@@ -4,17 +4,15 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
-use wasmtime_environ::{ir, settings};
+use wasmtime_environ::{
+    ir,
+    settings::{self, Configurable},
+};
 use wasmtime_jit::{CompilationStrategy, Features};
 
 // Runtime Environment
 
 // Configuration
-
-fn default_flags() -> settings::Flags {
-    let flag_builder = settings::builder();
-    settings::Flags::new(flag_builder)
-}
 
 /// Global configuration options used to create an [`Engine`] and customize its
 /// behavior.
@@ -23,7 +21,7 @@ fn default_flags() -> settings::Flags {
 /// [`Engine::new()`]
 #[derive(Clone)]
 pub struct Config {
-    pub(crate) flags: settings::Flags,
+    pub(crate) flags: settings::Builder,
     pub(crate) features: Features,
     pub(crate) debug_info: bool,
     pub(crate) strategy: CompilationStrategy,
@@ -33,10 +31,18 @@ impl Config {
     /// Creates a new configuration object with the default configuration
     /// specified.
     pub fn new() -> Config {
+        let mut flags = settings::builder();
+
+        // There are two possible traps for division, and this way
+        // we get the proper one if code traps.
+        flags
+            .enable("avoid_div_traps")
+            .expect("should be valid flag");
+
         Config {
             debug_info: false,
             features: Default::default(),
-            flags: default_flags(),
+            flags,
             strategy: CompilationStrategy::Auto,
         }
     }
@@ -47,16 +53,6 @@ impl Config {
     /// By default this option is `false`.
     pub fn debug_info(&mut self, enable: bool) -> &mut Self {
         self.debug_info = enable;
-        self
-    }
-
-    /// Configures various flags for compilation such as optimization level and
-    /// such.
-    ///
-    /// For more information on defaults and configuration options, see the
-    /// documentation for [`Flags`](settings::Flags)
-    pub fn flags(&mut self, flags: settings::Flags) -> &mut Self {
-        self.flags = flags;
         self
     }
 
@@ -116,6 +112,10 @@ impl Config {
     /// [proposal]: https://github.com/webassembly/simd
     pub fn wasm_simd(&mut self, enable: bool) -> &mut Self {
         self.features.simd = enable;
+        let val = if enable { "true" } else { "false" };
+        self.flags
+            .set("enable_simd", val)
+            .expect("should be valid flag");
         self
     }
 
@@ -165,6 +165,8 @@ impl Config {
     /// modules, and for more documentation consult the [`Strategy`] enumeration
     /// and its documentation.
     ///
+    /// The default value for this is `Strategy::Auto`.
+    ///
     /// # Errors
     ///
     /// Some compilation strategies require compile-time options of `wasmtime`
@@ -182,6 +184,41 @@ impl Config {
             }
         };
         Ok(self)
+    }
+
+    /// Configures whether the debug verifier of Cranelift is enabled or not.
+    ///
+    /// When Cranelift is used as a code generation backend this will configure
+    /// it to have the `enable_verifier` flag which will enable a number of debug
+    /// checks inside of Cranelift. This is largely only useful for the
+    /// developers of wasmtime itself.
+    ///
+    /// The default value for this is `false`
+    pub fn cranelift_debug_verifier(&mut self, enable: bool) -> &mut Self {
+        let val = if enable { "true" } else { "false" };
+        self.flags
+            .set("enable_verifier", val)
+            .expect("should be valid flag");
+        self
+    }
+
+    /// Configures the Cranelift code generator optimization level.
+    ///
+    /// When the Cranelift code generator is used you can configure the
+    /// optimization level used for generated code in a few various ways. For
+    /// more information see the documentation of [`OptLevel`].
+    ///
+    /// The default value for this is `OptLevel::None`.
+    pub fn cranelift_opt_level(&mut self, level: OptLevel) -> &mut Self {
+        let val = match level {
+            OptLevel::None => "none",
+            OptLevel::Speed => "speed",
+            OptLevel::SpeedAndSize => "speed_and_size",
+        };
+        self.flags
+            .set("opt_level", val)
+            .expect("should be valid flag");
+        self
     }
 }
 
@@ -213,6 +250,20 @@ pub enum Strategy {
     /// A single-pass code generator that is faster than Cranelift but doesn't
     /// produce as high-quality code.
     Lightbeam,
+}
+
+/// Possible optimization levels for the Cranelift codegen backend.
+#[non_exhaustive]
+#[derive(Clone, Debug)]
+pub enum OptLevel {
+    /// No optimizations performed, minimizes compilation time by disabling most
+    /// optimizations.
+    None,
+    /// Generates the fastest possible code, but may take longer.
+    Speed,
+    /// Similar to `speed`, but also performs transformations aimed at reducing
+    /// code size.
+    SpeedAndSize,
 }
 
 // Engine
@@ -313,4 +364,5 @@ impl Store {
 fn _assert_send_sync() {
     fn _assert<T: Send + Sync>() {}
     _assert::<Engine>();
+    _assert::<Config>();
 }

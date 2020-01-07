@@ -1,7 +1,5 @@
 use std::path::Path;
 use wasmtime::{Config, Engine, HostRef, Store, Strategy};
-use wasmtime_environ::settings;
-use wasmtime_environ::settings::Configurable;
 use wasmtime_wast::WastContext;
 
 include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
@@ -12,16 +10,11 @@ include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
 fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
     let wast = Path::new(wast);
 
-    let mut flag_builder = settings::builder();
-    flag_builder.enable("enable_verifier").unwrap();
-    flag_builder.enable("avoid_div_traps").unwrap();
-    flag_builder.enable("enable_simd").unwrap();
-
     let mut cfg = Config::new();
     cfg.wasm_simd(wast.iter().any(|s| s == "simd"))
         .wasm_multi_value(wast.iter().any(|s| s == "multi-value"))
         .strategy(strategy)?
-        .flags(settings::Flags::new(flag_builder));
+        .cranelift_debug_verifier(true);
     let store = HostRef::new(Store::new(&Engine::new(&cfg)));
     let mut wast_context = WastContext::new(store);
     wast_context.register_spectest()?;

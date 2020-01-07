@@ -19,7 +19,6 @@ wasmtime = { path = "crates/api" }
 wasmtime-debug = { path = "crates/debug" }
 wasmtime-environ = { path = "crates/environ" }
 wasmtime-interface-types = { path = "crates/interface-types" }
-wasmtime-runtime = { path = "crates/runtime" }
 wasmtime-jit = { path = "crates/jit" }
 wasmtime-obj = { path = "crates/obj" }
 wasmtime-wast = { path = "crates/wast" }

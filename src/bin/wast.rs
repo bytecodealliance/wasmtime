@@ -29,8 +29,6 @@ use std::path::Path;
 use std::process;
 use wasmtime::{Config, Engine, HostRef, Store};
 use wasmtime_cli::pick_compilation_strategy;
-use wasmtime_environ::settings;
-use wasmtime_environ::settings::Configurable;
 use wasmtime_environ::{cache_create_new_config, cache_init};
 use wasmtime_wast::WastContext;
 
@@ -118,25 +116,16 @@ fn main() -> Result<()> {
     }
 
     let mut cfg = Config::new();
-    let mut flag_builder = settings::builder();
-
-    // There are two possible traps for division, and this way
-    // we get the proper one if code traps.
-    flag_builder.enable("avoid_div_traps").unwrap();
-
     // Enable verifier passes in debug mode.
-    if cfg!(debug_assertions) {
-        flag_builder.enable("enable_verifier").unwrap();
-    }
+    cfg.cranelift_debug_verifier(cfg!(debug_assertions));
 
     // Enable optimization if requested.
     if args.flag_optimize {
-        flag_builder.set("opt_level", "speed").unwrap();
+        cfg.cranelift_opt_level(wasmtime::OptLevel::Speed);
     }
 
     // Enable SIMD if requested
     if args.flag_enable_simd {
-        flag_builder.enable("enable_simd").unwrap();
         cfg.wasm_simd(true);
     }
 
@@ -144,8 +133,7 @@ fn main() -> Result<()> {
     cfg.strategy(pick_compilation_strategy(
         args.flag_cranelift,
         args.flag_lightbeam,
-    )?)?
-    .flags(settings::Flags::new(flag_builder));
+    )?)?;
     let store = HostRef::new(Store::new(&Engine::new(&cfg)));
     let mut wast_context = WastContext::new(store);
 

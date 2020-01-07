@@ -36,7 +36,6 @@ use wasi_common::preopen_dir;
 use wasmtime::{Config, Engine, HostRef, Instance, Module, Store};
 use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_environ::{cache_create_new_config, cache_init};
-use wasmtime_environ::{settings, settings::Configurable};
 use wasmtime_interface_types::ModuleData;
 use wasmtime_wasi::create_wasi_instance;
 use wasmtime_wasi::old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0;
@@ -231,29 +230,21 @@ fn main() -> Result<()> {
     }
 
     let mut config = Config::new();
-    let mut flag_builder = settings::builder();
-
-    // There are two possible traps for division, and this way
-    // we get the proper one if code traps.
-    flag_builder.enable("avoid_div_traps")?;
 
     // Enable/disable producing of debug info.
     config.debug_info(args.flag_g);
 
     // Enable verifier passes in debug mode.
-    if cfg!(debug_assertions) {
-        flag_builder.enable("enable_verifier")?;
-    }
+    config.cranelift_debug_verifier(cfg!(debug_assertions));
 
     // Enable SIMD if requested
     if args.flag_enable_simd {
-        flag_builder.enable("enable_simd")?;
         config.wasm_simd(true);
     }
 
     // Enable optimization if requested.
     if args.flag_optimize {
-        flag_builder.set("opt_level", "speed")?;
+        config.cranelift_opt_level(wasmtime::OptLevel::Speed);
     }
 
     // Decide how to compile.
@@ -261,7 +252,6 @@ fn main() -> Result<()> {
         args.flag_cranelift,
         args.flag_lightbeam,
     )?)?;
-    config.flags(settings::Flags::new(flag_builder));
     let engine = Engine::new(&config);
     let store = HostRef::new(Store::new(&engine));
 
