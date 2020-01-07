@@ -74,7 +74,7 @@ impl fmt::Debug for UnsafeTrapInfo {
 
 /// A struct representing an aborted instruction execution, with a message
 /// indicating the cause.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 #[error("Wasm trap: {message}")]
 pub struct Trap {
     message: String,
