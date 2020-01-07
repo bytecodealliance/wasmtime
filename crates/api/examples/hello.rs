@@ -1,6 +1,6 @@
 //! Translation of hello example
 
-use anyhow::{ensure, format_err, Context as _, Result};
+use anyhow::{ensure, Context as _, Result};
 use std::rc::Rc;
 use wasmtime::*;
 
@@ -15,8 +15,9 @@ impl Callable for HelloCallback {
 }
 
 fn main() -> Result<()> {
-    // Configure the initial compilation environment, creating more global
-    // structures such as an `Engine` and a `Store`.
+    // Configure the initial compilation environment, creating the global
+    // `Store` structure. Note that you can also tweak configuration settings
+    // with a `Config` and an `Engine` if desired.
     println!("Initializing...");
     let store = Store::default();
 
@@ -58,10 +59,7 @@ fn main() -> Result<()> {
 
     // And last but not least we can call it!
     println!("Calling export...");
-    run_func
-        .borrow()
-        .call(&[])
-        .map_err(|e| format_err!("> Error calling function: {:?}", e))?;
+    run_func.borrow().call(&[])?;
 
     println!("Done.");
     Ok(())
