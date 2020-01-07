@@ -32,3 +32,4 @@ maintenance = { status = "actively-developed" }
 [lib]
 test = false
 doctest = false
+doc = false

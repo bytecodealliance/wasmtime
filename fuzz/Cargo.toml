@@ -21,18 +21,22 @@ libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
 name = "compile"
 path = "fuzz_targets/compile.rs"
 test = false
+doc = false
 
 [[bin]]
 name = "instantiate"
 path = "fuzz_targets/instantiate.rs"
 test = false
+doc = false
 
 [[bin]]
 name = "instantiate_translated"
 path = "fuzz_targets/instantiate_translated.rs"
 test = false
+doc = false
 
 [[bin]]
 name = "api_calls"
 path = "fuzz_targets/api_calls.rs"
 test = false
+doc = false
