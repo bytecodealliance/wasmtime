@@ -94,12 +94,9 @@ impl WastContext {
         let instance = match Instance::new(&self.store, &module, &imports) {
             Ok(i) => i,
             Err(e) => {
-                let err = e
-                    .chain()
-                    .filter_map(|e| e.downcast_ref::<Trap>())
-                    .next();
+                let err = e.chain().filter_map(|e| e.downcast_ref::<Trap>()).next();
                 if let Some(trap) = err {
-                    return Ok(Outcome::Trap(trap.clone()))
+                    return Ok(Outcome::Trap(trap.clone()));
                 }
                 return Err(e);
             }
