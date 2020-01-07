@@ -151,7 +151,7 @@ pub fn create_new_config<P: AsRef<Path> + Debug>(config_file: Option<P>) -> Resu
 
     if config_file.exists() {
         bail!(
-            "Specified config file already exists! Path: {}",
+            "Configuration file '{}' already exists.",
             config_file.display()
         );
     }
@@ -193,7 +193,7 @@ lazy_static! {
         ProjectDirs::from("", "BytecodeAlliance", "wasmtime");
     static ref DEFAULT_CONFIG_PATH: Result<PathBuf, String> = PROJECT_DIRS
         .as_ref()
-        .map(|proj_dirs| proj_dirs.config_dir().join("wasmtime-cache-config.toml"))
+        .map(|proj_dirs| proj_dirs.config_dir().join("config.toml"))
         .ok_or_else(|| "Config file not specified and failed to get the default".to_string());
 }
 
