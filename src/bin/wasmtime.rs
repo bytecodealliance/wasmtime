@@ -257,11 +257,11 @@ fn main() -> Result<()> {
     }
 
     // Decide how to compile.
-    let strategy = pick_compilation_strategy(args.flag_cranelift, args.flag_lightbeam);
-
-    config
-        .flags(settings::Flags::new(flag_builder))
-        .strategy(strategy);
+    config.strategy(pick_compilation_strategy(
+        args.flag_cranelift,
+        args.flag_lightbeam,
+    )?)?;
+    config.flags(settings::Flags::new(flag_builder));
     let engine = Engine::new(&config);
     let store = HostRef::new(Store::new(&engine));
 

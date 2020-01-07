@@ -27,7 +27,7 @@ pub use crate::externals::*;
 pub use crate::instance::Instance;
 pub use crate::module::Module;
 pub use crate::r#ref::{AnyRef, HostInfo, HostRef};
-pub use crate::runtime::{Config, Engine, Store};
+pub use crate::runtime::{Config, Engine, Store, Strategy};
 pub use crate::trap::{FrameInfo, Trap, TrapInfo};
 pub use crate::types::*;
 pub use crate::values::*;

@@ -26,15 +26,15 @@
     )
 )]
 
+use anyhow::{anyhow, bail, Result};
 use docopt::Docopt;
 use faerie::Artifact;
 use serde::Deserialize;
-use std::error::Error;
-use std::fmt::format;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::{process, str};
 use target_lexicon::Triple;
+use wasmtime::Strategy;
 use wasmtime_cli::pick_compilation_strategy;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
 use wasmtime_environ::entity::EntityRef;
@@ -47,7 +47,7 @@ use wasmtime_environ::{
     cache_create_new_config, cache_init, Compiler, Cranelift, ModuleEnvironment, ModuleVmctxInfo,
     Tunables, VMOffsets,
 };
-use wasmtime_jit::{native, CompilationStrategy};
+use wasmtime_jit::native;
 use wasmtime_obj::emit_module;
 
 const USAGE: &str = "
@@ -176,18 +176,14 @@ fn handle_module(
     enable_optimize: bool,
     cranelift: bool,
     lightbeam: bool,
-) -> Result<(), String> {
-    let data = match wat::parse_file(path) {
-        Ok(data) => data,
-        Err(err) => {
-            return Err(String::from(err.description()));
-        }
-    };
+) -> Result<()> {
+    let data = wat::parse_file(path)?;
 
     let isa_builder = match *target {
         Some(ref target) => {
-            let target = Triple::from_str(&target).map_err(|_| "could not parse --target")?;
-            native::lookup(target).map_err(|err| format!("{:?}", err))?
+            let target =
+                Triple::from_str(&target).map_err(|_| anyhow!("could not parse --target"))?;
+            native::lookup(target)?
         }
         None => native::builder(),
     };
@@ -213,7 +209,7 @@ fn handle_module(
     let tunables = Tunables::default();
 
     // Decide how to compile.
-    let strategy = pick_compilation_strategy(cranelift, lightbeam);
+    let strategy = pick_compilation_strategy(cranelift, lightbeam)?;
 
     let (
         module,
@@ -224,10 +220,7 @@ fn handle_module(
     ) = {
         let environ = ModuleEnvironment::new(isa.frontend_config(), tunables);
 
-        let translation = environ
-            .translate(&data)
-            .map_err(|error| error.to_string())?;
-
+        let translation = environ.translate(&data)?;
         (
             translation.module,
             translation.module_translation.unwrap(),
@@ -240,25 +233,24 @@ fn handle_module(
     // TODO: use the traps information
     let (compilation, relocations, address_transform, value_ranges, stack_slots, _traps) =
         match strategy {
-            CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
-                Cranelift::compile_module(
-                    &module,
-                    &module_translation,
-                    lazy_function_body_inputs,
-                    &*isa,
-                    generate_debug_info,
-                )
-                .map_err(|e| e.to_string())?
-            }
-            #[cfg(feature = "lightbeam")]
-            CompilationStrategy::Lightbeam => Lightbeam::compile_module(
+            Strategy::Auto | Strategy::Cranelift => Cranelift::compile_module(
                 &module,
                 &module_translation,
                 lazy_function_body_inputs,
                 &*isa,
                 generate_debug_info,
-            )
-            .map_err(|e| e.to_string())?,
+            )?,
+            #[cfg(feature = "lightbeam")]
+            Strategy::Lightbeam => Lightbeam::compile_module(
+                &module,
+                &module_translation,
+                lazy_function_body_inputs,
+                &*isa,
+                generate_debug_info,
+            )?,
+            #[cfg(not(feature = "lightbeam"))]
+            Strategy::Lightbeam => bail!("lightbeam support not enabled"),
+            other => bail!("unsupported compilation strategy {:?}", other),
         };
 
     let module_vmctx_info = {
@@ -288,14 +280,12 @@ fn handle_module(
             &debug_data,
             &address_transform,
             &value_ranges,
-        )
-        .map_err(|e| e.to_string())?;
+        )?
     }
 
     // FIXME: Make the format a parameter.
-    let file =
-        ::std::fs::File::create(Path::new(output)).map_err(|x| format(format_args!("{}", x)))?;
-    obj.write(file).map_err(|e| e.to_string())?;
+    let file = ::std::fs::File::create(Path::new(output))?;
+    obj.write(file)?;
 
     Ok(())
 }

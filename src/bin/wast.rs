@@ -22,8 +22,8 @@
     )
 )]
 
+use anyhow::{Context, Result};
 use docopt::Docopt;
-use pretty_env_logger;
 use serde::Deserialize;
 use std::path::Path;
 use std::process;
@@ -75,7 +75,7 @@ struct Args {
     flag_cranelift: bool,
 }
 
-fn main() {
+fn main() -> Result<()> {
     let version = env!("CARGO_PKG_VERSION");
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| {
@@ -95,19 +95,12 @@ fn main() {
     };
 
     if args.flag_create_cache_config {
-        match cache_create_new_config(args.flag_cache_config) {
-            Ok(path) => {
-                println!(
-                    "Successfully created new configuation file at {}",
-                    path.display()
-                );
-                return;
-            }
-            Err(err) => {
-                eprintln!("Error: {}", err);
-                process::exit(1);
-            }
-        }
+        let path = cache_create_new_config(args.flag_cache_config)?;
+        println!(
+            "Successfully created new configuation file at {}",
+            path.display()
+        );
+        return Ok(());
     }
 
     let errors = cache_init(
@@ -148,22 +141,20 @@ fn main() {
     }
 
     // Decide how to compile.
-    let strategy = pick_compilation_strategy(args.flag_cranelift, args.flag_lightbeam);
-    cfg.strategy(strategy)
-        .flags(settings::Flags::new(flag_builder));
+    cfg.strategy(pick_compilation_strategy(
+        args.flag_cranelift,
+        args.flag_lightbeam,
+    )?)?
+    .flags(settings::Flags::new(flag_builder));
     let store = HostRef::new(Store::new(&Engine::new(&cfg)));
     let mut wast_context = WastContext::new(store);
 
     wast_context
         .register_spectest()
-        .expect("error instantiating \"spectest\"");
+        .context("error instantiating \"spectest\"")?;
 
     for filename in &args.arg_file {
-        wast_context
-            .run_file(Path::new(&filename))
-            .unwrap_or_else(|e| {
-                eprintln!("{:?}", e);
-                process::exit(1)
-            });
+        wast_context.run_file(Path::new(&filename))?;
     }
+    Ok(())
 }

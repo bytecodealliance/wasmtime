@@ -32,14 +32,15 @@ fn host_isa() -> Box<dyn isa::TargetIsa> {
 /// Performs initial validation, and returns early if the Wasm is invalid.
 ///
 /// You can control which compiler is used via passing a `CompilationStrategy`.
-pub fn instantiate(wasm: &[u8], compilation_strategy: CompilationStrategy) {
+pub fn instantiate(wasm: &[u8], strategy: Strategy) {
     if wasmparser::validate(wasm, None).is_err() {
         return;
     }
 
     let mut config = Config::new();
-    config.strategy(compilation_strategy);
-
+    config
+        .strategy(strategy)
+        .expect("failed to enable lightbeam");
     let engine = Engine::new(&config);
     let store = HostRef::new(Store::new(&engine));
 

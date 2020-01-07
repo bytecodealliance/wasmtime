@@ -36,3 +36,9 @@ wat = "1.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[features]
+# Enables experimental support for the lightbeam codegen backend, an alternative
+# to cranelift. Requires Nightly Rust currently, and this is not enabled by
+# default.
+lightbeam = ["wasmtime-jit/lightbeam"]

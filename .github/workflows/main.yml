@@ -207,7 +207,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2019-08-15
+        toolchain: nightly-2020-01-06
     - uses: ./.github/actions/binary-compatible-builds
     - run: mkdir crates/misc/py/wheelhouse
       shell: bash
