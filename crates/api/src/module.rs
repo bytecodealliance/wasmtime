@@ -1,4 +1,3 @@
-use crate::r#ref::HostRef;
 use crate::runtime::Store;
 use crate::types::{
     ExportType, ExternType, FuncType, GlobalType, ImportType, Limits, MemoryType, Mutability,
@@ -173,7 +172,7 @@ pub(crate) enum ModuleCodeSource {
 
 #[derive(Clone)]
 pub struct Module {
-    store: HostRef<Store>,
+    store: Store,
     source: ModuleCodeSource,
     imports: Box<[ImportType]>,
     exports: Box<[ExportType]>,
@@ -182,13 +181,13 @@ pub struct Module {
 impl Module {
     /// Validate and decode the raw wasm data in `binary` and create a new
     /// `Module` in the given `store`.
-    pub fn new(store: &HostRef<Store>, binary: &[u8]) -> Result<Module> {
+    pub fn new(store: &Store, binary: &[u8]) -> Result<Module> {
         Self::validate(store, binary)?;
         Self::new_unchecked(store, binary)
     }
     /// Similar to `new`, but does not perform any validation. Only use this
     /// on modules which are known to have been validated already!
-    pub fn new_unchecked(store: &HostRef<Store>, binary: &[u8]) -> Result<Module> {
+    pub fn new_unchecked(store: &Store, binary: &[u8]) -> Result<Module> {
         let (imports, exports) = read_imports_and_exports(binary)?;
         Ok(Module {
             store: store.clone(),
@@ -203,8 +202,8 @@ impl Module {
             _ => None,
         }
     }
-    pub fn validate(store: &HostRef<Store>, binary: &[u8]) -> Result<()> {
-        let features = store.borrow().engine().config.features.clone();
+    pub fn validate(store: &Store, binary: &[u8]) -> Result<()> {
+        let features = store.engine().config.features.clone();
         let config = ValidatingParserConfig {
             operator_config: OperatorValidatorConfig {
                 enable_threads: features.threads,
@@ -222,7 +221,7 @@ impl Module {
     pub fn exports(&self) -> &[ExportType] {
         &self.exports
     }
-    pub fn from_exports(store: &HostRef<Store>, exports: Box<[ExportType]>) -> Self {
+    pub fn from_exports(store: &Store, exports: Box<[ExportType]>) -> Self {
         Module {
             store: store.clone(),
             source: ModuleCodeSource::Unknown,

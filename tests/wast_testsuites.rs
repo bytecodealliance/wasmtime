@@ -1,5 +1,5 @@
 use std::path::Path;
-use wasmtime::{Config, Engine, HostRef, Store, Strategy};
+use wasmtime::{Config, Engine, Store, Strategy};
 use wasmtime_wast::WastContext;
 
 include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
@@ -15,7 +15,7 @@ fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
         .wasm_multi_value(wast.iter().any(|s| s == "multi-value"))
         .strategy(strategy)?
         .cranelift_debug_verifier(true);
-    let store = HostRef::new(Store::new(&Engine::new(&cfg)));
+    let store = Store::new(&Engine::new(&cfg));
     let mut wast_context = WastContext::new(store);
     wast_context.register_spectest()?;
     wast_context.run_file(wast)?;

@@ -4,7 +4,7 @@ use crate::{init_file_per_thread_logger, pick_compilation_strategy, CommonOption
 use anyhow::{bail, Context as _, Result};
 use std::{fmt::Write, path::PathBuf};
 use structopt::{clap::AppSettings, StructOpt};
-use wasmtime::{Config, Engine, HostRef, Store};
+use wasmtime::{Config, Engine, Store};
 use wasmtime_environ::cache_init;
 use wasmtime_wast::WastContext;
 
@@ -65,7 +65,7 @@ impl WastCommand {
             config.cranelift_opt_level(wasmtime::OptLevel::Speed);
         }
 
-        let store = HostRef::new(Store::new(&Engine::new(&config)));
+        let store = Store::new(&Engine::new(&config));
         let mut wast_context = WastContext::new(store);
 
         wast_context

@@ -2,7 +2,6 @@
 
 use super::create_handle::create_handle;
 use super::trap::{record_api_trap, TrapSink, API_TRAP_CODE};
-use crate::r#ref::HostRef;
 use crate::{Callable, FuncType, Store, Val};
 use anyhow::Result;
 use std::cmp;
@@ -234,7 +233,7 @@ fn make_trampoline(
 pub fn create_handle_with_function(
     ft: &FuncType,
     func: &Rc<dyn Callable + 'static>,
-    store: &HostRef<Store>,
+    store: &Store,
 ) -> Result<InstanceHandle> {
     let sig = ft.get_wasmtime_signature().clone();
 
@@ -270,7 +269,7 @@ pub fn create_handle_with_function(
 
     create_handle(
         module,
-        Some(store.borrow_mut()),
+        Some(store),
         finished_functions,
         Box::new(trampoline_state),
     )

@@ -42,7 +42,7 @@ pub fn instantiate(wasm: &[u8], strategy: Strategy) {
         .strategy(strategy)
         .expect("failed to enable lightbeam");
     let engine = Engine::new(&config);
-    let store = HostRef::new(Store::new(&engine));
+    let store = Store::new(&engine);
 
     let module =
         HostRef::new(Module::new(&store, wasm).expect("Failed to compile a valid Wasm module!"));
@@ -91,7 +91,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
 
     let mut config: Option<Config> = None;
     let mut engine: Option<Engine> = None;
-    let mut store: Option<HostRef<Store>> = None;
+    let mut store: Option<Store> = None;
     let mut modules: HashMap<usize, HostRef<Module>> = Default::default();
     let mut instances: HashMap<usize, HostRef<Instance>> = Default::default();
 
@@ -113,7 +113,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
 
             ApiCall::StoreNew => {
                 assert!(store.is_none());
-                store = Some(HostRef::new(Store::new(engine.as_ref().unwrap())));
+                store = Some(Store::new(engine.as_ref().unwrap()));
             }
 
             ApiCall::ModuleNew { id, wasm } => {

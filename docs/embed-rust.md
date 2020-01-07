@@ -33,13 +33,12 @@ wasmtime = "<current version>"
 
 where "<current version>" is the current version number of the `wasmtime` crate.
 
-It is time to add code to the `src/main.rs`. First, the engine and storage need to be activated:
+It is time to add code to the `src/main.rs`. First, storage needs to be activated:
 
 ```rust
 use wasmtime::*;
 
-let engine = Engine::default();
-let store = HostRef::new(Store::new(&engine));
+let store = Store::default();
 ```
 
 The `HostRef` will be used a lot -- it is a "convenience" object to store and refer an object between the host and
@@ -87,8 +86,7 @@ use std::fs::read;
 use wasmtime::*;
 
 fn main() {
-    let engine = Engine::default();
-    let store = HostRef::new(Store::new(&engine));
+    let store = Store::default();
 
     let wasm = read("hello.wasm").expect("wasm file");
 
