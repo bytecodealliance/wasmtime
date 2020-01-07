@@ -229,6 +229,8 @@ impl Default for Config {
 }
 
 /// Possible Compilation strategies for a wasm module.
+///
+/// This is used as an argument to the [`Config::strategy`] method.
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub enum Strategy {
@@ -249,6 +251,9 @@ pub enum Strategy {
 
     /// A single-pass code generator that is faster than Cranelift but doesn't
     /// produce as high-quality code.
+    ///
+    /// To successfully pass this argument to [`Config::strategy`] the
+    /// `lightbeam` feature of this crate must be enabled.
     Lightbeam,
 }
 

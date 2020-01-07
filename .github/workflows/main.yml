@@ -46,17 +46,9 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: cargo doc --no-deps -p wasmtime-cli
-    - run: cargo doc --no-deps -p wasmtime
-    - run: cargo doc --no-deps -p wasmtime-debug
-    - run: cargo doc --no-deps -p wasmtime-environ
-    - run: cargo doc --no-deps -p wasmtime-interface-types
-    - run: cargo doc --no-deps -p wasmtime-jit
-    - run: cargo doc --no-deps -p wasmtime-obj
-    - run: cargo doc --no-deps -p wasmtime-runtime
-    - run: cargo doc --no-deps -p wasmtime-wasi
-    - run: cargo doc --no-deps -p wasmtime-wast
-    - run: cargo doc --no-deps -p wasi-common
+      with:
+        toolchain: nightly
+    - run: cargo doc --no-deps --all --exclude wasmtime-cli --exclude test-programs
     - uses: actions/upload-artifact@v1
       with:
         name: doc-api
