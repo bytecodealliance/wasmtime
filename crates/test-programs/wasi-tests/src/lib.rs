@@ -24,7 +24,8 @@ pub fn open_scratch_directory(path: &str) -> Result<wasi::Fd, String> {
             }
             dst.set_len(stat.u.dir.pr_name_len);
             if dst == path.as_bytes() {
-                return Ok(wasi::path_open(i, 0, ".", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
+                let (base, inherit) = fd_get_rights(i);
+                return Ok(wasi::path_open(i, 0, ".", wasi::OFLAGS_DIRECTORY, base, inherit, 0)
                     .expect("failed to open dir"));
             }
         }
