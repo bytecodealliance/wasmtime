@@ -364,4 +364,5 @@ impl Store {
 fn _assert_send_sync() {
     fn _assert<T: Send + Sync>() {}
     _assert::<Engine>();
+    _assert::<Config>();
 }
