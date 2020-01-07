@@ -2215,7 +2215,7 @@ version = "0.7.0"
 dependencies = [
  "anyhow",
  "wasmtime",
- "wast 4.0.0",
+ "wast 5.0.1",
 ]
 
 [[package]]
@@ -2232,6 +2232,15 @@ name = "wast"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fdd03645007fe5c76cdacbcf51c145db79ab82756e977f7ed051b7cf896dc7df"
+dependencies = [
+ "leb128",
+]
+
+[[package]]
+name = "wast"
+version = "5.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d1de68310854a9840d39487701a8c1acccb5c9f9f2650d5fce3cdfe6650c372"
 dependencies = [
  "leb128",
 ]
