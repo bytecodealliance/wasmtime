@@ -249,16 +249,8 @@ pub fn create_handle_with_function(
         PrimaryMap::new();
     let mut code_memory = CodeMemory::new();
 
-    let func_id = {
-        let unique_sig_idx = module
-            .signatures
-            .iter()
-            .find(|(_, v)| **v == sig)
-            .map(|(k, _)| k)
-            .unwrap_or_else(|| module.signatures.push(sig.clone()));
-        let sig_idx = module.signature_mapping.push(unique_sig_idx);
-        module.functions.push(sig_idx)
-    };
+    let sig_id = module.add_signature(sig.clone());
+    let func_id = module.functions.push(sig_id);
     module
         .exports
         .insert("trampoline".to_string(), Export::Function(func_id));
