@@ -65,8 +65,14 @@ unsafe fn test_stdin_read() {
             r#type: wasi::EVENTTYPE_CLOCK,
             u: wasi::SubscriptionU { clock },
         },
+        // Make sure that timeout is returned only once even if there are multiple read events
         wasi::Subscription {
             userdata: 1,
+            r#type: wasi::EVENTTYPE_FD_READ,
+            u: wasi::SubscriptionU { fd_readwrite },
+        },
+        wasi::Subscription {
+            userdata: 42,
             r#type: wasi::EVENTTYPE_FD_READ,
             u: wasi::SubscriptionU { fd_readwrite },
         },

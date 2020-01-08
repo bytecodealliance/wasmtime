@@ -95,7 +95,7 @@ fn make_rw_event(event: &FdEventData, nbytes: Result<u64>) -> wasi::__wasi_event
     }
 }
 
-fn make_timeout_event(event: &FdEventData, timeout: &ClockEventData) -> wasi::__wasi_event_t {
+fn make_timeout_event(timeout: &ClockEventData) -> wasi::__wasi_event_t {
     wasi::__wasi_event_t {
         userdata: timeout.userdata,
         r#type: wasi::__WASI_EVENTTYPE_CLOCK,
@@ -125,7 +125,12 @@ pub(crate) fn poll_oneoff(
     // With no events to listen, poll_oneoff just becomes a sleep.
     if fd_events.is_empty() {
         match timeout_duration {
-            Some(t) => thread::sleep(t),
+            Some(t) => {
+                thread::sleep(t);
+                let timeout_event = timeout.expect("timeout should be Some");
+                let new_event = make_timeout_event(&timeout_event);
+                events.push(new_event);
+            }
             // `poll` invoked with nfds = 0, timeout = -1 appears to be an infinite sleep
             // Even though the thread is not guanteed to remain parked forever, `poll(2)`
             // mentions that spurious readiness notifications may occur, so it's probably fine
@@ -236,10 +241,8 @@ pub(crate) fn poll_oneoff(
 
         match timeout_occurred {
             Some(timeout_info) => {
-                for event in stdin_events {
-                    let new_event = make_timeout_event(&event, &timeout_info);
-                    events.push(new_event);
-                }
+                let new_event = make_timeout_event(&timeout_info);
+                events.push(new_event);
             }
             None => {
                 // stdin became ready for reading
