@@ -34,7 +34,7 @@ fn test_import_calling_export() {
 
     let store = Store::default();
     let wasm = wat::parse_str(WAT).unwrap();
-    let module = HostRef::new(Module::new(&store, &wasm).expect("failed to create module"));
+    let module = Module::new(&store, &wasm).expect("failed to create module");
 
     let callback = Rc::new(Callback {
         other: RefCell::new(None),

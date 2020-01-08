@@ -4,6 +4,7 @@ use crate::types::{
     TableType, ValType,
 };
 use anyhow::{Error, Result};
+use std::rc::Rc;
 use wasmparser::{
     validate, ExternalKind, ImportSectionEntryType, ModuleReader, OperatorValidatorConfig,
     SectionCode, ValidatingParserConfig,
@@ -170,8 +171,27 @@ pub(crate) enum ModuleCodeSource {
     Unknown,
 }
 
+/// A compiled WebAssembly module, ready to be instantiated.
+///
+/// A `Module` is a compiled in-memory representation of an input WebAssembly
+/// binary. A `Module` is then used to create an [`Instance`](crate::Instance)
+/// through an instantiation process. You cannot call functions or fetch
+/// globals, for example, on a `Module` because it's purely a code
+/// representation. Instead you'll need to create an
+/// [`Instance`](crate::Instance) to interact with the wasm module.
+///
+/// ## Modules and `Clone`
+///
+/// Using `clone` on a `Module` is a cheap operation. It will not create an
+/// entirely new module, but rather just a new reference to the existing module.
+/// In other words it's a shallow copy, not a deep copy.
 #[derive(Clone)]
 pub struct Module {
+    // FIXME(#777) should be `Arc` and this type should be thread-safe
+    inner: Rc<ModuleInner>,
+}
+
+struct ModuleInner {
     store: Store,
     source: ModuleCodeSource,
     imports: Box<[ImportType]>,
@@ -179,29 +199,106 @@ pub struct Module {
 }
 
 impl Module {
-    /// Validate and decode the raw wasm data in `binary` and create a new
-    /// `Module` in the given `store`.
+    /// Creates a new WebAssembly `Module` from the given in-memory `binary`
+    /// data.
+    ///
+    /// The `binary` data provided must be a [binary-encoded][binary]
+    /// WebAssembly module. This means that the data for the wasm module must be
+    /// loaded in-memory if it's present elsewhere, for example on disk.
+    /// Additionally this requires that the entire binary is loaded into memory
+    /// all at once, this API does not support streaming compilation of a
+    /// module.
+    ///
+    /// The WebAssembly binary will be decoded and validated. It will also be
+    /// compiled according to the configuration of the provided `store` and
+    /// cached in this type.
+    ///
+    /// The provided `store` is a global cache for compiled resources as well as
+    /// configuration for what wasm features are enabled. It's recommended to
+    /// share a `store` among modules if possible.
+    ///
+    /// # Errors
+    ///
+    /// This function may fail and return an error. Errors may include
+    /// situations such as:
+    ///
+    /// * The binary provided could not be decoded because it's not a valid
+    ///   WebAssembly binary
+    /// * The WebAssembly binary may not validate (e.g. contains type errors)
+    /// * Implementation-specific limits were exceeded with a valid binary (for
+    ///   example too many locals)
+    /// * The wasm binary may use features that are not enabled in the
+    ///   configuration of `store`
+    ///
+    /// The error returned should contain full information about why module
+    /// creation failed if one is returned.
+    ///
+    /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     pub fn new(store: &Store, binary: &[u8]) -> Result<Module> {
         Self::validate(store, binary)?;
-        Self::new_unchecked(store, binary)
+        // Note that the call to `unsafe` here should be ok because we
+        // previously validated the binary, meaning we're guaranteed to pass a
+        // valid binary for `store`.
+        unsafe { Self::new_unchecked(store, binary) }
     }
-    /// Similar to `new`, but does not perform any validation. Only use this
-    /// on modules which are known to have been validated already!
-    pub fn new_unchecked(store: &Store, binary: &[u8]) -> Result<Module> {
+
+    /// Creates a new WebAssembly `Module` from the given in-memory `binary`
+    /// data, skipping validation and asserting that `binary` is a valid
+    /// WebAssembly module.
+    ///
+    /// This function is the same as [`Module::new`] except that it skips the
+    /// call to [`Module::validate`]. This means that the WebAssembly binary is
+    /// not validated for correctness and it is simply assumed as valid.
+    ///
+    /// For more information about creation of a module and the `store` argument
+    /// see the documentation of [`Module::new`].
+    ///
+    /// # Unsafety
+    ///
+    /// This function is `unsafe` due to the unchecked assumption that the input
+    /// `binary` is valid. If the `binary` is not actually a valid wasm binary it
+    /// may cause invalid machine code to get generated, cause panics, etc.
+    ///
+    /// It is only safe to call this method if [`Module::validate`] succeeds on
+    /// the same arguments passed to this function.
+    ///
+    /// # Errors
+    ///
+    /// This function may fail for many of the same reasons as [`Module::new`].
+    /// While this assumes that the binary is valid it still needs to actually
+    /// be somewhat valid for decoding purposes, and the basics of decoding can
+    /// still fail.
+    pub unsafe fn new_unchecked(store: &Store, binary: &[u8]) -> Result<Module> {
         let (imports, exports) = read_imports_and_exports(binary)?;
         Ok(Module {
-            store: store.clone(),
-            source: ModuleCodeSource::Binary(binary.into()),
-            imports,
-            exports,
+            inner: Rc::new(ModuleInner {
+                store: store.clone(),
+                source: ModuleCodeSource::Binary(binary.into()),
+                imports,
+                exports,
+            }),
         })
     }
-    pub(crate) fn binary(&self) -> Option<&[u8]> {
-        match &self.source {
-            ModuleCodeSource::Binary(b) => Some(b),
-            _ => None,
-        }
-    }
+
+    /// Validates `binary` input data as a WebAssembly binary given the
+    /// configuration in `store`.
+    ///
+    /// This function will perform a speedy validation of the `binary` input
+    /// WebAssembly module (which is in [binary form][binary]) and return either
+    /// `Ok` or `Err` depending on the results of validation. The `store`
+    /// argument indicates configuration for WebAssembly features, for example,
+    /// which are used to indicate what should be valid and what shouldn't be.
+    ///
+    /// Validation automatically happens as part of [`Module::new`], but is a
+    /// requirement for [`Module::new_unchecked`] to be safe.
+    ///
+    /// # Errors
+    ///
+    /// If validation fails for any reason (type check error, usage of a feature
+    /// that wasn't enabled, etc) then an error with a description of the
+    /// validation issue will be returned.
+    ///
+    /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     pub fn validate(store: &Store, binary: &[u8]) -> Result<()> {
         let features = store.engine().config.features.clone();
         let config = ValidatingParserConfig {
@@ -215,18 +312,39 @@ impl Module {
         };
         validate(binary, Some(config)).map_err(Error::new)
     }
-    pub fn imports(&self) -> &[ImportType] {
-        &self.imports
-    }
-    pub fn exports(&self) -> &[ExportType] {
-        &self.exports
-    }
+
     pub fn from_exports(store: &Store, exports: Box<[ExportType]>) -> Self {
         Module {
-            store: store.clone(),
-            source: ModuleCodeSource::Unknown,
-            imports: Box::new([]),
-            exports,
+            inner: Rc::new(ModuleInner {
+                store: store.clone(),
+                source: ModuleCodeSource::Unknown,
+                imports: Box::new([]),
+                exports,
+            }),
         }
+    }
+
+    pub(crate) fn binary(&self) -> Option<&[u8]> {
+        match &self.inner.source {
+            ModuleCodeSource::Binary(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    /// Returns the list of imports that this [`Module`] has and must be
+    /// satisfied.
+    pub fn imports(&self) -> &[ImportType] {
+        &self.inner.imports
+    }
+
+    /// Returns the list of exports that this [`Module`] has and will be
+    /// available after instantiation.
+    pub fn exports(&self) -> &[ExportType] {
+        &self.inner.exports
+    }
+
+    /// Returns the [`Store`] that this [`Module`] was compiled into.
+    pub fn store(&self) -> &Store {
+        &self.inner.store
     }
 }
