@@ -34,10 +34,6 @@ unsafe fn test_timeout() {
     let out = poll_oneoff_impl(&r#in, 1);
     let event = &out[0];
     assert_eq!(
-        event.userdata, CLOCK_ID,
-        "the event.userdata should contain clock_id specified by the user"
-    );
-    assert_eq!(
         event.error,
         wasi::ERRNO_SUCCESS,
         "the event.error should be set to ESUCCESS"
@@ -46,6 +42,10 @@ unsafe fn test_timeout() {
         event.r#type,
         wasi::EVENTTYPE_CLOCK,
         "the event.type should equal clock"
+    );
+    assert_eq!(
+        event.userdata, CLOCK_ID,
+        "the event.userdata should contain clock_id specified by the user"
     );
 }
 
@@ -71,18 +71,9 @@ unsafe fn test_stdin_read() {
             r#type: wasi::EVENTTYPE_FD_READ,
             u: wasi::SubscriptionU { fd_readwrite },
         },
-        wasi::Subscription {
-            userdata: 42,
-            r#type: wasi::EVENTTYPE_FD_READ,
-            u: wasi::SubscriptionU { fd_readwrite },
-        },
     ];
     let out = poll_oneoff_impl(&r#in, 1);
     let event = &out[0];
-    assert_eq!(
-        event.userdata, CLOCK_ID,
-        "the event.userdata should contain clock_id specified by the user"
-    );
     assert_eq!(
         event.error,
         wasi::ERRNO_SUCCESS,
@@ -92,6 +83,10 @@ unsafe fn test_stdin_read() {
         event.r#type,
         wasi::EVENTTYPE_CLOCK,
         "the event.type should equal clock"
+    );
+    assert_eq!(
+        event.userdata, CLOCK_ID,
+        "the event.userdata should contain clock_id specified by the user"
     );
 }
 
