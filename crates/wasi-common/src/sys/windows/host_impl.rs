@@ -1,7 +1,12 @@
 //! WASI host types specific to Windows host.
+use crate::host::FileType;
 use crate::{wasi, Error, Result};
+use std::convert::TryInto;
 use std::ffi::OsStr;
+use std::fs::{self, File};
+use std::io;
 use std::os::windows::ffi::OsStrExt;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(crate) fn errno_from_win(error: winx::winerror::WinError) -> wasi::__wasi_errno_t {
     // TODO: implement error mapping between Windows and WASI
@@ -32,6 +37,60 @@ pub(crate) fn errno_from_win(error: winx::winerror::WinError) -> wasi::__wasi_er
         ERROR_ALREADY_EXISTS => wasi::__WASI_ERRNO_EXIST,
         _ => wasi::__WASI_ERRNO_NOTSUP,
     }
+}
+
+pub(crate) fn filetype_from_std(ftype: &fs::FileType) -> FileType {
+    if ftype.is_file() {
+        FileType::RegularFile
+    } else if ftype.is_dir() {
+        FileType::Directory
+    } else if ftype.is_symlink() {
+        FileType::Symlink
+    } else {
+        FileType::Unknown
+    }
+}
+
+fn num_hardlinks(file: &File) -> io::Result<u64> {
+    Ok(winx::file::get_fileinfo(file)?.nNumberOfLinks.into())
+}
+
+fn device_id(file: &File) -> io::Result<u64> {
+    Ok(winx::file::get_fileinfo(file)?.dwVolumeSerialNumber.into())
+}
+
+pub(crate) fn file_serial_no(file: &File) -> io::Result<u64> {
+    let info = winx::file::get_fileinfo(file)?;
+    let high = info.nFileIndexHigh;
+    let low = info.nFileIndexLow;
+    let no = (u64::from(high) << 32) | u64::from(low);
+    Ok(no)
+}
+
+fn change_time(file: &File) -> io::Result<i64> {
+    winx::file::change_time(file)
+}
+
+fn systemtime_to_timestamp(st: SystemTime) -> Result<u64> {
+    st.duration_since(UNIX_EPOCH)
+        .map_err(|_| Error::EINVAL)? // date earlier than UNIX_EPOCH
+        .as_nanos()
+        .try_into()
+        .map_err(Into::into) // u128 doesn't fit into u64
+}
+
+pub(crate) fn filestat_from_win(file: &File) -> Result<wasi::__wasi_filestat_t> {
+    let metadata = file.metadata()?;
+    Ok(wasi::__wasi_filestat_t {
+        dev: device_id(file)?,
+        ino: file_serial_no(file)?,
+        nlink: num_hardlinks(file)?.try_into()?, // u64 doesn't fit into u32
+        size: metadata.len(),
+        atim: systemtime_to_timestamp(metadata.accessed()?)?,
+        ctim: change_time(file)?.try_into()?, // i64 doesn't fit into u64
+        mtim: systemtime_to_timestamp(metadata.modified()?)?,
+        filetype: filetype_from_std(&metadata.file_type()).to_wasi(),
+    })
 }
 
 /// Creates owned WASI path from OS string.

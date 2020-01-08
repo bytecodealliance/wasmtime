@@ -1,12 +1,11 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
-use crate::helpers::systemtime_to_timestamp;
-use crate::host::{Dirent, FileType};
+use crate::host::Dirent;
 use crate::hostcalls_impl::PathGet;
 use crate::sys::{fdentry_impl::OsHandle, host_impl, unix::sys_impl};
 use crate::{wasi, Error, Result};
 use std::convert::TryInto;
-use std::fs::{File, Metadata};
+use std::fs::File;
 use std::os::unix::fs::FileExt;
 use std::os::unix::prelude::{AsRawFd, FromRawFd};
 
@@ -198,45 +197,11 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
     Ok(copy_len)
 }
 
-pub(crate) fn fd_filestat_get_impl(file: &std::fs::File) -> Result<wasi::__wasi_filestat_t> {
-    use std::os::unix::fs::MetadataExt;
-
-    let metadata = file.metadata()?;
-    Ok(wasi::__wasi_filestat_t {
-        dev: metadata.dev(),
-        ino: metadata.ino(),
-        nlink: metadata.nlink().try_into()?, // u64 doesn't fit into u32
-        size: metadata.len(),
-        atim: systemtime_to_timestamp(metadata.accessed()?)?,
-        ctim: metadata.ctime().try_into()?, // i64 doesn't fit into u64
-        mtim: systemtime_to_timestamp(metadata.modified()?)?,
-        filetype: filetype(file, &metadata)?.to_wasi(),
-    })
-}
-
-fn filetype(file: &File, metadata: &Metadata) -> Result<FileType> {
-    use std::os::unix::fs::FileTypeExt;
-    use yanix::socket::{get_socket_type, SockType};
-    let ftype = metadata.file_type();
-    if ftype.is_file() {
-        Ok(FileType::RegularFile)
-    } else if ftype.is_dir() {
-        Ok(FileType::Directory)
-    } else if ftype.is_symlink() {
-        Ok(FileType::Symlink)
-    } else if ftype.is_char_device() {
-        Ok(FileType::CharacterDevice)
-    } else if ftype.is_block_device() {
-        Ok(FileType::BlockDevice)
-    } else if ftype.is_socket() {
-        match unsafe { get_socket_type(file.as_raw_fd())? } {
-            SockType::Datagram => Ok(FileType::SocketDgram),
-            SockType::Stream => Ok(FileType::SocketStream),
-            _ => Ok(FileType::Unknown),
-        }
-    } else {
-        Ok(FileType::Unknown)
-    }
+pub(crate) fn fd_filestat_get(file: &std::fs::File) -> Result<wasi::__wasi_filestat_t> {
+    use yanix::file::fstat;
+    unsafe { fstat(file.as_raw_fd()) }
+        .map_err(Into::into)
+        .and_then(host_impl::filestat_from_nix)
 }
 
 pub(crate) fn path_filestat_get(

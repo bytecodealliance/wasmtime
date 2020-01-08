@@ -693,8 +693,7 @@ pub(crate) unsafe fn fd_filestat_get(
     );
 
     let fd = wasi_ctx.get_fd_entry(fd)?.as_descriptor(0, 0)?.as_file()?;
-
-    let host_filestat = hostcalls_impl::fd_filestat_get_impl(fd)?;
+    let host_filestat = hostcalls_impl::fd_filestat_get(fd)?;
 
     trace!("     | *filestat_ptr={:?}", host_filestat);
 

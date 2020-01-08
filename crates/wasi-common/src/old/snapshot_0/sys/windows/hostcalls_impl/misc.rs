@@ -1,7 +1,6 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
 #![allow(unused)]
-use crate::old::snapshot_0::helpers::systemtime_to_timestamp;
 use crate::old::snapshot_0::hostcalls_impl::{ClockEventData, FdEventData};
 use crate::old::snapshot_0::memory::*;
 use crate::old::snapshot_0::sys::host_impl;
