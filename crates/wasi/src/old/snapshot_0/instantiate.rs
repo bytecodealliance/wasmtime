@@ -70,7 +70,7 @@ pub fn instantiate_wasi_with_context(
 
     macro_rules! signature {
         ($name:ident) => {{
-            let sig = translate_signature(
+            let sig = module.add_signature(translate_signature(
                 ir::Signature {
                     params: syscalls::$name::params()
                         .into_iter()
@@ -83,10 +83,8 @@ pub fn instantiate_wasi_with_context(
                     call_conv,
                 },
                 pointer_type,
-            );
-            let unique_idx = module.signatures.push(sig);
-            let sig_idx = module.signature_mapping.push(unique_idx);
-            let func = module.functions.push(sig_idx);
+            ));
+            let func = module.functions.push(sig);
             module
                 .exports
                 .insert(stringify!($name).to_owned(), Export::Function(func));

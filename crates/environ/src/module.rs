@@ -224,6 +224,18 @@ impl Module {
         index.index() < self.imported_funcs.len()
     }
 
+    /// Convert a `SignatureIndex` into a `UniqueSignatureIndex`.
+    pub fn unique_sig_index(&self, index: SignatureIndex) -> UniqueSignatureIndex {
+        self.signature_mapping[index]
+    }
+
+    /// Return the signature of the function associated with the given index.
+    pub fn function_signature(&self, index: FuncIndex) -> &ir::Signature {
+        let sigidx = self.functions[index];
+        let unique_index = self.unique_sig_index(sigidx);
+        &self.signatures[unique_index]
+    }
+
     /// Convert a `DefinedTableIndex` into a `TableIndex`.
     pub fn table_index(&self, defined_table: DefinedTableIndex) -> TableIndex {
         TableIndex::new(self.imported_tables.len() + defined_table.index())
@@ -314,5 +326,16 @@ impl Module {
             val.hash(state);
         }
         function_body_inputs.hash(state);
+    }
+
+    /// Add a new signature to the module.
+    pub fn add_signature(&mut self, sig: ir::Signature) -> SignatureIndex {
+        let unique_idx = self
+            .signatures
+            .iter()
+            .find(|(_, v)| **v == sig)
+            .map(|(k, _)| k)
+            .unwrap_or_else(|| self.signatures.push(sig));
+        self.signature_mapping.push(unique_idx)
     }
 }

@@ -974,11 +974,7 @@ fn lookup_by_declaration(
 ) -> Export {
     match export {
         wasmtime_environ::Export::Function(index) => {
-            let signature = {
-                let sigidx = module.functions[*index];
-                let unique_idx = module.signature_mapping[sigidx];
-                module.signatures[unique_idx].clone()
-            };
+            let signature = module.function_signature(*index).clone();
             let (address, vmctx) = if let Some(def_index) = module.defined_func_index(*index) {
                 (finished_functions[def_index], vmctx as *mut VMContext)
             } else {
@@ -1174,7 +1170,7 @@ fn initialize_tables(instance: &mut Instance) -> Result<(), InstantiationError> 
         let subslice = &mut slice[start..start + init.elements.len()];
         for (i, func_idx) in init.elements.iter().enumerate() {
             let sigidx = instance.module.functions[*func_idx];
-            let callee_sig = instance.module.signature_mapping[sigidx];
+            let callee_sig = instance.module.unique_sig_index(sigidx);
             let (callee_ptr, callee_vmctx) =
                 if let Some(index) = instance.module.defined_func_index(*func_idx) {
                     (instance.finished_functions[index], vmctx)

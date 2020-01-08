@@ -202,11 +202,7 @@ impl crate::compilation::Compiler for Cranelift {
                         let func_index = module.func_index(*i);
                         let mut context = Context::new();
                         context.func.name = get_func_name(func_index);
-                        context.func.signature = {
-                            let sigidx = module.functions[func_index];
-                            let unique_sigidx = module.signature_mapping[sigidx];
-                            module.signatures[unique_sigidx].clone()
-                        };
+                        context.func.signature = module.function_signature(func_index).clone();
                         if generate_debug_info {
                             context.func.collect_debug_info();
                         }

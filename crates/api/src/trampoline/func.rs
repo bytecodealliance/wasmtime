@@ -67,12 +67,7 @@ unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *m
 
     let (args, returns_len) = {
         let module = instance.module_ref();
-        let signature = {
-            let func_idx = FuncIndex::new(call_id as usize);
-            let sig_idx = module.functions[func_idx];
-            let unique_index = module.signature_mapping[sig_idx];
-            &module.signatures[unique_index]
-        };
+        let signature = module.function_signature(FuncIndex::new(call_id as usize));
 
         let mut args = Vec::new();
         for i in 1..signature.params.len() {

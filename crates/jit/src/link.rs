@@ -38,11 +38,7 @@ pub fn link_module(
                     signature,
                     vmctx,
                 } => {
-                    let import_signature = {
-                        let sigidx = module.functions[index];
-                        let unique_index = module.signature_mapping[sigidx];
-                        &module.signatures[unique_index]
-                    };
+                    let import_signature = module.function_signature(index);
                     if signature != *import_signature {
                         // TODO: If the difference is in the calling convention,
                         // we could emit a wrapper function to fix it up.
