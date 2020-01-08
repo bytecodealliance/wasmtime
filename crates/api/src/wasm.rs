@@ -8,7 +8,7 @@
 use super::{
     AnyRef, Callable, Engine, ExportType, Extern, ExternType, Func, FuncType, Global, GlobalType,
     HostInfo, HostRef, ImportType, Instance, Limits, Memory, MemoryType, Module, Store, Table,
-    TableType, Trap, TrapInfo, Val, ValType,
+    TableType, Trap, Val, ValType,
 };
 use std::rc::Rc;
 use std::{mem, ptr, slice};
@@ -317,7 +317,7 @@ pub type wasm_message_t = wasm_name_t;
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_trap_t {
-    trap_info: HostRef<TrapInfo>,
+    trap: HostRef<Trap>,
 }
 #[repr(C)]
 #[derive(Clone)]
@@ -469,8 +469,9 @@ pub unsafe extern "C" fn wasm_func_call(
             ptr::null_mut()
         }
         Err(trap) => {
-            let trap_info = trap.trap_info_unchecked();
-            let trap = Box::new(wasm_trap_t { trap_info });
+            let trap = Box::new(wasm_trap_t {
+                trap: HostRef::new(trap),
+            });
             Box::into_raw(trap)
         }
     }
@@ -550,19 +551,12 @@ impl Callable for wasm_func_callback_t {
         let out = unsafe { func(params.as_ptr(), out_results.as_mut_ptr()) };
         if !out.is_null() {
             let trap: Box<wasm_trap_t> = unsafe { Box::from_raw(out) };
-            let trap_info: HostRef<TrapInfo> = (*trap).into();
-            return Err(Trap::from(trap_info));
+            return Err(trap.trap.borrow().clone());
         }
         for i in 0..results.len() {
             results[i] = out_results[i].val();
         }
         Ok(())
-    }
-}
-
-impl Into<HostRef<TrapInfo>> for wasm_trap_t {
-    fn into(self) -> HostRef<TrapInfo> {
-        self.trap_info
     }
 }
 
@@ -583,8 +577,7 @@ impl Callable for CallbackWithEnv {
         let out = unsafe { func(self.env, params.as_ptr(), out_results.as_mut_ptr()) };
         if !out.is_null() {
             let trap: Box<wasm_trap_t> = unsafe { Box::from_raw(out) };
-            let trap_info: HostRef<TrapInfo> = (*trap).into();
-            return Err(Trap::from(trap_info));
+            return Err(trap.trap.borrow().clone());
         }
         for i in 0..results.len() {
             results[i] = out_results[i].val();
@@ -682,11 +675,13 @@ pub unsafe extern "C" fn wasm_instance_new(
         }
         Err(trap) => {
             if !result.is_null() {
-                let trap_info = match trap.downcast::<Trap>() {
-                    Ok(trap) => trap.trap_info_unchecked(),
-                    Err(_) => HostRef::new(TrapInfo::new("instance error".to_string())),
+                let trap = match trap.downcast::<Trap>() {
+                    Ok(trap) => trap,
+                    Err(e) => Trap::new(format!("{:?}", e)),
                 };
-                let trap = Box::new(wasm_trap_t { trap_info });
+                let trap = Box::new(wasm_trap_t {
+                    trap: HostRef::new(trap),
+                });
                 (*result) = Box::into_raw(trap);
             }
             ptr::null_mut()
@@ -927,9 +922,9 @@ pub unsafe extern "C" fn wasm_trap_new(
     if message[message.len() - 1] != 0 {
         panic!("wasm_trap_new message stringz expected");
     }
-    let message = String::from_utf8_lossy(message).to_string();
+    let message = String::from_utf8_lossy(message);
     let trap = Box::new(wasm_trap_t {
-        trap_info: HostRef::new(TrapInfo::new(message)),
+        trap: HostRef::new(Trap::new(message)),
     });
     Box::into_raw(trap)
 }
@@ -937,7 +932,7 @@ pub unsafe extern "C" fn wasm_trap_new(
 #[no_mangle]
 pub unsafe extern "C" fn wasm_trap_message(trap: *const wasm_trap_t, out: *mut wasm_message_t) {
     let mut buffer = Vec::new();
-    buffer.extend_from_slice((*trap).trap_info.borrow().message().as_bytes());
+    buffer.extend_from_slice((*trap).trap.borrow().message().as_bytes());
     buffer.reserve_exact(1);
     buffer.push(0);
     (*out).set_buffer(buffer);

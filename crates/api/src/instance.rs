@@ -45,7 +45,7 @@ pub fn instantiate_in_context(
     )
     .map_err(|e| -> Error {
         if let Some(trap) = take_api_trap() {
-            Trap::from(trap).into()
+            trap.into()
         } else if let SetupError::Instantiate(InstantiationError::StartTrap(msg)) = e {
             Trap::new(msg).into()
         } else {

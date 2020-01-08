@@ -1,7 +1,6 @@
-use crate::r#ref::HostRef;
 use crate::runtime::Store;
 use crate::trampoline::{generate_func_export, take_api_trap};
-use crate::trap::{Trap, TrapInfo};
+use crate::trap::Trap;
 use crate::types::FuncType;
 use crate::values::Val;
 use std::rc::Rc;
@@ -159,8 +158,8 @@ impl WrappedCallable for WasmtimeFn {
             )
         } {
             let trap = take_api_trap()
-                .unwrap_or_else(|| HostRef::new(TrapInfo::new(format!("call error: {}", message))));
-            return Err(trap.into());
+                .unwrap_or_else(|| Trap::new(format!("call error: {}", message)));
+            return Err(trap);
         }
 
         // Load the return values out of `values_vec`.

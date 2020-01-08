@@ -1971,7 +1971,6 @@ dependencies = [
  "rayon",
  "region",
  "target-lexicon",
- "thiserror",
  "wasi-common",
  "wasmparser 0.45.1",
  "wasmtime-environ",
