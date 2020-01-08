@@ -394,336 +394,41 @@ impl PerCpuModeEncodings {
 
 // Definitions.
 
-#[allow(clippy::cognitive_complexity)]
-pub(crate) fn define(
-    shared_defs: &SharedDefinitions,
-    settings: &SettingGroup,
-    x86: &InstructionGroup,
-    r: &RecipeGroup,
-) -> PerCpuModeEncodings {
+#[inline(never)]
+fn define_moves(e: &mut PerCpuModeEncodings, shared_defs: &SharedDefinitions, r: &RecipeGroup) {
     let shared = &shared_defs.instructions;
     let formats = &shared_defs.formats;
 
     // Shorthands for instructions.
-    let adjust_sp_down = shared.by_name("adjust_sp_down");
-    let adjust_sp_down_imm = shared.by_name("adjust_sp_down_imm");
-    let adjust_sp_up_imm = shared.by_name("adjust_sp_up_imm");
-    let band = shared.by_name("band");
-    let band_imm = shared.by_name("band_imm");
-    let band_not = shared.by_name("band_not");
     let bconst = shared.by_name("bconst");
     let bint = shared.by_name("bint");
-    let bitcast = shared.by_name("bitcast");
-    let bnot = shared.by_name("bnot");
-    let bor = shared.by_name("bor");
-    let bor_imm = shared.by_name("bor_imm");
-    let brff = shared.by_name("brff");
-    let brif = shared.by_name("brif");
-    let brnz = shared.by_name("brnz");
-    let brz = shared.by_name("brz");
-    let bxor = shared.by_name("bxor");
-    let bxor_imm = shared.by_name("bxor_imm");
-    let call = shared.by_name("call");
-    let call_indirect = shared.by_name("call_indirect");
-    let ceil = shared.by_name("ceil");
-    let clz = shared.by_name("clz");
     let copy = shared.by_name("copy");
-    let copy_nop = shared.by_name("copy_nop");
     let copy_special = shared.by_name("copy_special");
     let copy_to_ssa = shared.by_name("copy_to_ssa");
-    let ctz = shared.by_name("ctz");
-    let debugtrap = shared.by_name("debugtrap");
-    let f32const = shared.by_name("f32const");
-    let f64const = shared.by_name("f64const");
-    let fadd = shared.by_name("fadd");
-    let fcmp = shared.by_name("fcmp");
-    let fcvt_from_sint = shared.by_name("fcvt_from_sint");
-    let fdemote = shared.by_name("fdemote");
-    let fdiv = shared.by_name("fdiv");
-    let ffcmp = shared.by_name("ffcmp");
-    let fill = shared.by_name("fill");
-    let fill_nop = shared.by_name("fill_nop");
-    let floor = shared.by_name("floor");
-    let fmax = shared.by_name("fmax");
-    let fmin = shared.by_name("fmin");
-    let fmul = shared.by_name("fmul");
-    let fpromote = shared.by_name("fpromote");
-    let fsub = shared.by_name("fsub");
-    let func_addr = shared.by_name("func_addr");
     let get_pinned_reg = shared.by_name("get_pinned_reg");
-    let iadd = shared.by_name("iadd");
-    let iadd_ifcout = shared.by_name("iadd_ifcout");
-    let iadd_ifcin = shared.by_name("iadd_ifcin");
-    let iadd_ifcarry = shared.by_name("iadd_ifcarry");
-    let iadd_imm = shared.by_name("iadd_imm");
-    let icmp = shared.by_name("icmp");
-    let icmp_imm = shared.by_name("icmp_imm");
     let iconst = shared.by_name("iconst");
-    let ifcmp = shared.by_name("ifcmp");
-    let ifcmp_imm = shared.by_name("ifcmp_imm");
-    let ifcmp_sp = shared.by_name("ifcmp_sp");
-    let imul = shared.by_name("imul");
-    let indirect_jump_table_br = shared.by_name("indirect_jump_table_br");
     let ireduce = shared.by_name("ireduce");
-    let ishl = shared.by_name("ishl");
-    let ishl_imm = shared.by_name("ishl_imm");
-    let is_null = shared.by_name("is_null");
-    let istore16 = shared.by_name("istore16");
-    let istore16_complex = shared.by_name("istore16_complex");
-    let istore32 = shared.by_name("istore32");
-    let istore32_complex = shared.by_name("istore32_complex");
-    let istore8 = shared.by_name("istore8");
-    let istore8_complex = shared.by_name("istore8_complex");
-    let isub = shared.by_name("isub");
-    let isub_ifbout = shared.by_name("isub_ifbout");
-    let isub_ifbin = shared.by_name("isub_ifbin");
-    let isub_ifborrow = shared.by_name("isub_ifborrow");
-    let jump = shared.by_name("jump");
-    let jump_table_base = shared.by_name("jump_table_base");
-    let jump_table_entry = shared.by_name("jump_table_entry");
-    let load = shared.by_name("load");
-    let load_complex = shared.by_name("load_complex");
-    let nearest = shared.by_name("nearest");
-    let null = shared.by_name("null");
-    let popcnt = shared.by_name("popcnt");
-    let raw_bitcast = shared.by_name("raw_bitcast");
-    let regfill = shared.by_name("regfill");
     let regmove = shared.by_name("regmove");
-    let regspill = shared.by_name("regspill");
-    let return_ = shared.by_name("return");
-    let rotl = shared.by_name("rotl");
-    let rotl_imm = shared.by_name("rotl_imm");
-    let rotr = shared.by_name("rotr");
-    let rotr_imm = shared.by_name("rotr_imm");
-    let sadd_sat = shared.by_name("sadd_sat");
-    let safepoint = shared.by_name("safepoint");
-    let scalar_to_vector = shared.by_name("scalar_to_vector");
-    let selectif = shared.by_name("selectif");
     let sextend = shared.by_name("sextend");
     let set_pinned_reg = shared.by_name("set_pinned_reg");
-    let sload16 = shared.by_name("sload16");
-    let sload16_complex = shared.by_name("sload16_complex");
-    let sload32 = shared.by_name("sload32");
-    let sload32_complex = shared.by_name("sload32_complex");
-    let sload8 = shared.by_name("sload8");
-    let sload8_complex = shared.by_name("sload8_complex");
-    let spill = shared.by_name("spill");
-    let sqrt = shared.by_name("sqrt");
-    let sshr = shared.by_name("sshr");
-    let sshr_imm = shared.by_name("sshr_imm");
-    let ssub_sat = shared.by_name("ssub_sat");
-    let stack_addr = shared.by_name("stack_addr");
-    let store = shared.by_name("store");
-    let store_complex = shared.by_name("store_complex");
-    let symbol_value = shared.by_name("symbol_value");
-    let trap = shared.by_name("trap");
-    let trapff = shared.by_name("trapff");
-    let trapif = shared.by_name("trapif");
-    let resumable_trap = shared.by_name("resumable_trap");
-    let trueff = shared.by_name("trueff");
-    let trueif = shared.by_name("trueif");
-    let trunc = shared.by_name("trunc");
-    let uadd_sat = shared.by_name("uadd_sat");
     let uextend = shared.by_name("uextend");
-    let uload16 = shared.by_name("uload16");
-    let uload16_complex = shared.by_name("uload16_complex");
-    let uload32 = shared.by_name("uload32");
-    let uload32_complex = shared.by_name("uload32_complex");
-    let uload8 = shared.by_name("uload8");
-    let uload8_complex = shared.by_name("uload8_complex");
-    let ushr = shared.by_name("ushr");
-    let ushr_imm = shared.by_name("ushr_imm");
-    let usub_sat = shared.by_name("usub_sat");
-    let vconst = shared.by_name("vconst");
-    let x86_bsf = x86.by_name("x86_bsf");
-    let x86_bsr = x86.by_name("x86_bsr");
-    let x86_cvtt2si = x86.by_name("x86_cvtt2si");
-    let x86_fmax = x86.by_name("x86_fmax");
-    let x86_fmin = x86.by_name("x86_fmin");
-    let x86_insertps = x86.by_name("x86_insertps");
-    let x86_movlhps = x86.by_name("x86_movlhps");
-    let x86_movsd = x86.by_name("x86_movsd");
-    let x86_pop = x86.by_name("x86_pop");
-    let x86_pextr = x86.by_name("x86_pextr");
-    let x86_pinsr = x86.by_name("x86_pinsr");
-    let x86_pmaxs = x86.by_name("x86_pmaxs");
-    let x86_pmaxu = x86.by_name("x86_pmaxu");
-    let x86_pmins = x86.by_name("x86_pmins");
-    let x86_pminu = x86.by_name("x86_pminu");
-    let x86_pshufd = x86.by_name("x86_pshufd");
-    let x86_pshufb = x86.by_name("x86_pshufb");
-    let x86_psll = x86.by_name("x86_psll");
-    let x86_psra = x86.by_name("x86_psra");
-    let x86_psrl = x86.by_name("x86_psrl");
-    let x86_ptest = x86.by_name("x86_ptest");
-    let x86_push = x86.by_name("x86_push");
-    let x86_sdivmodx = x86.by_name("x86_sdivmodx");
-    let x86_smulx = x86.by_name("x86_smulx");
-    let x86_udivmodx = x86.by_name("x86_udivmodx");
-    let x86_umulx = x86.by_name("x86_umulx");
 
     // Shorthands for recipes.
-    let rec_adjustsp = r.template("adjustsp");
-    let rec_adjustsp_ib = r.template("adjustsp_ib");
-    let rec_adjustsp_id = r.template("adjustsp_id");
-    let rec_allones_fnaddr4 = r.template("allones_fnaddr4");
-    let rec_allones_fnaddr8 = r.template("allones_fnaddr8");
-    let rec_brfb = r.template("brfb");
-    let rec_brfd = r.template("brfd");
-    let rec_brib = r.template("brib");
-    let rec_brid = r.template("brid");
-    let rec_bsf_and_bsr = r.template("bsf_and_bsr");
-    let rec_call_id = r.template("call_id");
-    let rec_call_plt_id = r.template("call_plt_id");
-    let rec_call_r = r.template("call_r");
-    let rec_cmov = r.template("cmov");
     let rec_copysp = r.template("copysp");
-    let rec_div = r.template("div");
-    let rec_debugtrap = r.recipe("debugtrap");
-    let rec_f_ib = r.template("f_ib");
-    let rec_f32imm_z = r.template("f32imm_z");
-    let rec_f64imm_z = r.template("f64imm_z");
-    let rec_fa = r.template("fa");
-    let rec_fax = r.template("fax");
-    let rec_fa_ib = r.template("fa_ib");
-    let rec_fcmp = r.template("fcmp");
-    let rec_fcscc = r.template("fcscc");
-    let rec_ffillnull = r.recipe("ffillnull");
-    let rec_ffillSib32 = r.template("ffillSib32");
-    let rec_fillnull = r.recipe("fillnull");
-    let rec_fillSib32 = r.template("fillSib32");
-    let rec_fld = r.template("fld");
-    let rec_fldDisp32 = r.template("fldDisp32");
-    let rec_fldDisp8 = r.template("fldDisp8");
-    let rec_fldWithIndex = r.template("fldWithIndex");
-    let rec_fldWithIndexDisp32 = r.template("fldWithIndexDisp32");
-    let rec_fldWithIndexDisp8 = r.template("fldWithIndexDisp8");
-    let rec_fnaddr4 = r.template("fnaddr4");
-    let rec_fnaddr8 = r.template("fnaddr8");
-    let rec_fregfill32 = r.template("fregfill32");
-    let rec_fregspill32 = r.template("fregspill32");
-    let rec_frmov = r.template("frmov");
-    let rec_frurm = r.template("frurm");
-    let rec_fspillSib32 = r.template("fspillSib32");
-    let rec_fst = r.template("fst");
-    let rec_fstDisp32 = r.template("fstDisp32");
-    let rec_fstDisp8 = r.template("fstDisp8");
-    let rec_fstWithIndex = r.template("fstWithIndex");
-    let rec_fstWithIndexDisp32 = r.template("fstWithIndexDisp32");
-    let rec_fstWithIndexDisp8 = r.template("fstWithIndexDisp8");
-    let rec_furm = r.template("furm");
     let rec_furm_reg_to_ssa = r.template("furm_reg_to_ssa");
-    let rec_furmi_rnd = r.template("furmi_rnd");
     let rec_get_pinned_reg = r.recipe("get_pinned_reg");
-    let rec_got_fnaddr8 = r.template("got_fnaddr8");
-    let rec_got_gvaddr8 = r.template("got_gvaddr8");
-    let rec_gvaddr4 = r.template("gvaddr4");
-    let rec_gvaddr8 = r.template("gvaddr8");
-    let rec_icscc = r.template("icscc");
-    let rec_icscc_fpr = r.template("icscc_fpr");
-    let rec_icscc_ib = r.template("icscc_ib");
-    let rec_icscc_id = r.template("icscc_id");
-    let rec_indirect_jmp = r.template("indirect_jmp");
-    let rec_is_zero = r.template("is_zero");
-    let rec_jmpb = r.template("jmpb");
-    let rec_jmpd = r.template("jmpd");
-    let rec_jt_base = r.template("jt_base");
-    let rec_jt_entry = r.template("jt_entry");
-    let rec_ld = r.template("ld");
-    let rec_ldDisp32 = r.template("ldDisp32");
-    let rec_ldDisp8 = r.template("ldDisp8");
-    let rec_ldWithIndex = r.template("ldWithIndex");
-    let rec_ldWithIndexDisp32 = r.template("ldWithIndexDisp32");
-    let rec_ldWithIndexDisp8 = r.template("ldWithIndexDisp8");
-    let rec_mulx = r.template("mulx");
     let rec_null = r.recipe("null");
-    let rec_null_fpr = r.recipe("null_fpr");
-    let rec_pcrel_fnaddr8 = r.template("pcrel_fnaddr8");
-    let rec_pcrel_gvaddr8 = r.template("pcrel_gvaddr8");
-    let rec_pfcmp = r.template("pfcmp");
-    let rec_popq = r.template("popq");
     let rec_pu_id = r.template("pu_id");
     let rec_pu_id_bool = r.template("pu_id_bool");
-    let rec_pu_id_ref = r.template("pu_id_ref");
     let rec_pu_iq = r.template("pu_iq");
-    let rec_pushq = r.template("pushq");
-    let rec_ret = r.template("ret");
-    let rec_r_ib = r.template("r_ib");
-    let rec_r_ib_unsigned_gpr = r.template("r_ib_unsigned_gpr");
-    let rec_r_ib_unsigned_fpr = r.template("r_ib_unsigned_fpr");
-    let rec_r_ib_unsigned_r = r.template("r_ib_unsigned_r");
-    let rec_r_id = r.template("r_id");
-    let rec_rcmp = r.template("rcmp");
-    let rec_rcmp_ib = r.template("rcmp_ib");
-    let rec_rcmp_id = r.template("rcmp_id");
-    let rec_rcmp_sp = r.template("rcmp_sp");
-    let rec_regfill32 = r.template("regfill32");
-    let rec_regspill32 = r.template("regspill32");
-    let rec_rc = r.template("rc");
-    let rec_rfumr = r.template("rfumr");
-    let rec_rfurm = r.template("rfurm");
     let rec_rmov = r.template("rmov");
-    let rec_rr = r.template("rr");
-    let rec_rout = r.template("rout");
-    let rec_rin = r.template("rin");
-    let rec_rio = r.template("rio");
-    let rec_rrx = r.template("rrx");
-    let rec_safepoint = r.recipe("safepoint");
-    let rec_setf_abcd = r.template("setf_abcd");
-    let rec_seti_abcd = r.template("seti_abcd");
     let rec_set_pinned_reg = r.template("set_pinned_reg");
-    let rec_spaddr4_id = r.template("spaddr4_id");
-    let rec_spaddr8_id = r.template("spaddr8_id");
-    let rec_spillSib32 = r.template("spillSib32");
-    let rec_st = r.template("st");
-    let rec_stacknull = r.recipe("stacknull");
-    let rec_stDisp32 = r.template("stDisp32");
-    let rec_stDisp32_abcd = r.template("stDisp32_abcd");
-    let rec_stDisp8 = r.template("stDisp8");
-    let rec_stDisp8_abcd = r.template("stDisp8_abcd");
-    let rec_stWithIndex = r.template("stWithIndex");
-    let rec_stWithIndexDisp32 = r.template("stWithIndexDisp32");
-    let rec_stWithIndexDisp32_abcd = r.template("stWithIndexDisp32_abcd");
-    let rec_stWithIndexDisp8 = r.template("stWithIndexDisp8");
-    let rec_stWithIndexDisp8_abcd = r.template("stWithIndexDisp8_abcd");
-    let rec_stWithIndex_abcd = r.template("stWithIndex_abcd");
-    let rec_st_abcd = r.template("st_abcd");
-    let rec_t8jccb_abcd = r.template("t8jccb_abcd");
-    let rec_t8jccd_abcd = r.template("t8jccd_abcd");
-    let rec_t8jccd_long = r.template("t8jccd_long");
-    let rec_tjccb = r.template("tjccb");
-    let rec_tjccd = r.template("tjccd");
-    let rec_trap = r.template("trap");
-    let rec_trapif = r.recipe("trapif");
-    let rec_trapff = r.recipe("trapff");
     let rec_u_id = r.template("u_id");
     let rec_u_id_z = r.template("u_id_z");
     let rec_umr = r.template("umr");
     let rec_umr_reg_to_ssa = r.template("umr_reg_to_ssa");
-    let rec_ur = r.template("ur");
-    let rec_urm = r.template("urm");
     let rec_urm_noflags = r.template("urm_noflags");
     let rec_urm_noflags_abcd = r.template("urm_noflags_abcd");
-    let rec_vconst = r.template("vconst");
-    let rec_vconst_optimized = r.template("vconst_optimized");
-
-    // Predicates shorthands.
-    let all_ones_funcaddrs_and_not_is_pic =
-        settings.predicate_by_name("all_ones_funcaddrs_and_not_is_pic");
-    let is_pic = settings.predicate_by_name("is_pic");
-    let not_all_ones_funcaddrs_and_not_is_pic =
-        settings.predicate_by_name("not_all_ones_funcaddrs_and_not_is_pic");
-    let not_is_pic = settings.predicate_by_name("not_is_pic");
-    let use_popcnt = settings.predicate_by_name("use_popcnt");
-    let use_lzcnt = settings.predicate_by_name("use_lzcnt");
-    let use_bmi1 = settings.predicate_by_name("use_bmi1");
-    let use_sse41 = settings.predicate_by_name("use_sse41");
-    let use_ssse3_simd = settings.predicate_by_name("use_ssse3_simd");
-    let use_sse41_simd = settings.predicate_by_name("use_sse41_simd");
-    let use_sse42_simd = settings.predicate_by_name("use_sse42_simd");
-
-    // Definitions.
-    let mut e = PerCpuModeEncodings::new();
 
     // The pinned reg is fixed to a certain value entirely user-controlled, so it generates nothing!
     e.enc64_rec(get_pinned_reg.bind(I64), rec_get_pinned_reg, 0);
@@ -731,41 +436,6 @@ pub(crate) fn define(
         set_pinned_reg.bind(I64),
         rec_set_pinned_reg.opcodes(&MOV_STORE).rex().w(),
     );
-
-    e.enc_i32_i64(iadd, rec_rr.opcodes(&ADD));
-    e.enc_i32_i64(iadd_ifcout, rec_rout.opcodes(&ADD));
-    e.enc_i32_i64(iadd_ifcin, rec_rin.opcodes(&ADC));
-    e.enc_i32_i64(iadd_ifcarry, rec_rio.opcodes(&ADC));
-
-    e.enc_i32_i64(isub, rec_rr.opcodes(&SUB));
-    e.enc_i32_i64(isub_ifbout, rec_rout.opcodes(&SUB));
-    e.enc_i32_i64(isub_ifbin, rec_rin.opcodes(&SBB));
-    e.enc_i32_i64(isub_ifborrow, rec_rio.opcodes(&SBB));
-
-    e.enc_i32_i64(band, rec_rr.opcodes(&AND));
-    e.enc_b32_b64(band, rec_rr.opcodes(&AND));
-    e.enc_i32_i64(bor, rec_rr.opcodes(&OR));
-    e.enc_b32_b64(bor, rec_rr.opcodes(&OR));
-    e.enc_i32_i64(bxor, rec_rr.opcodes(&XOR));
-    e.enc_b32_b64(bxor, rec_rr.opcodes(&XOR));
-
-    // x86 has a bitwise not instruction NOT.
-    e.enc_i32_i64(bnot, rec_ur.opcodes(&NOT).rrr(2));
-    e.enc_b32_b64(bnot, rec_ur.opcodes(&NOT).rrr(2));
-
-    // Also add a `b1` encodings for the logic instructions.
-    // TODO: Should this be done with 8-bit instructions? It would improve partial register
-    // dependencies.
-    e.enc_both(band.bind(B1), rec_rr.opcodes(&AND));
-    e.enc_both(bor.bind(B1), rec_rr.opcodes(&OR));
-    e.enc_both(bxor.bind(B1), rec_rr.opcodes(&XOR));
-
-    e.enc_i32_i64(imul, rec_rrx.opcodes(&IMUL));
-    e.enc_i32_i64(x86_sdivmodx, rec_div.opcodes(&IDIV).rrr(7));
-    e.enc_i32_i64(x86_udivmodx, rec_div.opcodes(&DIV).rrr(6));
-
-    e.enc_i32_i64(x86_smulx, rec_mulx.opcodes(&IMUL_RDX_RAX).rrr(5));
-    e.enc_i32_i64(x86_umulx, rec_mulx.opcodes(&MUL).rrr(4));
 
     e.enc_i32_i64(copy, rec_umr.opcodes(&MOV_STORE));
     e.enc_r32_r64_rex_only(copy, rec_umr.opcodes(&MOV_STORE));
@@ -789,21 +459,6 @@ pub(crate) fn define(
     e.enc32(regmove.bind(R32), rec_rmov.opcodes(&MOV_STORE));
     e.enc64(regmove.bind(R32), rec_rmov.opcodes(&MOV_STORE).rex());
     e.enc64(regmove.bind(R64), rec_rmov.opcodes(&MOV_STORE).rex().w());
-
-    e.enc_i32_i64(iadd_imm, rec_r_ib.opcodes(&ADD_IMM8_SIGN_EXTEND).rrr(0));
-    e.enc_i32_i64(iadd_imm, rec_r_id.opcodes(&ADD_IMM).rrr(0));
-
-    e.enc_i32_i64(band_imm, rec_r_ib.opcodes(&AND_IMM8_SIGN_EXTEND).rrr(4));
-    e.enc_i32_i64(band_imm, rec_r_id.opcodes(&AND_IMM).rrr(4));
-
-    e.enc_i32_i64(bor_imm, rec_r_ib.opcodes(&OR_IMM8_SIGN_EXTEND).rrr(1));
-    e.enc_i32_i64(bor_imm, rec_r_id.opcodes(&OR_IMM).rrr(1));
-
-    e.enc_i32_i64(bxor_imm, rec_r_ib.opcodes(&XOR_IMM8_SIGN_EXTEND).rrr(6));
-    e.enc_i32_i64(bxor_imm, rec_r_id.opcodes(&XOR_IMM).rrr(6));
-
-    // TODO: band_imm.i64 with an unsigned 32-bit immediate can be encoded as band_imm.i32. Can
-    // even use the single-byte immediate for 0xffff_ffXX masks.
 
     // Immediate constants.
     e.enc32(iconst.bind(I32), rec_pu_id.opcodes(&MOV_IMM));
@@ -845,6 +500,7 @@ pub(crate) fn define(
         rec_u_id_z.opcodes(&XORB),
         is_zero_int.clone(),
     );
+
     // You may expect that i16 encodings would have an 0x66 prefix on the opcode to indicate that
     // encodings should be on 16-bit operands (f.ex, "xor %ax, %ax"). Cranelift currently does not
     // know that it can drop the 0x66 prefix and clear the upper half of a 32-bit register in these
@@ -864,58 +520,252 @@ pub(crate) fn define(
     );
     e.enc_x86_64_instp(iconst.bind(I64), rec_u_id_z.opcodes(&XOR), is_zero_int);
 
-    // Shifts and rotates.
-    // Note that the dynamic shift amount is only masked by 5 or 6 bits; the 8-bit
-    // and 16-bit shifts would need explicit masking.
+    // Numerical conversions.
 
-    for &(inst, rrr) in &[(rotl, 0), (rotr, 1), (ishl, 4), (ushr, 5), (sshr, 7)] {
-        // Cannot use enc_i32_i64 for this pattern because instructions require
-        // to bind any.
-        e.enc32(
-            inst.bind(I32).bind(Any),
-            rec_rc.opcodes(&ROTATE_CL).rrr(rrr),
-        );
-        e.enc64(
-            inst.bind(I64).bind(Any),
-            rec_rc.opcodes(&ROTATE_CL).rrr(rrr).rex().w(),
-        );
-        e.enc64(
-            inst.bind(I32).bind(Any),
-            rec_rc.opcodes(&ROTATE_CL).rrr(rrr).rex(),
-        );
-        e.enc64(
-            inst.bind(I32).bind(Any),
-            rec_rc.opcodes(&ROTATE_CL).rrr(rrr),
-        );
+    // Reducing an integer is a no-op.
+    e.enc32_rec(ireduce.bind(I8).bind(I16), rec_null, 0);
+    e.enc32_rec(ireduce.bind(I8).bind(I32), rec_null, 0);
+    e.enc32_rec(ireduce.bind(I16).bind(I32), rec_null, 0);
+
+    e.enc64_rec(ireduce.bind(I8).bind(I16), rec_null, 0);
+    e.enc64_rec(ireduce.bind(I8).bind(I32), rec_null, 0);
+    e.enc64_rec(ireduce.bind(I16).bind(I32), rec_null, 0);
+    e.enc64_rec(ireduce.bind(I8).bind(I64), rec_null, 0);
+    e.enc64_rec(ireduce.bind(I16).bind(I64), rec_null, 0);
+    e.enc64_rec(ireduce.bind(I32).bind(I64), rec_null, 0);
+
+    // TODO: Add encodings for cbw, cwde, cdqe, which are sign-extending
+    // instructions for %al/%ax/%eax to %ax/%eax/%rax.
+
+    // movsbl
+    e.enc32(
+        sextend.bind(I32).bind(I8),
+        rec_urm_noflags_abcd.opcodes(&MOVSX_BYTE),
+    );
+    e.enc64(
+        sextend.bind(I32).bind(I8),
+        rec_urm_noflags.opcodes(&MOVSX_BYTE).rex(),
+    );
+    e.enc64(
+        sextend.bind(I32).bind(I8),
+        rec_urm_noflags_abcd.opcodes(&MOVSX_BYTE),
+    );
+
+    // movswl
+    e.enc32(
+        sextend.bind(I32).bind(I16),
+        rec_urm_noflags.opcodes(&MOVSX_WORD),
+    );
+    e.enc64(
+        sextend.bind(I32).bind(I16),
+        rec_urm_noflags.opcodes(&MOVSX_WORD).rex(),
+    );
+    e.enc64(
+        sextend.bind(I32).bind(I16),
+        rec_urm_noflags.opcodes(&MOVSX_WORD),
+    );
+
+    // movsbq
+    e.enc64(
+        sextend.bind(I64).bind(I8),
+        rec_urm_noflags.opcodes(&MOVSX_BYTE).rex().w(),
+    );
+
+    // movswq
+    e.enc64(
+        sextend.bind(I64).bind(I16),
+        rec_urm_noflags.opcodes(&MOVSX_WORD).rex().w(),
+    );
+
+    // movslq
+    e.enc64(
+        sextend.bind(I64).bind(I32),
+        rec_urm_noflags.opcodes(&MOVSXD).rex().w(),
+    );
+
+    // movzbl
+    e.enc32(
+        uextend.bind(I32).bind(I8),
+        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+    );
+    e.enc64(
+        uextend.bind(I32).bind(I8),
+        rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
+    );
+    e.enc64(
+        uextend.bind(I32).bind(I8),
+        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+    );
+
+    // movzwl
+    e.enc32(
+        uextend.bind(I32).bind(I16),
+        rec_urm_noflags.opcodes(&MOVZX_WORD),
+    );
+    e.enc64(
+        uextend.bind(I32).bind(I16),
+        rec_urm_noflags.opcodes(&MOVZX_WORD).rex(),
+    );
+    e.enc64(
+        uextend.bind(I32).bind(I16),
+        rec_urm_noflags.opcodes(&MOVZX_WORD),
+    );
+
+    // movzbq, encoded as movzbl because it's equivalent and shorter.
+    e.enc64(
+        uextend.bind(I64).bind(I8),
+        rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
+    );
+    e.enc64(
+        uextend.bind(I64).bind(I8),
+        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+    );
+
+    // movzwq, encoded as movzwl because it's equivalent and shorter
+    e.enc64(
+        uextend.bind(I64).bind(I16),
+        rec_urm_noflags.opcodes(&MOVZX_WORD).rex(),
+    );
+    e.enc64(
+        uextend.bind(I64).bind(I16),
+        rec_urm_noflags.opcodes(&MOVZX_WORD),
+    );
+
+    // A 32-bit register copy clears the high 32 bits.
+    e.enc64(
+        uextend.bind(I64).bind(I32),
+        rec_umr.opcodes(&MOV_STORE).rex(),
+    );
+    e.enc64(uextend.bind(I64).bind(I32), rec_umr.opcodes(&MOV_STORE));
+
+    // Convert bool to int.
+    //
+    // This assumes that b1 is represented as an 8-bit low register with the value 0
+    // or 1.
+    //
+    // Encode movzbq as movzbl, because it's equivalent and shorter.
+    for &to in &[I8, I16, I32, I64] {
+        for &from in &[B1, B8] {
+            e.enc64(
+                bint.bind(to).bind(from),
+                rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
+            );
+            e.enc64(
+                bint.bind(to).bind(from),
+                rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+            );
+            if to != I64 {
+                e.enc32(
+                    bint.bind(to).bind(from),
+                    rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+                );
+            }
+        }
     }
 
-    e.enc_i32_i64(rotl_imm, rec_r_ib.opcodes(&ROTATE_IMM8).rrr(0));
-    e.enc_i32_i64(rotr_imm, rec_r_ib.opcodes(&ROTATE_IMM8).rrr(1));
-    e.enc_i32_i64(ishl_imm, rec_r_ib.opcodes(&ROTATE_IMM8).rrr(4));
-    e.enc_i32_i64(ushr_imm, rec_r_ib.opcodes(&ROTATE_IMM8).rrr(5));
-    e.enc_i32_i64(sshr_imm, rec_r_ib.opcodes(&ROTATE_IMM8).rrr(7));
+    // Copy Special
+    // For x86-64, only define REX forms for now, since we can't describe the
+    // special regunit immediate operands with the current constraint language.
+    e.enc64(copy_special, rec_copysp.opcodes(&MOV_STORE).rex().w());
+    e.enc32(copy_special, rec_copysp.opcodes(&MOV_STORE));
 
-    // Population count.
-    e.enc32_isap(popcnt.bind(I32), rec_urm.opcodes(&POPCNT), use_popcnt);
-    e.enc64_isap(
-        popcnt.bind(I64),
-        rec_urm.opcodes(&POPCNT).rex().w(),
-        use_popcnt,
+    // Copy to SSA.  These have to be done with special _rex_only encoders, because the standard
+    // machinery for deciding whether a REX.{RXB} prefix is needed doesn't take into account
+    // the source register, which is specified directly in the instruction.
+    e.enc_i32_i64_rex_only(copy_to_ssa, rec_umr_reg_to_ssa.opcodes(&MOV_STORE));
+    e.enc_r32_r64_rex_only(copy_to_ssa, rec_umr_reg_to_ssa.opcodes(&MOV_STORE));
+    e.enc_both_rex_only(copy_to_ssa.bind(B1), rec_umr_reg_to_ssa.opcodes(&MOV_STORE));
+    e.enc_both_rex_only(copy_to_ssa.bind(I8), rec_umr_reg_to_ssa.opcodes(&MOV_STORE));
+    e.enc_both_rex_only(
+        copy_to_ssa.bind(I16),
+        rec_umr_reg_to_ssa.opcodes(&MOV_STORE),
     );
-    e.enc64_isap(popcnt.bind(I32), rec_urm.opcodes(&POPCNT).rex(), use_popcnt);
-    e.enc64_isap(popcnt.bind(I32), rec_urm.opcodes(&POPCNT), use_popcnt);
+    e.enc_both_rex_only(
+        copy_to_ssa.bind(F64),
+        rec_furm_reg_to_ssa.opcodes(&MOVSD_LOAD),
+    );
+    e.enc_both_rex_only(
+        copy_to_ssa.bind(F32),
+        rec_furm_reg_to_ssa.opcodes(&MOVSS_LOAD),
+    );
+}
 
-    // Count leading zero bits.
-    e.enc32_isap(clz.bind(I32), rec_urm.opcodes(&LZCNT), use_lzcnt);
-    e.enc64_isap(clz.bind(I64), rec_urm.opcodes(&LZCNT).rex().w(), use_lzcnt);
-    e.enc64_isap(clz.bind(I32), rec_urm.opcodes(&LZCNT).rex(), use_lzcnt);
-    e.enc64_isap(clz.bind(I32), rec_urm.opcodes(&LZCNT), use_lzcnt);
+#[inline(never)]
+fn define_memory(
+    e: &mut PerCpuModeEncodings,
+    shared_defs: &SharedDefinitions,
+    x86: &InstructionGroup,
+    r: &RecipeGroup,
+) {
+    let shared = &shared_defs.instructions;
+    let formats = &shared_defs.formats;
 
-    // Count trailing zero bits.
-    e.enc32_isap(ctz.bind(I32), rec_urm.opcodes(&TZCNT), use_bmi1);
-    e.enc64_isap(ctz.bind(I64), rec_urm.opcodes(&TZCNT).rex().w(), use_bmi1);
-    e.enc64_isap(ctz.bind(I32), rec_urm.opcodes(&TZCNT).rex(), use_bmi1);
-    e.enc64_isap(ctz.bind(I32), rec_urm.opcodes(&TZCNT), use_bmi1);
+    // Shorthands for instructions.
+    let adjust_sp_down = shared.by_name("adjust_sp_down");
+    let adjust_sp_down_imm = shared.by_name("adjust_sp_down_imm");
+    let adjust_sp_up_imm = shared.by_name("adjust_sp_up_imm");
+    let copy_nop = shared.by_name("copy_nop");
+    let fill = shared.by_name("fill");
+    let fill_nop = shared.by_name("fill_nop");
+    let istore16 = shared.by_name("istore16");
+    let istore16_complex = shared.by_name("istore16_complex");
+    let istore32 = shared.by_name("istore32");
+    let istore32_complex = shared.by_name("istore32_complex");
+    let istore8 = shared.by_name("istore8");
+    let istore8_complex = shared.by_name("istore8_complex");
+    let load = shared.by_name("load");
+    let load_complex = shared.by_name("load_complex");
+    let regfill = shared.by_name("regfill");
+    let regspill = shared.by_name("regspill");
+    let sload16 = shared.by_name("sload16");
+    let sload16_complex = shared.by_name("sload16_complex");
+    let sload32 = shared.by_name("sload32");
+    let sload32_complex = shared.by_name("sload32_complex");
+    let sload8 = shared.by_name("sload8");
+    let sload8_complex = shared.by_name("sload8_complex");
+    let spill = shared.by_name("spill");
+    let store = shared.by_name("store");
+    let store_complex = shared.by_name("store_complex");
+    let uload16 = shared.by_name("uload16");
+    let uload16_complex = shared.by_name("uload16_complex");
+    let uload32 = shared.by_name("uload32");
+    let uload32_complex = shared.by_name("uload32_complex");
+    let uload8 = shared.by_name("uload8");
+    let uload8_complex = shared.by_name("uload8_complex");
+    let x86_pop = x86.by_name("x86_pop");
+    let x86_push = x86.by_name("x86_push");
+
+    // Shorthands for recipes.
+    let rec_adjustsp = r.template("adjustsp");
+    let rec_adjustsp_ib = r.template("adjustsp_ib");
+    let rec_adjustsp_id = r.template("adjustsp_id");
+    let rec_ffillnull = r.recipe("ffillnull");
+    let rec_fillnull = r.recipe("fillnull");
+    let rec_fillSib32 = r.template("fillSib32");
+    let rec_ld = r.template("ld");
+    let rec_ldDisp32 = r.template("ldDisp32");
+    let rec_ldDisp8 = r.template("ldDisp8");
+    let rec_ldWithIndex = r.template("ldWithIndex");
+    let rec_ldWithIndexDisp32 = r.template("ldWithIndexDisp32");
+    let rec_ldWithIndexDisp8 = r.template("ldWithIndexDisp8");
+    let rec_popq = r.template("popq");
+    let rec_pushq = r.template("pushq");
+    let rec_regfill32 = r.template("regfill32");
+    let rec_regspill32 = r.template("regspill32");
+    let rec_spillSib32 = r.template("spillSib32");
+    let rec_st = r.template("st");
+    let rec_stacknull = r.recipe("stacknull");
+    let rec_stDisp32 = r.template("stDisp32");
+    let rec_stDisp32_abcd = r.template("stDisp32_abcd");
+    let rec_stDisp8 = r.template("stDisp8");
+    let rec_stDisp8_abcd = r.template("stDisp8_abcd");
+    let rec_stWithIndex = r.template("stWithIndex");
+    let rec_stWithIndexDisp32 = r.template("stWithIndexDisp32");
+    let rec_stWithIndexDisp32_abcd = r.template("stWithIndexDisp32_abcd");
+    let rec_stWithIndexDisp8 = r.template("stWithIndexDisp8");
+    let rec_stWithIndexDisp8_abcd = r.template("stWithIndexDisp8_abcd");
+    let rec_stWithIndex_abcd = r.template("stWithIndex_abcd");
+    let rec_st_abcd = r.template("st_abcd");
 
     // Loads and stores.
     let is_load_complex_length_two =
@@ -1080,32 +930,6 @@ pub(crate) fn define(
     e.enc32(x86_pop.bind(I32), rec_popq.opcodes(&POP_REG));
     e.enc_x86_64(x86_pop.bind(I64), rec_popq.opcodes(&POP_REG));
 
-    // Copy Special
-    // For x86-64, only define REX forms for now, since we can't describe the
-    // special regunit immediate operands with the current constraint language.
-    e.enc64(copy_special, rec_copysp.opcodes(&MOV_STORE).rex().w());
-    e.enc32(copy_special, rec_copysp.opcodes(&MOV_STORE));
-
-    // Copy to SSA.  These have to be done with special _rex_only encoders, because the standard
-    // machinery for deciding whether a REX.{RXB} prefix is needed doesn't take into account
-    // the source register, which is specified directly in the instruction.
-    e.enc_i32_i64_rex_only(copy_to_ssa, rec_umr_reg_to_ssa.opcodes(&MOV_STORE));
-    e.enc_r32_r64_rex_only(copy_to_ssa, rec_umr_reg_to_ssa.opcodes(&MOV_STORE));
-    e.enc_both_rex_only(copy_to_ssa.bind(B1), rec_umr_reg_to_ssa.opcodes(&MOV_STORE));
-    e.enc_both_rex_only(copy_to_ssa.bind(I8), rec_umr_reg_to_ssa.opcodes(&MOV_STORE));
-    e.enc_both_rex_only(
-        copy_to_ssa.bind(I16),
-        rec_umr_reg_to_ssa.opcodes(&MOV_STORE),
-    );
-    e.enc_both_rex_only(
-        copy_to_ssa.bind(F64),
-        rec_furm_reg_to_ssa.opcodes(&MOVSD_LOAD),
-    );
-    e.enc_both_rex_only(
-        copy_to_ssa.bind(F32),
-        rec_furm_reg_to_ssa.opcodes(&MOVSS_LOAD),
-    );
-
     // Stack-slot-to-the-same-stack-slot copy, which is guaranteed to turn
     // into a no-op.
     // The same encoding is generated for both the 64- and 32-bit architectures.
@@ -1151,6 +975,94 @@ pub(crate) fn define(
         adjust_sp_down_imm,
         rec_adjustsp_id.opcodes(&CMP_IMM).rrr(5).rex().w(),
     );
+}
+
+#[inline(never)]
+fn define_fpu_moves(e: &mut PerCpuModeEncodings, shared_defs: &SharedDefinitions, r: &RecipeGroup) {
+    let shared = &shared_defs.instructions;
+
+    // Shorthands for instructions.
+    let bitcast = shared.by_name("bitcast");
+    let copy = shared.by_name("copy");
+    let regmove = shared.by_name("regmove");
+
+    // Shorthands for recipes.
+    let rec_frmov = r.template("frmov");
+    let rec_frurm = r.template("frurm");
+    let rec_furm = r.template("furm");
+    let rec_rfumr = r.template("rfumr");
+
+    // Floating-point moves.
+    // movd
+    e.enc_both(
+        bitcast.bind(F32).bind(I32),
+        rec_frurm.opcodes(&MOVD_LOAD_XMM),
+    );
+    e.enc_both(
+        bitcast.bind(I32).bind(F32),
+        rec_rfumr.opcodes(&MOVD_STORE_XMM),
+    );
+
+    // movq
+    e.enc64(
+        bitcast.bind(F64).bind(I64),
+        rec_frurm.opcodes(&MOVD_LOAD_XMM).rex().w(),
+    );
+    e.enc64(
+        bitcast.bind(I64).bind(F64),
+        rec_rfumr.opcodes(&MOVD_STORE_XMM).rex().w(),
+    );
+
+    // movaps
+    e.enc_both(copy.bind(F32), rec_furm.opcodes(&MOVAPS_LOAD));
+    e.enc_both(copy.bind(F64), rec_furm.opcodes(&MOVAPS_LOAD));
+
+    // TODO For x86-64, only define REX forms for now, since we can't describe the special regunit
+    // immediate operands with the current constraint language.
+    e.enc32(regmove.bind(F32), rec_frmov.opcodes(&MOVAPS_LOAD));
+    e.enc64(regmove.bind(F32), rec_frmov.opcodes(&MOVAPS_LOAD).rex());
+
+    // TODO For x86-64, only define REX forms for now, since we can't describe the special regunit
+    // immediate operands with the current constraint language.
+    e.enc32(regmove.bind(F64), rec_frmov.opcodes(&MOVAPS_LOAD));
+    e.enc64(regmove.bind(F64), rec_frmov.opcodes(&MOVAPS_LOAD).rex());
+}
+
+#[inline(never)]
+fn define_fpu_memory(
+    e: &mut PerCpuModeEncodings,
+    shared_defs: &SharedDefinitions,
+    r: &RecipeGroup,
+) {
+    let shared = &shared_defs.instructions;
+
+    // Shorthands for instructions.
+    let fill = shared.by_name("fill");
+    let load = shared.by_name("load");
+    let load_complex = shared.by_name("load_complex");
+    let regfill = shared.by_name("regfill");
+    let regspill = shared.by_name("regspill");
+    let spill = shared.by_name("spill");
+    let store = shared.by_name("store");
+    let store_complex = shared.by_name("store_complex");
+
+    // Shorthands for recipes.
+    let rec_ffillSib32 = r.template("ffillSib32");
+    let rec_fld = r.template("fld");
+    let rec_fldDisp32 = r.template("fldDisp32");
+    let rec_fldDisp8 = r.template("fldDisp8");
+    let rec_fldWithIndex = r.template("fldWithIndex");
+    let rec_fldWithIndexDisp32 = r.template("fldWithIndexDisp32");
+    let rec_fldWithIndexDisp8 = r.template("fldWithIndexDisp8");
+    let rec_fregfill32 = r.template("fregfill32");
+    let rec_fregspill32 = r.template("fregspill32");
+    let rec_fspillSib32 = r.template("fspillSib32");
+    let rec_fst = r.template("fst");
+    let rec_fstDisp32 = r.template("fstDisp32");
+    let rec_fstDisp8 = r.template("fstDisp8");
+    let rec_fstWithIndex = r.template("fstWithIndex");
+    let rec_fstWithIndexDisp32 = r.template("fstWithIndexDisp32");
+    let rec_fstWithIndexDisp8 = r.template("fstWithIndexDisp8");
 
     // Float loads and stores.
     e.enc_both(load.bind(F32).bind(Any), rec_fld.opcodes(&MOVSS_LOAD));
@@ -1242,358 +1154,53 @@ pub(crate) fn define(
     e.enc_both(regspill.bind(F32), rec_fregspill32.opcodes(&MOVSS_STORE));
     e.enc_both(spill.bind(F64), rec_fspillSib32.opcodes(&MOVSD_STORE));
     e.enc_both(regspill.bind(F64), rec_fregspill32.opcodes(&MOVSD_STORE));
+}
 
-    // Function addresses.
+#[inline(never)]
+fn define_fpu_ops(
+    e: &mut PerCpuModeEncodings,
+    shared_defs: &SharedDefinitions,
+    settings: &SettingGroup,
+    x86: &InstructionGroup,
+    r: &RecipeGroup,
+) {
+    let shared = &shared_defs.instructions;
+    let formats = &shared_defs.formats;
 
-    // Non-PIC, all-ones funcaddresses.
-    e.enc32_isap(
-        func_addr.bind(I32),
-        rec_fnaddr4.opcodes(&MOV_IMM),
-        not_all_ones_funcaddrs_and_not_is_pic,
-    );
-    e.enc64_isap(
-        func_addr.bind(I64),
-        rec_fnaddr8.opcodes(&MOV_IMM).rex().w(),
-        not_all_ones_funcaddrs_and_not_is_pic,
-    );
+    // Shorthands for instructions.
+    let ceil = shared.by_name("ceil");
+    let f32const = shared.by_name("f32const");
+    let f64const = shared.by_name("f64const");
+    let fadd = shared.by_name("fadd");
+    let fcmp = shared.by_name("fcmp");
+    let fcvt_from_sint = shared.by_name("fcvt_from_sint");
+    let fdemote = shared.by_name("fdemote");
+    let fdiv = shared.by_name("fdiv");
+    let ffcmp = shared.by_name("ffcmp");
+    let floor = shared.by_name("floor");
+    let fmul = shared.by_name("fmul");
+    let fpromote = shared.by_name("fpromote");
+    let fsub = shared.by_name("fsub");
+    let nearest = shared.by_name("nearest");
+    let sqrt = shared.by_name("sqrt");
+    let trunc = shared.by_name("trunc");
+    let x86_cvtt2si = x86.by_name("x86_cvtt2si");
+    let x86_fmax = x86.by_name("x86_fmax");
+    let x86_fmin = x86.by_name("x86_fmin");
 
-    // Non-PIC, all-zeros funcaddresses.
-    e.enc32_isap(
-        func_addr.bind(I32),
-        rec_allones_fnaddr4.opcodes(&MOV_IMM),
-        all_ones_funcaddrs_and_not_is_pic,
-    );
-    e.enc64_isap(
-        func_addr.bind(I64),
-        rec_allones_fnaddr8.opcodes(&MOV_IMM).rex().w(),
-        all_ones_funcaddrs_and_not_is_pic,
-    );
+    // Shorthands for recipes.
+    let rec_f32imm_z = r.template("f32imm_z");
+    let rec_f64imm_z = r.template("f64imm_z");
+    let rec_fa = r.template("fa");
+    let rec_fcmp = r.template("fcmp");
+    let rec_fcscc = r.template("fcscc");
+    let rec_frurm = r.template("frurm");
+    let rec_furm = r.template("furm");
+    let rec_furmi_rnd = r.template("furmi_rnd");
+    let rec_rfurm = r.template("rfurm");
 
-    // 64-bit, colocated, both PIC and non-PIC. Use the lea instruction's pc-relative field.
-    let is_colocated_func =
-        InstructionPredicate::new_is_colocated_func(&*formats.func_addr, "func_ref");
-    e.enc64_instp(
-        func_addr.bind(I64),
-        rec_pcrel_fnaddr8.opcodes(&LEA).rex().w(),
-        is_colocated_func,
-    );
-
-    // 64-bit, non-colocated, PIC.
-    e.enc64_isap(
-        func_addr.bind(I64),
-        rec_got_fnaddr8.opcodes(&MOV_LOAD).rex().w(),
-        is_pic,
-    );
-
-    // Global addresses.
-
-    // Non-PIC.
-    e.enc32_isap(
-        symbol_value.bind(I32),
-        rec_gvaddr4.opcodes(&MOV_IMM),
-        not_is_pic,
-    );
-    e.enc64_isap(
-        symbol_value.bind(I64),
-        rec_gvaddr8.opcodes(&MOV_IMM).rex().w(),
-        not_is_pic,
-    );
-
-    // PIC, colocated.
-    e.enc64_func(
-        symbol_value.bind(I64),
-        rec_pcrel_gvaddr8.opcodes(&LEA).rex().w(),
-        |encoding| {
-            encoding
-                .isa_predicate(is_pic)
-                .inst_predicate(InstructionPredicate::new_is_colocated_data(formats))
-        },
-    );
-
-    // PIC, non-colocated.
-    e.enc64_isap(
-        symbol_value.bind(I64),
-        rec_got_gvaddr8.opcodes(&MOV_LOAD).rex().w(),
-        is_pic,
-    );
-
-    // Stack addresses.
-    //
-    // TODO: Add encoding rules for stack_load and stack_store, so that they
-    // don't get legalized to stack_addr + load/store.
-    e.enc32(stack_addr.bind(I32), rec_spaddr4_id.opcodes(&LEA));
-    e.enc64(stack_addr.bind(I64), rec_spaddr8_id.opcodes(&LEA).rex().w());
-
-    // Call/return
-
-    // 32-bit, both PIC and non-PIC.
-    e.enc32(call, rec_call_id.opcodes(&CALL_RELATIVE));
-
-    // 64-bit, colocated, both PIC and non-PIC. Use the call instruction's pc-relative field.
-    let is_colocated_func = InstructionPredicate::new_is_colocated_func(&*formats.call, "func_ref");
-    e.enc64_instp(call, rec_call_id.opcodes(&CALL_RELATIVE), is_colocated_func);
-
-    // 64-bit, non-colocated, PIC. There is no 64-bit non-colocated non-PIC version, since non-PIC
-    // is currently using the large model, which requires calls be lowered to
-    // func_addr+call_indirect.
-    e.enc64_isap(call, rec_call_plt_id.opcodes(&CALL_RELATIVE), is_pic);
-
-    e.enc32(
-        call_indirect.bind(I32),
-        rec_call_r.opcodes(&JUMP_ABSOLUTE).rrr(2),
-    );
-    e.enc64(
-        call_indirect.bind(I64),
-        rec_call_r.opcodes(&JUMP_ABSOLUTE).rrr(2).rex(),
-    );
-    e.enc64(
-        call_indirect.bind(I64),
-        rec_call_r.opcodes(&JUMP_ABSOLUTE).rrr(2),
-    );
-
-    e.enc32(return_, rec_ret.opcodes(&RET_NEAR));
-    e.enc64(return_, rec_ret.opcodes(&RET_NEAR));
-
-    // Branches.
-    e.enc32(jump, rec_jmpb.opcodes(&JUMP_SHORT));
-    e.enc64(jump, rec_jmpb.opcodes(&JUMP_SHORT));
-    e.enc32(jump, rec_jmpd.opcodes(&JUMP_NEAR_RELATIVE));
-    e.enc64(jump, rec_jmpd.opcodes(&JUMP_NEAR_RELATIVE));
-
-    e.enc_both(brif, rec_brib.opcodes(&JUMP_SHORT_IF_OVERFLOW));
-    e.enc_both(brif, rec_brid.opcodes(&JUMP_NEAR_IF_OVERFLOW));
-
-    // Not all float condition codes are legal, see `supported_floatccs`.
-    e.enc_both(brff, rec_brfb.opcodes(&JUMP_SHORT_IF_OVERFLOW));
-    e.enc_both(brff, rec_brfd.opcodes(&JUMP_NEAR_IF_OVERFLOW));
-
-    // Note that the tjccd opcode will be prefixed with 0x0f.
-    e.enc_i32_i64_explicit_rex(brz, rec_tjccb.opcodes(&JUMP_SHORT_IF_EQUAL));
-    e.enc_i32_i64_explicit_rex(brz, rec_tjccd.opcodes(&TEST_BYTE_REG));
-    e.enc_i32_i64_explicit_rex(brnz, rec_tjccb.opcodes(&JUMP_SHORT_IF_NOT_EQUAL));
-    e.enc_i32_i64_explicit_rex(brnz, rec_tjccd.opcodes(&TEST_REG));
-
-    // Branch on a b1 value in a register only looks at the low 8 bits. See also
-    // bint encodings below.
-    //
-    // Start with the worst-case encoding for X86_32 only. The register allocator
-    // can't handle a branch with an ABCD-constrained operand.
-    e.enc32(brz.bind(B1), rec_t8jccd_long.opcodes(&TEST_BYTE_REG));
-    e.enc32(brnz.bind(B1), rec_t8jccd_long.opcodes(&TEST_REG));
-
-    e.enc_both(brz.bind(B1), rec_t8jccb_abcd.opcodes(&JUMP_SHORT_IF_EQUAL));
-    e.enc_both(brz.bind(B1), rec_t8jccd_abcd.opcodes(&TEST_BYTE_REG));
-    e.enc_both(
-        brnz.bind(B1),
-        rec_t8jccb_abcd.opcodes(&JUMP_SHORT_IF_NOT_EQUAL),
-    );
-    e.enc_both(brnz.bind(B1), rec_t8jccd_abcd.opcodes(&TEST_REG));
-
-    // Jump tables.
-    e.enc64(
-        jump_table_entry.bind(I64),
-        rec_jt_entry.opcodes(&MOVSXD).rex().w(),
-    );
-    e.enc32(jump_table_entry.bind(I32), rec_jt_entry.opcodes(&MOV_LOAD));
-
-    e.enc64(
-        jump_table_base.bind(I64),
-        rec_jt_base.opcodes(&LEA).rex().w(),
-    );
-    e.enc32(jump_table_base.bind(I32), rec_jt_base.opcodes(&LEA));
-
-    e.enc_x86_64(
-        indirect_jump_table_br.bind(I64),
-        rec_indirect_jmp.opcodes(&JUMP_ABSOLUTE).rrr(4),
-    );
-    e.enc32(
-        indirect_jump_table_br.bind(I32),
-        rec_indirect_jmp.opcodes(&JUMP_ABSOLUTE).rrr(4),
-    );
-
-    // Trap as ud2
-    e.enc32(trap, rec_trap.opcodes(&UNDEFINED2));
-    e.enc64(trap, rec_trap.opcodes(&UNDEFINED2));
-    e.enc32(resumable_trap, rec_trap.opcodes(&UNDEFINED2));
-    e.enc64(resumable_trap, rec_trap.opcodes(&UNDEFINED2));
-
-    // Debug trap as int3
-    e.enc32_rec(debugtrap, rec_debugtrap, 0);
-    e.enc64_rec(debugtrap, rec_debugtrap, 0);
-
-    e.enc32_rec(trapif, rec_trapif, 0);
-    e.enc64_rec(trapif, rec_trapif, 0);
-    e.enc32_rec(trapff, rec_trapff, 0);
-    e.enc64_rec(trapff, rec_trapff, 0);
-
-    // Comparisons
-    e.enc_i32_i64(icmp, rec_icscc.opcodes(&CMP_REG));
-    e.enc_i32_i64(icmp_imm, rec_icscc_ib.opcodes(&CMP_IMM8).rrr(7));
-    e.enc_i32_i64(icmp_imm, rec_icscc_id.opcodes(&CMP_IMM).rrr(7));
-    e.enc_i32_i64(ifcmp, rec_rcmp.opcodes(&CMP_REG));
-    e.enc_i32_i64(ifcmp_imm, rec_rcmp_ib.opcodes(&CMP_IMM8).rrr(7));
-    e.enc_i32_i64(ifcmp_imm, rec_rcmp_id.opcodes(&CMP_IMM).rrr(7));
-    // TODO: We could special-case ifcmp_imm(x, 0) to TEST(x, x).
-
-    e.enc32(ifcmp_sp.bind(I32), rec_rcmp_sp.opcodes(&CMP_REG));
-    e.enc64(ifcmp_sp.bind(I64), rec_rcmp_sp.opcodes(&CMP_REG).rex().w());
-
-    // Convert flags to bool.
-    // This encodes `b1` as an 8-bit low register with the value 0 or 1.
-    e.enc_both(trueif, rec_seti_abcd.opcodes(&SET_BYTE_IF_OVERFLOW));
-    e.enc_both(trueff, rec_setf_abcd.opcodes(&SET_BYTE_IF_OVERFLOW));
-
-    // Conditional move (a.k.a integer select).
-    e.enc_i32_i64(selectif, rec_cmov.opcodes(&CMOV_OVERFLOW));
-
-    // Bit scan forwards and reverse
-    e.enc_i32_i64(x86_bsf, rec_bsf_and_bsr.opcodes(&BIT_SCAN_FORWARD));
-    e.enc_i32_i64(x86_bsr, rec_bsf_and_bsr.opcodes(&BIT_SCAN_REVERSE));
-
-    // Convert bool to int.
-    //
-    // This assumes that b1 is represented as an 8-bit low register with the value 0
-    // or 1.
-    //
-    // Encode movzbq as movzbl, because it's equivalent and shorter.
-    for &to in &[I8, I16, I32, I64] {
-        for &from in &[B1, B8] {
-            e.enc64(
-                bint.bind(to).bind(from),
-                rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
-            );
-            e.enc64(
-                bint.bind(to).bind(from),
-                rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
-            );
-            if to != I64 {
-                e.enc32(
-                    bint.bind(to).bind(from),
-                    rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
-                );
-            }
-        }
-    }
-
-    // Numerical conversions.
-
-    // Reducing an integer is a no-op.
-    e.enc32_rec(ireduce.bind(I8).bind(I16), rec_null, 0);
-    e.enc32_rec(ireduce.bind(I8).bind(I32), rec_null, 0);
-    e.enc32_rec(ireduce.bind(I16).bind(I32), rec_null, 0);
-
-    e.enc64_rec(ireduce.bind(I8).bind(I16), rec_null, 0);
-    e.enc64_rec(ireduce.bind(I8).bind(I32), rec_null, 0);
-    e.enc64_rec(ireduce.bind(I16).bind(I32), rec_null, 0);
-    e.enc64_rec(ireduce.bind(I8).bind(I64), rec_null, 0);
-    e.enc64_rec(ireduce.bind(I16).bind(I64), rec_null, 0);
-    e.enc64_rec(ireduce.bind(I32).bind(I64), rec_null, 0);
-
-    // TODO: Add encodings for cbw, cwde, cdqe, which are sign-extending
-    // instructions for %al/%ax/%eax to %ax/%eax/%rax.
-
-    // movsbl
-    e.enc32(
-        sextend.bind(I32).bind(I8),
-        rec_urm_noflags_abcd.opcodes(&MOVSX_BYTE),
-    );
-    e.enc64(
-        sextend.bind(I32).bind(I8),
-        rec_urm_noflags.opcodes(&MOVSX_BYTE).rex(),
-    );
-    e.enc64(
-        sextend.bind(I32).bind(I8),
-        rec_urm_noflags_abcd.opcodes(&MOVSX_BYTE),
-    );
-
-    // movswl
-    e.enc32(
-        sextend.bind(I32).bind(I16),
-        rec_urm_noflags.opcodes(&MOVSX_WORD),
-    );
-    e.enc64(
-        sextend.bind(I32).bind(I16),
-        rec_urm_noflags.opcodes(&MOVSX_WORD).rex(),
-    );
-    e.enc64(
-        sextend.bind(I32).bind(I16),
-        rec_urm_noflags.opcodes(&MOVSX_WORD),
-    );
-
-    // movsbq
-    e.enc64(
-        sextend.bind(I64).bind(I8),
-        rec_urm_noflags.opcodes(&MOVSX_BYTE).rex().w(),
-    );
-
-    // movswq
-    e.enc64(
-        sextend.bind(I64).bind(I16),
-        rec_urm_noflags.opcodes(&MOVSX_WORD).rex().w(),
-    );
-
-    // movslq
-    e.enc64(
-        sextend.bind(I64).bind(I32),
-        rec_urm_noflags.opcodes(&MOVSXD).rex().w(),
-    );
-
-    // movzbl
-    e.enc32(
-        uextend.bind(I32).bind(I8),
-        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
-    );
-    e.enc64(
-        uextend.bind(I32).bind(I8),
-        rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
-    );
-    e.enc64(
-        uextend.bind(I32).bind(I8),
-        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
-    );
-
-    // movzwl
-    e.enc32(
-        uextend.bind(I32).bind(I16),
-        rec_urm_noflags.opcodes(&MOVZX_WORD),
-    );
-    e.enc64(
-        uextend.bind(I32).bind(I16),
-        rec_urm_noflags.opcodes(&MOVZX_WORD).rex(),
-    );
-    e.enc64(
-        uextend.bind(I32).bind(I16),
-        rec_urm_noflags.opcodes(&MOVZX_WORD),
-    );
-
-    // movzbq, encoded as movzbl because it's equivalent and shorter.
-    e.enc64(
-        uextend.bind(I64).bind(I8),
-        rec_urm_noflags.opcodes(&MOVZX_BYTE).rex(),
-    );
-    e.enc64(
-        uextend.bind(I64).bind(I8),
-        rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
-    );
-
-    // movzwq, encoded as movzwl because it's equivalent and shorter
-    e.enc64(
-        uextend.bind(I64).bind(I16),
-        rec_urm_noflags.opcodes(&MOVZX_WORD).rex(),
-    );
-    e.enc64(
-        uextend.bind(I64).bind(I16),
-        rec_urm_noflags.opcodes(&MOVZX_WORD),
-    );
-
-    // A 32-bit register copy clears the high 32 bits.
-    e.enc64(
-        uextend.bind(I64).bind(I32),
-        rec_umr.opcodes(&MOV_STORE).rex(),
-    );
-    e.enc64(uextend.bind(I64).bind(I32), rec_umr.opcodes(&MOV_STORE));
-
-    // Floating point
+    // Predicates shorthands.
+    let use_sse41 = settings.predicate_by_name("use_sse41");
 
     // Floating-point constants equal to 0.0 can be encoded using either `xorps` or `xorpd`, for
     // 32-bit and 64-bit floats respectively.
@@ -1615,40 +1222,6 @@ pub(crate) fn define(
 
     e.enc_x86_64_instp(f32const, rec_f32imm_z.opcodes(&XORPS), is_zero_32_bit_float);
     e.enc_x86_64_instp(f64const, rec_f64imm_z.opcodes(&XORPD), is_zero_64_bit_float);
-
-    // movd
-    e.enc_both(
-        bitcast.bind(F32).bind(I32),
-        rec_frurm.opcodes(&MOVD_LOAD_XMM),
-    );
-    e.enc_both(
-        bitcast.bind(I32).bind(F32),
-        rec_rfumr.opcodes(&MOVD_STORE_XMM),
-    );
-
-    // movq
-    e.enc64(
-        bitcast.bind(F64).bind(I64),
-        rec_frurm.opcodes(&MOVD_LOAD_XMM).rex().w(),
-    );
-    e.enc64(
-        bitcast.bind(I64).bind(F64),
-        rec_rfumr.opcodes(&MOVD_STORE_XMM).rex().w(),
-    );
-
-    // movaps
-    e.enc_both(copy.bind(F32), rec_furm.opcodes(&MOVAPS_LOAD));
-    e.enc_both(copy.bind(F64), rec_furm.opcodes(&MOVAPS_LOAD));
-
-    // TODO For x86-64, only define REX forms for now, since we can't describe the special regunit
-    // immediate operands with the current constraint language.
-    e.enc32(regmove.bind(F32), rec_frmov.opcodes(&MOVAPS_LOAD));
-    e.enc64(regmove.bind(F32), rec_frmov.opcodes(&MOVAPS_LOAD).rex());
-
-    // TODO For x86-64, only define REX forms for now, since we can't describe the special regunit
-    // immediate operands with the current constraint language.
-    e.enc32(regmove.bind(F64), rec_frmov.opcodes(&MOVAPS_LOAD));
-    e.enc64(regmove.bind(F64), rec_frmov.opcodes(&MOVAPS_LOAD).rex());
 
     // cvtsi2ss
     e.enc_i32_i64(fcvt_from_sint.bind(F32), rec_frurm.opcodes(&CVTSI2SS));
@@ -1711,6 +1284,156 @@ pub(crate) fn define(
     e.enc_both(x86_fmax.bind(F32), rec_fa.opcodes(&MAXSS));
     e.enc_both(x86_fmax.bind(F64), rec_fa.opcodes(&MAXSD));
 
+    // Comparisons.
+    //
+    // This only covers the condition codes in `supported_floatccs`, the rest are
+    // handled by legalization patterns.
+    e.enc_both(fcmp.bind(F32), rec_fcscc.opcodes(&UCOMISS));
+    e.enc_both(fcmp.bind(F64), rec_fcscc.opcodes(&UCOMISD));
+    e.enc_both(ffcmp.bind(F32), rec_fcmp.opcodes(&UCOMISS));
+    e.enc_both(ffcmp.bind(F64), rec_fcmp.opcodes(&UCOMISD));
+}
+
+#[inline(never)]
+fn define_alu(
+    e: &mut PerCpuModeEncodings,
+    shared_defs: &SharedDefinitions,
+    settings: &SettingGroup,
+    x86: &InstructionGroup,
+    r: &RecipeGroup,
+) {
+    let shared = &shared_defs.instructions;
+
+    // Shorthands for instructions.
+    let clz = shared.by_name("clz");
+    let ctz = shared.by_name("ctz");
+    let icmp = shared.by_name("icmp");
+    let icmp_imm = shared.by_name("icmp_imm");
+    let ifcmp = shared.by_name("ifcmp");
+    let ifcmp_imm = shared.by_name("ifcmp_imm");
+    let ifcmp_sp = shared.by_name("ifcmp_sp");
+    let ishl = shared.by_name("ishl");
+    let ishl_imm = shared.by_name("ishl_imm");
+    let popcnt = shared.by_name("popcnt");
+    let rotl = shared.by_name("rotl");
+    let rotl_imm = shared.by_name("rotl_imm");
+    let rotr = shared.by_name("rotr");
+    let rotr_imm = shared.by_name("rotr_imm");
+    let selectif = shared.by_name("selectif");
+    let sshr = shared.by_name("sshr");
+    let sshr_imm = shared.by_name("sshr_imm");
+    let trueff = shared.by_name("trueff");
+    let trueif = shared.by_name("trueif");
+    let ushr = shared.by_name("ushr");
+    let ushr_imm = shared.by_name("ushr_imm");
+    let x86_bsf = x86.by_name("x86_bsf");
+    let x86_bsr = x86.by_name("x86_bsr");
+
+    // Shorthands for recipes.
+    let rec_bsf_and_bsr = r.template("bsf_and_bsr");
+    let rec_cmov = r.template("cmov");
+    let rec_icscc = r.template("icscc");
+    let rec_icscc_ib = r.template("icscc_ib");
+    let rec_icscc_id = r.template("icscc_id");
+    let rec_rcmp = r.template("rcmp");
+    let rec_rcmp_ib = r.template("rcmp_ib");
+    let rec_rcmp_id = r.template("rcmp_id");
+    let rec_rcmp_sp = r.template("rcmp_sp");
+    let rec_rc = r.template("rc");
+    let rec_setf_abcd = r.template("setf_abcd");
+    let rec_seti_abcd = r.template("seti_abcd");
+    let rec_urm = r.template("urm");
+
+    // Predicates shorthands.
+    let use_popcnt = settings.predicate_by_name("use_popcnt");
+    let use_lzcnt = settings.predicate_by_name("use_lzcnt");
+    let use_bmi1 = settings.predicate_by_name("use_bmi1");
+
+    let band = shared.by_name("band");
+    let band_imm = shared.by_name("band_imm");
+    let band_not = shared.by_name("band_not");
+    let bnot = shared.by_name("bnot");
+    let bor = shared.by_name("bor");
+    let bor_imm = shared.by_name("bor_imm");
+    let bxor = shared.by_name("bxor");
+    let bxor_imm = shared.by_name("bxor_imm");
+    let iadd = shared.by_name("iadd");
+    let iadd_ifcarry = shared.by_name("iadd_ifcarry");
+    let iadd_ifcin = shared.by_name("iadd_ifcin");
+    let iadd_ifcout = shared.by_name("iadd_ifcout");
+    let iadd_imm = shared.by_name("iadd_imm");
+    let imul = shared.by_name("imul");
+    let isub = shared.by_name("isub");
+    let isub_ifbin = shared.by_name("isub_ifbin");
+    let isub_ifborrow = shared.by_name("isub_ifborrow");
+    let isub_ifbout = shared.by_name("isub_ifbout");
+    let x86_sdivmodx = x86.by_name("x86_sdivmodx");
+    let x86_smulx = x86.by_name("x86_smulx");
+    let x86_udivmodx = x86.by_name("x86_udivmodx");
+    let x86_umulx = x86.by_name("x86_umulx");
+
+    let rec_div = r.template("div");
+    let rec_fa = r.template("fa");
+    let rec_fax = r.template("fax");
+    let rec_mulx = r.template("mulx");
+    let rec_r_ib = r.template("r_ib");
+    let rec_r_id = r.template("r_id");
+    let rec_rin = r.template("rin");
+    let rec_rio = r.template("rio");
+    let rec_rout = r.template("rout");
+    let rec_rr = r.template("rr");
+    let rec_rrx = r.template("rrx");
+    let rec_ur = r.template("ur");
+
+    e.enc_i32_i64(iadd, rec_rr.opcodes(&ADD));
+    e.enc_i32_i64(iadd_ifcout, rec_rout.opcodes(&ADD));
+    e.enc_i32_i64(iadd_ifcin, rec_rin.opcodes(&ADC));
+    e.enc_i32_i64(iadd_ifcarry, rec_rio.opcodes(&ADC));
+    e.enc_i32_i64(iadd_imm, rec_r_ib.opcodes(&ADD_IMM8_SIGN_EXTEND).rrr(0));
+    e.enc_i32_i64(iadd_imm, rec_r_id.opcodes(&ADD_IMM).rrr(0));
+
+    e.enc_i32_i64(isub, rec_rr.opcodes(&SUB));
+    e.enc_i32_i64(isub_ifbout, rec_rout.opcodes(&SUB));
+    e.enc_i32_i64(isub_ifbin, rec_rin.opcodes(&SBB));
+    e.enc_i32_i64(isub_ifborrow, rec_rio.opcodes(&SBB));
+
+    e.enc_i32_i64(band, rec_rr.opcodes(&AND));
+    e.enc_b32_b64(band, rec_rr.opcodes(&AND));
+
+    // TODO: band_imm.i64 with an unsigned 32-bit immediate can be encoded as band_imm.i32. Can
+    // even use the single-byte immediate for 0xffff_ffXX masks.
+
+    e.enc_i32_i64(band_imm, rec_r_ib.opcodes(&AND_IMM8_SIGN_EXTEND).rrr(4));
+    e.enc_i32_i64(band_imm, rec_r_id.opcodes(&AND_IMM).rrr(4));
+
+    e.enc_i32_i64(bor, rec_rr.opcodes(&OR));
+    e.enc_b32_b64(bor, rec_rr.opcodes(&OR));
+    e.enc_i32_i64(bor_imm, rec_r_ib.opcodes(&OR_IMM8_SIGN_EXTEND).rrr(1));
+    e.enc_i32_i64(bor_imm, rec_r_id.opcodes(&OR_IMM).rrr(1));
+
+    e.enc_i32_i64(bxor, rec_rr.opcodes(&XOR));
+    e.enc_b32_b64(bxor, rec_rr.opcodes(&XOR));
+    e.enc_i32_i64(bxor_imm, rec_r_ib.opcodes(&XOR_IMM8_SIGN_EXTEND).rrr(6));
+    e.enc_i32_i64(bxor_imm, rec_r_id.opcodes(&XOR_IMM).rrr(6));
+
+    // x86 has a bitwise not instruction NOT.
+    e.enc_i32_i64(bnot, rec_ur.opcodes(&NOT).rrr(2));
+    e.enc_b32_b64(bnot, rec_ur.opcodes(&NOT).rrr(2));
+
+    // Also add a `b1` encodings for the logic instructions.
+    // TODO: Should this be done with 8-bit instructions? It would improve partial register
+    // dependencies.
+    e.enc_both(band.bind(B1), rec_rr.opcodes(&AND));
+    e.enc_both(bor.bind(B1), rec_rr.opcodes(&OR));
+    e.enc_both(bxor.bind(B1), rec_rr.opcodes(&XOR));
+
+    e.enc_i32_i64(imul, rec_rrx.opcodes(&IMUL));
+    e.enc_i32_i64(x86_sdivmodx, rec_div.opcodes(&IDIV).rrr(7));
+    e.enc_i32_i64(x86_udivmodx, rec_div.opcodes(&DIV).rrr(6));
+
+    e.enc_i32_i64(x86_smulx, rec_mulx.opcodes(&IMUL_RDX_RAX).rrr(5));
+    e.enc_i32_i64(x86_umulx, rec_mulx.opcodes(&MUL).rrr(4));
+
     // Binary bitwise ops.
     //
     // The F64 version is intentionally encoded using the single-precision opcode:
@@ -1728,14 +1451,182 @@ pub(crate) fn define(
     e.enc_both(band_not.bind(F32), rec_fax.opcodes(&ANDNPS));
     e.enc_both(band_not.bind(F64), rec_fax.opcodes(&ANDNPS));
 
-    // Comparisons.
-    //
-    // This only covers the condition codes in `supported_floatccs`, the rest are
-    // handled by legalization patterns.
-    e.enc_both(fcmp.bind(F32), rec_fcscc.opcodes(&UCOMISS));
-    e.enc_both(fcmp.bind(F64), rec_fcscc.opcodes(&UCOMISD));
-    e.enc_both(ffcmp.bind(F32), rec_fcmp.opcodes(&UCOMISS));
-    e.enc_both(ffcmp.bind(F64), rec_fcmp.opcodes(&UCOMISD));
+    // Shifts and rotates.
+    // Note that the dynamic shift amount is only masked by 5 or 6 bits; the 8-bit
+    // and 16-bit shifts would need explicit masking.
+
+    for &(inst, rrr) in &[(rotl, 0), (rotr, 1), (ishl, 4), (ushr, 5), (sshr, 7)] {
+        // Cannot use enc_i32_i64 for this pattern because instructions require
+        // to bind any.
+        e.enc32(
+            inst.bind(I32).bind(Any),
+            rec_rc.opcodes(&ROTATE_CL).rrr(rrr),
+        );
+        e.enc64(
+            inst.bind(I64).bind(Any),
+            rec_rc.opcodes(&ROTATE_CL).rrr(rrr).rex().w(),
+        );
+        e.enc64(
+            inst.bind(I32).bind(Any),
+            rec_rc.opcodes(&ROTATE_CL).rrr(rrr).rex(),
+        );
+        e.enc64(
+            inst.bind(I32).bind(Any),
+            rec_rc.opcodes(&ROTATE_CL).rrr(rrr),
+        );
+    }
+
+    e.enc_i32_i64(rotl_imm, rec_r_ib.opcodes(&ROTATE_IMM8).rrr(0));
+    e.enc_i32_i64(rotr_imm, rec_r_ib.opcodes(&ROTATE_IMM8).rrr(1));
+    e.enc_i32_i64(ishl_imm, rec_r_ib.opcodes(&ROTATE_IMM8).rrr(4));
+    e.enc_i32_i64(ushr_imm, rec_r_ib.opcodes(&ROTATE_IMM8).rrr(5));
+    e.enc_i32_i64(sshr_imm, rec_r_ib.opcodes(&ROTATE_IMM8).rrr(7));
+
+    // Population count.
+    e.enc32_isap(popcnt.bind(I32), rec_urm.opcodes(&POPCNT), use_popcnt);
+    e.enc64_isap(
+        popcnt.bind(I64),
+        rec_urm.opcodes(&POPCNT).rex().w(),
+        use_popcnt,
+    );
+    e.enc64_isap(popcnt.bind(I32), rec_urm.opcodes(&POPCNT).rex(), use_popcnt);
+    e.enc64_isap(popcnt.bind(I32), rec_urm.opcodes(&POPCNT), use_popcnt);
+
+    // Count leading zero bits.
+    e.enc32_isap(clz.bind(I32), rec_urm.opcodes(&LZCNT), use_lzcnt);
+    e.enc64_isap(clz.bind(I64), rec_urm.opcodes(&LZCNT).rex().w(), use_lzcnt);
+    e.enc64_isap(clz.bind(I32), rec_urm.opcodes(&LZCNT).rex(), use_lzcnt);
+    e.enc64_isap(clz.bind(I32), rec_urm.opcodes(&LZCNT), use_lzcnt);
+
+    // Count trailing zero bits.
+    e.enc32_isap(ctz.bind(I32), rec_urm.opcodes(&TZCNT), use_bmi1);
+    e.enc64_isap(ctz.bind(I64), rec_urm.opcodes(&TZCNT).rex().w(), use_bmi1);
+    e.enc64_isap(ctz.bind(I32), rec_urm.opcodes(&TZCNT).rex(), use_bmi1);
+    e.enc64_isap(ctz.bind(I32), rec_urm.opcodes(&TZCNT), use_bmi1);
+
+    // Bit scan forwards and reverse
+    e.enc_i32_i64(x86_bsf, rec_bsf_and_bsr.opcodes(&BIT_SCAN_FORWARD));
+    e.enc_i32_i64(x86_bsr, rec_bsf_and_bsr.opcodes(&BIT_SCAN_REVERSE));
+
+    // Comparisons
+    e.enc_i32_i64(icmp, rec_icscc.opcodes(&CMP_REG));
+    e.enc_i32_i64(icmp_imm, rec_icscc_ib.opcodes(&CMP_IMM8).rrr(7));
+    e.enc_i32_i64(icmp_imm, rec_icscc_id.opcodes(&CMP_IMM).rrr(7));
+    e.enc_i32_i64(ifcmp, rec_rcmp.opcodes(&CMP_REG));
+    e.enc_i32_i64(ifcmp_imm, rec_rcmp_ib.opcodes(&CMP_IMM8).rrr(7));
+    e.enc_i32_i64(ifcmp_imm, rec_rcmp_id.opcodes(&CMP_IMM).rrr(7));
+    // TODO: We could special-case ifcmp_imm(x, 0) to TEST(x, x).
+
+    e.enc32(ifcmp_sp.bind(I32), rec_rcmp_sp.opcodes(&CMP_REG));
+    e.enc64(ifcmp_sp.bind(I64), rec_rcmp_sp.opcodes(&CMP_REG).rex().w());
+
+    // Convert flags to bool.
+    // This encodes `b1` as an 8-bit low register with the value 0 or 1.
+    e.enc_both(trueif, rec_seti_abcd.opcodes(&SET_BYTE_IF_OVERFLOW));
+    e.enc_both(trueff, rec_setf_abcd.opcodes(&SET_BYTE_IF_OVERFLOW));
+
+    // Conditional move (a.k.a integer select).
+    e.enc_i32_i64(selectif, rec_cmov.opcodes(&CMOV_OVERFLOW));
+}
+
+#[inline(never)]
+fn define_simd(
+    e: &mut PerCpuModeEncodings,
+    shared_defs: &SharedDefinitions,
+    settings: &SettingGroup,
+    x86: &InstructionGroup,
+    r: &RecipeGroup,
+) {
+    let shared = &shared_defs.instructions;
+    let formats = &shared_defs.formats;
+
+    // Shorthands for instructions.
+    let bitcast = shared.by_name("bitcast");
+    let bor = shared.by_name("bor");
+    let bxor = shared.by_name("bxor");
+    let copy = shared.by_name("copy");
+    let copy_nop = shared.by_name("copy_nop");
+    let fadd = shared.by_name("fadd");
+    let fcmp = shared.by_name("fcmp");
+    let fdiv = shared.by_name("fdiv");
+    let fill = shared.by_name("fill");
+    let fill_nop = shared.by_name("fill_nop");
+    let fmax = shared.by_name("fmax");
+    let fmin = shared.by_name("fmin");
+    let fmul = shared.by_name("fmul");
+    let fsub = shared.by_name("fsub");
+    let iadd = shared.by_name("iadd");
+    let icmp = shared.by_name("icmp");
+    let imul = shared.by_name("imul");
+    let ishl_imm = shared.by_name("ishl_imm");
+    let load = shared.by_name("load");
+    let raw_bitcast = shared.by_name("raw_bitcast");
+    let regfill = shared.by_name("regfill");
+    let regmove = shared.by_name("regmove");
+    let regspill = shared.by_name("regspill");
+    let sadd_sat = shared.by_name("sadd_sat");
+    let scalar_to_vector = shared.by_name("scalar_to_vector");
+    let spill = shared.by_name("spill");
+    let sqrt = shared.by_name("sqrt");
+    let sshr_imm = shared.by_name("sshr_imm");
+    let ssub_sat = shared.by_name("ssub_sat");
+    let store = shared.by_name("store");
+    let uadd_sat = shared.by_name("uadd_sat");
+    let ushr_imm = shared.by_name("ushr_imm");
+    let usub_sat = shared.by_name("usub_sat");
+    let vconst = shared.by_name("vconst");
+    let x86_insertps = x86.by_name("x86_insertps");
+    let x86_movlhps = x86.by_name("x86_movlhps");
+    let x86_movsd = x86.by_name("x86_movsd");
+    let x86_pextr = x86.by_name("x86_pextr");
+    let x86_pinsr = x86.by_name("x86_pinsr");
+    let x86_pmaxs = x86.by_name("x86_pmaxs");
+    let x86_pmaxu = x86.by_name("x86_pmaxu");
+    let x86_pmins = x86.by_name("x86_pmins");
+    let x86_pminu = x86.by_name("x86_pminu");
+    let x86_pshufb = x86.by_name("x86_pshufb");
+    let x86_pshufd = x86.by_name("x86_pshufd");
+    let x86_psll = x86.by_name("x86_psll");
+    let x86_psra = x86.by_name("x86_psra");
+    let x86_psrl = x86.by_name("x86_psrl");
+    let x86_ptest = x86.by_name("x86_ptest");
+
+    // Shorthands for recipes.
+    let rec_f_ib = r.template("f_ib");
+    let rec_fa = r.template("fa");
+    let rec_fa_ib = r.template("fa_ib");
+    let rec_fax = r.template("fax");
+    let rec_fcmp = r.template("fcmp");
+    let rec_ffillSib32 = r.template("ffillSib32");
+    let rec_ffillnull = r.recipe("ffillnull");
+    let rec_fld = r.template("fld");
+    let rec_fldDisp32 = r.template("fldDisp32");
+    let rec_fldDisp8 = r.template("fldDisp8");
+    let rec_fregfill32 = r.template("fregfill32");
+    let rec_fregspill32 = r.template("fregspill32");
+    let rec_frmov = r.template("frmov");
+    let rec_frurm = r.template("frurm");
+    let rec_fspillSib32 = r.template("fspillSib32");
+    let rec_fst = r.template("fst");
+    let rec_fstDisp32 = r.template("fstDisp32");
+    let rec_fstDisp8 = r.template("fstDisp8");
+    let rec_furm = r.template("furm");
+    let rec_icscc_fpr = r.template("icscc_fpr");
+    let rec_null_fpr = r.recipe("null_fpr");
+    let rec_pfcmp = r.template("pfcmp");
+    let rec_r_ib_unsigned_fpr = r.template("r_ib_unsigned_fpr");
+    let rec_r_ib_unsigned_gpr = r.template("r_ib_unsigned_gpr");
+    let rec_r_ib_unsigned_r = r.template("r_ib_unsigned_r");
+    let rec_stacknull = r.recipe("stacknull");
+    let rec_vconst = r.template("vconst");
+    let rec_vconst_optimized = r.template("vconst_optimized");
+
+    // Predicates shorthands.
+    settings.predicate_by_name("all_ones_funcaddrs_and_not_is_pic");
+    settings.predicate_by_name("not_all_ones_funcaddrs_and_not_is_pic");
+    let use_ssse3_simd = settings.predicate_by_name("use_ssse3_simd");
+    let use_sse41_simd = settings.predicate_by_name("use_sse41_simd");
+    let use_sse42_simd = settings.predicate_by_name("use_sse42_simd");
 
     // SIMD vector size: eventually multiple vector sizes may be supported but for now only
     // SSE-sized vectors are available.
@@ -1976,6 +1867,7 @@ pub(crate) fn define(
     );
 
     // SIMD integer subtraction
+    let isub = shared.by_name("isub");
     for (ty, opcodes) in &[(I8, &PSUBB), (I16, &PSUBW), (I32, &PSUBD), (I64, &PSUBQ)] {
         let isub = isub.bind(vector(*ty, sse_vector_size));
         e.enc_32_64(isub, rec_fa.opcodes(*opcodes));
@@ -2010,6 +1902,8 @@ pub(crate) fn define(
     }
 
     // SIMD logical operations
+    let band = shared.by_name("band");
+    let band_not = shared.by_name("band_not");
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         // and
         let band = band.bind(vector(ty, sse_vector_size));
@@ -2148,8 +2042,298 @@ pub(crate) fn define(
         let inst = inst.bind(vector(*ty, sse_vector_size));
         e.enc_both(inst, rec_furm.opcodes(opcodes));
     }
+}
 
-    // Reference type instructions
+#[inline(never)]
+fn define_entity_ref(
+    e: &mut PerCpuModeEncodings,
+    shared_defs: &SharedDefinitions,
+    settings: &SettingGroup,
+    r: &RecipeGroup,
+) {
+    let shared = &shared_defs.instructions;
+    let formats = &shared_defs.formats;
+
+    // Shorthands for instructions.
+    let func_addr = shared.by_name("func_addr");
+    let stack_addr = shared.by_name("stack_addr");
+    let symbol_value = shared.by_name("symbol_value");
+
+    // Shorthands for recipes.
+    let rec_allones_fnaddr4 = r.template("allones_fnaddr4");
+    let rec_allones_fnaddr8 = r.template("allones_fnaddr8");
+    let rec_fnaddr4 = r.template("fnaddr4");
+    let rec_fnaddr8 = r.template("fnaddr8");
+    let rec_got_fnaddr8 = r.template("got_fnaddr8");
+    let rec_got_gvaddr8 = r.template("got_gvaddr8");
+    let rec_gvaddr4 = r.template("gvaddr4");
+    let rec_gvaddr8 = r.template("gvaddr8");
+    let rec_pcrel_fnaddr8 = r.template("pcrel_fnaddr8");
+    let rec_pcrel_gvaddr8 = r.template("pcrel_gvaddr8");
+    let rec_spaddr4_id = r.template("spaddr4_id");
+    let rec_spaddr8_id = r.template("spaddr8_id");
+
+    // Predicates shorthands.
+    let all_ones_funcaddrs_and_not_is_pic =
+        settings.predicate_by_name("all_ones_funcaddrs_and_not_is_pic");
+    let is_pic = settings.predicate_by_name("is_pic");
+    let not_all_ones_funcaddrs_and_not_is_pic =
+        settings.predicate_by_name("not_all_ones_funcaddrs_and_not_is_pic");
+    let not_is_pic = settings.predicate_by_name("not_is_pic");
+
+    // Function addresses.
+
+    // Non-PIC, all-ones funcaddresses.
+    e.enc32_isap(
+        func_addr.bind(I32),
+        rec_fnaddr4.opcodes(&MOV_IMM),
+        not_all_ones_funcaddrs_and_not_is_pic,
+    );
+    e.enc64_isap(
+        func_addr.bind(I64),
+        rec_fnaddr8.opcodes(&MOV_IMM).rex().w(),
+        not_all_ones_funcaddrs_and_not_is_pic,
+    );
+
+    // Non-PIC, all-zeros funcaddresses.
+    e.enc32_isap(
+        func_addr.bind(I32),
+        rec_allones_fnaddr4.opcodes(&MOV_IMM),
+        all_ones_funcaddrs_and_not_is_pic,
+    );
+    e.enc64_isap(
+        func_addr.bind(I64),
+        rec_allones_fnaddr8.opcodes(&MOV_IMM).rex().w(),
+        all_ones_funcaddrs_and_not_is_pic,
+    );
+
+    // 64-bit, colocated, both PIC and non-PIC. Use the lea instruction's pc-relative field.
+    let is_colocated_func =
+        InstructionPredicate::new_is_colocated_func(&*formats.func_addr, "func_ref");
+    e.enc64_instp(
+        func_addr.bind(I64),
+        rec_pcrel_fnaddr8.opcodes(&LEA).rex().w(),
+        is_colocated_func,
+    );
+
+    // 64-bit, non-colocated, PIC.
+    e.enc64_isap(
+        func_addr.bind(I64),
+        rec_got_fnaddr8.opcodes(&MOV_LOAD).rex().w(),
+        is_pic,
+    );
+
+    // Global addresses.
+
+    // Non-PIC.
+    e.enc32_isap(
+        symbol_value.bind(I32),
+        rec_gvaddr4.opcodes(&MOV_IMM),
+        not_is_pic,
+    );
+    e.enc64_isap(
+        symbol_value.bind(I64),
+        rec_gvaddr8.opcodes(&MOV_IMM).rex().w(),
+        not_is_pic,
+    );
+
+    // PIC, colocated.
+    e.enc64_func(
+        symbol_value.bind(I64),
+        rec_pcrel_gvaddr8.opcodes(&LEA).rex().w(),
+        |encoding| {
+            encoding
+                .isa_predicate(is_pic)
+                .inst_predicate(InstructionPredicate::new_is_colocated_data(formats))
+        },
+    );
+
+    // PIC, non-colocated.
+    e.enc64_isap(
+        symbol_value.bind(I64),
+        rec_got_gvaddr8.opcodes(&MOV_LOAD).rex().w(),
+        is_pic,
+    );
+
+    // Stack addresses.
+    //
+    // TODO: Add encoding rules for stack_load and stack_store, so that they
+    // don't get legalized to stack_addr + load/store.
+    e.enc32(stack_addr.bind(I32), rec_spaddr4_id.opcodes(&LEA));
+    e.enc64(stack_addr.bind(I64), rec_spaddr8_id.opcodes(&LEA).rex().w());
+}
+
+/// Control flow opcodes.
+#[inline(never)]
+fn define_control_flow(
+    e: &mut PerCpuModeEncodings,
+    shared_defs: &SharedDefinitions,
+    settings: &SettingGroup,
+    r: &RecipeGroup,
+) {
+    let shared = &shared_defs.instructions;
+    let formats = &shared_defs.formats;
+
+    // Shorthands for instructions.
+    let brff = shared.by_name("brff");
+    let brif = shared.by_name("brif");
+    let brnz = shared.by_name("brnz");
+    let brz = shared.by_name("brz");
+    let call = shared.by_name("call");
+    let call_indirect = shared.by_name("call_indirect");
+    let debugtrap = shared.by_name("debugtrap");
+    let indirect_jump_table_br = shared.by_name("indirect_jump_table_br");
+    let jump = shared.by_name("jump");
+    let jump_table_base = shared.by_name("jump_table_base");
+    let jump_table_entry = shared.by_name("jump_table_entry");
+    let return_ = shared.by_name("return");
+    let trap = shared.by_name("trap");
+    let trapff = shared.by_name("trapff");
+    let trapif = shared.by_name("trapif");
+    let resumable_trap = shared.by_name("resumable_trap");
+
+    // Shorthands for recipes.
+    let rec_brfb = r.template("brfb");
+    let rec_brfd = r.template("brfd");
+    let rec_brib = r.template("brib");
+    let rec_brid = r.template("brid");
+    let rec_call_id = r.template("call_id");
+    let rec_call_plt_id = r.template("call_plt_id");
+    let rec_call_r = r.template("call_r");
+    let rec_debugtrap = r.recipe("debugtrap");
+    let rec_indirect_jmp = r.template("indirect_jmp");
+    let rec_jmpb = r.template("jmpb");
+    let rec_jmpd = r.template("jmpd");
+    let rec_jt_base = r.template("jt_base");
+    let rec_jt_entry = r.template("jt_entry");
+    let rec_ret = r.template("ret");
+    let rec_t8jccb_abcd = r.template("t8jccb_abcd");
+    let rec_t8jccd_abcd = r.template("t8jccd_abcd");
+    let rec_t8jccd_long = r.template("t8jccd_long");
+    let rec_tjccb = r.template("tjccb");
+    let rec_tjccd = r.template("tjccd");
+    let rec_trap = r.template("trap");
+    let rec_trapif = r.recipe("trapif");
+    let rec_trapff = r.recipe("trapff");
+
+    // Predicates shorthands.
+    let is_pic = settings.predicate_by_name("is_pic");
+
+    // Call/return
+
+    // 32-bit, both PIC and non-PIC.
+    e.enc32(call, rec_call_id.opcodes(&CALL_RELATIVE));
+
+    // 64-bit, colocated, both PIC and non-PIC. Use the call instruction's pc-relative field.
+    let is_colocated_func = InstructionPredicate::new_is_colocated_func(&*formats.call, "func_ref");
+    e.enc64_instp(call, rec_call_id.opcodes(&CALL_RELATIVE), is_colocated_func);
+
+    // 64-bit, non-colocated, PIC. There is no 64-bit non-colocated non-PIC version, since non-PIC
+    // is currently using the large model, which requires calls be lowered to
+    // func_addr+call_indirect.
+    e.enc64_isap(call, rec_call_plt_id.opcodes(&CALL_RELATIVE), is_pic);
+
+    e.enc32(
+        call_indirect.bind(I32),
+        rec_call_r.opcodes(&JUMP_ABSOLUTE).rrr(2),
+    );
+    e.enc64(
+        call_indirect.bind(I64),
+        rec_call_r.opcodes(&JUMP_ABSOLUTE).rrr(2).rex(),
+    );
+    e.enc64(
+        call_indirect.bind(I64),
+        rec_call_r.opcodes(&JUMP_ABSOLUTE).rrr(2),
+    );
+
+    e.enc32(return_, rec_ret.opcodes(&RET_NEAR));
+    e.enc64(return_, rec_ret.opcodes(&RET_NEAR));
+
+    // Branches.
+    e.enc32(jump, rec_jmpb.opcodes(&JUMP_SHORT));
+    e.enc64(jump, rec_jmpb.opcodes(&JUMP_SHORT));
+    e.enc32(jump, rec_jmpd.opcodes(&JUMP_NEAR_RELATIVE));
+    e.enc64(jump, rec_jmpd.opcodes(&JUMP_NEAR_RELATIVE));
+
+    e.enc_both(brif, rec_brib.opcodes(&JUMP_SHORT_IF_OVERFLOW));
+    e.enc_both(brif, rec_brid.opcodes(&JUMP_NEAR_IF_OVERFLOW));
+
+    // Not all float condition codes are legal, see `supported_floatccs`.
+    e.enc_both(brff, rec_brfb.opcodes(&JUMP_SHORT_IF_OVERFLOW));
+    e.enc_both(brff, rec_brfd.opcodes(&JUMP_NEAR_IF_OVERFLOW));
+
+    // Note that the tjccd opcode will be prefixed with 0x0f.
+    e.enc_i32_i64_explicit_rex(brz, rec_tjccb.opcodes(&JUMP_SHORT_IF_EQUAL));
+    e.enc_i32_i64_explicit_rex(brz, rec_tjccd.opcodes(&TEST_BYTE_REG));
+    e.enc_i32_i64_explicit_rex(brnz, rec_tjccb.opcodes(&JUMP_SHORT_IF_NOT_EQUAL));
+    e.enc_i32_i64_explicit_rex(brnz, rec_tjccd.opcodes(&TEST_REG));
+
+    // Branch on a b1 value in a register only looks at the low 8 bits. See also
+    // bint encodings below.
+    //
+    // Start with the worst-case encoding for X86_32 only. The register allocator
+    // can't handle a branch with an ABCD-constrained operand.
+    e.enc32(brz.bind(B1), rec_t8jccd_long.opcodes(&TEST_BYTE_REG));
+    e.enc32(brnz.bind(B1), rec_t8jccd_long.opcodes(&TEST_REG));
+
+    e.enc_both(brz.bind(B1), rec_t8jccb_abcd.opcodes(&JUMP_SHORT_IF_EQUAL));
+    e.enc_both(brz.bind(B1), rec_t8jccd_abcd.opcodes(&TEST_BYTE_REG));
+    e.enc_both(
+        brnz.bind(B1),
+        rec_t8jccb_abcd.opcodes(&JUMP_SHORT_IF_NOT_EQUAL),
+    );
+    e.enc_both(brnz.bind(B1), rec_t8jccd_abcd.opcodes(&TEST_REG));
+
+    // Jump tables.
+    e.enc64(
+        jump_table_entry.bind(I64),
+        rec_jt_entry.opcodes(&MOVSXD).rex().w(),
+    );
+    e.enc32(jump_table_entry.bind(I32), rec_jt_entry.opcodes(&MOV_LOAD));
+
+    e.enc64(
+        jump_table_base.bind(I64),
+        rec_jt_base.opcodes(&LEA).rex().w(),
+    );
+    e.enc32(jump_table_base.bind(I32), rec_jt_base.opcodes(&LEA));
+
+    e.enc_x86_64(
+        indirect_jump_table_br.bind(I64),
+        rec_indirect_jmp.opcodes(&JUMP_ABSOLUTE).rrr(4),
+    );
+    e.enc32(
+        indirect_jump_table_br.bind(I32),
+        rec_indirect_jmp.opcodes(&JUMP_ABSOLUTE).rrr(4),
+    );
+
+    // Trap as ud2
+    e.enc32(trap, rec_trap.opcodes(&UNDEFINED2));
+    e.enc64(trap, rec_trap.opcodes(&UNDEFINED2));
+    e.enc32(resumable_trap, rec_trap.opcodes(&UNDEFINED2));
+    e.enc64(resumable_trap, rec_trap.opcodes(&UNDEFINED2));
+
+    // Debug trap as int3
+    e.enc32_rec(debugtrap, rec_debugtrap, 0);
+    e.enc64_rec(debugtrap, rec_debugtrap, 0);
+
+    e.enc32_rec(trapif, rec_trapif, 0);
+    e.enc64_rec(trapif, rec_trapif, 0);
+    e.enc32_rec(trapff, rec_trapff, 0);
+    e.enc64_rec(trapff, rec_trapff, 0);
+}
+
+/// Reference type instructions.
+#[inline(never)]
+fn define_reftypes(e: &mut PerCpuModeEncodings, shared_defs: &SharedDefinitions, r: &RecipeGroup) {
+    let shared = &shared_defs.instructions;
+
+    let is_null = shared.by_name("is_null");
+    let null = shared.by_name("null");
+    let safepoint = shared.by_name("safepoint");
+
+    let rec_is_zero = r.template("is_zero");
+    let rec_pu_id_ref = r.template("pu_id_ref");
+    let rec_safepoint = r.recipe("safepoint");
 
     // Null references implemented as iconst 0.
     e.enc32(null.bind(R32), rec_pu_id_ref.opcodes(&MOV_IMM));
@@ -2163,6 +2347,28 @@ pub(crate) fn define(
     // safepoint instruction calls sink, no actual encoding.
     e.enc32_rec(safepoint, rec_safepoint, 0);
     e.enc64_rec(safepoint, rec_safepoint, 0);
+}
+
+#[allow(clippy::cognitive_complexity)]
+pub(crate) fn define(
+    shared_defs: &SharedDefinitions,
+    settings: &SettingGroup,
+    x86: &InstructionGroup,
+    r: &RecipeGroup,
+) -> PerCpuModeEncodings {
+    // Definitions.
+    let mut e = PerCpuModeEncodings::new();
+
+    define_moves(&mut e, shared_defs, r);
+    define_memory(&mut e, shared_defs, x86, r);
+    define_fpu_moves(&mut e, shared_defs, r);
+    define_fpu_memory(&mut e, shared_defs, r);
+    define_fpu_ops(&mut e, shared_defs, settings, x86, r);
+    define_alu(&mut e, shared_defs, settings, x86, r);
+    define_simd(&mut e, shared_defs, settings, x86, r);
+    define_entity_ref(&mut e, shared_defs, settings, r);
+    define_control_flow(&mut e, shared_defs, settings, r);
+    define_reftypes(&mut e, shared_defs, r);
 
     e
 }

@@ -11,6 +11,476 @@ use crate::shared::formats::Formats;
 use crate::shared::types;
 use crate::shared::{entities::EntityRefs, immediates::Immediates};
 
+#[inline(never)]
+fn define_control_flow(
+    ig: &mut InstructionGroupBuilder,
+    formats: &Formats,
+    imm: &Immediates,
+    entities: &EntityRefs,
+) {
+    let EBB = &Operand::new("EBB", &entities.ebb).with_doc("Destination extended basic block");
+    let args = &Operand::new("args", &entities.varargs).with_doc("EBB arguments");
+
+    ig.push(
+        Inst::new(
+            "jump",
+            r#"
+        Jump.
+
+        Unconditionally jump to an extended basic block, passing the specified
+        EBB arguments. The number and types of arguments must match the
+        destination EBB.
+        "#,
+            &formats.jump,
+        )
+        .operands_in(vec![EBB, args])
+        .is_terminator(true)
+        .is_branch(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "fallthrough",
+            r#"
+        Fall through to the next EBB.
+
+        This is the same as `jump`, except the destination EBB must be
+        the next one in the layout.
+
+        Jumps are turned into fall-through instructions by the branch
+        relaxation pass. There is no reason to use this instruction outside
+        that pass.
+        "#,
+            &formats.jump,
+        )
+        .operands_in(vec![EBB, args])
+        .is_terminator(true)
+        .is_branch(true),
+    );
+
+    let Testable = &TypeVar::new(
+        "Testable",
+        "A scalar boolean or integer type",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .bools(Interval::All)
+            .build(),
+    );
+
+    {
+        let c = &Operand::new("c", Testable).with_doc("Controlling value to test");
+
+        ig.push(
+            Inst::new(
+                "brz",
+                r#"
+        Branch when zero.
+
+        If ``c`` is a `b1` value, take the branch when ``c`` is false. If
+        ``c`` is an integer value, take the branch when ``c = 0``.
+        "#,
+                &formats.branch,
+            )
+            .operands_in(vec![c, EBB, args])
+            .is_branch(true),
+        );
+
+        ig.push(
+            Inst::new(
+                "brnz",
+                r#"
+        Branch when non-zero.
+
+        If ``c`` is a `b1` value, take the branch when ``c`` is true. If
+        ``c`` is an integer value, take the branch when ``c != 0``.
+        "#,
+                &formats.branch,
+            )
+            .operands_in(vec![c, EBB, args])
+            .is_branch(true),
+        );
+    }
+
+    let iB = &TypeVar::new(
+        "iB",
+        "A scalar integer type",
+        TypeSetBuilder::new().ints(Interval::All).build(),
+    );
+    let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
+    let fflags: &TypeVar = &ValueType::Special(types::Flag::FFlags.into()).into();
+
+    {
+        let Cond = &Operand::new("Cond", &imm.intcc);
+        let x = &Operand::new("x", iB);
+        let y = &Operand::new("y", iB);
+
+        ig.push(
+            Inst::new(
+                "br_icmp",
+                r#"
+        Compare scalar integers and branch.
+
+        Compare ``x`` and ``y`` in the same way as the `icmp` instruction
+        and take the branch if the condition is true:
+
+        ```text
+            br_icmp ugt v1, v2, ebb4(v5, v6)
+        ```
+
+        is semantically equivalent to:
+
+        ```text
+            v10 = icmp ugt, v1, v2
+            brnz v10, ebb4(v5, v6)
+        ```
+
+        Some RISC architectures like MIPS and RISC-V provide instructions that
+        implement all or some of the condition codes. The instruction can also
+        be used to represent *macro-op fusion* on architectures like Intel's.
+        "#,
+                &formats.branch_icmp,
+            )
+            .operands_in(vec![Cond, x, y, EBB, args])
+            .is_branch(true),
+        );
+
+        let f = &Operand::new("f", iflags);
+
+        ig.push(
+            Inst::new(
+                "brif",
+                r#"
+        Branch when condition is true in integer CPU flags.
+        "#,
+                &formats.branch_int,
+            )
+            .operands_in(vec![Cond, f, EBB, args])
+            .is_branch(true),
+        );
+    }
+
+    {
+        let Cond = &Operand::new("Cond", &imm.floatcc);
+
+        let f = &Operand::new("f", fflags);
+
+        ig.push(
+            Inst::new(
+                "brff",
+                r#"
+        Branch when condition is true in floating point CPU flags.
+        "#,
+                &formats.branch_float,
+            )
+            .operands_in(vec![Cond, f, EBB, args])
+            .is_branch(true),
+        );
+    }
+
+    {
+        let x = &Operand::new("x", iB).with_doc("index into jump table");
+        let JT = &Operand::new("JT", &entities.jump_table);
+
+        ig.push(
+            Inst::new(
+                "br_table",
+                r#"
+        Indirect branch via jump table.
+
+        Use ``x`` as an unsigned index into the jump table ``JT``. If a jump
+        table entry is found, branch to the corresponding EBB. If no entry was
+        found or the index is out-of-bounds, branch to the given default EBB.
+
+        Note that this branch instruction can't pass arguments to the targeted
+        blocks. Split critical edges as needed to work around this.
+
+        Do not confuse this with "tables" in WebAssembly. ``br_table`` is for
+        jump tables with destinations within the current function only -- think
+        of a ``match`` in Rust or a ``switch`` in C.  If you want to call a
+        function in a dynamic library, that will typically use
+        ``call_indirect``.
+        "#,
+                &formats.branch_table,
+            )
+            .operands_in(vec![x, EBB, JT])
+            .is_terminator(true)
+            .is_branch(true),
+        );
+    }
+
+    let iAddr = &TypeVar::new(
+        "iAddr",
+        "An integer address type",
+        TypeSetBuilder::new().ints(32..64).build(),
+    );
+
+    {
+        let x = &Operand::new("x", iAddr).with_doc("index into jump table");
+        let addr = &Operand::new("addr", iAddr);
+        let Size = &Operand::new("Size", &imm.uimm8).with_doc("Size in bytes");
+        let JT = &Operand::new("JT", &entities.jump_table);
+        let entry = &Operand::new("entry", iAddr).with_doc("entry of jump table");
+
+        ig.push(
+            Inst::new(
+                "jump_table_entry",
+                r#"
+    Get an entry from a jump table.
+
+    Load a serialized ``entry`` from a jump table ``JT`` at a given index
+    ``addr`` with a specific ``Size``. The retrieved entry may need to be
+    decoded after loading, depending upon the jump table type used.
+
+    Currently, the only type supported is entries which are relative to the
+    base of the jump table.
+    "#,
+                &formats.branch_table_entry,
+            )
+            .operands_in(vec![x, addr, Size, JT])
+            .operands_out(vec![entry])
+            .can_load(true),
+        );
+
+        ig.push(
+            Inst::new(
+                "jump_table_base",
+                r#"
+    Get the absolute base address of a jump table.
+
+    This is used for jump tables wherein the entries are stored relative to
+    the base of jump table. In order to use these, generated code should first
+    load an entry using ``jump_table_entry``, then use this instruction to add
+    the relative base back to it.
+    "#,
+                &formats.branch_table_base,
+            )
+            .operands_in(vec![JT])
+            .operands_out(vec![addr]),
+        );
+
+        ig.push(
+            Inst::new(
+                "indirect_jump_table_br",
+                r#"
+    Branch indirectly via a jump table entry.
+
+    Unconditionally jump via a jump table entry that was previously loaded
+    with the ``jump_table_entry`` instruction.
+    "#,
+                &formats.indirect_jump,
+            )
+            .operands_in(vec![addr, JT])
+            .is_indirect_branch(true)
+            .is_terminator(true)
+            .is_branch(true),
+        );
+    }
+
+    ig.push(
+        Inst::new(
+            "debugtrap",
+            r#"
+    Encodes an assembly debug trap.
+    "#,
+            &formats.nullary,
+        )
+        .other_side_effects(true)
+        .can_load(true)
+        .can_store(true),
+    );
+
+    {
+        let code = &Operand::new("code", &imm.trapcode);
+        ig.push(
+            Inst::new(
+                "trap",
+                r#"
+        Terminate execution unconditionally.
+        "#,
+                &formats.trap,
+            )
+            .operands_in(vec![code])
+            .can_trap(true)
+            .is_terminator(true),
+        );
+
+        let c = &Operand::new("c", Testable).with_doc("Controlling value to test");
+        ig.push(
+            Inst::new(
+                "trapz",
+                r#"
+        Trap when zero.
+
+        if ``c`` is non-zero, execution continues at the following instruction.
+        "#,
+                &formats.cond_trap,
+            )
+            .operands_in(vec![c, code])
+            .can_trap(true),
+        );
+
+        ig.push(
+            Inst::new(
+                "resumable_trap",
+                r#"
+        A resumable trap.
+
+        This instruction allows non-conditional traps to be used as non-terminal instructions.
+        "#,
+                &formats.trap,
+            )
+            .operands_in(vec![code])
+            .can_trap(true),
+        );
+
+        let c = &Operand::new("c", Testable).with_doc("Controlling value to test");
+        ig.push(
+            Inst::new(
+                "trapnz",
+                r#"
+        Trap when non-zero.
+
+        if ``c`` is zero, execution continues at the following instruction.
+        "#,
+                &formats.cond_trap,
+            )
+            .operands_in(vec![c, code])
+            .can_trap(true),
+        );
+
+        let Cond = &Operand::new("Cond", &imm.intcc);
+        let f = &Operand::new("f", iflags);
+        ig.push(
+            Inst::new(
+                "trapif",
+                r#"
+        Trap when condition is true in integer CPU flags.
+        "#,
+                &formats.int_cond_trap,
+            )
+            .operands_in(vec![Cond, f, code])
+            .can_trap(true),
+        );
+
+        let Cond = &Operand::new("Cond", &imm.floatcc);
+        let f = &Operand::new("f", fflags);
+        let code = &Operand::new("code", &imm.trapcode);
+        ig.push(
+            Inst::new(
+                "trapff",
+                r#"
+        Trap when condition is true in floating point CPU flags.
+        "#,
+                &formats.float_cond_trap,
+            )
+            .operands_in(vec![Cond, f, code])
+            .can_trap(true),
+        );
+    }
+
+    let rvals = &Operand::new("rvals", &entities.varargs).with_doc("return values");
+    ig.push(
+        Inst::new(
+            "return",
+            r#"
+        Return from the function.
+
+        Unconditionally transfer control to the calling function, passing the
+        provided return values. The list of return values must match the
+        function signature's return types.
+        "#,
+            &formats.multiary,
+        )
+        .operands_in(vec![rvals])
+        .is_return(true)
+        .is_terminator(true),
+    );
+
+    let rvals = &Operand::new("rvals", &entities.varargs).with_doc("return values");
+    ig.push(
+        Inst::new(
+            "fallthrough_return",
+            r#"
+        Return from the function by fallthrough.
+
+        This is a specialized instruction for use where one wants to append
+        a custom epilogue, which will then perform the real return. This
+        instruction has no encoding.
+        "#,
+            &formats.multiary,
+        )
+        .operands_in(vec![rvals])
+        .is_return(true)
+        .is_terminator(true),
+    );
+
+    let FN = &Operand::new("FN", &entities.func_ref)
+        .with_doc("function to call, declared by `function`");
+    let args = &Operand::new("args", &entities.varargs).with_doc("call arguments");
+    let rvals = &Operand::new("rvals", &entities.varargs).with_doc("return values");
+    ig.push(
+        Inst::new(
+            "call",
+            r#"
+        Direct function call.
+
+        Call a function which has been declared in the preamble. The argument
+        types must match the function's signature.
+        "#,
+            &formats.call,
+        )
+        .operands_in(vec![FN, args])
+        .operands_out(vec![rvals])
+        .is_call(true),
+    );
+
+    let SIG = &Operand::new("SIG", &entities.sig_ref).with_doc("function signature");
+    let callee = &Operand::new("callee", iAddr).with_doc("address of function to call");
+    let args = &Operand::new("args", &entities.varargs).with_doc("call arguments");
+    let rvals = &Operand::new("rvals", &entities.varargs).with_doc("return values");
+    ig.push(
+        Inst::new(
+            "call_indirect",
+            r#"
+        Indirect function call.
+
+        Call the function pointed to by `callee` with the given arguments. The
+        called function must match the specified signature.
+
+        Note that this is different from WebAssembly's ``call_indirect``; the
+        callee is a native address, rather than a table index. For WebAssembly,
+        `table_addr` and `load` are used to obtain a native address
+        from a table.
+        "#,
+            &formats.call_indirect,
+        )
+        .operands_in(vec![SIG, callee, args])
+        .operands_out(vec![rvals])
+        .is_call(true),
+    );
+
+    let FN = &Operand::new("FN", &entities.func_ref)
+        .with_doc("function to call, declared by `function`");
+    let addr = &Operand::new("addr", iAddr);
+    ig.push(
+        Inst::new(
+            "func_addr",
+            r#"
+        Get the address of a function.
+
+        Compute the absolute address of a function declared in the preamble.
+        The returned address can be used as a ``callee`` argument to
+        `call_indirect`. This is also a method for calling functions that
+        are too far away to be addressable by a direct `call`
+        instruction.
+        "#,
+            &formats.func_addr,
+        )
+        .operands_in(vec![FN])
+        .operands_out(vec![addr]),
+    );
+}
+
 #[allow(clippy::many_single_char_names)]
 pub(crate) fn define(
     all_instructions: &mut AllInstructions,
@@ -19,6 +489,8 @@ pub(crate) fn define(
     entities: &EntityRefs,
 ) -> InstructionGroup {
     let mut ig = InstructionGroupBuilder::new(all_instructions);
+
+    define_control_flow(&mut ig, formats, imm, entities);
 
     // Operand kind shorthands.
     let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
@@ -114,426 +586,6 @@ pub(crate) fn define(
     let MemTo = &TypeVar::copy_from(Mem, "MemTo".to_string());
 
     let addr = &Operand::new("addr", iAddr);
-    let c = &Operand::new("c", Testable).with_doc("Controlling value to test");
-    let Cond = &Operand::new("Cond", &imm.intcc);
-    let x = &Operand::new("x", iB);
-    let y = &Operand::new("y", iB);
-    let EBB = &Operand::new("EBB", &entities.ebb).with_doc("Destination extended basic block");
-    let args = &Operand::new("args", &entities.varargs).with_doc("EBB arguments");
-
-    ig.push(
-        Inst::new(
-            "jump",
-            r#"
-        Jump.
-
-        Unconditionally jump to an extended basic block, passing the specified
-        EBB arguments. The number and types of arguments must match the
-        destination EBB.
-        "#,
-            &formats.jump,
-        )
-        .operands_in(vec![EBB, args])
-        .is_terminator(true)
-        .is_branch(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "fallthrough",
-            r#"
-        Fall through to the next EBB.
-
-        This is the same as `jump`, except the destination EBB must be
-        the next one in the layout.
-
-        Jumps are turned into fall-through instructions by the branch
-        relaxation pass. There is no reason to use this instruction outside
-        that pass.
-        "#,
-            &formats.jump,
-        )
-        .operands_in(vec![EBB, args])
-        .is_terminator(true)
-        .is_branch(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "brz",
-            r#"
-        Branch when zero.
-
-        If ``c`` is a `b1` value, take the branch when ``c`` is false. If
-        ``c`` is an integer value, take the branch when ``c = 0``.
-        "#,
-            &formats.branch,
-        )
-        .operands_in(vec![c, EBB, args])
-        .is_branch(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "brnz",
-            r#"
-        Branch when non-zero.
-
-        If ``c`` is a `b1` value, take the branch when ``c`` is true. If
-        ``c`` is an integer value, take the branch when ``c != 0``.
-        "#,
-            &formats.branch,
-        )
-        .operands_in(vec![c, EBB, args])
-        .is_branch(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "br_icmp",
-            r#"
-        Compare scalar integers and branch.
-
-        Compare ``x`` and ``y`` in the same way as the `icmp` instruction
-        and take the branch if the condition is true:
-
-        ```text
-            br_icmp ugt v1, v2, ebb4(v5, v6)
-        ```
-
-        is semantically equivalent to:
-
-        ```text
-            v10 = icmp ugt, v1, v2
-            brnz v10, ebb4(v5, v6)
-        ```
-
-        Some RISC architectures like MIPS and RISC-V provide instructions that
-        implement all or some of the condition codes. The instruction can also
-        be used to represent *macro-op fusion* on architectures like Intel's.
-        "#,
-            &formats.branch_icmp,
-        )
-        .operands_in(vec![Cond, x, y, EBB, args])
-        .is_branch(true),
-    );
-
-    let f = &Operand::new("f", iflags);
-
-    ig.push(
-        Inst::new(
-            "brif",
-            r#"
-        Branch when condition is true in integer CPU flags.
-        "#,
-            &formats.branch_int,
-        )
-        .operands_in(vec![Cond, f, EBB, args])
-        .is_branch(true),
-    );
-
-    let Cond = &Operand::new("Cond", &imm.floatcc);
-    let f = &Operand::new("f", fflags);
-
-    ig.push(
-        Inst::new(
-            "brff",
-            r#"
-        Branch when condition is true in floating point CPU flags.
-        "#,
-            &formats.branch_float,
-        )
-        .operands_in(vec![Cond, f, EBB, args])
-        .is_branch(true),
-    );
-
-    // The index into the br_table can be any type; legalizer will convert it to the right type.
-    let x = &Operand::new("x", iB).with_doc("index into jump table");
-    let entry = &Operand::new("entry", iAddr).with_doc("entry of jump table");
-    let JT = &Operand::new("JT", &entities.jump_table);
-
-    ig.push(
-        Inst::new(
-            "br_table",
-            r#"
-        Indirect branch via jump table.
-
-        Use ``x`` as an unsigned index into the jump table ``JT``. If a jump
-        table entry is found, branch to the corresponding EBB. If no entry was
-        found or the index is out-of-bounds, branch to the given default EBB.
-
-        Note that this branch instruction can't pass arguments to the targeted
-        blocks. Split critical edges as needed to work around this.
-
-        Do not confuse this with "tables" in WebAssembly. ``br_table`` is for
-        jump tables with destinations within the current function only -- think
-        of a ``match`` in Rust or a ``switch`` in C.  If you want to call a
-        function in a dynamic library, that will typically use
-        ``call_indirect``.
-        "#,
-            &formats.branch_table,
-        )
-        .operands_in(vec![x, EBB, JT])
-        .is_terminator(true)
-        .is_branch(true),
-    );
-
-    // These are the instructions which br_table legalizes to: they perform address computations,
-    // using pointer-sized integers, so their type variables are more constrained.
-    let x = &Operand::new("x", iAddr).with_doc("index into jump table");
-    let Size = &Operand::new("Size", &imm.uimm8).with_doc("Size in bytes");
-
-    ig.push(
-        Inst::new(
-            "jump_table_entry",
-            r#"
-    Get an entry from a jump table.
-
-    Load a serialized ``entry`` from a jump table ``JT`` at a given index
-    ``addr`` with a specific ``Size``. The retrieved entry may need to be
-    decoded after loading, depending upon the jump table type used.
-
-    Currently, the only type supported is entries which are relative to the
-    base of the jump table.
-    "#,
-            &formats.branch_table_entry,
-        )
-        .operands_in(vec![x, addr, Size, JT])
-        .operands_out(vec![entry])
-        .can_load(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "jump_table_base",
-            r#"
-    Get the absolute base address of a jump table.
-
-    This is used for jump tables wherein the entries are stored relative to
-    the base of jump table. In order to use these, generated code should first
-    load an entry using ``jump_table_entry``, then use this instruction to add
-    the relative base back to it.
-    "#,
-            &formats.branch_table_base,
-        )
-        .operands_in(vec![JT])
-        .operands_out(vec![addr]),
-    );
-
-    ig.push(
-        Inst::new(
-            "indirect_jump_table_br",
-            r#"
-    Branch indirectly via a jump table entry.
-
-    Unconditionally jump via a jump table entry that was previously loaded
-    with the ``jump_table_entry`` instruction.
-    "#,
-            &formats.indirect_jump,
-        )
-        .operands_in(vec![addr, JT])
-        .is_indirect_branch(true)
-        .is_terminator(true)
-        .is_branch(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "debugtrap",
-            r#"
-    Encodes an assembly debug trap.
-    "#,
-            &formats.nullary,
-        )
-        .other_side_effects(true)
-        .can_load(true)
-        .can_store(true),
-    );
-
-    let code = &Operand::new("code", &imm.trapcode);
-
-    ig.push(
-        Inst::new(
-            "trap",
-            r#"
-        Terminate execution unconditionally.
-        "#,
-            &formats.trap,
-        )
-        .operands_in(vec![code])
-        .can_trap(true)
-        .is_terminator(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "trapz",
-            r#"
-        Trap when zero.
-
-        if ``c`` is non-zero, execution continues at the following instruction.
-        "#,
-            &formats.cond_trap,
-        )
-        .operands_in(vec![c, code])
-        .can_trap(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "resumable_trap",
-            r#"
-        A resumable trap.
-
-        This instruction allows non-conditional traps to be used as non-terminal instructions.
-        "#,
-            &formats.trap,
-        )
-        .operands_in(vec![code])
-        .can_trap(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "trapnz",
-            r#"
-        Trap when non-zero.
-
-        if ``c`` is zero, execution continues at the following instruction.
-        "#,
-            &formats.cond_trap,
-        )
-        .operands_in(vec![c, code])
-        .can_trap(true),
-    );
-
-    let Cond = &Operand::new("Cond", &imm.intcc);
-    let f = &Operand::new("f", iflags);
-
-    ig.push(
-        Inst::new(
-            "trapif",
-            r#"
-        Trap when condition is true in integer CPU flags.
-        "#,
-            &formats.int_cond_trap,
-        )
-        .operands_in(vec![Cond, f, code])
-        .can_trap(true),
-    );
-
-    let Cond = &Operand::new("Cond", &imm.floatcc);
-    let f = &Operand::new("f", fflags);
-
-    ig.push(
-        Inst::new(
-            "trapff",
-            r#"
-        Trap when condition is true in floating point CPU flags.
-        "#,
-            &formats.float_cond_trap,
-        )
-        .operands_in(vec![Cond, f, code])
-        .can_trap(true),
-    );
-
-    let rvals = &Operand::new("rvals", &entities.varargs).with_doc("return values");
-
-    ig.push(
-        Inst::new(
-            "return",
-            r#"
-        Return from the function.
-
-        Unconditionally transfer control to the calling function, passing the
-        provided return values. The list of return values must match the
-        function signature's return types.
-        "#,
-            &formats.multiary,
-        )
-        .operands_in(vec![rvals])
-        .is_return(true)
-        .is_terminator(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "fallthrough_return",
-            r#"
-        Return from the function by fallthrough.
-
-        This is a specialized instruction for use where one wants to append
-        a custom epilogue, which will then perform the real return. This
-        instruction has no encoding.
-        "#,
-            &formats.multiary,
-        )
-        .operands_in(vec![rvals])
-        .is_return(true)
-        .is_terminator(true),
-    );
-
-    let FN = &Operand::new("FN", &entities.func_ref)
-        .with_doc("function to call, declared by `function`");
-    let args = &Operand::new("args", &entities.varargs).with_doc("call arguments");
-
-    ig.push(
-        Inst::new(
-            "call",
-            r#"
-        Direct function call.
-
-        Call a function which has been declared in the preamble. The argument
-        types must match the function's signature.
-        "#,
-            &formats.call,
-        )
-        .operands_in(vec![FN, args])
-        .operands_out(vec![rvals])
-        .is_call(true),
-    );
-
-    let SIG = &Operand::new("SIG", &entities.sig_ref).with_doc("function signature");
-    let callee = &Operand::new("callee", iAddr).with_doc("address of function to call");
-
-    ig.push(
-        Inst::new(
-            "call_indirect",
-            r#"
-        Indirect function call.
-
-        Call the function pointed to by `callee` with the given arguments. The
-        called function must match the specified signature.
-
-        Note that this is different from WebAssembly's ``call_indirect``; the
-        callee is a native address, rather than a table index. For WebAssembly,
-        `table_addr` and `load` are used to obtain a native address
-        from a table.
-        "#,
-            &formats.call_indirect,
-        )
-        .operands_in(vec![SIG, callee, args])
-        .operands_out(vec![rvals])
-        .is_call(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "func_addr",
-            r#"
-        Get the address of a function.
-
-        Compute the absolute address of a function declared in the preamble.
-        The returned address can be used as a ``callee`` argument to
-        `call_indirect`. This is also a method for calling functions that
-        are too far away to be addressable by a direct `call`
-        instruction.
-        "#,
-            &formats.func_addr,
-        )
-        .operands_in(vec![FN])
-        .operands_out(vec![addr]),
-    );
 
     let SS = &Operand::new("SS", &entities.stack_slot);
     let Offset = &Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address");
