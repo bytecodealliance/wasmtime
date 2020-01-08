@@ -234,14 +234,15 @@ impl RunCommand {
         store: &Store,
         module_registry: &HashMap<String, HostRef<Instance>>,
         path: &Path,
-    ) -> Result<(HostRef<Instance>, Module, Vec<u8>)> {
+    ) -> Result<(HostRef<Instance>, HostRef<Module>, Vec<u8>)> {
         // Read the wasm module binary either as `*.wat` or a raw binary
         let data = wat::parse_file(path)?;
 
-        let module = Module::new(store, &data)?;
+        let module = HostRef::new(Module::new(store, &data)?);
 
         // Resolve import using module_registry.
         let imports = module
+            .borrow()
             .imports()
             .iter()
             .map(|i| {
@@ -284,6 +285,7 @@ impl RunCommand {
             let data = ModuleData::new(&data)?;
             self.invoke_export(instance, &data, name)?;
         } else if module
+            .borrow()
             .exports()
             .iter()
             .any(|export| export.name().is_empty())

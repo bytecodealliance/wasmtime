@@ -331,7 +331,6 @@ impl Engine {
 /// ocnfiguration (see [`Config`] for more information).
 #[derive(Clone)]
 pub struct Store {
-    // FIXME(#777) should be `Arc` and this type should be thread-safe
     inner: Rc<StoreInner>,
 }
 

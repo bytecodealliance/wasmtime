@@ -44,15 +44,19 @@ pub fn instantiate(wasm: &[u8], strategy: Strategy) {
     let engine = Engine::new(&config);
     let store = Store::new(&engine);
 
-    let module = Module::new(&store, wasm).expect("Failed to compile a valid Wasm module!");
+    let module =
+        HostRef::new(Module::new(&store, wasm).expect("Failed to compile a valid Wasm module!"));
 
-    let imports = match dummy_imports(&store, module.imports()) {
-        Ok(imps) => imps,
-        Err(_) => {
-            // There are some value types that we can't synthesize a
-            // dummy value for (e.g. anyrefs) and for modules that
-            // import things of these types we skip instantiation.
-            return;
+    let imports = {
+        let module = module.borrow();
+        match dummy_imports(&store, module.imports()) {
+            Ok(imps) => imps,
+            Err(_) => {
+                // There are some value types that we can't synthesize a
+                // dummy value for (e.g. anyrefs) and for modules that
+                // import things of these types we skip instantiation.
+                return;
+            }
         }
     };
 
@@ -88,7 +92,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
     let mut config: Option<Config> = None;
     let mut engine: Option<Engine> = None;
     let mut store: Option<Store> = None;
-    let mut modules: HashMap<usize, Module> = Default::default();
+    let mut modules: HashMap<usize, HostRef<Module>> = Default::default();
     let mut instances: HashMap<usize, HostRef<Instance>> = Default::default();
 
     for call in api.calls {
@@ -113,10 +117,10 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
             }
 
             ApiCall::ModuleNew { id, wasm } => {
-                let module = match Module::new(store.as_ref().unwrap(), &wasm.wasm) {
+                let module = HostRef::new(match Module::new(store.as_ref().unwrap(), &wasm.wasm) {
                     Ok(m) => m,
                     Err(_) => continue,
-                };
+                });
                 let old = modules.insert(id, module);
                 assert!(old.is_none());
             }
@@ -131,13 +135,16 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                     None => continue,
                 };
 
-                let imports = match dummy_imports(store.as_ref().unwrap(), module.imports()) {
-                    Ok(imps) => imps,
-                    Err(_) => {
-                        // There are some value types that we can't synthesize a
-                        // dummy value for (e.g. anyrefs) and for modules that
-                        // import things of these types we skip instantiation.
-                        continue;
+                let imports = {
+                    let module = module.borrow();
+                    match dummy_imports(store.as_ref().unwrap(), module.imports()) {
+                        Ok(imps) => imps,
+                        Err(_) => {
+                            // There are some value types that we can't synthesize a
+                            // dummy value for (e.g. anyrefs) and for modules that
+                            // import things of these types we skip instantiation.
+                            continue;
+                        }
                     }
                 };
 

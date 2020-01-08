@@ -38,10 +38,11 @@ fn main() -> anyhow::Result<()> {
     // `Module` which is attached to a `Store` cache.
     let wasm = wat::parse_str(WAT)?;
     let store = Store::default();
-    let module = Module::new(&store, &wasm)?;
+    let module = HostRef::new(Module::new(&store, &wasm)?);
 
     // Find index of the `gcd` export.
     let gcd_index = module
+        .borrow()
         .exports()
         .iter()
         .enumerate()

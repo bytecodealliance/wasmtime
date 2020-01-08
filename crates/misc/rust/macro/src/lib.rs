@@ -57,13 +57,13 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
 
             let data = #root::wasmtime_interface_types::ModuleData::new(&bytes)?;
 
-            let module = Module::new(&store, &bytes)?;
+            let module = HostRef::new(Module::new(&store, &bytes)?);
 
             let mut imports: Vec<Extern> = Vec::new();
             if let Some(module_name) = data.find_wasi_module_name() {
                 let wasi_instance = #root::wasmtime_wasi::create_wasi_instance(&store, &[], &[], &[])
                     .map_err(|e| format_err!("wasm instantiation error: {:?}", e))?;
-                for i in module.imports().iter() {
+                for i in module.borrow().imports().iter() {
                     if i.module() != module_name {
                         bail!("unknown import module {}", i.module());
                     }

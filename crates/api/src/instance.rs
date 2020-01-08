@@ -1,6 +1,7 @@
 use crate::context::Context;
 use crate::externals::Extern;
 use crate::module::Module;
+use crate::r#ref::HostRef;
 use crate::runtime::Store;
 use crate::trampoline::take_api_trap;
 use crate::trap::Trap;
@@ -59,7 +60,7 @@ pub fn instantiate_in_context(
 pub struct Instance {
     instance_handle: InstanceHandle,
 
-    module: Module,
+    module: HostRef<Module>,
 
     // We need to keep CodeMemory alive.
     contexts: HashSet<Context>,
@@ -68,19 +69,29 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(store: &Store, module: &Module, externs: &[Extern]) -> Result<Instance, Error> {
+    pub fn new(
+        store: &Store,
+        module: &HostRef<Module>,
+        externs: &[Extern],
+    ) -> Result<Instance, Error> {
         let context = store.context().clone();
         let exports = store.global_exports().clone();
         let imports = module
+            .borrow()
             .imports()
             .iter()
             .zip(externs.iter())
             .map(|(i, e)| (i.module().to_string(), i.name().to_string(), e.clone()))
             .collect::<Vec<_>>();
-        let (mut instance_handle, contexts) =
-            instantiate_in_context(module.binary().expect("binary"), imports, context, exports)?;
+        let (mut instance_handle, contexts) = instantiate_in_context(
+            module.borrow().binary().expect("binary"),
+            imports,
+            context,
+            exports,
+        )?;
 
         let exports = {
+            let module = module.borrow();
             let mut exports = Vec::with_capacity(module.exports().len());
             for export in module.exports() {
                 let name = export.name().to_string();
@@ -105,13 +116,14 @@ impl Instance {
         &self.exports
     }
 
-    pub fn module(&self) -> &Module {
+    pub fn module(&self) -> &HostRef<Module> {
         &self.module
     }
 
     pub fn find_export_by_name(&self, name: &str) -> Option<&Extern> {
         let (i, _) = self
             .module
+            .borrow()
             .exports()
             .iter()
             .enumerate()
@@ -142,7 +154,10 @@ impl Instance {
             ));
         }
 
-        let module = Module::from_exports(store, exports_types.into_boxed_slice());
+        let module = HostRef::new(Module::from_exports(
+            store,
+            exports_types.into_boxed_slice(),
+        ));
 
         Instance {
             instance_handle,

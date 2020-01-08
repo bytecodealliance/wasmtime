@@ -43,8 +43,9 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         .context("failed to instantiate wasi")?,
     );
 
-    let module = Module::new(&store, &data).context("failed to create wasm module")?;
+    let module = HostRef::new(Module::new(&store, &data).context("failed to create wasm module")?);
     let imports = module
+        .borrow()
         .imports()
         .iter()
         .map(|i| {

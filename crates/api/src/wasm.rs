@@ -662,7 +662,7 @@ pub unsafe extern "C" fn wasm_instance_new(
         let import = *imports.add(i);
         externs.push((*import).ext.clone());
     }
-    let module = &(*module).module.borrow();
+    let module = &(*module).module;
     match Instance::new(store, module, &externs) {
         Ok(instance) => {
             let instance = Box::new(wasm_instance_t {

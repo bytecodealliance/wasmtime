@@ -43,7 +43,7 @@ use wasmtime_runtime::Export;
 ///
 /// // Initialise environment and our module.
 /// let store = wasmtime::Store::default();
-/// let module = wasmtime::Module::new(&store, &binary)?;
+/// let module = HostRef::new(wasmtime::Module::new(&store, &binary)?);
 ///
 /// // Define the type of the function we're going to call.
 /// let times_two_type = wasmtime::FuncType::new(

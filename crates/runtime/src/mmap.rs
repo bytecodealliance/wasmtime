@@ -1,8 +1,11 @@
 //! Low-level abstraction for allocating and managing zero-filled pages
 //! of memory.
 
+#[cfg(not(target_os = "windows"))]
+use libc;
 use more_asserts::assert_le;
 use more_asserts::assert_lt;
+use region;
 use std::io;
 use std::ptr;
 use std::slice;
@@ -16,7 +19,7 @@ fn round_up_to_page_size(size: usize, page_size: usize) -> usize {
 /// and initially-zeroed memory and a length.
 #[derive(Debug)]
 pub struct Mmap {
-    offset: usize,
+    ptr: *mut u8,
     len: usize,
 }
 
@@ -26,8 +29,10 @@ impl Mmap {
         // Rust's slices require non-null pointers, even when empty. `Vec`
         // contains code to create a non-null dangling pointer value when
         // constructed empty, so we reuse that here.
-        let empty = Vec::<u8>::new();
-        Self { offset: empty.as_ptr() as usize, len: 0 }
+        Self {
+            ptr: Vec::new().as_mut_ptr(),
+            len: 0,
+        }
     }
 
     /// Create a new `Mmap` pointing to at least `size` bytes of page-aligned accessible memory.
@@ -73,7 +78,7 @@ impl Mmap {
             }
 
             Self {
-                offset: ptr as usize,
+                ptr: ptr as *mut u8,
                 len: mapping_size,
             }
         } else {
@@ -93,7 +98,7 @@ impl Mmap {
             }
 
             let mut result = Self {
-                offset: ptr as usize,
+                ptr: ptr as *mut u8,
                 len: mapping_size,
             };
 
@@ -137,7 +142,7 @@ impl Mmap {
             }
 
             Self {
-                offset: ptr as usize,
+                ptr: ptr as *mut u8,
                 len: mapping_size,
             }
         } else {
@@ -149,7 +154,7 @@ impl Mmap {
             }
 
             let mut result = Self {
-                offset: ptr as usize,
+                ptr: ptr as *mut u8,
                 len: mapping_size,
             };
 
@@ -174,8 +179,7 @@ impl Mmap {
         assert_lt!(start, self.len - len);
 
         // Commit the accessible size.
-        let ptr = self.offset as *const u8;
-        unsafe { region::protect(ptr.add(start), len, region::Protection::ReadWrite) }
+        unsafe { region::protect(self.ptr.add(start), len, region::Protection::ReadWrite) }
             .map_err(|e| e.to_string())
     }
 
@@ -194,10 +198,9 @@ impl Mmap {
         assert_lt!(start, self.len - len);
 
         // Commit the accessible size.
-        let ptr = self.offset as *const u8;
         if unsafe {
             VirtualAlloc(
-                ptr.add(start) as *mut c_void,
+                self.ptr.add(start) as *mut c_void,
                 len,
                 MEM_COMMIT,
                 PAGE_READWRITE,
@@ -213,22 +216,22 @@ impl Mmap {
 
     /// Return the allocated memory as a slice of u8.
     pub fn as_slice(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.offset as *const u8, self.len) }
+        unsafe { slice::from_raw_parts(self.ptr, self.len) }
     }
 
     /// Return the allocated memory as a mutable slice of u8.
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        unsafe { slice::from_raw_parts_mut(self.offset as *mut u8, self.len) }
+        unsafe { slice::from_raw_parts_mut(self.ptr, self.len) }
     }
 
     /// Return the allocated memory as a pointer to u8.
     pub fn as_ptr(&self) -> *const u8 {
-        self.offset as *const u8
+        self.ptr
     }
 
     /// Return the allocated memory as a mutable pointer to u8.
     pub fn as_mut_ptr(&mut self) -> *mut u8 {
-        self.offset as *mut u8
+        self.ptr
     }
 
     /// Return the length of the allocated memory.
@@ -246,7 +249,7 @@ impl Drop for Mmap {
     #[cfg(not(target_os = "windows"))]
     fn drop(&mut self) {
         if self.len != 0 {
-            let r = unsafe { libc::munmap(self.offset as *mut libc::c_void, self.len) };
+            let r = unsafe { libc::munmap(self.ptr as *mut libc::c_void, self.len) };
             assert_eq!(r, 0, "munmap failed: {}", io::Error::last_os_error());
         }
     }
@@ -257,15 +260,10 @@ impl Drop for Mmap {
             use winapi::ctypes::c_void;
             use winapi::um::memoryapi::VirtualFree;
             use winapi::um::winnt::MEM_RELEASE;
-            let r = unsafe { VirtualFree(self.offset as *mut c_void, 0, MEM_RELEASE) };
+            let r = unsafe { VirtualFree(self.ptr as *mut c_void, 0, MEM_RELEASE) };
             assert_ne!(r, 0);
         }
     }
-}
-
-fn _assert() {
-    fn _assert_send_sync<T: Send + Sync>() {}
-    _assert_send_sync::<Mmap>();
 }
 
 #[cfg(test)]

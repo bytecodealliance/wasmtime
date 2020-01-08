@@ -4,5 +4,5 @@ use pyo3::prelude::*;
 
 #[pyclass]
 pub struct Module {
-    pub module: wasmtime::Module,
+    pub module: wasmtime::HostRef<wasmtime::Module>,
 }

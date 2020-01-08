@@ -14,11 +14,6 @@ pub struct CodeMemory {
     published: usize,
 }
 
-fn _assert() {
-    fn _assert_send_sync<T: Send + Sync>() {}
-    _assert_send_sync::<CodeMemory>();
-}
-
 impl CodeMemory {
     /// Create a new `CodeMemory` instance.
     pub fn new() -> Self {

@@ -21,7 +21,7 @@ impl Instance {
         let py = gil.python();
         let exports = PyDict::new(py);
         let module = self.instance.borrow().module().clone();
-        for (i, e) in module.exports().iter().enumerate() {
+        for (i, e) in module.borrow().exports().iter().enumerate() {
             match e.ty() {
                 wasmtime::ExternType::Func(ft) => {
                     let mut args_types = Vec::new();

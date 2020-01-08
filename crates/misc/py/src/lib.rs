@@ -84,7 +84,7 @@ pub fn instantiate(
     let engine = wasmtime::Engine::new(&wasmtime::Config::new().wasm_multi_value(true));
     let store = wasmtime::Store::new(&engine);
 
-    let module = wasmtime::Module::new(&store, wasm_data).map_err(err2py)?;
+    let module = wasmtime::HostRef::new(wasmtime::Module::new(&store, wasm_data).map_err(err2py)?);
 
     let data = Rc::new(ModuleData::new(wasm_data).map_err(err2py)?);
 
@@ -99,7 +99,7 @@ pub fn instantiate(
     };
 
     let mut imports: Vec<wasmtime::Extern> = Vec::new();
-    for i in module.imports() {
+    for i in module.borrow().imports() {
         let module_name = i.module();
         if let Some(m) = import_obj.get_item(module_name) {
             let e = find_export_in(m, &store, i.name())?;
