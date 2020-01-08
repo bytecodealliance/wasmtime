@@ -198,7 +198,7 @@ impl TargetFrontendConfig {
 
 /// Methods that are specialized to a target ISA. Implies a Display trait that shows the
 /// shared flags, as well as any isa-specific flags.
-pub trait TargetIsa: fmt::Display + Sync {
+pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Get the name of this ISA.
     fn name(&self) -> &'static str;
 
