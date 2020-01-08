@@ -27,7 +27,10 @@ impl Mmap {
         // contains code to create a non-null dangling pointer value when
         // constructed empty, so we reuse that here.
         let empty = Vec::<u8>::new();
-        Self { offset: empty.as_ptr() as usize, len: 0 }
+        Self {
+            offset: empty.as_ptr() as usize,
+            len: 0,
+        }
     }
 
     /// Create a new `Mmap` pointing to at least `size` bytes of page-aligned accessible memory.
