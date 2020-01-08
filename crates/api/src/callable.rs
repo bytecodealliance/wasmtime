@@ -157,8 +157,8 @@ impl WrappedCallable for WasmtimeFn {
                 values_vec.as_mut_ptr() as *mut u8,
             )
         } {
-            let trap = take_api_trap()
-                .unwrap_or_else(|| Trap::new(format!("call error: {}", message)));
+            let trap =
+                take_api_trap().unwrap_or_else(|| Trap::new(format!("call error: {}", message)));
             return Err(trap);
         }
 
