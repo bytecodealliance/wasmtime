@@ -60,8 +60,8 @@ ebb0(v0: f32x4 [%xmm2], v1: f32x4 [%xmm4]):
 [-, %xmm2]  v4 = fcmp le v0, v1     ; bin: 40 0f c2 d4 02
 [-, %xmm2]  v5 = fcmp uno v0, v1    ; bin: 40 0f c2 d4 03
 [-, %xmm2]  v6 = fcmp ne v0, v1     ; bin: 40 0f c2 d4 04
-[-, %xmm2]  v7 = fcmp ge v0, v1     ; bin: 40 0f c2 d4 05
-[-, %xmm2]  v8 = fcmp gt v0, v1     ; bin: 40 0f c2 d4 06
+[-, %xmm2]  v7 = fcmp uge v0, v1    ; bin: 40 0f c2 d4 05
+[-, %xmm2]  v8 = fcmp ugt v0, v1    ; bin: 40 0f c2 d4 06
 [-, %xmm2]  v9 = fcmp ord v0, v1    ; bin: 40 0f c2 d4 07
             return
 }
@@ -73,8 +73,8 @@ ebb0(v0: f64x2 [%xmm2], v1: f64x2 [%xmm0]):
 [-, %xmm2]  v4 = fcmp le v0, v1     ; bin: 66 40 0f c2 d0 02
 [-, %xmm2]  v5 = fcmp uno v0, v1    ; bin: 66 40 0f c2 d0 03
 [-, %xmm2]  v6 = fcmp ne v0, v1     ; bin: 66 40 0f c2 d0 04
-[-, %xmm2]  v7 = fcmp ge v0, v1     ; bin: 66 40 0f c2 d0 05
-[-, %xmm2]  v8 = fcmp gt v0, v1     ; bin: 66 40 0f c2 d0 06
+[-, %xmm2]  v7 = fcmp uge v0, v1    ; bin: 66 40 0f c2 d0 05
+[-, %xmm2]  v8 = fcmp ugt v0, v1    ; bin: 66 40 0f c2 d0 06
 [-, %xmm2]  v9 = fcmp ord v0, v1    ; bin: 66 40 0f c2 d0 07
             return
 }

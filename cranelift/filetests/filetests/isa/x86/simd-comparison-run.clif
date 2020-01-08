@@ -231,3 +231,17 @@ ebb0:
     return v8
 }
 ; run
+
+function %fcmp_gt_nans_f32x4() -> b1 {
+ebb0:
+    v0 = vconst.f32x4 [NaN 0x42.0 -NaN NaN]
+    v1 = vconst.f32x4 [NaN NaN 0x42.0 Inf]
+    v2 = fcmp gt v0, v1
+    ; now check that the result v2 is all zeroes
+    v3 = vconst.i32x4 0x00
+    v4 = raw_bitcast.i32x4 v2
+    v5 = icmp eq v3, v4
+    v8 = vall_true v5
+    return v8
+}
+; run

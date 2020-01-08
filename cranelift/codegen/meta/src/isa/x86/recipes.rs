@@ -3169,7 +3169,7 @@ pub(crate) fn define<'shared>(
     );
 
     {
-        let supported_floatccs: Vec<Literal> = ["eq", "lt", "le", "uno", "ne", "gt", "ge", "ord"]
+        let supported_floatccs: Vec<Literal> = ["eq", "lt", "le", "uno", "ne", "uge", "ugt", "ord"]
             .iter()
             .map(|name| Literal::enumerator_for(floatcc, name))
             .collect();
@@ -3189,14 +3189,14 @@ pub(crate) fn define<'shared>(
                     // Add immediate byte indicating what type of comparison.
                     use crate::ir::condcodes::FloatCC::*;
                     let imm = match cond {
-                        Equal               => 0x00,
-                        LessThan            => 0x01,
-                        LessThanOrEqual     => 0x02,
-                        Unordered           => 0x03,
-                        NotEqual            => 0x04,
-                        GreaterThanOrEqual  => 0x05,
-                        GreaterThan         => 0x06,
-                        Ordered             => 0x07,
+                        Equal                      => 0x00,
+                        LessThan                   => 0x01,
+                        LessThanOrEqual            => 0x02,
+                        Unordered                  => 0x03,
+                        NotEqual                   => 0x04,
+                        UnorderedOrGreaterThanOrEqual => 0x05,
+                        UnorderedOrGreaterThan => 0x06,
+                        Ordered                    => 0x07,
                         _ => panic!("{} not supported by pfcmp", cond),
                     };
                     sink.put1(imm);

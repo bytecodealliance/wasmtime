@@ -552,6 +552,26 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         narrow.legalize(def!(c = icmp_(ule, a, b)), vec![def!(c = icmp(uge, b, a))]);
     }
 
+    // SIMD fcmp greater-/less-than
+    let gt = Literal::enumerator_for(&imm.floatcc, "gt");
+    let lt = Literal::enumerator_for(&imm.floatcc, "lt");
+    let ge = Literal::enumerator_for(&imm.floatcc, "ge");
+    let le = Literal::enumerator_for(&imm.floatcc, "le");
+    let ugt = Literal::enumerator_for(&imm.floatcc, "ugt");
+    let ult = Literal::enumerator_for(&imm.floatcc, "ult");
+    let uge = Literal::enumerator_for(&imm.floatcc, "uge");
+    let ule = Literal::enumerator_for(&imm.floatcc, "ule");
+    for ty in &[F32, F64] {
+        let fcmp_ = fcmp.bind(vector(*ty, sse_vector_size));
+        narrow.legalize(def!(c = fcmp_(gt, a, b)), vec![def!(c = fcmp(lt, b, a))]);
+        let fcmp_ = fcmp.bind(vector(*ty, sse_vector_size));
+        narrow.legalize(def!(c = fcmp_(ge, a, b)), vec![def!(c = fcmp(le, b, a))]);
+        let fcmp_ = fcmp.bind(vector(*ty, sse_vector_size));
+        narrow.legalize(def!(c = fcmp_(ult, a, b)), vec![def!(c = fcmp(ugt, b, a))]);
+        let fcmp_ = fcmp.bind(vector(*ty, sse_vector_size));
+        narrow.legalize(def!(c = fcmp_(ule, a, b)), vec![def!(c = fcmp(uge, b, a))]);
+    }
+
     for ty in &[F32, F64] {
         let fneg = fneg.bind(vector(*ty, sse_vector_size));
         let lane_type_as_int = LaneType::int_from_bits(LaneType::from(*ty).lane_bits() as u16);
