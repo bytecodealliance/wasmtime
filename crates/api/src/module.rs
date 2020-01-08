@@ -256,7 +256,7 @@ impl Module {
     /// # Unsafety
     ///
     /// This function is `unsafe` due to the unchecked assumption that the input
-    /// `binary` is valid. If the `binary` is not actuall a valid wasm binary it
+    /// `binary` is valid. If the `binary` is not actually a valid wasm binary it
     /// may cause invalid machine code to get generated, cause panics, etc.
     ///
     /// It is only safe to call this method if [`Module::validate`] succeeds on
