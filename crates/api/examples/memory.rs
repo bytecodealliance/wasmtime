@@ -86,7 +86,7 @@ fn main() -> Result<(), Error> {
 
     // Compile.
     println!("Compiling module...");
-    let module = HostRef::new(Module::new(&store, &binary).context("> Error compiling module!")?);
+    let module = Module::new(&store, &binary).context("> Error compiling module!")?;
 
     // Instantiate.
     println!("Instantiating module...");

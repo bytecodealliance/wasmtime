@@ -65,9 +65,9 @@ impl WastContext {
     }
 
     fn instantiate(&self, module: &[u8]) -> Result<Outcome<HostRef<Instance>>> {
-        let module = HostRef::new(Module::new(&self.store, module)?);
+        let module = Module::new(&self.store, module)?;
         let mut imports = Vec::new();
-        for import in module.borrow().imports() {
+        for import in module.imports() {
             if import.module() == "spectest" {
                 let spectest = self
                     .spectest

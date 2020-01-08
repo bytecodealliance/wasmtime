@@ -54,7 +54,7 @@ fn main() -> Result<()> {
 
     // Compile.
     println!("Compiling module...");
-    let module = HostRef::new(Module::new(&store, &binary).context("Error compiling module!")?);
+    let module = Module::new(&store, &binary).context("Error compiling module!")?;
 
     // Create external print functions.
     println!("Creating callback...");
