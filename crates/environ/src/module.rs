@@ -301,6 +301,7 @@ impl Module {
         // There's no need to cache names (strings), start function
         // and data initializers (for both memory and tables)
         self.signatures.hash(state);
+        self.signature_mapping.hash(state);
         self.functions.hash(state);
         self.table_plans.hash(state);
         self.memory_plans.hash(state);
