@@ -88,8 +88,9 @@ pub(crate) fn fd_fdstat_set_flags(
 
     let new_access_mode = file_access_mode_from_fdflags(
         fdflags,
-        (access_mode & AccessMode::FILE_READ_DATA).bits() != 0,
-        (access_mode & (AccessMode::FILE_WRITE_DATA | AccessMode::FILE_APPEND_DATA)).bits() != 0,
+        access_mode.contains(AccessMode::FILE_READ_DATA),
+        access_mode.contains(AccessMode::FILE_WRITE_DATA)
+            | access_mode.contains(AccessMode::FILE_APPEND_DATA),
     );
 
     unsafe {
@@ -139,13 +140,11 @@ pub(crate) fn path_open(
     let is_trunc = oflags & wasi::__WASI_OFLAGS_TRUNC != 0;
 
     if is_trunc {
-        // Windows requires write access for truncation
-        if !write {
-            return Err(Error::ENOTCAPABLE);
-        }
-        // Windows does not support append mode with truncation
+        // Windows does not support append mode when opening for truncation
+        // This is because truncation requires `GENERIC_WRITE` access, which will override the removal
+        // of the `FILE_WRITE_DATA` permission.
         if fdflags & wasi::__WASI_FDFLAGS_APPEND != 0 {
-            return Err(Error::EINVAL);
+            return Err(Error::ENOTSUP);
         }
     }
 
@@ -232,6 +231,9 @@ fn file_access_mode_from_fdflags(
 ) -> AccessMode {
     let mut access_mode = AccessMode::READ_CONTROL;
 
+    // Note that `GENERIC_READ` and `GENERIC_WRITE` cannot be used to properly support append-only mode
+    // The file-specific flags `FILE_GENERIC_READ` and `FILE_GENERIC_WRITE` are used here instead
+    // These flags have the same semantic meaning for file objects, but allow removal of specific permissions (see below)
     if read {
         access_mode.insert(AccessMode::FILE_GENERIC_READ);
     }

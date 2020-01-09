@@ -25,8 +25,10 @@ pub fn open_scratch_directory(path: &str) -> Result<wasi::Fd, String> {
             dst.set_len(stat.u.dir.pr_name_len);
             if dst == path.as_bytes() {
                 let (base, inherit) = fd_get_rights(i);
-                return Ok(wasi::path_open(i, 0, ".", wasi::OFLAGS_DIRECTORY, base, inherit, 0)
-                    .expect("failed to open dir"));
+                return Ok(
+                    wasi::path_open(i, 0, ".", wasi::OFLAGS_DIRECTORY, base, inherit, 0)
+                        .expect("failed to open dir"),
+                );
             }
         }
 
@@ -51,17 +53,11 @@ pub unsafe fn fd_get_rights(fd: wasi::Fd) -> (wasi::Rights, wasi::Rights) {
     (fdstat.fs_rights_base, fdstat.fs_rights_inheriting)
 }
 
-pub unsafe fn drop_rights(
-    fd: wasi::Fd,
-    drop_base: wasi::Rights,
-    drop_inheriting: wasi::Rights,
-) {
+pub unsafe fn drop_rights(fd: wasi::Fd, drop_base: wasi::Rights, drop_inheriting: wasi::Rights) {
     let (current_base, current_inheriting) = fd_get_rights(fd);
 
     let new_base = current_base & !drop_base;
     let new_inheriting = current_inheriting & !drop_inheriting;
 
-        wasi::fd_fdstat_set_rights(fd, new_base, new_inheriting).expect(
-        "dropping fd rights",
-    );
+    wasi::fd_fdstat_set_rights(fd, new_base, new_inheriting).expect("dropping fd rights");
 }
