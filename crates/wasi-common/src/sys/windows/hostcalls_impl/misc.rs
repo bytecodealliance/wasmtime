@@ -7,6 +7,7 @@ use crate::sys::host_impl;
 use crate::{wasi, wasi32, Error, Result};
 use cpu_time::{ProcessTime, ThreadTime};
 use lazy_static::lazy_static;
+use log::trace;
 use std::convert::TryInto;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
