@@ -167,29 +167,29 @@ cfg_if::cfg_if! {
         impl Instance {
             /// The signal handler must be
             /// [async-signal-safe](http://man7.org/linux/man-pages/man7/signal-safety.7.html).
-            pub fn set_signal_handler<H>(&mut self, handler: H)
+            pub fn set_signal_handler<H>(&self, handler: H)
             where
                 H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
             {
-                self.instance_handle.set_signal_handler(handler);
+                self.instance_handle.clone().set_signal_handler(handler);
             }
         }
     } else if #[cfg(target_os = "windows")] {
         impl Instance {
-            pub fn set_signal_handler<H>(&mut self, handler: H)
+            pub fn set_signal_handler<H>(&self, handler: H)
             where
                 H: 'static + Fn(winapi::um::winnt::EXCEPTION_POINTERS) -> bool,
             {
-                self.instance_handle.set_signal_handler(handler);
+                self.instance_handle.clone().set_signal_handler(handler);
             }
         }
     } else if #[cfg(target_os = "macos")] {
         impl Instance {
-            pub fn set_signal_handler<H>(&mut self, handler: H)
+            pub fn set_signal_handler<H>(&self, handler: H)
             where
                 H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
             {
-                self.instance_handle.set_signal_handler(handler);
+                self.instance_handle.clone().set_signal_handler(handler);
             }
         }
     }

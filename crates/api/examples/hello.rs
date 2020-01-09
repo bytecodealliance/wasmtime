@@ -41,15 +41,15 @@ fn main() -> Result<()> {
     // `HelloCallback` type and its associated implementation of `Callback.
     println!("Creating callback...");
     let hello_type = FuncType::new(Box::new([]), Box::new([]));
-    let hello_func = HostRef::new(Func::new(&store, hello_type, Rc::new(HelloCallback)));
+    let hello_func = Func::new(&store, hello_type, Rc::new(HelloCallback));
 
     // Once we've got that all set up we can then move to the instantiation
     // phase, pairing together a compiled module as well as a set of imports.
     // Note that this is where the wasm `start` function, if any, would run.
     println!("Instantiating module...");
     let imports = vec![hello_func.into()];
-    let instance = Instance::new(&store, &module, imports.as_slice())
-        .context("> Error instantiating module!")?;
+    let instance =
+        Instance::new(&store, &module, &imports).context("> Error instantiating module!")?;
 
     // Next we poke around a bit to extract the `run` function from the module.
     println!("Extracting export...");
@@ -59,7 +59,7 @@ fn main() -> Result<()> {
 
     // And last but not least we can call it!
     println!("Calling export...");
-    run_func.borrow().call(&[])?;
+    run_func.call(&[])?;
 
     println!("Done.");
     Ok(())

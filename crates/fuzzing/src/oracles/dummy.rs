@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 use wasmtime::{
-    Callable, Extern, ExternType, Func, FuncType, Global, GlobalType, HostRef, ImportType, Memory,
+    Callable, Extern, ExternType, Func, FuncType, Global, GlobalType, ImportType, Memory,
     MemoryType, Store, Table, TableType, Trap, Val, ValType,
 };
 
@@ -11,18 +11,12 @@ pub fn dummy_imports(store: &Store, import_tys: &[ImportType]) -> Result<Vec<Ext
     let mut imports = Vec::with_capacity(import_tys.len());
     for imp in import_tys {
         imports.push(match imp.ty() {
-            ExternType::Func(func_ty) => {
-                Extern::Func(HostRef::new(DummyFunc::new(&store, func_ty.clone())))
-            }
+            ExternType::Func(func_ty) => Extern::Func(DummyFunc::new(&store, func_ty.clone())),
             ExternType::Global(global_ty) => {
-                Extern::Global(HostRef::new(dummy_global(&store, global_ty.clone())?))
+                Extern::Global(dummy_global(&store, global_ty.clone())?)
             }
-            ExternType::Table(table_ty) => {
-                Extern::Table(HostRef::new(dummy_table(&store, table_ty.clone())?))
-            }
-            ExternType::Memory(mem_ty) => {
-                Extern::Memory(HostRef::new(dummy_memory(&store, mem_ty.clone())))
-            }
+            ExternType::Table(table_ty) => Extern::Table(dummy_table(&store, table_ty.clone())?),
+            ExternType::Memory(mem_ty) => Extern::Memory(dummy_memory(&store, mem_ty.clone())),
         });
     }
     Ok(imports)

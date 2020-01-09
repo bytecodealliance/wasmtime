@@ -11,7 +11,7 @@ use std::{
 };
 use structopt::{clap::AppSettings, StructOpt};
 use wasi_common::preopen_dir;
-use wasmtime::{Config, Engine, HostRef, Instance, Module, Store};
+use wasmtime::{Config, Engine, Instance, Module, Store};
 use wasmtime_environ::cache_init;
 use wasmtime_interface_types::ModuleData;
 use wasmtime_wasi::{
@@ -148,7 +148,7 @@ impl RunCommand {
         let preopen_dirs = self.compute_preopen_dirs()?;
         let argv = self.compute_argv();
 
-        let wasi_unstable = HostRef::new(if self.enable_wasi_c {
+        let wasi_unstable = if self.enable_wasi_c {
             #[cfg(feature = "wasi-c")]
             {
                 let global_exports = store.global_exports().clone();
@@ -161,14 +161,10 @@ impl RunCommand {
             }
         } else {
             create_wasi_instance_snapshot_0(&store, &preopen_dirs, &argv, &self.vars)?
-        });
+        };
 
-        let wasi_snapshot_preview1 = HostRef::new(create_wasi_instance(
-            &store,
-            &preopen_dirs,
-            &argv,
-            &self.vars,
-        )?);
+        let wasi_snapshot_preview1 =
+            create_wasi_instance(&store, &preopen_dirs, &argv, &self.vars)?;
 
         module_registry.insert("wasi_unstable".to_owned(), wasi_unstable);
         module_registry.insert("wasi_snapshot_preview1".to_owned(), wasi_snapshot_preview1);
@@ -232,9 +228,9 @@ impl RunCommand {
 
     fn instantiate_module(
         store: &Store,
-        module_registry: &HashMap<String, HostRef<Instance>>,
+        module_registry: &HashMap<String, Instance>,
         path: &Path,
-    ) -> Result<(HostRef<Instance>, Module, Vec<u8>)> {
+    ) -> Result<(Instance, Module, Vec<u8>)> {
         // Read the wasm module binary either as `*.wat` or a raw binary
         let data = wat::parse_file(path)?;
 
@@ -248,7 +244,7 @@ impl RunCommand {
                 let module_name = i.module();
                 if let Some(instance) = module_registry.get(module_name) {
                     let field_name = i.name();
-                    if let Some(export) = instance.borrow().find_export_by_name(field_name) {
+                    if let Some(export) = instance.find_export_by_name(field_name) {
                         Ok(export.clone())
                     } else {
                         bail!(
@@ -263,10 +259,8 @@ impl RunCommand {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let instance = HostRef::new(
-            Instance::new(store, &module, &imports)
-                .context(format!("failed to instantiate {:?}", path))?,
-        );
+        let instance = Instance::new(store, &module, &imports)
+            .context(format!("failed to instantiate {:?}", path))?;
 
         Ok((instance, module, data))
     }
@@ -274,7 +268,7 @@ impl RunCommand {
     fn handle_module(
         &self,
         store: &Store,
-        module_registry: &HashMap<String, HostRef<Instance>>,
+        module_registry: &HashMap<String, Instance>,
     ) -> Result<()> {
         let (instance, module, data) =
             Self::instantiate_module(store, module_registry, &self.module)?;
@@ -301,16 +295,11 @@ impl RunCommand {
         Ok(())
     }
 
-    fn invoke_export(
-        &self,
-        instance: HostRef<Instance>,
-        data: &ModuleData,
-        name: &str,
-    ) -> Result<()> {
+    fn invoke_export(&self, instance: Instance, data: &ModuleData, name: &str) -> Result<()> {
         use wasm_webidl_bindings::ast;
         use wasmtime_interface_types::Value;
 
-        let mut handle = instance.borrow().handle().clone();
+        let mut handle = instance.handle().clone();
 
         // Use the binding information in `ModuleData` to figure out what arguments
         // need to be passed to the function that we're invoking. Currently we take
