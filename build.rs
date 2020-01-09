@@ -139,7 +139,6 @@ fn write_testsuite_tests(
     strategy: &str,
 ) -> anyhow::Result<()> {
     let path = path.as_ref();
-    println!("cargo:rerun-if-changed={}", path.display());
     let testname = extract_name(path);
 
     writeln!(out, "#[test]")?;
