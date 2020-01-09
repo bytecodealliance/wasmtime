@@ -6,14 +6,43 @@ mod tests {
     use wasmtime::*;
     use wasmtime_interface_types::{ModuleData, Value};
 
+    const WAT1: &str = r#"
+(module
+  (func $read (export "read") (result i32)
+    (i32.load (i32.const 0))
+  )
+  (func $read_out_of_bounds (export "read_out_of_bounds") (result i32)
+    (i32.load
+      (i32.mul
+        ;; memory size in Wasm pages
+        (memory.size)
+        ;; Wasm page size
+        (i32.const 65536)
+      )
+    )
+  )
+  (func $start
+    (i32.store (i32.const 0) (i32.const 123))
+  )
+  (start $start)
+  (memory (export "memory") 1 4)
+)
+"#;
+
+    const WAT2: &str = r#"
+(module
+  (import "other_module" "read" (func $other_module.read (result i32)))
+  (func $run (export "run") (result i32)
+      call $other_module.read)
+)
+"#;
+
     fn invoke_export(
         instance: &HostRef<Instance>,
         data: &[u8],
         func_name: &str,
     ) -> Result<Vec<Value>, anyhow::Error> {
-        ModuleData::new(&data)
-            .expect("module data")
-            .invoke_export(instance, func_name, &[])
+        ModuleData::new(&data)?.invoke_export(instance, func_name, &[])
     }
 
     // Locate "memory" export, get base address and size and set memory protection to PROT_NONE
@@ -73,15 +102,12 @@ mod tests {
     }
 
     #[test]
-    fn test_custom_signal_handler_single_instance() {
+    fn test_custom_signal_handler_single_instance() -> anyhow::Result<()> {
         let engine = Engine::new(&Config::default());
         let store = Store::new(&engine);
-        let data =
-            std::fs::read("tests/custom_signal_handler.wasm").expect("failed to read wasm file");
-        let module = Module::new(&store, &data).expect("failed to create module");
-        let instance = HostRef::new(
-            Instance::new(&store, &module, &[]).expect("failed to instantiate module"),
-        );
+        let data = wat::parse_str(WAT1)?;
+        let module = Module::new(&store, &data)?;
+        let instance = HostRef::new(Instance::new(&store, &module, &[])?);
 
         let (base, length) = set_up_memory(&instance);
         instance
@@ -131,21 +157,19 @@ mod tests {
                 .message()
                 .starts_with("call error: wasm trap: out of bounds memory access"));
         }
+        Ok(())
     }
 
     #[test]
-    fn test_custom_signal_handler_multiple_instances() {
+    fn test_custom_signal_handler_multiple_instances() -> anyhow::Result<()> {
         let engine = Engine::new(&Config::default());
         let store = Store::new(&engine);
-        let data =
-            std::fs::read("tests/custom_signal_handler.wasm").expect("failed to read wasm file");
-        let module = Module::new(&store, &data).expect("failed to create module");
+        let data = wat::parse_str(WAT1)?;
+        let module = Module::new(&store, &data)?;
 
         // Set up multiple instances
 
-        let instance1 = HostRef::new(
-            Instance::new(&store, &module, &[]).expect("failed to instantiate module"),
-        );
+        let instance1 = HostRef::new(Instance::new(&store, &module, &[])?);
         let instance1_handler_triggered = Rc::new(AtomicBool::new(false));
 
         {
@@ -232,20 +256,18 @@ mod tests {
                 "instance1 signal handler has been triggered"
             );
         }
+        Ok(())
     }
 
     #[test]
-    fn test_custom_signal_handler_instance_calling_another_instance() {
+    fn test_custom_signal_handler_instance_calling_another_instance() -> anyhow::Result<()> {
         let engine = Engine::new(&Config::default());
         let store = Store::new(&engine);
 
         // instance1 which defines 'read'
-        let data1 =
-            std::fs::read("tests/custom_signal_handler.wasm").expect("failed to read wasm file");
-        let module1 = Module::new(&store, &data1).expect("failed to create module");
-        let instance1: HostRef<Instance> = HostRef::new(
-            Instance::new(&store, &module1, &[]).expect("failed to instantiate module"),
-        );
+        let data1 = wat::parse_str(WAT1)?;
+        let module1 = Module::new(&store, &data1)?;
+        let instance1: HostRef<Instance> = HostRef::new(Instance::new(&store, &module1, &[])?);
         let (base1, length1) = set_up_memory(&instance1);
         instance1
             .borrow_mut()
@@ -259,13 +281,9 @@ mod tests {
         let instance1_read = instance1_exports[0].clone();
 
         // instance2 wich calls 'instance1.read'
-        let data2 =
-            std::fs::read("tests/custom_signal_handler_2.wasm").expect("failed to read wasm file");
-        let module2 = Module::new(&store, &data2).expect("failed to create module");
-        let instance2 = HostRef::new(
-            Instance::new(&store, &module2, &[instance1_read])
-                .expect("failed to instantiate module"),
-        );
+        let data2 = wat::parse_str(WAT2)?;
+        let module2 = Module::new(&store, &data2)?;
+        let instance2 = HostRef::new(Instance::new(&store, &module2, &[instance1_read])?);
         // since 'instance2.run' calls 'instance1.read' we need to set up the signal handler to handle
         // SIGSEGV originating from within the memory of instance1
         instance2
@@ -275,7 +293,8 @@ mod tests {
             });
 
         println!("calling instance2.run");
-        let result = invoke_export(&instance2, &data2, "run").expect("instance2.run succeeded");
+        let result = invoke_export(&instance2, &data2, "run")?;
         assert_eq!("123", result[0].clone().to_string());
+        Ok(())
     }
 }
