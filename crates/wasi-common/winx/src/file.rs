@@ -436,6 +436,8 @@ pub fn query_mode_information(handle: RawHandle) -> Result<FileModeInformation> 
 }
 
 pub fn reopen_file(handle: RawHandle, access_mode: AccessMode, flags: Flags) -> Result<RawHandle> {
+    // Files on Windows are opened with DELETE, READ, and WRITE share mode by default (see OpenOptions in stdlib)
+    // This keeps the same share mode when reopening the file handle
     let new_handle = unsafe {
         winbase::ReOpenFile(
             handle,
