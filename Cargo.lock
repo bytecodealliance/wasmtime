@@ -2006,6 +2006,7 @@ dependencies = [
  "wasmtime-interface-types",
  "wasmtime-jit",
  "wasmtime-obj",
+ "wasmtime-runtime",
  "wasmtime-wasi",
  "wasmtime-wasi-c",
  "wasmtime-wast",
