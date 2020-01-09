@@ -54,7 +54,10 @@ pub(crate) fn descriptor_as_oshandle<'lifetime>(
     })))
 }
 
-/// This function is unsafe because it operates on a raw file handle.
+/// Returns the set of all possible rights that are both relevant for the file
+/// type and consistent with the open mode.
+///
+/// This function is unsafe because it operates on a raw file descriptor.
 pub(crate) unsafe fn determine_type_and_access_rights<Handle: AsRawHandle>(
     handle: &Handle,
 ) -> Result<(
@@ -85,7 +88,9 @@ pub(crate) unsafe fn determine_type_and_access_rights<Handle: AsRawHandle>(
     Ok((file_type, rights_base, rights_inheriting))
 }
 
-/// This function is unsafe because it operates on a raw file handle.
+/// Returns the set of all possible rights that are relevant for file type.
+///
+/// This function is unsafe because it operates on a raw file descriptor.
 pub(crate) unsafe fn determine_type_rights<Handle: AsRawHandle>(
     handle: &Handle,
 ) -> Result<(
