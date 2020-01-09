@@ -1966,7 +1966,9 @@ name = "wasmtime"
 version = "0.7.0"
 dependencies = [
  "anyhow",
+ "cfg-if",
  "file-per-thread-logger",
+ "libc",
  "pretty_env_logger",
  "rayon",
  "region",
@@ -1979,6 +1981,7 @@ dependencies = [
  "wasmtime-wasi",
  "wasmtime-wast",
  "wat",
+ "winapi",
 ]
 
 [[package]]
@@ -2155,6 +2158,7 @@ name = "wasmtime-runtime"
 version = "0.7.0"
 dependencies = [
  "cc",
+ "cfg-if",
  "indexmap",
  "lazy_static",
  "libc",
