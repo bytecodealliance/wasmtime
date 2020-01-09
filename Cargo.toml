@@ -40,6 +40,7 @@ rayon = "1.2.1"
 wasm-webidl-bindings = "0.6"
 
 [dev-dependencies]
+wasmtime-runtime = { path = "crates/runtime" }
 more-asserts = "0.2.1"
 # This feature requires the wasm32-wasi target be installed. It enables
 # wasm32-wasi integration tests. To enable, run

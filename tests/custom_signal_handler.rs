@@ -74,11 +74,11 @@ mod tests {
 
     #[test]
     fn test_custom_signal_handler_single_instance() {
-        let engine = HostRef::new(Engine::new(&Config::default()));
-        let store = HostRef::new(Store::new(&engine));
+        let engine = Engine::new(&Config::default());
+        let store = Store::new(&engine);
         let data =
             std::fs::read("tests/custom_signal_handler.wasm").expect("failed to read wasm file");
-        let module = HostRef::new(Module::new(&store, &data).expect("failed to create module"));
+        let module = Module::new(&store, &data).expect("failed to create module");
         let instance = HostRef::new(
             Instance::new(&store, &module, &[]).expect("failed to instantiate module"),
         );
@@ -104,7 +104,7 @@ mod tests {
             println!("calling read_out_of_bounds...");
             let trap = invoke_export(&instance, &data, "read_out_of_bounds").unwrap_err();
             assert!(trap.root_cause().to_string().starts_with(
-                "trapped: Ref(Trap { message: \"wasm trap: out of bounds memory access"
+                "trapped: Trap { message: \"call error: wasm trap: out of bounds memory access"
             ));
         }
 
@@ -128,19 +128,18 @@ mod tests {
             println!("calling read_out_of_bounds...");
             let trap = read_out_of_bounds_func.borrow().call(&[]).unwrap_err();
             assert!(trap
-                .borrow()
                 .message()
-                .starts_with("wasm trap: out of bounds memory access"));
+                .starts_with("call error: wasm trap: out of bounds memory access"));
         }
     }
 
     #[test]
     fn test_custom_signal_handler_multiple_instances() {
-        let engine = HostRef::new(Engine::new(&Config::default()));
-        let store = HostRef::new(Store::new(&engine));
+        let engine = Engine::new(&Config::default());
+        let store = Store::new(&engine);
         let data =
             std::fs::read("tests/custom_signal_handler.wasm").expect("failed to read wasm file");
-        let module = HostRef::new(Module::new(&store, &data).expect("failed to create module"));
+        let module = Module::new(&store, &data).expect("failed to create module");
 
         // Set up multiple instances
 
@@ -237,13 +236,13 @@ mod tests {
 
     #[test]
     fn test_custom_signal_handler_instance_calling_another_instance() {
-        let engine = HostRef::new(Engine::new(&Config::default()));
-        let store = HostRef::new(Store::new(&engine));
+        let engine = Engine::new(&Config::default());
+        let store = Store::new(&engine);
 
         // instance1 which defines 'read'
         let data1 =
             std::fs::read("tests/custom_signal_handler.wasm").expect("failed to read wasm file");
-        let module1 = HostRef::new(Module::new(&store, &data1).expect("failed to create module"));
+        let module1 = Module::new(&store, &data1).expect("failed to create module");
         let instance1: HostRef<Instance> = HostRef::new(
             Instance::new(&store, &module1, &[]).expect("failed to instantiate module"),
         );
@@ -262,7 +261,7 @@ mod tests {
         // instance2 wich calls 'instance1.read'
         let data2 =
             std::fs::read("tests/custom_signal_handler_2.wasm").expect("failed to read wasm file");
-        let module2 = HostRef::new(Module::new(&store, &data2).expect("failed to create module"));
+        let module2 = Module::new(&store, &data2).expect("failed to create module");
         let instance2 = HostRef::new(
             Instance::new(&store, &module2, &[instance1_read])
                 .expect("failed to instantiate module"),
