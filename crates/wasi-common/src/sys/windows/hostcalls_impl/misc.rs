@@ -167,6 +167,7 @@ pub(crate) fn poll_oneoff(
 
     // Process all the events that do not require waiting.
     if !immediate_events.is_empty() {
+        trace!("    | have immediate events, will return immediately");
         for mut event in immediate_events {
             let size = match event.descriptor {
                 Descriptor::OsHandle(os_handle) => {
@@ -190,6 +191,7 @@ pub(crate) fn poll_oneoff(
             events.push(new_event)
         }
     } else if !stdin_events.is_empty() {
+        trace!("     | actively polling stdin");
         // There are some stdin poll requests and there's no data available immediately
 
         // We are busy-polling the stdin with delay, unfortunately.
