@@ -56,7 +56,7 @@ pub struct FrameLayout {
 impl FrameLayout {
     /// Create instance of FrameLayout.
     pub fn new() -> Self {
-        FrameLayout {
+        Self {
             initial: vec![].into_boxed_slice(),
             instructions: HashMap::new(),
         }

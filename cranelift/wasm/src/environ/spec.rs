@@ -306,6 +306,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// The `index` provided identifies the linear memory to query, and `heap` is the heap reference
     /// returned by `make_heap` for the same index. `seg_index` is the index of the segment to copy
     /// from.
+    #[allow(clippy::too_many_arguments)]
     fn translate_memory_init(
         &mut self,
         pos: FuncCursor,
@@ -329,6 +330,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     ) -> WasmResult<ir::Value>;
 
     /// Translate a `table.copy` WebAssembly instruction.
+    #[allow(clippy::too_many_arguments)]
     fn translate_table_copy(
         &mut self,
         pos: FuncCursor,
@@ -342,6 +344,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     ) -> WasmResult<()>;
 
     /// Translate a `table.init` WebAssembly instruction.
+    #[allow(clippy::too_many_arguments)]
     fn translate_table_init(
         &mut self,
         pos: FuncCursor,

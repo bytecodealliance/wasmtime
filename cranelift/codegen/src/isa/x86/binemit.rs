@@ -64,7 +64,7 @@ fn rex3(rm: RegUnit, reg: RegUnit, index: RegUnit) -> u8 {
 /// Determines whether a REX prefix should be emitted.
 #[inline]
 fn needs_rex(bits: u16, rex: u8) -> bool {
-    rex != BASE_REX || u8::from(EncodingBits::from(bits).rex_w()) == 1
+    rex != BASE_REX || EncodingBits::from(bits).rex_w() == 1
 }
 
 // Emit a REX prefix.
@@ -74,7 +74,7 @@ fn needs_rex(bits: u16, rex: u8) -> bool {
 fn rex_prefix<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
     debug_assert_eq!(rex & 0xf8, BASE_REX);
     let w = EncodingBits::from(bits).rex_w();
-    sink.put1(rex | (u8::from(w) << 3));
+    sink.put1(rex | (w << 3));
 }
 
 // Emit a single-byte opcode with no REX prefix.

@@ -124,7 +124,8 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
             use crate::scoped_hash_map::Entry::*;
             match visible_values.entry(key) {
                 Occupied(entry) => {
-                    debug_assert!(domtree.dominates(*entry.get(), inst, &func.layout));
+                    let layout = &func.layout;
+                    debug_assert!(domtree.dominates(*entry.get(), inst, layout));
                     // If the redundant instruction is representing the current
                     // scope, pick a new representative.
                     let old = scope_stack.last_mut().unwrap();
