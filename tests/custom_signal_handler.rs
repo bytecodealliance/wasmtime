@@ -104,7 +104,7 @@ mod tests {
             println!("calling read_out_of_bounds...");
             let trap = invoke_export(&instance, &data, "read_out_of_bounds").unwrap_err();
             assert!(trap.root_cause().to_string().starts_with(
-                "trapped: Ref(Trap { message: \"wasm trap: out of bounds memory access"
+                "trapped: Trap { message: \"call error: wasm trap: out of bounds memory access"
             ));
         }
 
@@ -129,7 +129,7 @@ mod tests {
             let trap = read_out_of_bounds_func.borrow().call(&[]).unwrap_err();
             assert!(trap
                 .message()
-                .starts_with("wasm trap: out of bounds memory access"));
+                .starts_with("call error: wasm trap: out of bounds memory access"));
         }
     }
 
