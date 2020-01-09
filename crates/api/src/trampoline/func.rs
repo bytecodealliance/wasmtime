@@ -70,9 +70,9 @@ unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *m
         let signature = &module.signatures[module.functions[FuncIndex::new(call_id as usize)]];
 
         let mut args = Vec::new();
-        for i in 1..signature.params.len() {
+        for i in 2..signature.params.len() {
             args.push(Val::read_value_from(
-                values_vec.offset(i as isize - 1),
+                values_vec.offset(i as isize - 2),
                 signature.params[i].value_type,
             ))
         }
@@ -120,6 +120,11 @@ fn make_trampoline(
         ir::ArgumentPurpose::VMContext,
     ));
 
+    // Add the caller `vmctx` parameter.
+    stub_sig.params.push(ir::AbiParam::new(
+        pointer_type,
+    ));
+
     // Add the `call_id` parameter.
     stub_sig.params.push(ir::AbiParam::new(types::I32));
 
@@ -129,9 +134,10 @@ fn make_trampoline(
     // Add error/trap return.
     stub_sig.returns.push(ir::AbiParam::new(types::I32));
 
+    // Compute the size of the values vector. The vmctx and caller vmctx are passed separately.
     let value_size = 16;
     let values_vec_len = ((value_size as usize)
-        * cmp::max(signature.params.len() - 1, signature.returns.len()))
+        * cmp::max(signature.params.len() - 2, signature.returns.len()))
         as u32;
 
     let mut context = Context::new();
@@ -152,7 +158,7 @@ fn make_trampoline(
 
         let values_vec_ptr_val = builder.ins().stack_addr(pointer_type, ss, 0);
         let mflags = MemFlags::trusted();
-        for i in 1..signature.params.len() {
+        for i in 2..signature.params.len() {
             if i == 0 {
                 continue;
             }
@@ -162,14 +168,21 @@ fn make_trampoline(
                 mflags,
                 val,
                 values_vec_ptr_val,
-                ((i - 1) * value_size) as i32,
+                ((i - 2) * value_size) as i32,
             );
         }
 
-        let vmctx_ptr_val = builder.func.dfg.ebb_params(block0)[0];
+        let ebb_params = builder.func.dfg.ebb_params(block0);
+        let vmctx_ptr_val = ebb_params[0];
+        let caller_vmctx_ptr_val = ebb_params[1];
         let call_id_val = builder.ins().iconst(types::I32, call_id as i64);
 
-        let callee_args = vec![vmctx_ptr_val, call_id_val, values_vec_ptr_val];
+        let callee_args = vec![
+            vmctx_ptr_val,
+            caller_vmctx_ptr_val,
+            call_id_val,
+            values_vec_ptr_val,
+        ];
 
         let new_sig = builder.import_signature(stub_sig);
 

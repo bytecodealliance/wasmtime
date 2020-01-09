@@ -193,6 +193,7 @@ pub fn add_wrappers_to_module(args: TokenStream) -> TokenStream {
 
                 unsafe extern "C" fn #name_ident(
                     ctx: *mut wasmtime_runtime::VMContext,
+                    caller_ctx: *mut wasmtime_runtime::VMContext,
                     #(#shim_arg_decls),*
                 ) -> #ret_ty {
                     log::trace!(
@@ -203,7 +204,7 @@ pub fn add_wrappers_to_module(args: TokenStream) -> TokenStream {
                         Ok(e) => e,
                         Err(e) => #handle_early_error,
                     };
-                    let memory = match get_memory(&mut *ctx) {
+                    let memory = match get_memory(&mut *caller_ctx) {
                         Ok(e) => e,
                         Err(e) => #handle_early_error,
                     };

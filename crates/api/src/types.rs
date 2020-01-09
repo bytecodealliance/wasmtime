@@ -217,6 +217,7 @@ impl FuncType {
             })
             .map(|(mut params, returns)| {
                 params.insert(0, AbiParam::special(types::I64, ArgumentPurpose::VMContext));
+                params.insert(0, AbiParam::new(types::I64));
 
                 Signature {
                     params,

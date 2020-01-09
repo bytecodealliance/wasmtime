@@ -6,9 +6,7 @@ use crate::trampoline::take_api_trap;
 use crate::trap::Trap;
 use crate::types::{ExportType, ExternType};
 use anyhow::{Error, Result};
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
+use std::collections::HashSet;
 use wasmtime_jit::{instantiate, Resolver, SetupError};
 use wasmtime_runtime::{Export, InstanceHandle, InstantiationError};
 
@@ -29,7 +27,6 @@ pub fn instantiate_in_context(
     imports: &[Extern],
     module_name: Option<&str>,
     context: Context,
-    exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
 ) -> Result<(InstanceHandle, HashSet<Context>), Error> {
     let mut contexts = HashSet::new();
     let debug_info = context.debug_info();
@@ -39,7 +36,6 @@ pub fn instantiate_in_context(
         data,
         module_name,
         &mut resolver,
-        exports,
         debug_info,
     )
     .map_err(|e| -> Error {
@@ -70,13 +66,11 @@ pub struct Instance {
 impl Instance {
     pub fn new(store: &Store, module: &Module, externs: &[Extern]) -> Result<Instance, Error> {
         let context = store.context().clone();
-        let exports = store.global_exports().clone();
         let (mut instance_handle, contexts) = instantiate_in_context(
             module.binary().expect("binary"),
             externs,
             module.name(),
             context,
-            exports,
         )?;
 
         let exports = {

@@ -617,12 +617,4 @@ impl VMContext {
     pub unsafe fn host_state(&mut self) -> &mut dyn Any {
         self.instance().host_state()
     }
-
-    /// Lookup an export in the global exports namespace.
-    /// # Safety
-    /// This is unsafe because it doesn't work on just any `VMContext`, it must
-    /// be a `VMContext` allocated as part of an `Instance`.
-    pub unsafe fn lookup_global_export(&mut self, field: &str) -> Option<crate::export::Export> {
-        self.instance().lookup_global_export(field)
-    }
 }
