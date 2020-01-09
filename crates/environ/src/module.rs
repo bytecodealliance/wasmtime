@@ -168,6 +168,9 @@ pub struct Module {
 
     /// WebAssembly table initializers.
     pub table_elements: Vec<TableElements>,
+
+    /// Module name.
+    pub name: Option<String>,
 }
 
 impl Module {
@@ -186,6 +189,7 @@ impl Module {
             exports: IndexMap::new(),
             start_func: None,
             table_elements: Vec::new(),
+            name: None,
         }
     }
 

@@ -78,7 +78,14 @@ pub fn compile(wasm: &[u8], compilation_strategy: CompilationStrategy) {
     let mut compiler = Compiler::new(isa, compilation_strategy);
     let mut resolver = NullResolver {};
     let global_exports = Rc::new(RefCell::new(HashMap::new()));
-    let _ = CompiledModule::new(&mut compiler, wasm, &mut resolver, global_exports, false);
+    let _ = CompiledModule::new(
+        &mut compiler,
+        wasm,
+        None,
+        &mut resolver,
+        global_exports,
+        false,
+    );
 }
 
 /// Invoke the given API calls.
