@@ -389,8 +389,8 @@ fn relocate(
     }
 }
 
-/// A declaration for the stack probe function in Rust's standard library, for
-/// catching callstack overflow.
+// A declaration for the stack probe function in Rust's standard library, for
+// catching callstack overflow.
 cfg_if::cfg_if! {
     if #[cfg(any(
         target_arch="aarch64",
