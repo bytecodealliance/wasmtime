@@ -7,9 +7,10 @@
 
 use super::{
     AnyRef, Callable, Engine, ExportType, Extern, ExternType, Func, FuncType, Global, GlobalType,
-    HostInfo, HostRef, ImportType, Instance, Limits, Memory, MemoryType, Module, Store, Table,
-    TableType, Trap, Val, ValType,
+    ImportType, Instance, Limits, Memory, MemoryType, Module, Store, Table, TableType, Trap, Val,
+    ValType,
 };
+use crate::r#ref::{HostInfo, HostRef};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::{mem, ptr, slice};
