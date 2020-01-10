@@ -56,138 +56,6 @@ fn into_table_type(tt: wasmparser::TableType) -> TableType {
     TableType::new(ty, limits)
 }
 
-fn read_imports_and_exports(
-    binary: &[u8],
-) -> Result<(Box<[ImportType]>, Box<[ExportType]>, Option<String>)> {
-    let mut reader = ModuleReader::new(binary)?;
-    let mut imports = Vec::new();
-    let mut exports = Vec::new();
-    let mut memories = Vec::new();
-    let mut tables = Vec::new();
-    let mut func_sig = Vec::new();
-    let mut sigs = Vec::new();
-    let mut globals = Vec::new();
-    let mut module_name = None;
-    while !reader.eof() {
-        let section = reader.read()?;
-        match section.code {
-            SectionCode::Memory => {
-                let section = section.get_memory_section_reader()?;
-                memories.reserve_exact(section.get_count() as usize);
-                for entry in section {
-                    memories.push(into_memory_type(entry?));
-                }
-            }
-            SectionCode::Type => {
-                let section = section.get_type_section_reader()?;
-                sigs.reserve_exact(section.get_count() as usize);
-                for entry in section {
-                    sigs.push(into_func_type(entry?));
-                }
-            }
-            SectionCode::Function => {
-                let section = section.get_function_section_reader()?;
-                func_sig.reserve_exact(section.get_count() as usize);
-                for entry in section {
-                    func_sig.push(entry?);
-                }
-            }
-            SectionCode::Global => {
-                let section = section.get_global_section_reader()?;
-                globals.reserve_exact(section.get_count() as usize);
-                for entry in section {
-                    globals.push(into_global_type(entry?.ty));
-                }
-            }
-            SectionCode::Table => {
-                let section = section.get_table_section_reader()?;
-                tables.reserve_exact(section.get_count() as usize);
-                for entry in section {
-                    tables.push(into_table_type(entry?))
-                }
-            }
-            SectionCode::Import => {
-                let section = section.get_import_section_reader()?;
-                imports.reserve_exact(section.get_count() as usize);
-                for entry in section {
-                    let entry = entry?;
-                    let r#type = match entry.ty {
-                        ImportSectionEntryType::Function(index) => {
-                            func_sig.push(index);
-                            let sig = &sigs[index as usize];
-                            ExternType::Func(sig.clone())
-                        }
-                        ImportSectionEntryType::Table(tt) => {
-                            let table = into_table_type(tt);
-                            tables.push(table.clone());
-                            ExternType::Table(table)
-                        }
-                        ImportSectionEntryType::Memory(mt) => {
-                            let memory = into_memory_type(mt);
-                            memories.push(memory.clone());
-                            ExternType::Memory(memory)
-                        }
-                        ImportSectionEntryType::Global(gt) => {
-                            let global = into_global_type(gt);
-                            globals.push(global.clone());
-                            ExternType::Global(global)
-                        }
-                    };
-                    imports.push(ImportType::new(entry.module, entry.field, r#type));
-                }
-            }
-            SectionCode::Export => {
-                let section = section.get_export_section_reader()?;
-                exports.reserve_exact(section.get_count() as usize);
-                for entry in section {
-                    let entry = entry?;
-                    let r#type = match entry.kind {
-                        ExternalKind::Function => {
-                            let sig_index = func_sig[entry.index as usize] as usize;
-                            let sig = &sigs[sig_index];
-                            ExternType::Func(sig.clone())
-                        }
-                        ExternalKind::Table => {
-                            ExternType::Table(tables[entry.index as usize].clone())
-                        }
-                        ExternalKind::Memory => {
-                            ExternType::Memory(memories[entry.index as usize].clone())
-                        }
-                        ExternalKind::Global => {
-                            ExternType::Global(globals[entry.index as usize].clone())
-                        }
-                    };
-                    exports.push(ExportType::new(entry.field, r#type));
-                }
-            }
-            SectionCode::Custom {
-                kind: CustomSectionKind::Name,
-                ..
-            } => {
-                // Read name section. Per spec, ignore invalid custom section.
-                if let Ok(mut reader) = section.get_name_section_reader() {
-                    while let Ok(entry) = reader.read() {
-                        if let Name::Module(name) = entry {
-                            if let Ok(name) = name.get_name() {
-                                module_name = Some(name.to_string());
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-            _ => {
-                // skip other sections
-            }
-        }
-    }
-    Ok((
-        imports.into_boxed_slice(),
-        exports.into_boxed_slice(),
-        module_name,
-    ))
-}
-
 #[derive(Clone)]
 pub(crate) enum ModuleCodeSource {
     Binary(Box<[u8]>),
@@ -259,11 +127,11 @@ impl Module {
     ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     pub fn new(store: &Store, binary: &[u8]) -> Result<Module> {
-        Self::validate(store, binary)?;
+        Module::validate(store, binary)?;
         // Note that the call to `unsafe` here should be ok because we
         // previously validated the binary, meaning we're guaranteed to pass a
         // valid binary for `store`.
-        unsafe { Self::create(store, binary, None) }
+        unsafe { Module::new_unchecked(store, binary) }
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
@@ -271,8 +139,9 @@ impl Module {
     ///
     /// See [`Module::new`] for other details.
     pub fn new_with_name(store: &Store, binary: &[u8], name: &str) -> Result<Module> {
-        Self::validate(store, binary)?;
-        unsafe { Self::create(store, binary, Some(name.to_string())) }
+        let mut ret = Module::new(store, binary)?;
+        Rc::get_mut(&mut ret.inner).unwrap().name = Some(name.to_string());
+        Ok(ret)
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
@@ -302,24 +171,9 @@ impl Module {
     /// be somewhat valid for decoding purposes, and the basics of decoding can
     /// still fail.
     pub unsafe fn new_unchecked(store: &Store, binary: &[u8]) -> Result<Module> {
-        Self::create(store, binary, None)
-    }
-
-    unsafe fn create(
-        store: &Store,
-        binary: &[u8],
-        name_override: Option<String>,
-    ) -> Result<Module> {
-        let (imports, exports, name) = read_imports_and_exports(binary)?;
-        Ok(Module {
-            inner: Rc::new(ModuleInner {
-                store: store.clone(),
-                source: ModuleCodeSource::Binary(binary.into()),
-                imports,
-                exports,
-                name: name_override.or(name),
-            }),
-        })
+        let mut ret = Module::empty(store);
+        ret.read_imports_and_exports(binary)?;
+        Ok(ret)
     }
 
     /// Validates `binary` input data as a WebAssembly binary given the
@@ -356,12 +210,18 @@ impl Module {
     }
 
     pub fn from_exports(store: &Store, exports: Box<[ExportType]>) -> Self {
+        let mut ret = Module::empty(store);
+        Rc::get_mut(&mut ret.inner).unwrap().exports = exports;
+        return ret;
+    }
+
+    fn empty(store: &Store) -> Self {
         Module {
             inner: Rc::new(ModuleInner {
                 store: store.clone(),
                 source: ModuleCodeSource::Unknown,
                 imports: Box::new([]),
-                exports,
+                exports: Box::new([]),
                 name: None,
             }),
         }
@@ -395,5 +255,135 @@ impl Module {
     /// Returns the [`Store`] that this [`Module`] was compiled into.
     pub fn store(&self) -> &Store {
         &self.inner.store
+    }
+
+    fn read_imports_and_exports(&mut self, binary: &[u8]) -> Result<()> {
+        let inner = Rc::get_mut(&mut self.inner).unwrap();
+        inner.source = ModuleCodeSource::Binary(binary.into());
+        let mut reader = ModuleReader::new(binary)?;
+        let mut imports = Vec::new();
+        let mut exports = Vec::new();
+        let mut memories = Vec::new();
+        let mut tables = Vec::new();
+        let mut func_sig = Vec::new();
+        let mut sigs = Vec::new();
+        let mut globals = Vec::new();
+        while !reader.eof() {
+            let section = reader.read()?;
+            match section.code {
+                SectionCode::Memory => {
+                    let section = section.get_memory_section_reader()?;
+                    memories.reserve_exact(section.get_count() as usize);
+                    for entry in section {
+                        memories.push(into_memory_type(entry?));
+                    }
+                }
+                SectionCode::Type => {
+                    let section = section.get_type_section_reader()?;
+                    sigs.reserve_exact(section.get_count() as usize);
+                    for entry in section {
+                        sigs.push(into_func_type(entry?));
+                    }
+                }
+                SectionCode::Function => {
+                    let section = section.get_function_section_reader()?;
+                    func_sig.reserve_exact(section.get_count() as usize);
+                    for entry in section {
+                        func_sig.push(entry?);
+                    }
+                }
+                SectionCode::Global => {
+                    let section = section.get_global_section_reader()?;
+                    globals.reserve_exact(section.get_count() as usize);
+                    for entry in section {
+                        globals.push(into_global_type(entry?.ty));
+                    }
+                }
+                SectionCode::Table => {
+                    let section = section.get_table_section_reader()?;
+                    tables.reserve_exact(section.get_count() as usize);
+                    for entry in section {
+                        tables.push(into_table_type(entry?))
+                    }
+                }
+                SectionCode::Import => {
+                    let section = section.get_import_section_reader()?;
+                    imports.reserve_exact(section.get_count() as usize);
+                    for entry in section {
+                        let entry = entry?;
+                        let r#type = match entry.ty {
+                            ImportSectionEntryType::Function(index) => {
+                                func_sig.push(index);
+                                let sig = &sigs[index as usize];
+                                ExternType::Func(sig.clone())
+                            }
+                            ImportSectionEntryType::Table(tt) => {
+                                let table = into_table_type(tt);
+                                tables.push(table.clone());
+                                ExternType::Table(table)
+                            }
+                            ImportSectionEntryType::Memory(mt) => {
+                                let memory = into_memory_type(mt);
+                                memories.push(memory.clone());
+                                ExternType::Memory(memory)
+                            }
+                            ImportSectionEntryType::Global(gt) => {
+                                let global = into_global_type(gt);
+                                globals.push(global.clone());
+                                ExternType::Global(global)
+                            }
+                        };
+                        imports.push(ImportType::new(entry.module, entry.field, r#type));
+                    }
+                }
+                SectionCode::Export => {
+                    let section = section.get_export_section_reader()?;
+                    exports.reserve_exact(section.get_count() as usize);
+                    for entry in section {
+                        let entry = entry?;
+                        let r#type = match entry.kind {
+                            ExternalKind::Function => {
+                                let sig_index = func_sig[entry.index as usize] as usize;
+                                let sig = &sigs[sig_index];
+                                ExternType::Func(sig.clone())
+                            }
+                            ExternalKind::Table => {
+                                ExternType::Table(tables[entry.index as usize].clone())
+                            }
+                            ExternalKind::Memory => {
+                                ExternType::Memory(memories[entry.index as usize].clone())
+                            }
+                            ExternalKind::Global => {
+                                ExternType::Global(globals[entry.index as usize].clone())
+                            }
+                        };
+                        exports.push(ExportType::new(entry.field, r#type));
+                    }
+                }
+                SectionCode::Custom {
+                    kind: CustomSectionKind::Name,
+                    ..
+                } => {
+                    // Read name section. Per spec, ignore invalid custom section.
+                    if let Ok(mut reader) = section.get_name_section_reader() {
+                        while let Ok(entry) = reader.read() {
+                            if let Name::Module(name) = entry {
+                                if let Ok(name) = name.get_name() {
+                                    inner.name = Some(name.to_string());
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    // skip other sections
+                }
+            }
+        }
+
+        inner.imports = imports.into();
+        inner.exports = exports.into();
+        Ok(())
     }
 }
