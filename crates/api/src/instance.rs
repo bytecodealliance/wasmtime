@@ -27,7 +27,7 @@ impl Resolver for SimpleResolver<'_> {
 pub fn instantiate_in_context(
     data: &[u8],
     imports: &[Extern],
-    module_name: Option<String>,
+    module_name: Option<&str>,
     context: Context,
     exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
 ) -> Result<(InstanceHandle, HashSet<Context>), Error> {
@@ -74,7 +74,7 @@ impl Instance {
         let (mut instance_handle, contexts) = instantiate_in_context(
             module.binary().expect("binary"),
             externs,
-            module.name().cloned(),
+            module.name(),
             context,
             exports,
         )?;

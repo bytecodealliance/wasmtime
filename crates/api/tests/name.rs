@@ -42,7 +42,7 @@ fn test_module_name() -> Result<(), String> {
     );
 
     let module = HostRef::new(
-        Module::new_with_name(&store, &binary, "override".to_string())
+        Module::new_with_name(&store, &binary, "override")
             .map_err(|e| format!("failed to compile module: {}", e))?,
     );
     assert_eq!(
