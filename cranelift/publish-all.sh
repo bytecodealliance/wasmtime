@@ -51,3 +51,7 @@ do
     # https://internals.rust-lang.org/t/changes-to-how-crates-io-handles-index-updates/9608
     echo sleep 10
 done
+echo
+echo "echo \"#\""
+echo "echo \"# Don't forget to click the above link to open a pull-request!\""
+echo "echo \"#\""
