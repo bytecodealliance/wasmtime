@@ -42,23 +42,23 @@ fn same_import_names_still_distinct() -> anyhow::Result<()> {
     let module = Module::new(&store, &wasm)?;
 
     let imports = [
-        HostRef::new(Func::new(
+        Func::new(
             &store,
             FuncType::new(Box::new([]), Box::new([ValType::I32])),
             Rc::new(Ret1),
-        ))
+        )
         .into(),
-        HostRef::new(Func::new(
+        Func::new(
             &store,
             FuncType::new(Box::new([]), Box::new([ValType::F32])),
             Rc::new(Ret2),
-        ))
+        )
         .into(),
     ];
     let instance = Instance::new(&store, &module, &imports)?;
 
     let func = instance.find_export_by_name("foo").unwrap().func().unwrap();
-    let results = func.borrow().call(&[])?;
+    let results = func.call(&[])?;
     assert_eq!(results.len(), 1);
     match results[0] {
         Val::I32(n) => assert_eq!(n, 3),

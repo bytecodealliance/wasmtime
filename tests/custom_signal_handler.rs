@@ -164,6 +164,7 @@ mod tests {
         // Set up multiple instances
 
         let instance1 = Instance::new(&store, &module, &[])?;
+        let instance1_handler_triggered = Rc::new(AtomicBool::new(false));
 
         {
             let (base1, length1) = set_up_memory(&instance1);
