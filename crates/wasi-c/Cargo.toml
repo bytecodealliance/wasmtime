@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-wasi-c"
-version = "0.7.0"
+version = "0.9.0"
 authors = ["The Cranelift Project Developers"]
 description = "WASI API support for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -11,9 +11,9 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-wasmtime-runtime = { path = "../runtime" }
-wasmtime-environ = { path = "../environ" }
-wasmtime-jit = { path = "../jit" }
+wasmtime-runtime = { path = "../runtime", version = "0.9.0" }
+wasmtime-environ = { path = "../environ", version = "0.9.0" }
+wasmtime-jit = { path = "../jit", version = "0.9.0" }
 cranelift-codegen = { version = "0.52.0", features = ["enable-serde"] }
 cranelift-entity = { version = "0.52.0", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.52.0", features = ["enable-serde"] }

@@ -28,7 +28,7 @@ pub(crate) fn witx_path_from_args(args: TokenStream) -> (String, String) {
 
 fn witx_path(phase: &str, id: &str) -> String {
     let root = env!("CARGO_MANIFEST_DIR");
-    format!("{}/../WASI/phases/{}/witx/{}.witx", root, phase, id)
+    format!("{}/WASI/phases/{}/witx/{}.witx", root, phase, id)
 }
 
 // Convert a `Literal` holding a string literal into the `String`.

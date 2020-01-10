@@ -4,7 +4,7 @@ description = "Fuzzing infrastructure for Wasmtime"
 edition = "2018"
 name = "wasmtime-fuzzing"
 publish = false
-version = "0.1.0"
+version = "0.9.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -16,9 +16,9 @@ env_logger = { version = "0.7.1", optional = true }
 log = "0.4.8"
 wasmparser = "0.45.1"
 wasmprinter = "0.2.0"
-wasmtime = { path = "../api" }
-wasmtime-environ = { path = "../environ" }
-wasmtime-jit = { path = "../jit" }
+wasmtime = { path = "../api", version = "0.9.0" }
+wasmtime-environ = { path = "../environ", version = "0.9.0" }
+wasmtime-jit = { path = "../jit", version = "0.9.0" }
 
 [dev-dependencies]
 wat = "1.0"

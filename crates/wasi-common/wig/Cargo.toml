@@ -1,6 +1,6 @@
 [package]
 name = "wig"
-version = "0.7.0"
+version = "0.9.2"
 authors = ["Dan Gohman <sunfish@mozilla.com>"]
 description = "WebAssembly Interface Generator"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -8,6 +8,7 @@ categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 edition = "2018"
+include = ["src/**/*", "LICENSE", "WASI"]
 
 [lib]
 proc-macro = true
@@ -19,7 +20,7 @@ heck = "0.3.1"
 # We include the WASI repo primarily for the witx files, but it's also useful
 # to use the witx parser it contains, rather than the witx crate from
 # crates.io, so that it always matches the version of the witx files.
-witx = { path = "../WASI/tools/witx" }
+witx = "0.6.0"
 
 [badges]
 maintenance = { status = "actively-developed" }

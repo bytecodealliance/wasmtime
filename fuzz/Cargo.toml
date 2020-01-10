@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-fuzz"
-version = "0.7.0"
+version = "0.9.0"
 authors = ["The Wasmtime Project Developers"]
 edition = "2018"
 publish = false
