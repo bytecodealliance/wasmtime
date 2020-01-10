@@ -1,6 +1,5 @@
 #[cfg(not(target_os = "windows"))]
 mod tests {
-    use core::cell::Ref;
     use std::rc::Rc;
     use std::sync::atomic::{AtomicBool, Ordering};
     use wasmtime::*;
@@ -38,7 +37,7 @@ mod tests {
 "#;
 
     fn invoke_export(
-        instance: &HostRef<Instance>,
+        instance: &Instance,
         data: &[u8],
         func_name: &str,
     ) -> Result<Vec<Value>, anyhow::Error> {
@@ -46,8 +45,8 @@ mod tests {
     }
 
     // Locate "memory" export, get base address and size and set memory protection to PROT_NONE
-    fn set_up_memory(instance: &HostRef<Instance>) -> (*mut u8, usize) {
-        let mem_export = instance.borrow().get_wasmtime_memory().expect("memory");
+    fn set_up_memory(instance: &Instance) -> (*mut u8, usize) {
+        let mem_export = instance.get_wasmtime_memory().expect("memory");
 
         let (base, length) = if let wasmtime_runtime::Export::Memory {
             definition,
@@ -107,16 +106,14 @@ mod tests {
         let store = Store::new(&engine);
         let data = wat::parse_str(WAT1)?;
         let module = Module::new(&store, &data)?;
-        let instance = HostRef::new(Instance::new(&store, &module, &[])?);
+        let instance = Instance::new(&store, &module, &[])?;
 
         let (base, length) = set_up_memory(&instance);
-        instance
-            .borrow_mut()
-            .set_signal_handler(move |signum, siginfo, _| {
-                handle_sigsegv(base, length, signum, siginfo)
-            });
+        instance.set_signal_handler(move |signum, siginfo, _| {
+            handle_sigsegv(base, length, signum, siginfo)
+        });
 
-        let exports = Ref::map(instance.borrow(), |instance| instance.exports());
+        let exports = instance.exports();
         assert!(!exports.is_empty());
 
         // these invoke wasmtime_call_trampoline from action.rs
@@ -140,10 +137,7 @@ mod tests {
                 .func()
                 .expect("expected a 'read' func in the module");
             println!("calling read...");
-            let result = read_func
-                .borrow()
-                .call(&[])
-                .expect("expected function not to trap");
+            let result = read_func.call(&[]).expect("expected function not to trap");
             assert_eq!(123i32, result[0].clone().unwrap_i32());
         }
 
@@ -152,7 +146,7 @@ mod tests {
                 .func()
                 .expect("expected a 'read_out_of_bounds' func in the module");
             println!("calling read_out_of_bounds...");
-            let trap = read_out_of_bounds_func.borrow().call(&[]).unwrap_err();
+            let trap = read_out_of_bounds_func.call(&[]).unwrap_err();
             assert!(trap
                 .message()
                 .starts_with("call error: wasm trap: out of bounds memory access"));
@@ -169,13 +163,13 @@ mod tests {
 
         // Set up multiple instances
 
-        let instance1 = HostRef::new(Instance::new(&store, &module, &[])?);
+        let instance1 = Instance::new(&store, &module, &[])?;
         let instance1_handler_triggered = Rc::new(AtomicBool::new(false));
 
         {
             let (base1, length1) = set_up_memory(&instance1);
 
-            instance1.borrow_mut().set_signal_handler({
+            instance1.set_signal_handler({
                 let instance1_handler_triggered = instance1_handler_triggered.clone();
                 move |_signum, _siginfo, _context| {
                     // Remove protections so the execution may resume
@@ -196,15 +190,13 @@ mod tests {
             });
         }
 
-        let instance2 = HostRef::new(
-            Instance::new(&store, &module, &[]).expect("failed to instantiate module"),
-        );
+        let instance2 = Instance::new(&store, &module, &[]).expect("failed to instantiate module");
         let instance2_handler_triggered = Rc::new(AtomicBool::new(false));
 
         {
             let (base2, length2) = set_up_memory(&instance2);
 
-            instance2.borrow_mut().set_signal_handler({
+            instance2.set_signal_handler({
                 let instance2_handler_triggered = instance2_handler_triggered.clone();
                 move |_signum, _siginfo, _context| {
                     // Remove protections so the execution may resume
@@ -229,7 +221,7 @@ mod tests {
 
         // First instance1
         {
-            let exports1 = Ref::map(instance1.borrow(), |i| i.exports());
+            let exports1 = instance1.exports();
             assert!(!exports1.is_empty());
 
             println!("calling instance1.read...");
@@ -244,7 +236,7 @@ mod tests {
 
         // And then instance2
         {
-            let exports2 = Ref::map(instance2.borrow(), |i| i.exports());
+            let exports2 = instance2.exports();
             assert!(!exports2.is_empty());
 
             println!("calling instance2.read...");
@@ -267,30 +259,26 @@ mod tests {
         // instance1 which defines 'read'
         let data1 = wat::parse_str(WAT1)?;
         let module1 = Module::new(&store, &data1)?;
-        let instance1: HostRef<Instance> = HostRef::new(Instance::new(&store, &module1, &[])?);
+        let instance1 = Instance::new(&store, &module1, &[])?;
         let (base1, length1) = set_up_memory(&instance1);
-        instance1
-            .borrow_mut()
-            .set_signal_handler(move |signum, siginfo, _| {
-                println!("instance1");
-                handle_sigsegv(base1, length1, signum, siginfo)
-            });
+        instance1.set_signal_handler(move |signum, siginfo, _| {
+            println!("instance1");
+            handle_sigsegv(base1, length1, signum, siginfo)
+        });
 
-        let instance1_exports = Ref::map(instance1.borrow(), |i| i.exports());
+        let instance1_exports = instance1.exports();
         assert!(!instance1_exports.is_empty());
         let instance1_read = instance1_exports[0].clone();
 
         // instance2 wich calls 'instance1.read'
         let data2 = wat::parse_str(WAT2)?;
         let module2 = Module::new(&store, &data2)?;
-        let instance2 = HostRef::new(Instance::new(&store, &module2, &[instance1_read])?);
+        let instance2 = Instance::new(&store, &module2, &[instance1_read])?;
         // since 'instance2.run' calls 'instance1.read' we need to set up the signal handler to handle
         // SIGSEGV originating from within the memory of instance1
-        instance2
-            .borrow_mut()
-            .set_signal_handler(move |signum, siginfo, _| {
-                handle_sigsegv(base1, length1, signum, siginfo)
-            });
+        instance2.set_signal_handler(move |signum, siginfo, _| {
+            handle_sigsegv(base1, length1, signum, siginfo)
+        });
 
         println!("calling instance2.run");
         let result = invoke_export(&instance2, &data2, "run")?;

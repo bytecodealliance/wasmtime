@@ -122,10 +122,8 @@ pub fn instantiate(
         }
     }
 
-    let instance = wasmtime::HostRef::new(
-        wasmtime::Instance::new(&store, &module, &imports)
-            .map_err(|t| PyErr::new::<Exception, _>(format!("instantiated with trap {:?}", t)))?,
-    );
+    let instance = wasmtime::Instance::new(&store, &module, &imports)
+        .map_err(|t| PyErr::new::<Exception, _>(format!("instantiated with trap {:?}", t)))?;
 
     let module = Py::new(py, Module { module })?;
 

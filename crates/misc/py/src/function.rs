@@ -10,17 +10,16 @@ use wasmtime_interface_types::ModuleData;
 // TODO support non-export functions
 #[pyclass]
 pub struct Function {
-    pub instance: wasmtime::HostRef<wasmtime::Instance>,
+    pub instance: wasmtime::Instance,
     pub export_name: String,
     pub args_types: Vec<wasmtime::ValType>,
     pub data: Rc<ModuleData>,
 }
 
 impl Function {
-    pub fn func(&self) -> wasmtime::HostRef<wasmtime::Func> {
+    pub fn func(&self) -> wasmtime::Func {
         let e = self
             .instance
-            .borrow()
             .find_export_by_name(&self.export_name)
             .expect("named export")
             .clone();
@@ -125,10 +124,7 @@ impl wasmtime::Callable for WrappedFn {
     }
 }
 
-pub fn wrap_into_pyfunction(
-    store: &wasmtime::Store,
-    callable: &PyAny,
-) -> PyResult<wasmtime::HostRef<wasmtime::Func>> {
+pub fn wrap_into_pyfunction(store: &wasmtime::Store, callable: &PyAny) -> PyResult<wasmtime::Func> {
     if !callable.hasattr("__annotations__")? {
         // TODO support calls without annotations?
         return Err(PyErr::new::<Exception, _>(
@@ -154,6 +150,5 @@ pub fn wrap_into_pyfunction(
 
     let gil = Python::acquire_gil();
     let wrapped = WrappedFn::new(callable.to_object(gil.python()), returns);
-    let f = wasmtime::Func::new(store, ft, Rc::new(wrapped));
-    Ok(wasmtime::HostRef::new(f))
+    Ok(wasmtime::Func::new(store, ft, Rc::new(wrapped)))
 }

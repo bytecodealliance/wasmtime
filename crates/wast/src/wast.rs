@@ -27,9 +27,9 @@ fn runtime_value(v: &wast::Expression<'_>) -> Result<Val> {
 pub struct WastContext {
     /// Wast files have a concept of a "current" module, which is the most
     /// recently defined.
-    current: Option<HostRef<Instance>>,
+    current: Option<Instance>,
 
-    instances: HashMap<String, HostRef<Instance>>,
+    instances: HashMap<String, Instance>,
     store: Store,
     spectest: Option<HashMap<&'static str, Extern>>,
 }
@@ -50,7 +50,7 @@ impl WastContext {
         }
     }
 
-    fn get_instance(&self, instance_name: Option<&str>) -> Result<HostRef<Instance>> {
+    fn get_instance(&self, instance_name: Option<&str>) -> Result<Instance> {
         match instance_name {
             Some(name) => self
                 .instances
@@ -64,7 +64,7 @@ impl WastContext {
         }
     }
 
-    fn instantiate(&self, module: &[u8]) -> Result<Outcome<HostRef<Instance>>> {
+    fn instantiate(&self, module: &[u8]) -> Result<Outcome<Instance>> {
         let module = Module::new(&self.store, module)?;
         let mut imports = Vec::new();
         for import in module.imports() {
@@ -85,7 +85,6 @@ impl WastContext {
                 .get(import.module())
                 .ok_or_else(|| anyhow!("no module named `{}`", import.module()))?;
             let export = instance
-                .borrow()
                 .find_export_by_name(import.name())
                 .ok_or_else(|| anyhow!("unknown import `{}::{}`", import.name(), import.module()))?
                 .clone();
@@ -101,7 +100,7 @@ impl WastContext {
                 return Err(e);
             }
         };
-        Ok(Outcome::Ok(HostRef::new(instance)))
+        Ok(Outcome::Ok(instance))
     }
 
     /// Register "spectest" which is used by the spec testsuite.
@@ -159,12 +158,11 @@ impl WastContext {
     ) -> Result<Outcome> {
         let values = args.iter().map(runtime_value).collect::<Result<Vec<_>>>()?;
         let instance = self.get_instance(instance_name.as_ref().map(|x| &**x))?;
-        let instance = instance.borrow();
         let export = instance
             .find_export_by_name(field)
             .ok_or_else(|| anyhow!("no global named `{}`", field))?;
         let func = match export {
-            Extern::Func(f) => f.borrow(),
+            Extern::Func(f) => f,
             _ => bail!("export of `{}` wasn't a global", field),
         };
         Ok(match func.call(&values) {
@@ -176,12 +174,11 @@ impl WastContext {
     /// Get the value of an exported global from an instance.
     fn get(&mut self, instance_name: Option<&str>, field: &str) -> Result<Outcome> {
         let instance = self.get_instance(instance_name.as_ref().map(|x| &**x))?;
-        let instance = instance.borrow();
         let export = instance
             .find_export_by_name(field)
             .ok_or_else(|| anyhow!("no global named `{}`", field))?;
         let global = match export {
-            Extern::Global(g) => g.borrow(),
+            Extern::Global(g) => g,
             _ => bail!("export of `{}` wasn't a global", field),
         };
         Ok(Outcome::Ok(vec![global.get()]))

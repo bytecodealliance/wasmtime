@@ -54,7 +54,7 @@ fn main() -> anyhow::Result<()> {
 
     // Invoke `gcd` export
     let gcd = instance.exports()[gcd_index].func().expect("gcd");
-    let result = gcd.borrow().call(&[Val::from(6i32), Val::from(27i32)])?;
+    let result = gcd.call(&[Val::from(6i32), Val::from(27i32)])?;
 
     println!("{:?}", result);
     Ok(())
