@@ -60,7 +60,7 @@ impl<'data> RawCompiledModule<'data> {
     fn new(
         compiler: &mut Compiler,
         data: &'data [u8],
-        module_name: Option<String>,
+        module_name: Option<&str>,
         resolver: &mut dyn Resolver,
         debug_info: bool,
     ) -> Result<Self, SetupError> {
@@ -76,7 +76,7 @@ impl<'data> RawCompiledModule<'data> {
             None
         };
 
-        translation.module.name = module_name;
+        translation.module.name = module_name.map(|s| s.to_string());
 
         let (allocated_functions, jt_offsets, relocations, dbg_image) = compiler.compile(
             &translation.module,
@@ -155,7 +155,7 @@ impl CompiledModule {
     pub fn new<'data>(
         compiler: &mut Compiler,
         data: &'data [u8],
-        module_name: Option<String>,
+        module_name: Option<&str>,
         resolver: &mut dyn Resolver,
         global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
         debug_info: bool,
@@ -263,7 +263,7 @@ impl OwnedDataInitializer {
 pub fn instantiate(
     compiler: &mut Compiler,
     data: &[u8],
-    module_name: Option<String>,
+    module_name: Option<&str>,
     resolver: &mut dyn Resolver,
     global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
     debug_info: bool,

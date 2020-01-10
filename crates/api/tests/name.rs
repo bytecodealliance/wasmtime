@@ -16,7 +16,7 @@ fn test_module_no_name() -> Result<(), String> {
     let module = HostRef::new(
         Module::new(&store, &binary).map_err(|e| format!("failed to compile module: {}", e))?,
     );
-    assert_eq!(module.borrow().name().cloned(), None);
+    assert_eq!(module.borrow().name(), None);
 
     Ok(())
 }
@@ -36,19 +36,13 @@ fn test_module_name() -> Result<(), String> {
     let module = HostRef::new(
         Module::new(&store, &binary).map_err(|e| format!("failed to compile module: {}", e))?,
     );
-    assert_eq!(
-        module.borrow().name().cloned(),
-        Some("from_name_section".to_string())
-    );
+    assert_eq!(module.borrow().name(), Some("from_name_section"));
 
     let module = HostRef::new(
-        Module::new_with_name(&store, &binary, "override".to_string())
+        Module::new_with_name(&store, &binary, "override")
             .map_err(|e| format!("failed to compile module: {}", e))?,
     );
-    assert_eq!(
-        module.borrow().name().cloned(),
-        Some("override".to_string())
-    );
+    assert_eq!(module.borrow().name(), Some("override"));
 
     Ok(())
 }

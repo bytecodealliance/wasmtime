@@ -270,9 +270,9 @@ impl Module {
     /// data. The provided `name` will be used in traps/backtrace details.
     ///
     /// See [`Module::new`] for other details.
-    pub fn new_with_name(store: &Store, binary: &[u8], name: String) -> Result<Module> {
+    pub fn new_with_name(store: &Store, binary: &[u8], name: &str) -> Result<Module> {
         Self::validate(store, binary)?;
-        unsafe { Self::create(store, binary, Some(name)) }
+        unsafe { Self::create(store, binary, Some(name.to_string())) }
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
@@ -376,8 +376,8 @@ impl Module {
 
     /// Returns identifier/name that this [`Module`] has. This name
     /// is used in traps/backtrace details.
-    pub fn name(&self) -> Option<&String> {
-        self.inner.name.as_ref()
+    pub fn name(&self) -> Option<&str> {
+        self.inner.name.as_deref()
     }
 
     /// Returns the list of imports that this [`Module`] has and must be
