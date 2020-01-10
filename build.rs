@@ -43,12 +43,14 @@ fn main() -> anyhow::Result<()> {
                 "simd",
                 strategy,
             )?;
-            write_testsuite_tests(
-                &mut out,
-                "tests/spec_testsuite/proposals/simd/simd_const.wast",
-                "simd",
-                strategy,
-            )?;
+            // FIXME this uses some features from the reference types proposal
+            // (multi-table) which aren't fully implemented yet
+            // write_testsuite_tests(
+            //     &mut out,
+            //     "tests/spec_testsuite/proposals/simd/simd_const.wast",
+            //     "simd",
+            //     strategy,
+            // )?;
             finish_test_module(&mut out)?;
 
             test_directory(
