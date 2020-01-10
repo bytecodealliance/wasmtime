@@ -8,7 +8,7 @@
 )]
 
 use crate::disasm::{print_all, PrintRelocs, PrintStackmaps, PrintTraps};
-use crate::utils::{parse_sets_and_triple, read_to_end};
+use crate::utils::parse_sets_and_triple;
 use cranelift_codegen::ir::DisplayFunctionAnnotations;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
@@ -16,10 +16,10 @@ use cranelift_codegen::timing;
 use cranelift_codegen::Context;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ReturnMode};
+use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 use term;
-use wabt::{wat2wasm_with_features, Features};
 
 macro_rules! vprintln {
     ($x: expr, $($tts:tt)*) => {
@@ -49,9 +49,6 @@ pub fn run(
     flag_print_size: bool,
     flag_report_times: bool,
     flag_calc_value_ranges: bool,
-    flag_enable_simd: bool,
-    flag_enable_multi_value: bool,
-    flag_enable_reference_types: bool,
 ) -> Result<(), String> {
     let parsed = parse_sets_and_triple(flag_set, flag_triple)?;
 
@@ -67,9 +64,6 @@ pub fn run(
             flag_print_disasm,
             flag_report_times,
             flag_calc_value_ranges,
-            flag_enable_simd,
-            flag_enable_multi_value,
-            flag_enable_reference_types,
             &path.to_path_buf(),
             &name,
             parsed.as_fisa(),
@@ -87,9 +81,6 @@ fn handle_module(
     flag_print_disasm: bool,
     flag_report_times: bool,
     flag_calc_value_ranges: bool,
-    flag_enable_simd: bool,
-    flag_enable_multi_value: bool,
-    flag_enable_reference_types: bool,
     path: &PathBuf,
     name: &str,
     fisa: FlagsOrIsa,
@@ -103,25 +94,19 @@ fn handle_module(
     vprint!(flag_verbose, "Translating... ");
     let _ = terminal.reset();
 
-    let mut module_binary = read_to_end(path.clone()).map_err(|err| err.to_string())?;
-
-    if !module_binary.starts_with(&[b'\0', b'a', b's', b'm']) {
-        let mut features = Features::new();
-        if flag_enable_simd {
-            features.enable_simd();
-        }
-        if flag_enable_multi_value {
-            features.enable_multi_value();
-        }
-        if flag_enable_reference_types {
-            features.enable_reference_types();
-        }
-
-        module_binary = match wat2wasm_with_features(&module_binary, features) {
-            Ok(data) => data,
-            Err(e) => return Err(e.to_string()),
-        };
-    }
+    let module_binary = if path.to_str() == Some("-") {
+        let stdin = std::io::stdin();
+        let mut buf = Vec::new();
+        stdin
+            .lock()
+            .read_to_end(&mut buf)
+            .map_err(|e| e.to_string())?;
+        wat::parse_bytes(&buf)
+            .map_err(|err| format!("{:?}", err))?
+            .into()
+    } else {
+        wat::parse_file(path).map_err(|err| format!("{:?}", err))?
+    };
 
     let isa = match fisa.isa {
         Some(isa) => isa,

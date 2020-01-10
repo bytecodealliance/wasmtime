@@ -21,7 +21,7 @@ serde = { version = "1.0.94", features = ["derive"], optional = true }
 thiserror = "1.0.4"
 
 [dev-dependencies]
-wabt = "0.9.1"
+wat = "1.0.7"
 target-lexicon = "0.10"
 
 [features]

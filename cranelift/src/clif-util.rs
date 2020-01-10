@@ -107,24 +107,6 @@ fn add_debug_flag<'a>() -> clap::Arg<'a, 'a> {
         .help("Enable debug output on stderr/stdout")
 }
 
-fn add_enable_simd_flag<'a>() -> clap::Arg<'a, 'a> {
-    Arg::with_name("enable-simd")
-        .long("enable-simd")
-        .help("Enable WASM's SIMD operations")
-}
-
-fn add_enable_multi_value<'a>() -> clap::Arg<'a, 'a> {
-    Arg::with_name("enable-multi-value")
-        .long("enable-multi-value")
-        .help("Enable WASM's multi-value support")
-}
-
-fn add_enable_reference_types_flag<'a>() -> clap::Arg<'a, 'a> {
-    Arg::with_name("enable-reference-types")
-        .long("enable-reference-types")
-        .help("Enable WASM's reference types operations")
-}
-
 fn add_just_decode_flag<'a>() -> clap::Arg<'a, 'a> {
     Arg::with_name("just-decode")
         .short("t")
@@ -167,9 +149,6 @@ fn add_wasm_or_compile<'a>(cmd: &str) -> clap::App<'a, 'a> {
         .arg(add_target_flag())
         .arg(add_input_file_arg())
         .arg(add_debug_flag())
-        .arg(add_enable_simd_flag())
-        .arg(add_enable_multi_value())
-        .arg(add_enable_reference_types_flag())
         .arg(add_just_decode_flag())
         .arg(add_check_translation_flag())
 }
@@ -321,9 +300,6 @@ fn main() {
                     rest_cmd.is_present("print-size"),
                     rest_cmd.is_present("time-passes"),
                     rest_cmd.is_present("value-ranges"),
-                    rest_cmd.is_present("enable-simd"),
-                    rest_cmd.is_present("enable-multi-value"),
-                    rest_cmd.is_present("enable-reference-types"),
                 )
             };
 

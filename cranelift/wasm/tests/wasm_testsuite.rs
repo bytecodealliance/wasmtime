@@ -10,7 +10,6 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::str::FromStr;
 use target_lexicon::triple;
-use wabt::{wat2wasm_with_features, Features, Wat2Wasm};
 
 #[test]
 fn testsuite() {
@@ -47,15 +46,14 @@ fn use_fallthrough_return() {
 
 #[test]
 fn use_name_section() {
-    let wat = r#"
+    let data = wat::parse_str(
+        r#"
         (module $module_name
             (func $func_name (local $loc_name i32)
             )
-        )"#;
-    let data = Wat2Wasm::new()
-        .write_debug_names(true)
-        .convert(wat)
-        .unwrap_or_else(|e| panic!("error converting wat to wasm: {:?}", e));
+        )"#,
+    )
+    .unwrap();
 
     let flags = Flags::new(settings::builder());
     let triple = triple!("riscv64");
@@ -79,23 +77,13 @@ fn read_file(path: &Path) -> io::Result<Vec<u8>> {
 }
 
 fn read_module(path: &Path) -> Vec<u8> {
-    let mut features = Features::new();
-    features.enable_all();
     match path.extension() {
         None => {
             panic!("the file extension is not wasm or wat");
         }
         Some(ext) => match ext.to_str() {
             Some("wasm") => read_file(path).expect("error reading wasm file"),
-            Some("wat") => {
-                let wat = read_file(path).expect("error reading wat file");
-                match wat2wasm_with_features(&wat, features) {
-                    Ok(wasm) => wasm,
-                    Err(e) => {
-                        panic!("error converting wat to wasm: {:?}", e);
-                    }
-                }
-            }
+            Some("wat") => wat::parse_file(path).expect("failed to parse wat"),
             None | Some(&_) => panic!("the file extension for {:?} is not wasm or wat", path),
         },
     }

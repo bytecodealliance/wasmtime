@@ -24,21 +24,6 @@ pub fn read_to_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
     Ok(buffer)
 }
 
-/// Read an entire file into a vector of bytes.
-#[cfg(feature = "wasm")]
-pub fn read_to_end<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
-    let mut buffer = Vec::new();
-    if path.as_ref() == Path::new("-") {
-        let stdin = io::stdin();
-        let mut stdin = stdin.lock();
-        stdin.read_to_end(&mut buffer)?;
-    } else {
-        let mut file = File::open(path)?;
-        file.read_to_end(&mut buffer)?;
-    }
-    Ok(buffer)
-}
-
 /// Like `FlagsOrIsa`, but holds ownership.
 pub enum OwnedFlagsOrIsa {
     Flags(settings::Flags),

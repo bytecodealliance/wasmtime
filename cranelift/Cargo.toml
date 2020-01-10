@@ -38,7 +38,7 @@ clap = "2.32.0"
 serde = "1.0.8"
 term = "0.6.1"
 capstone = { version = "0.6.0", optional = true }
-wabt = { version = "0.9.1", optional = true }
+wat = { version = "1.0.7", optional = true }
 target-lexicon = "0.10"
 pretty_env_logger = "0.3.0"
 file-per-thread-logger = "0.1.2"
@@ -48,7 +48,7 @@ walkdir = "2.2"
 [features]
 default = ["disas", "wasm", "cranelift-codegen/all-arch", "basic-blocks"]
 disas = ["capstone"]
-wasm = ["wabt", "cranelift-wasm"]
+wasm = ["wat", "cranelift-wasm"]
 basic-blocks = ["cranelift-codegen/basic-blocks", "cranelift-frontend/basic-blocks",
 "cranelift-wasm/basic-blocks", "cranelift-filetests/basic-blocks"]
 
