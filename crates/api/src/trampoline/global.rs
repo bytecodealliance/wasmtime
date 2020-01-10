@@ -1,6 +1,6 @@
 use super::create_handle::create_handle;
 use crate::{GlobalType, Mutability, Val};
-use anyhow::Result;
+use anyhow::{bail, Result};
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::{wasm, Module};
 use wasmtime_runtime::{InstanceHandle, VMGlobalDefinition};
@@ -24,7 +24,10 @@ pub fn create_global(gt: &GlobalType, val: Val) -> Result<(wasmtime_runtime::Exp
     }
 
     let global = wasm::Global {
-        ty: gt.content().get_wasmtime_type(),
+        ty: match gt.content().get_wasmtime_type() {
+            Some(t) => t,
+            None => bail!("cannot support {:?} as a wasm global type", gt.content()),
+        },
         mutability: match gt.mutability() {
             Mutability::Const => false,
             Mutability::Var => true,

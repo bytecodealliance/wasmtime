@@ -163,8 +163,12 @@ impl Func {
         store: &Store,
         instance_handle: InstanceHandle,
     ) -> Self {
+        // This is only called with `Export::Function`, and since it's coming
+        // from wasmtime_runtime itself we should support all the types coming
+        // out of it, so assert such here.
         let ty = if let wasmtime_runtime::Export::Function { signature, .. } = &export {
             FuncType::from_wasmtime_signature(signature.clone())
+                .expect("core wasm signature should be supported")
         } else {
             panic!("expected function export")
         };
@@ -258,9 +262,12 @@ impl Global {
         let global = if let wasmtime_runtime::Export::Global { ref global, .. } = export {
             global
         } else {
-            panic!("wasmtime export is not memory")
+            panic!("wasmtime export is not global")
         };
-        let ty = GlobalType::from_wasmtime_global(&global);
+        // The original export is coming from wasmtime_runtime itself we should
+        // support all the types coming out of it, so assert such here.
+        let ty = GlobalType::from_wasmtime_global(&global)
+            .expect("core wasm global type should be supported");
         Global {
             inner: Rc::new(GlobalInner {
                 _store: store.clone(),
