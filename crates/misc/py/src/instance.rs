@@ -43,10 +43,7 @@ impl Instance {
                     let f = Py::new(
                         py,
                         Memory {
-                            memory: self.instance.exports()[i]
-                                .memory()
-                                .unwrap()
-                                .clone(),
+                            memory: self.instance.exports()[i].memory().unwrap().clone(),
                         },
                     )?;
                     exports.set_item(e.name().to_string(), f)?;

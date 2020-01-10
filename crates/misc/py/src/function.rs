@@ -124,10 +124,7 @@ impl wasmtime::Callable for WrappedFn {
     }
 }
 
-pub fn wrap_into_pyfunction(
-    store: &wasmtime::Store,
-    callable: &PyAny,
-) -> PyResult<wasmtime::Func> {
+pub fn wrap_into_pyfunction(store: &wasmtime::Store, callable: &PyAny) -> PyResult<wasmtime::Func> {
     if !callable.hasattr("__annotations__")? {
         // TODO support calls without annotations?
         return Err(PyErr::new::<Exception, _>(
