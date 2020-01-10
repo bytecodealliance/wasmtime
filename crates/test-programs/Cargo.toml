@@ -16,7 +16,7 @@ wasmtime-environ = { path = "../environ", version = "0.9.0" }
 wasmtime-jit = { path = "../jit", version = "0.9.0" }
 wasmtime-wasi = { path = "../wasi", version = "0.9.0" }
 wasmtime = { path = "../api", version = "0.9.0" }
-target-lexicon = "0.9.0"
+target-lexicon = "0.10.0"
 pretty_env_logger = "0.3.0"
 tempfile = "3.1.0"
 os_pipe = "0.9"

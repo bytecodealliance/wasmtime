@@ -166,6 +166,8 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         "Lightbeam" => match (testsuite, testname) {
             (_, _) if testname.starts_with("simd") => return true,
             (_, _) if testsuite.ends_with("multi_value") => return true,
+            // Lightbeam doesn't support float arguments on the stack.
+            ("spec_testsuite", "call.wast") => return true,
             _ => (),
         },
         "Cranelift" => match (testsuite, testname) {

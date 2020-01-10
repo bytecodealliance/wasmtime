@@ -9,16 +9,16 @@ topdir=$(dirname "$0")/..
 cd "$topdir"
 
 # All the cranelift-* crates have the same version number
-version="0.49"
+version="0.53"
 
 # Update all of the Cargo.toml files.
 echo "Updating crate versions to $version"
-for crate in . crates/* crates/misc/* fuzz; do
+for toml in Cargo.toml crates/*/Cargo.toml crates/misc/*/Cargo.toml fuzz/Cargo.toml; do
     # Update the version number of this crate to $version.
     sed -i.bk -e "/^cranelift-/s/\"[^\"]*\"/\"$version\"/" \
-        "$crate/Cargo.toml"
+        "$toml"
 
     # Update the required version number of any cranelift* dependencies.
     sed -i.bk -e "/^cranelift-/s/version = \"[^\"]*\"/version = \"$version\"/" \
-        "$crate/Cargo.toml"
+        "$toml"
 done
