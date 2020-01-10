@@ -12,7 +12,7 @@ use wasmtime_runtime::Export;
 /// WebAssembly.
 /// # Example
 /// ```
-/// use wasmtime::{HostRef, Val};
+/// use wasmtime::Val;
 ///
 /// struct TimesTwo;
 ///
@@ -54,9 +54,8 @@ use wasmtime_runtime::Export;
 /// );
 ///
 /// // Build a reference to the "times_two" function that can be used.
-/// let times_two_function = HostRef::new(
-///     wasmtime::Func::new(&store, times_two_type, std::rc::Rc::new(TimesTwo))
-/// );
+/// let times_two_function =
+///     wasmtime::Func::new(&store, times_two_type, std::rc::Rc::new(TimesTwo));
 ///
 /// // Create module instance that imports our function
 /// let instance = wasmtime::Instance::new(
@@ -71,7 +70,6 @@ use wasmtime_runtime::Export;
 /// // Borrow and call "run". Returning any error message from Wasm as a string.
 /// let original = 5i32;
 /// let results = run_function
-///     .borrow()
 ///     .call(&[original.into()])
 ///     .map_err(|trap| trap.to_string())?;
 ///
