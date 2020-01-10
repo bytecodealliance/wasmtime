@@ -138,6 +138,10 @@ pub trait TargetEnvironment {
 /// IR. The function environment provides information about the WebAssembly module as well as the
 /// runtime environment.
 pub trait FuncEnvironment: TargetEnvironment {
+    /// Is the given parameter of the given function a wasm-level parameter, as opposed to a hidden
+    /// parameter added for use by the implementation?
+    fn is_wasm_parameter(&self, func: &ir::Function, index: usize) -> bool;
+
     /// Should the code be structured to use a single `fallthrough_return` instruction at the end
     /// of the function body, rather than `return` instructions as needed? This is used by VMs
     /// to append custom epilogues.

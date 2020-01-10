@@ -99,7 +99,7 @@ impl FuncTranslator {
         // `environ`. The callback functions may need to insert things in the entry block.
         builder.ensure_inserted_ebb();
 
-        let num_params = declare_wasm_parameters(&mut builder, entry_block);
+        let num_params = declare_wasm_parameters(&mut builder, entry_block, environ);
 
         // Set up the translation state with a single pushed control block representing the whole
         // function and its return values.
@@ -124,14 +124,18 @@ impl FuncTranslator {
 /// Declare local variables for the signature parameters that correspond to WebAssembly locals.
 ///
 /// Return the number of local variables declared.
-fn declare_wasm_parameters(builder: &mut FunctionBuilder, entry_block: Ebb) -> usize {
+fn declare_wasm_parameters<FE: FuncEnvironment + ?Sized>(
+    builder: &mut FunctionBuilder,
+    entry_block: Ebb,
+    environ: &FE,
+) -> usize {
     let sig_len = builder.func.signature.params.len();
     let mut next_local = 0;
     for i in 0..sig_len {
         let param_type = builder.func.signature.params[i];
-        // There may be additional special-purpose parameters following the normal WebAssembly
+        // There may be additional special-purpose parameters in addition to the normal WebAssembly
         // signature parameters. For example, a `vmctx` pointer.
-        if param_type.purpose == ir::ArgumentPurpose::Normal {
+        if environ.is_wasm_parameter(&builder.func, i) {
             // This is a normal WebAssembly signature parameter, so create a local for it.
             let local = Variable::new(next_local);
             builder.declare_var(local, param_type.value_type);
