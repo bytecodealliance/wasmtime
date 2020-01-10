@@ -17,14 +17,15 @@ use crate::{wasm_unsupported, HashMap};
 use core::convert::TryFrom;
 use cranelift_codegen::ir::immediates::V128Imm;
 use cranelift_codegen::ir::{self, AbiParam, Signature};
+use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::EntityRef;
 use std::vec::Vec;
 use wasmparser::{
-    self, CodeSectionReader, Data, DataKind, DataSectionReader, Element, ElementKind,
+    self, CodeSectionReader, Data, DataKind, DataSectionReader, Element, ElementItem, ElementKind,
     ElementSectionReader, Export, ExportSectionReader, ExternalKind, FuncType,
     FunctionSectionReader, GlobalSectionReader, GlobalType, ImportSectionEntryType,
     ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader, Naming, NamingReader,
-    Operator, TableSectionReader, TypeSectionReader,
+    Operator, TableSectionReader, Type, TypeSectionReader,
 };
 
 /// Parses the Type section of the wasm module.
@@ -292,9 +293,14 @@ pub fn parse_element_section<'data>(
     environ.reserve_table_elements(elements.get_count())?;
 
     for entry in elements {
-        let Element { kind } = entry?;
+        let Element { kind, items, ty } = entry?;
+        if ty != Type::AnyFunc {
+            return Err(wasm_unsupported!(
+                "unsupported table element type: {:?}",
+                ty
+            ));
+        }
         if let ElementKind::Active {
-            items,
             table_index,
             init_expr,
         } = kind
@@ -315,8 +321,11 @@ pub fn parse_element_section<'data>(
             let items_reader = items.get_items_reader()?;
             let mut elems = Vec::with_capacity(usize::try_from(items_reader.get_count()).unwrap());
             for item in items_reader {
-                let x = item?;
-                elems.push(FuncIndex::from_u32(x));
+                let elem = match item? {
+                    ElementItem::Null => FuncIndex::reserved_value(),
+                    ElementItem::Func(index) => FuncIndex::from_u32(index),
+                };
+                elems.push(elem);
             }
             environ.declare_table_elements(
                 TableIndex::from_u32(table_index),

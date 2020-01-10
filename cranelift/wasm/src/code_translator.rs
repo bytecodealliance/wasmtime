@@ -947,6 +947,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::F32Le | Operator::F64Le => {
             translate_fcmp(FloatCC::LessThanOrEqual, builder, state)
         }
+        Operator::TypedSelect { .. } => {
+            return Err(wasm_unsupported!("proposed typed select operator {:?}", op))
+        }
         Operator::RefNull => state.push1(builder.ins().null(environ.reference_type())),
         Operator::RefIsNull => {
             let arg = state.pop1();
