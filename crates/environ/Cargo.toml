@@ -13,10 +13,10 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-cranelift-codegen = { version = "0.52.0", features = ["enable-serde"] }
-cranelift-entity = { version = "0.52.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.52.0", features = ["enable-serde"] }
-wasmparser = "0.45.1"
+cranelift-codegen = { version = "0.53", features = ["enable-serde"] }
+cranelift-entity = { version = "0.53", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.53", features = ["enable-serde"] }
+wasmparser = "0.47.0"
 lightbeam = { path = "../lightbeam", optional = true, version = "0.9.0" }
 indexmap = "1.0.2"
 rayon = "1.2.1"
@@ -43,10 +43,10 @@ errno = "0.2.4"
 
 [dev-dependencies]
 tempfile = "3"
-target-lexicon = { version = "0.9.0", default-features = false }
+target-lexicon = { version = "0.10.0", default-features = false }
 pretty_env_logger = "0.3.0"
 rand = { version = "0.7.0", default-features = false, features = ["small_rng"] }
-cranelift-codegen = { version = "0.52.0", features = ["enable-serde", "all-arch"] }
+cranelift-codegen = { version = "0.53", features = ["enable-serde", "all-arch"] }
 filetime = "0.2.7"
 
 [badges]

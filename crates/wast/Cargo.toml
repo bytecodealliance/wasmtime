@@ -13,7 +13,7 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.19"
 wasmtime = { path = "../api", version = "0.9.0" }
-wast = "5.0.1"
+wast = "6.0.0"
 
 [badges]
 maintenance = { status = "actively-developed" }

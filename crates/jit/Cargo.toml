@@ -11,18 +11,18 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { version = "0.52.0", features = ["enable-serde"] }
-cranelift-entity = { version = "0.52.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.52.0", features = ["enable-serde"] }
-cranelift-native = "0.52.0"
-cranelift-frontend = "0.52.0"
+cranelift-codegen = { version = "0.53", features = ["enable-serde"] }
+cranelift-entity = { version = "0.53", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.53", features = ["enable-serde"] }
+cranelift-native = "0.53"
+cranelift-frontend = "0.53"
 wasmtime-environ = { path = "../environ", version = "0.9.0" }
 wasmtime-runtime = { path = "../runtime", version = "0.9.0" }
 wasmtime-debug = { path = "../debug", version = "0.9.0" }
 region = "2.0.0"
 thiserror = "1.0.4"
-target-lexicon = { version = "0.9.0", default-features = false }
-wasmparser = { version = "0.45.1", default-features = false }
+target-lexicon = { version = "0.10.0", default-features = false }
+wasmparser = { version = "0.47.0", default-features = false }
 more-asserts = "0.2.1"
 anyhow = "1.0"
 
