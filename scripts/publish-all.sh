@@ -9,7 +9,7 @@ topdir=$(dirname "$0")/..
 cd "$topdir"
 
 # All the wasmtime-* crates have the same version number
-version="0.7.0"
+version="0.9.0"
 
 # Update the version numbers of the crates to $version.
 echo "Updating crate versions to $version"
@@ -42,10 +42,10 @@ for cargo_toml in \
     crates/runtime/Cargo.toml \
     crates/debug/Cargo.toml \
     crates/jit/Cargo.toml \
-    crates/wast/Cargo.toml \
     crates/wasi-c/Cargo.toml \
-    crates/wasi/Cargo.toml \
     crates/api/Cargo.toml \
+    crates/wasi/Cargo.toml \
+    crates/wast/Cargo.toml \
     crates/interface-types/Cargo.toml \
     crates/misc/py/Cargo.toml \
     crates/misc/rust/macro/Cargo.toml \

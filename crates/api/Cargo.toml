@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime"
-version = "0.7.0"
+version = "0.9.0"
 authors = ["The Wasmtime Project Developers"]
 description = "High-level API to expose the Wasmtime runtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -13,9 +13,9 @@ name = "wasmtime"
 crate-type = ["lib", "staticlib", "cdylib"]
 
 [dependencies]
-wasmtime-runtime = { path = "../runtime" }
-wasmtime-environ = { path = "../environ" }
-wasmtime-jit = { path = "../jit" }
+wasmtime-runtime = { path = "../runtime", version = "0.9.0" }
+wasmtime-environ = { path = "../environ", version = "0.9.0" }
+wasmtime-jit = { path = "../jit", version = "0.9.0" }
 wasmparser = { version = "0.45.1", default-features = false }
 target-lexicon = { version = "0.9.0", default-features = false }
 anyhow = "1.0.19"
@@ -28,10 +28,8 @@ winapi = "0.3.7"
 
 [dev-dependencies]
 # for wasmtime.rs
-wasi-common = { path = "../wasi-common" }
+wasi-common = { path = "../wasi-common", version = "0.9.0" }
 pretty_env_logger = "0.3.0"
-wasmtime-wast = { path = "../wast" }
-wasmtime-wasi = { path = "../wasi" }
 rayon = "1.2.1"
 file-per-thread-logger = "0.1.1"
 wat = "1.0"

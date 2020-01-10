@@ -154,7 +154,7 @@ impl WasmToObjCommand {
                     &module_translation,
                     lazy_function_body_inputs,
                     &*isa,
-                    generate_debug_info,
+                    self.common.debug_info,
                 ),
                 #[cfg(not(feature = "lightbeam"))]
                 Strategy::Lightbeam => bail!("lightbeam support not enabled"),
