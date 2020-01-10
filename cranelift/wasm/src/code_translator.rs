@@ -1715,6 +1715,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::V128Const { .. }
         | Operator::V128Not
         | Operator::V128And
+        | Operator::V128AndNot
         | Operator::V128Or
         | Operator::V128Xor
         | Operator::V128Bitselect => I8X16, // default type representing V128
@@ -1858,7 +1859,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I64x2TruncSatF64x2U => F64X2,
 
         _ => unimplemented!(
-            "Currently only the SIMD instructions are translated to their return type: {:?}",
+            "Currently only SIMD instructions are mapped to their return type; the \
+             following instruction is not mapped: {:?}",
             operator
         ),
     }
