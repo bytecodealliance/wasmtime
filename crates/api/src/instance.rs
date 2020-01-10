@@ -132,7 +132,14 @@ impl Instance {
                 // imported into this store using the from_handle() method.
                 let _ = store.register_wasmtime_signature(signature);
             }
-            let extern_type = ExternType::from_wasmtime_export(&export);
+
+            // We should support everything supported by wasmtime_runtime, or
+            // otherwise we've got a bug in this crate, so panic if anything
+            // fails to convert here.
+            let extern_type = match ExternType::from_wasmtime_export(&export) {
+                Some(ty) => ty,
+                None => panic!("unsupported core wasm external type {:?}", export),
+            };
             exports_types.push(ExportType::new(name, extern_type));
             exports.push(Extern::from_wasmtime_export(
                 store,

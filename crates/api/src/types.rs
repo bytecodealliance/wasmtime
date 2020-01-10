@@ -84,25 +84,25 @@ impl ValType {
         }
     }
 
-    pub(crate) fn get_wasmtime_type(&self) -> ir::Type {
+    pub(crate) fn get_wasmtime_type(&self) -> Option<ir::Type> {
         match self {
-            ValType::I32 => ir::types::I32,
-            ValType::I64 => ir::types::I64,
-            ValType::F32 => ir::types::F32,
-            ValType::F64 => ir::types::F64,
-            ValType::V128 => ir::types::I8X16,
-            _ => unimplemented!("get_wasmtime_type other"),
+            ValType::I32 => Some(ir::types::I32),
+            ValType::I64 => Some(ir::types::I64),
+            ValType::F32 => Some(ir::types::F32),
+            ValType::F64 => Some(ir::types::F64),
+            ValType::V128 => Some(ir::types::I8X16),
+            _ => None,
         }
     }
 
-    pub(crate) fn from_wasmtime_type(ty: ir::Type) -> ValType {
+    pub(crate) fn from_wasmtime_type(ty: ir::Type) -> Option<ValType> {
         match ty {
-            ir::types::I32 => ValType::I32,
-            ir::types::I64 => ValType::I64,
-            ir::types::F32 => ValType::F32,
-            ir::types::F64 => ValType::F64,
-            ir::types::I8X16 => ValType::V128,
-            _ => unimplemented!("from_wasmtime_type other"),
+            ir::types::I32 => Some(ValType::I32),
+            ir::types::I64 => Some(ValType::I64),
+            ir::types::F32 => Some(ValType::F32),
+            ir::types::F64 => Some(ValType::F64),
+            ir::types::I8X16 => Some(ValType::V128),
+            _ => None,
         }
     }
 }
@@ -153,26 +153,29 @@ impl ExternType {
         (Table(TableType) table unwrap_table)
         (Memory(MemoryType) memory unwrap_memory)
     }
-    pub(crate) fn from_wasmtime_export(export: &wasmtime_runtime::Export) -> Self {
-        match export {
+
+    /// Returns `None` if the sub-type fails to get converted, see documentation
+    /// for sub-types about what may fail.
+    pub(crate) fn from_wasmtime_export(export: &wasmtime_runtime::Export) -> Option<Self> {
+        Some(match export {
             wasmtime_runtime::Export::Function { signature, .. } => {
-                ExternType::Func(FuncType::from_wasmtime_signature(signature.clone()))
+                ExternType::Func(FuncType::from_wasmtime_signature(signature.clone())?)
             }
             wasmtime_runtime::Export::Memory { memory, .. } => {
                 ExternType::Memory(MemoryType::from_wasmtime_memory(&memory.memory))
             }
             wasmtime_runtime::Export::Global { global, .. } => {
-                ExternType::Global(GlobalType::from_wasmtime_global(&global))
+                ExternType::Global(GlobalType::from_wasmtime_global(&global)?)
             }
             wasmtime_runtime::Export::Table { table, .. } => {
                 ExternType::Table(TableType::from_wasmtime_table(&table.table))
             }
-        }
+        })
     }
 }
 
 // Function Types
-fn from_wasmtime_abiparam(param: &ir::AbiParam) -> ValType {
+fn from_wasmtime_abiparam(param: &ir::AbiParam) -> Option<ValType> {
     assert_eq!(param.purpose, ir::ArgumentPurpose::Normal);
     ValType::from_wasmtime_type(param.value_type)
 }
@@ -184,7 +187,12 @@ fn from_wasmtime_abiparam(param: &ir::AbiParam) -> ValType {
 pub struct FuncType {
     params: Box<[ValType]>,
     results: Box<[ValType]>,
-    signature: ir::Signature,
+    // `None` if params/results aren't wasm-compatible (e.g. use wasm interface
+    // types), or if they're not implemented (like anyref at the time of this
+    // writing)
+    //
+    // `Some` if they're all wasm-compatible.
+    signature: Option<ir::Signature>,
 }
 
 impl FuncType {
@@ -196,23 +204,26 @@ impl FuncType {
         use wasmtime_environ::ir::{types, AbiParam, ArgumentPurpose, Signature};
         use wasmtime_jit::native;
         let call_conv = native::call_conv();
-        let signature: Signature = {
-            let mut params = params
-                .iter()
-                .map(|p| AbiParam::new(p.get_wasmtime_type()))
-                .collect::<Vec<_>>();
-            let returns = results
-                .iter()
-                .map(|p| AbiParam::new(p.get_wasmtime_type()))
-                .collect::<Vec<_>>();
-            params.insert(0, AbiParam::special(types::I64, ArgumentPurpose::VMContext));
+        let signature = params
+            .iter()
+            .map(|p| p.get_wasmtime_type().map(AbiParam::new))
+            .collect::<Option<Vec<_>>>()
+            .and_then(|params| {
+                results
+                    .iter()
+                    .map(|p| p.get_wasmtime_type().map(AbiParam::new))
+                    .collect::<Option<Vec<_>>>()
+                    .map(|results| (params, results))
+            })
+            .map(|(mut params, returns)| {
+                params.insert(0, AbiParam::special(types::I64, ArgumentPurpose::VMContext));
 
-            Signature {
-                params,
-                returns,
-                call_conv,
-            }
-        };
+                Signature {
+                    params,
+                    returns,
+                    call_conv,
+                }
+            });
         FuncType {
             params,
             results,
@@ -230,27 +241,33 @@ impl FuncType {
         &self.results
     }
 
-    pub(crate) fn get_wasmtime_signature(&self) -> &ir::Signature {
-        &self.signature
+    /// Returns `Some` if this function signature was compatible with cranelift,
+    /// or `None` if one of the types/results wasn't supported or compatible
+    /// with cranelift.
+    pub(crate) fn get_wasmtime_signature(&self) -> Option<&ir::Signature> {
+        self.signature.as_ref()
     }
 
-    pub(crate) fn from_wasmtime_signature(signature: ir::Signature) -> FuncType {
+    /// Returns `None` if any types in the signature can't be converted to the
+    /// types in this crate, but that should very rarely happen and largely only
+    /// indicate a bug in our cranelift integration.
+    pub(crate) fn from_wasmtime_signature(signature: ir::Signature) -> Option<FuncType> {
         let params = signature
             .params
             .iter()
             .filter(|p| p.purpose == ir::ArgumentPurpose::Normal)
             .map(|p| from_wasmtime_abiparam(p))
-            .collect::<Vec<_>>();
+            .collect::<Option<Vec<_>>>()?;
         let results = signature
             .returns
             .iter()
             .map(|p| from_wasmtime_abiparam(p))
-            .collect::<Vec<_>>();
-        FuncType {
+            .collect::<Option<Vec<_>>>()?;
+        Some(FuncType {
             params: params.into_boxed_slice(),
             results: results.into_boxed_slice(),
-            signature,
-        }
+            signature: Some(signature),
+        })
     }
 }
 
@@ -287,14 +304,16 @@ impl GlobalType {
         self.mutability
     }
 
-    pub(crate) fn from_wasmtime_global(global: &wasm::Global) -> GlobalType {
-        let ty = ValType::from_wasmtime_type(global.ty);
+    /// Returns `None` if the wasmtime global has a type that we can't
+    /// represent, but that should only very rarely happen and indicate a bug.
+    pub(crate) fn from_wasmtime_global(global: &wasm::Global) -> Option<GlobalType> {
+        let ty = ValType::from_wasmtime_type(global.ty)?;
         let mutability = if global.mutability {
             Mutability::Var
         } else {
             Mutability::Const
         };
-        GlobalType::new(ty, mutability)
+        Some(GlobalType::new(ty, mutability))
     }
 }
 
