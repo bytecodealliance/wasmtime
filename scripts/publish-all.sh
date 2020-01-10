@@ -17,6 +17,13 @@ find -name Cargo.toml \
     -not -path ./crates/wasi-common/WASI/tools/witx/Cargo.toml \
     -exec sed -i.bk -e "s/^version = \"[[:digit:]].*/version = \"$version\"/" {} \;
 
+# Update the required version numbers of path dependencies.
+find -name Cargo.toml \
+    -not -path ./crates/wasi-common/wig/WASI/tools/witx/Cargo.toml \
+    -exec sed -i.bk \
+        -e "/\> *= *{.*\<path *= *\"/s/version = \"[^\"]*\"/version = \"$version\"/" \
+        {} \;
+
 # Update our local Cargo.lock (not checked in).
 cargo update
 scripts/test-all.sh
