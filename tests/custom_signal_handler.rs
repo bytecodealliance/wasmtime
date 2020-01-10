@@ -1,9 +1,9 @@
 #[cfg(not(target_os = "windows"))]
 mod tests {
+    use anyhow::Result;
     use std::rc::Rc;
     use std::sync::atomic::{AtomicBool, Ordering};
     use wasmtime::*;
-    use wasmtime_interface_types::{ModuleData, Value};
 
     const WAT1: &str = r#"
 (module
@@ -36,12 +36,14 @@ mod tests {
 )
 "#;
 
-    fn invoke_export(
-        instance: &Instance,
-        data: &[u8],
-        func_name: &str,
-    ) -> Result<Vec<Value>, anyhow::Error> {
-        ModuleData::new(&data)?.invoke_export(instance, func_name, &[])
+    fn invoke_export(instance: &Instance, func_name: &str) -> Result<Box<[Val]>, Trap> {
+        let ret = instance
+            .find_export_by_name(func_name)
+            .unwrap()
+            .func()
+            .unwrap()
+            .call(&[])?;
+        Ok(ret)
     }
 
     // Locate "memory" export, get base address and size and set memory protection to PROT_NONE
@@ -101,7 +103,7 @@ mod tests {
     }
 
     #[test]
-    fn test_custom_signal_handler_single_instance() -> anyhow::Result<()> {
+    fn test_custom_signal_handler_single_instance() -> Result<()> {
         let engine = Engine::new(&Config::default());
         let store = Store::new(&engine);
         let data = wat::parse_str(WAT1)?;
@@ -119,16 +121,16 @@ mod tests {
         // these invoke wasmtime_call_trampoline from action.rs
         {
             println!("calling read...");
-            let result = invoke_export(&instance, &data, "read").expect("read succeeded");
-            assert_eq!("123", result[0].clone().to_string());
+            let result = invoke_export(&instance, "read").expect("read succeeded");
+            assert_eq!(123, result[0].unwrap_i32());
         }
 
         {
             println!("calling read_out_of_bounds...");
-            let trap = invoke_export(&instance, &data, "read_out_of_bounds").unwrap_err();
-            assert!(trap.root_cause().to_string().starts_with(
-                "trapped: Trap { message: \"call error: wasm trap: out of bounds memory access"
-            ));
+            let trap = invoke_export(&instance, "read_out_of_bounds").unwrap_err();
+            assert!(trap
+                .message()
+                .starts_with("call error: wasm trap: out of bounds memory access"));
         }
 
         // these invoke wasmtime_call_trampoline from callable.rs
@@ -155,7 +157,7 @@ mod tests {
     }
 
     #[test]
-    fn test_custom_signal_handler_multiple_instances() -> anyhow::Result<()> {
+    fn test_custom_signal_handler_multiple_instances() -> Result<()> {
         let engine = Engine::new(&Config::default());
         let store = Store::new(&engine);
         let data = wat::parse_str(WAT1)?;
@@ -225,8 +227,8 @@ mod tests {
             assert!(!exports1.is_empty());
 
             println!("calling instance1.read...");
-            let result = invoke_export(&instance1, &data, "read").expect("read succeeded");
-            assert_eq!("123", result[0].clone().to_string());
+            let result = invoke_export(&instance1, "read").expect("read succeeded");
+            assert_eq!(123, result[0].unwrap_i32());
             assert_eq!(
                 instance1_handler_triggered.load(Ordering::SeqCst),
                 true,
@@ -240,8 +242,8 @@ mod tests {
             assert!(!exports2.is_empty());
 
             println!("calling instance2.read...");
-            let result = invoke_export(&instance2, &data, "read").expect("read succeeded");
-            assert_eq!("123", result[0].clone().to_string());
+            let result = invoke_export(&instance2, "read").expect("read succeeded");
+            assert_eq!(123, result[0].unwrap_i32());
             assert_eq!(
                 instance2_handler_triggered.load(Ordering::SeqCst),
                 true,
@@ -252,7 +254,7 @@ mod tests {
     }
 
     #[test]
-    fn test_custom_signal_handler_instance_calling_another_instance() -> anyhow::Result<()> {
+    fn test_custom_signal_handler_instance_calling_another_instance() -> Result<()> {
         let engine = Engine::new(&Config::default());
         let store = Store::new(&engine);
 
@@ -281,8 +283,8 @@ mod tests {
         });
 
         println!("calling instance2.run");
-        let result = invoke_export(&instance2, &data2, "run")?;
-        assert_eq!("123", result[0].clone().to_string());
+        let result = invoke_export(&instance2, "run")?;
+        assert_eq!(123, result[0].unwrap_i32());
         Ok(())
     }
 }
