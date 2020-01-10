@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::str;
 use wasmtime::*;
+use wast::{AssertExpression, Float32, Float64, NanPattern, V128Pattern};
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
 fn runtime_value(v: &wast::Expression<'_>) -> Result<Val> {
@@ -227,9 +228,8 @@ impl WastContext {
                     results,
                 } => match self.perform_execute(exec).with_context(|| context(span))? {
                     Outcome::Ok(values) => {
-                        for (v, e) in values.iter().zip(results.iter().map(runtime_value)) {
-                            let e = e?;
-                            if values_equal(v, &e)? {
+                        for (v, e) in values.iter().zip(results) {
+                            if matches(v, &e)? {
                                 continue;
                             }
                             bail!("{}\nexpected {:?}, got {:?}", context(span), e, v)
@@ -287,150 +287,6 @@ impl WastContext {
                         )
                     }
                 },
-                AssertReturnCanonicalNan { span, invoke } => {
-                    match self.perform_invoke(invoke).with_context(|| context(span))? {
-                        Outcome::Ok(values) => {
-                            for v in values.iter() {
-                                match v {
-                                    Val::F32(x) => {
-                                        if !is_canonical_f32_nan(*x) {
-                                            bail!("{}\nexpected canonical NaN", context(span))
-                                        }
-                                    }
-                                    Val::F64(x) => {
-                                        if !is_canonical_f64_nan(*x) {
-                                            bail!("{}\nexpected canonical NaN", context(span))
-                                        }
-                                    }
-                                    other => bail!("expected float, got {:?}", other),
-                                };
-                            }
-                        }
-                        Outcome::Trap(t) => {
-                            bail!("{}\nunexpected trap: {}", context(span), t.message())
-                        }
-                    }
-                }
-                AssertReturnCanonicalNanF32x4 { span, invoke } => {
-                    match self.perform_invoke(invoke).with_context(|| context(span))? {
-                        Outcome::Ok(values) => {
-                            for v in values.iter() {
-                                let val = match v {
-                                    Val::V128(x) => x,
-                                    other => bail!("expected v128, got {:?}", other),
-                                };
-                                for l in 0..4 {
-                                    if !is_canonical_f32_nan(extract_lane_as_u32(val, l)?) {
-                                        bail!(
-                                            "{}\nexpected f32x4 canonical NaN in lane {}",
-                                            context(span),
-                                            l
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        Outcome::Trap(t) => {
-                            bail!("{}\nunexpected trap: {}", context(span), t.message())
-                        }
-                    }
-                }
-                AssertReturnCanonicalNanF64x2 { span, invoke } => {
-                    match self.perform_invoke(invoke).with_context(|| context(span))? {
-                        Outcome::Ok(values) => {
-                            for v in values.iter() {
-                                let val = match v {
-                                    Val::V128(x) => x,
-                                    other => bail!("expected v128, got {:?}", other),
-                                };
-                                for l in 0..2 {
-                                    if !is_canonical_f64_nan(extract_lane_as_u64(val, l)?) {
-                                        bail!(
-                                            "{}\nexpected f64x2 canonical NaN in lane {}",
-                                            context(span),
-                                            l
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        Outcome::Trap(t) => {
-                            bail!("{}\nunexpected trap: {}", context(span), t.message())
-                        }
-                    }
-                }
-                AssertReturnArithmeticNan { span, invoke } => {
-                    match self.perform_invoke(invoke).with_context(|| context(span))? {
-                        Outcome::Ok(values) => {
-                            for v in values.iter() {
-                                match v {
-                                    Val::F32(x) => {
-                                        if !is_arithmetic_f32_nan(*x) {
-                                            bail!("{}\nexpected arithmetic NaN", context(span))
-                                        }
-                                    }
-                                    Val::F64(x) => {
-                                        if !is_arithmetic_f64_nan(*x) {
-                                            bail!("{}\nexpected arithmetic NaN", context(span))
-                                        }
-                                    }
-                                    other => bail!("expected float, got {:?}", other),
-                                };
-                            }
-                        }
-                        Outcome::Trap(t) => {
-                            bail!("{}\nunexpected trap: {}", context(span), t.message())
-                        }
-                    }
-                }
-                AssertReturnArithmeticNanF32x4 { span, invoke } => {
-                    match self.perform_invoke(invoke).with_context(|| context(span))? {
-                        Outcome::Ok(values) => {
-                            for v in values.iter() {
-                                let val = match v {
-                                    Val::V128(x) => x,
-                                    other => bail!("expected v128, got {:?}", other),
-                                };
-                                for l in 0..4 {
-                                    if !is_arithmetic_f32_nan(extract_lane_as_u32(val, l)?) {
-                                        bail!(
-                                            "{}\nexpected f32x4 arithmetic NaN in lane {}",
-                                            context(span),
-                                            l
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        Outcome::Trap(t) => {
-                            bail!("{}\nunexpected trap: {}", context(span), t.message())
-                        }
-                    }
-                }
-                AssertReturnArithmeticNanF64x2 { span, invoke } => {
-                    match self.perform_invoke(invoke).with_context(|| context(span))? {
-                        Outcome::Ok(values) => {
-                            for v in values.iter() {
-                                let val = match v {
-                                    Val::V128(x) => x,
-                                    other => bail!("expected v128, got {:?}", other),
-                                };
-                                for l in 0..2 {
-                                    if !is_arithmetic_f64_nan(extract_lane_as_u64(val, l)?) {
-                                        bail!(
-                                            "{}\nexpected f64x2 arithmetic NaN in lane {}",
-                                            context(span),
-                                            l
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        Outcome::Trap(t) => {
-                            bail!("{}\nunexpected trap: {}", context(span), t.message())
-                        }
-                    }
-                }
                 AssertInvalid {
                     span,
                     mut module,
@@ -542,15 +398,78 @@ fn is_arithmetic_f64_nan(bits: u64) -> bool {
     (bits & AF64_NAN) == AF64_NAN
 }
 
-fn values_equal(v1: &Val, v2: &Val) -> Result<bool> {
-    Ok(match (v1, v2) {
-        (Val::I32(a), Val::I32(b)) => a == b,
-        (Val::I64(a), Val::I64(b)) => a == b,
-        // Note that these float comparisons are comparing bits, not float
-        // values, so we're testing for bit-for-bit equivalence
-        (Val::F32(a), Val::F32(b)) => a == b,
-        (Val::F64(a), Val::F64(b)) => a == b,
-        (Val::V128(a), Val::V128(b)) => a == b,
-        _ => bail!("don't know how to compare {:?} and {:?} yet", v1, v2),
+fn matches(actual: &Val, expected: &AssertExpression) -> Result<bool> {
+    Ok(match (actual, expected) {
+        (Val::I32(a), AssertExpression::I32(b)) => a == b,
+        (Val::I64(a), AssertExpression::I64(b)) => a == b,
+        (Val::F32(a), AssertExpression::F32(b)) => f32_matches(*a, b),
+        (Val::F64(a), AssertExpression::F64(b)) => f64_matches(*a, b),
+        (Val::V128(a), AssertExpression::V128(b)) => v128_matches(*a, b),
+        _ => bail!(
+            "don't know how to compare {:?} and {:?} yet",
+            actual,
+            expected
+        ),
     })
+}
+
+fn f32_matches(actual: u32, expected: &NanPattern<Float32>) -> bool {
+    match expected {
+        NanPattern::CanonicalNan => is_canonical_f32_nan(actual),
+        NanPattern::ArithmeticNan => is_arithmetic_f32_nan(actual),
+        NanPattern::Value(expected_value) => actual == expected_value.bits,
+    }
+}
+
+fn f64_matches(actual: u64, expected: &NanPattern<Float64>) -> bool {
+    match expected {
+        NanPattern::CanonicalNan => is_canonical_f64_nan(actual),
+        NanPattern::ArithmeticNan => is_arithmetic_f64_nan(actual),
+        NanPattern::Value(expected_value) => actual == expected_value.bits,
+    }
+}
+
+fn to_le_bytes(v: &V128Pattern) -> Vec<u8> {
+    match v {
+        V128Pattern::I8x16(w) => w.iter().map(|&i| i as u8).collect(),
+        V128Pattern::I16x8(w) => w.iter().flat_map(|i| i.to_le_bytes().to_vec()).collect(),
+        V128Pattern::I32x4(w) => w.iter().flat_map(|i| i.to_le_bytes().to_vec()).collect(),
+        V128Pattern::I64x2(w) => w.iter().flat_map(|i| i.to_le_bytes().to_vec()).collect(),
+        _ => panic!("Unable to convert a float pattern to bytes (may contain NaN patterns)"),
+    }
+}
+
+fn v128_matches(actual: u128, expected: &V128Pattern) -> bool {
+    match expected {
+        V128Pattern::I8x16(_)
+        | V128Pattern::I16x8(_)
+        | V128Pattern::I32x4(_)
+        | V128Pattern::I64x2(_) => &actual.to_le_bytes() == to_le_bytes(expected).as_slice(),
+        V128Pattern::F32x4(expected_lanes) => {
+            let actual_lanes = vec![
+                extract_lane_as_u32(&actual, 0).expect("unable to extract lane"),
+                extract_lane_as_u32(&actual, 1).expect("unable to extract lane"),
+                extract_lane_as_u32(&actual, 2).expect("unable to extract lane"),
+                extract_lane_as_u32(&actual, 3).expect("unable to extract lane"),
+            ];
+            for (&a, e) in actual_lanes.iter().zip(expected_lanes.iter()) {
+                if !f32_matches(a, e) {
+                    return false;
+                }
+            }
+            true
+        }
+        V128Pattern::F64x2(expected_lanes) => {
+            let actual_lanes = vec![
+                extract_lane_as_u64(&actual, 0).expect("unable to extract lane"),
+                extract_lane_as_u64(&actual, 1).expect("unable to extract lane"),
+            ];
+            for (&a, e) in actual_lanes.iter().zip(expected_lanes.iter()) {
+                if !f64_matches(a, e) {
+                    return false;
+                }
+            }
+            true
+        }
+    }
 }
