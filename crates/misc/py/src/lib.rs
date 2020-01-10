@@ -1,5 +1,3 @@
-#![allow(improper_ctypes)]
-
 use crate::function::{wrap_into_pyfunction, Function};
 use crate::instance::Instance;
 use crate::memory::Memory;

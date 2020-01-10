@@ -1,5 +1,3 @@
-#![allow(improper_ctypes)]
-
 use anyhow::Result;
 use std::collections::HashMap;
 use std::rc::Rc;
