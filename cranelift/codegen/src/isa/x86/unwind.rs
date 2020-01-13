@@ -1,6 +1,7 @@
 //! Unwind information for x64 Windows.
 
 use super::registers::RU;
+use crate::binemit::FrameUnwindSink;
 use crate::ir::{Function, InstructionData, Opcode};
 use crate::isa::{CallConv, RegUnit, TargetIsa};
 use alloc::vec::Vec;
@@ -11,16 +12,20 @@ const SMALL_ALLOC_MAX_SIZE: u32 = 128;
 /// Maximum (inclusive) size of a "large" stack allocation that can represented in 16-bits
 const LARGE_ALLOC_16BIT_MAX_SIZE: u32 = 524280;
 
-fn write_u16<T: ByteOrder>(mem: &mut Vec<u8>, v: u16) {
-    let mut buf = [0; 2];
-    T::write_u16(&mut buf, v);
-    mem.extend(buf.iter());
+fn write_u8(sink: &mut dyn FrameUnwindSink, v: u8) {
+    sink.bytes(&[v]);
 }
 
-fn write_u32<T: ByteOrder>(mem: &mut Vec<u8>, v: u32) {
+fn write_u16<T: ByteOrder>(sink: &mut dyn FrameUnwindSink, v: u16) {
+    let mut buf = [0; 2];
+    T::write_u16(&mut buf, v);
+    sink.bytes(&buf);
+}
+
+fn write_u32<T: ByteOrder>(sink: &mut dyn FrameUnwindSink, v: u32) {
     let mut buf = [0; 4];
     T::write_u32(&mut buf, v);
-    mem.extend(buf.iter());
+    sink.bytes(&buf);
 }
 
 /// The supported unwind codes for the x64 Windows ABI.
@@ -36,7 +41,7 @@ enum UnwindCode {
 }
 
 impl UnwindCode {
-    fn emit(&self, mem: &mut Vec<u8>) {
+    fn emit(&self, sink: &mut dyn FrameUnwindSink) {
         enum UnwindOperation {
             PushNonvolatileRegister,
             LargeStackAlloc,
@@ -46,30 +51,37 @@ impl UnwindCode {
 
         match self {
             Self::PushRegister { offset, reg } => {
-                mem.push(*offset);
-                mem.push(((*reg as u8) << 4) | (UnwindOperation::PushNonvolatileRegister as u8));
+                write_u8(sink, *offset);
+                write_u8(
+                    sink,
+                    ((*reg as u8) << 4) | (UnwindOperation::PushNonvolatileRegister as u8),
+                );
             }
             Self::StackAlloc { offset, size } => {
                 // Stack allocations on Windows must be a multiple of 8 and be at least 1 slot
                 assert!(*size >= 8);
                 assert!((*size % 8) == 0);
 
-                mem.push(*offset);
+                write_u8(sink, *offset);
                 if *size <= SMALL_ALLOC_MAX_SIZE {
-                    mem.push(
+                    write_u8(
+                        sink,
                         ((((*size - 8) / 8) as u8) << 4) | UnwindOperation::SmallStackAlloc as u8,
                     );
                 } else if *size <= LARGE_ALLOC_16BIT_MAX_SIZE {
-                    mem.push(UnwindOperation::LargeStackAlloc as u8);
-                    write_u16::<LittleEndian>(mem, (*size / 8) as u16);
+                    write_u8(sink, UnwindOperation::LargeStackAlloc as u8);
+                    write_u16::<LittleEndian>(sink, (*size / 8) as u16);
                 } else {
-                    mem.push((1 << 4) | (UnwindOperation::LargeStackAlloc as u8));
-                    write_u32::<LittleEndian>(mem, *size);
+                    write_u8(sink, (1 << 4) | (UnwindOperation::LargeStackAlloc as u8));
+                    write_u32::<LittleEndian>(sink, *size);
                 }
             }
             Self::SetFramePointer { offset, sp_offset } => {
-                mem.push(*offset);
-                mem.push((*sp_offset << 4) | (UnwindOperation::SetFramePointer as u8));
+                write_u8(sink, *offset);
+                write_u8(
+                    sink,
+                    (*sp_offset << 4) | (UnwindOperation::SetFramePointer as u8),
+                );
             }
         };
     }
@@ -231,48 +243,49 @@ impl UnwindInfo {
             .fold(0, |nodes, c| nodes + c.node_count())
     }
 
-    pub fn emit(&self, mem: &mut Vec<u8>) {
+    pub fn emit(&self, sink: &mut dyn FrameUnwindSink) {
         const UNWIND_INFO_VERSION: u8 = 1;
 
         let size = self.size();
-        let offset = mem.len();
+        let offset = sink.len();
 
         // Ensure the memory is 32-bit aligned
         assert_eq!(offset % 4, 0);
 
-        mem.reserve(offset + size);
+        sink.reserve(offset + size);
 
         let node_count = self.node_count();
         assert!(node_count <= 256);
 
-        mem.push((self.flags << 3) | UNWIND_INFO_VERSION);
-        mem.push(self.prologue_size);
-        mem.push(node_count as u8);
+        write_u8(sink, (self.flags << 3) | UNWIND_INFO_VERSION);
+        write_u8(sink, self.prologue_size);
+        write_u8(sink, node_count as u8);
 
         if let Some(reg) = self.frame_register {
-            mem.push((self.frame_register_offset << 4) | reg as u8);
+            write_u8(sink, (self.frame_register_offset << 4) | reg as u8);
         } else {
-            mem.push(0);
+            write_u8(sink, 0);
         }
 
         // Unwind codes are written in reverse order (prologue offset descending)
         for code in self.unwind_codes.iter().rev() {
-            code.emit(mem);
+            code.emit(sink);
         }
 
         // To keep a 32-bit alignment, emit 2 bytes of padding if there's an odd number of 16-bit nodes
         if (node_count & 1) == 1 {
-            write_u16::<LittleEndian>(mem, 0);
+            write_u16::<LittleEndian>(sink, 0);
         }
 
         // Ensure the correct number of bytes was emitted
-        assert_eq!(mem.len() - offset, size);
+        assert_eq!(sink.len() - offset, size);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::binemit::{FrameUnwindOffset, Reloc};
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::{ExternalName, InstBuilder, Signature, StackSlotData, StackSlotKind};
     use crate::isa::{lookup, CallConv};
@@ -280,6 +293,18 @@ mod tests {
     use crate::Context;
     use std::str::FromStr;
     use target_lexicon::triple;
+
+    struct SimpleUnwindSink(pub Vec<u8>);
+    impl FrameUnwindSink for SimpleUnwindSink {
+        fn len(&self) -> FrameUnwindOffset {
+            self.0.len()
+        }
+        fn bytes(&mut self, b: &[u8]) {
+            self.0.extend_from_slice(b);
+        }
+        fn reloc(&mut self, _: Reloc, _: FrameUnwindOffset) {}
+        fn set_entry_offset(&mut self, _: FrameUnwindOffset) {}
+    }
 
     #[test]
     fn test_wrong_calling_convention() {
@@ -336,11 +361,11 @@ mod tests {
 
         assert_eq!(unwind.size(), 12);
 
-        let mut mem = Vec::new();
-        unwind.emit(&mut mem);
+        let mut sink = SimpleUnwindSink(Vec::new());
+        unwind.emit(&mut sink);
 
         assert_eq!(
-            mem,
+            sink.0,
             [
                 0x01, // Version and flags (version 1, no flags)
                 0x09, // Prologue size
@@ -400,11 +425,11 @@ mod tests {
 
         assert_eq!(unwind.size(), 12);
 
-        let mut mem = Vec::new();
-        unwind.emit(&mut mem);
+        let mut sink = SimpleUnwindSink(Vec::new());
+        unwind.emit(&mut sink);
 
         assert_eq!(
-            mem,
+            sink.0,
             [
                 0x01, // Version and flags (version 1, no flags)
                 0x1B, // Prologue size
@@ -464,11 +489,11 @@ mod tests {
 
         assert_eq!(unwind.size(), 16);
 
-        let mut mem = Vec::new();
-        unwind.emit(&mut mem);
+        let mut sink = SimpleUnwindSink(Vec::new());
+        unwind.emit(&mut sink);
 
         assert_eq!(
-            mem,
+            sink.0,
             [
                 0x01, // Version and flags (version 1, no flags)
                 0x1B, // Prologue size

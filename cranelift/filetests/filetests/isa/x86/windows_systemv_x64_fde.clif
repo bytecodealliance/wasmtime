@@ -1,0 +1,54 @@
+test fde
+set opt_level=speed_and_size
+set is_pic
+target x86_64 haswell
+
+; check that there is no libunwind information for a windows_fastcall function
+function %not_fastcall() windows_fastcall {
+ebb0:
+    return
+}
+; sameln: No unwind information.
+
+; check the libunwind information with a function with no args
+function %no_args() system_v {
+ebb0:
+    return
+}
+; sameln: 0x00000000: CIE
+; nextln:         length: 0x00000014
+; nextln:        version: 0x01
+; nextln:     code_align: 1
+; nextln:     data_align: -8
+; nextln:    ra_register: 0x10
+; nextln:                 DW_CFA_def_cfa (r7, 8)
+; nextln:                 DW_CFA_offset (r16, 1)
+; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_nop
+; nextln:   Instructions: Init State:
+; nextln: 
+; nextln: 
+; nextln: 0x00000018: FDE
+; nextln:         length: 0x00000024
+; nextln:    CIE_pointer: 0x00000000
+; nextln:     start_addr: 0x0000000000000000
+; nextln:     range_size: 0x0000000000000006 (end_addr = 0x0000000000000006)
+; nextln:   Instructions:
+; nextln:                 DW_CFA_advance_loc (1)
+; nextln:                 DW_CFA_def_cfa_offset (16)
+; nextln:                 DW_CFA_offset (r6, 2)
+; nextln:                 DW_CFA_advance_loc (3)
+; nextln:                 DW_CFA_def_cfa_register (r6)
+; nextln:                 DW_CFA_advance_loc (1)
+; nextln:                 DW_CFA_def_cfa (r7, 8)
+; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_nop
+; nextln: 
+; nextln: Entry: 24
+; nextln: Relocs: [(Abs8, 32)]

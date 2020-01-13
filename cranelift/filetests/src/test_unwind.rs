@@ -6,6 +6,7 @@
 use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
 use byteorder::{ByteOrder, LittleEndian};
 use cranelift_codegen;
+use cranelift_codegen::binemit::{FrameUnwindKind, FrameUnwindOffset, FrameUnwindSink, Reloc};
 use cranelift_codegen::ir;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
@@ -41,14 +42,30 @@ impl SubTest for TestUnwind {
 
         comp_ctx.compile(isa).expect("failed to compile function");
 
-        let mut mem = Vec::new();
-        comp_ctx.emit_unwind_info(isa, &mut mem);
+        struct Sink(Vec<u8>);
+        impl FrameUnwindSink for Sink {
+            fn len(&self) -> FrameUnwindOffset {
+                self.0.len()
+            }
+            fn bytes(&mut self, b: &[u8]) {
+                self.0.extend_from_slice(b);
+            }
+            fn reloc(&mut self, _: Reloc, _: FrameUnwindOffset) {
+                unimplemented!();
+            }
+            fn set_entry_offset(&mut self, _: FrameUnwindOffset) {
+                unimplemented!();
+            }
+        }
+
+        let mut sink = Sink(Vec::new());
+        comp_ctx.emit_unwind_info(isa, FrameUnwindKind::Fastcall, &mut sink);
 
         let mut text = String::new();
-        if mem.is_empty() {
+        if sink.0.is_empty() {
             writeln!(text, "No unwind information.").unwrap();
         } else {
-            print_unwind_info(&mut text, &mem);
+            print_unwind_info(&mut text, &sink.0);
         }
 
         run_filecheck(&text, context)

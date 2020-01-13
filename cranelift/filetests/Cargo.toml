@@ -16,6 +16,7 @@ cranelift-reader = { path = "../cranelift-reader", version = "0.54.0" }
 cranelift-preopt = { path = "../cranelift-preopt", version = "0.54.0" }
 file-per-thread-logger = "0.1.2"
 filecheck = "0.4.0"
+gimli = { version = "0.19.0", default-features = false, features = ["read"] }
 log = "0.4.6"
 memmap = "0.7.0"
 num_cpus = "1.8.0"

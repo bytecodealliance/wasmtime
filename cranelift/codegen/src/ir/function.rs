@@ -253,6 +253,11 @@ impl Function {
     /// Starts collection of debug information.
     pub fn collect_debug_info(&mut self) {
         self.dfg.collect_debug_info();
+        self.collect_frame_layout_info();
+    }
+
+    /// Starts collection of frame layout information.
+    pub fn collect_frame_layout_info(&mut self) {
         self.frame_layout = Some(FrameLayout::new());
     }
 
