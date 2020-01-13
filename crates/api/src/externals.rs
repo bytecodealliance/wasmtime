@@ -452,9 +452,11 @@ impl Memory {
     }
 
     /// Returns a mutable slice the current memory.
+    ///
     /// # Safety
-    /// Marked unsafe due to posibility that wasmtime can resize internal memory
-    /// from other threads.
+    ///
+    /// Marked unsafe due to posibility of getting aliased mutable references. It is up to caller
+    /// to ensure that the returned mutable reference is unique.
     pub unsafe fn data(&self) -> &mut [u8] {
         let definition = &*self.wasmtime_memory_definition();
         slice::from_raw_parts_mut(definition.base, definition.current_length)
