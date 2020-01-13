@@ -67,8 +67,8 @@ fn main() -> Result<()> {
     // Instantiate.
     println!("Instantiating module...");
     let imports = vec![callback_func.into()];
-    let instance = Instance::new(&store, &module, imports.as_slice())
-        .context("Error instantiating module!")?;
+    let instance =
+        Instance::new(&module, imports.as_slice()).context("Error instantiating module!")?;
 
     // Extract exports.
     println!("Extracting export...");

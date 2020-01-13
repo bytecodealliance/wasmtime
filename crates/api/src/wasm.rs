@@ -681,12 +681,11 @@ pub unsafe extern "C" fn wasm_instance_delete(instance: *mut wasm_instance_t) {
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_instance_new(
-    store: *mut wasm_store_t,
+    _store: *mut wasm_store_t,
     module: *const wasm_module_t,
     imports: *const *const wasm_extern_t,
     result: *mut *mut wasm_trap_t,
 ) -> *mut wasm_instance_t {
-    let store = &(*store).store.borrow();
     let mut externs: Vec<Extern> = Vec::with_capacity((*module).imports.len());
     for i in 0..(*module).imports.len() {
         let import = *imports.add(i);
@@ -698,7 +697,7 @@ pub unsafe extern "C" fn wasm_instance_new(
         });
     }
     let module = &(*module).module.borrow();
-    match Instance::new(store, module, &externs) {
+    match Instance::new(module, &externs) {
         Ok(instance) => {
             let instance = Box::new(wasm_instance_t {
                 instance: HostRef::new(instance),

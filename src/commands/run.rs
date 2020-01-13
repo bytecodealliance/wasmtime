@@ -259,7 +259,7 @@ impl RunCommand {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let instance = Instance::new(store, &module, &imports)
+        let instance = Instance::new(&module, &imports)
             .context(format!("failed to instantiate {:?}", path))?;
 
         Ok((instance, module, data))

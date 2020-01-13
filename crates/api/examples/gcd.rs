@@ -50,7 +50,7 @@ fn main() -> anyhow::Result<()> {
         .0;
 
     // Instantiate the module.
-    let instance = Instance::new(&store, &module, &[])?;
+    let instance = Instance::new(&module, &[])?;
 
     // Invoke `gcd` export
     let gcd = instance.exports()[gcd_index].func().expect("gcd");
