@@ -681,7 +681,7 @@ pub unsafe extern "C" fn wasm_instance_delete(instance: *mut wasm_instance_t) {
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_instance_new(
-    _store: *mut wasm_store_t,
+    store: *mut wasm_store_t,
     module: *const wasm_module_t,
     imports: *const *const wasm_extern_t,
     result: *mut *mut wasm_trap_t,
@@ -696,7 +696,20 @@ pub unsafe extern "C" fn wasm_instance_new(
             ExternHost::Memory(e) => Extern::Memory(e.borrow().clone()),
         });
     }
+    let store = &(*store).store.borrow();
     let module = &(*module).module.borrow();
+    // FIXME(WebAssembly/wasm-c-api#126) what else can we do with the `store`
+    // argument?
+    if !Store::ptr_eq(&store, module.store()) {
+        if !result.is_null() {
+            let trap = Trap::new("wasm_store_t must match store in wasm_module_t");
+            let trap = Box::new(wasm_trap_t {
+                trap: HostRef::new(trap),
+            });
+            (*result) = Box::into_raw(trap);
+        }
+        return ptr::null_mut()
+    }
     match Instance::new(module, &externs) {
         Ok(instance) => {
             let instance = Box::new(wasm_instance_t {
