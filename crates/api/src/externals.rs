@@ -455,7 +455,7 @@ impl Memory {
     ///
     /// # Safety
     ///
-    /// Marked unsafe due to posibility of getting aliased mutable references. It is up to caller
+    /// Marked unsafe due to possibility of getting aliased mutable references. It is up to the caller
     /// to ensure that the returned mutable reference is unique.
     pub unsafe fn data(&self) -> &mut [u8] {
         let definition = &*self.wasmtime_memory_definition();
