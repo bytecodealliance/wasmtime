@@ -48,13 +48,9 @@ fn main() -> Result<()> {
     let engine = Engine::new(Config::new().wasm_multi_value(true));
     let store = Store::new(&engine);
 
-    // Load binary.
-    println!("Loading binary...");
-    let binary = wat::parse_str(WAT)?;
-
     // Compile.
     println!("Compiling module...");
-    let module = Module::new(&store, &binary).context("Error compiling module!")?;
+    let module = Module::new(&store, WAT).context("Error compiling module!")?;
 
     // Create external print functions.
     println!("Creating callback...");
