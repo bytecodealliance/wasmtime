@@ -708,7 +708,7 @@ pub unsafe extern "C" fn wasm_instance_new(
             });
             (*result) = Box::into_raw(trap);
         }
-        return ptr::null_mut()
+        return ptr::null_mut();
     }
     match Instance::new(module, &externs) {
         Ok(instance) => {
