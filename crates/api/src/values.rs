@@ -1,6 +1,7 @@
 use crate::externals::Func;
 use crate::r#ref::AnyRef;
 use crate::runtime::Store;
+use anyhow::{bail, Result};
 use crate::types::ValType;
 use std::ptr;
 use wasmtime_environ::ir;
@@ -188,8 +189,8 @@ impl From<RuntimeValue> for Val {
 pub(crate) fn into_checked_anyfunc(
     val: Val,
     store: &Store,
-) -> wasmtime_runtime::VMCallerCheckedAnyfunc {
-    match val {
+) -> Result<wasmtime_runtime::VMCallerCheckedAnyfunc> {
+    Ok(match val {
         Val::AnyRef(AnyRef::Null) => wasmtime_runtime::VMCallerCheckedAnyfunc {
             func_ptr: ptr::null(),
             type_index: wasmtime_runtime::VMSharedSignatureIndex::default(),
@@ -211,8 +212,8 @@ pub(crate) fn into_checked_anyfunc(
                 vmctx,
             }
         }
-        _ => panic!("val is not funcref"),
-    }
+        _ => bail!("val is not funcref"),
+    })
 }
 
 pub(crate) fn from_checked_anyfunc(

@@ -73,13 +73,13 @@ pub fn dummy_value(val_ty: &ValType) -> Result<Val, Trap> {
 /// Construct a dummy global for the given global type.
 pub fn dummy_global(store: &Store, ty: GlobalType) -> Result<Global, Trap> {
     let val = dummy_value(ty.content())?;
-    Ok(Global::new(store, ty, val))
+    Ok(Global::new(store, ty, val).unwrap())
 }
 
 /// Construct a dummy table for the given table type.
 pub fn dummy_table(store: &Store, ty: TableType) -> Result<Table, Trap> {
     let init_val = dummy_value(&ty.element())?;
-    Ok(Table::new(store, ty, init_val))
+    Ok(Table::new(store, ty, init_val).unwrap())
 }
 
 /// Construct a dummy memory for the given memory type.

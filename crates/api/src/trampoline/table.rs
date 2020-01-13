@@ -13,10 +13,7 @@ pub fn create_handle_with_table(table: &TableType) -> Result<InstanceHandle> {
         maximum: table.limits().max(),
         ty: match table.element() {
             ValType::FuncRef => wasm::TableElementType::Func,
-            _ => match table.element().get_wasmtime_type() {
-                Some(t) => wasm::TableElementType::Val(t),
-                None => bail!("cannot support {:?} as a table element", table.element()),
-            },
+            _ => bail!("cannot support {:?} as a table element", table.element()),
         },
     };
     let tunable = Default::default();

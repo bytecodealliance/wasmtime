@@ -5,7 +5,7 @@ use wasmtime_environ::{ir, wasm};
 // Type attributes
 
 /// Indicator of whether a global is mutable or not
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Mutability {
     /// The global is constant and its value does not change
     Const,
