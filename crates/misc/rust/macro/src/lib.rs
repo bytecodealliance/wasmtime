@@ -75,7 +75,7 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
                 }
             }
             let instance =
-                Instance::new(&store, &module, &imports).map_err(|t| format_err!("instantiation trap: {:?}", t))?;
+                Instance::new(&module, &imports).map_err(|t| format_err!("instantiation trap: {:?}", t))?;
 
             Ok(#name { instance, data })
         }
