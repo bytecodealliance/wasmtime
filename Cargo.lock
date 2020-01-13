@@ -2188,6 +2188,7 @@ dependencies = [
 name = "wasmtime-runtime"
 version = "0.9.0"
 dependencies = [
+ "backtrace",
  "cc",
  "cfg-if",
  "indexmap",

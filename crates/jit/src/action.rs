@@ -6,7 +6,9 @@ use std::cmp::max;
 use std::{fmt, mem, ptr, slice};
 use thiserror::Error;
 use wasmtime_environ::ir;
-use wasmtime_runtime::{wasmtime_call_trampoline, Export, InstanceHandle, VMInvokeArgument};
+use wasmtime_runtime::{
+    wasmtime_call_trampoline, Export, InstanceHandle, TrapMessageAndStack, VMInvokeArgument,
+};
 
 /// A runtime value.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -191,7 +193,7 @@ pub fn invoke(
     compiler.publish_compiled_code();
 
     // Call the trampoline.
-    if let Err(message) = unsafe {
+    if let Err(TrapMessageAndStack(message, _)) = unsafe {
         instance.with_signals_on(|| {
             wasmtime_call_trampoline(
                 callee_vmctx,

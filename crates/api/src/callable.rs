@@ -147,7 +147,7 @@ impl WrappedCallable for WasmtimeFn {
             .map_err(|e| Trap::new(format!("trampoline error: {:?}", e)))?;
 
         // Call the trampoline.
-        if let Err(message) = unsafe {
+        if let Err(error) = unsafe {
             self.instance.with_signals_on(|| {
                 wasmtime_runtime::wasmtime_call_trampoline(
                     vmctx,
@@ -156,6 +156,8 @@ impl WrappedCallable for WasmtimeFn {
                 )
             })
         } {
+            let message = error.0;
+
             let trap =
                 take_api_trap().unwrap_or_else(|| Trap::new(format!("call error: {}", message)));
             return Err(trap);
