@@ -1,7 +1,7 @@
 ; binary emission of 32-bit code.
 test binemit
 set opt_level=speed_and_size
-set allones_funcaddrs
+set emit_all_ones_funcaddrs
 target i686 haswell
 
 ; The binary encodings can be verified with the command:
@@ -9,7 +9,7 @@ target i686 haswell
 ;   sed -ne 's/^ *; asm: *//p' filetests/isa/x86/allones_funcaddrs32.clif | llvm-mc -show-encoding -triple=i386
 ;
 
-; Tests from binary32.clif affected by allones_funcaddrs.
+; Tests from binary32.clif affected by emit_all_ones_funcaddrs.
 function %I32() {
     sig0 = ()
     fn0 = %foo()

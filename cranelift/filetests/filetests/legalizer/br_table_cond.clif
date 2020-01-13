@@ -1,6 +1,6 @@
 test legalizer
-set probestack_enabled=false
-set jump_tables_enabled=false
+set enable_probestack=false
+set enable_jump_tables=false
 target x86_64
 
 ; Test that when jump_tables_enables is false, all jump tables are eliminated.

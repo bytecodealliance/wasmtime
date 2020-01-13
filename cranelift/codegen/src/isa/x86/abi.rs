@@ -453,7 +453,7 @@ pub fn prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> Codege
 
 fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> CodegenResult<()> {
     debug_assert!(
-        !isa.flags().probestack_enabled(),
+        !isa.flags().enable_probestack(),
         "baldrdash does not expect cranelift to emit stack probes"
     );
 
@@ -754,8 +754,7 @@ fn insert_common_prologue(
 
     // Allocate stack frame storage.
     if stack_size > 0 {
-        if isa.flags().probestack_enabled()
-            && stack_size > (1 << isa.flags().probestack_size_log2())
+        if isa.flags().enable_probestack() && stack_size > (1 << isa.flags().probestack_size_log2())
         {
             // Emit a stack probe.
             let rax = RU::rax as RegUnit;

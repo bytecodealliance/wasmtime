@@ -1,6 +1,6 @@
 test compile
 set opt_level=speed_and_size
-set probestack_enabled=false
+set enable_probestack=false
 set enable_simd
 target x86_64
 

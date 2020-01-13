@@ -37,7 +37,7 @@ pub(crate) fn define() -> SettingGroup {
     );
 
     settings.add_bool(
-        "colocated_libcalls",
+        "use_colocated_libcalls",
         r#"
             Use colocated libcalls.
 
@@ -177,7 +177,7 @@ pub(crate) fn define() -> SettingGroup {
     // BaldrMonkey requires that not-yet-relocated function addresses be encoded
     // as all-ones bitpatterns.
     settings.add_bool(
-        "allones_funcaddrs",
+        "emit_all_ones_funcaddrs",
         "Emit not-yet-relocated function addresses as all-ones bit patterns.",
         false,
     );
@@ -185,7 +185,7 @@ pub(crate) fn define() -> SettingGroup {
     // Stack probing options.
 
     settings.add_bool(
-        "probestack_enabled",
+        "enable_probestack",
         r#"
             Enable the use of stack probes, for calling conventions which support this
             functionality.
@@ -218,7 +218,7 @@ pub(crate) fn define() -> SettingGroup {
     // Jump table options.
 
     settings.add_bool(
-        "jump_tables_enabled",
+        "enable_jump_tables",
         "Enable the use of jump tables in generated machine code.",
         true,
     );

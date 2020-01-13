@@ -59,16 +59,16 @@ pub(crate) fn define(shared: &SettingGroup) -> SettingGroup {
     // back in the shared SettingGroup, and use it in x86 instruction predicates.
 
     let is_pic = shared.get_bool("is_pic");
-    let allones_funcaddrs = shared.get_bool("allones_funcaddrs");
+    let emit_all_ones_funcaddrs = shared.get_bool("emit_all_ones_funcaddrs");
     settings.add_predicate("is_pic", predicate!(is_pic));
     settings.add_predicate("not_is_pic", predicate!(!is_pic));
     settings.add_predicate(
         "all_ones_funcaddrs_and_not_is_pic",
-        predicate!(allones_funcaddrs && !is_pic),
+        predicate!(emit_all_ones_funcaddrs && !is_pic),
     );
     settings.add_predicate(
         "not_all_ones_funcaddrs_and_not_is_pic",
-        predicate!(!allones_funcaddrs && !is_pic),
+        predicate!(!emit_all_ones_funcaddrs && !is_pic),
     );
 
     // Presets corresponding to x86 CPUs.

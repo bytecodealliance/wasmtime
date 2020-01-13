@@ -1,5 +1,5 @@
 test compile
-set colocated_libcalls=1
+set use_colocated_libcalls=1
 target x86_64
 
 ; A function with a big stack frame. This should have a stack probe.

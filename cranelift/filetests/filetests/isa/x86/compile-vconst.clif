@@ -1,6 +1,6 @@
 test compile
 set enable_simd=true
-set probestack_enabled=false
+set enable_probestack=false
 target x86_64 haswell
 
 ; use baldrdash calling convention here for simplicity (avoids prologue, epilogue)

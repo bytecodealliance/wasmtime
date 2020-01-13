@@ -1,5 +1,5 @@
 test compile
-set colocated_libcalls=1
+set use_colocated_libcalls=1
 set probestack_func_adjusts_sp=1
 target x86_64
 

@@ -2,8 +2,8 @@ test binemit
 set opt_level=speed_and_size
 set avoid_div_traps
 set baldrdash_prologue_words=3
-set allones_funcaddrs
-set probestack_enabled=false
+set emit_all_ones_funcaddrs
+set enable_probestack=false
 target x86_64 haswell
 
 ; This checks that a branch that is too far away is getting relaxed. In

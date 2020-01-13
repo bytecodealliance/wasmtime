@@ -1,7 +1,7 @@
 ; binary emission of 64-bit code.
 test binemit
 set opt_level=speed_and_size
-set allones_funcaddrs
+set emit_all_ones_funcaddrs
 target x86_64 haswell
 
 ; The binary encodings can be verified with the command:
@@ -9,7 +9,7 @@ target x86_64 haswell
 ;   sed -ne 's/^ *; asm: *//p' filetests/isa/x86/allones_funcaddrs64.clif | llvm-mc -show-encoding -triple=x86_64
 ;
 
-; Tests from binary64.clif affected by allones_funcaddrs.
+; Tests from binary64.clif affected by emit_all_ones_funcaddrs.
 function %I64() {
     sig0 = ()
     fn0 = %foo()

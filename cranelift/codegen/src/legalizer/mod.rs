@@ -191,7 +191,7 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
     }
 
     // Now that we've lowered all br_tables, we don't need the jump tables anymore.
-    if !isa.flags().jump_tables_enabled() {
+    if !isa.flags().enable_jump_tables() {
         pos.func.jump_tables.clear();
     }
 }
@@ -276,7 +276,7 @@ fn expand_br_table(
     cfg: &mut ControlFlowGraph,
     isa: &dyn TargetIsa,
 ) {
-    if isa.flags().jump_tables_enabled() {
+    if isa.flags().enable_jump_tables() {
         expand_br_table_jt(inst, func, cfg, isa);
     } else {
         expand_br_table_conds(inst, func, cfg, isa);

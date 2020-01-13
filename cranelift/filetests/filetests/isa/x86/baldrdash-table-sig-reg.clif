@@ -1,5 +1,5 @@
 test compile
-set probestack_enabled=false
+set enable_probestack=false
 target i686
 
 function u0:0(i32 vmctx) baldrdash_system_v {

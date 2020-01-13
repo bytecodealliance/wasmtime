@@ -1,7 +1,7 @@
 ; Use "test compile" here otherwise the dead blocks won't be eliminated.
 test compile
 
-set probestack_enabled=0
+set enable_probestack=0
 target x86_64 haswell
 
 ; This function contains unreachable blocks which trip up the register
