@@ -61,7 +61,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let instance = Instance::new(&store, &module, &imports).context(format!(
+    let instance = Instance::new(&module, &imports).context(format!(
         "error while instantiating Wasm module '{}'",
         bin_name,
     ))?;

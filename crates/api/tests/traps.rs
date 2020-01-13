@@ -29,7 +29,7 @@ fn test_trap_return() -> Result<(), String> {
     let hello_func = Func::new(&store, hello_type, Rc::new(HelloCallback));
 
     let imports = vec![hello_func.into()];
-    let instance = Instance::new(&store, &module, &imports)
+    let instance = Instance::new(&module, &imports)
         .map_err(|e| format!("failed to instantiate module: {:?}", e))?;
     let run_func = instance.exports()[0]
         .func()

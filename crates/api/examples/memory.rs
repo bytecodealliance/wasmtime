@@ -90,7 +90,7 @@ fn main() -> Result<(), Error> {
 
     // Instantiate.
     println!("Instantiating module...");
-    let instance = Instance::new(&store, &module, &[]).context("> Error instantiating module!")?;
+    let instance = Instance::new(&module, &[]).context("> Error instantiating module!")?;
 
     // Extract export.
     println!("Extracting export...");

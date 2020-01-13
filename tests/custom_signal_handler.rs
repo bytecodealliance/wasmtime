@@ -108,7 +108,7 @@ mod tests {
         let store = Store::new(&engine);
         let data = wat::parse_str(WAT1)?;
         let module = Module::new(&store, &data)?;
-        let instance = Instance::new(&store, &module, &[])?;
+        let instance = Instance::new(&module, &[])?;
 
         let (base, length) = set_up_memory(&instance);
         instance.set_signal_handler(move |signum, siginfo, _| {
@@ -165,7 +165,7 @@ mod tests {
 
         // Set up multiple instances
 
-        let instance1 = Instance::new(&store, &module, &[])?;
+        let instance1 = Instance::new(&module, &[])?;
         let instance1_handler_triggered = Rc::new(AtomicBool::new(false));
 
         {
@@ -192,7 +192,7 @@ mod tests {
             });
         }
 
-        let instance2 = Instance::new(&store, &module, &[]).expect("failed to instantiate module");
+        let instance2 = Instance::new(&module, &[]).expect("failed to instantiate module");
         let instance2_handler_triggered = Rc::new(AtomicBool::new(false));
 
         {
@@ -261,7 +261,7 @@ mod tests {
         // instance1 which defines 'read'
         let data1 = wat::parse_str(WAT1)?;
         let module1 = Module::new(&store, &data1)?;
-        let instance1 = Instance::new(&store, &module1, &[])?;
+        let instance1 = Instance::new(&module1, &[])?;
         let (base1, length1) = set_up_memory(&instance1);
         instance1.set_signal_handler(move |signum, siginfo, _| {
             println!("instance1");
@@ -275,7 +275,7 @@ mod tests {
         // instance2 wich calls 'instance1.read'
         let data2 = wat::parse_str(WAT2)?;
         let module2 = Module::new(&store, &data2)?;
-        let instance2 = Instance::new(&store, &module2, &[instance1_read])?;
+        let instance2 = Instance::new(&module2, &[instance1_read])?;
         // since 'instance2.run' calls 'instance1.read' we need to set up the signal handler to handle
         // SIGSEGV originating from within the memory of instance1
         instance2.set_signal_handler(move |signum, siginfo, _| {

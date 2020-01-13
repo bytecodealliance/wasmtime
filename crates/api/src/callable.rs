@@ -59,7 +59,6 @@ use wasmtime_runtime::Export;
 ///
 /// // Create module instance that imports our function
 /// let instance = wasmtime::Instance::new(
-///     &store,
 ///     &module,
 ///     &[times_two_function.into()]
 /// )?;

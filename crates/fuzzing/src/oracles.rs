@@ -60,7 +60,7 @@ pub fn instantiate(wasm: &[u8], strategy: Strategy) {
     // aren't caught during validation or compilation. For example, an imported
     // table might not have room for an element segment that we want to
     // initialize into it.
-    let _result = Instance::new(&store, &module, &imports);
+    let _result = Instance::new(&module, &imports);
 }
 
 /// Compile the Wasm buffer, and implicitly fail if we have an unexpected
@@ -152,7 +152,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 // aren't caught during validation or compilation. For example, an imported
                 // table might not have room for an element segment that we want to
                 // initialize into it.
-                if let Ok(instance) = Instance::new(store.as_ref().unwrap(), &module, &imports) {
+                if let Ok(instance) = Instance::new(&module, &imports) {
                     instances.insert(id, instance);
                 }
             }

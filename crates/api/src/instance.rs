@@ -68,7 +68,8 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(store: &Store, module: &Module, externs: &[Extern]) -> Result<Instance, Error> {
+    pub fn new(module: &Module, externs: &[Extern]) -> Result<Instance, Error> {
+        let store = module.store();
         let context = store.context().clone();
         let exports = store.global_exports().clone();
         let (mut instance_handle, contexts) = instantiate_in_context(
@@ -100,12 +101,25 @@ impl Instance {
         })
     }
 
-    pub fn exports(&self) -> &[Extern] {
-        &self.exports
+    /// Returns the associated [`Store`] that this `Instance` is compiled into.
+    ///
+    /// This is the [`Store`] that generally serves as a sort of global cache
+    /// for various instance-related things.
+    pub fn store(&self) -> &Store {
+        self.module.store()
     }
 
+    /// Returns the associated [`Module`] that this `Instance` instantiated.
+    ///
+    /// The corresponding [`Module`] here is a static version of this `Instance`
+    /// which can be used to learn information such as naming information about
+    /// various functions.
     pub fn module(&self) -> &Module {
         &self.module
+    }
+
+    pub fn exports(&self) -> &[Extern] {
+        &self.exports
     }
 
     pub fn find_export_by_name(&self, name: &str) -> Option<&Extern> {

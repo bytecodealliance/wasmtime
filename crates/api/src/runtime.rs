@@ -397,6 +397,10 @@ impl Store {
             .get(&type_index)
             .cloned()
     }
+
+    pub(crate) fn ptr_eq(a: &Store, b: &Store) -> bool {
+        Rc::ptr_eq(&a.inner, &b.inner)
+    }
 }
 
 impl Default for Store {

@@ -48,8 +48,7 @@ fn main() -> Result<()> {
     // Note that this is where the wasm `start` function, if any, would run.
     println!("Instantiating module...");
     let imports = vec![hello_func.into()];
-    let instance =
-        Instance::new(&store, &module, &imports).context("> Error instantiating module!")?;
+    let instance = Instance::new(&module, &imports).context("> Error instantiating module!")?;
 
     // Next we poke around a bit to extract the `run` function from the module.
     println!("Extracting export...");
