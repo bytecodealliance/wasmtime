@@ -1,7 +1,9 @@
 use super::config::tests::test_prolog;
 use super::*;
 use crate::address_map::{FunctionAddressMap, InstructionAddressMap};
-use crate::compilation::{CompiledFunction, Relocation, RelocationTarget, TrapInformation};
+use crate::compilation::{
+    CompiledFunction, CompiledFunctionUnwindInfo, Relocation, RelocationTarget, TrapInformation,
+};
 use crate::module::{MemoryPlan, MemoryStyle, Module};
 use cranelift_codegen::{binemit, ir, isa, settings, ValueLocRange};
 use cranelift_entity::EntityRef;
@@ -259,7 +261,7 @@ fn new_module_cache_data(rng: &mut impl Rng) -> ModuleCacheData {
             CompiledFunction {
                 body: (0..(i * 3 / 2)).collect(),
                 jt_offsets: sm,
-                unwind_info: (0..(i * 3 / 2)).collect(),
+                unwind_info: CompiledFunctionUnwindInfo::Windows((0..(i * 3 / 2)).collect()),
             }
         })
         .collect();
