@@ -67,7 +67,7 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
                     if i.module() != module_name {
                         bail!("unknown import module {}", i.module());
                     }
-                    if let Some(export) = wasi_instance.find_export_by_name(i.name()) {
+                    if let Some(export) = wasi_instance.get_export(i.name()) {
                         imports.push(export.clone());
                     } else {
                         bail!("unknown import {}:{}", i.module(), i.name())

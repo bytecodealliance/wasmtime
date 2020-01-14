@@ -57,7 +57,7 @@ fn same_import_names_still_distinct() -> anyhow::Result<()> {
     ];
     let instance = Instance::new(&module, &imports)?;
 
-    let func = instance.find_export_by_name("foo").unwrap().func().unwrap();
+    let func = instance.get_export("foo").unwrap().func().unwrap();
     let results = func.call(&[])?;
     assert_eq!(results.len(), 1);
     match results[0] {
