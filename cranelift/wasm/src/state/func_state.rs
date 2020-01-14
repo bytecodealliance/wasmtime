@@ -474,7 +474,7 @@ impl FuncTranslationState {
             Occupied(entry) => Ok(*entry.get()),
             Vacant(entry) => {
                 let sig = environ.make_indirect_sig(func, index)?;
-                Ok(*entry.insert((sig, func.dfg.signatures[sig].num_normal_params())))
+                Ok(*entry.insert((sig, num_wasm_parameters(environ, &func.dfg.signatures[sig]))))
             }
         }
     }
@@ -495,8 +495,20 @@ impl FuncTranslationState {
             Vacant(entry) => {
                 let fref = environ.make_direct_func(func, index)?;
                 let sig = func.dfg.ext_funcs[fref].signature;
-                Ok(*entry.insert((fref, func.dfg.signatures[sig].num_normal_params())))
+                Ok(*entry.insert((
+                    fref,
+                    num_wasm_parameters(environ, &func.dfg.signatures[sig]),
+                )))
             }
         }
     }
+}
+
+fn num_wasm_parameters<FE: FuncEnvironment + ?Sized>(
+    environ: &FE,
+    signature: &ir::Signature,
+) -> usize {
+    (0..signature.params.len())
+        .filter(|index| environ.is_wasm_parameter(signature, *index))
+        .count()
 }

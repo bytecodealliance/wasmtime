@@ -135,7 +135,7 @@ fn declare_wasm_parameters<FE: FuncEnvironment + ?Sized>(
         let param_type = builder.func.signature.params[i];
         // There may be additional special-purpose parameters in addition to the normal WebAssembly
         // signature parameters. For example, a `vmctx` pointer.
-        if environ.is_wasm_parameter(&builder.func, i) {
+        if environ.is_wasm_parameter(&builder.func.signature, i) {
             // This is a normal WebAssembly signature parameter, so create a local for it.
             let local = Variable::new(next_local);
             builder.declare_var(local, param_type.value_type);

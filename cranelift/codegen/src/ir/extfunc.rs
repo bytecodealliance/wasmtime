@@ -88,16 +88,6 @@ impl Signature {
             .count()
     }
 
-    /// Count the number of normal parameters in a signature.
-    /// Exclude special-purpose parameters that represent runtime stuff and not WebAssembly
-    /// arguments.
-    pub fn num_normal_params(&self) -> usize {
-        self.params
-            .iter()
-            .filter(|arg| arg.purpose == ArgumentPurpose::Normal)
-            .count()
-    }
-
     /// Does this signature take an struct return pointer parameter?
     pub fn uses_struct_return_param(&self) -> bool {
         self.uses_special_param(ArgumentPurpose::StructReturn)

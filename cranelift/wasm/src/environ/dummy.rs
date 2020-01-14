@@ -201,10 +201,6 @@ impl<'dummy_environment> TargetEnvironment for DummyFuncEnvironment<'dummy_envir
 }
 
 impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environment> {
-    fn is_wasm_parameter(&self, func: &ir::Function, index: usize) -> bool {
-        func.signature.params[index].purpose == ir::ArgumentPurpose::Normal
-    }
-
     fn return_mode(&self) -> ReturnMode {
         self.return_mode
     }
