@@ -20,7 +20,7 @@ impl Function {
     pub fn func(&self) -> wasmtime::Func {
         let e = self
             .instance
-            .find_export_by_name(&self.export_name)
+            .get_export(&self.export_name)
             .expect("named export")
             .clone();
         e.func().expect("function export").clone()
