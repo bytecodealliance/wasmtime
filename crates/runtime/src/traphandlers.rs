@@ -170,9 +170,9 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
 pub unsafe extern "C" fn wasmtime_call(
     vmctx: *mut VMContext,
     callee: *const VMFunctionBody,
-) -> Result<(), String> {
+) -> Result<(), TrapMessageAndStack> {
     if WasmtimeCall(vmctx as *mut u8, callee) == 0 {
-        Err(trap_message_and_stack().0)
+        Err(trap_message_and_stack())
     } else {
         Ok(())
     }
