@@ -9,7 +9,7 @@ use wasmtime_interface_types::ModuleData;
 
 #[pyclass]
 pub struct Instance {
-    pub instance: wasmtime::HostRef<wasmtime::Instance>,
+    pub instance: wasmtime::Instance,
     pub data: Rc<ModuleData>,
 }
 
@@ -20,7 +20,7 @@ impl Instance {
         let gil = Python::acquire_gil();
         let py = gil.python();
         let exports = PyDict::new(py);
-        let module = self.instance.borrow().module().clone();
+        let module = self.instance.module().clone();
         for (i, e) in module.exports().iter().enumerate() {
             match e.ty() {
                 wasmtime::ExternType::Func(ft) => {
@@ -43,10 +43,7 @@ impl Instance {
                     let f = Py::new(
                         py,
                         Memory {
-                            memory: self.instance.borrow().exports()[i]
-                                .memory()
-                                .unwrap()
-                                .clone(),
+                            memory: self.instance.exports()[i].memory().unwrap().clone(),
                         },
                     )?;
                     exports.set_item(e.name().to_string(), f)?;

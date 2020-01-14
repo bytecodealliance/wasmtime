@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-runtime"
-version = "0.7.0"
+version = "0.9.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Runtime library support for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -11,7 +11,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-wasmtime-environ = { path = "../environ" }
+wasmtime-environ = { path = "../environ", version = "0.9.0" }
 region = "2.0.0"
 lazy_static = "1.2.0"
 libc = { version = "0.2.60", default-features = false }

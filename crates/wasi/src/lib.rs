@@ -1,5 +1,3 @@
-#![allow(improper_ctypes)]
-
 mod instantiate;
 pub mod old;
 

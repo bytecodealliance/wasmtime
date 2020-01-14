@@ -9,45 +9,50 @@ use anyhow::{Error, Result};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
-use wasmtime_jit::{instantiate, Resolver, SetupError};
+use wasmtime_jit::{CompiledModule, Resolver};
 use wasmtime_runtime::{Export, InstanceHandle, InstantiationError};
 
-struct SimpleResolver {
-    imports: Vec<(String, String, Extern)>,
+struct SimpleResolver<'a> {
+    imports: &'a [Extern],
 }
 
-impl Resolver for SimpleResolver {
-    fn resolve(&mut self, name: &str, field: &str) -> Option<Export> {
-        // TODO speedup lookup
+impl Resolver for SimpleResolver<'_> {
+    fn resolve(&mut self, idx: u32, _name: &str, _field: &str) -> Option<Export> {
         self.imports
-            .iter_mut()
-            .find(|(n, f, _)| name == n && field == f)
-            .map(|(_, _, e)| e.get_wasmtime_export())
+            .get(idx as usize)
+            .map(|i| i.get_wasmtime_export())
     }
 }
 
-pub fn instantiate_in_context(
+fn instantiate_in_context(
+    store: &Store,
     data: &[u8],
-    imports: Vec<(String, String, Extern)>,
-    module_name: Option<String>,
+    imports: &[Extern],
+    module_name: Option<&str>,
     context: Context,
     exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
 ) -> Result<(InstanceHandle, HashSet<Context>), Error> {
     let mut contexts = HashSet::new();
     let debug_info = context.debug_info();
     let mut resolver = SimpleResolver { imports };
-    let instance = instantiate(
+    let mut compiled_module = CompiledModule::new(
         &mut context.compiler(),
         data,
         module_name,
         &mut resolver,
         exports,
         debug_info,
-    )
-    .map_err(|e| -> Error {
+    )?;
+
+    // Register all module signatures
+    for signature in compiled_module.module().signatures.values() {
+        store.register_wasmtime_signature(signature);
+    }
+
+    let instance = compiled_module.instantiate().map_err(|e| -> Error {
         if let Some(trap) = take_api_trap() {
             trap.into()
-        } else if let SetupError::Instantiate(InstantiationError::StartTrap(msg)) = e {
+        } else if let InstantiationError::StartTrap(msg) = e {
             Trap::new(msg).into()
         } else {
             e.into()
@@ -70,19 +75,15 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(store: &Store, module: &Module, externs: &[Extern]) -> Result<Instance, Error> {
+    pub fn new(module: &Module, externs: &[Extern]) -> Result<Instance, Error> {
+        let store = module.store();
         let context = store.context().clone();
         let exports = store.global_exports().clone();
-        let imports = module
-            .imports()
-            .iter()
-            .zip(externs.iter())
-            .map(|(i, e)| (i.module().to_string(), i.name().to_string(), e.clone()))
-            .collect::<Vec<_>>();
         let (mut instance_handle, contexts) = instantiate_in_context(
+            module.store(),
             module.binary().expect("binary"),
-            imports,
-            module.name().cloned(),
+            externs,
+            module.name(),
             context,
             exports,
         )?;
@@ -108,12 +109,25 @@ impl Instance {
         })
     }
 
-    pub fn exports(&self) -> &[Extern] {
-        &self.exports
+    /// Returns the associated [`Store`] that this `Instance` is compiled into.
+    ///
+    /// This is the [`Store`] that generally serves as a sort of global cache
+    /// for various instance-related things.
+    pub fn store(&self) -> &Store {
+        self.module.store()
     }
 
+    /// Returns the associated [`Module`] that this `Instance` instantiated.
+    ///
+    /// The corresponding [`Module`] here is a static version of this `Instance`
+    /// which can be used to learn information such as naming information about
+    /// various functions.
     pub fn module(&self) -> &Module {
         &self.module
+    }
+
+    pub fn exports(&self) -> &[Extern] {
+        &self.exports
     }
 
     pub fn find_export_by_name(&self, name: &str) -> Option<&Extern> {
@@ -140,7 +154,14 @@ impl Instance {
                 // imported into this store using the from_handle() method.
                 let _ = store.register_wasmtime_signature(signature);
             }
-            let extern_type = ExternType::from_wasmtime_export(&export);
+
+            // We should support everything supported by wasmtime_runtime, or
+            // otherwise we've got a bug in this crate, so panic if anything
+            // fails to convert here.
+            let extern_type = match ExternType::from_wasmtime_export(&export) {
+                Some(ty) => ty,
+                None => panic!("unsupported core wasm external type {:?}", export),
+            };
             exports_types.push(ExportType::new(name, extern_type));
             exports.push(Extern::from_wasmtime_export(
                 store,
@@ -175,29 +196,29 @@ cfg_if::cfg_if! {
         impl Instance {
             /// The signal handler must be
             /// [async-signal-safe](http://man7.org/linux/man-pages/man7/signal-safety.7.html).
-            pub fn set_signal_handler<H>(&mut self, handler: H)
+            pub fn set_signal_handler<H>(&self, handler: H)
             where
                 H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
             {
-                self.instance_handle.set_signal_handler(handler);
+                self.instance_handle.clone().set_signal_handler(handler);
             }
         }
     } else if #[cfg(target_os = "windows")] {
         impl Instance {
-            pub fn set_signal_handler<H>(&mut self, handler: H)
+            pub fn set_signal_handler<H>(&self, handler: H)
             where
                 H: 'static + Fn(winapi::um::winnt::EXCEPTION_POINTERS) -> bool,
             {
-                self.instance_handle.set_signal_handler(handler);
+                self.instance_handle.clone().set_signal_handler(handler);
             }
         }
     } else if #[cfg(target_os = "macos")] {
         impl Instance {
-            pub fn set_signal_handler<H>(&mut self, handler: H)
+            pub fn set_signal_handler<H>(&self, handler: H)
             where
                 H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
             {
-                self.instance_handle.set_signal_handler(handler);
+                self.instance_handle.clone().set_signal_handler(handler);
             }
         }
     }

@@ -26,20 +26,16 @@ fn test_trap_return() -> Result<(), String> {
     let module =
         Module::new(&store, &binary).map_err(|e| format!("failed to compile module: {}", e))?;
     let hello_type = FuncType::new(Box::new([]), Box::new([]));
-    let hello_func = HostRef::new(Func::new(&store, hello_type, Rc::new(HelloCallback)));
+    let hello_func = Func::new(&store, hello_type, Rc::new(HelloCallback));
 
     let imports = vec![hello_func.into()];
-    let instance = Instance::new(&store, &module, imports.as_slice())
+    let instance = Instance::new(&module, &imports)
         .map_err(|e| format!("failed to instantiate module: {:?}", e))?;
     let run_func = instance.exports()[0]
         .func()
         .expect("expected function export");
 
-    let e = run_func
-        .borrow()
-        .call(&[])
-        .err()
-        .expect("error calling function");
+    let e = run_func.call(&[]).err().expect("error calling function");
 
     assert_eq!(e.message(), "test 123");
 

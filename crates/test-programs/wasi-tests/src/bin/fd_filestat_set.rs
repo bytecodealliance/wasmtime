@@ -9,7 +9,11 @@ unsafe fn test_fd_filestat_set(dir_fd: wasi::Fd) {
         0,
         "file",
         wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        wasi::RIGHTS_FD_READ
+            | wasi::RIGHTS_FD_WRITE
+            | wasi::RIGHTS_FD_FILESTAT_GET
+            | wasi::RIGHTS_FD_FILESTAT_SET_SIZE
+            | wasi::RIGHTS_FD_FILESTAT_SET_TIMES,
         0,
         0,
     )

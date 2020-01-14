@@ -362,6 +362,10 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
 }
 
 impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'module_environment> {
+    fn is_wasm_parameter(&self, func: &ir::Function, index: usize) -> bool {
+        func.signature.params[index].purpose == ir::ArgumentPurpose::Normal
+    }
+
     fn make_table(&mut self, func: &mut ir::Function, index: TableIndex) -> WasmResult<ir::Table> {
         let pointer_type = self.pointer_type();
 

@@ -3,7 +3,7 @@
 use super::create_handle::create_handle;
 use super::trap::{record_api_trap, TrapSink, API_TRAP_CODE};
 use crate::{Callable, FuncType, Store, Val};
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::cmp;
 use std::convert::TryFrom;
 use std::rc::Rc;
@@ -234,7 +234,10 @@ pub fn create_handle_with_function(
     func: &Rc<dyn Callable + 'static>,
     store: &Store,
 ) -> Result<InstanceHandle> {
-    let sig = ft.get_wasmtime_signature().clone();
+    let sig = match ft.get_wasmtime_signature() {
+        Some(sig) => sig.clone(),
+        None => bail!("not a supported core wasm signature {:?}", ft),
+    };
 
     let isa = {
         let isa_builder = native::builder();

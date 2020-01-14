@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-wasi"
-version = "0.7.0"
+version = "0.9.0"
 authors = ["The Cranelift Project Developers"]
 description = "WASI API support for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -11,17 +11,17 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-wasmtime = { path = "../api" }
-wasmtime-runtime = { path = "../runtime" }
-wasmtime-environ = { path = "../environ" }
-wasmtime-jit = { path = "../jit" }
-wasi-common = { path = "../wasi-common" }
-cranelift-codegen = { version = "0.52.0", features = ["enable-serde"] }
-cranelift-entity = { version = "0.52.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.52.0", features = ["enable-serde"] }
-target-lexicon = "0.9.0"
+wasmtime = { path = "../api", version = "0.9.0" }
+wasmtime-runtime = { path = "../runtime", version = "0.9.0" }
+wasmtime-environ = { path = "../environ", version = "0.9.0" }
+wasmtime-jit = { path = "../jit", version = "0.9.0" }
+wasi-common = { path = "../wasi-common", version = "0.9.0" }
+cranelift-codegen = { version = "0.54", features = ["enable-serde"] }
+cranelift-entity = { version = "0.54", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.54", features = ["enable-serde"] }
+target-lexicon = "0.10.0"
 log = { version = "0.4.8", default-features = false }
-wig = { path = "../wasi-common/wig" }
+wig = { path = "../wasi-common/wig", version = "0.9.2" }
 
 [badges]
 maintenance = { status = "actively-developed" }

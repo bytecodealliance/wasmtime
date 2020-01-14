@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-py"
-version = "0.7.0"
+version = "0.9.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Python extension for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -17,15 +17,15 @@ test = false
 doc = false
 
 [dependencies]
-wasmtime = { path = "../../api" }
-wasmtime-environ = { path = "../../environ" }
-wasmtime-interface-types = { path = "../../interface-types" }
-wasmtime-runtime = { path = "../../runtime" }
-wasmtime-wasi = { path = "../../wasi" }
-target-lexicon = { version = "0.9.0", default-features = false }
+wasmtime = { path = "../../api", version = "0.9.0" }
+wasmtime-environ = { path = "../../environ", version = "0.9.0" }
+wasmtime-interface-types = { path = "../../interface-types", version = "0.9.0" }
+wasmtime-runtime = { path = "../../runtime", version = "0.9.0" }
+wasmtime-wasi = { path = "../../wasi", version = "0.9.0" }
+target-lexicon = { version = "0.10.0", default-features = false }
 anyhow = "1.0.19"
 region = "2.0.0"
-wasmparser = "0.45.1"
+wasmparser = "0.47.0"
 pyo3 = { version = "0.8.0", features = ["extension-module"] }
 
 [badges]

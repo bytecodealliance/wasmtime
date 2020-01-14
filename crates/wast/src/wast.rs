@@ -27,9 +27,9 @@ fn runtime_value(v: &wast::Expression<'_>) -> Result<Val> {
 pub struct WastContext {
     /// Wast files have a concept of a "current" module, which is the most
     /// recently defined.
-    current: Option<HostRef<Instance>>,
+    current: Option<Instance>,
 
-    instances: HashMap<String, HostRef<Instance>>,
+    instances: HashMap<String, Instance>,
     store: Store,
     spectest: Option<HashMap<&'static str, Extern>>,
 }
@@ -37,6 +37,15 @@ pub struct WastContext {
 enum Outcome<T = Vec<Val>> {
     Ok(T),
     Trap(Trap),
+}
+
+impl<T> Outcome<T> {
+    fn into_result(self) -> Result<T, Trap> {
+        match self {
+            Outcome::Ok(t) => Ok(t),
+            Outcome::Trap(t) => Err(t),
+        }
+    }
 }
 
 impl WastContext {
@@ -50,7 +59,7 @@ impl WastContext {
         }
     }
 
-    fn get_instance(&self, instance_name: Option<&str>) -> Result<HostRef<Instance>> {
+    fn get_instance(&self, instance_name: Option<&str>) -> Result<Instance> {
         match instance_name {
             Some(name) => self
                 .instances
@@ -64,7 +73,7 @@ impl WastContext {
         }
     }
 
-    fn instantiate(&self, module: &[u8]) -> Result<Outcome<HostRef<Instance>>> {
+    fn instantiate(&self, module: &[u8]) -> Result<Outcome<Instance>> {
         let module = Module::new(&self.store, module)?;
         let mut imports = Vec::new();
         for import in module.imports() {
@@ -85,23 +94,16 @@ impl WastContext {
                 .get(import.module())
                 .ok_or_else(|| anyhow!("no module named `{}`", import.module()))?;
             let export = instance
-                .borrow()
                 .find_export_by_name(import.name())
                 .ok_or_else(|| anyhow!("unknown import `{}::{}`", import.name(), import.module()))?
                 .clone();
             imports.push(export);
         }
-        let instance = match Instance::new(&self.store, &module, &imports) {
+        let instance = match Instance::new(&module, &imports) {
             Ok(i) => i,
-            Err(e) => {
-                let err = e.chain().filter_map(|e| e.downcast_ref::<Trap>()).next();
-                if let Some(trap) = err {
-                    return Ok(Outcome::Trap(trap.clone()));
-                }
-                return Err(e);
-            }
+            Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),
         };
-        Ok(Outcome::Ok(HostRef::new(instance)))
+        Ok(Outcome::Ok(instance))
     }
 
     /// Register "spectest" which is used by the spec testsuite.
@@ -127,7 +129,12 @@ impl WastContext {
     }
 
     fn perform_invoke(&mut self, exec: wast::WastInvoke<'_>) -> Result<Outcome> {
-        self.invoke(exec.module.map(|i| i.name()), exec.name, &exec.args)
+        let values = exec
+            .args
+            .iter()
+            .map(runtime_value)
+            .collect::<Result<Vec<_>>>()?;
+        self.invoke(exec.module.map(|i| i.name()), exec.name, &values)
     }
 
     /// Define a module and register it.
@@ -155,19 +162,17 @@ impl WastContext {
         &mut self,
         instance_name: Option<&str>,
         field: &str,
-        args: &[wast::Expression],
+        args: &[Val],
     ) -> Result<Outcome> {
-        let values = args.iter().map(runtime_value).collect::<Result<Vec<_>>>()?;
         let instance = self.get_instance(instance_name.as_ref().map(|x| &**x))?;
-        let instance = instance.borrow();
         let export = instance
             .find_export_by_name(field)
             .ok_or_else(|| anyhow!("no global named `{}`", field))?;
         let func = match export {
-            Extern::Func(f) => f.borrow(),
+            Extern::Func(f) => f,
             _ => bail!("export of `{}` wasn't a global", field),
         };
-        Ok(match func.call(&values) {
+        Ok(match func.call(args) {
             Ok(result) => Outcome::Ok(result.into()),
             Err(e) => Outcome::Trap(e),
         })
@@ -176,21 +181,44 @@ impl WastContext {
     /// Get the value of an exported global from an instance.
     fn get(&mut self, instance_name: Option<&str>, field: &str) -> Result<Outcome> {
         let instance = self.get_instance(instance_name.as_ref().map(|x| &**x))?;
-        let instance = instance.borrow();
         let export = instance
             .find_export_by_name(field)
             .ok_or_else(|| anyhow!("no global named `{}`", field))?;
         let global = match export {
-            Extern::Global(g) => g.borrow(),
+            Extern::Global(g) => g,
             _ => bail!("export of `{}` wasn't a global", field),
         };
         Ok(Outcome::Ok(vec![global.get()]))
     }
 
+    fn assert_return(&self, result: Outcome, results: &[wast::AssertExpression]) -> Result<()> {
+        let values = result.into_result()?;
+        for (v, e) in values.iter().zip(results) {
+            if val_matches(v, e)? {
+                continue;
+            }
+            bail!("expected {:?}, got {:?}", e, v)
+        }
+        Ok(())
+    }
+
+    fn assert_trap(&self, result: Outcome, message: &str) -> Result<()> {
+        let trap = match result {
+            Outcome::Ok(values) => bail!("expected trap, got {:?}", values),
+            Outcome::Trap(t) => t,
+        };
+        if trap.message().contains(message) {
+            return Ok(());
+        }
+        if cfg!(feature = "lightbeam") {
+            println!("TODO: Check the assert_trap message: {}", message);
+            return Ok(());
+        }
+        bail!("expected {}, got {}", message, trap.message())
+    }
+
     /// Run a wast script from a byte buffer.
     pub fn run_buffer(&mut self, filename: &str, wast: &[u8]) -> Result<()> {
-        use wast::WastDirective::*;
-
         let wast = str::from_utf8(wast)?;
 
         let adjust_wast = |mut err: wast::Error| {
@@ -198,311 +226,126 @@ impl WastContext {
             err.set_text(wast);
             err
         };
-        let context = |sp: wast::Span| {
-            let (line, col) = sp.linecol_in(wast);
-            format!("for directive on {}:{}:{}", filename, line + 1, col)
-        };
 
         let buf = wast::parser::ParseBuffer::new(wast).map_err(adjust_wast)?;
-        let wast = wast::parser::parse::<wast::Wast>(&buf).map_err(adjust_wast)?;
+        let ast = wast::parser::parse::<wast::Wast>(&buf).map_err(adjust_wast)?;
 
-        for directive in wast.directives {
-            match directive {
-                Module(mut module) => {
-                    let binary = module.encode().map_err(adjust_wast)?;
-                    self.module(module.name.map(|s| s.name()), &binary)
-                        .with_context(|| context(module.span))?;
-                }
-                Register { span, name, module } => {
-                    self.register(module.map(|s| s.name()), name)
-                        .with_context(|| context(span))?;
-                }
-                Invoke(i) => {
-                    let span = i.span;
-                    self.perform_invoke(i).with_context(|| context(span))?;
-                }
-                AssertReturn {
-                    span,
-                    exec,
-                    results,
-                } => match self.perform_execute(exec).with_context(|| context(span))? {
-                    Outcome::Ok(values) => {
-                        for (v, e) in values.iter().zip(results.iter().map(runtime_value)) {
-                            let e = e?;
-                            if values_equal(v, &e)? {
-                                continue;
-                            }
-                            bail!("{}\nexpected {:?}, got {:?}", context(span), e, v)
-                        }
-                    }
-                    Outcome::Trap(t) => {
-                        bail!("{}\nunexpected trap: {}", context(span), t.message())
-                    }
-                },
-                AssertTrap {
-                    span,
-                    exec,
-                    message,
-                } => match self.perform_execute(exec).with_context(|| context(span))? {
-                    Outcome::Ok(values) => {
-                        bail!("{}\nexpected trap, got {:?}", context(span), values)
-                    }
-                    Outcome::Trap(t) => {
-                        if t.message().contains(message) {
-                            continue;
-                        }
-                        if cfg!(feature = "lightbeam") {
-                            println!(
-                                "{}\nTODO: Check the assert_trap message: {}",
-                                context(span),
-                                message
-                            );
-                            continue;
-                        }
-                        bail!(
-                            "{}\nexpected {}, got {}",
-                            context(span),
-                            message,
-                            t.message(),
-                        )
-                    }
-                },
-                AssertExhaustion {
-                    span,
-                    call,
-                    message,
-                } => match self.perform_invoke(call).with_context(|| context(span))? {
-                    Outcome::Ok(values) => {
-                        bail!("{}\nexpected trap, got {:?}", context(span), values)
-                    }
-                    Outcome::Trap(t) => {
-                        if t.message().contains(message) {
-                            continue;
-                        }
-                        bail!(
-                            "{}\nexpected exhaustion with {}, got {}",
-                            context(span),
-                            message,
-                            t.message(),
-                        )
-                    }
-                },
-                AssertReturnCanonicalNan { span, invoke } => {
-                    match self.perform_invoke(invoke).with_context(|| context(span))? {
-                        Outcome::Ok(values) => {
-                            for v in values.iter() {
-                                match v {
-                                    Val::F32(x) => {
-                                        if !is_canonical_f32_nan(*x) {
-                                            bail!("{}\nexpected canonical NaN", context(span))
-                                        }
-                                    }
-                                    Val::F64(x) => {
-                                        if !is_canonical_f64_nan(*x) {
-                                            bail!("{}\nexpected canonical NaN", context(span))
-                                        }
-                                    }
-                                    other => bail!("expected float, got {:?}", other),
-                                };
-                            }
-                        }
-                        Outcome::Trap(t) => {
-                            bail!("{}\nunexpected trap: {}", context(span), t.message())
-                        }
-                    }
-                }
-                AssertReturnCanonicalNanF32x4 { span, invoke } => {
-                    match self.perform_invoke(invoke).with_context(|| context(span))? {
-                        Outcome::Ok(values) => {
-                            for v in values.iter() {
-                                let val = match v {
-                                    Val::V128(x) => x,
-                                    other => bail!("expected v128, got {:?}", other),
-                                };
-                                for l in 0..4 {
-                                    if !is_canonical_f32_nan(extract_lane_as_u32(val, l)?) {
-                                        bail!(
-                                            "{}\nexpected f32x4 canonical NaN in lane {}",
-                                            context(span),
-                                            l
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        Outcome::Trap(t) => {
-                            bail!("{}\nunexpected trap: {}", context(span), t.message())
-                        }
-                    }
-                }
-                AssertReturnCanonicalNanF64x2 { span, invoke } => {
-                    match self.perform_invoke(invoke).with_context(|| context(span))? {
-                        Outcome::Ok(values) => {
-                            for v in values.iter() {
-                                let val = match v {
-                                    Val::V128(x) => x,
-                                    other => bail!("expected v128, got {:?}", other),
-                                };
-                                for l in 0..2 {
-                                    if !is_canonical_f64_nan(extract_lane_as_u64(val, l)?) {
-                                        bail!(
-                                            "{}\nexpected f64x2 canonical NaN in lane {}",
-                                            context(span),
-                                            l
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        Outcome::Trap(t) => {
-                            bail!("{}\nunexpected trap: {}", context(span), t.message())
-                        }
-                    }
-                }
-                AssertReturnArithmeticNan { span, invoke } => {
-                    match self.perform_invoke(invoke).with_context(|| context(span))? {
-                        Outcome::Ok(values) => {
-                            for v in values.iter() {
-                                match v {
-                                    Val::F32(x) => {
-                                        if !is_arithmetic_f32_nan(*x) {
-                                            bail!("{}\nexpected arithmetic NaN", context(span))
-                                        }
-                                    }
-                                    Val::F64(x) => {
-                                        if !is_arithmetic_f64_nan(*x) {
-                                            bail!("{}\nexpected arithmetic NaN", context(span))
-                                        }
-                                    }
-                                    other => bail!("expected float, got {:?}", other),
-                                };
-                            }
-                        }
-                        Outcome::Trap(t) => {
-                            bail!("{}\nunexpected trap: {}", context(span), t.message())
-                        }
-                    }
-                }
-                AssertReturnArithmeticNanF32x4 { span, invoke } => {
-                    match self.perform_invoke(invoke).with_context(|| context(span))? {
-                        Outcome::Ok(values) => {
-                            for v in values.iter() {
-                                let val = match v {
-                                    Val::V128(x) => x,
-                                    other => bail!("expected v128, got {:?}", other),
-                                };
-                                for l in 0..4 {
-                                    if !is_arithmetic_f32_nan(extract_lane_as_u32(val, l)?) {
-                                        bail!(
-                                            "{}\nexpected f32x4 arithmetic NaN in lane {}",
-                                            context(span),
-                                            l
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        Outcome::Trap(t) => {
-                            bail!("{}\nunexpected trap: {}", context(span), t.message())
-                        }
-                    }
-                }
-                AssertReturnArithmeticNanF64x2 { span, invoke } => {
-                    match self.perform_invoke(invoke).with_context(|| context(span))? {
-                        Outcome::Ok(values) => {
-                            for v in values.iter() {
-                                let val = match v {
-                                    Val::V128(x) => x,
-                                    other => bail!("expected v128, got {:?}", other),
-                                };
-                                for l in 0..2 {
-                                    if !is_arithmetic_f64_nan(extract_lane_as_u64(val, l)?) {
-                                        bail!(
-                                            "{}\nexpected f64x2 arithmetic NaN in lane {}",
-                                            context(span),
-                                            l
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        Outcome::Trap(t) => {
-                            bail!("{}\nunexpected trap: {}", context(span), t.message())
-                        }
-                    }
-                }
-                AssertInvalid {
-                    span,
-                    mut module,
-                    message,
-                } => {
-                    let bytes = module.encode().map_err(adjust_wast)?;
-                    let err = match self.module(None, &bytes) {
-                        Ok(()) => bail!("{}\nexpected module to fail to build", context(span)),
-                        Err(e) => e,
-                    };
-                    let error_message = format!("{:?}", err);
-                    if !error_message.contains(&message) {
-                        // TODO: change to bail!
-                        println!(
-                            "{}\nassert_invalid: expected {}, got {}",
-                            context(span),
-                            message,
-                            error_message
-                        )
-                    }
-                }
-                AssertMalformed {
-                    span,
-                    module,
-                    message,
-                } => {
-                    let mut module = match module {
-                        wast::QuoteModule::Module(m) => m,
-                        // this is a `*.wat` parser test which we're not
-                        // interested in
-                        wast::QuoteModule::Quote(_) => return Ok(()),
-                    };
-                    let bytes = module.encode().map_err(adjust_wast)?;
-                    let err = match self.module(None, &bytes) {
-                        Ok(()) => {
-                            bail!("{}\nexpected module to fail to instantiate", context(span))
-                        }
-                        Err(e) => e,
-                    };
-                    let error_message = format!("{:?}", err);
-                    if !error_message.contains(&message) {
-                        // TODO: change to bail!
-                        println!(
-                            "{}\nassert_malformed: expected {}, got {}",
-                            context(span),
-                            message,
-                            error_message
-                        )
-                    }
-                }
-                AssertUnlinkable {
-                    span,
-                    mut module,
-                    message,
-                } => {
-                    let bytes = module.encode().map_err(adjust_wast)?;
-                    let err = match self.module(None, &bytes) {
-                        Ok(()) => bail!("{}\nexpected module to fail to link", context(span)),
-                        Err(e) => e,
-                    };
-                    let error_message = format!("{:?}", err);
-                    if !error_message.contains(&message) {
-                        bail!(
-                            "{}\nassert_unlinkable: expected {}, got {}",
-                            context(span),
-                            message,
-                            error_message
-                        )
-                    }
-                }
-                AssertReturnFunc { .. } => bail!("need to implement assert_return_func"),
+        for directive in ast.directives {
+            let sp = directive.span();
+            self.run_directive(directive).with_context(|| {
+                let (line, col) = sp.linecol_in(wast);
+                format!("failed directive on {}:{}:{}", filename, line + 1, col)
+            })?;
+        }
+        Ok(())
+    }
+
+    fn run_directive(&mut self, directive: wast::WastDirective) -> Result<()> {
+        use wast::WastDirective::*;
+
+        match directive {
+            Module(mut module) => {
+                let binary = module.encode()?;
+                self.module(module.name.map(|s| s.name()), &binary)?;
             }
+            Register {
+                span: _,
+                name,
+                module,
+            } => {
+                self.register(module.map(|s| s.name()), name)?;
+            }
+            Invoke(i) => {
+                self.perform_invoke(i)?;
+            }
+            AssertReturn {
+                span: _,
+                exec,
+                results,
+            } => {
+                let result = self.perform_execute(exec)?;
+                self.assert_return(result, &results)?;
+            }
+            AssertTrap {
+                span: _,
+                exec,
+                message,
+            } => {
+                let result = self.perform_execute(exec)?;
+                self.assert_trap(result, message)?;
+            }
+            AssertExhaustion {
+                span: _,
+                call,
+                message,
+            } => {
+                let result = self.perform_invoke(call)?;
+                self.assert_trap(result, message)?;
+            }
+            AssertInvalid {
+                span: _,
+                mut module,
+                message,
+            } => {
+                let bytes = module.encode()?;
+                let err = match self.module(None, &bytes) {
+                    Ok(()) => bail!("expected module to fail to build"),
+                    Err(e) => e,
+                };
+                let error_message = format!("{:?}", err);
+                if !error_message.contains(&message) {
+                    // TODO: change to bail!
+                    println!(
+                        "assert_invalid: expected {}, got {}",
+                        message, error_message
+                    )
+                }
+            }
+            AssertMalformed {
+                span: _,
+                module,
+                message,
+            } => {
+                let mut module = match module {
+                    wast::QuoteModule::Module(m) => m,
+                    // this is a `*.wat` parser test which we're not
+                    // interested in
+                    wast::QuoteModule::Quote(_) => return Ok(()),
+                };
+                let bytes = module.encode()?;
+                let err = match self.module(None, &bytes) {
+                    Ok(()) => bail!("expected module to fail to instantiate"),
+                    Err(e) => e,
+                };
+                let error_message = format!("{:?}", err);
+                if !error_message.contains(&message) {
+                    // TODO: change to bail!
+                    println!(
+                        "assert_malformed: expected {}, got {}",
+                        message, error_message
+                    )
+                }
+            }
+            AssertUnlinkable {
+                span: _,
+                mut module,
+                message,
+            } => {
+                let bytes = module.encode()?;
+                let err = match self.module(None, &bytes) {
+                    Ok(()) => bail!("expected module to fail to link"),
+                    Err(e) => e,
+                };
+                let error_message = format!("{:?}", err);
+                if !error_message.contains(&message) {
+                    bail!(
+                        "assert_unlinkable: expected {}, got {}",
+                        message,
+                        error_message
+                    )
+                }
+            }
+            AssertReturnFunc { .. } => bail!("need to implement assert_return_func"),
         }
 
         Ok(())
@@ -516,12 +359,20 @@ impl WastContext {
     }
 }
 
-fn extract_lane_as_u32(bytes: &u128, lane: usize) -> Result<u32> {
-    Ok((*bytes >> (lane * 32)) as u32)
+fn extract_lane_as_i8(bytes: u128, lane: usize) -> i8 {
+    (bytes >> (lane * 8)) as i8
 }
 
-fn extract_lane_as_u64(bytes: &u128, lane: usize) -> Result<u64> {
-    Ok((*bytes >> (lane * 64)) as u64)
+fn extract_lane_as_i16(bytes: u128, lane: usize) -> i16 {
+    (bytes >> (lane * 16)) as i16
+}
+
+fn extract_lane_as_i32(bytes: u128, lane: usize) -> i32 {
+    (bytes >> (lane * 32)) as i32
+}
+
+fn extract_lane_as_i64(bytes: u128, lane: usize) -> i64 {
+    (bytes >> (lane * 64)) as i64
 }
 
 fn is_canonical_f32_nan(bits: u32) -> bool {
@@ -542,15 +393,64 @@ fn is_arithmetic_f64_nan(bits: u64) -> bool {
     (bits & AF64_NAN) == AF64_NAN
 }
 
-fn values_equal(v1: &Val, v2: &Val) -> Result<bool> {
-    Ok(match (v1, v2) {
-        (Val::I32(a), Val::I32(b)) => a == b,
-        (Val::I64(a), Val::I64(b)) => a == b,
+fn val_matches(actual: &Val, expected: &wast::AssertExpression) -> Result<bool> {
+    Ok(match (actual, expected) {
+        (Val::I32(a), wast::AssertExpression::I32(b)) => a == b,
+        (Val::I64(a), wast::AssertExpression::I64(b)) => a == b,
         // Note that these float comparisons are comparing bits, not float
         // values, so we're testing for bit-for-bit equivalence
-        (Val::F32(a), Val::F32(b)) => a == b,
-        (Val::F64(a), Val::F64(b)) => a == b,
-        (Val::V128(a), Val::V128(b)) => a == b,
-        _ => bail!("don't know how to compare {:?} and {:?} yet", v1, v2),
+        (Val::F32(a), wast::AssertExpression::F32(b)) => f32_matches(*a, b),
+        (Val::F64(a), wast::AssertExpression::F64(b)) => f64_matches(*a, b),
+        (Val::V128(a), wast::AssertExpression::V128(b)) => v128_matches(*a, b),
+        _ => bail!(
+            "don't know how to compare {:?} and {:?} yet",
+            actual,
+            expected
+        ),
     })
+}
+
+fn f32_matches(actual: u32, expected: &wast::NanPattern<wast::Float32>) -> bool {
+    match expected {
+        wast::NanPattern::CanonicalNan => is_canonical_f32_nan(actual),
+        wast::NanPattern::ArithmeticNan => is_arithmetic_f32_nan(actual),
+        wast::NanPattern::Value(expected_value) => actual == expected_value.bits,
+    }
+}
+
+fn f64_matches(actual: u64, expected: &wast::NanPattern<wast::Float64>) -> bool {
+    match expected {
+        wast::NanPattern::CanonicalNan => is_canonical_f64_nan(actual),
+        wast::NanPattern::ArithmeticNan => is_arithmetic_f64_nan(actual),
+        wast::NanPattern::Value(expected_value) => actual == expected_value.bits,
+    }
+}
+
+fn v128_matches(actual: u128, expected: &wast::V128Pattern) -> bool {
+    match expected {
+        wast::V128Pattern::I8x16(b) => b
+            .iter()
+            .enumerate()
+            .all(|(i, b)| *b == extract_lane_as_i8(actual, i)),
+        wast::V128Pattern::I16x8(b) => b
+            .iter()
+            .enumerate()
+            .all(|(i, b)| *b == extract_lane_as_i16(actual, i)),
+        wast::V128Pattern::I32x4(b) => b
+            .iter()
+            .enumerate()
+            .all(|(i, b)| *b == extract_lane_as_i32(actual, i)),
+        wast::V128Pattern::I64x2(b) => b
+            .iter()
+            .enumerate()
+            .all(|(i, b)| *b == extract_lane_as_i64(actual, i)),
+        wast::V128Pattern::F32x4(b) => b.iter().enumerate().all(|(i, b)| {
+            let a = extract_lane_as_i32(actual, i) as u32;
+            f32_matches(a, b)
+        }),
+        wast::V128Pattern::F64x2(b) => b.iter().enumerate().all(|(i, b)| {
+            let a = extract_lane_as_i64(actual, i) as u64;
+            f64_matches(a, b)
+        }),
+    }
 }

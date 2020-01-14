@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-cli"
-version = "0.7.0"
+version = "0.9.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Command-line interface for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -29,9 +29,9 @@ wasmtime-wasi = { path = "crates/wasi" }
 wasmtime-wasi-c = { path = "crates/wasi-c", optional = true }
 wasi-common = { path = "crates/wasi-common" }
 structopt = { version = "0.3.5", features = ["color", "suggestions"] }
-faerie = "0.13.0"
+faerie = "0.14.0"
 anyhow = "1.0.19"
-target-lexicon = { version = "0.9.0", default-features = false }
+target-lexicon = { version = "0.10.0", default-features = false }
 pretty_env_logger = "0.3.0"
 file-per-thread-logger = "0.1.1"
 wat = "1.0.2"
@@ -40,6 +40,7 @@ rayon = "1.2.1"
 wasm-webidl-bindings = "0.6"
 
 [dev-dependencies]
+wasmtime-runtime = { path = "crates/runtime" }
 more-asserts = "0.2.1"
 # This feature requires the wasm32-wasi target be installed. It enables
 # wasm32-wasi integration tests. To enable, run

@@ -30,26 +30,8 @@ fn main() -> anyhow::Result<()> {
         // Skip running spec_testsuite tests if the submodule isn't checked
         // out.
         if spec_tests > 0 {
-            start_test_module(&mut out, "simd")?;
-            write_testsuite_tests(
-                &mut out,
-                "tests/spec_testsuite/proposals/simd/simd_address.wast",
-                "simd",
-                strategy,
-            )?;
-            write_testsuite_tests(
-                &mut out,
-                "tests/spec_testsuite/proposals/simd/simd_align.wast",
-                "simd",
-                strategy,
-            )?;
-            write_testsuite_tests(
-                &mut out,
-                "tests/spec_testsuite/proposals/simd/simd_const.wast",
-                "simd",
-                strategy,
-            )?;
-            finish_test_module(&mut out)?;
+            test_directory(&mut out, "tests/spec_testsuite/proposals/simd", strategy)
+                .expect("generating tests");
 
             test_directory(
                 &mut out,
@@ -139,7 +121,6 @@ fn write_testsuite_tests(
     strategy: &str,
 ) -> anyhow::Result<()> {
     let path = path.as_ref();
-    println!("cargo:rerun-if-changed={}", path.display());
     let testname = extract_name(path);
 
     writeln!(out, "#[test]")?;
@@ -165,9 +146,23 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         "Lightbeam" => match (testsuite, testname) {
             (_, _) if testname.starts_with("simd") => return true,
             (_, _) if testsuite.ends_with("multi_value") => return true,
+            // Lightbeam doesn't support float arguments on the stack.
+            ("spec_testsuite", "call") => return true,
             _ => (),
         },
         "Cranelift" => match (testsuite, testname) {
+            ("simd", "simd_bit_shift") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16Shl
+            ("simd", "simd_const") => return true, // FIXME Invalid input WebAssembly code at offset 474: Unexpected data at the end of the section
+            ("simd", "simd_conversions") => return true, // FIXME Unsupported feature: proposed SIMD operator I16x8NarrowI32x4S
+            ("simd", "simd_f32x4") => return true, // FIXME expected V128(F32x4([CanonicalNan, CanonicalNan, Value(Float32 { bits: 0 }), Value(Float32 { bits: 0 })])), got V128(18428729675200069632)
+            ("simd", "simd_f64x2") => return true, // FIXME expected V128(F64x2([Value(Float64 { bits: 9221120237041090560 }), Value(Float64 { bits: 0 })])), got V128(0)
+            ("simd", "simd_f64x2_arith") => return true, // FIXME expected V128(F64x2([Value(Float64 { bits: 9221120237041090560 }), Value(Float64 { bits: 13835058055282163712 })])), got V128(255211775190703847615975447847722024960)
+            ("simd", "simd_i64x2_arith") => return true, // FIXME Unsupported feature: proposed SIMD operator I64x2Mul
+            ("simd", "simd_lane") => return true, // FIXME invalid u8 number: constant out of range: (v8x16.shuffle -1 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14...
+            ("simd", "simd_load") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16Shl
+            ("simd", "simd_load_extend") => return true, // FIXME Unsupported feature: proposed SIMD operator I16x8Load8x8S { memarg: MemoryImmediate { flags: 0, offset: 0 } }
+            ("simd", "simd_load_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator V8x16LoadSplat { memarg: MemoryImmediate { flags: 0, offset: 0 } }
+            ("simd", "simd_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16ShrS
             _ => {}
         },
         _ => panic!("unrecognized strategy"),

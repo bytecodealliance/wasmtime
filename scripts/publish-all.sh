@@ -9,13 +9,20 @@ topdir=$(dirname "$0")/..
 cd "$topdir"
 
 # All the wasmtime-* crates have the same version number
-version="0.7.0"
+version="0.9.0"
 
 # Update the version numbers of the crates to $version.
 echo "Updating crate versions to $version"
 find -name Cargo.toml \
     -not -path ./crates/wasi-common/WASI/tools/witx/Cargo.toml \
     -exec sed -i.bk -e "s/^version = \"[[:digit:]].*/version = \"$version\"/" {} \;
+
+# Update the required version numbers of path dependencies.
+find -name Cargo.toml \
+    -not -path ./crates/wasi-common/wig/WASI/tools/witx/Cargo.toml \
+    -exec sed -i.bk \
+        -e "/\> *= *{.*\<path *= *\"/s/version = \"[^\"]*\"/version = \"$version\"/" \
+        {} \;
 
 # Update our local Cargo.lock (not checked in).
 cargo update
@@ -42,10 +49,10 @@ for cargo_toml in \
     crates/runtime/Cargo.toml \
     crates/debug/Cargo.toml \
     crates/jit/Cargo.toml \
-    crates/wast/Cargo.toml \
     crates/wasi-c/Cargo.toml \
-    crates/wasi/Cargo.toml \
     crates/api/Cargo.toml \
+    crates/wasi/Cargo.toml \
+    crates/wast/Cargo.toml \
     crates/interface-types/Cargo.toml \
     crates/misc/py/Cargo.toml \
     crates/misc/rust/macro/Cargo.toml \

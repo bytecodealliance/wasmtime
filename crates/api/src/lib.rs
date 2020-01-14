@@ -6,8 +6,6 @@
 //! and there to implement Rust idioms. This crate also defines the actual C API
 //! itself for consumption from other languages.
 
-#![allow(improper_ctypes)]
-
 mod callable;
 mod context;
 mod externals;
@@ -26,7 +24,7 @@ pub use crate::callable::Callable;
 pub use crate::externals::*;
 pub use crate::instance::Instance;
 pub use crate::module::Module;
-pub use crate::r#ref::{AnyRef, HostInfo, HostRef};
+pub use crate::r#ref::AnyRef;
 pub use crate::runtime::{Config, Engine, OptLevel, Store, Strategy};
 pub use crate::trap::{FrameInfo, Trap};
 pub use crate::types::*;

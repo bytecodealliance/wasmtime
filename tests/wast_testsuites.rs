@@ -10,8 +10,11 @@ include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
 fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
     let wast = Path::new(wast);
 
+    let simd = wast.iter().any(|s| s == "simd");
+
     let mut cfg = Config::new();
-    cfg.wasm_simd(wast.iter().any(|s| s == "simd"))
+    cfg.wasm_simd(simd)
+        .wasm_reference_types(simd) // some simd tests assume multiple tables ok
         .wasm_multi_value(wast.iter().any(|s| s == "multi-value"))
         .strategy(strategy)?
         .cranelift_debug_verifier(true);

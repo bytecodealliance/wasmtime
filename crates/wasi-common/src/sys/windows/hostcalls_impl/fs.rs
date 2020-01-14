@@ -5,7 +5,7 @@ use crate::ctx::WasiCtx;
 use crate::fdentry::FdEntry;
 use crate::host::{Dirent, FileType};
 use crate::hostcalls_impl::{fd_filestat_set_times_impl, PathGet};
-use crate::sys::fdentry_impl::determine_type_rights;
+use crate::sys::fdentry_impl::{determine_type_rights, OsHandle};
 use crate::sys::host_impl::{self, path_from_host};
 use crate::sys::hostcalls_impl::fs_helpers::PathGetExt;
 use crate::{wasi, Error, Result};
@@ -78,8 +78,26 @@ pub(crate) fn fd_fdstat_get(fd: &File) -> Result<wasi::__wasi_fdflags_t> {
     Ok(fdflags)
 }
 
-pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: wasi::__wasi_fdflags_t) -> Result<()> {
-    unimplemented!("fd_fdstat_set_flags")
+pub(crate) fn fd_fdstat_set_flags(
+    fd: &File,
+    fdflags: wasi::__wasi_fdflags_t,
+) -> Result<Option<OsHandle>> {
+    let handle = unsafe { fd.as_raw_handle() };
+
+    let access_mode = winx::file::query_access_information(handle)?;
+
+    let new_access_mode = file_access_mode_from_fdflags(
+        fdflags,
+        access_mode.contains(AccessMode::FILE_READ_DATA),
+        access_mode.contains(AccessMode::FILE_WRITE_DATA)
+            | access_mode.contains(AccessMode::FILE_APPEND_DATA),
+    );
+
+    unsafe {
+        Ok(Some(OsHandle::from(File::from_raw_handle(
+            winx::file::reopen_file(handle, new_access_mode, file_flags_from_fdflags(fdflags))?,
+        ))))
+    }
 }
 
 pub(crate) fn fd_advise(
@@ -119,9 +137,20 @@ pub(crate) fn path_open(
 ) -> Result<File> {
     use winx::file::{AccessMode, CreationDisposition, Flags};
 
+    let is_trunc = oflags & wasi::__WASI_OFLAGS_TRUNC != 0;
+
+    if is_trunc {
+        // Windows does not support append mode when opening for truncation
+        // This is because truncation requires `GENERIC_WRITE` access, which will override the removal
+        // of the `FILE_WRITE_DATA` permission.
+        if fdflags & wasi::__WASI_FDFLAGS_APPEND != 0 {
+            return Err(Error::ENOTSUP);
+        }
+    }
+
     // convert open flags
     // note: the calls to `write(true)` are to bypass an internal OpenOption check
-    // the write flag will ultimately be ignored when `access_mode` is called below.
+    // the write flag will ultimately be ignored when `access_mode` is calculated below.
     let mut opts = OpenOptions::new();
     match creation_disposition_from_oflags(oflags) {
         CreationDisposition::CREATE_ALWAYS => {
@@ -168,7 +197,14 @@ pub(crate) fn path_open(
         },
     }
 
-    opts.access_mode(file_access_mode_from_fdflags(fdflags, read, write).bits())
+    let mut access_mode = file_access_mode_from_fdflags(fdflags, read, write);
+
+    // Truncation requires the special `GENERIC_WRITE` bit set (this is why it doesn't work with append-only mode)
+    if is_trunc {
+        access_mode |= AccessMode::GENERIC_WRITE;
+    }
+
+    opts.access_mode(access_mode.bits())
         .custom_flags(file_flags_from_fdflags(fdflags).bits())
         .open(&path)
         .map_err(Into::into)
@@ -195,12 +231,15 @@ fn file_access_mode_from_fdflags(
 ) -> AccessMode {
     let mut access_mode = AccessMode::READ_CONTROL;
 
+    // Note that `GENERIC_READ` and `GENERIC_WRITE` cannot be used to properly support append-only mode
+    // The file-specific flags `FILE_GENERIC_READ` and `FILE_GENERIC_WRITE` are used here instead
+    // These flags have the same semantic meaning for file objects, but allow removal of specific permissions (see below)
     if read {
-        access_mode.insert(AccessMode::GENERIC_READ);
+        access_mode.insert(AccessMode::FILE_GENERIC_READ);
     }
 
     if write {
-        access_mode.insert(AccessMode::GENERIC_WRITE);
+        access_mode.insert(AccessMode::FILE_GENERIC_WRITE);
     }
 
     // For append, grant the handle FILE_APPEND_DATA access but *not* FILE_WRITE_DATA.

@@ -60,7 +60,7 @@ pub fn instantiate(wasm: &[u8], strategy: Strategy) {
     // aren't caught during validation or compilation. For example, an imported
     // table might not have room for an element segment that we want to
     // initialize into it.
-    let _result = Instance::new(&store, &module, &imports);
+    let _result = Instance::new(&module, &imports);
 }
 
 /// Compile the Wasm buffer, and implicitly fail if we have an unexpected
@@ -96,7 +96,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
     let mut engine: Option<Engine> = None;
     let mut store: Option<Store> = None;
     let mut modules: HashMap<usize, Module> = Default::default();
-    let mut instances: HashMap<usize, HostRef<Instance>> = Default::default();
+    let mut instances: HashMap<usize, Instance> = Default::default();
 
     for call in api.calls {
         match call {
@@ -152,8 +152,8 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 // aren't caught during validation or compilation. For example, an imported
                 // table might not have room for an element segment that we want to
                 // initialize into it.
-                if let Ok(instance) = Instance::new(store.as_ref().unwrap(), &module, &imports) {
-                    instances.insert(id, HostRef::new(instance));
+                if let Ok(instance) = Instance::new(&module, &imports) {
+                    instances.insert(id, instance);
                 }
             }
 
@@ -175,25 +175,22 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                     }
                 };
 
-                let funcs = {
-                    let instance = instance.borrow();
-                    instance
-                        .exports()
-                        .iter()
-                        .filter_map(|e| match e {
-                            Extern::Func(f) => Some(f.clone()),
-                            _ => None,
-                        })
-                        .collect::<Vec<_>>()
-                };
+                let funcs = instance
+                    .exports()
+                    .iter()
+                    .filter_map(|e| match e {
+                        Extern::Func(f) => Some(f.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
 
                 if funcs.is_empty() {
                     continue;
                 }
 
                 let nth = nth % funcs.len();
-                let f = funcs[nth].borrow();
-                let ty = f.r#type();
+                let f = &funcs[nth];
+                let ty = f.ty();
                 let params = match ty
                     .params()
                     .iter()

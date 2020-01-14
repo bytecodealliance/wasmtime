@@ -1,7 +1,7 @@
 use anyhow::{bail, Context};
 use std::fs::File;
 use std::path::Path;
-use wasmtime::{HostRef, Instance, Module, Store};
+use wasmtime::{Instance, Module, Store};
 
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
     let store = Store::default();
@@ -61,13 +61,12 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let instance = HostRef::new(Instance::new(&store, &module, &imports).context(format!(
+    let instance = Instance::new(&module, &imports).context(format!(
         "error while instantiating Wasm module '{}'",
         bin_name,
-    ))?);
+    ))?;
 
     let export = instance
-        .borrow()
         .find_export_by_name("_start")
         .context("expected a _start export")?
         .clone();
@@ -75,7 +74,6 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
     if let Err(trap) = export
         .func()
         .context("expected export to be a func")?
-        .borrow()
         .call(&[])
     {
         bail!("trapped: {:?}", trap);

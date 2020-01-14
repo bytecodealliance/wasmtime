@@ -1,4 +1,4 @@
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 use wasmtime::*;
 
@@ -16,7 +16,7 @@ fn test_import_calling_export() {
     "#;
 
     struct Callback {
-        pub other: RefCell<Option<HostRef<Func>>>,
+        pub other: RefCell<Option<Func>>,
     }
 
     impl Callable for Callback {
@@ -25,7 +25,6 @@ fn test_import_calling_export() {
                 .borrow()
                 .as_ref()
                 .expect("expected a function ref")
-                .borrow()
                 .call(&[])
                 .expect("expected function not to trap");
             Ok(())
@@ -40,18 +39,17 @@ fn test_import_calling_export() {
         other: RefCell::new(None),
     });
 
-    let callback_func = HostRef::new(Func::new(
+    let callback_func = Func::new(
         &store,
         FuncType::new(Box::new([]), Box::new([])),
         callback.clone(),
-    ));
-
-    let imports = vec![callback_func.into()];
-    let instance = HostRef::new(
-        Instance::new(&store, &module, imports.as_slice()).expect("failed to instantiate module"),
     );
 
-    let exports = Ref::map(instance.borrow(), |instance| instance.exports());
+    let imports = vec![callback_func.into()];
+    let instance =
+        Instance::new(&module, imports.as_slice()).expect("failed to instantiate module");
+
+    let exports = instance.exports();
     assert!(!exports.is_empty());
 
     let run_func = exports[0]
@@ -65,8 +63,5 @@ fn test_import_calling_export() {
             .clone(),
     );
 
-    run_func
-        .borrow()
-        .call(&[])
-        .expect("expected function not to trap");
+    run_func.call(&[]).expect("expected function not to trap");
 }

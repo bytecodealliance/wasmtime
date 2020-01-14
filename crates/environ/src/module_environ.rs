@@ -55,6 +55,7 @@ impl<'data> ModuleTranslation<'data> {
 pub struct ModuleEnvironment<'data> {
     /// The result to be filled in.
     result: ModuleTranslation<'data>,
+    imports: u32,
 }
 
 impl<'data> ModuleEnvironment<'data> {
@@ -69,6 +70,7 @@ impl<'data> ModuleEnvironment<'data> {
                 tunables,
                 module_translation: None,
             },
+            imports: 0,
         }
     }
 
@@ -123,10 +125,12 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         );
         self.result.module.functions.push(sig_index);
 
-        self.result
-            .module
-            .imported_funcs
-            .push((String::from(module), String::from(field)));
+        self.result.module.imported_funcs.push((
+            String::from(module),
+            String::from(field),
+            self.imports,
+        ));
+        self.imports += 1;
         Ok(())
     }
 
@@ -139,10 +143,12 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         let plan = TablePlan::for_table(table, &self.result.tunables);
         self.result.module.table_plans.push(plan);
 
-        self.result
-            .module
-            .imported_tables
-            .push((String::from(module), String::from(field)));
+        self.result.module.imported_tables.push((
+            String::from(module),
+            String::from(field),
+            self.imports,
+        ));
+        self.imports += 1;
         Ok(())
     }
 
@@ -160,10 +166,12 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         let plan = MemoryPlan::for_memory(memory, &self.result.tunables);
         self.result.module.memory_plans.push(plan);
 
-        self.result
-            .module
-            .imported_memories
-            .push((String::from(module), String::from(field)));
+        self.result.module.imported_memories.push((
+            String::from(module),
+            String::from(field),
+            self.imports,
+        ));
+        self.imports += 1;
         Ok(())
     }
 
@@ -180,10 +188,12 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         );
         self.result.module.globals.push(global);
 
-        self.result
-            .module
-            .imported_globals
-            .push((String::from(module), String::from(field)));
+        self.result.module.imported_globals.push((
+            String::from(module),
+            String::from(field),
+            self.imports,
+        ));
+        self.imports += 1;
         Ok(())
     }
 

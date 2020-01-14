@@ -1,6 +1,5 @@
 //! Runtime library support for Wasmtime.
 
-#![allow(improper_ctypes)]
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces)]
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]

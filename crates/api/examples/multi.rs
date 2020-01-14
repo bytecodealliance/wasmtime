@@ -62,13 +62,13 @@ fn main() -> Result<()> {
         Box::new([ValType::I32, ValType::I64]),
         Box::new([ValType::I64, ValType::I32]),
     );
-    let callback_func = HostRef::new(Func::new(&store, callback_type, Rc::new(Callback)));
+    let callback_func = Func::new(&store, callback_type, Rc::new(Callback));
 
     // Instantiate.
     println!("Instantiating module...");
     let imports = vec![callback_func.into()];
-    let instance = Instance::new(&store, &module, imports.as_slice())
-        .context("Error instantiating module!")?;
+    let instance =
+        Instance::new(&module, imports.as_slice()).context("Error instantiating module!")?;
 
     // Extract exports.
     println!("Extracting export...");
@@ -83,7 +83,6 @@ fn main() -> Result<()> {
     println!("Calling export \"g\"...");
     let args = vec![Val::I32(1), Val::I64(3)];
     let results = g
-        .borrow()
         .call(&args)
         .map_err(|e| format_err!("> Error calling g! {:?}", e))?;
 
@@ -108,7 +107,6 @@ fn main() -> Result<()> {
         Val::I64(9),
     ];
     let results = round_trip_many
-        .borrow()
         .call(&args)
         .map_err(|e| format_err!("> Error calling round_trip_many! {:?}", e))?;
 

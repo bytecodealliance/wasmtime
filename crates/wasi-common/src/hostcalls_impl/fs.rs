@@ -5,7 +5,6 @@ use crate::fdentry::{Descriptor, FdEntry};
 use crate::helpers::*;
 use crate::memory::*;
 use crate::sandboxed_tty_writer::SandboxedTTYWriter;
-use crate::sys::fdentry_impl::determine_type_rights;
 use crate::sys::hostcalls_impl::fs_helpers::path_open_rights;
 use crate::sys::{host_impl, hostcalls_impl};
 use crate::{helpers, host, wasi, wasi32, Error, Result};
@@ -299,19 +298,24 @@ pub(crate) unsafe fn fd_fdstat_get(
 }
 
 pub(crate) unsafe fn fd_fdstat_set_flags(
-    wasi_ctx: &WasiCtx,
+    wasi_ctx: &mut WasiCtx,
     _memory: &mut [u8],
     fd: wasi::__wasi_fd_t,
     fdflags: wasi::__wasi_fdflags_t,
 ) -> Result<()> {
     trace!("fd_fdstat_set_flags(fd={:?}, fdflags={:#x?})", fd, fdflags);
 
-    let fd = wasi_ctx
-        .get_fd_entry(fd)?
-        .as_descriptor(0, 0)?
-        .as_os_handle();
+    let descriptor = wasi_ctx
+        .get_fd_entry_mut(fd)?
+        .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_FDSTAT_SET_FLAGS, 0)?;
 
-    hostcalls_impl::fd_fdstat_set_flags(&fd, fdflags)
+    if let Some(new_handle) =
+        hostcalls_impl::fd_fdstat_set_flags(&descriptor.as_os_handle(), fdflags)?
+    {
+        *descriptor = Descriptor::OsHandle(new_handle);
+    }
+
+    Ok(())
 }
 
 pub(crate) unsafe fn fd_fdstat_set_rights(
@@ -574,6 +578,11 @@ pub(crate) unsafe fn path_open(
 
     let (needed_base, needed_inheriting) =
         path_open_rights(fs_rights_base, fs_rights_inheriting, oflags, fs_flags);
+    trace!(
+        "     | needed_base = {}, needed_inheriting = {}",
+        needed_base,
+        needed_inheriting
+    );
     let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved = path_get(
         fe,
@@ -593,13 +602,20 @@ pub(crate) unsafe fn path_open(
             | wasi::__WASI_RIGHTS_FD_FILESTAT_SET_SIZE)
         != 0;
 
+    trace!(
+        "     | calling path_open impl: read={}, write={}",
+        read,
+        write
+    );
     let fd = hostcalls_impl::path_open(resolved, read, write, oflags, fs_flags)?;
 
-    // Determine the type of the new file descriptor and which rights contradict with this type
-    let (_ty, max_base, max_inheriting) = determine_type_rights(&fd)?;
     let mut fe = FdEntry::from(fd)?;
-    fe.rights_base &= max_base;
-    fe.rights_inheriting &= max_inheriting;
+    // We need to manually deny the rights which are not explicitly requested.
+    // This should not be needed, but currently determine_type_and_access_rights,
+    // which is used by FdEntry::from, may grant extra rights while inferring it
+    // from the open mode.
+    fe.rights_base &= fs_rights_base;
+    fe.rights_inheriting &= fs_rights_inheriting;
     let guest_fd = wasi_ctx.insert_fd_entry(fe)?;
 
     trace!("     | *fd={:?}", guest_fd);
@@ -709,7 +725,10 @@ pub(crate) unsafe fn fd_filestat_get(
         filestat_ptr
     );
 
-    let fd = wasi_ctx.get_fd_entry(fd)?.as_descriptor(0, 0)?.as_file()?;
+    let fd = wasi_ctx
+        .get_fd_entry(fd)?
+        .as_descriptor(wasi::__WASI_RIGHTS_FD_FILESTAT_GET, 0)?
+        .as_file()?;
     let host_filestat = hostcalls_impl::fd_filestat_get(fd)?;
 
     trace!("     | *filestat_ptr={:?}", host_filestat);

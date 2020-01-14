@@ -198,7 +198,7 @@ unsafe fn test_fd_readwrite_valid_fd(dir_fd: wasi::Fd) {
         0,
         "file",
         wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE | wasi::RIGHTS_POLL_FD_READWRITE,
         0,
         0,
     )

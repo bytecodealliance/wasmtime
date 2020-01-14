@@ -30,8 +30,8 @@ pub fn link_module(
     let mut dependencies = HashSet::new();
 
     let mut function_imports = PrimaryMap::with_capacity(module.imported_funcs.len());
-    for (index, (ref module_name, ref field)) in module.imported_funcs.iter() {
-        match resolver.resolve(module_name, field) {
+    for (index, (module_name, field, import_idx)) in module.imported_funcs.iter() {
+        match resolver.resolve(*import_idx, module_name, field) {
             Some(export_value) => match export_value {
                 Export::Function {
                     address,
@@ -71,8 +71,8 @@ pub fn link_module(
     }
 
     let mut table_imports = PrimaryMap::with_capacity(module.imported_tables.len());
-    for (index, (ref module_name, ref field)) in module.imported_tables.iter() {
-        match resolver.resolve(module_name, field) {
+    for (index, (module_name, field, import_idx)) in module.imported_tables.iter() {
+        match resolver.resolve(*import_idx, module_name, field) {
             Some(export_value) => match export_value {
                 Export::Table {
                     definition,
@@ -110,8 +110,8 @@ pub fn link_module(
     }
 
     let mut memory_imports = PrimaryMap::with_capacity(module.imported_memories.len());
-    for (index, (ref module_name, ref field)) in module.imported_memories.iter() {
-        match resolver.resolve(module_name, field) {
+    for (index, (module_name, field, import_idx)) in module.imported_memories.iter() {
+        match resolver.resolve(*import_idx, module_name, field) {
             Some(export_value) => match export_value {
                 Export::Memory {
                     definition,
@@ -163,8 +163,8 @@ pub fn link_module(
     }
 
     let mut global_imports = PrimaryMap::with_capacity(module.imported_globals.len());
-    for (index, (ref module_name, ref field)) in module.imported_globals.iter() {
-        match resolver.resolve(module_name, field) {
+    for (index, (module_name, field, import_idx)) in module.imported_globals.iter() {
+        match resolver.resolve(*import_idx, module_name, field) {
             Some(export_value) => match export_value {
                 Export::Table { .. } | Export::Memory { .. } | Export::Function { .. } => {
                     return Err(LinkError(format!(
