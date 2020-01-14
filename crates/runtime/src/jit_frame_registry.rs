@@ -2,7 +2,7 @@
 
 use lazy_static::lazy_static;
 use std::collections::BTreeMap;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 lazy_static! {
     static ref REGISTRY: RwLock<JITFrameRegistry> = RwLock::new(JITFrameRegistry::default());
@@ -26,7 +26,7 @@ impl std::fmt::Debug for JITFrameTag {
 }
 
 struct JITFrameRegistry {
-    ranges: BTreeMap<usize, (usize, JITFrameTag)>,
+    ranges: BTreeMap<usize, (usize, Arc<JITFrameTag>)>,
 }
 
 impl Default for JITFrameRegistry {
@@ -39,14 +39,14 @@ impl Default for JITFrameRegistry {
 
 impl JITFrameRegistry {
     fn register(&mut self, fn_start: usize, fn_end: usize, tag: JITFrameTag) {
-        self.ranges.insert(fn_end, (fn_start, tag));
+        self.ranges.insert(fn_end, (fn_start, Arc::new(tag)));
     }
 
     fn unregister(&mut self, fn_end: usize) {
         self.ranges.remove(&fn_end);
     }
 
-    fn find(&self, pc: usize) -> Option<&JITFrameTag> {
+    fn find(&self, pc: usize) -> Option<&Arc<JITFrameTag>> {
         self.ranges
             .range(pc..)
             .next()
@@ -74,7 +74,7 @@ pub fn unregister(_fn_start: usize, fn_end: usize) {
         .unregister(fn_end);
 }
 
-pub fn find(pc: usize) -> Option<JITFrameTag> {
+pub fn find(pc: usize) -> Option<Arc<JITFrameTag>> {
     REGISTRY
         .read()
         .expect("jit frame registry lock got poisoned")

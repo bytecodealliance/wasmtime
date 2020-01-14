@@ -1,6 +1,7 @@
 //! Backtrace object and utilities.
 
 use crate::jit_frame_registry;
+use std::sync::Arc;
 
 /// Information about backtrace frame.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -20,7 +21,7 @@ impl BacktraceFrame {
         self.pc
     }
     /// Additinal frame information.
-    pub fn tag(&self) -> Option<jit_frame_registry::JITFrameTag> {
+    pub fn tag(&self) -> Option<Arc<jit_frame_registry::JITFrameTag>> {
         jit_frame_registry::find(self.pc)
     }
 }
