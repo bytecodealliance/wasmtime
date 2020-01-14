@@ -8,10 +8,6 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
 
-[lib]
-name = "wasmtime"
-crate-type = ["lib", "staticlib", "cdylib"]
-
 [dependencies]
 wasmtime-runtime = { path = "../runtime", version = "0.9.0" }
 wasmtime-environ = { path = "../environ", version = "0.9.0" }

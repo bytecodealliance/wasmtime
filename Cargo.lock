@@ -2008,6 +2008,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmtime-capi"
+version = "0.9.0"
+dependencies = [
+ "wasmtime",
+]
+
+[[package]]
 name = "wasmtime-cli"
 version = "0.9.0"
 dependencies = [
