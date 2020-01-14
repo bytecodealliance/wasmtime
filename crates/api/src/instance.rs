@@ -9,7 +9,7 @@ use anyhow::{Error, Result};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
-use wasmtime_jit::{instantiate, Resolver, SetupError};
+use wasmtime_jit::{CompiledModule, Resolver};
 use wasmtime_runtime::{Export, InstanceHandle, InstantiationError};
 
 struct SimpleResolver<'a> {
@@ -24,7 +24,8 @@ impl Resolver for SimpleResolver<'_> {
     }
 }
 
-pub fn instantiate_in_context(
+fn instantiate_in_context(
+    store: &Store,
     data: &[u8],
     imports: &[Extern],
     module_name: Option<&str>,
@@ -34,18 +35,24 @@ pub fn instantiate_in_context(
     let mut contexts = HashSet::new();
     let debug_info = context.debug_info();
     let mut resolver = SimpleResolver { imports };
-    let instance = instantiate(
+    let mut compiled_module = CompiledModule::new(
         &mut context.compiler(),
         data,
         module_name,
         &mut resolver,
         exports,
         debug_info,
-    )
-    .map_err(|e| -> Error {
+    )?;
+
+    // Register all module signatures
+    for signature in compiled_module.module().signatures.values() {
+        store.register_wasmtime_signature(signature);
+    }
+
+    let instance = compiled_module.instantiate().map_err(|e| -> Error {
         if let Some(trap) = take_api_trap() {
             trap.into()
-        } else if let SetupError::Instantiate(InstantiationError::StartTrap(msg)) = e {
+        } else if let InstantiationError::StartTrap(msg) = e {
             Trap::new(msg).into()
         } else {
             e.into()
@@ -73,6 +80,7 @@ impl Instance {
         let context = store.context().clone();
         let exports = store.global_exports().clone();
         let (mut instance_handle, contexts) = instantiate_in_context(
+            module.store(),
             module.binary().expect("binary"),
             externs,
             module.name(),
