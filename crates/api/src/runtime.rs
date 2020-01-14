@@ -398,7 +398,13 @@ impl Store {
             .cloned()
     }
 
-    pub(crate) fn ptr_eq(a: &Store, b: &Store) -> bool {
+    /// Returns whether the stores `a` and `b` refer to the same underlying
+    /// `Store`.
+    ///
+    /// Because the `Store` type is reference counted multiple clones may point
+    /// to the same underlying storage, and this method can be used to determine
+    /// whether two stores are indeed the same.
+    pub fn same(a: &Store, b: &Store) -> bool {
         Rc::ptr_eq(&a.inner, &b.inner)
     }
 }
