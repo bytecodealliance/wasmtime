@@ -22,6 +22,7 @@ filetime = "0.2.7"
 lazy_static = "1.4.0"
 num = { version = "0.2.0", default-features = false }
 wig = { path = "wig" }
+crossbeam = "0.7.3"
 
 [target.'cfg(unix)'.dependencies]
 yanix = { path = "yanix" }
