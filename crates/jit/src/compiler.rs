@@ -20,7 +20,7 @@ use wasmtime_environ::{
     FunctionBodyData, Module, ModuleVmctxInfo, Relocations, Traps, Tunables, VMOffsets,
 };
 use wasmtime_runtime::{
-    get_mut_trap_registry, jit_frame_registry, InstantiationError, SignatureRegistry,
+    get_mut_trap_registry, jit_function_registry, InstantiationError, SignatureRegistry,
     TrapRegistrationGuard, VMFunctionBody,
 };
 
@@ -89,7 +89,7 @@ impl Drop for Compiler {
         self.trap_registration_guards.clear();
 
         for (start, end) in self.jit_function_ranges.iter() {
-            jit_frame_registry::unregister(*start, *end);
+            jit_function_registry::unregister(*start, *end);
         }
     }
 }
@@ -166,11 +166,11 @@ impl Compiler {
             let body_len = compilation.get(i).body.len();
             self.jit_function_ranges
                 .push((ptr as usize, ptr as usize + body_len));
-            let tag = jit_frame_registry::JITFrameTag {
+            let tag = jit_function_registry::JITFunctionTag {
                 module_id: module.name.clone(),
                 func_index: i.index(),
             };
-            jit_frame_registry::register(ptr as usize, ptr as usize + body_len, tag);
+            jit_function_registry::register(ptr as usize, ptr as usize + body_len, tag);
         }
 
         let dbg = if let Some(debug_data) = debug_data {

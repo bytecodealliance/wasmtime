@@ -1,6 +1,6 @@
 //! Backtrace object and utilities.
 
-use crate::jit_frame_registry;
+use crate::jit_function_registry;
 use std::sync::Arc;
 
 /// Information about backtrace frame.
@@ -21,8 +21,8 @@ impl BacktraceFrame {
         self.pc
     }
     /// Additinal frame information.
-    pub fn tag(&self) -> Option<Arc<jit_frame_registry::JITFrameTag>> {
-        jit_frame_registry::find(self.pc)
+    pub fn tag(&self) -> Option<Arc<jit_function_registry::JITFunctionTag>> {
+        jit_function_registry::find(self.pc)
     }
 }
 
@@ -144,7 +144,7 @@ where
 pub fn get_backtrace() -> Backtrace {
     let mut frames = Backtrace::new();
     capture_stack(|pc| {
-        if let Some(_) = jit_frame_registry::find(pc) {
+        if let Some(_) = jit_function_registry::find(pc) {
             frames.push(BacktraceFrame { pc });
         }
         !frames.full()

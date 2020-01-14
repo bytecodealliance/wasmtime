@@ -35,7 +35,7 @@ mod trap_registry;
 mod traphandlers;
 mod vmcontext;
 
-pub mod jit_frame_registry;
+pub mod jit_function_registry;
 pub mod libcalls;
 
 pub use crate::backtrace::{get_backtrace, Backtrace, BacktraceFrame};
