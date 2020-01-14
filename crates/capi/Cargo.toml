@@ -12,6 +12,9 @@ publish = false
 [lib]
 name = "wasmtime"
 crate-type = ["staticlib", "cdylib"]
+doc = false
+test = false
+doctest = false
 
 [dependencies]
 wasmtime = { path = "../api" }
