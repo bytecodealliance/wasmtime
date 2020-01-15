@@ -1,7 +1,7 @@
 use crate::instance::Instance;
+use backtrace::Backtrace;
 use std::fmt;
 use std::sync::Arc;
-use wasmtime_runtime::{get_backtrace, Backtrace, BacktraceFrame};
 
 /// A struct representing an aborted instruction execution, with a message
 /// indicating the cause.
@@ -12,7 +12,8 @@ pub struct Trap {
 
 struct TrapInner {
     message: String,
-    trace: Vec<FrameInfo>,
+    wasm_trace: Vec<FrameInfo>,
+    native_trace: Backtrace,
 }
 
 fn _assert_trap_is_sync_and_send(t: &Trap) -> (&dyn Sync, &dyn Send) {
@@ -27,21 +28,29 @@ impl Trap {
     /// assert_eq!("unexpected error", trap.message());
     /// ```
     pub fn new<I: Into<String>>(message: I) -> Self {
-        Self::new_with_trace(message, get_backtrace())
+        Trap::new_with_trace(message.into(), Backtrace::new_unresolved())
     }
 
-    pub(crate) fn new_with_trace<I: Into<String>>(message: I, backtrace: Backtrace) -> Self {
-        let mut trace = Vec::with_capacity(backtrace.len());
-        for i in 0..backtrace.len() {
-            // Don't include frames without backtrace info.
-            if let Some(info) = FrameInfo::try_from(backtrace[i]) {
-                trace.push(info);
+    pub(crate) fn from_jit(jit: wasmtime_runtime::Trap) -> Self {
+        Trap::new_with_trace(jit.to_string(), jit.backtrace)
+    }
+
+    fn new_with_trace(message: String, native_trace: Backtrace) -> Self {
+        let mut wasm_trace = Vec::new();
+        for frame in native_trace.frames() {
+            let pc = frame.ip() as usize;
+            if let Some(info) = wasmtime_runtime::jit_function_registry::find(pc) {
+                wasm_trace.push(FrameInfo {
+                    func_index: info.func_index as u32,
+                    module_name: info.module_id.clone(),
+                })
             }
         }
         Trap {
             inner: Arc::new(TrapInner {
-                message: message.into(),
-                trace,
+                message,
+                wasm_trace,
+                native_trace,
             }),
         }
     }
@@ -52,7 +61,7 @@ impl Trap {
     }
 
     pub fn trace(&self) -> &[FrameInfo] {
-        &self.inner.trace
+        &self.inner.wasm_trace
     }
 }
 
@@ -60,7 +69,8 @@ impl fmt::Debug for Trap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Trap")
             .field("message", &self.inner.message)
-            .field("trace", &self.inner.trace)
+            .field("wasm_trace", &self.inner.wasm_trace)
+            .field("native_trace", &self.inner.native_trace)
             .finish()
     }
 }
@@ -98,18 +108,5 @@ impl FrameInfo {
 
     pub fn module_name(&self) -> Option<&str> {
         self.module_name.as_deref()
-    }
-
-    pub(crate) fn try_from(backtrace: BacktraceFrame) -> Option<FrameInfo> {
-        if let Some(tag) = backtrace.tag() {
-            let func_index = tag.func_index as u32;
-            let module_name = tag.module_id.clone();
-            Some(FrameInfo {
-                func_index,
-                module_name,
-            })
-        } else {
-            None
-        }
     }
 }

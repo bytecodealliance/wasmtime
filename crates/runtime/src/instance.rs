@@ -9,7 +9,7 @@ use crate::memory::LinearMemory;
 use crate::mmap::Mmap;
 use crate::signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
 use crate::table::Table;
-use crate::traphandlers::{wasmtime_call, TrapMessageAndStack};
+use crate::traphandlers::{wasmtime_call, Trap};
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport,
     VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
@@ -568,7 +568,7 @@ impl Instance {
 
         // Make the call.
         unsafe { wasmtime_call(callee_vmctx, callee_address) }
-            .map_err(|TrapMessageAndStack(msg, _)| InstantiationError::StartTrap(msg))
+            .map_err(InstantiationError::StartTrap)
     }
 
     /// Invoke the WebAssembly start function of the instance, if one is present.
@@ -1398,6 +1398,6 @@ pub enum InstantiationError {
     Link(#[from] LinkError),
 
     /// A compilation error occured.
-    #[error("Trap occurred while invoking start function: {0}")]
-    StartTrap(String),
+    #[error("Trap occurred while invoking start function")]
+    StartTrap(#[source] Trap),
 }

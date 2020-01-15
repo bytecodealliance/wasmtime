@@ -52,8 +52,8 @@ fn instantiate_in_context(
     let instance = compiled_module.instantiate().map_err(|e| -> Error {
         if let Some(trap) = take_api_trap() {
             trap.into()
-        } else if let InstantiationError::StartTrap(msg) = e {
-            Trap::new(msg).into()
+        } else if let InstantiationError::StartTrap(trap) = e {
+            Trap::from_jit(trap).into()
         } else {
             e.into()
         }
