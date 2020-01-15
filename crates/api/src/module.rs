@@ -4,11 +4,13 @@ use crate::types::{
     TableType, ValType,
 };
 use anyhow::{Error, Result};
+use std::cell::{self, RefCell};
 use std::rc::Rc;
 use wasmparser::{
     validate, CustomSectionKind, ExternalKind, ImportSectionEntryType, ModuleReader, Name,
     OperatorValidatorConfig, SectionCode, ValidatingParserConfig,
 };
+use wasmtime_jit::CompiledModule;
 
 fn into_memory_type(mt: wasmparser::MemoryType) -> MemoryType {
     assert!(!mt.shared);
@@ -88,6 +90,7 @@ struct ModuleInner {
     imports: Box<[ImportType]>,
     exports: Box<[ExportType]>,
     name: Option<String>,
+    compiled: RefCell<Option<CompiledModule>>,
 }
 
 impl Module {
@@ -223,11 +226,24 @@ impl Module {
                 imports: Box::new([]),
                 exports: Box::new([]),
                 name: None,
+                compiled: RefCell::new(None),
             }),
         }
     }
 
-    pub(crate) fn binary(&self) -> Option<&[u8]> {
+    pub(crate) fn compiled_module(&self, store: &Store) -> Result<cell::Ref<CompiledModule>> {
+        if self.inner.compiled.borrow().is_none() {
+            // Compile the module if it is not already compiled.
+            let compiled_module = compile(store, self.binary().expect("binary"), self.name())?;
+            *self.inner.compiled.borrow_mut() = Some(compiled_module);
+        }
+        let compiled_module = cell::Ref::map(self.inner.compiled.borrow(), |inner| {
+            inner.as_ref().unwrap()
+        });
+        Ok(compiled_module)
+    }
+
+    fn binary(&self) -> Option<&[u8]> {
         match &self.inner.source {
             ModuleCodeSource::Binary(b) => Some(b),
             _ => None,
@@ -386,4 +402,24 @@ impl Module {
         inner.exports = exports.into();
         Ok(())
     }
+}
+
+fn compile(store: &Store, binary: &[u8], module_name: Option<&str>) -> Result<CompiledModule> {
+    let context = store.context().clone();
+    let exports = store.global_exports().clone();
+    let debug_info = context.debug_info();
+    let compiled_module = CompiledModule::new(
+        &mut context.compiler(),
+        binary,
+        module_name,
+        exports,
+        debug_info,
+    )?;
+
+    // Register all module signatures
+    for signature in compiled_module.module().signatures.values() {
+        store.register_wasmtime_signature(signature);
+    }
+
+    Ok(compiled_module)
 }

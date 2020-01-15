@@ -4,6 +4,7 @@
 //! steps.
 
 use crate::compiler::Compiler;
+use crate::imports::resolve_imports;
 use crate::link::link_module;
 use crate::resolver::Resolver;
 use std::cell::RefCell;
@@ -18,7 +19,7 @@ use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleEnvironment,
 };
 use wasmtime_runtime::{
-    Export, GdbJitImageRegistration, Imports, InstanceHandle, InstantiationError, VMFunctionBody,
+    Export, GdbJitImageRegistration, InstanceHandle, InstantiationError, VMFunctionBody,
     VMSharedSignatureIndex,
 };
 
@@ -49,7 +50,6 @@ pub enum SetupError {
 struct RawCompiledModule<'data> {
     module: Module,
     finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
-    imports: Imports,
     data_initializers: Box<[DataInitializer<'data>]>,
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<GdbJitImageRegistration>,
@@ -61,7 +61,6 @@ impl<'data> RawCompiledModule<'data> {
         compiler: &mut Compiler,
         data: &'data [u8],
         module_name: Option<&str>,
-        resolver: &mut dyn Resolver,
         debug_info: bool,
     ) -> Result<Self, SetupError> {
         let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
@@ -85,14 +84,12 @@ impl<'data> RawCompiledModule<'data> {
             debug_data,
         )?;
 
-        let imports = link_module(
+        link_module(
             &translation.module,
             &allocated_functions,
             &jt_offsets,
             relocations,
-            resolver,
-        )
-        .map_err(|err| SetupError::Instantiate(InstantiationError::Link(err)))?;
+        );
 
         // Gather up the pointers to the compiled functions.
         let finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody> =
@@ -131,7 +128,6 @@ impl<'data> RawCompiledModule<'data> {
         Ok(Self {
             module: translation.module,
             finished_functions,
-            imports,
             data_initializers: translation.data_initializers.into_boxed_slice(),
             signatures: signatures.into_boxed_slice(),
             dbg_jit_registration,
@@ -143,7 +139,6 @@ impl<'data> RawCompiledModule<'data> {
 pub struct CompiledModule {
     module: Rc<Module>,
     finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
-    imports: Imports,
     data_initializers: Box<[OwnedDataInitializer]>,
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
@@ -156,18 +151,15 @@ impl CompiledModule {
         compiler: &mut Compiler,
         data: &'data [u8],
         module_name: Option<&str>,
-        resolver: &mut dyn Resolver,
         global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
         debug_info: bool,
     ) -> Result<Self, SetupError> {
-        let raw =
-            RawCompiledModule::<'data>::new(compiler, data, module_name, resolver, debug_info)?;
+        let raw = RawCompiledModule::<'data>::new(compiler, data, module_name, debug_info)?;
 
         Ok(Self::from_parts(
             raw.module,
             global_exports,
             raw.finished_functions,
-            raw.imports,
             raw.data_initializers
                 .iter()
                 .map(OwnedDataInitializer::new)
@@ -183,7 +175,6 @@ impl CompiledModule {
         module: Module,
         global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
         finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
-        imports: Imports,
         data_initializers: Box<[OwnedDataInitializer]>,
         signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         dbg_jit_registration: Option<GdbJitImageRegistration>,
@@ -192,7 +183,6 @@ impl CompiledModule {
             module: Rc::new(module),
             global_exports: Rc::clone(&global_exports),
             finished_functions,
-            imports,
             data_initializers,
             signatures,
             dbg_jit_registration: dbg_jit_registration.map(Rc::new),
@@ -204,7 +194,10 @@ impl CompiledModule {
     /// Note that if only one instance of this module is needed, it may be more
     /// efficient to call the top-level `instantiate`, since that avoids copying
     /// the data initializers.
-    pub fn instantiate(&mut self) -> Result<InstanceHandle, InstantiationError> {
+    pub fn instantiate(
+        &self,
+        resolver: &mut dyn Resolver,
+    ) -> Result<InstanceHandle, InstantiationError> {
         let data_initializers = self
             .data_initializers
             .iter()
@@ -213,11 +206,12 @@ impl CompiledModule {
                 data: &*init.data,
             })
             .collect::<Vec<_>>();
+        let imports = resolve_imports(&self.module, resolver)?;
         InstanceHandle::new(
             Rc::clone(&self.module),
             Rc::clone(&self.global_exports),
             self.finished_functions.clone(),
-            self.imports.clone(),
+            imports,
             &data_initializers,
             self.signatures.clone(),
             self.dbg_jit_registration.as_ref().map(|r| Rc::clone(&r)),
@@ -268,13 +262,14 @@ pub fn instantiate(
     global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
     debug_info: bool,
 ) -> Result<InstanceHandle, SetupError> {
-    let raw = RawCompiledModule::new(compiler, data, module_name, resolver, debug_info)?;
-
+    let raw = RawCompiledModule::new(compiler, data, module_name, debug_info)?;
+    let imports = resolve_imports(&raw.module, resolver)
+        .map_err(|err| SetupError::Instantiate(InstantiationError::Link(err)))?;
     InstanceHandle::new(
         Rc::new(raw.module),
         global_exports,
         raw.finished_functions,
-        raw.imports,
+        imports,
         &*raw.data_initializers,
         raw.signatures,
         raw.dbg_jit_registration.map(Rc::new),
