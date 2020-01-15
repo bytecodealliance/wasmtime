@@ -114,9 +114,9 @@ fn test_trap_trace_cb() -> Result<(), String> {
     let trace = e.trace();
     assert_eq!(trace.len(), 2);
     assert_eq!(trace[0].module_name().unwrap(), "hello_mod");
-    assert_eq!(trace[0].func_index(), 1);
+    assert_eq!(trace[0].func_index(), 2);
     assert_eq!(trace[1].module_name().unwrap(), "hello_mod");
-    assert_eq!(trace[1].func_index(), 0);
+    assert_eq!(trace[1].func_index(), 1);
     assert_eq!(e.message(), "cb throw");
 
     Ok(())

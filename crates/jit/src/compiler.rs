@@ -168,7 +168,7 @@ impl Compiler {
                 .push((ptr as usize, ptr as usize + body_len));
             let tag = jit_function_registry::JITFunctionTag {
                 module_id: module.name.clone(),
-                func_index: i.index(),
+                func_index: module.func_index(i).index(),
             };
             jit_function_registry::register(ptr as usize, ptr as usize + body_len, tag);
         }
