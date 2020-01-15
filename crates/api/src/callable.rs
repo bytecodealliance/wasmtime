@@ -141,8 +141,7 @@ impl WrappedCallable for WasmtimeFn {
         // Get the trampoline to call for this function.
         let exec_code_buf = self
             .store
-            .context()
-            .compiler()
+            .compiler_mut()
             .get_published_trampoline(body, &signature, value_size)
             .map_err(|e| Trap::new(format!("trampoline error: {:?}", e)))?;
 

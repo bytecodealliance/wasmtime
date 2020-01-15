@@ -1,4 +1,3 @@
-use crate::context::Context;
 use crate::externals::Extern;
 use crate::module::Module;
 use crate::runtime::Store;
@@ -6,9 +5,6 @@ use crate::trampoline::take_api_trap;
 use crate::trap::Trap;
 use crate::types::{ExportType, ExternType};
 use anyhow::{Error, Result};
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
 use wasmtime_jit::{CompiledModule, Resolver};
 use wasmtime_runtime::{Export, InstanceHandle, InstantiationError};
 
@@ -29,19 +25,15 @@ fn instantiate_in_context(
     data: &[u8],
     imports: &[Extern],
     module_name: Option<&str>,
-    context: Context,
-    exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
-) -> Result<(InstanceHandle, HashSet<Context>), Error> {
-    let mut contexts = HashSet::new();
-    let debug_info = context.debug_info();
+) -> Result<InstanceHandle> {
     let mut resolver = SimpleResolver { imports };
     let mut compiled_module = CompiledModule::new(
-        &mut context.compiler(),
+        &mut store.compiler_mut(),
         data,
         module_name,
         &mut resolver,
-        exports,
-        debug_info,
+        store.global_exports().clone(),
+        store.engine().config().debug_info,
     )?;
 
     // Register all module signatures
@@ -58,34 +50,24 @@ fn instantiate_in_context(
             e.into()
         }
     })?;
-    contexts.insert(context);
-    Ok((instance, contexts))
+    Ok(instance)
 }
 
 #[derive(Clone)]
 pub struct Instance {
     instance_handle: InstanceHandle,
-
     module: Module,
-
-    // We need to keep CodeMemory alive.
-    contexts: HashSet<Context>,
-
     exports: Box<[Extern]>,
 }
 
 impl Instance {
     pub fn new(module: &Module, externs: &[Extern]) -> Result<Instance, Error> {
         let store = module.store();
-        let context = store.context().clone();
-        let exports = store.global_exports().clone();
-        let (mut instance_handle, contexts) = instantiate_in_context(
-            module.store(),
+        let mut instance_handle = instantiate_in_context(
+            store,
             module.binary().expect("binary"),
             externs,
             module.name(),
-            context,
-            exports,
         )?;
 
         let exports = {
@@ -104,7 +86,6 @@ impl Instance {
         Ok(Instance {
             instance_handle,
             module: module.clone(),
-            contexts,
             exports,
         })
     }
@@ -141,8 +122,6 @@ impl Instance {
     }
 
     pub fn from_handle(store: &Store, instance_handle: InstanceHandle) -> Instance {
-        let contexts = HashSet::new();
-
         let mut exports = Vec::new();
         let mut exports_types = Vec::new();
         let mut mutable = instance_handle.clone();
@@ -175,7 +154,6 @@ impl Instance {
         Instance {
             instance_handle,
             module,
-            contexts,
             exports: exports.into_boxed_slice(),
         }
     }
