@@ -6,7 +6,7 @@ use std::cmp::max;
 use std::{fmt, mem, ptr, slice};
 use thiserror::Error;
 use wasmtime_environ::ir;
-use wasmtime_runtime::{wasmtime_call_trampoline, Export, InstanceHandle, VMInvokeArgument};
+use wasmtime_runtime::{wasmtime_call_trampoline, Export, InstanceHandle, Trap, VMInvokeArgument};
 
 /// A runtime value.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -100,10 +100,7 @@ pub enum ActionOutcome {
     },
 
     /// A trap occurred while the action was executing.
-    Trapped {
-        /// The trap message.
-        message: String,
-    },
+    Trapped(Trap),
 }
 
 /// An error detected while invoking a wasm function or reading a wasm global.
@@ -192,7 +189,7 @@ pub fn invoke(
 
     // Call the trampoline. Pass a null `caller_vmctx` argument as `invoke` is
     // all about calling from the outside world rather than from an instance.
-    if let Err(message) = unsafe {
+    if let Err(trap) = unsafe {
         instance.with_signals_on(|| {
             wasmtime_call_trampoline(
                 callee_vmctx,
@@ -202,7 +199,7 @@ pub fn invoke(
             )
         })
     } {
-        return Ok(ActionOutcome::Trapped { message });
+        return Ok(ActionOutcome::Trapped(trap));
     }
 
     // Load the return values out of `values_vec`.

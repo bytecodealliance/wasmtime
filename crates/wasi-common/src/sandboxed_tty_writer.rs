@@ -1,4 +1,4 @@
-use std::io::{Result, Write};
+use std::io::{IoSlice, Result, Write};
 
 /// An adapter around a `Write` stream that guarantees that its output
 /// is valid UTF-8 and contains no control characters. It does this by
@@ -122,6 +122,27 @@ where
         }
 
         return Ok(result);
+    }
+
+    fn write_vectored(&mut self, bufs: &[IoSlice]) -> Result<usize> {
+        // Terminal output is [not expected to be atomic], so just write all the
+        // individual buffers in sequence.
+        //
+        // [not expected to be atomic]: https://pubs.opengroup.org/onlinepubs/9699919799/functions/read.html#tag_16_474_08
+        let mut total_written = 0;
+
+        for buf in bufs {
+            let written = self.write(buf)?;
+
+            total_written += written;
+
+            // Stop at the first point where the OS writes less than we asked.
+            if written < buf.len() {
+                break;
+            }
+        }
+
+        Ok(total_written)
     }
 
     fn flush(&mut self) -> Result<()> {

@@ -99,7 +99,7 @@ impl WastContext {
                 .clone();
             imports.push(export);
         }
-        let instance = match Instance::new(&self.store, &module, &imports) {
+        let instance = match Instance::new(&module, &imports) {
             Ok(i) => i,
             Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),
         };

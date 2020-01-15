@@ -44,8 +44,9 @@ pub use crate::address_map::{
 };
 pub use crate::cache::{create_new_config as cache_create_new_config, init as cache_init};
 pub use crate::compilation::{
-    Compilation, CompileError, CompiledFunction, Compiler, Relocation, RelocationTarget,
-    Relocations, TrapInformation, Traps,
+    Compilation, CompileError, CompiledFunction, CompiledFunctionUnwindInfo,
+    CompiledFunctionUnwindInfoReloc, Compiler, Relocation, RelocationTarget, Relocations,
+    TrapInformation, Traps,
 };
 pub use crate::cranelift::Cranelift;
 pub use crate::data_structures::*;

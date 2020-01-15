@@ -6,8 +6,10 @@ use crate::trampoline::take_api_trap;
 use crate::trap::Trap;
 use crate::types::{ExportType, ExternType};
 use anyhow::{Error, Result};
-use std::collections::HashSet;
-use wasmtime_jit::{instantiate, Resolver, SetupError};
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
+use wasmtime_jit::{instantiate, Resolver, SetupError, CompiledModule};
 use wasmtime_runtime::{Export, InstanceHandle, InstantiationError};
 
 struct SimpleResolver<'a> {
@@ -22,7 +24,8 @@ impl Resolver for SimpleResolver<'_> {
     }
 }
 
-pub fn instantiate_in_context(
+fn instantiate_in_context(
+    store: &Store,
     data: &[u8],
     imports: &[Extern],
     module_name: Option<&str>,
@@ -31,18 +34,24 @@ pub fn instantiate_in_context(
     let mut contexts = HashSet::new();
     let debug_info = context.debug_info();
     let mut resolver = SimpleResolver { imports };
-    let instance = instantiate(
+    let mut compiled_module = CompiledModule::new(
         &mut context.compiler(),
         data,
         module_name,
         &mut resolver,
         debug_info,
-    )
-    .map_err(|e| -> Error {
+    )?;
+
+    // Register all module signatures
+    for signature in compiled_module.module().signatures.values() {
+        store.register_wasmtime_signature(signature);
+    }
+
+    let instance = compiled_module.instantiate().map_err(|e| -> Error {
         if let Some(trap) = take_api_trap() {
             trap.into()
-        } else if let SetupError::Instantiate(InstantiationError::StartTrap(msg)) = e {
-            Trap::new(msg).into()
+        } else if let InstantiationError::StartTrap(trap) = e {
+            Trap::from_jit(trap).into()
         } else {
             e.into()
         }
@@ -64,9 +73,11 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(store: &Store, module: &Module, externs: &[Extern]) -> Result<Instance, Error> {
+    pub fn new(module: &Module, externs: &[Extern]) -> Result<Instance, Error> {
+        let store = module.store();
         let context = store.context().clone();
         let (mut instance_handle, contexts) = instantiate_in_context(
+            module.store(),
             module.binary().expect("binary"),
             externs,
             module.name(),
@@ -94,12 +105,25 @@ impl Instance {
         })
     }
 
-    pub fn exports(&self) -> &[Extern] {
-        &self.exports
+    /// Returns the associated [`Store`] that this `Instance` is compiled into.
+    ///
+    /// This is the [`Store`] that generally serves as a sort of global cache
+    /// for various instance-related things.
+    pub fn store(&self) -> &Store {
+        self.module.store()
     }
 
+    /// Returns the associated [`Module`] that this `Instance` instantiated.
+    ///
+    /// The corresponding [`Module`] here is a static version of this `Instance`
+    /// which can be used to learn information such as naming information about
+    /// various functions.
     pub fn module(&self) -> &Module {
         &self.module
+    }
+
+    pub fn exports(&self) -> &[Extern] {
+        &self.exports
     }
 
     pub fn find_export_by_name(&self, name: &str) -> Option<&Extern> {

@@ -17,8 +17,7 @@ use wasmtime_interface_types::ModuleData;
 use wasmtime_wasi::{
     create_wasi_instance, old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0,
 };
-#[cfg(feature = "wasi-c")]
-use wasmtime_wasi_c::instantiate_wasi_c;
+
 #[cfg(feature = "wasi-c")]
 use wasmtime_wasi_c::instantiate_wasi_c;
 
@@ -151,7 +150,8 @@ impl RunCommand {
         let wasi_unstable = if self.enable_wasi_c {
             #[cfg(feature = "wasi-c")]
             {
-                let handle = instantiate_wasi_c(&preopen_dirs, &argv, &self.vars)?;
+                let handle =
+                    instantiate_wasi_c("", &preopen_dirs, &argv, &self.vars)?;
                 Instance::from_handle(&store, handle)
             }
             #[cfg(not(feature = "wasi-c"))]
@@ -258,7 +258,7 @@ impl RunCommand {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let instance = Instance::new(store, &module, &imports)
+        let instance = Instance::new(&module, &imports)
             .context(format!("failed to instantiate {:?}", path))?;
 
         Ok((instance, module, data))

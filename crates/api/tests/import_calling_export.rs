@@ -47,7 +47,7 @@ fn test_import_calling_export() {
 
     let imports = vec![callback_func.into()];
     let instance =
-        Instance::new(&store, &module, imports.as_slice()).expect("failed to instantiate module");
+        Instance::new(&module, imports.as_slice()).expect("failed to instantiate module");
 
     let exports = instance.exports();
     assert!(!exports.is_empty());

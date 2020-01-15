@@ -4,7 +4,9 @@
 use crate::trap_registry::get_trap_registry;
 use crate::trap_registry::TrapDescription;
 use crate::vmcontext::{VMContext, VMFunctionBody};
+use backtrace::Backtrace;
 use std::cell::Cell;
+use std::fmt;
 use std::ptr;
 use wasmtime_environ::ir;
 
@@ -19,7 +21,7 @@ extern "C" {
 }
 
 thread_local! {
-    static RECORDED_TRAP: Cell<Option<TrapDescription>> = Cell::new(None);
+    static RECORDED_TRAP: Cell<Option<Trap>> = Cell::new(None);
     static JMP_BUF: Cell<*const u8> = Cell::new(ptr::null());
     static RESET_GUARD_PAGE: Cell<bool> = Cell::new(false);
 }
@@ -44,24 +46,26 @@ pub extern "C" fn CheckIfTrapAtAddress(_pc: *const u8) -> i8 {
 pub extern "C" fn RecordTrap(pc: *const u8, reset_guard_page: bool) {
     // TODO: please see explanation in CheckIfTrapAtAddress.
     let registry = get_trap_registry();
-    let trap_desc = registry
-        .get_trap(pc as usize)
-        .unwrap_or_else(|| TrapDescription {
-            source_loc: ir::SourceLoc::default(),
-            trap_code: ir::TrapCode::StackOverflow,
-        });
+    let trap = Trap {
+        desc: registry
+            .get_trap(pc as usize)
+            .unwrap_or_else(|| TrapDescription {
+                source_loc: ir::SourceLoc::default(),
+                trap_code: ir::TrapCode::StackOverflow,
+            }),
+        backtrace: Backtrace::new_unresolved(),
+    };
 
     if reset_guard_page {
         RESET_GUARD_PAGE.with(|v| v.set(true));
     }
 
     RECORDED_TRAP.with(|data| {
-        assert_eq!(
-            data.get(),
-            None,
+        let prev = data.replace(Some(trap));
+        assert!(
+            prev.is_none(),
             "Only one trap per thread can be recorded at a moment!"
         );
-        data.set(Some(trap_desc))
     });
 }
 
@@ -109,16 +113,33 @@ fn reset_guard_page() {
 #[cfg(not(target_os = "windows"))]
 fn reset_guard_page() {}
 
-fn trap_message() -> String {
-    let trap_desc = RECORDED_TRAP
-        .with(|data| data.replace(None))
-        .expect("trap_message must be called after trap occurred");
+/// Stores trace message with backtrace.
+#[derive(Debug)]
+pub struct Trap {
+    /// What sort of trap happened, as well as where in the original wasm module
+    /// it happened.
+    pub desc: TrapDescription,
+    /// Native stack backtrace at the time the trap occurred
+    pub backtrace: Backtrace,
+}
 
-    format!(
-        "wasm trap: {}, source location: {}",
-        trap_code_to_expected_string(trap_desc.trap_code),
-        trap_desc.source_loc,
-    )
+impl fmt::Display for Trap {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "wasm trap: {}, source location: {}",
+            trap_code_to_expected_string(self.desc.trap_code),
+            self.desc.source_loc
+        )
+    }
+}
+
+impl std::error::Error for Trap {}
+
+fn last_trap() -> Trap {
+    RECORDED_TRAP
+        .with(|data| data.replace(None))
+        .expect("trap_message must be called after trap occurred")
 }
 
 fn trap_code_to_expected_string(trap_code: ir::TrapCode) -> String {
@@ -148,15 +169,9 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
     caller_vmctx: *mut VMContext,
     callee: *const VMFunctionBody,
     values_vec: *mut u8,
-) -> Result<(), String> {
-    if WasmtimeCallTrampoline(
-        vmctx as *mut u8,
-        caller_vmctx as *mut u8,
-        callee,
-        values_vec,
-    ) == 0
-    {
-        Err(trap_message())
+) -> Result<(), Trap> {
+    if WasmtimeCallTrampoline(vmctx as *mut u8, caller_vmctx as *mut u8, callee, values_vec) == 0 {
+        Err(last_trap())
     } else {
         Ok(())
     }
@@ -171,7 +186,7 @@ pub unsafe extern "C" fn wasmtime_call(
     callee: *const VMFunctionBody,
 ) -> Result<(), String> {
     if WasmtimeCall(vmctx as *mut u8, caller_vmctx as *mut u8, callee) == 0 {
-        Err(trap_message())
+        Err(last_trap())
     } else {
         Ok(())
     }

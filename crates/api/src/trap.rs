@@ -1,4 +1,5 @@
 use crate::instance::Instance;
+use backtrace::Backtrace;
 use std::fmt;
 use std::sync::Arc;
 
@@ -11,7 +12,8 @@ pub struct Trap {
 
 struct TrapInner {
     message: String,
-    trace: Vec<FrameInfo>,
+    wasm_trace: Vec<FrameInfo>,
+    native_trace: Backtrace,
 }
 
 fn _assert_trap_is_sync_and_send(t: &Trap) -> (&dyn Sync, &dyn Send) {
@@ -26,10 +28,29 @@ impl Trap {
     /// assert_eq!("unexpected error", trap.message());
     /// ```
     pub fn new<I: Into<String>>(message: I) -> Self {
+        Trap::new_with_trace(message.into(), Backtrace::new_unresolved())
+    }
+
+    pub(crate) fn from_jit(jit: wasmtime_runtime::Trap) -> Self {
+        Trap::new_with_trace(jit.to_string(), jit.backtrace)
+    }
+
+    fn new_with_trace(message: String, native_trace: Backtrace) -> Self {
+        let mut wasm_trace = Vec::new();
+        for frame in native_trace.frames() {
+            let pc = frame.ip() as usize;
+            if let Some(info) = wasmtime_runtime::jit_function_registry::find(pc) {
+                wasm_trace.push(FrameInfo {
+                    func_index: info.func_index as u32,
+                    module_name: info.module_id.clone(),
+                })
+            }
+        }
         Trap {
             inner: Arc::new(TrapInner {
-                message: message.into(),
-                trace: Vec::new(),
+                message,
+                wasm_trace,
+                native_trace,
             }),
         }
     }
@@ -40,7 +61,7 @@ impl Trap {
     }
 
     pub fn trace(&self) -> &[FrameInfo] {
-        &self.inner.trace
+        &self.inner.wasm_trace
     }
 }
 
@@ -48,7 +69,8 @@ impl fmt::Debug for Trap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Trap")
             .field("message", &self.inner.message)
-            .field("trace", &self.inner.trace)
+            .field("wasm_trace", &self.inner.wasm_trace)
+            .field("native_trace", &self.inner.native_trace)
             .finish()
     }
 }
@@ -62,22 +84,29 @@ impl fmt::Display for Trap {
 impl std::error::Error for Trap {}
 
 #[derive(Debug)]
-pub struct FrameInfo;
+pub struct FrameInfo {
+    module_name: Option<String>,
+    func_index: u32,
+}
 
 impl FrameInfo {
     pub fn instance(&self) -> *const Instance {
         unimplemented!("FrameInfo::instance");
     }
 
-    pub fn func_index() -> usize {
-        unimplemented!("FrameInfo::func_index");
+    pub fn func_index(&self) -> u32 {
+        self.func_index
     }
 
-    pub fn func_offset() -> usize {
+    pub fn func_offset(&self) -> usize {
         unimplemented!("FrameInfo::func_offset");
     }
 
-    pub fn module_offset() -> usize {
+    pub fn module_offset(&self) -> usize {
         unimplemented!("FrameInfo::module_offset");
+    }
+
+    pub fn module_name(&self) -> Option<&str> {
+        self.module_name.as_deref()
     }
 }

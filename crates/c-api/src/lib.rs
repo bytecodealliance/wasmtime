@@ -5,15 +5,14 @@
 
 // TODO complete the C API
 
-use super::{
-    AnyRef, Callable, Engine, ExportType, Extern, ExternType, Func, FuncType, Global, GlobalType,
-    ImportType, Instance, Limits, Memory, MemoryType, Module, Store, Table, TableType, Trap, Val,
-    ValType,
-};
-use crate::r#ref::{HostInfo, HostRef};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::{mem, ptr, slice};
+use wasmtime::{
+    AnyRef, Callable, Engine, ExportType, Extern, ExternType, Func, FuncType, Global, GlobalType,
+    HostInfo, HostRef, ImportType, Instance, Limits, Memory, MemoryType, Module, Store, Table,
+    TableType, Trap, Val, ValType,
+};
 
 macro_rules! declare_vec {
     ($name:ident, $elem_ty:path) => {
@@ -569,14 +568,18 @@ impl wasm_val_t {
     }
 }
 
-impl Callable for wasm_func_callback_t {
+struct Callback {
+    callback: wasm_func_callback_t,
+}
+
+impl Callable for Callback {
     fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
         let params = params
             .iter()
             .map(|p| wasm_val_t::from_val(p))
             .collect::<Vec<_>>();
         let mut out_results = vec![wasm_val_t::default(); results.len()];
-        let func = self.expect("wasm_func_callback_t fn");
+        let func = self.callback.expect("wasm_func_callback_t fn");
         let out = unsafe { func(params.as_ptr(), out_results.as_mut_ptr()) };
         if !out.is_null() {
             let trap: Box<wasm_trap_t> = unsafe { Box::from_raw(out) };
@@ -633,7 +636,7 @@ pub unsafe extern "C" fn wasm_func_new(
 ) -> *mut wasm_func_t {
     let store = &(*store).store.borrow();
     let ty = (*ty).functype.clone();
-    let callback = Rc::new(callback);
+    let callback = Rc::new(Callback { callback });
     let func = Box::new(wasm_func_t {
         ext: wasm_extern_t {
             which: ExternHost::Func(HostRef::new(Func::new(store, ty, callback))),
@@ -686,7 +689,6 @@ pub unsafe extern "C" fn wasm_instance_new(
     imports: *const *const wasm_extern_t,
     result: *mut *mut wasm_trap_t,
 ) -> *mut wasm_instance_t {
-    let store = &(*store).store.borrow();
     let mut externs: Vec<Extern> = Vec::with_capacity((*module).imports.len());
     for i in 0..(*module).imports.len() {
         let import = *imports.add(i);
@@ -697,8 +699,21 @@ pub unsafe extern "C" fn wasm_instance_new(
             ExternHost::Memory(e) => Extern::Memory(e.borrow().clone()),
         });
     }
+    let store = &(*store).store.borrow();
     let module = &(*module).module.borrow();
-    match Instance::new(store, module, &externs) {
+    // FIXME(WebAssembly/wasm-c-api#126) what else can we do with the `store`
+    // argument?
+    if !Store::same(&store, module.store()) {
+        if !result.is_null() {
+            let trap = Trap::new("wasm_store_t must match store in wasm_module_t");
+            let trap = Box::new(wasm_trap_t {
+                trap: HostRef::new(trap),
+            });
+            (*result) = Box::into_raw(trap);
+        }
+        return ptr::null_mut();
+    }
+    match Instance::new(module, &externs) {
         Ok(instance) => {
             let instance = Box::new(wasm_instance_t {
                 instance: HostRef::new(instance),
@@ -1242,7 +1257,7 @@ pub unsafe extern "C" fn wasm_globaltype_content(
 pub unsafe extern "C" fn wasm_globaltype_mutability(
     gt: *const wasm_globaltype_t,
 ) -> wasm_mutability_t {
-    use super::Mutability::*;
+    use wasmtime::Mutability::*;
     match (*gt).globaltype.mutability() {
         Const => 0,
         Var => 1,
@@ -1399,7 +1414,7 @@ pub unsafe extern "C" fn wasm_globaltype_new(
     ty: *mut wasm_valtype_t,
     mutability: wasm_mutability_t,
 ) -> *mut wasm_globaltype_t {
-    use super::Mutability::*;
+    use wasmtime::Mutability::*;
     let ty = Box::from_raw(ty);
     let mutability = match mutability {
         0 => Const,

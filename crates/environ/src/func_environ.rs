@@ -362,7 +362,7 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
 }
 
 impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'module_environment> {
-    fn is_wasm_parameter(&self, _func: &ir::Function, index: usize) -> bool {
+    fn is_wasm_parameter(&self, _signature: &ir::Signature, index: usize) -> bool {
         // The first two parameters are the vmctx and caller vmctx. The rest are
         // the wasm parameters.
         index >= 2
