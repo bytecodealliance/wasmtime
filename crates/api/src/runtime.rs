@@ -7,7 +7,7 @@ use wasmtime_environ::{
     ir,
     settings::{self, Configurable},
 };
-use wasmtime_jit::{native, CompilationStrategy, Features, Compiler};
+use wasmtime_jit::{native, CompilationStrategy, Compiler, Features};
 
 // Runtime Environment
 
