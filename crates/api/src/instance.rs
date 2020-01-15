@@ -60,8 +60,11 @@ impl Instance {
     pub fn new(module: &Module, externs: &[Extern]) -> Result<Instance, Error> {
         let store = module.store();
         let context = store.context().clone();
-        let (mut instance_handle, contexts) =
-            instantiate_in_context(&*module.compiled_module(store)?, externs, context)?;
+        let (mut instance_handle, contexts) = instantiate_in_context(
+            module.compiled_module().expect("compiled_module"),
+            externs,
+            context,
+        )?;
 
         let exports = {
             let mut exports = Vec::with_capacity(module.exports().len());
