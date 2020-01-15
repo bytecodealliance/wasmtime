@@ -128,9 +128,12 @@ mod tests {
         {
             println!("calling read_out_of_bounds...");
             let trap = invoke_export(&instance, "read_out_of_bounds").unwrap_err();
-            assert!(trap
-                .message()
-                .starts_with("call error: wasm trap: out of bounds memory access"));
+            assert!(
+                trap.message()
+                    .starts_with("wasm trap: out of bounds memory access"),
+                "bad trap message: {:?}",
+                trap.message()
+            );
         }
 
         // these invoke wasmtime_call_trampoline from callable.rs
@@ -151,7 +154,7 @@ mod tests {
             let trap = read_out_of_bounds_func.call(&[]).unwrap_err();
             assert!(trap
                 .message()
-                .starts_with("call error: wasm trap: out of bounds memory access"));
+                .starts_with("wasm trap: out of bounds memory access"));
         }
         Ok(())
     }
