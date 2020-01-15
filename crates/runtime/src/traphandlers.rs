@@ -184,7 +184,7 @@ pub unsafe extern "C" fn wasmtime_call(
     vmctx: *mut VMContext,
     caller_vmctx: *mut VMContext,
     callee: *const VMFunctionBody,
-) -> Result<(), String> {
+) -> Result<(), Trap> {
     if WasmtimeCall(vmctx as *mut u8, caller_vmctx as *mut u8, callee) == 0 {
         Err(last_trap())
     } else {

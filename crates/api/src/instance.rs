@@ -6,10 +6,8 @@ use crate::trampoline::take_api_trap;
 use crate::trap::Trap;
 use crate::types::{ExportType, ExternType};
 use anyhow::{Error, Result};
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
-use wasmtime_jit::{instantiate, Resolver, SetupError, CompiledModule};
+use std::collections::HashSet;
+use wasmtime_jit::{Resolver, CompiledModule};
 use wasmtime_runtime::{Export, InstanceHandle, InstantiationError};
 
 struct SimpleResolver<'a> {
