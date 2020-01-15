@@ -43,6 +43,7 @@ impl Trap {
                 wasm_trace.push(FrameInfo {
                     func_index: info.func_index as u32,
                     module_name: info.module_id.clone(),
+                    func_name: info.func_name.clone(),
                 })
             }
         }
@@ -87,6 +88,7 @@ impl std::error::Error for Trap {}
 pub struct FrameInfo {
     module_name: Option<String>,
     func_index: u32,
+    func_name: String,
 }
 
 impl FrameInfo {
@@ -108,5 +110,9 @@ impl FrameInfo {
 
     pub fn module_name(&self) -> Option<&str> {
         self.module_name.as_deref()
+    }
+
+    pub fn func_name(&self) -> &str {
+        &self.func_name
     }
 }

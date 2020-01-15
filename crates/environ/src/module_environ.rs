@@ -369,6 +369,11 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         });
         Ok(())
     }
+
+    fn declare_func_name(&mut self, func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
+        self.result.module.func_names[func_index] = name.to_string();
+        Ok(())
+    }
 }
 
 /// Add environment-specific function parameters.

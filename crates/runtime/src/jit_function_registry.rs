@@ -12,6 +12,7 @@ lazy_static! {
 pub struct JITFunctionTag {
     pub module_id: Option<String>,
     pub func_index: usize,
+    pub func_name: String,
 }
 
 impl std::fmt::Debug for JITFunctionTag {

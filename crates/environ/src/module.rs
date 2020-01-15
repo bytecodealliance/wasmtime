@@ -3,7 +3,7 @@
 use crate::module_environ::FunctionBodyData;
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
-use cranelift_entity::{EntityRef, PrimaryMap};
+use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, Global,
     GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
@@ -172,6 +172,9 @@ pub struct Module {
 
     /// Module name.
     pub name: Option<String>,
+
+    /// Function names.
+    pub func_names: SecondaryMap<FuncIndex, String>,
 }
 
 impl Module {
@@ -191,6 +194,7 @@ impl Module {
             start_func: None,
             table_elements: Vec::new(),
             name: None,
+            func_names: SecondaryMap::new(),
         }
     }
 
