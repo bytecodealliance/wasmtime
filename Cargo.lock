@@ -2102,7 +2102,6 @@ dependencies = [
  "log",
  "wasmtime",
  "wasmtime-fuzzing",
- "wasmtime-jit",
 ]
 
 [[package]]

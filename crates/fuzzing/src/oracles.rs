@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use wasmtime::*;
 use wasmtime_environ::{isa, settings};
-use wasmtime_jit::{native, CompilationStrategy, CompiledModule, Compiler, NullResolver};
+use wasmtime_jit::{native, CompilationStrategy, CompiledModule, Compiler};
 
 fn host_isa() -> Box<dyn isa::TargetIsa> {
     let flag_builder = settings::builder();
@@ -76,16 +76,8 @@ pub fn compile(wasm: &[u8], compilation_strategy: CompilationStrategy) {
 
     let isa = host_isa();
     let mut compiler = Compiler::new(isa, compilation_strategy);
-    let mut resolver = NullResolver {};
     let global_exports = Rc::new(RefCell::new(HashMap::new()));
-    let _ = CompiledModule::new(
-        &mut compiler,
-        wasm,
-        None,
-        &mut resolver,
-        global_exports,
-        false,
-    );
+    let _ = CompiledModule::new(&mut compiler, wasm, None, global_exports, false);
 }
 
 /// Invoke the given API calls.
