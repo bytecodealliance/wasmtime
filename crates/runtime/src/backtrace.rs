@@ -96,20 +96,16 @@ where
     use std::mem::MaybeUninit;
     use std::ptr;
     use winapi::um::winnt::{
-        RtlCaptureContext, RtlLookupFunctionEntry, RtlVirtualUnwind, CONTEXT, UNWIND_HISTORY_TABLE,
-        UNW_FLAG_NHANDLER,
+        RtlCaptureContext, RtlLookupFunctionEntry, RtlVirtualUnwind, CONTEXT, UNW_FLAG_NHANDLER,
     };
 
     #[repr(C, align(16))]
     struct WrappedContext(CONTEXT);
-    #[repr(C, align(16))]
-    struct WrappedUnwindHistory(UNWIND_HISTORY_TABLE);
 
     unsafe {
-        let mut ctx = MaybeUninit::uninit();
-        RtlCaptureContext(ctx.as_mut_ptr());
-        let mut ctx = WrappedContext(ctx.assume_init());
-        let mut unwind_history_table = WrappedUnwindHistory(MaybeUninit::zeroed().assume_init());
+        let mut ctx = WrappedContext(MaybeUninit::uninit().assume_init());
+        RtlCaptureContext(&mut ctx.0);
+        let mut unwind_history_table = MaybeUninit::zeroed().assume_init();
         while ctx.0.Rip != 0 {
             let cont = f(ctx.0.Rip as usize);
             if !cont {
@@ -119,8 +115,7 @@ where
             let mut image_base: u64 = 0;
             let mut handler_data: *mut core::ffi::c_void = ptr::null_mut();
             let mut establisher_frame: u64 = 0;
-            let rf =
-                RtlLookupFunctionEntry(ctx.0.Rip, &mut image_base, &mut unwind_history_table.0);
+            let rf = RtlLookupFunctionEntry(ctx.0.Rip, &mut image_base, &mut unwind_history_table);
             if rf.is_null() {
                 ctx.0.Rip = ptr::read(ctx.0.Rsp as *const u64);
                 ctx.0.Rsp += 8;
