@@ -121,3 +121,36 @@ fn test_trap_trace_cb() -> Result<(), String> {
 
     Ok(())
 }
+
+#[test]
+fn test_trap_stack_overflow() -> Result<(), String> {
+    let store = Store::default();
+    let binary = parse_str(
+        r#"
+            (module $rec_mod
+                (func $run (export "run") (call $run))
+            )
+        "#,
+    )
+    .map_err(|e| format!("failed to parse WebAssembly text source: {}", e))?;
+
+    let module =
+        Module::new(&store, &binary).map_err(|e| format!("failed to compile module: {}", e))?;
+    let instance = Instance::new(&module, &[])
+        .map_err(|e| format!("failed to instantiate module: {:?}", e))?;
+    let run_func = instance.exports()[0]
+        .func()
+        .expect("expected function export");
+
+    let e = run_func.call(&[]).err().expect("error calling function");
+
+    let trace = e.trace();
+    assert!(trace.len() >= 32);
+    for i in 0..trace.len() {
+        assert_eq!(trace[i].module_name().unwrap(), "rec_mod");
+        assert_eq!(trace[i].func_index(), 0);
+    }
+    assert!(e.message().contains("call stack exhausted"));
+
+    Ok(())
+}
