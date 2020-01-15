@@ -7,7 +7,6 @@
 //! itself for consumption from other languages.
 
 mod callable;
-mod context;
 mod externals;
 mod instance;
 mod module;
