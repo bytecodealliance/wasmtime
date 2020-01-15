@@ -282,9 +282,7 @@ fn make_trampoline(
     ));
 
     // Add the caller `vmctx` parameter.
-    wrapper_sig.params.push(ir::AbiParam::new(
-        pointer_type,
-    ));
+    wrapper_sig.params.push(ir::AbiParam::new(pointer_type));
 
     // Add the `values_vec` parameter.
     wrapper_sig.params.push(ir::AbiParam::new(pointer_type));

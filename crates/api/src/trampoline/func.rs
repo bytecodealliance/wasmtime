@@ -123,9 +123,7 @@ fn make_trampoline(
     ));
 
     // Add the caller `vmctx` parameter.
-    stub_sig.params.push(ir::AbiParam::new(
-        pointer_type,
-    ));
+    stub_sig.params.push(ir::AbiParam::new(pointer_type));
 
     // Add the `call_id` parameter.
     stub_sig.params.push(ir::AbiParam::new(types::I32));

@@ -7,7 +7,7 @@ use crate::trap::Trap;
 use crate::types::{ExportType, ExternType};
 use anyhow::{Error, Result};
 use std::collections::HashSet;
-use wasmtime_jit::{Resolver, CompiledModule};
+use wasmtime_jit::{CompiledModule, Resolver};
 use wasmtime_runtime::{Export, InstanceHandle, InstantiationError};
 
 struct SimpleResolver<'a> {

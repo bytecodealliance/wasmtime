@@ -170,7 +170,13 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
     callee: *const VMFunctionBody,
     values_vec: *mut u8,
 ) -> Result<(), Trap> {
-    if WasmtimeCallTrampoline(vmctx as *mut u8, caller_vmctx as *mut u8, callee, values_vec) == 0 {
+    if WasmtimeCallTrampoline(
+        vmctx as *mut u8,
+        caller_vmctx as *mut u8,
+        callee,
+        values_vec,
+    ) == 0
+    {
         Err(last_trap())
     } else {
         Ok(())
