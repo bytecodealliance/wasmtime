@@ -2,14 +2,45 @@
 
 use crate::function_table::FunctionTable;
 use region;
+use std::mem::ManuallyDrop;
 use std::{cmp, mem};
 use wasmtime_environ::{Compilation, CompiledFunction};
 use wasmtime_runtime::{Mmap, VMFunctionBody};
 
+struct CodeMemoryEntry {
+    mmap: ManuallyDrop<Mmap>,
+    table: ManuallyDrop<FunctionTable>,
+}
+
+impl CodeMemoryEntry {
+    fn new() -> Self {
+        Self {
+            mmap: ManuallyDrop::new(Mmap::new()),
+            table: ManuallyDrop::new(FunctionTable::new()),
+        }
+    }
+    fn with_capacity(cap: usize) -> Result<Self, String> {
+        Ok(Self {
+            mmap: ManuallyDrop::new(Mmap::with_at_least(cap)?),
+            table: ManuallyDrop::new(FunctionTable::new()),
+        })
+    }
+}
+
+impl Drop for CodeMemoryEntry {
+    fn drop(&mut self) {
+        unsafe {
+            // Table needs to be freed before mmap.
+            ManuallyDrop::drop(&mut self.table);
+            ManuallyDrop::drop(&mut self.mmap);
+        }
+    }
+}
+
 /// Memory manager for executable code.
 pub struct CodeMemory {
-    current: (Mmap, FunctionTable),
-    mmaps: Vec<(Mmap, FunctionTable)>,
+    current: CodeMemoryEntry,
+    entries: Vec<CodeMemoryEntry>,
     position: usize,
     published: usize,
 }
@@ -23,8 +54,8 @@ impl CodeMemory {
     /// Create a new `CodeMemory` instance.
     pub fn new() -> Self {
         Self {
-            current: (Mmap::new(), FunctionTable::new()),
-            mmaps: Vec::new(),
+            current: CodeMemoryEntry::new(),
+            entries: Vec::new(),
             position: 0,
             published: 0,
         }
@@ -81,19 +112,20 @@ impl CodeMemory {
         self.push_current(0)
             .expect("failed to push current memory map");
 
-        for (m, t) in &mut self.mmaps[self.published..] {
+        for CodeMemoryEntry { mmap: m, table: t } in &mut self.entries[self.published..] {
+            // Remove write access to the pages due to the relocation fixups.
+            t.publish(m.as_ptr() as u64)
+                .expect("failed to publish function table");
+
             if !m.is_empty() {
                 unsafe {
                     region::protect(m.as_mut_ptr(), m.len(), region::Protection::ReadExecute)
                 }
                 .expect("unable to make memory readonly and executable");
             }
-
-            t.publish(m.as_ptr() as u64)
-                .expect("failed to publish function table");
         }
 
-        self.published = self.mmaps.len();
+        self.published = self.entries.len();
     }
 
     /// Allocate `size` bytes of memory which can be made executable later by
@@ -103,7 +135,7 @@ impl CodeMemory {
     ///
     /// TODO: Add an alignment flag.
     fn allocate(&mut self, size: usize) -> Result<(&mut [u8], &mut FunctionTable), String> {
-        if self.current.0.len() - self.position < size {
+        if self.current.mmap.len() - self.position < size {
             self.push_current(cmp::max(0x10000, size))?;
         }
 
@@ -111,8 +143,8 @@ impl CodeMemory {
         self.position += size;
 
         Ok((
-            &mut self.current.0.as_mut_slice()[old_position..self.position],
-            &mut self.current.1,
+            &mut self.current.mmap.as_mut_slice()[old_position..self.position],
+            &mut self.current.table,
         ))
     }
 
@@ -153,12 +185,19 @@ impl CodeMemory {
         // Keep unwind information 32-bit aligned (round up to the nearest 4 byte boundary)
         let padding = ((func.body.len() + 3) & !3) - func.body.len();
         let (unwind, remainder) = remainder.split_at_mut(padding + func.unwind_info.len());
-        unwind[padding..].copy_from_slice(&func.unwind_info);
+        let mut relocs = Vec::new();
+        func.unwind_info
+            .serialize(&mut unwind[padding..], &mut relocs);
 
         let unwind_start = func_end + (padding as u32);
         let unwind_end = unwind_start + (func.unwind_info.len() as u32);
 
-        table.add_function(func_start, func_end, unwind_start);
+        relocs.iter_mut().for_each(move |r| {
+            r.offset += unwind_start;
+            r.addend += func_start;
+        });
+
+        table.add_function(func_start, func_end, unwind_start, &relocs);
 
         (unwind_end, remainder, table, vmfunc)
     }
@@ -174,20 +213,17 @@ impl CodeMemory {
     fn push_current(&mut self, new_size: usize) -> Result<(), String> {
         let previous = mem::replace(
             &mut self.current,
-            (
-                if new_size == 0 {
-                    Mmap::new()
-                } else {
-                    Mmap::with_at_least(cmp::max(0x10000, new_size))?
-                },
-                FunctionTable::new(),
-            ),
+            if new_size == 0 {
+                CodeMemoryEntry::new()
+            } else {
+                CodeMemoryEntry::with_capacity(cmp::max(0x10000, new_size))?
+            },
         );
 
-        if !previous.0.is_empty() {
-            self.mmaps.push(previous);
+        if !previous.mmap.is_empty() {
+            self.entries.push(previous);
         } else {
-            assert_eq!(previous.1.len(), 0);
+            assert_eq!(previous.table.len(), 0);
         }
 
         self.position = 0;

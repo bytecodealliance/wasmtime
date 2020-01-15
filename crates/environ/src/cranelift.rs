@@ -3,7 +3,8 @@
 use crate::address_map::{FunctionAddressMap, InstructionAddressMap};
 use crate::cache::{ModuleCacheData, ModuleCacheDataTupleType, ModuleCacheEntry};
 use crate::compilation::{
-    Compilation, CompileError, CompiledFunction, Relocation, RelocationTarget, TrapInformation,
+    Compilation, CompileError, CompiledFunction, CompiledFunctionUnwindInfo, Relocation,
+    RelocationTarget, TrapInformation,
 };
 use crate::func_environ::{
     get_func_name, get_imported_memory32_grow_name, get_imported_memory32_size_name,
@@ -204,6 +205,7 @@ impl crate::compilation::Compiler for Cranelift {
                         context.func.name = get_func_name(func_index);
                         context.func.signature =
                             module.signatures[module.functions[func_index]].clone();
+                        context.func.collect_frame_layout_info();
                         if generate_debug_info {
                             context.func.collect_debug_info();
                         }
@@ -217,7 +219,6 @@ impl crate::compilation::Compiler for Cranelift {
                         )?;
 
                         let mut code_buf: Vec<u8> = Vec::new();
-                        let mut unwind_info = Vec::new();
                         let mut reloc_sink = RelocSink::new(func_index);
                         let mut trap_sink = TrapSink::new();
                         let mut stackmap_sink = binemit::NullStackmapSink {};
@@ -233,7 +234,7 @@ impl crate::compilation::Compiler for Cranelift {
                                 CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
                             })?;
 
-                        context.emit_unwind_info(isa, &mut unwind_info);
+                        let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context);
 
                         let address_transform = if generate_debug_info {
                             let body_len = code_buf.len();

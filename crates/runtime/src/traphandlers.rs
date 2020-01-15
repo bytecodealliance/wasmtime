@@ -1,6 +1,7 @@
 //! WebAssembly trap handling, which is built on top of the lower-level
 //! signalhandling mechanisms.
 
+use crate::backtrace::{get_backtrace, Backtrace};
 use crate::trap_registry::get_trap_registry;
 use crate::trap_registry::TrapDescription;
 use crate::vmcontext::{VMContext, VMFunctionBody};
@@ -18,7 +19,7 @@ extern "C" {
 }
 
 thread_local! {
-    static RECORDED_TRAP: Cell<Option<TrapDescription>> = Cell::new(None);
+    static RECORDED_TRAP: Cell<Option<(TrapDescription, Backtrace)>> = Cell::new(None);
     static JMP_BUF: Cell<*const u8> = Cell::new(ptr::null());
     static RESET_GUARD_PAGE: Cell<bool> = Cell::new(false);
 }
@@ -50,6 +51,8 @@ pub extern "C" fn RecordTrap(pc: *const u8, reset_guard_page: bool) {
             trap_code: ir::TrapCode::StackOverflow,
         });
 
+    let trap_backtrace = get_backtrace();
+
     if reset_guard_page {
         RESET_GUARD_PAGE.with(|v| v.set(true));
     }
@@ -60,7 +63,7 @@ pub extern "C" fn RecordTrap(pc: *const u8, reset_guard_page: bool) {
             None,
             "Only one trap per thread can be recorded at a moment!"
         );
-        data.set(Some(trap_desc))
+        data.set(Some((trap_desc, trap_backtrace)))
     });
 }
 
@@ -108,15 +111,22 @@ fn reset_guard_page() {
 #[cfg(not(target_os = "windows"))]
 fn reset_guard_page() {}
 
-fn trap_message() -> String {
+/// Stores trace message with backtrace.
+#[derive(Debug)]
+pub struct TrapMessageAndStack(pub String, pub Backtrace);
+
+fn trap_message_and_stack() -> TrapMessageAndStack {
     let trap_desc = RECORDED_TRAP
         .with(|data| data.replace(None))
         .expect("trap_message must be called after trap occurred");
 
-    format!(
-        "wasm trap: {}, source location: {}",
-        trap_code_to_expected_string(trap_desc.trap_code),
-        trap_desc.source_loc,
+    TrapMessageAndStack(
+        format!(
+            "wasm trap: {}, source location: {}",
+            trap_code_to_expected_string(trap_desc.0.trap_code),
+            trap_desc.0.source_loc,
+        ),
+        trap_desc.1,
     )
 }
 
@@ -146,9 +156,9 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
     vmctx: *mut VMContext,
     callee: *const VMFunctionBody,
     values_vec: *mut u8,
-) -> Result<(), String> {
+) -> Result<(), TrapMessageAndStack> {
     if WasmtimeCallTrampoline(vmctx as *mut u8, callee, values_vec) == 0 {
-        Err(trap_message())
+        Err(trap_message_and_stack())
     } else {
         Ok(())
     }
@@ -160,9 +170,9 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
 pub unsafe extern "C" fn wasmtime_call(
     vmctx: *mut VMContext,
     callee: *const VMFunctionBody,
-) -> Result<(), String> {
+) -> Result<(), TrapMessageAndStack> {
     if WasmtimeCall(vmctx as *mut u8, callee) == 0 {
-        Err(trap_message())
+        Err(trap_message_and_stack())
     } else {
         Ok(())
     }

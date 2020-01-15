@@ -16,12 +16,12 @@ use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
 use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex};
 use wasmtime_environ::{
-    Compilation, CompileError, CompiledFunction, Compiler as _C, FunctionBodyData, Module,
-    ModuleVmctxInfo, Relocations, Traps, Tunables, VMOffsets,
+    Compilation, CompileError, CompiledFunction, CompiledFunctionUnwindInfo, Compiler as _C,
+    FunctionBodyData, Module, ModuleVmctxInfo, Relocations, Traps, Tunables, VMOffsets,
 };
 use wasmtime_runtime::{
-    get_mut_trap_registry, InstantiationError, SignatureRegistry, TrapRegistrationGuard,
-    VMFunctionBody,
+    get_mut_trap_registry, jit_function_registry, InstantiationError, SignatureRegistry,
+    TrapRegistrationGuard, VMFunctionBody,
 };
 
 /// Select which kind of compilation to use.
@@ -51,6 +51,7 @@ pub struct Compiler {
 
     code_memory: CodeMemory,
     trap_registration_guards: Vec<TrapRegistrationGuard>,
+    jit_function_ranges: Vec<(usize, usize)>,
     trampoline_park: HashMap<*const VMFunctionBody, *const VMFunctionBody>,
     signatures: SignatureRegistry,
     strategy: CompilationStrategy,
@@ -66,6 +67,7 @@ impl Compiler {
             isa,
             code_memory: CodeMemory::new(),
             trap_registration_guards: Vec::new(),
+            jit_function_ranges: Vec::new(),
             trampoline_park: HashMap::new(),
             signatures: SignatureRegistry::new(),
             fn_builder_ctx: FunctionBuilderContext::new(),
@@ -85,6 +87,10 @@ impl Drop for Compiler {
         // Having a custom drop implementation we are independent from the field order
         // in the struct what reduces potential human error.
         self.trap_registration_guards.clear();
+
+        for (start, end) in self.jit_function_ranges.iter() {
+            jit_function_registry::unregister(*start, *end);
+        }
     }
 }
 
@@ -155,6 +161,18 @@ impl Compiler {
             &mut self.trap_registration_guards,
         );
 
+        for (i, allocated) in allocated_functions.iter() {
+            let ptr = (*allocated) as *const VMFunctionBody;
+            let body_len = compilation.get(i).body.len();
+            self.jit_function_ranges
+                .push((ptr as usize, ptr as usize + body_len));
+            let tag = jit_function_registry::JITFunctionTag {
+                module_id: module.name.clone(),
+                func_index: i.index(),
+            };
+            jit_function_registry::register(ptr as usize, ptr as usize + body_len, tag);
+        }
+
         let dbg = if let Some(debug_data) = debug_data {
             let target_config = self.isa.frontend_config();
             let ofs = VMOffsets::new(target_config.pointer_bytes(), &module);
@@ -215,6 +233,7 @@ impl Compiler {
                     signature,
                     value_size,
                 )?;
+
                 entry.insert(body);
                 body
             }
@@ -266,6 +285,7 @@ fn make_trampoline(
 
     let mut context = Context::new();
     context.func = ir::Function::with_name_signature(ir::ExternalName::user(0, 0), wrapper_sig);
+    context.func.collect_frame_layout_info();
 
     {
         let mut builder = FunctionBuilder::new(&mut context.func, fn_builder_ctx);
@@ -326,7 +346,6 @@ fn make_trampoline(
     }
 
     let mut code_buf = Vec::new();
-    let mut unwind_info = Vec::new();
     let mut reloc_sink = RelocSink {};
     let mut trap_sink = binemit::NullTrapSink {};
     let mut stackmap_sink = binemit::NullStackmapSink {};
@@ -346,7 +365,7 @@ fn make_trampoline(
             )))
         })?;
 
-    context.emit_unwind_info(isa, &mut unwind_info);
+    let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context);
 
     Ok(code_memory
         .allocate_for_function(&CompiledFunction {

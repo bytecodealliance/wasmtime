@@ -9,7 +9,7 @@ use crate::memory::LinearMemory;
 use crate::mmap::Mmap;
 use crate::signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
 use crate::table::Table;
-use crate::traphandlers::wasmtime_call;
+use crate::traphandlers::{wasmtime_call, TrapMessageAndStack};
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport,
     VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
@@ -568,7 +568,7 @@ impl Instance {
 
         // Make the call.
         unsafe { wasmtime_call(callee_vmctx, callee_address) }
-            .map_err(InstantiationError::StartTrap)
+            .map_err(|TrapMessageAndStack(msg, _)| InstantiationError::StartTrap(msg))
     }
 
     /// Invoke the WebAssembly start function of the instance, if one is present.
