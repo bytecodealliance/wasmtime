@@ -175,13 +175,17 @@ impl RelocSink {
     }
 }
 
-struct TrapSink {
+/// Implementation of a trap sink that simply stores all trap info in-memory
+#[derive(Default)]
+pub struct TrapSink {
+    /// The in-memory vector of trap info
     pub traps: Vec<TrapInformation>,
 }
 
 impl TrapSink {
-    fn new() -> Self {
-        Self { traps: Vec::new() }
+    /// Create a new `TrapSink`
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
