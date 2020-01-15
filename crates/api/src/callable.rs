@@ -156,12 +156,7 @@ impl WrappedCallable for WasmtimeFn {
                 )
             })
         } {
-            let message = error.0;
-            let backtrace = error.1;
-
-            let trap = take_api_trap().unwrap_or_else(|| {
-                Trap::new_with_trace(format!("call error: {}", message), backtrace)
-            });
+            let trap = take_api_trap().unwrap_or_else(|| Trap::from_jit(error));
             return Err(trap);
         }
 
