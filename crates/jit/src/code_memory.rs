@@ -40,7 +40,7 @@ impl Drop for CodeMemoryEntry {
 /// Memory manager for executable code.
 pub struct CodeMemory {
     current: CodeMemoryEntry,
-    mmaps: Vec<CodeMemoryEntry>,
+    entries: Vec<CodeMemoryEntry>,
     position: usize,
     published: usize,
 }
@@ -55,7 +55,7 @@ impl CodeMemory {
     pub fn new() -> Self {
         Self {
             current: CodeMemoryEntry::new(),
-            mmaps: Vec::new(),
+            entries: Vec::new(),
             position: 0,
             published: 0,
         }
@@ -112,7 +112,7 @@ impl CodeMemory {
         self.push_current(0)
             .expect("failed to push current memory map");
 
-        for CodeMemoryEntry { mmap: m, table: t } in &mut self.mmaps[self.published..] {
+        for CodeMemoryEntry { mmap: m, table: t } in &mut self.entries[self.published..] {
             // Remove write access to the pages due to the relocation fixups.
             t.publish(m.as_ptr() as u64)
                 .expect("failed to publish function table");
@@ -125,7 +125,7 @@ impl CodeMemory {
             }
         }
 
-        self.published = self.mmaps.len();
+        self.published = self.entries.len();
     }
 
     /// Allocate `size` bytes of memory which can be made executable later by
@@ -221,7 +221,7 @@ impl CodeMemory {
         );
 
         if !previous.mmap.is_empty() {
-            self.mmaps.push(previous);
+            self.entries.push(previous);
         } else {
             assert_eq!(previous.table.len(), 0);
         }
