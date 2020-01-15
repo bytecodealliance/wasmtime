@@ -109,13 +109,14 @@ pub fn code(
     translation_ctx: &SimpleContext,
 ) -> Result<TranslatedCodeSection, Error> {
     let func_count = code.get_count();
+    let mut relocs = binemit::NullRelocSink {};
+    let mut traps = binemit::NullTrapSink {};
+
     let mut session = CodeGenSession::new(func_count, translation_ctx);
 
     for (idx, body) in code.into_iter().enumerate() {
         let body = body?;
-        let mut relocs = UnimplementedRelocSink;
-
-        function_body::translate_wasm(&mut session, &mut relocs, idx as u32, &body)?;
+        function_body::translate_wasm(&mut session, &mut relocs, &mut traps, idx as u32, &body)?;
     }
 
     Ok(session.into_translated_code_section()?)

@@ -22,6 +22,7 @@ thiserror = "1.0.9"
 cranelift-codegen = { path = "../../cranelift/codegen", version = "0.61.0" }
 multi_mut = "0.1"
 either = "1.5"
+hashers = "1.0"
 typemap = "0.3"
 more-asserts = "0.2.1"
 

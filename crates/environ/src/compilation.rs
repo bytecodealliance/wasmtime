@@ -165,7 +165,7 @@ impl Compilation {
 
     /// Allocates the compilation result with the given function bodies.
     pub fn from_buffer(
-        buffer: Vec<u8>,
+        buffer: &[u8],
         functions: impl IntoIterator<Item = (Range<usize>, ir::JumpTableOffsets, Range<usize>)>,
     ) -> Self {
         Self::new(

@@ -4,18 +4,19 @@ use self::registers::*;
 use crate::error::Error;
 use crate::microwasm::{BrTarget, Ieee32, Ieee64, SignlessType, Type, Value, F32, F64, I32, I64};
 use crate::module::ModuleContext;
-use cranelift_codegen::{binemit, ir};
+use cranelift_codegen::{
+    binemit,
+    ir::{self, TrapCode},
+};
 use dynasm::dynasm;
 use dynasmrt::x64::Assembler;
 use dynasmrt::{AssemblyOffset, DynamicLabel, DynasmApi, DynasmLabelApi, ExecutableBuffer};
-use either::Either;
-
 use std::{
-    any::{Any, TypeId},
+    any::Any,
     cmp::Ordering,
-    collections::HashMap,
     convert::{TryFrom, TryInto},
     fmt::Display,
+    hash::Hash,
     iter::{self, FromIterator},
     mem,
     ops::RangeInclusive,
@@ -522,12 +523,6 @@ const SCRATCH_REGS: &[GPR] = &[
 ];
 const VMCTX: RegId = rq::RDI;
 
-#[must_use]
-#[derive(Debug, Clone)]
-pub struct FunctionEnd {
-    should_generate_epilogue: bool,
-}
-
 pub struct CodeGenSession<'module, M> {
     assembler: Assembler,
     pub module_context: &'module M,
@@ -556,6 +551,7 @@ impl<'module, M> CodeGenSession<'module, M> {
         &'this mut self,
         func_idx: u32,
         reloc_sink: &'this mut dyn binemit::RelocSink,
+        trap_sink: &'this mut dyn binemit::TrapSink,
     ) -> Context<'this, M> {
         {
             let func_start = &mut self.func_starts[func_idx as usize];
@@ -570,6 +566,7 @@ impl<'module, M> CodeGenSession<'module, M> {
             asm: &mut self.assembler,
             current_function: func_idx,
             reloc_sink,
+            trap_sink,
             func_starts: &self.func_starts,
             labels: &mut self.labels,
             block_state: Default::default(),
@@ -578,16 +575,17 @@ impl<'module, M> CodeGenSession<'module, M> {
     }
 
     fn finalize(&mut self) {
-        let mut values = self.labels.values_mut().collect::<Vec<_>>();
-        values.sort_unstable_by_key(|(_, align, _)| *align);
-        for (label, align, func) in values {
-            if let Some(mut func) = func.take() {
-                dynasm!(self.assembler
-                    ; .align *align as usize
-                );
-                self.assembler.dynamic_label(label.0);
-                func(&mut self.assembler);
-            }
+        for LabelInfo {
+            label,
+            align,
+            callback,
+        } in self.labels.drain()
+        {
+            dynasm!(self.assembler
+                ; .align align as usize
+                ;; self.assembler.dynamic_label(label.0)
+                ;; callback(IntoLabelContext { asm: &mut self.assembler, extra: &mut ()})
+            );
         }
     }
 
@@ -688,14 +686,78 @@ impl From<Value> for LabelValue {
     }
 }
 
-type Labels = HashMap<
-    (u32, Either<TypeId, (LabelValue, Option<LabelValue>)>),
-    (Label, u32, Option<Box<dyn FnMut(&mut Assembler)>>),
->;
+mod labels {
+    use crate::backend::{IntoLabel, IntoLabelContext, Label};
+    use dynasmrt::x64::Assembler;
+    use std::{
+        any::{Any, TypeId},
+        collections::hash_map::{HashMap, RandomState},
+        hash::{BuildHasher, BuildHasherDefault, Hash, Hasher},
+    };
+
+    pub struct LabelInfo<Extra: ?Sized> {
+        pub label: Label,
+        pub align: u32,
+        pub callback: Box<dyn FnOnce(IntoLabelContext<'_, Extra>)>,
+    }
+
+    pub struct Labels<Extra: ?Sized = (), S = RandomState> {
+        builder: S,
+        map: HashMap<u64, LabelInfo<Extra>, BuildHasherDefault<hashers::null::PassThroughHasher>>,
+    }
+
+    impl<E: ?Sized, S: Default> Default for Labels<E, S> {
+        fn default() -> Self {
+            Labels {
+                builder: Default::default(),
+                map: Default::default(),
+            }
+        }
+    }
+
+    impl<E: ?Sized, S: BuildHasher> Labels<E, S> {
+        fn hash<K: Hash + Any>(&self, k: &K) -> u64 {
+            let mut hasher = self.builder.build_hasher();
+            (TypeId::of::<K>(), k).hash(&mut hasher);
+            hasher.finish()
+        }
+
+        pub fn drain(&mut self) -> impl Iterator<Item = LabelInfo<E>> + '_ {
+            self.map.drain().map(|(_, info)| info)
+        }
+
+        pub fn get<K: Hash + Any>(&self, k: &K) -> Option<&LabelInfo<E>> {
+            self.map.get(&self.hash(k))
+        }
+
+        pub fn insert<L>(&mut self, l: impl FnOnce() -> Label, align: u32, label: L) -> Label
+        where
+            L: IntoLabel<E>,
+            L::Callback: 'static,
+        {
+            let key = label.key();
+            let val = self
+                .map
+                .entry(self.hash(&key))
+                .or_insert_with(move || LabelInfo {
+                    label: l(),
+                    align,
+                    callback: Box::new(label.callback()),
+                });
+
+            val.align = val.align.max(align);
+
+            val.label
+        }
+    }
+}
+
+use labels::{LabelInfo, Labels};
 
 pub struct Context<'this, M> {
     pub asm: &'this mut Assembler,
     reloc_sink: &'this mut dyn binemit::RelocSink,
+    trap_sink: &'this mut dyn binemit::TrapSink,
     module_context: &'this M,
     current_function: u32,
     func_starts: &'this Vec<(Option<AssemblyOffset>, DynamicLabel)>,
@@ -732,7 +794,7 @@ macro_rules! int_div {
 
             if let (Some(dividend), Some(divisor)) = (dividend.$imm_fn(), divisor.$imm_fn()) {
                 if divisor == 0 {
-                    self.trap();
+                    self.trap(TrapCode::IntegerDivisionByZero);
                     self.push(ValueLocation::Immediate((0 as $unsigned_ty).into()))?;
                 } else {
                     self.push(ValueLocation::Immediate(
@@ -777,7 +839,7 @@ macro_rules! int_div {
 
             if let (Some(dividend), Some(divisor)) = (dividend.$imm_fn(), divisor.$imm_fn()) {
                 if divisor == 0 {
-                    self.trap();
+                    self.trap(TrapCode::IntegerDivisionByZero);
                     self.push(ValueLocation::Immediate((0 as $signed_ty).into()))?;
                 } else {
                     self.push(ValueLocation::Immediate(
@@ -820,7 +882,7 @@ macro_rules! int_div {
 
             if let (Some(dividend), Some(divisor)) = (dividend.$imm_fn(), divisor.$imm_fn()) {
                 if divisor == 0 {
-                    self.trap();
+                    self.trap(TrapCode::IntegerDivisionByZero);
                     self.push(ValueLocation::Immediate((0 as $unsigned_ty).into()))?;
                 } else {
                     self.push(ValueLocation::Immediate(
@@ -862,7 +924,7 @@ macro_rules! int_div {
 
             if let (Some(dividend), Some(divisor)) = (dividend.$imm_fn(), divisor.$imm_fn()) {
                 if divisor == 0 {
-                    self.trap();
+                    self.trap(TrapCode::IntegerDivisionByZero);
                     self.push(ValueLocation::Immediate((0 as $signed_ty).into()))?;
                 } else {
                     self.push(ValueLocation::Immediate((dividend % divisor).into()))?;
@@ -1838,7 +1900,6 @@ macro_rules! load {
                 let vmctx = GPR::Rq(VMCTX);
 
                 if ctx.module_context.emit_memory_bounds_check() {
-                    let trap_label = ctx.trap_label();
                     let addr_reg = match runtime_offset {
                         Ok(imm) => {
                             let addr_reg = ctx.take_reg(I64).unwrap();
@@ -1853,7 +1914,6 @@ macro_rules! load {
                                     Err(e) => return Err(e),
                                     Ok(o) => o.unwrap(),
                                 }
-
                             } else if offset > 0 {
                                 let addr_reg = ctx.take_reg(I64).unwrap();
                                 dynasm!(ctx.asm
@@ -1874,12 +1934,12 @@ macro_rules! load {
                         }
                     };
                     dynasm!(ctx.asm
-                        ; cmp [
+                        ; cmp Rq(addr_reg.rq().unwrap()), [
                             Rq(reg.unwrap_or(vmctx).rq().unwrap()) +
                                 mem_offset +
                                 ctx.module_context.vmmemory_definition_current_length() as i32
-                        ], Rq(addr_reg.rq().unwrap())
-                        ; jna =>trap_label.0
+                        ]
+                        ;; ctx.trap_if(cc::GE_U, TrapCode::HeapOutOfBounds)
                     );
                     ctx.block_state.regs.release(addr_reg)?;
                 }
@@ -2026,7 +2086,6 @@ macro_rules! store {
                 let vmctx = GPR::Rq(VMCTX);
 
                 if ctx.module_context.emit_memory_bounds_check() {
-                    let trap_label = ctx.trap_label();
                     let addr_reg = match runtime_offset {
                         Ok(imm) => {
                             let addr_reg = ctx.take_reg(I64).unwrap();
@@ -2067,7 +2126,7 @@ macro_rules! store {
                                 mem_offset +
                                 ctx.module_context.vmmemory_definition_current_length() as i32
                         ]
-                        ; jae =>trap_label.0
+                        ;; ctx.trap_if(cc::GE_U, TrapCode::HeapOutOfBounds)
                     );
                     ctx.block_state.regs.release(addr_reg)?;
                 }
@@ -3880,6 +3939,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         as_f64,
         |a: Ieee64| Ieee32::from_bits((f64::from_bits(a.to_bits()) as f32).to_bits())
     );
+
     pub fn i32_truncate_f32_s(&mut self) -> Result<(), Error> {
         let mut val = self.pop()?;
 
@@ -3898,18 +3958,19 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let float_cmp_mask =
                     self.aligned_label(16, LabelValue::I32(0xCF00_0000_u32 as i32));
                 let zero = self.aligned_label(16, LabelValue::I32(0));
-                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; cvttss2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; cmp Rd(temp.rq().unwrap()), [=>sign_mask.0]
                     ; jne >ret
                     ; ucomiss Rx(reg.rx().unwrap()), Rx(reg.rx().unwrap())
-                    ; jp =>trap_label.0
+                    ; jp >trap
                     ; ucomiss Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
-                    ; jnae =>trap_label.0
+                    ; jnae >trap
                     ; ucomiss Rx(reg.rx().unwrap()), [=>zero.0]
-                    ; jnb =>trap_label.0
+                    ; jb >ret
+                ; trap:
+                    ;; self.trap(TrapCode::BadConversionToInteger)
                 ; ret:
                 );
 
@@ -3941,22 +4002,24 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
                 let float_cmp_mask =
                     self.aligned_label(16, LabelValue::I32(0x4F00_0000_u32 as i32));
-                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; ucomiss Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
                     ; jae >else_
-                    ; jp =>trap_label.0
+                    ; jp >trap
                     ; cvttss2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; test Rd(temp.rq().unwrap()), Rd(temp.rq().unwrap())
-                    ; js =>trap_label.0
+                    ; js >trap
                     ; jmp >ret
                 ; else_:
                     ; subss Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
                     ; cvttss2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; test Rd(temp.rq().unwrap()), Rd(temp.rq().unwrap())
-                    ; js =>trap_label.0
+                    ; js >trap
                     ; add Rq(temp.rq().unwrap()), [=>sign_mask.0]
+                    ; jmp >ret
+                ; trap:
+                    ;; self.trap(TrapCode::BadConversionToInteger)
                 ; ret:
                 );
 
@@ -3989,18 +4052,19 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let float_cmp_mask =
                     self.aligned_label(16, LabelValue::I64(0xC1E0_0000_0020_0000_u64 as i64));
                 let zero = self.aligned_label(16, LabelValue::I64(0));
-                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; cvttsd2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; cmp Rd(temp.rq().unwrap()), [=>sign_mask.0]
                     ; jne >ret
                     ; ucomisd Rx(reg.rx().unwrap()), Rx(reg.rx().unwrap())
-                    ; jp =>trap_label.0
+                    ; jp >trap
                     ; ucomisd Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
-                    ; jna =>trap_label.0
+                    ; jna >trap
                     ; ucomisd Rx(reg.rx().unwrap()), [=>zero.0]
-                    ; jnb =>trap_label.0
+                    ; jb >ret
+                ; trap:
+                    ;; self.trap(TrapCode::BadConversionToInteger)
                 ; ret:
                 );
 
@@ -4032,22 +4096,24 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
                 let float_cmp_mask =
                     self.aligned_label(16, LabelValue::I64(0x41E0_0000_0000_0000_u64 as i64));
-                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; ucomisd Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
                     ; jae >else_
-                    ; jp =>trap_label.0
+                    ; jp >trap
                     ; cvttsd2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; test Rd(temp.rq().unwrap()), Rd(temp.rq().unwrap())
-                    ; js =>trap_label.0
+                    ; js >trap
                     ; jmp >ret
                 ; else_:
                     ; subsd Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
                     ; cvttsd2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; test Rd(temp.rq().unwrap()), Rd(temp.rq().unwrap())
-                    ; js =>trap_label.0
+                    ; js >trap
                     ; add Rq(temp.rq().unwrap()), [=>sign_mask.0]
+                    ; jmp >ret
+                ; trap:
+                    ;; self.trap(TrapCode::BadConversionToInteger)
                 ; ret:
                 );
 
@@ -4129,18 +4195,19 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let float_cmp_mask =
                     self.aligned_label(16, LabelValue::I32(0xDF00_0000_u32 as i32));
                 let zero = self.aligned_label(16, LabelValue::I64(0));
-                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; cvttss2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; cmp Rq(temp.rq().unwrap()), [=>sign_mask.0]
                     ; jne >ret
                     ; ucomiss Rx(reg.rx().unwrap()), Rx(reg.rx().unwrap())
-                    ; jp =>trap_label.0
+                    ; jp >trap
                     ; ucomiss Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
-                    ; jnae =>trap_label.0
+                    ; jnae >trap
                     ; ucomiss Rx(reg.rx().unwrap()), [=>zero.0]
-                    ; jnb =>trap_label.0
+                    ; jb >ret
+                ; trap:
+                    ;; self.trap(TrapCode::BadConversionToInteger)
                 ; ret:
                 );
 
@@ -4173,18 +4240,19 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let float_cmp_mask =
                     self.aligned_label(16, LabelValue::I64(0xC3E0_0000_0000_0000_u64 as i64));
                 let zero = self.aligned_label(16, LabelValue::I64(0));
-                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; cvttsd2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; cmp Rq(temp.rq().unwrap()), [=>sign_mask.0]
                     ; jne >ret
                     ; ucomisd Rx(reg.rx().unwrap()), Rx(reg.rx().unwrap())
-                    ; jp =>trap_label.0
+                    ; jp >trap
                     ; ucomisd Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
-                    ; jnae =>trap_label.0
+                    ; jnae >trap
                     ; ucomisd Rx(reg.rx().unwrap()), [=>zero.0]
-                    ; jnb =>trap_label.0
+                    ; jb >ret
+                ; trap:
+                    ;; self.trap(TrapCode::BadConversionToInteger)
                 ; ret:
                 );
 
@@ -4214,22 +4282,24 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let temp = self.take_reg(I64).unwrap();
                 let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
                 let u64_trunc_f32_const = self.aligned_label(16, LabelValue::I32(0x5F00_0000_i32));
-                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; comiss Rx(reg.rx().unwrap()), [=>u64_trunc_f32_const.0]
                     ; jae >large
-                    ; jp =>trap_label.0
+                    ; jp >trap
                     ; cvttss2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; test Rq(temp.rq().unwrap()), Rq(temp.rq().unwrap())
-                    ; js =>trap_label.0
+                    ; js >trap
                     ; jmp >cont
                 ; large:
                     ; subss Rx(reg.rx().unwrap()), [=>u64_trunc_f32_const.0]
                     ; cvttss2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; test Rq(temp.rq().unwrap()), Rq(temp.rq().unwrap())
-                    ; js =>trap_label.0
+                    ; js >trap
                     ; add Rq(temp.rq().unwrap()), [=>sign_mask.0]
+                    ; jmp >cont
+                ; trap:
+                    ;; self.trap(TrapCode::BadConversionToInteger)
                 ; cont:
                 );
 
@@ -4261,22 +4331,24 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
                 let u64_trunc_f64_const =
                     self.aligned_label(16, LabelValue::I64(0x43E0_0000_0000_0000_i64));
-                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; comisd Rx(reg.rx().unwrap()), [=>u64_trunc_f64_const.0]
                     ; jnb >large
-                    ; jp =>trap_label.0
+                    ; jp >trap
                     ; cvttsd2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; cmp Rq(temp.rq().unwrap()), 0
-                    ; jge >cont
-                    ; jmp =>trap_label.0
+                    ; jl >trap
+                    ; jmp >cont
                 ; large:
                     ; subsd Rx(reg.rx().unwrap()), [=>u64_trunc_f64_const.0]
                     ; cvttsd2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; cmp Rq(temp.rq().unwrap()), 0
-                    ; jnge =>trap_label.0
+                    ; jnge >trap
                     ; add Rq(temp.rq().unwrap()), [=>sign_mask.0]
+                    ; jmp >cont
+                ; trap:
+                    ;; self.trap(TrapCode::BadConversionToInteger)
                 ; cont:
                 );
 
@@ -5636,6 +5708,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Ok(())
     }
 
+    fn trap_if(&mut self, ccode: CondCode, trap_code: TrapCode) {
+        let label = self.create_label();
+        self.br_on_cond_code(label, !ccode);
+        self.trap(trap_code);
+        self.define_label(label);
+    }
+
     pub fn call_indirect(
         &mut self,
         type_id: u32,
@@ -5671,7 +5750,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         self.pass_outgoing_args(&locs)?;
 
-        let fail = self.trap_label().0;
         let table_index = 0;
         let reg_offset = self
             .module_context
@@ -5697,14 +5775,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         });
 
         let temp0 = self.take_reg(I64).unwrap();
-
         dynasm!(self.asm
             ; cmp Rd(callee_reg.rq().unwrap()), [
                 Rq(reg.unwrap_or(vmctx).rq().unwrap()) +
                     offset +
                     self.module_context.vmtable_definition_current_elements() as i32
             ]
-            ; jae =>fail
+            ;; self.trap_if(cc::GE_U, TrapCode::TableOutOfBounds)
             ; imul
                 Rd(callee_reg.rq().unwrap()),
                 Rd(callee_reg.rq().unwrap()),
@@ -5733,7 +5810,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     Rq(callee_reg.rq().unwrap()) +
                     self.module_context.vmcaller_checked_anyfunc_type_index() as i32
             ], Rd(temp1.rq().unwrap())
-            ; jne =>fail
+            ;; self.trap_if(cc::NOT_EQUAL, TrapCode::BadSignature)
             ; mov Rq(VMCTX), [
                 Rq(temp0.rq().unwrap()) +
                     Rq(callee_reg.rq().unwrap()) +
@@ -5879,50 +5956,56 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
     pub fn epilogue(&mut self) {}
 
-    pub fn trap(&mut self) {
-        let trap_label = self.trap_label();
+    pub fn trap(&mut self, trap_id: TrapCode) {
+        let function_start = (self.func_starts[self.current_function as usize]
+            .0
+            .unwrap()
+            .0) as u32;
+        self.trap_sink.trap(
+            u32::try_from(self.asm.offset().0).expect("Assembly offset overflowed u32")
+                - function_start,
+            Default::default(),
+            trap_id,
+        );
         dynasm!(self.asm
-            ; jmp =>trap_label.0
+            ; ud2
         );
     }
 
-    pub fn trap_label(&mut self) -> Label {
-        self.label(|asm: &mut Assembler| {
-            dynasm!(asm
-                ; ud2
-            );
-        })
-    }
-
     pub fn ret_label(&mut self) -> Label {
-        self.label(|asm: &mut Assembler| {
-            dynasm!(asm
-                ; ret
-            );
-        })
+        #[derive(Copy, Clone, Hash)]
+        struct RetLabel;
+
+        self.label(TaggedLabel(
+            RetLabel,
+            |IntoLabelContext { asm, .. }: IntoLabelContext<'_>| {
+                dynasm!(asm
+                    ; ret
+                );
+            },
+        ))
     }
 
-    fn label<F>(&mut self, fun: F) -> Label
+    fn label<L>(&mut self, intolabel: L) -> Label
     where
-        F: IntoLabel,
+        L: IntoLabel,
+        L::Callback: 'static,
     {
-        self.aligned_label(1, fun)
+        self.aligned_label(1, intolabel)
     }
 
-    fn aligned_label<F>(&mut self, align: u32, fun: F) -> Label
+    fn aligned_label<L>(&mut self, align: u32, intolabel: L) -> Label
     where
-        F: IntoLabel,
+        L: IntoLabel,
+        L::Callback: 'static,
     {
-        let key = fun.key();
-        if let Some((label, _, _)) = self.labels.get(&(align, key)) {
+        if let Some(LabelInfo { label, .. }) = self.labels.get(&intolabel.key()) {
             return *label;
         }
 
-        let label = self.create_label();
+        let asm = &mut self.asm;
         self.labels
-            .insert((align, key), (label, align, Some(fun.callback())));
-
-        label
+            .insert(|| Label(asm.new_dynamic_label()), align, intolabel)
     }
 
     fn target_to_label(&mut self, target: BrTarget<Label>) -> Label {
@@ -5933,71 +6016,118 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 }
 
-trait IntoLabel {
-    fn key(&self) -> Either<TypeId, (LabelValue, Option<LabelValue>)>;
-    fn callback(self) -> Box<dyn FnMut(&mut Assembler)>;
+pub struct IntoLabelContext<'a, E: ?Sized = ()> {
+    asm: &'a mut Assembler,
+    extra: &'a mut E,
 }
 
-impl<F> IntoLabel for F
+pub trait IntoLabel<E: ?Sized = ()> {
+    type Key: Hash + Any;
+    type Callback: FnOnce(IntoLabelContext<'_, E>);
+
+    fn key(&self) -> Self::Key;
+    fn callback(self) -> Self::Callback;
+}
+
+struct TaggedLabel<Tag, Label>(pub Tag, pub Label);
+
+impl<E: ?Sized, Tag, Label> IntoLabel<E> for TaggedLabel<Tag, Label>
 where
-    F: FnMut(&mut Assembler) + Any,
+    Label: IntoLabel<E>,
+    Tag: Hash + Copy + 'static,
 {
-    fn key(&self) -> Either<TypeId, (LabelValue, Option<LabelValue>)> {
-        Either::Left(TypeId::of::<Self>())
+    type Key = (Tag, Label::Key);
+    type Callback = Label::Callback;
+
+    fn key(&self) -> Self::Key {
+        (self.0, self.1.key())
     }
 
-    fn callback(self) -> Box<dyn FnMut(&mut Assembler)> {
-        Box::new(self)
-    }
-}
-
-fn const_value(val: LabelValue) -> impl FnMut(&mut Assembler) {
-    move |asm| match val {
-        LabelValue::I32(val) => dynasm!(asm
-            ; .dword val
-        ),
-        LabelValue::I64(val) => dynasm!(asm
-            ; .qword val
-        ),
+    fn callback(self) -> Self::Callback {
+        self.1.callback()
     }
 }
 
-fn const_values(a: LabelValue, b: LabelValue) -> impl FnMut(&mut Assembler) {
-    move |asm| {
-        match a {
-            LabelValue::I32(val) => dynasm!(asm
+impl<E: ?Sized, F> IntoLabel<E> for F
+where
+    F: FnOnce(IntoLabelContext<'_, E>),
+{
+    type Key = ();
+    type Callback = F;
+
+    fn key(&self) -> Self::Key {
+        ()
+    }
+
+    fn callback(self) -> Self::Callback {
+        self
+    }
+}
+
+type LabelValueCallback<E: ?Sized> = impl FnOnce(IntoLabelContext<'_, E>);
+
+impl<E: ?Sized> IntoLabel<E> for LabelValue {
+    type Key = LabelValue;
+    type Callback = LabelValueCallback<E>;
+
+    fn key(&self) -> Self::Key {
+        *self
+    }
+
+    fn callback(self) -> Self::Callback {
+        move |ctx| match self {
+            LabelValue::I32(val) => dynasm!(ctx.asm
                 ; .dword val
             ),
-            LabelValue::I64(val) => dynasm!(asm
+            LabelValue::I64(val) => dynasm!(ctx.asm
                 ; .qword val
             ),
         }
+    }
+}
 
-        match b {
-            LabelValue::I32(val) => dynasm!(asm
-                ; .dword val
-            ),
-            LabelValue::I64(val) => dynasm!(asm
-                ; .qword val
-            ),
+/// Hack to work around some limitations in `impl Trait` - this forces Rust to only consider
+/// `fn tuple_callback` as a defining use and not `type Callback`. It assumes that `type Callback`
+/// captures the `A` and `B` type parameters, when we only need to capture the callback.
+mod tuple_callback_hack {
+    use super::{Assembler, IntoLabelContext};
+
+    pub type TupleCallback<E: ?Sized, A, B> = impl FnOnce(IntoLabelContext<'_, E>);
+
+    pub fn tuple_callback<E: ?Sized, A, B>(a: A, b: B) -> TupleCallback<E, A, B>
+    where
+        A: FnOnce(IntoLabelContext<'_, E>),
+        B: FnOnce(IntoLabelContext<'_, E>),
+    {
+        move |IntoLabelContext { asm, extra }| {
+            a(IntoLabelContext {
+                asm: &mut *asm,
+                extra: &mut *extra,
+            });
+            b(IntoLabelContext {
+                asm: &mut *asm,
+                extra: &mut *extra,
+            });
         }
     }
 }
 
-impl IntoLabel for LabelValue {
-    fn key(&self) -> Either<TypeId, (LabelValue, Option<LabelValue>)> {
-        Either::Right((*self, None))
-    }
-    fn callback(self) -> Box<dyn FnMut(&mut Assembler)> {
-        Box::new(const_value(self))
-    }
-}
+impl<E: Copy, A, B> IntoLabel<E> for (A, B)
+where
+    A: IntoLabel<E>,
+    B: IntoLabel<E>,
+{
+    type Key = (A::Key, B::Key);
+    type Callback = tuple_callback_hack::TupleCallback<E, A::Callback, B::Callback>;
 
-impl IntoLabel for (LabelValue, LabelValue) {
-    fn key(&self) -> Either<TypeId, (LabelValue, Option<LabelValue>)> {
-        Either::Right((self.0, Some(self.1)))
+    fn key(&self) -> Self::Key {
+        (self.0.key(), self.1.key())
     }
-    fn callback(self) -> Box<dyn FnMut(&mut Assembler)> {
-        Box::new(const_values(self.0, self.1))
+
+    fn callback(self) -> Self::Callback {
+        tuple_callback_hack::tuple_callback::<E, A::Callback, B::Callback>(
+            self.0.callback(),
+            self.1.callback(),
+        )
     }
 }
