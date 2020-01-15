@@ -13,18 +13,8 @@
 pub mod dummy;
 
 use dummy::{dummy_imports, dummy_value};
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 use wasmtime::*;
-use wasmtime_environ::{isa, settings};
-use wasmtime_jit::{native, CompilationStrategy, CompiledModule, Compiler};
-
-fn host_isa() -> Box<dyn isa::TargetIsa> {
-    let flag_builder = settings::builder();
-    let isa_builder = native::builder();
-    isa_builder.finish(settings::Flags::new(flag_builder))
-}
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
 /// panic or segfault or anything else that can be detected "passively".
@@ -68,16 +58,21 @@ pub fn instantiate(wasm: &[u8], strategy: Strategy) {
 ///
 /// Performs initial validation, and returns early if the Wasm is invalid.
 ///
-/// You can control which compiler is used via passing a `CompilationStrategy`.
-pub fn compile(wasm: &[u8], compilation_strategy: CompilationStrategy) {
+/// You can control which compiler is used via passing a `Strategy`.
+pub fn compile(wasm: &[u8], compilation_strategy: Strategy) {
     if wasmparser::validate(wasm, None).is_err() {
         return;
     }
 
-    let isa = host_isa();
-    let mut compiler = Compiler::new(isa, compilation_strategy);
-    let global_exports = Rc::new(RefCell::new(HashMap::new()));
-    let _ = CompiledModule::new(&mut compiler, wasm, None, global_exports, false);
+    let engine = Engine::new(&{
+        let mut config = Config::new();
+        config.strategy(compilation_strategy).unwrap();
+        config
+    });
+    let store = Store::new(&engine);
+
+    // This unsafe should be oK since we validated source just before.
+    let _ = unsafe { Module::new_unchecked(&store, wasm) };
 }
 
 /// Invoke the given API calls.
