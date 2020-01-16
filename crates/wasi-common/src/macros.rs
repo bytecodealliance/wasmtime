@@ -6,7 +6,7 @@ macro_rules! hostcalls {
                     .err()
                     .unwrap_or(crate::Error::ESUCCESS)
                     .as_wasi_error();
-                log::trace!("\t | errno={}", ret);
+                log::trace!("     | errno={}", ret);
                 ret.as_raw_errno()
             }
     )*)
@@ -22,7 +22,7 @@ macro_rules! hostcalls_old {
                     .err()
                     .unwrap_or(crate::old::snapshot_0::Error::ESUCCESS)
                     .as_wasi_error();
-                log::trace!("\t | errno={}", ret);
+                log::trace!("     | errno={}", ret);
                 ret.as_raw_errno()
             }
     )*)
