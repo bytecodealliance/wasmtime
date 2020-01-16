@@ -137,11 +137,6 @@ pub(crate) fn clock_time_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::_
     duration.as_nanos().try_into().map_err(Into::into)
 }
 
-fn stdin_nonempty() -> bool {
-    use std::io::Read;
-    std::io::stdin().bytes().peekable().peek().is_some()
-}
-
 fn make_rw_event(event: &FdEventData, nbytes: Result<u64>) -> wasi::__wasi_event_t {
     use crate::error::WasiErrno;
     let error = nbytes.as_wasi_errno();
@@ -253,13 +248,6 @@ pub(crate) fn poll_oneoff(
         }
     }
 
-    // Currently WASI file support is only (a) regular files (b) directories (c) symlinks on Windows,
-    // which are always ready to write on Unix.
-    //
-    // We need to consider stdin/stdout/stderr separately.
-    // We treat stdout/stderr as always ready to write. I'm not sure if it's correct
-    // on Windows but I have not find any way of checking if a write to stdout would block.
-    // Therefore, we only poll the stdin.
     let mut stdin_events = vec![];
     let mut immediate_events = vec![];
     let mut pipe_events = vec![];
@@ -269,13 +257,18 @@ pub(crate) fn poll_oneoff(
             Descriptor::Stdin if event.r#type == wasi::__WASI_EVENTTYPE_FD_READ => {
                 stdin_events.push(event)
             }
+            // stdout/stderr are always considered ready to write because there seems to
+            // be no way of checking if a write to stdout would block.
+            //
+            // If stdin is polled for anything else then reading, then it is also
+            // considered immediately ready, following the behavior on Linux.
             Descriptor::Stdin | Descriptor::Stderr | Descriptor::Stdout => {
                 immediate_events.push(event)
             }
             Descriptor::OsHandle(os_handle) => {
                 let ftype = unsafe { winx::file::get_file_type(os_handle.as_raw_handle()) }?;
                 if ftype.is_unknown() || ftype.is_char() {
-                    error!("poll_oneoff: unsupported file type: {:?}", ftype);
+                    debug!("poll_oneoff: unsupported file type: {:?}", ftype);
                     handle_error_event(event, Error::ENOTSUP, events);
                 } else if ftype.is_disk() {
                     immediate_events.push(event);
@@ -295,13 +288,28 @@ pub(crate) fn poll_oneoff(
             handle_rw_event(event, events);
         }
     } else if !stdin_events.is_empty() {
-        // REVIEW: is there a better place to document this? Perhaps in
-        // `struct PollStdin`?
-        //
-        // If there's a request to poll stdin, we spin up a separate thread to
+        // During the firt request to poll stdin, we spin up a separate thread to
         // waiting for data to arrive on stdin. This thread will not terminate.
         //
-        // TODO more explain why this way
+        // FIXME this is not thread safe!
+        //
+        // We'd like to do the following:
+        // (1) wait in a non-blocking way for data to be available in stdin, with timeout
+        // (2) find out, how many bytes are there available to be read.
+        //
+        // One issue is that we are currently relying on the Rust libstd for interaction
+        // with stdin. More precisely, `io::stdin` is used via the `BufRead` trait,
+        // in the `fd_read` function, which always does buffering on the libstd side. [1]
+        // This means that even if there's still some unread data in stdin,
+        // the lower-level Windows system calls may return false negatives,
+        // claiming that stdin is empty.
+        //
+        // Theoretically, one could use `WaitForSingleObject` on the stdin handle
+        // to achieve (1). Unfortunately, this function doesn't seem to honor the
+        // requested timeout and to misbehaves after the stdin is closed.
+        //
+        // There appears to be no way of achieving (2) on Windows.
+        // [1]: https://github.com/rust-lang/rust/pull/12422
         trace!("     | passively waiting on stdin");
         let dur = timeout.map(|t| t.1);
         let state = STDIN_POLL.poll(dur);
@@ -316,10 +324,14 @@ pub(crate) fn poll_oneoff(
                 }
             }
         }
-    } else if !pipe_events.is_empty() {
-        trace!("     | actively polling stdin or pipes");
+    }
+
+    if !pipe_events.is_empty() {
+        trace!("     | actively polling pipes");
         match timeout {
             Some((event, dur)) => {
+                // In the tests stdin is replaced with a dummy pipe, so for now
+                // we just time out. Support for pipes will be decided later on.
                 warn!("Polling pipes not supported on Windows, will just time out.");
                 return Ok(handle_timeout(event, dur, events));
             }
@@ -328,32 +340,6 @@ pub(crate) fn poll_oneoff(
                 return Err(Error::ENOTSUP);
             }
         }
-        // TODO remove these old comments!!!
-        // There are some stdin or pipe poll requests and there's no data available immediately
-
-        // We are busy-polling the stdin with delay, unfortunately.
-        //
-        // We'd like to do the following:
-        // (1) wait in a non-blocking way for data to be available in stdin, with timeout
-        // (2) find out, how many bytes are there available to be read.
-        // For one, using `WaitForSingleObject` on the stdin handle could possibly be one way of
-        // achieving (1).
-        // I don't know of any way to achieve (2).
-        //
-        // While both of these are not as trivial on Windows as they are on Linux, there's a much
-        // more fundamental issue preventing us from achieving such behavior with the current
-        // implementation of wasi-common.
-        //
-        // Precisely, in `fd_read` we are using `io::stdin` via the `BufRead` trait, which does
-        // buffering on the libstd side. This means that even if there's still some unread data
-        // in stdin, the Windows system calls may return false negatives, indicating that stdin is empty.
-        // Therefore, avoiding the busy-poll here would require us to ditch libstd for the interaction
-        // with stdin altogether.
-        //
-        // However, polling stdin is a relatively infrequent use case, so this hopefully won't be
-        // a major issue.
-
-        // avoid issuing more syscalls if we're requested to return immediately
     }
 
     Ok(())
