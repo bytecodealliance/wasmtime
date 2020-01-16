@@ -60,15 +60,11 @@ pub fn instantiate(wasm: &[u8], strategy: Strategy) {
 ///
 /// You can control which compiler is used via passing a `Strategy`.
 pub fn compile(wasm: &[u8], strategy: Strategy) {
-    if wasmparser::validate(wasm, None).is_err() {
-        return;
-    }
-
     let mut config = Config::new();
     config.strategy(strategy).unwrap();
     let engine = Engine::new(&config);
     let store = Store::new(&engine);
-    let _ = Module::new(&store, wasm).expect("Failed to compile a valid Wasm module!");
+    let _ = Module::new(&store, wasm);
 }
 
 /// Invoke the given API calls.
