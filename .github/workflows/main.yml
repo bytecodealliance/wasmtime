@@ -71,7 +71,7 @@ jobs:
     - uses: ./.github/actions/install-rust
       with:
         toolchain: nightly
-    - run: cargo install cargo-fuzz --vers "^0.6"
+    - run: cargo install cargo-fuzz --vers "^0.7"
     - run: cargo fetch
       working-directory: ./fuzz
     - run: cargo fuzz build --release --debug-assertions
@@ -512,4 +512,3 @@ jobs:
         files: "dist/*"
         name: ${{ steps.tagname.outputs.val }}
         token: ${{ secrets.GITHUB_TOKEN }}
-
