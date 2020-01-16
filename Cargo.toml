@@ -55,6 +55,7 @@ members = [
   "crates/fuzzing",
   "crates/misc/rust",
   "crates/misc/py",
+  "crates/c-api",
   "fuzz",
 ]
 

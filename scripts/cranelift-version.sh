@@ -9,7 +9,7 @@ topdir=$(dirname "$0")/..
 cd "$topdir"
 
 # All the cranelift-* crates have the same version number
-version="0.53"
+version="0.55"
 
 # Update all of the Cargo.toml files.
 echo "Updating crate versions to $version"

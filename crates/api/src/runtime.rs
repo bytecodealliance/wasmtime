@@ -1,4 +1,3 @@
-use crate::context::Context;
 use anyhow::Result;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -8,7 +7,7 @@ use wasmtime_environ::{
     ir,
     settings::{self, Configurable},
 };
-use wasmtime_jit::{CompilationStrategy, Features};
+use wasmtime_jit::{native, CompilationStrategy, Compiler, Features};
 
 // Runtime Environment
 
@@ -297,7 +296,7 @@ pub enum OptLevel {
 /// default settings.
 #[derive(Default, Clone)]
 pub struct Engine {
-    pub(crate) config: Arc<Config>,
+    config: Arc<Config>,
 }
 
 impl Engine {
@@ -307,6 +306,11 @@ impl Engine {
         Engine {
             config: Arc::new(config.clone()),
         }
+    }
+
+    /// Returns the configuration settings that this engine is using.
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 }
 
@@ -337,7 +341,7 @@ pub struct Store {
 
 struct StoreInner {
     engine: Engine,
-    context: Context,
+    compiler: RefCell<Compiler>,
     global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
     signature_cache: RefCell<HashMap<wasmtime_runtime::VMSharedSignatureIndex, ir::Signature>>,
 }
@@ -345,10 +349,12 @@ struct StoreInner {
 impl Store {
     /// Creates a new store to be associated with the given [`Engine`].
     pub fn new(engine: &Engine) -> Store {
+        let isa = native::builder().finish(settings::Flags::new(engine.config.flags.clone()));
+        let compiler = Compiler::new(isa, engine.config.strategy);
         Store {
             inner: Rc::new(StoreInner {
                 engine: engine.clone(),
-                context: Context::new(&engine.config),
+                compiler: RefCell::new(compiler),
                 global_exports: Rc::new(RefCell::new(HashMap::new())),
                 signature_cache: RefCell::new(HashMap::new()),
             }),
@@ -360,8 +366,8 @@ impl Store {
         &self.inner.engine
     }
 
-    pub(crate) fn context(&self) -> &Context {
-        &self.inner.context
+    pub(crate) fn compiler_mut(&self) -> std::cell::RefMut<'_, Compiler> {
+        self.inner.compiler.borrow_mut()
     }
 
     // Specific to wasmtime: hack to pass memory around to wasi
@@ -377,7 +383,7 @@ impl Store {
         signature: &ir::Signature,
     ) -> wasmtime_runtime::VMSharedSignatureIndex {
         use std::collections::hash_map::Entry;
-        let index = self.context().compiler().signatures().register(signature);
+        let index = self.compiler_mut().signatures().register(signature);
         match self.inner.signature_cache.borrow_mut().entry(index) {
             Entry::Vacant(v) => {
                 v.insert(signature.clone());
@@ -398,7 +404,13 @@ impl Store {
             .cloned()
     }
 
-    pub(crate) fn ptr_eq(a: &Store, b: &Store) -> bool {
+    /// Returns whether the stores `a` and `b` refer to the same underlying
+    /// `Store`.
+    ///
+    /// Because the `Store` type is reference counted multiple clones may point
+    /// to the same underlying storage, and this method can be used to determine
+    /// whether two stores are indeed the same.
+    pub fn same(a: &Store, b: &Store) -> bool {
         Rc::ptr_eq(&a.inner, &b.inner)
     }
 }

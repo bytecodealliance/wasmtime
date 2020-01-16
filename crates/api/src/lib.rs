@@ -7,7 +7,6 @@
 //! itself for consumption from other languages.
 
 mod callable;
-mod context;
 mod externals;
 mod instance;
 mod module;
@@ -18,13 +17,11 @@ mod trap;
 mod types;
 mod values;
 
-pub mod wasm;
-
 pub use crate::callable::Callable;
 pub use crate::externals::*;
 pub use crate::instance::Instance;
 pub use crate::module::Module;
-pub use crate::r#ref::AnyRef;
+pub use crate::r#ref::{AnyRef, HostInfo, HostRef};
 pub use crate::runtime::{Config, Engine, OptLevel, Store, Strategy};
 pub use crate::trap::{FrameInfo, Trap};
 pub use crate::types::*;

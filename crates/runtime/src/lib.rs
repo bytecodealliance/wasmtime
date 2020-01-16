@@ -34,6 +34,7 @@ mod trap_registry;
 mod traphandlers;
 mod vmcontext;
 
+pub mod jit_function_registry;
 pub mod libcalls;
 
 pub use crate::export::Export;
@@ -44,7 +45,7 @@ pub use crate::mmap::Mmap;
 pub use crate::sig_registry::SignatureRegistry;
 pub use crate::signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
 pub use crate::trap_registry::{get_mut_trap_registry, get_trap_registry, TrapRegistrationGuard};
-pub use crate::traphandlers::{wasmtime_call, wasmtime_call_trampoline};
+pub use crate::traphandlers::{wasmtime_call, wasmtime_call_trampoline, Trap};
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
     VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,

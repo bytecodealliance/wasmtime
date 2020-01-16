@@ -17,8 +17,7 @@ use wasmtime_interface_types::ModuleData;
 use wasmtime_wasi::{
     create_wasi_instance, old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0,
 };
-#[cfg(feature = "wasi-c")]
-use wasmtime_wasi_c::instantiate_wasi_c;
+
 #[cfg(feature = "wasi-c")]
 use wasmtime_wasi_c::instantiate_wasi_c;
 
@@ -152,7 +151,8 @@ impl RunCommand {
             #[cfg(feature = "wasi-c")]
             {
                 let global_exports = store.global_exports().clone();
-                let handle = instantiate_wasi_c(global_exports, &preopen_dirs, &argv, &self.vars)?;
+                let handle =
+                    instantiate_wasi_c("", global_exports, &preopen_dirs, &argv, &self.vars)?;
                 Instance::from_handle(&store, handle)
             }
             #[cfg(not(feature = "wasi-c"))]

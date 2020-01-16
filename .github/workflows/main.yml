@@ -71,7 +71,7 @@ jobs:
     - uses: ./.github/actions/install-rust
       with:
         toolchain: nightly
-    - run: cargo install cargo-fuzz --vers "^0.6"
+    - run: cargo install cargo-fuzz --vers "^0.7"
     - run: cargo fetch
       working-directory: ./fuzz
     - run: cargo fuzz build --release --debug-assertions
@@ -165,6 +165,7 @@ jobs:
     - run: rustup target add wasm32-wasi
 
     - run: cargo fetch --locked
+    - run: cargo fetch --locked --manifest-path crates/test-programs/wasi-tests/Cargo.toml
 
     # Build and test all features except for lightbeam
     - run: cargo test --features test_programs --all --exclude lightbeam -- --nocapture
@@ -302,7 +303,7 @@ jobs:
     - run: $CENTOS cargo build --release --bin wasmtime --bin wasm2obj
       shell: bash
     # Build `libwasmtime.so`
-    - run: $CENTOS cargo build --release --manifest-path crates/api/Cargo.toml
+    - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
       shell: bash
     # Test what we just built
     - run: $CENTOS cargo test --features test_programs --release --all --exclude lightbeam --exclude wasmtime --exclude wasmtime-fuzzing
@@ -511,4 +512,3 @@ jobs:
         files: "dist/*"
         name: ${{ steps.tagname.outputs.val }}
         token: ${{ secrets.GITHUB_TOKEN }}
-
