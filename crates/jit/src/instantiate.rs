@@ -16,6 +16,7 @@ use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
 use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleEnvironment,
+    ModuleSyncString,
 };
 use wasmtime_runtime::{
     Export, GdbJitImageRegistration, Imports, InstanceHandle, InstantiationError, VMFunctionBody,
@@ -76,7 +77,7 @@ impl<'data> RawCompiledModule<'data> {
             None
         };
 
-        translation.module.name = module_name.map(|s| s.to_string());
+        translation.module.name = ModuleSyncString::new(module_name);
 
         let (allocated_functions, jt_offsets, relocations, dbg_image) = compiler.compile(
             &translation.module,

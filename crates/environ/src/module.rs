@@ -11,6 +11,7 @@ use cranelift_wasm::{
 use indexmap::IndexMap;
 use more_asserts::assert_ge;
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 /// A WebAssembly table initializer.
 #[derive(Clone, Debug, Hash)]
@@ -128,6 +129,28 @@ impl TablePlan {
     }
 }
 
+/// Allows module strings to be cached as reused across
+/// multiple threads. Useful for debug/trace information.
+#[derive(Debug, Clone)]
+pub struct ModuleSyncString(Option<Arc<String>>);
+
+impl ModuleSyncString {
+    /// Gets optional string reference.
+    pub fn get(&self) -> Option<&str> {
+        self.0.as_deref().map(|s| s.as_str())
+    }
+    /// Constructs the string.
+    pub fn new(s: Option<&str>) -> Self {
+        ModuleSyncString(s.map(|s| Arc::new(s.to_string())))
+    }
+}
+
+impl Default for ModuleSyncString {
+    fn default() -> Self {
+        ModuleSyncString(None)
+    }
+}
+
 /// A translated WebAssembly module, excluding the function bodies and
 /// memory initializers.
 // WARNING: when modifying, make sure that `hash_for_cache` is still valid!
@@ -171,10 +194,10 @@ pub struct Module {
     pub table_elements: Vec<TableElements>,
 
     /// Module name.
-    pub name: Option<String>,
+    pub name: ModuleSyncString,
 
     /// Function names.
-    pub func_names: SecondaryMap<FuncIndex, String>,
+    pub func_names: SecondaryMap<FuncIndex, ModuleSyncString>,
 }
 
 impl Module {
@@ -193,7 +216,7 @@ impl Module {
             exports: IndexMap::new(),
             start_func: None,
             table_elements: Vec::new(),
-            name: None,
+            name: Default::default(),
             func_names: SecondaryMap::new(),
         }
     }
