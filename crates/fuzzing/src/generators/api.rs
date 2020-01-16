@@ -15,8 +15,9 @@
 //! [swarm testing]: https://www.cs.utah.edu/~regehr/papers/swarm12.pdf
 
 use arbitrary::{Arbitrary, Unstructured};
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
+#[derive(Arbitrary, Debug)]
 struct Swarm {
     config_debug_info: bool,
     module_new: bool,
@@ -26,24 +27,8 @@ struct Swarm {
     call_exported_func: bool,
 }
 
-impl Arbitrary for Swarm {
-    fn arbitrary<U>(input: &mut U) -> Result<Self, U::Error>
-    where
-        U: Unstructured + ?Sized,
-    {
-        Ok(Swarm {
-            config_debug_info: bool::arbitrary(input)?,
-            module_new: bool::arbitrary(input)?,
-            module_drop: bool::arbitrary(input)?,
-            instance_new: bool::arbitrary(input)?,
-            instance_drop: bool::arbitrary(input)?,
-            call_exported_func: bool::arbitrary(input)?,
-        })
-    }
-}
-
 /// A call to one of Wasmtime's public APIs.
-#[derive(Clone, Debug)]
+#[derive(Arbitrary, Clone, Debug)]
 #[allow(missing_docs)]
 pub enum ApiCall {
     ConfigNew,
@@ -61,8 +46,8 @@ use ApiCall::*;
 #[derive(Default)]
 struct Scope {
     id_counter: usize,
-    modules: HashSet<usize>,
-    instances: HashSet<usize>,
+    modules: BTreeSet<usize>,
+    instances: BTreeSet<usize>,
 }
 
 impl Scope {
@@ -81,10 +66,7 @@ pub struct ApiCalls {
 }
 
 impl Arbitrary for ApiCalls {
-    fn arbitrary<U>(input: &mut U) -> Result<Self, U::Error>
-    where
-        U: Unstructured + ?Sized,
-    {
+    fn arbitrary(input: &mut Unstructured) -> arbitrary::Result<Self> {
         let swarm = Swarm::arbitrary(input)?;
         let mut calls = vec![];
 
@@ -94,8 +76,8 @@ impl Arbitrary for ApiCalls {
 
         let mut scope = Scope::default();
 
-        for _ in 0..input.container_size()? {
-            let mut choices: Vec<fn(_, &mut Scope) -> Result<ApiCall, U::Error>> = vec![];
+        for _ in 0..input.arbitrary_len::<ApiCall>()? {
+            let mut choices: Vec<fn(_, &mut Scope) -> arbitrary::Result<ApiCall>> = vec![];
 
             if swarm.module_new {
                 choices.push(|input, scope| {
@@ -108,7 +90,7 @@ impl Arbitrary for ApiCalls {
             if swarm.module_drop && !scope.modules.is_empty() {
                 choices.push(|input, scope| {
                     let modules: Vec<_> = scope.modules.iter().cloned().collect();
-                    let id = arbitrary_choice(input, &modules)?.cloned().unwrap();
+                    let id = *input.choose(&modules)?;
                     scope.modules.remove(&id);
                     Ok(ModuleDrop { id })
                 });
@@ -116,7 +98,7 @@ impl Arbitrary for ApiCalls {
             if swarm.instance_new && !scope.modules.is_empty() {
                 choices.push(|input, scope| {
                     let modules: Vec<_> = scope.modules.iter().cloned().collect();
-                    let module = arbitrary_choice(input, &modules)?.cloned().unwrap();
+                    let module = *input.choose(&modules)?;
                     let id = scope.next_id();
                     scope.instances.insert(id);
                     Ok(InstanceNew { id, module })
@@ -125,7 +107,7 @@ impl Arbitrary for ApiCalls {
             if swarm.instance_drop && !scope.instances.is_empty() {
                 choices.push(|input, scope| {
                     let instances: Vec<_> = scope.instances.iter().cloned().collect();
-                    let id = arbitrary_choice(input, &instances)?.cloned().unwrap();
+                    let id = *input.choose(&instances)?;
                     scope.instances.remove(&id);
                     Ok(InstanceDrop { id })
                 });
@@ -133,43 +115,28 @@ impl Arbitrary for ApiCalls {
             if swarm.call_exported_func && !scope.instances.is_empty() {
                 choices.push(|input, scope| {
                     let instances: Vec<_> = scope.instances.iter().cloned().collect();
-                    let instance = arbitrary_choice(input, &instances)?.cloned().unwrap();
+                    let instance = *input.choose(&instances)?;
                     let nth = usize::arbitrary(input)?;
                     Ok(CallExportedFunc { instance, nth })
                 });
             }
 
-            if let Some(c) = arbitrary_choice(input, &choices)? {
-                calls.push(c(input, &mut scope)?);
-            } else {
+            if choices.is_empty() {
                 break;
             }
+            let c = input.choose(&choices)?;
+            calls.push(c(input, &mut scope)?);
         }
 
         Ok(ApiCalls { calls })
     }
 }
 
-fn arbitrary_choice<'a, T, U>(input: &mut U, choices: &'a [T]) -> Result<Option<&'a T>, U::Error>
-where
-    U: Unstructured + ?Sized,
-{
-    if choices.is_empty() {
-        Ok(None)
-    } else {
-        let i = usize::arbitrary(input)? % choices.len();
-        Ok(Some(&choices[i]))
-    }
-}
-
-fn arbitrary_config<U>(
-    input: &mut U,
+fn arbitrary_config(
+    input: &mut Unstructured,
     swarm: &Swarm,
     calls: &mut Vec<ApiCall>,
-) -> Result<(), U::Error>
-where
-    U: Unstructured + ?Sized,
-{
+) -> arbitrary::Result<()> {
     calls.push(ConfigNew);
 
     if swarm.config_debug_info && bool::arbitrary(input)? {
