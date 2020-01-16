@@ -2061,6 +2061,7 @@ dependencies = [
  "pretty_env_logger",
  "rayon",
  "region",
+ "rustc-demangle",
  "target-lexicon",
  "wasi-common",
  "wasmparser 0.47.0",
