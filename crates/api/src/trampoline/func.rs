@@ -64,7 +64,7 @@ impl Drop for TrampolineState {
     }
 }
 
-unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, call_id: u32, values_vec: *mut i128) -> u32 {
+unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, _caller_vmctx: *mut VMContext, call_id: u32, values_vec: *mut i128) -> u32 {
     let mut instance = InstanceHandle::from_vmctx(vmctx);
 
     let (args, returns_len) = {
@@ -116,7 +116,7 @@ fn make_trampoline(
     let pointer_type = isa.pointer_type();
     let mut stub_sig = ir::Signature::new(isa.frontend_config().default_call_conv);
 
-    // Add the `vmctx` parameter.
+    // Add the caller/callee `vmctx` parameters.
     stub_sig.params.push(ir::AbiParam::special(
         pointer_type,
         ir::ArgumentPurpose::VMContext,
@@ -247,15 +247,17 @@ pub fn create_handle_with_function(
     func: &Rc<dyn Callable + 'static>,
     store: &Store,
 ) -> Result<InstanceHandle> {
-    let sig = match ft.get_wasmtime_signature() {
-        Some(sig) => sig.clone(),
-        None => bail!("not a supported core wasm signature {:?}", ft),
-    };
 
     let isa = {
         let isa_builder = native::builder();
         let flag_builder = settings::builder();
         isa_builder.finish(settings::Flags::new(flag_builder))
+    };
+
+    let pointer_type = isa.pointer_type();
+    let sig = match ft.get_wasmtime_signature(pointer_type) {
+        Some(sig) => sig.clone(),
+        None => bail!("not a supported core wasm signature {:?}", ft),
     };
 
     let mut fn_builder_ctx = FunctionBuilderContext::new();
