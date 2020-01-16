@@ -269,18 +269,11 @@ pub(crate) fn poll_oneoff(
     let mut stdin_events = vec![];
     let mut immediate_events = vec![];
     let mut pipe_events = vec![];
-    let mut stdin_ready = None;
 
     for event in fd_events {
         match event.descriptor {
             Descriptor::Stdin if event.r#type == wasi::__WASI_EVENTTYPE_FD_READ => {
-                // Cache the non-emptiness for better performance.
-                let immediate = stdin_ready.get_or_insert_with(stdin_nonempty);
-                if *immediate {
-                    immediate_events.push(event)
-                } else {
-                    stdin_events.push(event)
-                }
+                stdin_events.push(event)
             }
             Descriptor::Stdin | Descriptor::Stderr | Descriptor::Stdout => {
                 immediate_events.push(event)
@@ -322,7 +315,7 @@ pub(crate) fn poll_oneoff(
             match state {
                 PollState::Ready => handle_rw_event(event, events),
                 PollState::Closed => { /* error? FIXME */ }
-                PollState::TimedOut => { /* FIXME */ }
+                PollState::TimedOut => handle_timeout_event(timeout.unwrap().0, events),
                 PollState::Error(ref e) => {
                     error!("PollState error");
                     handle_error_event(event, Error::ENOTSUP /*FIXME*/, events);
