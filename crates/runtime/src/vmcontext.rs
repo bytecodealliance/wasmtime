@@ -595,7 +595,7 @@ impl VMInvokeArgument {
 ///
 /// TODO: We could move the globals into the `vmctx` allocation too.
 #[derive(Debug)]
-#[repr(C)]
+#[repr(C, align(16))] // align 16 since globals are aligned to that and contained inside
 pub struct VMContext {}
 
 impl VMContext {
