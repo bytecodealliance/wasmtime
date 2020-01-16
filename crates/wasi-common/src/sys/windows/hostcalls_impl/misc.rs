@@ -247,10 +247,14 @@ pub(crate) fn poll_oneoff(
             // `poll` invoked with nfds = 0, timeout = -1 appears to be an infinite sleep on Unix
             // usually meant to be interrupted by a signal. Unfortunately, WASI doesn't currently
             // support signals and there is no way to interrupt this infinite sleep, so we
-            // return `ENOTSUP`
+            // intend to return `ENOTSUP`.
+            //
+            // Unfortunately, current implementation of poll_oneoff on Unix relies on
+            // `poll_oneoff` returning `Ok(())` in such case, so we emulate this behavior for now
+            // and will address it in a subsequent PR.
             None => {
-                error!("poll_oneoff: invoking with neither timeout nor fds not supported");
-                return Err(Error::ENOTSUP);
+                // error!("poll_oneoff: invoking with neither timeout nor fds not supported");
+                return Ok(()); // Err(Error::ENOTSUP);
             }
         }
     }
