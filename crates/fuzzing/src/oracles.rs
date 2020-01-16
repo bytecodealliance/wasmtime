@@ -21,7 +21,7 @@ use wasmtime::*;
 ///
 /// Performs initial validation, and returns early if the Wasm is invalid.
 ///
-/// You can control which compiler is used via passing a `CompilationStrategy`.
+/// You can control which compiler is used via passing a `Strategy`.
 pub fn instantiate(wasm: &[u8], strategy: Strategy) {
     if wasmparser::validate(wasm, None).is_err() {
         return;
@@ -59,20 +59,18 @@ pub fn instantiate(wasm: &[u8], strategy: Strategy) {
 /// Performs initial validation, and returns early if the Wasm is invalid.
 ///
 /// You can control which compiler is used via passing a `Strategy`.
-pub fn compile(wasm: &[u8], compilation_strategy: Strategy) {
+pub fn compile(wasm: &[u8], strategy: Strategy) {
     if wasmparser::validate(wasm, None).is_err() {
         return;
     }
 
-    let engine = Engine::new(&{
-        let mut config = Config::new();
-        config.strategy(compilation_strategy).unwrap();
-        config
-    });
+    let mut config = Config::new();
+    config
+        .strategy(strategy)
+        .unwrap();
+    let engine = Engine::new(&config);
     let store = Store::new(&engine);
-
-    // This unsafe should be oK since we validated source just before.
-    let _ = unsafe { Module::new_unchecked(&store, wasm) };
+    let _ = Module::new(&store, wasm).expect("Failed to compile a valid Wasm module!");
 }
 
 /// Invoke the given API calls.
