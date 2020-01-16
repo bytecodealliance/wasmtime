@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 use crate::old::snapshot_0::sys::host_impl;
 use crate::old::snapshot_0::sys::hostcalls_impl::fs_helpers::*;
-use crate::old::snapshot_0::{fdentry::FdEntry, wasi, Error, Result};
+use crate::old::snapshot_0::{error::WasiError, fdentry::FdEntry, wasi, Error, Result};
 use std::fs::File;
 use std::path::{Component, Path};
 
@@ -117,10 +117,10 @@ pub(crate) fn path_get(
                                     dir_stack.push(new_dir);
                                 }
                                 Err(e) => {
-                                    match e.as_wasi_errno() {
-                                        wasi::__WASI_ERRNO_LOOP
-                                        | wasi::__WASI_ERRNO_MLINK
-                                        | wasi::__WASI_ERRNO_NOTDIR =>
+                                    match e.as_wasi_error() {
+                                        WasiError::ELOOP
+                                        | WasiError::EMLINK
+                                        | WasiError::ENOTDIR =>
                                         // Check to see if it was a symlink. Linux indicates
                                         // this with ENOTDIR because of the O_DIRECTORY flag.
                                         {
@@ -179,12 +179,12 @@ pub(crate) fn path_get(
                                     continue;
                                 }
                                 Err(e) => {
-                                    if e.as_wasi_errno() != wasi::__WASI_ERRNO_INVAL
-                                        && e.as_wasi_errno() != wasi::__WASI_ERRNO_NOENT
+                                    if e.as_wasi_error() != WasiError::EINVAL
+                                        && e.as_wasi_error() != WasiError::ENOENT
                                         // this handles the cases when trying to link to
                                         // a destination that already exists, and the target
                                         // path contains a slash
-                                        && e.as_wasi_errno() != wasi::__WASI_ERRNO_NOTDIR
+                                        && e.as_wasi_error() != WasiError::ENOTDIR
                                     {
                                         return Err(e);
                                     }
