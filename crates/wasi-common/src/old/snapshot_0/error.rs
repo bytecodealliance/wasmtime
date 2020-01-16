@@ -8,7 +8,7 @@ use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
 #[repr(u16)]
-#[error("{:?}", self)]
+#[error("{:?} ({})", self, wasi::strerror(*self as wasi::__wasi_errno_t))]
 pub enum WasiError {
     ESUCCESS = wasi::__WASI_ERRNO_SUCCESS,
     E2BIG = wasi::__WASI_ERRNO_2BIG,
