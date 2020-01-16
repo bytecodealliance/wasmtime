@@ -71,13 +71,10 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         .context("expected a _start export")?
         .clone();
 
-    if let Err(trap) = export
+    export
         .func()
         .context("expected export to be a func")?
-        .call(&[])
-    {
-        bail!("trapped: {:?}", trap);
-    }
+        .call(&[])?;
 
     Ok(())
 }

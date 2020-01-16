@@ -147,21 +147,19 @@ impl ModuleData {
             .into_iter()
             .map(|rv| rv.into())
             .collect::<Vec<_>>();
-        let wasm_results = match f.call(&wasm_args) {
-            Ok(values) => values
-                .to_vec()
-                .into_iter()
-                .map(|v: wasmtime::Val| match v {
-                    wasmtime::Val::I32(i) => RuntimeValue::I32(i),
-                    wasmtime::Val::I64(i) => RuntimeValue::I64(i),
-                    wasmtime::Val::F32(i) => RuntimeValue::F32(i),
-                    wasmtime::Val::F64(i) => RuntimeValue::F64(i),
-                    wasmtime::Val::V128(i) => RuntimeValue::V128(i.to_le_bytes()),
-                    _ => panic!("unsupported value {:?}", v),
-                })
-                .collect::<Vec<RuntimeValue>>(),
-            Err(trap) => bail!("trapped: {:?}", trap),
-        };
+        let wasm_results = f
+            .call(&wasm_args)?
+            .to_vec()
+            .into_iter()
+            .map(|v: wasmtime::Val| match v {
+                wasmtime::Val::I32(i) => RuntimeValue::I32(i),
+                wasmtime::Val::I64(i) => RuntimeValue::I64(i),
+                wasmtime::Val::F32(i) => RuntimeValue::F32(i),
+                wasmtime::Val::F64(i) => RuntimeValue::F64(i),
+                wasmtime::Val::V128(i) => RuntimeValue::V128(i.to_le_bytes()),
+                _ => panic!("unsupported value {:?}", v),
+            })
+            .collect::<Vec<RuntimeValue>>();
         translate_outgoing(&mut cx, &outgoing, &wasm_results)
     }
 
@@ -333,10 +331,7 @@ impl TranslateContext for InstanceTranslateContext {
             .ok_or_else(|| format_err!("`{}` is not a (alloc) function", alloc_func_name))?
             .clone();
         let alloc_args = vec![wasmtime::Val::I32(len)];
-        let results = match alloc.call(&alloc_args) {
-            Ok(values) => values,
-            Err(trap) => bail!("trapped: {:?}", trap),
-        };
+        let results = alloc.call(&alloc_args)?;
         if results.len() != 1 {
             bail!("allocator function wrong number of results");
         }
