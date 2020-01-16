@@ -672,7 +672,7 @@ impl Memory {
 
     /// Returns the byte length of this memory.
     ///
-    /// The returned value will be amultiple of the wasm page size, 64k.
+    /// The returned value will be a multiple of the wasm page size, 64k.
     pub fn data_size(&self) -> usize {
         unsafe { (*self.wasmtime_memory_definition()).current_length }
     }
