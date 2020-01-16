@@ -4,6 +4,7 @@
 use crate::trap_registry::get_trap_registry;
 use crate::trap_registry::TrapDescription;
 use crate::vmcontext::{VMContext, VMFunctionBody};
+use std::sync::Once;
 use backtrace::Backtrace;
 use std::cell::Cell;
 use std::fmt;
@@ -159,6 +160,17 @@ fn trap_code_to_expected_string(trap_code: ir::TrapCode) -> String {
     }
 }
 
+// This is a really weird and unfortunate static. For all the gory details see
+// #829, but the tl;dr; is that in a trap handler we have 2 pages of stack space
+// on Linux, and calling into libunwind which triggers the dynamic loader blows
+// the stack.
+//
+// This is a dumb hack to work around this system-specific issue by capturing a
+// backtrace once in the lifetime of a process to ensure that when we capture a
+// backtrace in the trap handler all caches are primed, aka the dynamic loader
+// has resolved all the relevant symbols.
+static BACKTRACE_ONCE: Once = Once::new();
+
 /// Call the wasm function pointed to by `callee`. `values_vec` points to
 /// a buffer which holds the incoming arguments, and to which the outgoing
 /// return values will be written.
@@ -168,6 +180,9 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
     callee: *const VMFunctionBody,
     values_vec: *mut u8,
 ) -> Result<(), Trap> {
+    // see comments on the definition for why this is done
+    BACKTRACE_ONCE.call_once(|| drop(Backtrace::new_unresolved()));
+
     if WasmtimeCallTrampoline(vmctx as *mut u8, callee, values_vec) == 0 {
         Err(last_trap())
     } else {
@@ -182,6 +197,9 @@ pub unsafe extern "C" fn wasmtime_call(
     vmctx: *mut VMContext,
     callee: *const VMFunctionBody,
 ) -> Result<(), Trap> {
+    // see comments on the definition for why this is done
+    BACKTRACE_ONCE.call_once(|| drop(Backtrace::new_unresolved()));
+
     if WasmtimeCall(vmctx as *mut u8, callee) == 0 {
         Err(last_trap())
     } else {
