@@ -42,7 +42,8 @@ impl Trap {
             if let Some(info) = wasmtime_runtime::jit_function_registry::find(pc) {
                 wasm_trace.push(FrameInfo {
                     func_index: info.func_index as u32,
-                    module_name: info.module_id.clone(),
+                    module_name: info.module_id.get().map(|s| s.to_string()),
+                    func_name: info.func_name.get().map(|s| s.to_string()),
                 })
             }
         }
@@ -87,6 +88,7 @@ impl std::error::Error for Trap {}
 pub struct FrameInfo {
     module_name: Option<String>,
     func_index: u32,
+    func_name: Option<String>,
 }
 
 impl FrameInfo {
@@ -108,5 +110,9 @@ impl FrameInfo {
 
     pub fn module_name(&self) -> Option<&str> {
         self.module_name.as_deref()
+    }
+
+    pub fn func_name(&self) -> Option<&str> {
+        self.func_name.as_deref()
     }
 }
