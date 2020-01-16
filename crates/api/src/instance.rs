@@ -57,7 +57,7 @@ fn instantiate(
 /// call any code or execute anything!
 #[derive(Clone)]
 pub struct Instance {
-    instance_handle: InstanceHandle,
+    pub(crate) instance_handle: InstanceHandle,
     module: Module,
     exports: Box<[Extern]>,
 }
