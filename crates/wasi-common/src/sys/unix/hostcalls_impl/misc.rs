@@ -60,12 +60,6 @@ pub(crate) fn poll_oneoff(
         Errno,
     };
 
-    trace!(
-        "poll_oneoff_impl: timeout={:?}, fd_events={:?}",
-        timeout,
-        fd_events
-    );
-
     if fd_events.is_empty() && timeout.is_none() {
         return Ok(());
     }

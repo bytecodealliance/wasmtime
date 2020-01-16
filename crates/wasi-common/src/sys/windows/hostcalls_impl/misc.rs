@@ -224,12 +224,6 @@ pub(crate) fn poll_oneoff(
     use std::fs::Metadata;
     use std::thread;
 
-    trace!(
-        "poll_oneoff_impl: timeout={:?}, fd_events={:?}",
-        timeout,
-        fd_events
-    );
-
     let timeout = timeout
         .map(|event| {
             event
