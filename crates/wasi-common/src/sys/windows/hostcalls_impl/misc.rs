@@ -9,7 +9,7 @@ use crate::{wasi, wasi32, Error, Result};
 use cpu_time::{ProcessTime, ThreadTime};
 use crossbeam::channel::{self, Receiver, Sender};
 use lazy_static::lazy_static;
-use log::{error, trace};
+use log::{error, trace, warning};
 use std::convert::TryInto;
 use std::io;
 use std::os::windows::io::AsRawHandle;
@@ -242,7 +242,10 @@ pub(crate) fn poll_oneoff(
             // usually meant to be interrupted by a signal. Unfortunately, WASI doesn't currently
             // support signals and there is no way to interrupt this infinite sleep, so we
             // return `ENOTSUP`
-            None => return Err(Error::ENOTSUP),
+            None => {
+                error!("poll_oneoff: invoking with neither timeout nor fds not supported");
+                return Err(Error::ENOTSUP);
+            }
         }
     }
 
@@ -311,6 +314,7 @@ pub(crate) fn poll_oneoff(
                 PollState::Closed => { /* error? FIXME */ }
                 PollState::TimedOut => { /* FIXME */ }
                 PollState::Error(ref e) => {
+                    error!("PollState error");
                     handle_error_event(event, Error::ENOTSUP /*FIXME*/, events);
                 }
             }
@@ -319,7 +323,7 @@ pub(crate) fn poll_oneoff(
         trace!("     | actively polling stdin or pipes");
         match timeout {
             Some((event, dur)) => {
-                error!("Polling pipes not supported on Windows, will just time out.");
+                warning!("Polling pipes not supported on Windows, will just time out.");
                 return Ok(handle_timeout(event, dur, events));
             }
             None => {
