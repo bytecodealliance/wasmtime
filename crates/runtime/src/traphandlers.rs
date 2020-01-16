@@ -4,11 +4,11 @@
 use crate::trap_registry::get_trap_registry;
 use crate::trap_registry::TrapDescription;
 use crate::vmcontext::{VMContext, VMFunctionBody};
-use std::sync::Once;
 use backtrace::Backtrace;
 use std::cell::Cell;
 use std::fmt;
 use std::ptr;
+use std::sync::Once;
 use wasmtime_environ::ir;
 
 extern "C" {
