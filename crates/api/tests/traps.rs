@@ -144,3 +144,88 @@ fn test_trap_stack_overflow() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn trap_display_pretty() -> Result<()> {
+    let store = Store::default();
+    let binary = wat::parse_str(
+        r#"
+            (module $m
+                (func $die unreachable)
+                (func call $die)
+                (func $foo call 1)
+                (func (export "bar") call $foo)
+            )
+        "#,
+    )?;
+
+    let module = Module::new(&store, &binary)?;
+    let instance = Instance::new(&module, &[])?;
+    let run_func = instance.exports()[0]
+        .func()
+        .expect("expected function export");
+
+    let e = run_func.call(&[]).err().expect("error calling function");
+    assert_eq!(
+        e.to_string(),
+        "\
+wasm trap: unreachable, source location: @0023
+wasm backtrace:
+  0: m!die
+  1: m!<wasm function 1>
+  2: m!foo
+  3: m!<wasm function 3>
+"
+    );
+    Ok(())
+}
+
+#[test]
+fn trap_display_multi_module() -> Result<()> {
+    let store = Store::default();
+    let binary = wat::parse_str(
+        r#"
+            (module $a
+                (func $die unreachable)
+                (func call $die)
+                (func $foo call 1)
+                (func (export "bar") call $foo)
+            )
+        "#,
+    )?;
+
+    let module = Module::new(&store, &binary)?;
+    let instance = Instance::new(&module, &[])?;
+    let bar = instance.exports()[0].clone();
+
+    let binary = wat::parse_str(
+        r#"
+            (module $b
+                (import "" "" (func $bar))
+                (func $middle call $bar)
+                (func (export "bar2") call $middle)
+            )
+        "#,
+    )?;
+    let module = Module::new(&store, &binary)?;
+    let instance = Instance::new(&module, &[bar])?;
+    let bar2 = instance.exports()[0]
+        .func()
+        .expect("expected function export");
+
+    let e = bar2.call(&[]).err().expect("error calling function");
+    assert_eq!(
+        e.to_string(),
+        "\
+wasm trap: unreachable, source location: @0023
+wasm backtrace:
+  0: a!die
+  1: a!<wasm function 1>
+  2: a!foo
+  3: a!<wasm function 3>
+  4: b!middle
+  5: b!<wasm function 2>
+"
+    );
+    Ok(())
+}
