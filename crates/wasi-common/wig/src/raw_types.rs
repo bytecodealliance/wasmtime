@@ -148,6 +148,38 @@ fn gen_datatype(output: &mut TokenStream, mode: Mode, namedtype: &witx::NamedTyp
             }
         },
     }
+
+    if namedtype.name.as_str() == "errno" {
+        // Generate strerror for errno type
+        gen_errno_strerror(output, namedtype);
+    }
+}
+
+fn gen_errno_strerror(output: &mut TokenStream, namedtype: &witx::NamedType) {
+    let inner = match &namedtype.dt {
+        witx::TypeRef::Value(v) => match &**v {
+            witx::Type::Enum(e) => e,
+            x => panic!("expected Enum('errno'), instead received {:?}", x),
+        },
+        x => panic!("expected Enum('errno'), instead received {:?}", x),
+    };
+    let mut inner_group = TokenStream::new();
+    for variant in &inner.variants {
+        let value_name = format_ident!(
+            "__WASI_ERRNO_{}",
+            variant.name.as_str().to_shouty_snake_case()
+        );
+        let docs = variant.docs.trim();
+        inner_group.extend(quote!(#value_name => #docs,));
+    }
+    output.extend(
+        quote!(pub fn strerror(errno: __wasi_errno_t) -> &'static str {
+            match errno {
+                #inner_group
+                other => panic!("Undefined errno value {:?}", other),
+            }
+        }),
+    );
 }
 
 fn int_repr_tokens(int_repr: witx::IntRepr) -> TokenStream {
