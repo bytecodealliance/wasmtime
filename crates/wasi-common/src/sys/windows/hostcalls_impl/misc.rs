@@ -72,7 +72,10 @@ impl StdinPoll {
     fn event_loop(request_rx: Receiver<()>, notify_tx: Sender<PollState>) -> ! {
         use std::io::BufRead;
         loop {
+            // Wait for the request to poll stdin
             request_rx.recv().expect("request_rx channel closed");
+
+            // Wait for data to appear in stdin.
             // If `fill_buf` returns any slice, then it means that either
             // (a) there some data in stdout, if it's non-empty
             // (b) EOF was received, if it's empty
@@ -81,6 +84,9 @@ impl StdinPoll {
                 Ok(_) => PollState::Ready,
                 Err(e) => PollState::Error(e.into()),
             };
+
+            // Notify the requestor about data in stdin. They may have already timed out,
+            // then the next requestor will have to clean the channel.
             notify_tx.send(resp).expect("notify_tx channel closed");
         }
     }
