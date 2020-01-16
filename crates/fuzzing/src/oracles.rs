@@ -65,9 +65,7 @@ pub fn compile(wasm: &[u8], strategy: Strategy) {
     }
 
     let mut config = Config::new();
-    config
-        .strategy(strategy)
-        .unwrap();
+    config.strategy(strategy).unwrap();
     let engine = Engine::new(&config);
     let store = Store::new(&engine);
     let _ = Module::new(&store, wasm).expect("Failed to compile a valid Wasm module!");

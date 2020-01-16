@@ -1,4 +1,3 @@
-use crate::context::Context;
 use crate::externals::Extern;
 use crate::module::Module;
 use crate::runtime::Store;
@@ -6,7 +5,6 @@ use crate::trampoline::take_api_trap;
 use crate::trap::Trap;
 use crate::types::{ExportType, ExternType};
 use anyhow::{Error, Result};
-use std::collections::HashSet;
 use wasmtime_jit::{CompiledModule, Resolver};
 use wasmtime_runtime::{Export, InstanceHandle, InstantiationError};
 
@@ -22,49 +20,37 @@ impl Resolver for SimpleResolver<'_> {
     }
 }
 
-fn instantiate_in_context(
+fn instantiate(
     compiled_module: &CompiledModule,
     imports: &[Extern],
-    context: Context,
-) -> Result<(InstanceHandle, HashSet<Context>), Error> {
+) -> Result<InstanceHandle, Error> {
     let mut resolver = SimpleResolver { imports };
     let instance = compiled_module
         .instantiate(&mut resolver)
         .map_err(|e| -> Error {
             if let Some(trap) = take_api_trap() {
                 trap.into()
-            } else if let InstantiationError::StartTrap(msg) = e {
-                Trap::new(msg).into()
+            } else if let InstantiationError::StartTrap(trap) = e {
+                Trap::from_jit(trap).into()
             } else {
                 e.into()
             }
         })?;
-    let mut contexts = HashSet::new();
-    contexts.insert(context);
-    Ok((instance, contexts))
+    Ok(instance)
 }
 
 #[derive(Clone)]
 pub struct Instance {
     instance_handle: InstanceHandle,
-
     module: Module,
-
-    // We need to keep CodeMemory alive.
-    contexts: HashSet<Context>,
-
     exports: Box<[Extern]>,
 }
 
 impl Instance {
     pub fn new(module: &Module, externs: &[Extern]) -> Result<Instance, Error> {
         let store = module.store();
-        let context = store.context().clone();
-        let (mut instance_handle, contexts) = instantiate_in_context(
-            module.compiled_module().expect("compiled_module"),
-            externs,
-            context,
-        )?;
+        let mut instance_handle =
+            instantiate(module.compiled_module().expect("compiled_module"), externs)?;
 
         let exports = {
             let mut exports = Vec::with_capacity(module.exports().len());
@@ -82,7 +68,6 @@ impl Instance {
         Ok(Instance {
             instance_handle,
             module: module.clone(),
-            contexts,
             exports,
         })
     }
@@ -119,8 +104,6 @@ impl Instance {
     }
 
     pub fn from_handle(store: &Store, instance_handle: InstanceHandle) -> Instance {
-        let contexts = HashSet::new();
-
         let mut exports = Vec::new();
         let mut exports_types = Vec::new();
         let mut mutable = instance_handle.clone();
@@ -153,7 +136,6 @@ impl Instance {
         Instance {
             instance_handle,
             module,
-            contexts,
             exports: exports.into_boxed_slice(),
         }
     }

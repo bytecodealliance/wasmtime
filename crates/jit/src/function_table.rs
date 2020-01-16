@@ -2,42 +2,7 @@
 //!
 //! This module is primarily used to track JIT functions on Windows for stack walking and unwind.
 
-/// Represents a runtime function table.
-///
-/// The runtime function table is not implemented for non-Windows target platforms.
-#[cfg(not(target_os = "windows"))]
-pub(crate) struct FunctionTable;
-
-#[cfg(not(target_os = "windows"))]
-impl FunctionTable {
-    /// Creates a new function table.
-    pub fn new() -> Self {
-        Self
-    }
-
-    /// Returns the number of functions in the table, also referred to as its 'length'.
-    ///
-    /// For non-Windows platforms, the table will always be empty.
-    pub fn len(&self) -> usize {
-        0
-    }
-
-    /// Adds a function to the table based off of the start offset, end offset, and unwind offset.
-    ///
-    /// The offsets are from the "module base", which is provided when the table is published.
-    ///
-    /// For non-Windows platforms, this is a no-op.
-    pub fn add_function(&mut self, _start: u32, _end: u32, _unwind: u32) {}
-
-    /// Publishes the function table using the given base address.
-    ///
-    /// A published function table will automatically be deleted when it is dropped.
-    ///
-    /// For non-Windows platforms, this is a no-op.
-    pub fn publish(&mut self, _base_address: u64) -> Result<(), String> {
-        Ok(())
-    }
-}
+type FunctionTableReloc = wasmtime_environ::CompiledFunctionUnwindInfoReloc;
 
 /// Represents a runtime function table.
 ///
@@ -66,7 +31,14 @@ impl FunctionTable {
     /// Adds a function to the table based off of the start offset, end offset, and unwind offset.
     ///
     /// The offsets are from the "module base", which is provided when the table is published.
-    pub fn add_function(&mut self, start: u32, end: u32, unwind: u32) {
+    pub fn add_function(
+        &mut self,
+        start: u32,
+        end: u32,
+        unwind: u32,
+        _relocs: &[FunctionTableReloc],
+    ) {
+        assert_eq!(_relocs.len(), 0);
         use winapi::um::winnt;
 
         assert!(!self.published, "table has already been published");
@@ -129,6 +101,109 @@ impl Drop for FunctionTable {
         if self.published {
             unsafe {
                 winnt::RtlDeleteFunctionTable(self.functions.as_mut_ptr());
+            }
+        }
+    }
+}
+
+/// Represents a runtime function table.
+///
+/// This is used to register JIT code with the operating system to enable stack walking and unwinding.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub(crate) struct FunctionTable {
+    functions: Vec<u32>,
+    relocs: Vec<FunctionTableReloc>,
+    published: Option<Vec<usize>>,
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+impl FunctionTable {
+    /// Creates a new function table.
+    pub fn new() -> Self {
+        Self {
+            functions: Vec::new(),
+            relocs: Vec::new(),
+            published: None,
+        }
+    }
+
+    /// Returns the number of functions in the table, also referred to as its 'length'.
+    pub fn len(&self) -> usize {
+        self.functions.len()
+    }
+
+    /// Adds a function to the table based off of the start offset, end offset, and unwind offset.
+    ///
+    /// The offsets are from the "module base", which is provided when the table is published.
+    pub fn add_function(
+        &mut self,
+        _start: u32,
+        _end: u32,
+        unwind: u32,
+        relocs: &[FunctionTableReloc],
+    ) {
+        assert!(self.published.is_none(), "table has already been published");
+        self.functions.push(unwind);
+        self.relocs.extend_from_slice(relocs);
+    }
+
+    /// Publishes the function table using the given base address.
+    ///
+    /// A published function table will automatically be deleted when it is dropped.
+    pub fn publish(&mut self, base_address: u64) -> Result<(), String> {
+        if self.published.is_some() {
+            return Err("function table was already published".into());
+        }
+
+        if self.functions.is_empty() {
+            assert_eq!(self.relocs.len(), 0);
+            self.published = Some(vec![]);
+            return Ok(());
+        }
+
+        extern "C" {
+            // libunwind import
+            fn __register_frame(fde: *const u8);
+        }
+
+        for reloc in self.relocs.iter() {
+            let addr = base_address + (reloc.offset as u64);
+            let target = base_address + (reloc.addend as u64);
+            unsafe {
+                std::ptr::write(addr as *mut u64, target);
+            }
+        }
+
+        let mut fdes = Vec::with_capacity(self.functions.len());
+        for unwind_offset in self.functions.iter() {
+            let addr = base_address + (*unwind_offset as u64);
+            let off = unsafe { std::ptr::read::<u32>(addr as *const u32) } as usize + 4;
+
+            let fde = (addr + off as u64) as usize;
+            unsafe {
+                __register_frame(fde as *const _);
+            }
+            fdes.push(fde);
+        }
+
+        self.published = Some(fdes);
+        Ok(())
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+impl Drop for FunctionTable {
+    fn drop(&mut self) {
+        extern "C" {
+            // libunwind import
+            fn __deregister_frame(fde: *const u8);
+        }
+
+        if self.published.is_some() {
+            unsafe {
+                for fde in self.published.as_ref().unwrap() {
+                    __deregister_frame(*fde as *const _);
+                }
             }
         }
     }

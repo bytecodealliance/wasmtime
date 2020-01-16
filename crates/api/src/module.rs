@@ -205,7 +205,7 @@ impl Module {
     ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     pub fn validate(store: &Store, binary: &[u8]) -> Result<()> {
-        let features = store.engine().config.features.clone();
+        let features = store.engine().config().features.clone();
         let config = ValidatingParserConfig {
             operator_config: OperatorValidatorConfig {
                 enable_threads: features.threads,
@@ -394,15 +394,13 @@ impl Module {
 }
 
 fn compile(store: &Store, binary: &[u8], module_name: Option<&str>) -> Result<CompiledModule> {
-    let context = store.context().clone();
     let exports = store.global_exports().clone();
-    let debug_info = context.debug_info();
     let compiled_module = CompiledModule::new(
-        &mut context.compiler(),
+        &mut store.compiler_mut(),
         binary,
         module_name,
         exports,
-        debug_info,
+        store.engine().config().debug_info,
     )?;
 
     // Register all module signatures
