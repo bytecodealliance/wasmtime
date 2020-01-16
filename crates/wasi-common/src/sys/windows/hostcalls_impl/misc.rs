@@ -187,6 +187,20 @@ fn make_timeout_event(timeout: &ClockEventData) -> wasi::__wasi_event_t {
     }
 }
 
+fn make_hangup_event(fd_event: &FdEventData) -> wasi::__wasi_event_t {
+    wasi::__wasi_event_t {
+        userdata: fd_event.userdata,
+        r#type: fd_event.r#type,
+        error: wasi::__WASI_ERRNO_SUCCESS,
+        u: wasi::__wasi_event_u_t {
+            fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+                nbytes: 0,
+                flags: wasi::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
+            },
+        },
+    }
+}
+
 fn handle_timeout(
     timeout_event: ClockEventData,
     timeout: Duration,
@@ -199,6 +213,11 @@ fn handle_timeout(
 fn handle_timeout_event(timeout_event: ClockEventData, events: &mut Vec<wasi::__wasi_event_t>) {
     let new_event = make_timeout_event(&timeout_event);
     events.push(new_event);
+}
+
+fn handle_hangup_event(event: FdEventData, events: &mut Vec<wasi::__wasi_event_t>) {
+    let new_event = make_hangup_event(&event);
+    events.push(new_event)
 }
 
 fn handle_rw_event(event: FdEventData, out_events: &mut Vec<wasi::__wasi_event_t>) {
@@ -315,8 +334,6 @@ pub(crate) fn poll_oneoff(
         // During the firt request to poll stdin, we spin up a separate thread to
         // waiting for data to arrive on stdin. This thread will not terminate.
         //
-        // FIXME this is not thread safe!
-        //
         // We'd like to do the following:
         // (1) wait in a non-blocking way for data to be available in stdin, with timeout
         // (2) find out, how many bytes are there available to be read.
@@ -334,7 +351,7 @@ pub(crate) fn poll_oneoff(
         //
         // There appears to be no way of achieving (2) on Windows.
         // [1]: https://github.com/rust-lang/rust/pull/12422
-        let dur = if immediate {
+        let waitmode = if immediate {
             trace!("     | tentatively checking stdin");
             WaitMode::Immediate
         } else {
@@ -344,16 +361,16 @@ pub(crate) fn poll_oneoff(
                 None => WaitMode::Infinite,
             }
         };
-        let state = STDIN_POLL.lock().unwrap().poll(dur);
+        let state = STDIN_POLL.lock().unwrap().poll(waitmode);
         for event in stdin_events {
             match state {
                 PollState::Ready => handle_rw_event(event, events),
-                PollState::NotReady => {}
-                PollState::Closed => { /* error? FIXME */ }
+                PollState::NotReady => {} // not immediately available, so just ignore
+                PollState::Closed => handle_hangup_event(event, events), // TODO check if actually a POLLHUP on Linux
                 PollState::TimedOut => handle_timeout_event(timeout.unwrap().0, events),
                 PollState::Error(ref e) => {
-                    error!("PollState error");
-                    handle_error_event(event, Error::ENOTSUP /*FIXME*/, events);
+                    error!("FIXME return real error");
+                    handle_error_event(event, Error::ENOTSUP, events);
                 }
             }
         }
