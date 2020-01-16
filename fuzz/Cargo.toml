@@ -15,7 +15,7 @@ log = "0.4.8"
 wasmtime-fuzzing = { path = "../crates/fuzzing", features = ["env_logger"] }
 wasmtime-jit = { path = "../crates/jit" }
 wasmtime = { path = "../crates/api" }
-libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
+libfuzzer-sys = "0.2.0"
 
 [[bin]]
 name = "compile"
