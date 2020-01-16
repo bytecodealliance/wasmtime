@@ -9,7 +9,7 @@ use crate::{wasi, wasi32, Error, Result};
 use cpu_time::{ProcessTime, ThreadTime};
 use crossbeam::channel::{self, Receiver, Sender};
 use lazy_static::lazy_static;
-use log::{error, trace, warning};
+use log::{error, trace, warn};
 use std::convert::TryInto;
 use std::io;
 use std::os::windows::io::AsRawHandle;
@@ -323,7 +323,7 @@ pub(crate) fn poll_oneoff(
         trace!("     | actively polling stdin or pipes");
         match timeout {
             Some((event, dur)) => {
-                warning!("Polling pipes not supported on Windows, will just time out.");
+                warn!("Polling pipes not supported on Windows, will just time out.");
                 return Ok(handle_timeout(event, dur, events));
             }
             None => {
