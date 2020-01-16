@@ -24,7 +24,6 @@ struct StdinPoll {
 
 enum PollState {
     Ready,
-    Closed,
     NotReady, // it's not ready, but we didn't wait
     TimedOut, // it's not ready and a timeout has occurred
     Error(Error),
@@ -74,9 +73,12 @@ impl StdinPoll {
         use std::io::BufRead;
         loop {
             request_rx.recv().expect("request_rx channel closed");
-            let resp = match std::io::stdin().lock().fill_buf().map(|s| !s.is_empty()) {
-                Ok(true) => PollState::Ready,
-                Ok(false) => PollState::Closed,
+            // If `fill_buf` returns any slice, then it means that either
+            // (a) there some data in stdout, if it's non-empty
+            // (b) EOF was received, if it's empty
+            // Linux returns `POLLIN` in both cases, and we imitate this behavior.
+            let resp = match std::io::stdin().lock().fill_buf() {
+                Ok(_) => PollState::Ready,
                 Err(e) => PollState::Error(e.into()),
             };
             notify_tx.send(resp).expect("notify_tx channel closed");
@@ -187,20 +189,6 @@ fn make_timeout_event(timeout: &ClockEventData) -> wasi::__wasi_event_t {
     }
 }
 
-fn make_hangup_event(fd_event: &FdEventData) -> wasi::__wasi_event_t {
-    wasi::__wasi_event_t {
-        userdata: fd_event.userdata,
-        r#type: fd_event.r#type,
-        error: wasi::__WASI_ERRNO_SUCCESS,
-        u: wasi::__wasi_event_u_t {
-            fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
-                nbytes: 0,
-                flags: wasi::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
-            },
-        },
-    }
-}
-
 fn handle_timeout(
     timeout_event: ClockEventData,
     timeout: Duration,
@@ -213,11 +201,6 @@ fn handle_timeout(
 fn handle_timeout_event(timeout_event: ClockEventData, events: &mut Vec<wasi::__wasi_event_t>) {
     let new_event = make_timeout_event(&timeout_event);
     events.push(new_event);
-}
-
-fn handle_hangup_event(event: FdEventData, events: &mut Vec<wasi::__wasi_event_t>) {
-    let new_event = make_hangup_event(&event);
-    events.push(new_event)
 }
 
 fn handle_rw_event(event: FdEventData, out_events: &mut Vec<wasi::__wasi_event_t>) {
@@ -366,7 +349,6 @@ pub(crate) fn poll_oneoff(
             match state {
                 PollState::Ready => handle_rw_event(event, events),
                 PollState::NotReady => {} // not immediately available, so just ignore
-                PollState::Closed => handle_hangup_event(event, events), // TODO check if actually a POLLHUP on Linux
                 PollState::TimedOut => handle_timeout_event(timeout.unwrap().0, events),
                 PollState::Error(ref e) => {
                     error!("FIXME return real error");
