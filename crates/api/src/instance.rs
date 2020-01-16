@@ -20,36 +20,22 @@ impl Resolver for SimpleResolver<'_> {
     }
 }
 
-fn instantiate_in_context(
-    store: &Store,
-    data: &[u8],
+fn instantiate(
+    compiled_module: &CompiledModule,
     imports: &[Extern],
-    module_name: Option<&str>,
-) -> Result<InstanceHandle> {
+) -> Result<InstanceHandle, Error> {
     let mut resolver = SimpleResolver { imports };
-    let mut compiled_module = CompiledModule::new(
-        &mut store.compiler_mut(),
-        data,
-        module_name,
-        &mut resolver,
-        store.global_exports().clone(),
-        store.engine().config().debug_info,
-    )?;
-
-    // Register all module signatures
-    for signature in compiled_module.module().signatures.values() {
-        store.register_wasmtime_signature(signature);
-    }
-
-    let instance = compiled_module.instantiate().map_err(|e| -> Error {
-        if let Some(trap) = take_api_trap() {
-            trap.into()
-        } else if let InstantiationError::StartTrap(trap) = e {
-            Trap::from_jit(trap).into()
-        } else {
-            e.into()
-        }
-    })?;
+    let instance = compiled_module
+        .instantiate(&mut resolver)
+        .map_err(|e| -> Error {
+            if let Some(trap) = take_api_trap() {
+                trap.into()
+            } else if let InstantiationError::StartTrap(trap) = e {
+                Trap::from_jit(trap).into()
+            } else {
+                e.into()
+            }
+        })?;
     Ok(instance)
 }
 
@@ -63,12 +49,8 @@ pub struct Instance {
 impl Instance {
     pub fn new(module: &Module, externs: &[Extern]) -> Result<Instance, Error> {
         let store = module.store();
-        let mut instance_handle = instantiate_in_context(
-            store,
-            module.binary().expect("binary"),
-            externs,
-            module.name(),
-        )?;
+        let mut instance_handle =
+            instantiate(module.compiled_module().expect("compiled_module"), externs)?;
 
         let exports = {
             let mut exports = Vec::with_capacity(module.exports().len());

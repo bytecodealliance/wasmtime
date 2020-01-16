@@ -13,25 +13,15 @@
 pub mod dummy;
 
 use dummy::{dummy_imports, dummy_value};
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 use wasmtime::*;
-use wasmtime_environ::{isa, settings};
-use wasmtime_jit::{native, CompilationStrategy, CompiledModule, Compiler, NullResolver};
-
-fn host_isa() -> Box<dyn isa::TargetIsa> {
-    let flag_builder = settings::builder();
-    let isa_builder = native::builder();
-    isa_builder.finish(settings::Flags::new(flag_builder))
-}
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
 /// panic or segfault or anything else that can be detected "passively".
 ///
 /// Performs initial validation, and returns early if the Wasm is invalid.
 ///
-/// You can control which compiler is used via passing a `CompilationStrategy`.
+/// You can control which compiler is used via passing a `Strategy`.
 pub fn instantiate(wasm: &[u8], strategy: Strategy) {
     if wasmparser::validate(wasm, None).is_err() {
         return;
@@ -68,24 +58,13 @@ pub fn instantiate(wasm: &[u8], strategy: Strategy) {
 ///
 /// Performs initial validation, and returns early if the Wasm is invalid.
 ///
-/// You can control which compiler is used via passing a `CompilationStrategy`.
-pub fn compile(wasm: &[u8], compilation_strategy: CompilationStrategy) {
-    if wasmparser::validate(wasm, None).is_err() {
-        return;
-    }
-
-    let isa = host_isa();
-    let mut compiler = Compiler::new(isa, compilation_strategy);
-    let mut resolver = NullResolver {};
-    let global_exports = Rc::new(RefCell::new(HashMap::new()));
-    let _ = CompiledModule::new(
-        &mut compiler,
-        wasm,
-        None,
-        &mut resolver,
-        global_exports,
-        false,
-    );
+/// You can control which compiler is used via passing a `Strategy`.
+pub fn compile(wasm: &[u8], strategy: Strategy) {
+    let mut config = Config::new();
+    config.strategy(strategy).unwrap();
+    let engine = Engine::new(&config);
+    let store = Store::new(&engine);
+    let _ = Module::new(&store, wasm);
 }
 
 /// Invoke the given API calls.
