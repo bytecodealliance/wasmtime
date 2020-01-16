@@ -136,7 +136,7 @@ impl ModuleData {
         let outgoing = binding.result_bindings()?;
 
         let f = instance
-            .find_export_by_name(export)
+            .get_export(export)
             .ok_or_else(|| format_err!("failed to find export `{}`", export))?
             .func()
             .ok_or_else(|| format_err!("`{}` is not a function", export))?
@@ -325,7 +325,7 @@ impl TranslateContext for InstanceTranslateContext {
     fn invoke_alloc(&mut self, alloc_func_name: &str, len: i32) -> Result<i32> {
         let alloc = self
             .0
-            .find_export_by_name(alloc_func_name)
+            .get_export(alloc_func_name)
             .ok_or_else(|| format_err!("failed to find alloc function `{}`", alloc_func_name))?
             .func()
             .ok_or_else(|| format_err!("`{}` is not a (alloc) function", alloc_func_name))?
@@ -343,7 +343,7 @@ impl TranslateContext for InstanceTranslateContext {
     unsafe fn get_memory(&mut self) -> Result<&mut [u8]> {
         let memory = self
             .0
-            .find_export_by_name("memory")
+            .get_export("memory")
             .ok_or_else(|| format_err!("failed to find `memory` export"))?
             .memory()
             .ok_or_else(|| format_err!("`memory` is not a memory"))?

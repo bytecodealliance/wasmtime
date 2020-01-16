@@ -107,7 +107,7 @@ pub fn instantiate(
                 .as_ref()
                 .unwrap()
                 .1
-                .find_export_by_name(i.name())
+                .get_export(i.name())
                 .ok_or_else(|| {
                     PyErr::new::<Exception, _>(format!("wasi export {} is not found", i.name(),))
                 })?;

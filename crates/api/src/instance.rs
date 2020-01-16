@@ -39,18 +39,77 @@ fn instantiate(
     Ok(instance)
 }
 
+/// An instantiated WebAssembly module.
+///
+/// This type represents the instantiation of a [`Module`]. Once instantiated
+/// you can access the [`exports`](Instance::exports) which are of type
+/// [`Extern`] and provide the ability to call functions, set globals, read
+/// memory, etc. This is where all the fun stuff happens!
+///
+/// An [`Instance`] is created from two inputs, a [`Module`] and a list of
+/// imports, provided as a list of [`Extern`] values. The [`Module`] is the wasm
+/// code that was compiled and we're instantiating, and the [`Extern`] imports
+/// are how we're satisfying the imports of the module provided. On successful
+/// instantiation an [`Instance`] will automatically invoke the wasm `start`
+/// function.
+///
+/// When interacting with any wasm code you'll want to make an [`Instance`] to
+/// call any code or execute anything!
 #[derive(Clone)]
 pub struct Instance {
-    instance_handle: InstanceHandle,
+    pub(crate) instance_handle: InstanceHandle,
     module: Module,
     exports: Box<[Extern]>,
 }
 
 impl Instance {
-    pub fn new(module: &Module, externs: &[Extern]) -> Result<Instance, Error> {
+    /// Creates a new [`Instance`] from the previously compiled [`Module`] and
+    /// list of `imports` specified.
+    ///
+    /// This method instantiates the `module` provided with the `imports`,
+    /// following the procedure in the [core specification][inst] to
+    /// instantiate. Instantiation can fail for a number of reasons (many
+    /// specified below), but if successful the `start` function will be
+    /// automatically run (if provided) and then the [`Instance`] will be
+    /// returned.
+    ///
+    /// ## Providing Imports
+    ///
+    /// The `imports` array here is a bit tricky. The entries in the list of
+    /// `imports` are intended to correspond 1:1 with the list of imports
+    /// returned by [`Module::imports`]. Before calling [`Instance::new`] you'll
+    /// want to inspect the return value of [`Module::imports`] and, for each
+    /// import type, create an [`Extern`] which corresponds to that type.
+    /// These [`Extern`] values are all then collected into a list and passed to
+    /// this function.
+    ///
+    /// Note that this function is intentionally relatively low level. It is the
+    /// intention that we'll soon provide a [higher level API][issue] which will
+    /// be much more ergonomic for instantiating modules. If you need the full
+    /// power of customization of imports, though, this is the method for you!
+    ///
+    /// ## Errors
+    ///
+    /// This function can fail for a number of reasons, including, but not
+    /// limited to:
+    ///
+    /// * The number of `imports` provided doesn't match the number of imports
+    ///   returned by the `module`'s [`Module::imports`] method.
+    /// * The type of any [`Extern`] doesn't match the corresponding
+    ///   [`ExternType`] entry that it maps to.
+    /// * The `start` function in the instance, if present, traps.
+    /// * Module/instance resource limits are exceeded.
+    ///
+    /// When instantiation fails it's recommended to inspect the return value to
+    /// see why it failed, or bubble it upwards. If you'd like to specifically
+    /// check for trap errors, you can use `error.downcast::<Trap>()`.
+    ///
+    /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
+    /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
+    pub fn new(module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
         let store = module.store();
         let mut instance_handle =
-            instantiate(module.compiled_module().expect("compiled_module"), externs)?;
+            instantiate(module.compiled_module().expect("compiled_module"), imports)?;
 
         let exports = {
             let mut exports = Vec::with_capacity(module.exports().len());
@@ -89,11 +148,24 @@ impl Instance {
         &self.module
     }
 
+    /// Returns the list of exported items from this [`Instance`].
+    ///
+    /// Note that the exports here do not have names associated with them,
+    /// they're simply the values that are exported. To learn the value of each
+    /// export you'll need to consult [`Module::exports`]. The list returned
+    /// here maps 1:1 with the list that [`Module::exports`] returns, and
+    /// [`ExportType`] contains the name of each export.
     pub fn exports(&self) -> &[Extern] {
         &self.exports
     }
 
-    pub fn find_export_by_name(&self, name: &str) -> Option<&Extern> {
+    /// Looks up an exported [`Extern`] value by name.
+    ///
+    /// This method will search the module for an export named `name` and return
+    /// the value, if found.
+    ///
+    /// Returns `None` if there was no export named `name`.
+    pub fn get_export(&self, name: &str) -> Option<&Extern> {
         let (i, _) = self
             .module
             .exports()
@@ -103,6 +175,7 @@ impl Instance {
         Some(&self.exports()[i])
     }
 
+    #[doc(hidden)]
     pub fn from_handle(store: &Store, instance_handle: InstanceHandle) -> Instance {
         let mut exports = Vec::new();
         let mut exports_types = Vec::new();
@@ -140,46 +213,14 @@ impl Instance {
         }
     }
 
+    #[doc(hidden)]
     pub fn handle(&self) -> &InstanceHandle {
         &self.instance_handle
     }
 
+    #[doc(hidden)]
     pub fn get_wasmtime_memory(&self) -> Option<wasmtime_runtime::Export> {
         let mut instance_handle = self.instance_handle.clone();
         instance_handle.lookup("memory")
-    }
-}
-
-// OS-specific signal handling
-cfg_if::cfg_if! {
-    if #[cfg(target_os = "linux")] {
-        impl Instance {
-            /// The signal handler must be
-            /// [async-signal-safe](http://man7.org/linux/man-pages/man7/signal-safety.7.html).
-            pub fn set_signal_handler<H>(&self, handler: H)
-            where
-                H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
-            {
-                self.instance_handle.clone().set_signal_handler(handler);
-            }
-        }
-    } else if #[cfg(target_os = "windows")] {
-        impl Instance {
-            pub fn set_signal_handler<H>(&self, handler: H)
-            where
-                H: 'static + Fn(winapi::um::winnt::EXCEPTION_POINTERS) -> bool,
-            {
-                self.instance_handle.clone().set_signal_handler(handler);
-            }
-        }
-    } else if #[cfg(target_os = "macos")] {
-        impl Instance {
-            pub fn set_signal_handler<H>(&self, handler: H)
-            where
-                H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
-            {
-                self.instance_handle.clone().set_signal_handler(handler);
-            }
-        }
     }
 }
