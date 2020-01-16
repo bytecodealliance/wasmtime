@@ -181,7 +181,7 @@ impl Module {
             // Assign or override the module's name if supplied.
             inner.name = Some(name.to_string());
         }
-        inner.compiled = Some(compile(store, binary, name)?);
+        inner.compiled = Some(compile(store, binary, inner.name.as_deref())?);
         Ok(ret)
     }
 
