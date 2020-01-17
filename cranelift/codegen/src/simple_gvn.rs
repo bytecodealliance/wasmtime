@@ -124,8 +124,13 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
             use crate::scoped_hash_map::Entry::*;
             match visible_values.entry(key) {
                 Occupied(entry) => {
-                    let layout = &func.layout;
-                    debug_assert!(domtree.dominates(*entry.get(), inst, layout));
+                    #[allow(clippy::debug_assert_with_mut_call)]
+                    {
+                        // Clippy incorrectly believes `&func.layout` should not be used here:
+                        // https://github.com/rust-lang/rust-clippy/issues/4737
+                        debug_assert!(domtree.dominates(*entry.get(), inst, &func.layout));
+                    }
+
                     // If the redundant instruction is representing the current
                     // scope, pick a new representative.
                     let old = scope_stack.last_mut().unwrap();

@@ -1530,6 +1530,7 @@ fn define_alu(
 }
 
 #[inline(never)]
+#[allow(clippy::cognitive_complexity)]
 fn define_simd(
     e: &mut PerCpuModeEncodings,
     shared_defs: &SharedDefinitions,

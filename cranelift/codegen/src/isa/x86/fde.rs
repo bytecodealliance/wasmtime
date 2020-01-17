@@ -10,7 +10,6 @@ use gimli::write::{
     FrameDescriptionEntry, FrameTable, Result, Writer,
 };
 use gimli::{Encoding, Format, LittleEndian, Register, X86_64};
-use std::ptr;
 
 pub type FDERelocEntry = (FrameUnwindOffset, Reloc);
 
@@ -196,7 +195,7 @@ pub fn emit_fde(func: &Function, isa: &dyn TargetIsa, sink: &mut dyn FrameUnwind
             assert!(last_offset <= address_offset);
             if let Some(cmds) = frame_layout.instructions.get(&inst) {
                 for cmd in cmds.iter() {
-                    changes.push((address_offset, cmd.clone()));
+                    changes.push((address_offset, *cmd));
                 }
             }
             last_offset = address_offset;
@@ -252,7 +251,9 @@ pub fn emit_fde(func: &Function, isa: &dyn TargetIsa, sink: &mut dyn FrameUnwind
     for (off, r) in relocs {
         sink.reloc(r, off + unwind_start);
     }
-    let fde_offset = unsafe { ptr::read::<u32>(bytes.as_ptr() as *const u32) } as usize + 4;
+
+    let cie_len = u32::from_le_bytes(bytes.as_slice()[..4].try_into().unwrap());
+    let fde_offset = cie_len as usize + 4;
     sink.set_entry_offset(unwind_start + fde_offset);
 
     // Need 0 marker for GCC unwind to end FDE "list".

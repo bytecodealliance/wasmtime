@@ -113,13 +113,13 @@ mod dwarfdump {
 
     impl From<gimli::Error> for Error {
         fn from(err: gimli::Error) -> Self {
-            Error::GimliError(err)
+            Self::GimliError(err)
         }
     }
 
     impl From<fmt::Error> for Error {
         fn from(_: fmt::Error) -> Self {
-            Error::IoError
+            Self::IoError
         }
     }
 

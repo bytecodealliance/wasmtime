@@ -73,15 +73,15 @@ impl TypeVar {
         builder = builder.simd_lanes(num_lanes..num_lanes);
 
         let builder = match scalar_type {
-            LaneType::IntType(int_type) => {
+            LaneType::Int(int_type) => {
                 let bits = int_type as RangeBound;
                 builder.ints(bits..bits)
             }
-            LaneType::FloatType(float_type) => {
+            LaneType::Float(float_type) => {
                 let bits = float_type as RangeBound;
                 builder.floats(bits..bits)
             }
-            LaneType::BoolType(bool_type) => {
+            LaneType::Bool(bool_type) => {
                 let bits = bool_type as RangeBound;
                 builder.bools(bits..bits)
             }
@@ -1200,8 +1200,7 @@ fn test_typevar_singleton() {
     use crate::shared::types as shared_types;
 
     // Test i32.
-    let typevar =
-        TypeVar::new_singleton(ValueType::Lane(LaneType::IntType(shared_types::Int::I32)));
+    let typevar = TypeVar::new_singleton(ValueType::Lane(LaneType::Int(shared_types::Int::I32)));
     assert_eq!(typevar.name, "i32");
     assert_eq!(typevar.type_set.ints, num_set![32]);
     assert!(typevar.type_set.floats.is_empty());
@@ -1211,7 +1210,7 @@ fn test_typevar_singleton() {
 
     // Test f32x4.
     let typevar = TypeVar::new_singleton(ValueType::Vector(VectorType::new(
-        LaneType::FloatType(shared_types::Float::F32),
+        LaneType::Float(shared_types::Float::F32),
         4,
     )));
     assert_eq!(typevar.name, "f32x4");
