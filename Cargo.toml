@@ -1,0 +1,11 @@
+[package]
+name = "wig-new"
+version = "0.1.0"
+authors = ["Jakub Konka <jakub.konka@golem.network>"]
+edition = "2018"
+
+[dependencies]
+generate = { path = "crates/generate" }
+
+[workspace]
+members = ["crates/generate"]
