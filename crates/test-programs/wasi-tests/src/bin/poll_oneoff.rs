@@ -19,6 +19,18 @@ unsafe fn poll_oneoff_impl(r#in: &[wasi::Subscription], nexpected: usize) -> Vec
     out
 }
 
+unsafe fn test_empty_poll() {
+    let r#in = [];
+    let mut out: Vec<wasi::Event> = Vec::new();
+    let error = wasi::poll_oneoff(r#in.as_ptr(), out.as_mut_ptr(), r#in.len())
+        .expect_err("empty poll_oneoff should fail");
+    assert_eq!(
+        error.raw_error(),
+        wasi::ERRNO_INVAL,
+        "error should be EINVAL"
+    );
+}
+
 unsafe fn test_timeout() {
     let clock = wasi::SubscriptionClock {
         id: wasi::CLOCKID_MONOTONIC,
@@ -220,6 +232,7 @@ unsafe fn test_fd_readwrite_invalid_fd() {
 
 unsafe fn test_poll_oneoff(dir_fd: wasi::Fd) {
     test_timeout();
+    test_empty_poll();
     // NB we assume that stdin/stdout/stderr are valid and open
     // for the duration of the test case
     test_stdin_read();
