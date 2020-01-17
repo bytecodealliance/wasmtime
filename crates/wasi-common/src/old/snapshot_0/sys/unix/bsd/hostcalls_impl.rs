@@ -1,5 +1,4 @@
 use crate::old::snapshot_0::hostcalls_impl::PathGet;
-use crate::old::snapshot_0::sys::host_impl;
 use crate::old::snapshot_0::{Error, Result};
 use std::os::unix::prelude::AsRawFd;
 
@@ -80,7 +79,7 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
                         Err(Error::ENOTDIR)
                     }
                 }
-                x => Err(host_impl::errno_from_nix(x)),
+                x => Err(x.into()),
             }
         } else {
             Err(err.into())
@@ -132,7 +131,7 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
                         Err(Error::ENOENT)
                     }
                 }
-                x => Err(host_impl::errno_from_nix(x)),
+                x => Err(x.into()),
             }
         } else {
             Err(err.into())

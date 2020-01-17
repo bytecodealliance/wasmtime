@@ -105,9 +105,9 @@ fn main() -> Result<(), Error> {
     println!("Checking memory...");
     check!(memory.size(), 2u32);
     check!(memory.data_size(), 0x20000usize);
-    check!(unsafe { memory.data()[0] }, 0);
-    check!(unsafe { memory.data()[0x1000] }, 1);
-    check!(unsafe { memory.data()[0x1003] }, 4);
+    check!(unsafe { memory.data_unchecked_mut()[0] }, 0);
+    check!(unsafe { memory.data_unchecked_mut()[0x1000] }, 1);
+    check!(unsafe { memory.data_unchecked_mut()[0x1003] }, 4);
 
     check!(call!(size_func,), 2);
     check!(call!(load_func, 0), 0);
@@ -119,20 +119,20 @@ fn main() -> Result<(), Error> {
     // Mutate memory.
     println!("Mutating memory...");
     unsafe {
-        memory.data()[0x1003] = 5;
+        memory.data_unchecked_mut()[0x1003] = 5;
     }
 
     check_ok!(store_func, 0x1002, 6);
     check_trap!(store_func, 0x20000, 0);
 
-    check!(unsafe { memory.data()[0x1002] }, 6);
-    check!(unsafe { memory.data()[0x1003] }, 5);
+    check!(unsafe { memory.data_unchecked()[0x1002] }, 6);
+    check!(unsafe { memory.data_unchecked()[0x1003] }, 5);
     check!(call!(load_func, 0x1002), 6);
     check!(call!(load_func, 0x1003), 5);
 
     // Grow memory.
     println!("Growing memory...");
-    check!(memory.grow(1), true);
+    memory.grow(1)?;
     check!(memory.size(), 3u32);
     check!(memory.data_size(), 0x30000usize);
 
@@ -141,8 +141,8 @@ fn main() -> Result<(), Error> {
     check_trap!(load_func, 0x30000);
     check_trap!(store_func, 0x30000, 0);
 
-    check!(memory.grow(1), false);
-    check!(memory.grow(0), true);
+    memory.grow(1).unwrap_err();
+    memory.grow(0).unwrap();
 
     // Create stand-alone memory.
     // TODO(wasm+): Once Wasm allows multiple memories, turn this into import.
@@ -150,8 +150,8 @@ fn main() -> Result<(), Error> {
     let memorytype = MemoryType::new(Limits::new(5, Some(5)));
     let memory2 = Memory::new(&store, memorytype);
     check!(memory2.size(), 5u32);
-    check!(memory2.grow(1), false);
-    check!(memory2.grow(0), true);
+    memory2.grow(1).unwrap_err();
+    memory2.grow(0).unwrap();
 
     // Shut down.
     println!("Shutting down...");

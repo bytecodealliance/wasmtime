@@ -136,7 +136,7 @@ impl ModuleData {
         let outgoing = binding.result_bindings()?;
 
         let f = instance
-            .find_export_by_name(export)
+            .get_export(export)
             .ok_or_else(|| format_err!("failed to find export `{}`", export))?
             .func()
             .ok_or_else(|| format_err!("`{}` is not a function", export))?
@@ -147,21 +147,19 @@ impl ModuleData {
             .into_iter()
             .map(|rv| rv.into())
             .collect::<Vec<_>>();
-        let wasm_results = match f.call(&wasm_args) {
-            Ok(values) => values
-                .to_vec()
-                .into_iter()
-                .map(|v: wasmtime::Val| match v {
-                    wasmtime::Val::I32(i) => RuntimeValue::I32(i),
-                    wasmtime::Val::I64(i) => RuntimeValue::I64(i),
-                    wasmtime::Val::F32(i) => RuntimeValue::F32(i),
-                    wasmtime::Val::F64(i) => RuntimeValue::F64(i),
-                    wasmtime::Val::V128(i) => RuntimeValue::V128(i.to_le_bytes()),
-                    _ => panic!("unsupported value {:?}", v),
-                })
-                .collect::<Vec<RuntimeValue>>(),
-            Err(trap) => bail!("trapped: {:?}", trap),
-        };
+        let wasm_results = f
+            .call(&wasm_args)?
+            .to_vec()
+            .into_iter()
+            .map(|v: wasmtime::Val| match v {
+                wasmtime::Val::I32(i) => RuntimeValue::I32(i),
+                wasmtime::Val::I64(i) => RuntimeValue::I64(i),
+                wasmtime::Val::F32(i) => RuntimeValue::F32(i),
+                wasmtime::Val::F64(i) => RuntimeValue::F64(i),
+                wasmtime::Val::V128(i) => RuntimeValue::V128(i.to_le_bytes()),
+                _ => panic!("unsupported value {:?}", v),
+            })
+            .collect::<Vec<RuntimeValue>>();
         translate_outgoing(&mut cx, &outgoing, &wasm_results)
     }
 
@@ -327,16 +325,13 @@ impl TranslateContext for InstanceTranslateContext {
     fn invoke_alloc(&mut self, alloc_func_name: &str, len: i32) -> Result<i32> {
         let alloc = self
             .0
-            .find_export_by_name(alloc_func_name)
+            .get_export(alloc_func_name)
             .ok_or_else(|| format_err!("failed to find alloc function `{}`", alloc_func_name))?
             .func()
             .ok_or_else(|| format_err!("`{}` is not a (alloc) function", alloc_func_name))?
             .clone();
         let alloc_args = vec![wasmtime::Val::I32(len)];
-        let results = match alloc.call(&alloc_args) {
-            Ok(values) => values,
-            Err(trap) => bail!("trapped: {:?}", trap),
-        };
+        let results = alloc.call(&alloc_args)?;
         if results.len() != 1 {
             bail!("allocator function wrong number of results");
         }
@@ -348,7 +343,7 @@ impl TranslateContext for InstanceTranslateContext {
     unsafe fn get_memory(&mut self) -> Result<&mut [u8]> {
         let memory = self
             .0
-            .find_export_by_name("memory")
+            .get_export("memory")
             .ok_or_else(|| format_err!("failed to find `memory` export"))?
             .memory()
             .ok_or_else(|| format_err!("`memory` is not a memory"))?

@@ -1,5 +1,5 @@
 use crate::func_environ::FuncEnvironment;
-use crate::module::{Export, MemoryPlan, Module, TableElements, TablePlan};
+use crate::module::{Export, MemoryPlan, Module, ModuleSyncString, TableElements, TablePlan};
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
@@ -367,6 +367,11 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             },
             data,
         });
+        Ok(())
+    }
+
+    fn declare_func_name(&mut self, func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
+        self.result.module.func_names[func_index] = ModuleSyncString::new(Some(name));
         Ok(())
     }
 }

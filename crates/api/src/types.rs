@@ -5,7 +5,7 @@ use wasmtime_environ::{ir, wasm};
 // Type attributes
 
 /// Indicator of whether a global is mutable or not
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Mutability {
     /// The global is constant and its value does not change
     Const,
@@ -116,9 +116,13 @@ impl ValType {
 /// can either be imported or exported.
 #[derive(Debug, Clone)]
 pub enum ExternType {
+    /// This external type is the type of a WebAssembly function.
     Func(FuncType),
+    /// This external type is the type of a WebAssembly global.
     Global(GlobalType),
+    /// This external type is the type of a WebAssembly table.
     Table(TableType),
+    /// This external type is the type of a WebAssembly memory.
     Memory(MemoryType),
 }
 
