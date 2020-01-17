@@ -10,9 +10,19 @@ use target_lexicon::Triple;
 use walkdir::WalkDir;
 
 pub fn run(files: Vec<String>, flag_print: bool) -> Result<(), String> {
+    let stdin_exist = files.iter().find(|file| *file == "-").is_some();
+    let filtered_files = files
+        .iter()
+        .filter(|file| *file != "-")
+        .map(|file| file.to_string())
+        .collect::<Vec<String>>();
     let mut total = 0;
     let mut errors = 0;
-    for file in iterate_files(files) {
+    let mut special_files: Vec<PathBuf> = vec![];
+    if stdin_exist {
+        special_files.push("-".into());
+    }
+    for file in iterate_files(filtered_files).chain(special_files) {
         total += 1;
         match run_single_file(&file) {
             Ok(_) => {
