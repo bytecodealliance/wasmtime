@@ -38,6 +38,7 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
+use std::vec::Vec;
 use wasmparser::{MemoryImmediate, Operator};
 
 // Clippy warns about "flags: _" but its important to document that the flags field is ignored
@@ -439,7 +440,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             };
             {
                 let return_args = state.peekn_mut(return_count);
-                let return_types = &builder.func.signature.return_types();
+                let return_types = wasm_param_types(&builder.func.signature.returns, |i| {
+                    environ.is_wasm_return(&builder.func.signature, i)
+                });
                 bitcast_arguments(return_args, &return_types, builder);
                 match environ.return_mode() {
                     ReturnMode::NormalReturns => builder.ins().return_(return_args),
@@ -463,7 +466,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let callee_signature =
                 &builder.func.dfg.signatures[builder.func.dfg.ext_funcs[fref].signature];
             let args = state.peekn_mut(num_args);
-            bitcast_arguments(args, &callee_signature.param_types(), builder);
+            let types = wasm_param_types(&callee_signature.params, |i| {
+                environ.is_wasm_parameter(&callee_signature, i)
+            });
+            bitcast_arguments(args, &types, builder);
 
             let call = environ.translate_call(
                 builder.cursor(),
@@ -492,7 +498,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // Bitcast any vector arguments to their default type, I8X16, before calling.
             let callee_signature = &builder.func.dfg.signatures[sigref];
             let args = state.peekn_mut(num_args);
-            bitcast_arguments(args, &callee_signature.param_types(), builder);
+            let types = wasm_param_types(&callee_signature.params, |i| {
+                environ.is_wasm_parameter(&callee_signature, i)
+            });
+            bitcast_arguments(args, &types, builder);
 
             let call = environ.translate_call_indirect(
                 builder.cursor(),
@@ -1931,4 +1940,17 @@ pub fn bitcast_arguments(
             arguments[i] = optionally_bitcast_vector(arguments[i], *t, builder)
         }
     }
+}
+
+/// A helper to extract all the `Type` listings of each variable in `params`
+/// for only parameters the return true for `is_wasm`, typically paired with
+/// `is_wasm_return` or `is_wasm_parameter`.
+pub fn wasm_param_types(params: &[ir::AbiParam], is_wasm: impl Fn(usize) -> bool) -> Vec<Type> {
+    let mut ret = Vec::with_capacity(params.len());
+    for (i, param) in params.iter().enumerate() {
+        if is_wasm(i) {
+            ret.push(param.value_type);
+        }
+    }
+    return ret;
 }

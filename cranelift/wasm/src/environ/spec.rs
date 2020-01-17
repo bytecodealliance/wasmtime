@@ -144,6 +144,12 @@ pub trait FuncEnvironment: TargetEnvironment {
         signature.params[index].purpose == ir::ArgumentPurpose::Normal
     }
 
+    /// Is the given return of the given function a wasm-level parameter, as
+    /// opposed to a hidden parameter added for use by the implementation?
+    fn is_wasm_return(&self, signature: &ir::Signature, index: usize) -> bool {
+        signature.returns[index].purpose == ir::ArgumentPurpose::Normal
+    }
+
     /// Should the code be structured to use a single `fallthrough_return` instruction at the end
     /// of the function body, rather than `return` instructions as needed? This is used by VMs
     /// to append custom epilogues.
