@@ -39,3 +39,7 @@ name = "api_calls"
 path = "fuzz_targets/api_calls.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "differential"
+path = "fuzz_targets/differential.rs"

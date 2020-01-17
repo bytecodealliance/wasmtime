@@ -45,3 +45,41 @@ impl Arbitrary for WasmOptTtf {
         Ok(WasmOptTtf { wasm })
     }
 }
+
+/// A description of configuration options that we should do differential
+/// testing between.
+#[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct DifferentialConfig {
+    strategy: DifferentialStrategy,
+    opt_level: DifferentialOptLevel,
+}
+
+impl DifferentialConfig {
+    /// Convert this differential fuzzing config into a `wasmtime::Config`.
+    pub fn to_wasmtime_config(&self) -> anyhow::Result<wasmtime::Config> {
+        let mut config = wasmtime::Config::new();
+        config.strategy(match self.strategy {
+            DifferentialStrategy::Cranelift => wasmtime::Strategy::Cranelift,
+            DifferentialStrategy::Lightbeam => wasmtime::Strategy::Lightbeam,
+        })?;
+        config.cranelift_opt_level(match self.opt_level {
+            DifferentialOptLevel::None => wasmtime::OptLevel::None,
+            DifferentialOptLevel::Speed => wasmtime::OptLevel::Speed,
+            DifferentialOptLevel::SpeedAndSize => wasmtime::OptLevel::SpeedAndSize,
+        });
+        Ok(config)
+    }
+}
+
+#[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
+enum DifferentialStrategy {
+    Cranelift,
+    Lightbeam,
+}
+
+#[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
+enum DifferentialOptLevel {
+    None,
+    Speed,
+    SpeedAndSize,
+}
