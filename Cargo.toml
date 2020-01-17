@@ -16,6 +16,11 @@ publish = false
 [lib]
 doctest = false
 
+[[bin]]
+name = "wasmtime"
+path = "src/bin/wasmtime.rs"
+doc = false
+
 [dependencies]
 # Enable all supported architectures by default.
 wasmtime = { path = "crates/api" }
