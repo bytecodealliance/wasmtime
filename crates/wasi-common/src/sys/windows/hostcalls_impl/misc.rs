@@ -77,7 +77,7 @@ impl StdinPoll {
 
             // Wait for data to appear in stdin.
             // If `fill_buf` returns any slice, then it means that either
-            // (a) there some data in stdout, if it's non-empty
+            // (a) there some data in stdin, if it's non-empty
             // (b) EOF was received, if it's empty
             // Linux returns `POLLIN` in both cases, and we imitate this behavior.
             let resp = match std::io::stdin().lock().fill_buf() {
