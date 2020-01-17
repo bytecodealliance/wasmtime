@@ -218,6 +218,12 @@ pub(crate) fn poll_oneoff(
 
     let mut timeout: Option<ClockEventData> = None;
     let mut fd_events = Vec::new();
+
+    // As mandated by the WASI spec:
+    // > If `nsubscriptions` is 0, returns `errno::inval`.
+    if subscriptions.is_empty() {
+        return Err(Error::EINVAL);
+    }
     for subscription in subscriptions {
         match subscription.r#type {
             wasi::__WASI_EVENTTYPE_CLOCK => {
@@ -280,6 +286,9 @@ pub(crate) fn poll_oneoff(
     log::debug!("poll_oneoff timeout = {:?}", timeout);
     log::debug!("poll_oneoff fd_events = {:?}", fd_events);
 
+    // The underlying implementation should successfully and immediately return
+    // if no events have been passed. Such situation may occur if all provided
+    // events have been filtered out as errors in the code above.
     hostcalls_impl::poll_oneoff(timeout, fd_events, &mut events)?;
 
     let events_count = u32::try_from(events.len()).map_err(|_| Error::EOVERFLOW)?;
