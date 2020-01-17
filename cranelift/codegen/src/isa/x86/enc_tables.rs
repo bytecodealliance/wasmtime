@@ -1173,7 +1173,7 @@ fn convert_insertlane(
             // Floats are already in XMM registers and can stay there.
             match value_type {
                 F32X4 => {
-                    assert!(lane > 0 && lane <= 3);
+                    assert!(lane <= 3);
                     let immediate = 0b00_00_00_00 | lane << 4;
                     // Insert 32-bits from replacement (at index 00, bits 7:8) to vector (lane
                     // shifted into bits 5:6).
