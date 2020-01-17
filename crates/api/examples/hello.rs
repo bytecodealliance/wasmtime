@@ -1,18 +1,7 @@
 //! Translation of hello example
 
 use anyhow::{ensure, Context as _, Result};
-use std::rc::Rc;
 use wasmtime::*;
-
-struct HelloCallback;
-
-impl Callable for HelloCallback {
-    fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
-        println!("Calling back...");
-        println!("> Hello World!");
-        Ok(())
-    }
-}
 
 fn main() -> Result<()> {
     // Configure the initial compilation environment, creating the global
@@ -34,8 +23,10 @@ fn main() -> Result<()> {
     // Here we handle the imports of the module, which in this case is our
     // `HelloCallback` type and its associated implementation of `Callback.
     println!("Creating callback...");
-    let hello_type = FuncType::new(Box::new([]), Box::new([]));
-    let hello_func = Func::new(&store, hello_type, Rc::new(HelloCallback));
+    let hello_func = Func::wrap0(&store, || {
+        println!("Calling back...");
+        println!("> Hello World!");
+    });
 
     // Once we've got that all set up we can then move to the instantiation
     // phase, pairing together a compiled module as well as a set of imports.

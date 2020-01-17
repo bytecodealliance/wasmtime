@@ -1,8 +1,10 @@
-use crate::{Store, FuncType, Callable, Val, Trap};
-use crate::callable::{WrappedCallable, WasmtimeFn, NativeCallable};
-use std::rc::Rc;
+use crate::callable::{NativeCallable, WasmtimeFn, WrappedCallable};
+use crate::{Callable, FuncType, Store, Trap, Val, ValType};
 use std::fmt;
+use std::panic::{self, AssertUnwindSafe};
+use std::rc::Rc;
 use wasmtime_jit::InstanceHandle;
+use wasmtime_runtime::VMContext;
 
 /// A WebAssembly function which can be called.
 ///
@@ -27,6 +29,59 @@ pub struct Func {
     ty: FuncType,
 }
 
+macro_rules! wrappers {
+    ($(
+        $(#[$doc:meta])*
+        ($name:ident $(,$args:ident)*)
+    )*) => ($(
+        $(#[$doc])*
+        pub fn $name<F, $($args,)* R>(store: &Store, func: F) -> Func
+        where
+            F: Fn($($args),*) -> R + 'static,
+            $($args: WasmArg,)*
+            R: WasmRet,
+        {
+            #[allow(non_snake_case)]
+            unsafe extern "C" fn shim<F, $($args,)* R>(
+                vmctx: *mut VMContext,
+                _caller_vmctx: *mut VMContext,
+                $($args: $args,)*
+            ) -> R::Abi
+            where
+                F: Fn($($args),*) -> R + 'static,
+                R: WasmRet,
+            {
+                let ret = {
+                    let instance = InstanceHandle::from_vmctx(vmctx);
+                    let func = instance.host_state().downcast_ref::<F>().expect("state");
+                    panic::catch_unwind(AssertUnwindSafe(|| func($($args),*)))
+                };
+                match ret {
+                    Ok(ret) => ret.into_abi(),
+                    Err(panic) => wasmtime_runtime::resume_panic(panic),
+                }
+            }
+
+            let mut _args = Vec::new();
+            $($args::push(&mut _args);)*
+            let mut ret = Vec::new();
+            R::push(&mut ret);
+            let ty = FuncType::new(_args.into(), ret.into());
+            unsafe {
+                let (instance, export) = crate::trampoline::generate_raw_func_export(
+                    &ty,
+                    shim::<F, $($args,)* R> as *const _,
+                    store,
+                    Box::new(func),
+                )
+                .expect("failed to generate export");
+                let callable = Rc::new(WasmtimeFn::new(store, instance, export));
+                Func::from_wrapped(store, ty, callable)
+            }
+        }
+    )*)
+}
+
 impl Func {
     /// Creates a new `Func` with the given arguments, typically to create a
     /// user-defined function to pass as an import to a module.
@@ -46,6 +101,71 @@ impl Func {
     pub fn new(store: &Store, ty: FuncType, callable: Rc<dyn Callable + 'static>) -> Self {
         let callable = Rc::new(NativeCallable::new(callable, &ty, &store));
         Func::from_wrapped(store, ty, callable)
+    }
+
+    wrappers! {
+        /// Creates a new `Func` from the given Rust closure, which takes 0
+        /// arguments.
+        ///
+        /// For more information about this function, see [`Func::wrap1`].
+        (wrap0)
+
+        /// Creates a new `Func` from the given Rust closure, which takes 1
+        /// argument.
+        ///
+        /// This function will create a new `Func` which, when called, will
+        /// execute the given Rust closure. Unlike [`Func::new`] the target
+        /// function being called is known statically so the type signature can
+        /// be inferred. Rust types will map to WebAssembly types as follows:
+        ///
+        ///
+        /// | Rust Argument Type | WebAssembly Type |
+        /// |--------------------|------------------|
+        /// | `i32`              | `i32`            |
+        /// | `i64`              | `i64`            |
+        /// | `f32`              | `f32`            |
+        /// | `f64`              | `f64`            |
+        /// | (not supported)    | `v128`           |
+        /// | (not supported)    | `anyref`         |
+        ///
+        /// Any of the Rust types can be returned from the closure as well, in
+        /// addition to some extra types
+        ///
+        /// | Rust Return Type  | WebAssembly Return Type | Meaning           |
+        /// |-------------------|-------------------------|-------------------|
+        /// | `()`              | nothing                 | no return value   |
+        /// | `Result<T, Trap>` | `T`                     | function may trap |
+        ///
+        /// Note that when using this API (and the related `wrap*` family of
+        /// functions), the intention is to create as thin of a layer as
+        /// possible for when WebAssembly calls the function provided. With
+        /// sufficient inlining and optimization the WebAssembly will call
+        /// straight into `func` provided, with no extra fluff entailed.
+        (wrap1, A)
+
+        /// Creates a new `Func` from the given Rust closure, which takes 2
+        /// arguments.
+        ///
+        /// For more information about this function, see [`Func::wrap1`].
+        (wrap2, A, B)
+
+        /// Creates a new `Func` from the given Rust closure, which takes 3
+        /// arguments.
+        ///
+        /// For more information about this function, see [`Func::wrap1`].
+        (wrap3, A, B, C)
+
+        /// Creates a new `Func` from the given Rust closure, which takes 4
+        /// arguments.
+        ///
+        /// For more information about this function, see [`Func::wrap1`].
+        (wrap4, A, B, C, D)
+
+        /// Creates a new `Func` from the given Rust closure, which takes 5
+        /// arguments.
+        ///
+        /// For more information about this function, see [`Func::wrap1`].
+        (wrap5, A, B, C, D, E)
     }
 
     fn from_wrapped(
@@ -116,5 +236,94 @@ impl Func {
 impl fmt::Debug for Func {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Func")
+    }
+}
+
+/// A trait implemented for types which can be arguments to closures passed to
+/// [`Func::wrap1`] and friends.
+///
+/// This trait should not be implemented by user types. This trait may change at
+/// any time internally. The types which implement this trait, however, are
+/// stable over time.
+///
+/// For more information see [`Func::wrap1`]
+pub trait WasmArg {
+    #[doc(hidden)]
+    fn push(dst: &mut Vec<ValType>);
+}
+
+impl WasmArg for () {
+    fn push(_dst: &mut Vec<ValType>) {}
+}
+
+impl WasmArg for i32 {
+    fn push(dst: &mut Vec<ValType>) {
+        dst.push(ValType::I32);
+    }
+}
+
+impl WasmArg for i64 {
+    fn push(dst: &mut Vec<ValType>) {
+        dst.push(ValType::I64);
+    }
+}
+
+impl WasmArg for f32 {
+    fn push(dst: &mut Vec<ValType>) {
+        dst.push(ValType::F32);
+    }
+}
+
+impl WasmArg for f64 {
+    fn push(dst: &mut Vec<ValType>) {
+        dst.push(ValType::F64);
+    }
+}
+
+/// A trait implemented for types which can be returned from closures passed to
+/// [`Func::wrap1`] and friends.
+///
+/// This trait should not be implemented by user types. This trait may change at
+/// any time internally. The types which implement this trait, however, are
+/// stable over time.
+///
+/// For more information see [`Func::wrap1`]
+pub trait WasmRet {
+    #[doc(hidden)]
+    type Abi;
+    #[doc(hidden)]
+    fn push(dst: &mut Vec<ValType>);
+    #[doc(hidden)]
+    fn into_abi(self) -> Self::Abi;
+}
+
+impl<T: WasmArg> WasmRet for T {
+    type Abi = T;
+    fn push(dst: &mut Vec<ValType>) {
+        T::push(dst)
+    }
+
+    #[inline]
+    fn into_abi(self) -> Self::Abi {
+        self
+    }
+}
+
+impl<T: WasmArg> WasmRet for Result<T, Trap> {
+    type Abi = T;
+    fn push(dst: &mut Vec<ValType>) {
+        T::push(dst)
+    }
+
+    #[inline]
+    fn into_abi(self) -> Self::Abi {
+        match self {
+            Ok(val) => return val,
+            Err(trap) => handle_trap(trap),
+        }
+
+        fn handle_trap(trap: Trap) -> ! {
+            unsafe { wasmtime_runtime::raise_user_trap(Box::new(trap)) }
+        }
     }
 }
