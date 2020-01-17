@@ -18,7 +18,7 @@ use wasmtime_environ::{
     ModuleSyncString,
 };
 use wasmtime_runtime::{
-    Imports, Export, GdbJitImageRegistration, InstanceHandle, InstantiationError, VMFunctionBody,
+    GdbJitImageRegistration, InstanceHandle, InstantiationError, VMFunctionBody,
     VMSharedSignatureIndex,
 };
 

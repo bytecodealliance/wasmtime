@@ -150,7 +150,6 @@ impl Context {
             &mut *self.compiler,
             data,
             None,
-            &mut self.namespace,
             debug_info,
         )
     }
