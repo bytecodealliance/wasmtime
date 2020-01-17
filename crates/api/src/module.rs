@@ -218,6 +218,7 @@ impl Module {
         validate(binary, Some(config)).map_err(Error::new)
     }
 
+    #[doc(hidden)]
     pub fn from_exports(store: &Store, exports: Box<[ExportType]>) -> Self {
         let mut ret = Module::empty(store);
         Rc::get_mut(&mut ret.inner).unwrap().exports = exports;

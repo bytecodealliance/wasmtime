@@ -116,9 +116,13 @@ impl ValType {
 /// can either be imported or exported.
 #[derive(Debug, Clone)]
 pub enum ExternType {
+    /// This external type is the type of a WebAssembly function.
     Func(FuncType),
+    /// This external type is the type of a WebAssembly global.
     Global(GlobalType),
+    /// This external type is the type of a WebAssembly table.
     Table(TableType),
+    /// This external type is the type of a WebAssembly memory.
     Memory(MemoryType),
 }
 

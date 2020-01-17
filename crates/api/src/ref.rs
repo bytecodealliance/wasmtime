@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use std::any::Any;
 use std::cell::{self, RefCell};
 use std::fmt;
