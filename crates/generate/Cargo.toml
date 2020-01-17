@@ -12,3 +12,4 @@ witx = { path = "../WASI/tools/witx" }
 quote = "1.0"
 proc-macro2 = "1.0"
 heck = "0.3"
+anyhow = "1"

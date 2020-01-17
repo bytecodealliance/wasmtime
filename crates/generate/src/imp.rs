@@ -3,8 +3,6 @@ use proc_macro2::{Delimiter, Group, Literal, TokenStream, TokenTree};
 use quote::{format_ident, quote};
 use std::convert::TryFrom;
 
-const WITX_PATH: &'static str = "crates/WASI/phases/snapshot/witx/wasi_snapshot_preview1.witx";
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Mode {
     Host,
@@ -21,15 +19,8 @@ impl Mode {
     }
 }
 
-pub fn gen() -> TokenStream {
+pub fn gen(doc: witx::Document) -> TokenStream {
     let mut output = TokenStream::new();
-    let doc = match witx::load(&[&WITX_PATH]) {
-        Ok(doc) => doc,
-        Err(e) => {
-            panic!("error opening file {}: {}", WITX_PATH, e);
-        }
-    };
-
     gen_datatypes(&mut output, &doc, Mode::Wasi);
     // gen_datatypes(&mut output, &doc, Mode::Wasi32);
     // gen_datatypes(&mut output, &doc, Mode::Host);
