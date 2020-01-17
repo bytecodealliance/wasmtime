@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 generate = { path = "crates/generate" }
+memory = { path = "crates/memory" }
 
 [workspace]
 members = ["crates/generate"]
