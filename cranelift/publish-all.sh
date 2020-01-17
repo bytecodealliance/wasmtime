@@ -9,7 +9,7 @@ topdir=$(dirname "$0")
 cd "$topdir"
 
 # All the cranelift-* crates have the same version number
-version="0.55.0"
+version="0.56.0"
 
 # Update all of the Cargo.toml files.
 #
@@ -27,7 +27,7 @@ done
 
 # Update our local Cargo.lock (not checked in).
 cargo update
-#./test-all.sh
+./test-all.sh
 
 # Commands needed to publish.
 #
