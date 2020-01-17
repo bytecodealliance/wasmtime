@@ -248,15 +248,15 @@ pub(crate) trait FromRawOsError {
 
 pub(crate) type Result<T> = std::result::Result<T, Error>;
 
-pub(crate) trait WasiErrno {
-    fn as_wasi_errno(&self) -> wasi::__wasi_errno_t;
+pub(crate) trait AsWasiError {
+    fn as_wasi_error(&self) -> WasiError;
 }
 
-impl<T> WasiErrno for Result<T> {
-    fn as_wasi_errno(&self) -> wasi::__wasi_errno_t {
+impl<T> AsWasiError for Result<T> {
+    fn as_wasi_error(&self) -> WasiError {
         self.as_ref()
             .err()
             .unwrap_or(&Error::ESUCCESS)
-            .as_wasi_errno()
+            .as_wasi_error()
     }
 }

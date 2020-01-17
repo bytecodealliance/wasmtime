@@ -5,7 +5,7 @@ use crate::fdentry::Descriptor;
 use crate::hostcalls_impl::{ClockEventData, FdEventData};
 use crate::memory::*;
 use crate::sys::host_impl;
-use crate::{wasi, wasi32, Error, Result};
+use crate::{error::WasiError, wasi, wasi32, Error, Result};
 use cpu_time::{ProcessTime, ThreadTime};
 use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
@@ -24,9 +24,9 @@ struct StdinPoll {
 
 enum PollState {
     Ready,
-    NotReady, // it's not ready, but we didn't wait
-    TimedOut, // it's not ready and a timeout has occurred
-    Error(Error),
+    NotReady,         // it's not ready, but we didn't wait
+    TimedOut,         // it's not ready and a timeout has occurred
+    Error(WasiError), // not using the top-lever Error because it's not Clone
 }
 
 enum WaitMode {
@@ -82,7 +82,7 @@ impl StdinPoll {
             // Linux returns `POLLIN` in both cases, and we imitate this behavior.
             let resp = match std::io::stdin().lock().fill_buf() {
                 Ok(_) => PollState::Ready,
-                Err(e) => PollState::Error(e.into()),
+                Err(e) => PollState::Error(Error::from(e).as_wasi_error()),
             };
 
             // Notify the requestor about data in stdin. They may have already timed out,
@@ -168,13 +168,13 @@ pub(crate) fn clock_time_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::_
 }
 
 fn make_rw_event(event: &FdEventData, nbytes: Result<u64>) -> wasi::__wasi_event_t {
-    use crate::error::WasiErrno;
-    let error = nbytes.as_wasi_errno();
+    use crate::error::AsWasiError;
+    let error = nbytes.as_wasi_error();
     let nbytes = nbytes.unwrap_or_default();
     wasi::__wasi_event_t {
         userdata: event.userdata,
         r#type: event.r#type,
-        error,
+        error: error.as_raw_errno(),
         u: wasi::__wasi_event_u_t {
             fd_readwrite: wasi::__wasi_event_fd_readwrite_t { nbytes, flags: 0 },
         },
@@ -356,10 +356,7 @@ pub(crate) fn poll_oneoff(
                 PollState::Ready => handle_rw_event(event, events),
                 PollState::NotReady => {} // not immediately available, so just ignore
                 PollState::TimedOut => handle_timeout_event(timeout.unwrap().0, events),
-                PollState::Error(ref e) => {
-                    error!("FIXME return real error");
-                    handle_error_event(event, Error::ENOTSUP, events);
-                }
+                PollState::Error(e) => handle_error_event(event, Error::Wasi(e), events),
             }
         }
     }
