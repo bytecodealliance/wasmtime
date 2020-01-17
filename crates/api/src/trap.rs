@@ -78,7 +78,25 @@ impl fmt::Debug for Trap {
 
 impl fmt::Display for Trap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.inner.message.fmt(f)
+        write!(f, "{}", self.inner.message)?;
+        let trace = self.trace();
+        if trace.is_empty() {
+            return Ok(());
+        }
+        writeln!(f, "\nwasm backtrace:")?;
+        for (i, frame) in self.trace().iter().enumerate() {
+            let name = frame.module_name().unwrap_or("<unknown>");
+            write!(f, "  {}: {}!", i, name)?;
+            match frame.func_name() {
+                Some(name) => match rustc_demangle::try_demangle(name) {
+                    Ok(name) => write!(f, "{}", name)?,
+                    Err(_) => write!(f, "{}", name)?,
+                },
+                None => write!(f, "<wasm function {}>", frame.func_index)?,
+            }
+            writeln!(f, "")?;
+        }
+        Ok(())
     }
 }
 

@@ -156,7 +156,6 @@ impl Context {
             &mut *self.compiler,
             data,
             None,
-            &mut self.namespace,
             Rc::clone(&self.global_exports),
             debug_info,
         )

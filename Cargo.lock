@@ -2061,6 +2061,7 @@ dependencies = [
  "pretty_env_logger",
  "rayon",
  "region",
+ "rustc-demangle",
  "target-lexicon",
  "wasi-common",
  "wasmparser 0.47.0",
@@ -2166,7 +2167,6 @@ dependencies = [
  "log",
  "wasmtime",
  "wasmtime-fuzzing",
- "wasmtime-jit",
 ]
 
 [[package]]
@@ -2181,8 +2181,6 @@ dependencies = [
  "wasmparser 0.47.0",
  "wasmprinter",
  "wasmtime",
- "wasmtime-environ",
- "wasmtime-jit",
  "wat",
 ]
 
@@ -2206,6 +2204,7 @@ name = "wasmtime-jit"
 version = "0.9.0"
 dependencies = [
  "anyhow",
+ "cfg-if",
  "cranelift-codegen",
  "cranelift-entity",
  "cranelift-frontend",

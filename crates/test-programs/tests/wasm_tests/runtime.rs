@@ -49,7 +49,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         .iter()
         .map(|i| {
             let field_name = i.name();
-            if let Some(export) = snapshot1.find_export_by_name(field_name) {
+            if let Some(export) = snapshot1.get_export(field_name) {
                 Ok(export.clone())
             } else {
                 bail!(
@@ -67,17 +67,14 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
     ))?;
 
     let export = instance
-        .find_export_by_name("_start")
+        .get_export("_start")
         .context("expected a _start export")?
         .clone();
 
-    if let Err(trap) = export
+    export
         .func()
         .context("expected export to be a func")?
-        .call(&[])
-    {
-        bail!("trapped: {:?}", trap);
-    }
+        .call(&[])?;
 
     Ok(())
 }

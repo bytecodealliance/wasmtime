@@ -94,7 +94,7 @@ impl WastContext {
                 .get(import.module())
                 .ok_or_else(|| anyhow!("no module named `{}`", import.module()))?;
             let export = instance
-                .find_export_by_name(import.name())
+                .get_export(import.name())
                 .ok_or_else(|| anyhow!("unknown import `{}::{}`", import.name(), import.module()))?
                 .clone();
             imports.push(export);
@@ -165,13 +165,10 @@ impl WastContext {
         args: &[Val],
     ) -> Result<Outcome> {
         let instance = self.get_instance(instance_name.as_ref().map(|x| &**x))?;
-        let export = instance
-            .find_export_by_name(field)
-            .ok_or_else(|| anyhow!("no global named `{}`", field))?;
-        let func = match export {
-            Extern::Func(f) => f,
-            _ => bail!("export of `{}` wasn't a global", field),
-        };
+        let func = instance
+            .get_export(field)
+            .and_then(|e| e.func())
+            .ok_or_else(|| anyhow!("no function named `{}`", field))?;
         Ok(match func.call(args) {
             Ok(result) => Outcome::Ok(result.into()),
             Err(e) => Outcome::Trap(e),
@@ -181,13 +178,10 @@ impl WastContext {
     /// Get the value of an exported global from an instance.
     fn get(&mut self, instance_name: Option<&str>, field: &str) -> Result<Outcome> {
         let instance = self.get_instance(instance_name.as_ref().map(|x| &**x))?;
-        let export = instance
-            .find_export_by_name(field)
+        let global = instance
+            .get_export(field)
+            .and_then(|e| e.global())
             .ok_or_else(|| anyhow!("no global named `{}`", field))?;
-        let global = match export {
-            Extern::Global(g) => g,
-            _ => bail!("export of `{}` wasn't a global", field),
-        };
         Ok(Outcome::Ok(vec![global.get()]))
     }
 

@@ -258,7 +258,7 @@ pub(crate) fn poll_oneoff(
                         let event = wasi::__wasi_event_t {
                             userdata: subscription.userdata,
                             r#type,
-                            error: err.as_wasi_errno(),
+                            error: err.as_wasi_error().as_raw_errno(),
                             u: wasi::__wasi_event_u_t {
                                 fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
                                     nbytes: 0,

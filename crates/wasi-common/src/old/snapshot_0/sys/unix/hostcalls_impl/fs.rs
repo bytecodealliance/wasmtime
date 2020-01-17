@@ -170,7 +170,7 @@ pub(crate) fn path_open(
                     Errno::EMLINK if !(nix_all_oflags & OFlag::NOFOLLOW).is_empty() => {
                         return Err(Error::ELOOP);
                     }
-                    errno => return Err(host_impl::errno_from_nix(errno)),
+                    errno => return Err(errno.into()),
                 }
             } else {
                 return Err(e.into());

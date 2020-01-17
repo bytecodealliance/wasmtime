@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 #![allow(unused)]
 use crate::old::snapshot_0::host::FileType;
-use crate::old::snapshot_0::{wasi, Error, Result};
+use crate::old::snapshot_0::{error::FromRawOsError, wasi, Error, Result};
 use std::convert::TryInto;
 use std::ffi::OsStr;
 use std::fs::OpenOptions;
@@ -13,35 +13,44 @@ use std::os::windows::ffi::OsStrExt;
 use std::os::windows::fs::OpenOptionsExt;
 use std::time::{SystemTime, UNIX_EPOCH};
 use winx::file::{AccessMode, Attributes, CreationDisposition, Flags};
+use winx::winerror::WinError;
 
-pub(crate) fn errno_from_win(error: winx::winerror::WinError) -> wasi::__wasi_errno_t {
-    // TODO: implement error mapping between Windows and WASI
-    use winx::winerror::WinError::*;
-    match error {
-        ERROR_SUCCESS => wasi::__WASI_ERRNO_SUCCESS,
-        ERROR_BAD_ENVIRONMENT => wasi::__WASI_ERRNO_2BIG,
-        ERROR_FILE_NOT_FOUND => wasi::__WASI_ERRNO_NOENT,
-        ERROR_PATH_NOT_FOUND => wasi::__WASI_ERRNO_NOENT,
-        ERROR_TOO_MANY_OPEN_FILES => wasi::__WASI_ERRNO_NFILE,
-        ERROR_ACCESS_DENIED => wasi::__WASI_ERRNO_ACCES,
-        ERROR_SHARING_VIOLATION => wasi::__WASI_ERRNO_ACCES,
-        ERROR_PRIVILEGE_NOT_HELD => wasi::__WASI_ERRNO_NOTCAPABLE, // TODO is this the correct mapping?
-        ERROR_INVALID_HANDLE => wasi::__WASI_ERRNO_BADF,
-        ERROR_INVALID_NAME => wasi::__WASI_ERRNO_NOENT,
-        ERROR_NOT_ENOUGH_MEMORY => wasi::__WASI_ERRNO_NOMEM,
-        ERROR_OUTOFMEMORY => wasi::__WASI_ERRNO_NOMEM,
-        ERROR_DIR_NOT_EMPTY => wasi::__WASI_ERRNO_NOTEMPTY,
-        ERROR_NOT_READY => wasi::__WASI_ERRNO_BUSY,
-        ERROR_BUSY => wasi::__WASI_ERRNO_BUSY,
-        ERROR_NOT_SUPPORTED => wasi::__WASI_ERRNO_NOTSUP,
-        ERROR_FILE_EXISTS => wasi::__WASI_ERRNO_EXIST,
-        ERROR_BROKEN_PIPE => wasi::__WASI_ERRNO_PIPE,
-        ERROR_BUFFER_OVERFLOW => wasi::__WASI_ERRNO_NAMETOOLONG,
-        ERROR_NOT_A_REPARSE_POINT => wasi::__WASI_ERRNO_INVAL,
-        ERROR_NEGATIVE_SEEK => wasi::__WASI_ERRNO_INVAL,
-        ERROR_DIRECTORY => wasi::__WASI_ERRNO_NOTDIR,
-        ERROR_ALREADY_EXISTS => wasi::__WASI_ERRNO_EXIST,
-        _ => wasi::__WASI_ERRNO_NOTSUP,
+impl FromRawOsError for Error {
+    fn from_raw_os_error(code: i32) -> Self {
+        Self::from(WinError::from_u32(code as u32))
+    }
+}
+
+impl From<WinError> for Error {
+    fn from(err: WinError) -> Self {
+        // TODO: implement error mapping between Windows and WASI
+        use winx::winerror::WinError::*;
+        match err {
+            ERROR_SUCCESS => Self::ESUCCESS,
+            ERROR_BAD_ENVIRONMENT => Self::E2BIG,
+            ERROR_FILE_NOT_FOUND => Self::ENOENT,
+            ERROR_PATH_NOT_FOUND => Self::ENOENT,
+            ERROR_TOO_MANY_OPEN_FILES => Self::ENFILE,
+            ERROR_ACCESS_DENIED => Self::EACCES,
+            ERROR_SHARING_VIOLATION => Self::EACCES,
+            ERROR_PRIVILEGE_NOT_HELD => Self::ENOTCAPABLE, // TODO is this the correct mapping?
+            ERROR_INVALID_HANDLE => Self::EBADF,
+            ERROR_INVALID_NAME => Self::ENOENT,
+            ERROR_NOT_ENOUGH_MEMORY => Self::ENOMEM,
+            ERROR_OUTOFMEMORY => Self::ENOMEM,
+            ERROR_DIR_NOT_EMPTY => Self::ENOTEMPTY,
+            ERROR_NOT_READY => Self::EBUSY,
+            ERROR_BUSY => Self::EBUSY,
+            ERROR_NOT_SUPPORTED => Self::ENOTSUP,
+            ERROR_FILE_EXISTS => Self::EEXIST,
+            ERROR_BROKEN_PIPE => Self::EPIPE,
+            ERROR_BUFFER_OVERFLOW => Self::ENAMETOOLONG,
+            ERROR_NOT_A_REPARSE_POINT => Self::EINVAL,
+            ERROR_NEGATIVE_SEEK => Self::EINVAL,
+            ERROR_DIRECTORY => Self::ENOTDIR,
+            ERROR_ALREADY_EXISTS => Self::EEXIST,
+            _ => Self::ENOTSUP,
+        }
     }
 }
 

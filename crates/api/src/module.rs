@@ -9,6 +9,7 @@ use wasmparser::{
     validate, CustomSectionKind, ExternalKind, ImportSectionEntryType, ModuleReader, Name,
     OperatorValidatorConfig, SectionCode, ValidatingParserConfig,
 };
+use wasmtime_jit::CompiledModule;
 
 fn into_memory_type(mt: wasmparser::MemoryType) -> MemoryType {
     assert!(!mt.shared);
@@ -56,12 +57,6 @@ fn into_table_type(tt: wasmparser::TableType) -> TableType {
     TableType::new(ty, limits)
 }
 
-#[derive(Clone)]
-pub(crate) enum ModuleCodeSource {
-    Binary(Box<[u8]>),
-    Unknown,
-}
-
 /// A compiled WebAssembly module, ready to be instantiated.
 ///
 /// A `Module` is a compiled in-memory representation of an input WebAssembly
@@ -84,10 +79,10 @@ pub struct Module {
 
 struct ModuleInner {
     store: Store,
-    source: ModuleCodeSource,
     imports: Box<[ImportType]>,
     exports: Box<[ExportType]>,
     name: Option<String>,
+    compiled: Option<CompiledModule>,
 }
 
 impl Module {
@@ -131,7 +126,7 @@ impl Module {
         // Note that the call to `unsafe` here should be ok because we
         // previously validated the binary, meaning we're guaranteed to pass a
         // valid binary for `store`.
-        unsafe { Module::new_unchecked(store, binary) }
+        unsafe { Module::new_internal(store, binary, None) }
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
@@ -139,9 +134,11 @@ impl Module {
     ///
     /// See [`Module::new`] for other details.
     pub fn new_with_name(store: &Store, binary: &[u8], name: &str) -> Result<Module> {
-        let mut ret = Module::new(store, binary)?;
-        Rc::get_mut(&mut ret.inner).unwrap().name = Some(name.to_string());
-        Ok(ret)
+        Module::validate(store, binary)?;
+        // Note that the call to `unsafe` here should be ok because we
+        // previously validated the binary, meaning we're guaranteed to pass a
+        // valid binary for `store`.
+        unsafe { Module::new_internal(store, binary, Some(name)) }
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
@@ -171,8 +168,20 @@ impl Module {
     /// be somewhat valid for decoding purposes, and the basics of decoding can
     /// still fail.
     pub unsafe fn new_unchecked(store: &Store, binary: &[u8]) -> Result<Module> {
+        Module::new_internal(store, binary, None)
+    }
+
+    /// Creates a new `Module` and compiles it without doing any validation.
+    unsafe fn new_internal(store: &Store, binary: &[u8], name: Option<&str>) -> Result<Module> {
         let mut ret = Module::empty(store);
         ret.read_imports_and_exports(binary)?;
+
+        let inner = Rc::get_mut(&mut ret.inner).unwrap();
+        if let Some(name) = name {
+            // Assign or override the module's name if supplied.
+            inner.name = Some(name.to_string());
+        }
+        inner.compiled = Some(compile(store, binary, inner.name.as_deref())?);
         Ok(ret)
     }
 
@@ -219,19 +228,16 @@ impl Module {
         Module {
             inner: Rc::new(ModuleInner {
                 store: store.clone(),
-                source: ModuleCodeSource::Unknown,
                 imports: Box::new([]),
                 exports: Box::new([]),
                 name: None,
+                compiled: None,
             }),
         }
     }
 
-    pub(crate) fn binary(&self) -> Option<&[u8]> {
-        match &self.inner.source {
-            ModuleCodeSource::Binary(b) => Some(b),
-            _ => None,
-        }
+    pub(crate) fn compiled_module(&self) -> Option<&CompiledModule> {
+        self.inner.compiled.as_ref()
     }
 
     /// Returns identifier/name that this [`Module`] has. This name
@@ -259,7 +265,6 @@ impl Module {
 
     fn read_imports_and_exports(&mut self, binary: &[u8]) -> Result<()> {
         let inner = Rc::get_mut(&mut self.inner).unwrap();
-        inner.source = ModuleCodeSource::Binary(binary.into());
         let mut reader = ModuleReader::new(binary)?;
         let mut imports = Vec::new();
         let mut exports = Vec::new();
@@ -386,4 +391,22 @@ impl Module {
         inner.exports = exports.into();
         Ok(())
     }
+}
+
+fn compile(store: &Store, binary: &[u8], module_name: Option<&str>) -> Result<CompiledModule> {
+    let exports = store.global_exports().clone();
+    let compiled_module = CompiledModule::new(
+        &mut store.compiler_mut(),
+        binary,
+        module_name,
+        exports,
+        store.engine().config().debug_info,
+    )?;
+
+    // Register all module signatures
+    for signature in compiled_module.module().signatures.values() {
+        store.register_wasmtime_signature(signature);
+    }
+
+    Ok(compiled_module)
 }
