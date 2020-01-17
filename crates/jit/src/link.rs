@@ -44,16 +44,7 @@ pub fn link_module(
                         FloorF64 => wasmtime_f64_floor as usize,
                         TruncF64 => wasmtime_f64_trunc as usize,
                         NearestF64 => wasmtime_f64_nearest as usize,
-                        #[cfg(not(target_os = "windows"))]
-                        Probestack => __rust_probestack as usize,
-                        #[cfg(all(target_os = "windows", target_env = "gnu"))]
-                        Probestack => ___chkstk as usize,
-                        #[cfg(all(
-                            target_os = "windows",
-                            target_env = "msvc",
-                            target_pointer_width = "64"
-                        ))]
-                        Probestack => __chkstk as usize,
+                        Probestack => PROBESTACK as usize,
                         other => panic!("unexpected libcall: {}", other),
                     }
                 }
@@ -107,19 +98,33 @@ pub fn link_module(
     }
 }
 
-/// A declaration for the stack probe function in Rust's standard library, for
-/// catching callstack overflow.
-extern "C" {
-    #[cfg(not(target_os = "windows"))]
-    pub fn __rust_probestack();
-    #[cfg(all(
-        target_os = "windows",
-        target_env = "msvc",
-        target_pointer_width = "64"
-    ))]
-    pub fn __chkstk();
-    // ___chkstk (note the triple underscore) is implemented in compiler-builtins/src/x86_64.rs
-    // by the Rust compiler for the MinGW target
-    #[cfg(all(target_os = "windows", target_env = "gnu"))]
-    pub fn ___chkstk();
+// A declaration for the stack probe function in Rust's standard library, for
+// catching callstack overflow.
+cfg_if::cfg_if! {
+    if #[cfg(any(
+        target_arch="aarch64",
+        all(
+            target_os = "windows",
+            target_env = "msvc",
+            target_pointer_width = "64"
+        )
+    ))] {
+        extern "C" {
+            pub fn __chkstk();
+        }
+        const PROBESTACK: unsafe extern "C" fn() = __chkstk;
+    } else if #[cfg(all(target_os = "windows", target_env = "gnu"))] {
+        extern "C" {
+            // ___chkstk (note the triple underscore) is implemented in compiler-builtins/src/x86_64.rs
+            // by the Rust compiler for the MinGW target
+            #[cfg(all(target_os = "windows", target_env = "gnu"))]
+            pub fn ___chkstk();
+        }
+        const PROBESTACK: unsafe extern "C" fn() = ___chkstk;
+    } else {
+        extern "C" {
+            pub fn __rust_probestack();
+        }
+        static PROBESTACK: unsafe extern "C" fn() = __rust_probestack;
+    }
 }
