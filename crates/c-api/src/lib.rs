@@ -1381,11 +1381,16 @@ pub unsafe extern "C" fn wasm_global_new(
     gt: *const wasm_globaltype_t,
     val: *const wasm_val_t,
 ) -> *mut wasm_global_t {
-    let global = HostRef::new(Global::new(
-        &(*store).store.borrow(),
-        (*gt).globaltype.clone(),
-        (*val).val(),
-    ));
+    let global = HostRef::new(
+        match Global::new(
+            &(*store).store.borrow(),
+            (*gt).globaltype.clone(),
+            (*val).val(),
+        ) {
+            Ok(g) => g,
+            Err(_) => return ptr::null_mut(),
+        },
+    );
     let g = Box::new(wasm_global_t {
         ext: wasm_extern_t {
             which: ExternHost::Global(global),
@@ -1401,7 +1406,8 @@ pub unsafe extern "C" fn wasm_global_get(g: *const wasm_global_t, out: *mut wasm
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_global_set(g: *mut wasm_global_t, val: *const wasm_val_t) {
-    (*g).global().borrow().set((*val).val())
+    let result = (*g).global().borrow().set((*val).val());
+    drop(result); // TODO: should communicate this via the api somehow?
 }
 
 #[no_mangle]
@@ -1480,7 +1486,7 @@ pub unsafe extern "C" fn wasm_memory_grow(
     m: *mut wasm_memory_t,
     delta: wasm_memory_pages_t,
 ) -> bool {
-    (*m).memory().borrow().grow(delta)
+    (*m).memory().borrow().grow(delta).is_ok()
 }
 
 #[no_mangle]
@@ -1570,13 +1576,13 @@ pub unsafe extern "C" fn wasm_table_new(
     } else {
         Val::AnyRef(AnyRef::Null)
     };
+    let table = match Table::new(&(*store).store.borrow(), (*tt).tabletype.clone(), init) {
+        Ok(table) => table,
+        Err(_) => return ptr::null_mut(),
+    };
     let t = Box::new(wasm_table_t {
         ext: wasm_extern_t {
-            which: ExternHost::Table(HostRef::new(Table::new(
-                &(*store).store.borrow(),
-                (*tt).tabletype.clone(),
-                init,
-            ))),
+            which: ExternHost::Table(HostRef::new(table)),
         },
     });
     Box::into_raw(t)
@@ -1607,8 +1613,10 @@ pub unsafe extern "C" fn wasm_table_get(
     t: *const wasm_table_t,
     index: wasm_table_size_t,
 ) -> *mut wasm_ref_t {
-    let val = (*t).table().borrow().get(index);
-    into_funcref(val)
+    match (*t).table().borrow().get(index) {
+        Some(val) => into_funcref(val),
+        None => into_funcref(Val::AnyRef(AnyRef::Null)),
+    }
 }
 
 #[no_mangle]
@@ -1618,7 +1626,7 @@ pub unsafe extern "C" fn wasm_table_set(
     r: *mut wasm_ref_t,
 ) -> bool {
     let val = from_funcref(r);
-    (*t).table().borrow().set(index, val)
+    (*t).table().borrow().set(index, val).is_ok()
 }
 
 #[no_mangle]
@@ -1633,7 +1641,7 @@ pub unsafe extern "C" fn wasm_table_grow(
     init: *mut wasm_ref_t,
 ) -> bool {
     let init = from_funcref(init);
-    (*t).table().borrow().grow(delta, init)
+    (*t).table().borrow().grow(delta, init).is_ok()
 }
 
 #[no_mangle]

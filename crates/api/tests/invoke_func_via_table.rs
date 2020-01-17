@@ -24,6 +24,7 @@ fn test_invoke_func_via_table() -> Result<()> {
         .table()
         .unwrap()
         .get(0)
+        .unwrap()
         .funcref()
         .unwrap()
         .clone();
