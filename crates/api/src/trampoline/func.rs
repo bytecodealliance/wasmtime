@@ -64,7 +64,12 @@ impl Drop for TrampolineState {
     }
 }
 
-unsafe extern "C" fn stub_fn(vmctx: *mut VMContext, _caller_vmctx: *mut VMContext, call_id: u32, values_vec: *mut i128) -> u32 {
+unsafe extern "C" fn stub_fn(
+    vmctx: *mut VMContext,
+    _caller_vmctx: *mut VMContext,
+    call_id: u32,
+    values_vec: *mut i128,
+) -> u32 {
     let mut instance = InstanceHandle::from_vmctx(vmctx);
 
     let (args, returns_len) = {
@@ -247,7 +252,6 @@ pub fn create_handle_with_function(
     func: &Rc<dyn Callable + 'static>,
     store: &Store,
 ) -> Result<InstanceHandle> {
-
     let isa = {
         let isa_builder = native::builder();
         let flag_builder = settings::builder();

@@ -146,12 +146,7 @@ impl Context {
         self.validate(&data).map_err(SetupError::Validate)?;
         let debug_info = self.debug_info();
 
-        CompiledModule::new(
-            &mut *self.compiler,
-            data,
-            None,
-            debug_info,
-        )
+        CompiledModule::new(&mut *self.compiler, data, None, debug_info)
     }
 
     /// If `name` isn't None, register it for the given instance.
