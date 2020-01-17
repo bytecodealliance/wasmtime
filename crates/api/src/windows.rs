@@ -13,7 +13,9 @@ use crate::Instance;
 
 /// Extensions for the [`Instance`] type only available on Windows.
 pub trait InstanceExt {
-    // TODO: docs?
+    /// Configures a custom signal handler to execute.
+    ///
+    /// TODO: needs more documentation.
     unsafe fn set_signal_handler<H>(&self, handler: H)
     where
         H: 'static + Fn(winapi::um::winnt::EXCEPTION_POINTERS) -> bool;
