@@ -98,6 +98,11 @@ jobs:
             | shuf \
             | head -n 100 \
             | xargs cargo fuzz run api_calls --release --debug-assertions
+    - run: |
+        find fuzz/corpus/differential -type f \
+            | shuf \
+            | head -n 100 \
+            | xargs cargo fuzz run differential --release --debug-assertions
 
   # Install wasm32-unknown-emscripten target, and ensure `crates/wasi-common`
   # compiles to Emscripten.
