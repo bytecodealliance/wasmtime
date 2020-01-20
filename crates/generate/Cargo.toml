@@ -8,6 +8,7 @@ edition = "2018"
 proc-macro = true
 
 [dependencies]
+memory = { path = "../memory" }
 witx = { path = "../WASI/tools/witx" }
 quote = "1.0"
 proc-macro2 = "1.0"

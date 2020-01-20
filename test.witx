@@ -8,6 +8,7 @@
 
 (module $foo
   (@interface func (export "bar")
-    (param $name string)
+    (param $an_int (@witx pointer u32))
+    (param $an_float (@witx pointer f32))
     (result $error $errno))
 )
