@@ -46,17 +46,9 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: cargo doc --no-deps -p wasmtime-cli
-    - run: cargo doc --no-deps -p wasmtime
-    - run: cargo doc --no-deps -p wasmtime-debug
-    - run: cargo doc --no-deps -p wasmtime-environ
-    - run: cargo doc --no-deps -p wasmtime-interface-types
-    - run: cargo doc --no-deps -p wasmtime-jit
-    - run: cargo doc --no-deps -p wasmtime-obj
-    - run: cargo doc --no-deps -p wasmtime-runtime
-    - run: cargo doc --no-deps -p wasmtime-wasi
-    - run: cargo doc --no-deps -p wasmtime-wast
-    - run: cargo doc --no-deps -p wasi-common
+      with:
+        toolchain: nightly
+    - run: cargo doc --no-deps --all --exclude wasmtime-cli --exclude test-programs
     - uses: actions/upload-artifact@v1
       with:
         name: doc-api
@@ -79,7 +71,7 @@ jobs:
     - uses: ./.github/actions/install-rust
       with:
         toolchain: nightly
-    - run: cargo install cargo-fuzz --vers "^0.6"
+    - run: cargo install cargo-fuzz --vers "^0.7"
     - run: cargo fetch
       working-directory: ./fuzz
     - run: cargo fuzz build --release --debug-assertions
@@ -136,11 +128,9 @@ jobs:
           - build: beta
             os: ubuntu-latest
             rust: beta
-          # FIXME need to wait for rust-lang/rust#67065 to get into nightlies,
-          # and then this can be updated to `nightly` again.
           - build: nightly
             os: ubuntu-latest
-            rust: nightly-2019-12-03
+            rust: nightly
           - build: macos
             os: macos-latest
             rust: stable
@@ -175,6 +165,7 @@ jobs:
     - run: rustup target add wasm32-wasi
 
     - run: cargo fetch --locked
+    - run: cargo fetch --locked --manifest-path crates/test-programs/wasi-tests/Cargo.toml
 
     # Build and test all features except for lightbeam
     - run: cargo test --features test_programs --all --exclude lightbeam -- --nocapture
@@ -207,7 +198,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2019-08-15
+        toolchain: nightly-2020-01-06
     - uses: ./.github/actions/binary-compatible-builds
     - run: mkdir crates/misc/py/wheelhouse
       shell: bash
@@ -312,7 +303,7 @@ jobs:
     - run: $CENTOS cargo build --release --bin wasmtime --bin wasm2obj
       shell: bash
     # Build `libwasmtime.so`
-    - run: $CENTOS cargo build --release --manifest-path crates/api/Cargo.toml
+    - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
       shell: bash
     # Test what we just built
     - run: $CENTOS cargo test --features test_programs --release --all --exclude lightbeam --exclude wasmtime --exclude wasmtime-fuzzing
@@ -492,6 +483,24 @@ jobs:
       with:
         name: tarballs
         path: dist
+
+    # The action 'pypa/gh-action-pypi-publish' will try to upload all files in the
+    # dist/ folder. This folder also contains non-package files, and therefore the
+    # action fails.
+    #
+    # To prevent the action from failing all .whl files are copied into a new
+    # directory.
+    - run: |
+        mkdir -p tmp/whl
+        find dist/ -name '*.whl' -type f -exec cp '{}' tmp/whl -v \;
+
+    - name: Publish Python wheels on Pypi
+      uses: pypa/gh-action-pypi-publish@v1.0.0a0
+      if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
+      with:
+        user: __token__
+        password: ${{ secrets.pypi_password }}
+        packages_dir: tmp/whl
 
     # ... and if this was an actual push (tag or `master`) then we publish a
     # new release. This'll automatically publish a tag release or update `dev`

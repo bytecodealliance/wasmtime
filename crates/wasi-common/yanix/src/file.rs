@@ -190,6 +190,13 @@ pub unsafe fn fstatat<P: AsRef<OsStr>>(dirfd: RawFd, path: P, flags: AtFlag) -> 
     Ok(filestat.assume_init())
 }
 
+pub unsafe fn fstat(fd: RawFd) -> Result<libc::stat> {
+    use std::mem::MaybeUninit;
+    let mut filestat = MaybeUninit::<libc::stat>::uninit();
+    Errno::from_result(libc::fstat(fd, filestat.as_mut_ptr()))?;
+    Ok(filestat.assume_init())
+}
+
 /// `fionread()` function, equivalent to `ioctl(fd, FIONREAD, *bytes)`.
 pub unsafe fn fionread(fd: RawFd) -> Result<usize> {
     let mut nread: libc::c_int = 0;

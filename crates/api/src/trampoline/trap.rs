@@ -1,6 +1,5 @@
 use std::cell::Cell;
 
-use crate::r#ref::HostRef;
 use crate::Trap;
 use wasmtime_environ::ir::{SourceLoc, TrapCode};
 use wasmtime_environ::TrapInformation;
@@ -10,10 +9,10 @@ use wasmtime_jit::trampoline::binemit;
 pub const API_TRAP_CODE: TrapCode = TrapCode::User(13);
 
 thread_local! {
-    static RECORDED_API_TRAP: Cell<Option<HostRef<Trap>>> = Cell::new(None);
+    static RECORDED_API_TRAP: Cell<Option<Trap>> = Cell::new(None);
 }
 
-pub fn record_api_trap(trap: HostRef<Trap>) {
+pub fn record_api_trap(trap: Trap) {
     RECORDED_API_TRAP.with(|data| {
         let trap = Cell::new(Some(trap));
         data.swap(&trap);
@@ -24,7 +23,7 @@ pub fn record_api_trap(trap: HostRef<Trap>) {
     });
 }
 
-pub fn take_api_trap() -> Option<HostRef<Trap>> {
+pub fn take_api_trap() -> Option<Trap> {
     RECORDED_API_TRAP.with(|data| data.take())
 }
 

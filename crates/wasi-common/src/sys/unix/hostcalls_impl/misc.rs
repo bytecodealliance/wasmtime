@@ -1,7 +1,6 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
 use crate::hostcalls_impl::{ClockEventData, FdEventData};
-use crate::sys::host_impl;
 use crate::{wasi, Error, Result};
 use yanix::clock::{clock_getres, clock_gettime, ClockId};
 
@@ -92,7 +91,7 @@ pub(crate) fn poll_oneoff(
                 if Errno::last() == Errno::EINTR {
                     continue;
                 }
-                return Err(host_impl::errno_from_nix(Errno::last()));
+                return Err(Errno::last().into());
             }
             Ok(ready) => break ready,
         }

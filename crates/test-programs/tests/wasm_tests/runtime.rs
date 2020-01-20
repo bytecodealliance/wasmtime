@@ -1,24 +1,12 @@
 use anyhow::{bail, Context};
 use std::fs::File;
 use std::path::Path;
-use wasmtime::{Config, Engine, HostRef, Instance, Module, Store};
-use wasmtime_environ::settings::{self, Configurable};
+use wasmtime::{Instance, Module, Store};
 
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
-    // Prepare runtime
-    let mut flag_builder = settings::builder();
+    let store = Store::default();
 
-    // Enable proper trap for division
-    flag_builder
-        .enable("avoid_div_traps")
-        .context("error while enabling proper division trap")?;
-
-    let mut config = Config::new();
-    config.flags(settings::Flags::new(flag_builder));
-    let engine = HostRef::new(Engine::new(&config));
-    let store = HostRef::new(Store::new(&engine));
-
-    let global_exports = store.borrow().global_exports().clone();
+    let global_exports = store.global_exports().clone();
     let get_preopens = |workspace: Option<&Path>| -> anyhow::Result<Vec<_>> {
         if let Some(workspace) = workspace {
             let preopen_dir = wasi_common::preopen_dir(workspace)
@@ -55,14 +43,13 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         .context("failed to instantiate wasi")?,
     );
 
-    let module = HostRef::new(Module::new(&store, &data).context("failed to create wasm module")?);
+    let module = Module::new(&store, &data).context("failed to create wasm module")?;
     let imports = module
-        .borrow()
         .imports()
         .iter()
         .map(|i| {
             let field_name = i.name();
-            if let Some(export) = snapshot1.find_export_by_name(field_name) {
+            if let Some(export) = snapshot1.get_export(field_name) {
                 Ok(export.clone())
             } else {
                 bail!(
@@ -74,25 +61,20 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let instance = HostRef::new(Instance::new(&store, &module, &imports).context(format!(
+    let instance = Instance::new(&module, &imports).context(format!(
         "error while instantiating Wasm module '{}'",
         bin_name,
-    ))?);
+    ))?;
 
     let export = instance
-        .borrow()
-        .find_export_by_name("_start")
+        .get_export("_start")
         .context("expected a _start export")?
         .clone();
 
-    if let Err(trap) = export
+    export
         .func()
         .context("expected export to be a func")?
-        .borrow()
-        .call(&[])
-    {
-        bail!("trapped: {:?}", trap.borrow());
-    }
+        .call(&[])?;
 
     Ok(())
 }

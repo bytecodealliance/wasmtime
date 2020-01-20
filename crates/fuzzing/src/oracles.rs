@@ -13,49 +13,36 @@
 pub mod dummy;
 
 use dummy::{dummy_imports, dummy_value};
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 use wasmtime::*;
-use wasmtime_environ::{isa, settings};
-use wasmtime_jit::{native, CompilationStrategy, CompiledModule, Compiler, NullResolver};
-
-fn host_isa() -> Box<dyn isa::TargetIsa> {
-    let flag_builder = settings::builder();
-    let isa_builder = native::builder();
-    isa_builder.finish(settings::Flags::new(flag_builder))
-}
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
 /// panic or segfault or anything else that can be detected "passively".
 ///
 /// Performs initial validation, and returns early if the Wasm is invalid.
 ///
-/// You can control which compiler is used via passing a `CompilationStrategy`.
-pub fn instantiate(wasm: &[u8], compilation_strategy: CompilationStrategy) {
+/// You can control which compiler is used via passing a `Strategy`.
+pub fn instantiate(wasm: &[u8], strategy: Strategy) {
     if wasmparser::validate(wasm, None).is_err() {
         return;
     }
 
     let mut config = Config::new();
-    config.strategy(compilation_strategy);
+    config
+        .strategy(strategy)
+        .expect("failed to enable lightbeam");
+    let engine = Engine::new(&config);
+    let store = Store::new(&engine);
 
-    let engine = HostRef::new(Engine::new(&config));
-    let store = HostRef::new(Store::new(&engine));
+    let module = Module::new(&store, wasm).expect("Failed to compile a valid Wasm module!");
 
-    let module =
-        HostRef::new(Module::new(&store, wasm).expect("Failed to compile a valid Wasm module!"));
-
-    let imports = {
-        let module = module.borrow();
-        match dummy_imports(&store, module.imports()) {
-            Ok(imps) => imps,
-            Err(_) => {
-                // There are some value types that we can't synthesize a
-                // dummy value for (e.g. anyrefs) and for modules that
-                // import things of these types we skip instantiation.
-                return;
-            }
+    let imports = match dummy_imports(&store, module.imports()) {
+        Ok(imps) => imps,
+        Err(_) => {
+            // There are some value types that we can't synthesize a
+            // dummy value for (e.g. anyrefs) and for modules that
+            // import things of these types we skip instantiation.
+            return;
         }
     };
 
@@ -63,7 +50,7 @@ pub fn instantiate(wasm: &[u8], compilation_strategy: CompilationStrategy) {
     // aren't caught during validation or compilation. For example, an imported
     // table might not have room for an element segment that we want to
     // initialize into it.
-    let _result = Instance::new(&store, &module, &imports);
+    let _result = Instance::new(&module, &imports);
 }
 
 /// Compile the Wasm buffer, and implicitly fail if we have an unexpected
@@ -71,17 +58,13 @@ pub fn instantiate(wasm: &[u8], compilation_strategy: CompilationStrategy) {
 ///
 /// Performs initial validation, and returns early if the Wasm is invalid.
 ///
-/// You can control which compiler is used via passing a `CompilationStrategy`.
-pub fn compile(wasm: &[u8], compilation_strategy: CompilationStrategy) {
-    if wasmparser::validate(wasm, None).is_err() {
-        return;
-    }
-
-    let isa = host_isa();
-    let mut compiler = Compiler::new(isa, compilation_strategy);
-    let mut resolver = NullResolver {};
-    let global_exports = Rc::new(RefCell::new(HashMap::new()));
-    let _ = CompiledModule::new(&mut compiler, wasm, &mut resolver, global_exports, false);
+/// You can control which compiler is used via passing a `Strategy`.
+pub fn compile(wasm: &[u8], strategy: Strategy) {
+    let mut config = Config::new();
+    config.strategy(strategy).unwrap();
+    let engine = Engine::new(&config);
+    let store = Store::new(&engine);
+    let _ = Module::new(&store, wasm);
 }
 
 /// Invoke the given API calls.
@@ -89,10 +72,10 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
     use crate::generators::api::ApiCall;
 
     let mut config: Option<Config> = None;
-    let mut engine: Option<HostRef<Engine>> = None;
-    let mut store: Option<HostRef<Store>> = None;
-    let mut modules: HashMap<usize, HostRef<Module>> = Default::default();
-    let mut instances: HashMap<usize, HostRef<Instance>> = Default::default();
+    let mut engine: Option<Engine> = None;
+    let mut store: Option<Store> = None;
+    let mut modules: HashMap<usize, Module> = Default::default();
+    let mut instances: HashMap<usize, Instance> = Default::default();
 
     for call in api.calls {
         match call {
@@ -107,19 +90,19 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
 
             ApiCall::EngineNew => {
                 assert!(engine.is_none());
-                engine = Some(HostRef::new(Engine::new(config.as_ref().unwrap())));
+                engine = Some(Engine::new(config.as_ref().unwrap()));
             }
 
             ApiCall::StoreNew => {
                 assert!(store.is_none());
-                store = Some(HostRef::new(Store::new(engine.as_ref().unwrap())));
+                store = Some(Store::new(engine.as_ref().unwrap()));
             }
 
             ApiCall::ModuleNew { id, wasm } => {
-                let module = HostRef::new(match Module::new(store.as_ref().unwrap(), &wasm.wasm) {
+                let module = match Module::new(store.as_ref().unwrap(), &wasm.wasm) {
                     Ok(m) => m,
                     Err(_) => continue,
-                });
+                };
                 let old = modules.insert(id, module);
                 assert!(old.is_none());
             }
@@ -134,16 +117,13 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                     None => continue,
                 };
 
-                let imports = {
-                    let module = module.borrow();
-                    match dummy_imports(store.as_ref().unwrap(), module.imports()) {
-                        Ok(imps) => imps,
-                        Err(_) => {
-                            // There are some value types that we can't synthesize a
-                            // dummy value for (e.g. anyrefs) and for modules that
-                            // import things of these types we skip instantiation.
-                            continue;
-                        }
+                let imports = match dummy_imports(store.as_ref().unwrap(), module.imports()) {
+                    Ok(imps) => imps,
+                    Err(_) => {
+                        // There are some value types that we can't synthesize a
+                        // dummy value for (e.g. anyrefs) and for modules that
+                        // import things of these types we skip instantiation.
+                        continue;
                     }
                 };
 
@@ -151,8 +131,8 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 // aren't caught during validation or compilation. For example, an imported
                 // table might not have room for an element segment that we want to
                 // initialize into it.
-                if let Ok(instance) = Instance::new(store.as_ref().unwrap(), &module, &imports) {
-                    instances.insert(id, HostRef::new(instance));
+                if let Ok(instance) = Instance::new(&module, &imports) {
+                    instances.insert(id, instance);
                 }
             }
 
@@ -174,25 +154,22 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                     }
                 };
 
-                let funcs = {
-                    let instance = instance.borrow();
-                    instance
-                        .exports()
-                        .iter()
-                        .filter_map(|e| match e {
-                            Extern::Func(f) => Some(f.clone()),
-                            _ => None,
-                        })
-                        .collect::<Vec<_>>()
-                };
+                let funcs = instance
+                    .exports()
+                    .iter()
+                    .filter_map(|e| match e {
+                        Extern::Func(f) => Some(f.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
 
                 if funcs.is_empty() {
                     continue;
                 }
 
                 let nth = nth % funcs.len();
-                let f = funcs[nth].borrow();
-                let ty = f.r#type();
+                let f = &funcs[nth];
+                let ty = f.ty();
                 let params = match ty
                     .params()
                     .iter()

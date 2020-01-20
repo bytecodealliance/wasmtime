@@ -7,7 +7,7 @@ use wasmtime::*;
 struct Callback;
 
 impl Callable for Callback {
-    fn call(&self, args: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
+    fn call(&self, args: &[Val], results: &mut [Val]) -> Result<(), Trap> {
         println!("Calling back...");
         println!("> {} {}", args[0].unwrap_i32(), args[1].unwrap_i64());
 
@@ -45,13 +45,8 @@ const WAT: &str = r#"
 fn main() -> Result<()> {
     // Initialize.
     println!("Initializing...");
-    let mut cfg = Config::new();
-    cfg.features(wasmtime_jit::Features {
-        multi_value: true,
-        ..Default::default()
-    });
-    let engine = HostRef::new(Engine::new(&cfg));
-    let store = HostRef::new(Store::new(&engine));
+    let engine = Engine::new(Config::new().wasm_multi_value(true));
+    let store = Store::new(&engine);
 
     // Load binary.
     println!("Loading binary...");
@@ -59,7 +54,7 @@ fn main() -> Result<()> {
 
     // Compile.
     println!("Compiling module...");
-    let module = HostRef::new(Module::new(&store, &binary).context("Error compiling module!")?);
+    let module = Module::new(&store, &binary).context("Error compiling module!")?;
 
     // Create external print functions.
     println!("Creating callback...");
@@ -67,13 +62,13 @@ fn main() -> Result<()> {
         Box::new([ValType::I32, ValType::I64]),
         Box::new([ValType::I64, ValType::I32]),
     );
-    let callback_func = HostRef::new(Func::new(&store, callback_type, Rc::new(Callback)));
+    let callback_func = Func::new(&store, callback_type, Rc::new(Callback));
 
     // Instantiate.
     println!("Instantiating module...");
     let imports = vec![callback_func.into()];
-    let instance = Instance::new(&store, &module, imports.as_slice())
-        .context("Error instantiating module!")?;
+    let instance =
+        Instance::new(&module, imports.as_slice()).context("Error instantiating module!")?;
 
     // Extract exports.
     println!("Extracting export...");
@@ -88,7 +83,6 @@ fn main() -> Result<()> {
     println!("Calling export \"g\"...");
     let args = vec![Val::I32(1), Val::I64(3)];
     let results = g
-        .borrow()
         .call(&args)
         .map_err(|e| format_err!("> Error calling g! {:?}", e))?;
 
@@ -113,7 +107,6 @@ fn main() -> Result<()> {
         Val::I64(9),
     ];
     let results = round_trip_many
-        .borrow()
         .call(&args)
         .map_err(|e| format_err!("> Error calling round_trip_many! {:?}", e))?;
 

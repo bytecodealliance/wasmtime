@@ -10,14 +10,14 @@ use std::ptr;
 
 #[pyclass]
 pub struct Memory {
-    pub memory: wasmtime::HostRef<wasmtime::Memory>,
+    pub memory: wasmtime::Memory,
 }
 
 #[pymethods]
 impl Memory {
     #[getter(current)]
     pub fn current(&self) -> u32 {
-        self.memory.borrow().size()
+        self.memory.size()
     }
 
     pub fn grow(&self, _number: u32) -> u32 {
@@ -48,8 +48,8 @@ impl PyBufferProtocol for Memory {
         };
 
         unsafe {
-            let base = self.memory.borrow().data_ptr();
-            let current_length = self.memory.borrow().data_size();
+            let base = self.memory.data_ptr();
+            let current_length = self.memory.data_size();
 
             (*view).buf = base as *mut c_void;
             (*view).len = current_length as isize;

@@ -14,12 +14,12 @@ use wasmtime_runtime::{Imports, InstanceHandle, InstantiationError, VMContext};
 
 /// Creates `wasmtime::Instance` object implementing the "wasi" interface.
 pub fn create_wasi_instance(
-    store: &wasmtime::HostRef<wasmtime::Store>,
+    store: &wasmtime::Store,
     preopened_dirs: &[(String, File)],
     argv: &[String],
     environ: &[(String, String)],
 ) -> Result<wasmtime::Instance, InstantiationError> {
-    let global_exports = store.borrow().global_exports().clone();
+    let global_exports = store.global_exports().clone();
     let wasi = instantiate_wasi(global_exports, preopened_dirs, argv, environ)?;
     let instance = wasmtime::Instance::from_handle(&store, wasi);
     Ok(instance)

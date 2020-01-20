@@ -36,7 +36,7 @@ impl Namespace {
 }
 
 impl Resolver for Namespace {
-    fn resolve(&mut self, name: &str, field: &str) -> Option<Export> {
+    fn resolve(&mut self, _idx: u32, name: &str, field: &str) -> Option<Export> {
         if let Some(instance) = self.names.get_mut(name) {
             instance.lookup(field)
         } else {

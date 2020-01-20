@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-fuzz"
-version = "0.7.0"
+version = "0.9.0"
 authors = ["The Wasmtime Project Developers"]
 edition = "2018"
 publish = false
@@ -13,25 +13,29 @@ arbitrary = "0.2.0"
 env_logger = "0.7.1"
 log = "0.4.8"
 wasmtime-fuzzing = { path = "../crates/fuzzing", features = ["env_logger"] }
-wasmtime-jit = { path = "../crates/jit" }
-libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
+wasmtime = { path = "../crates/api" }
+libfuzzer-sys = "0.2.0"
 
 [[bin]]
 name = "compile"
 path = "fuzz_targets/compile.rs"
 test = false
+doc = false
 
 [[bin]]
 name = "instantiate"
 path = "fuzz_targets/instantiate.rs"
 test = false
+doc = false
 
 [[bin]]
 name = "instantiate_translated"
 path = "fuzz_targets/instantiate_translated.rs"
 test = false
+doc = false
 
 [[bin]]
 name = "api_calls"
 path = "fuzz_targets/api_calls.rs"
 test = false
+doc = false

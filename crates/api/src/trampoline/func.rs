@@ -2,9 +2,8 @@
 
 use super::create_handle::create_handle;
 use super::trap::{record_api_trap, TrapSink, API_TRAP_CODE};
-use crate::r#ref::HostRef;
 use crate::{Callable, FuncType, Store, Val};
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::cmp;
 use std::convert::TryFrom;
 use std::rc::Rc;
@@ -12,7 +11,9 @@ use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::ir::types;
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{DefinedFuncIndex, FuncIndex};
-use wasmtime_environ::{ir, settings, CompiledFunction, Export, Module, TrapInformation};
+use wasmtime_environ::{
+    ir, settings, CompiledFunction, CompiledFunctionUnwindInfo, Export, Module, TrapInformation,
+};
 use wasmtime_jit::trampoline::ir::{
     ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind,
 };
@@ -137,6 +138,7 @@ fn make_trampoline(
 
     let mut context = Context::new();
     context.func = Function::with_name_signature(ExternalName::user(0, 0), signature.clone());
+    context.func.collect_frame_layout_info();
 
     let ss = context.func.create_stack_slot(StackSlotData::new(
         StackSlotKind::ExplicitSlot,
@@ -214,8 +216,7 @@ fn make_trampoline(
         .map_err(|error| pretty_error(&context.func, Some(isa), error))
         .expect("compile_and_emit");
 
-    let mut unwind_info = Vec::new();
-    context.emit_unwind_info(isa, &mut unwind_info);
+    let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context);
 
     let traps = trap_sink.traps;
 
@@ -233,9 +234,12 @@ fn make_trampoline(
 pub fn create_handle_with_function(
     ft: &FuncType,
     func: &Rc<dyn Callable + 'static>,
-    store: &HostRef<Store>,
+    store: &Store,
 ) -> Result<InstanceHandle> {
-    let sig = ft.get_wasmtime_signature().clone();
+    let sig = match ft.get_wasmtime_signature() {
+        Some(sig) => sig.clone(),
+        None => bail!("not a supported core wasm signature {:?}", ft),
+    };
 
     let isa = {
         let isa_builder = native::builder();
@@ -269,7 +273,7 @@ pub fn create_handle_with_function(
 
     create_handle(
         module,
-        Some(store.borrow_mut()),
+        Some(store),
         finished_functions,
         Box::new(trampoline_state),
     )

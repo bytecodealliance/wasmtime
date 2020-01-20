@@ -9,7 +9,11 @@ unsafe fn test_fd_advise(dir_fd: wasi::Fd) {
         0,
         "file",
         wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        wasi::RIGHTS_FD_READ
+            | wasi::RIGHTS_FD_WRITE
+            | wasi::RIGHTS_FD_ADVISE
+            | wasi::RIGHTS_FD_FILESTAT_GET
+            | wasi::RIGHTS_FD_ALLOCATE,
         0,
         0,
     )

@@ -3,11 +3,12 @@
 use crate::old::snapshot_0::wasi;
 use std::convert::Infallible;
 use std::num::TryFromIntError;
-use std::{ffi, fmt, str};
+use std::{ffi, str};
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
 #[repr(u16)]
+#[error("{:?} ({})", self, wasi::strerror(*self as wasi::__wasi_errno_t))]
 pub enum WasiError {
     ESUCCESS = wasi::__WASI_ERRNO_SUCCESS,
     E2BIG = wasi::__WASI_ERRNO_2BIG,
@@ -94,46 +95,20 @@ impl WasiError {
     }
 }
 
-impl fmt::Display for WasiError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            _ => write!(f, "{:?}", self),
-        }
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum Error {
-    Wasi(WasiError),
-    Io(std::io::Error),
+    #[error("WASI error code: {0}")]
+    Wasi(#[from] WasiError),
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
     #[cfg(unix)]
-    Nix(yanix::YanixError),
-    #[cfg(windows)]
-    Win(winx::winerror::WinError),
-}
-
-impl From<WasiError> for Error {
-    fn from(err: WasiError) -> Self {
-        Self::Wasi(err)
-    }
-}
-
-#[cfg(unix)]
-impl From<yanix::YanixError> for Error {
-    fn from(err: yanix::YanixError) -> Self {
-        Self::Nix(err)
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
-        Self::Io(err)
-    }
+    #[error("Yanix error: {0}")]
+    Yanix(#[from] yanix::YanixError),
 }
 
 impl From<TryFromIntError> for Error {
     fn from(_: TryFromIntError) -> Self {
-        Self::Wasi(WasiError::EOVERFLOW)
+        Self::EOVERFLOW
     }
 }
 
@@ -145,48 +120,49 @@ impl From<Infallible> for Error {
 
 impl From<str::Utf8Error> for Error {
     fn from(_: str::Utf8Error) -> Self {
-        Self::Wasi(WasiError::EILSEQ)
+        Self::EILSEQ
     }
 }
 
 impl From<ffi::NulError> for Error {
     fn from(_: ffi::NulError) -> Self {
-        Self::Wasi(WasiError::EILSEQ)
+        Self::EILSEQ
     }
 }
 
 impl From<&ffi::NulError> for Error {
     fn from(_: &ffi::NulError) -> Self {
-        Self::Wasi(WasiError::EILSEQ)
-    }
-}
-
-#[cfg(windows)]
-impl From<winx::winerror::WinError> for Error {
-    fn from(err: winx::winerror::WinError) -> Self {
-        Self::Win(err)
+        Self::EILSEQ
     }
 }
 
 impl Error {
-    pub(crate) fn as_wasi_errno(&self) -> wasi::__wasi_errno_t {
+    pub(crate) fn as_wasi_error(&self) -> WasiError {
         match self {
-            Self::Wasi(no) => no.as_raw_errno(),
-            Self::Io(e) => errno_from_ioerror(e.to_owned()),
+            Self::Wasi(err) => *err,
+            Self::Io(err) => {
+                let err = match err.raw_os_error() {
+                    Some(code) => Self::from_raw_os_error(code),
+                    None => {
+                        log::debug!("Inconvertible OS error: {}", err);
+                        Self::EIO
+                    }
+                };
+                err.as_wasi_error()
+            }
             #[cfg(unix)]
-            Self::Nix(err) => {
+            Self::Yanix(err) => {
                 use yanix::YanixError::*;
-                let err = match err {
-                    Errno(errno) => crate::old::snapshot_0::sys::host_impl::errno_from_nix(*errno),
+                let err: Self = match err {
+                    Errno(errno) => (*errno).into(),
                     NulError(err) => err.into(),
                     TryFromIntError(err) => (*err).into(),
                 };
-                err.as_wasi_errno()
+                err.as_wasi_error()
             }
-            #[cfg(windows)]
-            Self::Win(err) => crate::old::snapshot_0::sys::host_impl::errno_from_win(*err),
         }
     }
+
     pub const ESUCCESS: Self = Error::Wasi(WasiError::ESUCCESS);
     pub const E2BIG: Self = Error::Wasi(WasiError::E2BIG);
     pub const EACCES: Self = Error::Wasi(WasiError::EACCES);
@@ -266,25 +242,6 @@ impl Error {
     pub const ENOTCAPABLE: Self = Error::Wasi(WasiError::ENOTCAPABLE);
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Io(e) => e.fmt(f),
-            Self::Wasi(e) => e.fmt(f),
-            #[cfg(unix)]
-            Self::Nix(e) => e.fmt(f),
-            #[cfg(windows)]
-            Self::Win(e) => e.fmt(f),
-        }
-    }
-}
-
-fn errno_from_ioerror(e: &std::io::Error) -> wasi::__wasi_errno_t {
-    match e.raw_os_error() {
-        Some(code) => crate::old::snapshot_0::sys::errno_from_host(code),
-        None => {
-            log::debug!("Inconvertible OS error: {}", e);
-            wasi::__WASI_ERRNO_IO
-        }
-    }
+pub(crate) trait FromRawOsError {
+    fn from_raw_os_error(code: i32) -> Self;
 }

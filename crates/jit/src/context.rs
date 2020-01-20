@@ -117,6 +117,7 @@ impl Context {
         instantiate(
             &mut *self.compiler,
             &data,
+            None,
             &mut self.namespace,
             Rc::clone(&self.global_exports),
             debug_info,
@@ -154,7 +155,7 @@ impl Context {
         CompiledModule::new(
             &mut *self.compiler,
             data,
-            &mut self.namespace,
+            None,
             Rc::clone(&self.global_exports),
             debug_info,
         )

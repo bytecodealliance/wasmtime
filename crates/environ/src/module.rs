@@ -3,7 +3,7 @@
 use crate::module_environ::FunctionBodyData;
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
-use cranelift_entity::{EntityRef, PrimaryMap};
+use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, Global,
     GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
@@ -11,6 +11,7 @@ use cranelift_wasm::{
 use indexmap::IndexMap;
 use more_asserts::assert_ge;
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 /// A WebAssembly table initializer.
 #[derive(Clone, Debug, Hash)]
@@ -128,6 +129,28 @@ impl TablePlan {
     }
 }
 
+/// Allows module strings to be cached as reused across
+/// multiple threads. Useful for debug/trace information.
+#[derive(Debug, Clone)]
+pub struct ModuleSyncString(Option<Arc<String>>);
+
+impl ModuleSyncString {
+    /// Gets optional string reference.
+    pub fn get(&self) -> Option<&str> {
+        self.0.as_deref().map(|s| s.as_str())
+    }
+    /// Constructs the string.
+    pub fn new(s: Option<&str>) -> Self {
+        ModuleSyncString(s.map(|s| Arc::new(s.to_string())))
+    }
+}
+
+impl Default for ModuleSyncString {
+    fn default() -> Self {
+        ModuleSyncString(None)
+    }
+}
+
 /// A translated WebAssembly module, excluding the function bodies and
 /// memory initializers.
 // WARNING: when modifying, make sure that `hash_for_cache` is still valid!
@@ -136,17 +159,18 @@ pub struct Module {
     /// Unprocessed signatures exactly as provided by `declare_signature()`.
     pub signatures: PrimaryMap<SignatureIndex, ir::Signature>,
 
-    /// Names of imported functions.
-    pub imported_funcs: PrimaryMap<FuncIndex, (String, String)>,
+    /// Names of imported functions, as well as the index of the import that
+    /// performed this import.
+    pub imported_funcs: PrimaryMap<FuncIndex, (String, String, u32)>,
 
     /// Names of imported tables.
-    pub imported_tables: PrimaryMap<TableIndex, (String, String)>,
+    pub imported_tables: PrimaryMap<TableIndex, (String, String, u32)>,
 
     /// Names of imported memories.
-    pub imported_memories: PrimaryMap<MemoryIndex, (String, String)>,
+    pub imported_memories: PrimaryMap<MemoryIndex, (String, String, u32)>,
 
     /// Names of imported globals.
-    pub imported_globals: PrimaryMap<GlobalIndex, (String, String)>,
+    pub imported_globals: PrimaryMap<GlobalIndex, (String, String, u32)>,
 
     /// Types of functions, imported and local.
     pub functions: PrimaryMap<FuncIndex, SignatureIndex>,
@@ -168,6 +192,12 @@ pub struct Module {
 
     /// WebAssembly table initializers.
     pub table_elements: Vec<TableElements>,
+
+    /// Module name.
+    pub name: ModuleSyncString,
+
+    /// Function names.
+    pub func_names: SecondaryMap<FuncIndex, ModuleSyncString>,
 }
 
 impl Module {
@@ -186,6 +216,8 @@ impl Module {
             exports: IndexMap::new(),
             start_func: None,
             table_elements: Vec::new(),
+            name: Default::default(),
+            func_names: SecondaryMap::new(),
         }
     }
 

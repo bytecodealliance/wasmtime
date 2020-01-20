@@ -90,7 +90,10 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
         0,
         "file",
         wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        wasi::RIGHTS_FD_READ
+            | wasi::RIGHTS_FD_WRITE
+            | wasi::RIGHTS_FD_READDIR
+            | wasi::RIGHTS_FD_FILESTAT_GET,
         0,
         0,
     )

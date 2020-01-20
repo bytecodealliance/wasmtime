@@ -1,4 +1,3 @@
-use crate::r#ref::HostRef;
 use crate::runtime::Store;
 use crate::trampoline::{generate_func_export, take_api_trap};
 use crate::trap::Trap;
@@ -13,12 +12,12 @@ use wasmtime_runtime::Export;
 /// WebAssembly.
 /// # Example
 /// ```
-/// use wasmtime::{HostRef, Val};
+/// use wasmtime::Val;
 ///
 /// struct TimesTwo;
 ///
 /// impl wasmtime::Callable for TimesTwo {
-///     fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<wasmtime::Trap>> {
+///     fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), wasmtime::Trap> {
 ///         let mut value = params[0].unwrap_i32();
 ///         value *= 2;
 ///         results[0] = value.into();
@@ -43,9 +42,8 @@ use wasmtime_runtime::Export;
 /// "#)?;
 ///
 /// // Initialise environment and our module.
-/// let engine = HostRef::new(wasmtime::Engine::default());
-/// let store = HostRef::new(wasmtime::Store::new(&engine));
-/// let module = HostRef::new(wasmtime::Module::new(&store, &binary)?);
+/// let store = wasmtime::Store::default();
+/// let module = wasmtime::Module::new(&store, &binary)?;
 ///
 /// // Define the type of the function we're going to call.
 /// let times_two_type = wasmtime::FuncType::new(
@@ -56,13 +54,11 @@ use wasmtime_runtime::Export;
 /// );
 ///
 /// // Build a reference to the "times_two" function that can be used.
-/// let times_two_function = HostRef::new(
-///     wasmtime::Func::new(&store, times_two_type, std::rc::Rc::new(TimesTwo))
-/// );
+/// let times_two_function =
+///     wasmtime::Func::new(&store, times_two_type, std::rc::Rc::new(TimesTwo));
 ///
 /// // Create module instance that imports our function
 /// let instance = wasmtime::Instance::new(
-///     &store,
 ///     &module,
 ///     &[times_two_function.into()]
 /// )?;
@@ -73,9 +69,8 @@ use wasmtime_runtime::Export;
 /// // Borrow and call "run". Returning any error message from Wasm as a string.
 /// let original = 5i32;
 /// let results = run_function
-///     .borrow()
 ///     .call(&[original.into()])
-///     .map_err(|trap| trap.borrow().to_string())?;
+///     .map_err(|trap| trap.to_string())?;
 ///
 /// // Compare that the results returned matches what we expect.
 /// assert_eq!(original * 2, results[0].unwrap_i32());
@@ -87,11 +82,11 @@ pub trait Callable {
     /// `params` is an immutable list of parameters provided to the function.
     /// `results` is mutable list of results to be potentially set by your
     /// function. Produces a `Trap` if the function encounters any errors.
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>>;
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap>;
 }
 
 pub(crate) trait WrappedCallable {
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>>;
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap>;
     fn signature(&self) -> &ir::Signature {
         match self.wasmtime_export() {
             Export::Function { signature, .. } => signature,
@@ -103,13 +98,13 @@ pub(crate) trait WrappedCallable {
 }
 
 pub(crate) struct WasmtimeFn {
-    store: HostRef<Store>,
+    store: Store,
     instance: InstanceHandle,
     export: Export,
 }
 
 impl WasmtimeFn {
-    pub fn new(store: &HostRef<Store>, instance: InstanceHandle, export: Export) -> WasmtimeFn {
+    pub fn new(store: &Store, instance: InstanceHandle, export: Export) -> WasmtimeFn {
         WasmtimeFn {
             store: store.clone(),
             instance,
@@ -119,7 +114,7 @@ impl WasmtimeFn {
 }
 
 impl WrappedCallable for WasmtimeFn {
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
         use std::cmp::max;
         use std::mem;
 
@@ -146,21 +141,21 @@ impl WrappedCallable for WasmtimeFn {
         // Get the trampoline to call for this function.
         let exec_code_buf = self
             .store
-            .borrow_mut()
-            .context()
-            .compiler()
+            .compiler_mut()
             .get_published_trampoline(body, &signature, value_size)
-            .map_err(|_| HostRef::new(Trap::fake()))?; //was ActionError::Setup)?;
+            .map_err(|e| Trap::new(format!("trampoline error: {:?}", e)))?;
 
         // Call the trampoline.
-        if let Err(message) = unsafe {
-            wasmtime_runtime::wasmtime_call_trampoline(
-                vmctx,
-                exec_code_buf,
-                values_vec.as_mut_ptr() as *mut u8,
-            )
+        if let Err(error) = unsafe {
+            self.instance.with_signals_on(|| {
+                wasmtime_runtime::wasmtime_call_trampoline(
+                    vmctx,
+                    exec_code_buf,
+                    values_vec.as_mut_ptr() as *mut u8,
+                )
+            })
         } {
-            let trap = take_api_trap().unwrap_or_else(|| HostRef::new(Trap::new(message)));
+            let trap = take_api_trap().unwrap_or_else(|| Trap::from_jit(error));
             return Err(trap);
         }
 
@@ -190,11 +185,7 @@ pub struct NativeCallable {
 }
 
 impl NativeCallable {
-    pub(crate) fn new(
-        callable: Rc<dyn Callable + 'static>,
-        ft: &FuncType,
-        store: &HostRef<Store>,
-    ) -> Self {
+    pub(crate) fn new(callable: Rc<dyn Callable + 'static>, ft: &FuncType, store: &Store) -> Self {
         let (instance, export) =
             generate_func_export(ft, &callable, store).expect("generated func");
         NativeCallable {
@@ -206,7 +197,7 @@ impl NativeCallable {
 }
 
 impl WrappedCallable for NativeCallable {
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), HostRef<Trap>> {
+    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
         self.callable.call(params, results)
     }
     fn wasmtime_handle(&self) -> &InstanceHandle {

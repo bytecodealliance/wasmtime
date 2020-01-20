@@ -1,5 +1,5 @@
 use crate::func_environ::FuncEnvironment;
-use crate::module::{Export, MemoryPlan, Module, TableElements, TablePlan};
+use crate::module::{Export, MemoryPlan, Module, ModuleSyncString, TableElements, TablePlan};
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
@@ -7,7 +7,7 @@ use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
     self, translate_module, DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
-    ModuleTranslationState, SignatureIndex, Table, TableIndex, WasmResult,
+    ModuleTranslationState, SignatureIndex, Table, TableIndex, TargetEnvironment, WasmResult,
 };
 use std::convert::TryFrom;
 
@@ -55,6 +55,7 @@ impl<'data> ModuleTranslation<'data> {
 pub struct ModuleEnvironment<'data> {
     /// The result to be filled in.
     result: ModuleTranslation<'data>,
+    imports: u32,
 }
 
 impl<'data> ModuleEnvironment<'data> {
@@ -69,6 +70,7 @@ impl<'data> ModuleEnvironment<'data> {
                 tunables,
                 module_translation: None,
             },
+            imports: 0,
         }
     }
 
@@ -86,13 +88,15 @@ impl<'data> ModuleEnvironment<'data> {
     }
 }
 
-/// This trait is useful for `translate_module` because it tells how to translate
-/// environment-dependent wasm instructions. These functions should not be called by the user.
-impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data> {
+impl<'data> TargetEnvironment for ModuleEnvironment<'data> {
     fn target_config(&self) -> TargetFrontendConfig {
         self.result.target_config
     }
+}
 
+/// This trait is useful for `translate_module` because it tells how to translate
+/// environment-dependent wasm instructions. These functions should not be called by the user.
+impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data> {
     fn reserve_signatures(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
@@ -121,10 +125,12 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         );
         self.result.module.functions.push(sig_index);
 
-        self.result
-            .module
-            .imported_funcs
-            .push((String::from(module), String::from(field)));
+        self.result.module.imported_funcs.push((
+            String::from(module),
+            String::from(field),
+            self.imports,
+        ));
+        self.imports += 1;
         Ok(())
     }
 
@@ -137,10 +143,12 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         let plan = TablePlan::for_table(table, &self.result.tunables);
         self.result.module.table_plans.push(plan);
 
-        self.result
-            .module
-            .imported_tables
-            .push((String::from(module), String::from(field)));
+        self.result.module.imported_tables.push((
+            String::from(module),
+            String::from(field),
+            self.imports,
+        ));
+        self.imports += 1;
         Ok(())
     }
 
@@ -158,10 +166,12 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         let plan = MemoryPlan::for_memory(memory, &self.result.tunables);
         self.result.module.memory_plans.push(plan);
 
-        self.result
-            .module
-            .imported_memories
-            .push((String::from(module), String::from(field)));
+        self.result.module.imported_memories.push((
+            String::from(module),
+            String::from(field),
+            self.imports,
+        ));
+        self.imports += 1;
         Ok(())
     }
 
@@ -178,10 +188,12 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         );
         self.result.module.globals.push(global);
 
-        self.result
-            .module
-            .imported_globals
-            .push((String::from(module), String::from(field)));
+        self.result.module.imported_globals.push((
+            String::from(module),
+            String::from(field),
+            self.imports,
+        ));
+        self.imports += 1;
         Ok(())
     }
 
@@ -355,6 +367,11 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             },
             data,
         });
+        Ok(())
+    }
+
+    fn declare_func_name(&mut self, func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
+        self.result.module.func_names[func_index] = ModuleSyncString::new(Some(name));
         Ok(())
     }
 }

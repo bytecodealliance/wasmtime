@@ -6,7 +6,7 @@
     <LibraryExtension Condition="'$(LibraryExtension)' == ''">.so</LibraryExtension>
     <WasmtimeLibraryFilename>$(LibraryPrefix)$(WasmtimeLibraryName)$(LibraryExtension)</WasmtimeLibraryFilename>
     <WasmtimeOutputPath>$(MSBuildThisFileDirectory)../../../target/$(Configuration.ToLower())</WasmtimeOutputPath>
-    <BuildWasmtimeCommand Condition="'$(Configuration)' == 'Release'">cargo build --release -p $(WasmtimeLibraryName)</BuildWasmtimeCommand> 
-    <BuildWasmtimeCommand Condition="'$(BuildWasmtimeCommand)' == ''">cargo build -p $(WasmtimeLibraryName)</BuildWasmtimeCommand> 
+    <BuildWasmtimeCommand Condition="'$(Configuration)' == 'Release'">cargo build --release -p $(WasmtimePackageName)</BuildWasmtimeCommand>
+    <BuildWasmtimeCommand Condition="'$(BuildWasmtimeCommand)' == ''">cargo build -p $(WasmtimePackageName)</BuildWasmtimeCommand>
   </PropertyGroup>
 </Project>
