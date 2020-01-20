@@ -36,7 +36,14 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
         for func in module.funcs() {
             fs.extend(define_func(&names, &func));
         }
-        modules.extend(quote!(mod #modname { use super::types::*; #fs }));
+        modules.extend(quote!(
+            mod #modname {
+                use super::*;
+                use super::types::*;
+                use memory::*;
+                #fs
+            }
+        ));
     }
 
     TokenStream::from(quote!(mod types { #types } #modules))

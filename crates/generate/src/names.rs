@@ -1,7 +1,7 @@
 use heck::{CamelCase, SnakeCase};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
-use witx::{BuiltinType, Id, TypeRef};
+use witx::{AtomType, BuiltinType, Id, TypeRef};
 
 #[derive(Debug, Clone)]
 pub struct Names {
@@ -32,6 +32,15 @@ impl Names {
             BuiltinType::USize => quote!(usize),
         }
     }
+    pub fn atom_type(&self, atom: AtomType) -> TokenStream {
+        match atom {
+            AtomType::I32 => quote!(i32),
+            AtomType::I64 => quote!(i64),
+            AtomType::F32 => quote!(f32),
+            AtomType::F64 => quote!(f64),
+        }
+    }
+
     pub fn type_ref(&self, tref: &TypeRef) -> TokenStream {
         match tref {
             TypeRef::Name(nt) => {
@@ -64,5 +73,10 @@ impl Names {
 
     pub fn func_param(&self, id: &Id) -> Ident {
         format_ident!("{}", id.as_str().to_snake_case())
+    }
+
+    /// For when you need a {name}_len parameter for passing an array:
+    pub fn func_len_param(&self, id: &Id) -> Ident {
+        format_ident!("{}_len", id.as_str().to_snake_case())
     }
 }

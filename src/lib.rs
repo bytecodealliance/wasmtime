@@ -1,4 +1,5 @@
 pub mod test {
+    pub struct WasiCtx {} // FIXME: parameterize macro on what ctx type is used here
     generate::from_witx!("test.witx");
 }
 /*
