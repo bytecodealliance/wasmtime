@@ -1,0 +1,68 @@
+use heck::{CamelCase, SnakeCase};
+use proc_macro2::{Ident, TokenStream};
+use quote::{format_ident, quote};
+use witx::{BuiltinType, Id, TypeRef};
+
+#[derive(Debug, Clone)]
+pub struct Names {
+    // FIXME: overrides go in here, so we can map e.g. 2big => TooBig
+}
+
+impl Names {
+    pub fn new() -> Names {
+        Names {}
+    }
+    pub fn type_(&self, id: &Id) -> Ident {
+        format_ident!("{}", id.as_str().to_camel_case())
+    }
+    pub fn builtin_type(&self, b: BuiltinType) -> TokenStream {
+        match b {
+            BuiltinType::String => quote!(String),
+            BuiltinType::U8 => quote!(u8),
+            BuiltinType::U16 => quote!(u16),
+            BuiltinType::U32 => quote!(u32),
+            BuiltinType::U64 => quote!(u64),
+            BuiltinType::S8 => quote!(i8),
+            BuiltinType::S16 => quote!(i16),
+            BuiltinType::S32 => quote!(i32),
+            BuiltinType::S64 => quote!(i64),
+            BuiltinType::F32 => quote!(f32),
+            BuiltinType::F64 => quote!(f64),
+            BuiltinType::Char8 => quote!(char),
+            BuiltinType::USize => quote!(usize),
+        }
+    }
+    pub fn type_ref(&self, tref: &TypeRef) -> TokenStream {
+        match tref {
+            TypeRef::Name(nt) => {
+                let ident = self.type_(&nt.name);
+                quote!(#ident)
+            }
+            TypeRef::Value(ty) => match &**ty {
+                witx::Type::Builtin(builtin) => self.builtin_type(*builtin),
+                _ => unimplemented!("anonymous type ref"),
+            },
+        }
+    }
+
+    pub fn enum_variant(&self, id: &Id) -> Ident {
+        // FIXME this is a hack - just a proof of concept.
+        if id.as_str().starts_with('2') {
+            format_ident!("TooBig")
+        } else {
+            format_ident!("{}", id.as_str().to_camel_case())
+        }
+    }
+
+    pub fn module(&self, id: &Id) -> Ident {
+        format_ident!("{}", id.as_str().to_snake_case())
+    }
+
+    pub fn func(&self, id: &Id) -> Ident {
+        format_ident!("{}", id.as_str().to_snake_case())
+    }
+
+    pub fn func_param(&self, id: &Id) -> Ident {
+        format_ident!("{}", id.as_str().to_snake_case())
+    }
+}

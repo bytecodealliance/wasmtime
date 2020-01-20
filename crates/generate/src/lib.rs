@@ -1,33 +1,40 @@
 extern crate proc_macro;
 
+mod funcs;
+mod names;
 mod parse;
 mod types;
 
-use heck::SnakeCase;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{format_ident, quote};
+use quote::quote;
+
+use funcs::define_func;
+use names::Names;
 use types::define_datatype;
 
 #[proc_macro]
 pub fn from_witx(args: TokenStream) -> TokenStream {
     let args = TokenStream2::from(args);
     let witx_paths = parse::witx_paths(args).expect("parsing macro arguments");
+
+    let names = Names::new(); // TODO parse the names from the invocation of the macro, or from a file?
+
     let doc = witx::load(&witx_paths).expect("loading witx");
 
     let mut types = TokenStream2::new();
     for namedtype in doc.typenames() {
-        let def = define_datatype(&namedtype);
+        let def = define_datatype(&names, &namedtype);
         types.extend(def);
     }
 
     let mut modules = TokenStream2::new();
     for module in doc.modules() {
-        let modname = format_ident!("{}", module.name.as_str().to_snake_case());
+        let modname = names.module(&module.name);
+
         let mut fs = TokenStream2::new();
         for func in module.funcs() {
-            let ident = format_ident!("{}", func.name.as_str().to_snake_case());
-            fs.extend(quote!(pub fn #ident() { unimplemented!() }));
+            fs.extend(define_func(&names, &func));
         }
         modules.extend(quote!(mod #modname { use super::types::*; #fs }));
     }
