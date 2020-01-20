@@ -62,6 +62,11 @@ impl Switch {
         );
     }
 
+    /// Get a reference to all existing entries
+    pub fn entries(&self) -> &HashMap<EntryIndex, Ebb> {
+        &self.cases
+    }
+
     /// Turn the `cases` `HashMap` into a list of `ContiguousCaseRange`s.
     ///
     /// # Postconditions
