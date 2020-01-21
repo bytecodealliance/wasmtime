@@ -702,7 +702,7 @@ fn narrow_icmp_imm(
 
     let imm_low = pos
         .ins()
-        .iconst(ty_half, imm & (1u128 << (ty_half.bits() - 1)) as i64);
+        .iconst(ty_half, imm & ((1u128 << ty_half.bits()) - 1) as i64);
     let imm_high = pos
         .ins()
         .iconst(ty_half, imm.wrapping_shr(ty_half.bits().into()));
