@@ -1158,6 +1158,32 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let splatted = builder.ins().splat(type_of(op), state.pop1());
             state.push1(splatted)
         }
+        Operator::V8x16LoadSplat {
+            memarg: MemoryImmediate { flags: _, offset },
+        }
+        | Operator::V16x8LoadSplat {
+            memarg: MemoryImmediate { flags: _, offset },
+        }
+        | Operator::V32x4LoadSplat {
+            memarg: MemoryImmediate { flags: _, offset },
+        }
+        | Operator::V64x2LoadSplat {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
+            // TODO: For spec compliance, this is initially implemented as a combination of `load +
+            // splat` but could be implemented eventually as a single instruction (`load_splat`).
+            // See https://github.com/bytecodealliance/cranelift/issues/1348.
+            translate_load(
+                *offset,
+                ir::Opcode::Load,
+                type_of(op).lane_type(),
+                builder,
+                state,
+                environ,
+            )?;
+            let splatted = builder.ins().splat(type_of(op), state.pop1());
+            state.push1(splatted)
+        }
         Operator::I8x16ExtractLaneS { lane } | Operator::I16x8ExtractLaneS { lane } => {
             let vector = pop1_with_bitcast(state, type_of(op), builder);
             let extracted = builder.ins().extractlane(vector, lane.clone());
@@ -1410,10 +1436,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I32x4WidenLowI16x8U { .. }
         | Operator::I32x4WidenHighI16x8U { .. }
         | Operator::V8x16Swizzle
-        | Operator::V8x16LoadSplat { .. }
-        | Operator::V16x8LoadSplat { .. }
-        | Operator::V32x4LoadSplat { .. }
-        | Operator::V64x2LoadSplat { .. }
         | Operator::I16x8Load8x8S { .. }
         | Operator::I16x8Load8x8U { .. }
         | Operator::I32x4Load16x4S { .. }
@@ -1734,6 +1756,7 @@ fn type_of(operator: &Operator) -> Type {
 
         Operator::V8x16Shuffle { .. }
         | Operator::I8x16Splat
+        | Operator::V8x16LoadSplat { .. }
         | Operator::I8x16ExtractLaneS { .. }
         | Operator::I8x16ExtractLaneU { .. }
         | Operator::I8x16ReplaceLane { .. }
@@ -1762,6 +1785,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I8x16Mul => I8X16,
 
         Operator::I16x8Splat
+        | Operator::V16x8LoadSplat { .. }
         | Operator::I16x8ExtractLaneS { .. }
         | Operator::I16x8ExtractLaneU { .. }
         | Operator::I16x8ReplaceLane { .. }
@@ -1790,6 +1814,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I16x8Mul => I16X8,
 
         Operator::I32x4Splat
+        | Operator::V32x4LoadSplat { .. }
         | Operator::I32x4ExtractLane { .. }
         | Operator::I32x4ReplaceLane { .. }
         | Operator::I32x4Eq
@@ -1815,6 +1840,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::F32x4ConvertI32x4U => I32X4,
 
         Operator::I64x2Splat
+        | Operator::V64x2LoadSplat { .. }
         | Operator::I64x2ExtractLane { .. }
         | Operator::I64x2ReplaceLane { .. }
         | Operator::I64x2Neg
