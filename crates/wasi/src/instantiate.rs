@@ -5,6 +5,7 @@ use cranelift_wasm::DefinedFuncIndex;
 use std::fs::File;
 use std::rc::Rc;
 use target_lexicon::HOST;
+use wasi_common::hostcalls;
 use wasi_common::wasi;
 use wasi_common::{WasiCtx, WasiCtxBuilder};
 use wasmtime_environ::{translate_signature, Export, Module};

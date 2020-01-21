@@ -208,7 +208,7 @@ pub fn add_wrappers_to_module(args: TokenStream) -> TokenStream {
                         Ok(e) => e,
                         Err(e) => #handle_early_error,
                     };
-                    wasi_common::hostcalls::#name_ident(
+                    hostcalls::#name_ident(
                         wasi_ctx,
                         memory,
                         #(#hostcall_args),*
