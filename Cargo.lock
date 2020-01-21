@@ -915,9 +915,9 @@ checksum = "d515b1f41455adea1313a4a2ac8a8a477634fbae63cc6100e3aebb207ce61558"
 
 [[package]]
 name = "libfuzzer-sys"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94f9e4f036a9cb9f43c637990c03fe045425a33c1c44abf9bc6f555671be5969"
+checksum = "3e969cd2be7a2aae0acbbe205da49134148db2287fb45a811bf441ed72f09a35"
 dependencies = [
  "arbitrary 0.3.2",
  "cc",
