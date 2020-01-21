@@ -70,6 +70,11 @@ pub fn dummy_value(val_ty: &ValType) -> Result<Val, Trap> {
     })
 }
 
+/// Construct a sequence of dummy values for the given types.
+pub fn dummy_values(val_tys: &[ValType]) -> Result<Vec<Val>, Trap> {
+    val_tys.iter().map(dummy_value).collect()
+}
+
 /// Construct a dummy global for the given global type.
 pub fn dummy_global(store: &Store, ty: GlobalType) -> Result<Global, Trap> {
     let val = dummy_value(ty.content())?;
