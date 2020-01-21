@@ -100,24 +100,25 @@ fn get_wasi_ctx(vmctx: &mut VMContext) -> Result<&mut WasiCtx, wasi::__wasi_errn
 }
 
 // Used by `add_wrappers_to_module` defined in the macro above
-fn get_memory(vmctx: &mut VMContext) -> Result<&mut [u8], wasi::__wasi_errno_t> {
-    unsafe {
-        match vmctx.lookup_global_export("memory") {
-            Some(wasmtime_runtime::Export::Memory {
-                definition,
-                vmctx: _,
-                memory: _,
-            }) => Ok(std::slice::from_raw_parts_mut(
-                (*definition).base,
-                (*definition).current_length,
-            )),
-            x => {
-                log::error!(
-                    "no export named \"memory\", or the export isn't a mem: {:?}",
-                    x
-                );
-                Err(wasi::__WASI_ERRNO_INVAL)
-            }
+fn get_memory(caller_vmctx: &mut VMContext) -> Result<&mut [u8], wasi::__wasi_errno_t> {
+    match unsafe { InstanceHandle::from_vmctx(caller_vmctx) }.lookup("memory") {
+        Some(wasmtime_runtime::Export::Memory {
+            definition,
+            vmctx: _,
+            memory: _,
+        }) => unsafe {
+            let definition = &*definition;
+            let ptr = definition.base;
+            let len = definition.current_length;
+            Ok(std::slice::from_raw_parts_mut(ptr, len))
+        },
+        Some(export) => {
+            log::error!("export named \"memory\" isn't a memory: {:?}", export);
+            Err(wasi::__WASI_ERRNO_INVAL)
+        }
+        None => {
+            log::error!("no export named \"memory\" available from caller");
+            Err(wasi::__WASI_ERRNO_INVAL)
         }
     }
 }
