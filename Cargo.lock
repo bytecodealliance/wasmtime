@@ -2032,6 +2032,7 @@ dependencies = [
  "backtrace",
  "cfg-if",
  "file-per-thread-logger",
+ "lazy_static",
  "libc",
  "pretty_env_logger",
  "rayon",

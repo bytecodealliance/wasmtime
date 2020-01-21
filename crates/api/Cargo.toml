@@ -20,6 +20,7 @@ libc = "0.2"
 cfg-if = "0.1.9"
 backtrace = "0.3.42"
 rustc-demangle = "0.1.16"
+lazy_static = "1.4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = "0.3.7"

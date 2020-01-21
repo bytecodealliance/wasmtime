@@ -54,7 +54,7 @@ pub use crate::func_environ::BuiltinFunctionIndex;
 #[cfg(feature = "lightbeam")]
 pub use crate::lightbeam::Lightbeam;
 pub use crate::module::{
-    Export, MemoryPlan, MemoryStyle, Module, ModuleSyncString, TableElements, TablePlan, TableStyle,
+    Export, MemoryPlan, MemoryStyle, Module, TableElements, TablePlan, TableStyle,
 };
 pub use crate::module_environ::{
     translate_signature, DataInitializer, DataInitializerLocation, FunctionBodyData,

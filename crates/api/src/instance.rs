@@ -108,8 +108,7 @@ impl Instance {
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     pub fn new(module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
         let store = module.store();
-        let mut instance_handle =
-            instantiate(module.compiled_module().expect("compiled_module"), imports)?;
+        let mut instance_handle = instantiate(module.compiled_module(), imports)?;
 
         let exports = {
             let mut exports = Vec::with_capacity(module.exports().len());
@@ -124,6 +123,7 @@ impl Instance {
             }
             exports.into_boxed_slice()
         };
+        module.register_names();
         Ok(Instance {
             instance_handle,
             module: module.clone(),

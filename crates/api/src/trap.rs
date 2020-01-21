@@ -1,6 +1,8 @@
+use crate::module::NAMES;
 use backtrace::Backtrace;
 use std::fmt;
 use std::sync::Arc;
+use wasmtime_environ::entity::EntityRef;
 
 /// A struct representing an aborted instruction execution, with a message
 /// indicating the cause.
@@ -36,15 +38,22 @@ impl Trap {
 
     fn new_with_trace(message: String, native_trace: Backtrace) -> Self {
         let mut wasm_trace = Vec::new();
+        let names = NAMES.read().unwrap();
         for frame in native_trace.frames() {
             let pc = frame.ip() as usize;
-            if let Some(info) = wasmtime_runtime::jit_function_registry::find(pc) {
-                wasm_trace.push(FrameInfo {
-                    func_index: info.func_index as u32,
-                    module_name: info.module_id.get().map(|s| s.to_string()),
-                    func_name: info.func_name.get().map(|s| s.to_string()),
-                })
-            }
+            let info = match wasmtime_runtime::jit_function_registry::find(pc) {
+                Some(info) => info,
+                None => continue,
+            };
+            let names = match names.get(&info.module_id) {
+                Some(names) => names,
+                None => continue,
+            };
+            wasm_trace.push(FrameInfo {
+                func_index: info.func_index.index() as u32,
+                module_name: names.module_name.clone(),
+                func_name: names.module.func_names.get(&info.func_index).cloned(),
+            })
         }
         Trap {
             inner: Arc::new(TrapInner {

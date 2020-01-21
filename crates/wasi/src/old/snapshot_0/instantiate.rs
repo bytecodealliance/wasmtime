@@ -3,7 +3,7 @@ use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::DefinedFuncIndex;
 use std::fs::File;
-use std::rc::Rc;
+use std::sync::Arc;
 use target_lexicon::HOST;
 use wasi_common::old::snapshot_0::hostcalls;
 use wasi_common::old::snapshot_0::{WasiCtx, WasiCtxBuilder};
@@ -79,7 +79,7 @@ pub fn instantiate_wasi_with_context(
     let signatures = PrimaryMap::new();
 
     InstanceHandle::new(
-        Rc::new(module),
+        Arc::new(module),
         finished_functions.into_boxed_slice(),
         imports,
         &data_initializers,

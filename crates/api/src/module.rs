@@ -4,7 +4,11 @@ use crate::types::{
     TableType, ValType,
 };
 use anyhow::{Error, Result};
+use lazy_static::lazy_static;
+use std::cell::Cell;
+use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 use wasmparser::{
     validate, CustomSectionKind, ExternalKind, ImportSectionEntryType, ModuleReader, Name,
     OperatorValidatorConfig, SectionCode, ValidatingParserConfig,
@@ -81,8 +85,25 @@ struct ModuleInner {
     store: Store,
     imports: Box<[ImportType]>,
     exports: Box<[ExportType]>,
-    name: Option<String>,
-    compiled: Option<CompiledModule>,
+    compiled: CompiledModule,
+    registered_names: Cell<bool>,
+    names: Arc<Names>,
+}
+
+pub struct Names {
+    pub module: Arc<wasmtime_environ::Module>,
+    pub module_name: Option<String>,
+}
+
+lazy_static! {
+    /// This is a global cache of names known for all compiled modules in this
+    /// process.
+    ///
+    /// This global cache is used during `Trap` creation to symbolicate frames.
+    /// This is populated on module compilation, and it is cleared out whenever
+    /// all references to a module are dropped, aka the `Drop for ModuleInner`
+    /// below.
+    pub static ref NAMES: RwLock<HashMap<usize, Arc<Names>>> = RwLock::default();
 }
 
 impl Module {
@@ -123,10 +144,7 @@ impl Module {
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     pub fn new(store: &Store, binary: &[u8]) -> Result<Module> {
         Module::validate(store, binary)?;
-        // Note that the call to `unsafe` here should be ok because we
-        // previously validated the binary, meaning we're guaranteed to pass a
-        // valid binary for `store`.
-        unsafe { Module::new_internal(store, binary, None) }
+        unsafe { Module::new_unchecked(store, binary) }
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
@@ -134,11 +152,10 @@ impl Module {
     ///
     /// See [`Module::new`] for other details.
     pub fn new_with_name(store: &Store, binary: &[u8], name: &str) -> Result<Module> {
-        Module::validate(store, binary)?;
-        // Note that the call to `unsafe` here should be ok because we
-        // previously validated the binary, meaning we're guaranteed to pass a
-        // valid binary for `store`.
-        unsafe { Module::new_internal(store, binary, Some(name)) }
+        let mut module = Module::new(store, binary)?;
+        let inner = Rc::get_mut(&mut module.inner).unwrap();
+        Arc::get_mut(&mut inner.names).unwrap().module_name = Some(name.to_string());
+        Ok(module)
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
@@ -168,20 +185,8 @@ impl Module {
     /// be somewhat valid for decoding purposes, and the basics of decoding can
     /// still fail.
     pub unsafe fn new_unchecked(store: &Store, binary: &[u8]) -> Result<Module> {
-        Module::new_internal(store, binary, None)
-    }
-
-    /// Creates a new `Module` and compiles it without doing any validation.
-    unsafe fn new_internal(store: &Store, binary: &[u8], name: Option<&str>) -> Result<Module> {
-        let mut ret = Module::empty(store);
+        let mut ret = Module::compile(store, binary)?;
         ret.read_imports_and_exports(binary)?;
-
-        let inner = Rc::get_mut(&mut ret.inner).unwrap();
-        if let Some(name) = name {
-            // Assign or override the module's name if supplied.
-            inner.name = Some(name.to_string());
-        }
-        inner.compiled = Some(compile(store, binary, inner.name.as_deref())?);
         Ok(ret)
     }
 
@@ -220,31 +225,42 @@ impl Module {
 
     #[doc(hidden)]
     pub fn from_exports(store: &Store, exports: Box<[ExportType]>) -> Self {
-        let mut ret = Module::empty(store);
+        let mut ret = unsafe { Module::compile(store, b"\0asm\x01\0\0\0").unwrap() };
         Rc::get_mut(&mut ret.inner).unwrap().exports = exports;
         return ret;
     }
 
-    fn empty(store: &Store) -> Self {
-        Module {
+    unsafe fn compile(store: &Store, binary: &[u8]) -> Result<Self> {
+        let compiled = CompiledModule::new(
+            &mut store.compiler_mut(),
+            binary,
+            store.engine().config().debug_info,
+        )?;
+
+        let names = Arc::new(Names {
+            module_name: None,
+            module: compiled.module().clone(),
+        });
+        Ok(Module {
             inner: Rc::new(ModuleInner {
                 store: store.clone(),
                 imports: Box::new([]),
                 exports: Box::new([]),
-                name: None,
-                compiled: None,
+                names,
+                compiled,
+                registered_names: Cell::new(false),
             }),
-        }
+        })
     }
 
-    pub(crate) fn compiled_module(&self) -> Option<&CompiledModule> {
-        self.inner.compiled.as_ref()
+    pub(crate) fn compiled_module(&self) -> &CompiledModule {
+        &self.inner.compiled
     }
 
     /// Returns identifier/name that this [`Module`] has. This name
     /// is used in traps/backtrace details.
     pub fn name(&self) -> Option<&str> {
-        self.inner.name.as_deref()
+        self.inner.names.module_name.as_deref()
     }
 
     /// Returns the list of imports that this [`Module`] has and must be
@@ -375,7 +391,8 @@ impl Module {
                         while let Ok(entry) = reader.read() {
                             if let Name::Module(name) = entry {
                                 if let Ok(name) = name.get_name() {
-                                    inner.name = Some(name.to_string());
+                                    Arc::get_mut(&mut inner.names).unwrap().module_name =
+                                        Some(name.to_string());
                                 }
                                 break;
                             }
@@ -392,14 +409,24 @@ impl Module {
         inner.exports = exports.into();
         Ok(())
     }
+
+    /// Register this module's names in the global map of module names.
+    ///
+    /// This is required to ensure that any traps can be properly symbolicated.
+    pub(crate) fn register_names(&self) {
+        if self.inner.registered_names.get() {
+            return;
+        }
+        let names = self.inner.names.clone();
+        NAMES.write().unwrap().insert(names.module.id, names);
+        self.inner.registered_names.set(true);
+    }
 }
 
-fn compile(store: &Store, binary: &[u8], module_name: Option<&str>) -> Result<CompiledModule> {
-    let compiled_module = CompiledModule::new(
-        &mut store.compiler_mut(),
-        binary,
-        module_name,
-        store.engine().config().debug_info,
-    )?;
-    Ok(compiled_module)
+impl Drop for ModuleInner {
+    fn drop(&mut self) {
+        if self.registered_names.get() {
+            NAMES.write().unwrap().remove(&self.names.module.id);
+        }
+    }
 }
