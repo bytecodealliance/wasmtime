@@ -249,7 +249,6 @@ pub fn instantiate(
     resolver: &mut dyn Resolver,
     debug_info: bool,
 ) -> Result<InstanceHandle, SetupError> {
-    let instance =
-        CompiledModule::new(compiler, data, debug_info)?.instantiate(resolver)?;
+    let instance = CompiledModule::new(compiler, data, debug_info)?.instantiate(resolver)?;
     Ok(instance)
 }

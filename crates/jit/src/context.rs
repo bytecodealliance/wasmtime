@@ -109,12 +109,7 @@ impl Context {
         self.validate(&data).map_err(SetupError::Validate)?;
         let debug_info = self.debug_info();
 
-        instantiate(
-            &mut *self.compiler,
-            &data,
-            &mut self.namespace,
-            debug_info,
-        )
+        instantiate(&mut *self.compiler, &data, &mut self.namespace, debug_info)
     }
 
     /// Return the instance associated with the given name.
