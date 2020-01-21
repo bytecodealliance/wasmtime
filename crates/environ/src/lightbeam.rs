@@ -48,9 +48,10 @@ impl crate::compilation::Compiler for Lightbeam {
                 &mut reloc_sink,
                 &mut trap_sink,
                 i.as_u32(),
-                &wasmparser::FunctionBody::new(0, function_body.data),
+                std::io::Cursor::new(function_body.data),
             )
             .map_err(|e| CompileError::Codegen(format!("Failed to translate function: {}", e)))?;
+
             relocations.push(reloc_sink.func_relocs);
             traps.push(trap_sink.traps);
         }
