@@ -16,7 +16,11 @@ use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::ops::DerefMut;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-pub(crate) unsafe fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasi::__wasi_fd_t) -> Result<()> {
+pub(crate) unsafe fn fd_close(
+    wasi_ctx: &mut WasiCtx,
+    _mem: &mut [u8],
+    fd: wasi::__wasi_fd_t,
+) -> Result<()> {
     trace!("fd_close(fd={:?})", fd);
 
     if let Ok(fe) = wasi_ctx.get_fd_entry(fd) {
@@ -30,7 +34,11 @@ pub(crate) unsafe fn fd_close(wasi_ctx: &mut WasiCtx, fd: wasi::__wasi_fd_t) -> 
     Ok(())
 }
 
-pub(crate) unsafe fn fd_datasync(wasi_ctx: &WasiCtx, fd: wasi::__wasi_fd_t) -> Result<()> {
+pub(crate) unsafe fn fd_datasync(
+    wasi_ctx: &WasiCtx,
+    _mem: &mut [u8],
+    fd: wasi::__wasi_fd_t,
+) -> Result<()> {
     trace!("fd_datasync(fd={:?})", fd);
 
     let fd = wasi_ctx
@@ -175,6 +183,7 @@ pub(crate) unsafe fn fd_read(
 
 pub(crate) unsafe fn fd_renumber(
     wasi_ctx: &mut WasiCtx,
+    _mem: &mut [u8],
     from: wasi::__wasi_fd_t,
     to: wasi::__wasi_fd_t,
 ) -> Result<()> {
@@ -291,6 +300,7 @@ pub(crate) unsafe fn fd_fdstat_get(
 
 pub(crate) unsafe fn fd_fdstat_set_flags(
     wasi_ctx: &WasiCtx,
+    _mem: &mut [u8],
     fd: wasi::__wasi_fd_t,
     fdflags: wasi::__wasi_fdflags_t,
 ) -> Result<()> {
@@ -306,6 +316,7 @@ pub(crate) unsafe fn fd_fdstat_set_flags(
 
 pub(crate) unsafe fn fd_fdstat_set_rights(
     wasi_ctx: &mut WasiCtx,
+    _mem: &mut [u8],
     fd: wasi::__wasi_fd_t,
     fs_rights_base: wasi::__wasi_rights_t,
     fs_rights_inheriting: wasi::__wasi_rights_t,
@@ -329,7 +340,11 @@ pub(crate) unsafe fn fd_fdstat_set_rights(
     Ok(())
 }
 
-pub(crate) unsafe fn fd_sync(wasi_ctx: &WasiCtx, fd: wasi::__wasi_fd_t) -> Result<()> {
+pub(crate) unsafe fn fd_sync(
+    wasi_ctx: &WasiCtx,
+    _mem: &mut [u8],
+    fd: wasi::__wasi_fd_t,
+) -> Result<()> {
     trace!("fd_sync(fd={:?})", fd);
 
     let fd = wasi_ctx
@@ -397,6 +412,7 @@ pub(crate) unsafe fn fd_write(
 
 pub(crate) unsafe fn fd_advise(
     wasi_ctx: &WasiCtx,
+    _mem: &mut [u8],
     fd: wasi::__wasi_fd_t,
     offset: wasi::__wasi_filesize_t,
     len: wasi::__wasi_filesize_t,
@@ -420,6 +436,7 @@ pub(crate) unsafe fn fd_advise(
 
 pub(crate) unsafe fn fd_allocate(
     wasi_ctx: &WasiCtx,
+    _mem: &mut [u8],
     fd: wasi::__wasi_fd_t,
     offset: wasi::__wasi_filesize_t,
     len: wasi::__wasi_filesize_t,
@@ -702,6 +719,7 @@ pub(crate) unsafe fn fd_filestat_get(
 
 pub(crate) unsafe fn fd_filestat_set_times(
     wasi_ctx: &WasiCtx,
+    _mem: &mut [u8],
     fd: wasi::__wasi_fd_t,
     st_atim: wasi::__wasi_timestamp_t,
     st_mtim: wasi::__wasi_timestamp_t,
@@ -761,6 +779,7 @@ pub(crate) fn fd_filestat_set_times_impl(
 
 pub(crate) unsafe fn fd_filestat_set_size(
     wasi_ctx: &WasiCtx,
+    _mem: &mut [u8],
     fd: wasi::__wasi_fd_t,
     st_size: wasi::__wasi_filesize_t,
 ) -> Result<()> {
