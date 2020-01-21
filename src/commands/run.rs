@@ -150,9 +150,7 @@ impl RunCommand {
         let wasi_unstable = if self.enable_wasi_c {
             #[cfg(feature = "wasi-c")]
             {
-                let global_exports = store.global_exports().clone();
-                let handle =
-                    instantiate_wasi_c("", global_exports, &preopen_dirs, &argv, &self.vars)?;
+                let handle = instantiate_wasi_c("", &preopen_dirs, &argv, &self.vars)?;
                 Instance::from_handle(&store, handle)
             }
             #[cfg(not(feature = "wasi-c"))]

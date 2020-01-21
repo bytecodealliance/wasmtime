@@ -395,12 +395,10 @@ impl Module {
 }
 
 fn compile(store: &Store, binary: &[u8], module_name: Option<&str>) -> Result<CompiledModule> {
-    let exports = store.global_exports().clone();
     let compiled_module = CompiledModule::new(
         &mut store.compiler_mut(),
         binary,
         module_name,
-        exports,
         store.engine().config().debug_info,
     )?;
 

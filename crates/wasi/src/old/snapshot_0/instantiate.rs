@@ -3,8 +3,6 @@ use cranelift_codegen::ir::types;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::DefinedFuncIndex;
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fs::File;
 use std::rc::Rc;
 use target_lexicon::HOST;
@@ -19,15 +17,13 @@ pub fn create_wasi_instance(
     argv: &[String],
     environ: &[(String, String)],
 ) -> Result<wasmtime::Instance, InstantiationError> {
-    let global_exports = store.global_exports().clone();
-    let wasi = instantiate_wasi(global_exports, preopened_dirs, argv, environ)?;
+    let wasi = instantiate_wasi(preopened_dirs, argv, environ)?;
     let instance = wasmtime::Instance::from_handle(&store, wasi);
     Ok(instance)
 }
 
 /// Return an instance implementing the "wasi" interface.
 pub fn instantiate_wasi(
-    global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
     preopened_dirs: &[(String, File)],
     argv: &[String],
     environ: &[(String, String)],
@@ -52,14 +48,13 @@ pub fn instantiate_wasi(
     let wasi_ctx = wasi_ctx_builder.build().map_err(|err| {
         InstantiationError::Resource(format!("couldn't assemble WASI context object: {}", err))
     })?;
-    instantiate_wasi_with_context(global_exports, wasi_ctx)
+    instantiate_wasi_with_context(wasi_ctx)
 }
 
 /// Return an instance implementing the "wasi" interface.
 ///
 /// The wasi context is configured by
 pub fn instantiate_wasi_with_context(
-    global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
     wasi_ctx: WasiCtx,
 ) -> Result<InstanceHandle, InstantiationError> {
     let pointer_type = types::Type::triple_pointer_type(&HOST);
@@ -144,7 +139,6 @@ pub fn instantiate_wasi_with_context(
 
     InstanceHandle::new(
         Rc::new(module),
-        global_exports,
         finished_functions.into_boxed_slice(),
         imports,
         &data_initializers,

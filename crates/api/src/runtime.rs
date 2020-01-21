@@ -342,7 +342,6 @@ pub struct Store {
 struct StoreInner {
     engine: Engine,
     compiler: RefCell<Compiler>,
-    global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
     signature_cache: RefCell<HashMap<wasmtime_runtime::VMSharedSignatureIndex, ir::Signature>>,
 }
 
@@ -355,7 +354,6 @@ impl Store {
             inner: Rc::new(StoreInner {
                 engine: engine.clone(),
                 compiler: RefCell::new(compiler),
-                global_exports: Rc::new(RefCell::new(HashMap::new())),
                 signature_cache: RefCell::new(HashMap::new()),
             }),
         }
@@ -368,14 +366,6 @@ impl Store {
 
     pub(crate) fn compiler_mut(&self) -> std::cell::RefMut<'_, Compiler> {
         self.inner.compiler.borrow_mut()
-    }
-
-    // Specific to wasmtime: hack to pass memory around to wasi
-    #[doc(hidden)]
-    pub fn global_exports(
-        &self,
-    ) -> &Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>> {
-        &self.inner.global_exports
     }
 
     pub(crate) fn register_wasmtime_signature(

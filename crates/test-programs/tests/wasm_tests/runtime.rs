@@ -6,7 +6,6 @@ use wasmtime::{Instance, Module, Store};
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
     let store = Store::default();
 
-    let global_exports = store.global_exports().clone();
     let get_preopens = |workspace: Option<&Path>| -> anyhow::Result<Vec<_>> {
         if let Some(workspace) = workspace {
             let preopen_dir = wasi_common::preopen_dir(workspace)
@@ -37,7 +36,6 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
     let snapshot1 = Instance::from_handle(
         &store,
         wasmtime_wasi::instantiate_wasi_with_context(
-            global_exports.clone(),
             builder.build().context("failed to build wasi context")?,
         )
         .context("failed to instantiate wasi")?,

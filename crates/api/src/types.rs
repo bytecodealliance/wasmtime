@@ -191,12 +191,6 @@ fn from_wasmtime_abiparam(param: &ir::AbiParam) -> Option<ValType> {
 pub struct FuncType {
     params: Box<[ValType]>,
     results: Box<[ValType]>,
-    // `None` if params/results aren't wasm-compatible (e.g. use wasm interface
-    // types), or if they're not implemented (like anyref at the time of this
-    // writing)
-    //
-    // `Some` if they're all wasm-compatible.
-    signature: Option<ir::Signature>,
 }
 
 impl FuncType {
@@ -205,34 +199,7 @@ impl FuncType {
     /// The function descriptor returned will represent a function which takes
     /// `params` as arguments and returns `results` when it is finished.
     pub fn new(params: Box<[ValType]>, results: Box<[ValType]>) -> FuncType {
-        use wasmtime_environ::ir::{types, AbiParam, ArgumentPurpose, Signature};
-        use wasmtime_jit::native;
-        let call_conv = native::call_conv();
-        let signature = params
-            .iter()
-            .map(|p| p.get_wasmtime_type().map(AbiParam::new))
-            .collect::<Option<Vec<_>>>()
-            .and_then(|params| {
-                results
-                    .iter()
-                    .map(|p| p.get_wasmtime_type().map(AbiParam::new))
-                    .collect::<Option<Vec<_>>>()
-                    .map(|results| (params, results))
-            })
-            .map(|(mut params, returns)| {
-                params.insert(0, AbiParam::special(types::I64, ArgumentPurpose::VMContext));
-
-                Signature {
-                    params,
-                    returns,
-                    call_conv,
-                }
-            });
-        FuncType {
-            params,
-            results,
-            signature,
-        }
+        FuncType { params, results }
     }
 
     /// Returns the list of parameter types for this function.
@@ -248,8 +215,28 @@ impl FuncType {
     /// Returns `Some` if this function signature was compatible with cranelift,
     /// or `None` if one of the types/results wasn't supported or compatible
     /// with cranelift.
-    pub(crate) fn get_wasmtime_signature(&self) -> Option<&ir::Signature> {
-        self.signature.as_ref()
+    pub(crate) fn get_wasmtime_signature(&self, pointer_type: ir::Type) -> Option<ir::Signature> {
+        use wasmtime_environ::ir::{types, AbiParam, ArgumentPurpose, Signature};
+        use wasmtime_jit::native;
+        let call_conv = native::call_conv();
+        let mut params = self
+            .params
+            .iter()
+            .map(|p| p.get_wasmtime_type().map(AbiParam::new))
+            .collect::<Option<Vec<_>>>()?;
+        let returns = self
+            .results
+            .iter()
+            .map(|p| p.get_wasmtime_type().map(AbiParam::new))
+            .collect::<Option<Vec<_>>>()?;
+        params.insert(0, AbiParam::special(types::I64, ArgumentPurpose::VMContext));
+        params.insert(1, AbiParam::new(pointer_type));
+
+        Some(Signature {
+            params,
+            returns,
+            call_conv,
+        })
     }
 
     /// Returns `None` if any types in the signature can't be converted to the
@@ -259,7 +246,7 @@ impl FuncType {
         let params = signature
             .params
             .iter()
-            .filter(|p| p.purpose == ir::ArgumentPurpose::Normal)
+            .skip(2) // skip the caller/callee vmctx
             .map(|p| from_wasmtime_abiparam(p))
             .collect::<Option<Vec<_>>>()?;
         let results = signature
@@ -270,7 +257,6 @@ impl FuncType {
         Some(FuncType {
             params: params.into_boxed_slice(),
             results: results.into_boxed_slice(),
-            signature: Some(signature),
         })
     }
 }

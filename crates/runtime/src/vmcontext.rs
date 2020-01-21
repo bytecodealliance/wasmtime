@@ -595,7 +595,7 @@ impl VMInvokeArgument {
 ///
 /// TODO: We could move the globals into the `vmctx` allocation too.
 #[derive(Debug)]
-#[repr(C)]
+#[repr(C, align(16))] // align 16 since globals are aligned to that and contained inside
 pub struct VMContext {}
 
 impl VMContext {
@@ -616,13 +616,5 @@ impl VMContext {
     /// be a `VMContext` allocated as part of an `Instance`.
     pub unsafe fn host_state(&mut self) -> &mut dyn Any {
         self.instance().host_state()
-    }
-
-    /// Lookup an export in the global exports namespace.
-    /// # Safety
-    /// This is unsafe because it doesn't work on just any `VMContext`, it must
-    /// be a `VMContext` allocated as part of an `Instance`.
-    pub unsafe fn lookup_global_export(&mut self, field: &str) -> Option<crate::export::Export> {
-        self.instance().lookup_global_export(field)
     }
 }
