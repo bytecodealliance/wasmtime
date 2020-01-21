@@ -25,6 +25,7 @@ either = "1.5"
 hashers = "1.0"
 typemap = "0.3"
 more-asserts = "0.2.1"
+wasm-reader = "0.1"
 
 [dev-dependencies]
 lazy_static = "1.2"

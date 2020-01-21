@@ -2,18 +2,19 @@ use crate::backend::{
     ret_locs, BlockCallingConvention, CodeGenSession, Context, Label, VirtualCallingConvention,
 };
 #[cfg(debug_assertions)]
-use crate::backend::{Registers, ValueLocation};
-use crate::error::Error;
-use crate::microwasm::*;
-use crate::module::{ModuleContext, SigType, Signature};
+use crate::{
+    backend::{Registers, ValueLocation},
+    error::Error,
+    microwasm::*,
+    module::{ModuleContext, SigType, Signature},
+};
 use cranelift_codegen::{binemit, ir};
 use dynasmrt::DynasmApi;
 use either::{Either, Left, Right};
 #[cfg(debug_assertions)]
 use more_asserts::assert_ge;
 use multi_mut::HashMapMultiMut;
-use std::{collections::HashMap, hash::Hash};
-use std::{fmt, mem};
+use std::{collections::HashMap, fmt, hash::Hash, io, iter, mem};
 
 #[derive(Debug)]
 struct Block {
@@ -37,47 +38,32 @@ impl Block {
 
 const DISASSEMBLE: bool = false;
 
-pub fn translate_wasm<M>(
+pub fn translate_wasm<M, R>(
     session: &mut CodeGenSession<M>,
     reloc_sink: &mut dyn binemit::RelocSink,
     trap_sink: &mut (dyn binemit::TrapSink + 'static),
     func_idx: u32,
-    body: &wasmparser::FunctionBody,
+    body: R,
 ) -> Result<(), Error>
 where
     M: ModuleContext,
+    R: io::Read,
     for<'any> &'any M::Signature: Into<OpSig>,
 {
     let ty = session.module_context.defined_func_type(func_idx);
-
-    if DISASSEMBLE {
-        let microwasm_conv = MicrowasmConv::new(
-            session.module_context,
-            ty.params().iter().map(SigType::to_microwasm_type),
-            ty.returns().iter().map(SigType::to_microwasm_type),
-            body,
-        )?;
-
-        let _ = crate::microwasm::dis(
-            std::io::stdout(),
-            func_idx,
-            microwasm_conv.flat_map(|ops| ops.unwrap()),
-        );
-    }
 
     let microwasm_conv = MicrowasmConv::new(
         session.module_context,
         ty.params().iter().map(SigType::to_microwasm_type),
         ty.returns().iter().map(SigType::to_microwasm_type),
         body,
-    )?;
+    )?
+    .flat_map(|ops| match ops {
+        Ok(ops) => Either::Left(ops.into_iter().map(Ok)),
+        Err(e) => Either::Right(iter::once(Err(Error::Microwasm(e.to_string())))),
+    });
 
-    let mut body = Vec::new();
-    for i in microwasm_conv {
-        body.extend(i?);
-    }
-
-    translate(session, reloc_sink, trap_sink, func_idx, body)?;
+    translate(session, reloc_sink, trap_sink, func_idx, microwasm_conv)?;
     Ok(())
 }
 
@@ -90,7 +76,7 @@ pub fn translate<M, I, L: Send + Sync + 'static>(
 ) -> Result<(), Error>
 where
     M: ModuleContext,
-    I: IntoIterator<Item = Operator<L>>,
+    I: IntoIterator<Item = Result<Operator<L>, Error>>,
     L: Hash + Clone + Eq,
     BrTarget<L>: std::fmt::Display,
 {
@@ -152,7 +138,9 @@ where
         );
 
         while let Some(op) = body.next() {
-            if let Some(Operator::Label(label)) = body.peek() {
+            let op = op?;
+
+            if let Some(Ok(Operator::Label(label))) = body.peek() {
                 let block = match blocks.get_mut(&BrTarget::Label(label.clone())) {
                     None => {
                         return Err(Error::Microwasm(
@@ -238,7 +226,7 @@ where
                             if block.actual_num_callers == 0 {
                                 loop {
                                     let done = match body.peek() {
-                                        Some(Operator::Label(_)) | None => true,
+                                        Some(Ok(Operator::Label(_))) | None => true,
                                         Some(_) => false,
                                     };
 
@@ -246,15 +234,17 @@ where
                                         break;
                                     }
 
-                                    let skipped = body.next();
+                                    let skipped = body.next().ok_or_else(|| {
+                                        Error::Assembler("Unexpected EOF".into())
+                                    })??;
 
                                     // We still want to honour block definitions even in unreachable code
-                                    if let Some(Operator::Block {
+                                    if let Operator::Block {
                                         label,
                                         has_backwards_callers,
                                         params,
                                         num_callers,
-                                    }) = skipped
+                                    } = skipped
                                     {
                                         let asm_label = ctx.create_label();
                                         blocks.insert(

@@ -1,16 +1,22 @@
-use crate::error::Error;
-use crate::module::{ModuleContext, SigType, Signature};
+use crate::{
+    error::Error,
+    module::{ModuleContext, SigType, Signature},
+    StrErr,
+};
+use cranelift_codegen::ir::SourceLoc;
 use smallvec::{smallvec, SmallVec};
 use std::{
     convert::TryInto,
     fmt,
+    io::{self, Read},
     iter::{self, FromIterator},
     ops::RangeInclusive,
 };
-use wasmparser::{
-    FunctionBody, Ieee32 as WasmIeee32, Ieee64 as WasmIeee64,
-    MemoryImmediate as WasmMemoryImmediate, Operator as WasmOperator, OperatorsReader,
+use wasm_reader::{
+    FunctionBody, Ieee32 as WasmIeee32, Ieee64 as WasmIeee64, Operator as WasmOperator,
+    OperatorsReader, ParseOne as _,
 };
+use wasmparser::MemoryImmediate as WasmMemoryImmediate;
 
 pub fn dis<L>(
     mut out: impl std::io::Write,
@@ -35,6 +41,43 @@ where
     Ok(())
 }
 
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Ieee32(u32);
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Ieee64(u64);
+
+impl Ieee32 {
+    pub fn to_bits(self) -> u32 {
+        self.0
+    }
+
+    pub fn from_bits(other: u32) -> Self {
+        Ieee32(other)
+    }
+}
+
+impl From<WasmIeee32> for Ieee32 {
+    fn from(other: WasmIeee32) -> Self {
+        Self::from_bits(other.0)
+    }
+}
+
+impl Ieee64 {
+    pub fn to_bits(self) -> u64 {
+        self.0
+    }
+
+    pub fn from_bits(other: u64) -> Self {
+        Ieee64(other)
+    }
+}
+
+impl From<WasmIeee64> for Ieee64 {
+    fn from(other: WasmIeee64) -> Self {
+        Self::from_bits(other.0)
+    }
+}
+
 /// A constant value embedded in the instructions
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Value {
@@ -49,8 +92,8 @@ impl fmt::Display for Value {
         match self {
             Value::I32(v) => write!(f, "{}i32", v),
             Value::I64(v) => write!(f, "{}i64", v),
-            Value::F32(v) => write!(f, "{}f32", f32::from_bits(v.to_bits())),
-            Value::F64(v) => write!(f, "{}f64", f64::from_bits(v.to_bits())),
+            Value::F32(v) => write!(f, "{}f32", f32::from_bits(v.0)),
+            Value::F64(v) => write!(f, "{}f64", f64::from_bits(v.0)),
         }
     }
 }
@@ -274,6 +317,15 @@ pub const SU64: SignfulType = Type::Int(sint::U64);
 pub const SF32: SignfulType = Type::Float(Size::_32);
 pub const SF64: SignfulType = Type::Float(Size::_64);
 
+fn strerr(msg: impl Into<std::borrow::Cow<'static, str>>) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        StrErr {
+            message: msg.into(),
+        },
+    )
+}
+
 impl SignlessType {
     pub fn from_wasm(other: wasmparser::Type) -> Result<Self, Error> {
         use wasmparser::Type;
@@ -293,12 +345,13 @@ impl SignlessType {
 
 fn create_returns_from_wasm_type(
     ty: wasmparser::TypeOrFuncType,
-) -> Result<Vec<SignlessType>, Error> {
+) -> wasm_reader::Result<Vec<SignlessType>> {
     match ty {
         wasmparser::TypeOrFuncType::Type(ty) => Ok(Vec::from_iter(Type::from_wasm(ty))),
-        wasmparser::TypeOrFuncType::FuncType(_) => {
-            Err(Error::Microwasm("Unsupported func type".to_string()))
-        }
+        wasmparser::TypeOrFuncType::FuncType(_) => Err(wasm_reader::Error::new(
+            strerr("Unsupported func type"),
+            None,
+        )),
     }
 }
 
@@ -391,43 +444,6 @@ where
         } else {
             write!(f, "{}", self.target)
         }
-    }
-}
-
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Ieee32(u32);
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Ieee64(u64);
-
-impl Ieee32 {
-    pub fn to_bits(self) -> u32 {
-        self.0
-    }
-
-    pub fn from_bits(other: u32) -> Self {
-        Ieee32(other)
-    }
-}
-
-impl From<WasmIeee32> for Ieee32 {
-    fn from(other: WasmIeee32) -> Self {
-        Self::from_bits(other.bits())
-    }
-}
-
-impl Ieee64 {
-    pub fn to_bits(self) -> u64 {
-        self.0
-    }
-
-    pub fn from_bits(other: u64) -> Self {
-        Ieee64(other)
-    }
-}
-
-impl From<WasmIeee64> for Ieee64 {
-    fn from(other: WasmIeee64) -> Self {
-        Self::from_bits(other.bits())
     }
 }
 
@@ -610,6 +626,11 @@ pub enum Operator<Label> {
     },
 }
 
+pub struct OperatorWithMeta<L> {
+    pub loc: SourceLoc,
+    pub op: Operator<L>,
+}
+
 impl<L> Operator<L> {
     pub fn is_label(&self) -> bool {
         match self {
@@ -650,6 +671,20 @@ impl<L> Operator<L> {
             label,
             has_backwards_callers: true,
             num_callers: None,
+        }
+    }
+}
+
+impl<L> fmt::Display for OperatorWithMeta<L>
+where
+    BrTarget<L>: fmt::Display,
+    L: Clone,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.loc.is_default() {
+            write!(f, "??????: {}", self.op)
+        } else {
+            write!(f, "{:0>6x}: {}", self.loc.bits(), self.op)
         }
     }
 }
@@ -977,16 +1012,70 @@ impl ControlFrame {
     }
 }
 
-pub struct MicrowasmConv<'a, 'b, M> {
+#[derive(Default)]
+struct ControlFrames {
+    inner: Vec<ControlFrame>,
+}
+
+impl ControlFrames {
+    fn function_block(&self) -> &ControlFrame {
+        self.inner.first().unwrap()
+    }
+
+    fn get(&self, n: usize) -> Option<&ControlFrame> {
+        self.inner.iter().rev().nth(n)
+    }
+
+    fn get_mut(&mut self, n: usize) -> Option<&mut ControlFrame> {
+        self.inner.iter_mut().rev().nth(n)
+    }
+
+    fn top(&self) -> Option<&ControlFrame> {
+        self.get(0)
+    }
+
+    fn top_mut(&mut self) -> Option<&mut ControlFrame> {
+        self.get_mut(0)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    fn pop(&mut self) -> Option<ControlFrame> {
+        self.inner.pop()
+    }
+
+    fn push(&mut self, val: ControlFrame) {
+        self.inner.push(val)
+    }
+}
+
+impl std::ops::Index<usize> for ControlFrames {
+    type Output = ControlFrame;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        self.get(index).unwrap()
+    }
+}
+
+impl std::ops::IndexMut<usize> for ControlFrames {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        self.get_mut(index).unwrap()
+    }
+}
+
+pub struct MicrowasmConv<'a, R, M> {
     // TODO: Maybe have a `ConvInner` type and have this wrap an `Option` so that
     //       we can dealloc everything when we've finished emitting
     is_done: bool,
     consts_to_emit: Option<Vec<Value>>,
     stack: Vec<SignlessType>,
-    internal: OperatorsReader<'a>,
-    module: &'b M,
+    operators: OperatorsReader,
+    reader: R,
+    module: &'a M,
     current_id: u32,
-    control_frames: Vec<ControlFrame>,
+    control_frames: ControlFrames,
     unreachable: bool,
 }
 
@@ -1044,25 +1133,25 @@ where
     }
 }
 
-impl<'a, 'b, M: ModuleContext> MicrowasmConv<'a, 'b, M>
+impl<'a, R: Read, M: ModuleContext> MicrowasmConv<'a, R, M>
 where
     for<'any> &'any M::Signature: Into<OpSig>,
 {
     pub fn new(
-        context: &'b M,
+        context: &'a M,
         params: impl IntoIterator<Item = SignlessType>,
         returns: impl IntoIterator<Item = SignlessType>,
-        reader: &'a FunctionBody,
+        mut reader: R,
     ) -> Result<Self, Error> {
-        let locals_reader = reader
-            .get_locals_reader()
-            .map_err(|_| Error::Microwasm("Failed to get locals reader".to_string()))?;
+        let func_body = FunctionBody::new(&mut reader)
+            .map_err(|e| Error::Microwasm(format!("Failed to get locals reader: {}", e)))?;
+        let (local_reader, operators) = func_body.into_locals_and_code(&mut reader);
         let mut locals = Vec::from_iter(params);
         let mut consts = Vec::new();
 
-        for loc in locals_reader {
+        for loc in local_reader {
             let (count, ty) =
-                loc.map_err(|_| Error::Microwasm("Getting local failed".to_string()))?;
+                loc.map_err(|e| Error::Microwasm(format!("Getting local failed: {}", e)))?;
             let ty = Type::from_wasm(ty)
                 .map_err(|_| Error::Microwasm("Invalid local type".to_string()))?;
 
@@ -1076,17 +1165,15 @@ where
 
         let num_locals = locals.len() as _;
 
-        let operators_reader = reader
-            .get_operators_reader()
-            .map_err(|_| Error::Microwasm("Failed to get operators reader".to_string()))?;
         let mut out = Self {
             is_done: false,
             stack: locals,
             module: context,
             consts_to_emit: Some(consts),
-            internal: operators_reader,
+            operators,
+            reader,
             current_id: 0,
-            control_frames: vec![],
+            control_frames: Default::default(),
             unreachable: false,
         };
 
@@ -1101,7 +1188,7 @@ where
         Ok(out)
     }
 
-    fn op_sig(&self, op: &WasmOperator) -> Result<OpSig, Error> {
+    fn op_sig(&self, op: &WasmOperator) -> wasm_reader::Result<OpSig> {
         use self::SigT::T;
         use std::iter::{empty as none, once};
 
@@ -1231,12 +1318,18 @@ where
             WasmOperator::F32Const { .. } => sig!(() -> (F32)),
             WasmOperator::F64Const { .. } => sig!(() -> (F64)),
 
-            WasmOperator::RefNull => {
-                return Err(Error::Microwasm("RefNull unimplemented".to_string()))
-            }
-            WasmOperator::RefIsNull => {
-                return Err(Error::Microwasm("RefIsNull unimplemented".to_string()))
-            }
+            // WasmOperator::RefNull => {
+            //     return Err(BinaryReaderError {
+            //         message: "RefNull unimplemented",
+            //         offset: None,
+            //     })
+            // }
+            // WasmOperator::RefIsNull => {
+            //     return Err(wasm_reader::Error::new (
+            //         strerr("RefIsNull unimplemented"),
+            //         None,
+            //     ))
+            // }
 
             // All comparison operators remove 2 elements and push 1
             WasmOperator::I32Eqz => sig!((I32) -> (I32)),
@@ -1371,7 +1464,12 @@ where
             WasmOperator::I64Extend16S => sig!((I32) -> (I64)),
             WasmOperator::I64Extend32S => sig!((I32) -> (I64)),
 
-            _ => return Err(Error::Microwasm("Opcode Unimplemented".to_string())),
+            _ => {
+                return Err(wasm_reader::Error::new(
+                    strerr("Opcode Unimplemented"),
+                    None,
+                ))
+            }
         };
         Ok(o)
     }
@@ -1382,29 +1480,17 @@ where
         id
     }
 
-    fn nth_block(&self, n: usize) -> &ControlFrame {
-        self.control_frames.iter().rev().nth(n).unwrap()
-    }
-
-    fn nth_block_mut(&mut self, n: usize) -> &mut ControlFrame {
-        self.control_frames.iter_mut().rev().nth(n).unwrap()
-    }
-
-    fn function_block(&self) -> &ControlFrame {
-        self.control_frames.first().unwrap()
-    }
-
     fn local_depth(&self, idx: u32) -> i32 {
         self.stack.len() as i32 - 1 - idx as i32
     }
 
-    fn apply_op(&mut self, sig: OpSig) -> Result<(), Error> {
+    fn apply_op(&mut self, sig: OpSig) -> wasm_reader::Result<()> {
         let mut ty_param = None;
 
         for p in sig.input.iter().rev() {
             let stack_ty = match self.stack.pop() {
                 Some(e) => e,
-                None => return Err(Error::Microwasm("Stack is empty".to_string())),
+                None => return Err(wasm_reader::Error::new(strerr("Stack is empty"), None)),
             };
 
             let ty = match p {
@@ -1426,7 +1512,12 @@ where
             let ty = match p {
                 SigT::T => match ty_param {
                     Some(e) => e,
-                    None => return Err(Error::Microwasm("Type parameter was not set".to_string())),
+                    None => {
+                        return Err(wasm_reader::Error::new(
+                            strerr("Type parameter was not set"),
+                            None,
+                        ))
+                    }
                 },
                 SigT::Concrete(ty) => ty,
             };
@@ -1442,30 +1533,30 @@ where
     fn block_params_with_wasm_type(
         &self,
         ty: wasmparser::TypeOrFuncType,
-    ) -> Result<Vec<SignlessType>, Error> {
+    ) -> wasm_reader::Result<Vec<SignlessType>> {
         let mut out = self.block_params();
         let return_wasm_type = create_returns_from_wasm_type(ty)?;
         out.extend(return_wasm_type);
         Ok(out)
     }
-}
 
-impl<'a, 'b, M: ModuleContext> Iterator for MicrowasmConv<'a, 'b, M>
-where
-    for<'any> &'any M::Signature: Into<OpSig>,
-{
-    type Item = Result<SmallVec<[OperatorFromWasm; 1]>, Error>;
+    fn next(&mut self) -> wasm_reader::Result<Option<SmallVec<[OperatorFromWasm; 1]>>> {
+        use wasm_reader::MaybePosition;
 
-    fn next(&mut self) -> Option<Result<SmallVec<[OperatorFromWasm; 1]>, Error>> {
+        let current_position = self.reader.position();
+
         macro_rules! to_drop {
-            ($block:expr) => {{
+            ($block:expr) => {
+                to_drop!($block, self.stack)
+            };
+            ($block:expr, $stack:expr) => {{
                 let block = &$block;
+                let len = $stack.len();
                 let first_non_local_depth = block.returns.len() as u32;
 
                 (|| {
-                    let last_non_local_depth = (self.stack.len() as u32)
-                        .checked_sub(1)?
-                        .checked_sub(block.arguments)?;
+                    let last_non_local_depth =
+                        (len as u32).checked_sub(1)?.checked_sub(block.arguments)?;
 
                     if first_non_local_depth <= last_non_local_depth {
                         Some(first_non_local_depth..=last_non_local_depth)
@@ -1476,12 +1567,8 @@ where
             }};
         }
 
-        if self.is_done {
-            return None;
-        }
-
         if let Some(consts) = self.consts_to_emit.take() {
-            return Some(Ok(consts.into_iter().map(Operator::Const).collect()));
+            return Ok(Some(consts.into_iter().map(Operator::Const).collect()));
         }
 
         if self.unreachable {
@@ -1493,10 +1580,11 @@ where
             // be executed. Tracking this in the microwasm translation step is
             // very complicated so we just do basic code removal here and leave
             // the removal of uncalled blocks to the backend.
-            return Some(Ok(loop {
-                let op = match self.internal.read() {
-                    Err(e) => return Some(Err(e.into())),
-                    Ok(o) => o,
+            return Ok(Some(loop {
+                let op = if let Some(op) = self.operators.next(&mut self.reader) {
+                    op?
+                } else {
+                    return Ok(None);
                 };
                 match op {
                     WasmOperator::Block { .. }
@@ -1506,14 +1594,12 @@ where
                     }
                     WasmOperator::Else => {
                         if depth == 0 {
-                            let block = match self.control_frames.last_mut() {
-                                Some(e) => e,
-                                None => {
-                                    return Some(Err(Error::Microwasm(
-                                        "unreachable Block else Failed".to_string(),
-                                    )))
-                                }
-                            };
+                            let block = self.control_frames.top_mut().ok_or_else(|| {
+                                wasm_reader::Error::new(
+                                    strerr("unreachable Block else Failed"),
+                                    current_position,
+                                )
+                            })?;
 
                             self.stack.truncate(block.arguments as _);
 
@@ -1526,18 +1612,16 @@ where
                     }
                     WasmOperator::End => {
                         if depth == 0 {
-                            let block = match self.control_frames.pop() {
-                                Some(e) => e,
-                                None => {
-                                    return Some(Err(Error::Microwasm(
-                                        "unreachable Block end Failed".to_string(),
-                                    )))
-                                }
-                            };
+                            let block = self.control_frames.pop().ok_or_else(|| {
+                                wasm_reader::Error::new(
+                                    strerr("unreachable Block end Failed"),
+                                    current_position,
+                                )
+                            })?;
 
                             if self.control_frames.is_empty() {
                                 self.is_done = true;
-                                return None;
+                                return Ok(Some(smallvec![]));
                             }
 
                             self.stack.truncate(block.arguments as _);
@@ -1568,22 +1652,17 @@ where
             }));
         }
 
-        let op = match self.internal.read() {
-            Err(e) => return Some(Err(e.into())),
-            Ok(o) => o,
+        let op = if let Some(op) = self.operators.next(&mut self.reader) {
+            op?
+        } else {
+            return Ok(None);
         };
 
-        let op_sig = match self.op_sig(&op) {
-            Ok(o) => o,
-            Err(e) => return Some(Err(e)),
-        };
+        let op_sig = self.op_sig(&op)?;
 
-        match self.apply_op(op_sig) {
-            Ok(o) => o,
-            Err(e) => return Some(Err(e)),
-        };
+        self.apply_op(op_sig)?;
 
-        Some(Ok(match op {
+        Ok(Some(match op {
             WasmOperator::Unreachable => {
                 self.unreachable = true;
                 smallvec![Operator::Unreachable]
@@ -1591,14 +1670,8 @@ where
             WasmOperator::Nop => smallvec![],
             WasmOperator::Block { ty } => {
                 let id = self.next_id();
-                let return_type_wasm = match create_returns_from_wasm_type(ty) {
-                    Ok(o) => o,
-                    Err(e) => return Some(Err(e)),
-                };
-                let block_param_type_wasm = match self.block_params_with_wasm_type(ty) {
-                    Err(e) => return Some(Err(e)),
-                    Ok(o) => o,
-                };
+                let return_type_wasm = create_returns_from_wasm_type(ty)?;
+                let block_param_type_wasm = self.block_params_with_wasm_type(ty)?;
                 self.control_frames.push(ControlFrame {
                     id,
                     arguments: self.stack.len() as u32,
@@ -1611,14 +1684,8 @@ where
             }
             WasmOperator::Loop { ty } => {
                 let id = self.next_id();
-                let return_type_wasm = match create_returns_from_wasm_type(ty) {
-                    Ok(o) => o,
-                    Err(e) => return Some(Err(e)),
-                };
-                let block_param_type_wasm = match self.block_params_with_wasm_type(ty) {
-                    Ok(o) => o,
-                    Err(e) => return Some(Err(e)),
-                };
+                let return_type_wasm = create_returns_from_wasm_type(ty)?;
+                let block_param_type_wasm = self.block_params_with_wasm_type(ty)?;
                 self.control_frames.push(ControlFrame {
                     id,
                     arguments: self.stack.len() as u32,
@@ -1637,14 +1704,8 @@ where
             }
             WasmOperator::If { ty } => {
                 let id = self.next_id();
-                let return_type_wasm = match create_returns_from_wasm_type(ty) {
-                    Ok(o) => o,
-                    Err(e) => return Some(Err(e)),
-                };
-                let block_param_type_wasm = match self.block_params_with_wasm_type(ty) {
-                    Ok(o) => o,
-                    Err(e) => return Some(Err(e)),
-                };
+                let return_type_wasm = create_returns_from_wasm_type(ty)?;
+                let block_param_type_wasm = self.block_params_with_wasm_type(ty)?;
                 self.control_frames.push(ControlFrame {
                     id,
                     arguments: self.stack.len() as u32,
@@ -1668,16 +1729,13 @@ where
                 ]
             }
             WasmOperator::Else => {
-                // We don't pop it since we're still in the second block.
-                let block = match self.control_frames.last() {
-                    Some(e) => e,
-                    None => return Some(Err(Error::Microwasm("Block else Failed".to_string()))),
-                };
+                let block = self.control_frames.top().ok_or_else(|| {
+                    wasm_reader::Error::new(strerr("Block else Failed"), current_position)
+                })?;
                 let to_drop = to_drop!(block);
-                let block = match self.control_frames.last_mut() {
-                    Some(e) => e,
-                    None => return Some(Err(Error::Microwasm("Block else Failed".to_string()))),
-                };
+                let block = self.control_frames.top_mut().ok_or_else(|| {
+                    wasm_reader::Error::new(strerr("Block else Failed"), current_position)
+                })?;
 
                 if let ControlFrameKind::If { has_else, .. } = &mut block.kind {
                     *has_else = true;
@@ -1698,10 +1756,9 @@ where
                 )
             }
             WasmOperator::End => {
-                let block = match self.control_frames.pop() {
-                    Some(e) => e,
-                    None => return Some(Err(Error::Microwasm("Block End Failed".to_string()))),
-                };
+                let block = self.control_frames.pop().ok_or_else(|| {
+                    wasm_reader::Error::new(strerr("Block End Failed"), current_position)
+                })?;
 
                 let to_drop = to_drop!(block);
 
@@ -1757,13 +1814,11 @@ where
                     })
                 }
             }
-            // TODO: If we're breaking out of the function block we want
-            //       to drop locals too (see code for `WasmOperator::End`)
             WasmOperator::Br { relative_depth } => {
                 self.unreachable = true;
-                let to_drop = to_drop!(self.nth_block(relative_depth as _));
+                let to_drop = to_drop!(self.control_frames[relative_depth as _]);
 
-                let block = self.nth_block_mut(relative_depth as _);
+                let block = &mut self.control_frames[relative_depth as _];
                 block.mark_branched_to();
                 SmallVec::from_iter(to_drop.into_iter().map(Operator::Drop).chain(iter::once(
                     Operator::Br {
@@ -1772,11 +1827,11 @@ where
                 )))
             }
             WasmOperator::BrIf { relative_depth } => {
-                let to_drop = to_drop!(self.nth_block(relative_depth as _));
+                let to_drop = to_drop!(self.control_frames[relative_depth as _]);
 
                 let label = (self.next_id(), NameTag::Header);
                 let params = self.block_params();
-                let block = self.nth_block_mut(relative_depth as _);
+                let block = &mut self.control_frames[relative_depth as _];
                 block.mark_branched_to();
 
                 smallvec![
@@ -1793,27 +1848,28 @@ where
             }
             WasmOperator::BrTable { table } => {
                 self.unreachable = true;
-                let (entries, default) = match table.read_table() {
-                    Ok(o) => o,
-                    Err(e) => return Some(Err(e.into())),
-                };
-                let targets = entries
-                    .iter()
+                let (targets, default) = table.targets_and_default(&mut self.reader);
+                let control_frames = &mut self.control_frames;
+                let stack = &self.stack;
+                let targets: Result<Vec<_>, _> = targets
                     .map(|depth| {
-                        self.nth_block_mut(*depth as _).mark_branched_to();
-                        let block = self.nth_block(*depth as _);
+                        let depth = depth?;
+                        control_frames[depth as _].mark_branched_to();
+                        let block = &control_frames[depth as _];
 
                         let target = block.br_target();
-                        BrTargetDrop {
-                            to_drop: to_drop!(block),
+                        Ok(BrTargetDrop {
+                            to_drop: to_drop!(block, stack),
                             target,
-                        }
+                        })
                     })
                     .collect();
+                let targets = targets?;
+                let default = default.parse(&mut self.reader)?;
 
-                self.nth_block_mut(default as _).mark_branched_to();
+                self.control_frames[default as _].mark_branched_to();
 
-                let default = self.nth_block(default as _);
+                let default = &self.control_frames[default as _];
                 let target = default.br_target();
                 let default = BrTargetDrop {
                     to_drop: to_drop!(default),
@@ -1825,7 +1881,7 @@ where
             WasmOperator::Return => {
                 self.unreachable = true;
 
-                let block = self.function_block();
+                let block = self.control_frames.function_block();
                 let to_drop = to_drop!(block);
 
                 SmallVec::from_iter(to_drop.into_iter().map(Operator::Drop).chain(iter::once(
@@ -1845,42 +1901,57 @@ where
             WasmOperator::Select => smallvec![Operator::Select],
 
             WasmOperator::LocalGet { local_index } => {
-                // `- 1` because we apply the stack difference _before_ this point
-                let depth = self.local_depth(local_index).checked_sub(1)?;
-                let depth = match depth.try_into() {
-                    Ok(o) => o,
-                    Err(_) => {
-                        return Some(Err(Error::Microwasm(
-                            "LocalGet - Local out of range".to_string(),
-                        )))
-                    }
-                };
+                let depth = self
+                    .local_depth(local_index)
+                    .checked_sub(1)
+                    .ok_or_else(|| {
+                        wasm_reader::Error::new(
+                            strerr("LocalGet - Local out of range"),
+                            current_position,
+                        )
+                    })?;
+                let depth = depth.try_into().map_err(|_| {
+                    wasm_reader::Error::new(
+                        strerr("LocalGet - Local out of range"),
+                        current_position,
+                    )
+                })?;
                 smallvec![Operator::Pick(depth)]
             }
             WasmOperator::LocalSet { local_index } => {
-                // `+ 1` because we apply the stack difference _before_ this point
-                let depth = self.local_depth(local_index).checked_add(1)?;
-                let depth = match depth.try_into() {
-                    Ok(o) => o,
-                    Err(_) => {
-                        return Some(Err(Error::Microwasm(
-                            "LocalSet - Local out of range".to_string(),
-                        )))
-                    }
-                };
+                let depth = self
+                    .local_depth(local_index)
+                    .checked_add(1)
+                    .ok_or_else(|| {
+                        wasm_reader::Error::new(
+                            strerr("LocalSet - Local out of range"),
+                            current_position,
+                        )
+                    })?;
+                let depth = depth.try_into().map_err(|_| {
+                    wasm_reader::Error::new(
+                        strerr("LocalSet - Local out of range"),
+                        current_position,
+                    )
+                })?;
                 smallvec![Operator::Swap(depth), Operator::Drop(0..=0)]
             }
             WasmOperator::LocalTee { local_index } => {
-                // `+ 1` because we `pick` before `swap`
-                let depth = self.local_depth(local_index).checked_add(1)?;
-                let depth = match depth.try_into() {
-                    Ok(o) => o,
-                    Err(_) => {
-                        return Some(Err(Error::Microwasm(
-                            "LocalTee - Local out of range".to_string(),
-                        )))
-                    }
-                };
+                let depth = self
+                    .local_depth(local_index)
+                    .checked_add(1)
+                    .ok_or_else(|| {
+                        wasm_reader::Error::new(
+                            strerr("LocalTee - Local out of range"),
+                            current_position,
+                        )
+                    })?;
+                let depth = depth.try_into().map_err(|_| {
+                    wasm_reader::Error::new(
+                        strerr("LocalTee - Local out of range"),
+                        current_position,
+                    )
+                })?;
                 smallvec![
                     Operator::Pick(0),
                     Operator::Swap(depth),
@@ -1998,10 +2069,16 @@ where
                 smallvec![Operator::Const(Value::F64(value.into()))]
             }
             WasmOperator::RefNull => {
-                return Some(Err(Error::Microwasm("RefNull unimplemented".to_string())))
+                return Err(wasm_reader::Error::new(
+                    strerr("RefNull unimplemented"),
+                    current_position,
+                ))
             }
             WasmOperator::RefIsNull => {
-                return Some(Err(Error::Microwasm("RefIsNull unimplemented".to_string())))
+                return Err(wasm_reader::Error::new(
+                    strerr("RefIsNull unimplemented"),
+                    current_position,
+                ))
             }
             WasmOperator::I32Eqz => smallvec![Operator::Eqz(Size::_32)],
             WasmOperator::I32Eq => smallvec![Operator::Eq(I32)],
@@ -2045,9 +2122,6 @@ where
             WasmOperator::I32Mul => smallvec![Operator::Mul(I32)],
             WasmOperator::I32DivS => smallvec![Operator::Div(SI32)],
             WasmOperator::I32DivU => smallvec![Operator::Div(SU32)],
-            // Unlike Wasm, our `rem_s` instruction _does_ trap on `-1`. Instead
-            // of handling this complexity in the backend, we handle it here
-            // (where it's way easier to debug).
             WasmOperator::I32RemS => smallvec![Operator::Rem(sint::I32),],
 
             WasmOperator::I32RemU => smallvec![Operator::Rem(sint::U32),],
@@ -2184,75 +2258,109 @@ where
             WasmOperator::F32ReinterpretI32 => smallvec![Operator::F32ReinterpretFromI32],
             WasmOperator::F64ReinterpretI64 => smallvec![Operator::F64ReinterpretFromI64],
             WasmOperator::I32Extend8S => {
-                return Some(Err(Error::Microwasm(
-                    "I32Extend8S unimplemented".to_string(),
-                )))
+                return Err(wasm_reader::Error::new(
+                    strerr("I32Extend8S unimplemented"),
+                    current_position,
+                ))
             }
             WasmOperator::I32Extend16S => {
-                return Some(Err(Error::Microwasm(
-                    "I32Extend16S unimplemented".to_string(),
-                )))
+                return Err(wasm_reader::Error::new(
+                    strerr("I32Extend16S unimplemented"),
+                    current_position,
+                ))
             }
             WasmOperator::I64Extend8S => {
-                return Some(Err(Error::Microwasm(
-                    "I64Extend8S unimplemented".to_string(),
-                )))
+                return Err(wasm_reader::Error::new(
+                    strerr("I64Extend8S unimplemented"),
+                    current_position,
+                ))
             }
             WasmOperator::I64Extend16S => {
-                return Some(Err(Error::Microwasm(
-                    "I64Extend16S unimplemented".to_string(),
-                )))
+                return Err(wasm_reader::Error::new(
+                    strerr("I64Extend16S unimplemented"),
+                    current_position,
+                ))
             }
             WasmOperator::I64Extend32S => {
-                return Some(Err(Error::Microwasm(
-                    "I64Extend32S unimplemented".to_string(),
-                )))
+                return Err(wasm_reader::Error::new(
+                    strerr("I64Extend32S unimplemented"),
+                    current_position,
+                ))
             }
 
-            // 0xFC operators
-            // Non-trapping Float-to-int Conversions
             WasmOperator::I32TruncSatF32S => {
-                return Some(Err(Error::Microwasm(
-                    "I32TruncSatF32S unimplemented".to_string(),
-                )))
+                return Err(wasm_reader::Error::new(
+                    strerr("I32TruncSatF32S unimplemented"),
+                    current_position,
+                ))
             }
             WasmOperator::I32TruncSatF32U => {
-                return Some(Err(Error::Microwasm(
-                    "I32TruncSatF32U unimplemented".to_string(),
-                )))
+                return Err(wasm_reader::Error::new(
+                    strerr("I32TruncSatF32U unimplemented"),
+                    current_position,
+                ))
             }
             WasmOperator::I32TruncSatF64S => {
-                return Some(Err(Error::Microwasm(
-                    "I32TruncSatF64S unimplemented".to_string(),
-                )))
+                return Err(wasm_reader::Error::new(
+                    strerr("I32TruncSatF64S unimplemented"),
+                    current_position,
+                ))
             }
             WasmOperator::I32TruncSatF64U => {
-                return Some(Err(Error::Microwasm(
-                    "I32TruncSatF64U unimplemented".to_string(),
-                )))
+                return Err(wasm_reader::Error::new(
+                    strerr("I32TruncSatF64U unimplemented"),
+                    current_position,
+                ))
             }
             WasmOperator::I64TruncSatF32S => {
-                return Some(Err(Error::Microwasm(
-                    "I64TruncSatF32S unimplemented".to_string(),
-                )))
+                return Err(wasm_reader::Error::new(
+                    strerr("I64TruncSatF32S unimplemented"),
+                    current_position,
+                ))
             }
             WasmOperator::I64TruncSatF32U => {
-                return Some(Err(Error::Microwasm(
-                    "I64TruncSatF32U unimplemented".to_string(),
-                )))
+                return Err(wasm_reader::Error::new(
+                    strerr("I64TruncSatF32U unimplemented"),
+                    current_position,
+                ))
             }
             WasmOperator::I64TruncSatF64S => {
-                return Some(Err(Error::Microwasm(
-                    "I64TruncSatF64S unimplemented".to_string(),
-                )))
+                return Err(wasm_reader::Error::new(
+                    strerr("I64TruncSatF64S unimplemented"),
+                    current_position,
+                ))
             }
             WasmOperator::I64TruncSatF64U => {
-                return Some(Err(Error::Microwasm(
-                    "I64TruncSatF64U unimplemented".to_string(),
-                )))
+                return Err(wasm_reader::Error::new(
+                    strerr("I64TruncSatF64U unimplemented"),
+                    current_position,
+                ))
             }
-
-            _other => return Some(Err(Error::Microwasm("Opcode unimplemented".to_string()))),
+            _other => {
+                return Err(wasm_reader::Error::new(
+                    strerr("Opcode unimplemented"),
+                    current_position,
+                ))
+            }
         }))
+    }
+}
+
+impl<R: Read, M: ModuleContext> Iterator for MicrowasmConv<'_, R, M>
+where
+    for<'any> &'any M::Signature: Into<OpSig>,
+{
+    type Item = wasm_reader::Result<SmallVec<[OperatorFromWasm; 1]>>;
+
+    fn next(&mut self) -> Option<wasm_reader::Result<SmallVec<[OperatorFromWasm; 1]>>> {
+        if self.is_done {
+            return None;
+        }
+
+        match self.next() {
+            Ok(Some(val)) => Some(Ok(val)),
+            Ok(None) => None,
+            Err(e) => Some(Err(e)),
+        }
     }
 }

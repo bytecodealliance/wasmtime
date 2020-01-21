@@ -1,6 +1,5 @@
-use crate::backend::{CodeGenSession, TranslatedCodeSection};
+use crate::backend::TranslatedCodeSection;
 use crate::error::Error;
-use crate::function_body;
 use crate::module::SimpleContext;
 use cranelift_codegen::{binemit, ir};
 use wasmparser::{
@@ -105,21 +104,22 @@ impl binemit::RelocSink for UnimplementedRelocSink {
 
 /// Parses the Code section of the wasm module.
 pub fn code(
-    code: CodeSectionReader,
-    translation_ctx: &SimpleContext,
+    _code: CodeSectionReader,
+    _translation_ctx: &SimpleContext,
 ) -> Result<TranslatedCodeSection, Error> {
-    let func_count = code.get_count();
-    let mut relocs = binemit::NullRelocSink {};
-    let mut traps = binemit::NullTrapSink {};
+    unimplemented!("Incomplete migration to wasm-reader");
+    // let func_count = code.get_count();
+    // let mut relocs = binemit::NullRelocSink {};
+    // let mut traps = binemit::NullTrapSink {};
 
-    let mut session = CodeGenSession::new(func_count, translation_ctx);
+    // let mut session = CodeGenSession::new(func_count, translation_ctx);
 
-    for (idx, body) in code.into_iter().enumerate() {
-        let body = body?;
-        function_body::translate_wasm(&mut session, &mut relocs, &mut traps, idx as u32, &body)?;
-    }
+    // for (idx, body) in code.into_iter().enumerate() {
+    //     let body = body?;
+    //     function_body::translate_wasm(&mut session, &mut relocs, &mut traps, idx as u32, &body)?;
+    // }
 
-    Ok(session.into_translated_code_section()?)
+    // Ok(session.into_translated_code_section()?)
 }
 
 /// Parses the Data section of the wasm module.

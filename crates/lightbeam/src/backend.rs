@@ -527,7 +527,6 @@ pub struct CodeGenSession<'module, M> {
     assembler: Assembler,
     pub module_context: &'module M,
     pub op_offset_map: Vec<(AssemblyOffset, Box<dyn Display + Send + Sync>)>,
-    labels: Labels,
     func_starts: Vec<(Option<AssemblyOffset>, DynamicLabel)>,
 }
 
@@ -541,7 +540,6 @@ impl<'module, M> CodeGenSession<'module, M> {
         CodeGenSession {
             assembler,
             op_offset_map: Default::default(),
-            labels: Default::default(),
             func_starts,
             module_context,
         }
@@ -568,29 +566,13 @@ impl<'module, M> CodeGenSession<'module, M> {
             reloc_sink,
             trap_sink,
             func_starts: &self.func_starts,
-            labels: &mut self.labels,
             block_state: Default::default(),
             module_context: self.module_context,
+            labels: Default::default(),
         }
     }
 
-    fn finalize(&mut self) {
-        for LabelInfo {
-            label,
-            align,
-            callback,
-        } in self.labels.drain()
-        {
-            dynasm!(self.assembler
-                ; .align align as usize
-                ;; self.assembler.dynamic_label(label.0)
-                ;; callback(IntoLabelContext { asm: &mut self.assembler, extra: &mut ()})
-            );
-        }
-    }
-
-    pub fn into_translated_code_section(mut self) -> Result<TranslatedCodeSection, Error> {
-        self.finalize();
+    pub fn into_translated_code_section(self) -> Result<TranslatedCodeSection, Error> {
         let exec_buf = self
             .assembler
             .finalize()
@@ -688,7 +670,6 @@ impl From<Value> for LabelValue {
 
 mod labels {
     use crate::backend::{IntoLabel, IntoLabelContext, Label};
-    use dynasmrt::x64::Assembler;
     use std::{
         any::{Any, TypeId},
         collections::hash_map::{HashMap, RandomState},
@@ -763,7 +744,7 @@ pub struct Context<'this, M> {
     func_starts: &'this Vec<(Option<AssemblyOffset>, DynamicLabel)>,
     /// Each push and pop on the value stack increments or decrements this value by 1 respectively.
     pub block_state: BlockState,
-    labels: &'this mut Labels,
+    labels: Labels,
 }
 
 /// Label in code.
@@ -5954,7 +5935,20 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         );
     }
 
-    pub fn epilogue(&mut self) {}
+    pub fn epilogue(&mut self) {
+        for LabelInfo {
+            label,
+            align,
+            callback,
+        } in self.labels.drain()
+        {
+            dynasm!(self.asm
+                ; .align align as usize
+                ;; self.asm.dynamic_label(label.0)
+                ;; callback(IntoLabelContext { asm: &mut self.asm, extra: &mut ()})
+            );
+        }
+    }
 
     pub fn trap(&mut self, trap_id: TrapCode) {
         let function_start = (self.func_starts[self.current_function as usize]
@@ -6090,7 +6084,7 @@ impl<E: ?Sized> IntoLabel<E> for LabelValue {
 /// `fn tuple_callback` as a defining use and not `type Callback`. It assumes that `type Callback`
 /// captures the `A` and `B` type parameters, when we only need to capture the callback.
 mod tuple_callback_hack {
-    use super::{Assembler, IntoLabelContext};
+    use super::IntoLabelContext;
 
     pub type TupleCallback<E: ?Sized, A, B> = impl FnOnce(IntoLabelContext<'_, E>);
 
