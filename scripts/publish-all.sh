@@ -49,7 +49,6 @@ for cargo_toml in \
     crates/runtime/Cargo.toml \
     crates/debug/Cargo.toml \
     crates/jit/Cargo.toml \
-    crates/wasi-c/Cargo.toml \
     crates/api/Cargo.toml \
     crates/wasi/Cargo.toml \
     crates/wast/Cargo.toml \

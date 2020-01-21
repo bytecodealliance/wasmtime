@@ -1,7 +1,0 @@
-Please see the LICENSE file in each top-level directory for the terms applicable to that directory and its relative sub-directories.
-
-The relevant directories and licenses are:
-
-src/                  - BSD-2-Clause; see src/LICENSE for details
-include/              - CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
-polyfill/clang/       - MIT; see the header of polyfill/clang/stdatomic.h for details
