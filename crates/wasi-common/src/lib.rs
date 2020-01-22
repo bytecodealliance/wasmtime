@@ -32,11 +32,14 @@ mod sys;
 mod macros;
 pub mod fs;
 mod host;
-pub mod hostcalls;
 mod memory;
 pub mod old;
 pub mod wasi;
 pub mod wasi32;
+
+pub mod hostcalls {
+    wig::define_hostcalls!("snapshot" "wasi_snapshot_preview1");
+}
 
 pub use ctx::{WasiCtx, WasiCtxBuilder};
 pub use sys::preopen_dir;

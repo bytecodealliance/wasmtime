@@ -1,5 +1,5 @@
-use crate::fs::{error::wasi_errno_to_io_error, Metadata};
-use crate::{host, hostcalls, wasi, WasiCtx};
+use crate::fs::Metadata;
+use crate::{host, hostcalls, hostcalls_impl, wasi, WasiCtx};
 use std::io;
 
 /// A reference to an open file on the filesystem.
@@ -35,7 +35,10 @@ impl<'ctx> File<'ctx> {
     ///
     /// [`std::fs::File::sync_all`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.sync_all
     pub fn sync_all(&self) -> io::Result<()> {
-        wasi_errno_to_io_error(unsafe { hostcalls::fd_sync(self.ctx, &mut [], self.fd) })
+        unsafe {
+            hostcalls_impl::fd_sync(self.ctx, &mut [], self.fd)?;
+        }
+        Ok(())
     }
 
     /// This function is similar to `sync_all`, except that it may not synchronize
@@ -45,7 +48,10 @@ impl<'ctx> File<'ctx> {
     ///
     /// [`std::fs::File::sync_data`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.sync_data
     pub fn sync_data(&self) -> io::Result<()> {
-        wasi_errno_to_io_error(unsafe { hostcalls::fd_datasync(self.ctx, &mut [], self.fd) })
+        unsafe {
+            hostcalls_impl::fd_datasync(self.ctx, &mut [], self.fd)?;
+        }
+        Ok(())
     }
 
     /// Truncates or extends the underlying file, updating the size of this file
@@ -55,9 +61,10 @@ impl<'ctx> File<'ctx> {
     ///
     /// [`std::fs::File::set_len`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.set_len
     pub fn set_len(&self, size: u64) -> io::Result<()> {
-        wasi_errno_to_io_error(unsafe {
-            hostcalls::fd_filestat_set_size(self.ctx, &mut [], self.fd, size)
-        })
+        unsafe {
+            hostcalls_impl::fd_filestat_set_size(self.ctx, &mut [], self.fd, size)?;
+        }
+        Ok(())
     }
 
     /// Queries metadata about the underlying file.

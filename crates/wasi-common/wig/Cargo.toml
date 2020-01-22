@@ -17,10 +17,7 @@ proc-macro = true
 quote = "1.0.2"
 proc-macro2 = "1.0.6"
 heck = "0.3.1"
-# We include the WASI repo primarily for the witx files, but it's also useful
-# to use the witx parser it contains, rather than the witx crate from
-# crates.io, so that it always matches the version of the witx files.
-witx = "0.6.0"
+witx = "0.7.0"
 
 [badges]
 maintenance = { status = "actively-developed" }

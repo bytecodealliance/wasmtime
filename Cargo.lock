@@ -2427,11 +2427,13 @@ dependencies = [
 
 [[package]]
 name = "witx"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abc432537dbc9940e06816ebc3e1c4694fc835b90720615c32038769d7b2967d"
+checksum = "a6ee25990cb94f39b8d5637b8c7d9b9eaaed76795d95f45342a7ef3d2e574931"
 dependencies = [
  "clap",
+ "log",
+ "pretty_env_logger",
  "thiserror",
  "wast 3.0.4",
 ]

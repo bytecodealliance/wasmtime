@@ -32,7 +32,6 @@
 mod dir;
 mod dir_builder;
 mod dir_entry;
-mod error;
 mod file;
 mod file_type;
 mod metadata;
