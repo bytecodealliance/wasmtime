@@ -1,4 +1,4 @@
-use crate::fs::{error::wasi_errno_to_io_error, File, OpenOptions, ReadDir};
+use crate::fs::{File, OpenOptions, ReadDir};
 use crate::{host, hostcalls, wasi, WasiCtx};
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;

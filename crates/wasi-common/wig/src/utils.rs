@@ -1,4 +1,4 @@
-use proc_macro2::{Literal, TokenStream, TokenTree};
+use proc_macro2::{Ident, Literal, TokenStream, TokenTree};
 
 /// Given the input tokens to a macro invocation, return the path to the
 /// witx file to process.
@@ -52,4 +52,14 @@ fn parse_string_literal(literal: Literal) -> String {
     );
 
     trimmed
+}
+
+pub fn param_name(param: &witx::InterfaceFuncParam) -> Ident {
+    quote::format_ident!(
+        "{}",
+        match param.name.as_str() {
+            "in" | "type" => format!("r#{}", param.name.as_str()),
+            s => s.to_string(),
+        }
+    )
 }

@@ -50,12 +50,13 @@ fn gen_datatypes(output: &mut TokenStream, doc: &witx::Document, mode: Mode) {
 
 fn gen_datatype(output: &mut TokenStream, mode: Mode, namedtype: &witx::NamedType) {
     let wasi_name = format_ident!("__wasi_{}_t", namedtype.name.as_str());
-    match &namedtype.dt {
+    match &namedtype.tref {
         witx::TypeRef::Name(alias_to) => {
-            let to = tref_tokens(mode, &alias_to.dt);
+            let to = tref_tokens(mode, &alias_to.tref);
             output.extend(quote!(pub type #wasi_name = #to;));
         }
         witx::TypeRef::Value(v) => match &**v {
+            witx::Type::Int(_) => panic!("unsupported int datatype"),
             witx::Type::Enum(e) => {
                 let repr = int_repr_tokens(e.repr);
                 output.extend(quote!(pub type #wasi_name = #repr;));
@@ -143,7 +144,7 @@ fn gen_datatype(output: &mut TokenStream, mode: Mode, namedtype: &witx::NamedTyp
             witx::Type::Pointer { .. }
             | witx::Type::ConstPointer { .. }
             | witx::Type::Array { .. } => {
-                let tref_tokens = tref_tokens(mode, &namedtype.dt);
+                let tref_tokens = tref_tokens(mode, &namedtype.tref);
                 output.extend(quote!(pub type #wasi_name = #tref_tokens;));
             }
         },
@@ -156,7 +157,7 @@ fn gen_datatype(output: &mut TokenStream, mode: Mode, namedtype: &witx::NamedTyp
 }
 
 fn gen_errno_strerror(output: &mut TokenStream, namedtype: &witx::NamedType) {
-    let inner = match &namedtype.dt {
+    let inner = match &namedtype.tref {
         witx::TypeRef::Value(v) => match &**v {
             witx::Type::Enum(e) => e,
             x => panic!("expected Enum('errno'), instead received {:?}", x),
@@ -198,6 +199,7 @@ fn builtin_tokens(mode: Mode, builtin: witx::BuiltinType) -> TokenStream {
             Mode::Wasi => panic!("strings have target-specific size"),
             Mode::Wasi32 => quote!((u32, u32)),
         },
+        witx::BuiltinType::Char8 => quote!(i8),
         witx::BuiltinType::U8 => quote!(u8),
         witx::BuiltinType::U16 => quote!(u16),
         witx::BuiltinType::U32 => quote!(u32),
@@ -208,6 +210,11 @@ fn builtin_tokens(mode: Mode, builtin: witx::BuiltinType) -> TokenStream {
         witx::BuiltinType::S64 => quote!(i64),
         witx::BuiltinType::F32 => quote!(f32),
         witx::BuiltinType::F64 => quote!(f64),
+        witx::BuiltinType::USize => match mode {
+            Mode::Host => quote!(usize),
+            Mode::Wasi => panic!("usize has target-specific size"),
+            Mode::Wasi32 => quote!(u32),
+        },
     }
 }
 
@@ -270,7 +277,7 @@ fn namedtype_has_target_size(nt: &witx::NamedType) -> bool {
     if nt.name.as_str() == "size" {
         true
     } else {
-        tref_has_target_size(&nt.dt)
+        tref_has_target_size(&nt.tref)
     }
 }
 

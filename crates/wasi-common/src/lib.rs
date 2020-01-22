@@ -24,19 +24,20 @@
 mod ctx;
 mod error;
 mod fdentry;
-mod helpers;
-mod hostcalls_impl;
-mod sandboxed_tty_writer;
-mod sys;
-#[macro_use]
-mod macros;
 pub mod fs;
+mod helpers;
 mod host;
-pub mod hostcalls;
+mod hostcalls_impl;
 mod memory;
 pub mod old;
+mod sandboxed_tty_writer;
+mod sys;
 pub mod wasi;
 pub mod wasi32;
+
+pub mod hostcalls {
+    wig::define_hostcalls!("snapshot" "wasi_snapshot_preview1");
+}
 
 pub use ctx::{WasiCtx, WasiCtxBuilder};
 pub use sys::preopen_dir;

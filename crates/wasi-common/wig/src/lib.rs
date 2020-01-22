@@ -1,5 +1,6 @@
 extern crate proc_macro;
 
+mod hostcalls;
 mod raw_types;
 mod utils;
 mod wasi;
@@ -35,4 +36,9 @@ pub fn witx_wasi32_types(args: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn define_add_wrappers_to_module(args: TokenStream) -> TokenStream {
     wasi::add_wrappers_to_module(args.into()).into()
+}
+
+#[proc_macro]
+pub fn define_hostcalls(args: TokenStream) -> TokenStream {
+    hostcalls::define(args.into()).into()
 }

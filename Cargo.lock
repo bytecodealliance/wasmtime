@@ -1861,20 +1861,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "efd1f82c56340fdf16f2a953d7bda4f8fdffba13d93b00844c25572110b26079"
 
 [[package]]
-name = "trybuild"
-version = "1.0.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "987d6fdc45ddd7f3be5aa7386c8c8a844d1655c95b9ed948a9cd9cded8f2b79f"
-dependencies = [
- "glob",
- "lazy_static",
- "serde",
- "serde_json",
- "termcolor",
- "toml",
-]
-
-[[package]]
 name = "typemap"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1992,21 +1978,10 @@ dependencies = [
  "log",
  "num",
  "thiserror",
- "wasi-common-cbindgen",
  "wig",
  "winapi",
  "winx",
  "yanix",
-]
-
-[[package]]
-name = "wasi-common-cbindgen"
-version = "0.9.0"
-dependencies = [
- "proc-macro2 1.0.7",
- "quote 1.0.2",
- "syn 1.0.13",
- "trybuild",
 ]
 
 [[package]]
@@ -2427,11 +2402,13 @@ dependencies = [
 
 [[package]]
 name = "witx"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abc432537dbc9940e06816ebc3e1c4694fc835b90720615c32038769d7b2967d"
+checksum = "a6ee25990cb94f39b8d5637b8c7d9b9eaaed76795d95f45342a7ef3d2e574931"
 dependencies = [
  "clap",
+ "log",
+ "pretty_env_logger",
  "thiserror",
  "wast 3.0.4",
 ]

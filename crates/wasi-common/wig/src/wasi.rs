@@ -45,13 +45,7 @@ pub fn add_wrappers_to_module(args: TokenStream) -> TokenStream {
             let mut hostcall_args = Vec::new();
 
             for param in func.params.iter() {
-                let name = format_ident!(
-                    "{}",
-                    match param.name.as_str() {
-                        "in" | "type" => format!("r#{}", param.name.as_str()),
-                        s => s.to_string(),
-                    }
-                );
+                let name = utils::param_name(param);
 
                 // Registers a new parameter to the shim we're making with the
                 // given `name`, the `abi_ty` wasm type and `hex` defines
@@ -89,6 +83,11 @@ pub fn add_wrappers_to_module(args: TokenStream) -> TokenStream {
                 };
 
                 match &*param.tref.type_() {
+                    witx::Type::Int(e) => match e.repr {
+                        witx::IntRepr::U64 => add_param(&name, Abi::I64, false),
+                        _ => add_param(&name, Abi::I32, false),
+                    },
+
                     witx::Type::Enum(e) => match e.repr {
                         witx::IntRepr::U64 => add_param(&name, Abi::I64, false),
                         _ => add_param(&name, Abi::I32, false),
@@ -99,12 +98,14 @@ pub fn add_wrappers_to_module(args: TokenStream) -> TokenStream {
                         _ => add_param(&name, Abi::I32, true),
                     },
 
-                    witx::Type::Builtin(witx::BuiltinType::S8)
+                    witx::Type::Builtin(witx::BuiltinType::Char8)
+                    | witx::Type::Builtin(witx::BuiltinType::S8)
                     | witx::Type::Builtin(witx::BuiltinType::U8)
                     | witx::Type::Builtin(witx::BuiltinType::S16)
                     | witx::Type::Builtin(witx::BuiltinType::U16)
                     | witx::Type::Builtin(witx::BuiltinType::S32)
-                    | witx::Type::Builtin(witx::BuiltinType::U32) => {
+                    | witx::Type::Builtin(witx::BuiltinType::U32)
+                    | witx::Type::Builtin(witx::BuiltinType::USize) => {
                         add_param(&name, Abi::I32, false);
                     }
 
@@ -208,7 +209,7 @@ pub fn add_wrappers_to_module(args: TokenStream) -> TokenStream {
                         Ok(e) => e,
                         Err(e) => #handle_early_error,
                     };
-                    wasi_common::hostcalls::#name_ident(
+                    hostcalls::#name_ident(
                         wasi_ctx,
                         memory,
                         #(#hostcall_args),*
