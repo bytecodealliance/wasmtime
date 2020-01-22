@@ -1,4 +1,4 @@
-use crate::old::snapshot_0::{WasiCtx, wasi, wasi32, Result};
+use crate::old::snapshot_0::{wasi, wasi32, Result, WasiCtx};
 
 pub fn sock_recv(
     _wasi_ctx: &WasiCtx,
@@ -33,4 +33,3 @@ pub fn sock_shutdown(
 ) -> Result<()> {
     unimplemented!("sock_shutdown")
 }
-

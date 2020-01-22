@@ -1,4 +1,4 @@
-use proc_macro2::{Literal, TokenStream, TokenTree, Ident};
+use proc_macro2::{Ident, Literal, TokenStream, TokenTree};
 
 /// Given the input tokens to a macro invocation, return the path to the
 /// witx file to process.

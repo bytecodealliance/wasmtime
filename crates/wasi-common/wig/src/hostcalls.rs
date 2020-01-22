@@ -55,15 +55,12 @@ fn generate_wrappers(func: &witx::InterfaceFunc, old: bool) -> TokenStream {
                     arg_declarations.push(quote! { #name: super::wasi::#ty_name });
                 }
             }
-            witx::TypeRef::Value(v) => {
-                match &**v {
-                    witx::Type::ConstPointer(_) |
-                    witx::Type::Pointer(_) => {
-                        arg_declarations.push(quote! { #name: super::wasi32::uintptr_t });
-                    }
-                    _ => panic!("unexpected value type"),
+            witx::TypeRef::Value(v) => match &**v {
+                witx::Type::ConstPointer(_) | witx::Type::Pointer(_) => {
+                    arg_declarations.push(quote! { #name: super::wasi32::uintptr_t });
                 }
-            }
+                _ => panic!("unexpected value type"),
+            },
         }
         arg_names.push(name);
     }

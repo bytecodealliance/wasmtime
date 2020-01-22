@@ -1,9 +1,9 @@
 extern crate proc_macro;
 
+mod hostcalls;
 mod raw_types;
 mod utils;
 mod wasi;
-mod hostcalls;
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;

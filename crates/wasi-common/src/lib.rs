@@ -24,14 +24,14 @@
 mod ctx;
 mod error;
 mod fdentry;
-mod helpers;
-mod hostcalls_impl;
-mod sandboxed_tty_writer;
-mod sys;
 pub mod fs;
+mod helpers;
 mod host;
+mod hostcalls_impl;
 mod memory;
 pub mod old;
+mod sandboxed_tty_writer;
+mod sys;
 pub mod wasi;
 pub mod wasi32;
 
