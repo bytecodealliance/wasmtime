@@ -28,8 +28,6 @@ mod helpers;
 mod hostcalls_impl;
 mod sandboxed_tty_writer;
 mod sys;
-#[macro_use]
-mod macros;
 pub mod fs;
 mod host;
 mod memory;
