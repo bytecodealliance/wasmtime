@@ -265,8 +265,8 @@ impl Compiler {
     }
 
     /// Shared signature registry.
-    pub fn signatures(&mut self) -> &mut SignatureRegistry {
-        &mut self.signatures
+    pub fn signatures(&self) -> &SignatureRegistry {
+        &self.signatures
     }
 }
 
