@@ -102,20 +102,33 @@ fn generate_wrappers(func: &witx::InterfaceFunc, old: bool) -> TokenStream {
         }
     };
 
-    let cbindgen = if old {
-        format_ident!("wasi_common_cbindgen_old")
+    let c_abi_name = if old {
+        format_ident!("old_wasi_common_{}", name)
     } else {
-        format_ident!("wasi_common_cbindgen")
+        format_ident!("wasi_common_{}", name)
     };
 
     quote! {
-        #[wasi_common_cbindgen::#cbindgen]
         pub unsafe fn #name(
             wasi_ctx: &mut super::WasiCtx,
             memory: &mut [u8],
             #(#arg_declarations,)*
         ) -> #ret {
             #body
+        }
+
+        #[no_mangle]
+        pub unsafe fn #c_abi_name(
+            wasi_ctx: *mut super::WasiCtx,
+            memory: *mut u8,
+            memory_len: usize,
+            #(#arg_declarations,)*
+        ) -> #ret {
+            #name(
+                &mut *wasi_ctx,
+                std::slice::from_raw_parts_mut(memory, memory_len),
+                #(#arg_names,)*
+            )
         }
     }
 }
