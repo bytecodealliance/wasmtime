@@ -4,6 +4,7 @@
 //! determined by the `Layout` data structure defined in this module.
 
 use crate::entity::SecondaryMap;
+use crate::ir::dfg::DataFlowGraph;
 use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder};
 use crate::ir::{Ebb, Inst};
 use crate::packed_option::PackedOption;
@@ -571,6 +572,19 @@ impl Layout {
     /// Fetch the instruction preceding `inst`.
     pub fn prev_inst(&self, inst: Inst) -> Option<Inst> {
         self.insts[inst].prev.expand()
+    }
+
+    /// Fetch the first instruction in an ebb's terminal branch group.
+    pub fn canonical_branch_inst(&self, dfg: &DataFlowGraph, ebb: Ebb) -> Option<Inst> {
+        // Basic blocks permit at most two terminal branch instructions.
+        // If two, the former is conditional and the latter is unconditional.
+        let last = self.last_inst(ebb)?;
+        if let Some(prev) = self.prev_inst(last) {
+            if dfg[prev].opcode().is_branch() {
+                return Some(prev);
+            }
+        }
+        Some(last)
     }
 
     /// Insert `inst` before the instruction `before` in the same EBB.

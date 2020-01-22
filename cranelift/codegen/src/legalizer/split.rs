@@ -189,6 +189,17 @@ fn perform_repairs(pos: &mut FuncCursor, cfg: &ControlFlowGraph, mut repairs: Ve
 
             // Split the old argument, possibly causing more repairs to be scheduled.
             pos.goto_inst(inst);
+            #[cfg(feature = "basic-blocks")]
+            {
+                let inst_ebb = pos.func.layout.inst_ebb(inst).expect("inst in ebb");
+
+                // Insert split values prior to the terminal branch group.
+                let dfg = &pos.func.dfg;
+                let canonical = pos.func.layout.canonical_branch_inst(dfg, inst_ebb);
+                if let Some(first_branch) = canonical {
+                    pos.goto_inst(first_branch);
+                }
+            }
             let (lo, hi) = split_value(pos, old_arg, repair.concat, &mut repairs);
 
             // The `lo` part replaces the original argument.
@@ -248,8 +259,8 @@ fn split_value(
             }
         }
         ValueDef::Param(ebb, num) => {
-            // This is an EBB parameter. We can split the parameter value unless this is the entry
-            // block.
+            // This is an EBB parameter.
+            // We can split the parameter value unless this is the entry block.
             if pos.func.layout.entry_block() != Some(ebb) {
                 reuse = Some(split_ebb_param(pos, ebb, num, value, concat, repairs));
             }
