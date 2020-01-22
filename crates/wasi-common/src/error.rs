@@ -435,10 +435,7 @@ fn wasi_errno_to_io_error(errno: wasi::__wasi_errno_t) -> std::io::Error {
         | wasi::__WASI_ERRNO_TXTBSY
         | wasi::__WASI_ERRNO_XDEV
         | wasi::__WASI_ERRNO_NOTCAPABLE => {
-            return std::io::Error::new(
-                std::io::ErrorKind::Other,
-                error_str(errno),
-            )
+            return std::io::Error::new(std::io::ErrorKind::Other, error_str(errno))
         }
         _ => panic!("unrecognized WASI errno value"),
     } as i32;
