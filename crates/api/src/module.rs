@@ -401,11 +401,5 @@ fn compile(store: &Store, binary: &[u8], module_name: Option<&str>) -> Result<Co
         module_name,
         store.engine().config().debug_info,
     )?;
-
-    // Register all module signatures
-    for signature in compiled_module.module().signatures.values() {
-        store.register_wasmtime_signature(signature);
-    }
-
     Ok(compiled_module)
 }

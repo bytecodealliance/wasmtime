@@ -186,7 +186,7 @@ impl Instance {
                 // HACK ensure all handles, instantiated outside Store, present in
                 // the store's SignatureRegistry, e.g. WASI instances that are
                 // imported into this store using the from_handle() method.
-                let _ = store.register_wasmtime_signature(signature);
+                store.compiler().signatures().register(signature);
             }
 
             // We should support everything supported by wasmtime_runtime, or

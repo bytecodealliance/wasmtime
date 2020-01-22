@@ -1,12 +1,8 @@
 use anyhow::Result;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
-use wasmtime_environ::{
-    ir,
-    settings::{self, Configurable},
-};
+use wasmtime_environ::settings::{self, Configurable};
 use wasmtime_jit::{native, CompilationStrategy, Compiler, Features};
 
 // Runtime Environment
@@ -342,7 +338,6 @@ pub struct Store {
 struct StoreInner {
     engine: Engine,
     compiler: RefCell<Compiler>,
-    signature_cache: RefCell<HashMap<wasmtime_runtime::VMSharedSignatureIndex, ir::Signature>>,
 }
 
 impl Store {
@@ -354,7 +349,6 @@ impl Store {
             inner: Rc::new(StoreInner {
                 engine: engine.clone(),
                 compiler: RefCell::new(compiler),
-                signature_cache: RefCell::new(HashMap::new()),
             }),
         }
     }
@@ -364,34 +358,12 @@ impl Store {
         &self.inner.engine
     }
 
+    pub(crate) fn compiler(&self) -> std::cell::Ref<'_, Compiler> {
+        self.inner.compiler.borrow()
+    }
+
     pub(crate) fn compiler_mut(&self) -> std::cell::RefMut<'_, Compiler> {
         self.inner.compiler.borrow_mut()
-    }
-
-    pub(crate) fn register_wasmtime_signature(
-        &self,
-        signature: &ir::Signature,
-    ) -> wasmtime_runtime::VMSharedSignatureIndex {
-        use std::collections::hash_map::Entry;
-        let index = self.compiler_mut().signatures().register(signature);
-        match self.inner.signature_cache.borrow_mut().entry(index) {
-            Entry::Vacant(v) => {
-                v.insert(signature.clone());
-            }
-            Entry::Occupied(_) => (),
-        }
-        index
-    }
-
-    pub(crate) fn lookup_wasmtime_signature(
-        &self,
-        type_index: wasmtime_runtime::VMSharedSignatureIndex,
-    ) -> Option<ir::Signature> {
-        self.inner
-            .signature_cache
-            .borrow()
-            .get(&type_index)
-            .cloned()
     }
 
     /// Returns whether the stores `a` and `b` refer to the same underlying

@@ -12,7 +12,7 @@ use wasmtime_runtime::{Imports, InstanceHandle, VMFunctionBody};
 
 pub(crate) fn create_handle(
     module: Module,
-    signature_registry: Option<&Store>,
+    store: Option<&Store>,
     finished_functions: PrimaryMap<DefinedFuncIndex, *const VMFunctionBody>,
     state: Box<dyn Any>,
 ) -> Result<InstanceHandle> {
@@ -26,12 +26,12 @@ pub(crate) fn create_handle(
     let data_initializers = Vec::new();
 
     // Compute indices into the shared signature table.
-    let signatures = signature_registry
-        .map(|signature_registry| {
+    let signatures = store
+        .map(|store| {
             module
                 .signatures
                 .values()
-                .map(|sig| signature_registry.register_wasmtime_signature(sig))
+                .map(|sig| store.compiler().signatures().register(sig))
                 .collect::<PrimaryMap<_, _>>()
         })
         .unwrap_or_else(PrimaryMap::new);
