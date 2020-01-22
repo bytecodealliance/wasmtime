@@ -194,8 +194,10 @@ fn perform_repairs(pos: &mut FuncCursor, cfg: &ControlFlowGraph, mut repairs: Ve
                 let inst_ebb = pos.func.layout.inst_ebb(inst).expect("inst in ebb");
 
                 // Insert split values prior to the terminal branch group.
-                let dfg = &pos.func.dfg;
-                let canonical = pos.func.layout.canonical_branch_inst(dfg, inst_ebb);
+                let canonical = pos
+                    .func
+                    .layout
+                    .canonical_branch_inst(&pos.func.dfg, inst_ebb);
                 if let Some(first_branch) = canonical {
                     pos.goto_inst(first_branch);
                 }

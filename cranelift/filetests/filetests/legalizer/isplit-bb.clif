@@ -1,0 +1,24 @@
+test legalizer
+target x86_64
+
+function u0:0(i128, i128, i64) -> i128 system_v {
+ebb0(v0: i128, v1: i128, v2: i64):
+    jump ebb1
+
+ebb1:
+    v17 = iadd v0, v1
+    v20 = iadd v1, v17
+    jump ebb79
+
+ebb79:
+    v425 = iconst.i64 0
+    v426 = icmp_imm eq v425, 1
+    brnz v426, ebb80
+    jump ebb85(v20, v17)
+
+ebb80:
+    trap user0
+
+ebb85(v462: i128, v874: i128):
+    trap user0
+}
