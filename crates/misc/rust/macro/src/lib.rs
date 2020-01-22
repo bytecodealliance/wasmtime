@@ -45,7 +45,11 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
     let name = &item.ident;
     let root = root();
     Ok(quote! {
-        #vis fn load_bytes<T: AsRef<[u8]>>(bytes: T) -> #root::anyhow::Result<#name> {
+        #vis fn load_file(path: impl AsRef<std::path::Path>) -> #root::anyhow::Result<#name> {
+            Self::load_bytes(std::fs::read(path)?)
+        }
+
+        #vis fn load_bytes(bytes: impl AsRef<[u8]>) -> #root::anyhow::Result<#name> {
             use #root::wasmtime::{Config, Extern, Engine, Store, Instance, Module};
             use #root::anyhow::{bail, format_err};
 
