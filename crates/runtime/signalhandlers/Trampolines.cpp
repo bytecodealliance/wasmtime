@@ -4,39 +4,34 @@
 
 extern "C"
 int WasmtimeCallTrampoline(
+    void **buf_storage,
     void *vmctx,
     void *caller_vmctx,
     void (*body)(void*, void*, void*),
     void *args)
 {
   jmp_buf buf;
-  void *volatile prev;
   if (setjmp(buf) != 0) {
-    LeaveScope(prev);
     return 0;
   }
-  prev = EnterScope(&buf);
+  *buf_storage = &buf;
   body(vmctx, caller_vmctx, args);
-  LeaveScope(prev);
   return 1;
 }
 
 extern "C"
-int WasmtimeCall(void *vmctx, void *caller_vmctx, void (*body)(void*, void*)) {
+int WasmtimeCall(void **buf_storage, void *vmctx, void *caller_vmctx, void (*body)(void*, void*)) {
   jmp_buf buf;
-  void *volatile prev;
   if (setjmp(buf) != 0) {
-    LeaveScope(prev);
     return 0;
   }
-  prev = EnterScope(&buf);
+  *buf_storage = &buf;
   body(vmctx, caller_vmctx);
-  LeaveScope(prev);
   return 1;
 }
 
 extern "C"
-void Unwind() {
-  jmp_buf *buf = (jmp_buf*) GetScope();
+void Unwind(void *JmpBuf) {
+  jmp_buf *buf = (jmp_buf*) JmpBuf;
   longjmp(*buf, 1);
 }
