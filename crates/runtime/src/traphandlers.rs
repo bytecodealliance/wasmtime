@@ -197,7 +197,7 @@ impl CallThreadState {
     fn unwrap_trap(self) -> Trap {
         self.trap
             .replace(None)
-            .expect("trap_message must be called after trap occurred")
+            .expect("unwrap_trap must be called after trap occurred")
     }
 }
 
