@@ -3,16 +3,15 @@ use super::attr::{clone_die_attributes, FileAttributeContext};
 use super::expression::compile_expression;
 use super::line_program::clone_line_program;
 use super::range_info_builder::RangeInfoBuilder;
+use super::refs::{PendingDebugInfoRefs, PendingUnitRefs, UnitRefsMap};
 use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_info};
 use super::{DebugInputContext, Reader, TransformError};
 use anyhow::Error;
 use gimli::write;
-use gimli::{AttributeValue, DebuggingInformationEntry, Unit, UnitOffset};
-use std::collections::{HashMap, HashSet};
+use gimli::{AttributeValue, DebuggingInformationEntry, Unit};
+use std::collections::HashSet;
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
-
-pub(crate) type PendingDieRef = (write::UnitEntryId, gimli::DwAt, UnitOffset);
 
 struct InheritedAttr<T> {
     stack: Vec<(usize, T)>,
@@ -90,7 +89,7 @@ fn replace_pointer_type<R>(
     unit: &Unit<R, R::Offset>,
     context: &DebugInputContext<R>,
     out_strings: &mut write::StringTable,
-    pending_die_refs: &mut Vec<(write::UnitEntryId, gimli::DwAt, UnitOffset)>,
+    pending_die_refs: &mut PendingUnitRefs,
 ) -> Result<write::UnitEntryId, Error>
 where
     R: Reader,
@@ -119,7 +118,7 @@ where
         write::AttributeValue::ThisUnitEntryRef(wp_die_id),
     );
     if let Some(AttributeValue::UnitRef(ref offset)) = entry.attr_value(gimli::DW_AT_type)? {
-        pending_die_refs.push((p_die_id, gimli::DW_AT_type, *offset))
+        pending_die_refs.insert(p_die_id, gimli::DW_AT_type, *offset);
     }
 
     let m_die_id = comp_unit.add(die_id, gimli::DW_TAG_member);
@@ -149,17 +148,18 @@ pub(crate) fn clone_unit<'a, R>(
     out_units: &mut write::UnitTable,
     out_strings: &mut write::StringTable,
     translated: &mut HashSet<u32>,
-) -> Result<(), Error>
+) -> Result<Option<(write::UnitId, UnitRefsMap, PendingDebugInfoRefs)>, Error>
 where
     R: Reader,
 {
-    let mut die_ref_map = HashMap::new();
-    let mut pending_die_refs = Vec::new();
+    let mut die_ref_map = UnitRefsMap::new();
+    let mut pending_die_refs = PendingUnitRefs::new();
+    let mut pending_di_refs = PendingDebugInfoRefs::new();
     let mut stack = Vec::new();
 
     // Iterate over all of this compilation unit's entries.
     let mut entries = unit.entries();
-    let (mut comp_unit, file_map, cu_low_pc, wp_die_id, vmctx_die_id) =
+    let (mut comp_unit, unit_id, file_map, cu_low_pc, wp_die_id, vmctx_die_id) =
         if let Some((depth_delta, entry)) = entries.next_dfs()? {
             assert_eq!(depth_delta, 0);
             let (out_line_program, debug_line_offset, file_map) = clone_line_program(
@@ -200,8 +200,8 @@ where
                     None,
                     cu_low_pc,
                     out_strings,
-                    &die_ref_map,
                     &mut pending_die_refs,
+                    &mut pending_di_refs,
                     FileAttributeContext::Root(Some(debug_line_offset)),
                 )?;
 
@@ -209,12 +209,19 @@ where
                     add_internal_types(comp_unit, root_id, out_strings, module_info);
 
                 stack.push(root_id);
-                (comp_unit, file_map, cu_low_pc, wp_die_id, vmctx_die_id)
+                (
+                    comp_unit,
+                    unit_id,
+                    file_map,
+                    cu_low_pc,
+                    wp_die_id,
+                    vmctx_die_id,
+                )
             } else {
                 return Err(TransformError("Unexpected unit header").into());
             }
         } else {
-            return Ok(()); // empty
+            return Ok(None); // empty
         };
     let mut skip_at_depth = None;
     let mut current_frame_base = InheritedAttr::new();
@@ -333,8 +340,8 @@ where
             current_scope_ranges.top(),
             cu_low_pc,
             out_strings,
-            &die_ref_map,
             &mut pending_die_refs,
+            &mut pending_di_refs,
             FileAttributeContext::Children(&file_map, current_frame_base.top()),
         )?;
 
@@ -350,13 +357,6 @@ where
             )?;
         }
     }
-    for (die_id, attr_name, offset) in pending_die_refs {
-        let die = comp_unit.get_mut(die_id);
-        if let Some(unit_id) = die_ref_map.get(&offset) {
-            die.set(attr_name, write::AttributeValue::ThisUnitEntryRef(*unit_id));
-        } else {
-            // TODO check why loosing DIEs
-        }
-    }
-    Ok(())
+    die_ref_map.patch(pending_die_refs, comp_unit);
+    Ok(Some((unit_id, die_ref_map, pending_di_refs)))
 }

@@ -1,3 +1,6 @@
+use self::refs::DebugInfoRefsMap;
+use self::simulate::generate_simulated_dwarf;
+use self::unit::clone_unit;
 use crate::gc::build_dependencies;
 use crate::DebugInfoData;
 use anyhow::Error;
@@ -5,10 +8,8 @@ use gimli::{
     write, DebugAddr, DebugAddrBase, DebugLine, DebugStr, LocationLists, RangeLists,
     UnitSectionOffset,
 };
-use simulate::generate_simulated_dwarf;
 use std::collections::HashSet;
 use thiserror::Error;
-use unit::clone_unit;
 use wasmtime_environ::isa::TargetFrontendConfig;
 use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
 
@@ -19,6 +20,7 @@ mod attr;
 mod expression;
 mod line_program;
 mod range_info_builder;
+mod refs;
 mod simulate;
 mod unit;
 mod utils;
@@ -76,12 +78,14 @@ pub fn transform_dwarf(
     let mut out_units = write::UnitTable::default();
 
     let out_line_strings = write::LineStringTable::default();
+    let mut pending_di_refs = Vec::new();
+    let mut di_ref_map = DebugInfoRefsMap::new();
 
     let mut translated = HashSet::new();
     let mut iter = di.dwarf.debug_info.units();
-    while let Some(unit) = iter.next().unwrap_or(None) {
-        let unit = di.dwarf.unit(unit)?;
-        clone_unit(
+    while let Some(header) = iter.next().unwrap_or(None) {
+        let unit = di.dwarf.unit(header)?;
+        if let Some((id, ref_map, pending_refs)) = clone_unit(
             unit,
             &context,
             &addr_tr,
@@ -91,8 +95,12 @@ pub fn transform_dwarf(
             &mut out_units,
             &mut out_strings,
             &mut translated,
-        )?;
+        )? {
+            di_ref_map.insert(&header, id, ref_map);
+            pending_di_refs.push((id, pending_refs));
+        }
     }
+    di_ref_map.patch(pending_di_refs.into_iter(), &mut out_units);
 
     generate_simulated_dwarf(
         &addr_tr,
