@@ -1,5 +1,5 @@
 use crate::fs::Metadata;
-use crate::{host, hostcalls, hostcalls_impl, wasi, WasiCtx, Result};
+use crate::{host, hostcalls, hostcalls_impl, wasi, Result, WasiCtx};
 use std::io;
 
 /// A reference to an open file on the filesystem.
