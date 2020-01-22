@@ -2,6 +2,7 @@ use more_asserts::assert_gt;
 use std::path::PathBuf;
 use wasmtime_environ::settings;
 use wasmtime_environ::settings::Configurable;
+use wasmtime_environ::CacheConfig;
 use wasmtime_jit::{instantiate, native, CompilationStrategy, Compiler, NullResolver};
 
 const PATH_MODULE_RS2WASM_ADD_FUNC: &str = r"tests/wat/rs2wasm-add-func.wat";
@@ -20,7 +21,8 @@ fn test_environ_translate() {
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
     let mut resolver = NullResolver {};
-    let mut compiler = Compiler::new(isa, CompilationStrategy::Auto);
+    let cache_config = CacheConfig::new_cache_disabled();
+    let mut compiler = Compiler::new(isa, CompilationStrategy::Auto, cache_config);
     unsafe {
         let instance = instantiate(&mut compiler, &data, &mut resolver, false);
         assert!(instance.is_ok());

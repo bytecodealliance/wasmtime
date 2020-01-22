@@ -18,9 +18,8 @@ use std::path::{Path, PathBuf};
 mod config;
 mod worker;
 
-use config::{cache_config, CacheConfig};
-pub use config::{create_new_config, init};
-use worker::{worker, Worker};
+pub use config::{create_new_config, CacheConfig};
+use worker::Worker;
 
 lazy_static! {
     static ref SELF_MTIME: String = {
@@ -48,12 +47,11 @@ lazy_static! {
     };
 }
 
-pub struct ModuleCacheEntry<'config, 'worker>(Option<ModuleCacheEntryInner<'config, 'worker>>);
+pub struct ModuleCacheEntry<'config>(Option<ModuleCacheEntryInner<'config>>);
 
-struct ModuleCacheEntryInner<'config, 'worker> {
+struct ModuleCacheEntryInner<'config> {
     mod_cache_path: PathBuf,
     cache_config: &'config CacheConfig,
-    worker: &'worker Worker,
 }
 
 /// Cached compilation data of a Wasm module.
@@ -79,15 +77,15 @@ pub type ModuleCacheDataTupleType = (
 
 struct Sha256Hasher(Sha256);
 
-impl<'config, 'worker> ModuleCacheEntry<'config, 'worker> {
+impl<'config> ModuleCacheEntry<'config> {
     pub fn new<'data>(
         module: &Module,
         function_body_inputs: &PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         compiler_name: &str,
         generate_debug_info: bool,
+        cache_config: &'config CacheConfig,
     ) -> Self {
-        let cache_config = cache_config();
         if cache_config.enabled() {
             Self(Some(ModuleCacheEntryInner::new(
                 module,
@@ -96,7 +94,6 @@ impl<'config, 'worker> ModuleCacheEntry<'config, 'worker> {
                 compiler_name,
                 generate_debug_info,
                 cache_config,
-                worker(),
             )))
         } else {
             Self(None)
@@ -104,14 +101,17 @@ impl<'config, 'worker> ModuleCacheEntry<'config, 'worker> {
     }
 
     #[cfg(test)]
-    fn from_inner(inner: ModuleCacheEntryInner<'config, 'worker>) -> Self {
+    fn from_inner(inner: ModuleCacheEntryInner<'config>) -> Self {
         Self(Some(inner))
     }
 
     pub fn get_data(&self) -> Option<ModuleCacheData> {
         if let Some(inner) = &self.0 {
             inner.get_data().map(|val| {
-                inner.worker.on_cache_get_async(&inner.mod_cache_path); // call on success
+                inner
+                    .cache_config
+                    .worker()
+                    .on_cache_get_async(&inner.mod_cache_path); // call on success
                 val
             })
         } else {
@@ -122,13 +122,16 @@ impl<'config, 'worker> ModuleCacheEntry<'config, 'worker> {
     pub fn update_data(&self, data: &ModuleCacheData) {
         if let Some(inner) = &self.0 {
             if inner.update_data(data).is_some() {
-                inner.worker.on_cache_update_async(&inner.mod_cache_path); // call on success
+                inner
+                    .cache_config
+                    .worker()
+                    .on_cache_update_async(&inner.mod_cache_path); // call on success
             }
         }
     }
 }
 
-impl<'config, 'worker> ModuleCacheEntryInner<'config, 'worker> {
+impl<'config> ModuleCacheEntryInner<'config> {
     fn new<'data>(
         module: &Module,
         function_body_inputs: &PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
@@ -136,7 +139,6 @@ impl<'config, 'worker> ModuleCacheEntryInner<'config, 'worker> {
         compiler_name: &str,
         generate_debug_info: bool,
         cache_config: &'config CacheConfig,
-        worker: &'worker Worker,
     ) -> Self {
         let hash = Sha256Hasher::digest(module, function_body_inputs);
         let compiler_dir = if cfg!(debug_assertions) {
@@ -167,7 +169,6 @@ impl<'config, 'worker> ModuleCacheEntryInner<'config, 'worker> {
         Self {
             mod_cache_path,
             cache_config,
-            worker,
         }
     }
 

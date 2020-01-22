@@ -1,11 +1,10 @@
 use crate::action::{get, inspect_memory, invoke};
 use crate::{
-    instantiate, ActionError, ActionOutcome, CompilationStrategy, CompiledModule, Compiler,
-    InstanceHandle, Namespace, RuntimeValue, SetupError,
+    instantiate, ActionError, ActionOutcome, CompiledModule, Compiler, InstanceHandle, Namespace,
+    RuntimeValue, SetupError,
 };
 use thiserror::Error;
 use wasmparser::{validate, OperatorValidatorConfig, ValidatingParserConfig};
-use wasmtime_environ::isa::TargetIsa;
 
 /// Indicates an unknown instance was specified.
 #[derive(Error, Debug)]
@@ -81,11 +80,6 @@ impl Context {
     /// Set debug_info settings.
     pub fn set_debug_info(&mut self, value: bool) {
         self.debug_info = value;
-    }
-
-    /// Construct a new instance of `Context` with the given target.
-    pub fn with_isa(isa: Box<dyn TargetIsa>, strategy: CompilationStrategy) -> Self {
-        Self::new(Box::new(Compiler::new(isa, strategy)))
     }
 
     /// Retrieve the context features

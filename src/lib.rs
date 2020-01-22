@@ -29,7 +29,7 @@ pub mod commands;
 use anyhow::{bail, Result};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use wasmtime::Strategy;
+use wasmtime::{Config, Strategy};
 
 fn pick_compilation_strategy(cranelift: bool, lightbeam: bool) -> Result<Strategy> {
     Ok(match (lightbeam, cranelift) {
@@ -100,4 +100,21 @@ struct CommonOptions {
     /// Run optimization passes on translated functions
     #[structopt(short = "O", long)]
     optimize: bool,
+}
+
+impl CommonOptions {
+    fn configure_cache(&self, config: &mut Config) -> Result<()> {
+        if self.disable_cache {
+            return Ok(());
+        }
+        match &self.config {
+            Some(path) => {
+                config.cache_config_load(path)?;
+            }
+            None => {
+                config.cache_config_load_default()?;
+            }
+        }
+        Ok(())
+    }
 }

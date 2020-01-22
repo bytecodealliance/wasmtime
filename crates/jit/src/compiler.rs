@@ -16,9 +16,9 @@ use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
 use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex};
 use wasmtime_environ::{
-    Compilation, CompileError, CompiledFunction, CompiledFunctionUnwindInfo, Compiler as _C,
-    FunctionBodyData, Module, ModuleMemoryOffset, ModuleVmctxInfo, Relocations, Traps, Tunables,
-    VMOffsets,
+    CacheConfig, Compilation, CompileError, CompiledFunction, CompiledFunctionUnwindInfo,
+    Compiler as _C, FunctionBodyData, Module, ModuleMemoryOffset, ModuleVmctxInfo, Relocations,
+    Traps, Tunables, VMOffsets,
 };
 use wasmtime_runtime::{
     jit_function_registry, InstantiationError, SignatureRegistry, TrapRegistration, TrapRegistry,
@@ -56,6 +56,7 @@ pub struct Compiler {
     trampoline_park: HashMap<*const VMFunctionBody, *const VMFunctionBody>,
     signatures: SignatureRegistry,
     strategy: CompilationStrategy,
+    cache_config: CacheConfig,
 
     /// The `FunctionBuilderContext`, shared between trampline function compilations.
     fn_builder_ctx: FunctionBuilderContext,
@@ -63,7 +64,11 @@ pub struct Compiler {
 
 impl Compiler {
     /// Construct a new `Compiler`.
-    pub fn new(isa: Box<dyn TargetIsa>, strategy: CompilationStrategy) -> Self {
+    pub fn new(
+        isa: Box<dyn TargetIsa>,
+        strategy: CompilationStrategy,
+        cache_config: CacheConfig,
+    ) -> Self {
         Self {
             isa,
             code_memory: CodeMemory::new(),
@@ -73,6 +78,7 @@ impl Compiler {
             fn_builder_ctx: FunctionBuilderContext::new(),
             strategy,
             trap_registry: TrapRegistry::default(),
+            cache_config,
         }
     }
 }
@@ -124,6 +130,7 @@ impl Compiler {
                         function_body_inputs,
                         &*self.isa,
                         debug_data.is_some(),
+                        &self.cache_config,
                     )
                 }
                 #[cfg(feature = "lightbeam")]
@@ -134,6 +141,7 @@ impl Compiler {
                         function_body_inputs,
                         &*self.isa,
                         debug_data.is_some(),
+                        &self.cache_config,
                     )
                 }
             }

@@ -24,7 +24,19 @@ macro_rules! load_config {
             cache_dir = toml::to_string_pretty(&format!("{}", $cache_dir.display())).unwrap()
         );
         fs::write(config_path, content).expect("Failed to write test config file");
-        CacheConfig::from_file(true, Some(config_path))
+        CacheConfig::from_file(Some(config_path)).unwrap()
+    }};
+}
+
+macro_rules! bad_config {
+    ($config_path:ident, $content_fmt:expr, $cache_dir:ident) => {{
+        let config_path = &$config_path;
+        let content = format!(
+            $content_fmt,
+            cache_dir = toml::to_string_pretty(&format!("{}", $cache_dir.display())).unwrap()
+        );
+        fs::write(config_path, content).expect("Failed to write test config file");
+        assert!(CacheConfig::from_file(Some(config_path)).is_err());
     }};
 }
 
@@ -34,24 +46,16 @@ fn test_disabled() {
     let dir = tempfile::tempdir().expect("Can't create temporary directory");
     let config_path = dir.path().join("cache-config.toml");
     let config_content = "[cache]\n\
-                          enabled = true\n";
-    fs::write(&config_path, config_content).expect("Failed to write test config file");
-    let conf = CacheConfig::from_file(false, Some(&config_path));
-    assert!(!conf.enabled());
-    assert!(conf.errors.is_empty());
-
-    let config_content = "[cache]\n\
                           enabled = false\n";
     fs::write(&config_path, config_content).expect("Failed to write test config file");
-    let conf = CacheConfig::from_file(true, Some(&config_path));
+    let conf = CacheConfig::from_file(Some(&config_path)).unwrap();
     assert!(!conf.enabled());
-    assert!(conf.errors.is_empty());
 }
 
 #[test]
 fn test_unrecognized_settings() {
     let (_td, cd, cp) = test_prolog();
-    let conf = load_config!(
+    bad_config!(
         cp,
         "unrecognized-setting = 42\n\
          [cache]\n\
@@ -59,10 +63,8 @@ fn test_unrecognized_settings() {
          directory = {cache_dir}",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -70,8 +72,6 @@ fn test_unrecognized_settings() {
          unrecognized-setting = 42",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 }
 
 #[test]
@@ -119,9 +119,7 @@ fn test_all_settings() {
     check_conf(&conf, &cd);
 
     fn check_conf(conf: &CacheConfig, cd: &PathBuf) {
-        eprintln!("errors: {:#?}", conf.errors);
         assert!(conf.enabled());
-        assert!(conf.errors.is_empty());
         assert_eq!(
             conf.directory(),
             &fs::canonicalize(cd).expect("canonicalize failed")
@@ -159,11 +157,10 @@ fn test_compression_level_settings() {
         cd
     );
     assert!(conf.enabled());
-    assert!(conf.errors.is_empty());
     assert_eq!(conf.baseline_compression_level(), 1);
     assert_eq!(conf.optimized_compression_level(), 21);
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -172,10 +169,8 @@ fn test_compression_level_settings() {
          optimized-compression-level = 21",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -184,8 +179,6 @@ fn test_compression_level_settings() {
          optimized-compression-level = 10",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 }
 
 #[test]
@@ -202,7 +195,6 @@ fn test_si_prefix_settings() {
         cd
     );
     assert!(conf.enabled());
-    assert!(conf.errors.is_empty());
     assert_eq!(conf.worker_event_queue_size(), 42);
     assert_eq!(conf.optimized_compression_usage_counter_threshold(), 4_000);
     assert_eq!(conf.file_count_soft_limit(), 3_000_000);
@@ -212,14 +204,13 @@ fn test_si_prefix_settings() {
         "[cache]\n\
          enabled = true\n\
          directory = {cache_dir}\n\
-         worker-event-queue-size = '2G'\n\
+         worker-event-queue-size = '2K'\n\
          optimized-compression-usage-counter-threshold = '4444T'\n\
          file-count-soft-limit = '1P'",
         cd
     );
     assert!(conf.enabled());
-    assert!(conf.errors.is_empty());
-    assert_eq!(conf.worker_event_queue_size(), 2_000_000_000);
+    assert_eq!(conf.worker_event_queue_size(), 2_000);
     assert_eq!(
         conf.optimized_compression_usage_counter_threshold(),
         4_444_000_000_000_000
@@ -227,7 +218,7 @@ fn test_si_prefix_settings() {
     assert_eq!(conf.file_count_soft_limit(), 1_000_000_000_000_000);
 
     // different errors
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -235,10 +226,8 @@ fn test_si_prefix_settings() {
          worker-event-queue-size = '2g'",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -246,10 +235,8 @@ fn test_si_prefix_settings() {
          file-count-soft-limit = 1",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -257,10 +244,8 @@ fn test_si_prefix_settings() {
          file-count-soft-limit = '-31337'",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -268,8 +253,6 @@ fn test_si_prefix_settings() {
          file-count-soft-limit = '3.14M'",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 }
 
 #[test]
@@ -284,7 +267,6 @@ fn test_disk_space_settings() {
         cd
     );
     assert!(conf.enabled());
-    assert!(conf.errors.is_empty());
     assert_eq!(conf.files_total_size_soft_limit(), 76);
 
     let conf = load_config!(
@@ -296,7 +278,6 @@ fn test_disk_space_settings() {
         cd
     );
     assert!(conf.enabled());
-    assert!(conf.errors.is_empty());
     assert_eq!(conf.files_total_size_soft_limit(), 42 * (1u64 << 20));
 
     let conf = load_config!(
@@ -308,7 +289,6 @@ fn test_disk_space_settings() {
         cd
     );
     assert!(conf.enabled());
-    assert!(conf.errors.is_empty());
     assert_eq!(conf.files_total_size_soft_limit(), 2 * (1u64 << 30));
 
     let conf = load_config!(
@@ -320,7 +300,6 @@ fn test_disk_space_settings() {
         cd
     );
     assert!(conf.enabled());
-    assert!(conf.errors.is_empty());
     assert_eq!(conf.files_total_size_soft_limit(), 31337 * (1u64 << 40));
 
     let conf = load_config!(
@@ -332,7 +311,6 @@ fn test_disk_space_settings() {
         cd
     );
     assert!(conf.enabled());
-    assert!(conf.errors.is_empty());
     assert_eq!(conf.files_total_size_soft_limit(), 7 * (1u64 << 50));
 
     let conf = load_config!(
@@ -344,11 +322,10 @@ fn test_disk_space_settings() {
         cd
     );
     assert!(conf.enabled());
-    assert!(conf.errors.is_empty());
     assert_eq!(conf.files_total_size_soft_limit(), 7_000_000);
 
     // different errors
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -356,10 +333,8 @@ fn test_disk_space_settings() {
          files-total-size-soft-limit = '7 mi'",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -367,10 +342,8 @@ fn test_disk_space_settings() {
          files-total-size-soft-limit = 1",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -378,10 +351,8 @@ fn test_disk_space_settings() {
          files-total-size-soft-limit = '-31337'",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -389,8 +360,6 @@ fn test_disk_space_settings() {
          files-total-size-soft-limit = '3.14Ki'",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 }
 
 #[test]
@@ -407,7 +376,6 @@ fn test_duration_settings() {
         cd
     );
     assert!(conf.enabled());
-    assert!(conf.errors.is_empty());
     assert_eq!(conf.cleanup_interval(), Duration::from_secs(100));
     assert_eq!(
         conf.optimizing_compression_task_timeout(),
@@ -428,7 +396,6 @@ fn test_duration_settings() {
         cd
     );
     assert!(conf.enabled());
-    assert!(conf.errors.is_empty());
     assert_eq!(
         conf.cleanup_interval(),
         Duration::from_secs(2 * 24 * 60 * 60)
@@ -439,7 +406,7 @@ fn test_duration_settings() {
     );
 
     // different errors
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -447,10 +414,8 @@ fn test_duration_settings() {
          optimizing-compression-task-timeout = '333'",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -458,10 +423,8 @@ fn test_duration_settings() {
          optimizing-compression-task-timeout = 333",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -469,10 +432,8 @@ fn test_duration_settings() {
          optimizing-compression-task-timeout = '10 M'",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -480,10 +441,8 @@ fn test_duration_settings() {
          optimizing-compression-task-timeout = '10 min'",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -491,10 +450,8 @@ fn test_duration_settings() {
          optimizing-compression-task-timeout = '-10s'",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -502,8 +459,6 @@ fn test_duration_settings() {
          optimizing-compression-task-timeout = '1.5m'",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 }
 
 #[test]
@@ -519,12 +474,11 @@ fn test_percent_settings() {
         cd
     );
     assert!(conf.enabled());
-    assert!(conf.errors.is_empty());
     assert_eq!(conf.file_count_limit_percent_if_deleting(), 62);
     assert_eq!(conf.files_total_size_limit_percent_if_deleting(), 23);
 
     // different errors
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -532,10 +486,8 @@ fn test_percent_settings() {
          files-total-size-limit-percent-if-deleting = '23'",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -543,10 +495,8 @@ fn test_percent_settings() {
          files-total-size-limit-percent-if-deleting = '22.5%'",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -554,10 +504,8 @@ fn test_percent_settings() {
          files-total-size-limit-percent-if-deleting = '0.5'",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -565,10 +513,8 @@ fn test_percent_settings() {
          files-total-size-limit-percent-if-deleting = '-1%'",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 
-    let conf = load_config!(
+    bad_config!(
         cp,
         "[cache]\n\
          enabled = true\n\
@@ -576,6 +522,4 @@ fn test_percent_settings() {
          files-total-size-limit-percent-if-deleting = '101%'",
         cd
     );
-    assert!(!conf.enabled());
-    assert!(!conf.errors.is_empty());
 }

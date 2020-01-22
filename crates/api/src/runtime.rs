@@ -1,9 +1,11 @@
 use anyhow::Result;
 use std::cell::RefCell;
 use std::fmt;
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 use wasmtime_environ::settings::{self, Configurable};
+use wasmtime_environ::CacheConfig;
 use wasmtime_jit::{native, CompilationStrategy, Compiler, Features};
 
 // Runtime Environment
@@ -21,6 +23,7 @@ pub struct Config {
     pub(crate) features: Features,
     pub(crate) debug_info: bool,
     pub(crate) strategy: CompilationStrategy,
+    pub(crate) cache_config: CacheConfig,
 }
 
 impl Config {
@@ -45,6 +48,7 @@ impl Config {
             features: Default::default(),
             flags,
             strategy: CompilationStrategy::Auto,
+            cache_config: CacheConfig::new_cache_disabled(),
         }
     }
 
@@ -221,6 +225,49 @@ impl Config {
             .expect("should be valid flag");
         self
     }
+
+    /// Loads cache configuration specified at `path`.
+    ///
+    /// This method will read the file specified by `path` on the filesystem and
+    /// attempt to load cache configuration from it. This method can also fail
+    /// due to I/O errors, misconfiguration, syntax errors, etc. For expected
+    /// syntax in the configuration file see the [documentation online][docs].
+    ///
+    /// By default cache configuration is not enabled or loaded.
+    ///
+    /// # Errors
+    ///
+    /// This method can fail due to any error that happens when loading the file
+    /// pointed to by `path` and attempting to load the cache configuration.
+    ///
+    /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
+    pub fn cache_config_load(&mut self, path: impl AsRef<Path>) -> Result<&mut Self> {
+        self.cache_config = wasmtime_environ::CacheConfig::from_file(Some(path.as_ref()))?;
+        Ok(self)
+    }
+
+    /// Loads cache configuration from the system default path.
+    ///
+    /// This commit is the same as [`Config::cache_config_load`] except that it
+    /// does not take a path argument and instead loads the default
+    /// configuration present on the system. This is located, for example, on
+    /// Unix at `$HOME/.config/wasmtime/config.toml` and is typically created
+    /// with the `wasmtime config new` command.
+    ///
+    /// By default cache configuration is not enabled or loaded.
+    ///
+    /// # Errors
+    ///
+    /// This method can fail due to any error that happens when loading the
+    /// default system configuration. Note that it is not an error if the
+    /// default config file does not exist, in which case the default settings
+    /// for an enabled cache are applied.
+    ///
+    /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
+    pub fn cache_config_load_default(&mut self) -> Result<&mut Self> {
+        self.cache_config = wasmtime_environ::CacheConfig::from_file(None)?;
+        Ok(self)
+    }
 }
 
 impl Default for Config {
@@ -364,7 +411,11 @@ impl Store {
     /// Creates a new store to be associated with the given [`Engine`].
     pub fn new(engine: &Engine) -> Store {
         let isa = native::builder().finish(settings::Flags::new(engine.config.flags.clone()));
-        let compiler = Compiler::new(isa, engine.config.strategy);
+        let compiler = Compiler::new(
+            isa,
+            engine.config.strategy,
+            engine.config.cache_config.clone(),
+        );
         Store {
             inner: Rc::new(StoreInner {
                 engine: engine.clone(),
