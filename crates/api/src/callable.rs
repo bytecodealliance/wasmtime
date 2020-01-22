@@ -3,6 +3,7 @@ use crate::trampoline::{generate_func_export, take_api_trap};
 use crate::trap::Trap;
 use crate::types::FuncType;
 use crate::values::Val;
+use std::ptr;
 use std::rc::Rc;
 use wasmtime_environ::ir;
 use wasmtime_jit::InstanceHandle;
@@ -150,6 +151,7 @@ impl WrappedCallable for WasmtimeFn {
             self.instance.with_signals_on(|| {
                 wasmtime_runtime::wasmtime_call_trampoline(
                     vmctx,
+                    ptr::null_mut(),
                     exec_code_buf,
                     values_vec.as_mut_ptr() as *mut u8,
                 )

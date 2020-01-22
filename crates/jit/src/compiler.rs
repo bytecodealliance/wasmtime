@@ -282,11 +282,15 @@ fn make_trampoline(
     let pointer_type = isa.pointer_type();
     let mut wrapper_sig = ir::Signature::new(isa.frontend_config().default_call_conv);
 
-    // Add the `vmctx` parameter.
+    // Add the callee `vmctx` parameter.
     wrapper_sig.params.push(ir::AbiParam::special(
         pointer_type,
         ir::ArgumentPurpose::VMContext,
     ));
+
+    // Add the caller `vmctx` parameter.
+    wrapper_sig.params.push(ir::AbiParam::new(pointer_type));
+
     // Add the `values_vec` parameter.
     wrapper_sig.params.push(ir::AbiParam::new(pointer_type));
 
@@ -302,9 +306,9 @@ fn make_trampoline(
         builder.switch_to_block(block0);
         builder.seal_block(block0);
 
-        let (vmctx_ptr_val, values_vec_ptr_val) = {
+        let (vmctx_ptr_val, caller_vmctx_ptr_val, values_vec_ptr_val) = {
             let params = builder.func.dfg.ebb_params(block0);
-            (params[0], params[1])
+            (params[0], params[1], params[2])
         };
 
         // Load the argument values out of `values_vec`.
@@ -314,16 +318,19 @@ fn make_trampoline(
             .iter()
             .enumerate()
             .map(|(i, r)| {
-                match r.purpose {
-                    // i - 1 because vmctx isn't passed through `values_vec`.
-                    ir::ArgumentPurpose::Normal => builder.ins().load(
-                        r.value_type,
-                        mflags,
-                        values_vec_ptr_val,
-                        ((i - 1) * value_size) as i32,
-                    ),
-                    ir::ArgumentPurpose::VMContext => vmctx_ptr_val,
-                    other => panic!("unsupported argument purpose {}", other),
+                match i {
+                    0 => vmctx_ptr_val,
+                    1 => caller_vmctx_ptr_val,
+                    _ =>
+                    // i - 2 because vmctx and caller vmctx aren't passed through `values_vec`.
+                    {
+                        builder.ins().load(
+                            r.value_type,
+                            mflags,
+                            values_vec_ptr_val,
+                            ((i - 2) * value_size) as i32,
+                        )
+                    }
                 }
             })
             .collect::<Vec<_>>();

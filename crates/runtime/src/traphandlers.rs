@@ -13,10 +13,11 @@ use wasmtime_environ::ir;
 extern "C" {
     fn WasmtimeCallTrampoline(
         vmctx: *mut u8,
+        caller_vmctx: *mut u8,
         callee: *const VMFunctionBody,
         values_vec: *mut u8,
     ) -> i32;
-    fn WasmtimeCall(vmctx: *mut u8, callee: *const VMFunctionBody) -> i32;
+    fn WasmtimeCall(vmctx: *mut u8, caller_vmctx: *mut u8, callee: *const VMFunctionBody) -> i32;
 }
 
 thread_local! {
@@ -165,10 +166,17 @@ fn trap_code_to_expected_string(trap_code: ir::TrapCode) -> String {
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_call_trampoline(
     vmctx: *mut VMContext,
+    caller_vmctx: *mut VMContext,
     callee: *const VMFunctionBody,
     values_vec: *mut u8,
 ) -> Result<(), Trap> {
-    if WasmtimeCallTrampoline(vmctx as *mut u8, callee, values_vec) == 0 {
+    if WasmtimeCallTrampoline(
+        vmctx as *mut u8,
+        caller_vmctx as *mut u8,
+        callee,
+        values_vec,
+    ) == 0
+    {
         Err(last_trap())
     } else {
         Ok(())
@@ -180,9 +188,10 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_call(
     vmctx: *mut VMContext,
+    caller_vmctx: *mut VMContext,
     callee: *const VMFunctionBody,
 ) -> Result<(), Trap> {
-    if WasmtimeCall(vmctx as *mut u8, callee) == 0 {
+    if WasmtimeCall(vmctx as *mut u8, caller_vmctx as *mut u8, callee) == 0 {
         Err(last_trap())
     } else {
         Ok(())

@@ -3,8 +3,7 @@
 use crate::runtime::Store;
 use anyhow::Result;
 use std::any::Any;
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::rc::Rc;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::DefinedFuncIndex;
@@ -17,9 +16,6 @@ pub(crate) fn create_handle(
     finished_functions: PrimaryMap<DefinedFuncIndex, *const VMFunctionBody>,
     state: Box<dyn Any>,
 ) -> Result<InstanceHandle> {
-    let global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>> =
-        Rc::new(RefCell::new(HashMap::new()));
-
     let imports = Imports::new(
         HashSet::new(),
         PrimaryMap::new(),
@@ -42,7 +38,6 @@ pub(crate) fn create_handle(
 
     Ok(InstanceHandle::new(
         Rc::new(module),
-        global_exports,
         finished_functions.into_boxed_slice(),
         imports,
         &data_initializers,

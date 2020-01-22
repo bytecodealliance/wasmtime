@@ -27,7 +27,6 @@ pub(crate) struct WASIState {
 /// Return an instance implementing the "wasi" interface.
 pub fn instantiate_wasi_c(
     prefix: &str,
-    global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
     preopened_dirs: &[(String, File)],
     argv: &[String],
     environ: &[(String, String)],
@@ -160,7 +159,6 @@ pub fn instantiate_wasi_c(
 
     InstanceHandle::new(
         Rc::new(module),
-        global_exports,
         finished_functions.into_boxed_slice(),
         imports,
         &data_initializers,

@@ -7,8 +7,6 @@ use crate::compiler::Compiler;
 use crate::imports::resolve_imports;
 use crate::link::link_module;
 use crate::resolver::Resolver;
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::io::Write;
 use std::rc::Rc;
 use thiserror::Error;
@@ -20,7 +18,7 @@ use wasmtime_environ::{
     ModuleSyncString,
 };
 use wasmtime_runtime::{
-    Export, GdbJitImageRegistration, InstanceHandle, InstantiationError, VMFunctionBody,
+    GdbJitImageRegistration, InstanceHandle, InstantiationError, VMFunctionBody,
     VMSharedSignatureIndex,
 };
 
@@ -142,7 +140,6 @@ pub struct CompiledModule {
     finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
     data_initializers: Box<[OwnedDataInitializer]>,
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
-    global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
     dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
 }
 
@@ -152,14 +149,12 @@ impl CompiledModule {
         compiler: &mut Compiler,
         data: &'data [u8],
         module_name: Option<&str>,
-        global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
         debug_info: bool,
     ) -> Result<Self, SetupError> {
         let raw = RawCompiledModule::<'data>::new(compiler, data, module_name, debug_info)?;
 
         Ok(Self::from_parts(
             raw.module,
-            global_exports,
             raw.finished_functions,
             raw.data_initializers
                 .iter()
@@ -174,7 +169,6 @@ impl CompiledModule {
     /// Construct a `CompiledModule` from component parts.
     pub fn from_parts(
         module: Module,
-        global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
         finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
         data_initializers: Box<[OwnedDataInitializer]>,
         signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
@@ -182,7 +176,6 @@ impl CompiledModule {
     ) -> Self {
         Self {
             module: Rc::new(module),
-            global_exports: Rc::clone(&global_exports),
             finished_functions,
             data_initializers,
             signatures,
@@ -210,7 +203,6 @@ impl CompiledModule {
         let imports = resolve_imports(&self.module, resolver)?;
         InstanceHandle::new(
             Rc::clone(&self.module),
-            Rc::clone(&self.global_exports),
             self.finished_functions.clone(),
             imports,
             &data_initializers,
@@ -260,7 +252,6 @@ pub fn instantiate(
     data: &[u8],
     module_name: Option<&str>,
     resolver: &mut dyn Resolver,
-    global_exports: Rc<RefCell<HashMap<String, Option<Export>>>>,
     debug_info: bool,
 ) -> Result<InstanceHandle, SetupError> {
     let raw = RawCompiledModule::new(compiler, data, module_name, debug_info)?;
@@ -268,7 +259,6 @@ pub fn instantiate(
         .map_err(|err| SetupError::Instantiate(InstantiationError::Link(err)))?;
     InstanceHandle::new(
         Rc::new(raw.module),
-        global_exports,
         raw.finished_functions,
         imports,
         &*raw.data_initializers,

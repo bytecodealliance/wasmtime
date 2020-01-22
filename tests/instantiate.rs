@@ -1,8 +1,5 @@
 use more_asserts::assert_gt;
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::path::PathBuf;
-use std::rc::Rc;
 use wasmtime_environ::settings;
 use wasmtime_environ::settings::Configurable;
 use wasmtime_jit::{instantiate, native, CompilationStrategy, Compiler, NullResolver};
@@ -24,14 +21,6 @@ fn test_environ_translate() {
 
     let mut resolver = NullResolver {};
     let mut compiler = Compiler::new(isa, CompilationStrategy::Auto);
-    let global_exports = Rc::new(RefCell::new(HashMap::new()));
-    let instance = instantiate(
-        &mut compiler,
-        &data,
-        None,
-        &mut resolver,
-        global_exports,
-        false,
-    );
+    let instance = instantiate(&mut compiler, &data, None, &mut resolver, false);
     assert!(instance.is_ok());
 }

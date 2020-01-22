@@ -295,6 +295,16 @@ impl CompiledExpression {
     }
 }
 
+fn is_old_expression_format(buf: &[u8]) -> bool {
+    // Heuristic to detect old variable expression format without DW_OP_fbreg:
+    // DW_OP_plus_uconst op must be present, but not DW_OP_fbreg.
+    if buf.contains(&(gimli::constants::DW_OP_fbreg.0 as u8)) {
+        // Stop check if DW_OP_fbreg exist.
+        return false;
+    }
+    buf.contains(&(gimli::constants::DW_OP_plus_uconst.0 as u8))
+}
+
 pub fn compile_expression<R>(
     expr: &Expression<R>,
     encoding: gimli::Encoding,
@@ -303,16 +313,17 @@ pub fn compile_expression<R>(
 where
     R: Reader,
 {
+    let mut pc = expr.0.clone();
+    let buf = expr.0.to_slice()?;
     let mut parts = Vec::new();
     let mut need_deref = false;
-    if let Some(frame_base) = frame_base {
-        parts.extend_from_slice(&frame_base.parts);
-        need_deref = frame_base.need_deref;
+    if is_old_expression_format(&buf) && frame_base.is_some() {
+        // Still supporting old DWARF variable expressions without fbreg.
+        parts.extend_from_slice(&frame_base.unwrap().parts);
+        need_deref = frame_base.unwrap().need_deref;
     }
     let base_len = parts.len();
-    let mut pc = expr.0.clone();
     let mut code_chunk = Vec::new();
-    let buf = expr.0.to_slice()?;
     while !pc.is_empty() {
         let next = buf[pc.offset_from(&expr.0).into_u64() as usize];
         need_deref = true;
@@ -333,6 +344,26 @@ where
             let pos = pc.offset_from(&expr.0).into_u64() as usize;
             let op = Operation::parse(&mut pc, &expr.0, encoding)?;
             match op {
+                Operation::FrameOffset { offset } => {
+                    // Expand DW_OP_fpreg into frame location and DW_OP_plus_uconst.
+                    use gimli::write::Writer;
+                    if frame_base.is_some() {
+                        // Add frame base expressions.
+                        if !code_chunk.is_empty() {
+                            parts.push(CompiledExpressionPart::Code(code_chunk));
+                            code_chunk = Vec::new();
+                        }
+                        parts.extend_from_slice(&frame_base.unwrap().parts);
+                        need_deref = frame_base.unwrap().need_deref;
+                    }
+                    // Append DW_OP_plus_uconst part.
+                    let endian = gimli::RunTimeEndian::Little;
+                    let mut writer = write::EndianVec::new(endian);
+                    writer.write_u8(gimli::constants::DW_OP_plus_uconst.0 as u8)?;
+                    writer.write_uleb128(offset as u64)?;
+                    code_chunk.extend(writer.into_vec());
+                    continue;
+                }
                 Operation::Literal { .. } | Operation::PlusConstant { .. } => (),
                 Operation::StackValue => {
                     need_deref = false;

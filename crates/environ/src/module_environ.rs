@@ -383,6 +383,8 @@ pub fn translate_signature(mut sig: ir::Signature, pointer_type: ir::Type) -> ir
         0,
         AbiParam::special(pointer_type, ArgumentPurpose::VMContext),
     );
+    // Prepend the caller vmctx argument.
+    sig.params.insert(1, AbiParam::new(pointer_type));
     sig
 }
 

@@ -3,9 +3,6 @@ use crate::{
     instantiate, ActionError, ActionOutcome, CompilationStrategy, CompiledModule, Compiler,
     InstanceHandle, Namespace, RuntimeValue, SetupError,
 };
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
 use thiserror::Error;
 use wasmparser::{validate, OperatorValidatorConfig, ValidatingParserConfig};
 use wasmtime_environ::isa::TargetIsa;
@@ -61,7 +58,6 @@ impl Into<ValidatingParserConfig> for Features {
 pub struct Context {
     namespace: Namespace,
     compiler: Box<Compiler>,
-    global_exports: Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>>,
     debug_info: bool,
     features: Features,
 }
@@ -72,7 +68,6 @@ impl Context {
         Self {
             namespace: Namespace::new(),
             compiler,
-            global_exports: Rc::new(RefCell::new(HashMap::new())),
             debug_info: false,
             features: Default::default(),
         }
@@ -119,7 +114,6 @@ impl Context {
             &data,
             None,
             &mut self.namespace,
-            Rc::clone(&self.global_exports),
             debug_info,
         )
     }
@@ -152,13 +146,7 @@ impl Context {
         self.validate(&data).map_err(SetupError::Validate)?;
         let debug_info = self.debug_info();
 
-        CompiledModule::new(
-            &mut *self.compiler,
-            data,
-            None,
-            Rc::clone(&self.global_exports),
-            debug_info,
-        )
+        CompiledModule::new(&mut *self.compiler, data, None, debug_info)
     }
 
     /// If `name` isn't None, register it for the given instance.
@@ -238,13 +226,5 @@ impl Context {
         len: usize,
     ) -> Result<&'instance [u8], ActionError> {
         inspect_memory(instance, field_name, start, len)
-    }
-
-    /// Return a handle to the global_exports mapping, needed by some modules
-    /// for instantiation.
-    pub fn get_global_exports(
-        &mut self,
-    ) -> Rc<RefCell<HashMap<String, Option<wasmtime_runtime::Export>>>> {
-        Rc::clone(&self.global_exports)
     }
 }

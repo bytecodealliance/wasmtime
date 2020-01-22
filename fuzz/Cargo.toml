@@ -14,7 +14,7 @@ env_logger = "0.7.1"
 log = "0.4.8"
 wasmtime-fuzzing = { path = "../crates/fuzzing", features = ["env_logger"] }
 wasmtime = { path = "../crates/api" }
-libfuzzer-sys = "0.2.0"
+libfuzzer-sys = "0.2.1"
 
 [[bin]]
 name = "compile"
@@ -37,5 +37,11 @@ doc = false
 [[bin]]
 name = "api_calls"
 path = "fuzz_targets/api_calls.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "differential"
+path = "fuzz_targets/differential.rs"
 test = false
 doc = false
