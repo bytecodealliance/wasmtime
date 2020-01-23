@@ -1,6 +1,5 @@
 extern crate proc_macro;
 
-mod errors;
 mod funcs;
 mod names;
 mod parse;
@@ -10,7 +9,6 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
-use errors::define_error_trait;
 use funcs::define_func;
 use names::Names;
 use types::define_datatype;
@@ -39,12 +37,9 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
         )
     });
 
-    let error_trait = define_error_trait(&names, &doc);
-
     TokenStream::from(quote!(
         mod types {
             #(#types)*
-            #error_trait
         }
         #(#modules)*
     ))
