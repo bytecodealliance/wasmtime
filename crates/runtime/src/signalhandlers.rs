@@ -18,8 +18,6 @@ struct TrapContext {
 
 extern "C" {
     fn EnsureEagerSignalHandlers() -> libc::c_int;
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    fn EnsureDarwinMachPorts() -> libc::c_int;
 }
 
 struct InstallState {
@@ -38,7 +36,6 @@ impl InstallState {
 
 lazy_static! {
     static ref EAGER_INSTALL_STATE: RwLock<InstallState> = RwLock::new(InstallState::new());
-    static ref LAZY_INSTALL_STATE: RwLock<InstallState> = RwLock::new(InstallState::new());
 }
 
 /// This function performs the low-overhead signal handler initialization that we
@@ -107,9 +104,6 @@ pub extern "C" fn wasmtime_init_finish(vmctx: &mut VMContext) {
             }
         }
 
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        ensure_darwin_mach_ports();
-
         TRAP_CONTEXT.with(|cx| {
             cx.have_signal_handlers.set(true);
         })
@@ -120,23 +114,4 @@ pub extern "C" fn wasmtime_init_finish(vmctx: &mut VMContext) {
     if !have_signal_handlers && instance.needs_signal_handlers() {
         panic!("failed to install signal handlers");
     }
-}
-
-#[cfg(any(target_os = "macos", target_os = "ios"))]
-fn ensure_darwin_mach_ports() {
-    let mut locked = LAZY_INSTALL_STATE.write().unwrap();
-    let state = locked.borrow_mut();
-
-    if state.tried {
-        return;
-    }
-
-    state.tried = true;
-    assert!(!state.success);
-
-    if unsafe { EnsureDarwinMachPorts() != 0 } {
-        return;
-    }
-
-    state.success = true;
 }
