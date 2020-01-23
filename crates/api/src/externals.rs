@@ -420,12 +420,9 @@ fn set_table_item(
     item_index: u32,
     item: wasmtime_runtime::VMCallerCheckedAnyfunc,
 ) -> Result<()> {
-    if let Some(item_ref) = handle.table_get_mut(table_index, item_index) {
-        *item_ref = item;
-        Ok(())
-    } else {
-        bail!("table element index out of bounds")
-    }
+    handle
+        .table_set(table_index, item_index, item)
+        .map_err(|()| anyhow!("table element index out of bounds"))
 }
 
 impl Table {

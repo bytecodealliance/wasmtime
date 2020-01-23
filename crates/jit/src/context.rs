@@ -105,7 +105,7 @@ impl Context {
             .map_err(|e| format!("module did not validate: {}", e.to_string()))
     }
 
-    fn instantiate(&mut self, data: &[u8]) -> Result<InstanceHandle, SetupError> {
+    unsafe fn instantiate(&mut self, data: &[u8]) -> Result<InstanceHandle, SetupError> {
         self.validate(&data).map_err(SetupError::Validate)?;
         let debug_info = self.debug_info();
 
@@ -125,7 +125,11 @@ impl Context {
     }
 
     /// Instantiate a module instance and register the instance.
-    pub fn instantiate_module(
+    ///
+    /// # Unsafety
+    ///
+    /// See `InstanceHandle::new`
+    pub unsafe fn instantiate_module(
         &mut self,
         instance_name: Option<String>,
         data: &[u8],

@@ -605,16 +605,16 @@ impl VMContext {
     /// This is unsafe because it doesn't work on just any `VMContext`, it must
     /// be a `VMContext` allocated as part of an `Instance`.
     #[allow(clippy::cast_ptr_alignment)]
-    pub(crate) unsafe fn instance(&mut self) -> &mut Instance {
-        &mut *((self as *mut Self as *mut u8).offset(-Instance::vmctx_offset()) as *mut Instance)
+    pub(crate) unsafe fn instance(&self) -> &Instance {
+        &*((self as *const Self as *mut u8).offset(-Instance::vmctx_offset()) as *const Instance)
     }
 
-    /// Return a mutable reference to the host state associated with this `Instance`.
+    /// Return a reference to the host state associated with this `Instance`.
     ///
     /// # Safety
     /// This is unsafe because it doesn't work on just any `VMContext`, it must
     /// be a `VMContext` allocated as part of an `Instance`.
-    pub unsafe fn host_state(&mut self) -> &mut dyn Any {
+    pub unsafe fn host_state(&self) -> &dyn Any {
         self.instance().host_state()
     }
 }

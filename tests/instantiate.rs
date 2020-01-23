@@ -21,6 +21,8 @@ fn test_environ_translate() {
 
     let mut resolver = NullResolver {};
     let mut compiler = Compiler::new(isa, CompilationStrategy::Auto);
-    let instance = instantiate(&mut compiler, &data, &mut resolver, false);
-    assert!(instance.is_ok());
+    unsafe {
+        let instance = instantiate(&mut compiler, &data, &mut resolver, false);
+        assert!(instance.is_ok());
+    }
 }

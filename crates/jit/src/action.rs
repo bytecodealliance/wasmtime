@@ -231,7 +231,7 @@ pub fn inspect_memory<'instance>(
     start: usize,
     len: usize,
 ) -> Result<&'instance [u8], ActionError> {
-    let definition = match unsafe { instance.lookup_immutable(memory_name) } {
+    let definition = match instance.lookup(memory_name) {
         Some(Export::Memory {
             definition,
             memory: _memory,
@@ -259,7 +259,7 @@ pub fn inspect_memory<'instance>(
 
 /// Read a global in the given instance identified by an export name.
 pub fn get(instance: &InstanceHandle, global_name: &str) -> Result<RuntimeValue, ActionError> {
-    let (definition, global) = match unsafe { instance.lookup_immutable(global_name) } {
+    let (definition, global) = match instance.lookup(global_name) {
         Some(Export::Global {
             definition,
             vmctx: _,

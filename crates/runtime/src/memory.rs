@@ -5,6 +5,7 @@
 use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
 use more_asserts::{assert_ge, assert_le};
+use std::cell::{Cell, RefCell};
 use std::convert::TryFrom;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
@@ -12,10 +13,10 @@ use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 #[derive(Debug)]
 pub struct LinearMemory {
     // The underlying allocation.
-    mmap: Mmap,
+    mmap: RefCell<Mmap>,
 
     // The current logical size in wasm pages of this linear memory.
-    current: u32,
+    current: Cell<u32>,
 
     // The optional maximum size in wasm pages of this linear memory.
     maximum: Option<u32>,
@@ -62,8 +63,8 @@ impl LinearMemory {
         let mmap = Mmap::accessible_reserved(mapped_bytes, request_bytes)?;
 
         Ok(Self {
-            mmap,
-            current: plan.memory.minimum,
+            mmap: mmap.into(),
+            current: plan.memory.minimum.into(),
             maximum: plan.memory.maximum,
             offset_guard_size: offset_guard_bytes,
             needs_signal_handlers,
@@ -72,25 +73,25 @@ impl LinearMemory {
 
     /// Returns the number of allocated wasm pages.
     pub fn size(&self) -> u32 {
-        self.current
+        self.current.get()
     }
 
     /// Grow memory by the specified amount of wasm pages.
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of wasm pages.
-    pub fn grow(&mut self, delta: u32) -> Option<u32> {
+    pub fn grow(&self, delta: u32) -> Option<u32> {
         // Optimization of memory.grow 0 calls.
         if delta == 0 {
-            return Some(self.current);
+            return Some(self.current.get());
         }
 
-        let new_pages = match self.current.checked_add(delta) {
+        let new_pages = match self.current.get().checked_add(delta) {
             Some(new_pages) => new_pages,
             // Linear memory size overflow.
             None => return None,
         };
-        let prev_pages = self.current;
+        let prev_pages = self.current.get();
 
         if let Some(maximum) = self.maximum {
             if new_pages > maximum {
@@ -111,7 +112,8 @@ impl LinearMemory {
         let prev_bytes = usize::try_from(prev_pages).unwrap() * WASM_PAGE_SIZE as usize;
         let new_bytes = usize::try_from(new_pages).unwrap() * WASM_PAGE_SIZE as usize;
 
-        if new_bytes > self.mmap.len() - self.offset_guard_size {
+        let mut mmap = self.mmap.borrow_mut();
+        if new_bytes > mmap.len() - self.offset_guard_size {
             // If the new size is within the declared maximum, but needs more memory than we
             // have on hand, it's a dynamic heap and it can move.
             let guard_bytes = self.offset_guard_size;
@@ -119,25 +121,26 @@ impl LinearMemory {
 
             let mut new_mmap = Mmap::accessible_reserved(new_bytes, request_bytes).ok()?;
 
-            let copy_len = self.mmap.len() - self.offset_guard_size;
-            new_mmap.as_mut_slice()[..copy_len].copy_from_slice(&self.mmap.as_slice()[..copy_len]);
+            let copy_len = mmap.len() - self.offset_guard_size;
+            new_mmap.as_mut_slice()[..copy_len].copy_from_slice(&mmap.as_slice()[..copy_len]);
 
-            self.mmap = new_mmap;
+            *mmap = new_mmap;
         } else if delta_bytes > 0 {
             // Make the newly allocated pages accessible.
-            self.mmap.make_accessible(prev_bytes, delta_bytes).ok()?;
+            mmap.make_accessible(prev_bytes, delta_bytes).ok()?;
         }
 
-        self.current = new_pages;
+        self.current.set(new_pages);
 
         Some(prev_pages)
     }
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
-    pub fn vmmemory(&mut self) -> VMMemoryDefinition {
+    pub fn vmmemory(&self) -> VMMemoryDefinition {
+        let mut mmap = self.mmap.borrow_mut();
         VMMemoryDefinition {
-            base: self.mmap.as_mut_ptr(),
-            current_length: self.current as usize * WASM_PAGE_SIZE as usize,
+            base: mmap.as_mut_ptr(),
+            current_length: self.current.get() as usize * WASM_PAGE_SIZE as usize,
         }
     }
 }
