@@ -245,3 +245,18 @@ impl Error {
 pub(crate) trait FromRawOsError {
     fn from_raw_os_error(code: i32) -> Self;
 }
+
+pub(crate) type Result<T> = std::result::Result<T, Error>;
+
+pub(crate) trait AsWasiError {
+    fn as_wasi_error(&self) -> WasiError;
+}
+
+impl<T> AsWasiError for Result<T> {
+    fn as_wasi_error(&self) -> WasiError {
+        self.as_ref()
+            .err()
+            .unwrap_or(&Error::ESUCCESS)
+            .as_wasi_error()
+    }
+}
