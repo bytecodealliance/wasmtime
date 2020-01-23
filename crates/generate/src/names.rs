@@ -12,8 +12,9 @@ impl Names {
     pub fn new() -> Names {
         Names {}
     }
-    pub fn type_(&self, id: &Id) -> Ident {
-        format_ident!("{}", id.as_str().to_camel_case())
+    pub fn type_(&self, id: &Id) -> TokenStream {
+        let ident = format_ident!("{}", id.as_str().to_camel_case());
+        quote!(#ident)
     }
     pub fn builtin_type(&self, b: BuiltinType) -> TokenStream {
         match b {

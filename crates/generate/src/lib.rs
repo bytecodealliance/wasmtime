@@ -1,5 +1,6 @@
 extern crate proc_macro;
 
+mod errors;
 mod funcs;
 mod names;
 mod parse;
@@ -9,6 +10,7 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
+use errors::define_error_trait;
 use funcs::define_func;
 use names::Names;
 use types::define_datatype;
@@ -22,29 +24,28 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
 
     let doc = witx::load(&witx_paths).expect("loading witx");
 
-    let mut types = TokenStream2::new();
-    for namedtype in doc.typenames() {
-        let def = define_datatype(&names, &namedtype);
-        types.extend(def);
-    }
+    let types = doc.typenames().map(|t| define_datatype(&names, &t));
 
-    let mut modules = TokenStream2::new();
-    for module in doc.modules() {
+    let modules = doc.modules().map(|module| {
         let modname = names.module(&module.name);
-
-        let mut fs = TokenStream2::new();
-        for func in module.funcs() {
-            fs.extend(define_func(&names, &func));
-        }
-        modules.extend(quote!(
+        let fs = module.funcs().map(|f| define_func(&names, &f));
+        quote!(
             mod #modname {
                 use super::*;
                 use super::types::*;
                 use memory::*;
-                #fs
+                #(#fs)*
             }
-        ));
-    }
+        )
+    });
 
-    TokenStream::from(quote!(mod types { #types } #modules))
+    let error_trait = define_error_trait(&names, &doc);
+
+    TokenStream::from(quote!(
+        mod types {
+            #(#types)*
+            #error_trait
+        }
+        #(#modules)*
+    ))
 }

@@ -31,71 +31,68 @@ fn define_alias(names: &Names, name: &witx::Id, to: &witx::NamedType) -> TokenSt
 fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenStream {
     let ident = names.type_(&name);
 
-    let mut output = TokenStream::new();
     let repr = int_repr_tokens(e.repr);
-    output.extend(quote!(#[repr(#repr)]));
-    output.extend(quote!(#[derive(Copy, Clone, Debug, std::hash::Hash, Eq, PartialEq)]));
 
-    let mut variants = TokenStream::new();
-    let mut to_repr_cases = TokenStream::new();
-    let mut tryfrom_repr_cases = TokenStream::new();
-    for (n, variant) in e.variants.iter().enumerate() {
+    let variant_names = e.variants.iter().map(|v| names.enum_variant(&v.name));
+    let tryfrom_repr_cases = e.variants.iter().enumerate().map(|(n, v)| {
+        let variant_name = names.enum_variant(&v.name);
         let n = n as u32;
-        let variant_name = names.enum_variant(&variant.name);
-        variants.extend(quote!(#variant_name,));
-        tryfrom_repr_cases.extend(quote!(#n => Ok(#ident::#variant_name),));
-        to_repr_cases.extend(quote!(#ident::#variant_name => #n,));
-    }
+        quote!(#n => Ok(#ident::#variant_name))
+    });
+    let to_repr_cases = e.variants.iter().enumerate().map(|(n, v)| {
+        let variant_name = names.enum_variant(&v.name);
+        let n = n as u32;
+        quote!(#ident::#variant_name => #n)
+    });
 
-    tryfrom_repr_cases
-        .extend(quote!(_ => Err(::memory::GuestValueError::InvalidEnum(stringify!(#ident)))));
+    quote! {
+        #[repr(#repr)]
+        #[derive(Copy, Clone, Debug, ::std::hash::Hash, Eq, PartialEq)]
+        pub enum #ident {
+            #(#variant_names),*
+        }
 
-    output.extend(quote!(pub enum #ident {
-        #variants
-    }
+        impl ::std::convert::TryFrom<#repr> for #ident {
+            type Error = ::memory::GuestValueError;
+            fn try_from(value: #repr) -> Result<#ident, ::memory::GuestValueError> {
+                match value {
+                    #(#tryfrom_repr_cases),*,
+                    _ => Err(::memory::GuestValueError::InvalidEnum(stringify!(#ident))),
+                }
+            }
+        }
 
-    impl ::std::convert::TryFrom<#repr> for #ident {
-        type Error = ::memory::GuestValueError;
-        fn try_from(value: #repr) -> Result<#ident, ::memory::GuestValueError> {
-            match value {
-                #tryfrom_repr_cases
+        impl From<#ident> for #repr {
+            fn from(e: #ident) -> #repr {
+                match e {
+                    #(#to_repr_cases),*
+                }
+            }
+        }
+
+        impl ::memory::GuestType for #ident {
+            fn size() -> u32 {
+                ::std::mem::size_of::<#repr>() as u32
+            }
+            fn name() -> &'static str {
+                stringify!(#ident)
+            }
+        }
+
+        impl ::memory::GuestTypeCopy for #ident {
+            fn read_val(src: ::memory::GuestPtr<#ident>) -> Result<#ident, ::memory::GuestValueError> {
+                use ::std::convert::TryInto;
+                let val = unsafe { ::std::ptr::read_unaligned(src.ptr() as *const #repr) };
+                val.try_into()
+            }
+            fn write_val(val: #ident, dest: ::memory::GuestPtrMut<#ident>) {
+                let val: #repr = val.into();
+                unsafe {
+                    ::std::ptr::write_unaligned(dest.ptr_mut() as *mut #repr, val)
+                };
             }
         }
     }
-
-    impl From<#ident> for #repr {
-        fn from(e: #ident) -> #repr {
-            match e {
-                #to_repr_cases
-            }
-        }
-    }
-
-    impl ::memory::GuestType for #ident {
-        fn size() -> u32 {
-            ::std::mem::size_of::<#repr>() as u32
-        }
-        fn name() -> &'static str {
-            stringify!(#ident)
-        }
-    }
-
-    impl ::memory::GuestTypeCopy for #ident {
-        fn read_val(src: ::memory::GuestPtr<#ident>) -> Result<#ident, ::memory::GuestValueError> {
-            use ::std::convert::TryInto;
-            let val = unsafe { ::std::ptr::read_unaligned(src.ptr() as *const #repr) };
-            val.try_into()
-        }
-        fn write_val(val: #ident, dest: ::memory::GuestPtrMut<#ident>) {
-            let val: #repr = val.into();
-            unsafe {
-                ::std::ptr::write_unaligned(dest.ptr_mut() as *mut #repr, val)
-            };
-        }
-    }
-    ));
-
-    output
 }
 
 fn define_builtin(names: &Names, name: &witx::Id, builtin: witx::BuiltinType) -> TokenStream {
