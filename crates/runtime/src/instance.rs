@@ -7,7 +7,7 @@ use crate::imports::Imports;
 use crate::jit_int::GdbJitImageRegistration;
 use crate::memory::LinearMemory;
 use crate::mmap::Mmap;
-use crate::signalhandlers::wasmtime_init_eager;
+use crate::signalhandlers;
 use crate::table::Table;
 use crate::traphandlers::{wasmtime_call, Trap};
 use crate::vmcontext::{
@@ -863,7 +863,7 @@ impl InstanceHandle {
 
         // Ensure that our signal handlers are ready for action.
         // TODO: Move these calls out of `InstanceHandle`.
-        wasmtime_init_eager();
+        signalhandlers::init();
 
         // The WebAssembly spec specifies that the start function is
         // invoked automatically at instantiation time.

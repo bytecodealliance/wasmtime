@@ -1,53 +1,26 @@
 //! Interface to low-level signal-handling mechanisms.
 
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-
-use lazy_static::lazy_static;
-use std::sync::RwLock;
+use std::sync::Once;
 
 extern "C" {
     fn EnsureEagerSignalHandlers() -> libc::c_int;
 }
 
-struct InstallState {
-    tried: bool,
-    success: bool,
+/// This function performs the low-overhead signal handler initialization that
+/// we want to do eagerly to ensure a more-deterministic global process state.
+///
+/// This is especially relevant for signal handlers since handler ordering
+/// depends on installation order: the wasm signal handler must run *before*
+/// the other crash handlers and since POSIX signal handlers work LIFO, this
+/// function needs to be called at the end of the startup process, after other
+/// handlers have been installed. This function can thus be called multiple
+/// times, having no effect after the first call.
+pub fn init() {
+    static INIT: Once = Once::new();
+    INIT.call_once(real_init);
 }
 
-impl InstallState {
-    fn new() -> Self {
-        Self {
-            tried: false,
-            success: false,
-        }
-    }
-}
-
-lazy_static! {
-    static ref EAGER_INSTALL_STATE: RwLock<InstallState> = RwLock::new(InstallState::new());
-}
-
-/// This function performs the low-overhead signal handler initialization that we
-/// want to do eagerly to ensure a more-deterministic global process state. This
-/// is especially relevant for signal handlers since handler ordering depends on
-/// installation order: the wasm signal handler must run *before* the other crash
-/// handlers and since POSIX signal handlers work LIFO, this function needs to be
-/// called at the end of the startup process, after other handlers have been
-/// installed. This function can thus be called multiple times, having no effect
-/// after the first call.
-#[no_mangle]
-pub extern "C" fn wasmtime_init_eager() {
-    let mut state = EAGER_INSTALL_STATE.write().unwrap();
-
-    if state.tried {
-        return;
-    }
-
-    state.tried = true;
-    assert!(!state.success);
-
+fn real_init() {
     // This is a really weird and unfortunate function call. For all the gory
     // details see #829, but the tl;dr; is that in a trap handler we have 2
     // pages of stack space on Linux, and calling into libunwind which triggers
@@ -60,8 +33,6 @@ pub extern "C" fn wasmtime_init_eager() {
     drop(backtrace::Backtrace::new_unresolved());
 
     if unsafe { EnsureEagerSignalHandlers() == 0 } {
-        return;
+        panic!("failed to install signal handlers");
     }
-
-    state.success = true;
 }
