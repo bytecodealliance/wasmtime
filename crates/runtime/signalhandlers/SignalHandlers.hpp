@@ -13,9 +13,8 @@
 extern "C" {
 #endif
 
-int8_t CheckIfTrapAtAddress(const uint8_t* pc);
 // Record the Trap code and wasm bytecode offset in TLS somewhere
-void RecordTrap(const uint8_t* pc, bool reset_guard_page);
+void* RecordTrap(const uint8_t* pc, bool reset_guard_page);
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -28,10 +27,7 @@ bool InstanceSignalHandler(int, siginfo_t *, void *);
 bool InstanceSignalHandler(int, siginfo_t *, ucontext_t *);
 #endif
 
-void* EnterScope(void*);
-void LeaveScope(void*);
-void* GetScope(void);
-void Unwind(void);
+void Unwind(void*);
 
 // This function performs the low-overhead signal handler initialization that we
 // want to do eagerly to ensure a more-deterministic global process state. This

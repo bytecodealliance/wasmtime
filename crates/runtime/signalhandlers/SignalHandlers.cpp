@@ -408,11 +408,10 @@ HandleTrap(CONTEXT* context, bool reset_guard_page)
 {
     assert(sAlreadyHandlingTrap);
 
-    if (!CheckIfTrapAtAddress(ContextToPC(context))) {
-        return false;
+    void *JmpBuf = RecordTrap(ContextToPC(context), reset_guard_page);
+    if (JmpBuf == nullptr) {
+      return false;
     }
-
-    RecordTrap(ContextToPC(context), reset_guard_page);
 
     // Unwind calls longjmp, so it doesn't run the automatic
     // sAlreadhHanldingTrap cleanups, so reset it manually before doing
@@ -423,12 +422,13 @@ HandleTrap(CONTEXT* context, bool reset_guard_page)
     // Reroute the PC to run the Unwind function on the main stack after the
     // handler exits. This doesn't yet work for stack overflow traps, because
     // in that case the main thread doesn't have any space left to run.
-    SetContextPC(context, reinterpret_cast<const uint8_t*>(&Unwind));
+    assert(false); // this branch isn't implemented here
+    // SetContextPC(context, reinterpret_cast<const uint8_t*>(&Unwind));
 #else
     // For now, just call Unwind directly, rather than redirecting the PC there,
     // so that it runs on the alternate signal handler stack. To run on the main
     // stack, reroute the context PC like this:
-    Unwind();
+    Unwind(JmpBuf);
 #endif
 
     return true;
