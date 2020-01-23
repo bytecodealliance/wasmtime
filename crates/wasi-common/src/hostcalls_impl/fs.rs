@@ -610,10 +610,8 @@ pub(crate) unsafe fn path_open(
     let fd = hostcalls_impl::path_open(resolved, read, write, oflags, fs_flags)?;
 
     let mut fe = FdEntry::from(fd)?;
-    // We need to manually deny the rights which are not explicitly requested.
-    // This should not be needed, but currently determine_type_and_access_rights,
-    // which is used by FdEntry::from, may grant extra rights while inferring it
-    // from the open mode.
+    // We need to manually deny the rights which are not explicitly requested
+    // because FdEntry::from will assign maximal consistent rights.
     fe.rights_base &= fs_rights_base;
     fe.rights_inheriting &= fs_rights_inheriting;
     let guest_fd = wasi_ctx.insert_fd_entry(fe)?;

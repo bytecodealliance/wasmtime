@@ -61,6 +61,9 @@ pub(crate) struct FdEntry {
 }
 
 impl FdEntry {
+    /// Create an FdEntry with *maximal* possible rights from a given `File`.
+    /// If this is not desired, the rights of the resulting `FdEntry` should
+    /// be manually restricted.
     pub(crate) fn from(file: fs::File) -> Result<Self> {
         unsafe { determine_type_and_access_rights(&file) }.map(
             |(file_type, rights_base, rights_inheriting)| Self {
