@@ -69,7 +69,7 @@ builtin_copy!(u8, i8, u16, i16, u32, i32, u64, i64, f32, f64, usize, char);
 
 pub trait GuestError {
     type Context;
-    fn is_success(&self) -> bool;
+    fn success() -> Self;
     fn from_memory_error(memory_error: MemoryError, ctx: &mut Self::Context) -> Self;
     fn from_value_error(value_error: GuestValueError, ctx: &mut Self::Context) -> Self;
 }

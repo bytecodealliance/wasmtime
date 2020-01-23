@@ -42,7 +42,6 @@ impl Names {
         }
     }
 
-    #[allow(unused)]
     pub fn type_ref(&self, tref: &TypeRef) -> TokenStream {
         match tref {
             TypeRef::Name(nt) => {
@@ -67,6 +66,10 @@ impl Names {
 
     pub fn module(&self, id: &Id) -> Ident {
         format_ident!("{}", id.as_str().to_snake_case())
+    }
+
+    pub fn trait_name(&self, id: &Id) -> Ident {
+        format_ident!("{}", id.as_str().to_camel_case())
     }
 
     pub fn func(&self, id: &Id) -> Ident {

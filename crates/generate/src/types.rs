@@ -32,6 +32,7 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
     let ident = names.type_(&name);
 
     let repr = int_repr_tokens(e.repr);
+    let signed_repr = int_signed_repr_tokens(e.repr);
 
     let variant_names = e.variants.iter().map(|v| names.enum_variant(&v.name));
     let tryfrom_repr_cases = e.variants.iter().enumerate().map(|(n, v)| {
@@ -62,11 +63,24 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
             }
         }
 
+        impl ::std::convert::TryFrom<#signed_repr> for #ident {
+            type Error = ::memory::GuestValueError;
+            fn try_from(value: #signed_repr) -> Result<#ident, ::memory::GuestValueError> {
+                #ident::try_from(value as #repr)
+            }
+        }
+
         impl From<#ident> for #repr {
             fn from(e: #ident) -> #repr {
                 match e {
                     #(#to_repr_cases),*
                 }
+            }
+        }
+
+        impl From<#ident> for #signed_repr {
+            fn from(e: #ident) -> #signed_repr {
+                #repr::from(e) as #signed_repr
             }
         }
 
@@ -107,5 +121,13 @@ fn int_repr_tokens(int_repr: witx::IntRepr) -> TokenStream {
         witx::IntRepr::U16 => quote!(u16),
         witx::IntRepr::U32 => quote!(u32),
         witx::IntRepr::U64 => quote!(u64),
+    }
+}
+fn int_signed_repr_tokens(int_repr: witx::IntRepr) -> TokenStream {
+    match int_repr {
+        witx::IntRepr::U8 => quote!(i8),
+        witx::IntRepr::U16 => quote!(i16),
+        witx::IntRepr::U32 => quote!(i32),
+        witx::IntRepr::U64 => quote!(i64),
     }
 }
