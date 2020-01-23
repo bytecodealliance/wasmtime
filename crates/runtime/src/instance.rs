@@ -64,8 +64,7 @@ cfg_if::cfg_if! {
                     return false;
                 } else {
                     unsafe {
-                        let last =
-                        &current_instance
+                        let last = &current_instance
                             .last()
                             .expect("current instance not none")
                             .as_ref();
@@ -112,12 +111,17 @@ cfg_if::cfg_if! {
                     return false;
                 } else {
                     unsafe {
-                        let f = &current_instance
+                        let last = &current_instance
                             .last()
                             .expect("current instance not none")
-                            .as_ref()
-                            .signal_handler;
-                        f(exception_info)
+                            .as_ref();
+
+                        let f = last
+                            .signal_handler
+                            .replace(Box::new(signal_handler_none));
+                        let ret = f(exception_info);
+                        drop(last.signal_handler.replace(f));
+                        ret
                     }
                 }
             })
@@ -129,7 +133,7 @@ cfg_if::cfg_if! {
             where
                 H: 'static + Fn(winapi::um::winnt::EXCEPTION_POINTERS) -> bool,
             {
-                self.instance().signal_handler.replace(Box::new(handler));
+                drop(self.instance().signal_handler.replace(Box::new(handler)));
             }
         }
     }
