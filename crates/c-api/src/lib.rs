@@ -6,6 +6,7 @@
 // TODO complete the C API
 
 use std::cell::RefCell;
+use std::panic::{self, AssertUnwindSafe};
 use std::rc::Rc;
 use std::{mem, ptr, slice};
 use wasmtime::{
@@ -488,15 +489,34 @@ pub unsafe extern "C" fn wasm_func_call(
         let val = &(*args.add(i));
         params.push(val.val());
     }
-    match func.call(&params) {
-        Ok(out) => {
+
+    // We're calling arbitrary code here most of the time, and we in general
+    // want to try to insulate callers against bugs in wasmtime/wasi/etc if we
+    // can. As a result we catch panics here and transform them to traps to
+    // allow the caller to have any insulation possible against Rust panics.
+    let result = panic::catch_unwind(AssertUnwindSafe(|| func.call(&params)));
+    match result {
+        Ok(Ok(out)) => {
             for i in 0..func.result_arity() {
                 let val = &mut (*results.add(i));
                 *val = wasm_val_t::from_val(&out[i]);
             }
             ptr::null_mut()
         }
-        Err(trap) => {
+        Ok(Err(trap)) => {
+            let trap = Box::new(wasm_trap_t {
+                trap: HostRef::new(trap),
+            });
+            Box::into_raw(trap)
+        }
+        Err(panic) => {
+            let trap = if let Some(msg) = panic.downcast_ref::<String>() {
+                Trap::new(msg)
+            } else if let Some(msg) = panic.downcast_ref::<&'static str>() {
+                Trap::new(*msg)
+            } else {
+                Trap::new("rust panic happened")
+            };
             let trap = Box::new(wasm_trap_t {
                 trap: HostRef::new(trap),
             });

@@ -1,5 +1,6 @@
 use lazy_static::lazy_static;
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use wasmtime_environ::ir;
 
@@ -20,6 +21,35 @@ pub struct TrapDescription {
     pub source_loc: ir::SourceLoc,
     /// Code of the trap.
     pub trap_code: ir::TrapCode,
+}
+
+impl fmt::Display for TrapDescription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "wasm trap: {}, source location: {}",
+            trap_code_to_expected_string(self.trap_code),
+            self.source_loc
+        )
+    }
+}
+
+fn trap_code_to_expected_string(trap_code: ir::TrapCode) -> String {
+    use ir::TrapCode::*;
+    match trap_code {
+        StackOverflow => "call stack exhausted".to_string(),
+        HeapOutOfBounds => "out of bounds memory access".to_string(),
+        TableOutOfBounds => "undefined element".to_string(),
+        OutOfBounds => "out of bounds".to_string(), // Note: not covered by the test suite
+        IndirectCallToNull => "uninitialized element".to_string(),
+        BadSignature => "indirect call type mismatch".to_string(),
+        IntegerOverflow => "integer overflow".to_string(),
+        IntegerDivisionByZero => "integer divide by zero".to_string(),
+        BadConversionToInteger => "invalid conversion to integer".to_string(),
+        UnreachableCodeReached => "unreachable".to_string(),
+        Interrupt => "interrupt".to_string(), // Note: not covered by the test suite
+        User(x) => format!("user trap {}", x), // Note: not covered by the test suite
+    }
 }
 
 /// RAII guard for deregistering traps

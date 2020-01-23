@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::panic::{self, AssertUnwindSafe};
 use std::rc::Rc;
 use wasmtime::*;
 
@@ -213,5 +214,97 @@ wasm backtrace:
   5: b!<wasm function 2>
 "
     );
+    Ok(())
+}
+
+#[test]
+fn trap_start_function_import() -> Result<()> {
+    struct ReturnTrap;
+
+    impl Callable for ReturnTrap {
+        fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
+            Err(Trap::new("user trap"))
+        }
+    }
+
+    let store = Store::default();
+    let binary = wat::parse_str(
+        r#"
+            (module $a
+                (import "" "" (func $foo))
+                (start $foo)
+            )
+        "#,
+    )?;
+
+    let module = Module::new(&store, &binary)?;
+    let sig = FuncType::new(Box::new([]), Box::new([]));
+    let func = Func::new(&store, sig, Rc::new(ReturnTrap));
+    let err = Instance::new(&module, &[func.into()]).err().unwrap();
+    assert_eq!(err.downcast_ref::<Trap>().unwrap().message(), "user trap");
+    Ok(())
+}
+
+#[test]
+fn rust_panic_import() -> Result<()> {
+    struct Panic;
+
+    impl Callable for Panic {
+        fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
+            panic!("this is a panic");
+        }
+    }
+
+    let store = Store::default();
+    let binary = wat::parse_str(
+        r#"
+            (module $a
+                (import "" "" (func $foo))
+                (func (export "foo") call $foo)
+            )
+        "#,
+    )?;
+
+    let module = Module::new(&store, &binary)?;
+    let sig = FuncType::new(Box::new([]), Box::new([]));
+    let func = Func::new(&store, sig, Rc::new(Panic));
+    let instance = Instance::new(&module, &[func.into()])?;
+    let func = instance.exports()[0].func().unwrap().clone();
+    let err = panic::catch_unwind(AssertUnwindSafe(|| {
+        drop(func.call(&[]));
+    }))
+    .unwrap_err();
+    assert_eq!(err.downcast_ref::<&'static str>(), Some(&"this is a panic"));
+    Ok(())
+}
+
+#[test]
+fn rust_panic_start_function() -> Result<()> {
+    struct Panic;
+
+    impl Callable for Panic {
+        fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
+            panic!("this is a panic");
+        }
+    }
+
+    let store = Store::default();
+    let binary = wat::parse_str(
+        r#"
+            (module $a
+                (import "" "" (func $foo))
+                (start $foo)
+            )
+        "#,
+    )?;
+
+    let module = Module::new(&store, &binary)?;
+    let sig = FuncType::new(Box::new([]), Box::new([]));
+    let func = Func::new(&store, sig, Rc::new(Panic));
+    let err = panic::catch_unwind(AssertUnwindSafe(|| {
+        drop(Instance::new(&module, &[func.into()]));
+    }))
+    .unwrap_err();
+    assert_eq!(err.downcast_ref::<&'static str>(), Some(&"this is a panic"));
     Ok(())
 }

@@ -1,7 +1,6 @@
 use crate::externals::Extern;
 use crate::module::Module;
 use crate::runtime::Store;
-use crate::trampoline::take_api_trap;
 use crate::trap::Trap;
 use crate::types::{ExportType, ExternType};
 use anyhow::{Error, Result};
@@ -29,12 +28,9 @@ fn instantiate(
         let instance = compiled_module
             .instantiate(&mut resolver)
             .map_err(|e| -> Error {
-                if let Some(trap) = take_api_trap() {
-                    trap.into()
-                } else if let InstantiationError::StartTrap(trap) = e {
-                    Trap::from_jit(trap).into()
-                } else {
-                    e.into()
+                match e {
+                    InstantiationError::StartTrap(trap) => Trap::from_jit(trap).into(),
+                    other => other.into(),
                 }
             })?;
         Ok(instance)
