@@ -4,17 +4,8 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
-use crate::vmcontext::VMContext;
 use lazy_static::lazy_static;
-use std::borrow::{Borrow, BorrowMut};
-use std::cell::Cell;
 use std::sync::RwLock;
-
-#[derive(Default)]
-struct TrapContext {
-    tried_to_install_signal_handlers: Cell<bool>,
-    have_signal_handlers: Cell<bool>,
-}
 
 extern "C" {
     fn EnsureEagerSignalHandlers() -> libc::c_int;
@@ -48,8 +39,7 @@ lazy_static! {
 /// after the first call.
 #[no_mangle]
 pub extern "C" fn wasmtime_init_eager() {
-    let mut locked = EAGER_INSTALL_STATE.write().unwrap();
-    let state = locked.borrow_mut();
+    let mut state = EAGER_INSTALL_STATE.write().unwrap();
 
     if state.tried {
         return;
@@ -74,44 +64,4 @@ pub extern "C" fn wasmtime_init_eager() {
     }
 
     state.success = true;
-}
-
-thread_local! {
-    static TRAP_CONTEXT: TrapContext = TrapContext::default();
-}
-
-/// Assuming `EnsureEagerProcessSignalHandlers` has already been called,
-/// this function performs the full installation of signal handlers which must
-/// be performed per-thread. This operation may incur some overhead and
-/// so should be done only when needed to use wasm.
-#[no_mangle]
-pub extern "C" fn wasmtime_init_finish(vmctx: &mut VMContext) {
-    if !TRAP_CONTEXT.with(|cx| cx.tried_to_install_signal_handlers.get()) {
-        TRAP_CONTEXT.with(|cx| {
-            cx.tried_to_install_signal_handlers.set(true);
-            assert!(!cx.have_signal_handlers.get());
-        });
-
-        {
-            let locked = EAGER_INSTALL_STATE.read().unwrap();
-            let state = locked.borrow();
-            assert!(
-                state.tried,
-                "call wasmtime_init_eager before calling wasmtime_init_finish"
-            );
-            if !state.success {
-                return;
-            }
-        }
-
-        TRAP_CONTEXT.with(|cx| {
-            cx.have_signal_handlers.set(true);
-        })
-    }
-
-    let instance = unsafe { vmctx.instance() };
-    let have_signal_handlers = TRAP_CONTEXT.with(|cx| cx.have_signal_handlers.get());
-    if !have_signal_handlers && instance.needs_signal_handlers() {
-        panic!("failed to install signal handlers");
-    }
 }
