@@ -40,13 +40,6 @@ void Unwind(void*);
 int
 EnsureEagerSignalHandlers(void);
 
-// Assuming EnsureEagerProcessSignalHandlers() has already been called,
-// this function performs the full installation of signal handlers which must
-// be performed per-thread. This operation may incur some overhead and
-// so should be done only when needed to use wasm.
-int
-EnsureDarwinMachPorts(void);
-
 #ifdef __cplusplus
 } // extern "C"
 #endif

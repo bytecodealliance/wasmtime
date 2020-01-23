@@ -7,7 +7,7 @@ use crate::imports::Imports;
 use crate::jit_int::GdbJitImageRegistration;
 use crate::memory::LinearMemory;
 use crate::mmap::Mmap;
-use crate::signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
+use crate::signalhandlers;
 use crate::table::Table;
 use crate::traphandlers::{wasmtime_call, Trap};
 use crate::vmcontext::{
@@ -611,14 +611,6 @@ impl Instance {
         index
     }
 
-    /// Test whether any of the objects inside this instance require signal
-    /// handlers to catch out of bounds accesses.
-    pub(crate) fn needs_signal_handlers(&self) -> bool {
-        self.memories
-            .values()
-            .any(|memory| memory.needs_signal_handlers)
-    }
-
     /// Grow memory by the specified amount of pages.
     ///
     /// Returns `None` if memory can't be grown by the specified amount
@@ -871,8 +863,7 @@ impl InstanceHandle {
 
         // Ensure that our signal handlers are ready for action.
         // TODO: Move these calls out of `InstanceHandle`.
-        wasmtime_init_eager();
-        wasmtime_init_finish(instance.vmctx_mut());
+        signalhandlers::init();
 
         // The WebAssembly spec specifies that the start function is
         // invoked automatically at instantiation time.

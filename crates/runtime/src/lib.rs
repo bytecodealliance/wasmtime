@@ -43,7 +43,6 @@ pub use crate::instance::{InstanceHandle, InstantiationError, LinkError};
 pub use crate::jit_int::GdbJitImageRegistration;
 pub use crate::mmap::Mmap;
 pub use crate::sig_registry::SignatureRegistry;
-pub use crate::signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
 pub use crate::trap_registry::{get_mut_trap_registry, get_trap_registry, TrapRegistrationGuard};
 pub use crate::traphandlers::{wasmtime_call, wasmtime_call_trampoline, Trap};
 pub use crate::vmcontext::{
