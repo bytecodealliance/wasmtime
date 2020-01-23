@@ -41,6 +41,7 @@ impl Names {
         }
     }
 
+    #[allow(unused)]
     pub fn type_ref(&self, tref: &TypeRef) -> TokenStream {
         match tref {
             TypeRef::Name(nt) => {

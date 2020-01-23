@@ -33,7 +33,7 @@ impl<'a> GuestMemory<'a> {
     pub fn ptr<T: GuestType>(&'a self, at: u32) -> Result<GuestPtr<'a, T>, MemoryError> {
         let r = Region {
             start: at,
-            len: T::len(),
+            len: T::size(),
         };
         let mut borrows = self.borrows.borrow_mut();
         if !self.contains(r) {
@@ -53,7 +53,7 @@ impl<'a> GuestMemory<'a> {
     pub fn ptr_mut<T: GuestType>(&'a self, at: u32) -> Result<GuestPtrMut<'a, T>, MemoryError> {
         let r = Region {
             start: at,
-            len: T::len(),
+            len: T::size(),
         };
         let mut borrows = self.borrows.borrow_mut();
         if !self.contains(r) {
@@ -77,9 +77,18 @@ pub struct GuestPtr<'a, T> {
     type_: PhantomData<T>,
 }
 
-impl<'a, T> GuestPtr<'a, T> {
+impl<'a, T: GuestType> GuestPtr<'a, T> {
     pub fn ptr(&self) -> *const u8 {
         (self.mem.ptr as usize + self.region.start as usize) as *const u8
+    }
+
+    pub unsafe fn downcast<Q: GuestType>(self) -> GuestPtr<'a, Q> {
+        debug_assert!(T::size() == Q::size(), "downcast to type of same size");
+        GuestPtr {
+            mem: self.mem,
+            region: self.region,
+            type_: PhantomData,
+        }
     }
 }
 
