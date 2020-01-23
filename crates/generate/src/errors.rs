@@ -7,6 +7,18 @@ use witx::{Document, TypeRef};
 
 /// The context struct needs to implement a trait for converting memory and value errors into the
 /// witx doc's error types.
+///
+// XXX im rethinking this. maybe each error type should impl
+// pub trait WitxErrorType {
+//   type Context;
+//   fn is_success(&self) -> bool;
+//   fn from_memory_error(memory_error: MemoryError, ctx: &mut Context) -> Self;
+//   fn from_value_error(value_error: GuestValueError, ctx: &mut Context) -> Self;
+// }
+//
+// where Context is mapped to their wasi ctx.
+// It seems less "magic" to leave that impl up to the user, and the error message may be simpler?
+//
 pub fn define_error_trait(names: &Names, doc: &Document) -> TokenStream {
     // All non-anonymous first return types are used to pass errors.
     let error_typenames = doc
