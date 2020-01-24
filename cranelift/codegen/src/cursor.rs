@@ -636,7 +636,6 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
 
     fn insert_built_inst(self, inst: ir::Inst, _: ir::Type) -> &'c mut ir::DataFlowGraph {
         // TODO: Remove this assertion once #796 is fixed.
-        #[cfg(feature = "basic-blocks")]
         #[cfg(debug_assertions)]
         {
             if let CursorPosition::At(_) = self.position() {
@@ -766,7 +765,6 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut EncCursor<'f> {
         ctrl_typevar: ir::Type,
     ) -> &'c mut ir::DataFlowGraph {
         // TODO: Remove this assertion once #796 is fixed.
-        #[cfg(feature = "basic-blocks")]
         #[cfg(debug_assertions)]
         {
             if let CursorPosition::At(_) = self.position() {

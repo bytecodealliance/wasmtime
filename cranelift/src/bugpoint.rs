@@ -589,19 +589,16 @@ impl Mutator for MergeBlocks {
 
         let pred = cfg.pred_iter(ebb).next().unwrap();
 
-        #[cfg(feature = "basic-blocks")]
-        {
-            // If the branch instruction that lead us to this block is preceded by another branch
-            // instruction, then we have a conditional jump sequence that we should not break by
-            // replacing the second instruction by more of them.
-            if let Some(pred_pred_inst) = func.layout.prev_inst(pred.inst) {
-                if func.dfg[pred_pred_inst].opcode().is_branch() {
-                    return Some((
-                        func,
-                        format!("did nothing for {}", ebb),
-                        ProgressStatus::Skip,
-                    ));
-                }
+        // If the branch instruction that lead us to this block is preceded by another branch
+        // instruction, then we have a conditional jump sequence that we should not break by
+        // replacing the second instruction by more of them.
+        if let Some(pred_pred_inst) = func.layout.prev_inst(pred.inst) {
+            if func.dfg[pred_pred_inst].opcode().is_branch() {
+                return Some((
+                    func,
+                    format!("did nothing for {}", ebb),
+                    ProgressStatus::Skip,
+                ));
             }
         }
 

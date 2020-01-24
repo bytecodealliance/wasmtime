@@ -1,7 +1,6 @@
 test safepoint
 set enable_safepoints=true
 target x86_64
-feature !"basic-blocks"
 
 function %test(i32, r64, r64) -> r64 {
     ebb0(v0: i32, v1:r64, v2:r64):
@@ -12,14 +11,18 @@ function %test(i32, r64, r64) -> r64 {
     ebb2(v5: i32):
         resumable_trap interrupt
         brz v5, ebb1(v5)
+        jump ebb3
+    ebb3:
         v6 = null.r64
         v7 = is_null v6
         brnz v7, ebb2(v0)
-        brnz v0, ebb3
         jump ebb4
-    ebb3:
-        return v1
     ebb4:
+        brnz v0, ebb5
+        jump ebb6
+    ebb5:
+        return v1
+    ebb6:
         return v2
 }
 
@@ -28,28 +31,41 @@ function %test(i32, r64, r64) -> r64 {
 ; nextln:   v10 = copy v0
 ; nextln:   jump ebb1(v10)
 ; nextln: 
+; nextln: ebb7:
+; nextln:   regmove.i32 v5, %rcx -> %rax
+; nextln:   jump ebb1(v5)
+; nextln: 
 ; nextln: ebb1(v3: i32 [%rax]):
 ; nextln:   v8 = iconst.i32 1
 ; nextln:   v4 = isub v8, v3
 ; nextln:   jump ebb2(v4)
 ; nextln: 
+; nextln: ebb8:
+; nextln:   v9 = copy.i32 v0
+; nextln:   regmove v9, %rax -> %rcx
+; nextln:   jump ebb2(v9)
+; nextln: 
 ; nextln: ebb2(v5: i32 [%rcx]):
 ; nextln:   safepoint v1, v2
 ; nextln:   resumable_trap interrupt
-; nextln:   regmove v5, %rcx -> %rax
-; nextln:   brz v5, ebb1(v5)
-; nextln:   v6 = null.r64 
-; nextln:   v7 = is_null v6
-; nextln:   v9 = copy.i32 v0
-; nextln:   brnz v7, ebb2(v9)
-; nextln:   brnz.i32 v0, ebb3
-; nextln:   jump ebb4
+; nextln:   brz v5, ebb7
+; nextln:   jump ebb3
 ; nextln: 
 ; nextln: ebb3:
+; nextln:   v6 = null.r64 
+; nextln:   v7 = is_null v6
+; nextln:   brnz v7, ebb8
+; nextln:   jump ebb4
+; nextln: 
+; nextln: ebb4:
+; nextln:   brnz.i32 v0, ebb5
+; nextln:   jump ebb6
+; nextln: 
+; nextln: ebb5:
 ; nextln:   regmove.r64 v1, %rsi -> %rax
 ; nextln:   return v1
 ; nextln: 
-; nextln: ebb4:
+; nextln: ebb6:
 ; nextln:   regmove.r64 v2, %rdx -> %rax
 ; nextln:   return v2
 ; nextln: }

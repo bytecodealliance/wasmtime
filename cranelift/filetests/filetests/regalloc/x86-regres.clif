@@ -1,8 +1,8 @@
 test regalloc
 target i686
-feature !"basic-blocks"
 
 ; regex: V=v\d+
+; regex: EBB=ebb\d+
 
 ; The value v9 appears both as the branch control and one of the EBB arguments
 ; in the brnz instruction in ebb2. It also happens that v7 and v9 are assigned
@@ -18,13 +18,16 @@ ebb0(v0: i32):
     v3 = iconst.i32 0
     jump ebb2(v3, v2, v0)
 
+    ; check: $(splitEdge=$EBB):
+    ; check:   jump ebb2($V, $V, v9)
+
 ebb2(v4: i32, v5: i32, v7: i32):
     ; check: ebb2
     v6 = iadd v4, v5
     v8 = iconst.i32 -1
     ; v7 is killed here and v9 gets the same register.
     v9 = iadd v7, v8
-    ; check: v9 = iadd v7, v8
+    ; check:   v9 = iadd v7, v8
     ; Here v9 the brnz control appears to interfere with v9 the EBB argument,
     ; so divert_fixed_input_conflicts() calls add_var(v9), which is ok. The
     ; add_var sanity checks got confused when no fixed assignment could be
@@ -32,7 +35,7 @@ ebb2(v4: i32, v5: i32, v7: i32):
     ;
     ; We should be able to handle this situation without making copies of v9.
     brnz v9, ebb2(v5, v6, v9)
-    ; check: brnz v9, ebb2($V, $V, v9)
+    ; check:   brnz v9, $splitEdge
     jump ebb3
 
 ebb3:

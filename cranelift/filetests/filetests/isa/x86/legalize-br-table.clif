@@ -1,7 +1,6 @@
 test compile
 set opt_level=speed_and_size
 target x86_64
-feature !"basic-blocks"
 ; regex: V=v\d+
 ; regex: EBB=ebb\d+
 
@@ -14,7 +13,8 @@ ebb0(v0: i64):
     v2 = load.i8 v1
     br_table v2, ebb2, jt0
 ; check:     $(oob=$V) = ifcmp_imm $(idx=$V), 1
-; nextln:    brif uge $oob, ebb2
+; ebb2 is replaced by ebb1 by fold_redundant_jump
+; nextln:    brif uge $oob, ebb1
 ; nextln:    fallthrough $(inb=$EBB)
 ; check:   $inb:
 ; nextln:    $(final_idx=$V) = uextend.i64 $idx

@@ -206,7 +206,7 @@ impl<'a> Context<'a> {
             // We are not able to insert any regmove for diversion or un-diversion after the first
             // branch. Instead, we record the diversion to be restored at the entry of the next EBB,
             // which should have a single predecessor.
-            if opcode.is_branch() && cfg!(feature = "basic-blocks") {
+            if opcode.is_branch() {
                 // The next instruction is necessarily an unconditional branch.
                 if let Some(branch) = self.cur.next_inst() {
                     debug!(

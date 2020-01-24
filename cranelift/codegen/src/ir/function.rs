@@ -9,7 +9,7 @@ use crate::ir;
 use crate::ir::{DataFlowGraph, ExternalName, Layout, Signature};
 use crate::ir::{
     Ebb, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, Inst, JumpTable,
-    JumpTableData, SigRef, StackSlot, StackSlotData, Table, TableData,
+    JumpTableData, Opcode, SigRef, StackSlot, StackSlotData, Table, TableData,
 };
 use crate::ir::{EbbOffsets, FrameLayout, InstEncodings, SourceLocs, StackSlots, ValueLocations};
 use crate::ir::{JumpTableOffsets, JumpTables};
@@ -18,9 +18,6 @@ use crate::regalloc::{EntryRegDiversions, RegDiversions};
 use crate::value_label::ValueLabelsRanges;
 use crate::write::write_function;
 use core::fmt;
-
-#[cfg(feature = "basic-blocks")]
-use crate::ir::Opcode;
 
 /// A function.
 ///
@@ -273,7 +270,6 @@ impl Function {
     /// Checks that the specified EBB can be encoded as a basic block.
     ///
     /// On error, returns the first invalid instruction and an error message.
-    #[cfg(feature = "basic-blocks")]
     pub fn is_ebb_basic(&self, ebb: Ebb) -> Result<(), (Inst, &'static str)> {
         let dfg = &self.dfg;
         let inst_iter = self.layout.ebb_insts(ebb);

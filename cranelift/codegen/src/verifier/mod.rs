@@ -504,7 +504,6 @@ impl<'a> Verifier<'a> {
 
     /// Check that the given EBB can be encoded as a BB, by checking that only
     /// branching instructions are ending the EBB.
-    #[cfg(feature = "basic-blocks")]
     fn encodable_as_bb(&self, ebb: Ebb, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         match self.func.is_ebb_basic(ebb) {
             Ok(()) => Ok(()),
@@ -1983,7 +1982,6 @@ impl<'a> Verifier<'a> {
                 self.immediate_constraints(inst, errors)?;
             }
 
-            #[cfg(feature = "basic-blocks")]
             self.encodable_as_bb(ebb, errors)?;
         }
 

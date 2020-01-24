@@ -33,7 +33,7 @@ byteorder = { version = "1.3.2", default-features = false }
 cranelift-codegen-meta = { path = "meta", version = "0.56.0" }
 
 [features]
-default = ["std", "basic-blocks", "unwind"]
+default = ["std", "unwind"]
 
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two
@@ -68,9 +68,6 @@ all-arch = [
 
 # For dependent crates that want to serialize some parts of cranelift
 enable-serde = ["serde"]
-
-# Temporary feature that enforces basic block semantics.
-basic-blocks = []
 
 [badges]
 maintenance = { status = "experimental" }

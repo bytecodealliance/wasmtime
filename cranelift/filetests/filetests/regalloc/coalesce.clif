@@ -1,11 +1,11 @@
 test regalloc
 target riscv32
-feature !"basic-blocks"
 
 ; Test the coalescer.
 ; regex: V=v\d+
 ; regex: WS=\s+
 ; regex: LOC=%\w+
+; regex: EBB=ebb\d+
 
 ; This function is already CSSA, so no copies should be inserted.
 function %cssa(i32) -> i32 {
@@ -27,8 +27,7 @@ ebb1(v10: i32):
 
 function %trivial(i32) -> i32 {
 ebb0(v0: i32):
-    ; check: $(cp1=$V) = copy v0
-    ; nextln: brnz v0, ebb1($cp1)
+    ; check:    brnz v0, $(splitEdge=$EBB)
     brnz v0, ebb1(v0)
     jump ebb2
 
@@ -36,6 +35,10 @@ ebb2:
     ; not: copy
     v1 = iadd_imm v0, 7
     jump ebb1(v1)
+
+    ; check:  $splitEdge:
+    ; nextln:   $(cp1=$V) = copy.i32 v0
+    ; nextln:   jump ebb1($cp1)
 
 ebb1(v10: i32):
     ; Use v0 in the destination EBB causes a conflict.
@@ -46,8 +49,7 @@ ebb1(v10: i32):
 ; A value is used as an SSA argument twice in the same branch.
 function %dualuse(i32) -> i32 {
 ebb0(v0: i32):
-    ; check: $(cp1=$V) = copy v0
-    ; nextln: brnz v0, ebb1($cp1, v0)
+    ; check:  brnz v0, $(splitEdge=$EBB)
     brnz v0, ebb1(v0, v0)
     jump ebb2
 
@@ -55,6 +57,10 @@ ebb2:
     v1 = iadd_imm v0, 7
     v2 = iadd_imm v1, 56
     jump ebb1(v1, v2)
+
+    ; check:  $splitEdge:
+    ; check:    $(cp1=$V) = copy.i32 v0
+    ; nextln:   jump ebb1($cp1, v0)
 
 ebb1(v10: i32, v11: i32):
     v12 = iadd v10, v11
@@ -65,9 +71,9 @@ ebb1(v10: i32, v11: i32):
 ; The interference can be broken with a copy at either branch.
 function %interference(i32) -> i32 {
 ebb0(v0: i32):
-    ; check: $(cp0=$V) = copy v0
-    ; not: copy
-    ; check: brnz v0, ebb1($cp0)
+    ; not:    copy
+    ; check:  brnz v0, $(splitEdge=$EBB)
+    ; not:    copy
     brnz v0, ebb1(v0)
     jump ebb2
 
@@ -75,9 +81,13 @@ ebb2:
     v1 = iadd_imm v0, 7
     ; v1 and v0 interfere here:
     v2 = iadd_imm v0, 8
-    ; not: copy
-    ; check: jump ebb1(v1)
+    ; check: $(cp0=$V) = copy v1
+    ; check: jump ebb1($cp0)
     jump ebb1(v1)
+
+    ; check:  $splitEdge:
+    ; not:      copy
+    ; nextln:   jump ebb1(v0)
 
 ebb1(v10: i32):
     ; not: copy
@@ -92,15 +102,18 @@ ebb0(v0: i32):
     v2 = iconst.i32 2
     jump ebb1(v1, v2)
 
+    ; check:  $(splitEdge=$EBB):
+    ; check:    $(nv11b=$V) = copy.i32 v11
+    ; not:      copy
+    ; check:    jump ebb1($nv11b, v12)
+
 ebb1(v10: i32, v11: i32):
     ; v11 needs to be isolated because it interferes with v10.
     ; check: ebb1(v10: i32 [$LOC], $(nv11a=$V): i32 [$LOC])
     ; check: v11 = copy $nv11a
     v12 = iadd v10, v11
     v13 = icmp ult v12, v0
-    ; check: $(nv11b=$V) = copy v11
-    ; not: copy
-    ; check: brnz v13, ebb1($nv11b, v12)
+    ; check:  brnz v13, $splitEdge
     brnz v13, ebb1(v11, v12)
     jump ebb2
 

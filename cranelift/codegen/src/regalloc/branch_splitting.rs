@@ -2,8 +2,6 @@
 //!
 //! One of the reason for splitting edges is to be able to insert `copy` and `regmove` instructions
 //! between a conditional branch and the following terminator.
-#![cfg(feature = "basic-blocks")]
-
 use alloc::vec::Vec;
 
 use crate::cursor::{Cursor, EncCursor};

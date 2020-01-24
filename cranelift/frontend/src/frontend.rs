@@ -480,7 +480,6 @@ impl<'a> FunctionBuilder<'a> {
         );
 
         // In debug mode, check that all blocks are valid basic blocks.
-        #[cfg(feature = "basic-blocks")]
         #[cfg(debug_assertions)]
         {
             // Iterate manually to provide more helpful error messages.

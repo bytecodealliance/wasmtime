@@ -25,13 +25,10 @@ wat = "1.0.7"
 target-lexicon = "0.10"
 
 [features]
-default = ["std", "basic-blocks"]
+default = ["std"]
 std = ["cranelift-codegen/std", "cranelift-frontend/std"]
 core = ["hashbrown", "cranelift-codegen/core", "cranelift-frontend/core"]
 enable-serde = ["serde"]
-
-# Temporary feature that enforces basic block semantics.
-basic-blocks = ["cranelift-codegen/basic-blocks", "cranelift-frontend/basic-blocks"]
 
 [badges]
 maintenance = { status = "experimental" }

@@ -2,7 +2,6 @@ test compile
 set opt_level=speed
 set enable_pinned_reg=true
 target x86_64 haswell
-feature !"basic-blocks"
 
 ;; Test for the issue #1123; https://github.com/bytecodealliance/cranelift/issues/1123
 
@@ -24,26 +23,26 @@ ebb0(v0: i32, v1: i32, v2: i32, v3: i64):
     v39 -> v533
     v53 = iconst.i32 0
     v547 = ifcmp_imm v53, -1
-    brif eq v547, ebb30
-    trap user0
+    trapif ne v547, user0
+    jump ebb30
 
 ebb30:
     v75 = iconst.i32 0
     v581 = ifcmp_imm v75, -1
-    brif eq v581, ebb42
-    trap user0
+    trapif ne v581, user0
+    jump ebb42
 
 ebb42:
     v136 = iconst.i32 0
     v691 = ifcmp_imm v136, -1
-    brif eq v691, ebb81
-    trap user0
+    trapif ne v691, user0
+    jump ebb81
 
 ebb81:
     v158 = iconst.i32 0
     v725 = ifcmp_imm v158, -1
-    brif eq v725, ebb93
-    trap user0
+    trapif ne v725, user0
+    jump ebb93
 
 ebb93:
     v760 = iconst.i32 0
@@ -54,8 +53,8 @@ ebb106(v175: i32):
     v180 = icmp_imm eq v179, 0
     v183 = iconst.i32 0
     v766 = ifcmp_imm v183, -1
-    brif eq v766, ebb108
-    trap user0
+    trapif ne v766, user0
+    jump ebb108
 
 ebb108:
     v771 = iconst.i32 0
@@ -65,8 +64,8 @@ ebb109(v184: i32):
     v785 = iconst.i32 0
     v193 -> v785
     v791 = ifcmp_imm v193, -1
-    brif eq v791, ebb117
-    trap user0
+    trapif ne v791, user0
+    jump ebb117
 
 ebb117:
     v796 = iconst.i32 0
@@ -77,14 +76,14 @@ ebb118(v194: i32):
     v809 = iconst.i32 0
     v207 -> v809
     v815 = ifcmp_imm v207, -1
-    brif eq v815, ebb126
-    trap user0
+    trapif ne v815, user0
+    jump ebb126
 
 ebb126:
     v209 = iconst.i32 0
     v823 = ifcmp_imm v209, -1
-    brif eq v823, ebb129
-    trap user0
+    trapif ne v823, user0
+    jump ebb129
 
 ebb129:
     v213 = iconst.i32 -23

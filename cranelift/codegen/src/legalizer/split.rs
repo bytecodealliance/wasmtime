@@ -189,19 +189,18 @@ fn perform_repairs(pos: &mut FuncCursor, cfg: &ControlFlowGraph, mut repairs: Ve
 
             // Split the old argument, possibly causing more repairs to be scheduled.
             pos.goto_inst(inst);
-            #[cfg(feature = "basic-blocks")]
-            {
-                let inst_ebb = pos.func.layout.inst_ebb(inst).expect("inst in ebb");
 
-                // Insert split values prior to the terminal branch group.
-                let canonical = pos
-                    .func
-                    .layout
-                    .canonical_branch_inst(&pos.func.dfg, inst_ebb);
-                if let Some(first_branch) = canonical {
-                    pos.goto_inst(first_branch);
-                }
+            let inst_ebb = pos.func.layout.inst_ebb(inst).expect("inst in ebb");
+
+            // Insert split values prior to the terminal branch group.
+            let canonical = pos
+                .func
+                .layout
+                .canonical_branch_inst(&pos.func.dfg, inst_ebb);
+            if let Some(first_branch) = canonical {
+                pos.goto_inst(first_branch);
             }
+
             let (lo, hi) = split_value(pos, old_arg, repair.concat, &mut repairs);
 
             // The `lo` part replaces the original argument.

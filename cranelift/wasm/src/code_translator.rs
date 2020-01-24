@@ -205,13 +205,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 (destination, ElseData::WithElse { else_block })
             };
 
-            #[cfg(feature = "basic-blocks")]
-            {
-                let next_ebb = builder.create_ebb();
-                builder.ins().jump(next_ebb, &[]);
-                builder.seal_block(next_ebb); // Only predecessor is the current block.
-                builder.switch_to_block(next_ebb);
-            }
+            let next_ebb = builder.create_ebb();
+            builder.ins().jump(next_ebb, &[]);
+            builder.seal_block(next_ebb); // Only predecessor is the current block.
+            builder.switch_to_block(next_ebb);
 
             // Here we append an argument to an Ebb targeted by an argumentless jump instruction
             // But in fact there are two cases:
@@ -1744,13 +1741,10 @@ fn translate_br_if(
 
     builder.ins().brnz(val, br_destination, inputs);
 
-    #[cfg(feature = "basic-blocks")]
-    {
-        let next_ebb = builder.create_ebb();
-        builder.ins().jump(next_ebb, &[]);
-        builder.seal_block(next_ebb); // The only predecessor is the current block.
-        builder.switch_to_block(next_ebb);
-    }
+    let next_ebb = builder.create_ebb();
+    builder.ins().jump(next_ebb, &[]);
+    builder.seal_block(next_ebb); // The only predecessor is the current block.
+    builder.switch_to_block(next_ebb);
 }
 
 fn translate_br_if_args(

@@ -31,7 +31,7 @@ use crate::binemit::{CodeInfo, CodeOffset};
 use crate::cursor::{Cursor, FuncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
-use crate::ir::{Function, InstructionData, Opcode};
+use crate::ir::{Ebb, Function, Inst, InstructionData, Opcode, Value, ValueList};
 use crate::isa::{EncInfo, TargetIsa};
 use crate::iterators::IteratorExtras;
 use crate::regalloc::RegDiversions;
@@ -39,9 +39,6 @@ use crate::timing;
 use crate::CodegenResult;
 use core::convert::TryFrom;
 use log::debug;
-
-#[cfg(feature = "basic-blocks")]
-use crate::ir::{Ebb, Inst, Value, ValueList};
 
 /// Relax branches and compute the final layout of EBB headers in `func`.
 ///
@@ -61,7 +58,6 @@ pub fn relax_branches(
     func.offsets.resize(func.dfg.num_ebbs());
 
     // Start by removing redundant jumps.
-    #[cfg(feature = "basic-blocks")]
     fold_redundant_jumps(func, _cfg, _domtree);
 
     // Convert jumps to fallthrough instructions where possible.
@@ -154,7 +150,6 @@ pub fn relax_branches(
 
 /// Folds an instruction if it is a redundant jump.
 /// Returns whether folding was performed (which invalidates the CFG).
-#[cfg(feature = "basic-blocks")]
 fn try_fold_redundant_jump(
     func: &mut Function,
     cfg: &mut ControlFlowGraph,
@@ -260,7 +255,6 @@ fn try_fold_redundant_jump(
 
 /// Redirects `jump` instructions that point to other `jump` instructions to the final destination.
 /// This transformation may orphan some blocks.
-#[cfg(feature = "basic-blocks")]
 fn fold_redundant_jumps(
     func: &mut Function,
     cfg: &mut ControlFlowGraph,
