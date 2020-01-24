@@ -106,7 +106,7 @@ impl LibCall {
 /// for `inst`.
 ///
 /// If there is an existing reference, use it, otherwise make a new one.
-pub fn get_libcall_funcref(
+pub(crate) fn get_libcall_funcref(
     libcall: LibCall,
     call_conv: CallConv,
     func: &mut Function,

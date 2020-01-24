@@ -1,7 +1,7 @@
 //! Expanding instructions as runtime library calls.
 
 use crate::ir;
-use crate::ir::{get_libcall_funcref, InstBuilder};
+use crate::ir::{libcall::get_libcall_funcref, InstBuilder};
 use crate::isa::{CallConv, TargetIsa};
 use crate::legalizer::boundary::legalize_libcall_signature;
 use alloc::vec::Vec;

@@ -14,7 +14,7 @@ pub mod immediates;
 pub mod instructions;
 pub mod jumptable;
 pub mod layout;
-mod libcall;
+pub(crate) mod libcall;
 mod memflags;
 mod progpoint;
 mod sourceloc;
@@ -49,7 +49,7 @@ pub use crate::ir::instructions::{
 };
 pub use crate::ir::jumptable::JumpTableData;
 pub use crate::ir::layout::Layout;
-pub use crate::ir::libcall::{get_libcall_funcref, get_probestack_funcref, LibCall};
+pub use crate::ir::libcall::{get_probestack_funcref, LibCall};
 pub use crate::ir::memflags::MemFlags;
 pub use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder, ProgramPoint};
 pub use crate::ir::sourceloc::SourceLoc;
