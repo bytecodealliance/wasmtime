@@ -2078,7 +2078,6 @@ dependencies = [
  "wasmtime-obj",
  "wasmtime-runtime",
  "wasmtime-wasi",
- "wasmtime-wasi-c",
  "wasmtime-wast",
  "wat",
 ]
@@ -2275,24 +2274,6 @@ dependencies = [
  "wasmtime-jit",
  "wasmtime-runtime",
  "wig",
-]
-
-[[package]]
-name = "wasmtime-wasi-c"
-version = "0.9.0"
-dependencies = [
- "bindgen",
- "cmake",
- "cranelift-codegen",
- "cranelift-entity",
- "cranelift-wasm",
- "libc",
- "log",
- "more-asserts",
- "target-lexicon",
- "wasmtime-environ",
- "wasmtime-jit",
- "wasmtime-runtime",
 ]
 
 [[package]]

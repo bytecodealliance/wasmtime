@@ -18,9 +18,6 @@ use wasmtime_wasi::{
     create_wasi_instance, old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0,
 };
 
-#[cfg(feature = "wasi-c")]
-use wasmtime_wasi_c::instantiate_wasi_c;
-
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
     // Do not accept wasmtime subcommand names as the module name
     match s.to_str() {
@@ -88,10 +85,6 @@ pub struct RunCommand {
     )]
     preloads: Vec<PathBuf>,
 
-    /// Enable the wasi-c implementation of `wasi_unstable`
-    #[structopt(long = "wasi-c")]
-    enable_wasi_c: bool,
-
     // NOTE: this must come last for trailing varargs
     /// The arguments to pass to the module
     #[structopt(value_name = "ARGS")]
@@ -147,19 +140,8 @@ impl RunCommand {
         let preopen_dirs = self.compute_preopen_dirs()?;
         let argv = self.compute_argv();
 
-        let wasi_unstable = if self.enable_wasi_c {
-            #[cfg(feature = "wasi-c")]
-            {
-                let handle = instantiate_wasi_c("", &preopen_dirs, &argv, &self.vars)?;
-                Instance::from_handle(&store, handle)
-            }
-            #[cfg(not(feature = "wasi-c"))]
-            {
-                bail!("wasi-c feature not enabled at build time")
-            }
-        } else {
-            create_wasi_instance_snapshot_0(&store, &preopen_dirs, &argv, &self.vars)?
-        };
+        let wasi_unstable =
+            create_wasi_instance_snapshot_0(&store, &preopen_dirs, &argv, &self.vars)?;
 
         let wasi_snapshot_preview1 =
             create_wasi_instance(&store, &preopen_dirs, &argv, &self.vars)?;
