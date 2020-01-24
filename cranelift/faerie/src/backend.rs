@@ -311,7 +311,7 @@ impl Backend for FaerieBackend {
         // Nothing to do.
     }
 
-    fn finish(self) -> FaerieProduct {
+    fn finish(self, _namespace: &ModuleNamespace<Self>) -> FaerieProduct {
         FaerieProduct {
             artifact: self.artifact,
             trap_manifest: self.trap_manifest,

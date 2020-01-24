@@ -714,8 +714,9 @@ where
     /// Consume the module and return the resulting `Product`. Some `Backend`
     /// implementations may provide additional functionality available after
     /// a `Module` is complete.
-    pub fn finish(mut self) -> B::Product {
-        self.finalize_definitions();
-        self.backend.finish()
+    pub fn finish(self) -> B::Product {
+        self.backend.finish(&ModuleNamespace::<B> {
+            contents: &self.contents,
+        })
     }
 }
