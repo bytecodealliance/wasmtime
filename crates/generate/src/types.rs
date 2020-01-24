@@ -37,13 +37,11 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
     let variant_names = e.variants.iter().map(|v| names.enum_variant(&v.name));
     let tryfrom_repr_cases = e.variants.iter().enumerate().map(|(n, v)| {
         let variant_name = names.enum_variant(&v.name);
-        let n = n as u32;
         quote!(#n => Ok(#ident::#variant_name))
     });
     let to_repr_cases = e.variants.iter().enumerate().map(|(n, v)| {
         let variant_name = names.enum_variant(&v.name);
-        let n = n as u32;
-        quote!(#ident::#variant_name => #n)
+        quote!(#ident::#variant_name => #n as #repr)
     });
 
     quote! {
@@ -56,14 +54,14 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
         impl ::std::convert::TryFrom<#repr> for #ident {
             type Error = ::memory::GuestValueError;
             fn try_from(value: #repr) -> Result<#ident, ::memory::GuestValueError> {
-                match value {
+                match value as usize {
                     #(#tryfrom_repr_cases),*,
                     _ => Err(::memory::GuestValueError::InvalidEnum(stringify!(#ident))),
                 }
             }
         }
 
-        impl ::std::convert::TryFrom<#signed_repr> for #ident {
+        impl ::std::convert::TryFrom<#signed_repr> for #ident { // XXX this one should always be from i32/i64 (abi size)
             type Error = ::memory::GuestValueError;
             fn try_from(value: #signed_repr) -> Result<#ident, ::memory::GuestValueError> {
                 #ident::try_from(value as #repr)
@@ -78,7 +76,7 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
             }
         }
 
-        impl From<#ident> for #signed_repr {
+        impl From<#ident> for #signed_repr { // XXX this should be to i32 or i64 (abi size)
             fn from(e: #ident) -> #signed_repr {
                 #repr::from(e) as #signed_repr
             }

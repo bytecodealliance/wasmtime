@@ -12,6 +12,10 @@ pub mod test {
             println!("BAR: {} {}", an_int, an_float);
             Ok(())
         }
+        fn baz(&mut self, excuse: types::Excuse) -> Result<(), types::Errno> {
+            println!("BAZ: {:?}", excuse);
+            Ok(())
+        }
     }
 
     // Errno is used as a first return value in the functions above, therefore

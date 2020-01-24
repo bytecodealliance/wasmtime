@@ -8,9 +8,18 @@
         $physically_unable
         $picket_line))
 
+(typename $excuse
+  (enum u8
+     $dog_ate
+     $traffic
+     $sleeping))
+
 (module $foo
   (@interface func (export "bar")
     (param $an_int u32)
     (param $an_float f32)
+    (result $error $errno))
+  (@interface func (export "baz")
+    (param $an_excuse $excuse)
     (result $error $errno))
 )

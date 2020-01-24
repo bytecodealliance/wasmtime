@@ -1,4 +1,4 @@
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::TokenStream;
 use quote::quote;
 
 use crate::names::Names;
@@ -66,29 +66,20 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
     let marshal_args = func
         .params
         .iter()
-        .map(|param| match param.tref.type_().passed_by() {
-            witx::TypePassedBy::Value(_atom) => {
-                // FIXME atom -> param.tref can be either an `as` conversion, or `try_from`
-                let name = names.func_param(&param.name);
-                let interface_type = names.type_ref(&param.tref);
-                quote!( let #name = #name as #interface_type; )
-            }
-            _ => unimplemented!(),
-        });
+        .map(|p| marshal_arg(names, p, func.results.get(0).map(|r| &r.tref)));
     let trait_args = func
         .params
         .iter()
         .map(|param| names.func_param(&param.name));
 
-    let trait_rets = func
-        .results
-        .iter()
-        .skip(1)
-        .map(|result| names.func_param(&result.name))
-        .collect::<Vec<Ident>>();
-    let (trait_rets, trait_bindings) = if trait_rets.is_empty() {
+    let (trait_rets, trait_bindings) = if func.results.len() < 2 {
         (quote!({}), quote!(_))
     } else {
+        let trait_rets = func
+            .results
+            .iter()
+            .skip(1)
+            .map(|result| names.func_param(&result.name));
         let tuple = quote!((#(#trait_rets),*));
         (tuple.clone(), tuple)
     };
@@ -109,4 +100,68 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
         let success:#err_type = ::memory::GuestError::success();
         #abi_ret::from(success)
     })
+}
+
+fn marshal_arg(
+    names: &Names,
+    param: &witx::InterfaceFuncParam,
+    error_type: Option<&witx::TypeRef>,
+) -> TokenStream {
+    let tref = &param.tref;
+    let interface_typename = names.type_ref(&tref);
+    let name = names.func_param(&param.name);
+
+    let value_error_handling = if let Some(tref) = error_type {
+        let abi_ret = match tref.type_().passed_by() {
+            witx::TypePassedBy::Value(atom) => names.atom_type(atom),
+            _ => unreachable!("err should always be passed by value"),
+        };
+        let err_typename = names.type_ref(&tref);
+        quote! {
+            let err: #err_typename = ::memory::GuestError::from_memory_error(e, ctx);
+            return #abi_ret::from(err);
+        }
+    } else {
+        quote! {
+            panic!("memory error: {:?}", e)
+        }
+    };
+
+    let try_into_conversion = quote! {
+        use ::std::convert::TryInto;
+        let #name: #interface_typename = match #name.try_into() {
+            Ok(a) => a,
+            Err(e) => {
+                #value_error_handling
+            }
+        };
+    };
+
+    match &*tref.type_() {
+        witx::Type::Enum(_e) => try_into_conversion,
+        witx::Type::Builtin(b) => match b {
+            witx::BuiltinType::U8 | witx::BuiltinType::U16 | witx::BuiltinType::Char8 => {
+                try_into_conversion
+            }
+            witx::BuiltinType::S8 | witx::BuiltinType::S16 => quote! {
+                let #name: #interface_typename = match (#name as i32).try_into() {
+                    Ok(a) => a,
+                    Err(e) => {
+                        #value_error_handling
+                    }
+                }
+            },
+            witx::BuiltinType::U32
+            | witx::BuiltinType::S32
+            | witx::BuiltinType::U64
+            | witx::BuiltinType::S64
+            | witx::BuiltinType::USize
+            | witx::BuiltinType::F32
+            | witx::BuiltinType::F64 => quote! {
+                let #name = #name as #interface_typename;
+            },
+            witx::BuiltinType::String => unimplemented!("string types unimplemented"),
+        },
+        _ => unimplemented!("only enums and builtins so far"),
+    }
 }
