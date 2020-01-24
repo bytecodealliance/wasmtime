@@ -252,8 +252,15 @@ impl Instance {
 
     /// Return the indexed `VMTableDefinition`.
     #[allow(dead_code)]
-    fn table(&self, index: DefinedTableIndex) -> &VMTableDefinition {
-        unsafe { &*self.table_ptr(index) }
+    fn table(&self, index: DefinedTableIndex) -> VMTableDefinition {
+        unsafe { *self.table_ptr(index) }
+    }
+
+    /// Updates the value for a defined table to `VMTableDefinition`.
+    fn set_table(&self, index: DefinedTableIndex, table: VMTableDefinition) {
+        unsafe {
+            *self.table_ptr(index) = table;
+        }
     }
 
     /// Return the indexed `VMTableDefinition`.
@@ -268,8 +275,15 @@ impl Instance {
     }
 
     /// Return the indexed `VMMemoryDefinition`.
-    fn memory(&self, index: DefinedMemoryIndex) -> &VMMemoryDefinition {
-        unsafe { &*self.memory_ptr(index) }
+    fn memory(&self, index: DefinedMemoryIndex) -> VMMemoryDefinition {
+        unsafe { *self.memory_ptr(index) }
+    }
+
+    /// Set the indexed memory to `VMMemoryDefinition`.
+    fn set_memory(&self, index: DefinedMemoryIndex, mem: VMMemoryDefinition) {
+        unsafe {
+            *self.memory_ptr(index) = mem;
+        }
     }
 
     /// Return the indexed `VMMemoryDefinition`.
@@ -284,8 +298,16 @@ impl Instance {
     }
 
     /// Return the indexed `VMGlobalDefinition`.
-    fn global(&self, index: DefinedGlobalIndex) -> &VMGlobalDefinition {
-        unsafe { &*self.global_ptr(index) }
+    fn global(&self, index: DefinedGlobalIndex) -> VMGlobalDefinition {
+        unsafe { *self.global_ptr(index) }
+    }
+
+    /// Set the indexed global to `VMGlobalDefinition`.
+    #[allow(dead_code)]
+    fn set_global(&self, index: DefinedGlobalIndex, global: VMGlobalDefinition) {
+        unsafe {
+            *self.global_ptr(index) = global;
+        }
     }
 
     /// Return the indexed `VMGlobalDefinition`.
@@ -477,9 +499,7 @@ impl Instance {
             .grow(delta);
 
         // Keep current the VMContext pointers used by compiled wasm code.
-        unsafe {
-            *self.memory_ptr(memory_index) = self.memories[memory_index].vmmemory();
-        }
+        self.set_memory(memory_index, self.memories[memory_index].vmmemory());
 
         result
     }
@@ -539,9 +559,7 @@ impl Instance {
             .grow(delta);
 
         // Keep current the VMContext pointers used by compiled wasm code.
-        unsafe {
-            *self.table_ptr(table_index) = self.tables[table_index].vmtable();
-        }
+        self.set_table(table_index, self.tables[table_index].vmtable());
 
         result
     }
@@ -1078,9 +1096,9 @@ fn initialize_globals(instance: &mut Instance) {
                 GlobalInit::V128Const(x) => *(*to).as_u128_bits_mut() = x.0,
                 GlobalInit::GetGlobal(x) => {
                     let from = if let Some(def_x) = module.defined_global_index(x) {
-                        *instance.global(def_x)
+                        instance.global(def_x)
                     } else {
-                        (*instance.imported_global(x).from)
+                        *instance.imported_global(x).from
                     };
                     *to = from;
                 }
