@@ -13,16 +13,14 @@ fn test_trap_return() -> Result<()> {
     }
 
     let store = Store::default();
-    let binary = wat::parse_str(
-        r#"
-            (module
-            (func $hello (import "" "hello"))
-            (func (export "run") (call $hello))
-            )
-        "#,
-    )?;
+    let wat = r#"
+        (module
+        (func $hello (import "" "hello"))
+        (func (export "run") (call $hello))
+        )
+    "#;
 
-    let module = Module::new(&store, &binary)?;
+    let module = Module::new(&store, wat)?;
     let hello_type = FuncType::new(Box::new([]), Box::new([]));
     let hello_func = Func::new(&store, hello_type, Rc::new(HelloCallback));
 
@@ -41,16 +39,14 @@ fn test_trap_return() -> Result<()> {
 #[test]
 fn test_trap_trace() -> Result<()> {
     let store = Store::default();
-    let binary = wat::parse_str(
-        r#"
-            (module $hello_mod
-                (func (export "run") (call $hello))
-                (func $hello (unreachable))
-            )
-        "#,
-    )?;
+    let wat = r#"
+        (module $hello_mod
+            (func (export "run") (call $hello))
+            (func $hello (unreachable))
+        )
+    "#;
 
-    let module = Module::new(&store, &binary)?;
+    let module = Module::new(&store, wat)?;
     let instance = Instance::new(&module, &[])?;
     let run_func = instance.exports()[0]
         .func()
@@ -82,20 +78,18 @@ fn test_trap_trace_cb() -> Result<()> {
     }
 
     let store = Store::default();
-    let binary = wat::parse_str(
-        r#"
-            (module $hello_mod
-                (import "" "throw" (func $throw))
-                (func (export "run") (call $hello))
-                (func $hello (call $throw))
-            )
-        "#,
-    )?;
+    let wat = r#"
+        (module $hello_mod
+            (import "" "throw" (func $throw))
+            (func (export "run") (call $hello))
+            (func $hello (call $throw))
+        )
+    "#;
 
     let fn_type = FuncType::new(Box::new([]), Box::new([]));
     let fn_func = Func::new(&store, fn_type, Rc::new(ThrowCallback));
 
-    let module = Module::new(&store, &binary)?;
+    let module = Module::new(&store, wat)?;
     let instance = Instance::new(&module, &[fn_func.into()])?;
     let run_func = instance.exports()[0]
         .func()
@@ -117,15 +111,13 @@ fn test_trap_trace_cb() -> Result<()> {
 #[test]
 fn test_trap_stack_overflow() -> Result<()> {
     let store = Store::default();
-    let binary = wat::parse_str(
-        r#"
-            (module $rec_mod
-                (func $run (export "run") (call $run))
-            )
-        "#,
-    )?;
+    let wat = r#"
+        (module $rec_mod
+            (func $run (export "run") (call $run))
+        )
+    "#;
 
-    let module = Module::new(&store, &binary)?;
+    let module = Module::new(&store, wat)?;
     let instance = Instance::new(&module, &[])?;
     let run_func = instance.exports()[0]
         .func()
@@ -148,18 +140,16 @@ fn test_trap_stack_overflow() -> Result<()> {
 #[test]
 fn trap_display_pretty() -> Result<()> {
     let store = Store::default();
-    let binary = wat::parse_str(
-        r#"
-            (module $m
-                (func $die unreachable)
-                (func call $die)
-                (func $foo call 1)
-                (func (export "bar") call $foo)
-            )
-        "#,
-    )?;
+    let wat = r#"
+        (module $m
+            (func $die unreachable)
+            (func call $die)
+            (func $foo call 1)
+            (func (export "bar") call $foo)
+        )
+    "#;
 
-    let module = Module::new(&store, &binary)?;
+    let module = Module::new(&store, wat)?;
     let instance = Instance::new(&module, &[])?;
     let run_func = instance.exports()[0]
         .func()
@@ -183,31 +173,27 @@ wasm backtrace:
 #[test]
 fn trap_display_multi_module() -> Result<()> {
     let store = Store::default();
-    let binary = wat::parse_str(
-        r#"
-            (module $a
-                (func $die unreachable)
-                (func call $die)
-                (func $foo call 1)
-                (func (export "bar") call $foo)
-            )
-        "#,
-    )?;
+    let wat = r#"
+        (module $a
+            (func $die unreachable)
+            (func call $die)
+            (func $foo call 1)
+            (func (export "bar") call $foo)
+        )
+    "#;
 
-    let module = Module::new(&store, &binary)?;
+    let module = Module::new(&store, wat)?;
     let instance = Instance::new(&module, &[])?;
     let bar = instance.exports()[0].clone();
 
-    let binary = wat::parse_str(
-        r#"
-            (module $b
-                (import "" "" (func $bar))
-                (func $middle call $bar)
-                (func (export "bar2") call $middle)
-            )
-        "#,
-    )?;
-    let module = Module::new(&store, &binary)?;
+    let wat = r#"
+        (module $b
+            (import "" "" (func $bar))
+            (func $middle call $bar)
+            (func (export "bar2") call $middle)
+        )
+    "#;
+    let module = Module::new(&store, wat)?;
     let instance = Instance::new(&module, &[bar])?;
     let bar2 = instance.exports()[0]
         .func()

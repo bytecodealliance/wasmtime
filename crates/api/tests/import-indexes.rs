@@ -38,8 +38,7 @@ fn same_import_names_still_distinct() -> anyhow::Result<()> {
     }
 
     let store = Store::default();
-    let wasm = wat::parse_str(WAT)?;
-    let module = Module::new(&store, &wasm)?;
+    let module = Module::new(&store, WAT)?;
 
     let imports = [
         Func::new(

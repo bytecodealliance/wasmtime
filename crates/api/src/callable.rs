@@ -30,7 +30,7 @@ use wasmtime_runtime::Export;
 /// # fn main () -> Result<(), Box<dyn std::error::Error>> {
 /// // Simple module that imports our host function ("times_two") and re-exports
 /// // it as "run".
-/// let binary = wat::parse_str(r#"
+/// let wat = r#"
 ///    (module
 ///      (func $times_two (import "" "times_two") (param i32) (result i32))
 ///      (func
@@ -40,11 +40,11 @@ use wasmtime_runtime::Export;
 ///        (local.get 0)
 ///        (call $times_two))
 ///    )
-/// "#)?;
+/// "#;
 ///
 /// // Initialise environment and our module.
 /// let store = wasmtime::Store::default();
-/// let module = wasmtime::Module::new(&store, &binary)?;
+/// let module = wasmtime::Module::new(&store, wat)?;
 ///
 /// // Define the type of the function we're going to call.
 /// let times_two_type = wasmtime::FuncType::new(
