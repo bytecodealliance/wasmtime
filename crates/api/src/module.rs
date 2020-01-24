@@ -108,10 +108,9 @@ lazy_static! {
 }
 
 impl Module {
-    /// Creates a new WebAssembly `Module` from the given in-memory `binary`
-    /// data.
+    /// Creates a new WebAssembly `Module` from the given in-memory `bytes`.
     ///
-    /// The `binary` data provided must be in one of two formats:
+    /// The `bytes` provided must be in one of two formats:
     ///
     /// * It can be a [binary-encoded][binary] WebAssembly module. This
     ///   is always supported.
@@ -154,28 +153,18 @@ impl Module {
     ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     /// [text]: https://webassembly.github.io/spec/core/text/index.html
-    pub fn new(store: &Store, binary: impl AsRef<[u8]>) -> Result<Module> {
-        Module::_new(store, binary.as_ref())
-    }
-
-    // internal shim that has no generics so we don't have to instantiate this
-    // into all our callers.
-    fn _new(store: &Store, binary: &[u8]) -> Result<Module> {
+    pub fn new(store: &Store, bytes: impl AsRef<[u8]>) -> Result<Module> {
         #[cfg(feature = "wat")]
-        let binary = wat::parse_bytes(binary)?;
-        Module::validate(store, &binary)?;
-        // Note that the call to `validate` here should be ok because we
-        // previously validated the binary, meaning we're guaranteed to pass a
-        // valid binary for `store`.
-        unsafe { Module::new_unchecked(store, &binary) }
+        let bytes = wat::parse_bytes(bytes.as_ref())?;
+        Module::from_binary(store, bytes.as_ref())
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
     /// data. The provided `name` will be used in traps/backtrace details.
     ///
     /// See [`Module::new`] for other details.
-    pub fn new_with_name(store: &Store, binary: &[u8], name: &str) -> Result<Module> {
-        let mut module = Module::new(store, binary)?;
+    pub fn new_with_name(store: &Store, bytes: impl AsRef<[u8]>, name: &str) -> Result<Module> {
+        let mut module = Module::new(store, bytes.as_ref())?;
         let inner = Rc::get_mut(&mut module.inner).unwrap();
         Arc::get_mut(&mut inner.names).unwrap().module_name = Some(name.to_string());
         Ok(module)
@@ -193,6 +182,22 @@ impl Module {
         #[cfg(not(feature = "wat"))]
         let wasm = std::fs::read(file)?;
         Module::new(store, &wasm)
+    }
+
+    /// Creates a new WebAssembly `Module` from the given in-memory `binary`
+    /// data.
+    ///
+    /// This is similar to [`Module::new`] except that it requires that the
+    /// `binary` input is a WebAssembly binary, the text format is not supported
+    /// by this function. It's generally recommended to use [`Module::new`],
+    /// but if it's required to not support the text format this function can be
+    /// used instead.
+    pub fn from_binary(store: &Store, binary: &[u8]) -> Result<Module> {
+        Module::validate(store, binary)?;
+        // Note that the call to `validate` here should be ok because we
+        // previously validated the binary, meaning we're guaranteed to pass a
+        // valid binary for `store`.
+        unsafe { Module::from_binary_unchecked(store, binary) }
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
@@ -222,7 +227,7 @@ impl Module {
     /// While this assumes that the binary is valid it still needs to actually
     /// be somewhat valid for decoding purposes, and the basics of decoding can
     /// still fail.
-    pub unsafe fn new_unchecked(store: &Store, binary: &[u8]) -> Result<Module> {
+    pub unsafe fn from_binary_unchecked(store: &Store, binary: &[u8]) -> Result<Module> {
         let mut ret = Module::compile(store, binary)?;
         ret.read_imports_and_exports(binary)?;
         Ok(ret)
