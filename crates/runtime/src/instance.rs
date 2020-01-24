@@ -187,6 +187,14 @@ pub(crate) struct Instance {
 
 #[allow(clippy::cast_ptr_alignment)]
 impl Instance {
+    /// Helper function to access various locations offset from our `*mut
+    /// VMContext` object.
+    unsafe fn vmctx_plus_offset<T>(&self, offset: u32) -> *mut T {
+        (self.vmctx_ptr() as *mut u8)
+            .add(usize::try_from(offset).unwrap())
+            .cast()
+    }
+
     /// Return the indexed `VMSharedSignatureIndex`.
     fn signature_id(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
         unsafe { *self.signature_ids_ptr().add(index.as_u32() as usize) }
@@ -195,9 +203,7 @@ impl Instance {
     /// Return a pointer to the `VMSharedSignatureIndex`s.
     fn signature_ids_ptr(&self) -> *mut VMSharedSignatureIndex {
         unsafe {
-            (self.vmctx_ptr() as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_signature_ids_begin()).unwrap())
-                as *mut VMSharedSignatureIndex
+            self.vmctx_plus_offset(self.offsets.vmctx_signature_ids_begin())
         }
     }
 
@@ -209,9 +215,7 @@ impl Instance {
     /// Return a pointer to the `VMFunctionImport`s.
     fn imported_functions_ptr(&self) -> *mut VMFunctionImport {
         unsafe {
-            (self.vmctx_ptr() as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_imported_functions_begin()).unwrap())
-                as *mut VMFunctionImport
+            self.vmctx_plus_offset(self.offsets.vmctx_imported_functions_begin())
         }
     }
 
@@ -223,9 +227,7 @@ impl Instance {
     /// Return a pointer to the `VMTableImports`s.
     fn imported_tables_ptr(&self) -> *mut VMTableImport {
         unsafe {
-            (self.vmctx_ptr() as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_imported_tables_begin()).unwrap())
-                as *mut VMTableImport
+            self.vmctx_plus_offset(self.offsets.vmctx_imported_tables_begin())
         }
     }
 
@@ -237,9 +239,7 @@ impl Instance {
     /// Return a pointer to the `VMMemoryImport`s.
     fn imported_memories_ptr(&self) -> *mut VMMemoryImport {
         unsafe {
-            (self.vmctx_ptr() as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_imported_memories_begin()).unwrap())
-                as *mut VMMemoryImport
+            self.vmctx_plus_offset(self.offsets.vmctx_imported_memories_begin())
         }
     }
 
@@ -251,9 +251,7 @@ impl Instance {
     /// Return a pointer to the `VMGlobalImport`s.
     fn imported_globals_ptr(&self) -> *mut VMGlobalImport {
         unsafe {
-            (self.vmctx_ptr() as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_imported_globals_begin()).unwrap())
-                as *mut VMGlobalImport
+            self.vmctx_plus_offset(self.offsets.vmctx_imported_globals_begin())
         }
     }
 
@@ -271,9 +269,7 @@ impl Instance {
     /// Return a pointer to the `VMTableDefinition`s.
     fn tables_ptr(&self) -> *mut VMTableDefinition {
         unsafe {
-            (self.vmctx_ptr() as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_tables_begin()).unwrap())
-                as *mut VMTableDefinition
+            self.vmctx_plus_offset(self.offsets.vmctx_tables_begin())
         }
     }
 
@@ -290,9 +286,7 @@ impl Instance {
     /// Return a pointer to the `VMMemoryDefinition`s.
     fn memories_ptr(&self) -> *mut VMMemoryDefinition {
         unsafe {
-            (self.vmctx_ptr() as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_memories_begin()).unwrap())
-                as *mut VMMemoryDefinition
+            self.vmctx_plus_offset(self.offsets.vmctx_memories_begin())
         }
     }
 
@@ -309,18 +303,14 @@ impl Instance {
     /// Return a pointer to the `VMGlobalDefinition`s.
     fn globals_ptr(&self) -> *mut VMGlobalDefinition {
         unsafe {
-            (self.vmctx_ptr() as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_globals_begin()).unwrap())
-                as *mut VMGlobalDefinition
+            self.vmctx_plus_offset(self.offsets.vmctx_globals_begin())
         }
     }
 
     /// Return a pointer to the `VMBuiltinFunctionsArray`.
     fn builtin_functions_ptr(&self) -> *mut VMBuiltinFunctionsArray {
         unsafe {
-            (self.vmctx_ptr() as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_builtin_functions_begin()).unwrap())
-                as *mut VMBuiltinFunctionsArray
+            self.vmctx_plus_offset(self.offsets.vmctx_builtin_functions_begin())
         }
     }
 
