@@ -197,7 +197,8 @@ impl Instance {
 
     /// Return the indexed `VMSharedSignatureIndex`.
     fn signature_id(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
-        unsafe { *self.signature_ids_ptr().add(index.as_u32() as usize) }
+        let index = usize::try_from(index.as_u32()).unwrap();
+        unsafe { *self.signature_ids_ptr().add(index) }
     }
 
     /// Return a pointer to the `VMSharedSignatureIndex`s.
@@ -207,7 +208,8 @@ impl Instance {
 
     /// Return the indexed `VMFunctionImport`.
     fn imported_function(&self, index: FuncIndex) -> &VMFunctionImport {
-        unsafe { &*self.imported_functions_ptr().add(index.as_u32() as usize) }
+        let index = usize::try_from(index.as_u32()).unwrap();
+        unsafe { &*self.imported_functions_ptr().add(index) }
     }
 
     /// Return a pointer to the `VMFunctionImport`s.
@@ -217,7 +219,8 @@ impl Instance {
 
     /// Return the index `VMTableImport`.
     fn imported_table(&self, index: TableIndex) -> &VMTableImport {
-        unsafe { &*self.imported_tables_ptr().add(index.as_u32() as usize) }
+        let index = usize::try_from(index.as_u32()).unwrap();
+        unsafe { &*self.imported_tables_ptr().add(index) }
     }
 
     /// Return a pointer to the `VMTableImports`s.
@@ -227,7 +230,8 @@ impl Instance {
 
     /// Return the indexed `VMMemoryImport`.
     fn imported_memory(&self, index: MemoryIndex) -> &VMMemoryImport {
-        unsafe { &*self.imported_memories_ptr().add(index.as_u32() as usize) }
+        let index = usize::try_from(index.as_u32()).unwrap();
+        unsafe { &*self.imported_memories_ptr().add(index) }
     }
 
     /// Return a pointer to the `VMMemoryImport`s.
@@ -237,7 +241,8 @@ impl Instance {
 
     /// Return the indexed `VMGlobalImport`.
     fn imported_global(&self, index: GlobalIndex) -> &VMGlobalImport {
-        unsafe { &*self.imported_globals_ptr().add(index.as_u32() as usize) }
+        let index = usize::try_from(index.as_u32()).unwrap();
+        unsafe { &*self.imported_globals_ptr().add(index) }
     }
 
     /// Return a pointer to the `VMGlobalImport`s.
@@ -253,7 +258,8 @@ impl Instance {
 
     /// Return the indexed `VMTableDefinition`.
     fn table_ptr(&self, index: DefinedTableIndex) -> *mut VMTableDefinition {
-        unsafe { self.tables_ptr().add(index.as_u32() as usize) }
+        let index = usize::try_from(index.as_u32()).unwrap();
+        unsafe { self.tables_ptr().add(index) }
     }
 
     /// Return a pointer to the `VMTableDefinition`s.
@@ -268,7 +274,8 @@ impl Instance {
 
     /// Return the indexed `VMMemoryDefinition`.
     fn memory_ptr(&self, index: DefinedMemoryIndex) -> *mut VMMemoryDefinition {
-        unsafe { self.memories_ptr().add(index.as_u32() as usize) }
+        let index = usize::try_from(index.as_u32()).unwrap();
+        unsafe { self.memories_ptr().add(index) }
     }
 
     /// Return a pointer to the `VMMemoryDefinition`s.
@@ -283,7 +290,8 @@ impl Instance {
 
     /// Return the indexed `VMGlobalDefinition`.
     fn global_ptr(&self, index: DefinedGlobalIndex) -> *mut VMGlobalDefinition {
-        unsafe { self.globals_ptr().add(index.as_u32() as usize) }
+        let index = usize::try_from(index.as_u32()).unwrap();
+        unsafe { self.globals_ptr().add(index) }
     }
 
     /// Return a pointer to the `VMGlobalDefinition`s.
