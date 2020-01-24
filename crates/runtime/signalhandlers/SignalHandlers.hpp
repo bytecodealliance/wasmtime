@@ -13,18 +13,12 @@
 extern "C" {
 #endif
 
-// Record the Trap code and wasm bytecode offset in TLS somewhere
-void* RecordTrap(const uint8_t* pc, bool reset_guard_page);
-
 #if defined(_WIN32)
 #include <windows.h>
 #include <winternl.h>
-bool InstanceSignalHandler(LPEXCEPTION_POINTERS);
-#elif defined(USE_APPLE_MACH_PORTS)
-bool InstanceSignalHandler(int, siginfo_t *, void *);
+void* HandleTrap(const uint8_t*, LPEXCEPTION_POINTERS);
 #else
-#include <sys/ucontext.h>
-bool InstanceSignalHandler(int, siginfo_t *, ucontext_t *);
+void* HandleTrap(const uint8_t*, int, siginfo_t *, void *);
 #endif
 
 void Unwind(void*);
