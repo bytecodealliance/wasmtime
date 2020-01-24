@@ -330,7 +330,6 @@ impl CacheConfig {
     fn new_cache_enabled_template() -> Self {
         let mut conf = Self::new_cache_disabled();
         conf.enabled = true;
-        conf.spawn_worker();
         conf
     }
 
