@@ -202,9 +202,7 @@ impl Instance {
 
     /// Return a pointer to the `VMSharedSignatureIndex`s.
     fn signature_ids_ptr(&self) -> *mut VMSharedSignatureIndex {
-        unsafe {
-            self.vmctx_plus_offset(self.offsets.vmctx_signature_ids_begin())
-        }
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_signature_ids_begin()) }
     }
 
     /// Return the indexed `VMFunctionImport`.
@@ -214,9 +212,7 @@ impl Instance {
 
     /// Return a pointer to the `VMFunctionImport`s.
     fn imported_functions_ptr(&self) -> *mut VMFunctionImport {
-        unsafe {
-            self.vmctx_plus_offset(self.offsets.vmctx_imported_functions_begin())
-        }
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_imported_functions_begin()) }
     }
 
     /// Return the index `VMTableImport`.
@@ -226,9 +222,7 @@ impl Instance {
 
     /// Return a pointer to the `VMTableImports`s.
     fn imported_tables_ptr(&self) -> *mut VMTableImport {
-        unsafe {
-            self.vmctx_plus_offset(self.offsets.vmctx_imported_tables_begin())
-        }
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_imported_tables_begin()) }
     }
 
     /// Return the indexed `VMMemoryImport`.
@@ -238,9 +232,7 @@ impl Instance {
 
     /// Return a pointer to the `VMMemoryImport`s.
     fn imported_memories_ptr(&self) -> *mut VMMemoryImport {
-        unsafe {
-            self.vmctx_plus_offset(self.offsets.vmctx_imported_memories_begin())
-        }
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_imported_memories_begin()) }
     }
 
     /// Return the indexed `VMGlobalImport`.
@@ -250,9 +242,7 @@ impl Instance {
 
     /// Return a pointer to the `VMGlobalImport`s.
     fn imported_globals_ptr(&self) -> *mut VMGlobalImport {
-        unsafe {
-            self.vmctx_plus_offset(self.offsets.vmctx_imported_globals_begin())
-        }
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_imported_globals_begin()) }
     }
 
     /// Return the indexed `VMTableDefinition`.
@@ -268,9 +258,7 @@ impl Instance {
 
     /// Return a pointer to the `VMTableDefinition`s.
     fn tables_ptr(&self) -> *mut VMTableDefinition {
-        unsafe {
-            self.vmctx_plus_offset(self.offsets.vmctx_tables_begin())
-        }
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_tables_begin()) }
     }
 
     /// Return the indexed `VMMemoryDefinition`.
@@ -285,9 +273,7 @@ impl Instance {
 
     /// Return a pointer to the `VMMemoryDefinition`s.
     fn memories_ptr(&self) -> *mut VMMemoryDefinition {
-        unsafe {
-            self.vmctx_plus_offset(self.offsets.vmctx_memories_begin())
-        }
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_memories_begin()) }
     }
 
     /// Return the indexed `VMGlobalDefinition`.
@@ -302,16 +288,12 @@ impl Instance {
 
     /// Return a pointer to the `VMGlobalDefinition`s.
     fn globals_ptr(&self) -> *mut VMGlobalDefinition {
-        unsafe {
-            self.vmctx_plus_offset(self.offsets.vmctx_globals_begin())
-        }
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_globals_begin()) }
     }
 
     /// Return a pointer to the `VMBuiltinFunctionsArray`.
     fn builtin_functions_ptr(&self) -> *mut VMBuiltinFunctionsArray {
-        unsafe {
-            self.vmctx_plus_offset(self.offsets.vmctx_builtin_functions_begin())
-        }
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_builtin_functions_begin()) }
     }
 
     /// Return a reference to the vmctx used by compiled wasm code.
