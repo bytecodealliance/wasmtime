@@ -18,7 +18,7 @@ use crate::vmcontext::{
 use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::any::Any;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::ptr::NonNull;
@@ -36,149 +36,6 @@ use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
 thread_local! {
     /// A stack of currently-running `Instance`s, if any.
     pub(crate) static CURRENT_INSTANCE: RefCell<Vec<NonNull<Instance>>> = RefCell::new(Vec::new());
-}
-
-fn signature_id(
-    vmctx: &VMContext,
-    offsets: &VMOffsets,
-    index: SignatureIndex,
-) -> VMSharedSignatureIndex {
-    #[allow(clippy::cast_ptr_alignment)]
-    unsafe {
-        let ptr = (vmctx as *const VMContext as *const u8)
-            .add(usize::try_from(offsets.vmctx_vmshared_signature_id(index)).unwrap());
-        *(ptr as *const VMSharedSignatureIndex)
-    }
-}
-
-fn imported_function<'vmctx>(
-    vmctx: &'vmctx VMContext,
-    offsets: &VMOffsets,
-    index: FuncIndex,
-) -> &'vmctx VMFunctionImport {
-    #[allow(clippy::cast_ptr_alignment)]
-    unsafe {
-        let ptr = (vmctx as *const VMContext as *const u8)
-            .add(usize::try_from(offsets.vmctx_vmfunction_import(index)).unwrap());
-        &*(ptr as *const VMFunctionImport)
-    }
-}
-
-fn imported_table<'vmctx>(
-    vmctx: &'vmctx VMContext,
-    offsets: &VMOffsets,
-    index: TableIndex,
-) -> &'vmctx VMTableImport {
-    #[allow(clippy::cast_ptr_alignment)]
-    unsafe {
-        let ptr = (vmctx as *const VMContext as *const u8)
-            .add(usize::try_from(offsets.vmctx_vmtable_import(index)).unwrap());
-        &*(ptr as *const VMTableImport)
-    }
-}
-
-fn imported_memory<'vmctx>(
-    vmctx: &'vmctx VMContext,
-    offsets: &VMOffsets,
-    index: MemoryIndex,
-) -> &'vmctx VMMemoryImport {
-    #[allow(clippy::cast_ptr_alignment)]
-    unsafe {
-        let ptr = (vmctx as *const VMContext as *const u8)
-            .add(usize::try_from(offsets.vmctx_vmmemory_import(index)).unwrap());
-        &*(ptr as *const VMMemoryImport)
-    }
-}
-
-fn imported_global<'vmctx>(
-    vmctx: &'vmctx VMContext,
-    offsets: &VMOffsets,
-    index: GlobalIndex,
-) -> &'vmctx VMGlobalImport {
-    unsafe {
-        let ptr = (vmctx as *const VMContext as *const u8)
-            .add(usize::try_from(offsets.vmctx_vmglobal_import(index)).unwrap());
-        #[allow(clippy::cast_ptr_alignment)]
-        &*(ptr as *const VMGlobalImport)
-    }
-}
-
-fn table<'vmctx>(
-    vmctx: &'vmctx VMContext,
-    offsets: &VMOffsets,
-    index: DefinedTableIndex,
-) -> &'vmctx VMTableDefinition {
-    unsafe {
-        let ptr = (vmctx as *const VMContext as *const u8)
-            .add(usize::try_from(offsets.vmctx_vmtable_definition(index)).unwrap());
-        #[allow(clippy::cast_ptr_alignment)]
-        &*(ptr as *const VMTableDefinition)
-    }
-}
-
-fn table_mut<'vmctx>(
-    vmctx: &'vmctx mut VMContext,
-    offsets: &VMOffsets,
-    index: DefinedTableIndex,
-) -> &'vmctx mut VMTableDefinition {
-    unsafe {
-        let ptr = (vmctx as *mut VMContext as *mut u8)
-            .add(usize::try_from(offsets.vmctx_vmtable_definition(index)).unwrap());
-        #[allow(clippy::cast_ptr_alignment)]
-        &mut *(ptr as *mut VMTableDefinition)
-    }
-}
-
-fn memory<'vmctx>(
-    vmctx: &'vmctx VMContext,
-    offsets: &VMOffsets,
-    index: DefinedMemoryIndex,
-) -> &'vmctx VMMemoryDefinition {
-    unsafe {
-        let ptr = (vmctx as *const VMContext as *const u8)
-            .add(usize::try_from(offsets.vmctx_vmmemory_definition(index)).unwrap());
-        #[allow(clippy::cast_ptr_alignment)]
-        &*(ptr as *const VMMemoryDefinition)
-    }
-}
-
-fn memory_mut<'vmctx>(
-    vmctx: &'vmctx mut VMContext,
-    offsets: &VMOffsets,
-    index: DefinedMemoryIndex,
-) -> &'vmctx mut VMMemoryDefinition {
-    unsafe {
-        let ptr = (vmctx as *mut VMContext as *mut u8)
-            .add(usize::try_from(offsets.vmctx_vmmemory_definition(index)).unwrap());
-        #[allow(clippy::cast_ptr_alignment)]
-        &mut *(ptr as *mut VMMemoryDefinition)
-    }
-}
-
-fn global<'vmctx>(
-    vmctx: &'vmctx VMContext,
-    offsets: &VMOffsets,
-    index: DefinedGlobalIndex,
-) -> &'vmctx VMGlobalDefinition {
-    unsafe {
-        let ptr = (vmctx as *const VMContext as *const u8)
-            .add(usize::try_from(offsets.vmctx_vmglobal_definition(index)).unwrap());
-        #[allow(clippy::cast_ptr_alignment)]
-        &*(ptr as *const VMGlobalDefinition)
-    }
-}
-
-fn global_mut<'vmctx>(
-    vmctx: &'vmctx mut VMContext,
-    offsets: &VMOffsets,
-    index: DefinedGlobalIndex,
-) -> &'vmctx mut VMGlobalDefinition {
-    unsafe {
-        let ptr = (vmctx as *mut VMContext as *mut u8)
-            .add(usize::try_from(offsets.vmctx_vmglobal_definition(index)).unwrap());
-        #[allow(clippy::cast_ptr_alignment)]
-        &mut *(ptr as *mut VMGlobalDefinition)
-    }
 }
 
 cfg_if::cfg_if! {
@@ -207,12 +64,17 @@ cfg_if::cfg_if! {
                     return false;
                 } else {
                     unsafe {
-                        let f = &current_instance
+                        let last = &current_instance
                             .last()
                             .expect("current instance not none")
-                            .as_ref()
-                            .signal_handler;
-                        f(signum, siginfo, context)
+                            .as_ref();
+
+                        let f = last
+                            .signal_handler
+                            .replace(Box::new(signal_handler_none));
+                        let ret = f(signum, siginfo, context);
+                        last.signal_handler.set(f);
+                        ret
                     }
                 }
             })
@@ -225,7 +87,7 @@ cfg_if::cfg_if! {
             where
                 H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
             {
-                self.instance_mut().signal_handler = Box::new(handler) as Box<SignalHandler>;
+                self.instance().signal_handler.set(Box::new(handler));
             }
         }
     } else if #[cfg(target_os = "windows")] {
@@ -249,12 +111,17 @@ cfg_if::cfg_if! {
                     return false;
                 } else {
                     unsafe {
-                        let f = &current_instance
+                        let last = &current_instance
                             .last()
                             .expect("current instance not none")
-                            .as_ref()
-                            .signal_handler;
-                        f(exception_info)
+                            .as_ref();
+
+                        let f = last
+                            .signal_handler
+                            .replace(Box::new(signal_handler_none));
+                        let ret = f(exception_info);
+                        last.signal_handler.set(f);
+                        ret
                     }
                 }
             })
@@ -266,7 +133,7 @@ cfg_if::cfg_if! {
             where
                 H: 'static + Fn(winapi::um::winnt::EXCEPTION_POINTERS) -> bool,
             {
-                self.instance_mut().signal_handler = Box::new(handler) as Box<SignalHandler>;
+                self.instance().signal_handler.set(Box::new(handler));
             }
         }
     }
@@ -278,7 +145,7 @@ cfg_if::cfg_if! {
 #[repr(C)]
 pub(crate) struct Instance {
     /// The number of references to this `Instance`.
-    refcount: usize,
+    refcount: Cell<usize>,
 
     /// `Instance`s from which this `Instance` imports. These won't
     /// create reference cycles because wasm instances can't cyclically
@@ -286,7 +153,7 @@ pub(crate) struct Instance {
     dependencies: HashSet<InstanceHandle>,
 
     /// The underlying mmap that holds this `Instance`.
-    mmap: Mmap,
+    mmap: Cell<Mmap>,
 
     /// The `Module` this `Instance` was instantiated from.
     module: Arc<Module>,
@@ -310,7 +177,7 @@ pub(crate) struct Instance {
     dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
 
     /// Handler run when `SIGBUS`, `SIGFPE`, `SIGILL`, or `SIGSEGV` are caught by the instance thread.
-    signal_handler: Box<SignalHandler>,
+    signal_handler: Cell<Box<SignalHandler>>,
 
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
@@ -320,145 +187,143 @@ pub(crate) struct Instance {
 
 #[allow(clippy::cast_ptr_alignment)]
 impl Instance {
+    /// Helper function to access various locations offset from our `*mut
+    /// VMContext` object.
+    unsafe fn vmctx_plus_offset<T>(&self, offset: u32) -> *mut T {
+        (self.vmctx_ptr() as *mut u8)
+            .add(usize::try_from(offset).unwrap())
+            .cast()
+    }
+
     /// Return the indexed `VMSharedSignatureIndex`.
-    #[allow(dead_code)]
     fn signature_id(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
-        signature_id(&self.vmctx, &self.offsets, index)
+        let index = usize::try_from(index.as_u32()).unwrap();
+        unsafe { *self.signature_ids_ptr().add(index) }
     }
 
     /// Return a pointer to the `VMSharedSignatureIndex`s.
-    fn signature_ids_ptr(&mut self) -> *mut VMSharedSignatureIndex {
-        unsafe {
-            (&mut self.vmctx as *mut VMContext as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_signature_ids_begin()).unwrap())
-                as *mut VMSharedSignatureIndex
-        }
+    fn signature_ids_ptr(&self) -> *mut VMSharedSignatureIndex {
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_signature_ids_begin()) }
     }
 
     /// Return the indexed `VMFunctionImport`.
     fn imported_function(&self, index: FuncIndex) -> &VMFunctionImport {
-        imported_function(&self.vmctx, &self.offsets, index)
+        let index = usize::try_from(index.as_u32()).unwrap();
+        unsafe { &*self.imported_functions_ptr().add(index) }
     }
 
     /// Return a pointer to the `VMFunctionImport`s.
-    fn imported_functions_ptr(&mut self) -> *mut VMFunctionImport {
-        unsafe {
-            (&mut self.vmctx as *mut VMContext as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_imported_functions_begin()).unwrap())
-                as *mut VMFunctionImport
-        }
+    fn imported_functions_ptr(&self) -> *mut VMFunctionImport {
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_imported_functions_begin()) }
     }
 
     /// Return the index `VMTableImport`.
-    #[allow(dead_code)]
     fn imported_table(&self, index: TableIndex) -> &VMTableImport {
-        imported_table(&self.vmctx, &self.offsets, index)
+        let index = usize::try_from(index.as_u32()).unwrap();
+        unsafe { &*self.imported_tables_ptr().add(index) }
     }
 
     /// Return a pointer to the `VMTableImports`s.
-    fn imported_tables_ptr(&mut self) -> *mut VMTableImport {
-        unsafe {
-            (&mut self.vmctx as *mut VMContext as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_imported_tables_begin()).unwrap())
-                as *mut VMTableImport
-        }
+    fn imported_tables_ptr(&self) -> *mut VMTableImport {
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_imported_tables_begin()) }
     }
 
     /// Return the indexed `VMMemoryImport`.
     fn imported_memory(&self, index: MemoryIndex) -> &VMMemoryImport {
-        imported_memory(&self.vmctx, &self.offsets, index)
+        let index = usize::try_from(index.as_u32()).unwrap();
+        unsafe { &*self.imported_memories_ptr().add(index) }
     }
 
     /// Return a pointer to the `VMMemoryImport`s.
-    fn imported_memories_ptr(&mut self) -> *mut VMMemoryImport {
-        unsafe {
-            (&mut self.vmctx as *mut VMContext as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_imported_memories_begin()).unwrap())
-                as *mut VMMemoryImport
-        }
+    fn imported_memories_ptr(&self) -> *mut VMMemoryImport {
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_imported_memories_begin()) }
     }
 
     /// Return the indexed `VMGlobalImport`.
     fn imported_global(&self, index: GlobalIndex) -> &VMGlobalImport {
-        imported_global(&self.vmctx, &self.offsets, index)
+        let index = usize::try_from(index.as_u32()).unwrap();
+        unsafe { &*self.imported_globals_ptr().add(index) }
     }
 
     /// Return a pointer to the `VMGlobalImport`s.
-    fn imported_globals_ptr(&mut self) -> *mut VMGlobalImport {
+    fn imported_globals_ptr(&self) -> *mut VMGlobalImport {
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_imported_globals_begin()) }
+    }
+
+    /// Return the indexed `VMTableDefinition`.
+    #[allow(dead_code)]
+    fn table(&self, index: DefinedTableIndex) -> VMTableDefinition {
+        unsafe { *self.table_ptr(index) }
+    }
+
+    /// Updates the value for a defined table to `VMTableDefinition`.
+    fn set_table(&self, index: DefinedTableIndex, table: VMTableDefinition) {
         unsafe {
-            (&mut self.vmctx as *mut VMContext as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_imported_globals_begin()).unwrap())
-                as *mut VMGlobalImport
+            *self.table_ptr(index) = table;
         }
     }
 
     /// Return the indexed `VMTableDefinition`.
-    #[allow(dead_code)]
-    fn table(&self, index: DefinedTableIndex) -> &VMTableDefinition {
-        table(&self.vmctx, &self.offsets, index)
-    }
-
-    /// Return the indexed `VMTableDefinition`.
-    #[allow(dead_code)]
-    fn table_mut(&mut self, index: DefinedTableIndex) -> &mut VMTableDefinition {
-        table_mut(&mut self.vmctx, &self.offsets, index)
+    fn table_ptr(&self, index: DefinedTableIndex) -> *mut VMTableDefinition {
+        let index = usize::try_from(index.as_u32()).unwrap();
+        unsafe { self.tables_ptr().add(index) }
     }
 
     /// Return a pointer to the `VMTableDefinition`s.
-    fn tables_ptr(&mut self) -> *mut VMTableDefinition {
+    fn tables_ptr(&self) -> *mut VMTableDefinition {
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_tables_begin()) }
+    }
+
+    /// Return the indexed `VMMemoryDefinition`.
+    fn memory(&self, index: DefinedMemoryIndex) -> VMMemoryDefinition {
+        unsafe { *self.memory_ptr(index) }
+    }
+
+    /// Set the indexed memory to `VMMemoryDefinition`.
+    fn set_memory(&self, index: DefinedMemoryIndex, mem: VMMemoryDefinition) {
         unsafe {
-            (&mut self.vmctx as *mut VMContext as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_tables_begin()).unwrap())
-                as *mut VMTableDefinition
+            *self.memory_ptr(index) = mem;
         }
     }
 
     /// Return the indexed `VMMemoryDefinition`.
-    fn memory(&self, index: DefinedMemoryIndex) -> &VMMemoryDefinition {
-        memory(&self.vmctx, &self.offsets, index)
-    }
-
-    /// Return the indexed `VMMemoryDefinition`.
-    fn memory_mut(&mut self, index: DefinedMemoryIndex) -> &mut VMMemoryDefinition {
-        memory_mut(&mut self.vmctx, &self.offsets, index)
+    fn memory_ptr(&self, index: DefinedMemoryIndex) -> *mut VMMemoryDefinition {
+        let index = usize::try_from(index.as_u32()).unwrap();
+        unsafe { self.memories_ptr().add(index) }
     }
 
     /// Return a pointer to the `VMMemoryDefinition`s.
-    fn memories_ptr(&mut self) -> *mut VMMemoryDefinition {
+    fn memories_ptr(&self) -> *mut VMMemoryDefinition {
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_memories_begin()) }
+    }
+
+    /// Return the indexed `VMGlobalDefinition`.
+    fn global(&self, index: DefinedGlobalIndex) -> VMGlobalDefinition {
+        unsafe { *self.global_ptr(index) }
+    }
+
+    /// Set the indexed global to `VMGlobalDefinition`.
+    #[allow(dead_code)]
+    fn set_global(&self, index: DefinedGlobalIndex, global: VMGlobalDefinition) {
         unsafe {
-            (&mut self.vmctx as *mut VMContext as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_memories_begin()).unwrap())
-                as *mut VMMemoryDefinition
+            *self.global_ptr(index) = global;
         }
     }
 
     /// Return the indexed `VMGlobalDefinition`.
-    #[allow(dead_code)]
-    fn global(&self, index: DefinedGlobalIndex) -> &VMGlobalDefinition {
-        global(&self.vmctx, &self.offsets, index)
-    }
-
-    /// Return the indexed `VMGlobalDefinition`.
-    fn global_mut(&mut self, index: DefinedGlobalIndex) -> &mut VMGlobalDefinition {
-        global_mut(&mut self.vmctx, &self.offsets, index)
+    fn global_ptr(&self, index: DefinedGlobalIndex) -> *mut VMGlobalDefinition {
+        let index = usize::try_from(index.as_u32()).unwrap();
+        unsafe { self.globals_ptr().add(index) }
     }
 
     /// Return a pointer to the `VMGlobalDefinition`s.
-    fn globals_ptr(&mut self) -> *mut VMGlobalDefinition {
-        unsafe {
-            (&mut self.vmctx as *mut VMContext as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_globals_begin()).unwrap())
-                as *mut VMGlobalDefinition
-        }
+    fn globals_ptr(&self) -> *mut VMGlobalDefinition {
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_globals_begin()) }
     }
 
     /// Return a pointer to the `VMBuiltinFunctionsArray`.
-    fn builtin_functions_ptr(&mut self) -> *mut VMBuiltinFunctionsArray {
-        unsafe {
-            (&mut self.vmctx as *mut VMContext as *mut u8)
-                .add(usize::try_from(self.offsets.vmctx_builtin_functions_begin()).unwrap())
-                as *mut VMBuiltinFunctionsArray
-        }
+    fn builtin_functions_ptr(&self) -> *mut VMBuiltinFunctionsArray {
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_builtin_functions_begin()) }
     }
 
     /// Return a reference to the vmctx used by compiled wasm code.
@@ -467,22 +332,12 @@ impl Instance {
     }
 
     /// Return a raw pointer to the vmctx used by compiled wasm code.
-    pub fn vmctx_ptr(&self) -> *const VMContext {
-        self.vmctx()
-    }
-
-    /// Return a mutable reference to the vmctx used by compiled wasm code.
-    pub fn vmctx_mut(&mut self) -> &mut VMContext {
-        &mut self.vmctx
-    }
-
-    /// Return a mutable raw pointer to the vmctx used by compiled wasm code.
-    pub fn vmctx_mut_ptr(&mut self) -> *mut VMContext {
-        self.vmctx_mut()
+    pub fn vmctx_ptr(&self) -> *mut VMContext {
+        self.vmctx() as *const VMContext as *mut VMContext
     }
 
     /// Lookup an export with the given name.
-    pub fn lookup(&mut self, field: &str) -> Option<Export> {
+    pub fn lookup(&self, field: &str) -> Option<Export> {
         let export = if let Some(export) = self.module.exports.get(field) {
             export.clone()
         } else {
@@ -491,42 +346,62 @@ impl Instance {
         Some(self.lookup_by_declaration(&export))
     }
 
-    /// Lookup an export with the given name.
-    ///
-    /// # Safety
-    /// This takes an immutable reference, and the result is an `Export` that
-    /// the type system doesn't prevent from being used to mutate the instance,
-    /// so this function is unsafe.
-    pub unsafe fn lookup_immutable(&self, field: &str) -> Option<Export> {
-        #[allow(clippy::cast_ref_to_mut)]
-        let temporary_mut = &mut *(self as *const Self as *mut Self);
-        temporary_mut.lookup(field)
-    }
-
     /// Lookup an export with the given export declaration.
-    pub fn lookup_by_declaration(&mut self, export: &wasmtime_environ::Export) -> Export {
-        lookup_by_declaration(
-            &self.module,
-            &mut self.vmctx,
-            &self.offsets,
-            &self.finished_functions,
-            export,
-        )
-    }
-
-    /// Lookup an export with the given export declaration.
-    ///
-    /// # Safety
-    /// This takes an immutable reference, and the result is an `Export` that
-    /// the type system doesn't prevent from being used to mutate the instance,
-    /// so this function is unsafe.
-    pub unsafe fn lookup_immutable_by_declaration(
-        &self,
-        export: &wasmtime_environ::Export,
-    ) -> Export {
-        #[allow(clippy::cast_ref_to_mut)]
-        let temporary_mut = &mut *(self as *const Self as *mut Self);
-        temporary_mut.lookup_by_declaration(export)
+    pub fn lookup_by_declaration(&self, export: &wasmtime_environ::Export) -> Export {
+        match export {
+            wasmtime_environ::Export::Function(index) => {
+                let signature = self.module.signatures[self.module.functions[*index]].clone();
+                let (address, vmctx) =
+                    if let Some(def_index) = self.module.defined_func_index(*index) {
+                        (self.finished_functions[def_index], self.vmctx_ptr())
+                    } else {
+                        let import = self.imported_function(*index);
+                        (import.body, import.vmctx)
+                    };
+                Export::Function {
+                    address,
+                    signature,
+                    vmctx,
+                }
+            }
+            wasmtime_environ::Export::Table(index) => {
+                let (definition, vmctx) =
+                    if let Some(def_index) = self.module.defined_table_index(*index) {
+                        (self.table_ptr(def_index), self.vmctx_ptr())
+                    } else {
+                        let import = self.imported_table(*index);
+                        (import.from, import.vmctx)
+                    };
+                Export::Table {
+                    definition,
+                    vmctx,
+                    table: self.module.table_plans[*index].clone(),
+                }
+            }
+            wasmtime_environ::Export::Memory(index) => {
+                let (definition, vmctx) =
+                    if let Some(def_index) = self.module.defined_memory_index(*index) {
+                        (self.memory_ptr(def_index), self.vmctx_ptr())
+                    } else {
+                        let import = self.imported_memory(*index);
+                        (import.from, import.vmctx)
+                    };
+                Export::Memory {
+                    definition,
+                    vmctx,
+                    memory: self.module.memory_plans[*index].clone(),
+                }
+            }
+            wasmtime_environ::Export::Global(index) => Export::Global {
+                definition: if let Some(def_index) = self.module.defined_global_index(*index) {
+                    self.global_ptr(def_index)
+                } else {
+                    self.imported_global(*index).from
+                },
+                vmctx: self.vmctx_ptr(),
+                global: self.module.globals[*index],
+            },
+        }
     }
 
     /// Return an iterator over the exports of this instance.
@@ -539,11 +414,11 @@ impl Instance {
     }
 
     /// Return a reference to the custom state attached to this instance.
-    pub fn host_state(&mut self) -> &mut dyn Any {
-        &mut *self.host_state
+    pub fn host_state(&self) -> &dyn Any {
+        &*self.host_state
     }
 
-    fn invoke_function(&mut self, index: FuncIndex) -> Result<(), InstantiationError> {
+    fn invoke_function(&self, index: FuncIndex) -> Result<(), InstantiationError> {
         // TODO: Check that the callee's calling convention matches what we expect.
 
         let (callee_address, callee_vmctx) = match self.module.defined_func_index(index) {
@@ -552,7 +427,7 @@ impl Instance {
                     .finished_functions
                     .get(defined_index)
                     .expect("function index is out of bounds");
-                (body, self.vmctx_mut() as *mut VMContext)
+                (body, self.vmctx_ptr())
             }
             None => {
                 assert_lt!(index.index(), self.module.imported_funcs.len());
@@ -562,12 +437,12 @@ impl Instance {
         };
 
         // Make the call.
-        unsafe { wasmtime_call(callee_vmctx, self.vmctx_mut_ptr(), callee_address) }
+        unsafe { wasmtime_call(callee_vmctx, self.vmctx_ptr(), callee_address) }
             .map_err(InstantiationError::StartTrap)
     }
 
     /// Invoke the WebAssembly start function of the instance, if one is present.
-    fn invoke_start_function(&mut self) -> Result<(), InstantiationError> {
+    fn invoke_start_function(&self) -> Result<(), InstantiationError> {
         if let Some(start_index) = self.module.start_func {
             self.invoke_function(start_index)
         } else {
@@ -616,19 +491,15 @@ impl Instance {
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages.
-    pub(crate) fn memory_grow(
-        &mut self,
-        memory_index: DefinedMemoryIndex,
-        delta: u32,
-    ) -> Option<u32> {
+    pub(crate) fn memory_grow(&self, memory_index: DefinedMemoryIndex, delta: u32) -> Option<u32> {
         let result = self
             .memories
-            .get_mut(memory_index)
+            .get(memory_index)
             .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()))
             .grow(delta);
 
         // Keep current the VMContext pointers used by compiled wasm code.
-        *self.memory_mut(memory_index) = self.memories[memory_index].vmmemory();
+        self.set_memory(memory_index, self.memories[memory_index].vmmemory());
 
         result
     }
@@ -642,20 +513,20 @@ impl Instance {
     /// This and `imported_memory_size` are currently unsafe because they
     /// dereference the memory import's pointers.
     pub(crate) unsafe fn imported_memory_grow(
-        &mut self,
+        &self,
         memory_index: MemoryIndex,
         delta: u32,
     ) -> Option<u32> {
         let import = self.imported_memory(memory_index);
-        let foreign_instance = (&mut *import.vmctx).instance();
-        let foreign_memory = &mut *import.from;
+        let foreign_instance = (&*import.vmctx).instance();
+        let foreign_memory = &*import.from;
         let foreign_index = foreign_instance.memory_index(foreign_memory);
 
         foreign_instance.memory_grow(foreign_index, delta)
     }
 
     /// Returns the number of allocated wasm pages.
-    pub(crate) fn memory_size(&mut self, memory_index: DefinedMemoryIndex) -> u32 {
+    pub(crate) fn memory_size(&self, memory_index: DefinedMemoryIndex) -> u32 {
         self.memories
             .get(memory_index)
             .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()))
@@ -667,7 +538,7 @@ impl Instance {
     /// # Safety
     /// This and `imported_memory_grow` are currently unsafe because they
     /// dereference the memory import's pointers.
-    pub(crate) unsafe fn imported_memory_size(&mut self, memory_index: MemoryIndex) -> u32 {
+    pub(crate) unsafe fn imported_memory_size(&self, memory_index: MemoryIndex) -> u32 {
         let import = self.imported_memory(memory_index);
         let foreign_instance = (&mut *import.vmctx).instance();
         let foreign_memory = &mut *import.from;
@@ -680,41 +551,41 @@ impl Instance {
     ///
     /// Returns `None` if table can't be grown by the specified amount
     /// of elements.
-    pub(crate) fn table_grow(&mut self, table_index: DefinedTableIndex, delta: u32) -> Option<u32> {
+    pub(crate) fn table_grow(&self, table_index: DefinedTableIndex, delta: u32) -> Option<u32> {
         let result = self
             .tables
-            .get_mut(table_index)
+            .get(table_index)
             .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
             .grow(delta);
 
         // Keep current the VMContext pointers used by compiled wasm code.
-        *self.table_mut(table_index) = self.tables[table_index].vmtable();
+        self.set_table(table_index, self.tables[table_index].vmtable());
 
         result
     }
 
     // Get table element by index.
-    pub(crate) fn table_get(
+    fn table_get(
         &self,
         table_index: DefinedTableIndex,
         index: u32,
-    ) -> Option<&VMCallerCheckedAnyfunc> {
+    ) -> Option<VMCallerCheckedAnyfunc> {
         self.tables
             .get(table_index)
             .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
             .get(index)
     }
 
-    // Get table mutable element by index.
-    pub(crate) fn table_get_mut(
-        &mut self,
+    fn table_set(
+        &self,
         table_index: DefinedTableIndex,
         index: u32,
-    ) -> Option<&mut VMCallerCheckedAnyfunc> {
+        val: VMCallerCheckedAnyfunc,
+    ) -> Result<(), ()> {
         self.tables
-            .get_mut(table_index)
+            .get(table_index)
             .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
-            .get_mut(index)
+            .set(index, val)
     }
 }
 
@@ -748,7 +619,21 @@ impl InstanceHandle {
     }
 
     /// Create a new `InstanceHandle` pointing at a new `Instance`.
-    pub fn new(
+    ///
+    /// # Unsafety
+    ///
+    /// This method is not necessarily inherently unsafe to call, but in general
+    /// the APIs of an `Instance` are quite unsafe and have not been really
+    /// audited for safety that much. As a result the unsafety here on this
+    /// method is a low-overhead way of saying "this is an extremely unsafe type
+    /// to work with".
+    ///
+    /// Extreme care must be taken when working with `InstanceHandle` and it's
+    /// recommended to have relatively intimate knowledge of how it works
+    /// internally if you'd like to do so. If possible it's recommended to use
+    /// the `wasmtime` crate API rather than this type since that is vetted for
+    /// safety.
+    pub unsafe fn new(
         module: Arc<Module>,
         finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
         imports: Imports,
@@ -757,17 +642,17 @@ impl InstanceHandle {
         dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
         host_state: Box<dyn Any>,
     ) -> Result<Self, InstantiationError> {
-        let mut tables = create_tables(&module);
-        let mut memories = create_memories(&module)?;
+        let tables = create_tables(&module);
+        let memories = create_memories(&module)?;
 
         let vmctx_tables = tables
-            .values_mut()
+            .values()
             .map(Table::vmtable)
             .collect::<PrimaryMap<DefinedTableIndex, _>>()
             .into_boxed_slice();
 
         let vmctx_memories = memories
-            .values_mut()
+            .values()
             .map(LinearMemory::vmmemory)
             .collect::<PrimaryMap<DefinedMemoryIndex, _>>()
             .into_boxed_slice();
@@ -787,9 +672,9 @@ impl InstanceHandle {
             #[allow(clippy::cast_ptr_alignment)]
             let instance_ptr = instance_mmap.as_mut_ptr() as *mut Instance;
             let instance = Instance {
-                refcount: 1,
+                refcount: Cell::new(1),
                 dependencies: imports.dependencies,
-                mmap: instance_mmap,
+                mmap: Cell::new(instance_mmap),
                 module,
                 offsets,
                 memories,
@@ -797,61 +682,57 @@ impl InstanceHandle {
                 finished_functions,
                 dbg_jit_registration,
                 host_state,
-                signal_handler: Box::new(signal_handler_none) as Box<SignalHandler>,
+                signal_handler: Cell::new(Box::new(signal_handler_none)),
                 vmctx: VMContext {},
             };
-            unsafe {
-                ptr::write(instance_ptr, instance);
-                &mut *instance_ptr
-            }
+            ptr::write(instance_ptr, instance);
+            &mut *instance_ptr
         };
 
-        unsafe {
-            ptr::copy(
-                vmshared_signatures.values().as_slice().as_ptr(),
-                instance.signature_ids_ptr() as *mut VMSharedSignatureIndex,
-                vmshared_signatures.len(),
-            );
-            ptr::copy(
-                imports.functions.values().as_slice().as_ptr(),
-                instance.imported_functions_ptr() as *mut VMFunctionImport,
-                imports.functions.len(),
-            );
-            ptr::copy(
-                imports.tables.values().as_slice().as_ptr(),
-                instance.imported_tables_ptr() as *mut VMTableImport,
-                imports.tables.len(),
-            );
-            ptr::copy(
-                imports.memories.values().as_slice().as_ptr(),
-                instance.imported_memories_ptr() as *mut VMMemoryImport,
-                imports.memories.len(),
-            );
-            ptr::copy(
-                imports.globals.values().as_slice().as_ptr(),
-                instance.imported_globals_ptr() as *mut VMGlobalImport,
-                imports.globals.len(),
-            );
-            ptr::copy(
-                vmctx_tables.values().as_slice().as_ptr(),
-                instance.tables_ptr() as *mut VMTableDefinition,
-                vmctx_tables.len(),
-            );
-            ptr::copy(
-                vmctx_memories.values().as_slice().as_ptr(),
-                instance.memories_ptr() as *mut VMMemoryDefinition,
-                vmctx_memories.len(),
-            );
-            ptr::copy(
-                vmctx_globals.values().as_slice().as_ptr(),
-                instance.globals_ptr() as *mut VMGlobalDefinition,
-                vmctx_globals.len(),
-            );
-            ptr::write(
-                instance.builtin_functions_ptr() as *mut VMBuiltinFunctionsArray,
-                VMBuiltinFunctionsArray::initialized(),
-            );
-        }
+        ptr::copy(
+            vmshared_signatures.values().as_slice().as_ptr(),
+            instance.signature_ids_ptr() as *mut VMSharedSignatureIndex,
+            vmshared_signatures.len(),
+        );
+        ptr::copy(
+            imports.functions.values().as_slice().as_ptr(),
+            instance.imported_functions_ptr() as *mut VMFunctionImport,
+            imports.functions.len(),
+        );
+        ptr::copy(
+            imports.tables.values().as_slice().as_ptr(),
+            instance.imported_tables_ptr() as *mut VMTableImport,
+            imports.tables.len(),
+        );
+        ptr::copy(
+            imports.memories.values().as_slice().as_ptr(),
+            instance.imported_memories_ptr() as *mut VMMemoryImport,
+            imports.memories.len(),
+        );
+        ptr::copy(
+            imports.globals.values().as_slice().as_ptr(),
+            instance.imported_globals_ptr() as *mut VMGlobalImport,
+            imports.globals.len(),
+        );
+        ptr::copy(
+            vmctx_tables.values().as_slice().as_ptr(),
+            instance.tables_ptr() as *mut VMTableDefinition,
+            vmctx_tables.len(),
+        );
+        ptr::copy(
+            vmctx_memories.values().as_slice().as_ptr(),
+            instance.memories_ptr() as *mut VMMemoryDefinition,
+            vmctx_memories.len(),
+        );
+        ptr::copy(
+            vmctx_globals.values().as_slice().as_ptr(),
+            instance.globals_ptr() as *mut VMGlobalDefinition,
+            vmctx_globals.len(),
+        );
+        ptr::write(
+            instance.builtin_functions_ptr() as *mut VMBuiltinFunctionsArray,
+            VMBuiltinFunctionsArray::initialized(),
+        );
 
         // Check initializer bounds before initializing anything.
         check_table_init_bounds(instance)?;
@@ -881,8 +762,10 @@ impl InstanceHandle {
     /// be a `VMContext` allocated as part of an `Instance`.
     pub unsafe fn from_vmctx(vmctx: *mut VMContext) -> Self {
         let instance = (&mut *vmctx).instance();
-        instance.refcount += 1;
-        Self { instance }
+        instance.refcount.set(instance.refcount.get() + 1);
+        Self {
+            instance: instance as *const Instance as *mut Instance,
+        }
     }
 
     /// Return a reference to the vmctx used by compiled wasm code.
@@ -891,7 +774,7 @@ impl InstanceHandle {
     }
 
     /// Return a raw pointer to the vmctx used by compiled wasm code.
-    pub fn vmctx_ptr(&self) -> *const VMContext {
+    pub fn vmctx_ptr(&self) -> *mut VMContext {
         self.instance().vmctx_ptr()
     }
 
@@ -905,47 +788,14 @@ impl InstanceHandle {
         &self.instance().module
     }
 
-    /// Return a mutable reference to the vmctx used by compiled wasm code.
-    pub fn vmctx_mut(&mut self) -> &mut VMContext {
-        self.instance_mut().vmctx_mut()
-    }
-
-    /// Return a mutable raw pointer to the vmctx used by compiled wasm code.
-    pub fn vmctx_mut_ptr(&mut self) -> *mut VMContext {
-        self.instance_mut().vmctx_mut_ptr()
-    }
-
     /// Lookup an export with the given name.
-    pub fn lookup(&mut self, field: &str) -> Option<Export> {
-        self.instance_mut().lookup(field)
-    }
-
-    /// Lookup an export with the given name.
-    ///
-    /// # Safety
-    /// This takes an immutable reference, and the result is an `Export` that
-    /// the type system doesn't prevent from being used to mutate the instance,
-    /// so this function is unsafe.
-    pub unsafe fn lookup_immutable(&self, field: &str) -> Option<Export> {
-        self.instance().lookup_immutable(field)
+    pub fn lookup(&self, field: &str) -> Option<Export> {
+        self.instance().lookup(field)
     }
 
     /// Lookup an export with the given export declaration.
-    pub fn lookup_by_declaration(&mut self, export: &wasmtime_environ::Export) -> Export {
-        self.instance_mut().lookup_by_declaration(export)
-    }
-
-    /// Lookup an export with the given export declaration.
-    ///
-    /// # Safety
-    /// This takes an immutable reference, and the result is an `Export` that
-    /// the type system doesn't prevent from being used to mutate the instance,
-    /// so this function is unsafe.
-    pub unsafe fn lookup_immutable_by_declaration(
-        &self,
-        export: &wasmtime_environ::Export,
-    ) -> Export {
-        self.instance().lookup_immutable_by_declaration(export)
+    pub fn lookup_by_declaration(&self, export: &wasmtime_environ::Export) -> Export {
+        self.instance().lookup_by_declaration(export)
     }
 
     /// Return an iterator over the exports of this instance.
@@ -958,8 +808,8 @@ impl InstanceHandle {
     }
 
     /// Return a reference to the custom state attached to this instance.
-    pub fn host_state(&mut self) -> &mut dyn Any {
-        self.instance_mut().host_state()
+    pub fn host_state(&self) -> &dyn Any {
+        self.instance().host_state()
     }
 
     /// Return the memory index for the given `VMMemoryDefinition` in this instance.
@@ -971,8 +821,8 @@ impl InstanceHandle {
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages.
-    pub fn memory_grow(&mut self, memory_index: DefinedMemoryIndex, delta: u32) -> Option<u32> {
-        self.instance_mut().memory_grow(memory_index, delta)
+    pub fn memory_grow(&self, memory_index: DefinedMemoryIndex, delta: u32) -> Option<u32> {
+        self.instance().memory_grow(memory_index, delta)
     }
 
     /// Return the table index for the given `VMTableDefinition` in this instance.
@@ -984,8 +834,8 @@ impl InstanceHandle {
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages.
-    pub fn table_grow(&mut self, table_index: DefinedTableIndex, delta: u32) -> Option<u32> {
-        self.instance_mut().table_grow(table_index, delta)
+    pub fn table_grow(&self, table_index: DefinedTableIndex, delta: u32) -> Option<u32> {
+        self.instance().table_grow(table_index, delta)
     }
 
     /// Get table element reference.
@@ -995,37 +845,32 @@ impl InstanceHandle {
         &self,
         table_index: DefinedTableIndex,
         index: u32,
-    ) -> Option<&VMCallerCheckedAnyfunc> {
+    ) -> Option<VMCallerCheckedAnyfunc> {
         self.instance().table_get(table_index, index)
     }
 
-    /// Get mutable table element reference.
+    /// Set table element reference.
     ///
-    /// Returns `None` if index is out of bounds.
-    pub fn table_get_mut(
-        &mut self,
+    /// Returns an error if the index is out of bounds
+    pub fn table_set(
+        &self,
         table_index: DefinedTableIndex,
         index: u32,
-    ) -> Option<&mut VMCallerCheckedAnyfunc> {
-        self.instance_mut().table_get_mut(table_index, index)
+        val: VMCallerCheckedAnyfunc,
+    ) -> Result<(), ()> {
+        self.instance().table_set(table_index, index, val)
     }
-}
 
-impl InstanceHandle {
     /// Return a reference to the contained `Instance`.
     fn instance(&self) -> &Instance {
         unsafe { &*(self.instance as *const Instance) }
-    }
-
-    /// Return a mutable reference to the contained `Instance`.
-    fn instance_mut(&mut self) -> &mut Instance {
-        unsafe { &mut *(self.instance as *mut Instance) }
     }
 }
 
 impl Clone for InstanceHandle {
     fn clone(&self) -> Self {
-        unsafe { &mut *(self.instance as *mut Instance) }.refcount += 1;
+        let instance = self.instance();
+        instance.refcount.set(instance.refcount.get() + 1);
         Self {
             instance: self.instance,
         }
@@ -1034,79 +879,14 @@ impl Clone for InstanceHandle {
 
 impl Drop for InstanceHandle {
     fn drop(&mut self) {
-        let instance = self.instance_mut();
-        instance.refcount -= 1;
-        if instance.refcount == 0 {
-            let mmap = mem::replace(&mut instance.mmap, Mmap::new());
-            unsafe { ptr::drop_in_place(instance) };
+        let instance = self.instance();
+        let count = instance.refcount.get();
+        instance.refcount.set(count - 1);
+        if count == 1 {
+            let mmap = instance.mmap.replace(Mmap::new());
+            unsafe { ptr::drop_in_place(self.instance) };
             mem::drop(mmap);
         }
-    }
-}
-
-fn lookup_by_declaration(
-    module: &Module,
-    vmctx: &mut VMContext,
-    offsets: &VMOffsets,
-    finished_functions: &BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
-    export: &wasmtime_environ::Export,
-) -> Export {
-    match export {
-        wasmtime_environ::Export::Function(index) => {
-            let signature = module.signatures[module.functions[*index]].clone();
-            let (address, vmctx) = if let Some(def_index) = module.defined_func_index(*index) {
-                (finished_functions[def_index], vmctx as *mut VMContext)
-            } else {
-                let import = imported_function(vmctx, offsets, *index);
-                (import.body, import.vmctx)
-            };
-            Export::Function {
-                address,
-                signature,
-                vmctx,
-            }
-        }
-        wasmtime_environ::Export::Table(index) => {
-            let (definition, vmctx) = if let Some(def_index) = module.defined_table_index(*index) {
-                (
-                    table_mut(vmctx, offsets, def_index) as *mut VMTableDefinition,
-                    vmctx as *mut VMContext,
-                )
-            } else {
-                let import = imported_table(vmctx, offsets, *index);
-                (import.from, import.vmctx)
-            };
-            Export::Table {
-                definition,
-                vmctx,
-                table: module.table_plans[*index].clone(),
-            }
-        }
-        wasmtime_environ::Export::Memory(index) => {
-            let (definition, vmctx) = if let Some(def_index) = module.defined_memory_index(*index) {
-                (
-                    memory_mut(vmctx, offsets, def_index) as *mut VMMemoryDefinition,
-                    vmctx as *mut VMContext,
-                )
-            } else {
-                let import = imported_memory(vmctx, offsets, *index);
-                (import.from, import.vmctx)
-            };
-            Export::Memory {
-                definition,
-                vmctx,
-                memory: module.memory_plans[*index].clone(),
-            }
-        }
-        wasmtime_environ::Export::Global(index) => Export::Global {
-            definition: if let Some(def_index) = module.defined_global_index(*index) {
-                global_mut(vmctx, offsets, def_index)
-            } else {
-                imported_global(vmctx, offsets, *index).from
-            },
-            vmctx,
-            global: module.globals[*index],
-        },
     }
 }
 
@@ -1114,15 +894,10 @@ fn check_table_init_bounds(instance: &mut Instance) -> Result<(), InstantiationE
     let module = Arc::clone(&instance.module);
     for init in &module.table_elements {
         let start = get_table_init_start(init, instance);
-        let slice = get_table_slice(
-            init,
-            &instance.module,
-            &mut instance.tables,
-            &instance.vmctx,
-            &instance.offsets,
-        );
+        let table = get_table(init, instance);
 
-        if slice.get_mut(start..start + init.elements.len()).is_none() {
+        let size = usize::try_from(table.size()).unwrap();
+        if size < start + init.elements.len() {
             return Err(InstantiationError::Link(LinkError(
                 "elements segment does not fit".to_owned(),
             )));
@@ -1137,12 +912,14 @@ fn get_memory_init_start(init: &DataInitializer<'_>, instance: &mut Instance) ->
     let mut start = init.location.offset;
 
     if let Some(base) = init.location.base {
-        let global = if let Some(def_index) = instance.module.defined_global_index(base) {
-            instance.global_mut(def_index)
-        } else {
-            instance.imported_global(base).from
+        let val = unsafe {
+            if let Some(def_index) = instance.module.defined_global_index(base) {
+                *instance.global(def_index).as_u32()
+            } else {
+                *(*instance.imported_global(base).from).as_u32()
+            }
         };
-        start += usize::try_from(*unsafe { (*global).as_u32() }).unwrap();
+        start += usize::try_from(val).unwrap();
     }
 
     start
@@ -1202,67 +979,60 @@ fn get_table_init_start(init: &TableElements, instance: &mut Instance) -> usize 
     let mut start = init.offset;
 
     if let Some(base) = init.base {
-        let global = if let Some(def_index) = instance.module.defined_global_index(base) {
-            instance.global_mut(def_index)
-        } else {
-            instance.imported_global(base).from
+        let val = unsafe {
+            if let Some(def_index) = instance.module.defined_global_index(base) {
+                *instance.global(def_index).as_u32()
+            } else {
+                *(*instance.imported_global(base).from).as_u32()
+            }
         };
-        start += usize::try_from(*unsafe { (*global).as_u32() }).unwrap();
+        start += usize::try_from(val).unwrap();
     }
 
     start
 }
 
 /// Return a byte-slice view of a table's data.
-fn get_table_slice<'instance>(
-    init: &TableElements,
-    module: &Module,
-    tables: &'instance mut BoxedSlice<DefinedTableIndex, Table>,
-    vmctx: &VMContext,
-    offsets: &VMOffsets,
-) -> &'instance mut [VMCallerCheckedAnyfunc] {
-    if let Some(defined_table_index) = module.defined_table_index(init.table_index) {
-        tables[defined_table_index].as_mut()
+fn get_table<'instance>(init: &TableElements, instance: &'instance Instance) -> &'instance Table {
+    if let Some(defined_table_index) = instance.module.defined_table_index(init.table_index) {
+        &instance.tables[defined_table_index]
     } else {
-        let import = imported_table(vmctx, offsets, init.table_index);
+        let import = instance.imported_table(init.table_index);
         let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
         let foreign_table = unsafe { &mut *(import).from };
         let foreign_index = foreign_instance.table_index(foreign_table);
-        foreign_instance.tables[foreign_index].as_mut()
+        &foreign_instance.tables[foreign_index]
     }
 }
 
 /// Initialize the table memory from the provided initializers.
 fn initialize_tables(instance: &mut Instance) -> Result<(), InstantiationError> {
-    let vmctx: *mut VMContext = instance.vmctx_mut();
+    let vmctx = instance.vmctx_ptr();
     let module = Arc::clone(&instance.module);
     for init in &module.table_elements {
         let start = get_table_init_start(init, instance);
-        let slice = get_table_slice(
-            init,
-            &instance.module,
-            &mut instance.tables,
-            &instance.vmctx,
-            &instance.offsets,
-        );
+        let table = get_table(init, instance);
 
-        let subslice = &mut slice[start..start + init.elements.len()];
         for (i, func_idx) in init.elements.iter().enumerate() {
             let callee_sig = instance.module.functions[*func_idx];
             let (callee_ptr, callee_vmctx) =
                 if let Some(index) = instance.module.defined_func_index(*func_idx) {
                     (instance.finished_functions[index], vmctx)
                 } else {
-                    let imported_func =
-                        imported_function(&instance.vmctx, &instance.offsets, *func_idx);
+                    let imported_func = instance.imported_function(*func_idx);
                     (imported_func.body, imported_func.vmctx)
                 };
-            let type_index = signature_id(&instance.vmctx, &instance.offsets, callee_sig);
-            subslice[i] = VMCallerCheckedAnyfunc {
-                func_ptr: callee_ptr,
-                type_index,
-                vmctx: callee_vmctx,
-            };
+            let type_index = instance.signature_id(callee_sig);
+            table
+                .set(
+                    u32::try_from(start + i).unwrap(),
+                    VMCallerCheckedAnyfunc {
+                        func_ptr: callee_ptr,
+                        type_index,
+                        vmctx: callee_vmctx,
+                    },
+                )
+                .unwrap();
         }
     }
 
@@ -1316,23 +1086,25 @@ fn initialize_globals(instance: &mut Instance) {
     let num_imports = module.imported_globals.len();
     for (index, global) in module.globals.iter().skip(num_imports) {
         let def_index = module.defined_global_index(index).unwrap();
-        let to: *mut VMGlobalDefinition = instance.global_mut(def_index);
-        match global.initializer {
-            GlobalInit::I32Const(x) => *unsafe { (*to).as_i32_mut() } = x,
-            GlobalInit::I64Const(x) => *unsafe { (*to).as_i64_mut() } = x,
-            GlobalInit::F32Const(x) => *unsafe { (*to).as_f32_bits_mut() } = x,
-            GlobalInit::F64Const(x) => *unsafe { (*to).as_f64_bits_mut() } = x,
-            GlobalInit::V128Const(x) => *unsafe { (*to).as_u128_bits_mut() } = x.0,
-            GlobalInit::GetGlobal(x) => {
-                let from = if let Some(def_x) = module.defined_global_index(x) {
-                    instance.global_mut(def_x)
-                } else {
-                    instance.imported_global(x).from
-                };
-                unsafe { *to = *from };
+        unsafe {
+            let to = instance.global_ptr(def_index);
+            match global.initializer {
+                GlobalInit::I32Const(x) => *(*to).as_i32_mut() = x,
+                GlobalInit::I64Const(x) => *(*to).as_i64_mut() = x,
+                GlobalInit::F32Const(x) => *(*to).as_f32_bits_mut() = x,
+                GlobalInit::F64Const(x) => *(*to).as_f64_bits_mut() = x,
+                GlobalInit::V128Const(x) => *(*to).as_u128_bits_mut() = x.0,
+                GlobalInit::GetGlobal(x) => {
+                    let from = if let Some(def_x) = module.defined_global_index(x) {
+                        instance.global(def_x)
+                    } else {
+                        *instance.imported_global(x).from
+                    };
+                    *to = from;
+                }
+                GlobalInit::Import => panic!("locally-defined global initialized as import"),
+                GlobalInit::RefNullConst => unimplemented!(),
             }
-            GlobalInit::Import => panic!("locally-defined global initialized as import"),
-            GlobalInit::RefNullConst => unimplemented!(),
         }
     }
 }

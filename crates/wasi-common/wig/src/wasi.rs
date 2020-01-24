@@ -201,8 +201,8 @@ pub fn add_wrappers_to_module(args: TokenStream) -> TokenStream {
                         #format_str,
                         #(#format_args),*
                     );
-                    let wasi_ctx = match get_wasi_ctx(&mut *ctx) {
-                        Ok(e) => e,
+                    let mut wasi_ctx = match get_wasi_ctx(&mut *ctx) {
+                        Ok(e) => e.borrow_mut(),
                         Err(e) => #handle_early_error,
                     };
                     let memory = match get_memory(&mut *caller_ctx) {
@@ -210,7 +210,7 @@ pub fn add_wrappers_to_module(args: TokenStream) -> TokenStream {
                         Err(e) => #handle_early_error,
                     };
                     hostcalls::#name_ident(
-                        wasi_ctx,
+                        &mut *wasi_ctx,
                         memory,
                         #(#hostcall_args),*
                     ) #cvt_ret

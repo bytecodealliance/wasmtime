@@ -3,6 +3,7 @@
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
+use std::cell::RefCell;
 use std::convert::{TryFrom, TryInto};
 use wasmtime_environ::wasm::TableElementType;
 use wasmtime_environ::{TablePlan, TableStyle};
@@ -10,7 +11,7 @@ use wasmtime_environ::{TablePlan, TableStyle};
 /// A table instance.
 #[derive(Debug)]
 pub struct Table {
-    vec: Vec<VMCallerCheckedAnyfunc>,
+    vec: RefCell<Vec<VMCallerCheckedAnyfunc>>,
     maximum: Option<u32>,
 }
 
@@ -25,10 +26,10 @@ impl Table {
         };
         match plan.style {
             TableStyle::CallerChecksSignature => Self {
-                vec: vec![
+                vec: RefCell::new(vec![
                     VMCallerCheckedAnyfunc::default();
                     usize::try_from(plan.table.minimum).unwrap()
-                ],
+                ]),
                 maximum: plan.table.maximum,
             },
         }
@@ -36,14 +37,14 @@ impl Table {
 
     /// Returns the number of allocated elements.
     pub fn size(&self) -> u32 {
-        self.vec.len().try_into().unwrap()
+        self.vec.borrow().len().try_into().unwrap()
     }
 
     /// Grow table by the specified amount of elements.
     ///
     /// Returns `None` if table can't be grown by the specified amount
     /// of elements.
-    pub fn grow(&mut self, delta: u32) -> Option<u32> {
+    pub fn grow(&self, delta: u32) -> Option<u32> {
         let new_len = match self.size().checked_add(delta) {
             Some(len) => {
                 if let Some(max) = self.maximum {
@@ -57,7 +58,7 @@ impl Table {
                 return None;
             }
         };
-        self.vec.resize(
+        self.vec.borrow_mut().resize(
             usize::try_from(new_len).unwrap(),
             VMCallerCheckedAnyfunc::default(),
         );
@@ -67,34 +68,31 @@ impl Table {
     /// Get reference to the specified element.
     ///
     /// Returns `None` if the index is out of bounds.
-    pub fn get(&self, index: u32) -> Option<&VMCallerCheckedAnyfunc> {
-        self.vec.get(index as usize)
+    pub fn get(&self, index: u32) -> Option<VMCallerCheckedAnyfunc> {
+        self.vec.borrow().get(index as usize).cloned()
     }
 
-    /// Get mutable reference to the specified element.
+    /// Set reference to the specified element.
     ///
-    /// Returns `None` if the index is out of bounds.
-    pub fn get_mut(&mut self, index: u32) -> Option<&mut VMCallerCheckedAnyfunc> {
-        self.vec.get_mut(index as usize)
+    /// # Panics
+    ///
+    /// Panics if `index` is out of bounds.
+    pub fn set(&self, index: u32, func: VMCallerCheckedAnyfunc) -> Result<(), ()> {
+        match self.vec.borrow_mut().get_mut(index as usize) {
+            Some(slot) => {
+                *slot = func;
+                Ok(())
+            }
+            None => Err(()),
+        }
     }
 
     /// Return a `VMTableDefinition` for exposing the table to compiled wasm code.
-    pub fn vmtable(&mut self) -> VMTableDefinition {
+    pub fn vmtable(&self) -> VMTableDefinition {
+        let mut vec = self.vec.borrow_mut();
         VMTableDefinition {
-            base: self.vec.as_mut_ptr() as *mut u8,
-            current_elements: self.vec.len().try_into().unwrap(),
+            base: vec.as_mut_ptr() as *mut u8,
+            current_elements: vec.len().try_into().unwrap(),
         }
-    }
-}
-
-impl AsRef<[VMCallerCheckedAnyfunc]> for Table {
-    fn as_ref(&self) -> &[VMCallerCheckedAnyfunc] {
-        self.vec.as_slice()
-    }
-}
-
-impl AsMut<[VMCallerCheckedAnyfunc]> for Table {
-    fn as_mut(&mut self) -> &mut [VMCallerCheckedAnyfunc] {
-        self.vec.as_mut_slice()
     }
 }

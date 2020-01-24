@@ -5,6 +5,7 @@
 use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
 use more_asserts::{assert_ge, assert_le};
+use std::cell::RefCell;
 use std::convert::TryFrom;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
@@ -12,10 +13,7 @@ use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 #[derive(Debug)]
 pub struct LinearMemory {
     // The underlying allocation.
-    mmap: Mmap,
-
-    // The current logical size in wasm pages of this linear memory.
-    current: u32,
+    mmap: RefCell<WasmMmap>,
 
     // The optional maximum size in wasm pages of this linear memory.
     maximum: Option<u32>,
@@ -27,6 +25,14 @@ pub struct LinearMemory {
     // Records whether we're using a bounds-checking strategy which requires
     // handlers to catch trapping accesses.
     pub(crate) needs_signal_handlers: bool,
+}
+
+#[derive(Debug)]
+struct WasmMmap {
+    // Our OS allocation of mmap'd memory.
+    alloc: Mmap,
+    // The current logical size in wasm pages of this linear memory.
+    size: u32,
 }
 
 impl LinearMemory {
@@ -59,11 +65,13 @@ impl LinearMemory {
         let mapped_pages = plan.memory.minimum as usize;
         let mapped_bytes = mapped_pages * WASM_PAGE_SIZE as usize;
 
-        let mmap = Mmap::accessible_reserved(mapped_bytes, request_bytes)?;
+        let mmap = WasmMmap {
+            alloc: Mmap::accessible_reserved(mapped_bytes, request_bytes)?,
+            size: plan.memory.minimum,
+        };
 
         Ok(Self {
-            mmap,
-            current: plan.memory.minimum,
+            mmap: mmap.into(),
             maximum: plan.memory.maximum,
             offset_guard_size: offset_guard_bytes,
             needs_signal_handlers,
@@ -72,25 +80,26 @@ impl LinearMemory {
 
     /// Returns the number of allocated wasm pages.
     pub fn size(&self) -> u32 {
-        self.current
+        self.mmap.borrow().size
     }
 
     /// Grow memory by the specified amount of wasm pages.
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of wasm pages.
-    pub fn grow(&mut self, delta: u32) -> Option<u32> {
+    pub fn grow(&self, delta: u32) -> Option<u32> {
         // Optimization of memory.grow 0 calls.
+        let mut mmap = self.mmap.borrow_mut();
         if delta == 0 {
-            return Some(self.current);
+            return Some(mmap.size);
         }
 
-        let new_pages = match self.current.checked_add(delta) {
+        let new_pages = match mmap.size.checked_add(delta) {
             Some(new_pages) => new_pages,
             // Linear memory size overflow.
             None => return None,
         };
-        let prev_pages = self.current;
+        let prev_pages = mmap.size;
 
         if let Some(maximum) = self.maximum {
             if new_pages > maximum {
@@ -111,7 +120,7 @@ impl LinearMemory {
         let prev_bytes = usize::try_from(prev_pages).unwrap() * WASM_PAGE_SIZE as usize;
         let new_bytes = usize::try_from(new_pages).unwrap() * WASM_PAGE_SIZE as usize;
 
-        if new_bytes > self.mmap.len() - self.offset_guard_size {
+        if new_bytes > mmap.alloc.len() - self.offset_guard_size {
             // If the new size is within the declared maximum, but needs more memory than we
             // have on hand, it's a dynamic heap and it can move.
             let guard_bytes = self.offset_guard_size;
@@ -119,25 +128,26 @@ impl LinearMemory {
 
             let mut new_mmap = Mmap::accessible_reserved(new_bytes, request_bytes).ok()?;
 
-            let copy_len = self.mmap.len() - self.offset_guard_size;
-            new_mmap.as_mut_slice()[..copy_len].copy_from_slice(&self.mmap.as_slice()[..copy_len]);
+            let copy_len = mmap.alloc.len() - self.offset_guard_size;
+            new_mmap.as_mut_slice()[..copy_len].copy_from_slice(&mmap.alloc.as_slice()[..copy_len]);
 
-            self.mmap = new_mmap;
+            mmap.alloc = new_mmap;
         } else if delta_bytes > 0 {
             // Make the newly allocated pages accessible.
-            self.mmap.make_accessible(prev_bytes, delta_bytes).ok()?;
+            mmap.alloc.make_accessible(prev_bytes, delta_bytes).ok()?;
         }
 
-        self.current = new_pages;
+        mmap.size = new_pages;
 
         Some(prev_pages)
     }
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
-    pub fn vmmemory(&mut self) -> VMMemoryDefinition {
+    pub fn vmmemory(&self) -> VMMemoryDefinition {
+        let mut mmap = self.mmap.borrow_mut();
         VMMemoryDefinition {
-            base: self.mmap.as_mut_ptr(),
-            current_length: self.current as usize * WASM_PAGE_SIZE as usize,
+            base: mmap.alloc.as_mut_ptr(),
+            current_length: mmap.size as usize * WASM_PAGE_SIZE as usize,
         }
     }
 }

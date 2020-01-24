@@ -217,7 +217,7 @@ pub(crate) fn into_checked_anyfunc(
 }
 
 pub(crate) fn from_checked_anyfunc(
-    item: &wasmtime_runtime::VMCallerCheckedAnyfunc,
+    item: wasmtime_runtime::VMCallerCheckedAnyfunc,
     store: &Store,
 ) -> Val {
     if item.type_index == wasmtime_runtime::VMSharedSignatureIndex::default() {

@@ -70,7 +70,7 @@ unsafe extern "C" fn stub_fn(
     call_id: u32,
     values_vec: *mut i128,
 ) -> u32 {
-    let mut instance = InstanceHandle::from_vmctx(vmctx);
+    let instance = InstanceHandle::from_vmctx(vmctx);
 
     let (args, returns_len) = {
         let module = instance.module_ref();
@@ -89,7 +89,7 @@ unsafe extern "C" fn stub_fn(
     let mut returns = vec![Val::null(); returns_len];
     let func = &instance
         .host_state()
-        .downcast_mut::<TrampolineState>()
+        .downcast_ref::<TrampolineState>()
         .expect("state")
         .func;
 

@@ -23,7 +23,7 @@ pub fn generate_func_export(
     func: &Rc<dyn Callable + 'static>,
     store: &Store,
 ) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export)> {
-    let mut instance = create_handle_with_function(ft, func, store)?;
+    let instance = create_handle_with_function(ft, func, store)?;
     let export = instance.lookup("trampoline").expect("trampoline export");
     Ok((instance, export))
 }
@@ -38,7 +38,7 @@ pub fn generate_global_export(
 pub fn generate_memory_export(
     m: &MemoryType,
 ) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export)> {
-    let mut instance = create_handle_with_memory(m)?;
+    let instance = create_handle_with_memory(m)?;
     let export = instance.lookup("memory").expect("memory export");
     Ok((instance, export))
 }
@@ -46,7 +46,7 @@ pub fn generate_memory_export(
 pub fn generate_table_export(
     t: &TableType,
 ) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export)> {
-    let mut instance = create_handle_with_table(t)?;
+    let instance = create_handle_with_table(t)?;
     let export = instance.lookup("table").expect("table export");
     Ok((instance, export))
 }

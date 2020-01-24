@@ -2,6 +2,7 @@ use cranelift_codegen::ir::types;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::DefinedFuncIndex;
+use std::cell::RefCell;
 use std::fs::File;
 use std::sync::Arc;
 use target_lexicon::HOST;
@@ -78,23 +79,25 @@ pub fn instantiate_wasi_with_context(
     let data_initializers = Vec::new();
     let signatures = PrimaryMap::new();
 
-    InstanceHandle::new(
-        Arc::new(module),
-        finished_functions.into_boxed_slice(),
-        imports,
-        &data_initializers,
-        signatures.into_boxed_slice(),
-        None,
-        Box::new(wasi_ctx),
-    )
+    unsafe {
+        InstanceHandle::new(
+            Arc::new(module),
+            finished_functions.into_boxed_slice(),
+            imports,
+            &data_initializers,
+            signatures.into_boxed_slice(),
+            None,
+            Box::new(RefCell::new(wasi_ctx)),
+        )
+    }
 }
 
 // Used by `add_wrappers_to_module` defined in the macro above
-fn get_wasi_ctx(vmctx: &mut VMContext) -> Result<&mut WasiCtx, wasi::__wasi_errno_t> {
+fn get_wasi_ctx(vmctx: &mut VMContext) -> Result<&RefCell<WasiCtx>, wasi::__wasi_errno_t> {
     unsafe {
         vmctx
             .host_state()
-            .downcast_mut::<WasiCtx>()
+            .downcast_ref()
             .ok_or_else(|| panic!("no host state named WasiCtx available"))
     }
 }

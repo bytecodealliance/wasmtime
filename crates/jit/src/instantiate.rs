@@ -184,7 +184,11 @@ impl CompiledModule {
     /// Note that if only one instance of this module is needed, it may be more
     /// efficient to call the top-level `instantiate`, since that avoids copying
     /// the data initializers.
-    pub fn instantiate(
+    ///
+    /// # Unsafety
+    ///
+    /// See `InstanceHandle::new`
+    pub unsafe fn instantiate(
         &self,
         resolver: &mut dyn Resolver,
     ) -> Result<InstanceHandle, InstantiationError> {
@@ -242,8 +246,12 @@ impl OwnedDataInitializer {
 ///
 /// This is equivalent to createing a `CompiledModule` and calling `instantiate()` on it,
 /// but avoids creating an intermediate copy of the data initializers.
+///
+/// # Unsafety
+///
+/// See `InstanceHandle::new`
 #[allow(clippy::implicit_hasher)]
-pub fn instantiate(
+pub unsafe fn instantiate(
     compiler: &mut Compiler,
     data: &[u8],
     resolver: &mut dyn Resolver,

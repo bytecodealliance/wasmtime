@@ -36,14 +36,15 @@ pub(crate) fn create_handle(
         })
         .unwrap_or_else(PrimaryMap::new);
 
-    Ok(InstanceHandle::new(
-        Arc::new(module),
-        finished_functions.into_boxed_slice(),
-        imports,
-        &data_initializers,
-        signatures.into_boxed_slice(),
-        None,
-        state,
-    )
-    .expect("instance"))
+    unsafe {
+        Ok(InstanceHandle::new(
+            Arc::new(module),
+            finished_functions.into_boxed_slice(),
+            imports,
+            &data_initializers,
+            signatures.into_boxed_slice(),
+            None,
+            state,
+        )?)
+    }
 }

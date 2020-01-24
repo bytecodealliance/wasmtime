@@ -25,18 +25,20 @@ fn instantiate(
     imports: &[Extern],
 ) -> Result<InstanceHandle, Error> {
     let mut resolver = SimpleResolver { imports };
-    let instance = compiled_module
-        .instantiate(&mut resolver)
-        .map_err(|e| -> Error {
-            if let Some(trap) = take_api_trap() {
-                trap.into()
-            } else if let InstantiationError::StartTrap(trap) = e {
-                Trap::from_jit(trap).into()
-            } else {
-                e.into()
-            }
-        })?;
-    Ok(instance)
+    unsafe {
+        let instance = compiled_module
+            .instantiate(&mut resolver)
+            .map_err(|e| -> Error {
+                if let Some(trap) = take_api_trap() {
+                    trap.into()
+                } else if let InstantiationError::StartTrap(trap) = e {
+                    Trap::from_jit(trap).into()
+                } else {
+                    e.into()
+                }
+            })?;
+        Ok(instance)
+    }
 }
 
 /// An instantiated WebAssembly module.
@@ -108,7 +110,7 @@ impl Instance {
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     pub fn new(module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
         let store = module.store();
-        let mut instance_handle = instantiate(module.compiled_module(), imports)?;
+        let instance_handle = instantiate(module.compiled_module(), imports)?;
 
         let exports = {
             let mut exports = Vec::with_capacity(module.exports().len());
@@ -179,9 +181,8 @@ impl Instance {
     pub fn from_handle(store: &Store, instance_handle: InstanceHandle) -> Instance {
         let mut exports = Vec::new();
         let mut exports_types = Vec::new();
-        let mut mutable = instance_handle.clone();
-        for (name, _) in instance_handle.clone().exports() {
-            let export = mutable.lookup(name).expect("export");
+        for (name, _) in instance_handle.exports() {
+            let export = instance_handle.lookup(name).expect("export");
             if let wasmtime_runtime::Export::Function { signature, .. } = &export {
                 // HACK ensure all handles, instantiated outside Store, present in
                 // the store's SignatureRegistry, e.g. WASI instances that are
@@ -220,7 +221,6 @@ impl Instance {
 
     #[doc(hidden)]
     pub fn get_wasmtime_memory(&self) -> Option<wasmtime_runtime::Export> {
-        let mut instance_handle = self.instance_handle.clone();
-        instance_handle.lookup("memory")
+        self.instance_handle.lookup("memory")
     }
 }
