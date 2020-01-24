@@ -32,7 +32,10 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
     let ident = names.type_(&name);
 
     let repr = int_repr_tokens(e.repr);
-    let signed_repr = int_signed_repr_tokens(e.repr);
+    let abi_repr = atom_token(match e.repr {
+        witx::IntRepr::U8 | witx::IntRepr::U16 | witx::IntRepr::U32 => witx::AtomType::I32,
+        witx::IntRepr::U64 => witx::AtomType::I64,
+    });
 
     let variant_names = e.variants.iter().map(|v| names.enum_variant(&v.name));
     let tryfrom_repr_cases = e.variants.iter().enumerate().map(|(n, v)| {
@@ -61,9 +64,9 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
             }
         }
 
-        impl ::std::convert::TryFrom<#signed_repr> for #ident { // XXX this one should always be from i32/i64 (abi size)
+        impl ::std::convert::TryFrom<#abi_repr> for #ident {
             type Error = ::memory::GuestValueError;
-            fn try_from(value: #signed_repr) -> Result<#ident, ::memory::GuestValueError> {
+            fn try_from(value: #abi_repr) -> Result<#ident, ::memory::GuestValueError> {
                 #ident::try_from(value as #repr)
             }
         }
@@ -76,9 +79,9 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
             }
         }
 
-        impl From<#ident> for #signed_repr { // XXX this should be to i32 or i64 (abi size)
-            fn from(e: #ident) -> #signed_repr {
-                #repr::from(e) as #signed_repr
+        impl From<#ident> for #abi_repr {
+            fn from(e: #ident) -> #abi_repr {
+                #repr::from(e) as #abi_repr
             }
         }
 
@@ -121,11 +124,11 @@ fn int_repr_tokens(int_repr: witx::IntRepr) -> TokenStream {
         witx::IntRepr::U64 => quote!(u64),
     }
 }
-fn int_signed_repr_tokens(int_repr: witx::IntRepr) -> TokenStream {
-    match int_repr {
-        witx::IntRepr::U8 => quote!(i8),
-        witx::IntRepr::U16 => quote!(i16),
-        witx::IntRepr::U32 => quote!(i32),
-        witx::IntRepr::U64 => quote!(i64),
+fn atom_token(atom: witx::AtomType) -> TokenStream {
+    match atom {
+        witx::AtomType::I32 => quote!(i32),
+        witx::AtomType::I64 => quote!(i64),
+        witx::AtomType::F32 => quote!(f32),
+        witx::AtomType::F64 => quote!(f64),
     }
 }
