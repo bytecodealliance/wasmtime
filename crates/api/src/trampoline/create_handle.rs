@@ -4,7 +4,7 @@ use crate::runtime::Store;
 use anyhow::Result;
 use std::any::Any;
 use std::collections::HashSet;
-use std::rc::Rc;
+use std::sync::Arc;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::Module;
@@ -37,7 +37,7 @@ pub(crate) fn create_handle(
         .unwrap_or_else(PrimaryMap::new);
 
     Ok(InstanceHandle::new(
-        Rc::new(module),
+        Arc::new(module),
         finished_functions.into_boxed_slice(),
         imports,
         &data_initializers,

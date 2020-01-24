@@ -9,13 +9,13 @@ use crate::link::link_module;
 use crate::resolver::Resolver;
 use std::io::Write;
 use std::rc::Rc;
+use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_debug::read_debuginfo;
 use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
 use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleEnvironment,
-    ModuleSyncString,
 };
 use wasmtime_runtime::{
     GdbJitImageRegistration, InstanceHandle, InstantiationError, VMFunctionBody,
@@ -59,12 +59,11 @@ impl<'data> RawCompiledModule<'data> {
     fn new(
         compiler: &mut Compiler,
         data: &'data [u8],
-        module_name: Option<&str>,
         debug_info: bool,
     ) -> Result<Self, SetupError> {
         let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
 
-        let mut translation = environ
+        let translation = environ
             .translate(data)
             .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
 
@@ -73,8 +72,6 @@ impl<'data> RawCompiledModule<'data> {
         } else {
             None
         };
-
-        translation.module.name = ModuleSyncString::new(module_name);
 
         let (allocated_functions, jt_offsets, relocations, dbg_image) = compiler.compile(
             &translation.module,
@@ -136,7 +133,7 @@ impl<'data> RawCompiledModule<'data> {
 
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
-    module: Rc<Module>,
+    module: Arc<Module>,
     finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
     data_initializers: Box<[OwnedDataInitializer]>,
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
@@ -148,10 +145,9 @@ impl CompiledModule {
     pub fn new<'data>(
         compiler: &mut Compiler,
         data: &'data [u8],
-        module_name: Option<&str>,
         debug_info: bool,
     ) -> Result<Self, SetupError> {
-        let raw = RawCompiledModule::<'data>::new(compiler, data, module_name, debug_info)?;
+        let raw = RawCompiledModule::<'data>::new(compiler, data, debug_info)?;
 
         Ok(Self::from_parts(
             raw.module,
@@ -175,7 +171,7 @@ impl CompiledModule {
         dbg_jit_registration: Option<GdbJitImageRegistration>,
     ) -> Self {
         Self {
-            module: Rc::new(module),
+            module: Arc::new(module),
             finished_functions,
             data_initializers,
             signatures,
@@ -202,7 +198,7 @@ impl CompiledModule {
             .collect::<Vec<_>>();
         let imports = resolve_imports(&self.module, resolver)?;
         InstanceHandle::new(
-            Rc::clone(&self.module),
+            Arc::clone(&self.module),
             self.finished_functions.clone(),
             imports,
             &data_initializers,
@@ -213,8 +209,8 @@ impl CompiledModule {
     }
 
     /// Return a reference-counting pointer to a module.
-    pub fn module(&self) -> Rc<Module> {
-        self.module.clone()
+    pub fn module(&self) -> &Arc<Module> {
+        &self.module
     }
 
     /// Return a reference to a module.
@@ -250,21 +246,9 @@ impl OwnedDataInitializer {
 pub fn instantiate(
     compiler: &mut Compiler,
     data: &[u8],
-    module_name: Option<&str>,
     resolver: &mut dyn Resolver,
     debug_info: bool,
 ) -> Result<InstanceHandle, SetupError> {
-    let raw = RawCompiledModule::new(compiler, data, module_name, debug_info)?;
-    let imports = resolve_imports(&raw.module, resolver)
-        .map_err(|err| SetupError::Instantiate(InstantiationError::Link(err)))?;
-    InstanceHandle::new(
-        Rc::new(raw.module),
-        raw.finished_functions,
-        imports,
-        &*raw.data_initializers,
-        raw.signatures,
-        raw.dbg_jit_registration.map(Rc::new),
-        Box::new(()),
-    )
-    .map_err(SetupError::Instantiate)
+    let instance = CompiledModule::new(compiler, data, debug_info)?.instantiate(resolver)?;
+    Ok(instance)
 }

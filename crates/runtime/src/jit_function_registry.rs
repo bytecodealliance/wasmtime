@@ -3,7 +3,7 @@
 use lazy_static::lazy_static;
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
-use wasmtime_environ::ModuleSyncString;
+use wasmtime_environ::wasm::FuncIndex;
 
 lazy_static! {
     static ref REGISTRY: RwLock<JITFunctionRegistry> = RwLock::new(JITFunctionRegistry::default());
@@ -11,20 +11,8 @@ lazy_static! {
 
 #[derive(Clone)]
 pub struct JITFunctionTag {
-    pub module_id: ModuleSyncString,
-    pub func_index: usize,
-    pub func_name: ModuleSyncString,
-}
-
-impl std::fmt::Debug for JITFunctionTag {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(ref module_id) = self.module_id.get() {
-            write!(f, "{}", module_id)?;
-        } else {
-            write!(f, "(module)")?;
-        }
-        write!(f, ":{}", self.func_index)
-    }
+    pub module_id: usize,
+    pub func_index: FuncIndex,
 }
 
 struct JITFunctionRegistry {

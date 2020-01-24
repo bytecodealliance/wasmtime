@@ -23,6 +23,7 @@ use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::ptr::NonNull;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::{mem, ptr, slice};
 use thiserror::Error;
 use wasmtime_environ::entity::{BoxedSlice, EntityRef, PrimaryMap};
@@ -288,7 +289,7 @@ pub(crate) struct Instance {
     mmap: Mmap,
 
     /// The `Module` this `Instance` was instantiated from.
-    module: Rc<Module>,
+    module: Arc<Module>,
 
     /// Offsets in the `vmctx` region.
     offsets: VMOffsets,
@@ -748,7 +749,7 @@ impl InstanceHandle {
 
     /// Create a new `InstanceHandle` pointing at a new `Instance`.
     pub fn new(
-        module: Rc<Module>,
+        module: Arc<Module>,
         finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
         imports: Imports,
         data_initializers: &[DataInitializer<'_>],
@@ -895,8 +896,8 @@ impl InstanceHandle {
     }
 
     /// Return a reference-counting pointer to a module.
-    pub fn module(&self) -> Rc<Module> {
-        self.instance().module.clone()
+    pub fn module(&self) -> &Arc<Module> {
+        &self.instance().module
     }
 
     /// Return a reference to a module.
@@ -1110,7 +1111,7 @@ fn lookup_by_declaration(
 }
 
 fn check_table_init_bounds(instance: &mut Instance) -> Result<(), InstantiationError> {
-    let module = Rc::clone(&instance.module);
+    let module = Arc::clone(&instance.module);
     for init in &module.table_elements {
         let start = get_table_init_start(init, instance);
         let slice = get_table_slice(
@@ -1234,7 +1235,7 @@ fn get_table_slice<'instance>(
 /// Initialize the table memory from the provided initializers.
 fn initialize_tables(instance: &mut Instance) -> Result<(), InstantiationError> {
     let vmctx: *mut VMContext = instance.vmctx_mut();
-    let module = Rc::clone(&instance.module);
+    let module = Arc::clone(&instance.module);
     for init in &module.table_elements {
         let start = get_table_init_start(init, instance);
         let slice = get_table_slice(
@@ -1311,7 +1312,7 @@ fn create_globals(module: &Module) -> BoxedSlice<DefinedGlobalIndex, VMGlobalDef
 }
 
 fn initialize_globals(instance: &mut Instance) {
-    let module = Rc::clone(&instance.module);
+    let module = Arc::clone(&instance.module);
     let num_imports = module.imported_globals.len();
     for (index, global) in module.globals.iter().skip(num_imports) {
         let def_index = module.defined_global_index(index).unwrap();

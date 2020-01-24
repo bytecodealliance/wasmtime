@@ -167,15 +167,9 @@ impl Compiler {
             self.jit_function_ranges
                 .push((ptr as usize, ptr as usize + body_len));
             let func_index = module.func_index(i);
-            let func_name = module
-                .func_names
-                .get(func_index)
-                .cloned()
-                .unwrap_or_else(Default::default);
             let tag = jit_function_registry::JITFunctionTag {
-                module_id: module.name.clone(),
-                func_index: func_index.index(),
-                func_name,
+                module_id: module.id,
+                func_index,
             };
             jit_function_registry::register(ptr as usize, ptr as usize + body_len, tag);
         }
