@@ -217,7 +217,7 @@ impl ExportBinding<'_> {
             ExportBindingKind::Raw(sig) => sig
                 .params
                 .iter()
-                .skip(1) // skip the VMContext argument
+                .skip(2) // skip the VMContext arguments
                 .enumerate()
                 .map(|(i, param)| default_incoming(i, param))
                 .collect(),
@@ -252,7 +252,7 @@ impl ExportBinding<'_> {
                     })
                     .collect()
             }
-            ExportBindingKind::Raw(sig) => sig.params.iter().skip(1).map(abi2ast).collect(),
+            ExportBindingKind::Raw(sig) => sig.params.iter().skip(2).map(abi2ast).collect(),
         }
     }
 
