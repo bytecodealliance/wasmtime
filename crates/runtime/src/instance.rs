@@ -73,7 +73,7 @@ cfg_if::cfg_if! {
                             .signal_handler
                             .replace(Box::new(signal_handler_none));
                         let ret = f(signum, siginfo, context);
-                        drop(last.signal_handler.replace(f));
+                        last.signal_handler.set(f);
                         ret
                     }
                 }
@@ -87,7 +87,7 @@ cfg_if::cfg_if! {
             where
                 H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
             {
-                drop(self.instance().signal_handler.replace(Box::new(handler)));
+                self.instance().signal_handler.set(Box::new(handler));
             }
         }
     } else if #[cfg(target_os = "windows")] {
@@ -120,7 +120,7 @@ cfg_if::cfg_if! {
                             .signal_handler
                             .replace(Box::new(signal_handler_none));
                         let ret = f(exception_info);
-                        drop(last.signal_handler.replace(f));
+                        last.signal_handler.set(f);
                         ret
                     }
                 }
@@ -133,7 +133,7 @@ cfg_if::cfg_if! {
             where
                 H: 'static + Fn(winapi::um::winnt::EXCEPTION_POINTERS) -> bool,
             {
-                drop(self.instance().signal_handler.replace(Box::new(handler)));
+                self.instance().signal_handler.set(Box::new(handler));
             }
         }
     }
