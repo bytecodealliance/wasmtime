@@ -118,7 +118,7 @@ fn marshal_arg(
         };
         let err_typename = names.type_ref(&tref);
         quote! {
-            let err: #err_typename = ::memory::GuestError::from_memory_error(e, ctx);
+            let err: #err_typename = ::memory::GuestError::from_value_error(e, ctx);
             return #abi_ret::from(err);
         }
     } else {
