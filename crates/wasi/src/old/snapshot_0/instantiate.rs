@@ -87,7 +87,7 @@ pub fn instantiate_wasi_with_context(
             &data_initializers,
             signatures.into_boxed_slice(),
             None,
-            Box::new(wasi_ctx),
+            Box::new(RefCell::new(wasi_ctx)),
         )
     }
 }
