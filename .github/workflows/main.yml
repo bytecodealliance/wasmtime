@@ -172,6 +172,12 @@ jobs:
     - run: cargo fetch --locked
     - run: cargo fetch --locked --manifest-path crates/test-programs/wasi-tests/Cargo.toml
 
+    # Build some various feature combinations
+    - run: cargo build --manifest-path crates/api/Cargo.toml --no-default-features
+    - run: cargo build --manifest-path crates/api/Cargo.toml --features wat
+    - run: cargo build --manifest-path crates/api/Cargo.toml --features lightbeam
+      if: matrix.rust == 'nightly'
+
     # Build and test all features except for lightbeam
     - run: cargo test --features test_programs --all --exclude lightbeam -- --nocapture
       env:

@@ -107,8 +107,7 @@ mod tests {
     fn test_custom_signal_handler_single_instance() -> Result<()> {
         let engine = Engine::new(&Config::default());
         let store = Store::new(&engine);
-        let data = wat::parse_str(WAT1)?;
-        let module = Module::new(&store, &data)?;
+        let module = Module::new(&store, WAT1)?;
         let instance = Instance::new(&module, &[])?;
 
         let (base, length) = set_up_memory(&instance);
@@ -166,8 +165,7 @@ mod tests {
     fn test_custom_signal_handler_multiple_instances() -> Result<()> {
         let engine = Engine::new(&Config::default());
         let store = Store::new(&engine);
-        let data = wat::parse_str(WAT1)?;
-        let module = Module::new(&store, &data)?;
+        let module = Module::new(&store, WAT1)?;
 
         // Set up multiple instances
 
@@ -261,8 +259,7 @@ mod tests {
         let store = Store::new(&engine);
 
         // instance1 which defines 'read'
-        let data1 = wat::parse_str(WAT1)?;
-        let module1 = Module::new(&store, &data1)?;
+        let module1 = Module::new(&store, WAT1)?;
         let instance1 = Instance::new(&module1, &[])?;
         let (base1, length1) = set_up_memory(&instance1);
         unsafe {
@@ -277,8 +274,7 @@ mod tests {
         let instance1_read = instance1_exports[0].clone();
 
         // instance2 wich calls 'instance1.read'
-        let data2 = wat::parse_str(WAT2)?;
-        let module2 = Module::new(&store, &data2)?;
+        let module2 = Module::new(&store, WAT2)?;
         let instance2 = Instance::new(&module2, &[instance1_read])?;
         // since 'instance2.run' calls 'instance1.read' we need to set up the signal handler to handle
         // SIGSEGV originating from within the memory of instance1

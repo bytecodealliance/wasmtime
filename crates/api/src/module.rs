@@ -7,6 +7,7 @@ use anyhow::{Error, Result};
 use lazy_static::lazy_static;
 use std::cell::Cell;
 use std::collections::HashMap;
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 use wasmparser::{
@@ -107,15 +108,22 @@ lazy_static! {
 }
 
 impl Module {
-    /// Creates a new WebAssembly `Module` from the given in-memory `binary`
-    /// data.
+    /// Creates a new WebAssembly `Module` from the given in-memory `bytes`.
     ///
-    /// The `binary` data provided must be a [binary-encoded][binary]
-    /// WebAssembly module. This means that the data for the wasm module must be
-    /// loaded in-memory if it's present elsewhere, for example on disk.
-    /// Additionally this requires that the entire binary is loaded into memory
-    /// all at once, this API does not support streaming compilation of a
-    /// module.
+    /// The `bytes` provided must be in one of two formats:
+    ///
+    /// * It can be a [binary-encoded][binary] WebAssembly module. This
+    ///   is always supported.
+    /// * It may also be a [text-encoded][text] instance of the WebAssembly
+    ///   text format. This is only supported when the `wat` feature of this
+    ///   crate is enabled. If this is supplied then the text format will be
+    ///   parsed before validation. Note that the `wat` feature is enabled by
+    ///   default.
+    ///
+    /// The data for the wasm module must be loaded in-memory if it's present
+    /// elsewhere, for example on disk. This requires that the entire binary is
+    /// loaded into memory all at once, this API does not support streaming
+    /// compilation of a module.
     ///
     /// The WebAssembly binary will be decoded and validated. It will also be
     /// compiled according to the configuration of the provided `store` and
@@ -137,25 +145,59 @@ impl Module {
     ///   example too many locals)
     /// * The wasm binary may use features that are not enabled in the
     ///   configuration of `store`
+    /// * If the `wat` feature is enabled and the input is text, then it may be
+    ///   rejected if it fails to parse.
     ///
     /// The error returned should contain full information about why module
     /// creation failed if one is returned.
     ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
-    pub fn new(store: &Store, binary: &[u8]) -> Result<Module> {
-        Module::validate(store, binary)?;
-        unsafe { Module::new_unchecked(store, binary) }
+    /// [text]: https://webassembly.github.io/spec/core/text/index.html
+    pub fn new(store: &Store, bytes: impl AsRef<[u8]>) -> Result<Module> {
+        #[cfg(feature = "wat")]
+        let bytes = wat::parse_bytes(bytes.as_ref())?;
+        Module::from_binary(store, bytes.as_ref())
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
     /// data. The provided `name` will be used in traps/backtrace details.
     ///
     /// See [`Module::new`] for other details.
-    pub fn new_with_name(store: &Store, binary: &[u8], name: &str) -> Result<Module> {
-        let mut module = Module::new(store, binary)?;
+    pub fn new_with_name(store: &Store, bytes: impl AsRef<[u8]>, name: &str) -> Result<Module> {
+        let mut module = Module::new(store, bytes.as_ref())?;
         let inner = Rc::get_mut(&mut module.inner).unwrap();
         Arc::get_mut(&mut inner.names).unwrap().module_name = Some(name.to_string());
         Ok(module)
+    }
+
+    /// Creates a new WebAssembly `Module` from the contents of the given
+    /// `file` on disk.
+    ///
+    /// This is a convenience function that will read the `file` provided and
+    /// pass the bytes to the [`Module::new`] function. For more information
+    /// see [`Module::new`]
+    pub fn from_file(store: &Store, file: impl AsRef<Path>) -> Result<Module> {
+        #[cfg(feature = "wat")]
+        let wasm = wat::parse_file(file)?;
+        #[cfg(not(feature = "wat"))]
+        let wasm = std::fs::read(file)?;
+        Module::new(store, &wasm)
+    }
+
+    /// Creates a new WebAssembly `Module` from the given in-memory `binary`
+    /// data.
+    ///
+    /// This is similar to [`Module::new`] except that it requires that the
+    /// `binary` input is a WebAssembly binary, the text format is not supported
+    /// by this function. It's generally recommended to use [`Module::new`],
+    /// but if it's required to not support the text format this function can be
+    /// used instead.
+    pub fn from_binary(store: &Store, binary: &[u8]) -> Result<Module> {
+        Module::validate(store, binary)?;
+        // Note that the call to `validate` here should be ok because we
+        // previously validated the binary, meaning we're guaranteed to pass a
+        // valid binary for `store`.
+        unsafe { Module::from_binary_unchecked(store, binary) }
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
@@ -163,8 +205,9 @@ impl Module {
     /// WebAssembly module.
     ///
     /// This function is the same as [`Module::new`] except that it skips the
-    /// call to [`Module::validate`]. This means that the WebAssembly binary is
-    /// not validated for correctness and it is simply assumed as valid.
+    /// call to [`Module::validate`] and it does not support the text format of
+    /// WebAssembly. The WebAssembly binary is not validated for
+    /// correctness and it is simply assumed as valid.
     ///
     /// For more information about creation of a module and the `store` argument
     /// see the documentation of [`Module::new`].
@@ -184,7 +227,7 @@ impl Module {
     /// While this assumes that the binary is valid it still needs to actually
     /// be somewhat valid for decoding purposes, and the basics of decoding can
     /// still fail.
-    pub unsafe fn new_unchecked(store: &Store, binary: &[u8]) -> Result<Module> {
+    pub unsafe fn from_binary_unchecked(store: &Store, binary: &[u8]) -> Result<Module> {
         let mut ret = Module::compile(store, binary)?;
         ret.read_imports_and_exports(binary)?;
         Ok(ret)
@@ -194,10 +237,11 @@ impl Module {
     /// configuration in `store`.
     ///
     /// This function will perform a speedy validation of the `binary` input
-    /// WebAssembly module (which is in [binary form][binary]) and return either
-    /// `Ok` or `Err` depending on the results of validation. The `store`
-    /// argument indicates configuration for WebAssembly features, for example,
-    /// which are used to indicate what should be valid and what shouldn't be.
+    /// WebAssembly module (which is in [binary form][binary], the text format
+    /// is not accepted by this function) and return either `Ok` or `Err`
+    /// depending on the results of validation. The `store` argument indicates
+    /// configuration for WebAssembly features, for example, which are used to
+    /// indicate what should be valid and what shouldn't be.
     ///
     /// Validation automatically happens as part of [`Module::new`], but is a
     /// requirement for [`Module::new_unchecked`] to be safe.

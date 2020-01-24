@@ -36,9 +36,8 @@ const WAT: &str = r#"
 fn main() -> anyhow::Result<()> {
     // Load our WebAssembly (parsed WAT in our case), and then load it into a
     // `Module` which is attached to a `Store` cache.
-    let wasm = wat::parse_str(WAT)?;
     let store = Store::default();
-    let module = Module::new(&store, &wasm)?;
+    let module = Module::new(&store, WAT)?;
 
     // Find index of the `gcd` export.
     let gcd_index = module

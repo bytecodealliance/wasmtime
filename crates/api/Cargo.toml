@@ -21,6 +21,7 @@ cfg-if = "0.1.9"
 backtrace = "0.3.42"
 rustc-demangle = "0.1.16"
 lazy_static = "1.4"
+wat = { version = "1.0.7", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = "0.3.7"
@@ -37,6 +38,8 @@ wat = "1.0"
 maintenance = { status = "actively-developed" }
 
 [features]
+default = ['wat']
+
 # Enables experimental support for the lightbeam codegen backend, an alternative
 # to cranelift. Requires Nightly Rust currently, and this is not enabled by
 # default.

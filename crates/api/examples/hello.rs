@@ -21,21 +21,15 @@ fn main() -> Result<()> {
     println!("Initializing...");
     let store = Store::default();
 
-    // Next upload the `*.wasm` binary file, which in this case we're going to
-    // be parsing an inline text format into a binary.
-    println!("Loading binary...");
-    let binary = wat::parse_str(
-        r#"
-            (module
-              (func $hello (import "" "hello"))
-              (func (export "run") (call $hello))
-            )
-        "#,
-    )?;
-
-    // Compiler the `*.wasm` binary into an in-memory instance of a `Module`.
+    // Compile the wasm binary into an in-memory instance of a `Module`.
     println!("Compiling module...");
-    let module = Module::new(&store, &binary).context("> Error compiling module!")?;
+    let wat = r#"
+        (module
+          (func $hello (import "" "hello"))
+          (func (export "run") (call $hello))
+        )
+    "#;
+    let module = Module::new(&store, wat).context("> Error compiling module!")?;
 
     // Here we handle the imports of the module, which in this case is our
     // `HelloCallback` type and its associated implementation of `Callback.
