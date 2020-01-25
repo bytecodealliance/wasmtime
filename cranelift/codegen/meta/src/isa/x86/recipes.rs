@@ -1422,6 +1422,7 @@ pub(crate) fn define<'shared>(
             .operands_in(vec![gpr])
             .emit(
                 r#"
+                        sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
                         let sp = StackRef::sp(stack_slot, &func.stack_slots);
                         let base = stk_base(sp.base);
                         {{PUT_OP}}(bits, rex2(base, in_reg0), sink);

@@ -140,7 +140,10 @@ impl SubTest for TestBinEmit {
         let min_offset = func
             .stack_slots
             .values()
-            .map(|slot| slot.offset.unwrap())
+            .map(|slot| {
+                slot.offset
+                    .expect("stack slots must have explicit offset for binemit tests")
+            })
             .min();
         func.stack_slots.layout_info = min_offset.map(|off| ir::StackLayoutInfo {
             frame_size: (-off) as u32,
