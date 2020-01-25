@@ -1,4 +1,4 @@
-use crate::{GuestPtr, GuestPtrMut, MemoryError};
+use crate::{GuestPtrMut, GuestPtrRead, MemoryError};
 use thiserror::Error;
 
 pub trait GuestType: Sized {
@@ -13,25 +13,25 @@ pub enum GuestValueError {
 }
 
 pub trait GuestTypeCopy: GuestType + Copy {
-    fn read_val(src: GuestPtr<Self>) -> Result<Self, GuestValueError>;
-    fn write_val(val: Self, dest: GuestPtrMut<Self>);
+    fn read_val<P: GuestPtrRead<Self>>(src: &P) -> Result<Self, GuestValueError>;
+    fn write_val(val: Self, dest: &GuestPtrMut<Self>);
 }
 
 pub trait GuestTypeClone: GuestType + Clone {
-    fn read_ref(src: GuestPtr<Self>, dest: &mut Self) -> Result<(), GuestValueError>;
-    fn write_ref(val: &Self, dest: GuestPtrMut<Self>);
+    fn read_ref<P: GuestPtrRead<Self>>(src: &P, dest: &mut Self) -> Result<(), GuestValueError>;
+    fn write_ref(val: &Self, dest: &GuestPtrMut<Self>);
 }
 
 impl<T> GuestTypeClone for T
 where
     T: GuestTypeCopy,
 {
-    fn read_ref(src: GuestPtr<T>, dest: &mut T) -> Result<(), GuestValueError> {
+    fn read_ref<P: GuestPtrRead<Self>>(src: &P, dest: &mut T) -> Result<(), GuestValueError> {
         let val = GuestTypeCopy::read_val(src)?;
         *dest = val;
         Ok(())
     }
-    fn write_ref(val: &T, dest: GuestPtrMut<T>) {
+    fn write_ref(val: &T, dest: &GuestPtrMut<T>) {
         GuestTypeCopy::write_val(*val, dest)
     }
 }
@@ -49,12 +49,12 @@ macro_rules! builtin_copy {
         }
 
         impl GuestTypeCopy for $t {
-            fn read_val(src: GuestPtr<$t>) -> Result<$t, GuestValueError> {
+            fn read_val<P: GuestPtrRead<$t>>(src: &P) -> Result<$t, GuestValueError> {
                 Ok(unsafe {
                     ::std::ptr::read_unaligned(src.ptr() as *const $t)
                 })
             }
-            fn write_val(val: $t, dest: GuestPtrMut<$t>) {
+            fn write_val(val: $t, dest: &GuestPtrMut<$t>) {
                 unsafe {
                     ::std::ptr::write_unaligned(dest.ptr_mut() as *mut $t, val)
                 }

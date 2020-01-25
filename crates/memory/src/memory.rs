@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 use thiserror::Error;
 
-use crate::borrow::GuestBorrows;
+use crate::borrow::{BorrowHandle, GuestBorrows};
 use crate::guest_type::GuestType;
 use crate::region::Region;
 
@@ -31,78 +31,83 @@ impl<'a> GuestMemory<'a> {
     }
 
     pub fn ptr<T: GuestType>(&'a self, at: u32) -> Result<GuestPtr<'a, T>, MemoryError> {
-        let r = Region {
+        let region = Region {
             start: at,
             len: T::size(),
         };
-        let mut borrows = self.borrows.borrow_mut();
-        if !self.contains(r) {
-            Err(MemoryError::OutOfBounds(r))?;
+        if !self.contains(region) {
+            Err(MemoryError::OutOfBounds(region))?;
         }
-        if borrows.borrow_immut(r) {
+        let mut borrows = self.borrows.borrow_mut();
+        if let Some(handle) = borrows.borrow_immut(region) {
             Ok(GuestPtr {
                 mem: &self,
-                region: r,
+                region,
+                handle,
                 type_: PhantomData,
             })
         } else {
-            Err(MemoryError::Borrowed(r))
+            Err(MemoryError::Borrowed(region))
         }
     }
 
     pub fn ptr_mut<T: GuestType>(&'a self, at: u32) -> Result<GuestPtrMut<'a, T>, MemoryError> {
-        let r = Region {
+        let region = Region {
             start: at,
             len: T::size(),
         };
-        let mut borrows = self.borrows.borrow_mut();
-        if !self.contains(r) {
-            Err(MemoryError::OutOfBounds(r))?;
+        if !self.contains(region) {
+            Err(MemoryError::OutOfBounds(region))?;
         }
-        if borrows.borrow_mut(r) {
+        let mut borrows = self.borrows.borrow_mut();
+        if let Some(handle) = borrows.borrow_mut(region) {
             Ok(GuestPtrMut {
                 mem: &self,
-                region: r,
+                region,
+                handle,
                 type_: PhantomData,
             })
         } else {
-            Err(MemoryError::Borrowed(r))
+            Err(MemoryError::Borrowed(region))
         }
     }
+}
+
+pub trait GuestPtrRead<T> {
+    fn ptr(&self) -> *const u8;
 }
 
 pub struct GuestPtr<'a, T> {
     mem: &'a GuestMemory<'a>,
     region: Region,
+    handle: BorrowHandle,
     type_: PhantomData<T>,
 }
 
-impl<'a, T: GuestType> GuestPtr<'a, T> {
-    pub fn ptr(&self) -> *const u8 {
+impl<'a, T: GuestType> GuestPtrRead<T> for GuestPtr<'a, T> {
+    fn ptr(&self) -> *const u8 {
         (self.mem.ptr as usize + self.region.start as usize) as *const u8
-    }
-
-    pub unsafe fn downcast<Q: GuestType>(self) -> GuestPtr<'a, Q> {
-        debug_assert!(T::size() == Q::size(), "downcast to type of same size");
-        GuestPtr {
-            mem: self.mem,
-            region: self.region,
-            type_: PhantomData,
-        }
     }
 }
 
 impl<'a, T> Drop for GuestPtr<'a, T> {
     fn drop(&mut self) {
         let mut borrows = self.mem.borrows.borrow_mut();
-        borrows.unborrow_immut(self.region);
+        borrows.unborrow_immut(self.handle);
     }
 }
 
 pub struct GuestPtrMut<'a, T> {
     mem: &'a GuestMemory<'a>,
     region: Region,
+    handle: BorrowHandle,
     type_: PhantomData<T>,
+}
+
+impl<'a, T: GuestType> GuestPtrRead<T> for GuestPtrMut<'a, T> {
+    fn ptr(&self) -> *const u8 {
+        (self.mem.ptr as usize + self.region.start as usize) as *const u8
+    }
 }
 
 impl<'a, T> GuestPtrMut<'a, T> {
@@ -113,7 +118,7 @@ impl<'a, T> GuestPtrMut<'a, T> {
 impl<'a, T> Drop for GuestPtrMut<'a, T> {
     fn drop(&mut self) {
         let mut borrows = self.mem.borrows.borrow_mut();
-        borrows.unborrow_mut(self.region);
+        borrows.unborrow_mut(self.handle);
     }
 }
 

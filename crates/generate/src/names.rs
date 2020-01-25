@@ -50,6 +50,14 @@ impl Names {
             }
             TypeRef::Value(ty) => match &**ty {
                 witx::Type::Builtin(builtin) => self.builtin_type(*builtin),
+                witx::Type::Pointer(pointee) => {
+                    let pointee_type = self.type_ref(&pointee);
+                    quote!(::memory::GuestPtrMut<#pointee_type>)
+                }
+                witx::Type::ConstPointer(pointee) => {
+                    let pointee_type = self.type_ref(&pointee);
+                    quote!(::memory::GuestPtr<#pointee_type>)
+                }
                 _ => unimplemented!("anonymous type ref"),
             },
         }

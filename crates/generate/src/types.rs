@@ -95,12 +95,12 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
         }
 
         impl ::memory::GuestTypeCopy for #ident {
-            fn read_val(src: ::memory::GuestPtr<#ident>) -> Result<#ident, ::memory::GuestValueError> {
+            fn read_val<P: ::memory::GuestPtrRead<#ident>>(src: &P) -> Result<#ident, ::memory::GuestValueError> {
                 use ::std::convert::TryInto;
                 let val = unsafe { ::std::ptr::read_unaligned(src.ptr() as *const #repr) };
                 val.try_into()
             }
-            fn write_val(val: #ident, dest: ::memory::GuestPtrMut<#ident>) {
+            fn write_val(val: #ident, dest: &::memory::GuestPtrMut<#ident>) {
                 let val: #repr = val.into();
                 unsafe {
                     ::std::ptr::write_unaligned(dest.ptr_mut() as *mut #repr, val)

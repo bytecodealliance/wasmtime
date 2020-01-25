@@ -21,5 +21,7 @@
     (result $error $errno))
   (@interface func (export "baz")
     (param $an_excuse $excuse)
+    (param $an_excuse_by_reference (@witx pointer $excuse))
+    (param $a_lamer_excuse (@witx const_pointer $excuse))
     (result $error $errno))
 )

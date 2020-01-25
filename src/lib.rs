@@ -12,8 +12,29 @@ pub mod test {
             println!("BAR: {} {}", an_int, an_float);
             Ok(())
         }
-        fn baz(&mut self, excuse: types::Excuse) -> Result<(), types::Errno> {
-            println!("BAZ: {:?}", excuse);
+        fn baz(
+            &mut self,
+            excuse: types::Excuse,
+            a_better_excuse_by_reference: ::memory::GuestPtrMut<types::Excuse>,
+            a_lamer_excuse_by_reference: ::memory::GuestPtr<types::Excuse>,
+        ) -> Result<(), types::Errno> {
+            use memory::GuestTypeCopy;
+            let a_better_excuse =
+                types::Excuse::read_val(&a_better_excuse_by_reference).map_err(|val_err| {
+                    eprintln!("a_better_excuse_by_reference value error: {:?}", val_err);
+                    types::Errno::InvalidArg
+                })?;
+            let a_lamer_excuse =
+                types::Excuse::read_val(&a_lamer_excuse_by_reference).map_err(|val_err| {
+                    eprintln!("a_lamer_excuse_by_reference value error: {:?}", val_err);
+                    types::Errno::InvalidArg
+                })?;
+            types::Excuse::write_val(a_lamer_excuse, &a_better_excuse_by_reference);
+
+            println!(
+                "BAZ: {:?} {:?} {:?}",
+                excuse, a_better_excuse, a_lamer_excuse
+            );
             Ok(())
         }
     }

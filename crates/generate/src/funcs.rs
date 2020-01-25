@@ -111,21 +111,25 @@ fn marshal_arg(
     let interface_typename = names.type_ref(&tref);
     let name = names.func_param(&param.name);
 
-    let value_error_handling = if let Some(tref) = error_type {
-        let abi_ret = match tref.type_().passed_by() {
-            witx::TypePassedBy::Value(atom) => names.atom_type(atom),
-            _ => unreachable!("err should always be passed by value"),
-        };
-        let err_typename = names.type_ref(&tref);
-        quote! {
-            let err: #err_typename = ::memory::GuestError::from_value_error(e, ctx);
-            return #abi_ret::from(err);
-        }
-    } else {
-        quote! {
-            panic!("memory error: {:?}", e)
+    let error_handling = |method| -> TokenStream {
+        if let Some(tref) = error_type {
+            let abi_ret = match tref.type_().passed_by() {
+                witx::TypePassedBy::Value(atom) => names.atom_type(atom),
+                _ => unreachable!("err should always be passed by value"),
+            };
+            let err_typename = names.type_ref(&tref);
+            quote! {
+                let err: #err_typename = ::memory::GuestError::#method(e, ctx);
+                return #abi_ret::from(err);
+            }
+        } else {
+            quote! {
+                panic!("error: {:?}", e)
+            }
         }
     };
+    let value_error_handling = error_handling(quote!(from_value_error));
+    let memory_error_handling = error_handling(quote!(from_memory_error));
 
     let try_into_conversion = quote! {
         use ::std::convert::TryInto;
@@ -162,6 +166,28 @@ fn marshal_arg(
             },
             witx::BuiltinType::String => unimplemented!("string types unimplemented"),
         },
-        _ => unimplemented!("only enums and builtins so far"),
+        witx::Type::Pointer(pointee) => {
+            let pointee_type = names.type_ref(pointee);
+            quote! {
+                let #name = match memory.ptr_mut::<#pointee_type>(#name as u32) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        #memory_error_handling
+                    }
+                };
+            }
+        }
+        witx::Type::ConstPointer(pointee) => {
+            let pointee_type = names.type_ref(pointee);
+            quote! {
+                let #name = match memory.ptr::<#pointee_type>(#name as u32) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        #memory_error_handling
+                    }
+                };
+            }
+        }
+        _ => unimplemented!("argument type marshalling"),
     }
 }
