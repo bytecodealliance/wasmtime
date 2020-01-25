@@ -119,6 +119,9 @@ where
 
     /// Perform all outstanding relocations on the given function. This requires all `Local`
     /// and `Export` entities referenced to be defined.
+    ///
+    /// This method is not relevant for `Backend` implementations that do not provide
+    /// `Backend::FinalizedFunction`.
     fn finalize_function(
         &mut self,
         id: FuncId,
@@ -131,6 +134,9 @@ where
 
     /// Perform all outstanding relocations on the given data object. This requires all
     /// `Local` and `Export` entities referenced to be defined.
+    ///
+    /// This method is not relevant for `Backend` implementations that do not provide
+    /// `Backend::FinalizedData`.
     fn finalize_data(
         &mut self,
         id: DataId,
@@ -142,6 +148,9 @@ where
     fn get_finalized_data(&self, data: &Self::CompiledData) -> Self::FinalizedData;
 
     /// "Publish" all finalized functions and data objects to their ultimate destinations.
+    ///
+    /// This method is not relevant for `Backend` implementations that do not provide
+    /// `Backend::FinalizedFunction` or `Backend::FinalizedData`.
     fn publish(&mut self);
 
     /// Consume this `Backend` and return a result. Some implementations may

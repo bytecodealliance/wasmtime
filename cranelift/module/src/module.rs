@@ -648,6 +648,9 @@ where
     ///
     /// Use `get_finalized_function` and `get_finalized_data` to obtain the final
     /// artifacts.
+    ///
+    /// This method is not relevant for `Backend` implementations that do not provide
+    /// `Backend::FinalizedFunction` or `Backend::FinalizedData`.
     pub fn finalize_definitions(&mut self) {
         for func in self.functions_to_finalize.drain(..) {
             let info = &self.contents.functions[func];
