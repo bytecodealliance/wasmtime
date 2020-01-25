@@ -2191,7 +2191,10 @@ fn define_entity_ref(
 
     // Stack accesses.
     e.enc32(stack_addr.bind(I32), rec_spaddr_ld_id.opcodes(&LEA));
-    e.enc64(stack_addr.bind(I64), rec_spaddr_ld_id.opcodes(&LEA).rex().w());
+    e.enc64(
+        stack_addr.bind(I64),
+        rec_spaddr_ld_id.opcodes(&LEA).rex().w(),
+    );
     e.enc_i32_i64_explicit_rex(stack_load, rec_spaddr_ld_id.opcodes(&MOV_LOAD));
     e.enc_i32_i64_explicit_rex(stack_store, rec_spst_id.opcodes(&MOV_STORE));
 }

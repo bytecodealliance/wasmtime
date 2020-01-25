@@ -70,7 +70,7 @@ impl EncodingBuilder {
                     inst.value_types.len(),
                     other_typevars.len() + 1,
                     "partially bound polymorphic instruction {} \
-                    with value_types {:?} and immediate values {:?}",
+                     with value_types {:?} and immediate values {:?}",
                     inst.inst.name,
                     inst.value_types,
                     inst.immediate_values,

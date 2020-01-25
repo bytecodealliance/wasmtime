@@ -258,7 +258,8 @@ impl<'builder> Template<'builder> {
     pub fn nonrex(&self) -> Self {
         assert!(
             self.rex_kind != RexRecipeKind::AlwaysEmitRex,
-            "Template {} requires REX prefix.", self.name(),
+            "Template {} requires REX prefix.",
+            self.name(),
         );
         let mut copy = self.clone();
         copy.rex_kind = RexRecipeKind::NeverEmitRex;
@@ -267,7 +268,8 @@ impl<'builder> Template<'builder> {
     pub fn rex(&self) -> Self {
         assert!(
             self.rex_kind != RexRecipeKind::NeverEmitRex,
-            "Template {} requires no REX prefix.", self.name(),
+            "Template {} requires no REX prefix.",
+            self.name(),
         );
         if let Some(prefixed) = &self.when_prefixed {
             let mut ret = prefixed.rex();
@@ -284,11 +286,13 @@ impl<'builder> Template<'builder> {
     pub fn infer_rex(&self) -> Self {
         assert!(
             self.rex_kind != RexRecipeKind::NeverEmitRex,
-            "Template {} requires no REX prefix.", self.name(),
+            "Template {} requires no REX prefix.",
+            self.name(),
         );
         assert!(
             self.rex_kind != RexRecipeKind::AlwaysEmitRex,
-            "Template {} akways requires REX prefix.", self.name(),
+            "Template {} akways requires REX prefix.",
+            self.name(),
         );
         assert!(
             self.when_prefixed.is_none(),
@@ -1396,12 +1400,11 @@ pub(crate) fn define<'shared>(
     //
     // TODO Alternative forms for 8-bit immediates, when applicable.
 
-    recipes.add_template(
-        Template::new(
-            EncodingRecipeBuilder::new("spaddr_ld_id", &formats.stack_load, 6)
-                .operands_out(vec![gpr])
-                .emit(
-                    r#"
+    recipes.add_template(Template::new(
+        EncodingRecipeBuilder::new("spaddr_ld_id", &formats.stack_load, 6)
+            .operands_out(vec![gpr])
+            .emit(
+                r#"
                         let sp = StackRef::sp(stack_slot, &func.stack_slots);
                         let base = stk_base(sp.base);
                         {{PUT_OP}}(bits, rex2(base, out_reg0), sink);
@@ -1410,17 +1413,15 @@ pub(crate) fn define<'shared>(
                         let imm : i32 = offset.into();
                         sink.put4(sp.offset.checked_add(imm).unwrap() as u32);
                     "#,
-                ),
-            regs
-        )
-    );
+            ),
+        regs,
+    ));
 
-    recipes.add_template(
-        Template::new(
-            EncodingRecipeBuilder::new("spst_id", &formats.stack_store, 6)
-                .operands_in(vec![gpr])
-                .emit(
-                    r#"
+    recipes.add_template(Template::new(
+        EncodingRecipeBuilder::new("spst_id", &formats.stack_store, 6)
+            .operands_in(vec![gpr])
+            .emit(
+                r#"
                         let sp = StackRef::sp(stack_slot, &func.stack_slots);
                         let base = stk_base(sp.base);
                         {{PUT_OP}}(bits, rex2(base, in_reg0), sink);
@@ -1429,10 +1430,9 @@ pub(crate) fn define<'shared>(
                         let imm : i32 = offset.into();
                         sink.put4(sp.offset.checked_add(imm).unwrap() as u32);
                     "#,
-                ),
-            regs
-        )
-    );
+            ),
+        regs,
+    ));
 
     // Store recipes.
 
