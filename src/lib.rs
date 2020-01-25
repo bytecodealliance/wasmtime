@@ -3,8 +3,7 @@ pub mod test {
     generate::from_witx!("test.witx");
 
     pub struct WasiCtx {
-        mem_errors: Vec<::memory::MemoryError>,
-        value_errors: Vec<::memory::GuestValueError>,
+        guest_errors: Vec<::memory::GuestError>,
     }
 
     impl foo::Foo for WasiCtx {
@@ -17,43 +16,65 @@ pub mod test {
             excuse: types::Excuse,
             a_better_excuse_by_reference: ::memory::GuestPtrMut<types::Excuse>,
             a_lamer_excuse_by_reference: ::memory::GuestPtr<types::Excuse>,
+            two_layers_of_excuses: ::memory::GuestPtrMut<::memory::GuestPtr<types::Excuse>>,
         ) -> Result<(), types::Errno> {
             use memory::GuestTypeCopy;
+
+            // Read enum value from mutable:
             let a_better_excuse =
-                types::Excuse::read_val(&a_better_excuse_by_reference).map_err(|val_err| {
-                    eprintln!("a_better_excuse_by_reference value error: {:?}", val_err);
+                types::Excuse::read_val(&a_better_excuse_by_reference).map_err(|e| {
+                    eprintln!("a_better_excuse_by_reference error: {}", e);
                     types::Errno::InvalidArg
                 })?;
+
+            // Read enum value from immutable ptr:
             let a_lamer_excuse =
-                types::Excuse::read_val(&a_lamer_excuse_by_reference).map_err(|val_err| {
-                    eprintln!("a_lamer_excuse_by_reference value error: {:?}", val_err);
+                types::Excuse::read_val(&a_lamer_excuse_by_reference).map_err(|e| {
+                    eprintln!("a_lamer_excuse_by_reference error: {}", e);
                     types::Errno::InvalidArg
                 })?;
+
+            // Write enum to mutable ptr:
             types::Excuse::write_val(a_lamer_excuse, &a_better_excuse_by_reference);
 
+            // Read ptr value from mutable ptr:
+            let one_layer_down =
+                ::memory::GuestPtr::read_ptr(&two_layers_of_excuses).map_err(|e| {
+                    eprintln!("one_layer_down error: {}", e);
+                    types::Errno::InvalidArg
+                })?;
+
+            // Read enum value from that ptr:
+            let two_layers_down = types::Excuse::read_val(&one_layer_down).map_err(|e| {
+                eprintln!("two_layers_down error: {}", e);
+                types::Errno::InvalidArg
+            })?;
+
+            // Write ptr value to mutable ptr:
+            ::memory::GuestPtr::write_ptr(
+                &a_better_excuse_by_reference.as_immut(),
+                &two_layers_of_excuses,
+            );
+
             println!(
-                "BAZ: {:?} {:?} {:?}",
-                excuse, a_better_excuse, a_lamer_excuse
+                "BAZ: excuse: {:?}, better excuse: {:?}, lamer excuse: {:?}, two layers down: {:?}",
+                excuse, a_better_excuse, a_lamer_excuse, two_layers_down
             );
             Ok(())
         }
     }
 
     // Errno is used as a first return value in the functions above, therefore
-    // it must implement GuestError with type Context = WasiCtx.
+    // it must implement GuestErrorType with type Context = WasiCtx.
     // The context type should let you do logging or debugging or whatever you need
     // with these errors. We just push them to vecs.
-    impl ::memory::GuestError for types::Errno {
+    impl ::memory::GuestErrorType for types::Errno {
         type Context = WasiCtx;
         fn success() -> types::Errno {
             types::Errno::Ok
         }
-        fn from_memory_error(e: ::memory::MemoryError, ctx: &mut WasiCtx) -> types::Errno {
-            ctx.mem_errors.push(e);
-            types::Errno::InvalidArg
-        }
-        fn from_value_error(e: ::memory::GuestValueError, ctx: &mut WasiCtx) -> types::Errno {
-            ctx.value_errors.push(e);
+        fn from_error(e: ::memory::GuestError, ctx: &mut WasiCtx) -> types::Errno {
+            ctx.guest_errors.push(e);
             types::Errno::InvalidArg
         }
     }

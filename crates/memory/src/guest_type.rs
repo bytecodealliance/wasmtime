@@ -1,24 +1,17 @@
-use crate::{GuestPtrMut, GuestPtrRead, MemoryError};
-use thiserror::Error;
+use crate::{GuestError, GuestPtrMut, GuestPtrRead};
 
 pub trait GuestType: Sized {
     fn size() -> u32;
     fn name() -> &'static str;
 }
 
-#[derive(Debug, Error)]
-pub enum GuestValueError {
-    #[error("Invalid enum {0}")]
-    InvalidEnum(&'static str),
-}
-
 pub trait GuestTypeCopy: GuestType + Copy {
-    fn read_val<P: GuestPtrRead<Self>>(src: &P) -> Result<Self, GuestValueError>;
+    fn read_val<'a, P: GuestPtrRead<'a, Self>>(src: &P) -> Result<Self, GuestError>;
     fn write_val(val: Self, dest: &GuestPtrMut<Self>);
 }
 
 pub trait GuestTypeClone: GuestType + Clone {
-    fn read_ref<P: GuestPtrRead<Self>>(src: &P, dest: &mut Self) -> Result<(), GuestValueError>;
+    fn read_ref<'a, P: GuestPtrRead<'a, Self>>(src: &P, dest: &mut Self) -> Result<(), GuestError>;
     fn write_ref(val: &Self, dest: &GuestPtrMut<Self>);
 }
 
@@ -26,7 +19,7 @@ impl<T> GuestTypeClone for T
 where
     T: GuestTypeCopy,
 {
-    fn read_ref<P: GuestPtrRead<Self>>(src: &P, dest: &mut T) -> Result<(), GuestValueError> {
+    fn read_ref<'a, P: GuestPtrRead<'a, Self>>(src: &P, dest: &mut T) -> Result<(), GuestError> {
         let val = GuestTypeCopy::read_val(src)?;
         *dest = val;
         Ok(())
@@ -49,7 +42,7 @@ macro_rules! builtin_copy {
         }
 
         impl GuestTypeCopy for $t {
-            fn read_val<P: GuestPtrRead<$t>>(src: &P) -> Result<$t, GuestValueError> {
+            fn read_val<'a, P: GuestPtrRead<'a, $t>>(src: &P) -> Result<$t, GuestError> {
                 Ok(unsafe {
                     ::std::ptr::read_unaligned(src.ptr() as *const $t)
                 })
@@ -67,9 +60,8 @@ macro_rules! builtin_copy {
 // These definitions correspond to all the witx BuiltinType variants that are Copy:
 builtin_copy!(u8, i8, u16, i16, u32, i32, u64, i64, f32, f64, usize, char);
 
-pub trait GuestError {
+pub trait GuestErrorType {
     type Context;
     fn success() -> Self;
-    fn from_memory_error(memory_error: MemoryError, ctx: &mut Self::Context) -> Self;
-    fn from_value_error(value_error: GuestValueError, ctx: &mut Self::Context) -> Self;
+    fn from_error(e: GuestError, ctx: &mut Self::Context) -> Self;
 }

@@ -1,8 +1,10 @@
 mod borrow;
+mod error;
 mod guest_type;
 mod memory;
 mod region;
 
-pub use guest_type::{GuestError, GuestType, GuestTypeClone, GuestTypeCopy, GuestValueError};
-pub use memory::{GuestMemory, GuestPtr, GuestPtrMut, GuestPtrRead, MemoryError};
+pub use error::GuestError;
+pub use guest_type::{GuestErrorType, GuestType, GuestTypeClone, GuestTypeCopy};
+pub use memory::{GuestMemory, GuestPtr, GuestPtrMut, GuestPtrRead};
 pub use region::Region;

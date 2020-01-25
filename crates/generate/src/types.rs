@@ -55,18 +55,18 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
         }
 
         impl ::std::convert::TryFrom<#repr> for #ident {
-            type Error = ::memory::GuestValueError;
-            fn try_from(value: #repr) -> Result<#ident, ::memory::GuestValueError> {
+            type Error = ::memory::GuestError;
+            fn try_from(value: #repr) -> Result<#ident, ::memory::GuestError> {
                 match value as usize {
                     #(#tryfrom_repr_cases),*,
-                    _ => Err(::memory::GuestValueError::InvalidEnum(stringify!(#ident))),
+                    _ => Err(::memory::GuestError::InvalidEnumValue(stringify!(#ident))),
                 }
             }
         }
 
         impl ::std::convert::TryFrom<#abi_repr> for #ident {
-            type Error = ::memory::GuestValueError;
-            fn try_from(value: #abi_repr) -> Result<#ident, ::memory::GuestValueError> {
+            type Error = ::memory::GuestError;
+            fn try_from(value: #abi_repr) -> Result<#ident, ::memory::GuestError> {
                 #ident::try_from(value as #repr)
             }
         }
@@ -95,7 +95,7 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
         }
 
         impl ::memory::GuestTypeCopy for #ident {
-            fn read_val<P: ::memory::GuestPtrRead<#ident>>(src: &P) -> Result<#ident, ::memory::GuestValueError> {
+            fn read_val<'a, P: ::memory::GuestPtrRead<'a, #ident>>(src: &P) -> Result<#ident, ::memory::GuestError> {
                 use ::std::convert::TryInto;
                 let val = unsafe { ::std::ptr::read_unaligned(src.ptr() as *const #repr) };
                 val.try_into()

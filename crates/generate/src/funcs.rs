@@ -97,7 +97,7 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
             Err(e) => { return #err_val; },
         };
         #(#marshal_rets)*
-        let success:#err_type = ::memory::GuestError::success();
+        let success:#err_type = ::memory::GuestErrorType::success();
         #abi_ret::from(success)
     })
 }
@@ -111,7 +111,7 @@ fn marshal_arg(
     let interface_typename = names.type_ref(&tref);
     let name = names.func_param(&param.name);
 
-    let error_handling = |method| -> TokenStream {
+    let error_handling: TokenStream = {
         if let Some(tref) = error_type {
             let abi_ret = match tref.type_().passed_by() {
                 witx::TypePassedBy::Value(atom) => names.atom_type(atom),
@@ -119,7 +119,7 @@ fn marshal_arg(
             };
             let err_typename = names.type_ref(&tref);
             quote! {
-                let err: #err_typename = ::memory::GuestError::#method(e, ctx);
+                let err: #err_typename = ::memory::GuestErrorType::from_error(e, ctx);
                 return #abi_ret::from(err);
             }
         } else {
@@ -128,15 +128,13 @@ fn marshal_arg(
             }
         }
     };
-    let value_error_handling = error_handling(quote!(from_value_error));
-    let memory_error_handling = error_handling(quote!(from_memory_error));
 
     let try_into_conversion = quote! {
         use ::std::convert::TryInto;
         let #name: #interface_typename = match #name.try_into() {
             Ok(a) => a,
             Err(e) => {
-                #value_error_handling
+                #error_handling
             }
         };
     };
@@ -151,7 +149,7 @@ fn marshal_arg(
                 let #name: #interface_typename = match (#name as i32).try_into() {
                     Ok(a) => a,
                     Err(e) => {
-                        #value_error_handling
+                        #error_handling
                     }
                 }
             },
@@ -172,7 +170,7 @@ fn marshal_arg(
                 let #name = match memory.ptr_mut::<#pointee_type>(#name as u32) {
                     Ok(p) => p,
                     Err(e) => {
-                        #memory_error_handling
+                        #error_handling
                     }
                 };
             }
@@ -183,7 +181,7 @@ fn marshal_arg(
                 let #name = match memory.ptr::<#pointee_type>(#name as u32) {
                     Ok(p) => p,
                     Err(e) => {
-                        #memory_error_handling
+                        #error_handling
                     }
                 };
             }
