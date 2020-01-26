@@ -333,13 +333,13 @@ fn new_module_cache_data(rng: &mut impl Rng) -> ModuleCacheData {
 
     let traps = (0..rng.gen_range(0, 0xd))
         .map(|i| {
-            ((i..i + rng.gen_range(0, 4))
+            (i..i + rng.gen_range(0, 4))
                 .map(|_| TrapInformation {
                     code_offset: rng.gen(),
                     source_loc: ir::SourceLoc::new(rng.gen()),
                     trap_code: ir::TrapCode::StackOverflow,
                 })
-                .collect())
+                .collect()
         })
         .collect();
 
