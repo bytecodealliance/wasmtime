@@ -7,8 +7,8 @@ use std::fs::File;
 use std::sync::Arc;
 use target_lexicon::HOST;
 use wasi_common::old::snapshot_0::hostcalls;
+use wasi_common::old::snapshot_0::wasi;
 use wasi_common::old::snapshot_0::{WasiCtx, WasiCtxBuilder};
-use wasi_common::wasi;
 use wasmtime_environ::{translate_signature, Export, Module};
 use wasmtime_runtime::{Imports, InstanceHandle, InstantiationError, VMContext};
 
