@@ -88,8 +88,13 @@ impl Names {
         format_ident!("{}", id.as_str().to_snake_case())
     }
 
-    /// For when you need a {name}_len parameter for passing an array:
-    pub fn func_len_param(&self, id: &Id) -> Ident {
+    /// For when you need a {name}_ptr binding for passing a value by reference:
+    pub fn func_ptr_binding(&self, id: &Id) -> Ident {
+        format_ident!("{}_ptr", id.as_str().to_snake_case())
+    }
+
+    /// For when you need a {name}_len binding for passing an array:
+    pub fn func_len_binding(&self, id: &Id) -> Ident {
         format_ident!("{}_len", id.as_str().to_snake_case())
     }
 }

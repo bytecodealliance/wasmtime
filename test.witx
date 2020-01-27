@@ -25,4 +25,8 @@
     (param $a_lamer_excuse (@witx const_pointer $excuse))
     (param $two_layers_of_excuses (@witx pointer (@witx const_pointer $excuse)))
     (result $error $errno))
+  (@interface func (export "bat")
+    (param $an_int u32)
+    (result $error $errno)
+    (result $doubled_it f32))
 )

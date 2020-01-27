@@ -62,8 +62,12 @@ pub mod test {
             );
             Ok(())
         }
-    }
 
+        fn bat(&mut self, an_int: u32) -> Result<f32, types::Errno> {
+            println!("bat: {}", an_int);
+            Ok((an_int as f32) * 2.0)
+        }
+    }
     // Errno is used as a first return value in the functions above, therefore
     // it must implement GuestErrorType with type Context = WasiCtx.
     // The context type should let you do logging or debugging or whatever you need
