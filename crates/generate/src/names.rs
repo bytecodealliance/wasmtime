@@ -72,6 +72,10 @@ impl Names {
         }
     }
 
+    pub fn struct_member(&self, id: &Id) -> Ident {
+        format_ident!("{}", id.as_str().to_snake_case())
+    }
+
     pub fn module(&self, id: &Id) -> Ident {
         format_ident!("{}", id.as_str().to_snake_case())
     }

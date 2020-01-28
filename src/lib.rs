@@ -62,6 +62,11 @@ pub mod test {
             println!("bat: {}", an_int);
             Ok((an_int as f32) * 2.0)
         }
+
+        fn sum_of_pair(&mut self, an_pair: &types::PairInts) -> Result<i64, types::Errno> {
+            println!("sum of pair: {:?}", an_pair);
+            Ok(an_pair.first as i64 + an_pair.second as i64)
+        }
     }
     // Errno is used as a first return value in the functions above, therefore
     // it must implement GuestErrorType with type Context = WasiCtx.

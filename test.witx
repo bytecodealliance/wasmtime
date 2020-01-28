@@ -14,6 +14,11 @@
      $traffic
      $sleeping))
 
+(typename $pair_ints
+  (struct
+    (field $first s32)
+    (field $second s32)))
+
 (module $foo
   (@interface func (export "bar")
     (param $an_int u32)
@@ -29,4 +34,9 @@
     (param $an_int u32)
     (result $error $errno)
     (result $doubled_it f32))
+
+  (@interface func (export "sum_of_pair")
+    (param $an_pair $pair_ints)
+    (result $error $errno)
+    (result $doubled s64))
 )

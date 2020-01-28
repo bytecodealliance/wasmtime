@@ -2,6 +2,7 @@ use crate::names::Names;
 
 use proc_macro2::TokenStream;
 use quote::quote;
+use witx::Layout;
 
 pub fn define_datatype(names: &Names, namedtype: &witx::NamedType) -> TokenStream {
     match &namedtype.tref {
@@ -10,7 +11,13 @@ pub fn define_datatype(names: &Names, namedtype: &witx::NamedType) -> TokenStrea
             witx::Type::Enum(e) => define_enum(names, &namedtype.name, &e),
             witx::Type::Int(_) => unimplemented!("int types"),
             witx::Type::Flags(_) => unimplemented!("flag types"),
-            witx::Type::Struct(_) => unimplemented!("struct types"),
+            witx::Type::Struct(s) => {
+                if struct_is_copy(s) {
+                    define_copy_struct(names, &namedtype.name, &s)
+                } else {
+                    unimplemented!("non-Copy struct")
+                }
+            }
             witx::Type::Union(_) => unimplemented!("union types"),
             witx::Type::Handle(_h) => unimplemented!("handle types"),
             witx::Type::Builtin(b) => define_builtin(names, &namedtype.name, *b),
@@ -124,6 +131,59 @@ fn define_builtin(names: &Names, name: &witx::Id, builtin: witx::BuiltinType) ->
     let ident = names.type_(name);
     let built = names.builtin_type(builtin);
     quote!(pub type #ident = #built;)
+}
+
+pub fn struct_is_copy(s: &witx::StructDatatype) -> bool {
+    s.members.iter().all(|m| match &*m.tref.type_() {
+        witx::Type::Struct(s) => struct_is_copy(&s),
+        witx::Type::Builtin(b) => match &*b {
+            witx::BuiltinType::String => false,
+            _ => true,
+        },
+        witx::Type::ConstPointer { .. }
+        | witx::Type::Pointer { .. }
+        | witx::Type::Array { .. }
+        | witx::Type::Union { .. } => false,
+        witx::Type::Enum { .. }
+        | witx::Type::Int { .. }
+        | witx::Type::Flags { .. }
+        | witx::Type::Handle { .. } => true,
+    })
+}
+
+fn define_copy_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -> TokenStream {
+    let ident = names.type_(name);
+    let member_decls = s.members.iter().map(|m| {
+        let name = names.struct_member(&m.name);
+        let type_ = names.type_ref(&m.tref);
+        quote!(pub #name: #type_)
+    });
+    let size = s.mem_size_align().size as u32;
+    let align = s.mem_size_align().align as u32;
+
+    quote! {
+        #[repr(C)]
+        #[derive(Copy, Clone, Debug, ::std::hash::Hash, Eq, PartialEq)]
+        pub struct #ident {
+            #(#member_decls),*
+        }
+
+        impl ::memory::GuestType for #ident {
+            fn size() -> u32 {
+                #size
+            }
+            fn align() -> u32 {
+                #align
+            }
+            fn name() -> String {
+                stringify!(#ident).to_owned()
+            }
+            fn validate(_ptr: &::memory::GuestPtr<#ident>) -> Result<(), ::memory::GuestError> {
+                Ok(()) // FIXME
+            }
+        }
+        impl ::memory::GuestTypeCopy for #ident {}
+    }
 }
 
 fn int_repr_tokens(int_repr: witx::IntRepr) -> TokenStream {

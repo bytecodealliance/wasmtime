@@ -10,7 +10,12 @@ pub fn define_module_trait(names: &Names, m: &Module) -> TokenStream {
         let funcname = names.func(&f.name);
         let args = f.params.iter().map(|arg| {
             let arg_name = names.func_param(&arg.name);
-            let arg_type = names.type_ref(&arg.tref);
+            let arg_typename = names.type_ref(&arg.tref);
+            let arg_type = match arg.tref.type_().passed_by() {
+                witx::TypePassedBy::Value { .. } => quote!(#arg_typename),
+                witx::TypePassedBy::Pointer { .. } => quote!(&#arg_typename),
+                witx::TypePassedBy::PointerLengthPair { .. } => unimplemented!(),
+            };
             quote!(#arg_name: #arg_type)
         });
         let rets = f

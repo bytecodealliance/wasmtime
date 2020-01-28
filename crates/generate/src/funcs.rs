@@ -2,6 +2,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 use crate::names::Names;
+use crate::types::struct_is_copy;
 
 // FIXME need to template what argument is required to an import function - some context
 // struct (e.g. WasiCtx) should be provided at the invocation of the `gen` proc macro.
@@ -75,10 +76,14 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
         .params
         .iter()
         .map(|p| marshal_arg(names, p, error_handling.clone()));
-    let trait_args = func
-        .params
-        .iter()
-        .map(|param| names.func_param(&param.name));
+    let trait_args = func.params.iter().map(|param| {
+        let name = names.func_param(&param.name);
+        match param.tref.type_().passed_by() {
+            witx::TypePassedBy::Value { .. } => quote!(#name),
+            witx::TypePassedBy::Pointer { .. } => quote!(&#name),
+            witx::TypePassedBy::PointerLengthPair { .. } => unimplemented!(),
+        }
+    });
 
     let (trait_rets, trait_bindings) = if func.results.len() < 2 {
         (quote!({}), quote!(_))
@@ -194,6 +199,24 @@ fn marshal_arg(
             quote! {
                 let #name = match memory.ptr::<#pointee_type>(#name as u32) {
                     Ok(p) => p,
+                    Err(e) => {
+                        #error_handling
+                    }
+                };
+            }
+        }
+        witx::Type::Struct(s) if struct_is_copy(&s) => {
+            let pointee_type = names.type_ref(tref);
+            let arg_name = names.func_ptr_binding(&param.name);
+            let name = names.func_param(&param.name);
+            quote! {
+                let #name = match memory.ptr::<#pointee_type>(#arg_name as u32) {
+                    Ok(p) => match p.as_ref() {
+                        Ok(r) => r,
+                        Err(e) => {
+                            #error_handling
+                        }
+                    },
                     Err(e) => {
                         #error_handling
                     }
