@@ -3,8 +3,10 @@ use crate::{
     module::{ModuleContext, SigType, Signature},
     StrErr,
 };
+use chain_one::WithChainOne;
 use cranelift_codegen::ir::SourceLoc;
-use smallvec::{smallvec, SmallVec};
+use itertools::Either;
+use smallvec::SmallVec;
 use std::{
     convert::TryInto,
     fmt,
@@ -327,31 +329,27 @@ fn strerr(msg: impl Into<std::borrow::Cow<'static, str>>) -> io::Error {
 }
 
 impl SignlessType {
-    pub fn from_wasm(other: wasmparser::Type) -> Result<Self, Error> {
+    pub fn from_wasm_block(
+        other: wasmparser::Type,
+    ) -> Result<Option<Self>, wasm_reader::ParserError> {
         use wasmparser::Type;
 
         match other {
-            Type::I32 => Ok(I32),
-            Type::I64 => Ok(I64),
-            Type::F32 => Ok(F32),
-            Type::F64 => Ok(F64),
-            Type::EmptyBlockType => Err(Error::Microwasm(
-                "SignlessType with EmptyBlockType".to_string(),
-            )),
-            _ => Err(Error::Microwasm("SignlessType unimplemented".to_string())),
+            Type::I32 => Ok(Some(I32)),
+            Type::I64 => Ok(Some(I64)),
+            Type::F32 => Ok(Some(F32)),
+            Type::F64 => Ok(Some(F64)),
+            Type::EmptyBlockType => Ok(None),
+            _ => Err(wasm_reader::ParserError::InvalidType),
         }
     }
-}
 
-fn create_returns_from_wasm_type(
-    ty: wasmparser::TypeOrFuncType,
-) -> wasm_reader::Result<Vec<SignlessType>> {
-    match ty {
-        wasmparser::TypeOrFuncType::Type(ty) => Ok(Vec::from_iter(Type::from_wasm(ty))),
-        wasmparser::TypeOrFuncType::FuncType(_) => Err(wasm_reader::Error::new(
-            strerr("Unsupported func type"),
-            None,
-        )),
+    pub fn from_wasm(other: wasmparser::Type) -> Result<Self, wasm_reader::ParserError> {
+        match Self::from_wasm_block(other) {
+            Ok(Some(v)) => Ok(v),
+            Ok(None) => Err(wasm_reader::ParserError::InvalidType),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -626,10 +624,27 @@ pub enum Operator<Label> {
     },
 }
 
-pub struct OperatorWithMeta<L> {
+pub struct Meta {
     pub loc: SourceLoc,
-    pub op: Operator<L>,
 }
+
+impl fmt::Display for Meta {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.loc.is_default() {
+            write!(f, "??????")
+        } else {
+            write!(f, "{:0>6x}", self.loc.bits())
+        }
+    }
+}
+
+pub struct WithMeta<T> {
+    pub meta: Meta,
+    pub data: T,
+}
+
+pub type OperatorWithMeta<L> = WithMeta<Operator<L>>;
+pub type OperatorFromWasmWithMeta = OperatorWithMeta<WasmLabel>;
 
 impl<L> Operator<L> {
     pub fn is_label(&self) -> bool {
@@ -675,17 +690,12 @@ impl<L> Operator<L> {
     }
 }
 
-impl<L> fmt::Display for OperatorWithMeta<L>
+impl<T> fmt::Display for WithMeta<T>
 where
-    BrTarget<L>: fmt::Display,
-    L: Clone,
+    T: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.loc.is_default() {
-            write!(f, "??????: {}", self.op)
-        } else {
-            write!(f, "{:0>6x}: {}", self.loc.bits(), self.op)
-        }
+        write!(f, "{}: {}", self.meta, self.data)
     }
 }
 
@@ -1073,6 +1083,7 @@ pub struct MicrowasmConv<'a, R, M> {
     stack: Vec<SignlessType>,
     operators: OperatorsReader,
     reader: R,
+    current_position: Option<u64>,
     module: &'a M,
     current_id: u32,
     control_frames: ControlFrames,
@@ -1172,6 +1183,7 @@ where
             consts_to_emit: Some(consts),
             operators,
             reader,
+            current_position: None,
             current_id: 0,
             control_frames: Default::default(),
             unreachable: false,
@@ -1186,6 +1198,33 @@ where
         });
 
         Ok(out)
+    }
+
+    fn type_or_func_type_to_sig(
+        &self,
+        ty: wasmparser::TypeOrFuncType,
+    ) -> wasm_reader::Result<(
+        impl ExactSizeIterator<Item = SignlessType> + '_,
+        impl ExactSizeIterator<Item = SignlessType> + '_,
+    )> {
+        match ty {
+            wasmparser::TypeOrFuncType::Type(ty) => {
+                let mwasm_type = Type::from_wasm_block(ty)
+                    .map_err(|e| wasm_reader::Error::new(e, self.current_position))?;
+
+                Ok((
+                    Either::Left(iter::empty()),
+                    Either::Left(mwasm_type.into_iter()),
+                ))
+            }
+            wasmparser::TypeOrFuncType::FuncType(ty) => {
+                let sig = self.module.signature(ty);
+                Ok((
+                    Either::Right(sig.params().iter().map(|t| t.to_microwasm_type())),
+                    Either::Right(sig.returns().iter().map(|t| t.to_microwasm_type())),
+                ))
+            }
+        }
     }
 
     fn op_sig(&self, op: &WasmOperator) -> wasm_reader::Result<OpSig> {
@@ -1533,17 +1572,82 @@ where
     fn block_params_with_wasm_type(
         &self,
         ty: wasmparser::TypeOrFuncType,
-    ) -> wasm_reader::Result<Vec<SignlessType>> {
-        let mut out = self.block_params();
-        let return_wasm_type = create_returns_from_wasm_type(ty)?;
-        out.extend(return_wasm_type);
-        Ok(out)
+    ) -> wasm_reader::Result<impl Iterator<Item = SignlessType> + '_> {
+        let (params, returns) = self.type_or_func_type_to_sig(ty)?;
+        Ok(self.stack[0..self.stack.len() - params.len()]
+            .iter()
+            .copied()
+            .chain(returns))
     }
 
-    fn next(&mut self) -> wasm_reader::Result<Option<SmallVec<[OperatorFromWasm; 1]>>> {
+    #[inline(always)]
+    fn next_with_meta(
+        &mut self,
+    ) -> wasm_reader::Result<Option<impl ExactSizeIterator<Item = OperatorFromWasmWithMeta> + '_>>
+    {
         use wasm_reader::MaybePosition;
 
-        let current_position = self.reader.position();
+        let loc = self
+            .reader
+            .position()
+            .map(|pos| SourceLoc::new(pos.try_into().expect("File size exceeded u32::MAX")))
+            .unwrap_or_default();
+
+        self.next().map(move |ok| {
+            ok.map(move |some| {
+                some.map(move |op| WithMeta {
+                    data: op,
+                    meta: Meta { loc },
+                })
+            })
+        })
+    }
+
+    #[inline(always)]
+    fn next(
+        &mut self,
+    ) -> wasm_reader::Result<Option<impl ExactSizeIterator<Item = OperatorFromWasm> + '_>> {
+        use derive_more::From;
+        use iter_enum::{ExactSizeIterator, Iterator};
+        use staticvec::{staticvec, StaticVec, StaticVecIntoIter};
+        use wasm_reader::MaybePosition;
+
+        type Consts = impl ExactSizeIterator<Item = OperatorFromWasm>;
+
+        fn consts(consts: Vec<Value>) -> Output {
+            fn impl_trait_hack(consts: Vec<Value>) -> Consts {
+                consts.into_iter().map(Operator::Const)
+            }
+
+            Output::Consts(impl_trait_hack(consts))
+        }
+
+        fn vec(vals: impl Into<StaticVec<OperatorFromWasm, 5>>) -> Output {
+            vals.into().into_iter().into()
+        }
+
+        fn iter(vals: impl IntoIterator<Item = OperatorFromWasm>) -> Output {
+            vec(StaticVec::from_iter(vals))
+        }
+
+        fn none() -> Output {
+            Output::None(std::iter::empty())
+        }
+
+        fn one(op: OperatorFromWasm) -> Output {
+            Output::One(std::iter::once(op))
+        }
+
+        #[derive(From, Iterator, ExactSizeIterator)]
+        enum Output {
+            Consts(Consts),
+            FixedLength(StaticVecIntoIter<OperatorFromWasm, 5>),
+            None(std::iter::Empty<OperatorFromWasm>),
+            One(std::iter::Once<OperatorFromWasm>),
+        }
+
+        self.current_position = self.reader.position();
+        let current_position = self.current_position;
 
         macro_rules! to_drop {
             ($block:expr) => {
@@ -1567,8 +1671,8 @@ where
             }};
         }
 
-        if let Some(consts) = self.consts_to_emit.take() {
-            return Ok(Some(consts.into_iter().map(Operator::Const).collect()));
+        if let Some(consts_to_emit) = self.consts_to_emit.take() {
+            return Ok(Some(consts(consts_to_emit)));
         }
 
         if self.unreachable {
@@ -1607,7 +1711,7 @@ where
                                 *has_else = true;
                             }
 
-                            break smallvec![Operator::Label((block.id, NameTag::Else))];
+                            break one(Operator::Label((block.id, NameTag::Else)));
                         }
                     }
                     WasmOperator::End => {
@@ -1621,7 +1725,7 @@ where
 
                             if self.control_frames.is_empty() {
                                 self.is_done = true;
-                                return Ok(Some(smallvec![]));
+                                return Ok(Some(none()));
                             }
 
                             self.stack.truncate(block.arguments as _);
@@ -1633,15 +1737,15 @@ where
                                 has_else: false, ..
                             } = block.kind
                             {
-                                break smallvec![
+                                break vec([
                                     Operator::Label((block.id, NameTag::Else)),
                                     Operator::Br {
                                         target: BrTarget::Label(end_label),
                                     },
                                     Operator::Label(end_label),
-                                ];
+                                ]);
                             } else {
-                                break smallvec![Operator::Label((block.id, NameTag::End))];
+                                break one(Operator::Label((block.id, NameTag::End)));
                             }
                         } else {
                             depth -= 1;
@@ -1665,68 +1769,76 @@ where
         Ok(Some(match op {
             WasmOperator::Unreachable => {
                 self.unreachable = true;
-                smallvec![Operator::Unreachable]
+                one(Operator::Unreachable)
             }
-            WasmOperator::Nop => smallvec![],
+            WasmOperator::Nop => none(),
             WasmOperator::Block { ty } => {
                 let id = self.next_id();
-                let return_type_wasm = create_returns_from_wasm_type(ty)?;
-                let block_param_type_wasm = self.block_params_with_wasm_type(ty)?;
+                let (_, returns) = self.type_or_func_type_to_sig(ty)?;
                 self.control_frames.push(ControlFrame {
                     id,
                     arguments: self.stack.len() as u32,
-                    returns: return_type_wasm,
+                    returns: returns.collect(),
                     kind: ControlFrameKind::Block {
                         needs_end_label: false,
                     },
                 });
-                smallvec![Operator::end(block_param_type_wasm, (id, NameTag::End))]
+
+                let block_param_type_wasm = self.block_params_with_wasm_type(ty)?;
+
+                one(Operator::end(
+                    block_param_type_wasm.collect(),
+                    (id, NameTag::End),
+                ))
             }
             WasmOperator::Loop { ty } => {
                 let id = self.next_id();
-                let return_type_wasm = create_returns_from_wasm_type(ty)?;
-                let block_param_type_wasm = self.block_params_with_wasm_type(ty)?;
+                let (_, returns) = self.type_or_func_type_to_sig(ty)?;
                 self.control_frames.push(ControlFrame {
                     id,
                     arguments: self.stack.len() as u32,
-                    returns: return_type_wasm,
+                    returns: returns.collect(),
                     kind: ControlFrameKind::Loop,
                 });
+
+                let block_param_type_wasm = self.block_params_with_wasm_type(ty)?;
                 let label = (id, NameTag::Header);
-                smallvec![
+
+                vec([
                     Operator::loop_(self.block_params(), label),
-                    Operator::end(block_param_type_wasm, (id, NameTag::End)),
+                    Operator::end(block_param_type_wasm.collect(), (id, NameTag::End)),
                     Operator::Br {
                         target: BrTarget::Label(label),
                     },
                     Operator::Label(label),
-                ]
+                ])
             }
             WasmOperator::If { ty } => {
                 let id = self.next_id();
-                let return_type_wasm = create_returns_from_wasm_type(ty)?;
-                let block_param_type_wasm = self.block_params_with_wasm_type(ty)?;
+                let (_, returns) = self.type_or_func_type_to_sig(ty)?;
                 self.control_frames.push(ControlFrame {
                     id,
                     arguments: self.stack.len() as u32,
-                    returns: return_type_wasm,
+                    returns: returns.collect(),
                     kind: ControlFrameKind::If { has_else: false },
                 });
+                let block_param_type_wasm = self.block_params_with_wasm_type(ty)?;
+
                 let (then, else_, end) = (
                     (id, NameTag::Header),
                     (id, NameTag::Else),
                     (id, NameTag::End),
                 );
-                smallvec![
+                vec([
                     Operator::block(self.block_params(), then),
                     Operator::block(self.block_params(), else_),
-                    Operator::end(block_param_type_wasm, end),
+                    Operator::end(block_param_type_wasm.collect(), end),
                     Operator::BrIf {
                         then: BrTarget::Label(then).into(),
-                        else_: BrTarget::Label(else_).into()
+                        else_: BrTarget::Label(else_).into(),
                     },
                     Operator::Label(then),
-                ]
+                ])
             }
             WasmOperator::Else => {
                 let block = self.control_frames.top().ok_or_else(|| {
@@ -1745,15 +1857,12 @@ where
 
                 let label = (block.id, NameTag::Else);
 
-                SmallVec::from_iter(
-                    to_drop
-                        .into_iter()
-                        .map(Operator::Drop)
-                        .chain(iter::once(Operator::Br {
-                            target: BrTarget::Label((block.id, NameTag::End)),
-                        }))
-                        .chain(iter::once(Operator::Label(label))),
-                )
+                iter(to_drop.into_iter().map(Operator::Drop).chain(staticvec![
+                    Operator::Br {
+                        target: BrTarget::Label((block.id, NameTag::End)),
+                    },
+                    Operator::Label(label)
+                ]))
             }
             WasmOperator::End => {
                 let block = self.control_frames.pop().ok_or_else(|| {
@@ -1772,46 +1881,35 @@ where
                     let else_ = (block.id, NameTag::Else);
                     let end = (block.id, NameTag::End);
 
-                    to_drop
-                        .map(Operator::Drop)
-                        .into_iter()
-                        .chain::<SmallVec<[_; 4]>>(smallvec![
-                            Operator::Br {
-                                target: BrTarget::Label(end),
-                            },
-                            Operator::Label(else_),
-                            Operator::Br {
-                                target: BrTarget::Label(end),
-                            },
-                            Operator::Label(end),
-                        ])
-                        .collect()
+                    iter(to_drop.map(Operator::Drop).into_iter().chain(staticvec![
+                        Operator::Br {
+                            target: BrTarget::Label(end),
+                        },
+                        Operator::Label(else_),
+                        Operator::Br {
+                            target: BrTarget::Label(end),
+                        },
+                        Operator::Label(end),
+                    ]))
                 } else {
-                    SmallVec::from_iter(if self.control_frames.is_empty() {
+                    if self.control_frames.is_empty() {
                         self.is_done = true;
 
-                        None.into_iter()
-                            .chain(Some(Operator::Br {
-                                target: BrTarget::Return,
-                            }))
-                            .chain(None)
+                        one(Operator::Br {
+                            target: BrTarget::Return,
+                        })
                     } else if block.needs_end_label() {
                         let label = (block.id, NameTag::End);
 
-                        to_drop
-                            .map(Operator::Drop)
-                            .into_iter()
-                            .chain(Some(Operator::Br {
+                        iter(to_drop.map(Operator::Drop).into_iter().chain(staticvec![
+                            Operator::Br {
                                 target: BrTarget::Label(label),
-                            }))
-                            .chain(Some(Operator::Label(label)))
+                            },
+                            Operator::Label(label)
+                        ]))
                     } else {
-                        to_drop
-                            .map(Operator::Drop)
-                            .into_iter()
-                            .chain(None)
-                            .chain(None)
-                    })
+                        iter(to_drop.map(Operator::Drop).into_iter())
+                    }
                 }
             }
             WasmOperator::Br { relative_depth } => {
@@ -1820,11 +1918,14 @@ where
 
                 let block = &mut self.control_frames[relative_depth as _];
                 block.mark_branched_to();
-                SmallVec::from_iter(to_drop.into_iter().map(Operator::Drop).chain(iter::once(
-                    Operator::Br {
-                        target: block.br_target(),
-                    },
-                )))
+                iter(
+                    to_drop
+                        .into_iter()
+                        .map(Operator::Drop)
+                        .chain_one(Operator::Br {
+                            target: block.br_target(),
+                        }),
+                )
             }
             WasmOperator::BrIf { relative_depth } => {
                 let to_drop = to_drop!(self.control_frames[relative_depth as _]);
@@ -1834,17 +1935,17 @@ where
                 let block = &mut self.control_frames[relative_depth as _];
                 block.mark_branched_to();
 
-                smallvec![
+                vec([
                     Operator::block(params, label),
                     Operator::BrIf {
                         then: BrTargetDrop {
                             to_drop,
-                            target: block.br_target()
+                            target: block.br_target(),
                         },
                         else_: BrTarget::Label(label).into(),
                     },
                     Operator::Label(label),
-                ]
+                ])
             }
             WasmOperator::BrTable { table } => {
                 self.unreachable = true;
@@ -1876,7 +1977,7 @@ where
                     target,
                 };
 
-                smallvec![Operator::BrTable(BrTable { targets, default })]
+                one(Operator::BrTable(BrTable { targets, default }))
             }
             WasmOperator::Return => {
                 self.unreachable = true;
@@ -1884,21 +1985,22 @@ where
                 let block = self.control_frames.function_block();
                 let to_drop = to_drop!(block);
 
-                SmallVec::from_iter(to_drop.into_iter().map(Operator::Drop).chain(iter::once(
-                    Operator::Br {
-                        target: block.br_target(),
-                    },
-                )))
+                iter(
+                    to_drop
+                        .into_iter()
+                        .map(Operator::Drop)
+                        .chain_one(Operator::Br {
+                            target: block.br_target(),
+                        }),
+                )
             }
-            WasmOperator::Call { function_index } => smallvec![Operator::Call { function_index }],
-            WasmOperator::CallIndirect { index, table_index } => {
-                smallvec![Operator::CallIndirect {
-                    type_index: index,
-                    table_index,
-                }]
-            }
-            WasmOperator::Drop => smallvec![Operator::Drop(0..=0)],
-            WasmOperator::Select => smallvec![Operator::Select],
+            WasmOperator::Call { function_index } => one(Operator::Call { function_index }),
+            WasmOperator::CallIndirect { index, table_index } => one(Operator::CallIndirect {
+                type_index: index,
+                table_index,
+            }),
+            WasmOperator::Drop => one(Operator::Drop(0..=0)),
+            WasmOperator::Select => one(Operator::Select),
 
             WasmOperator::LocalGet { local_index } => {
                 let depth = self
@@ -1916,7 +2018,7 @@ where
                         current_position,
                     )
                 })?;
-                smallvec![Operator::Pick(depth)]
+                one(Operator::Pick(depth))
             }
             WasmOperator::LocalSet { local_index } => {
                 let depth = self
@@ -1934,7 +2036,7 @@ where
                         current_position,
                     )
                 })?;
-                smallvec![Operator::Swap(depth), Operator::Drop(0..=0)]
+                vec([Operator::Swap(depth), Operator::Drop(0..=0)])
             }
             WasmOperator::LocalTee { local_index } => {
                 let depth = self
@@ -1952,122 +2054,114 @@ where
                         current_position,
                     )
                 })?;
-                smallvec![
+                vec([
                     Operator::Pick(0),
                     Operator::Swap(depth),
                     Operator::Drop(0..=0),
-                ]
+                ])
             }
-            WasmOperator::GlobalGet { global_index } => {
-                smallvec![Operator::GlobalGet(global_index)]
-            }
-            WasmOperator::GlobalSet { global_index } => {
-                smallvec![Operator::GlobalSet(global_index)]
-            }
+            WasmOperator::GlobalGet { global_index } => one(Operator::GlobalGet(global_index)),
+            WasmOperator::GlobalSet { global_index } => one(Operator::GlobalSet(global_index)),
 
-            WasmOperator::I32Load { memarg } => smallvec![Operator::Load {
+            WasmOperator::I32Load { memarg } => one(Operator::Load {
                 ty: I32,
-                memarg: memarg.into()
-            }],
-            WasmOperator::I64Load { memarg } => smallvec![Operator::Load {
+                memarg: memarg.into(),
+            }),
+            WasmOperator::I64Load { memarg } => one(Operator::Load {
                 ty: I64,
-                memarg: memarg.into()
-            }],
-            WasmOperator::F32Load { memarg } => smallvec![Operator::Load {
+                memarg: memarg.into(),
+            }),
+            WasmOperator::F32Load { memarg } => one(Operator::Load {
                 ty: F32,
-                memarg: memarg.into()
-            }],
-            WasmOperator::F64Load { memarg } => smallvec![Operator::Load {
+                memarg: memarg.into(),
+            }),
+            WasmOperator::F64Load { memarg } => one(Operator::Load {
                 ty: F64,
-                memarg: memarg.into()
-            }],
-            WasmOperator::I32Load8S { memarg } => smallvec![Operator::Load8 {
+                memarg: memarg.into(),
+            }),
+            WasmOperator::I32Load8S { memarg } => one(Operator::Load8 {
                 ty: sint::I32,
                 memarg: memarg.into(),
-            }],
-            WasmOperator::I32Load8U { memarg } => smallvec![Operator::Load8 {
+            }),
+            WasmOperator::I32Load8U { memarg } => one(Operator::Load8 {
                 ty: sint::U32,
                 memarg: memarg.into(),
-            }],
-            WasmOperator::I32Load16S { memarg } => smallvec![Operator::Load16 {
+            }),
+            WasmOperator::I32Load16S { memarg } => one(Operator::Load16 {
                 ty: sint::I32,
                 memarg: memarg.into(),
-            }],
-            WasmOperator::I32Load16U { memarg } => smallvec![Operator::Load16 {
+            }),
+            WasmOperator::I32Load16U { memarg } => one(Operator::Load16 {
                 ty: sint::U32,
                 memarg: memarg.into(),
-            }],
-            WasmOperator::I64Load8S { memarg } => smallvec![Operator::Load8 {
+            }),
+            WasmOperator::I64Load8S { memarg } => one(Operator::Load8 {
                 ty: sint::I64,
                 memarg: memarg.into(),
-            }],
-            WasmOperator::I64Load8U { memarg } => smallvec![Operator::Load8 {
+            }),
+            WasmOperator::I64Load8U { memarg } => one(Operator::Load8 {
                 ty: sint::U64,
                 memarg: memarg.into(),
-            }],
-            WasmOperator::I64Load16S { memarg } => smallvec![Operator::Load16 {
+            }),
+            WasmOperator::I64Load16S { memarg } => one(Operator::Load16 {
                 ty: sint::I64,
                 memarg: memarg.into(),
-            }],
-            WasmOperator::I64Load16U { memarg } => smallvec![Operator::Load16 {
+            }),
+            WasmOperator::I64Load16U { memarg } => one(Operator::Load16 {
                 ty: sint::U64,
                 memarg: memarg.into(),
-            }],
-            WasmOperator::I64Load32S { memarg } => smallvec![Operator::Load32 {
+            }),
+            WasmOperator::I64Load32S { memarg } => one(Operator::Load32 {
                 sign: Signedness::Signed,
                 memarg: memarg.into(),
-            }],
-            WasmOperator::I64Load32U { memarg } => smallvec![Operator::Load32 {
+            }),
+            WasmOperator::I64Load32U { memarg } => one(Operator::Load32 {
                 sign: Signedness::Unsigned,
                 memarg: memarg.into(),
-            }],
+            }),
 
-            WasmOperator::I32Store { memarg } => smallvec![Operator::Store {
+            WasmOperator::I32Store { memarg } => one(Operator::Store {
                 ty: I32,
-                memarg: memarg.into()
-            }],
-            WasmOperator::I64Store { memarg } => smallvec![Operator::Store {
+                memarg: memarg.into(),
+            }),
+            WasmOperator::I64Store { memarg } => one(Operator::Store {
                 ty: I64,
-                memarg: memarg.into()
-            }],
-            WasmOperator::F32Store { memarg } => smallvec![Operator::Store {
+                memarg: memarg.into(),
+            }),
+            WasmOperator::F32Store { memarg } => one(Operator::Store {
                 ty: F32,
-                memarg: memarg.into()
-            }],
-            WasmOperator::F64Store { memarg } => smallvec![Operator::Store {
+                memarg: memarg.into(),
+            }),
+            WasmOperator::F64Store { memarg } => one(Operator::Store {
                 ty: F64,
-                memarg: memarg.into()
-            }],
+                memarg: memarg.into(),
+            }),
 
-            WasmOperator::I32Store8 { memarg } => smallvec![Operator::Store8 {
+            WasmOperator::I32Store8 { memarg } => one(Operator::Store8 {
                 ty: Size::_32,
                 memarg: memarg.into(),
-            }],
-            WasmOperator::I32Store16 { memarg } => smallvec![Operator::Store16 {
+            }),
+            WasmOperator::I32Store16 { memarg } => one(Operator::Store16 {
                 ty: Size::_32,
                 memarg: memarg.into(),
-            }],
-            WasmOperator::I64Store8 { memarg } => smallvec![Operator::Store8 {
+            }),
+            WasmOperator::I64Store8 { memarg } => one(Operator::Store8 {
                 ty: Size::_64,
                 memarg: memarg.into(),
-            }],
-            WasmOperator::I64Store16 { memarg } => smallvec![Operator::Store16 {
+            }),
+            WasmOperator::I64Store16 { memarg } => one(Operator::Store16 {
                 ty: Size::_64,
                 memarg: memarg.into(),
-            }],
-            WasmOperator::I64Store32 { memarg } => smallvec![Operator::Store32 {
-                memarg: memarg.into()
-            }],
-            WasmOperator::MemorySize { reserved } => smallvec![Operator::MemorySize { reserved }],
-            WasmOperator::MemoryGrow { reserved } => smallvec![Operator::MemoryGrow { reserved }],
-            WasmOperator::I32Const { value } => smallvec![Operator::Const(Value::I32(value))],
-            WasmOperator::I64Const { value } => smallvec![Operator::Const(Value::I64(value))],
-            WasmOperator::F32Const { value } => {
-                smallvec![Operator::Const(Value::F32(value.into()))]
-            }
-            WasmOperator::F64Const { value } => {
-                smallvec![Operator::Const(Value::F64(value.into()))]
-            }
+            }),
+            WasmOperator::I64Store32 { memarg } => one(Operator::Store32 {
+                memarg: memarg.into(),
+            }),
+            WasmOperator::MemorySize { reserved } => one(Operator::MemorySize { reserved }),
+            WasmOperator::MemoryGrow { reserved } => one(Operator::MemoryGrow { reserved }),
+            WasmOperator::I32Const { value } => one(Operator::Const(Value::I32(value))),
+            WasmOperator::I64Const { value } => one(Operator::Const(Value::I64(value))),
+            WasmOperator::F32Const { value } => one(Operator::Const(Value::F32(value.into()))),
+            WasmOperator::F64Const { value } => one(Operator::Const(Value::F64(value.into()))),
             WasmOperator::RefNull => {
                 return Err(wasm_reader::Error::new(
                     strerr("RefNull unimplemented"),
@@ -2080,183 +2174,183 @@ where
                     current_position,
                 ))
             }
-            WasmOperator::I32Eqz => smallvec![Operator::Eqz(Size::_32)],
-            WasmOperator::I32Eq => smallvec![Operator::Eq(I32)],
-            WasmOperator::I32Ne => smallvec![Operator::Ne(I32)],
-            WasmOperator::I32LtS => smallvec![Operator::Lt(SI32)],
-            WasmOperator::I32LtU => smallvec![Operator::Lt(SU32)],
-            WasmOperator::I32GtS => smallvec![Operator::Gt(SI32)],
-            WasmOperator::I32GtU => smallvec![Operator::Gt(SU32)],
-            WasmOperator::I32LeS => smallvec![Operator::Le(SI32)],
-            WasmOperator::I32LeU => smallvec![Operator::Le(SU32)],
-            WasmOperator::I32GeS => smallvec![Operator::Ge(SI32)],
-            WasmOperator::I32GeU => smallvec![Operator::Ge(SU32)],
-            WasmOperator::I64Eqz => smallvec![Operator::Eqz(Size::_64)],
-            WasmOperator::I64Eq => smallvec![Operator::Eq(I64)],
-            WasmOperator::I64Ne => smallvec![Operator::Ne(I64)],
-            WasmOperator::I64LtS => smallvec![Operator::Lt(SI64)],
-            WasmOperator::I64LtU => smallvec![Operator::Lt(SU64)],
-            WasmOperator::I64GtS => smallvec![Operator::Gt(SI64)],
-            WasmOperator::I64GtU => smallvec![Operator::Gt(SU64)],
-            WasmOperator::I64LeS => smallvec![Operator::Le(SI64)],
-            WasmOperator::I64LeU => smallvec![Operator::Le(SU64)],
-            WasmOperator::I64GeS => smallvec![Operator::Ge(SI64)],
-            WasmOperator::I64GeU => smallvec![Operator::Ge(SU64)],
-            WasmOperator::F32Eq => smallvec![Operator::Eq(F32)],
-            WasmOperator::F32Ne => smallvec![Operator::Ne(F32)],
-            WasmOperator::F32Lt => smallvec![Operator::Lt(SF32)],
-            WasmOperator::F32Gt => smallvec![Operator::Gt(SF32)],
-            WasmOperator::F32Le => smallvec![Operator::Le(SF32)],
-            WasmOperator::F32Ge => smallvec![Operator::Ge(SF32)],
-            WasmOperator::F64Eq => smallvec![Operator::Eq(F64)],
-            WasmOperator::F64Ne => smallvec![Operator::Ne(F64)],
-            WasmOperator::F64Lt => smallvec![Operator::Lt(SF64)],
-            WasmOperator::F64Gt => smallvec![Operator::Gt(SF64)],
-            WasmOperator::F64Le => smallvec![Operator::Le(SF64)],
-            WasmOperator::F64Ge => smallvec![Operator::Ge(SF64)],
-            WasmOperator::I32Clz => smallvec![Operator::Clz(Size::_32)],
-            WasmOperator::I32Ctz => smallvec![Operator::Ctz(Size::_32)],
-            WasmOperator::I32Popcnt => smallvec![Operator::Popcnt(Size::_32)],
-            WasmOperator::I32Add => smallvec![Operator::Add(I32)],
-            WasmOperator::I32Sub => smallvec![Operator::Sub(I32)],
-            WasmOperator::I32Mul => smallvec![Operator::Mul(I32)],
-            WasmOperator::I32DivS => smallvec![Operator::Div(SI32)],
-            WasmOperator::I32DivU => smallvec![Operator::Div(SU32)],
-            WasmOperator::I32RemS => smallvec![Operator::Rem(sint::I32),],
+            WasmOperator::I32Eqz => one(Operator::Eqz(Size::_32)),
+            WasmOperator::I32Eq => one(Operator::Eq(I32)),
+            WasmOperator::I32Ne => one(Operator::Ne(I32)),
+            WasmOperator::I32LtS => one(Operator::Lt(SI32)),
+            WasmOperator::I32LtU => one(Operator::Lt(SU32)),
+            WasmOperator::I32GtS => one(Operator::Gt(SI32)),
+            WasmOperator::I32GtU => one(Operator::Gt(SU32)),
+            WasmOperator::I32LeS => one(Operator::Le(SI32)),
+            WasmOperator::I32LeU => one(Operator::Le(SU32)),
+            WasmOperator::I32GeS => one(Operator::Ge(SI32)),
+            WasmOperator::I32GeU => one(Operator::Ge(SU32)),
+            WasmOperator::I64Eqz => one(Operator::Eqz(Size::_64)),
+            WasmOperator::I64Eq => one(Operator::Eq(I64)),
+            WasmOperator::I64Ne => one(Operator::Ne(I64)),
+            WasmOperator::I64LtS => one(Operator::Lt(SI64)),
+            WasmOperator::I64LtU => one(Operator::Lt(SU64)),
+            WasmOperator::I64GtS => one(Operator::Gt(SI64)),
+            WasmOperator::I64GtU => one(Operator::Gt(SU64)),
+            WasmOperator::I64LeS => one(Operator::Le(SI64)),
+            WasmOperator::I64LeU => one(Operator::Le(SU64)),
+            WasmOperator::I64GeS => one(Operator::Ge(SI64)),
+            WasmOperator::I64GeU => one(Operator::Ge(SU64)),
+            WasmOperator::F32Eq => one(Operator::Eq(F32)),
+            WasmOperator::F32Ne => one(Operator::Ne(F32)),
+            WasmOperator::F32Lt => one(Operator::Lt(SF32)),
+            WasmOperator::F32Gt => one(Operator::Gt(SF32)),
+            WasmOperator::F32Le => one(Operator::Le(SF32)),
+            WasmOperator::F32Ge => one(Operator::Ge(SF32)),
+            WasmOperator::F64Eq => one(Operator::Eq(F64)),
+            WasmOperator::F64Ne => one(Operator::Ne(F64)),
+            WasmOperator::F64Lt => one(Operator::Lt(SF64)),
+            WasmOperator::F64Gt => one(Operator::Gt(SF64)),
+            WasmOperator::F64Le => one(Operator::Le(SF64)),
+            WasmOperator::F64Ge => one(Operator::Ge(SF64)),
+            WasmOperator::I32Clz => one(Operator::Clz(Size::_32)),
+            WasmOperator::I32Ctz => one(Operator::Ctz(Size::_32)),
+            WasmOperator::I32Popcnt => one(Operator::Popcnt(Size::_32)),
+            WasmOperator::I32Add => one(Operator::Add(I32)),
+            WasmOperator::I32Sub => one(Operator::Sub(I32)),
+            WasmOperator::I32Mul => one(Operator::Mul(I32)),
+            WasmOperator::I32DivS => one(Operator::Div(SI32)),
+            WasmOperator::I32DivU => one(Operator::Div(SU32)),
+            WasmOperator::I32RemS => one(Operator::Rem(sint::I32)),
 
-            WasmOperator::I32RemU => smallvec![Operator::Rem(sint::U32),],
-            WasmOperator::I32And => smallvec![Operator::And(Size::_32)],
-            WasmOperator::I32Or => smallvec![Operator::Or(Size::_32)],
-            WasmOperator::I32Xor => smallvec![Operator::Xor(Size::_32)],
-            WasmOperator::I32Shl => smallvec![Operator::Shl(Size::_32)],
-            WasmOperator::I32ShrS => smallvec![Operator::Shr(sint::I32)],
-            WasmOperator::I32ShrU => smallvec![Operator::Shr(sint::U32)],
-            WasmOperator::I32Rotl => smallvec![Operator::Rotl(Size::_32)],
-            WasmOperator::I32Rotr => smallvec![Operator::Rotr(Size::_32)],
-            WasmOperator::I64Clz => smallvec![Operator::Clz(Size::_64)],
-            WasmOperator::I64Ctz => smallvec![Operator::Ctz(Size::_64)],
-            WasmOperator::I64Popcnt => smallvec![Operator::Popcnt(Size::_64)],
-            WasmOperator::I64Add => smallvec![Operator::Add(I64)],
-            WasmOperator::I64Sub => smallvec![Operator::Sub(I64)],
-            WasmOperator::I64Mul => smallvec![Operator::Mul(I64)],
-            WasmOperator::I64DivS => smallvec![Operator::Div(SI64)],
-            WasmOperator::I64DivU => smallvec![Operator::Div(SU64)],
-            WasmOperator::I64RemS => smallvec![Operator::Rem(sint::I64),],
+            WasmOperator::I32RemU => one(Operator::Rem(sint::U32)),
+            WasmOperator::I32And => one(Operator::And(Size::_32)),
+            WasmOperator::I32Or => one(Operator::Or(Size::_32)),
+            WasmOperator::I32Xor => one(Operator::Xor(Size::_32)),
+            WasmOperator::I32Shl => one(Operator::Shl(Size::_32)),
+            WasmOperator::I32ShrS => one(Operator::Shr(sint::I32)),
+            WasmOperator::I32ShrU => one(Operator::Shr(sint::U32)),
+            WasmOperator::I32Rotl => one(Operator::Rotl(Size::_32)),
+            WasmOperator::I32Rotr => one(Operator::Rotr(Size::_32)),
+            WasmOperator::I64Clz => one(Operator::Clz(Size::_64)),
+            WasmOperator::I64Ctz => one(Operator::Ctz(Size::_64)),
+            WasmOperator::I64Popcnt => one(Operator::Popcnt(Size::_64)),
+            WasmOperator::I64Add => one(Operator::Add(I64)),
+            WasmOperator::I64Sub => one(Operator::Sub(I64)),
+            WasmOperator::I64Mul => one(Operator::Mul(I64)),
+            WasmOperator::I64DivS => one(Operator::Div(SI64)),
+            WasmOperator::I64DivU => one(Operator::Div(SU64)),
+            WasmOperator::I64RemS => one(Operator::Rem(sint::I64)),
 
-            WasmOperator::I64RemU => smallvec![Operator::Rem(sint::U64)],
-            WasmOperator::I64And => smallvec![Operator::And(Size::_64)],
-            WasmOperator::I64Or => smallvec![Operator::Or(Size::_64)],
-            WasmOperator::I64Xor => smallvec![Operator::Xor(Size::_64)],
-            WasmOperator::I64Shl => smallvec![Operator::Shl(Size::_64)],
-            WasmOperator::I64ShrS => smallvec![Operator::Shr(sint::I64)],
-            WasmOperator::I64ShrU => smallvec![Operator::Shr(sint::U64)],
-            WasmOperator::I64Rotl => smallvec![Operator::Rotl(Size::_64)],
-            WasmOperator::I64Rotr => smallvec![Operator::Rotr(Size::_64)],
-            WasmOperator::F32Abs => smallvec![Operator::Abs(Size::_32)],
-            WasmOperator::F32Neg => smallvec![Operator::Neg(Size::_32)],
-            WasmOperator::F32Ceil => smallvec![Operator::Ceil(Size::_32)],
-            WasmOperator::F32Floor => smallvec![Operator::Floor(Size::_32)],
-            WasmOperator::F32Trunc => smallvec![Operator::Trunc(Size::_32)],
-            WasmOperator::F32Nearest => smallvec![Operator::Nearest(Size::_32)],
-            WasmOperator::F32Sqrt => smallvec![Operator::Sqrt(Size::_32)],
-            WasmOperator::F32Add => smallvec![Operator::Add(F32)],
-            WasmOperator::F32Sub => smallvec![Operator::Sub(F32)],
-            WasmOperator::F32Mul => smallvec![Operator::Mul(F32)],
-            WasmOperator::F32Div => smallvec![Operator::Div(SF32)],
-            WasmOperator::F32Min => smallvec![Operator::Min(Size::_32)],
-            WasmOperator::F32Max => smallvec![Operator::Max(Size::_32)],
-            WasmOperator::F32Copysign => smallvec![Operator::Copysign(Size::_32)],
-            WasmOperator::F64Abs => smallvec![Operator::Abs(Size::_64)],
-            WasmOperator::F64Neg => smallvec![Operator::Neg(Size::_64)],
-            WasmOperator::F64Ceil => smallvec![Operator::Ceil(Size::_64)],
-            WasmOperator::F64Floor => smallvec![Operator::Floor(Size::_64)],
-            WasmOperator::F64Trunc => smallvec![Operator::Trunc(Size::_64)],
-            WasmOperator::F64Nearest => smallvec![Operator::Nearest(Size::_64)],
-            WasmOperator::F64Sqrt => smallvec![Operator::Sqrt(Size::_64)],
-            WasmOperator::F64Add => smallvec![Operator::Add(F64)],
-            WasmOperator::F64Sub => smallvec![Operator::Sub(F64)],
-            WasmOperator::F64Mul => smallvec![Operator::Mul(F64)],
-            WasmOperator::F64Div => smallvec![Operator::Div(SF64)],
-            WasmOperator::F64Min => smallvec![Operator::Min(Size::_64)],
-            WasmOperator::F64Max => smallvec![Operator::Max(Size::_64)],
-            WasmOperator::F64Copysign => smallvec![Operator::Copysign(Size::_64)],
-            WasmOperator::I32WrapI64 => smallvec![Operator::I32WrapFromI64],
-            WasmOperator::I32TruncF32S => smallvec![Operator::ITruncFromF {
+            WasmOperator::I64RemU => one(Operator::Rem(sint::U64)),
+            WasmOperator::I64And => one(Operator::And(Size::_64)),
+            WasmOperator::I64Or => one(Operator::Or(Size::_64)),
+            WasmOperator::I64Xor => one(Operator::Xor(Size::_64)),
+            WasmOperator::I64Shl => one(Operator::Shl(Size::_64)),
+            WasmOperator::I64ShrS => one(Operator::Shr(sint::I64)),
+            WasmOperator::I64ShrU => one(Operator::Shr(sint::U64)),
+            WasmOperator::I64Rotl => one(Operator::Rotl(Size::_64)),
+            WasmOperator::I64Rotr => one(Operator::Rotr(Size::_64)),
+            WasmOperator::F32Abs => one(Operator::Abs(Size::_32)),
+            WasmOperator::F32Neg => one(Operator::Neg(Size::_32)),
+            WasmOperator::F32Ceil => one(Operator::Ceil(Size::_32)),
+            WasmOperator::F32Floor => one(Operator::Floor(Size::_32)),
+            WasmOperator::F32Trunc => one(Operator::Trunc(Size::_32)),
+            WasmOperator::F32Nearest => one(Operator::Nearest(Size::_32)),
+            WasmOperator::F32Sqrt => one(Operator::Sqrt(Size::_32)),
+            WasmOperator::F32Add => one(Operator::Add(F32)),
+            WasmOperator::F32Sub => one(Operator::Sub(F32)),
+            WasmOperator::F32Mul => one(Operator::Mul(F32)),
+            WasmOperator::F32Div => one(Operator::Div(SF32)),
+            WasmOperator::F32Min => one(Operator::Min(Size::_32)),
+            WasmOperator::F32Max => one(Operator::Max(Size::_32)),
+            WasmOperator::F32Copysign => one(Operator::Copysign(Size::_32)),
+            WasmOperator::F64Abs => one(Operator::Abs(Size::_64)),
+            WasmOperator::F64Neg => one(Operator::Neg(Size::_64)),
+            WasmOperator::F64Ceil => one(Operator::Ceil(Size::_64)),
+            WasmOperator::F64Floor => one(Operator::Floor(Size::_64)),
+            WasmOperator::F64Trunc => one(Operator::Trunc(Size::_64)),
+            WasmOperator::F64Nearest => one(Operator::Nearest(Size::_64)),
+            WasmOperator::F64Sqrt => one(Operator::Sqrt(Size::_64)),
+            WasmOperator::F64Add => one(Operator::Add(F64)),
+            WasmOperator::F64Sub => one(Operator::Sub(F64)),
+            WasmOperator::F64Mul => one(Operator::Mul(F64)),
+            WasmOperator::F64Div => one(Operator::Div(SF64)),
+            WasmOperator::F64Min => one(Operator::Min(Size::_64)),
+            WasmOperator::F64Max => one(Operator::Max(Size::_64)),
+            WasmOperator::F64Copysign => one(Operator::Copysign(Size::_64)),
+            WasmOperator::I32WrapI64 => one(Operator::I32WrapFromI64),
+            WasmOperator::I32TruncF32S => one(Operator::ITruncFromF {
                 input_ty: Size::_32,
-                output_ty: sint::I32
-            }],
-            WasmOperator::I32TruncF32U => smallvec![Operator::ITruncFromF {
+                output_ty: sint::I32,
+            }),
+            WasmOperator::I32TruncF32U => one(Operator::ITruncFromF {
                 input_ty: Size::_32,
-                output_ty: sint::U32
-            }],
-            WasmOperator::I32TruncF64S => smallvec![Operator::ITruncFromF {
+                output_ty: sint::U32,
+            }),
+            WasmOperator::I32TruncF64S => one(Operator::ITruncFromF {
                 input_ty: Size::_64,
-                output_ty: sint::I32
-            }],
-            WasmOperator::I32TruncF64U => smallvec![Operator::ITruncFromF {
+                output_ty: sint::I32,
+            }),
+            WasmOperator::I32TruncF64U => one(Operator::ITruncFromF {
                 input_ty: Size::_64,
-                output_ty: sint::U32
-            }],
-            WasmOperator::I64ExtendI32S => smallvec![Operator::Extend {
-                sign: Signedness::Signed
-            }],
-            WasmOperator::I64ExtendI32U => smallvec![Operator::Extend {
-                sign: Signedness::Unsigned
-            }],
-            WasmOperator::I64TruncF32S => smallvec![Operator::ITruncFromF {
+                output_ty: sint::U32,
+            }),
+            WasmOperator::I64ExtendI32S => one(Operator::Extend {
+                sign: Signedness::Signed,
+            }),
+            WasmOperator::I64ExtendI32U => one(Operator::Extend {
+                sign: Signedness::Unsigned,
+            }),
+            WasmOperator::I64TruncF32S => one(Operator::ITruncFromF {
                 input_ty: Size::_32,
                 output_ty: sint::I64,
-            }],
-            WasmOperator::I64TruncF32U => smallvec![Operator::ITruncFromF {
+            }),
+            WasmOperator::I64TruncF32U => one(Operator::ITruncFromF {
                 input_ty: Size::_32,
                 output_ty: sint::U64,
-            }],
-            WasmOperator::I64TruncF64S => smallvec![Operator::ITruncFromF {
+            }),
+            WasmOperator::I64TruncF64S => one(Operator::ITruncFromF {
                 input_ty: Size::_64,
                 output_ty: sint::I64,
-            }],
-            WasmOperator::I64TruncF64U => smallvec![Operator::ITruncFromF {
+            }),
+            WasmOperator::I64TruncF64U => one(Operator::ITruncFromF {
                 input_ty: Size::_64,
                 output_ty: sint::U64,
-            }],
-            WasmOperator::F32ConvertI32S => smallvec![Operator::FConvertFromI {
+            }),
+            WasmOperator::F32ConvertI32S => one(Operator::FConvertFromI {
                 input_ty: sint::I32,
-                output_ty: Size::_32
-            }],
-            WasmOperator::F32ConvertI32U => smallvec![Operator::FConvertFromI {
+                output_ty: Size::_32,
+            }),
+            WasmOperator::F32ConvertI32U => one(Operator::FConvertFromI {
                 input_ty: sint::U32,
-                output_ty: Size::_32
-            }],
-            WasmOperator::F32ConvertI64S => smallvec![Operator::FConvertFromI {
+                output_ty: Size::_32,
+            }),
+            WasmOperator::F32ConvertI64S => one(Operator::FConvertFromI {
                 input_ty: sint::I64,
-                output_ty: Size::_32
-            }],
-            WasmOperator::F32ConvertI64U => smallvec![Operator::FConvertFromI {
+                output_ty: Size::_32,
+            }),
+            WasmOperator::F32ConvertI64U => one(Operator::FConvertFromI {
                 input_ty: sint::U64,
-                output_ty: Size::_32
-            }],
-            WasmOperator::F64ConvertI32S => smallvec![Operator::FConvertFromI {
+                output_ty: Size::_32,
+            }),
+            WasmOperator::F64ConvertI32S => one(Operator::FConvertFromI {
                 input_ty: sint::I32,
-                output_ty: Size::_64
-            }],
-            WasmOperator::F64ConvertI32U => smallvec![Operator::FConvertFromI {
+                output_ty: Size::_64,
+            }),
+            WasmOperator::F64ConvertI32U => one(Operator::FConvertFromI {
                 input_ty: sint::U32,
-                output_ty: Size::_64
-            }],
-            WasmOperator::F64ConvertI64S => smallvec![Operator::FConvertFromI {
+                output_ty: Size::_64,
+            }),
+            WasmOperator::F64ConvertI64S => one(Operator::FConvertFromI {
                 input_ty: sint::I64,
-                output_ty: Size::_64
-            }],
-            WasmOperator::F64ConvertI64U => smallvec![Operator::FConvertFromI {
+                output_ty: Size::_64,
+            }),
+            WasmOperator::F64ConvertI64U => one(Operator::FConvertFromI {
                 input_ty: sint::U64,
-                output_ty: Size::_64
-            }],
-            WasmOperator::F32DemoteF64 => smallvec![Operator::F32DemoteFromF64],
-            WasmOperator::F64PromoteF32 => smallvec![Operator::F64PromoteFromF32],
-            WasmOperator::I32ReinterpretF32 => smallvec![Operator::I32ReinterpretFromF32],
-            WasmOperator::I64ReinterpretF64 => smallvec![Operator::I64ReinterpretFromF64],
-            WasmOperator::F32ReinterpretI32 => smallvec![Operator::F32ReinterpretFromI32],
-            WasmOperator::F64ReinterpretI64 => smallvec![Operator::F64ReinterpretFromI64],
+                output_ty: Size::_64,
+            }),
+            WasmOperator::F32DemoteF64 => one(Operator::F32DemoteFromF64),
+            WasmOperator::F64PromoteF32 => one(Operator::F64PromoteFromF32),
+            WasmOperator::I32ReinterpretF32 => one(Operator::I32ReinterpretFromF32),
+            WasmOperator::I64ReinterpretF64 => one(Operator::I64ReinterpretFromF64),
+            WasmOperator::F32ReinterpretI32 => one(Operator::F32ReinterpretFromI32),
+            WasmOperator::F64ReinterpretI64 => one(Operator::F64ReinterpretFromI64),
             WasmOperator::I32Extend8S => {
                 return Err(wasm_reader::Error::new(
                     strerr("I32Extend8S unimplemented"),
@@ -2350,15 +2444,15 @@ impl<R: Read, M: ModuleContext> Iterator for MicrowasmConv<'_, R, M>
 where
     for<'any> &'any M::Signature: Into<OpSig>,
 {
-    type Item = wasm_reader::Result<SmallVec<[OperatorFromWasm; 1]>>;
+    type Item = wasm_reader::Result<SmallVec<[OperatorFromWasmWithMeta; 1]>>;
 
-    fn next(&mut self) -> Option<wasm_reader::Result<SmallVec<[OperatorFromWasm; 1]>>> {
+    fn next(&mut self) -> Option<wasm_reader::Result<SmallVec<[OperatorFromWasmWithMeta; 1]>>> {
         if self.is_done {
             return None;
         }
 
-        match self.next() {
-            Ok(Some(val)) => Some(Ok(val)),
+        match self.next_with_meta() {
+            Ok(Some(ops)) => Some(Ok(ops.collect())),
             Ok(None) => None,
             Err(e) => Some(Err(e)),
         }
