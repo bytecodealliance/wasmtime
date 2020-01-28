@@ -2,15 +2,15 @@ use crate::backend::{
     ret_locs, BlockCallingConvention, CodeGenSession, Context, Label, VirtualCallingConvention,
 };
 #[cfg(debug_assertions)]
+use crate::backend::{Registers, ValueLocation};
 use crate::{
-    backend::{Registers, ValueLocation},
     error::Error,
     microwasm::*,
     module::{ModuleContext, SigType, Signature},
 };
 use cranelift_codegen::{binemit, ir};
 use dynasmrt::DynasmApi;
-use either::{Either, Left, Right};
+use itertools::Either::{self, Left, Right};
 #[cfg(debug_assertions)]
 use more_asserts::assert_ge;
 use multi_mut::HashMapMultiMut;
@@ -59,8 +59,8 @@ where
         body,
     )?
     .flat_map(|ops| match ops {
-        Ok(ops) => Either::Left(ops.into_iter().map(Ok)),
-        Err(e) => Either::Right(iter::once(Err(Error::Microwasm(e.to_string())))),
+        Ok(ops) => Left(ops.into_iter().map(Ok)),
+        Err(e) => Right(iter::once(Err(Error::Microwasm(e.to_string())))),
     });
 
     translate(session, reloc_sink, trap_sink, func_idx, microwasm_conv)?;
@@ -76,7 +76,7 @@ pub fn translate<M, I, L: Send + Sync + 'static>(
 ) -> Result<(), Error>
 where
     M: ModuleContext,
-    I: IntoIterator<Item = Result<Operator<L>, Error>>,
+    I: IntoIterator<Item = Result<OperatorWithMeta<L>, Error>>,
     L: Hash + Clone + Eq,
     BrTarget<L>: std::fmt::Display,
 {
@@ -137,10 +137,19 @@ where
             },
         );
 
-        while let Some(op) = body.next() {
-            let op = op?;
+        while let Some(op_and_meta) = body.next() {
+            let WithMeta {
+                data: op,
+                meta: Meta { loc },
+            } = op_and_meta?;
 
-            if let Some(Ok(Operator::Label(label))) = body.peek() {
+            ctx.set_source_loc(loc);
+
+            if let Some(Ok(WithMeta {
+                data: Operator::Label(label),
+                ..
+            })) = body.peek()
+            {
                 let block = match blocks.get_mut(&BrTarget::Label(label.clone())) {
                     None => {
                         return Err(Error::Microwasm(
@@ -226,7 +235,11 @@ where
                             if block.actual_num_callers == 0 {
                                 loop {
                                     let done = match body.peek() {
-                                        Some(Ok(Operator::Label(_))) | None => true,
+                                        Some(Ok(WithMeta {
+                                            data: Operator::Label(_),
+                                            ..
+                                        }))
+                                        | None => true,
                                         Some(_) => false,
                                     };
 
@@ -234,9 +247,10 @@ where
                                         break;
                                     }
 
-                                    let skipped = body.next().ok_or_else(|| {
-                                        Error::Assembler("Unexpected EOF".into())
-                                    })??;
+                                    let WithMeta { data: skipped, .. } =
+                                        body.next().ok_or_else(|| {
+                                            Error::Assembler("Unexpected EOF".into())
+                                        })??;
 
                                     // We still want to honour block definitions even in unreachable code
                                     if let Operator::Block {
