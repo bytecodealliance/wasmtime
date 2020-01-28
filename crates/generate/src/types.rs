@@ -89,24 +89,30 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
             fn size() -> u32 {
                 ::std::mem::size_of::<#repr>() as u32
             }
-            fn name() -> &'static str {
-                stringify!(#ident)
+            fn align() -> u32 {
+                ::std::mem::align_of::<#repr>() as u32
+            }
+            fn name() -> String {
+                stringify!(#ident).to_owned()
+            }
+            fn validate<'a>(location: &::memory::GuestPtr<'a, #ident>) -> Result<(), ::memory::GuestError> {
+                use ::std::convert::TryFrom;
+                let raw: #repr = unsafe { (location.as_raw() as *const #repr).read() };
+                let _ = #ident::try_from(raw)?;
+                Ok(())
             }
         }
 
-        impl ::memory::GuestTypeCopy for #ident {
-            fn read_val<'a, P: ::memory::GuestPtrRead<'a, #ident>>(src: &P) -> Result<#ident, ::memory::GuestError> {
-                use ::std::convert::TryInto;
-                let val = unsafe { ::std::ptr::read_unaligned(src.ptr() as *const #repr) };
-                val.try_into()
-            }
-            fn write_val(val: #ident, dest: &::memory::GuestPtrMut<#ident>) {
-                let val: #repr = val.into();
-                unsafe {
-                    ::std::ptr::write_unaligned(dest.ptr_mut() as *mut #repr, val)
-                };
+        impl ::memory::GuestTypeCopy for #ident {}
+        impl ::memory::GuestTypeClone for #ident {
+            fn from_guest(location: &::memory::GuestPtr<#ident>) -> Result<#ident, ::memory::GuestError> {
+                use ::std::convert::TryFrom;
+                let raw: #repr = unsafe { (location.as_raw() as *const #repr).read() };
+                let val = #ident::try_from(raw)?;
+                Ok(val)
             }
         }
+
     }
 }
 

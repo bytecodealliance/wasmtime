@@ -74,7 +74,8 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
     let marshal_args = func
         .params
         .iter()
-        .map(|p| marshal_arg(names, p, error_handling.clone()));
+        //.map(|p| marshal_arg(names, p, error_handling.clone()));
+        .map(|_p| quote!(unimplemented!(); )); // FIXME
     let trait_args = func
         .params
         .iter()
@@ -98,7 +99,8 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
         .results
         .iter()
         .skip(1)
-        .map(|result| marshal_result(names, result, error_handling.clone()));
+        //.map(|result| marshal_result(names, result, error_handling.clone()));
+        .map(|_result| (quote!(unimplemented!();), quote!(unimplemented!();))); // FIXME
     let marshal_rets_pre = marshal_rets.clone().map(|(pre, _post)| pre);
     let marshal_rets_post = marshal_rets.map(|(_pre, post)| post);
 

@@ -1,56 +1,39 @@
-use crate::{GuestError, GuestPtrMut, GuestPtrRead};
+use crate::{GuestError, GuestPtr};
 
 pub trait GuestType: Sized {
+    // These are morally the same as Rust ::std::mem::size_of / align_of, but they return
+    // a u32 because the wasm memory space is 32 bits. They have a different names so they
+    // don't collide with the std::mem methods.
     fn size() -> u32;
-    fn name() -> &'static str;
+    fn align() -> u32;
+    fn name() -> String;
+    fn validate<'a>(location: &GuestPtr<'a, Self>) -> Result<(), GuestError>;
 }
 
-pub trait GuestTypeCopy: GuestType + Copy {
-    fn read_val<'a, P: GuestPtrRead<'a, Self>>(src: &P) -> Result<Self, GuestError>;
-    fn write_val(val: Self, dest: &GuestPtrMut<Self>);
-}
-
+pub trait GuestTypeCopy: GuestType + Copy {}
 pub trait GuestTypeClone: GuestType + Clone {
-    fn read_ref<'a, P: GuestPtrRead<'a, Self>>(src: &P, dest: &mut Self) -> Result<(), GuestError>;
-    fn write_ref(val: &Self, dest: &GuestPtrMut<Self>);
+    fn from_guest<'a>(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError>;
+}
+pub trait GuestTypeRef<'a>: GuestType {
+    type Ref;
+    fn from_guest(location: &GuestPtr<'a, Self>) -> Result<Self::Ref, GuestError>;
 }
 
-impl<T> GuestTypeClone for T
-where
-    T: GuestTypeCopy,
-{
-    fn read_ref<'a, P: GuestPtrRead<'a, Self>>(src: &P, dest: &mut T) -> Result<(), GuestError> {
-        let val = GuestTypeCopy::read_val(src)?;
-        *dest = val;
-        Ok(())
-    }
-    fn write_ref(val: &T, dest: &GuestPtrMut<T>) {
-        GuestTypeCopy::write_val(*val, dest)
-    }
-}
-
-macro_rules! builtin_copy {
+macro_rules! builtin_type {
     ( $( $t:ident ), * ) => {
         $(
         impl GuestType for $t {
             fn size() -> u32 {
                 ::std::mem::size_of::<$t>() as u32
             }
-            fn name() -> &'static str {
-                ::std::stringify!($t)
+            fn align() -> u32 {
+                ::std::mem::align_of::<$t>() as u32
             }
-        }
-
-        impl GuestTypeCopy for $t {
-            fn read_val<'a, P: GuestPtrRead<'a, $t>>(src: &P) -> Result<$t, GuestError> {
-                Ok(unsafe {
-                    ::std::ptr::read_unaligned(src.ptr() as *const $t)
-                })
+            fn name() -> String {
+                ::std::stringify!($t).to_owned()
             }
-            fn write_val(val: $t, dest: &GuestPtrMut<$t>) {
-                unsafe {
-                    ::std::ptr::write_unaligned(dest.ptr_mut() as *mut $t, val)
-                }
+            fn validate(_ptr: &GuestPtr<$t>) -> Result<(), GuestError> {
+                Ok(())
             }
         }
         )*
@@ -58,7 +41,10 @@ macro_rules! builtin_copy {
 }
 
 // These definitions correspond to all the witx BuiltinType variants that are Copy:
-builtin_copy!(u8, i8, u16, i16, u32, i32, u64, i64, f32, f64, usize, char);
+builtin_type!(u8, i8, u16, i16, u32, i32, u64, i64, f32, f64, usize);
+
+// FIXME implement GuestType for char. needs to validate that its a code point. what is the sizeof a char?
+// FIXME implement GuestType for String. how does validate work for array types?
 
 pub trait GuestErrorType {
     type Context;

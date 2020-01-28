@@ -18,43 +18,40 @@ pub mod test {
             a_lamer_excuse_by_reference: ::memory::GuestPtr<types::Excuse>,
             two_layers_of_excuses: ::memory::GuestPtrMut<::memory::GuestPtr<types::Excuse>>,
         ) -> Result<(), types::Errno> {
-            use memory::GuestTypeCopy;
-
             // Read enum value from mutable:
-            let a_better_excuse =
-                types::Excuse::read_val(&a_better_excuse_by_reference).map_err(|e| {
+            let mut a_better_excuse_ref: ::memory::GuestRefMut<types::Excuse> =
+                a_better_excuse_by_reference.as_ref_mut().map_err(|e| {
                     eprintln!("a_better_excuse_by_reference error: {}", e);
                     types::Errno::InvalidArg
                 })?;
+            let a_better_excuse: types::Excuse = *a_better_excuse_ref;
 
             // Read enum value from immutable ptr:
-            let a_lamer_excuse =
-                types::Excuse::read_val(&a_lamer_excuse_by_reference).map_err(|e| {
-                    eprintln!("a_lamer_excuse_by_reference error: {}", e);
-                    types::Errno::InvalidArg
-                })?;
+            let a_lamer_excuse = *a_lamer_excuse_by_reference.as_ref().map_err(|e| {
+                eprintln!("a_lamer_excuse_by_reference error: {}", e);
+                types::Errno::InvalidArg
+            })?;
 
             // Write enum to mutable ptr:
-            types::Excuse::write_val(a_lamer_excuse, &a_better_excuse_by_reference);
+            *a_better_excuse_ref = a_lamer_excuse;
 
             // Read ptr value from mutable ptr:
-            let one_layer_down =
-                ::memory::GuestPtr::read_ptr(&two_layers_of_excuses).map_err(|e| {
+            let mut one_layer_down: ::memory::GuestRefMut<::memory::GuestPtr<types::Excuse>> =
+                two_layers_of_excuses.as_ref_mut().map_err(|e| {
                     eprintln!("one_layer_down error: {}", e);
                     types::Errno::InvalidArg
                 })?;
 
             // Read enum value from that ptr:
-            let two_layers_down = types::Excuse::read_val(&one_layer_down).map_err(|e| {
-                eprintln!("two_layers_down error: {}", e);
-                types::Errno::InvalidArg
-            })?;
+            let two_layers_down: ::memory::GuestRef<types::Excuse> =
+                one_layer_down.from_guest().map_err(|e| {
+                    eprintln!("two_layers_down error: {}", e);
+                    types::Errno::InvalidArg
+                })?;
 
             // Write ptr value to mutable ptr:
-            ::memory::GuestPtr::write_ptr(
-                &a_better_excuse_by_reference.as_immut(),
-                &two_layers_of_excuses,
-            );
+            // FIXME this is still impossible...
+            // two_layers_of_excuses.write_guest(&a_better_excuse_by_reference)
 
             println!(
                 "BAZ: excuse: {:?}, better excuse: {:?}, lamer excuse: {:?}, two layers down: {:?}",
