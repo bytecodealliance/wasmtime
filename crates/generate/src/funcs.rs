@@ -74,8 +74,7 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
     let marshal_args = func
         .params
         .iter()
-        //.map(|p| marshal_arg(names, p, error_handling.clone()));
-        .map(|_p| quote!(unimplemented!(); )); // FIXME
+        .map(|p| marshal_arg(names, p, error_handling.clone()));
     let trait_args = func
         .params
         .iter()
@@ -99,8 +98,7 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
         .results
         .iter()
         .skip(1)
-        //.map(|result| marshal_result(names, result, error_handling.clone()));
-        .map(|_result| (quote!(unimplemented!();), quote!(unimplemented!();))); // FIXME
+        .map(|result| marshal_result(names, result, error_handling.clone()));
     let marshal_rets_pre = marshal_rets.clone().map(|(pre, _post)| pre);
     let marshal_rets_post = marshal_rets.map(|(_pre, post)| post);
 
@@ -218,8 +216,13 @@ fn marshal_result(
         // core type is given func_ptr_binding name.
         let ptr_name = names.func_ptr_binding(&result.name);
         let pre = quote! {
-            let #ptr_name = match memory.ptr_mut::<#pointee_type>(#ptr_name as u32) {
-                Ok(p) => p,
+            let mut #ptr_name = match memory.ptr_mut::<#pointee_type>(#ptr_name as u32) {
+                Ok(p) => match p.as_ref_mut() {
+                    Ok(r) => r,
+                    Err(e) => {
+                        #error_handling
+                    }
+                },
                 Err(e) => {
                     #error_handling
                 }
@@ -228,8 +231,7 @@ fn marshal_result(
         // trait binding returns func_param name.
         let val_name = names.func_param(&result.name);
         let post = quote! {
-            use ::memory::GuestTypeCopy;
-            #pointee_type::write_val(#val_name, &#ptr_name);
+            *#ptr_name = #val_name;
         };
         (pre, post)
     };

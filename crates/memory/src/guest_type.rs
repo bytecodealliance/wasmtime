@@ -37,6 +37,7 @@ macro_rules! builtin_type {
                 Ok(())
             }
         }
+        impl GuestTypeCopy for $t {}
         )*
     };
 }

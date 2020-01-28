@@ -34,7 +34,7 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
             mod #modname {
                 use super::WasiCtx;
                 use super::types::*;
-        //        #(#fs)*
+                #(#fs)*
 
                 #modtrait
             }
