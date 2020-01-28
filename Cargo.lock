@@ -290,6 +290,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 
 [[package]]
+name = "chain-one"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac254f2f2848982f05abc71a2b84b5ca4871d847ca3e15dd714da06043cbd935"
+
+[[package]]
 name = "clap"
 version = "2.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1171,6 +1177,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "iter-enum"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58107b833f974ca7bc9f98e032881967613dc214b6ab7ececb45b1ab9f0e7008"
+dependencies = [
+ "derive_utils",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "itertools"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1227,12 +1244,15 @@ name = "lightbeam"
 version = "0.14.0"
 dependencies = [
  "anyhow",
+ "auto_enums",
  "capstone",
+ "chain-one",
  "cranelift-codegen",
+ "derive_more",
  "dynasm",
  "dynasmrt",
- "either",
  "hashers",
+ "iter-enum",
  "itertools",
  "lazy_static",
  "memoffset",
@@ -1240,6 +1260,7 @@ dependencies = [
  "multi_mut",
  "quickcheck",
  "smallvec",
+ "staticvec",
  "thiserror",
  "typemap",
  "wasm-reader",
@@ -2036,6 +2057,12 @@ name = "stable_deref_trait"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dba1a27d3efae4351c8051072d619e3ade2820635c3958d826bfea39d59b54c8"
+
+[[package]]
+name = "staticvec"
+version = "0.8.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad858b0675d898276da104afc602fd7f42790123d3150646dac32338a92132af"
 
 [[package]]
 name = "string-interner"

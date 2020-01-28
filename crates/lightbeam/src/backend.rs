@@ -6,7 +6,7 @@ use crate::microwasm::{BrTarget, Ieee32, Ieee64, SignlessType, Type, Value, F32,
 use crate::module::ModuleContext;
 use cranelift_codegen::{
     binemit,
-    ir::{self, TrapCode},
+    ir::{self, TrapCode, SourceLoc},
 };
 use dynasm::dynasm;
 use dynasmrt::x64::Assembler;
@@ -565,6 +565,7 @@ impl<'module, M> CodeGenSession<'module, M> {
             current_function: func_idx,
             reloc_sink,
             trap_sink,
+            source_loc: Default::default(),
             func_starts: &self.func_starts,
             block_state: Default::default(),
             module_context: self.module_context,
@@ -737,6 +738,7 @@ use labels::{LabelInfo, Labels};
 
 pub struct Context<'this, M> {
     pub asm: &'this mut Assembler,
+    source_loc: SourceLoc,
     reloc_sink: &'this mut dyn binemit::RelocSink,
     trap_sink: &'this mut dyn binemit::TrapSink,
     module_context: &'this M,
@@ -2269,6 +2271,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 break None;
             }
         }
+    }
+
+    pub fn set_source_loc(&mut self, loc: SourceLoc) {
+        self.source_loc = loc;
     }
 
     pub fn virtual_calling_convention(&self) -> VirtualCallingConvention {
@@ -5958,7 +5964,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.trap_sink.trap(
             u32::try_from(self.asm.offset().0).expect("Assembly offset overflowed u32")
                 - function_start,
-            Default::default(),
+            self.source_loc,
             trap_id,
         );
         dynasm!(self.asm
