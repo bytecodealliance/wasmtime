@@ -1,4 +1,4 @@
-use crate::{GuestError, GuestPtr};
+use crate::{GuestError, GuestPtr, GuestPtrMut};
 
 pub trait GuestType: Sized {
     // These are morally the same as Rust ::std::mem::size_of / align_of, but they return
@@ -12,11 +12,12 @@ pub trait GuestType: Sized {
 
 pub trait GuestTypeCopy: GuestType + Copy {}
 pub trait GuestTypeClone: GuestType + Clone {
-    fn from_guest<'a>(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError>;
+    fn read_from_guest<'a>(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError>;
+    fn write_to_guest<'a>(&self, location: &GuestPtrMut<'a, Self>);
 }
-pub trait GuestTypeRef<'a>: GuestType {
-    type Ref;
-    fn from_guest(location: &GuestPtr<'a, Self>) -> Result<Self::Ref, GuestError>;
+pub trait GuestTypePtr<'a>: GuestType {
+    fn read_from_guest(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError>;
+    fn write_to_guest(&self, location: &GuestPtrMut<'a, Self>);
 }
 
 macro_rules! builtin_type {

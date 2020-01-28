@@ -105,11 +105,15 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
 
         impl ::memory::GuestTypeCopy for #ident {}
         impl ::memory::GuestTypeClone for #ident {
-            fn from_guest(location: &::memory::GuestPtr<#ident>) -> Result<#ident, ::memory::GuestError> {
+            fn read_from_guest(location: &::memory::GuestPtr<#ident>) -> Result<#ident, ::memory::GuestError> {
                 use ::std::convert::TryFrom;
                 let raw: #repr = unsafe { (location.as_raw() as *const #repr).read() };
                 let val = #ident::try_from(raw)?;
                 Ok(val)
+            }
+            fn write_to_guest(&self, location: &::memory::GuestPtrMut<#ident>) {
+                let val: #repr = #repr::from(*self);
+                unsafe { (location.as_raw() as *mut #repr).write(val) };
             }
         }
 

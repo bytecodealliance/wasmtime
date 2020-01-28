@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::borrow::{BorrowHandle, GuestBorrows};
-use crate::{GuestError, GuestType, GuestTypeCopy, GuestTypeRef, Region};
+use crate::{GuestError, GuestType, GuestTypeClone, GuestTypeCopy, GuestTypePtr, Region};
 
 pub struct GuestMemory<'a> {
     ptr: *mut u8,
@@ -67,6 +67,9 @@ impl<'a, T: GuestType> GuestPtr<'a, T> {
     pub fn as_raw(&self) -> *const u8 {
         (self.mem.ptr as usize + self.region.start as usize) as *const u8
     }
+}
+
+impl<'a, T: GuestTypeCopy> GuestPtr<'a, T> {
     pub fn as_ref(&self) -> Result<GuestRef<'a, T>, GuestError> {
         T::validate(&self)?;
         let handle = {
@@ -81,6 +84,18 @@ impl<'a, T: GuestType> GuestPtr<'a, T> {
             handle,
             type_: self.type_,
         })
+    }
+}
+
+impl<'a, T: GuestTypeClone> GuestPtr<'a, T> {
+    pub fn clone_from_guest(&self) -> Result<T, GuestError> {
+        T::read_from_guest(self)
+    }
+}
+
+impl<'a, T: GuestTypePtr<'a>> GuestPtr<'a, T> {
+    pub fn read_ptr_from_guest(&self) -> Result<T, GuestError> {
+        T::read_from_guest(self)
     }
 }
 
@@ -106,17 +121,24 @@ where
     }
 }
 
-impl<'a, T> GuestTypeRef<'a> for GuestPtr<'a, T>
+// Operations for reading and writing Ptrs to memory:
+impl<'a, T> GuestTypePtr<'a> for GuestPtr<'a, T>
 where
     T: GuestType,
 {
-    type Ref = GuestRef<'a, T>;
-    fn from_guest(location: &GuestPtr<'a, Self>) -> Result<Self::Ref, GuestError> {
+    fn read_from_guest(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
         // location is guaranteed to be in GuestMemory and aligned to 4
         let raw_ptr: u32 = unsafe { *(location.as_raw() as *const u32) };
         // GuestMemory can validate that the raw pointer contents are legal for T:
         let guest_ptr: GuestPtr<'a, T> = location.mem.ptr(raw_ptr)?;
-        Ok(guest_ptr.as_ref()?)
+        Ok(guest_ptr)
+    }
+    fn write_to_guest(&self, location: &GuestPtrMut<'a, Self>) {
+        // location is guaranteed to be in GuestMemory and aligned to 4
+        unsafe {
+            let raw_ptr: *mut u32 = location.as_raw() as *mut u32;
+            raw_ptr.write(self.region.start);
+        }
     }
 }
 
@@ -139,7 +161,9 @@ impl<'a, T: GuestType> GuestPtrMut<'a, T> {
     pub fn as_raw(&self) -> *const u8 {
         self.as_immut().as_raw()
     }
+}
 
+impl<'a, T: GuestTypeCopy> GuestPtrMut<'a, T> {
     pub fn as_ref(&self) -> Result<GuestRef<'a, T>, GuestError> {
         self.as_immut().as_ref()
     }
@@ -158,6 +182,25 @@ impl<'a, T: GuestType> GuestPtrMut<'a, T> {
             handle,
             type_: self.type_,
         })
+    }
+}
+
+impl<'a, T: GuestTypePtr<'a>> GuestPtrMut<'a, T> {
+    pub fn read_ptr_from_guest(&self) -> Result<T, GuestError> {
+        T::read_from_guest(&self.as_immut())
+    }
+    pub fn write_ptr_to_guest(&self, ptr: &T) {
+        T::write_to_guest(ptr, &self);
+    }
+}
+
+impl<'a, T: GuestTypeClone> GuestPtrMut<'a, T> {
+    pub fn clone_from_guest(&self) -> Result<T, GuestError> {
+        T::read_from_guest(&self.as_immut())
+    }
+
+    pub fn clone_to_guest(&self, val: &T) {
+        T::write_to_guest(val, &self)
     }
 }
 
@@ -183,17 +226,24 @@ where
     }
 }
 
-impl<'a, T> GuestTypeRef<'a> for GuestPtrMut<'a, T>
+// Reading and writing GuestPtrMuts to memory:
+impl<'a, T> GuestTypePtr<'a> for GuestPtrMut<'a, T>
 where
     T: GuestType,
 {
-    type Ref = GuestRefMut<'a, T>;
-    fn from_guest(location: &GuestPtr<'a, Self>) -> Result<Self::Ref, GuestError> {
+    fn read_from_guest(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
         // location is guaranteed to be in GuestMemory and aligned to 4
         let raw_ptr: u32 = unsafe { *(location.as_raw() as *const u32) };
         // GuestMemory can validate that the raw pointer contents are legal for T:
         let guest_ptr_mut: GuestPtrMut<'a, T> = location.mem.ptr_mut(raw_ptr)?;
-        Ok(guest_ptr_mut.as_ref_mut()?)
+        Ok(guest_ptr_mut)
+    }
+    fn write_to_guest(&self, location: &GuestPtrMut<'a, Self>) {
+        // location is guaranteed to be in GuestMemory and aligned to 4
+        unsafe {
+            let raw_ptr: *mut u32 = location.as_raw() as *mut u32;
+            raw_ptr.write(self.region.start);
+        }
     }
 }
 
@@ -202,6 +252,16 @@ pub struct GuestRef<'a, T> {
     region: Region,
     handle: BorrowHandle,
     type_: PhantomData<T>,
+}
+
+impl<'a, T> GuestRef<'a, T> {
+    pub fn as_ptr(&self) -> GuestPtr<'a, T> {
+        GuestPtr {
+            mem: self.mem,
+            region: self.region,
+            type_: self.type_,
+        }
+    }
 }
 
 impl<'a, T> ::std::ops::Deref for GuestRef<'a, T>
@@ -218,20 +278,6 @@ where
     }
 }
 
-impl<'a, T> GuestRef<'a, T>
-where
-    T: GuestTypeRef<'a>,
-{
-    pub fn from_guest(&self) -> Result<T::Ref, GuestError> {
-        let ptr = GuestPtr {
-            mem: self.mem,
-            region: self.region,
-            type_: self.type_,
-        };
-        GuestTypeRef::from_guest(&ptr)
-    }
-}
-
 impl<'a, T> Drop for GuestRef<'a, T> {
     fn drop(&mut self) {
         let mut borrows = self.mem.borrows.borrow_mut();
@@ -244,6 +290,23 @@ pub struct GuestRefMut<'a, T> {
     region: Region,
     handle: BorrowHandle,
     type_: PhantomData<T>,
+}
+
+impl<'a, T> GuestRefMut<'a, T> {
+    pub fn as_ptr(&self) -> GuestPtr<'a, T> {
+        GuestPtr {
+            mem: self.mem,
+            region: self.region,
+            type_: self.type_,
+        }
+    }
+    pub fn as_ptr_mut(&self) -> GuestPtrMut<'a, T> {
+        GuestPtrMut {
+            mem: self.mem,
+            region: self.region,
+            type_: self.type_,
+        }
+    }
 }
 
 impl<'a, T> ::std::ops::Deref for GuestRefMut<'a, T>
@@ -270,20 +333,6 @@ where
                 .as_mut()
                 .expect("GuestRef implies non-null")
         }
-    }
-}
-
-impl<'a, T> GuestRefMut<'a, T>
-where
-    T: GuestTypeRef<'a>,
-{
-    pub fn from_guest(&self) -> Result<T::Ref, GuestError> {
-        let ptr = GuestPtr {
-            mem: self.mem,
-            region: self.region,
-            type_: self.type_,
-        };
-        GuestTypeRef::from_guest(&ptr)
     }
 }
 
