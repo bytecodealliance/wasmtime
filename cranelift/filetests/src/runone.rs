@@ -8,7 +8,7 @@ use cranelift_codegen::print_errors::pretty_verifier_error;
 use cranelift_codegen::settings::Flags;
 use cranelift_codegen::timing;
 use cranelift_codegen::verify_function;
-use cranelift_reader::{parse_test, Feature, IsaSpec, ParseOptions};
+use cranelift_reader::{parse_test, IsaSpec, ParseOptions};
 use log::info;
 use std::borrow::Cow;
 use std::fs;
