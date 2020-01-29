@@ -164,7 +164,22 @@ fn define_copy_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) 
     let member_valids = s.member_layout().into_iter().map(|ml| {
         let type_ = names.type_ref(&ml.member.tref);
         let offset = ml.offset as u32;
-        quote!( #type_::validate(&ptr.cast(#offset)?)?; )
+        let fieldname = names.struct_member(&ml.member.name);
+        quote! {
+            #type_::validate(
+                &ptr.cast(#offset).map_err(|e|
+                    ::memory::GuestError::InField{
+                        typename: stringify!(#ident).to_owned(),
+                        field: stringify!(#fieldname).to_owned(),
+                        err: Box::new(e),
+                    })?
+                ).map_err(|e|
+                    ::memory::GuestError::InField {
+                        typename: stringify!(#ident).to_owned(),
+                        field: stringify!(#fieldname).to_owned(),
+                        err: Box::new(e),
+                    })?;
+        }
     });
 
     quote! {
@@ -235,7 +250,22 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
             },
         };
         let offset = ml.offset as u32;
-        quote!( #type_::validate(&ptr.cast(#offset)?)?; )
+        let fieldname = names.struct_member(&ml.member.name);
+        quote! {
+            #type_::validate(
+                &ptr.cast(#offset).map_err(|e|
+                    ::memory::GuestError::InField{
+                        typename: stringify!(#ident).to_owned(),
+                        field: stringify!(#fieldname).to_owned(),
+                        err: Box::new(e),
+                    })?
+                ).map_err(|e|
+                    ::memory::GuestError::InField {
+                        typename: stringify!(#ident).to_owned(),
+                        field: stringify!(#fieldname).to_owned(),
+                        err: Box::new(e),
+                    })?;
+        }
     });
 
     let member_reads = s.member_layout().into_iter().map(|ml| {
