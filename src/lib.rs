@@ -67,6 +67,15 @@ pub mod test {
             println!("sum of pair: {:?}", an_pair);
             Ok(an_pair.first as i64 + an_pair.second as i64)
         }
+        fn sum_of_pair_of_ptrs(
+            &mut self,
+            an_pair: &types::PairIntPtrs,
+        ) -> Result<i64, types::Errno> {
+            let first = *an_pair.first.as_ref().unwrap();
+            let second = *an_pair.second.as_ref().unwrap();
+            println!("sum of pair of ptrs: {} + {}", first, second);
+            Ok(first as i64 + second as i64)
+        }
     }
     // Errno is used as a first return value in the functions above, therefore
     // it must implement GuestErrorType with type Context = WasiCtx.

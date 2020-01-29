@@ -170,6 +170,14 @@ impl<'a, T: GuestType> GuestPtrMut<'a, T> {
     pub fn as_raw(&self) -> *const u8 {
         self.as_immut().as_raw()
     }
+    pub fn elem(&self, elements: i32) -> Result<GuestPtrMut<'a, T>, GuestError> {
+        self.mem
+            .ptr_mut(self.region.start + (elements * self.region.len as i32) as u32)
+    }
+
+    pub fn cast<TT: GuestType>(&self, offset: u32) -> Result<GuestPtrMut<'a, TT>, GuestError> {
+        self.mem.ptr_mut(self.region.start + offset)
+    }
 }
 
 impl<'a, T: GuestTypeCopy> GuestPtrMut<'a, T> {
