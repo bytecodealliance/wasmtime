@@ -34,7 +34,6 @@
     (param $an_int u32)
     (result $error $errno)
     (result $doubled_it f32))
-
   (@interface func (export "sum_of_pair")
     (param $an_pair $pair_ints)
     (result $error $errno)

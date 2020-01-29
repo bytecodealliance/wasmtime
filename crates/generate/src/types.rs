@@ -153,13 +153,19 @@ pub fn struct_is_copy(s: &witx::StructDatatype) -> bool {
 
 fn define_copy_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -> TokenStream {
     let ident = names.type_(name);
+    let size = s.mem_size_align().size as u32;
+    let align = s.mem_size_align().align as u32;
+
     let member_decls = s.members.iter().map(|m| {
         let name = names.struct_member(&m.name);
         let type_ = names.type_ref(&m.tref);
         quote!(pub #name: #type_)
     });
-    let size = s.mem_size_align().size as u32;
-    let align = s.mem_size_align().align as u32;
+    let member_valids = s.member_layout().into_iter().map(|ml| {
+        let type_ = names.type_ref(&ml.member.tref);
+        let offset = ml.offset as u32;
+        quote!( #type_::validate(&ptr.cast(#offset)?)?; )
+    });
 
     quote! {
         #[repr(C)]
@@ -178,8 +184,9 @@ fn define_copy_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) 
             fn name() -> String {
                 stringify!(#ident).to_owned()
             }
-            fn validate(_ptr: &::memory::GuestPtr<#ident>) -> Result<(), ::memory::GuestError> {
-                Ok(()) // FIXME
+            fn validate(ptr: &::memory::GuestPtr<#ident>) -> Result<(), ::memory::GuestError> {
+                #(#member_valids)*
+                Ok(())
             }
         }
         impl ::memory::GuestTypeCopy for #ident {}

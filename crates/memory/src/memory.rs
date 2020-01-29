@@ -67,6 +67,15 @@ impl<'a, T: GuestType> GuestPtr<'a, T> {
     pub fn as_raw(&self) -> *const u8 {
         (self.mem.ptr as usize + self.region.start as usize) as *const u8
     }
+
+    pub fn elem(&self, elements: i32) -> Result<GuestPtr<'a, T>, GuestError> {
+        self.mem
+            .ptr(self.region.start + (elements * self.region.len as i32) as u32)
+    }
+
+    pub fn cast<TT: GuestType>(&self, offset: u32) -> Result<GuestPtr<'a, TT>, GuestError> {
+        self.mem.ptr(self.region.start + offset)
+    }
 }
 
 impl<'a, T: GuestTypeCopy> GuestPtr<'a, T> {
