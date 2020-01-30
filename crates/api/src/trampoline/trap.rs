@@ -1,31 +1,6 @@
-use std::cell::Cell;
-
-use crate::Trap;
 use wasmtime_environ::ir::{SourceLoc, TrapCode};
 use wasmtime_environ::TrapInformation;
 use wasmtime_jit::trampoline::binemit;
-
-// Randomly selected user TrapCode magic number 13.
-pub const API_TRAP_CODE: TrapCode = TrapCode::User(13);
-
-thread_local! {
-    static RECORDED_API_TRAP: Cell<Option<Trap>> = Cell::new(None);
-}
-
-pub fn record_api_trap(trap: Trap) {
-    RECORDED_API_TRAP.with(|data| {
-        let trap = Cell::new(Some(trap));
-        data.swap(&trap);
-        assert!(
-            trap.take().is_none(),
-            "Only one API trap per thread can be recorded at a moment!"
-        );
-    });
-}
-
-pub fn take_api_trap() -> Option<Trap> {
-    RECORDED_API_TRAP.with(|data| data.take())
-}
 
 pub(crate) struct TrapSink {
     pub traps: Vec<TrapInformation>,

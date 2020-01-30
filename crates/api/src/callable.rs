@@ -1,5 +1,5 @@
 use crate::runtime::Store;
-use crate::trampoline::{generate_func_export, take_api_trap};
+use crate::trampoline::generate_func_export;
 use crate::trap::Trap;
 use crate::types::FuncType;
 use crate::values::Val;
@@ -157,8 +157,7 @@ impl WrappedCallable for WasmtimeFn {
                 )
             })
         } {
-            let trap = take_api_trap().unwrap_or_else(|| Trap::from_jit(error));
-            return Err(trap);
+            return Err(Trap::from_jit(error));
         }
 
         // Load the return values out of `values_vec`.

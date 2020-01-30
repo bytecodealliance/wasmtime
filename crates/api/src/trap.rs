@@ -33,7 +33,24 @@ impl Trap {
     }
 
     pub(crate) fn from_jit(jit: wasmtime_runtime::Trap) -> Self {
-        Trap::new_with_trace(jit.to_string(), jit.backtrace)
+        match jit {
+            wasmtime_runtime::Trap::User(error) => {
+                // Since we're the only one using the wasmtime internals (in
+                // theory) we should only see user errors which were originally
+                // created from our own `Trap` type (see the trampoline module
+                // with functions).
+                //
+                // If this unwrap trips for someone we'll need to tweak the
+                // return type of this function to probably be `anyhow::Error`
+                // or something like that.
+                *error
+                    .downcast()
+                    .expect("only `Trap` user errors are supported")
+            }
+            wasmtime_runtime::Trap::Wasm { desc, backtrace } => {
+                Trap::new_with_trace(desc.to_string(), backtrace)
+            }
+        }
     }
 
     fn new_with_trace(message: String, native_trace: Backtrace) -> Self {

@@ -5,7 +5,9 @@ use crate::trap_registry::get_trap_registry;
 use crate::trap_registry::TrapDescription;
 use crate::vmcontext::{VMContext, VMFunctionBody};
 use backtrace::Backtrace;
+use std::any::Any;
 use std::cell::Cell;
+use std::error::Error;
 use std::fmt;
 use std::ptr;
 use wasmtime_environ::ir;
@@ -24,6 +26,7 @@ extern "C" {
         caller_vmctx: *mut u8,
         callee: *const VMFunctionBody,
     ) -> i32;
+    fn Unwind(jmp_buf: *const u8) -> !;
 }
 
 /// Record the Trap code and wasm bytecode offset in TLS somewhere
@@ -44,7 +47,7 @@ pub extern "C" fn RecordTrap(pc: *const u8, reset_guard_page: bool) -> *const u8
         }
 
         let registry = get_trap_registry();
-        let trap = Trap {
+        let trap = Trap::Wasm {
             desc: registry
                 .get_trap(pc as usize)
                 .unwrap_or_else(|| TrapDescription {
@@ -58,14 +61,36 @@ pub extern "C" fn RecordTrap(pc: *const u8, reset_guard_page: bool) -> *const u8
             info.reset_guard_page.set(true);
         }
 
-        let prev = info.trap.replace(Some(trap));
-        assert!(
-            prev.is_none(),
-            "Only one trap per thread can be recorded at a moment!"
-        );
-
+        info.unwind.replace(UnwindReason::Trap(trap));
         info.jmp_buf.get()
     })
+}
+
+/// Raises a user-defined trap immediately.
+///
+/// This function performs as-if a wasm trap was just executed, only the trap
+/// has a dynamic payload associated with it which is user-provided. This trap
+/// payload is then returned from `wasmtime_call` an `wasmtime_call_trampoline`
+/// below.
+///
+/// # Safety
+///
+/// Only safe to call when wasm code is on the stack, aka `wasmtime_call` or
+/// `wasmtime_call_trampoline` must have been previously called.
+pub unsafe fn raise_user_trap(data: Box<dyn Error + Send + Sync>) -> ! {
+    let trap = Trap::User(data);
+    tls::with(|info| info.unwind_with(UnwindReason::Trap(trap)))
+}
+
+/// Carries a Rust panic across wasm code and resumes the panic on the other
+/// side.
+///
+/// # Safety
+///
+/// Only safe to call when wasm code is on the stack, aka `wasmtime_call` or
+/// `wasmtime_call_trampoline` must have been previously called.
+pub unsafe fn resume_panic(payload: Box<dyn Any + Send>) -> ! {
+    tls::with(|info| info.unwind_with(UnwindReason::Panic(payload)))
 }
 
 #[cfg(target_os = "windows")]
@@ -86,44 +111,29 @@ fn reset_guard_page() {}
 
 /// Stores trace message with backtrace.
 #[derive(Debug)]
-pub struct Trap {
-    /// What sort of trap happened, as well as where in the original wasm module
-    /// it happened.
-    pub desc: TrapDescription,
-    /// Native stack backtrace at the time the trap occurred
-    pub backtrace: Backtrace,
+pub enum Trap {
+    /// A user-raised trap through `raise_user_trap`.
+    User(Box<dyn Error + Send + Sync>),
+    /// A wasm-originating trap from wasm code itself.
+    Wasm {
+        /// What sort of trap happened, as well as where in the original wasm module
+        /// it happened.
+        desc: TrapDescription,
+        /// Native stack backtrace at the time the trap occurred
+        backtrace: Backtrace,
+    },
 }
 
 impl fmt::Display for Trap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "wasm trap: {}, source location: {}",
-            trap_code_to_expected_string(self.desc.trap_code),
-            self.desc.source_loc
-        )
+        match self {
+            Trap::User(user) => user.fmt(f),
+            Trap::Wasm { desc, .. } => desc.fmt(f),
+        }
     }
 }
 
 impl std::error::Error for Trap {}
-
-fn trap_code_to_expected_string(trap_code: ir::TrapCode) -> String {
-    use ir::TrapCode::*;
-    match trap_code {
-        StackOverflow => "call stack exhausted".to_string(),
-        HeapOutOfBounds => "out of bounds memory access".to_string(),
-        TableOutOfBounds => "undefined element".to_string(),
-        OutOfBounds => "out of bounds".to_string(), // Note: not covered by the test suite
-        IndirectCallToNull => "uninitialized element".to_string(),
-        BadSignature => "indirect call type mismatch".to_string(),
-        IntegerOverflow => "integer overflow".to_string(),
-        IntegerDivisionByZero => "integer divide by zero".to_string(),
-        BadConversionToInteger => "invalid conversion to integer".to_string(),
-        UnreachableCodeReached => "unreachable".to_string(),
-        Interrupt => "interrupt".to_string(), // Note: not covered by the test suite
-        User(x) => format!("user trap {}", x), // Note: not covered by the test suite
-    }
-}
 
 /// Call the wasm function pointed to by `callee`. `values_vec` points to
 /// a buffer which holds the incoming arguments, and to which the outgoing
@@ -145,12 +155,7 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
             values_vec,
         )
     });
-
-    if ret == 0 {
-        Err(cx.unwrap_trap())
-    } else {
-        Ok(())
-    }
+    cx.into_result(ret)
 }
 
 /// Call the wasm function pointed to by `callee`, which has no arguments or
@@ -170,34 +175,54 @@ pub unsafe extern "C" fn wasmtime_call(
             callee,
         )
     });
-    if ret == 0 {
-        Err(cx.unwrap_trap())
-    } else {
-        Ok(())
-    }
+    cx.into_result(ret)
 }
 
 /// Temporary state stored on the stack which is registered in the `tls` module
 /// below for calls into wasm.
 pub struct CallThreadState {
-    trap: Cell<Option<Trap>>,
+    unwind: Cell<UnwindReason>,
     jmp_buf: Cell<*const u8>,
     reset_guard_page: Cell<bool>,
+}
+
+enum UnwindReason {
+    None,
+    Panic(Box<dyn Any + Send>),
+    Trap(Trap),
 }
 
 impl CallThreadState {
     fn new() -> CallThreadState {
         CallThreadState {
-            trap: Cell::new(None),
+            unwind: Cell::new(UnwindReason::None),
             jmp_buf: Cell::new(ptr::null()),
             reset_guard_page: Cell::new(false),
         }
     }
 
-    fn unwrap_trap(self) -> Trap {
-        self.trap
-            .replace(None)
-            .expect("unwrap_trap must be called after trap occurred")
+    fn into_result(self, ret: i32) -> Result<(), Trap> {
+        match self.unwind.replace(UnwindReason::None) {
+            UnwindReason::None => {
+                debug_assert_eq!(ret, 1);
+                Ok(())
+            }
+            UnwindReason::Trap(trap) => {
+                debug_assert_eq!(ret, 0);
+                Err(trap)
+            }
+            UnwindReason::Panic(panic) => {
+                debug_assert_eq!(ret, 0);
+                std::panic::resume_unwind(panic)
+            }
+        }
+    }
+
+    fn unwind_with(&self, reason: UnwindReason) -> ! {
+        self.unwind.replace(reason);
+        unsafe {
+            Unwind(self.jmp_buf.get());
+        }
     }
 }
 

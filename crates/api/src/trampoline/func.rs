@@ -1,11 +1,12 @@
 //! Support for a calling of an imported function.
 
 use super::create_handle::create_handle;
-use super::trap::{record_api_trap, TrapSink, API_TRAP_CODE};
-use crate::{Callable, FuncType, Store, Val};
+use super::trap::TrapSink;
+use crate::{Callable, FuncType, Store, Trap, Val};
 use anyhow::{bail, Result};
 use std::cmp;
 use std::convert::TryFrom;
+use std::panic::{self, AssertUnwindSafe};
 use std::rc::Rc;
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::ir::types;
@@ -69,42 +70,70 @@ unsafe extern "C" fn stub_fn(
     _caller_vmctx: *mut VMContext,
     call_id: u32,
     values_vec: *mut i128,
-) -> u32 {
-    let instance = InstanceHandle::from_vmctx(vmctx);
+) {
+    // Here we are careful to use `catch_unwind` to ensure Rust panics don't
+    // unwind past us. The primary reason for this is that Rust considers it UB
+    // to unwind past an `extern "C"` function. Here we are in an `extern "C"`
+    // function and the cross into wasm was through an `extern "C"` function at
+    // the base of the stack as well. We'll need to wait for assorted RFCs and
+    // language features to enable this to be done in a sound and stable fashion
+    // before avoiding catching the panic here.
+    //
+    // Also note that there are intentionally no local variables on this stack
+    // frame. The reason for that is that some of the "raise" functions we have
+    // below will trigger a longjmp, which won't run local destructors if we
+    // have any. To prevent leaks we avoid having any local destructors by
+    // avoiding local variables.
+    let result = panic::catch_unwind(AssertUnwindSafe(|| call_stub(vmctx, call_id, values_vec)));
 
-    let (args, returns_len) = {
-        let module = instance.module_ref();
-        let signature = &module.signatures[module.functions[FuncIndex::new(call_id as usize)]];
+    match result {
+        Ok(Ok(())) => {}
 
-        let mut args = Vec::new();
-        for i in 2..signature.params.len() {
-            args.push(Val::read_value_from(
-                values_vec.offset(i as isize - 2),
-                signature.params[i].value_type,
-            ))
-        }
-        (args, signature.returns.len())
-    };
+        // If a trap was raised (an error returned from the imported function)
+        // then we smuggle the trap through `Box<dyn Error>` through to the
+        // call-site, which gets unwrapped in `Trap::from_jit` later on as we
+        // convert from the internal `Trap` type to our own `Trap` type in this
+        // crate.
+        Ok(Err(trap)) => wasmtime_runtime::raise_user_trap(Box::new(trap)),
 
-    let mut returns = vec![Val::null(); returns_len];
-    let func = &instance
-        .host_state()
-        .downcast_ref::<TrampolineState>()
-        .expect("state")
-        .func;
+        // And finally if the imported function panicked, then we trigger the
+        // form of unwinding that's safe to jump over wasm code on all
+        // platforms.
+        Err(panic) => wasmtime_runtime::resume_panic(panic),
+    }
 
-    match func.call(&args, &mut returns) {
-        Ok(()) => {
-            for (i, r#return) in returns.iter_mut().enumerate() {
-                // TODO check signature.returns[i].value_type ?
-                r#return.write_value_to(values_vec.add(i));
+    unsafe fn call_stub(
+        vmctx: *mut VMContext,
+        call_id: u32,
+        values_vec: *mut i128,
+    ) -> Result<(), Trap> {
+        let instance = InstanceHandle::from_vmctx(vmctx);
+
+        let (args, returns_len) = {
+            let module = instance.module_ref();
+            let signature = &module.signatures[module.functions[FuncIndex::new(call_id as usize)]];
+
+            let mut args = Vec::new();
+            for i in 2..signature.params.len() {
+                args.push(Val::read_value_from(
+                    values_vec.offset(i as isize - 2),
+                    signature.params[i].value_type,
+                ))
             }
-            0
+            (args, signature.returns.len())
+        };
+
+        let mut returns = vec![Val::null(); returns_len];
+        let state = &instance
+            .host_state()
+            .downcast_ref::<TrampolineState>()
+            .expect("state");
+        state.func.call(&args, &mut returns)?;
+        for (i, ret) in returns.iter_mut().enumerate() {
+            // TODO check signature.returns[i].value_type ?
+            ret.write_value_to(values_vec.add(i));
         }
-        Err(trap) => {
-            record_api_trap(trap);
-            1
-        }
+        Ok(())
     }
 }
 
@@ -135,9 +164,6 @@ fn make_trampoline(
 
     // Add the `values_vec` parameter.
     stub_sig.params.push(ir::AbiParam::new(pointer_type));
-
-    // Add error/trap return.
-    stub_sig.returns.push(ir::AbiParam::new(types::I32));
 
     // Compute the size of the values vector. The vmctx and caller vmctx are passed separately.
     let value_size = 16;
@@ -195,12 +221,9 @@ fn make_trampoline(
         let callee_value = builder
             .ins()
             .iconst(pointer_type, stub_fn as *const VMFunctionBody as i64);
-        let call = builder
+        builder
             .ins()
             .call_indirect(new_sig, callee_value, &callee_args);
-
-        let call_result = builder.func.dfg.inst_results(call)[0];
-        builder.ins().trapnz(call_result, API_TRAP_CODE);
 
         let mflags = MemFlags::trusted();
         let mut results = Vec::new();
