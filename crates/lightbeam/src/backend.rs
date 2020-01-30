@@ -5589,25 +5589,26 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
 
             if pending.len() == start_len {
-                let src =
-                    match pending
-                        .iter()
-                        .filter_map(|(src, _)| {
-                            if let ValueLocation::Reg(reg) = src {
-                                Some(reg)
-                            } else {
-                                None
-                            }
-                        })
-                        .next()
-                    {
-                        None => return Err(Error::Microwasm(
+                let src = match pending
+                    .iter()
+                    .filter_map(|(src, _)| {
+                        if let ValueLocation::Reg(reg) = src {
+                            Some(reg)
+                        } else {
+                            None
+                        }
+                    })
+                    .next()
+                {
+                    None => {
+                        return Err(Error::Microwasm(
                             "Programmer error: We shouldn't need to push \
                              intermediate args if we don't have any argument sources in registers"
                                 .to_string(),
-                        )),
-                        Some(val) => *val,
-                    };
+                        ))
+                    }
+                    Some(val) => *val,
+                };
                 let new_src = self.push_physical(ValueLocation::Reg(src))?;
                 for (old_src, _) in pending.iter_mut() {
                     if *old_src == ValueLocation::Reg(src) {

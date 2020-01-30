@@ -23,8 +23,7 @@ use wasmtime_jit::native;
 use wasmtime_obj::emit_module;
 
 /// The after help text for the `wasm2obj` command.
-pub const WASM2OBJ_AFTER_HELP: &str =
-    "The translation is dependent on the environment chosen.\n\
+pub const WASM2OBJ_AFTER_HELP: &str = "The translation is dependent on the environment chosen.\n\
      The default is a dummy environment that produces placeholder values.";
 
 fn parse_target(s: &str) -> Result<Triple> {
