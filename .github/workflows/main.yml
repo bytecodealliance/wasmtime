@@ -220,7 +220,7 @@ jobs:
       with:
         python-version: '3.6'
         architecture: x64
-    - run: $CENTOS pip3 install setuptools wheel==0.31.1 setuptools-rust
+    - run: $CENTOS pip3 install setuptools wheel setuptools-rust
       shell: bash
     - run: (cd crates/misc/py && $CENTOS $python setup.py bdist_wheel)
       shell: bash
@@ -242,7 +242,7 @@ jobs:
     - name: Build Python 3.7
       run: $CENTOS sh ci/setup_centos6_python3.sh 3.7.3
       if: matrix.os == 'ubuntu-latest'
-    - run: $CENTOS pip3 install setuptools wheel==0.31.1 setuptools-rust auditwheel
+    - run: $CENTOS pip3 install setuptools wheel setuptools-rust auditwheel
       shell: bash
     - run: (cd crates/misc/py && $CENTOS $python setup.py bdist_wheel)
       shell: bash
@@ -264,7 +264,7 @@ jobs:
     - name: Build Python 3.8
       run: $CENTOS sh ci/setup_centos6_python3.sh 3.8.0
       if: matrix.os == 'ubuntu-latest'
-    - run: $CENTOS pip3 install setuptools wheel==0.31.1 setuptools-rust auditwheel
+    - run: $CENTOS pip3 install setuptools wheel setuptools-rust auditwheel
       shell: bash
     - run: (cd crates/misc/py && $CENTOS $python setup.py bdist_wheel)
       shell: bash
