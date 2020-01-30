@@ -1,6 +1,6 @@
 pub mod test {
     // FIXME: parameterize macro on what ctx type is used here
-    generate::from_witx!("test.witx");
+    generate::from_witx!(["test.witx"]);
 
     pub struct WasiCtx {
         guest_errors: Vec<::memory::GuestError>,

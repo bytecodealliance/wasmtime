@@ -1,7 +1,37 @@
-use anyhow::{bail, Result};
-use proc_macro2::{Literal, TokenStream, TokenTree};
+use std::path::PathBuf;
 
-pub fn witx_paths(args: TokenStream) -> Result<Vec<String>> {
+use syn::{
+    bracketed,
+    parse::{Parse, ParseStream},
+    punctuated::Punctuated,
+    token, LitStr, Result, Token,
+};
+
+pub struct Config {
+    _bracket_token: token::Bracket,
+    path_lits: Punctuated<LitStr, Token![,]>,
+}
+
+impl Config {
+    pub fn witx_paths(&self) -> Vec<PathBuf> {
+        self.path_lits
+            .iter()
+            .map(|lit| PathBuf::from(lit.value()))
+            .collect()
+    }
+}
+
+impl Parse for Config {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let content;
+        Ok(Config {
+            _bracket_token: bracketed!(content in input),
+            path_lits: content.parse_terminated(Parse::parse)?,
+        })
+    }
+}
+
+/*
     let arg_strings = args
         .into_iter()
         .map(|arg| match arg {
@@ -31,3 +61,4 @@ fn string_literal(literal: Literal) -> Result<String> {
     }
     Ok(trimmed)
 }
+*/

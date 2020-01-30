@@ -14,3 +14,4 @@ quote = "1.0"
 proc-macro2 = "1.0"
 heck = "0.3"
 anyhow = "1"
+syn = { version = "1.0", features = ["full"] }
