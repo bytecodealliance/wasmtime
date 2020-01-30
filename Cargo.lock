@@ -1928,6 +1928,7 @@ dependencies = [
  "rayon",
  "structopt",
  "target-lexicon",
+ "tempfile",
  "test-programs",
  "wasi-common",
  "wasm-webidl-bindings",
