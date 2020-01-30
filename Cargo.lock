@@ -1998,9 +1998,7 @@ name = "wasmtime-fuzz"
 version = "0.9.0"
 dependencies = [
  "arbitrary 0.2.0",
- "env_logger 0.7.1",
  "libfuzzer-sys",
- "log",
  "wasmtime",
  "wasmtime-fuzzing",
 ]
