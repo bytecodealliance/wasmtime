@@ -129,9 +129,9 @@ unsafe extern "C" fn stub_fn(
             .downcast_ref::<TrampolineState>()
             .expect("state");
         state.func.call(&args, &mut returns)?;
-        for (i, r#return) in returns.iter_mut().enumerate() {
+        for (i, ret) in returns.iter_mut().enumerate() {
             // TODO check signature.returns[i].value_type ?
-            r#return.write_value_to(values_vec.add(i));
+            ret.write_value_to(values_vec.add(i));
         }
         Ok(())
     }
