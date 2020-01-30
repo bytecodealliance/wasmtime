@@ -129,8 +129,15 @@ unsafe extern "C" fn stub_fn(
             .downcast_ref::<TrampolineState>()
             .expect("state");
         state.func.call(&args, &mut returns)?;
+
+        let module = instance.module_ref();
+        let signature = &module.signatures[module.functions[FuncIndex::new(call_id as usize)]];
         for (i, ret) in returns.iter_mut().enumerate() {
-            // TODO check signature.returns[i].value_type ?
+            if ret.ty().get_wasmtime_type() != Some(signature.returns[i].value_type) {
+                return Err(Trap::new(
+                    "`Callable` attempted to return an incompatible value",
+                ));
+            }
             ret.write_value_to(values_vec.add(i));
         }
         Ok(())
