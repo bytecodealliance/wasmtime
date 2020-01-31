@@ -1304,6 +1304,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().umax(a, b))
         }
+        Operator::I8x16RoundingAverageU | Operator::I16x8RoundingAverageU => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().avg_round(a, b))
+        }
         Operator::I8x16Neg | Operator::I16x8Neg | Operator::I32x4Neg | Operator::I64x2Neg => {
             let a = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().ineg(a))
@@ -1491,9 +1495,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I32x4Load16x4S { .. }
         | Operator::I32x4Load16x4U { .. }
         | Operator::I64x2Load32x2S { .. }
-        | Operator::I64x2Load32x2U { .. }
-        | Operator::I8x16RoundingAverageU { .. }
-        | Operator::I16x8RoundingAverageU { .. } => {
+        | Operator::I64x2Load32x2U { .. } => {
             return Err(wasm_unsupported!("proposed SIMD operator {:?}", op));
         }
     };
@@ -1833,6 +1835,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I8x16MinU
         | Operator::I8x16MaxS
         | Operator::I8x16MaxU
+        | Operator::I8x16RoundingAverageU
         | Operator::I8x16Mul => I8X16,
 
         Operator::I16x8Splat
@@ -1866,6 +1869,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I16x8MinU
         | Operator::I16x8MaxS
         | Operator::I16x8MaxU
+        | Operator::I16x8RoundingAverageU
         | Operator::I16x8Mul => I16X8,
 
         Operator::I32x4Splat
