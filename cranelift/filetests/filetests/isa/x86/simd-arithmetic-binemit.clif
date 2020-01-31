@@ -197,3 +197,15 @@ block0(v0: f64x2 [%xmm3], v1: f64x2 [%xmm5]):
 [-, %xmm3]    v8 = sqrt v0          ; bin: 66 40 0f 51 db
     return
 }
+
+function %average_rounding_i8x16(i8x16, i8x16) {
+block0(v0: i8x16 [%xmm6], v1: i8x16 [%xmm2]):
+[-, %xmm6]    v2 = avg_round v0, v1      ; bin: 66 0f e0 f2
+    return
+}
+
+function %average_rounding_i16x8(i16x8, i16x8) {
+block0(v0: i16x8 [%xmm6], v1: i16x8 [%xmm2]):
+[-, %xmm6]    v2 = avg_round v0, v1      ; bin: 66 0f e3 f2
+    return
+}

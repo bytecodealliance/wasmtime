@@ -1560,6 +1560,7 @@ fn define_simd(
     let formats = &shared_defs.formats;
 
     // Shorthands for instructions.
+    let avg_round = shared.by_name("avg_round");
     let bitcast = shared.by_name("bitcast");
     let bor = shared.by_name("bor");
     let bxor = shared.by_name("bxor");
@@ -1924,6 +1925,12 @@ fn define_simd(
     ] {
         let imul = imul.bind(vector(*ty, sse_vector_size));
         e.enc_32_64_maybe_isap(imul, rec_fa.opcodes(opcodes), *isap);
+    }
+
+    // SIMD integer average with rounding.
+    for (ty, opcodes) in &[(I8, &PAVGB[..]), (I16, &PAVGW[..])] {
+        let avgr = avg_round.bind(vector(*ty, sse_vector_size));
+        e.enc_32_64(avgr, rec_fa.opcodes(opcodes));
     }
 
     // SIMD logical operations
