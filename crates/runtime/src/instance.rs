@@ -18,10 +18,9 @@ use crate::vmcontext::{
 use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::any::Any;
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::collections::HashSet;
 use std::convert::TryFrom;
-use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::{mem, ptr, slice};
@@ -33,53 +32,9 @@ use wasmtime_environ::wasm::{
 };
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
 
-thread_local! {
-    /// A stack of currently-running `Instance`s, if any.
-    pub(crate) static CURRENT_INSTANCE: RefCell<Vec<NonNull<Instance>>> = RefCell::new(Vec::new());
-}
-
 cfg_if::cfg_if! {
     if #[cfg(any(target_os = "linux", target_os = "macos"))] {
         pub type SignalHandler = dyn Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool;
-
-        pub fn signal_handler_none(
-            _signum: libc::c_int,
-            _siginfo: *const libc::siginfo_t,
-            _context: *const libc::c_void,
-        ) -> bool {
-            false
-        }
-
-        #[no_mangle]
-        pub extern "C" fn InstanceSignalHandler(
-            signum: libc::c_int,
-            siginfo: *mut libc::siginfo_t,
-            context: *mut libc::c_void,
-        ) -> bool {
-            CURRENT_INSTANCE.with(|current_instance| {
-                let current_instance = current_instance
-                    .try_borrow()
-                    .expect("borrow current instance");
-                if current_instance.is_empty() {
-                    return false;
-                } else {
-                    unsafe {
-                        let last = &current_instance
-                            .last()
-                            .expect("current instance not none")
-                            .as_ref();
-
-                        let f = last
-                            .signal_handler
-                            .replace(Box::new(signal_handler_none));
-                        let ret = f(signum, siginfo, context);
-                        last.signal_handler.set(f);
-                        ret
-                    }
-                }
-            })
-        }
-
 
         impl InstanceHandle {
             /// Set a custom signal handler
@@ -87,53 +42,19 @@ cfg_if::cfg_if! {
             where
                 H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
             {
-                self.instance().signal_handler.set(Box::new(handler));
+                self.instance().signal_handler.set(Some(Box::new(handler)));
             }
         }
     } else if #[cfg(target_os = "windows")] {
-        pub type SignalHandler = dyn Fn(winapi::um::winnt::EXCEPTION_POINTERS) -> bool;
-
-        pub fn signal_handler_none(
-            _exception_info: winapi::um::winnt::EXCEPTION_POINTERS
-        ) -> bool {
-            false
-        }
-
-        #[no_mangle]
-        pub extern "C" fn InstanceSignalHandler(
-            exception_info: winapi::um::winnt::EXCEPTION_POINTERS
-        ) -> bool {
-            CURRENT_INSTANCE.with(|current_instance| {
-                let current_instance = current_instance
-                    .try_borrow()
-                    .expect("borrow current instance");
-                if current_instance.is_empty() {
-                    return false;
-                } else {
-                    unsafe {
-                        let last = &current_instance
-                            .last()
-                            .expect("current instance not none")
-                            .as_ref();
-
-                        let f = last
-                            .signal_handler
-                            .replace(Box::new(signal_handler_none));
-                        let ret = f(exception_info);
-                        last.signal_handler.set(f);
-                        ret
-                    }
-                }
-            })
-        }
+        pub type SignalHandler = dyn Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool;
 
         impl InstanceHandle {
             /// Set a custom signal handler
             pub fn set_signal_handler<H>(&mut self, handler: H)
             where
-                H: 'static + Fn(winapi::um::winnt::EXCEPTION_POINTERS) -> bool,
+                H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool,
             {
-                self.instance().signal_handler.set(Box::new(handler));
+                self.instance().signal_handler.set(Some(Box::new(handler)));
             }
         }
     }
@@ -177,7 +98,7 @@ pub(crate) struct Instance {
     dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
 
     /// Handler run when `SIGBUS`, `SIGFPE`, `SIGILL`, or `SIGSEGV` are caught by the instance thread.
-    signal_handler: Cell<Box<SignalHandler>>,
+    pub(crate) signal_handler: Cell<Option<Box<SignalHandler>>>,
 
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
@@ -596,28 +517,6 @@ pub struct InstanceHandle {
 }
 
 impl InstanceHandle {
-    #[doc(hidden)]
-    pub fn with_signals_on<F, R>(&self, action: F) -> R
-    where
-        F: FnOnce() -> R,
-    {
-        CURRENT_INSTANCE.with(|current_instance| {
-            current_instance
-                .borrow_mut()
-                .push(unsafe { NonNull::new_unchecked(self.instance) });
-        });
-
-        let result = action();
-
-        CURRENT_INSTANCE.with(|current_instance| {
-            let mut current_instance = current_instance.borrow_mut();
-            assert!(!current_instance.is_empty());
-            current_instance.pop();
-        });
-
-        result
-    }
-
     /// Create a new `InstanceHandle` pointing at a new `Instance`.
     ///
     /// # Unsafety
@@ -682,7 +581,7 @@ impl InstanceHandle {
                 finished_functions,
                 dbg_jit_registration,
                 host_state,
-                signal_handler: Cell::new(Box::new(signal_handler_none)),
+                signal_handler: Cell::new(None),
                 vmctx: VMContext {},
             };
             ptr::write(instance_ptr, instance);
@@ -865,7 +764,7 @@ impl InstanceHandle {
     }
 
     /// Return a reference to the contained `Instance`.
-    fn instance(&self) -> &Instance {
+    pub(crate) fn instance(&self) -> &Instance {
         unsafe { &*(self.instance as *const Instance) }
     }
 }

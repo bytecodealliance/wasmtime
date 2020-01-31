@@ -190,14 +190,12 @@ pub fn invoke(
     // Call the trampoline. Pass a null `caller_vmctx` argument as `invoke` is
     // all about calling from the outside world rather than from an instance.
     if let Err(trap) = unsafe {
-        instance.with_signals_on(|| {
-            wasmtime_call_trampoline(
-                callee_vmctx,
-                ptr::null_mut(),
-                exec_code_buf,
-                values_vec.as_mut_ptr() as *mut u8,
-            )
-        })
+        wasmtime_call_trampoline(
+            callee_vmctx,
+            ptr::null_mut(),
+            exec_code_buf,
+            values_vec.as_mut_ptr() as *mut u8,
+        )
     } {
         return Ok(ActionOutcome::Trapped(trap));
     }

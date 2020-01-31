@@ -18,13 +18,13 @@ pub trait InstanceExt {
     /// TODO: needs more documentation.
     unsafe fn set_signal_handler<H>(&self, handler: H)
     where
-        H: 'static + Fn(winapi::um::winnt::EXCEPTION_POINTERS) -> bool;
+        H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool;
 }
 
 impl InstanceExt for Instance {
     unsafe fn set_signal_handler<H>(&self, handler: H)
     where
-        H: 'static + Fn(winapi::um::winnt::EXCEPTION_POINTERS) -> bool,
+        H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool,
     {
         self.instance_handle.clone().set_signal_handler(handler);
     }

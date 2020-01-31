@@ -399,44 +399,10 @@ struct AutoHandlingTrap
 
 }
 
-static
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__ ((warn_unused_result))
-#endif
-bool
-HandleTrap(CONTEXT* context, bool reset_guard_page)
-{
-    assert(sAlreadyHandlingTrap);
-
-    void *JmpBuf = RecordTrap(ContextToPC(context), reset_guard_page);
-    if (JmpBuf == nullptr) {
-      return false;
-    }
-
-    // Unwind calls longjmp, so it doesn't run the automatic
-    // sAlreadhHanldingTrap cleanups, so reset it manually before doing
-    // a longjmp.
-    sAlreadyHandlingTrap = false;
-
-#if defined(USE_APPLE_MACH_PORTS)
-    // Reroute the PC to run the Unwind function on the main stack after the
-    // handler exits. This doesn't yet work for stack overflow traps, because
-    // in that case the main thread doesn't have any space left to run.
-    assert(false); // this branch isn't implemented here
-    // SetContextPC(context, reinterpret_cast<const uint8_t*>(&Unwind));
-#else
-    // For now, just call Unwind directly, rather than redirecting the PC there,
-    // so that it runs on the alternate signal handler stack. To run on the main
-    // stack, reroute the context PC like this:
-    Unwind(JmpBuf);
-#endif
-
-    return true;
-}
-
 // =============================================================================
 // The following platform-specific handlers funnel all signals/exceptions into
-// the shared HandleTrap() above.
+// the HandleTrap() function defined in Rust. Note that the Rust function has a
+// different ABI depending on the platform.
 // =============================================================================
 
 #if defined(_WIN32)
@@ -467,16 +433,19 @@ WasmTrapHandler(LPEXCEPTION_POINTERS exception)
         return EXCEPTION_CONTINUE_SEARCH;
     }
 
-    bool handled = InstanceSignalHandler(exception);
+    void *JmpBuf = HandleTrap(ContextToPC(exception->ContextRecord), exception);
+    // Test if a custom instance signal handler handled the exception
+    if (((size_t) JmpBuf) == 1)
+        return EXCEPTION_CONTINUE_EXECUTION;
 
-    if (!handled) {
-        if (!HandleTrap(exception->ContextRecord,
-                        record->ExceptionCode == EXCEPTION_STACK_OVERFLOW)) {
-            return EXCEPTION_CONTINUE_SEARCH;
-        }
+    // Otherwise test if we need to longjmp to this buffer
+    if (JmpBuf != nullptr) {
+        sAlreadyHandlingTrap = false;
+        Unwind(JmpBuf);
     }
 
-    return EXCEPTION_CONTINUE_EXECUTION;
+    // ... and otherwise keep looking for a handler
+    return EXCEPTION_CONTINUE_SEARCH;
 }
 
 #elif defined(USE_APPLE_MACH_PORTS)
@@ -638,15 +607,20 @@ WasmTrapHandler(int signum, siginfo_t* info, void* context)
         AutoHandlingTrap aht;
         assert(signum == SIGSEGV || signum == SIGBUS || signum == SIGFPE || signum == SIGILL);
 
-        if (InstanceSignalHandler(signum, info, (ucontext_t*) context)) {
+        void *JmpBuf = HandleTrap(ContextToPC(static_cast<CONTEXT*>(context)), signum, info, context);
+
+        // Test if a custom instance signal handler handled the exception
+        if (((size_t) JmpBuf) == 1)
             return;
+
+        // Otherwise test if we need to longjmp to this buffer
+        if (JmpBuf != nullptr) {
+            sAlreadyHandlingTrap = false;
+            Unwind(JmpBuf);
         }
 
-        if (HandleTrap(static_cast<CONTEXT*>(context), false)) {
-            return;
-        }
+        // ... and otherwise call the previous signal handler, if one is there
     }
-
 
     struct sigaction* previousSignal = nullptr;
     switch (signum) {
