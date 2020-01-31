@@ -124,8 +124,23 @@ fn poll_oneoff_handle_fd_event<'a>(
     ready_events: impl Iterator<Item = (FdEventData<'a>, yanix::poll::PollFd)>,
     events: &mut Vec<wasi::__wasi_event_t>,
 ) -> Result<()> {
+    use crate::fdentry::Descriptor;
     use std::{convert::TryInto, os::unix::prelude::AsRawFd};
     use yanix::{file::fionread, poll::PollFlags};
+
+    fn query_nbytes(fd: &Descriptor) -> Result<u64> {
+        // fionread may overflow for large files, so use another way for regular files.
+        if let Descriptor::OsHandle(os_handle) = fd {
+            let meta = os_handle.metadata()?;
+            if meta.file_type().is_file() {
+                use yanix::file::tell;
+                let len = meta.len();
+                let host_offset = unsafe { tell(os_handle.as_raw_fd())? };
+                return Ok(len - host_offset);
+            }
+        }
+        unsafe { Ok(fionread(fd.as_raw_fd())?.into()) }
+    }
 
     for (fd_event, poll_fd) in ready_events {
         log::debug!("poll_oneoff_handle_fd_event fd_event = {:?}", fd_event);
@@ -139,7 +154,7 @@ fn poll_oneoff_handle_fd_event<'a>(
         log::debug!("poll_oneoff_handle_fd_event revents = {:?}", revents);
 
         let nbytes = if fd_event.r#type == wasi::__WASI_EVENTTYPE_FD_READ {
-            unsafe { fionread(fd_event.descriptor.as_raw_fd())? }
+            query_nbytes(fd_event.descriptor)?
         } else {
             0
         };
