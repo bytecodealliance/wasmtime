@@ -55,6 +55,9 @@ tempfile = "3.1.0"
 [build-dependencies]
 anyhow = "1.0.19"
 
+[profile.release.build-override]
+opt-level = 0
+
 [workspace]
 members = [
   "crates/fuzzing",
