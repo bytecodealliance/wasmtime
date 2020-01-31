@@ -3,14 +3,19 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use witx::{AtomType, BuiltinType, Id, TypeRef};
 
+use crate::Config;
+
 #[derive(Debug, Clone)]
 pub struct Names {
-    // FIXME: overrides go in here, so we can map e.g. 2big => TooBig
+    config: Config,
 }
 
 impl Names {
-    pub fn new() -> Names {
-        Names {}
+    pub fn new(config: Config) -> Names {
+        Names { config }
+    }
+    pub fn ctx_type(&self) -> Ident {
+        self.config.ctx.name.clone()
     }
     pub fn type_(&self, id: &Id) -> TokenStream {
         let ident = format_ident!("{}", id.as_str().to_camel_case());

@@ -4,11 +4,9 @@ use quote::quote;
 use crate::names::Names;
 use crate::types::struct_is_copy;
 
-// FIXME need to template what argument is required to an import function - some context
-// struct (e.g. WasiCtx) should be provided at the invocation of the `gen` proc macro.
-//
 pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
     let ident = names.func(&func.name);
+    let ctx_type = names.ctx_type();
     let coretype = func.core_type();
 
     let params = coretype.args.iter().map(|arg| match arg.signifies {
@@ -30,7 +28,7 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
     });
 
     let abi_args = quote!(
-            ctx: &mut WasiCtx, memory: ::memory::GuestMemory,
+            ctx: &mut #ctx_type, memory: ::memory::GuestMemory,
             #(#params),*
     );
     let abi_ret = if let Some(ret) = &coretype.ret {
