@@ -21,8 +21,12 @@ pub fn define_datatype(names: &Names, namedtype: &witx::NamedType) -> TokenStrea
             witx::Type::Union(_) => unimplemented!("union types"),
             witx::Type::Handle(_h) => unimplemented!("handle types"),
             witx::Type::Builtin(b) => define_builtin(names, &namedtype.name, *b),
-            witx::Type::Pointer { .. } => unimplemented!("pointer types"),
-            witx::Type::ConstPointer { .. } => unimplemented!("constpointer types"),
+            witx::Type::Pointer(p) => {
+                define_witx_pointer(names, &namedtype.name, quote!(::memory::GuestPtrMut), p)
+            }
+            witx::Type::ConstPointer(p) => {
+                define_witx_pointer(names, &namedtype.name, quote!(::memory::GuestPtr), p)
+            }
             witx::Type::Array { .. } => unimplemented!("array types"),
         },
     }
@@ -30,9 +34,12 @@ pub fn define_datatype(names: &Names, namedtype: &witx::NamedType) -> TokenStrea
 
 fn define_alias(names: &Names, name: &witx::Id, to: &witx::NamedType) -> TokenStream {
     let ident = names.type_(name);
-    let to = names.type_(&to.name);
-
-    quote!(pub type #ident = #to;)
+    let rhs = names.type_(&to.name);
+    if type_needs_lifetime(&to.tref) {
+        quote!(pub type #ident<'a> = #rhs<'a>;)
+    } else {
+        quote!(pub type #ident = #rhs;)
+    }
 }
 
 fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenStream {
@@ -133,6 +140,23 @@ fn define_builtin(names: &Names, name: &witx::Id, builtin: witx::BuiltinType) ->
     quote!(pub type #ident = #built;)
 }
 
+pub fn type_needs_lifetime(tref: &witx::TypeRef) -> bool {
+    match &*tref.type_() {
+        witx::Type::Builtin(b) => match b {
+            witx::BuiltinType::String => unimplemented!(),
+            _ => false,
+        },
+        witx::Type::Enum { .. }
+        | witx::Type::Flags { .. }
+        | witx::Type::Int { .. }
+        | witx::Type::Handle { .. } => false,
+        witx::Type::Struct(s) => !struct_is_copy(&s),
+        witx::Type::Union { .. } => true,
+        witx::Type::Pointer { .. } | witx::Type::ConstPointer { .. } => true,
+        witx::Type::Array { .. } => unimplemented!(),
+    }
+}
+
 pub fn struct_is_copy(s: &witx::StructDatatype) -> bool {
     s.members.iter().all(|m| match &*m.tref.type_() {
         witx::Type::Struct(s) => struct_is_copy(&s),
@@ -158,11 +182,11 @@ fn define_copy_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) 
 
     let member_decls = s.members.iter().map(|m| {
         let name = names.struct_member(&m.name);
-        let type_ = names.type_ref(&m.tref);
+        let type_ = names.type_ref(&m.tref, anon_lifetime());
         quote!(pub #name: #type_)
     });
     let member_valids = s.member_layout().into_iter().map(|ml| {
-        let type_ = names.type_ref(&ml.member.tref);
+        let type_ = names.type_ref(&ml.member.tref, anon_lifetime());
         let offset = ml.offset as u32;
         let fieldname = names.struct_member(&ml.member.name);
         quote! {
@@ -221,11 +245,11 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
             witx::TypeRef::Value(ty) => match &**ty {
                 witx::Type::Builtin(builtin) => names.builtin_type(*builtin),
                 witx::Type::Pointer(pointee) => {
-                    let pointee_type = names.type_ref(&pointee);
+                    let pointee_type = names.type_ref(&pointee, quote!('a));
                     quote!(::memory::GuestPtrMut<'a, #pointee_type>)
                 }
                 witx::Type::ConstPointer(pointee) => {
-                    let pointee_type = names.type_ref(&pointee);
+                    let pointee_type = names.type_ref(&pointee, quote!('a));
                     quote!(::memory::GuestPtr<'a, #pointee_type>)
                 }
                 _ => unimplemented!("other anonymous struct members"),
@@ -239,11 +263,11 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
             witx::TypeRef::Value(ty) => match &**ty {
                 witx::Type::Builtin(builtin) => names.builtin_type(*builtin),
                 witx::Type::Pointer(pointee) => {
-                    let pointee_type = names.type_ref(&pointee);
+                    let pointee_type = names.type_ref(&pointee, anon_lifetime());
                     quote!(::memory::GuestPtrMut::<#pointee_type>)
                 }
                 witx::Type::ConstPointer(pointee) => {
-                    let pointee_type = names.type_ref(&pointee);
+                    let pointee_type = names.type_ref(&pointee, anon_lifetime());
                     quote!(::memory::GuestPtr::<#pointee_type>)
                 }
                 _ => unimplemented!("other anonymous struct members"),
@@ -286,13 +310,13 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
                     }
                 }
                 witx::Type::Pointer(pointee) => {
-                    let pointee_type = names.type_ref(&pointee);
+                    let pointee_type = names.type_ref(&pointee, anon_lifetime());
                     quote! {
                         let #name = ::memory::GuestPtrMut::<#pointee_type>::read_from_guest(&location.cast(#offset)?)?;
                     }
                 }
                 witx::Type::ConstPointer(pointee) => {
-                    let pointee_type = names.type_ref(&pointee);
+                    let pointee_type = names.type_ref(&pointee, anon_lifetime());
                     quote! {
                         let #name = ::memory::GuestPtr::<#pointee_type>::read_from_guest(&location.cast(#offset)?)?;
                     }
@@ -340,6 +364,19 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
         }
     }
 }
+
+fn define_witx_pointer(
+    names: &Names,
+    name: &witx::Id,
+    pointer_type: TokenStream,
+    pointee: &witx::TypeRef,
+) -> TokenStream {
+    let ident = names.type_(name);
+    let pointee_type = names.type_ref(pointee, quote!('a));
+
+    quote!(pub type #ident<'a> = #pointer_type<'a, #pointee_type>;)
+}
+
 fn int_repr_tokens(int_repr: witx::IntRepr) -> TokenStream {
     match int_repr {
         witx::IntRepr::U8 => quote!(u8),
@@ -355,4 +392,8 @@ fn atom_token(atom: witx::AtomType) -> TokenStream {
         witx::AtomType::F32 => quote!(f32),
         witx::AtomType::F64 => quote!(f64),
     }
+}
+
+pub fn anon_lifetime() -> TokenStream {
+    quote!('_)
 }

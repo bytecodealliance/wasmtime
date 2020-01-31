@@ -3,6 +3,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use witx::{AtomType, BuiltinType, Id, TypeRef};
 
+use crate::types::type_needs_lifetime;
 use crate::Config;
 
 #[derive(Debug, Clone)]
@@ -47,21 +48,25 @@ impl Names {
         }
     }
 
-    pub fn type_ref(&self, tref: &TypeRef) -> TokenStream {
+    pub fn type_ref(&self, tref: &TypeRef, lifetime: TokenStream) -> TokenStream {
         match tref {
             TypeRef::Name(nt) => {
                 let ident = self.type_(&nt.name);
-                quote!(#ident)
+                if type_needs_lifetime(&nt.tref) {
+                    quote!(#ident<#lifetime>)
+                } else {
+                    quote!(#ident)
+                }
             }
             TypeRef::Value(ty) => match &**ty {
                 witx::Type::Builtin(builtin) => self.builtin_type(*builtin),
                 witx::Type::Pointer(pointee) => {
-                    let pointee_type = self.type_ref(&pointee);
-                    quote!(::memory::GuestPtrMut<#pointee_type>)
+                    let pointee_type = self.type_ref(&pointee, lifetime.clone());
+                    quote!(::memory::GuestPtrMut<#lifetime, #pointee_type>)
                 }
                 witx::Type::ConstPointer(pointee) => {
-                    let pointee_type = self.type_ref(&pointee);
-                    quote!(::memory::GuestPtr<#pointee_type>)
+                    let pointee_type = self.type_ref(&pointee, lifetime.clone());
+                    quote!(::memory::GuestPtr<#lifetime, #pointee_type>)
                 }
                 _ => unimplemented!("anonymous type ref"),
             },

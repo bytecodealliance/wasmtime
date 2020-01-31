@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 use crate::names::Names;
-use crate::types::struct_is_copy;
+use crate::types::{anon_lifetime, struct_is_copy};
 
 pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
     let ident = names.func(&func.name);
@@ -58,7 +58,7 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
                 witx::TypePassedBy::Value(atom) => names.atom_type(atom),
                 _ => unreachable!("err should always be passed by value"),
             };
-            let err_typename = names.type_ref(&tref);
+            let err_typename = names.type_ref(&tref, anon_lifetime());
             quote! {
                 let err: #err_typename = ::memory::GuestErrorType::from_error(e, ctx);
                 return #abi_ret::from(err);
@@ -106,7 +106,7 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
     let marshal_rets_post = marshal_rets.map(|(_pre, post)| post);
 
     let success = if let Some(err_type) = err_type {
-        let err_typename = names.type_ref(&err_type);
+        let err_typename = names.type_ref(&err_type, anon_lifetime());
         quote! {
             let success:#err_typename = ::memory::GuestErrorType::success();
             #abi_ret::from(success)
@@ -133,7 +133,7 @@ fn marshal_arg(
     error_handling: TokenStream,
 ) -> TokenStream {
     let tref = &param.tref;
-    let interface_typename = names.type_ref(&tref);
+    let interface_typename = names.type_ref(&tref, anon_lifetime());
 
     let try_into_conversion = {
         let name = names.func_param(&param.name);
@@ -180,7 +180,7 @@ fn marshal_arg(
             witx::BuiltinType::String => unimplemented!("string types unimplemented"),
         },
         witx::Type::Pointer(pointee) => {
-            let pointee_type = names.type_ref(pointee);
+            let pointee_type = names.type_ref(pointee, anon_lifetime());
             let name = names.func_param(&param.name);
             quote! {
                 let #name = match memory.ptr_mut::<#pointee_type>(#name as u32) {
@@ -192,7 +192,7 @@ fn marshal_arg(
             }
         }
         witx::Type::ConstPointer(pointee) => {
-            let pointee_type = names.type_ref(pointee);
+            let pointee_type = names.type_ref(pointee, anon_lifetime());
             let name = names.func_param(&param.name);
             quote! {
                 let #name = match memory.ptr::<#pointee_type>(#name as u32) {
@@ -204,7 +204,7 @@ fn marshal_arg(
             }
         }
         witx::Type::Struct(s) if struct_is_copy(&s) => {
-            let pointee_type = names.type_ref(tref);
+            let pointee_type = names.type_ref(tref, anon_lifetime());
             let arg_name = names.func_ptr_binding(&param.name);
             let name = names.func_param(&param.name);
             quote! {
@@ -222,7 +222,7 @@ fn marshal_arg(
             }
         }
         witx::Type::Struct(s) if !struct_is_copy(&s) => {
-            let pointee_type = names.type_ref(tref);
+            let pointee_type = names.type_ref(tref, anon_lifetime());
             let arg_name = names.func_ptr_binding(&param.name);
             let name = names.func_param(&param.name);
             quote! {
@@ -251,7 +251,7 @@ fn marshal_result(
     let tref = &result.tref;
 
     let write_val_to_ptr = {
-        let pointee_type = names.type_ref(tref);
+        let pointee_type = names.type_ref(tref, anon_lifetime());
         // core type is given func_ptr_binding name.
         let ptr_name = names.func_ptr_binding(&result.name);
         let pre = quote! {

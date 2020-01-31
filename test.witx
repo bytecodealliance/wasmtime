@@ -24,6 +24,9 @@
     (field $first (@witx const_pointer s32))
     (field $second (@witx const_pointer s32))))
 
+(typename $named_ptr (@witx pointer f32))
+(typename $named_ptr_to_ptr (@witx pointer (@witx pointer f64)))
+
 (module $foo
   (@interface func (export "bar")
     (param $an_int u32)
