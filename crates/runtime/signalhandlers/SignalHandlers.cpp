@@ -401,7 +401,8 @@ struct AutoHandlingTrap
 
 // =============================================================================
 // The following platform-specific handlers funnel all signals/exceptions into
-// the shared HandleTrap() above.
+// the HandleTrap() function defined in Rust. Note that the Rust function has a
+// different ABI depending on the platform.
 // =============================================================================
 
 #if defined(_WIN32)
