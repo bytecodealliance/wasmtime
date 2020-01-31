@@ -668,7 +668,7 @@ impl InstanceHandle {
         )
         .map_err(InstantiationError::Resource)?;
 
-        let instance = {
+        let handle = {
             #[allow(clippy::cast_ptr_alignment)]
             let instance_ptr = instance_mmap.as_mut_ptr() as *mut Instance;
             let instance = Instance {
@@ -686,8 +686,11 @@ impl InstanceHandle {
                 vmctx: VMContext {},
             };
             ptr::write(instance_ptr, instance);
-            &mut *instance_ptr
+            InstanceHandle {
+                instance: instance_ptr,
+            }
         };
+        let instance = handle.instance();
 
         ptr::copy(
             vmshared_signatures.values().as_slice().as_ptr(),
@@ -751,7 +754,7 @@ impl InstanceHandle {
         // invoked automatically at instantiation time.
         instance.invoke_start_function()?;
 
-        Ok(Self { instance })
+        Ok(handle)
     }
 
     /// Create a new `InstanceHandle` pointing at the instance
@@ -890,7 +893,7 @@ impl Drop for InstanceHandle {
     }
 }
 
-fn check_table_init_bounds(instance: &mut Instance) -> Result<(), InstantiationError> {
+fn check_table_init_bounds(instance: &Instance) -> Result<(), InstantiationError> {
     let module = Arc::clone(&instance.module);
     for init in &module.table_elements {
         let start = get_table_init_start(init, instance);
@@ -908,7 +911,7 @@ fn check_table_init_bounds(instance: &mut Instance) -> Result<(), InstantiationE
 }
 
 /// Compute the offset for a memory data initializer.
-fn get_memory_init_start(init: &DataInitializer<'_>, instance: &mut Instance) -> usize {
+fn get_memory_init_start(init: &DataInitializer<'_>, instance: &Instance) -> usize {
     let mut start = init.location.offset;
 
     if let Some(base) = init.location.base {
@@ -926,9 +929,9 @@ fn get_memory_init_start(init: &DataInitializer<'_>, instance: &mut Instance) ->
 }
 
 /// Return a byte-slice view of a memory's data.
-fn get_memory_slice<'instance>(
+unsafe fn get_memory_slice<'instance>(
     init: &DataInitializer<'_>,
-    instance: &'instance mut Instance,
+    instance: &'instance Instance,
 ) -> &'instance mut [u8] {
     let memory = if let Some(defined_memory_index) = instance
         .module
@@ -937,26 +940,27 @@ fn get_memory_slice<'instance>(
         instance.memory(defined_memory_index)
     } else {
         let import = instance.imported_memory(init.location.memory_index);
-        let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
-        let foreign_memory = unsafe { &mut *(import).from };
+        let foreign_instance = (&mut *(import).vmctx).instance();
+        let foreign_memory = &mut *(import).from;
         let foreign_index = foreign_instance.memory_index(foreign_memory);
         foreign_instance.memory(foreign_index)
     };
-    unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) }
+    slice::from_raw_parts_mut(memory.base, memory.current_length)
 }
 
 fn check_memory_init_bounds(
-    instance: &mut Instance,
+    instance: &Instance,
     data_initializers: &[DataInitializer<'_>],
 ) -> Result<(), InstantiationError> {
     for init in data_initializers {
         let start = get_memory_init_start(init, instance);
-        let mem_slice = get_memory_slice(init, instance);
-
-        if mem_slice.get_mut(start..start + init.data.len()).is_none() {
-            return Err(InstantiationError::Link(LinkError(
-                "data segment does not fit".to_owned(),
-            )));
+        unsafe {
+            let mem_slice = get_memory_slice(init, instance);
+            if mem_slice.get_mut(start..start + init.data.len()).is_none() {
+                return Err(InstantiationError::Link(LinkError(
+                    "data segment does not fit".to_owned(),
+                )));
+            }
         }
     }
 
@@ -975,7 +979,7 @@ fn create_tables(module: &Module) -> BoxedSlice<DefinedTableIndex, Table> {
 }
 
 /// Compute the offset for a table element initializer.
-fn get_table_init_start(init: &TableElements, instance: &mut Instance) -> usize {
+fn get_table_init_start(init: &TableElements, instance: &Instance) -> usize {
     let mut start = init.offset;
 
     if let Some(base) = init.base {
@@ -1006,7 +1010,7 @@ fn get_table<'instance>(init: &TableElements, instance: &'instance Instance) -> 
 }
 
 /// Initialize the table memory from the provided initializers.
-fn initialize_tables(instance: &mut Instance) -> Result<(), InstantiationError> {
+fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
     let vmctx = instance.vmctx_ptr();
     let module = Arc::clone(&instance.module);
     for init in &module.table_elements {
@@ -1054,15 +1058,16 @@ fn create_memories(
 
 /// Initialize the table memory from the provided initializers.
 fn initialize_memories(
-    instance: &mut Instance,
+    instance: &Instance,
     data_initializers: &[DataInitializer<'_>],
 ) -> Result<(), InstantiationError> {
     for init in data_initializers {
         let start = get_memory_init_start(init, instance);
-        let mem_slice = get_memory_slice(init, instance);
-
-        let to_init = &mut mem_slice[start..start + init.data.len()];
-        to_init.copy_from_slice(init.data);
+        unsafe {
+            let mem_slice = get_memory_slice(init, instance);
+            let to_init = &mut mem_slice[start..start + init.data.len()];
+            to_init.copy_from_slice(init.data);
+        }
     }
 
     Ok(())
@@ -1081,7 +1086,7 @@ fn create_globals(module: &Module) -> BoxedSlice<DefinedGlobalIndex, VMGlobalDef
     vmctx_globals.into_boxed_slice()
 }
 
-fn initialize_globals(instance: &mut Instance) {
+fn initialize_globals(instance: &Instance) {
     let module = Arc::clone(&instance.module);
     let num_imports = module.imported_globals.len();
     for (index, global) in module.globals.iter().skip(num_imports) {
