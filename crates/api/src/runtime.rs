@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::cell::RefCell;
+use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
 use wasmtime_environ::settings::{self, Configurable};
@@ -220,6 +221,20 @@ impl Config {
 impl Default for Config {
     fn default() -> Config {
         Config::new()
+    }
+}
+
+impl fmt::Debug for Config {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Config")
+            .field("debug_info", &self.debug_info)
+            .field("strategy", &self.strategy)
+            .field("features", &self.features)
+            .field(
+                "flags",
+                &settings::Flags::new(self.flags.clone()).to_string(),
+            )
+            .finish()
     }
 }
 
