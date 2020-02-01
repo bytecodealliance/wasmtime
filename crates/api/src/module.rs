@@ -3,7 +3,7 @@ use crate::types::{
     ExportType, ExternType, FuncType, GlobalType, ImportType, Limits, MemoryType, Mutability,
     TableType, ValType,
 };
-use anyhow::{Error, Result};
+use anyhow::{bail, Error, Result};
 use lazy_static::lazy_static;
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -16,9 +16,14 @@ use wasmparser::{
 };
 use wasmtime_jit::CompiledModule;
 
-fn into_memory_type(mt: wasmparser::MemoryType) -> MemoryType {
-    assert!(!mt.shared);
-    MemoryType::new(Limits::new(mt.limits.initial, mt.limits.maximum))
+fn into_memory_type(mt: wasmparser::MemoryType) -> Result<MemoryType> {
+    if mt.shared {
+        bail!("shared memories are not supported yet");
+    }
+    Ok(MemoryType::new(Limits::new(
+        mt.limits.initial,
+        mt.limits.maximum,
+    )))
 }
 
 fn into_global_type(gt: wasmparser::GlobalType) -> GlobalType {
@@ -341,7 +346,7 @@ impl Module {
                     let section = section.get_memory_section_reader()?;
                     memories.reserve_exact(section.get_count() as usize);
                     for entry in section {
-                        memories.push(into_memory_type(entry?));
+                        memories.push(into_memory_type(entry?)?);
                     }
                 }
                 SectionCode::Type => {
@@ -389,7 +394,7 @@ impl Module {
                                 ExternType::Table(table)
                             }
                             ImportSectionEntryType::Memory(mt) => {
-                                let memory = into_memory_type(mt);
+                                let memory = into_memory_type(mt)?;
                                 memories.push(memory.clone());
                                 ExternType::Memory(memory)
                             }
