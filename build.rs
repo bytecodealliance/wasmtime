@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() -> anyhow::Result<()> {
+    println!("cargo:rerun-if-changed=build.rs");
     let out_dir = PathBuf::from(
         env::var_os("OUT_DIR").expect("The OUT_DIR environment variable must be set"),
     );
