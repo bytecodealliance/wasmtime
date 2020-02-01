@@ -20,7 +20,10 @@ fn into_memory_type(mt: wasmparser::MemoryType) -> Result<MemoryType> {
     if mt.shared {
         bail!("shared memories are not supported yet");
     }
-    Ok(MemoryType::new(Limits::new(mt.limits.initial, mt.limits.maximum)))
+    Ok(MemoryType::new(Limits::new(
+        mt.limits.initial,
+        mt.limits.maximum,
+    )))
 }
 
 fn into_global_type(gt: wasmparser::GlobalType) -> GlobalType {
