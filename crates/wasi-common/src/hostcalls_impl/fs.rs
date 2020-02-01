@@ -47,6 +47,7 @@ pub(crate) unsafe fn fd_datasync(
 
     match file {
         Handle::OsHandle(fd) => fd.sync_data().map_err(Into::into),
+        Handle::Stream(stream) => stream.sync_data().map_err(Into::into),
         Handle::VirtualFile(virt) => virt.datasync(),
     }
 }
@@ -72,7 +73,7 @@ pub(crate) unsafe fn fd_pread(
     let file = wasi_ctx
         .get_fd_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_READ | wasi::__WASI_RIGHTS_FD_SEEK, 0)?
-        .as_handle();
+        .as_file()?;
 
     let iovs = dec_iovec_slice(memory, iovs_ptr, iovs_len)?;
 
@@ -84,6 +85,11 @@ pub(crate) unsafe fn fd_pread(
     let host_nread = match file {
         Handle::OsHandle(fd) => hostcalls_impl::fd_pread(&fd, &mut buf, offset)?,
         Handle::VirtualFile(virt) => virt.pread(&mut buf, offset)?,
+        Handle::Stream(_) => {
+            unreachable!(
+                "implementation error: fd should have been checked to not be a stream already"
+            );
+        }
     };
 
     let mut buf_offset = 0;
@@ -128,7 +134,7 @@ pub(crate) unsafe fn fd_pwrite(
             wasi::__WASI_RIGHTS_FD_WRITE | wasi::__WASI_RIGHTS_FD_SEEK,
             0,
         )?
-        .as_handle();
+        .as_file()?;
     let iovs = dec_ciovec_slice(memory, iovs_ptr, iovs_len)?;
 
     if offset > i64::max_value() as u64 {
@@ -145,6 +151,11 @@ pub(crate) unsafe fn fd_pwrite(
     let host_nwritten = match file {
         Handle::OsHandle(fd) => hostcalls_impl::fd_pwrite(&fd, &buf, offset)?,
         Handle::VirtualFile(virt) => virt.pwrite(buf.as_mut(), offset)?,
+        Handle::Stream(_) => {
+            unreachable!(
+                "implementation error: fd should have been checked to not be a stream already"
+            );
+        }
     };
 
     trace!("     | *nwritten={:?}", host_nwritten);
@@ -255,8 +266,13 @@ pub(crate) unsafe fn fd_seek(
         _ => return Err(Error::EINVAL),
     };
     let host_newoffset = match file {
-        HandleMut::OsHandle(mut fd) => fd.seek(pos)?,
+        HandleMut::OsHandle(fd) => fd.seek(pos)?,
         HandleMut::VirtualFile(virt) => virt.seek(pos)?,
+        HandleMut::Stream(_) => {
+            unreachable!(
+                "implementation error: fd should have been checked to not be a stream already"
+            );
+        }
     };
 
     trace!("     | *newoffset={:?}", host_newoffset);
@@ -275,11 +291,16 @@ pub(crate) unsafe fn fd_tell(
     let file = wasi_ctx
         .get_fd_entry_mut(fd)?
         .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_TELL, 0)?
-        .as_handle_mut();
+        .as_file_mut()?;
 
     let host_offset = match file {
-        HandleMut::OsHandle(mut fd) => fd.seek(SeekFrom::Current(0))?,
+        HandleMut::OsHandle(fd) => fd.seek(SeekFrom::Current(0))?,
         HandleMut::VirtualFile(virt) => virt.seek(SeekFrom::Current(0))?,
+        HandleMut::Stream(_) => {
+            unreachable!(
+                "implementation error: fd should have been checked to not be a stream already"
+            );
+        }
     };
 
     trace!("     | *newoffset={:?}", host_offset);
@@ -300,6 +321,7 @@ pub(crate) unsafe fn fd_fdstat_get(
 
     let fs_flags = match wasi_file {
         Handle::OsHandle(wasi_fd) => hostcalls_impl::fd_fdstat_get(&wasi_fd)?,
+        Handle::Stream(stream) => hostcalls_impl::fd_fdstat_get(&stream)?,
         Handle::VirtualFile(virt) => virt.fdstat_get(),
     };
 
@@ -328,6 +350,14 @@ pub(crate) unsafe fn fd_fdstat_set_flags(
 
     match descriptor.as_handle_mut() {
         HandleMut::OsHandle(handle) => {
+            let set_result =
+                hostcalls_impl::fd_fdstat_set_flags(&handle, fdflags)?.map(Descriptor::OsHandle);
+
+            if let Some(new_descriptor) = set_result {
+                *descriptor = new_descriptor;
+            }
+        }
+        HandleMut::Stream(handle) => {
             let set_result =
                 hostcalls_impl::fd_fdstat_set_flags(&handle, fdflags)?.map(Descriptor::OsHandle);
 
@@ -379,10 +409,15 @@ pub(crate) unsafe fn fd_sync(
     let file = wasi_ctx
         .get_fd_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_SYNC, 0)?
-        .as_handle();
+        .as_file()?;
     match file {
         Handle::OsHandle(fd) => fd.sync_all().map_err(Into::into),
         Handle::VirtualFile(virt) => virt.sync(),
+        Handle::Stream(_) => {
+            unreachable!(
+                "implementation error: fd should have been checked to not be a stream already"
+            );
+        }
     }
 }
 
@@ -473,6 +508,11 @@ pub(crate) unsafe fn fd_advise(
     match file {
         Handle::OsHandle(fd) => hostcalls_impl::fd_advise(&fd, advice, offset, len),
         Handle::VirtualFile(virt) => virt.advise(advice, offset, len),
+        Handle::Stream(_) => {
+            unreachable!(
+                "implementation error: fd should have been checked to not be a stream already"
+            );
+        }
     }
 }
 
@@ -488,7 +528,7 @@ pub(crate) unsafe fn fd_allocate(
     let file = wasi_ctx
         .get_fd_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_ALLOCATE, 0)?
-        .as_handle();
+        .as_file()?;
 
     match file {
         Handle::OsHandle(fd) => {
@@ -508,6 +548,11 @@ pub(crate) unsafe fn fd_allocate(
             }
         }
         Handle::VirtualFile(virt) => virt.allocate(offset, len),
+        Handle::Stream(_) => {
+            unreachable!(
+                "implementation error: fd should have been checked to not be a stream already"
+            );
+        }
     }
 }
 
@@ -769,10 +814,15 @@ pub(crate) unsafe fn fd_filestat_get(
     let fd = wasi_ctx
         .get_fd_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_FILESTAT_GET, 0)?
-        .as_handle();
+        .as_file()?;
     let host_filestat = match fd {
         Handle::OsHandle(fd) => hostcalls_impl::fd_filestat_get(&fd)?,
         Handle::VirtualFile(virt) => virt.filestat_get()?,
+        Handle::Stream(_) => {
+            unreachable!(
+                "implementation error: fd should have been checked to not be a stream already"
+            );
+        }
     };
 
     trace!("     | *filestat_ptr={:?}", host_filestat);
@@ -840,6 +890,11 @@ pub(crate) fn fd_filestat_set_times_impl(
     match file {
         Handle::OsHandle(fd) => set_file_handle_times(fd, atim, mtim).map_err(Into::into),
         Handle::VirtualFile(virt) => virt.filestat_set_times(atim, mtim),
+        Handle::Stream(_) => {
+            unreachable!(
+                "implementation error: fd should have been checked to not be a stream already"
+            );
+        }
     }
 }
 
@@ -854,7 +909,7 @@ pub(crate) unsafe fn fd_filestat_set_size(
     let file = wasi_ctx
         .get_fd_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_FILESTAT_SET_SIZE, 0)?
-        .as_handle();
+        .as_file()?;
 
     // This check will be unnecessary when rust-lang/rust#63326 is fixed
     if st_size > i64::max_value() as u64 {
@@ -863,6 +918,11 @@ pub(crate) unsafe fn fd_filestat_set_size(
     match file {
         Handle::OsHandle(fd) => fd.set_len(st_size).map_err(Into::into),
         Handle::VirtualFile(virt) => virt.filestat_set_size(st_size),
+        Handle::Stream(_) => {
+            unreachable!(
+                "implementation error: fd should have been checked to not be a stream already"
+            );
+        }
     }
 }
 
@@ -1119,7 +1179,7 @@ pub(crate) unsafe fn fd_readdir(
     let file = wasi_ctx
         .get_fd_entry_mut(fd)?
         .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_READDIR, 0)?
-        .as_handle_mut();
+        .as_file_mut()?;
     let host_buf = dec_slice_of_mut_u8(memory, buf, buf_len)?;
 
     trace!("     | (buf,buf_len)={:?}", host_buf);
@@ -1144,11 +1204,15 @@ pub(crate) unsafe fn fd_readdir(
     }
 
     let host_bufused = match file {
-        HandleMut::OsHandle(mut file) => copy_entities(
-            hostcalls_impl::fd_readdir(file.handle_mut(), cookie)?,
-            host_buf,
-        )?,
+        HandleMut::OsHandle(file) => {
+            copy_entities(hostcalls_impl::fd_readdir(file, cookie)?, host_buf)?
+        }
         HandleMut::VirtualFile(virt) => copy_entities(virt.readdir(cookie)?, host_buf)?,
+        HandleMut::Stream(_) => {
+            unreachable!(
+                "implementation error: fd should have been checked to not be a stream already"
+            );
+        }
     };
 
     trace!("     | *buf_used={:?}", host_bufused);

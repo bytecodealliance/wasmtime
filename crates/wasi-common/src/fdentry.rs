@@ -11,8 +11,9 @@ use std::path::PathBuf;
 use std::{fmt, fs, io};
 
 pub(crate) enum HandleMut<'handle> {
-    OsHandle(OsHandleRef<'handle>),
+    OsHandle(&'handle mut OsHandle),
     VirtualFile(&'handle mut dyn VirtualFile),
+    Stream(OsHandleRef<'handle>),
 }
 
 impl<'descriptor> fmt::Debug for HandleMut<'descriptor> {
@@ -23,20 +24,29 @@ impl<'descriptor> fmt::Debug for HandleMut<'descriptor> {
                 let file: &fs::File = file;
                 write!(f, "{:?}", file)
             }
+            HandleMut::Stream(stream) => {
+                // coerce to the target debug-printable type
+                let file: &fs::File = stream;
+                write!(f, "{:?}", file)
+            }
             HandleMut::VirtualFile(_) => write!(f, "VirtualFile"),
         }
     }
 }
 
 pub(crate) enum Handle<'handle> {
-    OsHandle(OsHandleRef<'handle>),
+    OsHandle(&'handle OsHandle),
     VirtualFile(&'handle dyn VirtualFile),
+    Stream(OsHandleRef<'handle>),
 }
 
 impl<'descriptor> Handle<'descriptor> {
     pub(crate) fn try_clone(&self) -> io::Result<Descriptor> {
         match self {
             Handle::OsHandle(file) => file
+                .try_clone()
+                .map(|f| Descriptor::OsHandle(OsHandle::from(f))),
+            Handle::Stream(stream) => stream
                 .try_clone()
                 .map(|f| Descriptor::OsHandle(OsHandle::from(f))),
             Handle::VirtualFile(virt) => virt.try_clone().map(|f| Descriptor::VirtualFile(f)),
@@ -50,6 +60,11 @@ impl<'descriptor> fmt::Debug for Handle<'descriptor> {
             Handle::OsHandle(file) => {
                 // coerce to the target debug-printable type
                 let file: &fs::File = file;
+                write!(f, "{:?}", file)
+            }
+            Handle::Stream(stream) => {
+                // coerce to the target debug-printable type
+                let file: &fs::File = stream;
                 write!(f, "{:?}", file)
             }
             Handle::VirtualFile(_) => write!(f, "VirtualFile"),
@@ -83,7 +98,7 @@ impl Descriptor {
     /// not just a stream or socket file descriptor.
     pub(crate) fn as_file<'descriptor>(&'descriptor self) -> Result<Handle<'descriptor>> {
         match self {
-            Self::OsHandle(_) => Ok(Handle::OsHandle(descriptor_as_oshandle(self))),
+            Self::OsHandle(handle) => Ok(Handle::OsHandle(handle)),
             Self::VirtualFile(virt) => Ok(Handle::VirtualFile(virt.as_ref())),
             _ => Err(Error::EBADF),
         }
@@ -94,7 +109,7 @@ impl Descriptor {
         &'descriptor mut self,
     ) -> Result<HandleMut<'descriptor>> {
         match self {
-            Self::OsHandle(_) => Ok(HandleMut::OsHandle(descriptor_as_oshandle(self))),
+            Self::OsHandle(handle) => Ok(HandleMut::OsHandle(handle)),
             Self::VirtualFile(virt) => Ok(HandleMut::VirtualFile(virt.as_mut())),
             _ => Err(Error::EBADF),
         }
@@ -103,14 +118,20 @@ impl Descriptor {
     pub(crate) fn as_handle<'descriptor>(&'descriptor self) -> Handle<'descriptor> {
         match self {
             Self::VirtualFile(virt) => Handle::VirtualFile(virt.as_ref()),
-            other => Handle::OsHandle(other.as_os_handle()),
+            Self::OsHandle(handle) => Handle::OsHandle(handle),
+            other @ Self::Stdin | other @ Self::Stderr | other @ Self::Stdout => {
+                Handle::Stream(other.as_os_handle())
+            }
         }
     }
 
     pub(crate) fn as_handle_mut<'descriptor>(&'descriptor mut self) -> HandleMut<'descriptor> {
         match self {
             Self::VirtualFile(virt) => HandleMut::VirtualFile(virt.as_mut()),
-            other => HandleMut::OsHandle(other.as_os_handle()),
+            Self::OsHandle(handle) => HandleMut::OsHandle(handle),
+            other @ Self::Stdin | other @ Self::Stderr | other @ Self::Stdout => {
+                HandleMut::Stream(other.as_os_handle())
+            }
         }
     }
 
@@ -295,15 +316,6 @@ impl<'descriptor> OsHandleRef<'descriptor> {
             handle,
             _ref: PhantomData,
         }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn handle(&self) -> &OsHandle {
-        &self.handle
-    }
-
-    pub(crate) fn handle_mut(&mut self) -> &mut OsHandle {
-        &mut self.handle
     }
 }
 
