@@ -51,6 +51,10 @@ Additional goals for Wasmtime include:
 [Cranelift]: https://github.com/bytecodealliance/cranelift
 [Lightbeam]: https://github.com/bytecodealliance/wasmtime/tree/master/crates/lightbeam
 
+## Using Wasmtime
+
+There are two primary ways to use Wasmtime: as a standalone runtime for running WASI-compatible WASM binaries, and via the embedding API in Rust and C.
+
 #### Including Wasmtime in your project
 
 Wasmtime exposes an API for embedding as a library through the `wasmtime` subcrate,
@@ -64,3 +68,33 @@ For more information, see the [Rust API embedding chapter] of the Wasmtime docum
 [Rust API embedding chapter]: https://bytecodealliance.github.io/wasmtime/embed-rust.html
 
 It's Wasmtime.
+
+#### Standalone runtime
+
+The [Releases](https://github.com/bytecodealliance/wasmtime/releases) page has pre-built binaries for each release, with binaries for Linux, macOS and Windows.
+
+If you want to build the latest Wasmtime from scratch, you will need:
+
+* An updated [Rust toolchain](https://www.rust-lang.org/install.html) installed
+* A C toolchain installed - e.g. the [`build-essential`](https://packages.ubuntu.com/xenial/build-essential) package in Ubuntu
+* A clone of the Wasmtime Git repo
+
+Example:
+
+```sh
+git clone https://github.com/bytecodealliance/wasmtime.git
+git submodule update --init --recursive
+cargo build --release
+```
+
+This will create a binary at `/target/release/wasmtime`, which you can then invoke directly to run a given WASI-compatible WASM binary:
+
+```sh
+$ ./target/release/wasmtime YOUR-BINARY.wasm
+```
+
+See `wasmtime --help` for the full list of options.
+
+### Licence
+
+Apache 2.0 licensed. See the LICENSE file for details.
