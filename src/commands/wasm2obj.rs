@@ -17,7 +17,8 @@ use wasmtime_debug::{emit_debugsections, read_debuginfo};
 use wasmtime_environ::Lightbeam;
 use wasmtime_environ::{
     cache_init, entity::EntityRef, settings, settings::Configurable, wasm::DefinedMemoryIndex,
-    Compiler, Cranelift, ModuleEnvironment, ModuleVmctxInfo, Tunables, VMOffsets,
+    wasm::MemoryIndex, Compiler, Cranelift, ModuleEnvironment, ModuleMemoryOffset, ModuleVmctxInfo,
+    Tunables, VMOffsets,
 };
 use wasmtime_jit::native;
 use wasmtime_obj::emit_module;
@@ -161,12 +162,22 @@ impl WasmToObjCommand {
             }
             .context("failed to compile module")?;
 
+        if compilation.is_empty() {
+            bail!("no functions were found/compiled");
+        }
+
         let module_vmctx_info = {
             let ofs = VMOffsets::new(target_config.pointer_bytes(), &module);
-            let memory_offset =
-                ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)) as i64;
             ModuleVmctxInfo {
-                memory_offset,
+                memory_offset: if ofs.num_imported_memories > 0 {
+                    ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
+                } else if ofs.num_defined_memories > 0 {
+                    ModuleMemoryOffset::Defined(
+                        ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)),
+                    )
+                } else {
+                    ModuleMemoryOffset::None
+                },
                 stack_slots,
             }
         };

@@ -14,10 +14,11 @@ use std::convert::TryFrom;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
-use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex};
+use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex};
 use wasmtime_environ::{
     Compilation, CompileError, CompiledFunction, CompiledFunctionUnwindInfo, Compiler as _C,
-    FunctionBodyData, Module, ModuleVmctxInfo, Relocations, Traps, Tunables, VMOffsets,
+    FunctionBodyData, Module, ModuleMemoryOffset, ModuleVmctxInfo, Relocations, Traps, Tunables,
+    VMOffsets,
 };
 use wasmtime_runtime::{
     get_mut_trap_registry, jit_function_registry, InstantiationError, SignatureRegistry,
@@ -174,38 +175,42 @@ impl Compiler {
             jit_function_registry::register(ptr as usize, ptr as usize + body_len, tag);
         }
 
-        let dbg = if let Some(debug_data) = debug_data {
+        // Translate debug info (DWARF) only if at least one function is present.
+        let dbg = if debug_data.is_some() && !allocated_functions.is_empty() {
             let target_config = self.isa.frontend_config();
             let ofs = VMOffsets::new(target_config.pointer_bytes(), &module);
-            if ofs.num_defined_memories > 0 {
-                let mut funcs = Vec::new();
-                for (i, allocated) in allocated_functions.into_iter() {
-                    let ptr = (*allocated) as *const u8;
-                    let body_len = compilation.get(i).body.len();
-                    funcs.push((ptr, body_len));
-                }
-                let module_vmctx_info = {
-                    let memory_offset =
-                        ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)) as i64;
-                    ModuleVmctxInfo {
-                        memory_offset,
-                        stack_slots,
-                    }
-                };
-                let bytes = emit_debugsections_image(
-                    self.isa.triple().clone(),
-                    target_config,
-                    &debug_data,
-                    &module_vmctx_info,
-                    &address_transform,
-                    &value_ranges,
-                    &funcs,
-                )
-                .map_err(SetupError::DebugInfo)?;
-                Some(bytes)
-            } else {
-                None
+
+            let mut funcs = Vec::new();
+            for (i, allocated) in allocated_functions.into_iter() {
+                let ptr = (*allocated) as *const u8;
+                let body_len = compilation.get(i).body.len();
+                funcs.push((ptr, body_len));
             }
+            let module_vmctx_info = {
+                ModuleVmctxInfo {
+                    memory_offset: if ofs.num_imported_memories > 0 {
+                        ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
+                    } else if ofs.num_defined_memories > 0 {
+                        ModuleMemoryOffset::Defined(
+                            ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)),
+                        )
+                    } else {
+                        ModuleMemoryOffset::None
+                    },
+                    stack_slots,
+                }
+            };
+            let bytes = emit_debugsections_image(
+                self.isa.triple().clone(),
+                target_config,
+                debug_data.as_ref().unwrap(),
+                &module_vmctx_info,
+                &address_transform,
+                &value_ranges,
+                &funcs,
+            )
+            .map_err(SetupError::DebugInfo)?;
+            Some(bytes)
         } else {
             None
         };

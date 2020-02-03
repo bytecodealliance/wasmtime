@@ -13,3 +13,9 @@ fn instantiate_empty_module() {
     let data = wat::parse_str(include_str!("./regressions/empty.wat")).unwrap();
     oracles::instantiate(&data, Strategy::Auto);
 }
+
+#[test]
+fn instantiate_empty_module_with_memory() {
+    let data = wat::parse_str(include_str!("./regressions/empty_with_memory.wat")).unwrap();
+    oracles::instantiate(&data, Strategy::Auto);
+}

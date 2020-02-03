@@ -7,12 +7,26 @@ use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::ir::{StackSlots, ValueLabel, ValueLabelsRanges, ValueLoc};
 use wasmtime_environ::isa::RegUnit;
 use wasmtime_environ::wasm::{get_vmctx_value_label, DefinedFuncIndex};
+use wasmtime_environ::ModuleMemoryOffset;
 
 #[derive(Debug)]
 pub struct FunctionFrameInfo<'a> {
     pub value_ranges: &'a ValueLabelsRanges,
-    pub memory_offset: i64,
+    pub memory_offset: ModuleMemoryOffset,
     pub stack_slots: &'a StackSlots,
+}
+
+impl<'a> FunctionFrameInfo<'a> {
+    fn vmctx_memory_offset(&self) -> Option<i64> {
+        match self.memory_offset {
+            ModuleMemoryOffset::Defined(x) => Some(x as i64),
+            ModuleMemoryOffset::Imported(_) => {
+                // TODO implement memory offset for imported memory
+                None
+            }
+            ModuleMemoryOffset::None => None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -142,20 +156,32 @@ fn append_memory_deref(
 ) -> write::Result<bool> {
     use gimli::write::Writer;
     let mut writer = write::EndianVec::new(endian);
+    // FIXME for imported memory
     match vmctx_loc {
         ValueLoc::Reg(vmctx_reg) => {
             let reg = map_reg(vmctx_reg);
             writer.write_u8(gimli::constants::DW_OP_breg0.0 + reg.0 as u8)?;
-            writer.write_sleb128(frame_info.memory_offset)?;
+            let memory_offset = match frame_info.vmctx_memory_offset() {
+                Some(offset) => offset,
+                None => {
+                    return Ok(false);
+                }
+            };
+            writer.write_sleb128(memory_offset)?;
         }
         ValueLoc::Stack(ss) => {
             if let Some(ss_offset) = frame_info.stack_slots[ss].offset {
                 writer.write_u8(gimli::constants::DW_OP_breg0.0 + X86_64::RBP.0 as u8)?;
                 writer.write_sleb128(ss_offset as i64 + 16)?;
                 writer.write_u8(gimli::constants::DW_OP_deref.0 as u8)?;
-
                 writer.write_u8(gimli::constants::DW_OP_consts.0 as u8)?;
-                writer.write_sleb128(frame_info.memory_offset)?;
+                let memory_offset = match frame_info.vmctx_memory_offset() {
+                    Some(offset) => offset,
+                    None => {
+                        return Ok(false);
+                    }
+                };
+                writer.write_sleb128(memory_offset)?;
                 writer.write_u8(gimli::constants::DW_OP_plus.0 as u8)?;
             } else {
                 return Ok(false);

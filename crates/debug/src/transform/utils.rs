@@ -3,7 +3,7 @@ use super::expression::{CompiledExpression, FunctionFrameInfo};
 use anyhow::Error;
 use gimli::write;
 use wasmtime_environ::wasm::DefinedFuncIndex;
-use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
+use wasmtime_environ::{ModuleMemoryOffset, ModuleVmctxInfo, ValueLabelsRanges};
 
 pub(crate) fn add_internal_types(
     comp_unit: &mut write::Unit,
@@ -46,32 +46,46 @@ pub(crate) fn add_internal_types(
         write::AttributeValue::ThisUnitEntryRef(memory_byte_die_id),
     );
 
-    let memory_offset = module_info.memory_offset;
+    // Create artificial VMContext type and its reference for convinience viewing
+    // its fields (such as memory ref) in a debugger.
     let vmctx_die_id = comp_unit.add(root_id, gimli::DW_TAG_structure_type);
     let vmctx_die = comp_unit.get_mut(vmctx_die_id);
     vmctx_die.set(
         gimli::DW_AT_name,
         write::AttributeValue::StringRef(out_strings.add("WasmtimeVMContext")),
     );
-    vmctx_die.set(
-        gimli::DW_AT_byte_size,
-        write::AttributeValue::Data4(memory_offset as u32 + 8),
-    );
 
-    let m_die_id = comp_unit.add(vmctx_die_id, gimli::DW_TAG_member);
-    let m_die = comp_unit.get_mut(m_die_id);
-    m_die.set(
-        gimli::DW_AT_name,
-        write::AttributeValue::StringRef(out_strings.add("memory")),
-    );
-    m_die.set(
-        gimli::DW_AT_type,
-        write::AttributeValue::ThisUnitEntryRef(memory_bytes_die_id),
-    );
-    m_die.set(
-        gimli::DW_AT_data_member_location,
-        write::AttributeValue::Udata(memory_offset as u64),
-    );
+    match module_info.memory_offset {
+        ModuleMemoryOffset::Defined(memory_offset) => {
+            // The context has defined memory: extend the WasmtimeVMContext size
+            // past the "memory" field.
+            const MEMORY_FIELD_SIZE_PLUS_PADDING: u32 = 8;
+            vmctx_die.set(
+                gimli::DW_AT_byte_size,
+                write::AttributeValue::Data4(memory_offset + MEMORY_FIELD_SIZE_PLUS_PADDING),
+            );
+
+            // Define the "memory" field which is a direct pointer to allocated Wasm memory.
+            let m_die_id = comp_unit.add(vmctx_die_id, gimli::DW_TAG_member);
+            let m_die = comp_unit.get_mut(m_die_id);
+            m_die.set(
+                gimli::DW_AT_name,
+                write::AttributeValue::StringRef(out_strings.add("memory")),
+            );
+            m_die.set(
+                gimli::DW_AT_type,
+                write::AttributeValue::ThisUnitEntryRef(memory_bytes_die_id),
+            );
+            m_die.set(
+                gimli::DW_AT_data_member_location,
+                write::AttributeValue::Udata(memory_offset as u64),
+            );
+        }
+        ModuleMemoryOffset::Imported(_) => {
+            // TODO implement convinience pointer to and additional types for VMMemoryImport.
+        }
+        ModuleMemoryOffset::None => (),
+    }
 
     let vmctx_ptr_die_id = comp_unit.add(root_id, gimli::DW_TAG_pointer_type);
     let vmctx_ptr_die = comp_unit.get_mut(vmctx_ptr_die_id);
@@ -141,7 +155,7 @@ where
     if let Some(value_ranges) = value_ranges.get(func_index) {
         let frame_info = FunctionFrameInfo {
             value_ranges,
-            memory_offset: module_info.memory_offset,
+            memory_offset: module_info.memory_offset.clone(),
             stack_slots: &module_info.stack_slots[func_index],
         };
         Some(frame_info)

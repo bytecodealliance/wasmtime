@@ -40,7 +40,8 @@ pub mod cranelift;
 pub mod lightbeam;
 
 pub use crate::address_map::{
-    FunctionAddressMap, InstructionAddressMap, ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges,
+    FunctionAddressMap, InstructionAddressMap, ModuleAddressMap, ModuleMemoryOffset,
+    ModuleVmctxInfo, ValueLabelsRanges,
 };
 pub use crate::cache::{create_new_config as cache_create_new_config, init as cache_init};
 pub use crate::compilation::{
