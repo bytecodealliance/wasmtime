@@ -9,4 +9,8 @@ generate = { path = "crates/generate" }
 memory = { path = "crates/memory" }
 
 [workspace]
-members = ["crates/generate"]
+members = [
+  "crates/generate",
+  "crates/memory"
+]
+exclude = ["crates/WASI"]
