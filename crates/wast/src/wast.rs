@@ -339,7 +339,6 @@ impl WastContext {
                     )
                 }
             }
-            AssertReturnFunc { .. } => bail!("need to implement assert_return_func"),
         }
 
         Ok(())
