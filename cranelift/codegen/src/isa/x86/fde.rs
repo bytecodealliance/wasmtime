@@ -163,9 +163,8 @@ fn to_cfi(
             let cfa_offset = *cfa_offset as i32;
             CallFrameInstruction::Offset(X86_64::RA, cfa_offset)
         }
-        _ => {
-            return None;
-        }
+        FrameLayoutChange::Preserve => CallFrameInstruction::RememberState,
+        FrameLayoutChange::Restore => CallFrameInstruction::RestoreState,
     })
 }
 
@@ -265,7 +264,10 @@ mod tests {
     use super::*;
     use crate::binemit::{FrameUnwindOffset, Reloc};
     use crate::cursor::{Cursor, FuncCursor};
-    use crate::ir::{ExternalName, InstBuilder, Signature, StackSlotData, StackSlotKind};
+    use crate::ir::{
+        types, AbiParam, ExternalName, InstBuilder, Signature, StackSlotData, StackSlotKind,
+        TrapCode,
+    };
     use crate::isa::{lookup, CallConv};
     use crate::settings::{builder, Flags};
     use crate::Context;
@@ -349,6 +351,81 @@ mod tests {
         if let Some(stack_slot) = stack_slot {
             func.stack_slots.push(stack_slot);
         }
+
+        func
+    }
+
+    #[test]
+    fn test_multi_return_func() {
+        let isa = lookup(triple!("x86_64"))
+            .expect("expect x86 ISA")
+            .finish(Flags::new(builder()));
+
+        let mut context = Context::for_function(create_multi_return_function(CallConv::SystemV));
+        context.func.collect_frame_layout_info();
+
+        context.compile(&*isa).expect("expected compilation");
+
+        let mut sink = SimpleUnwindSink(Vec::new(), 0, Vec::new());
+        emit_fde(&context.func, &*isa, &mut sink);
+
+        assert_eq!(
+            sink.0,
+            vec![
+                20, 0, 0, 0, // CIE len
+                0, 0, 0, 0,   // CIE marker
+                1,   // version
+                0,   // augmentation string
+                1,   // code aligment = 1
+                120, // data alignment = -8
+                16,  // RA = r16
+                0x0c, 0x07, 0x08, // DW_CFA_def_cfa r7, 8
+                0x90, 0x01, //  DW_CFA_offset r16, -8 * 1
+                0, 0, 0, 0, 0, 0, // padding
+                36, 0, 0, 0, // FDE len
+                28, 0, 0, 0, // CIE offset
+                0, 0, 0, 0, 0, 0, 0, 0, // addr reloc
+                15, 0, 0, 0, 0, 0, 0, 0,    // function length
+                0x42, // DW_CFA_advance_loc 2
+                0x0e, 0x10, // DW_CFA_def_cfa_offset 16
+                0x86, 0x02, // DW_CFA_offset r6, -8 * 2
+                0x43, // DW_CFA_advance_loc 3
+                0x0d, 0x06, // DW_CFA_def_cfa_register
+                0x47, // DW_CFA_advance_loc 10
+                0x0a, // DW_CFA_preserve_state
+                0x0c, 0x07, 0x08, // DW_CFA_def_cfa r7, 8
+                0x41, // DW_CFA_advance_loc 1
+                0x0b, // DW_CFA_restore_state
+                // NOTE: no additional CFA directives -- DW_CFA_restore_state
+                // is done before trap and it is last instruction in the function.
+                0, // padding
+                0, 0, 0, 0, // End of FDEs
+            ]
+        );
+        assert_eq!(sink.1, 24);
+        assert_eq!(sink.2.len(), 1);
+    }
+
+    fn create_multi_return_function(call_conv: CallConv) -> Function {
+        let mut sig = Signature::new(call_conv);
+        sig.params.push(AbiParam::new(types::I32));
+        let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig);
+
+        let ebb0 = func.dfg.make_ebb();
+        let v0 = func.dfg.append_ebb_param(ebb0, types::I32);
+        let ebb1 = func.dfg.make_ebb();
+        let ebb2 = func.dfg.make_ebb();
+
+        let mut pos = FuncCursor::new(&mut func);
+        pos.insert_ebb(ebb0);
+        pos.ins().brnz(v0, ebb2, &[]);
+        pos.ins().jump(ebb1, &[]);
+
+        pos.insert_ebb(ebb1);
+        pos.ins().return_(&[]);
+
+        pos.insert_ebb(ebb2);
+        pos.ins().trap(TrapCode::User(0));
 
         func
     }
