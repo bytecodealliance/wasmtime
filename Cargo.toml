@@ -78,3 +78,14 @@ test_programs = ["test-programs/test_programs"]
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[patch.crates-io]
+cranelift-codegen = { path = "../cranelift/cranelift-codegen" }
+cranelift-entity = { path = "../cranelift/cranelift-entity" }
+cranelift-frontend = { path = "../cranelift/cranelift-frontend" }
+cranelift-native = { path = "../cranelift/cranelift-native" }
+cranelift-wasm = { path = "../cranelift/cranelift-wasm" }
+# wasmprinter = { path = "../wasmprinter" }
+# wasmparser = { path = "../wasmparser" }
+# walrus = { path = "../walrus" }
+# wasm-webidl-bindings = { path = "../wasm-webidl-bindings" }
