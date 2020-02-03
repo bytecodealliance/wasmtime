@@ -1,5 +1,3 @@
-
-
 (typename $errno
     (enum u32
         $ok
