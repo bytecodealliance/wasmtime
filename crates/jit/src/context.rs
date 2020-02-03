@@ -26,7 +26,7 @@ pub enum ContextError {
 }
 
 /// The collection of features configurable during compilation
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct Features {
     /// marks whether the proposed thread feature is enabled or disabled
     pub threads: bool,
