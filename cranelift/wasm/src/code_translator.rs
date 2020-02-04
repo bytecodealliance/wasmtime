@@ -1288,6 +1288,22 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().usub_sat(a, b))
         }
+        Operator::I8x16MinS | Operator::I16x8MinS | Operator::I32x4MinS => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().imin(a, b))
+        }
+        Operator::I8x16MinU | Operator::I16x8MinU | Operator::I32x4MinU => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().umin(a, b))
+        }
+        Operator::I8x16MaxS | Operator::I16x8MaxS | Operator::I32x4MaxS => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().imax(a, b))
+        }
+        Operator::I8x16MaxU | Operator::I16x8MaxU | Operator::I32x4MaxU => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().umax(a, b))
+        }
         Operator::I8x16Neg | Operator::I16x8Neg | Operator::I32x4Neg | Operator::I64x2Neg => {
             let a = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().ineg(a))
@@ -1813,6 +1829,10 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I8x16Sub
         | Operator::I8x16SubSaturateS
         | Operator::I8x16SubSaturateU
+        | Operator::I8x16MinS
+        | Operator::I8x16MinU
+        | Operator::I8x16MaxS
+        | Operator::I8x16MaxU
         | Operator::I8x16Mul => I8X16,
 
         Operator::I16x8Splat
@@ -1842,6 +1862,10 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I16x8Sub
         | Operator::I16x8SubSaturateS
         | Operator::I16x8SubSaturateU
+        | Operator::I16x8MinS
+        | Operator::I16x8MinU
+        | Operator::I16x8MaxS
+        | Operator::I16x8MaxU
         | Operator::I16x8Mul => I16X8,
 
         Operator::I32x4Splat
@@ -1867,6 +1891,10 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I32x4Add
         | Operator::I32x4Sub
         | Operator::I32x4Mul
+        | Operator::I32x4MinS
+        | Operator::I32x4MinU
+        | Operator::I32x4MaxS
+        | Operator::I32x4MaxU
         | Operator::F32x4ConvertI32x4S
         | Operator::F32x4ConvertI32x4U => I32X4,
 
