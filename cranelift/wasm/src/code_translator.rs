@@ -2037,5 +2037,5 @@ pub fn wasm_param_types(params: &[ir::AbiParam], is_wasm: impl Fn(usize) -> bool
             ret.push(param.value_type);
         }
     }
-    return ret;
+    ret
 }
