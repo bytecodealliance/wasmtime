@@ -89,7 +89,8 @@ pub fn instantiate(
     // If this module expects to be able to use wasi then go ahead and hook
     // that up into the imported crates.
     let wasi = if let Some(module_name) = data.find_wasi_module_name() {
-        let cx = wasmtime_wasi::WasiCtxBuilder::new().build()
+        let cx = wasmtime_wasi::WasiCtxBuilder::new()
+            .build()
             .map_err(|e| err2py(e.into()))?;
         let wasi = wasmtime_wasi::Wasi::new(&store, cx);
         Some((module_name, wasi))

@@ -2,7 +2,7 @@ pub mod old;
 
 use wasi_common::hostcalls;
 
-pub use wasi_common::{WasiCtxBuilder, WasiCtx};
+pub use wasi_common::{WasiCtx, WasiCtxBuilder};
 
 // Defines a `struct Wasi` with member fields and appropriate APIs for dealing
 // with all the various WASI exports.
