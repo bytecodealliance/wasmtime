@@ -119,16 +119,27 @@ fn map_reg(reg: RegUnit) -> Register {
 }
 
 fn translate_loc(loc: ValueLoc, frame_info: Option<&FunctionFrameInfo>) -> Option<Vec<u8>> {
+    use gimli::write::Writer;
     match loc {
         ValueLoc::Reg(reg) => {
             let machine_reg = map_reg(reg).0 as u8;
-            assert_lt!(machine_reg, 32); // FIXME
-            Some(vec![gimli::constants::DW_OP_reg0.0 + machine_reg])
+            Some(if machine_reg < 32 {
+                vec![gimli::constants::DW_OP_reg0.0 + machine_reg]
+            } else {
+                let endian = gimli::RunTimeEndian::Little;
+                let mut writer = write::EndianVec::new(endian);
+                writer
+                    .write_u8(gimli::constants::DW_OP_regx.0 as u8)
+                    .expect("regx");
+                writer
+                    .write_uleb128(machine_reg.into())
+                    .expect("machine_reg");
+                writer.into_vec()
+            })
         }
         ValueLoc::Stack(ss) => {
             if let Some(frame_info) = frame_info {
                 if let Some(ss_offset) = frame_info.stack_slots[ss].offset {
-                    use gimli::write::Writer;
                     let endian = gimli::RunTimeEndian::Little;
                     let mut writer = write::EndianVec::new(endian);
                     writer
