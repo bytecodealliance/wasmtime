@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-faerie"
-version = "0.56.0"
+version = "0.57.0"
 authors = ["The Cranelift Project Developers"]
 description = "Emit Cranelift output to native object files with Faerie"
 repository = "https://github.com/bytecodealliance/cranelift"
@@ -10,7 +10,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-module = { path = "../cranelift-module", version = "0.56.0" }
+cranelift-module = { path = "../cranelift-module", version = "0.57.0" }
 faerie = "0.14.0"
 goblin = "0.1.0"
 anyhow = "1.0"
@@ -18,7 +18,7 @@ target-lexicon = "0.10"
 
 [dependencies.cranelift-codegen]
 path = "../cranelift-codegen"
-version = "0.56.0"
+version = "0.57.0"
 default-features = false
 features = ["std"]
 
