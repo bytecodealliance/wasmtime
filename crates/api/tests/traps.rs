@@ -308,3 +308,34 @@ fn rust_panic_start_function() -> Result<()> {
     assert_eq!(err.downcast_ref::<&'static str>(), Some(&"this is a panic"));
     Ok(())
 }
+
+#[test]
+fn mismatched_arguments() -> Result<()> {
+    let store = Store::default();
+    let binary = wat::parse_str(
+        r#"
+            (module $a
+                (func (export "foo") (param i32))
+            )
+        "#,
+    )?;
+
+    let module = Module::new(&store, &binary)?;
+    let instance = Instance::new(&module, &[])?;
+    let func = instance.exports()[0].func().unwrap().clone();
+    assert_eq!(
+        func.call(&[]).unwrap_err().message(),
+        "expected 1 arguments, got 0"
+    );
+    assert_eq!(
+        func.call(&[Val::F32(0)]).unwrap_err().message(),
+        "argument type mismatch",
+    );
+    assert_eq!(
+        func.call(&[Val::I32(0), Val::I32(1)])
+            .unwrap_err()
+            .message(),
+        "expected 1 arguments, got 2"
+    );
+    Ok(())
+}

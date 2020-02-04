@@ -127,15 +127,32 @@ impl WrappedCallable for WasmtimeFn {
             } => (*vmctx, *address, signature.clone()),
             _ => panic!("unexpected export type in Callable"),
         };
+        if signature.params.len() - 2 != params.len() {
+            return Err(Trap::new(format!(
+                "expected {} arguments, got {}",
+                signature.params.len() - 2,
+                params.len()
+            )));
+        }
+        if signature.returns.len() != results.len() {
+            return Err(Trap::new(format!(
+                "expected {} results, got {}",
+                signature.returns.len(),
+                results.len()
+            )));
+        }
 
         let value_size = mem::size_of::<u128>();
         let mut values_vec = vec![0; max(params.len(), results.len())];
 
         // Store the argument values into `values_vec`.
-        for (index, arg) in params.iter().enumerate() {
+        let param_tys = signature.params.iter().skip(2);
+        for ((arg, slot), ty) in params.iter().zip(&mut values_vec).zip(param_tys) {
+            if arg.ty().get_wasmtime_type() != Some(ty.value_type) {
+                return Err(Trap::new("argument type mismatch"));
+            }
             unsafe {
-                let ptr = values_vec.as_mut_ptr().add(index);
-                arg.write_value_to(ptr);
+                arg.write_value_to(slot);
             }
         }
 
