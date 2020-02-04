@@ -3,7 +3,6 @@
 use crate::{init_file_per_thread_logger, pick_compilation_strategy, CommonOptions};
 use anyhow::{bail, Context as _, Result};
 use std::{
-    collections::HashMap,
     ffi::{OsStr, OsString},
     fmt::Write,
     fs::File,
@@ -14,9 +13,7 @@ use wasi_common::preopen_dir;
 use wasmtime::{Config, Engine, Instance, Module, Store};
 use wasmtime_environ::cache_init;
 use wasmtime_interface_types::ModuleData;
-use wasmtime_wasi::{
-    create_wasi_instance, old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0,
-};
+use wasmtime_wasi::{old::snapshot_0::Wasi as WasiSnapshot0, Wasi};
 
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
     // Do not accept wasmtime subcommand names as the module name
@@ -134,20 +131,12 @@ impl RunCommand {
 
         let engine = Engine::new(&config);
         let store = Store::new(&engine);
-        let mut module_registry = HashMap::new();
 
         // Make wasi available by default.
         let preopen_dirs = self.compute_preopen_dirs()?;
         let argv = self.compute_argv();
 
-        let wasi_unstable =
-            create_wasi_instance_snapshot_0(&store, &preopen_dirs, &argv, &self.vars)?;
-
-        let wasi_snapshot_preview1 =
-            create_wasi_instance(&store, &preopen_dirs, &argv, &self.vars)?;
-
-        module_registry.insert("wasi_unstable".to_owned(), wasi_unstable);
-        module_registry.insert("wasi_snapshot_preview1".to_owned(), wasi_snapshot_preview1);
+        let module_registry = ModuleRegistry::new(&store, &preopen_dirs, &argv, &self.vars)?;
 
         // Load the preload wasm modules.
         for preload in self.preloads.iter() {
@@ -208,7 +197,7 @@ impl RunCommand {
 
     fn instantiate_module(
         store: &Store,
-        module_registry: &HashMap<String, Instance>,
+        module_registry: &ModuleRegistry,
         path: &Path,
     ) -> Result<(Instance, Module, Vec<u8>)> {
         // Read the wasm module binary either as `*.wat` or a raw binary
@@ -221,20 +210,20 @@ impl RunCommand {
             .imports()
             .iter()
             .map(|i| {
-                let module_name = i.module();
-                if let Some(instance) = module_registry.get(module_name) {
-                    let field_name = i.name();
-                    if let Some(export) = instance.get_export(field_name) {
-                        Ok(export.clone())
-                    } else {
-                        bail!(
-                            "Import {} was not found in module {}",
-                            field_name,
-                            module_name
-                        )
+                let export = match i.module() {
+                    "wasi_snapshot_preview1" => {
+                        module_registry.wasi_snapshot_preview1.get_export(i.name())
                     }
-                } else {
-                    bail!("Import module {} was not found", module_name)
+                    "wasi_unstable" => module_registry.wasi_unstable.get_export(i.name()),
+                    other => bail!("import module `{}` was not found", other),
+                };
+                match export {
+                    Some(export) => Ok(export.clone().into()),
+                    None => bail!(
+                        "import `{}` was not found in module `{}`",
+                        i.name(),
+                        i.module()
+                    ),
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -245,11 +234,7 @@ impl RunCommand {
         Ok((instance, module, data))
     }
 
-    fn handle_module(
-        &self,
-        store: &Store,
-        module_registry: &HashMap<String, Instance>,
-    ) -> Result<()> {
+    fn handle_module(&self, store: &Store, module_registry: &ModuleRegistry) -> Result<()> {
         let (instance, module, data) =
             Self::instantiate_module(store, module_registry, &self.module)?;
 
@@ -335,5 +320,42 @@ impl RunCommand {
         }
 
         Ok(())
+    }
+}
+
+struct ModuleRegistry {
+    wasi_snapshot_preview1: Wasi,
+    wasi_unstable: WasiSnapshot0,
+}
+
+impl ModuleRegistry {
+    fn new(
+        store: &Store,
+        preopen_dirs: &[(String, File)],
+        argv: &[String],
+        vars: &[(String, String)],
+    ) -> Result<ModuleRegistry> {
+        let mut cx1 = wasi_common::WasiCtxBuilder::new()
+            .inherit_stdio()
+            .args(argv)
+            .envs(vars);
+        for (name, file) in preopen_dirs {
+            cx1 = cx1.preopened_dir(file.try_clone()?, name);
+        }
+        let cx1 = cx1.build()?;
+
+        let mut cx2 = wasi_common::old::snapshot_0::WasiCtxBuilder::new()
+            .inherit_stdio()
+            .args(argv)
+            .envs(vars);
+        for (name, file) in preopen_dirs {
+            cx2 = cx2.preopened_dir(file.try_clone()?, name);
+        }
+        let cx2 = cx2.build()?;
+
+        Ok(ModuleRegistry {
+            wasi_snapshot_preview1: Wasi::new(store, cx1),
+            wasi_unstable: WasiSnapshot0::new(store, cx2),
+        })
     }
 }

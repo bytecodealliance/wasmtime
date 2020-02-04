@@ -11,18 +11,16 @@ enum Abi {
 
 /// This is a single-use macro intended to be used in the `wasmtime-wasi` crate.
 ///
-/// This macro will generate a function, `add_wrappers_to_module`, which will
-/// use the input arguments to register all wasi functions inside of a `Module`
-/// instance. This will automatically assign the wasm underlying types and
-/// perform conversions from the wasm type to the underlying wasi type (often
-/// unsigned or of a smaller width).
+/// This macro will generate a structure, `Wasi`, which will create all the
+/// functions necessary to bind wasi and hook everything up via the `wasmtime`
+/// crate.
 ///
 /// The generated shim functions here will also `trace!` their arguments for
 /// logging purposes. Otherwise this is hopefully somewhat straightforward!
 ///
 /// I'd recommend using `cargo +nightly expand` to explore the output of this
 /// macro some more.
-pub fn add_wrappers_to_module(args: TokenStream) -> TokenStream {
+pub fn define_struct(args: TokenStream) -> TokenStream {
     let (path, _phase) = utils::witx_path_from_args(args);
     let doc = match witx::load(&[&path]) {
         Ok(doc) => doc,
@@ -31,12 +29,18 @@ pub fn add_wrappers_to_module(args: TokenStream) -> TokenStream {
         }
     };
 
-    let mut add = Vec::new();
+    let mut fields = Vec::new();
+    let mut get_exports = Vec::new();
+    let mut ctor_externs = Vec::new();
+    let mut ctor_fields = Vec::new();
 
     for module in doc.modules() {
         for func in module.funcs() {
             let name = func.name.as_str();
             let name_ident = Ident::new(func.name.as_str(), Span::call_site());
+            fields.push(quote! { pub #name_ident: wasmtime::Func });
+            get_exports.push(quote! { #name => Some(&self.#name_ident) });
+            ctor_fields.push(name_ident.clone());
 
             let mut shim_arg_decls = Vec::new();
             let mut params = Vec::new();
@@ -178,56 +182,71 @@ pub fn add_wrappers_to_module(args: TokenStream) -> TokenStream {
             }
 
             let format_str = format!("{}({})", name, formats.join(", "));
-            add.push(quote! {
-                let sig = module.signatures.push(translate_signature(
-                    ir::Signature {
-                        params: vec![#(cranelift_codegen::ir::AbiParam::new(#params)),*],
-                        returns: vec![#(cranelift_codegen::ir::AbiParam::new(#returns)),*],
-                        call_conv,
-                    },
-                    pointer_type,
-                ));
-                let func = module.functions.push(sig);
-                module
-                    .exports
-                    .insert(#name.to_owned(), Export::Function(func));
-
-                unsafe extern "C" fn #name_ident(
-                    ctx: *mut wasmtime_runtime::VMContext,
-                    caller_ctx: *mut wasmtime_runtime::VMContext,
-                    #(#shim_arg_decls),*
-                ) -> #ret_ty {
-                    log::trace!(
-                        #format_str,
-                        #(#format_args),*
-                    );
-                    let mut wasi_ctx = match get_wasi_ctx(&mut *ctx) {
-                        Ok(e) => e.borrow_mut(),
-                        Err(e) => #handle_early_error,
-                    };
-                    let memory = match get_memory(&mut *caller_ctx) {
-                        Ok(e) => e,
-                        Err(e) => #handle_early_error,
-                    };
-                    hostcalls::#name_ident(
-                        &mut *wasi_ctx,
-                        memory,
-                        #(#hostcall_args),*
-                    ) #cvt_ret
-                }
-                finished_functions.push(#name_ident as *const _);
+            let wrap = format_ident!("wrap{}", shim_arg_decls.len() + 1);
+            ctor_externs.push(quote! {
+                let my_cx = cx.clone();
+                let #name_ident = wasmtime::Func::#wrap(
+                    store,
+                    move |mem: crate::WasiCallerMemory #(,#shim_arg_decls)*| -> #ret_ty {
+                        log::trace!(
+                            #format_str,
+                            #(#format_args),*
+                        );
+                        unsafe {
+                            let memory = match mem.get() {
+                                Ok(e) => e,
+                                Err(e) => #handle_early_error,
+                            };
+                            hostcalls::#name_ident(
+                                &mut my_cx.borrow_mut(),
+                                memory,
+                                #(#hostcall_args),*
+                            ) #cvt_ret
+                        }
+                    }
+                );
             });
         }
     }
 
     quote! {
-        pub fn add_wrappers_to_module(
-            module: &mut Module,
-            finished_functions: &mut PrimaryMap<DefinedFuncIndex, *const wasmtime_runtime::VMFunctionBody>,
-            call_conv: isa::CallConv,
-            pointer_type: types::Type,
-        ) {
-            #(#add)*
+        /// An instantiated instance of the wasi exports.
+        ///
+        /// This represents a wasi module which can be used to instantiate other
+        /// wasm modules. This structure exports all that various fields of the
+        /// wasi instance as fields which can be used to implement your own
+        /// instantiation logic, if necessary. Additionally [`Wasi::get_export`]
+        /// can be used to do name-based resolution.
+        pub struct Wasi {
+            #(#fields,)*
+        }
+
+        impl Wasi {
+            /// Creates a new [`Wasi`] instance.
+            ///
+            /// External values are allocated into the `store` provided and
+            /// configuration of the wasi instance itself should be all
+            /// contained in the `cx` parameter.
+            pub fn new(store: &wasmtime::Store, cx: WasiCtx) -> Wasi {
+                let cx = std::rc::Rc::new(std::cell::RefCell::new(cx));
+                #(#ctor_externs)*
+
+                Wasi {
+                    #(#ctor_fields,)*
+                }
+            }
+
+            /// Looks up a field called `name` in this structure, returning it
+            /// if found.
+            ///
+            /// This is often useful when instantiating a `wasmtime` instance
+            /// where name resolution often happens with strings.
+            pub fn get_export(&self, name: &str) -> Option<&wasmtime::Func> {
+                match name {
+                    #(#get_exports,)*
+                    _ => None,
+                }
+            }
         }
     }
 }

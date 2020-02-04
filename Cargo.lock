@@ -1655,9 +1655,6 @@ dependencies = [
  "tempfile",
  "wasi-common",
  "wasmtime",
- "wasmtime-environ",
- "wasmtime-jit",
- "wasmtime-runtime",
  "wasmtime-wasi",
  "wat",
 ]
@@ -2075,9 +2072,7 @@ dependencies = [
  "target-lexicon",
  "wasmparser 0.47.0",
  "wasmtime",
- "wasmtime-environ",
  "wasmtime-interface-types",
- "wasmtime-runtime",
  "wasmtime-wasi",
 ]
 
@@ -2123,15 +2118,10 @@ dependencies = [
 name = "wasmtime-wasi"
 version = "0.9.0"
 dependencies = [
- "cranelift-codegen",
- "cranelift-entity",
- "cranelift-wasm",
+ "anyhow",
  "log",
- "target-lexicon",
  "wasi-common",
  "wasmtime",
- "wasmtime-environ",
- "wasmtime-jit",
  "wasmtime-runtime",
  "wig",
 ]

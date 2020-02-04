@@ -34,8 +34,8 @@ pub fn witx_wasi32_types(args: TokenStream) -> TokenStream {
 
 /// A single-use macro in the `wasmtime-wasi` crate.
 #[proc_macro]
-pub fn define_add_wrappers_to_module(args: TokenStream) -> TokenStream {
-    wasi::add_wrappers_to_module(args.into()).into()
+pub fn define_wasi_struct(args: TokenStream) -> TokenStream {
+    wasi::define_struct(args.into()).into()
 }
 
 #[proc_macro]

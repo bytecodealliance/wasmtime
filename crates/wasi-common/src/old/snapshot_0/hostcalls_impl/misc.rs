@@ -183,7 +183,10 @@ pub(crate) fn clock_time_get(
     enc_timestamp_byref(memory, time_ptr, time)
 }
 
-pub(crate) fn sched_yield(_wasi_ctx: &WasiCtx, _memory: &mut [u8]) -> Result<()> {
+pub(crate) fn sched_yield(
+    _wasi_ctx: &WasiCtx,
+    _memory: &mut [u8],
+) -> Result<()> {
     trace!("sched_yield()");
 
     std::thread::yield_now();

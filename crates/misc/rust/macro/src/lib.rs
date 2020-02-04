@@ -62,14 +62,14 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
 
             let mut imports: Vec<Extern> = Vec::new();
             if let Some(module_name) = data.find_wasi_module_name() {
-                let wasi_instance = #root::wasmtime_wasi::create_wasi_instance(&store, &[], &[], &[])
-                    .map_err(|e| format_err!("wasm instantiation error: {:?}", e))?;
+                let wasi_cx = #root::wasmtime_wasi::WasiCtxBuilder::new().build()?;
+                let wasi = #root::wasmtime_wasi::Wasi::new(&store, wasi_cx);
                 for i in module.imports().iter() {
                     if i.module() != module_name {
                         bail!("unknown import module {}", i.module());
                     }
-                    if let Some(export) = wasi_instance.get_export(i.name()) {
-                        imports.push(export.clone());
+                    if let Some(export) = wasi.get_export(i.name()) {
+                        imports.push(export.clone().into());
                     } else {
                         bail!("unknown import {}:{}", i.module(), i.name())
                     }
