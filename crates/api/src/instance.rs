@@ -2,7 +2,6 @@ use crate::externals::Extern;
 use crate::module::Module;
 use crate::runtime::Store;
 use crate::trap::Trap;
-use crate::types::{ExportType, ExternType};
 use anyhow::{Error, Result};
 use wasmtime_jit::{CompiledModule, Resolver};
 use wasmtime_runtime::{Export, InstanceHandle, InstantiationError};
@@ -174,49 +173,7 @@ impl Instance {
     }
 
     #[doc(hidden)]
-    pub fn from_handle(store: &Store, instance_handle: InstanceHandle) -> Instance {
-        let mut exports = Vec::new();
-        let mut exports_types = Vec::new();
-        for (name, _) in instance_handle.exports() {
-            let export = instance_handle.lookup(name).expect("export");
-            if let wasmtime_runtime::Export::Function { signature, .. } = &export {
-                // HACK ensure all handles, instantiated outside Store, present in
-                // the store's SignatureRegistry, e.g. WASI instances that are
-                // imported into this store using the from_handle() method.
-                store.compiler().signatures().register(signature);
-            }
-
-            // We should support everything supported by wasmtime_runtime, or
-            // otherwise we've got a bug in this crate, so panic if anything
-            // fails to convert here.
-            let extern_type = match ExternType::from_wasmtime_export(&export) {
-                Some(ty) => ty,
-                None => panic!("unsupported core wasm external type {:?}", export),
-            };
-            exports_types.push(ExportType::new(name, extern_type));
-            exports.push(Extern::from_wasmtime_export(
-                store,
-                instance_handle.clone(),
-                export.clone(),
-            ));
-        }
-
-        let module = Module::from_exports(store, exports_types.into_boxed_slice());
-
-        Instance {
-            instance_handle,
-            module,
-            exports: exports.into_boxed_slice(),
-        }
-    }
-
-    #[doc(hidden)]
     pub fn handle(&self) -> &InstanceHandle {
         &self.instance_handle
-    }
-
-    #[doc(hidden)]
-    pub fn get_wasmtime_memory(&self) -> Option<wasmtime_runtime::Export> {
-        self.instance_handle.lookup("memory")
     }
 }

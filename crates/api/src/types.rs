@@ -157,25 +157,6 @@ impl ExternType {
         (Table(TableType) table unwrap_table)
         (Memory(MemoryType) memory unwrap_memory)
     }
-
-    /// Returns `None` if the sub-type fails to get converted, see documentation
-    /// for sub-types about what may fail.
-    pub(crate) fn from_wasmtime_export(export: &wasmtime_runtime::Export) -> Option<Self> {
-        Some(match export {
-            wasmtime_runtime::Export::Function { signature, .. } => {
-                ExternType::Func(FuncType::from_wasmtime_signature(signature.clone())?)
-            }
-            wasmtime_runtime::Export::Memory { memory, .. } => {
-                ExternType::Memory(MemoryType::from_wasmtime_memory(&memory.memory))
-            }
-            wasmtime_runtime::Export::Global { global, .. } => {
-                ExternType::Global(GlobalType::from_wasmtime_global(&global)?)
-            }
-            wasmtime_runtime::Export::Table { table, .. } => {
-                ExternType::Table(TableType::from_wasmtime_table(&table.table))
-            }
-        })
-    }
 }
 
 // Function Types

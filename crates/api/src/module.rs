@@ -272,13 +272,6 @@ impl Module {
         validate(binary, Some(config)).map_err(Error::new)
     }
 
-    #[doc(hidden)]
-    pub fn from_exports(store: &Store, exports: Box<[ExportType]>) -> Self {
-        let mut ret = unsafe { Module::compile(store, b"\0asm\x01\0\0\0").unwrap() };
-        Rc::get_mut(&mut ret.inner).unwrap().exports = exports;
-        return ret;
-    }
-
     unsafe fn compile(store: &Store, binary: &[u8]) -> Result<Self> {
         let compiled = CompiledModule::new(
             &mut store.compiler_mut(),

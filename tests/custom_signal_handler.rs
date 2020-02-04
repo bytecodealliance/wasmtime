@@ -49,21 +49,9 @@ mod tests {
 
     // Locate "memory" export, get base address and size and set memory protection to PROT_NONE
     fn set_up_memory(instance: &Instance) -> (*mut u8, usize) {
-        let mem_export = instance.get_wasmtime_memory().expect("memory");
-
-        let (base, length) = if let wasmtime_runtime::Export::Memory {
-            definition,
-            vmctx: _,
-            memory: _,
-        } = mem_export
-        {
-            unsafe {
-                let definition = std::ptr::read(definition);
-                (definition.base, definition.current_length)
-            }
-        } else {
-            panic!("expected memory");
-        };
+        let mem_export = instance.get_export("memory").unwrap().memory().unwrap();
+        let base = mem_export.data_ptr();
+        let length = mem_export.data_size();
 
         // So we can later trigger SIGSEGV by performing a read
         unsafe {
