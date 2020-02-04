@@ -1423,6 +1423,16 @@ pub unsafe extern "C" fn wasm_global_new(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn wasm_global_type(g: *const wasm_global_t) -> *mut wasm_globaltype_t {
+    let globaltype = (*g).global().borrow().ty().clone();
+    let g = Box::new(wasm_globaltype_t {
+        globaltype,
+        content_cache: None,
+    });
+    Box::into_raw(g)
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn wasm_global_get(g: *const wasm_global_t, out: *mut wasm_val_t) {
     (*out).set((*g).global().borrow().get());
 }
