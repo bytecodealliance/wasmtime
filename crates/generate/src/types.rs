@@ -192,13 +192,13 @@ fn define_copy_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) 
         quote! {
             #type_::validate(
                 &ptr.cast(#offset).map_err(|e|
-                    ::memory::GuestError::InField{
+                    ::memory::GuestError::InDataField{
                         typename: stringify!(#ident).to_owned(),
                         field: stringify!(#fieldname).to_owned(),
                         err: Box::new(e),
                     })?
                 ).map_err(|e|
-                    ::memory::GuestError::InField {
+                    ::memory::GuestError::InDataField {
                         typename: stringify!(#ident).to_owned(),
                         field: stringify!(#fieldname).to_owned(),
                         err: Box::new(e),
@@ -278,13 +278,13 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
         quote! {
             #type_::validate(
                 &ptr.cast(#offset).map_err(|e|
-                    ::memory::GuestError::InField{
+                    ::memory::GuestError::InDataField{
                         typename: stringify!(#ident).to_owned(),
                         field: stringify!(#fieldname).to_owned(),
                         err: Box::new(e),
                     })?
                 ).map_err(|e|
-                    ::memory::GuestError::InField {
+                    ::memory::GuestError::InDataField {
                         typename: stringify!(#ident).to_owned(),
                         field: stringify!(#fieldname).to_owned(),
                         err: Box::new(e),

@@ -26,7 +26,7 @@ impl<'a> GuestMemory<'a> {
     fn contains(&self, r: Region) -> bool {
         r.start < self.len
             && r.len < self.len // make sure next clause doesnt underflow
-            && r.start < (self.len - r.len)
+            && r.start <= (self.len - r.len)
     }
 
     pub fn ptr<T: GuestType>(&'a self, at: u32) -> Result<GuestPtr<'a, T>, GuestError> {

@@ -11,8 +11,15 @@ pub enum GuestError {
     PtrNotAligned(Region, u32),
     #[error("Pointer already borrowed: {0:?}")]
     PtrBorrowed(Region),
-    #[error("In {typename}.{field}:")]
-    InField {
+    #[error("In func {funcname}:{location}:")]
+    InFunc {
+        funcname: &'static str,
+        location: &'static str,
+        #[source]
+        err: Box<GuestError>,
+    },
+    #[error("In data {typename}.{field}:")]
+    InDataField {
         typename: String,
         field: String,
         #[source]

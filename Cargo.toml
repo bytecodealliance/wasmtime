@@ -8,6 +8,9 @@ edition = "2018"
 generate = { path = "crates/generate" }
 memory = { path = "crates/memory" }
 
+[dev-dependencies]
+proptest = "0.9"
+
 [workspace]
 members = [
   "crates/generate",

@@ -5,6 +5,8 @@ use crate::names::Names;
 use crate::types::{anon_lifetime, struct_is_copy};
 
 pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
+    let funcname = func.name.as_str();
+
     let ident = names.func(&func.name);
     let ctx_type = names.ctx_type();
     let coretype = func.core_type();
@@ -28,7 +30,7 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
     });
 
     let abi_args = quote!(
-            ctx: &mut #ctx_type, memory: ::memory::GuestMemory,
+            ctx: &mut #ctx_type, memory: &mut ::memory::GuestMemory,
             #(#params),*
     );
     let abi_ret = if let Some(ret) = &coretype.ret {
@@ -52,7 +54,7 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
         .map(|_res| quote!(#abi_ret::from(e)))
         .unwrap_or_else(|| quote!(()));
 
-    let error_handling: TokenStream = {
+    let error_handling = |location: &str| -> TokenStream {
         if let Some(tref) = &err_type {
             let abi_ret = match tref.type_().passed_by() {
                 witx::TypePassedBy::Value(atom) => names.atom_type(atom),
@@ -60,6 +62,7 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
             };
             let err_typename = names.type_ref(&tref, anon_lifetime());
             quote! {
+                let e = ::memory::GuestError::InFunc { funcname: #funcname, location: #location, err: Box::new(e) };
                 let err: #err_typename = ::memory::GuestErrorType::from_error(e, ctx);
                 return #abi_ret::from(err);
             }
@@ -73,7 +76,7 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
     let marshal_args = func
         .params
         .iter()
-        .map(|p| marshal_arg(names, p, error_handling.clone()));
+        .map(|p| marshal_arg(names, p, error_handling(p.name.as_str())));
     let trait_args = func.params.iter().map(|param| {
         let name = names.func_param(&param.name);
         match param.tref.type_().passed_by() {
@@ -101,11 +104,11 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
         .results
         .iter()
         .skip(1)
-        .map(|result| marshal_result(names, result, error_handling.clone()));
+        .map(|result| marshal_result(names, result, &error_handling));
     let marshal_rets_pre = marshal_rets.clone().map(|(pre, _post)| pre);
     let marshal_rets_post = marshal_rets.map(|(_pre, post)| post);
 
-    let success = if let Some(err_type) = err_type {
+    let success = if let Some(ref err_type) = err_type {
         let err_typename = names.type_ref(&err_type, anon_lifetime());
         quote! {
             let success:#err_typename = ::memory::GuestErrorType::success();
@@ -243,27 +246,32 @@ fn marshal_arg(
     }
 }
 
-fn marshal_result(
+fn marshal_result<F>(
     names: &Names,
     result: &witx::InterfaceFuncParam,
-    error_handling: TokenStream,
-) -> (TokenStream, TokenStream) {
+    error_handling: F,
+) -> (TokenStream, TokenStream)
+where
+    F: Fn(&str) -> TokenStream,
+{
     let tref = &result.tref;
 
     let write_val_to_ptr = {
         let pointee_type = names.type_ref(tref, anon_lifetime());
         // core type is given func_ptr_binding name.
         let ptr_name = names.func_ptr_binding(&result.name);
+        let ptr_err_handling = error_handling(&format!("{}:result_ptr_mut", result.name.as_str()));
+        let ref_err_handling = error_handling(&format!("{}:result_ref_mut", result.name.as_str()));
         let pre = quote! {
             let mut #ptr_name = match memory.ptr_mut::<#pointee_type>(#ptr_name as u32) {
                 Ok(p) => match p.as_ref_mut() {
                     Ok(r) => r,
                     Err(e) => {
-                        #error_handling
+                        #ref_err_handling
                     }
                 },
                 Err(e) => {
-                    #error_handling
+                    #ptr_err_handling
                 }
             };
         };

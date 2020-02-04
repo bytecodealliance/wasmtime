@@ -7,10 +7,10 @@ pub struct Region {
 impl Region {
     pub fn overlaps(&self, rhs: Region) -> bool {
         let self_start = self.start as u64;
-        let self_end = ((self_start + self.len as u64) as i64 - 1) as u64;
+        let self_end = self_start + (self.len - 1) as u64;
 
         let rhs_start = rhs.start as u64;
-        let rhs_end = ((rhs_start + rhs.len as u64) as i64 - 1) as u64;
+        let rhs_end = rhs_start + (rhs.len - 1) as u64;
 
         // start of rhs inside self:
         if rhs_start >= self_start && rhs_start < self_end {
