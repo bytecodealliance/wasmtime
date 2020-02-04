@@ -13,8 +13,11 @@ following `Backend` implementations:
 
  - `SimpleJITBackend`, provided by [cranelift-simplejit], which JITs
    code to memory for direct execution.
+ - `ObjectBackend`, provided by [cranelift-object], which emits native
+   object files.
  - `FaerieBackend`, provided by [cranelift-faerie], which emits native
    object files.
 
 [cranelift-simplejit]: https://crates.io/crates/cranelift-simplejit
+[cranelift-object]: https://crates.io/crates/cranelift-object
 [cranelift-faerie]: https://crates.io/crates/cranelift-faerie

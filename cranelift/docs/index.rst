@@ -46,6 +46,11 @@ Rust Crate Documentation
     This crate manages compiling multiple functions and data objects
     together.
 
+`cranelift-object <https://docs.rs/cranelift-object/>`_
+    This crate provides a object-based backend for `cranelift-module`, which
+    emits native object files using the
+    `object <https://github.com/gimli-rs/object>`_ library.
+
 `cranelift-faerie <https://docs.rs/cranelift-faerie/>`_
     This crate provides a faerie-based backend for `cranelift-module`, which
     emits native object files using the
