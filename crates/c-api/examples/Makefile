@@ -153,3 +153,19 @@ CARGO_RUN:
 clean:
 	rm -rf ${OUT_DIR}
 
+###############################################################################
+# Other examples
+
+WASM_EXT_INCLUDE = ${WASMTIME_API_DIR}/include
+
+run-config-debug-c: ${EXAMPLE_OUT}/config-debug-c ${EXAMPLE_OUT}/fib-wasm.wasm
+	@echo ==== C config ====; \
+	cd ${EXAMPLE_OUT}; ./config-debug-c
+	@echo ==== Done ====
+
+${EXAMPLE_OUT}/fib-wasm.wasm: fib-wasm.wasm
+	cp $< $@
+
+${EXAMPLE_OUT}/config-debug-c.o: config-debug.c ${WASM_INCLUDE}/wasm.h ${WASM_EXT_INCLUDE}/wasmtime.h
+	mkdir -p ${EXAMPLE_OUT}
+	${C_COMP} -c ${C_FLAGS} -I. -I${WASM_INCLUDE} -I${WASM_EXT_INCLUDE} $< -o $@
