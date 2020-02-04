@@ -10,6 +10,7 @@ pub use cranelift_codegen::Context;
 pub use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 
 pub mod binemit {
+    pub use cranelift_codegen::binemit::NullTrapSink;
     pub use cranelift_codegen::binemit::{CodeOffset, NullStackmapSink, TrapSink};
 
     use cranelift_codegen::{binemit, ir};

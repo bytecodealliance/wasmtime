@@ -5,7 +5,6 @@ mod func;
 mod global;
 mod memory;
 mod table;
-mod trap;
 
 use self::func::create_handle_with_function;
 use self::global::create_global;
