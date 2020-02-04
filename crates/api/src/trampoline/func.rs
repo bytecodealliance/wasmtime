@@ -4,6 +4,7 @@ use super::create_handle::create_handle;
 use super::trap::TrapSink;
 use crate::{Callable, FuncType, Store, Trap, Val};
 use anyhow::{bail, Result};
+use std::any::Any;
 use std::cmp;
 use std::convert::TryFrom;
 use std::panic::{self, AssertUnwindSafe};
@@ -324,4 +325,36 @@ pub fn create_handle_with_function(
         finished_functions,
         Box::new(trampoline_state),
     )
+}
+
+pub unsafe fn create_handle_with_raw_function(
+    ft: &FuncType,
+    func: *const VMFunctionBody,
+    store: &Store,
+    state: Box<dyn Any>,
+) -> Result<InstanceHandle> {
+    let isa = {
+        let isa_builder = native::builder();
+        let flag_builder = settings::builder();
+        isa_builder.finish(settings::Flags::new(flag_builder))
+    };
+
+    let pointer_type = isa.pointer_type();
+    let sig = match ft.get_wasmtime_signature(pointer_type) {
+        Some(sig) => sig.clone(),
+        None => bail!("not a supported core wasm signature {:?}", ft),
+    };
+
+    let mut module = Module::new();
+    let mut finished_functions: PrimaryMap<DefinedFuncIndex, *const VMFunctionBody> =
+        PrimaryMap::new();
+
+    let sig_id = module.signatures.push(sig.clone());
+    let func_id = module.functions.push(sig_id);
+    module
+        .exports
+        .insert("trampoline".to_string(), Export::Function(func_id));
+    finished_functions.push(func);
+
+    create_handle(module, Some(store), finished_functions, state)
 }

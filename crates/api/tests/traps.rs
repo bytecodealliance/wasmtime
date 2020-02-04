@@ -260,7 +260,9 @@ fn rust_panic_import() -> Result<()> {
         r#"
             (module $a
                 (import "" "" (func $foo))
+                (import "" "" (func $bar))
                 (func (export "foo") call $foo)
+                (func (export "bar") call $bar)
             )
         "#,
     )?;
@@ -268,13 +270,29 @@ fn rust_panic_import() -> Result<()> {
     let module = Module::new(&store, &binary)?;
     let sig = FuncType::new(Box::new([]), Box::new([]));
     let func = Func::new(&store, sig, Rc::new(Panic));
-    let instance = Instance::new(&module, &[func.into()])?;
+    let instance = Instance::new(
+        &module,
+        &[
+            func.into(),
+            Func::wrap0(&store, || panic!("this is another panic")).into(),
+        ],
+    )?;
     let func = instance.exports()[0].func().unwrap().clone();
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
         drop(func.call(&[]));
     }))
     .unwrap_err();
     assert_eq!(err.downcast_ref::<&'static str>(), Some(&"this is a panic"));
+
+    let func = instance.exports()[1].func().unwrap().clone();
+    let err = panic::catch_unwind(AssertUnwindSafe(|| {
+        drop(func.call(&[]));
+    }))
+    .unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<&'static str>(),
+        Some(&"this is another panic")
+    );
     Ok(())
 }
 
@@ -306,6 +324,16 @@ fn rust_panic_start_function() -> Result<()> {
     }))
     .unwrap_err();
     assert_eq!(err.downcast_ref::<&'static str>(), Some(&"this is a panic"));
+
+    let func = Func::wrap0(&store, || panic!("this is another panic"));
+    let err = panic::catch_unwind(AssertUnwindSafe(|| {
+        drop(Instance::new(&module, &[func.into()]));
+    }))
+    .unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<&'static str>(),
+        Some(&"this is another panic")
+    );
     Ok(())
 }
 

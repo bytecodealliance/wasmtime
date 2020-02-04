@@ -10,6 +10,7 @@
 
 mod callable;
 mod externals;
+mod func;
 mod instance;
 mod module;
 mod r#ref;
@@ -21,6 +22,7 @@ mod values;
 
 pub use crate::callable::Callable;
 pub use crate::externals::*;
+pub use crate::func::{Func, WasmArg, WasmRet};
 pub use crate::instance::Instance;
 pub use crate::module::Module;
 pub use crate::r#ref::{AnyRef, HostInfo, HostRef};

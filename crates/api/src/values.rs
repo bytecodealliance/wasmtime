@@ -1,7 +1,5 @@
-use crate::externals::Func;
 use crate::r#ref::AnyRef;
-use crate::runtime::Store;
-use crate::types::ValType;
+use crate::{Func, Store, ValType};
 use anyhow::{bail, Result};
 use std::ptr;
 use wasmtime_environ::ir;

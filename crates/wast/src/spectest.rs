@@ -1,77 +1,35 @@
-use anyhow::Result;
 use std::collections::HashMap;
-use std::rc::Rc;
 use wasmtime::*;
-
-struct MyCall<F>(F);
-
-impl<F> Callable for MyCall<F>
-where
-    F: Fn(&[Val], &mut [Val]) -> Result<(), Trap>,
-{
-    fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
-        (self.0)(params, results)
-    }
-}
-
-fn wrap(
-    store: &Store,
-    ty: FuncType,
-    callable: impl Fn(&[Val], &mut [Val]) -> Result<(), Trap> + 'static,
-) -> Func {
-    Func::new(store, ty, Rc::new(MyCall(callable)))
-}
 
 /// Return an instance implementing the "spectest" interface used in the
 /// spec testsuite.
 pub fn instantiate_spectest(store: &Store) -> HashMap<&'static str, Extern> {
     let mut ret = HashMap::new();
 
-    let ty = FuncType::new(Box::new([]), Box::new([]));
-    let func = wrap(store, ty, |_params, _results| Ok(()));
+    let func = Func::wrap0(store, || {});
     ret.insert("print", Extern::Func(func));
 
-    let ty = FuncType::new(Box::new([ValType::I32]), Box::new([]));
-    let func = wrap(store, ty, |params, _results| {
-        println!("{}: i32", params[0].unwrap_i32());
-        Ok(())
-    });
+    let func = Func::wrap1(store, |val: i32| println!("{}: i32", val));
     ret.insert("print_i32", Extern::Func(func));
 
-    let ty = FuncType::new(Box::new([ValType::I64]), Box::new([]));
-    let func = wrap(store, ty, |params, _results| {
-        println!("{}: i64", params[0].unwrap_i64());
-        Ok(())
-    });
+    let func = Func::wrap1(store, |val: i64| println!("{}: i64", val));
     ret.insert("print_i64", Extern::Func(func));
 
-    let ty = FuncType::new(Box::new([ValType::F32]), Box::new([]));
-    let func = wrap(store, ty, |params, _results| {
-        println!("{}: f32", params[0].unwrap_f32());
-        Ok(())
-    });
+    let func = Func::wrap1(store, |val: f32| println!("{}: f32", val));
     ret.insert("print_f32", Extern::Func(func));
 
-    let ty = FuncType::new(Box::new([ValType::F64]), Box::new([]));
-    let func = wrap(store, ty, |params, _results| {
-        println!("{}: f64", params[0].unwrap_f64());
-        Ok(())
-    });
+    let func = Func::wrap1(store, |val: f64| println!("{}: f64", val));
     ret.insert("print_f64", Extern::Func(func));
 
-    let ty = FuncType::new(Box::new([ValType::I32, ValType::F32]), Box::new([]));
-    let func = wrap(store, ty, |params, _results| {
-        println!("{}: i32", params[0].unwrap_i32());
-        println!("{}: f32", params[1].unwrap_f32());
-        Ok(())
+    let func = Func::wrap2(store, |i: i32, f: f32| {
+        println!("{}: i32", i);
+        println!("{}: f32", f);
     });
     ret.insert("print_i32_f32", Extern::Func(func));
 
-    let ty = FuncType::new(Box::new([ValType::F64, ValType::F64]), Box::new([]));
-    let func = wrap(store, ty, |params, _results| {
-        println!("{}: f64", params[0].unwrap_f64());
-        println!("{}: f64", params[1].unwrap_f64());
-        Ok(())
+    let func = Func::wrap2(store, |f1: f64, f2: f64| {
+        println!("{}: f64", f1);
+        println!("{}: f64", f2);
     });
     ret.insert("print_f64_f64", Extern::Func(func));
 
