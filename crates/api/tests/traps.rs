@@ -339,3 +339,34 @@ fn mismatched_arguments() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn call_signature_mismatch() -> Result<()> {
+    let store = Store::default();
+    let binary = wat::parse_str(
+        r#"
+            (module $a
+                (func $foo
+                    i32.const 0
+                    call_indirect)
+                (func $bar (param i32))
+                (start $foo)
+
+                (table 1 anyfunc)
+                (elem (i32.const 0) 1)
+            )
+        "#,
+    )?;
+
+    let module = Module::new(&store, &binary)?;
+    let err = Instance::new(&module, &[])
+        .err()
+        .unwrap()
+        .downcast::<Trap>()
+        .unwrap();
+    assert_eq!(
+        err.message(),
+        "wasm trap: indirect call type mismatch, source location: @0030"
+    );
+    Ok(())
+}
