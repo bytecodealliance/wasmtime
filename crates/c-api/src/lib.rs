@@ -158,6 +158,11 @@ declare_vec!(wasm_byte_vec_t, wasm_byte_t);
 pub type wasm_name_t = wasm_byte_vec_t;
 #[repr(C)]
 #[derive(Clone)]
+pub struct wasm_config_t {
+    pub(crate) config: Config,
+}
+#[repr(C)]
+#[derive(Clone)]
 pub struct wasm_engine_t {
     engine: HostRef<Engine>,
 }
@@ -447,8 +452,8 @@ pub unsafe extern "C" fn wasm_engine_delete(engine: *mut wasm_engine_t) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasm_config_new() -> *mut wasmtime_config_t {
-    let config = Box::new(wasmtime_config_t {
+pub unsafe extern "C" fn wasm_config_new() -> *mut wasm_config_t {
+    let config = Box::new(wasm_config_t {
         config: Config::default(),
     });
     Box::into_raw(config)
@@ -463,9 +468,7 @@ pub unsafe extern "C" fn wasm_engine_new() -> *mut wasm_engine_t {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasm_engine_new_with_config(
-    c: *mut wasmtime_config_t,
-) -> *mut wasm_engine_t {
+pub unsafe extern "C" fn wasm_engine_new_with_config(c: *mut wasm_config_t) -> *mut wasm_engine_t {
     let config = Box::from_raw(c).config;
     let engine = Box::new(wasm_engine_t {
         engine: HostRef::new(Engine::new(&config)),
