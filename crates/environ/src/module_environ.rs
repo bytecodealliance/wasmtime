@@ -86,6 +86,14 @@ impl<'data> ModuleEnvironment<'data> {
         self.result.module_translation = Some(module_translation);
         Ok(self.result)
     }
+
+    fn declare_export(&mut self, export: Export, name: &str) -> WasmResult<()> {
+        self.result
+            .module
+            .exports
+            .insert(String::from(name), export);
+        Ok(())
+    }
 }
 
 impl<'data> TargetEnvironment for ModuleEnvironment<'data> {
@@ -271,35 +279,19 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn declare_func_export(&mut self, func_index: FuncIndex, name: &str) -> WasmResult<()> {
-        self.result
-            .module
-            .exports
-            .insert(String::from(name), Export::Function(func_index));
-        Ok(())
+        self.declare_export(Export::Function(func_index), name)
     }
 
     fn declare_table_export(&mut self, table_index: TableIndex, name: &str) -> WasmResult<()> {
-        self.result
-            .module
-            .exports
-            .insert(String::from(name), Export::Table(table_index));
-        Ok(())
+        self.declare_export(Export::Table(table_index), name)
     }
 
     fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &str) -> WasmResult<()> {
-        self.result
-            .module
-            .exports
-            .insert(String::from(name), Export::Memory(memory_index));
-        Ok(())
+        self.declare_export(Export::Memory(memory_index), name)
     }
 
     fn declare_global_export(&mut self, global_index: GlobalIndex, name: &str) -> WasmResult<()> {
-        self.result
-            .module
-            .exports
-            .insert(String::from(name), Export::Global(global_index));
-        Ok(())
+        self.declare_export(Export::Global(global_index), name)
     }
 
     fn declare_start_func(&mut self, func_index: FuncIndex) -> WasmResult<()> {
