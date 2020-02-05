@@ -82,12 +82,11 @@ If you want to build the latest Wasmtime from scratch, you will need:
 Example:
 
 ```sh
-git clone https://github.com/bytecodealliance/wasmtime.git
-git submodule update --init --recursive
+git clone --recursive https://github.com/bytecodealliance/wasmtime.git
 cargo build --release
 ```
 
-This will create a binary at `/target/release/wasmtime`, which you can then invoke directly to run a given WASI-compatible WASM binary:
+This will create a binary at `./target/release/wasmtime`, which you can then invoke directly to run a given WASI-compatible WASM binary:
 
 ```sh
 $ ./target/release/wasmtime YOUR-BINARY.wasm
