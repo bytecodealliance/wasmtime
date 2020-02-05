@@ -27,6 +27,16 @@ pub fn instantiate(wasm: &[u8], strategy: Strategy) {
     config
         .strategy(strategy)
         .expect("failed to enable lightbeam");
+    instantiate_with_config(wasm, config);
+}
+
+/// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
+/// panic or segfault or anything else that can be detected "passively".
+///
+/// The engine will be configured using provided config.
+///
+/// See also `instantiate` functions.
+pub fn instantiate_with_config(wasm: &[u8], config: Config) {
     let engine = Engine::new(&config);
     let store = Store::new(&engine);
 
