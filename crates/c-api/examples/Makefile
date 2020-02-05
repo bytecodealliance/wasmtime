@@ -140,7 +140,7 @@ wasm-c: ${WASMTIME_C_BIN}
 wasm-cc: ${WASMTIME_CC_BIN}
 
 ${WASMTIME_C_BINS}: CARGO_RUN
-	@cd ${WASMTIME_API_DIR}; cargo build --lib ${CARGO_BUILD_FLAGS}
+	cd ${WASMTIME_API_DIR}; cargo build --lib ${CARGO_BUILD_FLAGS}
 
 .PHONY: CARGO_RUN
 CARGO_RUN:

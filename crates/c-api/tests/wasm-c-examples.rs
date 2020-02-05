@@ -9,7 +9,7 @@ fn run_c_example(name: &'static str, expected_out: &[u8]) {
     let make_arg = format!("run-{}-c", name);
     let output = Command::new(cargo)
         .current_dir(examples_dir)
-        .args(&[&make_arg])
+        .args(&["-s", &make_arg])
         .output()
         .expect("success");
     assert!(
