@@ -10,9 +10,9 @@ use std::panic::{self, AssertUnwindSafe};
 use std::rc::Rc;
 use std::{mem, ptr, slice};
 use wasmtime::{
-    AnyRef, Callable, Engine, ExportType, Extern, ExternType, Func, FuncType, Global, GlobalType,
-    HostInfo, HostRef, ImportType, Instance, Limits, Memory, MemoryType, Module, Store, Table,
-    TableType, Trap, Val, ValType,
+    AnyRef, Callable, Config, Engine, ExportType, Extern, ExternType, Func, FuncType, Global,
+    GlobalType, HostInfo, HostRef, ImportType, Instance, Limits, Memory, MemoryType, Module, Store,
+    Table, TableType, Trap, Val, ValType,
 };
 
 macro_rules! declare_vec {
@@ -159,7 +159,7 @@ pub type wasm_name_t = wasm_byte_vec_t;
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_config_t {
-    _unused: [u8; 0],
+    pub(crate) config: Config,
 }
 #[repr(C)]
 #[derive(Clone)]
@@ -452,9 +452,26 @@ pub unsafe extern "C" fn wasm_engine_delete(engine: *mut wasm_engine_t) {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn wasm_config_new() -> *mut wasm_config_t {
+    let config = Box::new(wasm_config_t {
+        config: Config::default(),
+    });
+    Box::into_raw(config)
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn wasm_engine_new() -> *mut wasm_engine_t {
     let engine = Box::new(wasm_engine_t {
         engine: HostRef::new(Engine::default()),
+    });
+    Box::into_raw(engine)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_engine_new_with_config(c: *mut wasm_config_t) -> *mut wasm_engine_t {
+    let config = Box::from_raw(c).config;
+    let engine = Box::new(wasm_engine_t {
+        engine: HostRef::new(Engine::new(&config)),
     });
     Box::into_raw(engine)
 }
@@ -1745,3 +1762,7 @@ pub unsafe extern "C" fn wasm_valtype_vec_copy(
     let slice = slice::from_raw_parts((*src).data, (*src).size);
     (*out).set_from_slice(slice);
 }
+
+mod ext;
+
+pub use crate::ext::*;
