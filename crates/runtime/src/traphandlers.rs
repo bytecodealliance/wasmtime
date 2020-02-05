@@ -2,7 +2,6 @@
 //! signalhandling mechanisms.
 
 use crate::instance::{InstanceHandle, SignalHandler};
-use crate::trap_registry::get_trap_registry;
 use crate::trap_registry::TrapDescription;
 use crate::vmcontext::{VMContext, VMFunctionBody};
 use backtrace::Backtrace;
@@ -289,10 +288,12 @@ impl CallThreadState {
         if self.jmp_buf.get().is_null() {
             return ptr::null();
         }
+        let instance = unsafe { InstanceHandle::from_vmctx(self.vmctx) };
 
-        let registry = get_trap_registry();
         let trap = Trap::Wasm {
-            desc: registry
+            desc: instance
+                .instance()
+                .trap_registration
                 .get_trap(pc as usize)
                 .unwrap_or_else(|| TrapDescription {
                     source_loc: ir::SourceLoc::default(),

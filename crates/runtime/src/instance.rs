@@ -15,6 +15,7 @@ use crate::vmcontext::{
     VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
     VMTableDefinition, VMTableImport,
 };
+use crate::TrapRegistration;
 use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::any::Any;
@@ -99,6 +100,10 @@ pub(crate) struct Instance {
 
     /// Handler run when `SIGBUS`, `SIGFPE`, `SIGILL`, or `SIGSEGV` are caught by the instance thread.
     pub(crate) signal_handler: Cell<Option<Box<SignalHandler>>>,
+
+    /// Handle to our registration of traps so signals know what trap to return
+    /// when a segfault/sigill happens.
+    pub(crate) trap_registration: TrapRegistration,
 
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
@@ -534,6 +539,7 @@ impl InstanceHandle {
     /// safety.
     pub unsafe fn new(
         module: Arc<Module>,
+        trap_registration: TrapRegistration,
         finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
         imports: Imports,
         data_initializers: &[DataInitializer<'_>],
@@ -582,6 +588,7 @@ impl InstanceHandle {
                 dbg_jit_registration,
                 host_state,
                 signal_handler: Cell::new(None),
+                trap_registration,
                 vmctx: VMContext {},
             };
             ptr::write(instance_ptr, instance);

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::Module;
-use wasmtime_runtime::{Imports, InstanceHandle, VMFunctionBody};
+use wasmtime_runtime::{Imports, InstanceHandle, VMFunctionBody, TrapRegistration};
 
 pub(crate) fn create_handle(
     module: Module,
@@ -39,6 +39,7 @@ pub(crate) fn create_handle(
     unsafe {
         Ok(InstanceHandle::new(
             Arc::new(module),
+            TrapRegistration::dummy(),
             finished_functions.into_boxed_slice(),
             imports,
             &data_initializers,
