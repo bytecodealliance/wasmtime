@@ -27,6 +27,9 @@ use std::str::FromStr;
 use std::{u16, u32};
 use target_lexicon::Triple;
 
+/// After some quick benchmarks a program should never have more than 100,000 blocks.
+const MAX_BLOCKS_IN_A_FUNCTION: u32 = 100_000;
+
 /// Parse the entire `text` into a list of functions.
 ///
 /// Any test commands or target declarations are ignored.
@@ -1768,6 +1771,10 @@ impl<'a> Parser<'a> {
         let block_num = self.match_block("expected block header")?;
         let block = ctx.add_block(block_num, self.loc)?;
 
+        if block_num.as_u32() >= MAX_BLOCKS_IN_A_FUNCTION {
+            return Err(self.error("too many blocks"));
+        }
+
         if !self.optional(Token::Colon) {
             // block-header ::= Block(block) [ * block-params ] ":"
             self.parse_block_params(ctx, block)?;
@@ -2976,6 +2983,24 @@ mod tests {
 
         assert_eq!(location.line_number, 3);
         assert_eq!(message, "duplicate entity: block0");
+        assert!(!is_warning);
+    }
+
+    #[test]
+    fn number_of_blocks() {
+        let ParseError {
+            location,
+            message,
+            is_warning,
+        } = Parser::new(
+            "function %a() {
+                block100000:",
+        )
+        .parse_function(None)
+        .unwrap_err();
+
+        assert_eq!(location.line_number, 2);
+        assert_eq!(message, "too many blocks");
         assert!(!is_warning);
     }
 
