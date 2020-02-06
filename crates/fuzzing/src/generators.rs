@@ -52,6 +52,7 @@ impl Arbitrary for WasmOptTtf {
 pub struct DifferentialConfig {
     strategy: DifferentialStrategy,
     opt_level: DifferentialOptLevel,
+    multi_value: bool,
 }
 
 impl DifferentialConfig {
@@ -67,6 +68,7 @@ impl DifferentialConfig {
             DifferentialOptLevel::Speed => wasmtime::OptLevel::Speed,
             DifferentialOptLevel::SpeedAndSize => wasmtime::OptLevel::SpeedAndSize,
         });
+        config.wasm_multi_value(self.multi_value);
         Ok(config)
     }
 }
