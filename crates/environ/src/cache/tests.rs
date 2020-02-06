@@ -317,7 +317,6 @@ fn new_module_cache_data(rng: &mut impl Rng) -> ModuleCacheData {
                 size: rng.gen(),
                 offset: rng.gen(),
             });
-            slots.frame_size = rng.gen();
             slots
         })
         .collect();

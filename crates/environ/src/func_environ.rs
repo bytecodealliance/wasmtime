@@ -425,6 +425,81 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         }))
     }
 
+    fn translate_table_grow(
+        &mut self,
+        _: cranelift_codegen::cursor::FuncCursor<'_>,
+        _: u32,
+        _: ir::Value,
+        _: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        Err(WasmError::Unsupported(
+            "the `table.grow` instruction is not supported yet".into(),
+        ))
+    }
+
+    fn translate_table_get(
+        &mut self,
+        _: cranelift_codegen::cursor::FuncCursor<'_>,
+        _: u32,
+        _: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        Err(WasmError::Unsupported(
+            "the `table.get` instruction is not supported yet".into(),
+        ))
+    }
+
+    fn translate_table_set(
+        &mut self,
+        _: cranelift_codegen::cursor::FuncCursor<'_>,
+        _: u32,
+        _: ir::Value,
+        _: ir::Value,
+    ) -> WasmResult<()> {
+        Err(WasmError::Unsupported(
+            "the `table.set` instruction is not supported yet".into(),
+        ))
+    }
+
+    fn translate_table_fill(
+        &mut self,
+        _: cranelift_codegen::cursor::FuncCursor<'_>,
+        _: u32,
+        _: ir::Value,
+        _: ir::Value,
+        _: ir::Value,
+    ) -> WasmResult<()> {
+        Err(WasmError::Unsupported(
+            "the `table.fill` instruction is not supported yet".into(),
+        ))
+    }
+
+    fn translate_ref_func(
+        &mut self,
+        _: cranelift_codegen::cursor::FuncCursor<'_>,
+        _: u32,
+    ) -> WasmResult<ir::Value> {
+        Err(WasmError::Unsupported(
+            "the `ref.func` instruction is not supported yet".into(),
+        ))
+    }
+
+    fn translate_custom_global_get(
+        &mut self,
+        _: cranelift_codegen::cursor::FuncCursor<'_>,
+        _: cranelift_wasm::GlobalIndex,
+    ) -> WasmResult<ir::Value> {
+        unreachable!("we don't make any custom globals")
+    }
+
+    fn translate_custom_global_set(
+        &mut self,
+        _: cranelift_codegen::cursor::FuncCursor<'_>,
+        _: cranelift_wasm::GlobalIndex,
+        _: ir::Value,
+    ) -> WasmResult<()> {
+        unreachable!("we don't make any custom globals")
+    }
+
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<ir::Heap> {
         let pointer_type = self.pointer_type();
 
