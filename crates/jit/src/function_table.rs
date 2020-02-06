@@ -199,9 +199,23 @@ impl Drop for FunctionTable {
             fn __deregister_frame(fde: *const u8);
         }
 
-        if self.published.is_some() {
+        if let Some(published) = &self.published {
             unsafe {
-                for fde in self.published.as_ref().unwrap() {
+                // I'm not really sure why, but it appears to be way faster to
+                // unregister frames in reverse order rather than in-order. This
+                // way we're deregistering in LIFO order, and maybe there's some
+                // vec shifting or something like that in libgcc?
+                //
+                // Locally on Ubuntu 18.04 a wasm module with 40k empty
+                // functions takes 0.1s to compile and drop with reverse
+                // iteration. With forward iteration it takes 3s to compile and
+                // drop!
+                //
+                // Poking around libgcc sources seems to indicate that some sort
+                // of linked list is being traversed... We may need to figure
+                // out something else for backtraces in the future since this
+                // API may not be long-lived to keep calling.
+                for fde in published.iter().rev() {
                     __deregister_frame(*fde as *const _);
                 }
             }
