@@ -73,10 +73,7 @@ where
 
     let mut body = Vec::new();
     for i in microwasm_conv {
-        match i {
-            Ok(v) => body.extend(v),
-            Err(e) => return Err(Error::Microwasm(e.message.to_string())),
-        };
+        body.extend(i?);
     }
 
     translate(session, reloc_sink, func_idx, body)?;
