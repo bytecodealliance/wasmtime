@@ -93,6 +93,22 @@ struct CommonOptions {
     #[structopt(long)]
     enable_simd: bool,
 
+    /// Enable support for wasm reference types instructions
+    #[structopt(long)]
+    enable_reference_types: bool,
+
+    /// Enable support for wasm multi-value
+    #[structopt(long)]
+    enable_multi_value: bool,
+
+    /// Enable support for wasm threads
+    #[structopt(long)]
+    enable_threads: bool,
+
+    /// Enable support for wasm bulk memory instruction
+    #[structopt(long)]
+    enable_bulk_memory: bool,
+
     /// Use Lightbeam for all compilation
     #[structopt(long, conflicts_with = "cranelift")]
     lightbeam: bool,
@@ -103,18 +119,30 @@ struct CommonOptions {
 }
 
 impl CommonOptions {
-    fn configure_cache(&self, config: &mut Config) -> Result<()> {
-        if self.disable_cache {
-            return Ok(());
+    fn config(&self) -> Result<Config> {
+        let mut config = Config::new();
+        config
+            .cranelift_debug_verifier(cfg!(debug_assertions))
+            .debug_info(self.debug_info)
+            .wasm_bulk_memory(self.enable_bulk_memory)
+            .wasm_simd(self.enable_simd)
+            .wasm_reference_types(self.enable_reference_types)
+            .wasm_multi_value(self.enable_multi_value)
+            .wasm_threads(self.enable_threads)
+            .strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?;
+        if self.optimize {
+            config.cranelift_opt_level(wasmtime::OptLevel::Speed);
         }
-        match &self.config {
-            Some(path) => {
-                config.cache_config_load(path)?;
-            }
-            None => {
-                config.cache_config_load_default()?;
+        if !self.disable_cache {
+            match &self.config {
+                Some(path) => {
+                    config.cache_config_load(path)?;
+                }
+                None => {
+                    config.cache_config_load_default()?;
+                }
             }
         }
-        Ok(())
+        Ok(config)
     }
 }

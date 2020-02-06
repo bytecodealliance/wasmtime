@@ -1,6 +1,6 @@
 //! The module that implements the `wasmtime run` command.
 
-use crate::{init_file_per_thread_logger, pick_compilation_strategy, CommonOptions};
+use crate::{init_file_per_thread_logger, CommonOptions};
 use anyhow::{bail, Context as _, Result};
 use std::{
     ffi::{OsStr, OsString},
@@ -9,7 +9,7 @@ use std::{
 };
 use structopt::{clap::AppSettings, StructOpt};
 use wasi_common::preopen_dir;
-use wasmtime::{Config, Engine, Instance, Module, Store};
+use wasmtime::{Engine, Instance, Module, Store};
 use wasmtime_interface_types::ModuleData;
 use wasmtime_wasi::{old::snapshot_0::Wasi as WasiSnapshot0, Wasi};
 
@@ -96,21 +96,7 @@ impl RunCommand {
             init_file_per_thread_logger(prefix);
         }
 
-        let mut config = Config::new();
-        config
-            .cranelift_debug_verifier(cfg!(debug_assertions))
-            .debug_info(self.common.debug_info)
-            .wasm_simd(self.common.enable_simd)
-            .strategy(pick_compilation_strategy(
-                self.common.cranelift,
-                self.common.lightbeam,
-            )?)?;
-        self.common.configure_cache(&mut config)?;
-
-        if self.common.optimize {
-            config.cranelift_opt_level(wasmtime::OptLevel::Speed);
-        }
-
+        let config = self.common.config()?;
         let engine = Engine::new(&config);
         let store = Store::new(&engine);
 
