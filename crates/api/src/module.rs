@@ -1,15 +1,12 @@
+use crate::frame_info::{GlobalFrameInfoRegistration, FRAME_INFO};
 use crate::runtime::Store;
 use crate::types::{
     ExportType, ExternType, FuncType, GlobalType, ImportType, Limits, MemoryType, Mutability,
     TableType, ValType,
 };
 use anyhow::{bail, Error, Result};
-use lazy_static::lazy_static;
-use std::cell::Cell;
-use std::collections::HashMap;
 use std::path::Path;
-use std::rc::Rc;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex};
 use wasmparser::{
     validate, CustomSectionKind, ExternalKind, ImportSectionEntryType, ModuleReader, Name,
     OperatorValidatorConfig, SectionCode, ValidatingParserConfig,
@@ -83,8 +80,7 @@ fn into_table_type(tt: wasmparser::TableType) -> TableType {
 /// In other words it's a shallow copy, not a deep copy.
 #[derive(Clone)]
 pub struct Module {
-    // FIXME(#777) should be `Arc` and this type should be thread-safe
-    inner: Rc<ModuleInner>,
+    inner: Arc<ModuleInner>,
 }
 
 struct ModuleInner {
@@ -92,24 +88,13 @@ struct ModuleInner {
     imports: Box<[ImportType]>,
     exports: Box<[ExportType]>,
     compiled: CompiledModule,
-    registered_names: Cell<bool>,
+    frame_info_registration: Mutex<Option<Option<GlobalFrameInfoRegistration>>>,
     names: Arc<Names>,
 }
 
 pub struct Names {
     pub module: Arc<wasmtime_environ::Module>,
     pub module_name: Option<String>,
-}
-
-lazy_static! {
-    /// This is a global cache of names known for all compiled modules in this
-    /// process.
-    ///
-    /// This global cache is used during `Trap` creation to symbolicate frames.
-    /// This is populated on module compilation, and it is cleared out whenever
-    /// all references to a module are dropped, aka the `Drop for ModuleInner`
-    /// below.
-    pub static ref NAMES: RwLock<HashMap<usize, Arc<Names>>> = RwLock::default();
 }
 
 impl Module {
@@ -170,7 +155,7 @@ impl Module {
     /// See [`Module::new`] for other details.
     pub fn new_with_name(store: &Store, bytes: impl AsRef<[u8]>, name: &str) -> Result<Module> {
         let mut module = Module::new(store, bytes.as_ref())?;
-        let inner = Rc::get_mut(&mut module.inner).unwrap();
+        let inner = Arc::get_mut(&mut module.inner).unwrap();
         Arc::get_mut(&mut inner.names).unwrap().module_name = Some(name.to_string());
         Ok(module)
     }
@@ -199,9 +184,9 @@ impl Module {
     /// used instead.
     pub fn from_binary(store: &Store, binary: &[u8]) -> Result<Module> {
         Module::validate(store, binary)?;
-        // Note that the call to `validate` here should be ok because we
-        // previously validated the binary, meaning we're guaranteed to pass a
-        // valid binary for `store`.
+        // Note that the call to `from_binary_unchecked` here should be ok
+        // because we previously validated the binary, meaning we're guaranteed
+        // to pass a valid binary for `store`.
         unsafe { Module::from_binary_unchecked(store, binary) }
     }
 
@@ -284,13 +269,13 @@ impl Module {
             module: compiled.module().clone(),
         });
         Ok(Module {
-            inner: Rc::new(ModuleInner {
+            inner: Arc::new(ModuleInner {
                 store: store.clone(),
                 imports: Box::new([]),
                 exports: Box::new([]),
                 names,
                 compiled,
-                registered_names: Cell::new(false),
+                frame_info_registration: Mutex::new(None),
             }),
         })
     }
@@ -323,7 +308,7 @@ impl Module {
     }
 
     fn read_imports_and_exports(&mut self, binary: &[u8]) -> Result<()> {
-        let inner = Rc::get_mut(&mut self.inner).unwrap();
+        let inner = Arc::get_mut(&mut self.inner).unwrap();
         let mut reader = ModuleReader::new(binary)?;
         let mut imports = Vec::new();
         let mut exports = Vec::new();
@@ -452,23 +437,14 @@ impl Module {
         Ok(())
     }
 
-    /// Register this module's names in the global map of module names.
+    /// Register this module's stack frame information into the global scope.
     ///
     /// This is required to ensure that any traps can be properly symbolicated.
-    pub(crate) fn register_names(&self) {
-        if self.inner.registered_names.get() {
+    pub(crate) fn register_frame_info(&self) {
+        let mut info = self.inner.frame_info_registration.lock().unwrap();
+        if info.is_some() {
             return;
         }
-        let names = self.inner.names.clone();
-        NAMES.write().unwrap().insert(names.module.id, names);
-        self.inner.registered_names.set(true);
-    }
-}
-
-impl Drop for ModuleInner {
-    fn drop(&mut self) {
-        if self.registered_names.get() {
-            NAMES.write().unwrap().remove(&self.names.module.id);
-        }
+        *info = Some(FRAME_INFO.register(&self.inner.names, &self.inner.compiled));
     }
 }

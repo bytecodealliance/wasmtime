@@ -120,7 +120,7 @@ impl Instance {
             }
             exports.into_boxed_slice()
         };
-        module.register_names();
+        module.register_frame_info();
         Ok(Instance {
             instance_handle,
             module: module.clone(),

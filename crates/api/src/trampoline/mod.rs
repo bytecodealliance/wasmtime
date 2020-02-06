@@ -33,7 +33,7 @@ pub fn generate_func_export(
 /// instance/export/etc may exhibit undefined behavior.
 pub unsafe fn generate_raw_func_export(
     ft: &FuncType,
-    func: *const VMFunctionBody,
+    func: *mut [VMFunctionBody],
     store: &Store,
     state: Box<dyn Any>,
 ) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export)> {

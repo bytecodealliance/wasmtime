@@ -1,8 +1,8 @@
-use crate::module::NAMES;
+use crate::frame_info::FRAME_INFO;
+use crate::FrameInfo;
 use backtrace::Backtrace;
 use std::fmt;
 use std::sync::Arc;
-use wasmtime_environ::entity::EntityRef;
 
 /// A struct representing an aborted instruction execution, with a message
 /// indicating the cause.
@@ -55,22 +55,11 @@ impl Trap {
 
     fn new_with_trace(message: String, native_trace: Backtrace) -> Self {
         let mut wasm_trace = Vec::new();
-        let names = NAMES.read().unwrap();
         for frame in native_trace.frames() {
             let pc = frame.ip() as usize;
-            let info = match wasmtime_runtime::jit_function_registry::find(pc) {
-                Some(info) => info,
-                None => continue,
-            };
-            let names = match names.get(&info.module_id) {
-                Some(names) => names,
-                None => continue,
-            };
-            wasm_trace.push(FrameInfo {
-                func_index: info.func_index.index() as u32,
-                module_name: names.module_name.clone(),
-                func_name: names.module.func_names.get(&info.func_index).cloned(),
-            })
+            if let Some(info) = FRAME_INFO.lookup(pc) {
+                wasm_trace.push(info);
+            }
         }
         Trap {
             inner: Arc::new(TrapInner {
@@ -119,7 +108,7 @@ impl fmt::Display for Trap {
                     Ok(name) => write!(f, "{}", name)?,
                     Err(_) => write!(f, "{}", name)?,
                 },
-                None => write!(f, "<wasm function {}>", frame.func_index)?,
+                None => write!(f, "<wasm function {}>", frame.func_index())?,
             }
             writeln!(f, "")?;
         }
@@ -128,56 +117,3 @@ impl fmt::Display for Trap {
 }
 
 impl std::error::Error for Trap {}
-
-/// Description of a frame in a backtrace for a [`Trap`].
-///
-/// Whenever a WebAssembly trap occurs an instance of [`Trap`] is created. Each
-/// [`Trap`] has a backtrace of the WebAssembly frames that led to the trap, and
-/// each frame is described by this structure.
-#[derive(Debug)]
-pub struct FrameInfo {
-    module_name: Option<String>,
-    func_index: u32,
-    func_name: Option<String>,
-}
-
-impl FrameInfo {
-    /// Returns the WebAssembly function index for this frame.
-    ///
-    /// This function index is the index in the function index space of the
-    /// WebAssembly module that this frame comes from.
-    pub fn func_index(&self) -> u32 {
-        self.func_index
-    }
-
-    /// Returns the identifer of the module that this frame is for.
-    ///
-    /// Module identifiers are present in the `name` section of a WebAssembly
-    /// binary, but this may not return the exact item in the `name` section.
-    /// Module names can be overwritten at construction time or perhaps inferred
-    /// from file names. The primary purpose of this function is to assist in
-    /// debugging and therefore may be tweaked over time.
-    ///
-    /// This function returns `None` when no name can be found or inferred.
-    pub fn module_name(&self) -> Option<&str> {
-        self.module_name.as_deref()
-    }
-
-    /// Returns a descriptive name of the function for this frame, if one is
-    /// available.
-    ///
-    /// The name of this function may come from the `name` section of the
-    /// WebAssembly binary, or wasmtime may try to infer a better name for it if
-    /// not available, for example the name of the export if it's exported.
-    ///
-    /// This return value is primarily used for debugging and human-readable
-    /// purposes for things like traps. Note that the exact return value may be
-    /// tweaked over time here and isn't guaranteed to be something in
-    /// particular about a wasm module due to its primary purpose of assisting
-    /// in debugging.
-    ///
-    /// This function returns `None` when no name could be inferred.
-    pub fn func_name(&self) -> Option<&str> {
-        self.func_name.as_deref()
-    }
-}
