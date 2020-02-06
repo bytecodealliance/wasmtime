@@ -38,7 +38,7 @@ impl wasmtime::WasmArg for WasiCallerMemory {
 
     fn push(_dst: &mut Vec<wasmtime::ValType>) {}
 
-    fn from(vmctx: *mut wasmtime_runtime::VMContext, _abi: ()) -> Self {
+    fn from_abi(vmctx: *mut wasmtime_runtime::VMContext, _abi: ()) -> Self {
         unsafe {
             match wasmtime_runtime::InstanceHandle::from_vmctx(vmctx).lookup("memory") {
                 Some(wasmtime_runtime::Export::Memory {

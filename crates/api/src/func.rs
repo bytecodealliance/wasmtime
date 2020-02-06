@@ -56,7 +56,7 @@ macro_rules! wrappers {
                     let instance = InstanceHandle::from_vmctx(vmctx);
                     let func = instance.host_state().downcast_ref::<F>().expect("state");
                     panic::catch_unwind(AssertUnwindSafe(|| {
-                        func($($args::from(_caller_vmctx, $args)),*)
+                        func($($args::from_abi(_caller_vmctx, $args)),*)
                     }))
                 };
                 match ret {
@@ -286,14 +286,14 @@ pub trait WasmArg {
     #[doc(hidden)]
     fn push(dst: &mut Vec<ValType>);
     #[doc(hidden)]
-    fn from(vmctx: *mut VMContext, abi: Self::Abi) -> Self;
+    fn from_abi(vmctx: *mut VMContext, abi: Self::Abi) -> Self;
 }
 
 impl WasmArg for () {
     type Abi = ();
     fn push(_dst: &mut Vec<ValType>) {}
     #[inline]
-    fn from(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
+    fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
         abi
     }
 }
@@ -304,7 +304,7 @@ impl WasmArg for i32 {
         dst.push(ValType::I32);
     }
     #[inline]
-    fn from(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
+    fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
         abi
     }
 }
@@ -315,7 +315,7 @@ impl WasmArg for i64 {
         dst.push(ValType::I64);
     }
     #[inline]
-    fn from(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
+    fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
         abi
     }
 }
@@ -326,7 +326,7 @@ impl WasmArg for f32 {
         dst.push(ValType::F32);
     }
     #[inline]
-    fn from(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
+    fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
         abi
     }
 }
@@ -337,7 +337,7 @@ impl WasmArg for f64 {
         dst.push(ValType::F64);
     }
     #[inline]
-    fn from(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
+    fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
         abi
     }
 }
