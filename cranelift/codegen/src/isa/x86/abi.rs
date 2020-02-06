@@ -12,7 +12,8 @@ use crate::abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
 use crate::binemit::{FrameUnwindKind, FrameUnwindSink};
 use crate::cursor::{Cursor, CursorPosition, EncCursor};
 use crate::ir;
-use crate::ir::immediates::{Imm64, Offset32};
+use crate::ir::entities::StackSlot;
+use crate::ir::immediates::Imm64;
 use crate::ir::stackslot::{StackOffset, StackSize};
 use crate::ir::types;
 use crate::ir::{
@@ -367,7 +368,7 @@ pub fn allocatable_registers(triple: &Triple, flags: &shared_settings::Flags) ->
     regs
 }
 
-/// Get the set of callee-saved registers general-purpose registers.
+/// Get the set of callee-saved general-purpose registers.
 fn callee_saved_gprs(isa: &dyn TargetIsa, call_conv: CallConv) -> &'static [RU] {
     match isa.triple().pointer_width().unwrap() {
         PointerWidth::U16 => panic!(),
@@ -579,7 +580,7 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     // TODO: eventually use the 32 bytes (shadow store) as spill slot. This currently doesn't work
     //       since cranelift does not support spill slots before incoming args
 
-    func.create_stack_slot(ir::StackSlotData {
+    let csr_slot = func.create_stack_slot(ir::StackSlotData {
         kind: ir::StackSlotKind::IncomingArg,
         size: csr_stack_size as u32,
         offset: Some(-(WIN_SHADOW_STACK_SPACE + csr_stack_size)),
@@ -621,7 +622,7 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     let entry_block = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_block);
     let prologue_cfa_state =
-        insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, isa);
+        insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, &csr_slot, isa);
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
@@ -630,6 +631,7 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
         local_stack_size,
         reg_type,
         &csrs,
+        &csr_slot,
         isa,
         prologue_cfa_state,
     );
@@ -656,7 +658,7 @@ fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     // will adjust the stack pointer to make room for the rest of the required
     // space for this frame.
     let csr_stack_size = ((csrs.iter(GPR).len() + 2) * word_size) as i32;
-    func.create_stack_slot(ir::StackSlotData {
+    let csr_slot = func.create_stack_slot(ir::StackSlotData {
         kind: ir::StackSlotKind::IncomingArg,
         size: csr_stack_size as u32,
         offset: Some(-csr_stack_size),
@@ -686,7 +688,7 @@ fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     let entry_block = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_block);
     let prologue_cfa_state =
-        insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, isa);
+        insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, &csr_slot, isa);
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
@@ -695,6 +697,7 @@ fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
         local_stack_size,
         reg_type,
         &csrs,
+        &csr_slot,
         isa,
         prologue_cfa_state,
     );
@@ -709,6 +712,7 @@ fn insert_common_prologue(
     stack_size: i64,
     reg_type: ir::types::Type,
     csrs: &RegisterSet,
+    csr_slot: &StackSlot,
     isa: &dyn TargetIsa,
 ) -> Option<CFAState> {
     let word_size = isa.pointer_bytes() as isize;
@@ -832,33 +836,44 @@ fn insert_common_prologue(
         }
     }
 
-    for reg in csrs.iter(FPR) {
-        // Append param to entry EBB
-        let csr_arg = pos.func.dfg.append_ebb_param(ebb, types::F64X2);
+    if csrs.iter(FPR).len() != 0 {
+        let mut fpr_offset = 0;
 
-        // Assign it a location
-        pos.func.locations[csr_arg] = ir::ValueLoc::Reg(reg);
+        // `stack_store` is not directly encodable in x86_64 at the moment, so we'll need a base
+        // address. We are well after postopt could run, so load the CSR region base once here,
+        // instead of hoping that the addr/store will be combined later.
+        let stack_addr = pos.ins().stack_addr(types::I64, *csr_slot, 0);
 
-        let reg_store_inst = pos.ins().store(
-            ir::MemFlags::trusted(),
-            csr_arg,
-            panic!("get RSP value"),
-            Offset32::new(panic!("value-appropriate offset")),
-        );
+        // At this point we won't be using volatile registers for anything except for return
+        // At this point we have not saved any CSRs yet, and arguments are all in registers. So
+        // pick a location for `stack_addr` that is neither non-volatile nor an argument: RAX will
+        // do.
+        pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::rax as u16);
 
-        if let Some(ref mut frame_layout) = pos.func.frame_layout {
-            let mut cfa_state = cfa_state
-                .as_mut()
-                .expect("cfa state exists when recording frame layout");
-            cfa_state.current_depth -= types::F64X2.bytes() as isize;
-            frame_layout.instructions.insert(
-                reg_store_inst,
-                vec![FrameLayoutChange::RegAt {
-                    reg,
-                    cfa_offset: cfa_state.current_depth,
-                }]
-                .into_boxed_slice(),
-            );
+        for reg in csrs.iter(FPR) {
+            // Append param to entry EBB
+            let csr_arg = pos.func.dfg.append_ebb_param(ebb, types::F64X2);
+
+            // Assign it a location
+            pos.func.locations[csr_arg] = ir::ValueLoc::Reg(reg);
+
+            let reg_store_inst = pos.ins().store(ir::MemFlags::trusted(), csr_arg, stack_addr, fpr_offset);
+            fpr_offset += types::F64X2.bytes() as i32;
+
+            if let Some(ref mut frame_layout) = pos.func.frame_layout {
+                let mut cfa_state = cfa_state
+                    .as_mut()
+                    .expect("cfa state exists when recording frame layout");
+                cfa_state.current_depth -= types::F64X2.bytes() as isize;
+                frame_layout.instructions.insert(
+                    reg_store_inst,
+                    vec![FrameLayoutChange::RegAt {
+                        reg,
+                        cfa_offset: cfa_state.current_depth,
+                    }]
+                    .into_boxed_slice(),
+                );
+            }
         }
     }
 
@@ -938,6 +953,7 @@ fn insert_common_epilogues(
     stack_size: i64,
     reg_type: ir::types::Type,
     csrs: &RegisterSet,
+    csr_slot: &StackSlot,
     isa: &dyn TargetIsa,
     cfa_state: Option<CFAState>,
 ) {
@@ -952,6 +968,7 @@ fn insert_common_epilogues(
                     pos,
                     reg_type,
                     csrs,
+                    csr_slot,
                     isa,
                     is_last,
                     cfa_state.clone(),
@@ -969,6 +986,7 @@ fn insert_common_epilogue(
     pos: &mut EncCursor,
     reg_type: ir::types::Type,
     csrs: &RegisterSet,
+    csr_slot: &StackSlot,
     isa: &dyn TargetIsa,
     is_last: bool,
     mut cfa_state: Option<CFAState>,
@@ -1013,25 +1031,35 @@ fn insert_common_epilogue(
         pos.func.dfg.append_inst_arg(inst, csr_ret);
     }
 
-    for reg in csrs.iter(FPR) {
-        let value = pos.ins().load(
-            types::F64X2,
-            ir::MemFlags::trusted(),
-            panic!("get RSP value"),
-            Offset32::new(panic!("value-appropriate offset")),
-        );
+    if csrs.iter(FPR).len() != 0 {
+        let mut fpr_offset = 0;
 
-        if let Some(ref mut cfa_state) = cfa_state.as_mut() {
-            // Note: don't bother recording a frame layout change because the popped value is
-            // still correct in memory, and won't be overwritten until we've returned where the
-            // current frame's layout would no longer matter. Only adjust `current_depth` for a
-            // consistency check later.
-            cfa_state.current_depth += types::F64X2.bytes() as isize;
+        // `stack_store` is not directly encodable in x86_64 at the moment, so we'll need a base
+        // address. We are well after postopt could run, so load the CSR region base once here,
+        // instead of hoping that the addr/store will be combined later.
+        let stack_addr = pos.ins().stack_addr(types::I64, *csr_slot, 0);
+
+        // At this point we won't be using volatile registers for anything except for return
+        // registers. Arbitrarily pick RCX as a volatile register that is not used for return
+        // values.
+        pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::rcx as u16);
+
+        for reg in csrs.iter(FPR) {
+            let value = pos.ins().load(types::F64X2, ir::MemFlags::trusted(), stack_addr, fpr_offset);
+            fpr_offset += types::F64X2.bytes() as i32;
+
+            if let Some(ref mut cfa_state) = cfa_state.as_mut() {
+                // Note: don't bother recording a frame layout change because the popped value is
+                // still correct in memory, and won't be overwritten until we've returned where the
+                // current frame's layout would no longer matter. Only adjust `current_depth` for a
+                // consistency check later.
+                cfa_state.current_depth += types::F64X2.bytes() as isize;
+            }
+            pos.prev_inst();
+
+            pos.func.locations[value] = ir::ValueLoc::Reg(reg);
+            pos.func.dfg.append_inst_arg(inst, value);
         }
-        pos.prev_inst();
-
-        pos.func.locations[value] = ir::ValueLoc::Reg(reg);
-        pos.func.dfg.append_inst_arg(inst, value);
     }
 
     if let Some(ref mut frame_layout) = pos.func.frame_layout {
