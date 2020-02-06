@@ -1042,9 +1042,9 @@ fn insert_common_epilogue(
         let stack_addr = pos.ins().stack_addr(types::I64, *csr_slot, 0);
 
         // At this point we won't be using volatile registers for anything except for return
-        // registers. Arbitrarily pick RCX as a volatile register that is not used for return
+        // registers. Arbitrarily pick R11 as a volatile register that is not used for return
         // values.
-        pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::rcx as u16);
+        pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::r11 as u16);
 
         for reg in csrs.iter(FPR) {
             let value = pos.ins().load(
