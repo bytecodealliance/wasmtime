@@ -332,25 +332,23 @@ dependencies = [
 
 [[package]]
 name = "cranelift-bforest"
-version = "0.56.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dfb4890b4075d5c39a581c0cf6354b43c8f8273d232cbc2a5e6c7e0f1027edc"
+version = "0.57.0"
+source = "git+https://github.com/bytecodealliance/cranelift#bc99ff3c59c48832ff98789c954fb48f55850a08"
 dependencies = [
  "cranelift-entity",
 ]
 
 [[package]]
 name = "cranelift-codegen"
-version = "0.56.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7600b2e36e28ecb0872e803d794b05c7a000273af8f7ac7d7cc32362e082e647"
+version = "0.57.0"
+source = "git+https://github.com/bytecodealliance/cranelift#bc99ff3c59c48832ff98789c954fb48f55850a08"
 dependencies = [
  "byteorder",
  "cranelift-bforest",
  "cranelift-codegen-meta",
  "cranelift-codegen-shared",
  "cranelift-entity",
- "gimli",
+ "gimli 0.20.0",
  "log",
  "serde",
  "smallvec",
@@ -360,9 +358,8 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-meta"
-version = "0.56.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65e50e5d5ffd37ec65b347cfbc653d64d0593b0ef7ff1eaf159f9fe1e1947207"
+version = "0.57.0"
+source = "git+https://github.com/bytecodealliance/cranelift#bc99ff3c59c48832ff98789c954fb48f55850a08"
 dependencies = [
  "cranelift-codegen-shared",
  "cranelift-entity",
@@ -370,24 +367,21 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-shared"
-version = "0.56.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc3de82e8bbd74f58dd8791c09cea215ba775f0bed780cbe4269ba3138848a51"
+version = "0.57.0"
+source = "git+https://github.com/bytecodealliance/cranelift#bc99ff3c59c48832ff98789c954fb48f55850a08"
 
 [[package]]
 name = "cranelift-entity"
-version = "0.56.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35fd5d8705013678bdcd21d607b6fe70d6d5a8f8a954820cf16a19275331478c"
+version = "0.57.0"
+source = "git+https://github.com/bytecodealliance/cranelift#bc99ff3c59c48832ff98789c954fb48f55850a08"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "cranelift-frontend"
-version = "0.56.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c948841f008f5f147e9a7527e144e1014b979f77e4190ade8080070436dd208"
+version = "0.57.0"
+source = "git+https://github.com/bytecodealliance/cranelift#bc99ff3c59c48832ff98789c954fb48f55850a08"
 dependencies = [
  "cranelift-codegen",
  "log",
@@ -397,9 +391,8 @@ dependencies = [
 
 [[package]]
 name = "cranelift-native"
-version = "0.56.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f9da354ffc3b9dd1c244eb23cc49048a7117bf685bc2a8fb5b3d4a3f6661d80"
+version = "0.57.0"
+source = "git+https://github.com/bytecodealliance/cranelift#bc99ff3c59c48832ff98789c954fb48f55850a08"
 dependencies = [
  "cranelift-codegen",
  "raw-cpuid",
@@ -408,9 +401,8 @@ dependencies = [
 
 [[package]]
 name = "cranelift-wasm"
-version = "0.56.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f48052598a13f46fa6fe1490e460bd6c9c61e81823b2e527165566f8d76755a"
+version = "0.57.0"
+source = "git+https://github.com/bytecodealliance/cranelift#bc99ff3c59c48832ff98789c954fb48f55850a08"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -418,7 +410,7 @@ dependencies = [
  "log",
  "serde",
  "thiserror",
- "wasmparser 0.47.0",
+ "wasmparser 0.48.2",
 ]
 
 [[package]]
@@ -703,6 +695,16 @@ dependencies = [
  "fallible-iterator",
  "indexmap",
  "stable_deref_trait",
+]
+
+[[package]]
+name = "gimli"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81dd6190aad0f05ddbbf3245c54ed14ca4aa6dd32f22312b70d8f168c3e3e633"
+dependencies = [
+ "byteorder",
+ "indexmap",
 ]
 
 [[package]]
@@ -1861,9 +1863,9 @@ checksum = "c702914acda5feeeffbc29e4d953e5b9ce79d8b98da4dbf18a77086e116c5470"
 
 [[package]]
 name = "wasmparser"
-version = "0.47.0"
+version = "0.48.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1add8db5a53a2f64f13418b241982c4ab533d7a9e1e8a5dcadccce633d8d393b"
+checksum = "073da89bf1c84db000dd68ce660c1b4a08e3a2d28fd1e3394ab9e7abdde4a0f8"
 
 [[package]]
 name = "wasmparser"
@@ -1947,7 +1949,7 @@ version = "0.9.0"
 dependencies = [
  "anyhow",
  "faerie",
- "gimli",
+ "gimli 0.19.0",
  "more-asserts",
  "target-lexicon",
  "thiserror",

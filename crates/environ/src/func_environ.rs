@@ -799,4 +799,69 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn translate_elem_drop(&mut self, _pos: FuncCursor, _seg_index: u32) -> WasmResult<()> {
         Err(WasmError::Unsupported("bulk memory".to_string()))
     }
+
+    fn translate_table_grow(
+        &mut self,
+        _pos: FuncCursor,
+        _table_index: u32,
+        _delta: ir::Value,
+        _init_value: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        Err(WasmError::Unsupported("reference types".to_string()))
+    }
+
+    fn translate_table_get(
+        &mut self,
+        _pos: FuncCursor,
+        _table_index: u32,
+        _index: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        Err(WasmError::Unsupported("reference types".to_string()))
+    }
+
+    fn translate_table_set(
+        &mut self,
+        _pos: FuncCursor,
+        _table_index: u32,
+        _value: ir::Value,
+        _index: ir::Value,
+    ) -> WasmResult<()> {
+        Err(WasmError::Unsupported("reference types".to_string()))
+    }
+
+    fn translate_table_fill(
+        &mut self,
+        _pos: FuncCursor,
+        _table_index: u32,
+        _dst: ir::Value,
+        _val: ir::Value,
+        _len: ir::Value,
+    ) -> WasmResult<()> {
+        Err(WasmError::Unsupported("reference types".to_string()))
+    }
+
+    fn translate_ref_func(
+        &mut self,
+        _pos: FuncCursor,
+        _func_index: u32,
+    ) -> WasmResult<ir::Value> {
+        Err(WasmError::Unsupported("reference types".to_string()))
+    }
+
+    fn translate_custom_global_get(
+        &mut self,
+        _pos: FuncCursor,
+        _global_index: GlobalIndex,
+    ) -> WasmResult<ir::Value> {
+        Err(WasmError::Unsupported("reference types".to_string()))
+    }
+
+    fn translate_custom_global_set(
+        &mut self,
+        _pos: FuncCursor,
+        _global_index: GlobalIndex,
+        _val: ir::Value,
+    ) -> WasmResult<()> {
+        Err(WasmError::Unsupported("reference types".to_string()))
+    }
 }

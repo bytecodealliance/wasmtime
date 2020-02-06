@@ -78,3 +78,11 @@ test_programs = ["test-programs/test_programs"]
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[patch.crates-io]
+cranelift-bforest = { git = "https://github.com/bytecodealliance/cranelift" }
+cranelift-codegen = { git = "https://github.com/bytecodealliance/cranelift" }
+cranelift-wasm = { git = "https://github.com/bytecodealliance/cranelift" }
+cranelift-entity = { git = "https://github.com/bytecodealliance/cranelift" }
+cranelift-frontend = { git = "https://github.com/bytecodealliance/cranelift" }
+cranelift-native = { git = "https://github.com/bytecodealliance/cranelift" }
