@@ -159,9 +159,9 @@ fn make_trampoline(
 
     {
         let mut builder = FunctionBuilder::new(&mut context.func, fn_builder_ctx);
-        let block0 = builder.create_ebb();
+        let block0 = builder.create_block();
 
-        builder.append_ebb_params_for_function_params(block0);
+        builder.append_block_params_for_function_params(block0);
         builder.switch_to_block(block0);
         builder.seal_block(block0);
 
@@ -172,7 +172,7 @@ fn make_trampoline(
                 continue;
             }
 
-            let val = builder.func.dfg.ebb_params(block0)[i];
+            let val = builder.func.dfg.block_params(block0)[i];
             builder.ins().store(
                 mflags,
                 val,
@@ -181,9 +181,9 @@ fn make_trampoline(
             );
         }
 
-        let ebb_params = builder.func.dfg.ebb_params(block0);
-        let vmctx_ptr_val = ebb_params[0];
-        let caller_vmctx_ptr_val = ebb_params[1];
+        let block_params = builder.func.dfg.block_params(block0);
+        let vmctx_ptr_val = block_params[0];
+        let caller_vmctx_ptr_val = block_params[1];
         let call_id_val = builder.ins().iconst(types::I32, call_id as i64);
 
         let callee_args = vec![

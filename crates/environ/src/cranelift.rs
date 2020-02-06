@@ -30,14 +30,14 @@ pub struct RelocSink {
 }
 
 impl binemit::RelocSink for RelocSink {
-    fn reloc_ebb(
+    fn reloc_block(
         &mut self,
         _offset: binemit::CodeOffset,
         _reloc: binemit::Reloc,
-        _ebb_offset: binemit::CodeOffset,
+        _block_offset: binemit::CodeOffset,
     ) {
         // This should use the `offsets` field of `ir::Function`.
-        panic!("ebb headers not yet implemented");
+        panic!("block headers not yet implemented");
     }
     fn reloc_external(
         &mut self,
@@ -134,12 +134,12 @@ fn get_function_address_map<'data>(
     let mut instructions = Vec::new();
 
     let func = &context.func;
-    let mut ebbs = func.layout.ebbs().collect::<Vec<_>>();
-    ebbs.sort_by_key(|ebb| func.offsets[*ebb]); // Ensure inst offsets always increase
+    let mut blocks = func.layout.blocks().collect::<Vec<_>>();
+    blocks.sort_by_key(|block| func.offsets[*block]); // Ensure inst offsets always increase
 
     let encinfo = isa.encoding_info();
-    for ebb in ebbs {
-        for (offset, inst, size) in func.inst_offsets(ebb, &encinfo) {
+    for block in blocks {
+        for (offset, inst, size) in func.inst_offsets(block, &encinfo) {
             let srcloc = func.srclocs[inst];
             instructions.push(InstructionAddressMap {
                 srcloc,
