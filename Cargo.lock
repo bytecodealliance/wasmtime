@@ -896,7 +896,7 @@ dependencies = [
  "smallvec",
  "thiserror",
  "typemap",
- "wasmparser 0.47.0",
+ "wasmparser 0.51.0",
  "wat",
 ]
 

@@ -19,8 +19,7 @@ pub enum Error {
 
 impl From<BinaryReaderError> for Error {
     fn from(e: BinaryReaderError) -> Self {
-        let BinaryReaderError { message, offset } = e;
-        Error::Input(format!("At wasm offset {}: {}", offset, message))
+        Error::Input(format!("At wasm offset {}: {}", e.offset(), e.message()))
     }
 }
 
