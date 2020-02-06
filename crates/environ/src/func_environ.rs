@@ -849,7 +849,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         _pos: FuncCursor,
         _global_index: GlobalIndex,
     ) -> WasmResult<ir::Value> {
-        Err(WasmError::Unsupported("reference types".to_string()))
+        unreachable!("we don't create any custom globals")
     }
 
     fn translate_custom_global_set(
@@ -858,6 +858,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         _global_index: GlobalIndex,
         _val: ir::Value,
     ) -> WasmResult<()> {
-        Err(WasmError::Unsupported("reference types".to_string()))
+        unreachable!("we don't create any custom globals")
     }
 }
