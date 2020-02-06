@@ -840,11 +840,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Err(WasmError::Unsupported("reference types".to_string()))
     }
 
-    fn translate_ref_func(
-        &mut self,
-        _pos: FuncCursor,
-        _func_index: u32,
-    ) -> WasmResult<ir::Value> {
+    fn translate_ref_func(&mut self, _pos: FuncCursor, _func_index: u32) -> WasmResult<ir::Value> {
         Err(WasmError::Unsupported("reference types".to_string()))
     }
 
