@@ -16,6 +16,16 @@ use dummy::{dummy_imports, dummy_values};
 use std::collections::{HashMap, HashSet};
 use wasmtime::*;
 
+fn fuzz_default_config(strategy: Strategy) -> Config {
+    let mut config = Config::new();
+    config
+        .cranelift_debug_verifier(true)
+        .wasm_multi_value(true)
+        .strategy(strategy)
+        .expect("failed to enable lightbeam");
+    return config;
+}
+
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
 /// panic or segfault or anything else that can be detected "passively".
 ///
@@ -23,12 +33,7 @@ use wasmtime::*;
 ///
 /// You can control which compiler is used via passing a `Strategy`.
 pub fn instantiate(wasm: &[u8], strategy: Strategy) {
-    let mut config = Config::new();
-    config
-        .cranelift_debug_verifier(true)
-        .strategy(strategy)
-        .expect("failed to enable lightbeam");
-    instantiate_with_config(wasm, config);
+    instantiate_with_config(wasm, fuzz_default_config(strategy));
 }
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
@@ -70,12 +75,7 @@ pub fn instantiate_with_config(wasm: &[u8], config: Config) {
 ///
 /// You can control which compiler is used via passing a `Strategy`.
 pub fn compile(wasm: &[u8], strategy: Strategy) {
-    let mut config = Config::new();
-    config
-        .cranelift_debug_verifier(true)
-        .strategy(strategy)
-        .unwrap();
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&fuzz_default_config(strategy));
     let store = Store::new(&engine);
     let _ = Module::new(&store, wasm);
 }
