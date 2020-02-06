@@ -109,6 +109,10 @@ struct CommonOptions {
     #[structopt(long)]
     enable_bulk_memory: bool,
 
+    /// Enable all experimental wasm features
+    #[structopt(long)]
+    enable_all: bool,
+
     /// Use Lightbeam for all compilation
     #[structopt(long, conflicts_with = "cranelift")]
     lightbeam: bool,
@@ -124,11 +128,11 @@ impl CommonOptions {
         config
             .cranelift_debug_verifier(cfg!(debug_assertions))
             .debug_info(self.debug_info)
-            .wasm_bulk_memory(self.enable_bulk_memory)
-            .wasm_simd(self.enable_simd)
-            .wasm_reference_types(self.enable_reference_types)
-            .wasm_multi_value(self.enable_multi_value)
-            .wasm_threads(self.enable_threads)
+            .wasm_bulk_memory(self.enable_bulk_memory || self.enable_all)
+            .wasm_simd(self.enable_simd || self.enable_all)
+            .wasm_reference_types(self.enable_reference_types || self.enable_all)
+            .wasm_multi_value(self.enable_multi_value || self.enable_all)
+            .wasm_threads(self.enable_threads || self.enable_all)
             .strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?;
         if self.optimize {
             config.cranelift_opt_level(wasmtime::OptLevel::Speed);
