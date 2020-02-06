@@ -288,10 +288,10 @@ impl WastContext {
                 };
                 let error_message = format!("{:?}", err);
                 if !error_message.contains(&message) {
-                    // TODO: change to bail!
-                    println!(
-                        "assert_invalid: expected {}, got {}",
-                        message, error_message
+                    bail!(
+                        "assert_invalid: expected \"{}\", got \"{}\"",
+                        message,
+                        error_message
                     )
                 }
             }
@@ -315,7 +315,7 @@ impl WastContext {
                 if !error_message.contains(&message) {
                     // TODO: change to bail!
                     println!(
-                        "assert_malformed: expected {}, got {}",
+                        "assert_malformed: expected \"{}\", got \"{}\"",
                         message, error_message
                     )
                 }
