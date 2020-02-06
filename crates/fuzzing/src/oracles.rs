@@ -25,6 +25,7 @@ use wasmtime::*;
 pub fn instantiate(wasm: &[u8], strategy: Strategy) {
     let mut config = Config::new();
     config
+        .cranelift_debug_verifier(true)
         .strategy(strategy)
         .expect("failed to enable lightbeam");
     instantiate_with_config(wasm, config);
@@ -70,7 +71,10 @@ pub fn instantiate_with_config(wasm: &[u8], config: Config) {
 /// You can control which compiler is used via passing a `Strategy`.
 pub fn compile(wasm: &[u8], strategy: Strategy) {
     let mut config = Config::new();
-    config.strategy(strategy).unwrap();
+    config
+        .cranelift_debug_verifier(true)
+        .strategy(strategy)
+        .unwrap();
     let engine = Engine::new(&config);
     let store = Store::new(&engine);
     let _ = Module::new(&store, wasm);
@@ -264,7 +268,9 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
         match call {
             ApiCall::ConfigNew => {
                 assert!(config.is_none());
-                config = Some(Config::new());
+                let mut cfg = Config::new();
+                cfg.cranelift_debug_verifier(true);
+                config = Some(cfg);
             }
 
             ApiCall::ConfigDebugInfo(b) => {

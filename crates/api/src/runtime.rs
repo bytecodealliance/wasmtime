@@ -35,6 +35,11 @@ impl Config {
             .enable("avoid_div_traps")
             .expect("should be valid flag");
 
+        // Invert cranelift's default-on verification to instead default off.
+        flags
+            .set("enable_verifier", "false")
+            .expect("should be valid flag");
+
         Config {
             debug_info: false,
             features: Default::default(),
