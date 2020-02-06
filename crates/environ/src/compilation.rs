@@ -4,6 +4,7 @@
 use crate::cache::ModuleCacheDataTupleType;
 use crate::module;
 use crate::module_environ::FunctionBodyData;
+use crate::CacheConfig;
 use cranelift_codegen::{binemit, ir, isa, Context};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, ModuleTranslationState, WasmError};
@@ -300,5 +301,6 @@ pub trait Compiler {
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         generate_debug_info: bool,
+        cache_config: &CacheConfig,
     ) -> Result<ModuleCacheDataTupleType, CompileError>;
 }

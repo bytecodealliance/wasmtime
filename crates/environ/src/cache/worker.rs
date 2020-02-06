@@ -5,16 +5,15 @@
 //! but we guarantee eventual consistency and fault tolerancy.
 //! Background tasks can be CPU intensive, but the worker thread has low priority.
 
-use super::{cache_config, fs_write_atomic, CacheConfig};
+use super::{fs_write_atomic, CacheConfig};
 use log::{debug, info, trace, warn};
 use serde::{Deserialize, Serialize};
-use spin::Once;
 use std::cmp;
 use std::collections::HashMap;
 use std::ffi::OsStr;
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{self, AtomicBool};
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 #[cfg(test)]
 use std::sync::{Arc, Condvar, Mutex};
@@ -25,6 +24,7 @@ use std::time::SystemTime;
 #[cfg(test)]
 use tests::system_time_stub::SystemTimeStub as SystemTime;
 
+#[derive(Clone)]
 pub(super) struct Worker {
     sender: SyncSender<CacheEvent>,
     #[cfg(test)]
@@ -44,29 +44,6 @@ struct WorkerStats {
     dropped: u32,
     sent: u32,
     handled: u32,
-}
-
-static WORKER: Once<Worker> = Once::new();
-static INIT_CALLED: AtomicBool = AtomicBool::new(false);
-
-pub(super) fn worker() -> &'static Worker {
-    WORKER
-        .r#try()
-        .expect("Cache worker must be initialized before usage")
-}
-
-pub(super) fn init(init_file_per_thread_logger: Option<&'static str>) {
-    INIT_CALLED
-        .compare_exchange(
-            false,
-            true,
-            atomic::Ordering::SeqCst,
-            atomic::Ordering::SeqCst,
-        )
-        .expect("Cache worker init must be called at most once");
-
-    let worker = Worker::start_new(cache_config(), init_file_per_thread_logger);
-    WORKER.call_once(|| worker);
 }
 
 #[derive(Debug, Clone)]
@@ -168,6 +145,12 @@ impl Worker {
     }
 }
 
+impl fmt::Debug for Worker {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Worker").finish()
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 struct ModuleCacheStatistics {
     pub usages: u64,
@@ -210,9 +193,6 @@ macro_rules! unwrap_or_warn {
 
 impl WorkerThread {
     fn run(self, init_file_per_thread_logger: Option<&'static str>) {
-        #[cfg(not(test))] // We want to test the worker without relying on init() being called
-        assert!(INIT_CALLED.load(atomic::Ordering::SeqCst));
-
         if let Some(prefix) = init_file_per_thread_logger {
             file_per_thread_logger::initialize(prefix);
         }

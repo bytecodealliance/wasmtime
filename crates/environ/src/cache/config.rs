@@ -1,20 +1,16 @@
 //! Module for configuring the cache system.
 
-use super::worker;
+use super::Worker;
 use anyhow::{anyhow, bail, Context, Result};
 use directories::ProjectDirs;
-use lazy_static::lazy_static;
-use log::{debug, error, trace, warn};
+use log::{trace, warn};
 use serde::{
     de::{self, Deserializer},
     Deserialize,
 };
-use spin::Once;
 use std::fmt::Debug;
 use std::fs;
-use std::mem;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 // wrapped, so we have named section in config,
@@ -25,12 +21,10 @@ struct Config {
     cache: CacheConfig,
 }
 
+/// Global configuration for how the cache is managed
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct CacheConfig {
-    #[serde(skip)]
-    errors: Vec<String>,
-
     enabled: bool,
     directory: Option<PathBuf>,
     #[serde(
@@ -91,49 +85,9 @@ pub struct CacheConfig {
         deserialize_with = "deserialize_percent"
     )]
     files_total_size_limit_percent_if_deleting: Option<u8>,
-}
 
-// Private static, so only internal function can access it.
-static CONFIG: Once<CacheConfig> = Once::new();
-static INIT_CALLED: AtomicBool = AtomicBool::new(false);
-
-/// Returns cache configuration.
-///
-/// If system has not been initialized, it disables it.
-/// You mustn't call init() after it.
-pub fn cache_config() -> &'static CacheConfig {
-    CONFIG.call_once(CacheConfig::new_cache_disabled)
-}
-
-/// Initializes the cache system. Should be called exactly once,
-/// and before using the cache system. Otherwise it can panic.
-/// Returns list of errors. If empty, initialization succeeded.
-pub fn init<P: AsRef<Path> + Debug>(
-    enabled: bool,
-    config_file: Option<P>,
-    init_file_per_thread_logger: Option<&'static str>,
-) -> &'static Vec<String> {
-    INIT_CALLED
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .expect("Cache system init must be called at most once");
-    assert!(
-        CONFIG.r#try().is_none(),
-        "Cache system init must be called before using the system."
-    );
-    let conf_file_str = format!("{:?}", config_file);
-    let conf = CONFIG.call_once(|| CacheConfig::from_file(enabled, config_file));
-    if conf.errors.is_empty() {
-        if conf.enabled() {
-            worker::init(init_file_per_thread_logger);
-        }
-        debug!("Cache init(\"{}\"): {:#?}", conf_file_str, conf)
-    } else {
-        error!(
-            "Cache init(\"{}\"): errors: {:#?}",
-            conf_file_str, conf.errors,
-        )
-    }
-    &conf.errors
+    #[serde(skip)]
+    worker: Option<Worker>,
 }
 
 /// Creates a new configuration file at specified path, or default path if None is passed.
@@ -141,13 +95,10 @@ pub fn init<P: AsRef<Path> + Debug>(
 pub fn create_new_config<P: AsRef<Path> + Debug>(config_file: Option<P>) -> Result<PathBuf> {
     trace!("Creating new config file, path: {:?}", config_file);
 
-    let config_file = config_file
-        .as_ref()
-        .map_or_else(
-            || DEFAULT_CONFIG_PATH.as_ref().map(|p| p.as_ref()),
-            |p| Ok(p.as_ref()),
-        )
-        .map_err(|s| anyhow!("{}", s))?;
+    let config_file = match config_file {
+        Some(path) => path.as_ref().to_path_buf(),
+        None => default_config_path()?,
+    };
 
     if config_file.exists() {
         bail!(
@@ -188,14 +139,6 @@ enabled = true
 
 // permitted levels from: https://docs.rs/zstd/0.4.28+zstd.1.4.3/zstd/stream/write/struct.Encoder.html
 const ZSTD_COMPRESSION_LEVELS: std::ops::RangeInclusive<i32> = 0..=21;
-lazy_static! {
-    static ref PROJECT_DIRS: Option<ProjectDirs> =
-        ProjectDirs::from("", "BytecodeAlliance", "wasmtime");
-    static ref DEFAULT_CONFIG_PATH: Result<PathBuf, String> = PROJECT_DIRS
-        .as_ref()
-        .map(|proj_dirs| proj_dirs.config_dir().join("config.toml"))
-        .ok_or_else(|| "Config file not specified and failed to get the default".to_string());
-}
 
 // Default settings, you're welcome to tune them!
 // TODO: what do we want to warn users about?
@@ -231,6 +174,17 @@ const DEFAULT_FILES_TOTAL_SIZE_SOFT_LIMIT: u64 = 1024 * 1024 * 512;
 const DEFAULT_FILE_COUNT_LIMIT_PERCENT_IF_DELETING: u8 = 70;
 // if changed, update cli-cache.md
 const DEFAULT_FILES_TOTAL_SIZE_LIMIT_PERCENT_IF_DELETING: u8 = 70;
+
+fn project_dirs() -> Option<ProjectDirs> {
+    ProjectDirs::from("", "BytecodeAlliance", "wasmtime")
+}
+
+fn default_config_path() -> Result<PathBuf> {
+    match project_dirs() {
+        Some(dirs) => Ok(dirs.config_dir().join("config.toml")),
+        None => bail!("config file not specified and failed to get the default"),
+    }
+}
 
 // Deserializers of our custom formats
 // can be replaced with const generics later
@@ -353,9 +307,9 @@ impl CacheConfig {
             .expect(CACHE_IMPROPER_CONFIG_ERROR_MSG)
     }
 
+    /// Creates a new set of configuration which represents a disabled cache
     pub fn new_cache_disabled() -> Self {
         Self {
-            errors: Vec::new(),
             enabled: false,
             directory: None,
             worker_event_queue_size: None,
@@ -369,6 +323,7 @@ impl CacheConfig {
             files_total_size_soft_limit: None,
             file_count_limit_percent_if_deleting: None,
             files_total_size_limit_percent_if_deleting: None,
+            worker: None,
         }
     }
 
@@ -378,78 +333,70 @@ impl CacheConfig {
         conf
     }
 
-    fn new_cache_with_errors(errors: Vec<String>) -> Self {
-        let mut conf = Self::new_cache_disabled();
-        conf.errors = errors;
-        conf
-    }
-
-    pub fn from_file<P: AsRef<Path>>(enabled: bool, config_file: Option<P>) -> Self {
-        if !enabled {
-            return Self::new_cache_disabled();
-        }
-
-        let mut config = match Self::load_and_parse_file(config_file) {
-            Ok(data) => data,
-            Err(err) => return Self::new_cache_with_errors(vec![err]),
-        };
+    /// Parses cache configuration from the file specified
+    pub fn from_file(config_file: Option<&Path>) -> Result<Self> {
+        let mut config = Self::load_and_parse_file(config_file)?;
 
         // validate values and fill in defaults
-        config.validate_directory_or_default();
+        config.validate_directory_or_default()?;
         config.validate_worker_event_queue_size_or_default();
-        config.validate_baseline_compression_level_or_default();
-        config.validate_optimized_compression_level_or_default();
+        config.validate_baseline_compression_level_or_default()?;
+        config.validate_optimized_compression_level_or_default()?;
         config.validate_optimized_compression_usage_counter_threshold_or_default();
         config.validate_cleanup_interval_or_default();
         config.validate_optimizing_compression_task_timeout_or_default();
         config.validate_allowed_clock_drift_for_files_from_future_or_default();
         config.validate_file_count_soft_limit_or_default();
         config.validate_files_total_size_soft_limit_or_default();
-        config.validate_file_count_limit_percent_if_deleting_or_default();
-        config.validate_files_total_size_limit_percent_if_deleting_or_default();
+        config.validate_file_count_limit_percent_if_deleting_or_default()?;
+        config.validate_files_total_size_limit_percent_if_deleting_or_default()?;
+        config.spawn_worker();
 
-        config.disable_if_any_error();
-        config
+        Ok(config)
     }
 
-    fn load_and_parse_file<P: AsRef<Path>>(config_file: Option<P>) -> Result<Self, String> {
+    fn spawn_worker(&mut self) {
+        if self.enabled {
+            self.worker = Some(Worker::start_new(self, None));
+        }
+    }
+
+    pub(super) fn worker(&self) -> &Worker {
+        assert!(self.enabled);
+        self.worker.as_ref().unwrap()
+    }
+
+    fn load_and_parse_file(config_file: Option<&Path>) -> Result<Self> {
         // get config file path
-        let (config_file, user_custom_file) = config_file.as_ref().map_or_else(
-            || DEFAULT_CONFIG_PATH.as_ref().map(|p| (p.as_ref(), false)),
-            |p| Ok((p.as_ref(), true)),
-        )?;
+        let (config_file, user_custom_file) = match config_file {
+            Some(path) => (path.to_path_buf(), true),
+            None => (default_config_path()?, false),
+        };
 
         // read config, or use default one
         let entity_exists = config_file.exists();
         match (entity_exists, user_custom_file) {
             (false, false) => Ok(Self::new_cache_enabled_template()),
-            _ => match fs::read(&config_file) {
-                Ok(bytes) => match toml::from_slice::<Config>(&bytes[..]) {
-                    Ok(config) => Ok(config.cache),
-                    Err(err) => Err(format!(
-                        "Failed to parse config file, path: {}, error: {}",
-                        config_file.display(),
-                        err
-                    )),
-                },
-                Err(err) => Err(format!(
-                    "Failed to read config file, path: {}, error: {}",
-                    config_file.display(),
-                    err
-                )),
-            },
+            _ => {
+                let bytes = fs::read(&config_file).context(format!(
+                    "failed to read config file: {}",
+                    config_file.display()
+                ))?;
+                let config = toml::from_slice::<Config>(&bytes[..]).context(format!(
+                    "failed to parse config file: {}",
+                    config_file.display()
+                ))?;
+                Ok(config.cache)
+            }
         }
     }
 
-    fn validate_directory_or_default(&mut self) {
+    fn validate_directory_or_default(&mut self) -> Result<()> {
         if self.directory.is_none() {
-            match &*PROJECT_DIRS {
+            match project_dirs() {
                 Some(proj_dirs) => self.directory = Some(proj_dirs.cache_dir().to_path_buf()),
                 None => {
-                    self.errors.push(
-                        "Cache directory not specified and failed to get the default".to_string(),
-                    );
-                    return;
+                    bail!("Cache directory not specified and failed to get the default");
                 }
             }
         }
@@ -461,35 +408,22 @@ impl CacheConfig {
         let cache_dir = self.directory.as_ref().unwrap();
 
         if !cache_dir.is_absolute() {
-            self.errors.push(format!(
+            bail!(
                 "Cache directory path has to be absolute, path: {}",
                 cache_dir.display(),
-            ));
-            return;
+            );
         }
 
-        match fs::create_dir_all(cache_dir) {
-            Ok(()) => (),
-            Err(err) => {
-                self.errors.push(format!(
-                    "Failed to create the cache directory, path: {}, error: {}",
-                    cache_dir.display(),
-                    err
-                ));
-                return;
-            }
-        };
-
-        match fs::canonicalize(cache_dir) {
-            Ok(p) => self.directory = Some(p),
-            Err(err) => {
-                self.errors.push(format!(
-                    "Failed to canonicalize the cache directory, path: {}, error: {}",
-                    cache_dir.display(),
-                    err
-                ));
-            }
-        }
+        fs::create_dir_all(cache_dir).context(format!(
+            "failed to create cache directory: {}",
+            cache_dir.display()
+        ))?;
+        let canonical = fs::canonicalize(cache_dir).context(format!(
+            "failed to canonicalize cache directory: {}",
+            cache_dir.display()
+        ))?;
+        self.directory = Some(canonical);
+        Ok(())
     }
 
     fn validate_worker_event_queue_size_or_default(&mut self) {
@@ -502,22 +436,23 @@ impl CacheConfig {
         }
     }
 
-    fn validate_baseline_compression_level_or_default(&mut self) {
+    fn validate_baseline_compression_level_or_default(&mut self) -> Result<()> {
         if self.baseline_compression_level.is_none() {
             self.baseline_compression_level = Some(DEFAULT_BASELINE_COMPRESSION_LEVEL);
         }
 
         if !ZSTD_COMPRESSION_LEVELS.contains(&self.baseline_compression_level.unwrap()) {
-            self.errors.push(format!(
+            bail!(
                 "Invalid baseline compression level: {} not in {:#?}",
                 self.baseline_compression_level.unwrap(),
                 ZSTD_COMPRESSION_LEVELS
-            ));
+            );
         }
+        Ok(())
     }
 
     // assumption: baseline compression level has been verified
-    fn validate_optimized_compression_level_or_default(&mut self) {
+    fn validate_optimized_compression_level_or_default(&mut self) -> Result<()> {
         if self.optimized_compression_level.is_none() {
             self.optimized_compression_level = Some(DEFAULT_OPTIMIZED_COMPRESSION_LEVEL);
         }
@@ -526,18 +461,21 @@ impl CacheConfig {
         let base_lvl = self.baseline_compression_level.unwrap();
 
         if !ZSTD_COMPRESSION_LEVELS.contains(&opt_lvl) {
-            self.errors.push(format!(
+            bail!(
                 "Invalid optimized compression level: {} not in {:#?}",
-                opt_lvl, ZSTD_COMPRESSION_LEVELS
-            ));
+                opt_lvl,
+                ZSTD_COMPRESSION_LEVELS
+            );
         }
 
         if opt_lvl < base_lvl {
-            self.errors.push(format!(
+            bail!(
                 "Invalid optimized compression level is lower than baseline: {} < {}",
-                opt_lvl, base_lvl
-            ));
+                opt_lvl,
+                base_lvl
+            );
         }
+        Ok(())
     }
 
     fn validate_optimized_compression_usage_counter_threshold_or_default(&mut self) {
@@ -579,7 +517,7 @@ impl CacheConfig {
         }
     }
 
-    fn validate_file_count_limit_percent_if_deleting_or_default(&mut self) {
+    fn validate_file_count_limit_percent_if_deleting_or_default(&mut self) -> Result<()> {
         if self.file_count_limit_percent_if_deleting.is_none() {
             self.file_count_limit_percent_if_deleting =
                 Some(DEFAULT_FILE_COUNT_LIMIT_PERCENT_IF_DELETING);
@@ -587,14 +525,15 @@ impl CacheConfig {
 
         let percent = self.file_count_limit_percent_if_deleting.unwrap();
         if percent > 100 {
-            self.errors.push(format!(
+            bail!(
                 "Invalid files count limit percent if deleting: {} not in range 0-100%",
                 percent
-            ));
+            );
         }
+        Ok(())
     }
 
-    fn validate_files_total_size_limit_percent_if_deleting_or_default(&mut self) {
+    fn validate_files_total_size_limit_percent_if_deleting_or_default(&mut self) -> Result<()> {
         if self.files_total_size_limit_percent_if_deleting.is_none() {
             self.files_total_size_limit_percent_if_deleting =
                 Some(DEFAULT_FILES_TOTAL_SIZE_LIMIT_PERCENT_IF_DELETING);
@@ -602,19 +541,12 @@ impl CacheConfig {
 
         let percent = self.files_total_size_limit_percent_if_deleting.unwrap();
         if percent > 100 {
-            self.errors.push(format!(
+            bail!(
                 "Invalid files total size limit percent if deleting: {} not in range 0-100%",
                 percent
-            ));
+            );
         }
-    }
-
-    fn disable_if_any_error(&mut self) {
-        if !self.errors.is_empty() {
-            let mut conf = Self::new_cache_disabled();
-            mem::swap(self, &mut conf);
-            mem::swap(&mut self.errors, &mut conf.errors);
-        }
+        Ok(())
     }
 }
 

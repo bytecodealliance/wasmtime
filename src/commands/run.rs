@@ -4,14 +4,12 @@ use crate::{init_file_per_thread_logger, pick_compilation_strategy, CommonOption
 use anyhow::{bail, Context as _, Result};
 use std::{
     ffi::{OsStr, OsString},
-    fmt::Write,
     fs::File,
     path::{Component, Path, PathBuf},
 };
 use structopt::{clap::AppSettings, StructOpt};
 use wasi_common::preopen_dir;
 use wasmtime::{Config, Engine, Instance, Module, Store};
-use wasmtime_environ::cache_init;
 use wasmtime_interface_types::ModuleData;
 use wasmtime_wasi::{old::snapshot_0::Wasi as WasiSnapshot0, Wasi};
 
@@ -91,28 +89,11 @@ pub struct RunCommand {
 impl RunCommand {
     /// Executes the command.
     pub fn execute(&self) -> Result<()> {
-        let log_config = if self.common.debug {
+        if self.common.debug {
             pretty_env_logger::init();
-            None
         } else {
             let prefix = "wasmtime.dbg.";
             init_file_per_thread_logger(prefix);
-            Some(prefix)
-        };
-
-        let errors = cache_init(
-            !self.common.disable_cache,
-            self.common.config.as_ref(),
-            log_config,
-        );
-
-        if !errors.is_empty() {
-            let mut message = String::new();
-            writeln!(message, "Cache initialization failed. Errors:")?;
-            for e in errors {
-                writeln!(message, "  -> {}", e)?;
-            }
-            bail!(message);
         }
 
         let mut config = Config::new();
@@ -124,6 +105,7 @@ impl RunCommand {
                 self.common.cranelift,
                 self.common.lightbeam,
             )?)?;
+        self.common.configure_cache(&mut config)?;
 
         if self.common.optimize {
             config.cranelift_opt_level(wasmtime::OptLevel::Speed);

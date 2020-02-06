@@ -4,7 +4,6 @@ use crate::{init_file_per_thread_logger, pick_compilation_strategy, CommonOption
 use anyhow::{anyhow, bail, Context as _, Result};
 use faerie::Artifact;
 use std::{
-    fmt::Write,
     fs::File,
     path::{Path, PathBuf},
     str::FromStr,
@@ -16,9 +15,9 @@ use wasmtime_debug::{emit_debugsections, read_debuginfo};
 #[cfg(feature = "lightbeam")]
 use wasmtime_environ::Lightbeam;
 use wasmtime_environ::{
-    cache_init, entity::EntityRef, settings, settings::Configurable, wasm::DefinedMemoryIndex,
-    wasm::MemoryIndex, Compiler, Cranelift, ModuleEnvironment, ModuleMemoryOffset, ModuleVmctxInfo,
-    Tunables, VMOffsets,
+    entity::EntityRef, settings, settings::Configurable, wasm::DefinedMemoryIndex,
+    wasm::MemoryIndex, CacheConfig, Compiler, Cranelift, ModuleEnvironment, ModuleMemoryOffset,
+    ModuleVmctxInfo, Tunables, VMOffsets,
 };
 use wasmtime_jit::native;
 use wasmtime_obj::emit_module;
@@ -59,34 +58,22 @@ pub struct WasmToObjCommand {
 impl WasmToObjCommand {
     /// Executes the command.
     pub fn execute(&self) -> Result<()> {
-        let log_config = if self.common.debug {
-            pretty_env_logger::init();
-            None
-        } else {
-            let prefix = "wasm2obj.dbg.";
-            init_file_per_thread_logger(prefix);
-            Some(prefix)
-        };
-
-        let errors = cache_init(
-            !self.common.disable_cache,
-            self.common.config.as_ref(),
-            log_config,
-        );
-
-        if !errors.is_empty() {
-            let mut message = String::new();
-            writeln!(message, "Cache initialization failed. Errors:")?;
-            for e in errors {
-                writeln!(message, "  -> {}", e)?;
-            }
-            bail!(message);
-        }
-
         self.handle_module()
     }
 
     fn handle_module(&self) -> Result<()> {
+        if self.common.debug {
+            pretty_env_logger::init();
+        } else {
+            let prefix = "wasm2obj.dbg.";
+            init_file_per_thread_logger(prefix);
+        }
+
+        let cache_config = if self.common.disable_cache {
+            CacheConfig::new_cache_disabled()
+        } else {
+            CacheConfig::from_file(self.common.config.as_deref())?
+        };
         let strategy = pick_compilation_strategy(self.common.cranelift, self.common.lightbeam)?;
 
         let data = wat::parse_file(&self.module).context("failed to parse module")?;
@@ -147,6 +134,7 @@ impl WasmToObjCommand {
                     lazy_function_body_inputs,
                     &*isa,
                     self.common.debug_info,
+                    &cache_config,
                 ),
                 #[cfg(feature = "lightbeam")]
                 Strategy::Lightbeam => Lightbeam::compile_module(
@@ -155,6 +143,7 @@ impl WasmToObjCommand {
                     lazy_function_body_inputs,
                     &*isa,
                     self.common.debug_info,
+                    &cache_config,
                 ),
                 #[cfg(not(feature = "lightbeam"))]
                 Strategy::Lightbeam => bail!("lightbeam support not enabled"),

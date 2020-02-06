@@ -36,11 +36,9 @@ fn test_cache_init() {
     );
     fs::write(&config_path, config_content).expect("Failed to write test config file");
 
-    let errors = init(true, Some(&config_path), None);
-    assert!(errors.is_empty());
+    let cache_config = CacheConfig::from_file(Some(&config_path)).unwrap();
 
     // test if we can use config
-    let cache_config = cache_config();
     assert!(cache_config.enabled());
     // assumption: config init creates cache directory and returns canonicalized path
     assert_eq!(
@@ -53,8 +51,7 @@ fn test_cache_init() {
     );
 
     // test if we can use worker
-    let worker = worker();
-    worker.on_cache_update_async(config_path);
+    cache_config.worker().on_cache_update_async(config_path);
 }
 
 #[test]
@@ -69,7 +66,6 @@ fn test_write_read_cache() {
         cache_dir
     );
     assert!(cache_config.enabled());
-    let worker = Worker::start_new(&cache_config, None);
 
     // assumption: config load creates cache directory and returns canonicalized path
     assert_eq!(
@@ -102,7 +98,6 @@ fn test_write_read_cache() {
         compiler1,
         false,
         &cache_config,
-        &worker,
     ));
     assert!(entry1.0.is_some());
     assert!(entry1.get_data().is_none());
@@ -117,7 +112,6 @@ fn test_write_read_cache() {
         compiler1,
         false,
         &cache_config,
-        &worker,
     ));
     let data2 = new_module_cache_data(&mut rng);
     entry2.update_data(&data2);
@@ -131,7 +125,6 @@ fn test_write_read_cache() {
         compiler1,
         false,
         &cache_config,
-        &worker,
     ));
     let data3 = new_module_cache_data(&mut rng);
     entry3.update_data(&data3);
@@ -146,7 +139,6 @@ fn test_write_read_cache() {
         compiler1,
         false,
         &cache_config,
-        &worker,
     ));
     let data4 = new_module_cache_data(&mut rng);
     entry4.update_data(&data4);
@@ -162,7 +154,6 @@ fn test_write_read_cache() {
         compiler2,
         false,
         &cache_config,
-        &worker,
     ));
     let data5 = new_module_cache_data(&mut rng);
     entry5.update_data(&data5);

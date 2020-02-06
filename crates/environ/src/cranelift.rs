@@ -12,6 +12,7 @@ use crate::func_environ::{
 };
 use crate::module::Module;
 use crate::module_environ::FunctionBodyData;
+use crate::CacheConfig;
 use cranelift_codegen::ir::{self, ExternalName};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{binemit, isa, Context};
@@ -176,6 +177,7 @@ impl crate::compilation::Compiler for Cranelift {
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         generate_debug_info: bool,
+        cache_config: &CacheConfig,
     ) -> Result<ModuleCacheDataTupleType, CompileError> {
         let cache_entry = ModuleCacheEntry::new(
             module,
@@ -183,6 +185,7 @@ impl crate::compilation::Compiler for Cranelift {
             isa,
             "cranelift",
             generate_debug_info,
+            cache_config,
         );
 
         let data = match cache_entry.get_data() {
