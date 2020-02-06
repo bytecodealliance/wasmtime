@@ -5,7 +5,6 @@ use crate::module_environ::FunctionBodyData;
 use cranelift_codegen::{ir, isa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::DefinedFuncIndex;
-use lazy_static::lazy_static;
 use log::{debug, trace, warn};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -20,32 +19,6 @@ mod worker;
 
 pub use config::{create_new_config, CacheConfig};
 use worker::Worker;
-
-lazy_static! {
-    static ref SELF_MTIME: String = {
-        std::env::current_exe()
-            .map_err(|_| warn!("Failed to get path of current executable"))
-            .ok()
-            .and_then(|path| {
-                fs::metadata(&path)
-                    .map_err(|_| warn!("Failed to get metadata of current executable"))
-                    .ok()
-            })
-            .and_then(|metadata| {
-                metadata
-                    .modified()
-                    .map_err(|_| warn!("Failed to get metadata of current executable"))
-                    .ok()
-            })
-            .map_or_else(
-                || "no-mtime".to_string(),
-                |mtime| match mtime.duration_since(std::time::UNIX_EPOCH) {
-                    Ok(duration) => format!("{}", duration.as_millis()),
-                    Err(err) => format!("m{}", err.duration().as_millis()),
-                },
-            )
-    };
-}
 
 pub struct ModuleCacheEntry<'config>(Option<ModuleCacheEntryInner<'config>>);
 
@@ -142,11 +115,21 @@ impl<'config> ModuleCacheEntryInner<'config> {
     ) -> Self {
         let hash = Sha256Hasher::digest(module, function_body_inputs);
         let compiler_dir = if cfg!(debug_assertions) {
+            fn self_mtime() -> Option<String> {
+                let path = std::env::current_exe().ok()?;
+                let metadata = path.metadata().ok()?;
+                let mtime = metadata.modified().ok()?;
+                Some(match mtime.duration_since(std::time::UNIX_EPOCH) {
+                    Ok(dur) => format!("{}", dur.as_millis()),
+                    Err(err) => format!("m{}", err.duration().as_millis()),
+                })
+            }
+            let self_mtime = self_mtime().unwrap_or("no-mtime".to_string());
             format!(
                 "{comp_name}-{comp_ver}-{comp_mtime}",
                 comp_name = compiler_name,
                 comp_ver = env!("GIT_REV"),
-                comp_mtime = *SELF_MTIME,
+                comp_mtime = self_mtime,
             )
         } else {
             format!(

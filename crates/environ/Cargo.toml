@@ -26,7 +26,6 @@ sha2 = "0.8.0"
 base64 = "0.11.0"
 serde = { version = "1.0.94", features = ["derive"] }
 bincode = "1.1.4"
-lazy_static = "1.3.0"
 log = { version = "0.4.8", default-features = false }
 zstd = "0.5"
 toml = "0.5.5"
@@ -47,6 +46,7 @@ pretty_env_logger = "0.3.0"
 rand = { version = "0.7.0", default-features = false, features = ["small_rng"] }
 cranelift-codegen = { version = "0.56", features = ["enable-serde", "all-arch"] }
 filetime = "0.2.7"
+lazy_static = "1.3.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
