@@ -857,7 +857,9 @@ fn insert_common_prologue(
             // Assign it a location
             pos.func.locations[csr_arg] = ir::ValueLoc::Reg(reg);
 
-            let reg_store_inst = pos.ins().store(ir::MemFlags::trusted(), csr_arg, stack_addr, fpr_offset);
+            let reg_store_inst =
+                pos.ins()
+                    .store(ir::MemFlags::trusted(), csr_arg, stack_addr, fpr_offset);
             fpr_offset += types::F64X2.bytes() as i32;
 
             if let Some(ref mut frame_layout) = pos.func.frame_layout {
@@ -1045,7 +1047,12 @@ fn insert_common_epilogue(
         pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::rcx as u16);
 
         for reg in csrs.iter(FPR) {
-            let value = pos.ins().load(types::F64X2, ir::MemFlags::trusted(), stack_addr, fpr_offset);
+            let value = pos.ins().load(
+                types::F64X2,
+                ir::MemFlags::trusted(),
+                stack_addr,
+                fpr_offset,
+            );
             fpr_offset += types::F64X2.bytes() as i32;
 
             if let Some(ref mut cfa_state) = cfa_state.as_mut() {
