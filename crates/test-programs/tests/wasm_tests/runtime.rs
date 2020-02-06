@@ -33,14 +33,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
     // stdin is closed which causes tests to fail.
     let (reader, _writer) = os_pipe::pipe()?;
     builder = builder.stdin(reader_to_file(reader));
-    let snapshot1 = Instance::from_handle(
-        &store,
-        wasmtime_wasi::instantiate_wasi_with_context(
-            builder.build().context("failed to build wasi context")?,
-        )
-        .context("failed to instantiate wasi")?,
-    );
-
+    let snapshot1 = wasmtime_wasi::Wasi::new(&store, builder.build()?);
     let module = Module::new(&store, &data).context("failed to create wasm module")?;
     let imports = module
         .imports()
@@ -48,7 +41,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         .map(|i| {
             let field_name = i.name();
             if let Some(export) = snapshot1.get_export(field_name) {
-                Ok(export.clone())
+                Ok(export.clone().into())
             } else {
                 bail!(
                     "import {} was not found in module {}",

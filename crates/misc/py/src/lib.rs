@@ -89,9 +89,11 @@ pub fn instantiate(
     // If this module expects to be able to use wasi then go ahead and hook
     // that up into the imported crates.
     let wasi = if let Some(module_name) = data.find_wasi_module_name() {
-        let instance = wasmtime_wasi::create_wasi_instance(&store, &[], &[], &[])
+        let cx = wasmtime_wasi::WasiCtxBuilder::new()
+            .build()
             .map_err(|e| err2py(e.into()))?;
-        Some((module_name, instance))
+        let wasi = wasmtime_wasi::Wasi::new(&store, cx);
+        Some((module_name, wasi))
     } else {
         None
     };
@@ -111,7 +113,7 @@ pub fn instantiate(
                 .ok_or_else(|| {
                     PyErr::new::<Exception, _>(format!("wasi export {} is not found", i.name(),))
                 })?;
-            imports.push(e.clone());
+            imports.push(e.clone().into());
         } else {
             return Err(PyErr::new::<Exception, _>(format!(
                 "imported module {} is not found",

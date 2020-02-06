@@ -45,16 +45,19 @@ macro_rules! wrappers {
             unsafe extern "C" fn shim<F, $($args,)* R>(
                 vmctx: *mut VMContext,
                 _caller_vmctx: *mut VMContext,
-                $($args: $args,)*
+                $($args: $args::Abi,)*
             ) -> R::Abi
             where
                 F: Fn($($args),*) -> R + 'static,
+                $($args: WasmArg,)*
                 R: WasmRet,
             {
                 let ret = {
                     let instance = InstanceHandle::from_vmctx(vmctx);
                     let func = instance.host_state().downcast_ref::<F>().expect("state");
-                    panic::catch_unwind(AssertUnwindSafe(|| func($($args),*)))
+                    panic::catch_unwind(AssertUnwindSafe(|| {
+                        func($($args::from_abi(_caller_vmctx, $args)),*)
+                    }))
                 };
                 match ret {
                     Ok(ret) => ret.into_abi(),
@@ -166,6 +169,36 @@ impl Func {
         ///
         /// For more information about this function, see [`Func::wrap1`].
         (wrap5, A, B, C, D, E)
+
+        /// Creates a new `Func` from the given Rust closure, which takes 6
+        /// arguments.
+        ///
+        /// For more information about this function, see [`Func::wrap1`].
+        (wrap6, A, B, C, D, E, G)
+
+        /// Creates a new `Func` from the given Rust closure, which takes 7
+        /// arguments.
+        ///
+        /// For more information about this function, see [`Func::wrap1`].
+        (wrap7, A, B, C, D, E, G, H)
+
+        /// Creates a new `Func` from the given Rust closure, which takes 8
+        /// arguments.
+        ///
+        /// For more information about this function, see [`Func::wrap1`].
+        (wrap8, A, B, C, D, E, G, H, I)
+
+        /// Creates a new `Func` from the given Rust closure, which takes 9
+        /// arguments.
+        ///
+        /// For more information about this function, see [`Func::wrap1`].
+        (wrap9, A, B, C, D, E, G, H, I, J)
+
+        /// Creates a new `Func` from the given Rust closure, which takes 10
+        /// arguments.
+        ///
+        /// For more information about this function, see [`Func::wrap1`].
+        (wrap10, A, B, C, D, E, G, H, I, J, K)
     }
 
     fn from_wrapped(
@@ -249,34 +282,63 @@ impl fmt::Debug for Func {
 /// For more information see [`Func::wrap1`]
 pub trait WasmArg {
     #[doc(hidden)]
+    type Abi;
+    #[doc(hidden)]
     fn push(dst: &mut Vec<ValType>);
+    #[doc(hidden)]
+    fn from_abi(vmctx: *mut VMContext, abi: Self::Abi) -> Self;
 }
 
 impl WasmArg for () {
+    type Abi = ();
     fn push(_dst: &mut Vec<ValType>) {}
+    #[inline]
+    fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
+        abi
+    }
 }
 
 impl WasmArg for i32 {
+    type Abi = Self;
     fn push(dst: &mut Vec<ValType>) {
         dst.push(ValType::I32);
+    }
+    #[inline]
+    fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
+        abi
     }
 }
 
 impl WasmArg for i64 {
+    type Abi = Self;
     fn push(dst: &mut Vec<ValType>) {
         dst.push(ValType::I64);
+    }
+    #[inline]
+    fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
+        abi
     }
 }
 
 impl WasmArg for f32 {
+    type Abi = Self;
     fn push(dst: &mut Vec<ValType>) {
         dst.push(ValType::F32);
+    }
+    #[inline]
+    fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
+        abi
     }
 }
 
 impl WasmArg for f64 {
+    type Abi = Self;
     fn push(dst: &mut Vec<ValType>) {
         dst.push(ValType::F64);
+    }
+    #[inline]
+    fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
+        abi
     }
 }
 
