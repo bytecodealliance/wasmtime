@@ -13,7 +13,6 @@ edition = "2018"
 [dependencies]
 wasmtime-environ = { path = "../environ", version = "0.9.0" }
 region = "2.0.0"
-lazy_static = "1.2.0"
 libc = { version = "0.2.60", default-features = false }
 memoffset = "0.5.3"
 indexmap = "1.0.2"
