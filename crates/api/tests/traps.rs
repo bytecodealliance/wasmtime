@@ -408,22 +408,22 @@ fn issue_841() -> Result<()> {
     let store = Store::default();
     let binary = wat::parse_str(
         r#"
-		   (module
-			  (func $test_panic (result i64)
-				unreachable
-			  )
-			  (func $test_conditional_panic (result i64)
-				block
-				  i32.const 1
-				  br_if 0
-				  i64.const 0
-				  return
-				end
-				unreachable
-			  )
-			  (export "test_panic" (func $test_panic))
-			  (export "test_conditional_panic" (func $test_conditional_panic))
-			)
+           (module
+              (func $test_panic (result i64)
+                unreachable
+              )
+              (func $test_conditional_panic (result i64)
+                block
+                  i32.const 1
+                  br_if 0
+                  i64.const 0
+                  return
+                end
+                unreachable
+              )
+              (export "test_panic" (func $test_panic))
+              (export "test_conditional_panic" (func $test_conditional_panic))
+            )
         "#,
     )?;
 
