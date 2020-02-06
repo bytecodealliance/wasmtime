@@ -43,24 +43,27 @@ pub unsafe fn generate_raw_func_export(
 }
 
 pub fn generate_global_export(
+    store: &Store,
     gt: &GlobalType,
     val: Val,
 ) -> Result<(wasmtime_runtime::Export, GlobalState)> {
-    create_global(gt, val)
+    create_global(store, gt, val)
 }
 
 pub fn generate_memory_export(
+    store: &Store,
     m: &MemoryType,
 ) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export)> {
-    let instance = create_handle_with_memory(m)?;
+    let instance = create_handle_with_memory(store, m)?;
     let export = instance.lookup("memory").expect("memory export");
     Ok((instance, export))
 }
 
 pub fn generate_table_export(
+    store: &Store,
     t: &TableType,
 ) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export)> {
-    let instance = create_handle_with_table(t)?;
+    let instance = create_handle_with_table(store, t)?;
     let export = instance.lookup("table").expect("table export");
     Ok((instance, export))
 }

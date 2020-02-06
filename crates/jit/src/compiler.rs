@@ -204,7 +204,13 @@ impl Compiler {
 
         let jt_offsets = compilation.get_jt_offsets();
 
-        Ok((allocated_functions, jt_offsets, relocations, dbg, trap_registration))
+        Ok((
+            allocated_functions,
+            jt_offsets,
+            relocations,
+            dbg,
+            trap_registration,
+        ))
     }
 
     /// Create a trampoline for invoking a function.
@@ -253,6 +259,11 @@ impl Compiler {
     /// Shared signature registry.
     pub fn signatures(&self) -> &SignatureRegistry {
         &self.signatures
+    }
+
+    /// Shared registration of trap information
+    pub fn trap_registry(&self) -> &TrapRegistry {
+        &self.trap_registry
     }
 }
 

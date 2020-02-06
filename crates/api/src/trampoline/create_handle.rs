@@ -8,11 +8,11 @@ use std::sync::Arc;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::Module;
-use wasmtime_runtime::{Imports, InstanceHandle, VMFunctionBody, TrapRegistration};
+use wasmtime_runtime::{Imports, InstanceHandle, VMFunctionBody};
 
 pub(crate) fn create_handle(
     module: Module,
-    store: Option<&Store>,
+    store: &Store,
     finished_functions: PrimaryMap<DefinedFuncIndex, *const VMFunctionBody>,
     state: Box<dyn Any>,
 ) -> Result<InstanceHandle> {
@@ -26,20 +26,16 @@ pub(crate) fn create_handle(
     let data_initializers = Vec::new();
 
     // Compute indices into the shared signature table.
-    let signatures = store
-        .map(|store| {
-            module
-                .signatures
-                .values()
-                .map(|sig| store.compiler().signatures().register(sig))
-                .collect::<PrimaryMap<_, _>>()
-        })
-        .unwrap_or_else(PrimaryMap::new);
+    let signatures = module
+        .signatures
+        .values()
+        .map(|sig| store.compiler().signatures().register(sig))
+        .collect::<PrimaryMap<_, _>>();
 
     unsafe {
         Ok(InstanceHandle::new(
             Arc::new(module),
-            TrapRegistration::dummy(),
+            store.compiler().trap_registry().register_traps(Vec::new()),
             finished_functions.into_boxed_slice(),
             imports,
             &data_initializers,

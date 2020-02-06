@@ -1,11 +1,12 @@
 use super::create_handle::create_handle;
+use crate::Store;
 use crate::{TableType, ValType};
 use anyhow::{bail, Result};
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::{wasm, Module};
 use wasmtime_runtime::InstanceHandle;
 
-pub fn create_handle_with_table(table: &TableType) -> Result<InstanceHandle> {
+pub fn create_handle_with_table(store: &Store, table: &TableType) -> Result<InstanceHandle> {
     let mut module = Module::new();
 
     let table = wasm::Table {
@@ -25,5 +26,5 @@ pub fn create_handle_with_table(table: &TableType) -> Result<InstanceHandle> {
         wasmtime_environ::Export::Table(table_id),
     );
 
-    create_handle(module, None, PrimaryMap::new(), Box::new(()))
+    create_handle(module, store, PrimaryMap::new(), Box::new(()))
 }

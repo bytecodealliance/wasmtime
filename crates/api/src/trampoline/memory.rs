@@ -1,13 +1,12 @@
 use super::create_handle::create_handle;
 use crate::MemoryType;
+use crate::Store;
 use anyhow::Result;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::{wasm, Module};
 use wasmtime_runtime::InstanceHandle;
 
-#[allow(dead_code)]
-
-pub fn create_handle_with_memory(memory: &MemoryType) -> Result<InstanceHandle> {
+pub fn create_handle_with_memory(store: &Store, memory: &MemoryType) -> Result<InstanceHandle> {
     let mut module = Module::new();
 
     let memory = wasm::Memory {
@@ -24,5 +23,5 @@ pub fn create_handle_with_memory(memory: &MemoryType) -> Result<InstanceHandle> 
         wasmtime_environ::Export::Memory(memory_id),
     );
 
-    create_handle(module, None, PrimaryMap::new(), Box::new(()))
+    create_handle(module, store, PrimaryMap::new(), Box::new(()))
 }

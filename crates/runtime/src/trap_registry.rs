@@ -47,8 +47,8 @@ struct TrapGroup {
 /// trap information on drop.
 #[derive(Clone)]
 pub struct TrapRegistration {
-    ranges: Option<Arc<RwLock<BTreeMap<usize, TrapGroup>>>>,
-    end: usize,
+    ranges: Arc<RwLock<BTreeMap<usize, TrapGroup>>>,
+    end: Option<usize>,
 }
 
 /// Description of a trap.
@@ -116,7 +116,10 @@ impl TrapRegistry {
             }
         }
         if traps.len() == 0 {
-            return TrapRegistration::dummy();
+            return TrapRegistration {
+                ranges: self.ranges.clone(),
+                end: None,
+            };
         }
         let mut ranges = self.ranges.write().unwrap();
 
@@ -132,24 +135,16 @@ impl TrapRegistry {
         // ... and then register ourselves
         assert!(ranges.insert(end, TrapGroup { start, traps }).is_none());
         TrapRegistration {
-            ranges: Some(self.ranges.clone()),
-            end,
+            ranges: self.ranges.clone(),
+            end: Some(end),
         }
     }
 }
 
 impl TrapRegistration {
-    /// Creates a dummy trap registration that does nothing on drop
-    pub fn dummy() -> TrapRegistration {
-        TrapRegistration {
-            ranges: None,
-            end: 0,
-        }
-    }
-
     /// Gets a trap description at given address.
     pub fn get_trap(&self, address: usize) -> Option<TrapDescription> {
-        let ranges = self.ranges.as_ref()?.read().ok()?;
+        let ranges = self.ranges.read().ok()?;
         let (end, group) = ranges.range(address..).next()?;
         if group.start <= address && address <= *end {
             group.traps.get(&address).copied()
@@ -161,9 +156,9 @@ impl TrapRegistration {
 
 impl Drop for TrapRegistration {
     fn drop(&mut self) {
-        if let Some(ranges) = &self.ranges {
-            if let Ok(mut ranges) = ranges.write() {
-                ranges.remove(&self.end);
+        if let Some(end) = self.end {
+            if let Ok(mut ranges) = self.ranges.write() {
+                ranges.remove(&end);
             }
         }
     }

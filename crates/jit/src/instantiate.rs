@@ -18,8 +18,8 @@ use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleEnvironment,
 };
 use wasmtime_runtime::{
-    GdbJitImageRegistration, InstanceHandle, InstantiationError, VMFunctionBody,
-    VMSharedSignatureIndex, TrapRegistration,
+    GdbJitImageRegistration, InstanceHandle, InstantiationError, TrapRegistration, VMFunctionBody,
+    VMSharedSignatureIndex,
 };
 
 /// An error condition while setting up a wasm instance, be it validation,
