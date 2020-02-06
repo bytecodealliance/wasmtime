@@ -39,7 +39,15 @@ pub struct TrapRegistry {
 
 #[derive(Debug)]
 struct TrapGroup {
+    /// The lowest key in the `trap` field.
+    ///
+    /// This represents the start of the range of this group of traps, and the
+    /// end of the range for this group of traps is stored as the key in the
+    /// `ranges` struct above in `TrapRegistry`.
     start: usize,
+
+    /// All known traps in this group, mapped from program counter to the
+    /// description of the trap itself.
     traps: HashMap<usize, TrapDescription>,
 }
 
@@ -123,7 +131,7 @@ impl TrapRegistry {
         }
         let mut ranges = self.ranges.write().unwrap();
 
-        // Sanity check that not other group of traps overlaps with our
+        // Sanity check that no other group of traps overlaps with our
         // registration...
         if let Some((_, prev)) = ranges.range(end..).next() {
             assert!(prev.start > end);
