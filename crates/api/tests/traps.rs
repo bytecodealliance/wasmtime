@@ -63,7 +63,11 @@ fn test_trap_trace() -> Result<()> {
     assert_eq!(trace[1].module_name().unwrap(), "hello_mod");
     assert_eq!(trace[1].func_index(), 0);
     assert_eq!(trace[1].func_name(), None);
-    assert!(e.message().contains("unreachable"));
+    assert!(
+        e.message().contains("unreachable"),
+        "wrong message: {}",
+        e.message()
+    );
 
     Ok(())
 }

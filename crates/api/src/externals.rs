@@ -181,7 +181,7 @@ impl Global {
         if val.ty() != *ty.content() {
             bail!("value provided does not match the type of this global");
         }
-        let (wasmtime_export, wasmtime_state) = generate_global_export(&ty, val)?;
+        let (wasmtime_export, wasmtime_state) = generate_global_export(store, &ty, val)?;
         Ok(Global {
             inner: Rc::new(GlobalInner {
                 _store: store.clone(),
@@ -321,7 +321,7 @@ impl Table {
     /// Returns an error if `init` does not match the element type of the table.
     pub fn new(store: &Store, ty: TableType, init: Val) -> Result<Table> {
         let item = into_checked_anyfunc(init, store)?;
-        let (mut wasmtime_handle, wasmtime_export) = generate_table_export(&ty)?;
+        let (mut wasmtime_handle, wasmtime_export) = generate_table_export(store, &ty)?;
 
         // Initialize entries with the init value.
         match wasmtime_export {
@@ -473,7 +473,7 @@ impl Memory {
     /// type's configuration. All WebAssembly memory is initialized to zero.
     pub fn new(store: &Store, ty: MemoryType) -> Memory {
         let (wasmtime_handle, wasmtime_export) =
-            generate_memory_export(&ty).expect("generated memory");
+            generate_memory_export(store, &ty).expect("generated memory");
         Memory {
             _store: store.clone(),
             ty,

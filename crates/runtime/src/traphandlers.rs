@@ -2,7 +2,6 @@
 //! signalhandling mechanisms.
 
 use crate::instance::{InstanceHandle, SignalHandler};
-use crate::trap_registry::get_trap_registry;
 use crate::trap_registry::TrapDescription;
 use crate::vmcontext::{VMContext, VMFunctionBody};
 use backtrace::Backtrace;
@@ -78,8 +77,7 @@ cfg_if::cfg_if! {
 /// Only safe to call when wasm code is on the stack, aka `wasmtime_call` or
 /// `wasmtime_call_trampoline` must have been previously called.
 pub unsafe fn raise_user_trap(data: Box<dyn Error + Send + Sync>) -> ! {
-    let trap = Trap::User(data);
-    tls::with(|info| info.unwrap().unwind_with(UnwindReason::Trap(trap)))
+    tls::with(|info| info.unwrap().unwind_with(UnwindReason::UserTrap(data)))
 }
 
 /// Carries a Rust panic across wasm code and resumes the panic on the other
@@ -187,7 +185,8 @@ pub struct CallThreadState {
 enum UnwindReason {
     None,
     Panic(Box<dyn Any + Send>),
-    Trap(Trap),
+    UserTrap(Box<dyn Error + Send + Sync>),
+    Trap { backtrace: Backtrace, pc: usize },
 }
 
 impl CallThreadState {
@@ -210,9 +209,25 @@ impl CallThreadState {
                     debug_assert_eq!(ret, 1);
                     Ok(())
                 }
-                UnwindReason::Trap(trap) => {
+                UnwindReason::UserTrap(data) => {
                     debug_assert_eq!(ret, 0);
-                    Err(trap)
+                    Err(Trap::User(data))
+                }
+                UnwindReason::Trap { backtrace, pc } => {
+                    debug_assert_eq!(ret, 0);
+                    let instance = unsafe { InstanceHandle::from_vmctx(self.vmctx) };
+
+                    Err(Trap::Wasm {
+                        desc: instance
+                            .instance()
+                            .trap_registration
+                            .get_trap(pc)
+                            .unwrap_or_else(|| TrapDescription {
+                                source_loc: ir::SourceLoc::default(),
+                                trap_code: ir::TrapCode::StackOverflow,
+                            }),
+                        backtrace,
+                    })
                 }
                 UnwindReason::Panic(panic) => {
                     debug_assert_eq!(ret, 0);
@@ -289,20 +304,12 @@ impl CallThreadState {
         if self.jmp_buf.get().is_null() {
             return ptr::null();
         }
-
-        let registry = get_trap_registry();
-        let trap = Trap::Wasm {
-            desc: registry
-                .get_trap(pc as usize)
-                .unwrap_or_else(|| TrapDescription {
-                    source_loc: ir::SourceLoc::default(),
-                    trap_code: ir::TrapCode::StackOverflow,
-                }),
-            backtrace: Backtrace::new_unresolved(),
-        };
-
+        let backtrace = Backtrace::new_unresolved();
         self.reset_guard_page.set(reset_guard_page);
-        self.unwind.replace(UnwindReason::Trap(trap));
+        self.unwind.replace(UnwindReason::Trap {
+            backtrace,
+            pc: pc as usize,
+        });
         self.jmp_buf.get()
     }
 }

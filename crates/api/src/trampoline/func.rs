@@ -287,7 +287,7 @@ pub fn create_handle_with_function(
 
     create_handle(
         module,
-        Some(store),
+        store,
         finished_functions,
         Box::new(trampoline_state),
     )
@@ -322,5 +322,5 @@ pub unsafe fn create_handle_with_raw_function(
         .insert("trampoline".to_string(), Export::Function(func_id));
     finished_functions.push(func);
 
-    create_handle(module, Some(store), finished_functions, state)
+    create_handle(module, store, finished_functions, state)
 }

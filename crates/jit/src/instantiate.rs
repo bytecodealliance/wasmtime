@@ -18,7 +18,7 @@ use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleEnvironment,
 };
 use wasmtime_runtime::{
-    GdbJitImageRegistration, InstanceHandle, InstantiationError, VMFunctionBody,
+    GdbJitImageRegistration, InstanceHandle, InstantiationError, TrapRegistration, VMFunctionBody,
     VMSharedSignatureIndex,
 };
 
@@ -52,6 +52,7 @@ struct RawCompiledModule<'data> {
     data_initializers: Box<[DataInitializer<'data>]>,
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<GdbJitImageRegistration>,
+    trap_registration: TrapRegistration,
 }
 
 impl<'data> RawCompiledModule<'data> {
@@ -73,12 +74,13 @@ impl<'data> RawCompiledModule<'data> {
             None
         };
 
-        let (allocated_functions, jt_offsets, relocations, dbg_image) = compiler.compile(
-            &translation.module,
-            translation.module_translation.as_ref().unwrap(),
-            translation.function_body_inputs,
-            debug_data,
-        )?;
+        let (allocated_functions, jt_offsets, relocations, dbg_image, trap_registration) = compiler
+            .compile(
+                &translation.module,
+                translation.module_translation.as_ref().unwrap(),
+                translation.function_body_inputs,
+                debug_data,
+            )?;
 
         link_module(
             &translation.module,
@@ -127,6 +129,7 @@ impl<'data> RawCompiledModule<'data> {
             data_initializers: translation.data_initializers.into_boxed_slice(),
             signatures: signatures.into_boxed_slice(),
             dbg_jit_registration,
+            trap_registration,
         })
     }
 }
@@ -138,6 +141,7 @@ pub struct CompiledModule {
     data_initializers: Box<[OwnedDataInitializer]>,
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
+    trap_registration: TrapRegistration,
 }
 
 impl CompiledModule {
@@ -159,6 +163,7 @@ impl CompiledModule {
                 .into_boxed_slice(),
             raw.signatures.clone(),
             raw.dbg_jit_registration,
+            raw.trap_registration,
         ))
     }
 
@@ -169,6 +174,7 @@ impl CompiledModule {
         data_initializers: Box<[OwnedDataInitializer]>,
         signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         dbg_jit_registration: Option<GdbJitImageRegistration>,
+        trap_registration: TrapRegistration,
     ) -> Self {
         Self {
             module: Arc::new(module),
@@ -176,6 +182,7 @@ impl CompiledModule {
             data_initializers,
             signatures,
             dbg_jit_registration: dbg_jit_registration.map(Rc::new),
+            trap_registration,
         }
     }
 
@@ -203,6 +210,7 @@ impl CompiledModule {
         let imports = resolve_imports(&self.module, resolver)?;
         InstanceHandle::new(
             Arc::clone(&self.module),
+            self.trap_registration.clone(),
             self.finished_functions.clone(),
             imports,
             &data_initializers,

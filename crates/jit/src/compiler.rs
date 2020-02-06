@@ -21,8 +21,8 @@ use wasmtime_environ::{
     VMOffsets,
 };
 use wasmtime_runtime::{
-    get_mut_trap_registry, jit_function_registry, InstantiationError, SignatureRegistry,
-    TrapRegistrationGuard, VMFunctionBody,
+    jit_function_registry, InstantiationError, SignatureRegistry, TrapRegistration, TrapRegistry,
+    VMFunctionBody,
 };
 
 /// Select which kind of compilation to use.
@@ -51,8 +51,8 @@ pub struct Compiler {
     isa: Box<dyn TargetIsa>,
 
     code_memory: CodeMemory,
-    trap_registration_guards: Vec<TrapRegistrationGuard>,
     jit_function_ranges: Vec<(usize, usize)>,
+    trap_registry: TrapRegistry,
     trampoline_park: HashMap<*const VMFunctionBody, *const VMFunctionBody>,
     signatures: SignatureRegistry,
     strategy: CompilationStrategy,
@@ -67,28 +67,18 @@ impl Compiler {
         Self {
             isa,
             code_memory: CodeMemory::new(),
-            trap_registration_guards: Vec::new(),
             jit_function_ranges: Vec::new(),
             trampoline_park: HashMap::new(),
             signatures: SignatureRegistry::new(),
             fn_builder_ctx: FunctionBuilderContext::new(),
             strategy,
+            trap_registry: TrapRegistry::default(),
         }
     }
 }
 
 impl Drop for Compiler {
     fn drop(&mut self) {
-        // We must deregister traps before freeing the code memory.
-        // Otherwise, we have a race:
-        // - Compiler #1 dropped code memory, but hasn't deregistered the trap yet
-        // - Compiler #2 allocated code memory and tries to register a trap,
-        //   but the trap at certain address happens to be already registered,
-        //   since Compiler #1 hasn't deregistered it yet => assertion in trap registry fails.
-        // Having a custom drop implementation we are independent from the field order
-        // in the struct what reduces potential human error.
-        self.trap_registration_guards.clear();
-
         for (start, end) in self.jit_function_ranges.iter() {
             jit_function_registry::unregister(*start, *end);
         }
@@ -119,6 +109,7 @@ impl Compiler {
             PrimaryMap<DefinedFuncIndex, ir::JumpTableOffsets>,
             Relocations,
             Option<Vec<u8>>,
+            TrapRegistration,
         ),
         SetupError,
     > {
@@ -156,11 +147,7 @@ impl Compiler {
                 )))
             })?;
 
-        register_traps(
-            &allocated_functions,
-            &traps,
-            &mut self.trap_registration_guards,
-        );
+        let trap_registration = register_traps(&allocated_functions, &traps, &self.trap_registry);
 
         for (i, allocated) in allocated_functions.iter() {
             let ptr = (*allocated) as *const VMFunctionBody;
@@ -217,7 +204,13 @@ impl Compiler {
 
         let jt_offsets = compilation.get_jt_offsets();
 
-        Ok((allocated_functions, jt_offsets, relocations, dbg))
+        Ok((
+            allocated_functions,
+            jt_offsets,
+            relocations,
+            dbg,
+            trap_registration,
+        ))
     }
 
     /// Create a trampoline for invoking a function.
@@ -266,6 +259,11 @@ impl Compiler {
     /// Shared signature registry.
     pub fn signatures(&self) -> &SignatureRegistry {
         &self.signatures
+    }
+
+    /// Shared registration of trap information
+    pub fn trap_registry(&self) -> &TrapRegistry {
+        &self.trap_registry
     }
 }
 
@@ -408,19 +406,21 @@ fn allocate_functions(
 fn register_traps(
     allocated_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
     traps: &Traps,
-    trap_registration_guards: &mut Vec<TrapRegistrationGuard>,
-) {
-    let mut trap_registry = get_mut_trap_registry();
-    for (func_addr, func_traps) in allocated_functions.values().zip(traps.values()) {
-        for trap_desc in func_traps.iter() {
-            let func_addr = *func_addr as *const u8 as usize;
-            let offset = usize::try_from(trap_desc.code_offset).unwrap();
-            let trap_addr = func_addr + offset;
-            let guard =
-                trap_registry.register_trap(trap_addr, trap_desc.source_loc, trap_desc.trap_code);
-            trap_registration_guards.push(guard);
-        }
-    }
+    registry: &TrapRegistry,
+) -> TrapRegistration {
+    let traps =
+        allocated_functions
+            .values()
+            .zip(traps.values())
+            .flat_map(|(func_addr, func_traps)| {
+                func_traps.iter().map(move |trap_desc| {
+                    let func_addr = *func_addr as *const u8 as usize;
+                    let offset = usize::try_from(trap_desc.code_offset).unwrap();
+                    let trap_addr = func_addr + offset;
+                    (trap_addr, trap_desc.source_loc, trap_desc.trap_code)
+                })
+            });
+    registry.register_traps(traps)
 }
 
 /// We don't expect trampoline compilation to produce any relocations, so

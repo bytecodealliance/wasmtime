@@ -1,4 +1,5 @@
 use super::create_handle::create_handle;
+use crate::Store;
 use crate::{GlobalType, Mutability, Val};
 use anyhow::{bail, Result};
 use wasmtime_environ::entity::PrimaryMap;
@@ -11,7 +12,11 @@ pub struct GlobalState {
     handle: InstanceHandle,
 }
 
-pub fn create_global(gt: &GlobalType, val: Val) -> Result<(wasmtime_runtime::Export, GlobalState)> {
+pub fn create_global(
+    store: &Store,
+    gt: &GlobalType,
+    val: Val,
+) -> Result<(wasmtime_runtime::Export, GlobalState)> {
     let mut definition = Box::new(VMGlobalDefinition::new());
     unsafe {
         match val {
@@ -35,7 +40,7 @@ pub fn create_global(gt: &GlobalType, val: Val) -> Result<(wasmtime_runtime::Exp
         initializer: wasm::GlobalInit::Import, // TODO is it right?
     };
     let handle =
-        create_handle(Module::new(), None, PrimaryMap::new(), Box::new(())).expect("handle");
+        create_handle(Module::new(), store, PrimaryMap::new(), Box::new(())).expect("handle");
     Ok((
         wasmtime_runtime::Export::Global {
             definition: definition.as_mut(),

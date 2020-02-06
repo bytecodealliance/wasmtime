@@ -1,17 +1,62 @@
-use lazy_static::lazy_static;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
-use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Arc, RwLock};
 use wasmtime_environ::ir;
-
-lazy_static! {
-    static ref REGISTRY: RwLock<TrapRegistry> = RwLock::new(TrapRegistry::default());
-}
 
 /// The registry maintains descriptions of traps in currently allocated functions.
 #[derive(Default)]
 pub struct TrapRegistry {
+    // This data structure is intended to be safe to use across many threads
+    // since this is stored inside of a `Compiler` which, eventually, will be
+    // used across many threads. To that end this is internally use an `Arc`
+    // plus an `RwLock`.
+    //
+    // The problem that this data structure is solving is that when a
+    // segfault/illegal instruction happens we need to answer "given this
+    // hardware program counter what is the wasm reason this trap is being
+    // raised"?
+    //
+    // The way this is answered here is done to minimize the amount of
+    // synchronization (in theory) and have something like so:
+    //
+    // * Each module bulk-registers a list of in-memory pc addresses that have
+    //   traps. We assume that the range of traps for each module are always
+    //   disjoint.
+    // * Each key in this `BTreeMap` is the highest trapping address and the
+    //   value contains the lowest address as well as all the individual
+    //   addresses in their own `HashMap`.
+    // * Registration then looks by calculating the start/end and inserting
+    //   into this map (with some assertions about disjointed-ness)
+    // * Lookup is done in two layers. First we find the corresponding entry
+    //   in the map and verify that a program counter falls in the start/end
+    //   range. Next we look up the address in the `traps` hash map below.
+    //
+    // The `register_traps` function works by returning an RAII guard that owns
+    // a handle to this `Arc` as well, and when that type is dropped it will
+    // automatically remove all trap information from this `ranges` list.
+    ranges: Arc<RwLock<BTreeMap<usize, TrapGroup>>>,
+}
+
+#[derive(Debug)]
+struct TrapGroup {
+    /// The lowest key in the `trap` field.
+    ///
+    /// This represents the start of the range of this group of traps, and the
+    /// end of the range for this group of traps is stored as the key in the
+    /// `ranges` struct above in `TrapRegistry`.
+    start: usize,
+
+    /// All known traps in this group, mapped from program counter to the
+    /// description of the trap itself.
     traps: HashMap<usize, TrapDescription>,
+}
+
+/// RAII structure returned from `TrapRegistry::register_trap` to unregister
+/// trap information on drop.
+#[derive(Clone)]
+pub struct TrapRegistration {
+    ranges: Arc<RwLock<BTreeMap<usize, TrapGroup>>>,
+    end: Option<usize>,
 }
 
 /// Description of a trap.
@@ -52,50 +97,77 @@ fn trap_code_to_expected_string(trap_code: ir::TrapCode) -> String {
     }
 }
 
-/// RAII guard for deregistering traps
-pub struct TrapRegistrationGuard(usize);
-
 impl TrapRegistry {
-    /// Registers a new trap.
-    /// Returns a RAII guard that deregisters the trap when dropped.
-    pub fn register_trap(
-        &mut self,
-        address: usize,
-        source_loc: ir::SourceLoc,
-        trap_code: ir::TrapCode,
-    ) -> TrapRegistrationGuard {
-        let entry = TrapDescription {
-            source_loc,
-            trap_code,
-        };
-        let previous_trap = self.traps.insert(address, entry);
-        assert!(previous_trap.is_none());
-        TrapRegistrationGuard(address)
-    }
+    /// Registers a list of traps.
+    ///
+    /// Returns a RAII guard that deregisters all traps when dropped.
+    pub fn register_traps(
+        &self,
+        list: impl IntoIterator<Item = (usize, ir::SourceLoc, ir::TrapCode)>,
+    ) -> TrapRegistration {
+        let mut start = usize::max_value();
+        let mut end = 0;
+        let mut traps = HashMap::new();
+        for (addr, source_loc, trap_code) in list.into_iter() {
+            traps.insert(
+                addr,
+                TrapDescription {
+                    source_loc,
+                    trap_code,
+                },
+            );
+            if addr < start {
+                start = addr;
+            }
+            if addr > end {
+                end = addr;
+            }
+        }
+        if traps.len() == 0 {
+            return TrapRegistration {
+                ranges: self.ranges.clone(),
+                end: None,
+            };
+        }
+        let mut ranges = self.ranges.write().unwrap();
 
-    fn deregister_trap(&mut self, address: usize) {
-        assert!(self.traps.remove(&address).is_some());
-    }
+        // Sanity check that no other group of traps overlaps with our
+        // registration...
+        if let Some((_, prev)) = ranges.range(end..).next() {
+            assert!(prev.start > end);
+        }
+        if let Some((prev_end, _)) = ranges.range(..=start).next_back() {
+            assert!(*prev_end < start);
+        }
 
+        // ... and then register ourselves
+        assert!(ranges.insert(end, TrapGroup { start, traps }).is_none());
+        TrapRegistration {
+            ranges: self.ranges.clone(),
+            end: Some(end),
+        }
+    }
+}
+
+impl TrapRegistration {
     /// Gets a trap description at given address.
     pub fn get_trap(&self, address: usize) -> Option<TrapDescription> {
-        self.traps.get(&address).copied()
+        let ranges = self.ranges.read().ok()?;
+        let (end, group) = ranges.range(address..).next()?;
+        if group.start <= address && address <= *end {
+            group.traps.get(&address).copied()
+        } else {
+            None
+        }
     }
 }
 
-impl Drop for TrapRegistrationGuard {
+impl Drop for TrapRegistration {
     fn drop(&mut self) {
-        let mut registry = get_mut_trap_registry();
-        registry.deregister_trap(self.0);
+        if let Some(end) = self.end {
+            if let Ok(mut ranges) = self.ranges.write() {
+                ranges.remove(&end);
+            }
+        }
     }
-}
-
-/// Gets guarded writable reference to traps registry
-pub fn get_mut_trap_registry() -> RwLockWriteGuard<'static, TrapRegistry> {
-    REGISTRY.write().expect("trap registry lock got poisoned")
-}
-
-/// Gets guarded readable reference to traps registry
-pub fn get_trap_registry() -> RwLockReadGuard<'static, TrapRegistry> {
-    REGISTRY.read().expect("trap registry lock got poisoned")
 }
