@@ -561,16 +561,20 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     // The reserved stack area is composed of:
     //   return address + frame pointer + all callee-saved registers + shadow space
     //
-    // XMM registers are twice the size of general purpose registers, so count them
-    // twice for stack space accounting.
-    //
     // Pushing the return address is an implicit function of the `call`
     // instruction. Each of the others we will then push explicitly. Then we
     // will adjust the stack pointer to make room for the rest of the required
     // space for this frame.
     let word_size = isa.pointer_bytes() as usize;
-    let csr_stack_size = ((csrs.iter(GPR).len() + 2) * word_size
-        + csrs.iter(FPR).len() * types::F64X2.bytes() as usize) as i32;
+    let num_fprs = csrs.iter(FPR).len();
+    let mut csr_stack_size = ((csrs.iter(GPR).len() + 2) * word_size) as i32;
+
+    if num_fprs != 0 {
+        csr_stack_size += (num_fprs * types::F64X2.bytes() as usize) as i32;
+
+        // Ensure that csr stack space is 16-byte aligned for ideal SIMD value placement.
+        csr_stack_size = csr_stack_size & !0b1111 + 16;
+    }
 
     // TODO: eventually use the 32 bytes (shadow store) as spill slot. This currently doesn't work
     //       since cranelift does not support spill slots before incoming args
@@ -715,9 +719,17 @@ fn insert_common_prologue(
             // pushed CSRs, frame pointer.
             // Also, the size of a return address, implicitly pushed by a x86 `call` instruction,
             // also should be accounted for.
+            // If any FPR are present, count them as well as necessary alignment space.
             // TODO: Check if the function body actually contains a `call` instruction.
-            let total_stack_size = (csrs.iter(GPR).len() + 1 + 1) as i64 * word_size as i64
-                + csrs.iter(FPR).len() as i64 * types::F64X2.bytes() as i64;
+            let mut total_stack_size = (csrs.iter(GPR).len() + 1 + 1) as i64 * word_size as i64;
+
+            let num_fpr = csrs.iter(FPR).len();
+            if num_fpr > 0 {
+                total_stack_size += csrs.iter(FPR).len() as i64 * types::F64X2.bytes() as i64;
+
+                // Ensure that csr stack space is 16-byte aligned for ideal SIMD value placement.
+                total_stack_size = total_stack_size & !0b1111 + 16;
+            }
 
             insert_stack_check(pos, total_stack_size, stack_limit_arg);
         }
