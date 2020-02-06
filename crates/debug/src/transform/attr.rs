@@ -1,13 +1,10 @@
 use super::address_transform::AddressTransform;
 use super::expression::{compile_expression, CompiledExpression, FunctionFrameInfo};
 use super::range_info_builder::RangeInfoBuilder;
-use super::unit::PendingDieRef;
+use super::refs::{PendingDebugInfoRefs, PendingUnitRefs};
 use super::{DebugInputContext, Reader, TransformError};
 use anyhow::Error;
-use gimli::{
-    write, AttributeValue, DebugLineOffset, DebugStr, DebuggingInformationEntry, UnitOffset,
-};
-use std::collections::HashMap;
+use gimli::{write, AttributeValue, DebugLineOffset, DebugStr, DebuggingInformationEntry};
 
 pub(crate) enum FileAttributeContext<'a> {
     Root(Option<DebugLineOffset>),
@@ -41,8 +38,8 @@ pub(crate) fn clone_die_attributes<'a, R>(
     scope_ranges: Option<&Vec<(u64, u64)>>,
     cu_low_pc: u64,
     out_strings: &mut write::StringTable,
-    die_ref_map: &HashMap<UnitOffset, write::UnitEntryId>,
-    pending_die_refs: &mut Vec<PendingDieRef>,
+    pending_die_refs: &mut PendingUnitRefs,
+    pending_di_refs: &mut PendingDebugInfoRefs,
     file_context: FileAttributeContext<'a>,
 ) -> Result<(), Error>
 where
@@ -243,17 +240,14 @@ where
             AttributeValue::CallingConvention(e) => write::AttributeValue::CallingConvention(e),
             AttributeValue::Inline(e) => write::AttributeValue::Inline(e),
             AttributeValue::Ordering(e) => write::AttributeValue::Ordering(e),
-            AttributeValue::UnitRef(ref offset) => {
-                if let Some(unit_id) = die_ref_map.get(offset) {
-                    write::AttributeValue::ThisUnitEntryRef(*unit_id)
-                } else {
-                    pending_die_refs.push((current_scope_id, attr.name(), *offset));
-                    continue;
-                }
+            AttributeValue::UnitRef(offset) => {
+                pending_die_refs.insert(current_scope_id, attr.name(), offset);
+                continue;
             }
-            // AttributeValue::DebugInfoRef(_) => {
-            //     continue;
-            // }
+            AttributeValue::DebugInfoRef(offset) => {
+                pending_di_refs.insert(current_scope_id, attr.name(), offset);
+                continue;
+            }
             _ => panic!(), //write::AttributeValue::StringRef(out_strings.add("_")),
         };
         let current_scope = out_unit.get_mut(current_scope_id);
