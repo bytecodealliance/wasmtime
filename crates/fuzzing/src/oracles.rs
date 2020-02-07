@@ -39,6 +39,10 @@ fn log_wasm(wasm: &[u8]) -> PathBuf {
     let name = format!("testcase{}.wasm", i);
     std::fs::write(&name, wasm).expect("failed to write wasm file");
     log::debug!("wrote wasm file to `{}`", name);
+    if let Ok(s) = wasmprinter::print_bytes(wasm) {
+        let name = format!("testcase{}.wat", i);
+        std::fs::write(&name, s).expect("failed to write wat file");
+    }
     name.into()
 }
 
