@@ -15,19 +15,19 @@ namespace Wasmtime.Tests
 
         public void Dispose()
         {
-            if (Module != null)
+            if (!(Module is null))
             {
                 Module.Dispose();
                 Module = null;
             }
 
-            if (Store != null)
+            if (!(Store is null))
             {
                 Store.Dispose();
                 Store = null;
             }
 
-            if (Engine != null)
+            if (!(Engine is null))
             {
                 Engine.Dispose();
                 Engine = null;

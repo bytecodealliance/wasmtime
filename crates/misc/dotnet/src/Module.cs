@@ -49,20 +49,33 @@ namespace Wasmtime
         /// </summary>
         /// <param name="host">The host to use for the WebAssembly module's instance.</param>
         /// <returns>Returns a new <see cref="Instance" />.</returns>
-        public Instance Instantiate(IHost host)
+        public Instance Instantiate(IHost host = null)
         {
-            if (host is null)
-            {
-                throw new ArgumentNullException(nameof(host));
-            }
+            return Instantiate(null, host);
+        }
 
-            if (host.Instance != null)
+        /// <summary>
+        /// Instantiates a WebAssembly module for the given host.
+        /// </summary>
+        /// <param name="wasi">The WASI instance to use for WASI imports.</param>
+        /// <param name="host">The host to use for the WebAssembly module's instance.</param>
+        /// <returns>Returns a new <see cref="Instance" />.</returns>
+        public Instance Instantiate(Wasi wasi, IHost host = null)
+        {
+            if (!(host?.Instance is null))
             {
                 throw new InvalidOperationException("The host has already been associated with an instantiated module.");
             }
 
-            host.Instance = new Instance(this, host);
-            return host.Instance;
+            var instance = new Instance(this, wasi, host);
+
+            if (!(host is null))
+            {
+                host.Instance = instance;
+                return instance;
+            }
+
+            return instance;
         }
 
         /// <summary>
@@ -93,6 +106,11 @@ namespace Wasmtime
             {
                 Handle.Dispose();
                 Handle.SetHandleAsInvalid();
+            }
+            if (!(Imports is null))
+            {
+                Imports.Dispose();
+                Imports = null;
             }
         }
 

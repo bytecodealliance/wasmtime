@@ -8,7 +8,7 @@ namespace Wasmtime.Bindings
     /// <summary>
     /// Represents a host global binding.
     /// </summary>
-    public class GlobalBinding : Binding
+    internal class GlobalBinding : Binding
     {
         /// <summary>
         /// Constructs a new global binding.
@@ -43,12 +43,12 @@ namespace Wasmtime.Bindings
         /// </summary>
         public FieldInfo Field { get; private set; }
 
-        internal override SafeHandle Bind(Store store, IHost host)
+        public override SafeHandle Bind(Store store, IHost host)
         {
             unsafe
             {
                 dynamic global = Field.GetValue(host);
-                if (global.Handle != null)
+                if (!(global.Handle is null))
                 {
                     throw new InvalidOperationException("Cannot bind more than once.");
                 }
@@ -74,17 +74,17 @@ namespace Wasmtime.Bindings
         {
             if (Field.IsStatic)
             {
-                ThrowBindingException(Import, Field, "field cannot be static");
+                throw CreateBindingException(Import, Field, "field cannot be static");
             }
 
             if (!Field.IsInitOnly)
             {
-                ThrowBindingException(Import, Field, "field must be readonly");
+                throw CreateBindingException(Import, Field, "field must be readonly");
             }
 
             if (!Field.FieldType.IsGenericType)
             {
-                ThrowBindingException(Import, Field, "field is expected to be of type 'Global<T>'");
+                throw CreateBindingException(Import, Field, "field is expected to be of type 'Global<T>'");
             }
 
             var definition = Field.FieldType.GetGenericTypeDefinition();
@@ -92,19 +92,19 @@ namespace Wasmtime.Bindings
             {
                 if (Import.IsMutable)
                 {
-                    ThrowBindingException(Import, Field, "the import is mutable (use the 'MutableGlobal' type)");
+                    throw CreateBindingException(Import, Field, "the import is mutable (use the 'MutableGlobal' type)");
                 }
             }
             else if (definition == typeof(MutableGlobal<>))
             {
                 if (!Import.IsMutable)
                 {
-                    ThrowBindingException(Import, Field, "the import is constant (use the 'Global' type)");
+                    throw CreateBindingException(Import, Field, "the import is constant (use the 'Global' type)");
                 }
             }
             else
             {
-                ThrowBindingException(Import, Field, "field is expected to be of type 'Global<T>' or 'MutableGlobal<T>'");
+                throw CreateBindingException(Import, Field, "field is expected to be of type 'Global<T>' or 'MutableGlobal<T>'");
             }
 
             var arg = Field.FieldType.GetGenericArguments()[0];
@@ -113,12 +113,12 @@ namespace Wasmtime.Bindings
             {
                 if (!Interop.IsMatchingKind(kind, Import.Kind))
                 {
-                    ThrowBindingException(Import, Field, $"global type argument is expected to be of type '{Interop.ToString(Import.Kind)}'");
+                    throw CreateBindingException(Import, Field, $"global type argument is expected to be of type '{Interop.ToString(Import.Kind)}'");
                 }
             }
             else
             {
-                ThrowBindingException(Import, Field, $"'{arg}' is not a valid global type");
+                throw CreateBindingException(Import, Field, $"'{arg}' is not a valid global type");
             }
         }
     }

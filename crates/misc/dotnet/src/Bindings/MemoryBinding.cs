@@ -8,7 +8,7 @@ namespace Wasmtime.Bindings
     /// <summary>
     /// Represents a host memory binding.
     /// </summary>
-    public class MemoryBinding : Binding
+    internal class MemoryBinding : Binding
     {
         /// <summary>
         /// Constructs a new memory binding.
@@ -43,10 +43,10 @@ namespace Wasmtime.Bindings
         /// </summary>
         public FieldInfo Field { get; private set; }
 
-        internal override SafeHandle Bind(Store store, IHost host)
+        public override SafeHandle Bind(Store store, IHost host)
         {
             Memory memory = (Memory)Field.GetValue(host);
-            if (memory.Handle != null)
+            if (!(memory.Handle is null))
             {
                 throw new InvalidOperationException("Cannot bind more than once.");
             }
@@ -56,11 +56,11 @@ namespace Wasmtime.Bindings
 
             if (min != Import.Minimum)
             {
-                ThrowBindingException(Import, Field, $"Memory does not have the expected minimum of {Import.Minimum} page(s)");
+                throw CreateBindingException(Import, Field, $"Memory does not have the expected minimum of {Import.Minimum} page(s)");
             }
             if (max != Import.Maximum)
             {
-                ThrowBindingException(Import, Field, $"Memory does not have the expected maximum of {Import.Maximum} page(s)");
+                throw CreateBindingException(Import, Field, $"Memory does not have the expected maximum of {Import.Maximum} page(s)");
             }
 
             unsafe
@@ -81,17 +81,17 @@ namespace Wasmtime.Bindings
         {
             if (Field.IsStatic)
             {
-                ThrowBindingException(Import, Field, "field cannot be static");
+                throw CreateBindingException(Import, Field, "field cannot be static");
             }
 
             if (!Field.IsInitOnly)
             {
-                ThrowBindingException(Import, Field, "field must be readonly");
+                throw CreateBindingException(Import, Field, "field must be readonly");
             }
 
             if (Field.FieldType != typeof(Memory))
             {
-                ThrowBindingException(Import, Field, "field is expected to be of type 'Memory'");
+                throw CreateBindingException(Import, Field, "field is expected to be of type 'Memory'");
             }
         }
     }

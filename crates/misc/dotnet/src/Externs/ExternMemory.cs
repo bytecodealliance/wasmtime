@@ -64,6 +64,23 @@ namespace Wasmtime.Externs
         }
 
         /// <summary>
+        /// Reads a null-terminated UTF-8 string from memory.
+        /// </summary>
+        /// <param name="address">The zero-based address to read from.</param>
+        /// <returns>Returns the string read from memory.</returns>
+        public string ReadNullTerminatedString(int address)
+        {
+            var slice = Span.Slice(address);
+            var terminator = slice.IndexOf((byte)0);
+            if (terminator == -1)
+            {
+                throw new InvalidOperationException("string is not null terminated");
+            }
+
+            return Encoding.UTF8.GetString(slice.Slice(0, terminator));
+        }
+
+        /// <summary>
         /// Writes a UTF-8 string at the given address.
         /// </summary>
         /// <param name="address">The zero-based address to write to.</param>

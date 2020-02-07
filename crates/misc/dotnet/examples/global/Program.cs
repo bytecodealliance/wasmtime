@@ -21,13 +21,12 @@ namespace HelloExample
     {
         static void Main(string[] args)
         {
-            using (var engine = new Engine())
-            using (var store = engine.CreateStore())
-            using (var module = store.CreateModule("global.wasm"))
-            using (dynamic instance = module.Instantiate(new Host()))
-            {
-                instance.run(20);
-            }
+            using var engine = new Engine();
+            using var store = engine.CreateStore();
+            using var module = store.CreateModule("global.wasm");
+            using dynamic instance = module.Instantiate(new Host());
+
+            instance.run(20);
         }
     }
 }

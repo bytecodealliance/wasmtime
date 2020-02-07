@@ -142,13 +142,12 @@ namespace Tutorial
     {
         static void Main(string[] args)
         {
-            using (var engine = new Engine())
-            using (var store = engine.CreateStore())
-            using (var module = store.CreateModule("hello.wasm"))
-            using (dynamic instance = module.Instantiate(new Host()))
-            {
-                instance.run();
-            }
+            using var engine = new Engine();
+            using var store = engine.CreateStore();
+            using var module = store.CreateModule("hello.wasm");
+            using dynamic instance = module.Instantiate(new Host());
+
+            instance.run();
         }
     }
 }

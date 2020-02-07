@@ -12,7 +12,7 @@ namespace Wasmtime.Tests
 
     public class FunctionThunkingTests : IClassFixture<FunctionThunkingFixture>
     {
-        const string THROW_MESSAGE = "Test error messages for wasmtime dotnet bidnings unit tests.";
+        const string THROW_MESSAGE = "Test error message for wasmtime dotnet unit tests.";
 
         class MyHost : IHost
         {
@@ -53,7 +53,7 @@ namespace Wasmtime.Tests
         }
 
         [Fact]
-        public void ItPropegatesExceptionsToCallersViaTraps()
+        public void ItPropagatesExceptionsToCallersViaTraps()
         {
             var host = new MyHost();
             using (var instance = Fixture.Module.Instantiate(host))

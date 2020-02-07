@@ -12,10 +12,12 @@ namespace Wasmtime.Imports
         {
             unsafe
             {
-                var moduleName = Interop.wasm_importtype_module(importType);
+                Handle = importType;
+
+                var moduleName = Interop.wasm_importtype_module(Handle);
                 ModuleName = Marshal.PtrToStringUTF8((IntPtr)moduleName->data, (int)moduleName->size);
 
-                var name = Interop.wasm_importtype_name(importType);
+                var name = Interop.wasm_importtype_name(Handle);
                 Name = Marshal.PtrToStringUTF8((IntPtr)name->data, (int)name->size);
             }
         }
@@ -29,6 +31,8 @@ namespace Wasmtime.Imports
         /// The name of the import.
         /// </summary>
         public string Name { get; private set; }
+
+        internal IntPtr Handle { get; private set; }
 
         /// <inheritdoc/>
         public override string ToString()

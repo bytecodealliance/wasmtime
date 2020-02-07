@@ -10,35 +10,37 @@ namespace Wasmtime.Bindings
     /// <summary>
     /// Represents an abstract host binding.
     /// </summary>
-    public abstract class Binding
+    internal abstract class Binding
     {
-        internal abstract SafeHandle Bind(Store store, IHost host);
+        public abstract SafeHandle Bind(Store store, IHost host);
 
-        internal static void ThrowBindingException(Import import, MemberInfo member, string message)
+        public static WasmtimeException CreateBindingException(Import import, MemberInfo member, string message)
         {
-            throw new WasmtimeException($"Unable to bind '{member.DeclaringType.Name}.{member.Name}' to WebAssembly import '{import}': {message}.");
+            return new WasmtimeException($"Unable to bind '{member.DeclaringType.Name}.{member.Name}' to WebAssembly import '{import}': {message}.");
         }
 
-        internal static List<Binding> GetImportBindings(IHost host, Module module)
+        public static List<Binding> GetImportBindings(Module module, Wasi wasi = null, IHost host = null)
         {
-            if (host is null)
-            {
-                throw new ArgumentNullException(nameof(host));
-            }
-
             if (module is null)
             {
                 throw new ArgumentNullException(nameof(module));
             }
 
-            var flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
-            var type = host.GetType();
-            var methods = type.GetMethods(flags).Where(m => !m.IsSpecialName && Attribute.IsDefined(m, typeof(ImportAttribute)));
-            var fields = type.GetFields(flags).Where(m => !m.IsSpecialName && Attribute.IsDefined(m, typeof(ImportAttribute)));
-
             var bindings = new List<Binding>();
+            var flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+            var type = host?.GetType();
+            var methods = type?.GetMethods(flags).Where(m => !m.IsSpecialName && Attribute.IsDefined(m, typeof(ImportAttribute)));
+            var fields = type?.GetFields(flags).Where(m => !m.IsSpecialName && Attribute.IsDefined(m, typeof(ImportAttribute)));
+
             foreach (var import in module.Imports.All)
             {
+                var wasiBinding = wasi?.Bind(import);
+                if (!(wasiBinding is null))
+                {
+                    bindings.Add(wasiBinding);
+                    continue;
+                }
+
                 switch (import)
                 {
                     case FunctionImport func:
@@ -63,7 +65,7 @@ namespace Wasmtime.Bindings
 
         private static FunctionBinding BindFunction(FunctionImport import, IEnumerable<MethodInfo> methods)
         {
-            var method = methods.Where(m =>
+            var method = methods?.Where(m =>
                 {
                     var attribute = (ImportAttribute)m.GetCustomAttribute(typeof(ImportAttribute));
                     if (attribute is null)
@@ -88,7 +90,7 @@ namespace Wasmtime.Bindings
 
         private static GlobalBinding BindGlobal(GlobalImport import, IEnumerable<FieldInfo> fields)
         {
-            var field = fields.Where(f =>
+            var field = fields?.Where(f =>
                 {
                     var attribute = (ImportAttribute)f.GetCustomAttribute(typeof(ImportAttribute));
                     return attribute.Name == import.Name &&
@@ -108,7 +110,7 @@ namespace Wasmtime.Bindings
 
         private static MemoryBinding BindMemory(MemoryImport import, IEnumerable<FieldInfo> fields)
         {
-            var field = fields.Where(f =>
+            var field = fields?.Where(f =>
                 {
                     var attribute = (ImportAttribute)f.GetCustomAttribute(typeof(ImportAttribute));
                     return attribute.Name == import.Name &&

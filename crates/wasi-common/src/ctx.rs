@@ -113,6 +113,27 @@ impl WasiCtxBuilder {
         self
     }
 
+    /// Inherit stdin from the host process.
+    pub fn inherit_stdin(mut self) -> Self {
+        self.fds
+            .insert(0, PendingFdEntry::Thunk(FdEntry::duplicate_stdin));
+        self
+    }
+
+    /// Inherit stdout from the host process.
+    pub fn inherit_stdout(mut self) -> Self {
+        self.fds
+            .insert(1, PendingFdEntry::Thunk(FdEntry::duplicate_stdout));
+        self
+    }
+
+    /// Inherit stdout from the host process.
+    pub fn inherit_stderr(mut self) -> Self {
+        self.fds
+            .insert(2, PendingFdEntry::Thunk(FdEntry::duplicate_stderr));
+        self
+    }
+
     /// Inherit the stdin, stdout, and stderr streams from the host process.
     pub fn inherit_stdio(mut self) -> Self {
         self.fds

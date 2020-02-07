@@ -15,6 +15,12 @@ use wasmtime::{
     Table, TableType, Trap, Val, ValType,
 };
 
+mod ext;
+mod wasi;
+
+pub use crate::ext::*;
+pub use crate::wasi::*;
+
 macro_rules! declare_vec {
     ($name:ident, $elem_ty:path) => {
         #[repr(C)]
@@ -1025,7 +1031,7 @@ pub unsafe extern "C" fn wasm_trap_new(
     if message[message.len() - 1] != 0 {
         panic!("wasm_trap_new message stringz expected");
     }
-    let message = String::from_utf8_lossy(message);
+    let message = String::from_utf8_lossy(&message[..message.len() - 1]);
     let trap = Box::new(wasm_trap_t {
         trap: HostRef::new(Trap::new(message)),
     });
@@ -1777,7 +1783,3 @@ pub unsafe extern "C" fn wasm_valtype_vec_copy(
     let slice = slice::from_raw_parts((*src).data, (*src).size);
     (*out).set_from_slice(slice);
 }
-
-mod ext;
-
-pub use crate::ext::*;
