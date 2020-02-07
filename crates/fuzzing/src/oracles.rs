@@ -14,8 +14,8 @@ pub mod dummy;
 
 use dummy::{dummy_imports, dummy_values};
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
 fn fuzz_default_config(strategy: Strategy) -> Config {
