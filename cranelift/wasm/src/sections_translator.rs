@@ -224,6 +224,9 @@ pub fn parse_global_section(
                 GlobalInit::V128Const(V128Imm::from(value.bytes().to_vec().as_slice()))
             }
             Operator::RefNull => GlobalInit::RefNullConst,
+            Operator::RefFunc { function_index } => {
+                GlobalInit::RefFunc(FuncIndex::from_u32(function_index))
+            }
             Operator::GlobalGet { global_index } => {
                 GlobalInit::GetGlobal(GlobalIndex::from_u32(global_index))
             }

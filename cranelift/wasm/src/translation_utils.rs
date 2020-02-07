@@ -81,10 +81,12 @@ pub enum GlobalInit {
     F64Const(u64),
     /// A `vconst`.
     V128Const(V128Imm),
-    /// A `get_global` of another global.
+    /// A `global.get` of another global.
     GetGlobal(GlobalIndex),
     /// A `ref.null`.
     RefNullConst,
+    /// A `ref.func <index>`.
+    RefFunc(FuncIndex),
     ///< The global is imported from, and thus initialized by, a different module.
     Import,
 }
