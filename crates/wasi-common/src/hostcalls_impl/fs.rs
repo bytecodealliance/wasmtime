@@ -1002,7 +1002,7 @@ pub(crate) unsafe fn fd_prestat_get(
         memory,
         prestat_ptr,
         host::__wasi_prestat_t {
-            pr_type: wasi::__WASI_PREOPENTYPE_DIR,
+            tag: wasi::__WASI_PREOPENTYPE_DIR,
             u: host::__wasi_prestat_u_t {
                 dir: host::__wasi_prestat_dir_t {
                     pr_name_len: path.len(),
