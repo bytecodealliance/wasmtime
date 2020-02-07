@@ -48,7 +48,7 @@ pub enum SetupError {
 /// from the wasm buffer rather than holding its own copy.
 struct RawCompiledModule<'data> {
     module: Module,
-    finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
+    finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
     data_initializers: Box<[DataInitializer<'data>]>,
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<GdbJitImageRegistration>,
@@ -74,7 +74,7 @@ impl<'data> RawCompiledModule<'data> {
             None
         };
 
-        let (allocated_functions, jt_offsets, relocations, dbg_image, trap_registration) = compiler
+        let (finished_functions, jt_offsets, relocations, dbg_image, trap_registration) = compiler
             .compile(
                 &translation.module,
                 translation.module_translation.as_ref().unwrap(),
@@ -84,21 +84,10 @@ impl<'data> RawCompiledModule<'data> {
 
         link_module(
             &translation.module,
-            &allocated_functions,
+            &finished_functions,
             &jt_offsets,
             relocations,
         );
-
-        // Gather up the pointers to the compiled functions.
-        let finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody> =
-            allocated_functions
-                .into_iter()
-                .map(|(_index, allocated)| {
-                    let fatptr: *const [VMFunctionBody] = *allocated;
-                    fatptr as *const VMFunctionBody
-                })
-                .collect::<PrimaryMap<_, _>>()
-                .into_boxed_slice();
 
         // Compute indices into the shared signature table.
         let signatures = {
@@ -125,7 +114,7 @@ impl<'data> RawCompiledModule<'data> {
 
         Ok(Self {
             module: translation.module,
-            finished_functions,
+            finished_functions: finished_functions.into_boxed_slice(),
             data_initializers: translation.data_initializers.into_boxed_slice(),
             signatures: signatures.into_boxed_slice(),
             dbg_jit_registration,
@@ -137,7 +126,7 @@ impl<'data> RawCompiledModule<'data> {
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
     module: Arc<Module>,
-    finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
+    finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
     data_initializers: Box<[OwnedDataInitializer]>,
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
@@ -170,7 +159,7 @@ impl CompiledModule {
     /// Construct a `CompiledModule` from component parts.
     pub fn from_parts(
         module: Module,
-        finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
+        finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
         data_initializers: Box<[OwnedDataInitializer]>,
         signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         dbg_jit_registration: Option<GdbJitImageRegistration>,
@@ -228,6 +217,11 @@ impl CompiledModule {
     /// Return a reference to a module.
     pub fn module_ref(&self) -> &Module {
         &self.module
+    }
+
+    /// Returns the map of all finished JIT functions compiled for this module
+    pub fn finished_functions(&self) -> &BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]> {
+        &self.finished_functions
     }
 }
 

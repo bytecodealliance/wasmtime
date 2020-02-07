@@ -121,7 +121,7 @@ fn make_trampoline(
     fn_builder_ctx: &mut FunctionBuilderContext,
     call_id: u32,
     signature: &ir::Signature,
-) -> *const VMFunctionBody {
+) -> *mut [VMFunctionBody] {
     // Mostly reverse copy of the similar method from wasmtime's
     // wasmtime-jit/src/compiler.rs.
     let pointer_type = isa.pointer_type();
@@ -241,7 +241,6 @@ fn make_trampoline(
             unwind_info,
         })
         .expect("allocate_for_function")
-        .as_ptr()
 }
 
 pub fn create_handle_with_function(
@@ -263,7 +262,7 @@ pub fn create_handle_with_function(
 
     let mut fn_builder_ctx = FunctionBuilderContext::new();
     let mut module = Module::new();
-    let mut finished_functions: PrimaryMap<DefinedFuncIndex, *const VMFunctionBody> =
+    let mut finished_functions: PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]> =
         PrimaryMap::new();
     let mut code_memory = CodeMemory::new();
 
@@ -295,7 +294,7 @@ pub fn create_handle_with_function(
 
 pub unsafe fn create_handle_with_raw_function(
     ft: &FuncType,
-    func: *const VMFunctionBody,
+    func: *mut [VMFunctionBody],
     store: &Store,
     state: Box<dyn Any>,
 ) -> Result<InstanceHandle> {
@@ -312,8 +311,7 @@ pub unsafe fn create_handle_with_raw_function(
     };
 
     let mut module = Module::new();
-    let mut finished_functions: PrimaryMap<DefinedFuncIndex, *const VMFunctionBody> =
-        PrimaryMap::new();
+    let mut finished_functions = PrimaryMap::new();
 
     let sig_id = module.signatures.push(sig.clone());
     let func_id = module.functions.push(sig_id);

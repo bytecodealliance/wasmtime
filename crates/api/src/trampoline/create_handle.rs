@@ -13,7 +13,7 @@ use wasmtime_runtime::{Imports, InstanceHandle, VMFunctionBody};
 pub(crate) fn create_handle(
     module: Module,
     store: &Store,
-    finished_functions: PrimaryMap<DefinedFuncIndex, *const VMFunctionBody>,
+    finished_functions: PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
     state: Box<dyn Any>,
 ) -> Result<InstanceHandle> {
     let imports = Imports::new(

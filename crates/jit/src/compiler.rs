@@ -21,8 +21,7 @@ use wasmtime_environ::{
     Traps, Tunables, VMOffsets,
 };
 use wasmtime_runtime::{
-    jit_function_registry, InstantiationError, SignatureRegistry, TrapRegistration, TrapRegistry,
-    VMFunctionBody,
+    InstantiationError, SignatureRegistry, TrapRegistration, TrapRegistry, VMFunctionBody,
 };
 
 /// Select which kind of compilation to use.
@@ -51,7 +50,6 @@ pub struct Compiler {
     isa: Box<dyn TargetIsa>,
 
     code_memory: CodeMemory,
-    jit_function_ranges: Vec<(usize, usize)>,
     trap_registry: TrapRegistry,
     trampoline_park: HashMap<*const VMFunctionBody, *const VMFunctionBody>,
     signatures: SignatureRegistry,
@@ -72,21 +70,12 @@ impl Compiler {
         Self {
             isa,
             code_memory: CodeMemory::new(),
-            jit_function_ranges: Vec::new(),
             trampoline_park: HashMap::new(),
             signatures: SignatureRegistry::new(),
             fn_builder_ctx: FunctionBuilderContext::new(),
             strategy,
             trap_registry: TrapRegistry::default(),
             cache_config,
-        }
-    }
-}
-
-impl Drop for Compiler {
-    fn drop(&mut self) {
-        for (start, end) in self.jit_function_ranges.iter() {
-            jit_function_registry::unregister(*start, *end);
         }
     }
 }
@@ -156,19 +145,6 @@ impl Compiler {
             })?;
 
         let trap_registration = register_traps(&allocated_functions, &traps, &self.trap_registry);
-
-        for (i, allocated) in allocated_functions.iter() {
-            let ptr = (*allocated) as *const VMFunctionBody;
-            let body_len = compilation.get(i).body.len();
-            self.jit_function_ranges
-                .push((ptr as usize, ptr as usize + body_len));
-            let func_index = module.func_index(i);
-            let tag = jit_function_registry::JITFunctionTag {
-                module_id: module.id,
-                func_index,
-            };
-            jit_function_registry::register(ptr as usize, ptr as usize + body_len, tag);
-        }
 
         // Translate debug info (DWARF) only if at least one function is present.
         let dbg = if debug_data.is_some() && !allocated_functions.is_empty() {

@@ -73,7 +73,10 @@ macro_rules! wrappers {
             unsafe {
                 let (instance, export) = crate::trampoline::generate_raw_func_export(
                     &ty,
-                    shim::<F, $($args,)* R> as *const _,
+                    std::slice::from_raw_parts_mut(
+                        shim::<F, $($args,)* R> as *mut _,
+                        0,
+                    ),
                     store,
                     Box::new(func),
                 )

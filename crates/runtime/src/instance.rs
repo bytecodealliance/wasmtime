@@ -90,7 +90,7 @@ pub(crate) struct Instance {
     tables: BoxedSlice<DefinedTableIndex, Table>,
 
     /// Pointers to functions in executable memory.
-    finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
+    finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
 
     /// Hosts can store arbitrary per-instance information here.
     host_state: Box<dyn Any>,
@@ -279,7 +279,10 @@ impl Instance {
                 let signature = self.module.signatures[self.module.functions[*index]].clone();
                 let (address, vmctx) =
                     if let Some(def_index) = self.module.defined_func_index(*index) {
-                        (self.finished_functions[def_index], self.vmctx_ptr())
+                        (
+                            self.finished_functions[def_index] as *const _,
+                            self.vmctx_ptr(),
+                        )
                     } else {
                         let import = self.imported_function(*index);
                         (import.body, import.vmctx)
@@ -353,7 +356,7 @@ impl Instance {
                     .finished_functions
                     .get(defined_index)
                     .expect("function index is out of bounds");
-                (body, self.vmctx_ptr())
+                (body as *const _, self.vmctx_ptr())
             }
             None => {
                 assert_lt!(index.index(), self.module.imported_funcs.len());
@@ -540,7 +543,7 @@ impl InstanceHandle {
     pub unsafe fn new(
         module: Arc<Module>,
         trap_registration: TrapRegistration,
-        finished_functions: BoxedSlice<DefinedFuncIndex, *const VMFunctionBody>,
+        finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
         imports: Imports,
         data_initializers: &[DataInitializer<'_>],
         vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
@@ -927,7 +930,7 @@ fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
             let callee_sig = instance.module.functions[*func_idx];
             let (callee_ptr, callee_vmctx) =
                 if let Some(index) = instance.module.defined_func_index(*func_idx) {
-                    (instance.finished_functions[index], vmctx)
+                    (instance.finished_functions[index] as *const _, vmctx)
                 } else {
                     let imported_func = instance.imported_function(*func_idx);
                     (imported_func.body, imported_func.vmctx)
