@@ -15,7 +15,7 @@
 //! are being translated:
 //!
 //! - the loads and stores need the memory base address;
-//! - the `get_global` et `set_global` instructions depends on how the globals are implemented;
+//! - the `get_global` and `set_global` instructions depend on how the globals are implemented;
 //! - `memory.size` and `memory.grow` are runtime functions;
 //! - `call_indirect` has to translate the function index into the address of where this
 //!    is;
@@ -322,7 +322,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          *
          * The `br_table` case is much more complicated because Cranelift's `br_table` instruction
          * does not support jump arguments like all the other branch instructions. That is why, in
-         * the case where we would use jump arguments for every other branch instructions, we
+         * the case where we would use jump arguments for every other branch instruction, we
          * need to split the critical edges leaving the `br_tables` by creating one `Block` per
          * table destination; the `br_table` will point to these newly created `Blocks` and these
          * `Block`s contain only a jump instruction pointing to the final destination, this time with
