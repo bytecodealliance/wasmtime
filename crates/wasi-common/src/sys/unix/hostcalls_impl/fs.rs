@@ -148,7 +148,7 @@ pub(crate) fn path_open(
                 .map_err(Into::into);
         }
         Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-            unreachable!("streams do not have paths and shoult not be accessible via PathGet");
+            unreachable!("streams do not have paths and should not be accessible via PathGet");
         }
     };
     let new_fd = match fd_no {
@@ -164,7 +164,7 @@ pub(crate) fn path_open(
                             },
                             Descriptor::VirtualFile(_) => unimplemented!("virt fstatat"),
                             Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-                                unreachable!("streams do not have paths and shoult not be accessible via PathGet");
+                                unreachable!("streams do not have paths and should not be accessible via PathGet");
                             }
                         } {
                             if FileType::from_stat_st_mode(stat.st_mode) == FileType::Socket {
@@ -189,7 +189,7 @@ pub(crate) fn path_open(
                                 unimplemented!("virt fstatat");
                             }
                             Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-                                unreachable!("streams do not have paths and shoult not be accessible via PathGet");
+                                unreachable!("streams do not have paths and should not be accessible via PathGet");
                             }
                         } {
                             if FileType::from_stat_st_mode(stat.st_mode) == FileType::Symlink {
@@ -230,7 +230,7 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
             unimplemented!("virtual readlink");
         }
         Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-            unreachable!("streams do not have paths and shoult not be accessible via PathGet");
+            unreachable!("streams do not have paths and should not be accessible via PathGet");
         }
     };
     let copy_len = min(read_link.len(), buf.len());
@@ -267,7 +267,7 @@ pub(crate) fn path_filestat_get(
             unimplemented!("virt path_filestat_get");
         }
         Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-            unreachable!("streams do not have paths and shoult not be accessible via PathGet");
+            unreachable!("streams do not have paths and should not be accessible via PathGet");
         }
     };
     filestat
@@ -318,7 +318,7 @@ pub(crate) fn path_filestat_set_times(
             unimplemented!("virt utimensat");
         }
         Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-            unreachable!("streams do not have paths and shoult not be accessible via PathGet");
+            unreachable!("streams do not have paths and should not be accessible via PathGet");
         }
     }
 }
@@ -333,7 +333,7 @@ pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
         }
         Descriptor::VirtualFile(_) => unimplemented!("virtual unlinkat"),
         Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-            unreachable!("streams do not have paths and shoult not be accessible via PathGet");
+            unreachable!("streams do not have paths and should not be accessible via PathGet");
         }
     }
 }
