@@ -70,7 +70,7 @@ impl Config {
     /// be enabled through this method for appropriate wasm modules.
     ///
     /// This feature gates items such as shared memories and atomic
-    /// instructions. Note that enabling the reference types feature will
+    /// instructions. Note that enabling the threads feature will
     /// also enable the bulk memory feature.
     ///
     /// This is `false` by default.

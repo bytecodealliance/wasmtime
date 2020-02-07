@@ -93,15 +93,15 @@ struct CommonOptions {
     #[structopt(long)]
     enable_simd: bool,
 
-    /// Enable support for wasm reference types instructions
+    /// Enable support for reference types
     #[structopt(long)]
     enable_reference_types: bool,
 
-    /// Enable support for wasm multi-value
+    /// Enable support for multi-value functions
     #[structopt(long)]
     enable_multi_value: bool,
 
-    /// Enable support for wasm threads
+    /// Enable support for Wasm threads
     #[structopt(long)]
     enable_threads: bool,
 
@@ -109,7 +109,7 @@ struct CommonOptions {
     #[structopt(long)]
     enable_bulk_memory: bool,
 
-    /// Enable all experimental wasm features
+    /// Enable all experimental Wasm features
     #[structopt(long)]
     enable_all: bool,
 
