@@ -70,13 +70,18 @@ impl Config {
     /// be enabled through this method for appropriate wasm modules.
     ///
     /// This feature gates items such as shared memories and atomic
-    /// instructions.
+    /// instructions. Note that enabling the threads feature will
+    /// also enable the bulk memory feature.
     ///
     /// This is `false` by default.
     ///
     /// [threads]: https://github.com/webassembly/threads
     pub fn wasm_threads(&mut self, enable: bool) -> &mut Self {
         self.features.threads = enable;
+        // The threads proposal depends on the bulk memory proposal
+        if enable {
+            self.features.bulk_memory = true;
+        }
         self
     }
 
@@ -90,13 +95,18 @@ impl Config {
     /// modules.
     ///
     /// This feature gates items such as the `anyref` type and multiple tables
-    /// being in a module.
+    /// being in a module. Note that enabling the reference types feature will
+    /// also enable the bulk memory feature.
     ///
     /// This is `false` by default.
     ///
     /// [proposal]: https://github.com/webassembly/reference-types
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
         self.features.reference_types = enable;
+        // The reference types proposal depends on the bulk memory proposal
+        if enable {
+            self.features.bulk_memory = true;
+        }
         self
     }
 

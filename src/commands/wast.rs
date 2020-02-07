@@ -1,10 +1,10 @@
 //! The module that implements the `wasmtime wast` command.
 
-use crate::{init_file_per_thread_logger, pick_compilation_strategy, CommonOptions};
+use crate::{init_file_per_thread_logger, CommonOptions};
 use anyhow::{Context as _, Result};
 use std::path::PathBuf;
 use structopt::{clap::AppSettings, StructOpt};
-use wasmtime::{Config, Engine, Store};
+use wasmtime::{Engine, Store};
 use wasmtime_wast::WastContext;
 
 /// Runs a WebAssembly test script file
@@ -33,21 +33,7 @@ impl WastCommand {
             init_file_per_thread_logger(prefix);
         }
 
-        let mut config = Config::new();
-        config
-            .cranelift_debug_verifier(cfg!(debug_assertions))
-            .debug_info(self.common.debug_info)
-            .wasm_simd(self.common.enable_simd)
-            .strategy(pick_compilation_strategy(
-                self.common.cranelift,
-                self.common.lightbeam,
-            )?)?;
-        self.common.configure_cache(&mut config)?;
-
-        if self.common.optimize {
-            config.cranelift_opt_level(wasmtime::OptLevel::Speed);
-        }
-
+        let config = self.common.config()?;
         let store = Store::new(&Engine::new(&config));
         let mut wast_context = WastContext::new(store);
 
