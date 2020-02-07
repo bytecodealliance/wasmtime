@@ -111,20 +111,38 @@ fn gen_datatype(output: &mut TokenStream, mode: Mode, namedtype: &witx::NamedTyp
                 output.extend(TokenStream::from(TokenTree::Group(braced)));
             }
             witx::Type::Union(u) => {
+                let u_name = format_ident!("__wasi_{}_u_t", namedtype.name.as_str());
                 output.extend(quote!(#[repr(C)]));
                 output.extend(quote!(#[derive(Copy, Clone)]));
                 output.extend(quote!(#[allow(missing_debug_implementations)]));
 
-                output.extend(quote!(pub union #wasi_name));
+                output.extend(quote!(pub union #u_name));
 
                 let mut inner = TokenStream::new();
                 for variant in &u.variants {
-                    let variant_name = format_ident!("r#{}", variant.name.as_str());
-                    let variant_type = tref_tokens(mode, &variant.tref);
-                    inner.extend(quote!(pub #variant_name: #variant_type,));
+                    if let Some(ref tref) = variant.tref {
+                        let variant_name = format_ident!("r#{}", variant.name.as_str());
+                        let variant_type = tref_tokens(mode, tref);
+                        inner.extend(quote!(pub #variant_name: #variant_type,));
+                    }
                 }
                 let braced = Group::new(Delimiter::Brace, inner);
                 output.extend(TokenStream::from(TokenTree::Group(braced)));
+
+                output.extend(quote!(#[repr(C)]));
+                output.extend(quote!(#[derive(Copy, Clone)]));
+                output.extend(quote!(#[allow(missing_debug_implementations)]));
+
+                output.extend(quote!(pub struct #wasi_name));
+                let tag_name = match &u.tag {
+                    witx::TypeRef::Name(nt) => format_ident!("__wasi_{}_t", nt.name.as_str()),
+                    witx::TypeRef::Value { .. } => unreachable!("union tag must be named type"),
+                };
+                let inner = quote!(pub tag: #tag_name, pub u: #u_name,);
+                output.extend(TokenStream::from(TokenTree::Group(Group::new(
+                    Delimiter::Brace,
+                    inner,
+                ))));
             }
             witx::Type::Handle(_h) => {
                 output.extend(quote!(pub type #wasi_name = u32;));
@@ -288,7 +306,10 @@ fn type_has_target_size(ty: &witx::Type) -> bool {
         witx::Type::Pointer { .. } | witx::Type::ConstPointer { .. } => true,
         witx::Type::Array(elem) => tref_has_target_size(elem),
         witx::Type::Struct(s) => s.members.iter().any(|m| tref_has_target_size(&m.tref)),
-        witx::Type::Union(u) => u.variants.iter().any(|v| tref_has_target_size(&v.tref)),
+        witx::Type::Union(u) => u
+            .variants
+            .iter()
+            .any(|v| v.tref.as_ref().map(tref_has_target_size).unwrap_or(false)),
         _ => false,
     }
 }
