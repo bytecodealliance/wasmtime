@@ -105,7 +105,7 @@ struct CommonOptions {
     #[structopt(long)]
     enable_threads: bool,
 
-    /// Enable support for wasm bulk memory instruction
+    /// Enable support for bulk memory instructions
     #[structopt(long)]
     enable_bulk_memory: bool,
 
