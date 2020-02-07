@@ -178,7 +178,11 @@ fn generate_vars(
 ) {
     let vmctx_label = get_vmctx_value_label();
 
-    for label in frame_info.value_ranges.keys() {
+    // Normalize order of ValueLabelsRanges keys to have reproducable results.
+    let mut vars = frame_info.value_ranges.keys().collect::<Vec<_>>();
+    vars.sort_by(|a, b| a.index().cmp(&b.index()));
+
+    for label in vars {
         if label.index() == vmctx_label.index() {
             append_vmctx_info(
                 unit,
