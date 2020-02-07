@@ -120,10 +120,12 @@ fn gen_datatype(output: &mut TokenStream, mode: Mode, namedtype: &witx::NamedTyp
 
                 let mut inner = TokenStream::new();
                 for variant in &u.variants {
+                    let variant_name = format_ident!("r#{}", variant.name.as_str());
                     if let Some(ref tref) = variant.tref {
-                        let variant_name = format_ident!("r#{}", variant.name.as_str());
                         let variant_type = tref_tokens(mode, tref);
                         inner.extend(quote!(pub #variant_name: #variant_type,));
+                    } else {
+                        inner.extend(quote!(pub #variant_name: (),));
                     }
                 }
                 let braced = Group::new(Delimiter::Brace, inner);
