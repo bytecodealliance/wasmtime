@@ -46,7 +46,14 @@ fn main() -> anyhow::Result<()> {
                 "tests/spec_testsuite/proposals/reference-types",
                 strategy,
             )
-                .expect("generating tests");
+            .expect("generating tests");
+
+            test_directory(
+                &mut out,
+                "tests/spec_testsuite/proposals/bulk-memory-operations",
+                strategy,
+            )
+            .expect("generating tests");
         } else {
             println!(
                 "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \
@@ -155,6 +162,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", _) => return true,
             ("multi_value", _) => return true,
             ("reference_types", _) => return true,
+            ("bulk_memory_operations", _) => return true,
             // Lightbeam doesn't support float arguments on the stack.
             ("spec_testsuite", "call") => return true,
             _ => (),
@@ -173,6 +181,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", "simd_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16ShrS
 
             ("reference_types", _) => return true,
+            ("bulk_memory_operations", _) => return true,
 
             _ => {}
         },
