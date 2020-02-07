@@ -14,9 +14,11 @@ pub mod dummy;
 
 use dummy::{dummy_imports, dummy_values};
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
 fn fuzz_default_config(strategy: Strategy) -> Config {
+    drop(env_logger::try_init());
     let mut config = Config::new();
     config
         .cranelift_debug_verifier(true)
@@ -24,6 +26,22 @@ fn fuzz_default_config(strategy: Strategy) -> Config {
         .strategy(strategy)
         .expect("failed to enable lightbeam");
     return config;
+}
+
+fn log_wasm(wasm: &[u8]) {
+    static CNT: AtomicUsize = AtomicUsize::new(0);
+    if !log::log_enabled!(log::Level::Debug) {
+        return;
+    }
+
+    let i = CNT.fetch_add(1, SeqCst);
+    let name = format!("testcase{}.wasm", i);
+    std::fs::write(&name, wasm).expect("failed to write wasm file");
+    log::debug!("wrote wasm file to `{}`", name);
+    if let Ok(s) = wasmprinter::print_bytes(wasm) {
+        let name = format!("testcase{}.wat", i);
+        std::fs::write(&name, s).expect("failed to write wat file");
+    }
 }
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
@@ -46,6 +64,7 @@ pub fn instantiate_with_config(wasm: &[u8], config: Config) {
     let engine = Engine::new(&config);
     let store = Store::new(&engine);
 
+    log_wasm(wasm);
     let module = match Module::new(&store, wasm) {
         Ok(module) => module,
         Err(_) => return,
@@ -77,6 +96,7 @@ pub fn instantiate_with_config(wasm: &[u8], config: Config) {
 pub fn compile(wasm: &[u8], strategy: Strategy) {
     let engine = Engine::new(&fuzz_default_config(strategy));
     let store = Store::new(&engine);
+    log_wasm(wasm);
     let _ = Module::new(&store, wasm);
 }
 
@@ -88,6 +108,7 @@ pub fn differential_execution(
     ttf: &crate::generators::WasmOptTtf,
     configs: &[crate::generators::DifferentialConfig],
 ) {
+    drop(env_logger::try_init());
     // We need at least two configs.
     if configs.len() < 2
         // And all the configs should be unique.
@@ -104,6 +125,7 @@ pub fn differential_execution(
     };
 
     let mut export_func_results: HashMap<String, Result<Box<[Val]>, Trap>> = Default::default();
+    log_wasm(&ttf.wasm);
 
     for config in &configs {
         let engine = Engine::new(config);
@@ -258,6 +280,8 @@ fn assert_same_export_func_result(
 pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
     use crate::generators::api::ApiCall;
 
+    drop(env_logger::try_init());
+
     let mut config: Option<Config> = None;
     let mut engine: Option<Engine> = None;
     let mut store: Option<Store> = None;
@@ -267,6 +291,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
     for call in api.calls {
         match call {
             ApiCall::ConfigNew => {
+                log::trace!("creating config");
                 assert!(config.is_none());
                 let mut cfg = Config::new();
                 cfg.cranelift_debug_verifier(true);
@@ -274,20 +299,25 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
             }
 
             ApiCall::ConfigDebugInfo(b) => {
+                log::trace!("enabling debuginfo");
                 config.as_mut().unwrap().debug_info(b);
             }
 
             ApiCall::EngineNew => {
+                log::trace!("creating engine");
                 assert!(engine.is_none());
                 engine = Some(Engine::new(config.as_ref().unwrap()));
             }
 
             ApiCall::StoreNew => {
+                log::trace!("creating store");
                 assert!(store.is_none());
                 store = Some(Store::new(engine.as_ref().unwrap()));
             }
 
             ApiCall::ModuleNew { id, wasm } => {
+                log::debug!("creating module: {}", id);
+                log_wasm(&wasm.wasm);
                 let module = match Module::new(store.as_ref().unwrap(), &wasm.wasm) {
                     Ok(m) => m,
                     Err(_) => continue,
@@ -297,10 +327,12 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
             }
 
             ApiCall::ModuleDrop { id } => {
+                log::trace!("dropping module: {}", id);
                 drop(modules.remove(&id));
             }
 
             ApiCall::InstanceNew { id, module } => {
+                log::trace!("instantiating module {} as {}", module, id);
                 let module = match modules.get(&module) {
                     Some(m) => m,
                     None => continue,
@@ -326,10 +358,12 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
             }
 
             ApiCall::InstanceDrop { id } => {
+                log::trace!("dropping instance {}", id);
                 drop(instances.remove(&id));
             }
 
             ApiCall::CallExportedFunc { instance, nth } => {
+                log::trace!("calling instance export {} / {}", instance, nth);
                 let instance = match instances.get(&instance) {
                     Some(i) => i,
                     None => {
