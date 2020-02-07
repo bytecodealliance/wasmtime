@@ -9,7 +9,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use wasmparser::{
     validate, CustomSectionKind, ExternalKind, ImportSectionEntryType, ModuleReader, Name,
-    OperatorValidatorConfig, SectionCode, ValidatingParserConfig,
+    SectionCode,
 };
 use wasmtime_jit::CompiledModule;
 
@@ -244,16 +244,7 @@ impl Module {
     ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     pub fn validate(store: &Store, binary: &[u8]) -> Result<()> {
-        let features = store.engine().config().features.clone();
-        let config = ValidatingParserConfig {
-            operator_config: OperatorValidatorConfig {
-                enable_threads: features.threads,
-                enable_reference_types: features.reference_types,
-                enable_bulk_memory: features.bulk_memory,
-                enable_simd: features.simd,
-                enable_multi_value: features.multi_value,
-            },
-        };
+        let config = store.engine().config().validating_config.clone();
         validate(binary, Some(config)).map_err(Error::new)
     }
 

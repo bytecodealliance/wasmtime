@@ -3,7 +3,6 @@ use crate::{Func, Store, ValType};
 use anyhow::{bail, Result};
 use std::ptr;
 use wasmtime_environ::ir;
-use wasmtime_jit::RuntimeValue;
 
 /// Possible runtime values that a WebAssembly module can either consume or
 /// produce.
@@ -169,18 +168,6 @@ impl From<AnyRef> for Val {
 impl From<Func> for Val {
     fn from(val: Func) -> Val {
         Val::FuncRef(val)
-    }
-}
-
-impl From<RuntimeValue> for Val {
-    fn from(rv: RuntimeValue) -> Self {
-        match rv {
-            RuntimeValue::I32(i) => Val::I32(i),
-            RuntimeValue::I64(i) => Val::I64(i),
-            RuntimeValue::F32(u) => Val::F32(u),
-            RuntimeValue::F64(u) => Val::F64(u),
-            RuntimeValue::V128(u) => Val::V128(u128::from_le_bytes(u)),
-        }
     }
 }
 
