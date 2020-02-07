@@ -21,28 +21,22 @@
     )
 )]
 
-mod action;
 mod code_memory;
 mod compiler;
-mod context;
 mod function_table;
 mod imports;
 mod instantiate;
 mod link;
-mod namespace;
 mod resolver;
 mod target_tunables;
 
 pub mod native;
 pub mod trampoline;
 
-pub use crate::action::{invoke, ActionError, ActionOutcome, RuntimeValue};
 pub use crate::code_memory::CodeMemory;
 pub use crate::compiler::{CompilationStrategy, Compiler};
-pub use crate::context::{Context, ContextError, Features, UnknownInstance};
 pub use crate::instantiate::{instantiate, CompiledModule, SetupError};
 pub use crate::link::link_module;
-pub use crate::namespace::Namespace;
 pub use crate::resolver::{NullResolver, Resolver};
 pub use crate::target_tunables::target_tunables;
 

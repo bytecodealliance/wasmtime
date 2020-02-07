@@ -11,8 +11,8 @@ use anyhow::{bail, format_err, Result};
 use std::convert::TryFrom;
 use std::str;
 use wasm_webidl_bindings::ast;
+use wasmtime::Val;
 use wasmtime_environ::ir;
-use wasmtime_jit::RuntimeValue;
 use wasmtime_runtime::{Export, InstanceHandle};
 
 mod value;
@@ -147,19 +147,7 @@ impl ModuleData {
             .into_iter()
             .map(|rv| rv.into())
             .collect::<Vec<_>>();
-        let wasm_results = f
-            .call(&wasm_args)?
-            .to_vec()
-            .into_iter()
-            .map(|v: wasmtime::Val| match v {
-                wasmtime::Val::I32(i) => RuntimeValue::I32(i),
-                wasmtime::Val::I64(i) => RuntimeValue::I64(i),
-                wasmtime::Val::F32(i) => RuntimeValue::F32(i),
-                wasmtime::Val::F64(i) => RuntimeValue::F64(i),
-                wasmtime::Val::V128(i) => RuntimeValue::V128(i.to_le_bytes()),
-                _ => panic!("unsupported value {:?}", v),
-            })
-            .collect::<Vec<RuntimeValue>>();
+        let wasm_results = f.call(&wasm_args)?;
         translate_outgoing(&mut cx, &outgoing, &wasm_results)
     }
 
@@ -358,7 +346,7 @@ fn translate_incoming(
     cx: &mut dyn TranslateContext,
     bindings: &[ast::IncomingBindingExpression],
     args: &[Value],
-) -> Result<Vec<RuntimeValue>> {
+) -> Result<Vec<Val>> {
     let get = |expr: &ast::IncomingBindingExpression| match expr {
         ast::IncomingBindingExpression::Get(g) => args
             .get(g.idx as usize)
@@ -387,31 +375,31 @@ fn translate_incoming(
                     _ => bail!("expected a string"),
                 };
                 let (ptr, len) = copy(&g.alloc_func_name, val.as_bytes())?;
-                wasm.push(RuntimeValue::I32(ptr));
-                wasm.push(RuntimeValue::I32(len));
+                wasm.push(Val::I32(ptr));
+                wasm.push(Val::I32(len));
             }
             ast::IncomingBindingExpression::As(g) => {
                 let val = get(&g.expr)?;
                 match g.ty {
                     walrus::ValType::I32 => match val {
-                        Value::I32(i) => wasm.push(RuntimeValue::I32(*i)),
-                        Value::U32(i) => wasm.push(RuntimeValue::I32(*i as i32)),
+                        Value::I32(i) => wasm.push(Val::I32(*i)),
+                        Value::U32(i) => wasm.push(Val::I32(*i as i32)),
                         _ => bail!("cannot convert {:?} to `i32`", val),
                     },
                     walrus::ValType::I64 => match val {
-                        Value::I32(i) => wasm.push(RuntimeValue::I64((*i).into())),
-                        Value::U32(i) => wasm.push(RuntimeValue::I64((*i).into())),
-                        Value::I64(i) => wasm.push(RuntimeValue::I64(*i)),
-                        Value::U64(i) => wasm.push(RuntimeValue::I64(*i as i64)),
+                        Value::I32(i) => wasm.push(Val::I64((*i).into())),
+                        Value::U32(i) => wasm.push(Val::I64((*i).into())),
+                        Value::I64(i) => wasm.push(Val::I64(*i)),
+                        Value::U64(i) => wasm.push(Val::I64(*i as i64)),
                         _ => bail!("cannot convert {:?} to `i64`", val),
                     },
                     walrus::ValType::F32 => match val {
-                        Value::F32(i) => wasm.push(RuntimeValue::F32(i.to_bits())),
+                        Value::F32(i) => wasm.push(Val::F32(i.to_bits())),
                         _ => bail!("cannot convert {:?} to `f32`", val),
                     },
                     walrus::ValType::F64 => match val {
-                        Value::F32(i) => wasm.push(RuntimeValue::F64((*i as f64).to_bits())),
-                        Value::F64(i) => wasm.push(RuntimeValue::F64(i.to_bits())),
+                        Value::F32(i) => wasm.push(Val::F64((*i as f64).to_bits())),
+                        Value::F64(i) => wasm.push(Val::F64(i.to_bits())),
                         _ => bail!("cannot convert {:?} to `f64`", val),
                     },
                     walrus::ValType::V128 | walrus::ValType::Anyref => {
@@ -429,7 +417,7 @@ fn translate_incoming(
 fn translate_outgoing(
     cx: &mut dyn TranslateContext,
     bindings: &[ast::OutgoingBindingExpression],
-    args: &[RuntimeValue],
+    args: &[Val],
 ) -> Result<Vec<Value>> {
     let mut values = Vec::new();
 
@@ -445,32 +433,32 @@ fn translate_outgoing(
                 let arg = get(a.idx)?;
                 match a.ty {
                     ast::WebidlTypeRef::Scalar(ast::WebidlScalarType::UnsignedLong) => match arg {
-                        RuntimeValue::I32(a) => values.push(Value::U32(a as u32)),
+                        Val::I32(a) => values.push(Value::U32(a as u32)),
                         _ => bail!("can't convert {:?} to unsigned long", arg),
                     },
                     ast::WebidlTypeRef::Scalar(ast::WebidlScalarType::Long) => match arg {
-                        RuntimeValue::I32(a) => values.push(Value::I32(a)),
+                        Val::I32(a) => values.push(Value::I32(a)),
                         _ => bail!("can't convert {:?} to long", arg),
                     },
                     ast::WebidlTypeRef::Scalar(ast::WebidlScalarType::LongLong) => match arg {
-                        RuntimeValue::I32(a) => values.push(Value::I64(a as i64)),
-                        RuntimeValue::I64(a) => values.push(Value::I64(a)),
+                        Val::I32(a) => values.push(Value::I64(a as i64)),
+                        Val::I64(a) => values.push(Value::I64(a)),
                         _ => bail!("can't convert {:?} to long long", arg),
                     },
                     ast::WebidlTypeRef::Scalar(ast::WebidlScalarType::UnsignedLongLong) => {
                         match arg {
-                            RuntimeValue::I32(a) => values.push(Value::U64(a as u64)),
-                            RuntimeValue::I64(a) => values.push(Value::U64(a as u64)),
+                            Val::I32(a) => values.push(Value::U64(a as u64)),
+                            Val::I64(a) => values.push(Value::U64(a as u64)),
                             _ => bail!("can't convert {:?} to unsigned long long", arg),
                         }
                     }
                     ast::WebidlTypeRef::Scalar(ast::WebidlScalarType::Float) => match arg {
-                        RuntimeValue::F32(a) => values.push(Value::F32(f32::from_bits(a))),
+                        Val::F32(a) => values.push(Value::F32(f32::from_bits(a))),
                         _ => bail!("can't convert {:?} to float", arg),
                     },
                     ast::WebidlTypeRef::Scalar(ast::WebidlScalarType::Double) => match arg {
-                        RuntimeValue::F32(a) => values.push(Value::F64(f32::from_bits(a) as f64)),
-                        RuntimeValue::F64(a) => values.push(Value::F64(f64::from_bits(a))),
+                        Val::F32(a) => values.push(Value::F64(f32::from_bits(a) as f64)),
+                        Val::F64(a) => values.push(Value::F64(f64::from_bits(a))),
                         _ => bail!("can't convert {:?} to double", arg),
                     },
                     _ => bail!("unsupported outgoing binding expr {:?}", expr),
@@ -481,11 +469,11 @@ fn translate_outgoing(
                     bail!("utf-8 strings must go into dom-string")
                 }
                 let offset = match get(e.offset)? {
-                    RuntimeValue::I32(a) => a,
+                    Val::I32(a) => a,
                     _ => bail!("offset must be an i32"),
                 };
                 let length = match get(e.length)? {
-                    RuntimeValue::I32(a) => a,
+                    Val::I32(a) => a,
                     _ => bail!("length must be an i32"),
                 };
                 let bytes = unsafe { &cx.get_memory()?[offset as usize..][..length as usize] };

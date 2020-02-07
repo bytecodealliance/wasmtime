@@ -4,9 +4,10 @@ use std::fmt;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
+use wasmparser::{OperatorValidatorConfig, ValidatingParserConfig};
 use wasmtime_environ::settings::{self, Configurable};
 use wasmtime_environ::CacheConfig;
-use wasmtime_jit::{native, CompilationStrategy, Compiler, Features};
+use wasmtime_jit::{native, CompilationStrategy, Compiler};
 
 // Runtime Environment
 
@@ -20,7 +21,7 @@ use wasmtime_jit::{native, CompilationStrategy, Compiler, Features};
 #[derive(Clone)]
 pub struct Config {
     pub(crate) flags: settings::Builder,
-    pub(crate) features: Features,
+    pub(crate) validating_config: ValidatingParserConfig,
     pub(crate) debug_info: bool,
     pub(crate) strategy: CompilationStrategy,
     pub(crate) cache_config: CacheConfig,
@@ -45,7 +46,15 @@ impl Config {
 
         Config {
             debug_info: false,
-            features: Default::default(),
+            validating_config: ValidatingParserConfig {
+                operator_config: OperatorValidatorConfig {
+                    enable_threads: false,
+                    enable_reference_types: false,
+                    enable_bulk_memory: false,
+                    enable_simd: false,
+                    enable_multi_value: false,
+                },
+            },
             flags,
             strategy: CompilationStrategy::Auto,
             cache_config: CacheConfig::new_cache_disabled(),
@@ -77,10 +86,10 @@ impl Config {
     ///
     /// [threads]: https://github.com/webassembly/threads
     pub fn wasm_threads(&mut self, enable: bool) -> &mut Self {
-        self.features.threads = enable;
+        self.validating_config.operator_config.enable_threads = enable;
         // The threads proposal depends on the bulk memory proposal
         if enable {
-            self.features.bulk_memory = true;
+            self.wasm_bulk_memory(true);
         }
         self
     }
@@ -102,10 +111,12 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/reference-types
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
-        self.features.reference_types = enable;
+        self.validating_config
+            .operator_config
+            .enable_reference_types = enable;
         // The reference types proposal depends on the bulk memory proposal
         if enable {
-            self.features.bulk_memory = true;
+            self.wasm_bulk_memory(true);
         }
         self
     }
@@ -126,7 +137,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/simd
     pub fn wasm_simd(&mut self, enable: bool) -> &mut Self {
-        self.features.simd = enable;
+        self.validating_config.operator_config.enable_simd = enable;
         let val = if enable { "true" } else { "false" };
         self.flags
             .set("enable_simd", val)
@@ -150,7 +161,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/bulk-memory-operations
     pub fn wasm_bulk_memory(&mut self, enable: bool) -> &mut Self {
-        self.features.bulk_memory = enable;
+        self.validating_config.operator_config.enable_bulk_memory = enable;
         self
     }
 
@@ -170,7 +181,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/multi-value
     pub fn wasm_multi_value(&mut self, enable: bool) -> &mut Self {
-        self.features.multi_value = enable;
+        self.validating_config.operator_config.enable_multi_value = enable;
         self
     }
 
@@ -288,10 +299,15 @@ impl Default for Config {
 
 impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let features = &self.validating_config.operator_config;
         f.debug_struct("Config")
             .field("debug_info", &self.debug_info)
             .field("strategy", &self.strategy)
-            .field("features", &self.features)
+            .field("wasm_threads", &features.enable_threads)
+            .field("wasm_reference_types", &features.enable_reference_types)
+            .field("wasm_bulk_memory", &features.enable_bulk_memory)
+            .field("wasm_simd", &features.enable_simd)
+            .field("wasm_multi_value", &features.enable_multi_value)
             .field(
                 "flags",
                 &settings::Flags::new(self.flags.clone()).to_string(),
