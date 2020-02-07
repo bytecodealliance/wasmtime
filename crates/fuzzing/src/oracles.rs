@@ -29,10 +29,10 @@ fn fuzz_default_config(strategy: Strategy) -> Config {
     return config;
 }
 
-fn log_wasm(wasm: &[u8]) -> PathBuf {
+fn log_wasm(wasm: &[u8]) {
     static CNT: AtomicUsize = AtomicUsize::new(0);
     if !log::log_enabled!(log::Level::Debug) {
-        return PathBuf::from("foo.wasm");
+        return;
     }
 
     let i = CNT.fetch_add(1, SeqCst);
@@ -43,7 +43,6 @@ fn log_wasm(wasm: &[u8]) -> PathBuf {
         let name = format!("testcase{}.wat", i);
         std::fs::write(&name, s).expect("failed to write wat file");
     }
-    name.into()
 }
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
