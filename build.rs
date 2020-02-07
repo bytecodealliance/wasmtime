@@ -152,8 +152,8 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
     match strategy {
         #[cfg(feature = "lightbeam")]
         "Lightbeam" => match (testsuite, testname) {
-            (_, _) if testname.starts_with("simd") => return true,
-            (_, _) if testsuite.ends_with("multi_value") => return true,
+            ("simd", _) => return true,
+            ("multi_value", _) => return true,
             ("reference_types", _) => return true,
             // Lightbeam doesn't support float arguments on the stack.
             ("spec_testsuite", "call") => return true,
