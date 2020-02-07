@@ -22,7 +22,7 @@ pub(crate) unsafe fn iovec_to_host_mut(iovec: &mut __wasi_iovec_t) -> io::IoSlic
 }
 
 #[allow(dead_code)] // trouble with sockets
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(u8)]
 pub enum FileType {
     Unknown = __WASI_FILETYPE_UNKNOWN,
