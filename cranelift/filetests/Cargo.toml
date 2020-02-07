@@ -1,7 +1,7 @@
 [package]
 name = "cranelift-filetests"
 authors = ["The Cranelift Project Developers"]
-version = "0.57.0"
+version = "0.58.0"
 description = "Test driver and implementations of the filetest commands"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://cranelift.readthedocs.io/en/latest/testing.html#file-tests"
@@ -10,10 +10,10 @@ publish = false
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../cranelift-codegen", version = "0.57.0", features = ["testing_hooks"] }
-cranelift-native = { path = "../cranelift-native", version = "0.57.0" }
-cranelift-reader = { path = "../cranelift-reader", version = "0.57.0" }
-cranelift-preopt = { path = "../cranelift-preopt", version = "0.57.0" }
+cranelift-codegen = { path = "../cranelift-codegen", version = "0.58.0", features = ["testing_hooks"] }
+cranelift-native = { path = "../cranelift-native", version = "0.58.0" }
+cranelift-reader = { path = "../cranelift-reader", version = "0.58.0" }
+cranelift-preopt = { path = "../cranelift-preopt", version = "0.58.0" }
 file-per-thread-logger = "0.1.2"
 filecheck = "0.4.0"
 gimli = { version = "0.20.0", default-features = false, features = ["read"] }
