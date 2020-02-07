@@ -288,36 +288,27 @@ impl WastContext {
                 };
                 let error_message = format!("{:?}", err);
                 if !error_message.contains(&message) {
-                    // TODO: change to bail!
-                    println!(
-                        "assert_invalid: expected {}, got {}",
-                        message, error_message
+                    bail!(
+                        "assert_invalid: expected \"{}\", got \"{}\"",
+                        message,
+                        error_message
                     )
                 }
             }
             AssertMalformed {
-                span: _,
                 module,
-                message,
+                span: _,
+                message: _,
             } => {
                 let mut module = match module {
                     wast::QuoteModule::Module(m) => m,
-                    // this is a `*.wat` parser test which we're not
-                    // interested in
+                    // This is a `*.wat` parser test which we're not
+                    // interested in.
                     wast::QuoteModule::Quote(_) => return Ok(()),
                 };
                 let bytes = module.encode()?;
-                let err = match self.module(None, &bytes) {
-                    Ok(()) => bail!("expected module to fail to instantiate"),
-                    Err(e) => e,
-                };
-                let error_message = format!("{:?}", err);
-                if !error_message.contains(&message) {
-                    // TODO: change to bail!
-                    println!(
-                        "assert_malformed: expected {}, got {}",
-                        message, error_message
-                    )
+                if let Ok(_) = self.module(None, &bytes) {
+                    bail!("expected malformed module to fail to instantiate");
                 }
             }
             AssertUnlinkable {

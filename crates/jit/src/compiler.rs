@@ -281,14 +281,14 @@ fn make_trampoline(
 
     {
         let mut builder = FunctionBuilder::new(&mut context.func, fn_builder_ctx);
-        let block0 = builder.create_ebb();
+        let block0 = builder.create_block();
 
-        builder.append_ebb_params_for_function_params(block0);
+        builder.append_block_params_for_function_params(block0);
         builder.switch_to_block(block0);
         builder.seal_block(block0);
 
         let (vmctx_ptr_val, caller_vmctx_ptr_val, values_vec_ptr_val) = {
-            let params = builder.func.dfg.ebb_params(block0);
+            let params = builder.func.dfg.block_params(block0);
             (params[0], params[1], params[2])
         };
 
@@ -412,13 +412,13 @@ fn register_traps(
 struct RelocSink {}
 
 impl binemit::RelocSink for RelocSink {
-    fn reloc_ebb(
+    fn reloc_block(
         &mut self,
         _offset: binemit::CodeOffset,
         _reloc: binemit::Reloc,
-        _ebb_offset: binemit::CodeOffset,
+        _block_offset: binemit::CodeOffset,
     ) {
-        panic!("trampoline compilation should not produce ebb relocs");
+        panic!("trampoline compilation should not produce block relocs");
     }
     fn reloc_external(
         &mut self,

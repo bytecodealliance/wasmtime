@@ -12,10 +12,16 @@ fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
 
     let simd = wast.iter().any(|s| s == "simd");
 
+    // Some simd tests assume support for multiple tables, which are introduced
+    // by reference types.
+    let reftypes = simd || wast.iter().any(|s| s == "reference-types");
+
+    let multi_val = wast.iter().any(|s| s == "multi-value");
+
     let mut cfg = Config::new();
     cfg.wasm_simd(simd)
-        .wasm_reference_types(simd) // some simd tests assume multiple tables ok
-        .wasm_multi_value(wast.iter().any(|s| s == "multi-value"))
+        .wasm_reference_types(reftypes)
+        .wasm_multi_value(multi_val)
         .strategy(strategy)?
         .cranelift_debug_verifier(true);
     let store = Store::new(&Engine::new(&cfg));

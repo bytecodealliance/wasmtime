@@ -40,6 +40,20 @@ fn main() -> anyhow::Result<()> {
                 strategy,
             )
             .expect("generating tests");
+
+            test_directory(
+                &mut out,
+                "tests/spec_testsuite/proposals/reference-types",
+                strategy,
+            )
+            .expect("generating tests");
+
+            test_directory(
+                &mut out,
+                "tests/spec_testsuite/proposals/bulk-memory-operations",
+                strategy,
+            )
+            .expect("generating tests");
         } else {
             println!(
                 "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \
@@ -145,8 +159,10 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
     match strategy {
         #[cfg(feature = "lightbeam")]
         "Lightbeam" => match (testsuite, testname) {
-            (_, _) if testname.starts_with("simd") => return true,
-            (_, _) if testsuite.ends_with("multi_value") => return true,
+            ("simd", _) => return true,
+            ("multi_value", _) => return true,
+            ("reference_types", _) => return true,
+            ("bulk_memory_operations", _) => return true,
             // Lightbeam doesn't support float arguments on the stack.
             ("spec_testsuite", "call") => return true,
             _ => (),
@@ -163,6 +179,10 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", "simd_load_extend") => return true, // FIXME Unsupported feature: proposed SIMD operator I16x8Load8x8S { memarg: MemoryImmediate { flags: 0, offset: 0 } }
             ("simd", "simd_load_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator V8x16LoadSplat { memarg: MemoryImmediate { flags: 0, offset: 0 } }
             ("simd", "simd_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16ShrS
+
+            ("reference_types", _) => return true,
+            ("bulk_memory_operations", _) => return true,
+
             _ => {}
         },
         _ => panic!("unrecognized strategy"),

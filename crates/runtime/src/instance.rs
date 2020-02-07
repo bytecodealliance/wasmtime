@@ -1017,7 +1017,7 @@ fn initialize_globals(instance: &Instance) {
                     *to = from;
                 }
                 GlobalInit::Import => panic!("locally-defined global initialized as import"),
-                GlobalInit::RefNullConst => unimplemented!(),
+                GlobalInit::RefNullConst | GlobalInit::RefFunc(_) => unimplemented!(),
             }
         }
     }
