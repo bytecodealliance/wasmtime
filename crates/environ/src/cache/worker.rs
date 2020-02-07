@@ -217,12 +217,6 @@ impl WorkerThread {
                 condvar.notify_all();
             }
         }
-
-        // The receiver can stop iteration iff the channel has hung up.
-        // The channel will hung when sender is dropped. It only happens in tests.
-        // In non-test case we have static worker and Rust doesn't drop static variables.
-        #[cfg(not(test))]
-        unreachable!()
     }
 
     #[cfg(target_os = "windows")]
