@@ -1,13 +1,13 @@
 /// Tunable parameters for WebAssembly compilation.
 #[derive(Clone)]
 pub struct Tunables {
-    /// For static heaps, the size of the heap protected by bounds checking.
+    /// For static heaps, the size in wasm pages of the heap protected by bounds checking.
     pub static_memory_bound: u32,
 
-    /// The size of the offset guard for static heaps.
+    /// The size in bytes of the offset guard for static heaps.
     pub static_memory_offset_guard_size: u64,
 
-    /// The size of the offset guard for dynamic heaps.
+    /// The size in bytes of the offset guard for dynamic heaps.
     pub dynamic_memory_offset_guard_size: u64,
 }
 
