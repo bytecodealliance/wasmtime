@@ -1962,6 +1962,7 @@ dependencies = [
  "anyhow",
  "faerie",
  "file-per-thread-logger",
+ "filecheck",
  "libc",
  "more-asserts",
  "pretty_env_logger",
@@ -1990,17 +1991,12 @@ version = "0.9.0"
 dependencies = [
  "anyhow",
  "faerie",
- "filecheck",
  "gimli 0.19.0",
  "more-asserts",
  "target-lexicon",
- "tempfile",
  "thiserror",
  "wasmparser 0.51.0",
  "wasmtime-environ",
- "wasmtime-jit",
- "wasmtime-obj",
- "wat",
 ]
 
 [[package]]

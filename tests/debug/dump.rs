@@ -10,7 +10,7 @@ pub enum DwarfDumpSection {
 }
 
 pub fn get_dwarfdump(obj: &str, section: DwarfDumpSection) -> Result<String> {
-    let dwarfdump = env::var("LLVM_DWARFDUMP").unwrap_or("llvm-dwarfdump".to_string());
+    let dwarfdump = env::var("DWARFDUMP").unwrap_or("llvm-dwarfdump".to_string());
     let section_flag = match section {
         DwarfDumpSection::DebugInfo => "-debug-info",
         DwarfDumpSection::DebugLine => "-debug-line",

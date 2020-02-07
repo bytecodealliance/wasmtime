@@ -1,13 +1,11 @@
+use super::dump::{get_dwarfdump, DwarfDumpSection};
+use super::obj::compile_cranelift;
 use anyhow::{format_err, Result};
-use dump::{get_dwarfdump, DwarfDumpSection};
 use filecheck::{CheckerBuilder, NO_VARIABLES};
-use obj::compile_cranelift;
 use tempfile::NamedTempFile;
 use wat::parse_str;
 
-mod dump;
-mod obj;
-
+#[allow(dead_code)]
 fn check_wat(wat: &str) -> Result<()> {
     let wasm = parse_str(wat)?;
     let obj_file = NamedTempFile::new()?;

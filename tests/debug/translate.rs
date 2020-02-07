@@ -1,13 +1,11 @@
+use super::dump::{get_dwarfdump, DwarfDumpSection};
+use super::obj::compile_cranelift;
 use anyhow::{format_err, Result};
-use dump::{get_dwarfdump, DwarfDumpSection};
 use filecheck::{CheckerBuilder, NO_VARIABLES};
-use obj::compile_cranelift;
 use std::fs::read;
 use tempfile::NamedTempFile;
 
-mod dump;
-mod obj;
-
+#[allow(dead_code)]
 fn check_wasm(wasm_path: &str, directives: &str) -> Result<()> {
     let wasm = read(wasm_path)?;
     let obj_file = NamedTempFile::new()?;
@@ -27,9 +25,13 @@ fn check_wasm(wasm_path: &str, directives: &str) -> Result<()> {
 }
 
 #[test]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
 fn test_dwarf_translate() -> Result<()> {
     check_wasm(
-        "examples/fib-wasm.wasm",
+        "tests/debug/testsuite/fib-wasm.wasm",
         r##"
 check: DW_TAG_compile_unit
 # We have "fib" function
@@ -46,12 +48,6 @@ check:        DW_AT_decl_line	(6)
 check:      DW_TAG_variable
 check:        DW_AT_name	("t")
 check:      DW_TAG_variable
-# checking if the variable location was transformed
-check:        DW_AT_location
-regex: GET_REG_LOCATION=DW_OP_reg\d+
-nextln:          $GET_REG_LOCATION
-nextln:          $GET_REG_LOCATION
-nextln:          $GET_REG_LOCATION
 check:        DW_AT_name	("a")
 check:      DW_TAG_variable
 check:        DW_AT_name	("b")
