@@ -23,6 +23,7 @@ pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
 }
 
 /// An index type for builtin functions.
+#[derive(Copy, Clone, Debug)]
 pub struct BuiltinFunctionIndex(u32);
 
 impl BuiltinFunctionIndex {
@@ -42,9 +43,28 @@ impl BuiltinFunctionIndex {
     pub const fn get_imported_memory32_size_index() -> Self {
         Self(3)
     }
+    /// Returns an index for wasm's `table.copy` when both tables are locally
+    /// defined.
+    pub const fn get_table_copy_defined_defined_index() -> Self {
+        Self(4)
+    }
+    /// Returns an index for wasm's `table.copy` when the destination table is
+    /// locally defined and the source table is imported.
+    pub const fn get_table_copy_defined_imported_index() -> Self {
+        Self(5)
+    }
+    /// Returns an index for wasm's `table.copy` when the destination table is
+    /// imported and the source table is locally defined.
+    pub const fn get_table_copy_imported_defined_index() -> Self {
+        Self(6)
+    }
+    /// Returns an index for wasm's `table.copy` when both tables are imported.
+    pub const fn get_table_copy_imported_imported_index() -> Self {
+        Self(7)
+    }
     /// Returns the total number of builtin functions.
     pub const fn builtin_functions_total_number() -> u32 {
-        4
+        8
     }
 
     /// Return the index as an u32 number.
@@ -72,6 +92,10 @@ pub struct FuncEnvironment<'module_environment> {
     /// for locally-defined memories.
     memory_grow_sig: Option<ir::SigRef>,
 
+    /// The external function signature for implementing wasm's `table.copy`
+    /// (it's the same for both local and imported tables).
+    table_copy_sig: Option<ir::SigRef>,
+
     /// Offsets to struct fields accessed by JIT code.
     offsets: VMOffsets,
 }
@@ -87,6 +111,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             vmctx: None,
             memory32_size_sig: None,
             memory_grow_sig: None,
+            table_copy_sig: None,
             offsets: VMOffsets::new(target_config.pointer_bytes(), module),
         }
     }
@@ -175,6 +200,97 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 self.module.defined_memory_index(index).unwrap().index(),
                 BuiltinFunctionIndex::get_memory32_size_index(),
             )
+        }
+    }
+
+    // NB: All `table_copy` libcall variants have the same signature.
+    fn get_table_copy_sig(&mut self, func: &mut Function) -> ir::SigRef {
+        let sig = self.table_copy_sig.unwrap_or_else(|| {
+            func.import_signature(Signature {
+                params: vec![
+                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                    // Destination table index.
+                    AbiParam::new(I32),
+                    // Source table index.
+                    AbiParam::new(I32),
+                    // Index within destination table.
+                    AbiParam::new(I32),
+                    // Index within source table.
+                    AbiParam::new(I32),
+                    // Number of elements to copy.
+                    AbiParam::new(I32),
+                    // Source location.
+                    AbiParam::new(I32),
+                ],
+                returns: vec![],
+                call_conv: self.target_config.default_call_conv,
+            })
+        });
+        self.table_copy_sig = Some(sig);
+        sig
+    }
+
+    fn get_table_copy_func(
+        &mut self,
+        func: &mut Function,
+        dst_table_index: TableIndex,
+        src_table_index: TableIndex,
+    ) -> (ir::SigRef, usize, usize, BuiltinFunctionIndex) {
+        let sig = self.get_table_copy_sig(func);
+        match (
+            self.module.is_imported_table(dst_table_index),
+            self.module.is_imported_table(src_table_index),
+        ) {
+            (false, false) => {
+                let dst_table_index = self
+                    .module
+                    .defined_table_index(dst_table_index)
+                    .unwrap()
+                    .index();
+                let src_table_index = self
+                    .module
+                    .defined_table_index(src_table_index)
+                    .unwrap()
+                    .index();
+                (
+                    sig,
+                    dst_table_index,
+                    src_table_index,
+                    BuiltinFunctionIndex::get_table_copy_defined_defined_index(),
+                )
+            }
+            (false, true) => {
+                let dst_table_index = self
+                    .module
+                    .defined_table_index(dst_table_index)
+                    .unwrap()
+                    .index();
+                (
+                    sig,
+                    dst_table_index,
+                    src_table_index.as_u32() as usize,
+                    BuiltinFunctionIndex::get_table_copy_defined_imported_index(),
+                )
+            }
+            (true, false) => {
+                let src_table_index = self
+                    .module
+                    .defined_table_index(src_table_index)
+                    .unwrap()
+                    .index();
+                (
+                    sig,
+                    dst_table_index.as_u32() as usize,
+                    src_table_index,
+                    BuiltinFunctionIndex::get_table_copy_imported_defined_index(),
+                )
+            }
+            (true, true) => (
+                sig,
+                dst_table_index.as_u32() as usize,
+                src_table_index.as_u32() as usize,
+                BuiltinFunctionIndex::get_table_copy_imported_imported_index(),
+            ),
         }
     }
 
@@ -782,7 +898,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         _src: ir::Value,
         _len: ir::Value,
     ) -> WasmResult<()> {
-        Err(WasmError::Unsupported("bulk memory".to_string()))
+        Err(WasmError::Unsupported(
+            "bulk memory: `memory.copy`".to_string(),
+        ))
     }
 
     fn translate_memory_fill(
@@ -794,7 +912,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         _val: ir::Value,
         _len: ir::Value,
     ) -> WasmResult<()> {
-        Err(WasmError::Unsupported("bulk memory".to_string()))
+        Err(WasmError::Unsupported(
+            "bulk memory: `memory.fill`".to_string(),
+        ))
     }
 
     fn translate_memory_init(
@@ -807,11 +927,15 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         _src: ir::Value,
         _len: ir::Value,
     ) -> WasmResult<()> {
-        Err(WasmError::Unsupported("bulk memory".to_string()))
+        Err(WasmError::Unsupported(
+            "bulk memory: `memory.copy`".to_string(),
+        ))
     }
 
     fn translate_data_drop(&mut self, _pos: FuncCursor, _seg_index: u32) -> WasmResult<()> {
-        Err(WasmError::Unsupported("bulk memory".to_string()))
+        Err(WasmError::Unsupported(
+            "bulk memory: `data.drop`".to_string(),
+        ))
     }
 
     fn translate_table_size(
@@ -820,21 +944,50 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         _index: TableIndex,
         _table: ir::Table,
     ) -> WasmResult<ir::Value> {
-        Err(WasmError::Unsupported("bulk memory".to_string()))
+        Err(WasmError::Unsupported(
+            "bulk memory: `table.size`".to_string(),
+        ))
     }
 
     fn translate_table_copy(
         &mut self,
-        _pos: FuncCursor,
-        _dst_table_index: TableIndex,
+        mut pos: FuncCursor,
+        dst_table_index: TableIndex,
         _dst_table: ir::Table,
-        _src_table_index: TableIndex,
+        src_table_index: TableIndex,
         _src_table: ir::Table,
-        _dst: ir::Value,
-        _src: ir::Value,
-        _len: ir::Value,
+        dst: ir::Value,
+        src: ir::Value,
+        len: ir::Value,
     ) -> WasmResult<()> {
-        Err(WasmError::Unsupported("bulk memory".to_string()))
+        use cranelift_codegen::cursor::Cursor;
+
+        let (func_sig, dst_table_index_arg, src_table_index_arg, func_idx) =
+            self.get_table_copy_func(&mut pos.func, dst_table_index, src_table_index);
+
+        let dst_table_index_arg = pos.ins().iconst(I32, dst_table_index_arg as i64);
+        let src_table_index_arg = pos.ins().iconst(I32, src_table_index_arg as i64);
+
+        let src_loc = pos.srcloc();
+        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
+
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        pos.ins().call_indirect(
+            func_sig,
+            func_addr,
+            &[
+                vmctx,
+                dst_table_index_arg,
+                src_table_index_arg,
+                dst,
+                src,
+                len,
+                src_loc_arg,
+            ],
+        );
+
+        Ok(())
     }
 
     fn translate_table_init(
@@ -847,10 +1000,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         _src: ir::Value,
         _len: ir::Value,
     ) -> WasmResult<()> {
-        Err(WasmError::Unsupported("bulk memory".to_string()))
+        Err(WasmError::Unsupported(
+            "bulk memory: `table.init`".to_string(),
+        ))
     }
 
     fn translate_elem_drop(&mut self, _pos: FuncCursor, _seg_index: u32) -> WasmResult<()> {
-        Err(WasmError::Unsupported("bulk memory".to_string()))
+        Err(WasmError::Unsupported(
+            "bulk memory: `elem.drop`".to_string(),
+        ))
     }
 }

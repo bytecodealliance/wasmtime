@@ -84,7 +84,7 @@ fn trap_code_to_expected_string(trap_code: ir::TrapCode) -> String {
     match trap_code {
         StackOverflow => "call stack exhausted".to_string(),
         HeapOutOfBounds => "out of bounds memory access".to_string(),
-        TableOutOfBounds => "undefined element".to_string(),
+        TableOutOfBounds => "undefined element: out of bounds".to_string(),
         OutOfBounds => "out of bounds".to_string(), // Note: not covered by the test suite
         IndirectCallToNull => "uninitialized element".to_string(),
         BadSignature => "indirect call type mismatch".to_string(),

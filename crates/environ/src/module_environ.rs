@@ -336,12 +336,20 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
 
     fn declare_passive_element(
         &mut self,
-        _: PassiveElemIndex,
-        _: Box<[FuncIndex]>,
+        elem_index: PassiveElemIndex,
+        segments: Box<[FuncIndex]>,
     ) -> WasmResult<()> {
-        Err(WasmError::Unsupported(
-            "bulk memory: passive element segment".into(),
-        ))
+        let old = self
+            .result
+            .module
+            .passive_elements
+            .insert(elem_index, segments);
+        debug_assert!(
+            old.is_none(),
+            "should never get duplicate element indices, that would be a bug in `cranelift_wasm`'s \
+             translation"
+        );
+        Ok(())
     }
 
     fn define_function_body(
@@ -382,9 +390,18 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         Ok(())
     }
 
-    fn declare_passive_data(&mut self, _: PassiveDataIndex, _: &'data [u8]) -> WasmResult<()> {
+    fn reserve_passive_data(&mut self, count: u32) -> WasmResult<()> {
+        self.result.module.passive_elements.reserve(count as usize);
+        Ok(())
+    }
+
+    fn declare_passive_data(
+        &mut self,
+        _data_index: PassiveDataIndex,
+        _data: &'data [u8],
+    ) -> WasmResult<()> {
         Err(WasmError::Unsupported(
-            "bulk memory: passive data segment".into(),
+            "bulk memory: passive data".to_string(),
         ))
     }
 

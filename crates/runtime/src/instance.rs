@@ -526,6 +526,30 @@ impl Instance {
         let align = mem::align_of_val(self);
         Layout::from_size_align(size, align).unwrap()
     }
+
+    /// Get a table by index regardless of whether it is locally-defined or an
+    /// imported, foreign table.
+    pub(crate) fn get_table(&self, table_index: TableIndex) -> &Table {
+        if let Some(defined_table_index) = self.module.local.defined_table_index(table_index) {
+            &self.tables[defined_table_index]
+        } else {
+            self.get_foreign_table(table_index)
+        }
+    }
+
+    /// Get a locally-defined table.
+    pub(crate) fn get_defined_table(&self, index: DefinedTableIndex) -> &Table {
+        &self.tables[index]
+    }
+
+    /// Get an imported, foreign table.
+    pub(crate) fn get_foreign_table(&self, index: TableIndex) -> &Table {
+        let import = self.imported_table(index);
+        let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
+        let foreign_table = unsafe { &mut *(import).from };
+        let foreign_index = foreign_instance.table_index(foreign_table);
+        &foreign_instance.tables[foreign_index]
+    }
 }
 
 /// A handle holding an `Instance` of a WebAssembly module.
@@ -778,6 +802,11 @@ impl InstanceHandle {
         self.instance().table_set(table_index, index, val)
     }
 
+    /// Get a table defined locally within this module.
+    pub fn get_defined_table(&self, index: DefinedTableIndex) -> &Table {
+        self.instance().get_defined_table(index)
+    }
+
     /// Return a reference to the contained `Instance`.
     pub(crate) fn instance(&self) -> &Instance {
         unsafe { &*(self.instance as *const Instance) }
@@ -813,7 +842,7 @@ fn check_table_init_bounds(instance: &Instance) -> Result<(), InstantiationError
     let module = Arc::clone(&instance.module);
     for init in &module.table_elements {
         let start = get_table_init_start(init, instance);
-        let table = get_table(init, instance);
+        let table = instance.get_table(init.table_index);
 
         let size = usize::try_from(table.size()).unwrap();
         if size < start + init.elements.len() {
@@ -913,26 +942,13 @@ fn get_table_init_start(init: &TableElements, instance: &Instance) -> usize {
     start
 }
 
-/// Return a byte-slice view of a table's data.
-fn get_table<'instance>(init: &TableElements, instance: &'instance Instance) -> &'instance Table {
-    if let Some(defined_table_index) = instance.module.local.defined_table_index(init.table_index) {
-        &instance.tables[defined_table_index]
-    } else {
-        let import = instance.imported_table(init.table_index);
-        let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
-        let foreign_table = unsafe { &mut *(import).from };
-        let foreign_index = foreign_instance.table_index(foreign_table);
-        &foreign_instance.tables[foreign_index]
-    }
-}
-
 /// Initialize the table memory from the provided initializers.
 fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
     let vmctx = instance.vmctx_ptr();
     let module = Arc::clone(&instance.module);
     for init in &module.table_elements {
         let start = get_table_init_start(init, instance);
-        let table = get_table(init, instance);
+        let table = instance.get_table(init.table_index);
 
         for (i, func_idx) in init.elements.iter().enumerate() {
             let callee_sig = instance.module.local.functions[*func_idx];

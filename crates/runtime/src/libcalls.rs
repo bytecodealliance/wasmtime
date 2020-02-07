@@ -2,8 +2,11 @@
 //! inline rather than calling them, particularly when CPUs have special
 //! instructions which compute them directly.
 
+use crate::table::Table;
+use crate::traphandlers::raise_lib_trap;
 use crate::vmcontext::VMContext;
-use wasmtime_environ::wasm::{DefinedMemoryIndex, MemoryIndex};
+use wasmtime_environ::ir;
+use wasmtime_environ::wasm::{DefinedMemoryIndex, DefinedTableIndex, MemoryIndex, TableIndex};
 
 /// Implementation of f32.ceil
 pub extern "C" fn wasmtime_f32_ceil(x: f32) -> f32 {
@@ -136,4 +139,94 @@ pub unsafe extern "C" fn wasmtime_imported_memory32_size(
     let memory_index = MemoryIndex::from_u32(memory_index);
 
     instance.imported_memory_size(memory_index)
+}
+
+/// Implementation of `table.copy` when both tables are locally defined.
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_table_copy_defined_defined(
+    vmctx: *mut VMContext,
+    dst_table_index: u32,
+    src_table_index: u32,
+    dst: u32,
+    src: u32,
+    len: u32,
+    source_loc: u32,
+) {
+    let dst_table_index = DefinedTableIndex::from_u32(dst_table_index);
+    let src_table_index = DefinedTableIndex::from_u32(src_table_index);
+    let source_loc = ir::SourceLoc::new(source_loc);
+    let instance = (&mut *vmctx).instance();
+    let dst_table = instance.get_defined_table(dst_table_index);
+    let src_table = instance.get_defined_table(src_table_index);
+    if let Err(trap) = Table::copy(dst_table, src_table, dst, src, len, source_loc) {
+        raise_lib_trap(trap);
+    }
+}
+
+/// Implementation of `table.copy` when the destination table is locally defined
+/// and the source table is imported.
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_table_copy_defined_imported(
+    vmctx: *mut VMContext,
+    dst_table_index: u32,
+    src_table_index: u32,
+    dst: u32,
+    src: u32,
+    len: u32,
+    source_loc: u32,
+) {
+    let dst_table_index = DefinedTableIndex::from_u32(dst_table_index);
+    let src_table_index = TableIndex::from_u32(src_table_index);
+    let source_loc = ir::SourceLoc::new(source_loc);
+    let instance = (&mut *vmctx).instance();
+    let dst_table = instance.get_defined_table(dst_table_index);
+    let src_table = instance.get_foreign_table(src_table_index);
+    if let Err(trap) = Table::copy(dst_table, src_table, dst, src, len, source_loc) {
+        raise_lib_trap(trap);
+    }
+}
+
+/// Implementation of `table.copy` when the destination table is imported
+/// and the source table is locally defined.
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_table_copy_imported_defined(
+    vmctx: *mut VMContext,
+    dst_table_index: u32,
+    src_table_index: u32,
+    dst: u32,
+    src: u32,
+    len: u32,
+    source_loc: u32,
+) {
+    let dst_table_index = TableIndex::from_u32(dst_table_index);
+    let src_table_index = DefinedTableIndex::from_u32(src_table_index);
+    let source_loc = ir::SourceLoc::new(source_loc);
+    let instance = (&mut *vmctx).instance();
+    let dst_table = instance.get_foreign_table(dst_table_index);
+    let src_table = instance.get_defined_table(src_table_index);
+    if let Err(trap) = Table::copy(dst_table, src_table, dst, src, len, source_loc) {
+        raise_lib_trap(trap);
+    }
+}
+
+/// Implementation of `table.copy` when both tables are imported.
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_table_copy_imported_imported(
+    vmctx: *mut VMContext,
+    dst_table_index: u32,
+    src_table_index: u32,
+    dst: u32,
+    src: u32,
+    len: u32,
+    source_loc: u32,
+) {
+    let dst_table_index = TableIndex::from_u32(dst_table_index);
+    let src_table_index = TableIndex::from_u32(src_table_index);
+    let source_loc = ir::SourceLoc::new(source_loc);
+    let instance = (&mut *vmctx).instance();
+    let dst_table = instance.get_foreign_table(dst_table_index);
+    let src_table = instance.get_foreign_table(src_table_index);
+    if let Err(trap) = Table::copy(dst_table, src_table, dst, src, len, source_loc) {
+        raise_lib_trap(trap);
+    }
 }

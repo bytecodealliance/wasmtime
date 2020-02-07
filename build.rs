@@ -181,6 +181,8 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", "simd_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16ShrS
 
             ("reference_types", _) => return true,
+
+            ("bulk_memory_operations", "table_copy") => return false,
             ("bulk_memory_operations", _) => return true,
 
             _ => {}

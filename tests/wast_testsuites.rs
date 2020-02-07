@@ -16,12 +16,25 @@ fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
     // by reference types.
     let reftypes = simd || wast.iter().any(|s| s == "reference-types");
 
+    // Reference types assumes support for bulk memory.
+    let bulk_mem = reftypes
+        || wast.iter().any(|s| s == "bulk-memory-operations")
+        || wast.iter().any(|s| s == "table_copy.wast")
+        || wast
+            .iter()
+            .any(|s| s == "table_copy_on_imported_tables.wast");
+
+    // And bulk memory also assumes support for reference types (e.g. multiple
+    // tables).
+    let reftypes = reftypes || bulk_mem;
+
     let multi_val = wast.iter().any(|s| s == "multi-value");
 
     let mut cfg = Config::new();
     cfg.wasm_simd(simd)
         .wasm_reference_types(reftypes)
         .wasm_multi_value(multi_val)
+        .wasm_bulk_memory(bulk_mem)
         .strategy(strategy)?
         .cranelift_debug_verifier(true);
 
