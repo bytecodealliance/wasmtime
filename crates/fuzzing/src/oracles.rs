@@ -14,7 +14,6 @@ pub mod dummy;
 
 use dummy::{dummy_imports, dummy_values};
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
