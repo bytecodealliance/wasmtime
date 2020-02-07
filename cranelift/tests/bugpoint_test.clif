@@ -288,7 +288,7 @@ function u0:0(i64, i64, i64) system_v {
     fn103 = u0:13 sig103
     fn104 = u0:95 sig104
 
-ebb0(v0: i64, v1: i64, v2: i64):
+block0(v0: i64, v1: i64, v2: i64):
     v113 -> v1
     v124 -> v1
     v136 -> v1
@@ -411,9 +411,9 @@ ebb0(v0: i64, v1: i64, v2: i64):
     v110 = stack_addr.i64 ss105
     v111 = stack_addr.i64 ss106
     v112 = stack_addr.i64 ss107
-    jump ebb1
+    jump block1
 
-ebb1:
+block1:
     v114 = load.i64 v113
     v115 = iconst.i64 0
     v116 = icmp ugt v114, v115
@@ -422,15 +422,15 @@ ebb1:
     v119 = icmp_imm eq v118, 0
     v120 = bint.i8 v119
     v121 = uextend.i32 v120
-    brz v121, ebb3
-    jump ebb2
+    brz v121, block3
+    jump block2
 
-ebb2:
+block2:
     v122 = global_value.i64 gv0
     v123 = global_value.i64 gv1
     trap user65535
 
-ebb3:
+block3:
     v125 = iadd_imm.i64 v124, 8
     v126 = load.i64 v125
     v127 = iconst.i64 0
@@ -440,15 +440,15 @@ ebb3:
     v131 = icmp_imm eq v130, 0
     v132 = bint.i8 v131
     v133 = uextend.i32 v132
-    brz v133, ebb5
-    jump ebb4
+    brz v133, block5
+    jump block4
 
-ebb4:
+block4:
     v134 = global_value.i64 gv2
     v135 = global_value.i64 gv3
     trap user65535
 
-ebb5:
+block5:
     v137 = iadd_imm.i64 v136, 16
     v138 = load.i64 v137+42
     v139 = iconst.i64 0
@@ -458,71 +458,71 @@ ebb5:
     v143 = icmp_imm eq v142, 0
     v144 = bint.i8 v143
     v145 = uextend.i32 v144
-    brz v145, ebb7
-    jump ebb6
+    brz v145, block7
+    jump block6
 
-ebb6:
+block6:
     v146 = global_value.i64 gv4
     v147 = global_value.i64 gv5
     trap user65535
 
-ebb7:
+block7:
     v149 = load.i64 v148
     v150 = iadd_imm.i64 v148, 16
     v151 = load.i64 v150
     call fn6(v7, v149, v151)
-    jump ebb8
+    jump block8
 
-ebb8:
+block8:
     v152 = call fn7(v7)
-    jump ebb9
+    jump block9
 
-ebb9:
+block9:
     v153 = load.i8 v6
     v154 = uextend.i32 v153
     v155 = icmp_imm eq v154, 0
     v156 = bint.i8 v155
     v157 = uextend.i32 v156
-    brz v157, ebb11
-    jump ebb10
+    brz v157, block11
+    jump block10
 
-ebb10:
+block10:
     v158 = global_value.i64 gv6
     v159 = global_value.i64 gv7
     trap user65535
 
-ebb11:
+block11:
     v161 = load.i64 v160
     v162 = iadd_imm.i64 v160, 8
     v163 = load.i64 v162
     call fn10(v9, v161, v163)
-    jump ebb12
+    jump block12
 
-ebb12:
+block12:
     v164 = call fn11(v9)
-    jump ebb13
+    jump block13
 
-ebb13:
+block13:
     v165 = load.i8 v8
     v166 = uextend.i32 v165
     v167 = icmp_imm eq v166, 0
     v168 = bint.i8 v167
     v169 = uextend.i32 v168
-    brz v169, ebb15
-    jump ebb14
+    brz v169, block15
+    jump block14
 
-ebb14:
+block14:
     v170 = global_value.i64 gv8
     v171 = global_value.i64 gv9
     trap user65535
 
-ebb15:
+block15:
     v172 = load.i64 aligned v3
     v173 = load.i64 aligned v3+8
     v174 = call fn14(v11)
-    jump ebb16
+    jump block16
 
-ebb16:
+block16:
     v175 = iconst.i64 17
     v176 = load.i64 v10
     v177 = icmp uge v176, v175
@@ -531,15 +531,15 @@ ebb16:
     v180 = icmp_imm eq v179, 0
     v181 = bint.i8 v180
     v182 = uextend.i32 v181
-    brz v182, ebb18
-    jump ebb17
+    brz v182, block18
+    jump block17
 
-ebb17:
+block17:
     v183 = global_value.i64 gv10
     v184 = global_value.i64 gv11
     trap user65535
 
-ebb18:
+block18:
     v186 = load.i64 v185
     v187 = iadd_imm.i64 v185, 16
     v188 = load.i64 v187
@@ -552,14 +552,14 @@ ebb18:
     v195 = iadd_imm.i64 v12, 8
     v196 = load.i8 v195
     v197 = uextend.i32 v196
-    brz v197, ebb19
-    jump ebb164
+    brz v197, block19
+    jump block164
 
-ebb164:
+block164:
     v198 = global_value.i64 gv12
     trap user0
 
-ebb19:
+block19:
     v199 = load.i64 v12
         v213 -> v199
     v200 = iconst.i64 1
@@ -573,14 +573,14 @@ ebb19:
     v208 = iadd_imm.i64 v13, 8
     v209 = load.i8 v208
     v210 = uextend.i32 v209
-    brz v210, ebb20
-    jump ebb163
+    brz v210, block20
+    jump block163
 
-ebb163:
+block163:
     v211 = global_value.i64 gv13
     trap user0
 
-ebb20:
+block20:
     v212 = load.i64 v13
     v214 = icmp.i64 ult v213, v212
     v215 = bint.i8 v214
@@ -588,15 +588,15 @@ ebb20:
     v217 = icmp_imm eq v216, 0
     v218 = bint.i8 v217
     v219 = uextend.i32 v218
-    brz v219, ebb22
-    jump ebb21
+    brz v219, block22
+    jump block21
 
-ebb21:
+block21:
     v220 = global_value.i64 gv14
     v221 = global_value.i64 gv15
     trap user65535
 
-ebb22:
+block22:
     v223 = load.i64 v222
     v224 = iadd_imm.i64 v222, 16
     v225 = load.i64 v224
@@ -609,22 +609,22 @@ ebb22:
     v232 = iadd_imm.i64 v16, 8
     v233 = load.i8 v232
     v234 = uextend.i32 v233
-    brz v234, ebb23
-    jump ebb162
+    brz v234, block23
+    jump block162
 
-ebb162:
+block162:
     v235 = global_value.i64 gv16
     trap user0
 
-ebb23:
+block23:
     v236 = load.i64 v16
     v238 = iadd_imm.i64 v237, 24
     v239 = load.i16 v238
     v240 = iadd_imm.i64 v15, 8
     call fn22(v14, v15)
-    jump ebb24
+    jump block24
 
-ebb24:
+block24:
     v242 = load.i64 v241
     v243 = iadd_imm.i64 v241, 8
     v244 = load.i64 v243
@@ -637,14 +637,14 @@ ebb24:
     v251 = iadd_imm.i64 v19, 8
     v252 = load.i8 v251
     v253 = uextend.i32 v252
-    brz v253, ebb25
-    jump ebb161
+    brz v253, block25
+    jump block161
 
-ebb161:
+block161:
     v254 = global_value.i64 gv17
     trap user0
 
-ebb25:
+block25:
     v255 = load.i64 v19
     v257 = iadd_imm.i64 v256, 24
     v258 = load.i16 v257
@@ -652,9 +652,9 @@ ebb25:
     v260 = iadd_imm.i64 v14, 8
     v261 = load.i16 v260
     call fn24(v17, v18, v261)
-    jump ebb26
+    jump block26
 
-ebb26:
+block26:
     v263 = load.i64 v262
     v264 = iadd_imm.i64 v262, 24
     v265 = load.i16 v264
@@ -662,9 +662,9 @@ ebb26:
     v267 = iadd_imm.i64 v14, 8
     v268 = load.i16 v267
     call fn25(v20, v21, v268)
-    jump ebb27
+    jump block27
 
-ebb27:
+block27:
     v269 = iadd_imm.i64 v14, 8
     v270 = load.i16 v269
     v271 = iconst.i16 -60
@@ -676,14 +676,14 @@ ebb27:
     v277 = iadd_imm.i64 v24, 2
     v278 = load.i8 v277
     v279 = uextend.i32 v278
-    brz v279, ebb28
-    jump ebb160
+    brz v279, block28
+    jump block160
 
-ebb160:
+block160:
     v280 = global_value.i64 gv18
     trap user0
 
-ebb28:
+block28:
     v281 = load.i16 v24
     v282 = iconst.i16 64
     v283 = isub v281, v282
@@ -694,14 +694,14 @@ ebb28:
     v288 = iadd_imm.i64 v25, 2
     v289 = load.i8 v288
     v290 = uextend.i32 v289
-    brz v290, ebb29
-    jump ebb159
+    brz v290, block29
+    jump block159
 
-ebb159:
+block159:
     v291 = global_value.i64 gv19
     trap user0
 
-ebb29:
+block29:
     v292 = load.i16 v25
         v317 -> v292
     v293 = iadd_imm.i64 v14, 8
@@ -715,14 +715,14 @@ ebb29:
     v301 = iadd_imm.i64 v26, 2
     v302 = load.i8 v301
     v303 = uextend.i32 v302
-    brz v303, ebb30
-    jump ebb158
+    brz v303, block30
+    jump block158
 
-ebb158:
+block158:
     v304 = global_value.i64 gv20
     trap user0
 
-ebb30:
+block30:
     v305 = load.i16 v26
     v306 = iconst.i16 64
     v307 = isub v305, v306
@@ -733,42 +733,42 @@ ebb30:
     v312 = iadd_imm.i64 v27, 2
     v313 = load.i8 v312
     v314 = uextend.i32 v313
-    brz v314, ebb31
-    jump ebb157
+    brz v314, block31
+    jump block157
 
-ebb157:
+block157:
     v315 = global_value.i64 gv21
     trap user0
 
-ebb31:
+block31:
     v316 = load.i16 v27
     call fn30(v23, v317, v316)
-    jump ebb32
+    jump block32
 
-ebb32:
+block32:
     v318 = load.i16 v23
         v1007 -> v318
     v319 = iadd_imm.i64 v23, 8
     v320 = load.i64 aligned v319
     v321 = load.i64 aligned v319+8
     call fn31(v28, v14, v22)
-    jump ebb33
+    jump block33
 
-ebb33:
+block33:
     call fn32(v29, v17, v22)
-    jump ebb34
+    jump block34
 
-ebb34:
+block34:
     call fn33(v30, v20, v22)
-    jump ebb35
+    jump block35
 
-ebb35:
+block35:
     v322 = iconst.i8 1
     v323 = uextend.i32 v322
-    brz v323, ebb42
-    jump ebb36
+    brz v323, block42
+    jump block36
 
-ebb36:
+block36:
     v324 = iadd_imm.i64 v28, 8
     v325 = iadd_imm.i64 v29, 8
     v326 = iadd_imm.i64 v31, 8
@@ -785,10 +785,10 @@ ebb36:
     v335 = icmp_imm eq v334, 0
     v336 = bint.i8 v335
     v337 = uextend.i32 v336
-    brz v337, ebb38
-    jump ebb37
+    brz v337, block38
+    jump block37
 
-ebb37:
+block37:
     v338 = global_value.i64 gv22
     v339 = iconst.i64 3
     v342 = iadd_imm.i64 v36, 8
@@ -798,17 +798,17 @@ ebb37:
         v347 -> v345
     v346 = func_addr.i64 fn34
     call fn35(v39, v343, v346)
-    jump ebb39
+    jump block39
 
-ebb38:
-    jump ebb42
+block38:
+    jump block42
 
-ebb39:
+block39:
     v348 = func_addr.i64 fn36
     call fn37(v40, v347, v348)
-    jump ebb40
+    jump block40
 
-ebb40:
+block40:
     v349 = iconst.i64 0
     v350 = imul_imm v349, 16
     v351 = iadd.i64 v35, v350
@@ -821,21 +821,21 @@ ebb40:
     v358 = load.i64 aligned v40+8
     v359 = iconst.i64 2
     call fn38(v32, v33, v34)
-    jump ebb41
+    jump block41
 
-ebb41:
+block41:
     v360 = global_value.i64 gv23
     call fn39(v32, v360)
     v361 = global_value.i64 gv24
     trap user65535
 
-ebb42:
+block42:
     v362 = iconst.i8 1
     v363 = uextend.i32 v362
-    brz v363, ebb49(v1007)
-    jump ebb43
+    brz v363, block49(v1007)
+    jump block43
 
-ebb43:
+block43:
     v364 = iadd_imm.i64 v28, 8
     v365 = iadd_imm.i64 v30, 8
     v366 = iadd_imm.i64 v41, 8
@@ -852,10 +852,10 @@ ebb43:
     v375 = icmp_imm eq v374, 0
     v376 = bint.i8 v375
     v377 = uextend.i32 v376
-    brz v377, ebb45
-    jump ebb44
+    brz v377, block45
+    jump block44
 
-ebb44:
+block44:
     v378 = global_value.i64 gv25
     v379 = iconst.i64 3
     v382 = iadd_imm.i64 v46, 8
@@ -865,17 +865,17 @@ ebb44:
         v387 -> v385
     v386 = func_addr.i64 fn41
     call fn42(v49, v383, v386)
-    jump ebb46
+    jump block46
 
-ebb45:
-    jump ebb49(v1007)
+block45:
+    jump block49(v1007)
 
-ebb46:
+block46:
     v388 = func_addr.i64 fn43
     call fn44(v50, v387, v388)
-    jump ebb47
+    jump block47
 
-ebb47:
+block47:
     v389 = iconst.i64 0
     v390 = imul_imm v389, 16
     v391 = iadd.i64 v45, v390
@@ -888,15 +888,15 @@ ebb47:
     v398 = load.i64 aligned v50+8
     v399 = iconst.i64 2
     call fn45(v42, v43, v44)
-    jump ebb48
+    jump block48
 
-ebb48:
+block48:
     v400 = global_value.i64 gv26
     call fn46(v42, v400)
     v401 = global_value.i64 gv27
     trap user65535
 
-ebb49(v1006: i16):
+block49(v1006: i16):
         v486 -> v1006
     v402 = load.i64 v28
     v403 = iconst.i64 1
@@ -909,14 +909,14 @@ ebb49(v1006: i16):
     v410 = iadd_imm.i64 v51, 8
     v411 = load.i8 v410
     v412 = uextend.i32 v411
-    brz v412, ebb50
-    jump ebb156
+    brz v412, block50
+    jump block156
 
-ebb156:
+block156:
     v413 = global_value.i64 gv28
     trap user0
 
-ebb50:
+block50:
     v414 = load.i64 v51
         v439 -> v414
         v452 -> v414
@@ -933,14 +933,14 @@ ebb50:
     v423 = iadd_imm.i64 v52, 8
     v424 = load.i8 v423
     v425 = uextend.i32 v424
-    brz v425, ebb51
-    jump ebb155
+    brz v425, block51
+    jump block155
 
-ebb155:
+block155:
     v426 = global_value.i64 gv29
     trap user0
 
-ebb51:
+block51:
     v427 = load.i64 v52
         v509 -> v427
     v428 = iadd_imm.i64 v28, 8
@@ -950,14 +950,14 @@ ebb51:
     v431 = icmp eq v429, v430
     v432 = bint.i8 v431
     v433 = uextend.i32 v432
-    brz v433, ebb52
-    jump ebb154
+    brz v433, block52
+    jump block154
 
-ebb154:
+block154:
     v434 = global_value.i64 gv30
     trap user0
 
-ebb52:
+block52:
     v436 = iconst.i16 0
     v437 = isub v436, v435
     v438 = sextend.i64 v437
@@ -972,14 +972,14 @@ ebb52:
     v446 = iadd_imm.i64 v53, 8
     v447 = load.i8 v446
     v448 = uextend.i32 v447
-    brz v448, ebb53
-    jump ebb153
+    brz v448, block53
+    jump block153
 
-ebb153:
+block153:
     v449 = global_value.i64 gv31
     trap user0
 
-ebb53:
+block53:
     v450 = load.i64 v53
     v451 = ireduce.i32 v450
         v480 -> v451
@@ -994,14 +994,14 @@ ebb53:
     v461 = iadd_imm.i64 v54, 8
     v462 = load.i8 v461
     v463 = uextend.i32 v462
-    brz v463, ebb54
-    jump ebb152
+    brz v463, block54
+    jump block152
 
-ebb152:
+block152:
     v464 = global_value.i64 gv32
     trap user0
 
-ebb54:
+block54:
     v465 = load.i64 v54
     v466 = iconst.i64 1
     v467 = isub v465, v466
@@ -1013,20 +1013,20 @@ ebb54:
     v473 = iadd_imm.i64 v55, 8
     v474 = load.i8 v473
     v475 = uextend.i32 v474
-    brz v475, ebb55
-    jump ebb151
+    brz v475, block55
+    jump block151
 
-ebb151:
+block151:
     v476 = global_value.i64 gv33
     trap user0
 
-ebb55:
+block55:
     v477 = load.i64 v55
     v479 = band.i64 v478, v477
     call fn54(v56, v480)
-    jump ebb56
+    jump block56
 
-ebb56:
+block56:
     v481 = load.i8 v56
         v548 -> v481
     v482 = iadd_imm.i64 v56, 4
@@ -1042,14 +1042,14 @@ ebb56:
     v492 = iadd_imm.i64 v57, 2
     v493 = load.i8 v492
     v494 = uextend.i32 v493
-    brz v494, ebb57
-    jump ebb150
+    brz v494, block57
+    jump block150
 
-ebb150:
+block150:
     v495 = global_value.i64 gv34
     trap user0
 
-ebb57:
+block57:
     v496 = load.i16 v57
     v497 = iconst.i16 1
     v498 = iadd v496, v497
@@ -1060,14 +1060,14 @@ ebb57:
     v503 = iadd_imm.i64 v58, 2
     v504 = load.i8 v503
     v505 = uextend.i32 v504
-    brz v505, ebb58
-    jump ebb149
+    brz v505, block58
+    jump block149
 
-ebb149:
+block149:
     v506 = global_value.i64 gv35
     trap user0
 
-ebb58:
+block58:
     v507 = load.i16 v58
     v510 = isub.i64 v508, v509
     v511 = iconst.i8 0
@@ -1078,14 +1078,14 @@ ebb58:
     v516 = iadd_imm.i64 v59, 8
     v517 = load.i8 v516
     v518 = uextend.i32 v517
-    brz v518, ebb59
-    jump ebb148
+    brz v518, block59
+    jump block148
 
-ebb148:
+block148:
     v519 = global_value.i64 gv36
     trap user0
 
-ebb59:
+block59:
     v520 = load.i64 v59
         v546 -> v520
     v522 = iconst.i64 1
@@ -1098,14 +1098,14 @@ ebb59:
     v529 = iadd_imm.i64 v60, 8
     v530 = load.i8 v529
     v531 = uextend.i32 v530
-    brz v531, ebb60
-    jump ebb147
+    brz v531, block60
+    jump block147
 
-ebb147:
+block147:
     v532 = global_value.i64 gv37
     trap user0
 
-ebb60:
+block60:
     v533 = load.i64 v60
     v534 = iconst.i64 1
     v535 = isub v533, v534
@@ -1117,20 +1117,20 @@ ebb60:
     v541 = iadd_imm.i64 v61, 8
     v542 = load.i8 v541
     v543 = uextend.i32 v542
-    brz v543, ebb61
-    jump ebb146
+    brz v543, block61
+    jump block146
 
-ebb146:
+block146:
     v544 = global_value.i64 gv38
     trap user0
 
-ebb61:
+block61:
     v545 = load.i64 v61
     v547 = band.i64 v546, v545
     v549 = uextend.i16 v548
-    jump ebb62(v551, v484, v521, v479, v520, v507, v508, v548, v547)
+    jump block62(v551, v484, v521, v479, v520, v507, v508, v548, v547)
 
-ebb62(v552: i32, v1009: i64, v1013: i64, v1016: i64, v1019: i64, v1022: i16, v1025: i64, v1028: i8, v1033: i64):
+block62(v552: i32, v1009: i64, v1013: i64, v1016: i64, v1019: i64, v1022: i16, v1025: i64, v1028: i8, v1033: i64):
         v559 -> v552
         v562 -> v552
         v569 -> v552
@@ -1173,14 +1173,14 @@ ebb62(v552: i32, v1009: i64, v1013: i64, v1016: i64, v1019: i64, v1022: i16, v10
     v555 = icmp eq v553, v554
     v556 = bint.i8 v555
     v557 = uextend.i32 v556
-    brz v557, ebb63
-    jump ebb145
+    brz v557, block63
+    jump block145
 
-ebb145:
+block145:
     v558 = global_value.i64 gv39
     trap user0
 
-ebb63:
+block63:
     v561 = udiv.i32 v559, v560
         v574 -> v561
     v563 = load.i32 v63
@@ -1189,24 +1189,24 @@ ebb63:
     v565 = icmp eq v563, v564
     v566 = bint.i8 v565
     v567 = uextend.i32 v566
-    brz v567, ebb64
-    jump ebb144
+    brz v567, block64
+    jump block144
 
-ebb144:
+block144:
     v568 = global_value.i64 gv40
     trap user0
 
-ebb64:
+block64:
     v571 = urem.i32 v569, v570
         v622 -> v571
         v803 -> v571
         v1011 -> v571
     v572 = iconst.i8 1
     v573 = uextend.i32 v572
-    brz v573, ebb68(v561)
-    jump ebb65
+    brz v573, block68(v561)
+    jump block65
 
-ebb65:
+block65:
     v575 = iconst.i32 10
     v576 = icmp.i32 ult v574, v575
     v577 = bint.i8 v576
@@ -1214,18 +1214,18 @@ ebb65:
     v579 = icmp_imm eq v578, 0
     v580 = bint.i8 v579
     v581 = uextend.i32 v580
-    brz v581, ebb67
-    jump ebb66
+    brz v581, block67
+    jump block66
 
-ebb66:
+block66:
     v582 = global_value.i64 gv41
     v583 = global_value.i64 gv42
     trap user65535
 
-ebb67:
-    jump ebb68(v574)
+block67:
+    jump block68(v574)
 
-ebb68(v584: i32):
+block68(v584: i32):
     v585 = ireduce.i8 v584
     v586 = iconst.i8 48
     v587 = iadd v586, v585
@@ -1236,27 +1236,27 @@ ebb68(v584: i32):
     v592 = iadd_imm.i64 v64, 1
     v593 = load.i8 v592
     v594 = uextend.i32 v593
-    brz v594, ebb69
-    jump ebb143
+    brz v594, block69
+    jump block143
 
-ebb143:
+block143:
     v595 = global_value.i64 gv43
     trap user0
 
-ebb69:
+block69:
     v597 = load.i64 v3
     v598 = load.i64 v3+8
     v599 = icmp.i64 ult v596, v598
     v600 = bint.i8 v599
     v601 = uextend.i32 v600
-    brnz v601, ebb70
-    jump ebb142
+    brnz v601, block70
+    jump block142
 
-ebb142:
+block142:
     v602 = global_value.i64 gv44
     trap user0
 
-ebb70:
+block70:
     v603 = load.i64 v3
     v604 = load.i64 v3+8
     v606 = imul_imm.i64 v605, 1
@@ -1272,14 +1272,14 @@ ebb70:
     v617 = iadd_imm.i64 v65, 8
     v618 = load.i8 v617
     v619 = uextend.i32 v618
-    brz v619, ebb71
-    jump ebb141
+    brz v619, block71
+    jump block141
 
-ebb141:
+block141:
     v620 = global_value.i64 gv45
     trap user0
 
-ebb71:
+block71:
     v621 = load.i64 v65
         v668 -> v621
         v695 -> v621
@@ -1295,14 +1295,14 @@ ebb71:
     v631 = iadd_imm.i64 v66, 8
     v632 = load.i8 v631
     v633 = uextend.i32 v632
-    brz v633, ebb72
-    jump ebb140
+    brz v633, block72
+    jump block140
 
-ebb140:
+block140:
     v634 = global_value.i64 gv46
     trap user0
 
-ebb72:
+block72:
     v635 = load.i64 v66
     v637 = iadd v635, v636
     v638 = iconst.i8 0
@@ -1313,24 +1313,24 @@ ebb72:
     v643 = iadd_imm.i64 v67, 8
     v644 = load.i8 v643
     v645 = uextend.i32 v644
-    brz v645, ebb73
-    jump ebb139
+    brz v645, block73
+    jump block139
 
-ebb139:
+block139:
     v646 = global_value.i64 gv47
     trap user0
 
-ebb73:
+block73:
     v647 = load.i64 v67
         v675 -> v647
         v692 -> v647
     v649 = icmp ult v647, v648
     v650 = bint.i8 v649
     v651 = uextend.i32 v650
-    brz v651, ebb80
-    jump ebb74
+    brz v651, block80
+    jump block74
 
-ebb74:
+block74:
     v652 = load.i32 v63
     v653 = uextend.i64 v652
     v655 = ishl v653, v654
@@ -1342,23 +1342,23 @@ ebb74:
     v661 = iadd_imm.i64 v68, 8
     v662 = load.i8 v661
     v663 = uextend.i32 v662
-    brz v663, ebb75
-    jump ebb138
+    brz v663, block75
+    jump block138
 
-ebb138:
+block138:
     v664 = global_value.i64 gv48
     trap user0
 
-ebb75:
+block75:
     v665 = load.i64 v68
         v690 -> v665
     v666 = load.i64 aligned v3
     v667 = load.i64 aligned v3+8
     v669 = load.i64 v73
     call fn70(v71, v72, v669)
-    jump ebb76
+    jump block76
 
-ebb76:
+block76:
     v670 = load.i64 aligned v71
     v671 = load.i64 aligned v71+8
     v672 = load.i64 aligned v70
@@ -1373,40 +1373,40 @@ ebb76:
     v685 = iadd_imm.i64 v74, 8
     v686 = load.i8 v685
     v687 = uextend.i32 v686
-    brz v687, ebb77
-    jump ebb137
+    brz v687, block77
+    jump block137
 
-ebb137:
+block137:
     v688 = global_value.i64 gv49
     trap user0
 
-ebb77:
+block77:
     v689 = load.i64 v74
     v694 = iconst.i64 1
     call fn72(v0, v69, v691, v692, v693, v689, v690, v694)
-    jump ebb78
+    jump block78
 
-ebb78:
-    jump ebb79
+block78:
+    jump block79
 
-ebb79:
+block79:
     return
 
-ebb80:
+block80:
     v697 = uextend.i64 v696
     v698 = icmp.i64 ugt v695, v697
     v699 = bint.i8 v698
     v700 = uextend.i32 v699
-    brz v700, ebb96
-    jump ebb81
+    brz v700, block96
+    jump block81
 
-ebb81:
+block81:
     v701 = iconst.i8 1
     v702 = uextend.i32 v701
-    brz v702, ebb88
-    jump ebb82
+    brz v702, block88
+    jump block82
 
-ebb82:
+block82:
     v703 = global_value.i64 gv50
     v704 = iadd_imm.i64 v75, 8
     v705 = load.i64 v75
@@ -1422,10 +1422,10 @@ ebb82:
     v713 = icmp_imm eq v712, 0
     v714 = bint.i8 v713
     v715 = uextend.i32 v714
-    brz v715, ebb84
-    jump ebb83
+    brz v715, block84
+    jump block83
 
-ebb83:
+block83:
     v716 = global_value.i64 gv51
     v717 = iconst.i64 3
     v720 = iadd_imm.i64 v80, 8
@@ -1435,17 +1435,17 @@ ebb83:
         v725 -> v723
     v724 = func_addr.i64 fn73
     call fn74(v83, v721, v724)
-    jump ebb85
+    jump block85
 
-ebb84:
-    jump ebb88
+block84:
+    jump block88
 
-ebb85:
+block85:
     v726 = func_addr.i64 fn75
     call fn76(v84, v725, v726)
-    jump ebb86
+    jump block86
 
-ebb86:
+block86:
     v727 = iconst.i64 0
     v728 = imul_imm v727, 16
     v729 = iadd.i64 v79, v728
@@ -1458,21 +1458,21 @@ ebb86:
     v736 = load.i64 aligned v84+8
     v737 = iconst.i64 2
     call fn77(v76, v77, v78)
-    jump ebb87
+    jump block87
 
-ebb87:
+block87:
     v738 = global_value.i64 gv52
     call fn78(v76, v738)
     v739 = global_value.i64 gv53
     trap user65535
 
-ebb88:
+block88:
     v740 = iconst.i8 1
     v741 = uextend.i32 v740
-    brz v741, ebb95(v1030, v1031, v1041, v1046, v1054, v1059)
-    jump ebb89
+    brz v741, block95(v1030, v1031, v1041, v1046, v1054, v1059)
+    jump block89
 
-ebb89:
+block89:
     v742 = global_value.i64 gv54
     v743 = iadd_imm.i64 v85, 8
     v744 = load.i64 v85
@@ -1488,10 +1488,10 @@ ebb89:
     v752 = icmp_imm eq v751, 0
     v753 = bint.i8 v752
     v754 = uextend.i32 v753
-    brz v754, ebb91
-    jump ebb90
+    brz v754, block91
+    jump block90
 
-ebb90:
+block90:
     v755 = global_value.i64 gv55
     v756 = iconst.i64 3
     v759 = iadd_imm.i64 v90, 8
@@ -1501,17 +1501,17 @@ ebb90:
         v764 -> v762
     v763 = func_addr.i64 fn80
     call fn81(v93, v760, v763)
-    jump ebb92
+    jump block92
 
-ebb91:
-    jump ebb95(v1030, v1031, v1041, v1046, v1054, v1059)
+block91:
+    jump block95(v1030, v1031, v1041, v1046, v1054, v1059)
 
-ebb92:
+block92:
     v765 = func_addr.i64 fn82
     call fn83(v94, v764, v765)
-    jump ebb93
+    jump block93
 
-ebb93:
+block93:
     v766 = iconst.i64 0
     v767 = imul_imm v766, 16
     v768 = iadd.i64 v89, v767
@@ -1524,19 +1524,19 @@ ebb93:
     v775 = load.i64 aligned v94+8
     v776 = iconst.i64 2
     call fn84(v86, v87, v88)
-    jump ebb94
+    jump block94
 
-ebb94:
+block94:
     v777 = global_value.i64 gv56
     call fn85(v86, v777)
     v778 = global_value.i64 gv57
     trap user65535
 
-ebb95(v779: i64, v780: i64, v1040: i64, v1045: i64, v1053: i16, v1058: i64):
+block95(v779: i64, v780: i64, v1040: i64, v1045: i64, v1053: i16, v1058: i64):
     v781 = iconst.i64 1
-    jump ebb99(v779, v780, v781, v1040, v1045, v1053, v1058)
+    jump block99(v779, v780, v781, v1040, v1045, v1053, v1058)
 
-ebb96:
+block96:
     v782 = iconst.i16 1
     v783 = load.i16 v62
     v784 = isub v783, v782
@@ -1547,34 +1547,34 @@ ebb96:
     v789 = iadd_imm.i64 v95, 2
     v790 = load.i8 v789
     v791 = uextend.i32 v790
-    brz v791, ebb97
-    jump ebb136
+    brz v791, block97
+    jump block136
 
-ebb136:
+block136:
     v792 = global_value.i64 gv58
     trap user0
 
-ebb97:
+block97:
     v793 = load.i16 aligned v95
     v794 = iconst.i32 10
     v795 = iconst.i32 0
     v796 = icmp eq v794, v795
     v797 = bint.i8 v796
     v798 = uextend.i32 v797
-    brz v798, ebb98
-    jump ebb135
+    brz v798, block98
+    jump block135
 
-ebb135:
+block135:
     v799 = global_value.i64 gv59
     trap user0
 
-ebb98:
+block98:
     v800 = iconst.i32 10
     v801 = load.i32 v63
     v802 = udiv v801, v800
-    jump ebb62(v803, v1010, v1014, v1017, v1020, v1023, v1026, v1029, v1034)
+    jump block62(v803, v1010, v1014, v1017, v1020, v1023, v1026, v1029, v1034)
 
-ebb99(v804: i64, v1035: i64, v1037: i64, v1039: i64, v1044: i64, v1052: i16, v1057: i64):
+block99(v804: i64, v1035: i64, v1037: i64, v1039: i64, v1044: i64, v1052: i16, v1057: i64):
         v817 -> v1035
         v830 -> v1037
         v844 -> v1039
@@ -1603,14 +1603,14 @@ ebb99(v804: i64, v1035: i64, v1037: i64, v1039: i64, v1044: i64, v1052: i16, v10
     v812 = iadd_imm.i64 v96, 8
     v813 = load.i8 v812
     v814 = uextend.i32 v813
-    brz v814, ebb100
-    jump ebb134
+    brz v814, block100
+    jump block134
 
-ebb134:
+block134:
     v815 = global_value.i64 gv60
     trap user0
 
-ebb100:
+block100:
     v816 = load.i64 v96
         v843 -> v816
         v856 -> v816
@@ -1625,14 +1625,14 @@ ebb100:
     v825 = iadd_imm.i64 v97, 8
     v826 = load.i8 v825
     v827 = uextend.i32 v826
-    brz v827, ebb101
-    jump ebb133
+    brz v827, block101
+    jump block133
 
-ebb133:
+block133:
     v828 = global_value.i64 gv61
     trap user0
 
-ebb101:
+block101:
     v829 = load.i64 v97
         v935 -> v829
         v962 -> v829
@@ -1649,14 +1649,14 @@ ebb101:
     v838 = iadd_imm.i64 v98, 8
     v839 = load.i8 v838
     v840 = uextend.i32 v839
-    brz v840, ebb102
-    jump ebb132
+    brz v840, block102
+    jump block132
 
-ebb132:
+block132:
     v841 = global_value.i64 gv62
     trap user0
 
-ebb102:
+block102:
     v842 = load.i64 v98
         v976 -> v842
         v989 -> v842
@@ -1671,14 +1671,14 @@ ebb102:
     v851 = iadd_imm.i64 v99, 8
     v852 = load.i8 v851
     v853 = uextend.i32 v852
-    brz v853, ebb103
-    jump ebb131
+    brz v853, block103
+    jump block131
 
-ebb131:
+block131:
     v854 = global_value.i64 gv63
     trap user0
 
-ebb103:
+block103:
     v855 = load.i64 v99
         v886 -> v855
     v858 = iconst.i64 1
@@ -1691,14 +1691,14 @@ ebb103:
     v865 = iadd_imm.i64 v100, 8
     v866 = load.i8 v865
     v867 = uextend.i32 v866
-    brz v867, ebb104
-    jump ebb130
+    brz v867, block104
+    jump block130
 
-ebb130:
+block130:
     v868 = global_value.i64 gv64
     trap user0
 
-ebb104:
+block104:
     v869 = load.i64 v100
     v870 = iconst.i64 1
     v871 = isub v869, v870
@@ -1710,14 +1710,14 @@ ebb104:
     v877 = iadd_imm.i64 v101, 8
     v878 = load.i8 v877
     v879 = uextend.i32 v878
-    brz v879, ebb105
-    jump ebb129
+    brz v879, block105
+    jump block129
 
-ebb129:
+block129:
     v880 = global_value.i64 gv65
     trap user0
 
-ebb105:
+block105:
     v881 = load.i64 v101
     v883 = band.i64 v882, v881
         v934 -> v883
@@ -1727,10 +1727,10 @@ ebb105:
         v1048 -> v883
     v884 = iconst.i8 1
     v885 = uextend.i32 v884
-    brz v885, ebb109(v855)
-    jump ebb106
+    brz v885, block109(v855)
+    jump block106
 
-ebb106:
+block106:
     v887 = iconst.i64 10
     v888 = icmp.i64 ult v886, v887
     v889 = bint.i8 v888
@@ -1738,18 +1738,18 @@ ebb106:
     v891 = icmp_imm eq v890, 0
     v892 = bint.i8 v891
     v893 = uextend.i32 v892
-    brz v893, ebb108
-    jump ebb107
+    brz v893, block108
+    jump block107
 
-ebb107:
+block107:
     v894 = global_value.i64 gv66
     v895 = global_value.i64 gv67
     trap user65535
 
-ebb108:
-    jump ebb109(v886)
+block108:
+    jump block109(v886)
 
-ebb109(v896: i64):
+block109(v896: i64):
     v897 = ireduce.i8 v896
     v898 = iconst.i8 48
     v899 = iadd v898, v897
@@ -1760,27 +1760,27 @@ ebb109(v896: i64):
     v904 = iadd_imm.i64 v102, 1
     v905 = load.i8 v904
     v906 = uextend.i32 v905
-    brz v906, ebb110
-    jump ebb128
+    brz v906, block110
+    jump block128
 
-ebb128:
+block128:
     v907 = global_value.i64 gv68
     trap user0
 
-ebb110:
+block110:
     v909 = load.i64 v3
     v910 = load.i64 v3+8
     v911 = icmp.i64 ult v908, v910
     v912 = bint.i8 v911
     v913 = uextend.i32 v912
-    brnz v913, ebb111
-    jump ebb127
+    brnz v913, block111
+    jump block127
 
-ebb127:
+block127:
     v914 = global_value.i64 gv69
     trap user0
 
-ebb111:
+block111:
     v915 = load.i64 v3
     v916 = load.i64 v3+8
     v918 = imul_imm.i64 v917, 1
@@ -1796,24 +1796,24 @@ ebb111:
     v929 = iadd_imm.i64 v103, 8
     v930 = load.i8 v929
     v931 = uextend.i32 v930
-    brz v931, ebb112
-    jump ebb126
+    brz v931, block112
+    jump block126
 
-ebb126:
+block126:
     v932 = global_value.i64 gv70
     trap user0
 
-ebb112:
+block112:
     v933 = load.i64 v103
         v954 -> v933
         v1047 -> v933
     v936 = icmp.i64 ult v934, v935
     v937 = bint.i8 v936
     v938 = uextend.i32 v937
-    brz v938, ebb119
-    jump ebb113
+    brz v938, block119
+    jump block113
 
-ebb113:
+block113:
     v940 = iconst.i64 1
     v941 = ishl v940, v939
     v942 = iconst.i8 0
@@ -1824,23 +1824,23 @@ ebb113:
     v947 = iadd_imm.i64 v104, 8
     v948 = load.i8 v947
     v949 = uextend.i32 v948
-    brz v949, ebb114
-    jump ebb125
+    brz v949, block114
+    jump block125
 
-ebb125:
+block125:
     v950 = global_value.i64 gv71
     trap user0
 
-ebb114:
+block114:
     v951 = load.i64 v104
         v988 -> v951
     v952 = load.i64 aligned v3
     v953 = load.i64 aligned v3+8
     v955 = load.i64 v109
     call fn101(v107, v108, v955)
-    jump ebb115
+    jump block115
 
-ebb115:
+block115:
     v956 = load.i64 aligned v107
     v957 = load.i64 aligned v107+8
     v958 = load.i64 aligned v106
@@ -1855,14 +1855,14 @@ ebb115:
     v971 = iadd_imm.i64 v110, 8
     v972 = load.i8 v971
     v973 = uextend.i32 v972
-    brz v973, ebb116
-    jump ebb123
+    brz v973, block116
+    jump block123
 
-ebb123:
+block123:
     v974 = global_value.i64 gv72
     trap user0
 
-ebb116:
+block116:
     v975 = load.i64 v110
     v977 = imul v975, v976
     v978 = iconst.i8 0
@@ -1873,22 +1873,22 @@ ebb116:
     v983 = iadd_imm.i64 v111, 8
     v984 = load.i8 v983
     v985 = uextend.i32 v984
-    brz v985, ebb117
-    jump ebb122
+    brz v985, block117
+    jump block122
 
-ebb122:
+block122:
     v986 = global_value.i64 gv73
     trap user0
 
-ebb117:
+block117:
     v987 = load.i64 v111
     call fn104(v0, v105, v990, v991, v992, v987, v988, v989)
-    jump ebb118
+    jump block118
 
-ebb118:
-    jump ebb79
+block118:
+    jump block79
 
-ebb119:
+block119:
     v993 = iconst.i16 1
     v994 = load.i16 v62
     v995 = isub v994, v993
@@ -1899,14 +1899,14 @@ ebb119:
     v1000 = iadd_imm.i64 v112, 2
     v1001 = load.i8 v1000
     v1002 = uextend.i32 v1001
-    brz v1002, ebb120
-    jump ebb121
+    brz v1002, block120
+    jump block121
 
-ebb121:
+block121:
     v1003 = global_value.i64 gv74
     trap user0
 
-ebb120:
+block120:
     v1004 = load.i16 aligned v112
-    jump ebb99(v1005, v1036, v1038, v1042, v1047, v1055, v1060)
+    jump block99(v1005, v1036, v1038, v1042, v1047, v1055, v1060)
 }

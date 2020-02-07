@@ -31,6 +31,6 @@ function %parse_encoding(i32 [%x5]) -> i32 [%x10] {
     ; check: sig6 = (i32 [%x10]) -> b1 [%x10] system_v
     ; nextln: fn0 = %bar sig6
 
-ebb0(v0: i32):
+block0(v0: i32):
     return v0
 }

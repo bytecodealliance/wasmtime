@@ -2,7 +2,7 @@ test compile
 target x86_64
 
 function u0:0(i16) -> i8 fast {
-ebb0(v0: i16):
+block0(v0: i16):
     v1 = ireduce.i8 v0
     return v1
 }

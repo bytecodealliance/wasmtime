@@ -2,7 +2,7 @@ test run
 set enable_simd
 
 function %test_shuffle_different_ssa_values() -> b1 {
-ebb0:
+block0:
     v0 = vconst.i8x16 0x00
     v1 = vconst.i8x16 [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42]
     v2 = shuffle v0, v1, [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 31]     ; use the first lane of v0 throughout except use the last lane of v1
@@ -15,7 +15,7 @@ ebb0:
 ; run
 
 function %test_shuffle_same_ssa_value() -> b1 {
-ebb0:
+block0:
     v0 = vconst.i8x16 0x01000000_00000000_00000000_00000000     ; note where lane 15 is when written with hexadecimal syntax
     v1 = shuffle v0, v0, 0x0f0f0f0f_0f0f0f0f_0f0f0f0f_0f0f0f0f  ; use the last lane of v0 to fill all lanes
     v2 = extractlane.i8x16 v1, 4
@@ -27,7 +27,7 @@ ebb0:
 ; run
 
 function %compare_shuffle() -> b1 {
-ebb0:
+block0:
     v1 = vconst.i32x4 [0 1 2 3]
     v2 = raw_bitcast.i8x16  v1 ; we have to cast because shuffle is type-limited to Tx16
     ; keep each lane in place from the first vector
@@ -45,7 +45,7 @@ ebb0:
 
 
 function %compare_shuffle() -> b32 {
-ebb0:
+block0:
     v1 = vconst.b32x4 [true false true false]
     v2 = raw_bitcast.b8x16 v1 ; we have to cast because shuffle is type-limited to Tx16
     ; pair up the true values to make the entire vector true

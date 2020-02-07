@@ -3,17 +3,17 @@ test verifier
 function %average(i32, i32) -> f32 system_v {
     ss0 = explicit_slot 8         ; Stack slot for ``sum``.
 
-ebb1(v0: i32, v1: i32):
+block1(v0: i32, v1: i32):
     v2 = f64const 0x0.0
     stack_store v2, ss0
-    brz v1, ebb5                  ; Handle count == 0.
-    jump ebb2
+    brz v1, block5                  ; Handle count == 0.
+    jump block2
 
-ebb2:
+block2:
     v3 = iconst.i32 0
-    jump ebb3(v3)
+    jump block3(v3)
 
-ebb3(v4: i32):
+block3(v4: i32):
     v5 = imul_imm v4, 4
     v6 = iadd v0, v5
     v7 = load.f32 v6              ; array[i]
@@ -23,17 +23,17 @@ ebb3(v4: i32):
     stack_store v10, ss0
     v11 = iadd_imm v4, 1
     v12 = icmp ult v11, v1
-    brnz v12, ebb3(v11)           ; Loop backedge.
-    jump ebb4
+    brnz v12, block3(v11)           ; Loop backedge.
+    jump block4
 
-ebb4:
+block4:
     v13 = stack_load.f64 ss0
     v14 = fcvt_from_uint.f64 v1
     v15 = fdiv v13, v14
     v16 = fdemote.f32 v15
     return v16
 
-ebb5:
+block5:
     v100 = f32const +NaN
     return v100
 }

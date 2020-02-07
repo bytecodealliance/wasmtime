@@ -1,73 +1,73 @@
 test domtree
 
 function %test(i32) {
-    ebb0(v0: i32):
-        brz v0, ebb13   ; dominates: ebb13
-        jump ebb1       ; dominates: ebb1
-    ebb1:
-        brz v0, ebb2    ; dominates: ebb2 ebb7
-        jump ebb20      ; dominates: ebb20
-    ebb20:
-        brnz v0, ebb3   ; dominates: ebb3
-        jump ebb21      ; dominates: ebb21
-    ebb21:
-        brz v0, ebb4    ; dominates: ebb4
-        jump ebb22      ; dominates: ebb22
-    ebb22:
-        brnz v0, ebb5   ; dominates: ebb5
-        jump ebb6       ; dominates: ebb6
-    ebb2:
-        jump ebb7
-    ebb3:
-        jump ebb7
-    ebb4:
-        jump ebb7
-    ebb5:
-        jump ebb7
-    ebb6:
-        jump ebb7
-    ebb7:
-        brnz v0, ebb8   ; dominates: ebb8 ebb12
-        jump ebb23      ; dominates: ebb23
-    ebb23:
-        brz v0, ebb9    ; dominates: ebb9
-        jump ebb24      ; dominates: ebb24
-    ebb24:
-        brnz v0, ebb10  ; dominates: ebb10
-        jump ebb11      ; dominates: ebb11
-    ebb8:
-        jump ebb12
-    ebb9:
-        jump ebb12
-    ebb10:
-        brz v0, ebb13
-        jump ebb12
-    ebb11:
-        jump ebb13
-    ebb12:
+    block0(v0: i32):
+        brz v0, block13   ; dominates: block13
+        jump block1       ; dominates: block1
+    block1:
+        brz v0, block2    ; dominates: block2 block7
+        jump block20      ; dominates: block20
+    block20:
+        brnz v0, block3   ; dominates: block3
+        jump block21      ; dominates: block21
+    block21:
+        brz v0, block4    ; dominates: block4
+        jump block22      ; dominates: block22
+    block22:
+        brnz v0, block5   ; dominates: block5
+        jump block6       ; dominates: block6
+    block2:
+        jump block7
+    block3:
+        jump block7
+    block4:
+        jump block7
+    block5:
+        jump block7
+    block6:
+        jump block7
+    block7:
+        brnz v0, block8   ; dominates: block8 block12
+        jump block23      ; dominates: block23
+    block23:
+        brz v0, block9    ; dominates: block9
+        jump block24      ; dominates: block24
+    block24:
+        brnz v0, block10  ; dominates: block10
+        jump block11      ; dominates: block11
+    block8:
+        jump block12
+    block9:
+        jump block12
+    block10:
+        brz v0, block13
+        jump block12
+    block11:
+        jump block13
+    block12:
         return
-    ebb13:
+    block13:
         return
 }
 
 ; check: domtree_preorder {
-; nextln: ebb0: ebb13 ebb1
-; nextln: ebb13:
-; nextln: ebb1: ebb2 ebb20 ebb7
-; nextln: ebb2:
-; nextln: ebb20: ebb3 ebb21
-; nextln: ebb3:
-; nextln: ebb21: ebb4 ebb22
-; nextln: ebb4:
-; nextln: ebb22: ebb5 ebb6
-; nextln: ebb5:
-; nextln: ebb6:
-; nextln: ebb7: ebb8 ebb23 ebb12
-; nextln: ebb8:
-; nextln: ebb23: ebb9 ebb24
-; nextln: ebb9:
-; nextln: ebb24: ebb10 ebb11
-; nextln: ebb10:
-; nextln: ebb11:
-; nextln: ebb12:
+; nextln: block0: block13 block1
+; nextln: block13:
+; nextln: block1: block2 block20 block7
+; nextln: block2:
+; nextln: block20: block3 block21
+; nextln: block3:
+; nextln: block21: block4 block22
+; nextln: block4:
+; nextln: block22: block5 block6
+; nextln: block5:
+; nextln: block6:
+; nextln: block7: block8 block23 block12
+; nextln: block8:
+; nextln: block23: block9 block24
+; nextln: block9:
+; nextln: block24: block10 block11
+; nextln: block10:
+; nextln: block11:
+; nextln: block12:
 ; nextln: }

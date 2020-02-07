@@ -135,7 +135,7 @@ pub fn legalize_args<AA: ArgAssigner>(args: &[AbiParam], aa: &mut AA) -> Option<
 ///
 /// The legalizer needs to repair the values at all ABI boundaries:
 ///
-/// - Incoming function arguments to the entry EBB.
+/// - Incoming function arguments to the entry block.
 /// - Function arguments passed to a call.
 /// - Return values from a call.
 /// - Return values passed to a return instruction.

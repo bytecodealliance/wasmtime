@@ -3,7 +3,7 @@ set enable_simd
 target x86_64 skylake
 
 function %ineg_i32x4() -> b1 {
-ebb0:
+block0:
     v0 = vconst.i32x4 [1 1 1 1]
     v2 = ineg v0
     ; check: v5 = vconst.i32x4 0x00
@@ -16,7 +16,7 @@ ebb0:
 }
 
 function %ineg_legalized() {
-ebb0:
+block0:
     v0 = vconst.i8x16 0x00
     v1 = ineg v0
     ; check: v6 = vconst.i8x16 0x00
@@ -36,7 +36,7 @@ ebb0:
 }
 
 function %fneg_legalized() {
-ebb0:
+block0:
     v0 = vconst.f32x4 [0x1.0 0x2.0 0x3.0 0x4.0]
     v1 = fneg v0
     ; check: v4 = vconst.i32x4 0xffffffffffffffffffffffffffffffff
@@ -55,7 +55,7 @@ ebb0:
 }
 
 function %fabs_legalized() {
-ebb0:
+block0:
     v0 = vconst.f64x2 [0x1.0 -0x2.0]
     v1 = fabs v0
     ; check: v2 = vconst.i64x2 0xffffffffffffffffffffffffffffffff

@@ -4,36 +4,36 @@ target i686
 target x86_64
 
 ; regex: V=v\d+
-; regex: EBB=ebb\d+
+; regex: BB=block\d+
 
 function %cond_trap(i32) {
-ebb0(v1: i32):
+block0(v1: i32):
     trapz v1, user67
     return
-    ; check: ebb0(v1: i32
+    ; check: block0(v1: i32
     ; nextln: $(f=$V) = ifcmp_imm v1, 0
     ; nextln: trapif eq $f, user67
     ; nextln: return
 }
 
 function %cond_trap2(i32) {
-ebb0(v1: i32):
+block0(v1: i32):
     trapnz v1, int_ovf
     return
-    ; check: ebb0(v1: i32
+    ; check: block0(v1: i32
     ; nextln: $(f=$V) = ifcmp_imm v1, 0
     ; nextln: trapif ne $f, int_ovf
     ; nextln: return
 }
 
 function %cond_trap_b1(i32) {
-ebb0(v1: i32):
+block0(v1: i32):
     v2 = icmp_imm eq v1, 6
     trapz v2, user7
     return
-    ; check: ebb0(v1: i32
-    ; check: brnz v2, $(new=$EBB)
-    ; check: jump $(trap=$EBB)
+    ; check: block0(v1: i32
+    ; check: brnz v2, $(new=$BB)
+    ; check: jump $(trap=$BB)
     ; check: $trap:
     ; nextln: trap user7
     ; check: $new:
@@ -41,13 +41,13 @@ ebb0(v1: i32):
 }
 
 function %cond_trap2_b1(i32) {
-ebb0(v1: i32):
+block0(v1: i32):
     v2 = icmp_imm eq v1, 6
     trapnz v2, user9
     return
-    ; check: ebb0(v1: i32
-    ; check: brz v2, $(new=$EBB)
-    ; check: jump $(trap=$EBB)
+    ; check: block0(v1: i32
+    ; check: brz v2, $(new=$BB)
+    ; check: jump $(trap=$BB)
     ; check: $trap:
     ; nextln: trap user9
     ; check: $new:
@@ -55,7 +55,7 @@ ebb0(v1: i32):
 }
 
 function %f32const() -> f32 {
-ebb0:
+block0:
     v1 = f32const 0x1.0p1
     ; check: $(tmp=$V) = iconst.i32
     ; check: v1 = bitcast.f32 $tmp
@@ -63,9 +63,9 @@ ebb0:
 }
 
 function %select_f64(f64, f64, i32) -> f64 {
-ebb0(v0: f64, v1: f64, v2: i32):
+block0(v0: f64, v1: f64, v2: i32):
     v3 = select v2, v0, v1
-    ; check:  brnz v2, $(new=$EBB)(v0)
+    ; check:  brnz v2, $(new=$BB)(v0)
     ; nextln: jump $new(v1)
     ; check: $new(v3: f64):
     ; nextln: return v3
@@ -73,19 +73,19 @@ ebb0(v0: f64, v1: f64, v2: i32):
 }
 
 function %f32_min(f32, f32) -> f32 {
-ebb0(v0: f32, v1: f32):
+block0(v0: f32, v1: f32):
     v2 = fmin v0, v1
     return v2
     ; check: $(vnat=$V) = x86_fmin.f32 v0, v1
-    ; nextln: jump $(done=$EBB)($vnat)
+    ; nextln: jump $(done=$BB)($vnat)
 
-    ; check: $(uno=$EBB):
+    ; check: $(uno=$BB):
     ; nextln: $(vuno=$V) = fadd.f32 v0, v1
-    ; nextln: jump $(done=$EBB)($vuno)
+    ; nextln: jump $(done=$BB)($vuno)
 
-    ; check: $(ueq=$EBB):
+    ; check: $(ueq=$BB):
     ; check: $(veq=$V) = bor.f32 v0, v1
-    ; nextln: jump $(done=$EBB)($veq)
+    ; nextln: jump $(done=$BB)($veq)
 
     ; check: $done(v2: f32):
     ; nextln: return v2

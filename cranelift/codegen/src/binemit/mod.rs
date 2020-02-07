@@ -127,8 +127,8 @@ pub trait CodeSink {
     /// Add 8 bytes to the code section.
     fn put8(&mut self, _: u64);
 
-    /// Add a relocation referencing an EBB at the current offset.
-    fn reloc_ebb(&mut self, _: Reloc, _: CodeOffset);
+    /// Add a relocation referencing an block at the current offset.
+    fn reloc_block(&mut self, _: Reloc, _: CodeOffset);
 
     /// Add a relocation referencing an external symbol plus the addend at the current offset.
     fn reloc_external(&mut self, _: Reloc, _: &ExternalName, _: Addend);
@@ -205,10 +205,10 @@ where
     EI: Fn(&Function, Inst, &mut RegDiversions, &mut CS, &dyn TargetIsa),
 {
     let mut divert = RegDiversions::new();
-    for ebb in func.layout.ebbs() {
-        divert.at_ebb(&func.entry_diversions, ebb);
-        debug_assert_eq!(func.offsets[ebb], sink.offset());
-        for inst in func.layout.ebb_insts(ebb) {
+    for block in func.layout.blocks() {
+        divert.at_block(&func.entry_diversions, block);
+        debug_assert_eq!(func.offsets[block], sink.offset());
+        for inst in func.layout.block_insts(block) {
             emit_inst(func, inst, &mut divert, sink, isa);
         }
     }
@@ -218,8 +218,8 @@ where
     // Output jump tables.
     for (jt, jt_data) in func.jump_tables.iter() {
         let jt_offset = func.jt_offsets[jt];
-        for ebb in jt_data.iter() {
-            let rel_offset: i32 = func.offsets[*ebb] as i32 - jt_offset as i32;
+        for block in jt_data.iter() {
+            let rel_offset: i32 = func.offsets[*block] as i32 - jt_offset as i32;
             sink.put4(rel_offset as u32)
         }
     }

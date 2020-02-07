@@ -4,35 +4,35 @@ set opt_level=speed_and_size
 target x86_64
 
 function %zero_const_32bit_no_rex() -> f32 fast {
-ebb0:
+block0:
   ; asm: xorps %xmm0, %xmm0
   [-,%xmm0]    v0 = f32const 0.0     ; bin: 0f 57 c0
   return v0
 }
 
 function %zero_const_32bit_rex() -> f32 fast {
-ebb0:
+block0:
   ; asm: xorps %xmm8, %xmm8
   [-,%xmm8]    v1 = f32const 0.0     ; bin: 45 0f 57 c0
   return v1
 }
 
 function %zero_const_64bit_no_rex() -> f64 fast {
-ebb0:
+block0:
   ; asm: xorpd %xmm0, %xmm0
   [-,%xmm0]    v0 = f64const 0.0     ; bin: 66 0f 57 c0
   return v0
 }
 
 function %zero_const_64bit_rex() -> f64 fast {
-ebb0:
+block0:
   ; asm: xorpd %xmm8, %xmm8
   [-,%xmm8]    v1 = f64const 0.0     ; bin: 66 45 0f 57 c0
   return v1
 }
 
 function %imm_zero_register() -> i64 fast {
-ebb0:
+block0:
   ; asm: xor %eax, %eax
   [-,%rax]     v0 = iconst.i64 0     ; bin: 31 c0
   ; asm: xor %edi, %edi
@@ -45,7 +45,7 @@ ebb0:
 }
 
 function %zero_word() -> i16 fast {
-ebb0:
+block0:
   ; while you may expect this to be encoded like 6631c0, aka
   ; xor %ax, %ax, the upper 16 bits of the register used for
   ; i16 are left undefined, so it's not wrong to clear them.
@@ -61,7 +61,7 @@ ebb0:
 }
 
 function %zero_byte() -> i8 fast {
-ebb0:
+block0:
   ; asm: xor %r8b, %r8b
   [-,%r15]     v0 = iconst.i8 0     ; bin: 45 30 ff
   ; asm: xor %al, %al

@@ -2,12 +2,12 @@ test legalizer
 target x86_64
 
 function %reverse_bits(i128) -> i128 {
-ebb0(v0: i128):
+block0(v0: i128):
     v1 = bitrev.i128 v0
     return v1
 }
 
-; check: ebb0(v2: i64, v3: i64):
+; check: block0(v2: i64, v3: i64):
 ; check: v0 = iconcat v2, v3
 ; check: v33 = iconst.i64 0xaaaa_aaaa_aaaa_aaaa
 ; check: v6 = band v2, v33

@@ -2,7 +2,7 @@ test run
 set enable_simd
 
 function %run_icmp_i8x16() -> b8 {
-ebb0:
+block0:
     v0 = vconst.i8x16 0x00
     v1 = vconst.i8x16 0x00
     v2 = icmp eq v0, v1
@@ -13,7 +13,7 @@ ebb0:
 ; run
 
 function %run_icmp_i64x2() -> b64 {
-ebb0:
+block0:
     v0 = vconst.i64x2 0xffffffffffffffffffffffffffffffff
     v1 = vconst.i64x2 0xffffffffffffffffffffffffffffffff
     v2 = icmp eq v0, v1

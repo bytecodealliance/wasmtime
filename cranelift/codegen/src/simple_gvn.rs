@@ -59,7 +59,7 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
     let _tt = timing::gvn();
     debug_assert!(domtree.is_valid());
 
-    // Visit EBBs in a reverse post-order.
+    // Visit blocks in a reverse post-order.
     //
     // The RefCell here is a bit ugly since the HashKeys in the ScopedHashMap
     // need a reference to the function.
@@ -68,13 +68,13 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
     let mut visible_values: ScopedHashMap<HashKey, Inst> = ScopedHashMap::new();
     let mut scope_stack: Vec<Inst> = Vec::new();
 
-    for &ebb in domtree.cfg_postorder().iter().rev() {
+    for &block in domtree.cfg_postorder().iter().rev() {
         {
             // Pop any scopes that we just exited.
             let layout = &pos.borrow().func.layout;
             loop {
                 if let Some(current) = scope_stack.last() {
-                    if domtree.dominates(*current, ebb, layout) {
+                    if domtree.dominates(*current, block, layout) {
                         break;
                     }
                 } else {
@@ -85,11 +85,11 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
             }
 
             // Push a scope for the current block.
-            scope_stack.push(layout.first_inst(ebb).unwrap());
+            scope_stack.push(layout.first_inst(block).unwrap());
             visible_values.increment_depth();
         }
 
-        pos.borrow_mut().goto_top(ebb);
+        pos.borrow_mut().goto_top(block);
         while let Some(inst) = {
             let mut pos = pos.borrow_mut();
             pos.next_inst()

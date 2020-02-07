@@ -7,19 +7,19 @@ target i686
 ; The icmp_imm instrutions write their b1 result to the ABCD register class on
 ; 32-bit x86. So if we define 5 live values, they can't all fit.
 function %global_constraints(i32) {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = icmp_imm eq v0, 1
     v2 = icmp_imm ugt v0, 2
     v3 = icmp_imm sle v0, 3
     v4 = icmp_imm ne v0, 4
     v5 = icmp_imm sge v0, 5
-    brnz v5, ebb1
-    jump ebb2
+    brnz v5, block1
+    jump block2
 
-ebb2:
+block2:
     return
 
-ebb1:
+block1:
     ; Make sure v1-v5 are live in.
     v10 = band v1, v2
     v11 = bor v3, v4

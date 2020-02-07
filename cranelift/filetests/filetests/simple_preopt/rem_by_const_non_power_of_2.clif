@@ -5,7 +5,7 @@ target i686 baseline
 
 ; complex case (mul, sub, shift, add, shift)
 function %t_urem32_p7(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = urem_imm v0, 7
     ; check: iconst.i32 0x2492_4925
     ; check: umulhi v0, v2
@@ -20,7 +20,7 @@ ebb0(v0: i32):
 
 ; simple case (mul, shift)
 function %t_urem32_p125(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = urem_imm v0, 125
     ; check: iconst.i32 0x1062_4dd3
     ; check: umulhi v0, v2
@@ -32,7 +32,7 @@ ebb0(v0: i32):
 
 ; simple case w/ shift by zero (mul)
 function %t_urem32_p641(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = urem_imm v0, 641
     ; check: iconst.i32 0x0066_3d81
     ; check: umulhi v0, v2
@@ -46,7 +46,7 @@ ebb0(v0: i32):
 
 ; simple case w/ shift by zero (mul, add-sign-bit)
 function %t_srem32_n6(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = srem_imm v0, -6
     ; check: iconst.i32 0xffff_ffff_d555_5555
     ; check: smulhi v0, v2
@@ -59,7 +59,7 @@ ebb0(v0: i32):
 
 ; simple case (mul, shift, add-sign-bit)
 function %t_srem32_n5(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = srem_imm v0, -5
     ; check: iconst.i32 0xffff_ffff_9999_9999
     ; check: smulhi v0, v2
@@ -73,7 +73,7 @@ ebb0(v0: i32):
 
 ; case d < 0 && M > 0 (mul, sub, shift, add-sign-bit)
 function %t_srem32_n3(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = srem_imm v0, -3
     ; check: iconst.i32 0x5555_5555
     ; check: smulhi v0, v2
@@ -88,7 +88,7 @@ ebb0(v0: i32):
 
 ; simple case w/ shift by zero (mul, add-sign-bit)
 function %t_srem32_p6(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = srem_imm v0, 6
     ; check: iconst.i32 0x2aaa_aaab
     ; check: smulhi v0, v2
@@ -101,7 +101,7 @@ ebb0(v0: i32):
 
 ; case d > 0 && M < 0 (mull, add, shift, add-sign-bit)
 function %t_srem32_p7(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = srem_imm v0, 7
     ; check: iconst.i32 0xffff_ffff_9249_2493
     ; check: smulhi v0, v2
@@ -116,7 +116,7 @@ ebb0(v0: i32):
 
 ; simple case (mul, shift, add-sign-bit)
 function %t_srem32_p625(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = srem_imm v0, 625
     ; check: iconst.i32 0x68db_8bad
     ; check: smulhi v0, v2
@@ -133,7 +133,7 @@ ebb0(v0: i32):
 
 ; complex case (mul, sub, shift, add, shift)
 function %t_urem64_p7(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = urem_imm v0, 7
     ; check: umulhi v0, v2
     ; check: isub v0, v3
@@ -147,7 +147,7 @@ ebb0(v0: i64):
 
 ; simple case (mul, shift)
 function %t_urem64_p9(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = urem_imm v0, 9
     ; check: iconst.i64 0xe38e_38e3_8e38_e38f
     ; check: umulhi v0, v2
@@ -159,7 +159,7 @@ ebb0(v0: i64):
 
 ; complex case (mul, sub, shift, add, shift)
 function %t_urem64_p125(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = urem_imm v0, 125
     ; check: iconst.i64 0x0624_dd2f_1a9f_be77
     ; check: umulhi v0, v2
@@ -174,7 +174,7 @@ ebb0(v0: i64):
 
 ; simple case w/ shift by zero (mul)
 function %t_urem64_p274177(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = urem_imm v0, 274177
     ; check: iconst.i64 0x3d30_f19c_d101
     ; check: umulhi v0, v2
@@ -188,7 +188,7 @@ ebb0(v0: i64):
 
 ; simple case (mul, shift, add-sign-bit)
 function %t_srem64_n625(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, -625
     ; check: iconst.i64 0xcb92_3a29_c779_a6b5
     ; check: smulhi v0, v2
@@ -202,7 +202,7 @@ ebb0(v0: i64):
 
 ; simple case w/ zero shift (mul, add-sign-bit)
 function %t_srem64_n6(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, -6
     ; check: iconst.i64 0xd555_5555_5555_5555
     ; check: smulhi v0, v2
@@ -215,7 +215,7 @@ ebb0(v0: i64):
 
 ; simple case w/ zero shift (mul, add-sign-bit)
 function %t_srem64_n5(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, -5
     ; check: iconst.i64 0x9999_9999_9999_9999
     ; check: smulhi v0, v2
@@ -229,7 +229,7 @@ ebb0(v0: i64):
 
 ; case d < 0 && M > 0 (mul, sub, shift, add-sign-bit)
 function %t_srem64_n3(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, -3
     ; check: iconst.i64 0x5555_5555_5555_5555
     ; check: smulhi v0, v2
@@ -244,7 +244,7 @@ ebb0(v0: i64):
 
 ; simple case w/ zero shift (mul, add-sign-bit)
 function %t_srem64_p6(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, 6
     ; check: iconst.i64 0x2aaa_aaaa_aaaa_aaab
     ; check: smulhi v0, v2
@@ -257,7 +257,7 @@ ebb0(v0: i64):
 
 ; case d > 0 && M < 0 (mul, add, shift, add-sign-bit)
 function %t_srem64_p15(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, 15
     ; check: iconst.i64 0x8888_8888_8888_8889
     ; check: smulhi v0, v2
@@ -272,7 +272,7 @@ ebb0(v0: i64):
 
 ; simple case (mul, shift, add-sign-bit)
 function %t_srem64_p625(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, 625
     ; check: iconst.i64 0x346d_c5d6_3886_594b
     ; check: smulhi v0, v2

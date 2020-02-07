@@ -3,7 +3,7 @@ set enable_simd
 target x86_64
 
 function %test_pshuf() {
-ebb0:
+block0:
 [-, %rax]   v0 = iconst.i32 42
 [-, %xmm0]  v1 = scalar_to_vector.i32x4 v0  ; bin: 66 40 0f 6e c0
 [-, %xmm0]  v2 = x86_pshufd v1, 0                ; bin: 66 0f 70 c0 00

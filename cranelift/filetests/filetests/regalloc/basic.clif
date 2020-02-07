@@ -6,7 +6,7 @@ target riscv32
 ; regex: RX=%x\d+
 
 function %add(i32, i32) {
-ebb0(v1: i32, v2: i32):
+block0(v1: i32, v2: i32):
     v3 = iadd v1, v2
 ; check: [R#0c,%x5]
 ; sameln: iadd
@@ -15,7 +15,7 @@ ebb0(v1: i32, v2: i32):
 
 ; Function with a dead argument.
 function %dead_arg(i32, i32) -> i32{
-ebb0(v1: i32, v2: i32):
+block0(v1: i32, v2: i32):
 ; not: regmove
 ; check: return v1
     return v1
@@ -23,7 +23,7 @@ ebb0(v1: i32, v2: i32):
 
 ; Return a value from a different register.
 function %move1(i32, i32) -> i32 {
-ebb0(v1: i32, v2: i32):
+block0(v1: i32, v2: i32):
 ; not: regmove
 ; check: regmove v2, %x11 -> %x10
 ; nextln: return v2
@@ -32,7 +32,7 @@ ebb0(v1: i32, v2: i32):
 
 ; Swap two registers.
 function %swap(i32, i32) -> i32, i32 {
-ebb0(v1: i32, v2: i32):
+block0(v1: i32, v2: i32):
 ; not: regmove
 ; check: regmove v2, %x11 -> $(tmp=$RX)
 ; nextln: regmove v1, %x10 -> %x11
@@ -41,40 +41,40 @@ ebb0(v1: i32, v2: i32):
         return v2, v1
 }
 
-; Return an EBB argument.
-function %retebb(i32, i32) -> i32 {
-ebb0(v1: i32, v2: i32):
-    brnz v1, ebb1(v1)
-    jump ebb1(v2)
+; Return a block argument.
+function %retblock(i32, i32) -> i32 {
+block0(v1: i32, v2: i32):
+    brnz v1, block1(v1)
+    jump block1(v2)
 
-ebb1(v10: i32):
+block1(v10: i32):
     return v10
 }
 
-; Pass an EBB argument as a function argument.
-function %callebb(i32, i32) -> i32 {
+; Pass a block argument as a function argument.
+function %callblock(i32, i32) -> i32 {
     fn0 = %foo(i32) -> i32
 
-ebb0(v1: i32, v2: i32):
-    brnz v1, ebb1(v1)
-    jump ebb1(v2)
+block0(v1: i32, v2: i32):
+    brnz v1, block1(v1)
+    jump block1(v2)
 
-ebb1(v10: i32):
+block1(v10: i32):
     v11 = call fn0(v10)
     return v11
 }
 
-; Pass an EBB argument as a jump argument.
-function %jumpebb(i32, i32) -> i32 {
+; Pass a block argument as a jump argument.
+function %jumpblock(i32, i32) -> i32 {
     fn0 = %foo(i32) -> i32
 
-ebb0(v1: i32, v2: i32):
-    brnz v1, ebb1(v1, v2)
-    jump ebb1(v2, v1)
+block0(v1: i32, v2: i32):
+    brnz v1, block1(v1, v2)
+    jump block1(v2, v1)
 
-ebb1(v10: i32, v11: i32):
-    jump ebb2(v10, v11)
+block1(v10: i32, v11: i32):
+    jump block2(v10, v11)
 
-ebb2(v20: i32, v21: i32):
+block2(v20: i32, v21: i32):
     return v21
 }

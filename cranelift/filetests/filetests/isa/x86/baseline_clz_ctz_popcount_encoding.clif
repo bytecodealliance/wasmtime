@@ -8,7 +8,7 @@ target x86_64 baseline
 ;
 
 function %Foo() {
-ebb0:
+block0:
     ; 64-bit wide bsf
 
     [-,%r11]                 v10 = iconst.i64 0x1234

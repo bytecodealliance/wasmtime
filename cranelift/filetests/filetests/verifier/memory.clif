@@ -4,13 +4,13 @@ function %cycle() {
     gv0 = load.i32 notrap aligned gv1 ; error: global value cycle: [gv0, gv1]
     gv1 = load.i32 notrap aligned gv0-32
 
-ebb1:
+block1:
     return
 }
 
 function %self_cycle() {
     gv0 = load.i32 notrap aligned gv0 ; error: global value cycle: [gv0]
 
-ebb1:
+block1:
     return
 }

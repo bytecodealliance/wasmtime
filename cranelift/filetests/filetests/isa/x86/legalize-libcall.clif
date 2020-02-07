@@ -5,7 +5,7 @@ set is_pic
 target x86_64
 
 function %floor(f32) -> f32 {
-ebb0(v0: f32):
+block0(v0: f32):
     v1 = floor v0
     return v1
 }

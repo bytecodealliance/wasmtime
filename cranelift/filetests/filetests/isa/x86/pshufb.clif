@@ -3,7 +3,7 @@ set enable_simd
 target x86_64 has_ssse3=true
 
 function %test_pshufb() {
-ebb0:
+block0:
 [-, %rax]   v0 = iconst.i8 42
 [-, %xmm0]  v1 = scalar_to_vector.i8x16 v0   ; bin: 66 40 0f 6e c0
 [-, %rbx]   v2 = iconst.i8 43

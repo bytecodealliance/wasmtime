@@ -5,7 +5,7 @@ target riscv32
 ; regex: WS=[ \t]*
 
 function %foo(i32, i32) {
-ebb1(v0: i32 [%x8], v1: i32):
+block1(v0: i32 [%x8], v1: i32):
     [-,-] v2 = iadd v0, v1
     [-] trap heap_oob
     [R#1234, %x5, %x11] v6, v7 = iadd_ifcout v2, v0
@@ -14,7 +14,7 @@ ebb1(v0: i32 [%x8], v1: i32):
 @a5 [Iret#5] return v0, v8
 }
 ; sameln: function %foo(i32, i32) fast {
-; nextln: ebb1(v0: i32 [%x8], v1: i32):
+; nextln: block1(v0: i32 [%x8], v1: i32):
 ; nextln:     [-,-]$WS v2 = iadd v0, v1
 ; nextln:     [-]$WS trap heap_oob
 ; nextln:     [R#1234,%x5,%x11]$WS v6, v7 = iadd_ifcout v2, v0

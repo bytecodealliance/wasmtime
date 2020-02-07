@@ -2,24 +2,24 @@ test cat
 
 ; The smallest possible function.
 function %minimal() {
-ebb0:
+block0:
     trap user0
 }
 ; sameln: function %minimal() fast {
-; nextln: ebb0:
+; nextln: block0:
 ; nextln:     trap user0
 ; nextln: }
 
 ; Create and use values.
 ; Polymorphic instructions with type suffix.
 function %ivalues() {
-ebb0:
+block0:
     v0 = iconst.i32 2
     v1 = iconst.i8 6
     v2 = ishl v0, v1
 }
 ; sameln: function %ivalues() fast {
-; nextln: ebb0:
+; nextln: block0:
 ; nextln:     v0 = iconst.i32 2
 ; nextln:     v1 = iconst.i8 6
 ; nextln:     v2 = ishl v0, v1
@@ -28,14 +28,14 @@ ebb0:
 ; Create and use values.
 ; Polymorphic instructions with type suffix.
 function %bvalues() {
-ebb0:
+block0:
     v0 = bconst.b32 true
     v1 = bconst.b8 false
     v2 = bextend.b32 v1
     v3 = bxor v0, v2
 }
 ; sameln: function %bvalues() fast {
-; nextln: ebb0:
+; nextln: block0:
 ; nextln:     v0 = bconst.b32 true
 ; nextln:     v1 = bconst.b8 false
 ; nextln:     v2 = bextend.b32 v1
@@ -44,33 +44,33 @@ ebb0:
 
 ; Polymorphic instruction controlled by second operand.
 function %select() {
-ebb0(v90: i32, v91: i32, v92: b1):
+block0(v90: i32, v91: i32, v92: b1):
     v0 = select v92, v90, v91
 }
 ; sameln: function %select() fast {
-; nextln: ebb0(v90: i32, v91: i32, v92: b1):
+; nextln: block0(v90: i32, v91: i32, v92: b1):
 ; nextln:     v0 = select v92, v90, v91
 ; nextln: }
 
 ; Polymorphic instruction controlled by third operand.
 function %selectif() system_v {
-ebb0(v95: i32, v96: i32, v97: b1):
+block0(v95: i32, v96: i32, v97: b1):
     v98 = selectif.i32 eq v97, v95, v96
 }
 ; sameln: function %selectif() system_v {
-; nextln: ebb0(v95: i32, v96: i32, v97: b1):
+; nextln: block0(v95: i32, v96: i32, v97: b1):
 ; nextln: v98 = selectif.i32 eq v97, v95, v96
 ; nextln: }
 
 ; Lane indexes.
 function %lanes() {
-ebb0:
+block0:
     v0 = iconst.i32x4 2
     v1 = extractlane v0, 3
     v2 = insertlane v0, 1, v1
 }
 ; sameln: function %lanes() fast {
-; nextln: ebb0:
+; nextln: block0:
 ; nextln:     v0 = iconst.i32x4 2
 ; nextln:     v1 = extractlane v0, 3
 ; nextln:     v2 = insertlane v0, 1, v1
@@ -78,31 +78,31 @@ ebb0:
 
 ; Integer condition codes.
 function %icmp(i32, i32) {
-ebb0(v90: i32, v91: i32):
+block0(v90: i32, v91: i32):
     v0 = icmp eq v90, v91
     v1 = icmp ult v90, v91
     v2 = icmp_imm sge v90, -12
     v3 = irsub_imm v91, 45
-    br_icmp eq v90, v91, ebb0(v91, v90)
+    br_icmp eq v90, v91, block0(v91, v90)
 }
 ; sameln: function %icmp(i32, i32) fast {
-; nextln: ebb0(v90: i32, v91: i32):
+; nextln: block0(v90: i32, v91: i32):
 ; nextln:     v0 = icmp eq v90, v91
 ; nextln:     v1 = icmp ult v90, v91
 ; nextln:     v2 = icmp_imm sge v90, -12
 ; nextln:     v3 = irsub_imm v91, 45
-; nextln:     br_icmp eq v90, v91, ebb0(v91, v90)
+; nextln:     br_icmp eq v90, v91, block0(v91, v90)
 ; nextln: }
 
 ; Floating condition codes.
 function %fcmp(f32, f32) {
-ebb0(v90: f32, v91: f32):
+block0(v90: f32, v91: f32):
     v0 = fcmp eq v90, v91
     v1 = fcmp uno v90, v91
     v2 = fcmp lt v90, v91
 }
 ; sameln: function %fcmp(f32, f32) fast {
-; nextln: ebb0(v90: f32, v91: f32):
+; nextln: block0(v90: f32, v91: f32):
 ; nextln:     v0 = fcmp eq v90, v91
 ; nextln:     v1 = fcmp uno v90, v91
 ; nextln:     v2 = fcmp lt v90, v91
@@ -111,12 +111,12 @@ ebb0(v90: f32, v91: f32):
 ; The bitcast instruction has two type variables: The controlling type variable
 ; controls the outout type, and the input type is a free variable.
 function %bitcast(i32, f32) {
-ebb0(v90: i32, v91: f32):
+block0(v90: i32, v91: f32):
     v0 = bitcast.i8x4 v90
     v1 = bitcast.i32 v91
 }
 ; sameln: function %bitcast(i32, f32) fast {
-; nextln: ebb0(v90: i32, v91: f32):
+; nextln: block0(v90: i32, v91: f32):
 ; nextln:     v0 = bitcast.i8x4 v90
 ; nextln:     v1 = bitcast.i32 v91
 ; nextln: }
@@ -129,7 +129,7 @@ function %stack() {
     ss4 = outgoing_arg 4
     ss5 = emergency_slot 4
 
-ebb0:
+block0:
     v1 = stack_load.i32 ss10
     v2 = stack_load.i32 ss10+4
     stack_store v1, ss10+2
@@ -142,7 +142,7 @@ ebb0:
 ; check:     ss5 = emergency_slot 4
 ; check:     ss10 = spill_slot 8
 
-; check: ebb0:
+; check: block0:
 ; nextln: v1 = stack_load.i32 ss10
 ; nextln: v2 = stack_load.i32 ss10+4
 ; nextln: stack_store v1, ss10+2
@@ -150,7 +150,7 @@ ebb0:
 
 ; Memory access instructions.
 function %memory(i32) {
-ebb0(v1: i32):
+block0(v1: i32):
     v2 = load.i64 v1
     v3 = load.i64 aligned v1
     v4 = load.i64 notrap v1
@@ -167,7 +167,7 @@ ebb0(v1: i32):
     store_complex v3, v1+v2+0x1
 }
 ; sameln: function %memory(i32) fast {
-; nextln: ebb0(v1: i32):
+; nextln: block0(v1: i32):
 ; nextln:     v2 = load.i64 v1
 ; nextln:     v3 = load.i64 aligned v1
 ; nextln:     v4 = load.i64 notrap v1
@@ -188,7 +188,7 @@ ebb0(v1: i32):
 function %diversion(i32) {
     ss0 = spill_slot 4
 
-ebb0(v1: i32):
+block0(v1: i32):
     regmove v1, %10 -> %20
     regmove v1, %20 -> %10
     regspill v1, %10 -> ss0
@@ -197,7 +197,7 @@ ebb0(v1: i32):
 }
 ; sameln: function %diversion(i32) fast {
 ; nextln:     ss0 = spill_slot 4
-; check: ebb0(v1: i32):
+; check: block0(v1: i32):
 ; nextln:     regmove v1, %10 -> %20
 ; nextln:     regmove v1, %20 -> %10
 ; nextln:     regspill v1, %10 -> ss0
@@ -207,20 +207,20 @@ ebb0(v1: i32):
 
 ; Register copies.
 function %copy_special() {
-ebb0:
+block0:
     copy_special %10 -> %20
     copy_special %20 -> %10
     return
 }
 ; sameln: function %copy_special() fast {
-; nextln: ebb0:
+; nextln: block0:
 ; nextln:     copy_special %10 -> %20
 ; nextln:     copy_special %20 -> %10
 ; nextln:     return
 ; nextln: }
 
 function %cond_traps(i32) {
-ebb0(v0: i32):
+block0(v0: i32):
     trapz v0, stk_ovf
     v1 = ifcmp_imm v0, 5
     trapif ugt v1, oob
@@ -230,7 +230,7 @@ ebb0(v0: i32):
     return
 }
 ; sameln: function %cond_traps(i32)
-; nextln: ebb0(v0: i32):
+; nextln: block0(v0: i32):
 ; nextln:     trapz v0, stk_ovf
 ; nextln:     v1 = ifcmp_imm v0, 5
 ; nextln:     trapif ugt v1, oob

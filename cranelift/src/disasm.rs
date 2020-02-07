@@ -18,14 +18,19 @@ impl PrintRelocs {
 }
 
 impl binemit::RelocSink for PrintRelocs {
-    fn reloc_ebb(
+    fn reloc_block(
         &mut self,
         where_: binemit::CodeOffset,
         r: binemit::Reloc,
         offset: binemit::CodeOffset,
     ) {
         if self.flag_print {
-            writeln!(&mut self.text, "reloc_ebb: {} {} at {}", r, offset, where_).unwrap();
+            writeln!(
+                &mut self.text,
+                "reloc_block: {} {} at {}",
+                r, offset, where_
+            )
+            .unwrap();
         }
     }
 

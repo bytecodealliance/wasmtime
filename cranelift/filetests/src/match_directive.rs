@@ -1,7 +1,7 @@
 /// Look for a directive in a comment string.
 /// The directive is of the form "foo:" and should follow the leading `;` in the comment:
 ///
-/// ; dominates: ebb3 ebb4
+/// ; dominates: block3 block4
 ///
 /// Return the comment text following the directive.
 pub fn match_directive<'a>(comment: &'a str, directive: &str) -> Option<&'a str> {

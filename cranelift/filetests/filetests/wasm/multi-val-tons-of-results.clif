@@ -2,7 +2,7 @@ test compile
 target x86_64 haswell
 
 function %return_20_i32s() -> i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32 {
-ebb0:
+block0:
     v0 = iconst.i32 0
     v1 = iconst.i32 1
     v2 = iconst.i32 2
@@ -28,7 +28,7 @@ ebb0:
 
 function %call_20_i32s() {
     fn0 = %return_20_i32s() -> i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32
-ebb0:
+block0:
     v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19 = call fn0()
     return
 }

@@ -3,7 +3,7 @@ set enable_simd
 target x86_64 skylake
 
 function %ishl_i32x4() -> i32x4 {
-ebb0:
+block0:
     v0 = iconst.i32 1
     v1 = vconst.i32x4 [1 2 4 8]
     v2 = ishl v1, v0
@@ -13,7 +13,7 @@ ebb0:
 }
 
 function %ushr_i64x2() -> i64x2 {
-ebb0:
+block0:
     v0 = iconst.i32 1
     v1 = vconst.i64x2 [1 2]
     v2 = ushr v1, v0
@@ -23,7 +23,7 @@ ebb0:
 }
 
 function %sshr_i16x8() -> i16x8 {
-ebb0:
+block0:
     v0 = iconst.i32 1
     v1 = vconst.i16x8 [1 2 4 8 16 32 64 128]
     v2 = sshr v1, v0
@@ -33,7 +33,7 @@ ebb0:
 }
 
 function %bitselect_i16x8() -> i16x8 {
-ebb0:
+block0:
     v0 = vconst.i16x8 [0 0 0 0 0 0 0 0]
     v1 = vconst.i16x8 [0 0 0 0 0 0 0 0]
     v2 = vconst.i16x8 [0 0 0 0 0 0 0 0]

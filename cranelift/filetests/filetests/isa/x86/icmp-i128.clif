@@ -2,7 +2,7 @@ test run
 target x86_64 haswell
 
 function %test_icmp_eq_i128() -> b1 {
-ebb0:
+block0:
     v11 = iconst.i64 0x0
     v12 = iconst.i64 0x0
     v1 = iconcat v11, v12
@@ -16,7 +16,7 @@ ebb0:
 ; run
 
 function %test_icmp_imm_eq_i128() -> b1 {
-ebb0:
+block0:
     v11 = iconst.i64 0x0
     v12 = iconst.i64 0x0
     v1 = iconcat v11, v12
@@ -27,7 +27,7 @@ ebb0:
 ; run
 
 function %test_icmp_ne_i128() -> b1 {
-ebb0:
+block0:
     v11 = iconst.i64 0x0
     v12 = iconst.i64 0x0
     v1 = iconcat v11, v12
@@ -41,7 +41,7 @@ ebb0:
 ; run
 
 function %test_icmp_imm_ne_i128() -> b1 {
-ebb0:
+block0:
     v11 = iconst.i64 0x0
     v12 = iconst.i64 0x0
     v1 = iconcat v11, v12

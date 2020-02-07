@@ -140,25 +140,25 @@ impl Formats {
                 .value()
                 .build(),
 
-            jump: Builder::new("Jump").imm(&entities.ebb).varargs().build(),
+            jump: Builder::new("Jump").imm(&entities.block).varargs().build(),
 
             branch: Builder::new("Branch")
                 .value()
-                .imm(&entities.ebb)
+                .imm(&entities.block)
                 .varargs()
                 .build(),
 
             branch_int: Builder::new("BranchInt")
                 .imm(&imm.intcc)
                 .value()
-                .imm(&entities.ebb)
+                .imm(&entities.block)
                 .varargs()
                 .build(),
 
             branch_float: Builder::new("BranchFloat")
                 .imm(&imm.floatcc)
                 .value()
-                .imm(&entities.ebb)
+                .imm(&entities.block)
                 .varargs()
                 .build(),
 
@@ -166,13 +166,13 @@ impl Formats {
                 .imm(&imm.intcc)
                 .value()
                 .value()
-                .imm(&entities.ebb)
+                .imm(&entities.block)
                 .varargs()
                 .build(),
 
             branch_table: Builder::new("BranchTable")
                 .value()
-                .imm(&entities.ebb)
+                .imm(&entities.block)
                 .imm(&entities.jump_table)
                 .build(),
 

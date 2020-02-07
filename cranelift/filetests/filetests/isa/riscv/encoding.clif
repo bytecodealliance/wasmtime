@@ -2,7 +2,7 @@ test legalizer
 target riscv32 supports_m=1
 
 function %int32(i32, i32) {
-ebb0(v1: i32, v2: i32):
+block0(v1: i32, v2: i32):
     v10 = iadd v1, v2
     ; check: [R#0c]
     ; sameln: v10 = iadd

@@ -5,14 +5,14 @@ target x86_64 haswell
 
 ; check that there is no unwind information for a system_v function
 function %not_fastcall() system_v {
-ebb0:
+block0:
     return
 }
 ; sameln: No unwind information.
 
 ; check the unwind information with a function with no args
 function %no_args() windows_fastcall {
-ebb0:
+block0:
     return
 }
 ; sameln: UnwindInfo {
@@ -47,7 +47,7 @@ ebb0:
 ; check a function with medium-sized stack alloc
 function %medium_stack() windows_fastcall {
     ss0 = explicit_slot 100000
-ebb0:
+block0:
     return
 }
 ; sameln: UnwindInfo {
@@ -84,7 +84,7 @@ ebb0:
 ; check a function with large-sized stack alloc
 function %large_stack() windows_fastcall {
     ss0 = explicit_slot 524288
-ebb0:
+block0:
     return
 }
 ; sameln: UnwindInfo {
@@ -120,7 +120,7 @@ ebb0:
 
 ; check a function that has CSRs
 function %lots_of_registers(i64, i64) windows_fastcall {
-ebb0(v0: i64, v1: i64):
+block0(v0: i64, v1: i64):
     v2 = load.i32 v0+0
     v3 = load.i32 v0+8
     v4 = load.i32 v0+16

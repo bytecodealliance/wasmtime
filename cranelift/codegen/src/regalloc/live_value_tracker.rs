@@ -1,13 +1,13 @@
-//! Track which values are live in an EBB with instruction granularity.
+//! Track which values are live in an block with instruction granularity.
 //!
-//! The `LiveValueTracker` keeps track of the set of live SSA values at each instruction in an EBB.
+//! The `LiveValueTracker` keeps track of the set of live SSA values at each instruction in an block.
 //! The sets of live values are computed on the fly as the tracker is moved from instruction to
-//! instruction, starting at the EBB header.
+//! instruction, starting at the block header.
 
 use crate::dominator_tree::DominatorTree;
 use crate::entity::{EntityList, ListPool};
 use crate::fx::FxHashMap;
-use crate::ir::{DataFlowGraph, Ebb, ExpandedProgramPoint, Inst, Layout, Value};
+use crate::ir::{Block, DataFlowGraph, ExpandedProgramPoint, Inst, Layout, Value};
 use crate::partition_slice::partition_slice;
 use crate::regalloc::affinity::Affinity;
 use crate::regalloc::liveness::Liveness;
@@ -16,13 +16,13 @@ use alloc::vec::Vec;
 
 type ValueList = EntityList<Value>;
 
-/// Compute and track live values throughout an EBB.
+/// Compute and track live values throughout an block.
 pub struct LiveValueTracker {
     /// The set of values that are live at the current program point.
     live: LiveValueVec,
 
     /// Saved set of live values for every jump and branch that can potentially be an immediate
-    /// dominator of an EBB.
+    /// dominator of an block.
     ///
     /// This is the set of values that are live *before* the branch.
     idom_sets: FxHashMap<Inst, ValueList>,
@@ -37,7 +37,7 @@ pub struct LiveValue {
     /// The live value.
     pub value: Value,
 
-    /// The local ending point of the live range in the current EBB, as returned by
+    /// The local ending point of the live range in the current block, as returned by
     /// `LiveRange::def_local_end()` or `LiveRange::livein_local_end()`.
     pub endpoint: Inst,
 
@@ -47,7 +47,7 @@ pub struct LiveValue {
     /// almost all users of `LiveValue` need to look at it.
     pub affinity: Affinity,
 
-    /// The live range for this value never leaves its EBB.
+    /// The live range for this value never leaves its block.
     pub is_local: bool,
 
     /// This value is dead - the live range ends immediately.
@@ -155,75 +155,75 @@ impl LiveValueTracker {
         &mut self.live.values
     }
 
-    /// Move the current position to the top of `ebb`.
+    /// Move the current position to the top of `block`.
     ///
-    /// This depends on the stored live value set at `ebb`'s immediate dominator, so that must have
+    /// This depends on the stored live value set at `block`'s immediate dominator, so that must have
     /// been visited first.
     ///
     /// Returns `(liveins, args)` as a pair of slices. The first slice is the set of live-in values
-    /// from the immediate dominator. The second slice is the set of `ebb` parameters.
+    /// from the immediate dominator. The second slice is the set of `block` parameters.
     ///
     /// Dead parameters with no uses are included in `args`. Call `drop_dead_args()` to remove them.
-    pub fn ebb_top(
+    pub fn block_top(
         &mut self,
-        ebb: Ebb,
+        block: Block,
         dfg: &DataFlowGraph,
         liveness: &Liveness,
         layout: &Layout,
         domtree: &DominatorTree,
     ) -> (&[LiveValue], &[LiveValue]) {
-        // Start over, compute the set of live values at the top of the EBB from two sources:
+        // Start over, compute the set of live values at the top of the block from two sources:
         //
-        // 1. Values that were live before `ebb`'s immediate dominator, filtered for those that are
+        // 1. Values that were live before `block`'s immediate dominator, filtered for those that are
         //    actually live-in.
-        // 2. Arguments to `ebb` that are not dead.
+        // 2. Arguments to `block` that are not dead.
         //
         self.live.clear();
 
         // Compute the live-in values. Start by filtering the set of values that were live before
         // the immediate dominator. Just use the empty set if there's no immediate dominator (i.e.,
         // the entry block or an unreachable block).
-        if let Some(idom) = domtree.idom(ebb) {
+        if let Some(idom) = domtree.idom(block) {
             // If the immediate dominator exits, we must have a stored list for it. This is a
-            // requirement to the order EBBs are visited: All dominators must have been processed
-            // before the current EBB.
+            // requirement to the order blocks are visited: All dominators must have been processed
+            // before the current block.
             let idom_live_list = self
                 .idom_sets
                 .get(&idom)
                 .expect("No stored live set for dominator");
-            // Get just the values that are live-in to `ebb`.
+            // Get just the values that are live-in to `block`.
             for &value in idom_live_list.as_slice(&self.idom_pool) {
                 let lr = liveness
                     .get(value)
                     .expect("Immediate dominator value has no live range");
 
                 // Check if this value is live-in here.
-                if let Some(endpoint) = lr.livein_local_end(ebb, layout) {
+                if let Some(endpoint) = lr.livein_local_end(block, layout) {
                     self.live.push(value, endpoint, lr);
                 }
             }
         }
 
-        // Now add all the live parameters to `ebb`.
+        // Now add all the live parameters to `block`.
         let first_arg = self.live.values.len();
-        for &value in dfg.ebb_params(ebb) {
+        for &value in dfg.block_params(block) {
             let lr = &liveness[value];
-            debug_assert_eq!(lr.def(), ebb.into());
+            debug_assert_eq!(lr.def(), block.into());
             match lr.def_local_end().into() {
                 ExpandedProgramPoint::Inst(endpoint) => {
                     self.live.push(value, endpoint, lr);
                 }
-                ExpandedProgramPoint::Ebb(local_ebb) => {
-                    // This is a dead EBB parameter which is not even live into the first
-                    // instruction in the EBB.
+                ExpandedProgramPoint::Block(local_block) => {
+                    // This is a dead block parameter which is not even live into the first
+                    // instruction in the block.
                     debug_assert_eq!(
-                        local_ebb, ebb,
-                        "EBB parameter live range ends at wrong EBB header"
+                        local_block, block,
+                        "block parameter live range ends at wrong block header"
                     );
-                    // Give this value a fake endpoint that is the first instruction in the EBB.
+                    // Give this value a fake endpoint that is the first instruction in the block.
                     // We expect it to be removed by calling `drop_dead_args()`.
                     self.live
-                        .push(value, layout.first_inst(ebb).expect("Empty EBB"), lr);
+                        .push(value, layout.first_inst(block).expect("Empty block"), lr);
                 }
             }
         }
@@ -274,8 +274,8 @@ impl LiveValueTracker {
                 ExpandedProgramPoint::Inst(endpoint) => {
                     self.live.push(value, endpoint, lr);
                 }
-                ExpandedProgramPoint::Ebb(ebb) => {
-                    panic!("Instruction result live range can't end at {}", ebb);
+                ExpandedProgramPoint::Block(block) => {
+                    panic!("Instruction result live range can't end at {}", block);
                 }
             }
         }
@@ -310,7 +310,7 @@ impl LiveValueTracker {
 
     /// Drop any values that are marked as `is_dead`.
     ///
-    /// Use this after calling `ebb_top` to clean out dead EBB parameters.
+    /// Use this after calling `block_top` to clean out dead block parameters.
     pub fn drop_dead_params(&mut self) {
         self.live.remove_dead_values();
     }

@@ -182,14 +182,14 @@ pub fn emit_fde(func: &Function, isa: &dyn TargetIsa, sink: &mut dyn FrameUnwind
     assert!(func.frame_layout.is_some(), "expected func.frame_layout");
     let frame_layout = func.frame_layout.as_ref().unwrap();
 
-    let mut ebbs = func.layout.ebbs().collect::<Vec<_>>();
-    ebbs.sort_by_key(|ebb| func.offsets[*ebb]); // Ensure inst offsets always increase
+    let mut blocks = func.layout.blocks().collect::<Vec<_>>();
+    blocks.sort_by_key(|block| func.offsets[*block]); // Ensure inst offsets always increase
 
     let encinfo = isa.encoding_info();
     let mut last_offset = 0;
     let mut changes = Vec::new();
-    for ebb in ebbs {
-        for (offset, inst, size) in func.inst_offsets(ebb, &encinfo) {
+    for block in blocks {
+        for (offset, inst, size) in func.inst_offsets(block, &encinfo) {
             let address_offset = (offset + size) as usize;
             assert!(last_offset <= address_offset);
             if let Some(cmds) = frame_layout.instructions.get(&inst) {
@@ -343,9 +343,9 @@ mod tests {
         let mut func =
             Function::with_name_signature(ExternalName::user(0, 0), Signature::new(call_conv));
 
-        let ebb0 = func.dfg.make_ebb();
+        let block0 = func.dfg.make_block();
         let mut pos = FuncCursor::new(&mut func);
-        pos.insert_ebb(ebb0);
+        pos.insert_block(block0);
         pos.ins().return_(&[]);
 
         if let Some(stack_slot) = stack_slot {
@@ -411,20 +411,20 @@ mod tests {
         sig.params.push(AbiParam::new(types::I32));
         let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig);
 
-        let ebb0 = func.dfg.make_ebb();
-        let v0 = func.dfg.append_ebb_param(ebb0, types::I32);
-        let ebb1 = func.dfg.make_ebb();
-        let ebb2 = func.dfg.make_ebb();
+        let block0 = func.dfg.make_block();
+        let v0 = func.dfg.append_block_param(block0, types::I32);
+        let block1 = func.dfg.make_block();
+        let block2 = func.dfg.make_block();
 
         let mut pos = FuncCursor::new(&mut func);
-        pos.insert_ebb(ebb0);
-        pos.ins().brnz(v0, ebb2, &[]);
-        pos.ins().jump(ebb1, &[]);
+        pos.insert_block(block0);
+        pos.ins().brnz(v0, block2, &[]);
+        pos.ins().jump(block1, &[]);
 
-        pos.insert_ebb(ebb1);
+        pos.insert_block(block1);
         pos.ins().return_(&[]);
 
-        pos.insert_ebb(ebb2);
+        pos.insert_block(block2);
         pos.ins().trap(TrapCode::User(0));
 
         func

@@ -120,12 +120,12 @@ fn static_addr(
         pos.ins().trap(ir::TrapCode::HeapOutOfBounds);
         pos.func.dfg.replace(inst).iconst(addr_ty, 0);
 
-        // Split Ebb, as the trap is a terminator instruction.
-        let curr_ebb = pos.current_ebb().expect("Cursor is not in an ebb");
-        let new_ebb = pos.func.dfg.make_ebb();
-        pos.insert_ebb(new_ebb);
-        cfg.recompute_ebb(pos.func, curr_ebb);
-        cfg.recompute_ebb(pos.func, new_ebb);
+        // Split Block, as the trap is a terminator instruction.
+        let curr_block = pos.current_block().expect("Cursor is not in an block");
+        let new_block = pos.func.dfg.make_block();
+        pos.insert_block(new_block);
+        cfg.recompute_block(pos.func, curr_block);
+        cfg.recompute_block(pos.func, new_block);
         return;
     }
 

@@ -3,11 +3,11 @@
 //! The `test verifier` test command looks for annotations on instructions like this:
 //!
 //! ```clif
-//!     jump ebb3 ; error: jump to non-existent EBB
+//!     jump block3 ; error: jump to non-existent block
 //! ```
 //!
 //! This annotation means that the verifier is expected to given an error for the jump instruction
-//! containing the substring "jump to non-existent EBB".
+//! containing the substring "jump to non-existent block".
 
 use crate::match_directive::match_directive;
 use crate::subtest::{Context, SubTest, SubtestResult};

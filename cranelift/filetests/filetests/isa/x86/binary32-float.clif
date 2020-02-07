@@ -13,7 +13,7 @@ function %F32() {
     ss2 = incoming_arg 1024, offset -2048
     ss3 = incoming_arg 8, offset -2056
 
-ebb0:
+block0:
     [-,%rcx]            v0 = iconst.i32 1
     [-,%rsi]            v1 = iconst.i32 2
 
@@ -262,7 +262,7 @@ function %F64() {
     ss2 = incoming_arg 1024, offset -2048
     ss3 = incoming_arg 8, offset -2056
 
-ebb0:
+block0:
     [-,%rcx]            v0 = iconst.i32 1
     [-,%rsi]            v1 = iconst.i32 2
 
@@ -472,53 +472,53 @@ ebb0:
 }
 
 function %cpuflags_float(f32 [%xmm0]) {
-ebb0(v0: f32 [%xmm0]):
+block0(v0: f32 [%xmm0]):
     ; asm: ucomiss %xmm0, %xmm0
     [-,%rflags]         v1 = ffcmp v0, v0                       ; bin: 0f 2e c0
 
-    jump ebb1
+    jump block1
 
-ebb1:
-    ; asm: jnp ebb1
-    brff ord v1, ebb1                                           ; bin: 7b fe
-    jump ebb2
+block1:
+    ; asm: jnp block1
+    brff ord v1, block1                                           ; bin: 7b fe
+    jump block2
 
-ebb2:
-    ; asm: jp ebb1
-    brff uno v1, ebb1                                           ; bin: 7a fc
-    jump ebb3
+block2:
+    ; asm: jp block1
+    brff uno v1, block1                                           ; bin: 7a fc
+    jump block3
 
-ebb3:
-    ; asm: jne ebb1
-    brff one v1, ebb1                                           ; bin: 75 fa
-    jump ebb4
+block3:
+    ; asm: jne block1
+    brff one v1, block1                                           ; bin: 75 fa
+    jump block4
 
-ebb4:
-    ; asm: je ebb1
-    brff ueq v1, ebb1                                           ; bin: 74 f8
-    jump ebb5
+block4:
+    ; asm: je block1
+    brff ueq v1, block1                                           ; bin: 74 f8
+    jump block5
 
-ebb5:
-    ; asm: ja ebb1
-    brff gt v1, ebb1                                            ; bin: 77 f6
-    jump ebb6
+block5:
+    ; asm: ja block1
+    brff gt v1, block1                                            ; bin: 77 f6
+    jump block6
 
-ebb6:
-    ; asm: jae ebb1
-    brff ge v1, ebb1                                            ; bin: 73 f4
-    jump ebb7
+block6:
+    ; asm: jae block1
+    brff ge v1, block1                                            ; bin: 73 f4
+    jump block7
 
-ebb7:
-    ; asm: jb ebb1
-    brff ult v1, ebb1                                           ; bin: 72 f2
-    jump ebb8
+block7:
+    ; asm: jb block1
+    brff ult v1, block1                                           ; bin: 72 f2
+    jump block8
 
-ebb8:
-    ; asm: jbe ebb1
-    brff ule v1, ebb1                                           ; bin: 76 f0
-    jump ebb9
+block8:
+    ; asm: jbe block1
+    brff ule v1, block1                                           ; bin: 76 f0
+    jump block9
 
-ebb9:
+block9:
     ; asm: jp .+4; ud2
     trapff ord v1, user0                                        ; bin: 7a 02 user0 0f 0b
     ; asm: jnp .+4; ud2

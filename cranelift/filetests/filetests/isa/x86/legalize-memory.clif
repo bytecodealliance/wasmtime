@@ -3,13 +3,13 @@ test legalizer
 target x86_64
 
 ; regex: V=v\d+
-; regex: EBB=ebb\d+
+; regex: BB=block\d+
 
 function %vmctx(i64 vmctx) -> i64 {
     gv0 = vmctx
     gv1 = iadd_imm.i64 gv0, -16
 
-ebb1(v1: i64):
+block1(v1: i64):
     v2 = global_value.i64 gv1
     ; check: v2 = iadd_imm v1, -16
     return v2
@@ -21,7 +21,7 @@ function %load(i64 vmctx) -> i64 {
     gv1 = load.i64 notrap aligned gv0-16
     gv2 = iadd_imm.i64 gv1, 32
 
-ebb1(v1: i64):
+block1(v1: i64):
     v2 = global_value.i64 gv2
     ; check: $(p1=$V) = load.i64 notrap aligned v1-16
     ; check: v2 = iadd_imm $p1, 32
@@ -33,7 +33,7 @@ function %symbol() -> i64 {
     gv0 = symbol %something
     gv1 = symbol u123:456
 
-ebb1:
+block1:
     v0 = global_value.i64 gv0
     ; check: v0 = symbol_value.i64 gv0
     v1 = global_value.i64 gv1
@@ -49,8 +49,8 @@ function %staticheap_sm64(i32, i64 vmctx) -> f32 baldrdash_system_v {
     gv1 = iadd_imm.i64 gv0, 64
     heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0x8000_0000
 
-ebb0(v0: i32, v999: i64):
-    ; check: ebb0(
+block0(v0: i32, v999: i64):
+    ; check: block0(
     v1 = heap_addr.i64 heap0, v0, 1
     ; Boundscheck should be eliminated.
     ; Checks here are assuming that no pipehole opts fold the load offsets.
@@ -70,13 +70,13 @@ function %staticheap_static_oob_sm64(i32, i64 vmctx) -> f32 baldrdash_system_v {
     gv1 = iadd_imm.i64 gv0, 64
     heap0 = static gv1, min 0x1000, bound 0x1000_0000, offset_guard 0x8000_0000
 
-ebb0(v0: i32, v999: i64):
+block0(v0: i32, v999: i64):
     ; Everything after the obviously OOB access should be eliminated, leaving
-    ; the `trap heap_oob` instruction as the terminator of the Ebb and moving
-    ; the remainder of the instructions into an inaccessible Ebb.
-    ; check: ebb0(
+    ; the `trap heap_oob` instruction as the terminator of the block and moving
+    ; the remainder of the instructions into an inaccessible block.
+    ; check: block0(
     ; nextln:     trap heap_oob
-    ; check: ebb1:
+    ; check: block1:
     ; nextln:     v1 = iconst.i64 0
     ; nextln:     v2 = load.f32 v1+16
     ; nextln:     return v2
@@ -94,13 +94,13 @@ function %staticheap_sm64(i32, i64 vmctx) -> f32 baldrdash_system_v {
     gv1 = iadd_imm.i64 gv0, 64
     heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0x8000_0000
 
-ebb0(v0: i32, v999: i64):
-    ; check: ebb0(
+block0(v0: i32, v999: i64):
+    ; check: block0(
     v1 = heap_addr.i64 heap0, v0, 0x8000_0000
     ; Boundscheck code
     ; check: $(oob=$V) = icmp
-    ; nextln: brz $oob, $(ok=$EBB)
-    ; nextln: jump $(trap_oob=$EBB)
+    ; nextln: brz $oob, $(ok=$BB)
+    ; nextln: jump $(trap_oob=$BB)
     ; check: $trap_oob:
     ; nextln: trap heap_oob
     ; check: $ok:

@@ -127,7 +127,7 @@ impl UnwindInfo {
         }
 
         let prologue_end = func.prologue_end.unwrap();
-        let entry_block = func.layout.ebbs().nth(0).expect("missing entry block");
+        let entry_block = func.layout.blocks().nth(0).expect("missing entry block");
 
         // Stores the stack size when SP is not adjusted via an immediate value
         let mut stack_size = None;
@@ -519,9 +519,9 @@ mod tests {
         let mut func =
             Function::with_name_signature(ExternalName::user(0, 0), Signature::new(call_conv));
 
-        let ebb0 = func.dfg.make_ebb();
+        let block0 = func.dfg.make_block();
         let mut pos = FuncCursor::new(&mut func);
-        pos.insert_ebb(ebb0);
+        pos.insert_block(block0);
         pos.ins().return_(&[]);
 
         if let Some(stack_slot) = stack_slot {

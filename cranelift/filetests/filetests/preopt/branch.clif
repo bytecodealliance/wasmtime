@@ -2,78 +2,78 @@ test preopt
 target x86_64
 
 function %brz_fold() -> i32 {
-ebb0:
+block0:
     v0 = bconst.b1 false
-    brz v0, ebb2
-    jump ebb1
-ebb1:
+    brz v0, block2
+    jump block1
+block1:
     v1 = iconst.i32 42
     return v1
-ebb2:
+block2:
     v2 = iconst.i32 24
     return v2
 }
 ; sameln: function %brz_fold
-; nextln: ebb0:
+; nextln: block0:
 ; nextln:     v0 = bconst.b1 false
-; nextln:     jump ebb2
+; nextln:     jump block2
 ; nextln: 
-; nextln: ebb1:
+; nextln: block1:
 ; nextln:     v1 = iconst.i32 42
 ; nextln:     return v1
 ; nextln: 
-; nextln: ebb2:
+; nextln: block2:
 ; nextln:     v2 = iconst.i32 24
 ; nextln:     return v2
 ; nextln: }
 
 function %brnz_fold() -> i32 {
-ebb0:
+block0:
     v0 = bconst.b1 true
-    brnz v0, ebb2
-    jump ebb1
-ebb1:
+    brnz v0, block2
+    jump block1
+block1:
     v1 = iconst.i32 42
     return v1
-ebb2:
+block2:
     v2 = iconst.i32 24
     return v2
 }
 ; sameln: function %brnz_fold
-; nextln: ebb0:
+; nextln: block0:
 ; nextln:     v0 = bconst.b1 true
-; nextln:     jump ebb2
+; nextln:     jump block2
 ; nextln: 
-; nextln: ebb1:
+; nextln: block1:
 ; nextln:     v1 = iconst.i32 42
 ; nextln:     return v1
 ; nextln: 
-; nextln: ebb2:
+; nextln: block2:
 ; nextln:     v2 = iconst.i32 24
 ; nextln:     return v2
 ; nextln: }
 
 function %brz_fold_param(b1) -> i32 {
-ebb0(v0: b1):
-    brz v0, ebb2
-    jump ebb1
-ebb1:
+block0(v0: b1):
+    brz v0, block2
+    jump block1
+block1:
     v1 = iconst.i32 42
     return v1
-ebb2:
+block2:
     v2 = iconst.i32 24
     return v2
 }
 ; sameln: function %brz_fold_param(b1) -> i32 fast {
-; nextln: ebb0(v0: b1):
-; nextln:     brz v0, ebb2
-; nextln:     jump ebb1
+; nextln: block0(v0: b1):
+; nextln:     brz v0, block2
+; nextln:     jump block1
 ; nextln: 
-; nextln: ebb1:
+; nextln: block1:
 ; nextln:     v1 = iconst.i32 42
 ; nextln:     return v1
 ; nextln: 
-; nextln: ebb2:
+; nextln: block2:
 ; nextln:     v2 = iconst.i32 24
 ; nextln:     return v2
 ; nextln: }

@@ -6,13 +6,13 @@ target x86_64
 
 ; ensure that scalar_to_vector emits no instructions for floats (already exist in an XMM register)
 function %test_scalar_to_vector_f32() -> f32x4 baldrdash_system_v {
-ebb0:
+block0:
     v0 = f32const 0x0.42
     v1 = scalar_to_vector.f32x4 v0
     return v1
 }
 
-; check: ebb0
+; check: block0
 ; nextln: v2 = iconst.i32 0x3e84_0000
 ; nextln: v0 = bitcast.f32 v2
 ; nextln: [null_fpr#00,%xmm0]                 v1 = scalar_to_vector.f32x4 v0

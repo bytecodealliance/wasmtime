@@ -5,14 +5,14 @@ target x86_64 haswell
 
 ; check that there is no libunwind information for a windows_fastcall function
 function %not_fastcall() windows_fastcall {
-ebb0:
+block0:
     return
 }
 ; sameln: No unwind information.
 
 ; check the libunwind information with a function with no args
 function %no_args() system_v {
-ebb0:
+block0:
     return
 }
 ; sameln: 0x00000000: CIE

@@ -5,11 +5,11 @@ set avoid_div_traps=1
 target x86_64
 
 ; regex: V=v\d+
-; regex: EBB=ebb\d+
+; regex: BB=block\d+
 
 function %udiv(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
-    ; check: ebb0(
+block0(v0: i64, v1: i64):
+    ; check: block0(
     v2 = udiv v0, v1
     ; nextln: $(fz=$V) = ifcmp_imm v1, 0
     ; nextln: trapif eq $fz, int_divz
@@ -20,8 +20,8 @@ ebb0(v0: i64, v1: i64):
 }
 
 function %udiv_0(i64) -> i64 {
-ebb0(v0: i64):
-    ; check: ebb0(
+block0(v0: i64):
+    ; check: block0(
     v1 = iconst.i64 0
     ; nextln: v1 = iconst.i64 0
     v2 = udiv v0, v1
@@ -34,8 +34,8 @@ ebb0(v0: i64):
 }
 
 function %udiv_minus_1(i64) -> i64 {
-ebb0(v0: i64):
-    ; check: ebb0(
+block0(v0: i64):
+    ; check: block0(
     v1 = iconst.i64 -1
     ; nextln: v1 = iconst.i64 -1
     v2 = udiv v0, v1
@@ -46,8 +46,8 @@ ebb0(v0: i64):
 }
 
 function %urem(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
-    ; check: ebb0(
+block0(v0: i64, v1: i64):
+    ; check: block0(
     v2 = urem v0, v1
     ; nextln: $(fz=$V) = ifcmp_imm v1, 0
     ; nextln: trapif eq $fz, int_divz
@@ -58,8 +58,8 @@ ebb0(v0: i64, v1: i64):
 }
 
 function %urem_0(i64) -> i64 {
-ebb0(v0: i64):
-    ; check: ebb0(
+block0(v0: i64):
+    ; check: block0(
     v1 = iconst.i64 0
     ; nextln: v1 = iconst.i64 0
     v2 = urem v0, v1
@@ -72,8 +72,8 @@ ebb0(v0: i64):
 }
 
 function %urem_minus_1(i64) -> i64 {
-ebb0(v0: i64):
-    ; check: ebb0(
+block0(v0: i64):
+    ; check: block0(
     v1 = iconst.i64 -1
     ; nextln: v1 = iconst.i64 -1
     v2 = urem v0, v1
@@ -84,16 +84,16 @@ ebb0(v0: i64):
 }
 
 function %sdiv(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
-    ; check: ebb0(
+block0(v0: i64, v1: i64):
+    ; check: block0(
     v2 = sdiv v0, v1
     ; nextln: $(fz=$V) = ifcmp_imm v1, 0
     ; nextln: trapif eq $fz, int_divz
     ; nextln: $(fm1=$V) = ifcmp_imm v1, -1
-    ; nextln: brif eq $fm1, $(m1=$EBB)
+    ; nextln: brif eq $fm1, $(m1=$BB)
     ; check: $(hi=$V) = sshr_imm
     ; nextln: $(q=$V), $(r=$V) = x86_sdivmodx v0, $hi, v1
-    ; nextln: jump $(done=$EBB)($q)
+    ; nextln: jump $(done=$BB)($q)
     ; check: $m1:
     ; nextln: $(imin=$V) = iconst.i64 0x8000_0000_0000_0000
     ; nextln: $(fm=$V) = ifcmp.i64 v0, $imin
@@ -104,8 +104,8 @@ ebb0(v0: i64, v1: i64):
 }
 
 function %sdiv_0(i64) -> i64 {
-ebb0(v0: i64):
-    ; check: ebb0(
+block0(v0: i64):
+    ; check: block0(
     v1 = iconst.i64 0
     ; nextln: v1 = iconst.i64 0
     v2 = sdiv v0, v1
@@ -118,16 +118,16 @@ ebb0(v0: i64):
 }
 
 function %sdiv_minus_1(i64) -> i64 {
-ebb0(v0: i64):
-    ; check: ebb0(
+block0(v0: i64):
+    ; check: block0(
     v1 = iconst.i64 -1
     ; nextln: v1 = iconst.i64 -1
     v2 = sdiv v0, v1
     ; nextln: $(fm1=$V) = ifcmp_imm v1, -1
-    ; nextln: brif eq $fm1, $(m1=$EBB)
+    ; nextln: brif eq $fm1, $(m1=$BB)
     ; check: $(hi=$V) = sshr_imm
     ; nextln: $(q=$V), $(r=$V) = x86_sdivmodx v0, $hi, v1
-    ; nextln: jump $(done=$EBB)($q)
+    ; nextln: jump $(done=$BB)($q)
     ; check: $m1:
     ; nextln: $(imin=$V) = iconst.i64 0x8000_0000_0000_0000
     ; nextln: $(fm=$V) = ifcmp.i64 v0, $imin
@@ -140,27 +140,27 @@ ebb0(v0: i64):
 ; The srem expansion needs to special-case x % -1 since x86_sdivmodx traps on INT_MIN/-1.
 ; TODO: Add more explicit pattern matching once we've cleaned up the ifcmp+brif pattern.
 function %srem(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
-    ; check: ebb0(
+block0(v0: i64, v1: i64):
+    ; check: block0(
     v2 = srem v0, v1
     ; nextln: $(fz=$V) = ifcmp_imm v1, 0
     ; nextln: trapif eq $fz, int_divz
     ; nextln: $(fm1=$V) = ifcmp_imm v1, -1
-    ; nextln: brif eq $fm1, $(m1=$EBB)
+    ; nextln: brif eq $fm1, $(m1=$BB)
     ; check: $(hi=$V) = sshr_imm
     ; nextln: $(d=$V), $(r=$V) = x86_sdivmodx v0, $hi, v1
-    ; nextln: jump $(done=$EBB)($r)
+    ; nextln: jump $(done=$BB)($r)
     ; check: $m1:
     ; nextln: $(zero=$V) = iconst.i64 0
-    ; nextln: jump $(done=$EBB)($zero)
+    ; nextln: jump $(done=$BB)($zero)
     ; check: $done(v2: i64):
     return v2
     ; nextln: return v2
 }
 
 function %srem_0(i64) -> i64 {
-ebb0(v0: i64):
-    ; check: ebb0(
+block0(v0: i64):
+    ; check: block0(
     v1 = iconst.i64 0
     ; nextln: v1 = iconst.i64 0
     v2 = srem v0, v1
@@ -173,19 +173,19 @@ ebb0(v0: i64):
 }
 
 function %srem_minus_1(i64) -> i64 {
-ebb0(v0: i64):
-    ; check: ebb0(
+block0(v0: i64):
+    ; check: block0(
     v1 = iconst.i64 -1
     ; nextln: v1 = iconst.i64 -1
     v2 = srem v0, v1
     ; nextln: $(fm1=$V) = ifcmp_imm v1, -1
-    ; nextln: brif eq $fm1, $(m1=$EBB)
+    ; nextln: brif eq $fm1, $(m1=$BB)
     ; check: $(hi=$V) = sshr_imm
     ; nextln: $(d=$V), $(r=$V) = x86_sdivmodx v0, $hi, v1
-    ; nextln: jump $(done=$EBB)($r)
+    ; nextln: jump $(done=$BB)($r)
     ; check: $m1:
     ; nextln: $(zero=$V) = iconst.i64 0
-    ; nextln: jump $(done=$EBB)($zero)
+    ; nextln: jump $(done=$BB)($zero)
     ; check: $done(v2: i64):
     return v2
     ; nextln: return v2

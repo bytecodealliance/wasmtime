@@ -2,7 +2,7 @@
 
 use crate::error::Location;
 use cranelift_codegen::ir::types;
-use cranelift_codegen::ir::{Ebb, Value};
+use cranelift_codegen::ir::{Block, Value};
 #[allow(unused_imports, deprecated)]
 use std::ascii::AsciiExt;
 use std::str::CharIndices;
@@ -33,7 +33,7 @@ pub enum Token<'a> {
     Integer(&'a str),     // Integer immediate
     Type(types::Type),    // i32, f32, b32x4, ...
     Value(Value),         // v12, v7
-    Ebb(Ebb),             // ebb3
+    Block(Block),         // block3
     StackSlot(u32),       // ss3
     GlobalValue(u32),     // gv3
     Heap(u32),            // heap2
@@ -318,7 +318,7 @@ impl<'a> Lexer<'a> {
         }
         let text = &self.source[begin..self.pos];
 
-        // Look for numbered well-known entities like ebb15, v45, ...
+        // Look for numbered well-known entities like block15, v45, ...
         token(
             split_entity_name(text)
                 .and_then(|(prefix, number)| {
@@ -339,7 +339,7 @@ impl<'a> Lexer<'a> {
     fn numbered_entity(prefix: &str, number: u32) -> Option<Token<'a>> {
         match prefix {
             "v" => Value::with_number(number).map(Token::Value),
-            "ebb" => Ebb::with_number(number).map(Token::Ebb),
+            "block" => Block::with_number(number).map(Token::Block),
             "ss" => Some(Token::StackSlot(number)),
             "gv" => Some(Token::GlobalValue(number)),
             "heap" => Some(Token::Heap(number)),
@@ -519,7 +519,7 @@ mod tests {
     use super::*;
     use crate::error::Location;
     use cranelift_codegen::ir::types;
-    use cranelift_codegen::ir::{Ebb, Value};
+    use cranelift_codegen::ir::{Block, Value};
 
     #[test]
     fn digits() {
@@ -616,7 +616,7 @@ mod tests {
     #[test]
     fn lex_identifiers() {
         let mut lex = Lexer::new(
-            "v0 v00 vx01 ebb1234567890 ebb5234567890 v1x vx1 vxvx4 \
+            "v0 v00 vx01 block1234567890 block5234567890 v1x vx1 vxvx4 \
              function0 function b1 i32x4 f32x5 \
              iflags fflags iflagss",
         );
@@ -628,9 +628,9 @@ mod tests {
         assert_eq!(lex.next(), token(Token::Identifier("vx01"), 1));
         assert_eq!(
             lex.next(),
-            token(Token::Ebb(Ebb::with_number(1234567890).unwrap()), 1)
+            token(Token::Block(Block::with_number(1234567890).unwrap()), 1)
         );
-        assert_eq!(lex.next(), token(Token::Identifier("ebb5234567890"), 1));
+        assert_eq!(lex.next(), token(Token::Identifier("block5234567890"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("v1x"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("vx1"), 1));
         assert_eq!(lex.next(), token(Token::Identifier("vxvx4"), 1));
@@ -656,7 +656,7 @@ mod tests {
 
     #[test]
     fn lex_names() {
-        let mut lex = Lexer::new("%0 %x3 %function %123_abc %ss0 %v3 %ebb11 %_");
+        let mut lex = Lexer::new("%0 %x3 %function %123_abc %ss0 %v3 %block11 %_");
 
         assert_eq!(lex.next(), token(Token::Name("0"), 1));
         assert_eq!(lex.next(), token(Token::Name("x3"), 1));
@@ -664,7 +664,7 @@ mod tests {
         assert_eq!(lex.next(), token(Token::Name("123_abc"), 1));
         assert_eq!(lex.next(), token(Token::Name("ss0"), 1));
         assert_eq!(lex.next(), token(Token::Name("v3"), 1));
-        assert_eq!(lex.next(), token(Token::Name("ebb11"), 1));
+        assert_eq!(lex.next(), token(Token::Name("block11"), 1));
         assert_eq!(lex.next(), token(Token::Name("_"), 1));
     }
 

@@ -7,15 +7,15 @@ function %direct() -> r64 {
     fn1 = %one() -> r64
     fn2 = %two() -> i32, r64
 
-ebb0:
+block0:
     call fn0()
     v1 = call fn1()
     v2, v3 = call fn2()
-    brz v2, ebb2
-    jump ebb1
-ebb1:
+    brz v2, block2
+    jump block1
+block1:
     return v1
-ebb2:
+block2:
     v4 = call fn1()
     return v3
 }
@@ -30,7 +30,7 @@ ebb2:
 ; nextln: fn1 = %one sig1
 ; nextln: fn2 = %two sig2
 ; nextln: 
-; nextln: ebb0:
+; nextln: block0:
 ; nextln:   v5 = func_addr.i64 fn0
 ; nextln:   call_indirect sig0, v5()
 ; nextln:   v6 = func_addr.i64 fn1
@@ -40,15 +40,15 @@ ebb2:
 ; nextln:   safepoint v1
 ; nextln:   v2, v10 = call_indirect sig2, v7()
 ; nextln:   v3 = spill v10
-; nextln:   brz v2, ebb2
-; nextln:   jump ebb1
+; nextln:   brz v2, block2
+; nextln:   jump block1
 ; nextln: 
-; nextln: ebb1:
+; nextln: block1:
 ; nextln:   v11 = fill.r64 v1
 ; nextln:   regmove v11, %r15 -> %rax
 ; nextln:   return v11
 ; nextln: 
-; nextln: ebb2:
+; nextln: block2:
 ; nextln:   v8 = func_addr.i64 fn1
 ; nextln:   safepoint v3
 ; nextln:   v4 = call_indirect sig1, v8()

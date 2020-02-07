@@ -4,7 +4,7 @@ use super::enc_tables::{needs_offset, needs_sib_byte};
 use super::registers::RU;
 use crate::binemit::{bad_encoding, CodeSink, Reloc};
 use crate::ir::condcodes::{CondCode, FloatCC, IntCC};
-use crate::ir::{Constant, Ebb, Function, Inst, InstructionData, JumpTable, Opcode, TrapCode};
+use crate::ir::{Block, Constant, Function, Inst, InstructionData, JumpTable, Opcode, TrapCode};
 use crate::isa::{RegUnit, StackBase, StackBaseMask, StackRef, TargetIsa};
 use crate::regalloc::RegDiversions;
 
@@ -369,13 +369,13 @@ fn fcc2opc(cond: FloatCC) -> u16 {
 }
 
 /// Emit a single-byte branch displacement to `destination`.
-fn disp1<CS: CodeSink + ?Sized>(destination: Ebb, func: &Function, sink: &mut CS) {
+fn disp1<CS: CodeSink + ?Sized>(destination: Block, func: &Function, sink: &mut CS) {
     let delta = func.offsets[destination].wrapping_sub(sink.offset() + 1);
     sink.put1(delta as u8);
 }
 
 /// Emit a four-byte branch displacement to `destination`.
-fn disp4<CS: CodeSink + ?Sized>(destination: Ebb, func: &Function, sink: &mut CS) {
+fn disp4<CS: CodeSink + ?Sized>(destination: Block, func: &Function, sink: &mut CS) {
     let delta = func.offsets[destination].wrapping_sub(sink.offset() + 4);
     sink.put4(delta);
 }

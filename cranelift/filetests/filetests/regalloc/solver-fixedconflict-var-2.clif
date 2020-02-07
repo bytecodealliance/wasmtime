@@ -4,16 +4,16 @@ set enable_pinned_reg=true
 target x86_64 haswell
 
 function u0:0(i32, i32, i32, i64 vmctx) -> i64 uext system_v {
-ebb0(v0: i32, v1: i32, v2: i32, v3: i64):
+block0(v0: i32, v1: i32, v2: i32, v3: i64):
     v236 = iconst.i32 0x4de9_bd37
     v424 = iconst.i32 0
-    jump ebb37(v424)
+    jump block37(v424)
 
-ebb37(v65: i32):
+block37(v65: i32):
     v433 = iconst.i32 0
-    jump ebb40(v433)
+    jump block40(v433)
 
-ebb40(v70: i32):
+block40(v70: i32):
     v75 = iconst.i32 0
     v259 = iconst.i32 0
     v78 -> v259
@@ -28,17 +28,17 @@ ebb40(v70: i32):
     v272 = iconst.i32 0x4de9_bd37
     v490, v273 = x86_smulx v100, v272
     v493 = iconst.i32 0
-    jump ebb61(v493)
+    jump block61(v493)
 
-ebb61(v103: i32):
+block61(v103: i32):
     v104 = iconst.i32 -23
     v105 = iconst.i32 -23
     v106 = popcnt v105
     v500 = sshr_imm v104, 31
     v501 = iconst.i32 0
-    jump ebb64(v501)
+    jump block64(v501)
 
-ebb64(v107: i32):
+block64(v107: i32):
     v108 = iconst.i32 0
     v109 = iconst.i32 0
     v278 = iconst.i32 0
@@ -49,9 +49,9 @@ ebb64(v107: i32):
     v283 = iadd v281, v282
     v111 -> v283
     v112 = rotr v108, v283
-    jump ebb65
+    jump block65
 
-ebb65:
+block65:
     v509 = iconst.i32 0
     v510, v511 = x86_sdivmodx v107, v509, v112
     v113 -> v510

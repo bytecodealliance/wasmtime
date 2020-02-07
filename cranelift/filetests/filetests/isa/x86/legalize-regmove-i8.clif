@@ -11,16 +11,16 @@ function u0:0(i64, i64, i64) system_v {
     sig0 = (i64, i16, i64) system_v
     fn0 = colocated u0:11 sig0
 
-ebb0(v0: i64, v1: i64, v2: i64):
+block0(v0: i64, v1: i64, v2: i64):
     v3 = stack_addr.i64 ss1
     store v1, v3
     v4 = stack_addr.i64 ss2
     store v2, v4
     v5 = stack_addr.i64 ss3
     v6 = stack_addr.i64 ss4
-    jump ebb1
+    jump block1
 
-ebb1:
+block1:
     v7 = load.i64 v3
     v8 = load.i16 v7
     store v8, v5
@@ -29,8 +29,8 @@ ebb1:
     v10 = load.i16 v5
     v11 = load.i64 v6
     call fn0(v0, v10, v11)
-    jump ebb2
+    jump block2
 
-ebb2:
+block2:
     return
 }

@@ -3,7 +3,7 @@ set enable_simd=true
 target x86_64 haswell
 
 function %test_vconst_i32() -> i32x4 {
-ebb0:
+block0:
     v0 = vconst.i32x4 0x1234
     return v0
 }
@@ -11,7 +11,7 @@ ebb0:
 ; sameln: [34, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 function %test_vconst_b16() -> b16x8 {
-ebb0:
+block0:
     v0 = vconst.b16x8 [true false true false true false true true]
     return v0
 }

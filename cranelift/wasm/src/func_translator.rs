@@ -10,7 +10,7 @@ use crate::state::{FuncTranslationState, ModuleTranslationState};
 use crate::translation_utils::get_vmctx_value_label;
 use crate::wasm_unsupported;
 use cranelift_codegen::entity::EntityRef;
-use cranelift_codegen::ir::{self, Ebb, InstBuilder, ValueLabel};
+use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use log::info;
@@ -84,27 +84,27 @@ impl FuncTranslator {
             func.name,
             func.signature
         );
-        debug_assert_eq!(func.dfg.num_ebbs(), 0, "Function must be empty");
+        debug_assert_eq!(func.dfg.num_blocks(), 0, "Function must be empty");
         debug_assert_eq!(func.dfg.num_insts(), 0, "Function must be empty");
 
         // This clears the `FunctionBuilderContext`.
         let mut builder = FunctionBuilder::new(func, &mut self.func_ctx);
         builder.set_srcloc(cur_srcloc(&reader));
-        let entry_block = builder.create_ebb();
-        builder.append_ebb_params_for_function_params(entry_block);
+        let entry_block = builder.create_block();
+        builder.append_block_params_for_function_params(entry_block);
         builder.switch_to_block(entry_block); // This also creates values for the arguments.
         builder.seal_block(entry_block); // Declare all predecessors known.
 
         // Make sure the entry block is inserted in the layout before we make any callbacks to
         // `environ`. The callback functions may need to insert things in the entry block.
-        builder.ensure_inserted_ebb();
+        builder.ensure_inserted_block();
 
         let num_params = declare_wasm_parameters(&mut builder, entry_block, environ);
 
         // Set up the translation state with a single pushed control block representing the whole
         // function and its return values.
-        let exit_block = builder.create_ebb();
-        builder.append_ebb_params_for_function_returns(exit_block);
+        let exit_block = builder.create_block();
+        builder.append_block_params_for_function_returns(exit_block);
         self.state.initialize(&builder.func.signature, exit_block);
 
         parse_local_decls(&mut reader, &mut builder, num_params, environ)?;
@@ -126,7 +126,7 @@ impl FuncTranslator {
 /// Return the number of local variables declared.
 fn declare_wasm_parameters<FE: FuncEnvironment + ?Sized>(
     builder: &mut FunctionBuilder,
-    entry_block: Ebb,
+    entry_block: Block,
     environ: &FE,
 ) -> usize {
     let sig_len = builder.func.signature.params.len();
@@ -141,11 +141,11 @@ fn declare_wasm_parameters<FE: FuncEnvironment + ?Sized>(
             builder.declare_var(local, param_type.value_type);
             next_local += 1;
 
-            let param_value = builder.ebb_params(entry_block)[i];
+            let param_value = builder.block_params(entry_block)[i];
             builder.def_var(local, param_value);
         }
         if param_type.purpose == ir::ArgumentPurpose::VMContext {
-            let param_value = builder.ebb_params(entry_block)[i];
+            let param_value = builder.block_params(entry_block)[i];
             builder.set_val_label(param_value, get_vmctx_value_label());
         }
     }

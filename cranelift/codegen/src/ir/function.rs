@@ -1,17 +1,17 @@
 //! Intermediate representation of a function.
 //!
-//! The `Function` struct defined in this module owns all of its extended basic blocks and
+//! The `Function` struct defined in this module owns all of its basic blocks and
 //! instructions.
 
 use crate::binemit::CodeOffset;
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir;
-use crate::ir::{DataFlowGraph, ExternalName, Layout, Signature};
 use crate::ir::{
-    Ebb, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, Inst, JumpTable,
+    Block, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, Inst, JumpTable,
     JumpTableData, Opcode, SigRef, StackSlot, StackSlotData, Table, TableData,
 };
-use crate::ir::{EbbOffsets, FrameLayout, InstEncodings, SourceLocs, StackSlots, ValueLocations};
+use crate::ir::{BlockOffsets, FrameLayout, InstEncodings, SourceLocs, StackSlots, ValueLocations};
+use crate::ir::{DataFlowGraph, ExternalName, Layout, Signature};
 use crate::ir::{JumpTableOffsets, JumpTables};
 use crate::isa::{CallConv, EncInfo, Encoding, Legalize, TargetIsa};
 use crate::regalloc::{EntryRegDiversions, RegDiversions};
@@ -50,10 +50,10 @@ pub struct Function {
     /// Jump tables used in this function.
     pub jump_tables: JumpTables,
 
-    /// Data flow graph containing the primary definition of all instructions, EBBs and values.
+    /// Data flow graph containing the primary definition of all instructions, blocks and values.
     pub dfg: DataFlowGraph,
 
-    /// Layout of EBBs and instructions in the function body.
+    /// Layout of blocks and instructions in the function body.
     pub layout: Layout,
 
     /// Encoding recipe and bits for the legal instructions.
@@ -69,12 +69,12 @@ pub struct Function {
     /// ValueLocation. This field records these register-to-register moves as Diversions.
     pub entry_diversions: EntryRegDiversions,
 
-    /// Code offsets of the EBB headers.
+    /// Code offsets of the block headers.
     ///
     /// This information is only transiently available after the `binemit::relax_branches` function
     /// computes it, and it can easily be recomputed by calling that function. It is not included
     /// in the textual IR format.
-    pub offsets: EbbOffsets,
+    pub offsets: BlockOffsets,
 
     /// Code offsets of Jump Table headers.
     pub jt_offsets: JumpTableOffsets,
@@ -207,10 +207,10 @@ impl Function {
         let entry = self.layout.entry_block().expect("Function is empty");
         self.signature
             .special_param_index(purpose)
-            .map(|i| self.dfg.ebb_params(entry)[i])
+            .map(|i| self.dfg.block_params(entry)[i])
     }
 
-    /// Get an iterator over the instructions in `ebb`, including offsets and encoded instruction
+    /// Get an iterator over the instructions in `block`, including offsets and encoded instruction
     /// sizes.
     ///
     /// The iterator returns `(offset, inst, size)` tuples, where `offset` if the offset in bytes
@@ -219,20 +219,20 @@ impl Function {
     ///
     /// This function can only be used after the code layout has been computed by the
     /// `binemit::relax_branches()` function.
-    pub fn inst_offsets<'a>(&'a self, ebb: Ebb, encinfo: &EncInfo) -> InstOffsetIter<'a> {
+    pub fn inst_offsets<'a>(&'a self, block: Block, encinfo: &EncInfo) -> InstOffsetIter<'a> {
         assert!(
             !self.offsets.is_empty(),
             "Code layout must be computed first"
         );
         let mut divert = RegDiversions::new();
-        divert.at_ebb(&self.entry_diversions, ebb);
+        divert.at_block(&self.entry_diversions, block);
         InstOffsetIter {
             encinfo: encinfo.clone(),
             func: self,
             divert,
             encodings: &self.encodings,
-            offset: self.offsets[ebb],
-            iter: self.layout.ebb_insts(ebb),
+            offset: self.offsets[block],
+            iter: self.layout.block_insts(block),
         }
     }
 
@@ -260,19 +260,19 @@ impl Function {
 
     /// Changes the destination of a jump or branch instruction.
     /// Does nothing if called with a non-jump or non-branch instruction.
-    pub fn change_branch_destination(&mut self, inst: Inst, new_dest: Ebb) {
+    pub fn change_branch_destination(&mut self, inst: Inst, new_dest: Block) {
         match self.dfg[inst].branch_destination_mut() {
             None => (),
             Some(inst_dest) => *inst_dest = new_dest,
         }
     }
 
-    /// Checks that the specified EBB can be encoded as a basic block.
+    /// Checks that the specified block can be encoded as a basic block.
     ///
     /// On error, returns the first invalid instruction and an error message.
-    pub fn is_ebb_basic(&self, ebb: Ebb) -> Result<(), (Inst, &'static str)> {
+    pub fn is_block_basic(&self, block: Block) -> Result<(), (Inst, &'static str)> {
         let dfg = &self.dfg;
-        let inst_iter = self.layout.ebb_insts(ebb);
+        let inst_iter = self.layout.block_insts(block);
 
         // Ignore all instructions prior to the first branch.
         let mut inst_iter = inst_iter.skip_while(|&inst| !dfg[inst].opcode().is_branch());

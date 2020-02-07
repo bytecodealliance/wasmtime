@@ -4,11 +4,11 @@ target riscv32
 ; regex: V=v\d+
 
 function %icmp_imm_eq(i64) -> b1 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = icmp_imm eq v0, 0x20202020_10101010
     return v1
 }
-; check: ebb0($(v0l=$V): i32, $(v0h=$V): i32, $(link=$V): i32):
+; check: block0($(v0l=$V): i32, $(v0h=$V): i32, $(link=$V): i32):
 ; nextln: $(v2l=$V) -> $(v0l)
 ; nextln: $(v2h=$V) -> $(v0h)
 ; nextln: v0 = iconcat $(v0l), $(v0h)
@@ -20,11 +20,11 @@ ebb0(v0: i64):
 ; nextln: return v1, $(link)
 
 function %icmp_imm_ne(i64) -> b1 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = icmp_imm ne v0, 0x33333333_44444444
     return v1
 }
-; check: ebb0($(v0l=$V): i32, $(v0h=$V): i32, $(link=$V): i32):
+; check: block0($(v0l=$V): i32, $(v0h=$V): i32, $(link=$V): i32):
 ; nextln: $(v2l=$V) -> $(v0l)
 ; nextln: $(v2h=$V) -> $(v0h)
 ; nextln: v0 = iconcat $(v0l), $(v0h)
@@ -36,11 +36,11 @@ ebb0(v0: i64):
 ; nextln: return v1, $(link)
 
 function %icmp_imm_sge(i64) -> b1 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = icmp_imm sge v0, 0x01020304_05060708
     return v1
 }
-; check: ebb0($(v0l=$V): i32, $(v0h=$V): i32, $(link=$V): i32):
+; check: block0($(v0l=$V): i32, $(v0h=$V): i32, $(link=$V): i32):
 ; nextln: $(v2l=$V) -> $(v0l)
 ; nextln: $(v2h=$V) -> $(v0h)
 ; nextln: v0 = iconcat $(v0l), $(v0h)

@@ -2,32 +2,32 @@ test run
 target x86_64
 
 function u0:0() -> b1 {
-ebb0:
+block0:
     v0 = iconst.i8 0
-    brz v0, ebb1
-    jump ebb2
+    brz v0, block1
+    jump block2
 
-ebb1:
+block1:
     v1 = bconst.b1 true
     return v1
 
-ebb2:
+block2:
     v2 = bconst.b1 false
     return v2
 }
 ; run
 
 function u0:1() -> b1 {
-ebb0:
+block0:
     v0 = iconst.i8 0
-    brnz v0, ebb1
-    jump ebb2
+    brnz v0, block1
+    jump block2
 
-ebb1:
+block1:
     v1 = bconst.b1 false
     return v1
 
-ebb2:
+block2:
     v2 = bconst.b1 true
     return v2
 }

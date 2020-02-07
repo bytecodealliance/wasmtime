@@ -5,7 +5,7 @@ target x86_64 haswell
 ; regex: V=v\d+
 
 function %imul(i128, i128) -> i128 {
-ebb0(v1: i128, v2: i128):
+block0(v1: i128, v2: i128):
     v10 = imul v1, v2
     ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
     ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)

@@ -450,7 +450,7 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
             all_inst,
             |inst| inst.is_terminator,
             "is_terminator",
-            "True for instructions that terminate the EBB",
+            "True for instructions that terminate the block",
             fmt,
         );
         gen_bool_accessor(

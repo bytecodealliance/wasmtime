@@ -2,7 +2,7 @@ test compile
 target x86_64
 
 function u0:0(i8) -> i8 fast {
-ebb0(v0: i8):
+block0(v0: i8):
     v1 = popcnt v0
     ; check-not: sextend.i32 v0
     return v1

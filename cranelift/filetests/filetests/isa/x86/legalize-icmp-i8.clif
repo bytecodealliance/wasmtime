@@ -4,7 +4,7 @@ target x86_64
 ; regex: V=v\d+
 
 function u0:0(i8, i8) -> i8 fast {
-ebb0(v0: i8, v1: i8):
+block0(v0: i8, v1: i8):
     v2 = icmp_imm sle v0, 0
     ; check: $(e1=$V) = sextend.i32 v0
     ; nextln: v2 = icmp_imm sle $e1, 0

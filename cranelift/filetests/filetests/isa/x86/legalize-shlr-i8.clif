@@ -4,7 +4,7 @@ target x86_64
 ; regex: V=v\d+
 
 function u0:0(i8, i8) -> i8 fast {
-ebb0(v0: i8, v1: i8):
+block0(v0: i8, v1: i8):
     v2 = ishl v0, v1
     ; check: $(e1=$V) = uextend.i32 v0
     ; check: $(r1=$V) = ishl $e1, v1

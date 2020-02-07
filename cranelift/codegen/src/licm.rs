@@ -3,10 +3,10 @@
 use crate::cursor::{Cursor, EncCursor, FuncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::entity::{EntityList, ListPool};
-use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::fx::FxHashSet;
 use crate::ir::{
-    DataFlowGraph, Ebb, Function, Inst, InstBuilder, InstructionData, Layout, Opcode, Type, Value,
+    Block, DataFlowGraph, Function, Inst, InstBuilder, InstructionData, Layout, Opcode, Type, Value,
 };
 use crate::isa::TargetIsa;
 use crate::loop_analysis::{Loop, LoopAnalysis};
@@ -65,23 +65,23 @@ pub fn do_licm(
 // A jump instruction to the header is placed at the end of the pre-header.
 fn create_pre_header(
     isa: &dyn TargetIsa,
-    header: Ebb,
+    header: Block,
     func: &mut Function,
     cfg: &mut ControlFlowGraph,
     domtree: &DominatorTree,
-) -> Ebb {
+) -> Block {
     let pool = &mut ListPool::<Value>::new();
-    let header_args_values = func.dfg.ebb_params(header).to_vec();
+    let header_args_values = func.dfg.block_params(header).to_vec();
     let header_args_types: Vec<Type> = header_args_values
         .into_iter()
         .map(|val| func.dfg.value_type(val))
         .collect();
-    let pre_header = func.dfg.make_ebb();
+    let pre_header = func.dfg.make_block();
     let mut pre_header_args_value: EntityList<Value> = EntityList::new();
     for typ in header_args_types {
-        pre_header_args_value.push(func.dfg.append_ebb_param(pre_header, typ), pool);
+        pre_header_args_value.push(func.dfg.append_block_param(pre_header, typ), pool);
     }
-    for BasicBlock {
+    for BlockPredecessor {
         inst: last_inst, ..
     } in cfg.pred_iter(header)
     {
@@ -93,7 +93,7 @@ fn create_pre_header(
     {
         let mut pos = EncCursor::new(func, isa).at_top(header);
         // Inserts the pre-header at the right place in the layout.
-        pos.insert_ebb(pre_header);
+        pos.insert_block(pre_header);
         pos.next_inst();
         pos.ins().jump(header, pre_header_args_value.as_slice(pool));
     }
@@ -104,16 +104,16 @@ fn create_pre_header(
 //
 // A loop header has a pre-header if there is only one predecessor that the header doesn't
 // dominate.
-// Returns the pre-header Ebb and the instruction jumping to the header.
+// Returns the pre-header Block and the instruction jumping to the header.
 fn has_pre_header(
     layout: &Layout,
     cfg: &ControlFlowGraph,
     domtree: &DominatorTree,
-    header: Ebb,
-) -> Option<(Ebb, Inst)> {
+    header: Block,
+) -> Option<(Block, Inst)> {
     let mut result = None;
-    for BasicBlock {
-        ebb: pred_ebb,
+    for BlockPredecessor {
+        block: pred_block,
         inst: branch_inst,
     } in cfg.pred_iter(header)
     {
@@ -123,13 +123,13 @@ fn has_pre_header(
                 // We have already found one, there are more than one
                 return None;
             }
-            if branch_inst != layout.last_inst(pred_ebb).unwrap()
-                || cfg.succ_iter(pred_ebb).nth(1).is_some()
+            if branch_inst != layout.last_inst(pred_block).unwrap()
+                || cfg.succ_iter(pred_block).nth(1).is_some()
             {
                 // It's along a critical edge, so don't use it.
                 return None;
             }
-            result = Some((pred_ebb, branch_inst));
+            result = Some((pred_block, branch_inst));
         }
     }
     result
@@ -176,7 +176,7 @@ fn is_loop_invariant(inst: Inst, dfg: &DataFlowGraph, loop_values: &FxHashSet<Va
     true
 }
 
-// Traverses a loop in reverse post-order from a header EBB and identify loop-invariant
+// Traverses a loop in reverse post-order from a header block and identify loop-invariant
 // instructions. These loop-invariant instructions are then removed from the code and returned
 // (in reverse post-order) for later use.
 fn remove_loop_invariant_instructions(
@@ -188,13 +188,13 @@ fn remove_loop_invariant_instructions(
     let mut loop_values: FxHashSet<Value> = FxHashSet();
     let mut invariant_insts: Vec<Inst> = Vec::new();
     let mut pos = FuncCursor::new(func);
-    // We traverse the loop EBB in reverse post-order.
-    for ebb in postorder_ebbs_loop(loop_analysis, cfg, lp).iter().rev() {
-        // Arguments of the EBB are loop values
-        for val in pos.func.dfg.ebb_params(*ebb) {
+    // We traverse the loop block in reverse post-order.
+    for block in postorder_blocks_loop(loop_analysis, cfg, lp).iter().rev() {
+        // Arguments of the block are loop values
+        for val in pos.func.dfg.block_params(*block) {
             loop_values.insert(*val);
         }
-        pos.goto_top(*ebb);
+        pos.goto_top(*block);
         #[cfg_attr(feature = "cargo-clippy", allow(clippy::block_in_if_condition_stmt))]
         while let Some(inst) = pos.next_inst() {
             if is_loop_invariant(inst, &pos.func.dfg, &loop_values) {
@@ -215,8 +215,12 @@ fn remove_loop_invariant_instructions(
     invariant_insts
 }
 
-/// Return ebbs from a loop in post-order, starting from an entry point in the block.
-fn postorder_ebbs_loop(loop_analysis: &LoopAnalysis, cfg: &ControlFlowGraph, lp: Loop) -> Vec<Ebb> {
+/// Return blocks from a loop in post-order, starting from an entry point in the block.
+fn postorder_blocks_loop(
+    loop_analysis: &LoopAnalysis,
+    cfg: &ControlFlowGraph,
+    lp: Loop,
+) -> Vec<Block> {
     let mut grey = FxHashSet();
     let mut black = FxHashSet();
     let mut stack = vec![loop_analysis.loop_header(lp)];

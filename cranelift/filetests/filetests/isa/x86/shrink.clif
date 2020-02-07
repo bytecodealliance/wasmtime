@@ -10,7 +10,7 @@ target x86_64
 ;
 
 function %test_shrinking(i32) -> i32 {
-ebb0(v0: i32 [ %rdi ]):
+block0(v0: i32 [ %rdi ]):
            ; asm: movl $0x2,%eax
 [-,%rcx]   v1 = iconst.i32 2     ; bin: b9 00000002
            ; asm: subl %ecx,%edi
@@ -19,7 +19,7 @@ ebb0(v0: i32 [ %rdi ]):
 }
 
 function %test_not_shrinking(i32) -> i32 {
-ebb0(v0: i32 [ %r8 ]):
+block0(v0: i32 [ %r8 ]):
            ; asm: movl $0x2,%eax
 [-,%rcx]   v1 = iconst.i32 2     ; bin: b9 00000002
            ; asm: subl %ecx,%edi
@@ -28,7 +28,7 @@ ebb0(v0: i32 [ %r8 ]):
 }
 
 function %test_not_shrinking_i8() {
-ebb0:
+block0:
 [-,%rsi]   v1 = iconst.i8 1
            ; asm: movsbl %sil,%esi
 [-,%rsi]   v2 = sextend.i32 v1   ; bin: 40 0f be f6

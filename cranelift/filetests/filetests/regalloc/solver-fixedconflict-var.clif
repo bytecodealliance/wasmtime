@@ -6,7 +6,7 @@ target x86_64 haswell
 ;; Test for the issue #1123; https://github.com/bytecodealliance/cranelift/issues/1123
 
 function u0:0(i32, i32, i32, i64 vmctx) -> i64 uext system_v {
-ebb0(v0: i32, v1: i32, v2: i32, v3: i64):
+block0(v0: i32, v1: i32, v2: i32, v3: i64):
     v351 = iconst.i32 0x4de9_bd37
     v31 = iconst.i32 -23
     v35 = iconst.i32 0
@@ -24,68 +24,68 @@ ebb0(v0: i32, v1: i32, v2: i32, v3: i64):
     v53 = iconst.i32 0
     v547 = ifcmp_imm v53, -1
     trapif ne v547, user0
-    jump ebb30
+    jump block30
 
-ebb30:
+block30:
     v75 = iconst.i32 0
     v581 = ifcmp_imm v75, -1
     trapif ne v581, user0
-    jump ebb42
+    jump block42
 
-ebb42:
+block42:
     v136 = iconst.i32 0
     v691 = ifcmp_imm v136, -1
     trapif ne v691, user0
-    jump ebb81
+    jump block81
 
-ebb81:
+block81:
     v158 = iconst.i32 0
     v725 = ifcmp_imm v158, -1
     trapif ne v725, user0
-    jump ebb93
+    jump block93
 
-ebb93:
+block93:
     v760 = iconst.i32 0
-    jump ebb106(v760)
+    jump block106(v760)
 
-ebb106(v175: i32):
+block106(v175: i32):
     v179 = iconst.i32 0
     v180 = icmp_imm eq v179, 0
     v183 = iconst.i32 0
     v766 = ifcmp_imm v183, -1
     trapif ne v766, user0
-    jump ebb108
+    jump block108
 
-ebb108:
+block108:
     v771 = iconst.i32 0
-    jump ebb109(v771)
+    jump block109(v771)
 
-ebb109(v184: i32):
+block109(v184: i32):
     v785 = iconst.i32 0
     v193 -> v785
     v791 = ifcmp_imm v193, -1
     trapif ne v791, user0
-    jump ebb117
+    jump block117
 
-ebb117:
+block117:
     v796 = iconst.i32 0
-    jump ebb118(v796)
+    jump block118(v796)
 
-ebb118(v194: i32):
+block118(v194: i32):
     v203 = iconst.i32 -63
     v809 = iconst.i32 0
     v207 -> v809
     v815 = ifcmp_imm v207, -1
     trapif ne v815, user0
-    jump ebb126
+    jump block126
 
-ebb126:
+block126:
     v209 = iconst.i32 0
     v823 = ifcmp_imm v209, -1
     trapif ne v823, user0
-    jump ebb129
+    jump block129
 
-ebb129:
+block129:
     v213 = iconst.i32 -23
     v214 = iconst.i32 -19
     v215 = icmp_imm eq v214, 0
@@ -111,9 +111,9 @@ ebb129:
     v858, v859 = x86_sdivmodx v175, v857, v232
     v233 -> v858
     v915 = iconst.i32 0
-    jump ebb163(v915)
+    jump block163(v915)
 
-ebb163(v253: i32):
+block163(v253: i32):
     v255 = iconst.i32 0
     v256 = iconst.i32 -23
     v257 = iconst.i32 -19

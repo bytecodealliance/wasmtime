@@ -1,92 +1,92 @@
 test domtree
 
 function %loop1(i32) {
-    ebb0(v0: i32):
-        brz v0, ebb1    ; dominates: ebb1 ebb6
-        jump ebb10      ; dominates: ebb10
-    ebb10:
-        brnz v0, ebb2   ; dominates: ebb2 ebb9
-        jump ebb3       ; dominates: ebb3
-    ebb1:
-        jump ebb6
-    ebb2:
-        brz v0, ebb4    ; dominates: ebb4 ebb7 ebb8
-        jump ebb5       ; dominates: ebb5
-    ebb3:
-        jump ebb9
-    ebb4:
-        brz v0, ebb4
-        jump ebb11      ; dominates: ebb11
-    ebb11:
-        brnz v0, ebb6
-        jump ebb7
-    ebb5:
-        brz v0, ebb7
-        jump ebb12      ; dominates: ebb12
-    ebb12:
-        brnz v0, ebb8
-        jump ebb9
-    ebb6:
+    block0(v0: i32):
+        brz v0, block1    ; dominates: block1 block6
+        jump block10      ; dominates: block10
+    block10:
+        brnz v0, block2   ; dominates: block2 block9
+        jump block3       ; dominates: block3
+    block1:
+        jump block6
+    block2:
+        brz v0, block4    ; dominates: block4 block7 block8
+        jump block5       ; dominates: block5
+    block3:
+        jump block9
+    block4:
+        brz v0, block4
+        jump block11      ; dominates: block11
+    block11:
+        brnz v0, block6
+        jump block7
+    block5:
+        brz v0, block7
+        jump block12      ; dominates: block12
+    block12:
+        brnz v0, block8
+        jump block9
+    block6:
         return
-    ebb7:
-        jump ebb8
-    ebb8:
+    block7:
+        jump block8
+    block8:
         return
-    ebb9:
+    block9:
         return
 }
 
 ; check: domtree_preorder {
-; nextln: ebb0: ebb1 ebb10 ebb6
-; nextln: ebb1:
-; nextln: ebb10: ebb2 ebb3 ebb9
-; nextln: ebb2: ebb4 ebb5 ebb7 ebb8
-; nextln: ebb4: ebb11
-; nextln: ebb11:
-; nextln: ebb5: ebb12
-; nextln: ebb12:
-; nextln: ebb7:
-; nextln: ebb8:
-; nextln: ebb3:
-; nextln: ebb9:
-; nextln: ebb6:
+; nextln: block0: block1 block10 block6
+; nextln: block1:
+; nextln: block10: block2 block3 block9
+; nextln: block2: block4 block5 block7 block8
+; nextln: block4: block11
+; nextln: block11:
+; nextln: block5: block12
+; nextln: block12:
+; nextln: block7:
+; nextln: block8:
+; nextln: block3:
+; nextln: block9:
+; nextln: block6:
 ; nextln: }
 
 function %loop2(i32) system_v {
-    ebb0(v0: i32):
-        brz v0, ebb1    ; dominates: ebb1 ebb3 ebb4 ebb5
-        jump ebb2       ; dominates: ebb2
-    ebb1:
-        jump ebb3
-    ebb2:
-        brz v0, ebb4
-        jump ebb5
-    ebb3:
-        jump ebb4
-    ebb4:
-        brz v0, ebb3
-        jump ebb5
-    ebb5:
-        brz v0, ebb4
-        jump ebb6       ; dominates: ebb6
-    ebb6:
+    block0(v0: i32):
+        brz v0, block1    ; dominates: block1 block3 block4 block5
+        jump block2       ; dominates: block2
+    block1:
+        jump block3
+    block2:
+        brz v0, block4
+        jump block5
+    block3:
+        jump block4
+    block4:
+        brz v0, block3
+        jump block5
+    block5:
+        brz v0, block4
+        jump block6       ; dominates: block6
+    block6:
         return
 }
 ; check: cfg_postorder:
-; sameln: ebb6
-; sameln: ebb5
-; sameln: ebb3
-; sameln: ebb4
-; sameln: ebb2
-; sameln: ebb1
-; sameln: ebb0
+; sameln: block6
+; sameln: block5
+; sameln: block3
+; sameln: block4
+; sameln: block2
+; sameln: block1
+; sameln: block0
 
 ; check: domtree_preorder {
-; nextln: ebb0: ebb1 ebb2 ebb4 ebb3 ebb5
-; nextln: ebb1:
-; nextln: ebb2:
-; nextln: ebb4:
-; nextln: ebb3:
-; nextln: ebb5: ebb6
-; nextln: ebb6:
+; nextln: block0: block1 block2 block4 block3 block5
+; nextln: block1:
+; nextln: block2:
+; nextln: block4:
+; nextln: block3:
+; nextln: block5: block6
+; nextln: block6:
 ; nextln: }

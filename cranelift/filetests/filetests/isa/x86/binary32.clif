@@ -19,7 +19,7 @@ function %I32() {
     ss2 = incoming_arg 1024, offset -2048
     ss3 = incoming_arg 8, offset -2056
 
-ebb0:
+block0:
     ; asm: movl $1, %ecx
     [-,%rcx]            v1 = iconst.i32 1        ; bin: b9 00000001
     ; asm: movl $2, %esi
@@ -486,141 +486,141 @@ ebb0:
     [-,%rcx,%rflags] v709, v710 = isub_ifborrow v1, v2, v707 ; bin: 19 f1
 
     ; asm: testl %ecx, %ecx
-    ; asm: je ebb1
-    brz v1, ebb1                                ; bin: 85 c9 74 0e
-    fallthrough ebb3
+    ; asm: je block1
+    brz v1, block1                                ; bin: 85 c9 74 0e
+    fallthrough block3
 
-ebb3:
+block3:
     ; asm: testl %esi, %esi
-    ; asm: je ebb1
-    brz v2, ebb1                                ; bin: 85 f6 74 0a
-    fallthrough ebb4
+    ; asm: je block1
+    brz v2, block1                                ; bin: 85 f6 74 0a
+    fallthrough block4
 
-ebb4:
+block4:
     ; asm: testl %ecx, %ecx
-    ; asm: jne ebb1
-    brnz v1, ebb1                               ; bin: 85 c9 75 06
-    fallthrough ebb5
+    ; asm: jne block1
+    brnz v1, block1                               ; bin: 85 c9 75 06
+    fallthrough block5
 
-ebb5:
+block5:
     ; asm: testl %esi, %esi
-    ; asm: jne ebb1
-    brnz v2, ebb1                               ; bin: 85 f6 75 02
+    ; asm: jne block1
+    brnz v2, block1                               ; bin: 85 f6 75 02
 
-    ; asm: jmp ebb2
-    jump ebb2                                   ; bin: eb 01
+    ; asm: jmp block2
+    jump block2                                   ; bin: eb 01
 
-    ; asm: ebb1:
-ebb1:
+    ; asm: block1:
+block1:
     ; asm: ret
     return                                      ; bin: c3
 
-    ; asm: ebb2:
-ebb2:
+    ; asm: block2:
+block2:
     trap user0                                  ; bin: user0 0f 0b
 }
 
 ; Special branch encodings only for I32 mode.
 function %special_branches() {
-ebb0:
+block0:
     [-,%rcx]            v1 = iconst.i32 1
     [-,%rsi]            v2 = iconst.i32 2
     [-,%rdi]            v3 = icmp eq v1, v2
     [-,%rbx]            v4 = icmp ugt v1, v2
 
     ; asm: testl $0xff, %edi
-    ; asm: je ebb1
-    brz v3, ebb1                                ; bin: f7 c7 000000ff 0f 84 00000015
-    fallthrough ebb2
+    ; asm: je block1
+    brz v3, block1                                ; bin: f7 c7 000000ff 0f 84 00000015
+    fallthrough block2
 
-ebb2:
+block2:
     ; asm: testb %bl, %bl
-    ; asm: je ebb1
-    brz v4, ebb1                                ; bin: 84 db 74 11
-    fallthrough ebb3
+    ; asm: je block1
+    brz v4, block1                                ; bin: 84 db 74 11
+    fallthrough block3
 
-ebb3:
+block3:
     ; asm: testl $0xff, %edi
-    ; asm: jne ebb1
-    brnz v3, ebb1                               ; bin: f7 c7 000000ff 0f 85 00000005
-    fallthrough ebb4
+    ; asm: jne block1
+    brnz v3, block1                               ; bin: f7 c7 000000ff 0f 85 00000005
+    fallthrough block4
 
-ebb4:
+block4:
     ; asm: testb %bl, %bl
-    ; asm: jne ebb1
-    brnz v4, ebb1                               ; bin: 84 db 75 01
-    fallthrough ebb5
+    ; asm: jne block1
+    brnz v4, block1                               ; bin: 84 db 75 01
+    fallthrough block5
 
-ebb5:
+block5:
     return
 
-ebb1:
+block1:
     return
 }
 
 ; CPU flag instructions.
 function %cpu_flags() {
-ebb0:
+block0:
     [-,%rcx]            v1 = iconst.i32 1
     [-,%rsi]            v2 = iconst.i32 2
-    jump ebb1
+    jump block1
 
-ebb1:
+block1:
     ; asm: cmpl %esi, %ecx
     [-,%rflags]         v10 = ifcmp v1, v2      ; bin: 39 f1
     ; asm: cmpl %ecx, %esi
     [-,%rflags]         v11 = ifcmp v2, v1      ; bin: 39 ce
 
-    ; asm: je ebb1
-    brif eq v11, ebb1                           ; bin: 74 fa
-    jump ebb2
+    ; asm: je block1
+    brif eq v11, block1                           ; bin: 74 fa
+    jump block2
 
-ebb2:
-    ; asm: jne ebb1
-    brif ne v11, ebb1                           ; bin: 75 f8
-    jump ebb3
+block2:
+    ; asm: jne block1
+    brif ne v11, block1                           ; bin: 75 f8
+    jump block3
 
-ebb3:
-    ; asm: jl ebb1
-    brif slt v11, ebb1                          ; bin: 7c f6
-    jump ebb4
+block3:
+    ; asm: jl block1
+    brif slt v11, block1                          ; bin: 7c f6
+    jump block4
 
-ebb4:
-    ; asm: jge ebb1
-    brif sge v11, ebb1                          ; bin: 7d f4
-    jump ebb5
+block4:
+    ; asm: jge block1
+    brif sge v11, block1                          ; bin: 7d f4
+    jump block5
 
-ebb5:
-    ; asm: jg ebb1
-    brif sgt v11, ebb1                          ; bin: 7f f2
-    jump ebb6
+block5:
+    ; asm: jg block1
+    brif sgt v11, block1                          ; bin: 7f f2
+    jump block6
 
-ebb6:
-    ; asm: jle ebb1
-    brif sle v11, ebb1                          ; bin: 7e f0
-    jump ebb7
+block6:
+    ; asm: jle block1
+    brif sle v11, block1                          ; bin: 7e f0
+    jump block7
 
-ebb7:
-    ; asm: jb ebb1
-    brif ult v11, ebb1                          ; bin: 72 ee
-    jump ebb8
+block7:
+    ; asm: jb block1
+    brif ult v11, block1                          ; bin: 72 ee
+    jump block8
 
-ebb8:
-    ; asm: jae ebb1
-    brif uge v11, ebb1                          ; bin: 73 ec
-    jump ebb9
+block8:
+    ; asm: jae block1
+    brif uge v11, block1                          ; bin: 73 ec
+    jump block9
 
-ebb9:
-    ; asm: ja ebb1
-    brif ugt v11, ebb1                          ; bin: 77 ea
-    jump ebb10
+block9:
+    ; asm: ja block1
+    brif ugt v11, block1                          ; bin: 77 ea
+    jump block10
 
-ebb10:
-    ; asm: jbe ebb1
-    brif ule v11, ebb1                          ; bin: 76 e8
-    jump ebb11
+block10:
+    ; asm: jbe block1
+    brif ule v11, block1                          ; bin: 76 e8
+    jump block11
 
-ebb11:
+block11:
 
     ; asm: sete %bl
     [-,%rbx]            v20 = trueif eq v11                           ; bin: 0f 94 c3
@@ -690,7 +690,7 @@ ebb11:
 
 ; Tests for i32/i8 conversion instructions.
 function %I32_I8() {
-ebb0:
+block0:
     [-,%rcx]            v1 = iconst.i32 1
 
     [-,%rcx]            v11 = ireduce.i8 v1             ; bin:
@@ -706,7 +706,7 @@ ebb0:
 
 ; Tests for i32/i16 conversion instructions.
 function %I32_I16() {
-ebb0:
+block0:
     [-,%rcx]            v1 = iconst.i32 1
 
     [-,%rcx]            v11 = ireduce.i16 v1            ; bin:

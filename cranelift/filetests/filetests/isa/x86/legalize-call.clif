@@ -5,7 +5,7 @@ target x86_64 haswell
 
 function %call() {
     fn0 = %foo()
-ebb0:
+block0:
     call fn0()
     return
 }

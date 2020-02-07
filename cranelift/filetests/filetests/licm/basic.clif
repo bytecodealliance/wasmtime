@@ -3,39 +3,39 @@ target riscv32
 
 function %simple_loop(i32) -> i32 {
 
-ebb0(v0: i32):
-    jump ebb1(v0)
+block0(v0: i32):
+    jump block1(v0)
 
-ebb1(v1: i32):
+block1(v1: i32):
     v2 = iconst.i32 1
     v3 = iconst.i32 2
     v4 = iadd v2, v3
-    brz v1, ebb3(v1)
-    jump ebb2
+    brz v1, block3(v1)
+    jump block2
 
-ebb2:
+block2:
     v5 = isub v1, v2
-    jump ebb1(v5)
+    jump block1(v5)
 
-ebb3(v6: i32):
+block3(v6: i32):
     return v6
 
 }
 ; sameln: function %simple_loop
-; nextln: ebb0(v0: i32):
+; nextln: block0(v0: i32):
 ; nextln:     v2 = iconst.i32 1
 ; nextln:     v3 = iconst.i32 2
 ; nextln:     v4 = iadd v2, v3
-; nextln:     jump ebb1(v0)
+; nextln:     jump block1(v0)
 ; nextln: 
-; nextln: ebb1(v1: i32):
-; nextln:     brz v1, ebb3(v1)
-; nextln:     jump ebb2
+; nextln: block1(v1: i32):
+; nextln:     brz v1, block3(v1)
+; nextln:     jump block2
 ; nextln: 
-; nextln: ebb2:
+; nextln: block2:
 ; nextln:     v5 = isub.i32 v1, v2
-; nextln:     jump ebb1(v5)
+; nextln:     jump block1(v5)
 ; nextln: 
-; nextln: ebb3(v6: i32):
+; nextln: block3(v6: i32):
 ; nextln:     return v6
 ; nextln: }

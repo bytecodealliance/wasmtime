@@ -83,22 +83,22 @@
 //! {
 //!     let mut builder = FunctionBuilder::new(&mut func, &mut fn_builder_ctx);
 //!
-//!     let block0 = builder.create_ebb();
-//!     let block1 = builder.create_ebb();
-//!     let block2 = builder.create_ebb();
-//!     let block3 = builder.create_ebb();
+//!     let block0 = builder.create_block();
+//!     let block1 = builder.create_block();
+//!     let block2 = builder.create_block();
+//!     let block3 = builder.create_block();
 //!     let x = Variable::new(0);
 //!     let y = Variable::new(1);
 //!     let z = Variable::new(2);
 //!     builder.declare_var(x, I32);
 //!     builder.declare_var(y, I32);
 //!     builder.declare_var(z, I32);
-//!     builder.append_ebb_params_for_function_params(block0);
+//!     builder.append_block_params_for_function_params(block0);
 //!
 //!     builder.switch_to_block(block0);
 //!     builder.seal_block(block0);
 //!     {
-//!         let tmp = builder.ebb_params(block0)[0]; // the first function parameter
+//!         let tmp = builder.block_params(block0)[0]; // the first function parameter
 //!         builder.def_var(x, tmp);
 //!     }
 //!     {

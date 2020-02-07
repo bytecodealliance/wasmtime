@@ -14,7 +14,7 @@ function %I64() {
     sig0 = ()
     fn0 = %foo()
 
-ebb0:
+block0:
 
     ; asm: movabsq $-1, %rcx
     [-,%rcx]            v400 = func_addr.i64 fn0        ; bin: 48 b9 Abs8(%foo) ffffffffffffffff

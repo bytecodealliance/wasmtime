@@ -6,7 +6,7 @@ target x86_64 haswell
 ; booleans use x86_pinsr which is manually placed in the IR so that it can be binemit-tested
 
 function %test_insertlane_b8() {
-ebb0:
+block0:
 [-, %rax]   v0 = bconst.b8 true
 [-, %rbx]   v1 = bconst.b8 false
 [-, %xmm0]  v2 = splat.b8x16 v0
@@ -15,7 +15,7 @@ ebb0:
 }
 
 function %test_insertlane_i16() {
-ebb0:
+block0:
 [-, %rax]   v0 = iconst.i16 4
 [-, %rbx]   v1 = iconst.i16 5
 [-, %xmm1]  v2 = splat.i16x8 v0
@@ -24,7 +24,7 @@ ebb0:
 }
 
 function %test_insertlane_i32() {
-ebb0:
+block0:
 [-, %rax]   v0 = iconst.i32 42
 [-, %rbx]   v1 = iconst.i32 99
 [-, %xmm4]  v2 = splat.i32x4 v0
@@ -33,7 +33,7 @@ ebb0:
 }
 
 function %test_insertlane_b64() {
-ebb0:
+block0:
 [-, %rax]   v0 = bconst.b64 true
 [-, %rbx]   v1 = bconst.b64 false
 [-, %xmm2]  v2 = splat.b64x2 v0

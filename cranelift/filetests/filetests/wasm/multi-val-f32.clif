@@ -4,14 +4,14 @@ target x86_64 haswell
 ;; Returning many f32s
 
 function %return_2_f32s() -> f32, f32 {
-ebb0:
+block0:
     v0 = f32const 0x0.0
     v1 = f32const 0x1.0
     return v0, v1
 }
 
 function %return_3_f32s() -> f32, f32, f32 {
-ebb0:
+block0:
     v0 = f32const 0x0.0
     v1 = f32const 0x1.0
     v2 = f32const 0x2.0
@@ -19,7 +19,7 @@ ebb0:
 }
 
 function %return_4_f32s() -> f32, f32, f32, f32 {
-ebb0:
+block0:
     v0 = f32const 0x0.0
     v1 = f32const 0x1.0
     v2 = f32const 0x2.0
@@ -33,7 +33,7 @@ function %call() -> f32 {
     fn0 = %a() -> f32, f32
     fn1 = %b(f32, f32) -> f32, f32, f32
     fn2 = %c(f32, f32, f32) -> f32, f32, f32, f32
-ebb0:
+block0:
     v0, v1 = call fn0()
     v2, v3, v4 = call fn1(v0, v1)
     v5, v6, v7, v8 = call fn2(v2, v3, v4)

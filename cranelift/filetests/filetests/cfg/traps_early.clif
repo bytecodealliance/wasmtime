@@ -6,16 +6,16 @@ test verifier
 function %nonsense(i32) {
 ; check: digraph "%nonsense" {
 
-ebb0(v1: i32):
+block0(v1: i32):
     trap user0      ; error: terminator instruction was encountered before the end
-    brnz v1, ebb2   ; unordered: ebb0:inst1 -> ebb2
-    jump ebb1       ; unordered: ebb0:inst2 -> ebb1
+    brnz v1, block2   ; unordered: block0:inst1 -> block2
+    jump block1       ; unordered: block0:inst2 -> block1
 
-ebb1:
+block1:
     v2 = iconst.i32 0
     v3 = iadd v1, v3
-    jump ebb0(v3)   ; unordered: ebb1:inst5 -> ebb0
+    jump block0(v3)   ; unordered: block1:inst5 -> block0
 
-ebb2:
+block2:
     return v1
 }

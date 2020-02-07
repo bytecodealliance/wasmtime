@@ -23,7 +23,7 @@ function %I64() {
     ss2 = incoming_arg 1024, offset -2048
     ss3 = incoming_arg 8, offset -2056
 
-ebb0:
+block0:
 
     ; Integer Constants.
 
@@ -708,117 +708,117 @@ ebb0:
     istore8_complex v601, v521+v522             ; bin: heap_oob 88 0c 18
 
     ; asm: testq %rcx, %rcx
-    ; asm: je ebb1
-    brz v1, ebb1                                ; bin: 48 85 c9 74 1b
-    fallthrough ebb3
+    ; asm: je block1
+    brz v1, block1                                ; bin: 48 85 c9 74 1b
+    fallthrough block3
 
-ebb3:
+block3:
     ; asm: testq %rsi, %rsi
-    ; asm: je ebb1
-    brz v2, ebb1                                ; bin: 48 85 f6 74 16
-    fallthrough ebb4
+    ; asm: je block1
+    brz v2, block1                                ; bin: 48 85 f6 74 16
+    fallthrough block4
 
-ebb4:
+block4:
     ; asm: testq %r10, %r10
-    ; asm: je ebb1
-    brz v3, ebb1                                ; bin: 4d 85 d2 74 11
-    fallthrough ebb5
+    ; asm: je block1
+    brz v3, block1                                ; bin: 4d 85 d2 74 11
+    fallthrough block5
 
-ebb5:
+block5:
     ; asm: testq %rcx, %rcx
-    ; asm: jne ebb1
-    brnz v1, ebb1                               ; bin: 48 85 c9 75 0c
-    fallthrough ebb6
+    ; asm: jne block1
+    brnz v1, block1                               ; bin: 48 85 c9 75 0c
+    fallthrough block6
 
-ebb6:
+block6:
     ; asm: testq %rsi, %rsi
-    ; asm: jne ebb1
-    brnz v2, ebb1                               ; bin: 48 85 f6 75 07
-    fallthrough ebb7
+    ; asm: jne block1
+    brnz v2, block1                               ; bin: 48 85 f6 75 07
+    fallthrough block7
 
-ebb7:
+block7:
     ; asm: testq %r10, %r10
-    ; asm: jne ebb1
-    brnz v3, ebb1                               ; bin: 4d 85 d2 75 02
+    ; asm: jne block1
+    brnz v3, block1                               ; bin: 4d 85 d2 75 02
 
-    ; asm: jmp ebb2
-    jump ebb2                                   ; bin: eb 01
+    ; asm: jmp block2
+    jump block2                                   ; bin: eb 01
 
-    ; asm: ebb1:
-ebb1:
+    ; asm: block1:
+block1:
     return                                      ; bin: c3
 
-    ; asm: ebb2:
-ebb2:
+    ; asm: block2:
+block2:
     ; Add a no-op instruction to prevent fold_redundant_jump from removing this block.
     ; asm: notq %rcx
     [-,%rcx]             v5000 = bnot v1        ; bin: 48 f7 d1
-    jump ebb1                                   ; bin: eb fa
+    jump block1                                   ; bin: eb fa
 }
 
 ; CPU flag instructions.
 function %cpu_flags_I64() {
-ebb0:
+block0:
     [-,%rcx]            v1 = iconst.i64 1
     [-,%r10]            v2 = iconst.i64 2
-    jump ebb1
+    jump block1
 
-ebb1:
+block1:
     ; asm: cmpq %r10, %rcx
     [-,%rflags]         v10 = ifcmp v1, v2      ; bin: 4c 39 d1
     ; asm: cmpq %rcx, %r10
     [-,%rflags]         v11 = ifcmp v2, v1      ; bin: 49 39 ca
 
-    ; asm: je ebb1
-    brif eq v11, ebb1                           ; bin: 74 f8
-    jump ebb2
+    ; asm: je block1
+    brif eq v11, block1                           ; bin: 74 f8
+    jump block2
 
-ebb2:
-    ; asm: jne ebb1
-    brif ne v11, ebb1                           ; bin: 75 f6
-    jump ebb3
+block2:
+    ; asm: jne block1
+    brif ne v11, block1                           ; bin: 75 f6
+    jump block3
 
-ebb3:
-    ; asm: jl ebb1
-    brif slt v11, ebb1                          ; bin: 7c f4
-    jump ebb4
+block3:
+    ; asm: jl block1
+    brif slt v11, block1                          ; bin: 7c f4
+    jump block4
 
-ebb4:
-    ; asm: jge ebb1
-    brif sge v11, ebb1                          ; bin: 7d f2
-    jump ebb5
+block4:
+    ; asm: jge block1
+    brif sge v11, block1                          ; bin: 7d f2
+    jump block5
 
-ebb5:
-    ; asm: jg ebb1
-    brif sgt v11, ebb1                          ; bin: 7f f0
-    jump ebb6
+block5:
+    ; asm: jg block1
+    brif sgt v11, block1                          ; bin: 7f f0
+    jump block6
 
-ebb6:
-    ; asm: jle ebb1
-    brif sle v11, ebb1                          ; bin: 7e ee
-    jump ebb7
+block6:
+    ; asm: jle block1
+    brif sle v11, block1                          ; bin: 7e ee
+    jump block7
 
-ebb7:
-    ; asm: jb ebb1
-    brif ult v11, ebb1                          ; bin: 72 ec
-    jump ebb8
+block7:
+    ; asm: jb block1
+    brif ult v11, block1                          ; bin: 72 ec
+    jump block8
 
-ebb8:
-    ; asm: jae ebb1
-    brif uge v11, ebb1                          ; bin: 73 ea
-    jump ebb9
+block8:
+    ; asm: jae block1
+    brif uge v11, block1                          ; bin: 73 ea
+    jump block9
 
-ebb9:
-    ; asm: ja ebb1
-    brif ugt v11, ebb1                          ; bin: 77 e8
-    jump ebb10
+block9:
+    ; asm: ja block1
+    brif ugt v11, block1                          ; bin: 77 e8
+    jump block10
 
-ebb10:
-    ; asm: jbe ebb1
-    brif ule v11, ebb1                          ; bin: 76 e6
-    jump ebb11
+block10:
+    ; asm: jbe block1
+    brif ule v11, block1                          ; bin: 76 e6
+    jump block11
 
-ebb11:
+block11:
 
     ; asm: sete %bl
     [-,%rbx]            v20 = trueif eq v11                           ; bin: 0f 94 c3
@@ -896,7 +896,7 @@ function %outargs() {
     ss1 = outgoing_arg 8, offset 8
     ss2 = outgoing_arg 8, offset 0
 
-ebb0:
+block0:
     [-,%rcx]            v1 = iconst.i64 1
 
     ; asm: movq %rcx, 8(%rsp)
@@ -922,7 +922,7 @@ function %I32() {
     ss2 = incoming_arg 1024, offset -2048
     ss3 = incoming_arg 8, offset -2056
 
-ebb0:
+block0:
 
     ; Integer Constants.
 
@@ -1318,58 +1318,58 @@ ebb0:
     [-,%r10]             v533 = ushr_imm v3, 31   ; bin: 41 c1 ea 1f
 
     ; asm: testl %ecx, %ecx
-    ; asm: je ebb1x
-    brz v1, ebb1                                ; bin: 85 c9 74 18
-    fallthrough ebb3
+    ; asm: je block1x
+    brz v1, block1                                ; bin: 85 c9 74 18
+    fallthrough block3
 
-ebb3:
+block3:
     ; asm: testl %esi, %esi
-    ; asm: je ebb1x
-    brz v2, ebb1                                ; bin: 85 f6 74 14
-    fallthrough ebb4
+    ; asm: je block1x
+    brz v2, block1                                ; bin: 85 f6 74 14
+    fallthrough block4
 
-ebb4:
+block4:
     ; asm: testl %r10d, %r10d
-    ; asm: je ebb1x
-    brz v3, ebb1                                ; bin: 45 85 d2 74 0f
-    fallthrough ebb5
+    ; asm: je block1x
+    brz v3, block1                                ; bin: 45 85 d2 74 0f
+    fallthrough block5
 
-ebb5:
+block5:
     ; asm: testl %ecx, %ecx
-    ; asm: jne ebb1x
-    brnz v1, ebb1                               ; bin: 85 c9 75 0b
-    fallthrough ebb6
+    ; asm: jne block1x
+    brnz v1, block1                               ; bin: 85 c9 75 0b
+    fallthrough block6
 
-ebb6:
+block6:
     ; asm: testl %esi, %esi
-    ; asm: jne ebb1x
-    brnz v2, ebb1                               ; bin: 85 f6 75 07
-    fallthrough ebb7
+    ; asm: jne block1x
+    brnz v2, block1                               ; bin: 85 f6 75 07
+    fallthrough block7
 
-ebb7:
+block7:
     ; asm: testl %r10d, %r10d
-    ; asm: jne ebb1x
-    brnz v3, ebb1                               ; bin: 45 85 d2 75 02
+    ; asm: jne block1x
+    brnz v3, block1                               ; bin: 45 85 d2 75 02
 
-    ; asm: jmp ebb2x
-    jump ebb2                                   ; bin: eb 01
+    ; asm: jmp block2x
+    jump block2                                   ; bin: eb 01
 
-    ; asm: ebb1x:
-ebb1:
+    ; asm: block1x:
+block1:
     return                                      ; bin: c3
 
-    ; asm: ebb2x:
-ebb2:
+    ; asm: block2x:
+block2:
     ; Add a no-op instruction to prevent fold_redundant_jump from removing this block.
     ; asm: notl %ecx
     [-,%rcx]             v5000 = bnot v1        ; bin: f7 d1
-    jump ebb1                                   ; bin: eb fb
+    jump block1                                   ; bin: eb fb
 
 }
 
 ; Tests for i32/i8 conversion instructions.
 function %I32_I8() {
-ebb0:
+block0:
     [-,%rcx]            v1 = iconst.i32 1
     [-,%rsi]            v2 = iconst.i32 2
     [-,%r10]            v3 = iconst.i32 3
@@ -1397,7 +1397,7 @@ ebb0:
 
 ; Tests for i32/i16 conversion instructions.
 function %I32_I16() {
-ebb0:
+block0:
     [-,%rcx]            v1 = iconst.i32 1
     [-,%rsi]            v2 = iconst.i32 2
     [-,%r10]            v3 = iconst.i32 3
@@ -1425,7 +1425,7 @@ ebb0:
 
 ; Tests for i64/i8 conversion instructions.
 function %I64_I8() {
-ebb0:
+block0:
     [-,%rcx]            v1 = iconst.i64 1
     [-,%rsi]            v2 = iconst.i64 2
     [-,%r10]            v3 = iconst.i64 3
@@ -1453,7 +1453,7 @@ ebb0:
 
 ; Tests for i64/i16 conversion instructions.
 function %I64_I16() {
-ebb0:
+block0:
     [-,%rcx]            v1 = iconst.i64 1
     [-,%rsi]            v2 = iconst.i64 2
     [-,%r10]            v3 = iconst.i64 3
@@ -1481,7 +1481,7 @@ ebb0:
 
 ; Tests for i64/i32 conversion instructions.
 function %I64_I32() {
-ebb0:
+block0:
     [-,%rcx]            v1 = iconst.i64 1
     [-,%rsi]            v2 = iconst.i64 2
     [-,%r10]            v3 = iconst.i64 3
@@ -1509,9 +1509,9 @@ ebb0:
 
 ; Tests for i64 jump table instructions.
 function %I64_JT(i64 [%rdi]) {
-    jt0 = jump_table [ebb1, ebb2, ebb3]
+    jt0 = jump_table [block1, block2, block3]
 
-ebb0(v0: i64 [%rdi]):
+block0(v0: i64 [%rdi]):
     ; Note: The next two lines will need to change whenever instructions are
     ;        added or removed from this test.
     [-, %rax]           v1 = jump_table_base.i64 jt0    ; bin: 48 8d 05 00000039 PCRelRodata4(jt0)
@@ -1530,23 +1530,23 @@ ebb0(v0: i64 [%rdi]):
     [-, %r10]           v32 = jump_table_entry.i64 v11, v1, 4, jt0      ; bin: 4e 63 14 a8
     [-, %r10]           v33 = jump_table_entry.i64 v11, v2, 4, jt0      ; bin: 4f 63 14 aa
 
-    fallthrough ebb10
+    fallthrough block10
 
-ebb10:
+block10:
     indirect_jump_table_br v10, jt0             ; bin: ff e3
-ebb11:
+block11:
     indirect_jump_table_br v11, jt0             ; bin: 41 ff e5
 
-ebb1:
-    fallthrough ebb2
-ebb2:
-    fallthrough ebb3
-ebb3:
+block1:
+    fallthrough block2
+block2:
+    fallthrough block3
+block3:
     trap user0
 }
 
 function %r12_r13_loads() {
-ebb0:
+block0:
     [-,%r12]            v1 = iconst.i64 0x0123_4567_89ab_cdef
     [-,%r13]            v2 = iconst.i64 0xfedc_ba98_7654_3210
     [-,%rax]            v3 = iconst.i64 0x1
@@ -1603,7 +1603,7 @@ ebb0:
 }
 
 function %r12_r13_stores() {
-ebb0:
+block0:
     [-,%r12]            v1 = iconst.i64 0x0123_4567_89ab_cdef
     [-,%r13]            v2 = iconst.i64 0xfedc_ba98_7654_3210
     [-,%rax]            v3 = iconst.i64 0x1
@@ -1674,7 +1674,7 @@ ebb0:
 }
 
 function %B64() {
-ebb0:
+block0:
     [-, %rax]   v1 = bconst.b64 true    ; bin: 40 b8 00000001
     [-, %r10]   v0 = bconst.b64 true    ; bin: 41 ba 00000001
     return

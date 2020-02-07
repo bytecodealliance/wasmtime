@@ -3,7 +3,7 @@ test compile
 target x86_64
 
 function u0:0() -> i8 fast {
-ebb0:
+block0:
     v14 = bconst.b1 false
     v15 = bint.i8 v14
     return v15

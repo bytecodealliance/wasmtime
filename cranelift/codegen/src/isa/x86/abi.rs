@@ -419,8 +419,8 @@ fn callee_saved_gprs_used(isa: &dyn TargetIsa, func: &ir::Function) -> RegisterS
     //
     // TODO: Consider re-evaluating how regmove/regfill/regspill work and whether it's possible
     // to avoid this step.
-    for ebb in &func.layout {
-        for inst in func.layout.ebb_insts(ebb) {
+    for block in &func.layout {
+        for inst in func.layout.block_insts(block) {
             match func.dfg[inst] {
                 ir::instructions::InstructionData::RegMove { dst, .. }
                 | ir::instructions::InstructionData::RegFill { dst, .. } => {
@@ -551,8 +551,8 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     }
 
     // Set up the cursor and insert the prologue
-    let entry_ebb = func.layout.entry_block().expect("missing entry block");
-    let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_ebb);
+    let entry_block = func.layout.entry_block().expect("missing entry block");
+    let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_block);
     let prologue_cfa_state =
         insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, isa);
 
@@ -612,8 +612,8 @@ fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     }
 
     // Set up the cursor and insert the prologue
-    let entry_ebb = func.layout.entry_block().expect("missing entry block");
-    let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_ebb);
+    let entry_block = func.layout.entry_block().expect("missing entry block");
+    let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_block);
     let prologue_cfa_state =
         insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, isa);
 
@@ -678,9 +678,9 @@ fn insert_common_prologue(
         None
     };
 
-    // Append param to entry EBB
-    let ebb = pos.current_ebb().expect("missing ebb under cursor");
-    let fp = pos.func.dfg.append_ebb_param(ebb, reg_type);
+    // Append param to entry block
+    let block = pos.current_block().expect("missing block under cursor");
+    let fp = pos.func.dfg.append_block_param(block, reg_type);
     pos.func.locations[fp] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
 
     let push_fp_inst = pos.ins().x86_push(fp);
@@ -727,8 +727,8 @@ fn insert_common_prologue(
     }
 
     for reg in csrs.iter(GPR) {
-        // Append param to entry EBB
-        let csr_arg = pos.func.dfg.append_ebb_param(ebb, reg_type);
+        // Append param to entry block
+        let csr_arg = pos.func.dfg.append_block_param(block, reg_type);
 
         // Assign it a location
         pos.func.locations[csr_arg] = ir::ValueLoc::Reg(reg);
@@ -831,11 +831,11 @@ fn insert_common_epilogues(
     isa: &dyn TargetIsa,
     cfa_state: Option<CFAState>,
 ) {
-    while let Some(ebb) = pos.next_ebb() {
-        pos.goto_last_inst(ebb);
+    while let Some(block) = pos.next_block() {
+        pos.goto_last_inst(block);
         if let Some(inst) = pos.current_inst() {
             if pos.func.dfg[inst].opcode().is_return() {
-                let is_last = pos.func.layout.last_ebb() == Some(ebb);
+                let is_last = pos.func.layout.last_block() == Some(block);
                 insert_common_epilogue(
                     inst,
                     stack_size,

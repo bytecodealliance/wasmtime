@@ -2,7 +2,7 @@ test run
 set enable_simd
 
 function %test_extractlane_b8() -> b8 {
-ebb0:
+block0:
     v1 = vconst.b8x16 [false false false false false false false false false false true false false
     false false false]
     v2 = extractlane v1, 10
@@ -11,7 +11,7 @@ ebb0:
 ; run
 
 function %test_extractlane_i16() -> b1 {
-ebb0:
+block0:
     v0 = vconst.i16x8 0x00080007000600050004000300020001
     v1 = extractlane v0, 1
     v2 = icmp_imm eq v1, 2
@@ -20,7 +20,7 @@ ebb0:
 ; run
 
 function %test_extractlane_f32() -> b1 {
-ebb0:
+block0:
     v0 = f32const 0x42.42
     v1 = vconst.f32x4 [0x00.00 0x00.00 0x00.00 0x42.42]
     v2 = extractlane v1, 3
@@ -30,7 +30,7 @@ ebb0:
 ; run
 
 function %test_extractlane_i32_with_vector_reuse() -> b1 {
-ebb0:
+block0:
     v0 = iconst.i32 42
     v1 = iconst.i32 99
 
@@ -49,7 +49,7 @@ ebb0:
 ; run
 
 function %test_extractlane_f32_with_vector_reuse() -> b1 {
-ebb0:
+block0:
     v0 = f32const 0x42.42
     v1 = f32const 0x99.99
 

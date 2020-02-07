@@ -9,7 +9,7 @@ function %call_indirect_many_rets(i64) {
     sig0 = () -> i64, i64, i64, i64
     ; check: sig0 = (i64 sret [%rdi]) -> i64 sret [%rax] fast
 
-ebb0(v0: i64):
+block0(v0: i64):
     v1, v2, v3, v4 = call_indirect sig0, v0()
     ; check:  v5 = stack_addr.i64 ss0
     ; nextln: v6 = call_indirect sig0, v0(v5)

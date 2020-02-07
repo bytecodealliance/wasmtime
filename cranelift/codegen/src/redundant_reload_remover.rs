@@ -8,7 +8,8 @@ use crate::ir::dfg::DataFlowGraph;
 use crate::ir::instructions::BranchInfo;
 use crate::ir::stackslot::{StackSlotKind, StackSlots};
 use crate::ir::{
-    Ebb, Function, Inst, InstBuilder, InstructionData, Opcode, StackSlotData, Type, Value, ValueLoc,
+    Block, Function, Inst, InstBuilder, InstructionData, Opcode, StackSlotData, Type, Value,
+    ValueLoc,
 };
 use crate::isa::{RegInfo, RegUnit, TargetIsa};
 use crate::regalloc::RegDiversions;
@@ -20,7 +21,7 @@ use cranelift_entity::{PrimaryMap, SecondaryMap};
 // A description of the redundant-fill-removal algorithm
 //
 //
-// The algorithm works forwards through each Ebb.  It carries along and updates a table,
+// The algorithm works forwards through each Block.  It carries along and updates a table,
 // AvailEnv, with which it tracks registers that are known to have the same value as some stack
 // slot.  The actions on encountering an instruction depend on the instruction, as follows:
 //
@@ -68,19 +69,19 @@ use cranelift_entity::{PrimaryMap, SecondaryMap};
 //
 // The overall algorithm, for a function, starts like this:
 //
-// * (once per function): finds Ebbs that have two or more predecessors, since they will be the
-//   roots of Ebb trees.  Also, the entry node for the function is considered to be a root.
+// * (once per function): finds Blocks that have two or more predecessors, since they will be the
+//   roots of Block trees.  Also, the entry node for the function is considered to be a root.
 //
-// It then continues with a loop that first finds a tree of Ebbs ("discovery") and then removes
+// It then continues with a loop that first finds a tree of Blocks ("discovery") and then removes
 // redundant fills as described above ("processing"):
 //
-// * (discovery; once per tree): for each root, performs a depth first search to find all the Ebbs
+// * (discovery; once per tree): for each root, performs a depth first search to find all the Blocks
 //   in the tree, guided by RedundantReloadRemover::discovery_stack.
 //
 // * (processing; once per tree): the just-discovered tree is then processed as described above,
 //   guided by RedundantReloadRemover::processing_stack.
 //
-// In this way, all Ebbs reachable from the function's entry point are eventually processed.  Note
+// In this way, all Blocks reachable from the function's entry point are eventually processed.  Note
 // that each tree is processed as soon as it has been discovered, so the algorithm never creates a
 // list of trees for the function.
 //
@@ -88,7 +89,7 @@ use cranelift_entity::{PrimaryMap, SecondaryMap};
 // reused for multiple functions so as to minimise heap turnover.  The fields are, roughly:
 //
 //   num_regunits -- constant for the whole function; used by the tree processing phase
-//   num_preds_per_ebb -- constant for the whole function; used by the tree discovery process
+//   num_preds_per_block -- constant for the whole function; used by the tree discovery process
 //
 //   discovery_stack -- used to guide the tree discovery process
 //   nodes_in_tree -- the discovered nodes are recorded here
@@ -121,8 +122,8 @@ use cranelift_entity::{PrimaryMap, SecondaryMap};
 // =============================================================================================
 // Data structures used for discovery of trees
 
-// `ZeroOneOrMany` is used to record the number of predecessors an Ebb block has.  The `Zero` case
-// is included so as to cleanly handle the case where the incoming graph has unreachable Ebbs.
+// `ZeroOneOrMany` is used to record the number of predecessors an Block block has.  The `Zero` case
+// is included so as to cleanly handle the case where the incoming graph has unreachable Blocks.
 
 #[derive(Clone, PartialEq)]
 enum ZeroOneOrMany {
@@ -183,23 +184,23 @@ struct AvailEnv {
 }
 
 // `ProcessingStackElem` combines AvailEnv with contextual information needed to "navigate" within
-// an Ebb.
+// an Block.
 //
-// A ProcessingStackElem conceptually has the lifetime of exactly one Ebb: once the current Ebb is
+// A ProcessingStackElem conceptually has the lifetime of exactly one Block: once the current Block is
 // completed, the ProcessingStackElem will be abandoned.  In practice the top level state,
 // RedundantReloadRemover, caches them, so as to avoid heap turnover.
 //
 // Note that ProcessingStackElem must contain a CursorPosition.  The CursorPosition, which
-// indicates where we are in the current Ebb, cannot be implicitly maintained by looping over all
-// the instructions in an Ebb in turn, because we may choose to suspend processing the current Ebb
+// indicates where we are in the current Block, cannot be implicitly maintained by looping over all
+// the instructions in an Block in turn, because we may choose to suspend processing the current Block
 // at a side exit, continue by processing the subtree reached via the side exit, and only later
-// resume the current Ebb.
+// resume the current Block.
 
 struct ProcessingStackElem {
-    /// Indicates the AvailEnv at the current point in the Ebb.
+    /// Indicates the AvailEnv at the current point in the Block.
     avail_env: AvailEnv,
 
-    /// Shows where we currently are inside the Ebb.
+    /// Shows where we currently are inside the Block.
     cursor: CursorPosition,
 
     /// Indicates the currently active register diversions at the current point.
@@ -212,7 +213,7 @@ struct ProcessingStackElem {
 // `RedundantReloadRemover` contains data structures for the two passes: discovery of tree shaped
 // regions, and processing of them.  These are allocated once and stay alive for the entire
 // function, even though they are cleared out for each new tree shaped region.  It also caches
-// `num_regunits` and `num_preds_per_ebb`, which are computed at the start of each function and
+// `num_regunits` and `num_preds_per_block`, which are computed at the start of each function and
 // then remain constant.
 
 /// The redundant reload remover's state.
@@ -222,22 +223,22 @@ pub struct RedundantReloadRemover {
     /// function.
     num_regunits: Option<u16>,
 
-    /// This stores, for each Ebb, a characterisation of the number of predecessors it has.
-    num_preds_per_ebb: PrimaryMap<Ebb, ZeroOneOrMany>,
+    /// This stores, for each Block, a characterisation of the number of predecessors it has.
+    num_preds_per_block: PrimaryMap<Block, ZeroOneOrMany>,
 
     /// The stack used for the first phase (discovery).  There is one element on the discovery
-    /// stack for each currently unexplored Ebb in the tree being searched.
-    discovery_stack: Vec<Ebb>,
+    /// stack for each currently unexplored Block in the tree being searched.
+    discovery_stack: Vec<Block>,
 
     /// The nodes in the discovered tree are inserted here.
-    nodes_in_tree: EntitySet<Ebb>,
+    nodes_in_tree: EntitySet<Block>,
 
     /// The stack used during the second phase (transformation).  There is one element on the
     /// processing stack for each currently-open node in the tree being transformed.
     processing_stack: Vec<ProcessingStackElem>,
 
     /// Used in the second phase to avoid visiting nodes more than once.
-    nodes_already_visited: EntitySet<Ebb>,
+    nodes_already_visited: EntitySet<Block>,
 }
 
 // =============================================================================================
@@ -301,17 +302,17 @@ fn slot_of_value<'s>(
 
 impl RedundantReloadRemover {
     // A helper for `add_nodes_to_tree` below.
-    fn discovery_stack_push_successors_of(&mut self, cfg: &ControlFlowGraph, node: Ebb) {
+    fn discovery_stack_push_successors_of(&mut self, cfg: &ControlFlowGraph, node: Block) {
         for successor in cfg.succ_iter(node) {
             self.discovery_stack.push(successor);
         }
     }
 
-    // Visit the tree of Ebbs rooted at `starting_point` and add them to `self.nodes_in_tree`.
-    // `self.num_preds_per_ebb` guides the process, ensuring we don't leave the tree-ish region
+    // Visit the tree of Blocks rooted at `starting_point` and add them to `self.nodes_in_tree`.
+    // `self.num_preds_per_block` guides the process, ensuring we don't leave the tree-ish region
     // and indirectly ensuring that the process will terminate in the presence of cycles in the
     // graph.  `self.discovery_stack` holds the search state in this function.
-    fn add_nodes_to_tree(&mut self, cfg: &ControlFlowGraph, starting_point: Ebb) {
+    fn add_nodes_to_tree(&mut self, cfg: &ControlFlowGraph, starting_point: Block) {
         // One might well ask why this doesn't loop forever when it encounters cycles in the
         // control flow graph.  The reason is that any cycle in the graph that is reachable from
         // anywhere outside the cycle -- in particular, that is reachable from the function's
@@ -325,7 +326,7 @@ impl RedundantReloadRemover {
         self.discovery_stack_push_successors_of(cfg, starting_point);
 
         while let Some(node) = self.discovery_stack.pop() {
-            match self.num_preds_per_ebb[node] {
+            match self.num_preds_per_block[node] {
                 // We arrived at a node with multiple predecessors, so it's a new root.  Ignore it.
                 ZeroOneOrMany::Many => {}
                 // This node has just one predecessor, so we should incorporate it in the tree and
@@ -652,8 +653,8 @@ impl RedundantReloadRemover {
 
 impl RedundantReloadRemover {
     // Push a clone of the top-of-stack ProcessingStackElem.  This will be used to process exactly
-    // one Ebb.  The diversions are created new, rather than cloned, to reflect the fact
-    // that diversions are local to each Ebb.
+    // one Block.  The diversions are created new, rather than cloned, to reflect the fact
+    // that diversions are local to each Block.
     fn processing_stack_push(&mut self, cursor: CursorPosition) {
         let avail_env = if let Some(stack_top) = self.processing_stack.last() {
             stack_top.avail_env.clone()
@@ -674,7 +675,7 @@ impl RedundantReloadRemover {
     // This pushes the node `dst` onto the processing stack, and sets up the new
     // ProcessingStackElem accordingly.  But it does all that only if `dst` is part of the current
     // tree *and* we haven't yet visited it.
-    fn processing_stack_maybe_push(&mut self, dst: Ebb) {
+    fn processing_stack_maybe_push(&mut self, dst: Block) {
         if self.nodes_in_tree.contains(dst) && !self.nodes_already_visited.contains(dst) {
             if !self.processing_stack.is_empty() {
                 // If this isn't the outermost node in the tree (that is, the root), then it must
@@ -682,7 +683,7 @@ impl RedundantReloadRemover {
                 // incorporated in any tree.  Nodes with two or more predecessors are the root of
                 // some other tree, and visiting them as if they were part of the current tree
                 // would be a serious error.
-                debug_assert!(self.num_preds_per_ebb[dst] == ZeroOneOrMany::One);
+                debug_assert!(self.num_preds_per_block[dst] == ZeroOneOrMany::One);
             }
             self.processing_stack_push(CursorPosition::Before(dst));
             self.nodes_already_visited.insert(dst);
@@ -697,7 +698,7 @@ impl RedundantReloadRemover {
         func: &mut Function,
         reginfo: &RegInfo,
         isa: &dyn TargetIsa,
-        root: Ebb,
+        root: Block,
     ) {
         debug_assert!(self.nodes_in_tree.contains(root));
         debug_assert!(self.processing_stack.is_empty());
@@ -728,10 +729,10 @@ impl RedundantReloadRemover {
                 // Update diversions after the insn.
                 self.processing_stack[tos].diversions.apply(&func.dfg[inst]);
 
-                // If the insn can branch outside this Ebb, push work items on the stack for all
-                // target Ebbs that are part of the same tree and that we haven't yet visited.
+                // If the insn can branch outside this Block, push work items on the stack for all
+                // target Blocks that are part of the same tree and that we haven't yet visited.
                 // The next iteration of this instruction-processing loop will immediately start
-                // work on the most recently pushed Ebb, and will eventually continue in this Ebb
+                // work on the most recently pushed Block, and will eventually continue in this Block
                 // when those new items have been removed from the stack.
                 match func.dfg.analyze_branch(inst) {
                     BranchInfo::NotABranch => (),
@@ -748,7 +749,7 @@ impl RedundantReloadRemover {
                     }
                 }
             } else {
-                // We've come to the end of the current work-item (Ebb).  We'll already have
+                // We've come to the end of the current work-item (Block).  We'll already have
                 // processed the fallthrough/continuation/whatever for it using the logic above.
                 // Pop it off the stack and resume work on its parent.
                 self.processing_stack.pop();
@@ -765,11 +766,11 @@ impl RedundantReloadRemover {
     pub fn new() -> Self {
         Self {
             num_regunits: None,
-            num_preds_per_ebb: PrimaryMap::<Ebb, ZeroOneOrMany>::with_capacity(8),
-            discovery_stack: Vec::<Ebb>::with_capacity(16),
-            nodes_in_tree: EntitySet::<Ebb>::new(),
+            num_preds_per_block: PrimaryMap::<Block, ZeroOneOrMany>::with_capacity(8),
+            discovery_stack: Vec::<Block>::with_capacity(16),
+            nodes_in_tree: EntitySet::<Block>::new(),
             processing_stack: Vec::<ProcessingStackElem>::with_capacity(8),
-            nodes_already_visited: EntitySet::<Ebb>::new(),
+            nodes_already_visited: EntitySet::<Block>::new(),
         }
     }
 
@@ -779,7 +780,7 @@ impl RedundantReloadRemover {
     }
 
     fn clear_for_new_function(&mut self) {
-        self.num_preds_per_ebb.clear();
+        self.num_preds_per_block.clear();
         self.clear_for_new_tree();
     }
 
@@ -798,19 +799,19 @@ impl RedundantReloadRemover {
         isa: &dyn TargetIsa,
         cfg: &ControlFlowGraph,
     ) {
-        // Fail in an obvious way if there are more than (2^32)-1 Ebbs in this function.
-        let num_ebbs: u32 = func.dfg.num_ebbs().try_into().unwrap();
+        // Fail in an obvious way if there are more than (2^32)-1 Blocks in this function.
+        let num_blocks: u32 = func.dfg.num_blocks().try_into().unwrap();
 
         // Clear out per-tree state.
         self.clear_for_new_function();
 
         // Create a PrimaryMap that summarises the number of predecessors for each block, as 0, 1
         // or "many", and that also claims the entry block as having "many" predecessors.
-        self.num_preds_per_ebb.clear();
-        self.num_preds_per_ebb.reserve(num_ebbs as usize);
+        self.num_preds_per_block.clear();
+        self.num_preds_per_block.reserve(num_blocks as usize);
 
-        for i in 0..num_ebbs {
-            let mut pi = cfg.pred_iter(Ebb::from_u32(i));
+        for i in 0..num_blocks {
+            let mut pi = cfg.pred_iter(Block::from_u32(i));
             let mut n_pi = ZeroOneOrMany::Zero;
             if pi.next().is_some() {
                 n_pi = ZeroOneOrMany::One;
@@ -819,24 +820,24 @@ impl RedundantReloadRemover {
                     // We don't care if there are more than two preds, so stop counting now.
                 }
             }
-            self.num_preds_per_ebb.push(n_pi);
+            self.num_preds_per_block.push(n_pi);
         }
-        debug_assert!(self.num_preds_per_ebb.len() == num_ebbs as usize);
+        debug_assert!(self.num_preds_per_block.len() == num_blocks as usize);
 
         // The entry block must be the root of some tree, so set up the state to reflect that.
-        let entry_ebb = func
+        let entry_block = func
             .layout
             .entry_block()
-            .expect("do_redundant_fill_removal_on_function: entry ebb unknown");
-        debug_assert!(self.num_preds_per_ebb[entry_ebb] == ZeroOneOrMany::Zero);
-        self.num_preds_per_ebb[entry_ebb] = ZeroOneOrMany::Many;
+            .expect("do_redundant_fill_removal_on_function: entry block unknown");
+        debug_assert!(self.num_preds_per_block[entry_block] == ZeroOneOrMany::Zero);
+        self.num_preds_per_block[entry_block] = ZeroOneOrMany::Many;
 
         // Now build and process trees.
-        for root_ix in 0..self.num_preds_per_ebb.len() {
-            let root = Ebb::from_u32(root_ix as u32);
+        for root_ix in 0..self.num_preds_per_block.len() {
+            let root = Block::from_u32(root_ix as u32);
 
             // Build a tree for each node that has two or more preds, and ignore all other nodes.
-            if self.num_preds_per_ebb[root] != ZeroOneOrMany::Many {
+            if self.num_preds_per_block[root] != ZeroOneOrMany::Many {
                 continue;
             }
 
@@ -846,7 +847,7 @@ impl RedundantReloadRemover {
             // Discovery phase: build the tree, as `root` and `self.nodes_in_tree`.
             self.add_nodes_to_tree(cfg, root);
             debug_assert!(self.nodes_in_tree.cardinality() > 0);
-            debug_assert!(self.num_preds_per_ebb[root] == ZeroOneOrMany::Many);
+            debug_assert!(self.num_preds_per_block[root] == ZeroOneOrMany::Many);
 
             // Processing phase: do redundant-reload-removal.
             self.process_tree(func, reginfo, isa, root);

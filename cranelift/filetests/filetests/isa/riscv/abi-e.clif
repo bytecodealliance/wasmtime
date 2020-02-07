@@ -9,6 +9,6 @@ function %f() {
     ; available in RV32E.
     sig0 = (i64, i64, i64, i64) -> i64 system_v
     ; check: sig0 = (i32 [%x10], i32 [%x11], i32 [%x12], i32 [%x13], i32 [%x14], i32 [%x15], i32 [0], i32 [4]) -> i32 [%x10], i32 [%x11] system_v
-ebb0:
+block0:
     return
 }

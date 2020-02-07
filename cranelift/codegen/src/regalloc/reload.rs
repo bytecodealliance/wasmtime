@@ -13,7 +13,7 @@ use crate::cursor::{Cursor, EncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::entity::{SparseMap, SparseMapValue};
 use crate::ir::{AbiParam, ArgumentLoc, InstBuilder};
-use crate::ir::{Ebb, Function, Inst, InstructionData, Opcode, Value, ValueLoc};
+use crate::ir::{Block, Function, Inst, InstructionData, Opcode, Value, ValueLoc};
 use crate::isa::RegClass;
 use crate::isa::{ConstraintKind, EncInfo, Encoding, RecipeConstraints, TargetIsa};
 use crate::regalloc::affinity::Affinity;
@@ -113,24 +113,24 @@ impl SparseMapValue<Value> for ReloadedValue {
 
 impl<'a> Context<'a> {
     fn run(&mut self, tracker: &mut LiveValueTracker) {
-        self.topo.reset(self.cur.func.layout.ebbs());
-        while let Some(ebb) = self.topo.next(&self.cur.func.layout, self.domtree) {
-            self.visit_ebb(ebb, tracker);
+        self.topo.reset(self.cur.func.layout.blocks());
+        while let Some(block) = self.topo.next(&self.cur.func.layout, self.domtree) {
+            self.visit_block(block, tracker);
         }
     }
 
-    fn visit_ebb(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
-        debug!("Reloading {}:", ebb);
-        self.visit_ebb_header(ebb, tracker);
+    fn visit_block(&mut self, block: Block, tracker: &mut LiveValueTracker) {
+        debug!("Reloading {}:", block);
+        self.visit_block_header(block, tracker);
         tracker.drop_dead_params();
 
-        // visit_ebb_header() places us at the first interesting instruction in the EBB.
+        // visit_block_header() places us at the first interesting instruction in the block.
         while let Some(inst) = self.cur.current_inst() {
             if !self.cur.func.dfg[inst].opcode().is_ghost() {
                 // This instruction either has an encoding or has ABI constraints, so visit it to
                 // insert spills and fills as needed.
                 let encoding = self.cur.func.encodings[inst];
-                self.visit_inst(ebb, inst, encoding, tracker);
+                self.visit_inst(block, inst, encoding, tracker);
                 tracker.drop_dead(inst);
             } else {
                 // This is a ghost instruction with no encoding and no extra constraints, so we can
@@ -140,29 +140,29 @@ impl<'a> Context<'a> {
         }
     }
 
-    /// Process the EBB parameters. Move to the next instruction in the EBB to be processed
-    fn visit_ebb_header(&mut self, ebb: Ebb, tracker: &mut LiveValueTracker) {
-        let (liveins, args) = tracker.ebb_top(
-            ebb,
+    /// Process the block parameters. Move to the next instruction in the block to be processed
+    fn visit_block_header(&mut self, block: Block, tracker: &mut LiveValueTracker) {
+        let (liveins, args) = tracker.block_top(
+            block,
             &self.cur.func.dfg,
             self.liveness,
             &self.cur.func.layout,
             self.domtree,
         );
 
-        if self.cur.func.layout.entry_block() == Some(ebb) {
+        if self.cur.func.layout.entry_block() == Some(block) {
             debug_assert_eq!(liveins.len(), 0);
-            self.visit_entry_params(ebb, args);
+            self.visit_entry_params(block, args);
         } else {
-            self.visit_ebb_params(ebb, args);
+            self.visit_block_params(block, args);
         }
     }
 
     /// Visit the parameters on the entry block.
     /// These values have ABI constraints from the function signature.
-    fn visit_entry_params(&mut self, ebb: Ebb, args: &[LiveValue]) {
+    fn visit_entry_params(&mut self, block: Block, args: &[LiveValue]) {
         debug_assert_eq!(self.cur.func.signature.params.len(), args.len());
-        self.cur.goto_first_inst(ebb);
+        self.cur.goto_first_inst(block);
 
         for (arg_idx, arg) in args.iter().enumerate() {
             let abi = self.cur.func.signature.params[arg_idx];
@@ -175,10 +175,10 @@ impl<'a> Context<'a> {
                             .cur
                             .func
                             .dfg
-                            .replace_ebb_param(arg.value, abi.value_type);
+                            .replace_block_param(arg.value, abi.value_type);
                         let affinity = Affinity::abi(&abi, self.cur.isa);
-                        self.liveness.create_dead(reg, ebb, affinity);
-                        self.insert_spill(ebb, arg.value, reg);
+                        self.liveness.create_dead(reg, block, affinity);
+                        self.insert_spill(block, arg.value, reg);
                     }
                 }
                 ArgumentLoc::Stack(_) => {
@@ -189,15 +189,15 @@ impl<'a> Context<'a> {
         }
     }
 
-    fn visit_ebb_params(&mut self, ebb: Ebb, _args: &[LiveValue]) {
-        self.cur.goto_first_inst(ebb);
+    fn visit_block_params(&mut self, block: Block, _args: &[LiveValue]) {
+        self.cur.goto_first_inst(block);
     }
 
     /// Process the instruction pointed to by `pos`, and advance the cursor to the next instruction
     /// that needs processing.
     fn visit_inst(
         &mut self,
-        ebb: Ebb,
+        block: Block,
         inst: Inst,
         encoding: Encoding,
         tracker: &mut LiveValueTracker,
@@ -265,7 +265,7 @@ impl<'a> Context<'a> {
         {
             self.reload_copy_candidates(inst);
         } else {
-            self.reload_inst_candidates(ebb, inst);
+            self.reload_inst_candidates(block, inst);
         }
 
         // TODO: Reuse reloads for future instructions.
@@ -304,7 +304,7 @@ impl<'a> Context<'a> {
                         let value_type = self.cur.func.dfg.value_type(lv.value);
                         let reg = self.cur.func.dfg.replace_result(lv.value, value_type);
                         self.liveness.create_dead(reg, inst, Affinity::new(op));
-                        self.insert_spill(ebb, lv.value, reg);
+                        self.insert_spill(block, lv.value, reg);
                     }
                 }
             }
@@ -333,14 +333,14 @@ impl<'a> Context<'a> {
                     let reg = self.cur.func.dfg.replace_result(lv.value, abi.value_type);
                     self.liveness
                         .create_dead(reg, inst, Affinity::abi(&abi, self.cur.isa));
-                    self.insert_spill(ebb, lv.value, reg);
+                    self.insert_spill(block, lv.value, reg);
                 }
             }
         }
     }
 
     // Reload the current candidates for the given `inst`.
-    fn reload_inst_candidates(&mut self, ebb: Ebb, inst: Inst) {
+    fn reload_inst_candidates(&mut self, block: Block, inst: Inst) {
         // Insert fill instructions before `inst` and replace `cand.value` with the filled value.
         for cand in self.candidates.iter_mut() {
             if let Some(reload) = self.reloads.get(cand.value) {
@@ -361,15 +361,15 @@ impl<'a> Context<'a> {
             let affinity = Affinity::Reg(cand.regclass.into());
             self.liveness.create_dead(reg, fill, affinity);
             self.liveness
-                .extend_locally(reg, ebb, inst, &self.cur.func.layout);
+                .extend_locally(reg, block, inst, &self.cur.func.layout);
         }
 
         // Rewrite instruction arguments.
         //
-        // Only rewrite those arguments that were identified as candidates. This leaves EBB
-        // arguments on branches as-is without rewriting them. A spilled EBB argument needs to stay
-        // spilled because the matching EBB parameter is going to be in the same virtual register
-        // and therefore the same stack slot as the EBB argument value.
+        // Only rewrite those arguments that were identified as candidates. This leaves block
+        // arguments on branches as-is without rewriting them. A spilled block argument needs to stay
+        // spilled because the matching block parameter is going to be in the same virtual register
+        // and therefore the same stack slot as the block argument value.
         if !self.candidates.is_empty() {
             let args = self.cur.func.dfg.inst_args_mut(inst);
             while let Some(cand) = self.candidates.pop() {
@@ -448,14 +448,14 @@ impl<'a> Context<'a> {
     /// - Insert `stack = spill reg` at `pos`, and assign an encoding.
     /// - Move the `stack` live range starting point to the new instruction.
     /// - Extend the `reg` live range to reach the new instruction.
-    fn insert_spill(&mut self, ebb: Ebb, stack: Value, reg: Value) {
+    fn insert_spill(&mut self, block: Block, stack: Value, reg: Value) {
         self.cur.ins().with_result(stack).spill(reg);
         let inst = self.cur.built_inst();
 
         // Update live ranges.
         self.liveness.move_def_locally(stack, inst);
         self.liveness
-            .extend_locally(reg, ebb, inst, &self.cur.func.layout);
+            .extend_locally(reg, block, inst, &self.cur.func.layout);
     }
 }
 

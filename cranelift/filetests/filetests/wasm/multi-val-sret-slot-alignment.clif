@@ -7,8 +7,8 @@ target x86_64 haswell
 function %returner() -> i8, i32, i8, i64 {
 ; check: function %returner(i64 sret [%rdi]) -> i64 sret [%rax] fast {
 
-ebb0:
-; check: ebb0(v4: i64):
+block0:
+; check: block0(v4: i64):
 
     v0 = iconst.i8 0
     v1 = iconst.i32 1
@@ -31,7 +31,7 @@ function %caller() {
     ; check:  sig0 = (i64 sret [%rdi]) -> i64 sret [%rax] fast
     ; nextln: fn0 = %returner sig0
 
-ebb0:
+block0:
     v0, v1, v2, v3 = call fn0()
     ; check:  v4 = stack_addr.i64 ss0
     ; nextln: v10 = func_addr.i64 fn0

@@ -5,7 +5,7 @@ target x86_64
 ; regex: V=v\d+
 
 function %f64const() -> f64 {
-ebb0:
+block0:
     v1 = f64const 0x1.0p1
     ; check: $(tmp=$V) = iconst.i64
     ; check: v1 = bitcast.f64 $tmp

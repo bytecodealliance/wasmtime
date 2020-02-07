@@ -3,7 +3,7 @@ set enable_simd=true
 target x86_64
 
 function %scalar_to_vector() {
-ebb0:
+block0:
     v0 = iconst.i32 42
     v1 = scalar_to_vector.f32x4 v0 ; error: arg 0 (v0) has type i32, expected f32
     return

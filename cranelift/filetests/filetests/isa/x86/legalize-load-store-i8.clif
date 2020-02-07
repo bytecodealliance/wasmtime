@@ -9,16 +9,16 @@ function u0:0(i64, i8, i8) system_v {
     ss3 = explicit_slot 1
     ss4 = explicit_slot 1
 
-ebb0(v0: i64, v1: i8, v2: i8):
+block0(v0: i64, v1: i8, v2: i8):
     v3 = stack_addr.i64 ss1
     store v1, v3
     v4 = stack_addr.i64 ss2
     store v2, v4
     v5 = stack_addr.i64 ss3
     v6 = stack_addr.i64 ss4
-    jump ebb1
+    jump block1
 
-ebb1:
+block1:
     v7 = load.i8 v3
     store v7, v5
     v8 = load.i8 v4

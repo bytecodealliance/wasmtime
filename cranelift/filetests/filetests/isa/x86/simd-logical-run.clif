@@ -3,7 +3,7 @@ set enable_simd
 target x86_64 skylake
 
 function %bnot() -> b32 {
-ebb0:
+block0:
     v0 = vconst.b32x4 [true true true false]
     v1 = bnot v0
     v2 = extractlane v1, 3
@@ -12,7 +12,7 @@ ebb0:
 ; run
 
 function %band_not() -> b1 {
-ebb0:
+block0:
     v0 = vconst.i16x8 [1 0 0 0 0 0 0 0]
     v1 = vconst.i16x8 [0 0 0 0 0 0 0 0]
     v2 = band_not v0, v1
@@ -23,7 +23,7 @@ ebb0:
 ; run
 
 function %vany_true_i16x8() -> b1 {
-ebb0:
+block0:
     v0 = vconst.i16x8 [1 0 0 0 0 0 0 0]
     v1 = vany_true v0
     return v1
@@ -31,7 +31,7 @@ ebb0:
 ; run
 
 function %vany_true_b32x4() -> b1 {
-ebb0:
+block0:
     v0 = vconst.b32x4 [false false false false]
     v1 = vany_true v0
     v2 = bint.i32 v1
@@ -41,7 +41,7 @@ ebb0:
 ; run
 
 function %vall_true_i16x8() -> b1 {
-ebb0:
+block0:
     v0 = vconst.i16x8 [1 0 0 0 0 0 0 0]
     v1 = vall_true v0
     v2 = bint.i32 v1
@@ -51,7 +51,7 @@ ebb0:
 ; run
 
 function %vall_true_b32x4() -> b1 {
-ebb0:
+block0:
     v0 = vconst.b32x4 [true true true true]
     v1 = vall_true v0
     return v1

@@ -14,7 +14,7 @@ use crate::ir::{
     immediates,
     instructions::{Opcode, ValueList},
     types::{I16, I32, I64, I8},
-    DataFlowGraph, Ebb, Function, Inst, InstBuilder, InstructionData, Type, Value,
+    Block, DataFlowGraph, Function, Inst, InstBuilder, InstructionData, Type, Value,
 };
 use crate::isa::TargetIsa;
 use crate::timing;
@@ -810,10 +810,10 @@ enum BranchOrderKind {
 
 /// Reorder branches to encourage fallthroughs.
 ///
-/// When an ebb ends with a conditional branch followed by an unconditional
-/// branch, this will reorder them if one of them is branching to the next Ebb
+/// When an block ends with a conditional branch followed by an unconditional
+/// branch, this will reorder them if one of them is branching to the next Block
 /// layout-wise. The unconditional jump can then become a fallthrough.
-fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, ebb: Ebb, inst: Inst) {
+fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, inst: Inst) {
     let (term_inst, term_inst_args, term_dest, cond_inst, cond_inst_args, cond_dest, kind) =
         match pos.func.dfg[inst] {
             InstructionData::Jump {
@@ -821,13 +821,13 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, ebb: Ebb, inst
                 destination,
                 ref args,
             } => {
-                let next_ebb = if let Some(next_ebb) = pos.func.layout.next_ebb(ebb) {
-                    next_ebb
+                let next_block = if let Some(next_block) = pos.func.layout.next_block(block) {
+                    next_block
                 } else {
                     return;
                 };
 
-                if destination == next_ebb {
+                if destination == next_block {
                     return;
                 }
 
@@ -840,7 +840,7 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, ebb: Ebb, inst
                 let prev_inst_data = &pos.func.dfg[prev_inst];
 
                 if let Some(prev_dest) = prev_inst_data.branch_destination() {
-                    if prev_dest != next_ebb {
+                    if prev_dest != next_block {
                         return;
                     }
                 } else {
@@ -941,7 +941,7 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, ebb: Ebb, inst
         }
     }
 
-    cfg.recompute_ebb(pos.func, ebb);
+    cfg.recompute_block(pos.func, block);
 }
 
 /// The main pre-opt pass.
@@ -949,7 +949,7 @@ pub fn do_preopt(func: &mut Function, cfg: &mut ControlFlowGraph, isa: &dyn Targ
     let _tt = timing::preopt();
     let mut pos = FuncCursor::new(func);
     let native_word_width = isa.pointer_bytes();
-    while let Some(ebb) = pos.next_ebb() {
+    while let Some(block) = pos.next_block() {
         while let Some(inst) = pos.next_inst() {
             // Apply basic simplifications.
             simplify(&mut pos, inst, native_word_width as u32);
@@ -961,7 +961,7 @@ pub fn do_preopt(func: &mut Function, cfg: &mut ControlFlowGraph, isa: &dyn Targ
             }
 
             branch_opt(&mut pos, inst);
-            branch_order(&mut pos, cfg, ebb, inst);
+            branch_order(&mut pos, cfg, block, inst);
         }
     }
 }

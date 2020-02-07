@@ -6,7 +6,7 @@ target i686
 
 ; Tied operands, both are killed at instruction.
 function %tied_easy() -> i32 {
-ebb0:
+block0:
     v0 = iconst.i32 12
     v1 = iconst.i32 13
     ; not: copy
@@ -17,7 +17,7 @@ ebb0:
 
 ; Tied operand is live after instruction.
 function %tied_alive() -> i32 {
-ebb0:
+block0:
     v0 = iconst.i32 12
     v1 = iconst.i32 13
     ; check: $(v0c=$V) = copy v0
@@ -30,7 +30,7 @@ ebb0:
 
 ; Fixed register constraint.
 function %fixed_op() -> i32 {
-ebb0:
+block0:
     ; check: ,%rax]
     ; sameln: v0 = iconst.i32 12
     v0 = iconst.i32 12
@@ -43,7 +43,7 @@ ebb0:
 
 ; Fixed register constraint twice.
 function %fixed_op_twice() -> i32 {
-ebb0:
+block0:
     ; check: ,%rax]
     ; sameln: v0 = iconst.i32 12
     v0 = iconst.i32 12
@@ -60,7 +60,7 @@ ebb0:
 
 ; Tied use of a diverted register.
 function %fixed_op_twice() -> i32 {
-ebb0:
+block0:
     ; check: ,%rax]
     ; sameln: v0 = iconst.i32 12
     v0 = iconst.i32 12

@@ -3,7 +3,7 @@ test compile
 target x86_64
 
 function %test(i32) -> i32 system_v {
-ebb0(v0: i32):
+block0(v0: i32):
     nop
     v1 = iconst.i32 42
     return v1

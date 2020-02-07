@@ -2,7 +2,7 @@ test legalizer
 target i686
 
 function %foo() -> i64 {
-ebb0:
+block0:
     v1 = iconst.i64 0x6400000042
     return v1
 }

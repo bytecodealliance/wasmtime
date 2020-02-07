@@ -6,7 +6,7 @@ target x86_64 haswell
 ; booleans use x86_pextr which is manually placed in the IR so that it can be binemit-tested
 
 function %test_extractlane_b8() {
-ebb0:
+block0:
 [-, %rax]   v0 = bconst.b8 true
 [-, %xmm0]  v1 = splat.b8x16 v0
 [-, %rax]   v2 = x86_pextr v1, 10    ; bin: 66 0f 3a 14 c0 0a
@@ -14,7 +14,7 @@ ebb0:
 }
 
 function %test_extractlane_i16() {
-ebb0:
+block0:
 [-, %rax]   v0 = iconst.i16 4
 [-, %xmm1]  v1 = splat.i16x8 v0
 [-, %rax]   v2 = x86_pextr v1, 4    ; bin: 66 0f 3a 15 c8 04
@@ -22,7 +22,7 @@ ebb0:
 }
 
 function %test_extractlane_i32() {
-ebb0:
+block0:
 [-, %rax]   v0 = iconst.i32 42
 [-, %xmm4]  v1 = splat.i32x4 v0
 [-, %rcx]   v2 = x86_pextr v1, 2    ; bin: 66 0f 3a 16 e1 02
@@ -30,7 +30,7 @@ ebb0:
 }
 
 function %test_extractlane_b64() {
-ebb0:
+block0:
 [-, %rax]   v0 = bconst.b64 false
 [-, %xmm2]  v1 = splat.b64x2 v0
 [-, %rbx]   v2 = x86_pextr v1, 1    ; bin: 66 48 0f 3a 16 d3 01

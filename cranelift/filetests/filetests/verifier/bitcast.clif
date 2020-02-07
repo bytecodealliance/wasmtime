@@ -2,21 +2,21 @@ test verifier
 
 ; bitcast between two types of equal size if ok
 function %valid_bitcast1(i32) -> f32 { ; Ok
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = bitcast.f32 v0
     return v1
 }
 
 ; bitcast to a type larger than the operand is ok
 function %valid_bitcast2(i32) -> i64 { ; Ok
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = bitcast.i64 v0
     return v1
 }
 
 ; bitcast to a smaller type is not ok
 function %bad_bitcast(i64) -> i32 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = bitcast.i32 v0 ; error: The bitcast argument v0 doesn't fit in a type of 32 bits
     return v1
 }

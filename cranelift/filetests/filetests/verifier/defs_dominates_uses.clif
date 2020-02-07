@@ -3,14 +3,14 @@ test verifier
 ; Test verification that uses properly dominate defs.
 
 function %non_dominating(i32) -> i32 system_v {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = iadd.i32 v2, v0   ; error: uses value v2 from non-dominating
     v2 = iadd.i32 v1, v0
     return v2
 }
 
 function %inst_uses_its_own_values(i32) -> i32 system_v {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = iadd.i32 v1, v0   ; error: uses value v1 from itself
     return v1
 }

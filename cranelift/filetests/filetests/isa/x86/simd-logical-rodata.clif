@@ -3,7 +3,7 @@ set enable_simd
 target x86_64 skylake
 
 function %bnot_b32x4(b32x4) -> b32x4 {
-ebb0(v0: b32x4):
+block0(v0: b32x4):
     v1 = bnot v0
     return v1
 }

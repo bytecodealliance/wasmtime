@@ -14,7 +14,7 @@ function %I32() {
     sig0 = ()
     fn0 = %foo()
 
-ebb0:
+block0:
 
     ; asm: movl $-1, %ecx
     [-,%rcx]            v400 = func_addr.i32 fn0        ; bin: b9 Abs4(%foo) ffffffff

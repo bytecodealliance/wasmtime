@@ -5,11 +5,11 @@
 //! output.
 //!
 //! A virtual register is typically built by merging together SSA values that are "phi-related" -
-//! that is, one value is passed as an EBB argument to a branch and the other is the EBB parameter
+//! that is, one value is passed as an block argument to a branch and the other is the block parameter
 //! value itself.
 //!
 //! If any values in a virtual register are spilled, they will use the same stack slot. This avoids
-//! memory-to-memory copies when a spilled value is passed as an EBB argument.
+//! memory-to-memory copies when a spilled value is passed as an block argument.
 
 use crate::dbg::DisplayList;
 use crate::dominator_tree::DominatorTreePreorder;

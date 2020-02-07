@@ -3,7 +3,7 @@
 //! Jump tables are declared in the preamble and assigned an `ir::entities::JumpTable` reference.
 //! The actual table of destinations is stored in a `JumpTableData` struct defined in this module.
 
-use crate::ir::entities::Ebb;
+use crate::ir::entities::Block;
 use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
 use core::slice::{Iter, IterMut};
@@ -14,7 +14,7 @@ use core::slice::{Iter, IterMut};
 #[derive(Clone)]
 pub struct JumpTableData {
     // Table entries.
-    table: Vec<Ebb>,
+    table: Vec<Block>,
 }
 
 impl JumpTableData {
@@ -36,32 +36,32 @@ impl JumpTableData {
     }
 
     /// Append a table entry.
-    pub fn push_entry(&mut self, dest: Ebb) {
+    pub fn push_entry(&mut self, dest: Block) {
         self.table.push(dest)
     }
 
-    /// Checks if any of the entries branch to `ebb`.
-    pub fn branches_to(&self, ebb: Ebb) -> bool {
-        self.table.iter().any(|target_ebb| *target_ebb == ebb)
+    /// Checks if any of the entries branch to `block`.
+    pub fn branches_to(&self, block: Block) -> bool {
+        self.table.iter().any(|target_block| *target_block == block)
     }
 
     /// Access the whole table as a slice.
-    pub fn as_slice(&self) -> &[Ebb] {
+    pub fn as_slice(&self) -> &[Block] {
         self.table.as_slice()
     }
 
     /// Access the whole table as a mutable slice.
-    pub fn as_mut_slice(&mut self) -> &mut [Ebb] {
+    pub fn as_mut_slice(&mut self) -> &mut [Block] {
         self.table.as_mut_slice()
     }
 
     /// Returns an iterator over the table.
-    pub fn iter(&self) -> Iter<Ebb> {
+    pub fn iter(&self) -> Iter<Block> {
         self.table.iter()
     }
 
     /// Returns an iterator that allows modifying each value.
-    pub fn iter_mut(&mut self) -> IterMut<Ebb> {
+    pub fn iter_mut(&mut self) -> IterMut<Block> {
         self.table.iter_mut()
     }
 }
@@ -73,8 +73,8 @@ impl Display for JumpTableData {
             None => (),
             Some(first) => write!(fmt, "{}", first)?,
         }
-        for ebb in self.table.iter().skip(1) {
-            write!(fmt, ", {}", ebb)?;
+        for block in self.table.iter().skip(1) {
+            write!(fmt, ", {}", block)?;
         }
         write!(fmt, "]")
     }
@@ -84,7 +84,7 @@ impl Display for JumpTableData {
 mod tests {
     use super::JumpTableData;
     use crate::entity::EntityRef;
-    use crate::ir::Ebb;
+    use crate::ir::Block;
     use alloc::string::ToString;
 
     #[test]
@@ -102,8 +102,8 @@ mod tests {
 
     #[test]
     fn insert() {
-        let e1 = Ebb::new(1);
-        let e2 = Ebb::new(2);
+        let e1 = Block::new(1);
+        let e2 = Block::new(2);
 
         let mut jt = JumpTableData::new();
 
@@ -111,7 +111,7 @@ mod tests {
         jt.push_entry(e2);
         jt.push_entry(e1);
 
-        assert_eq!(jt.to_string(), "jump_table [ebb1, ebb2, ebb1]");
+        assert_eq!(jt.to_string(), "jump_table [block1, block2, block1]");
 
         let v = jt.as_slice();
         assert_eq!(v, [e1, e2, e1]);

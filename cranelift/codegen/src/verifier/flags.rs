@@ -1,7 +1,7 @@
 //! Verify CPU flags values.
 
 use crate::entity::{EntitySet, SecondaryMap};
-use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir;
 use crate::ir::instructions::BranchInfo;
 use crate::isa;
@@ -42,33 +42,33 @@ struct FlagsVerifier<'a> {
     cfg: &'a ControlFlowGraph,
     encinfo: Option<isa::EncInfo>,
 
-    /// The single live-in flags value (if any) for each EBB.
-    livein: SecondaryMap<ir::Ebb, PackedOption<ir::Value>>,
+    /// The single live-in flags value (if any) for each block.
+    livein: SecondaryMap<ir::Block, PackedOption<ir::Value>>,
 }
 
 impl<'a> FlagsVerifier<'a> {
     fn check(&mut self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        // List of EBBs that need to be processed. EBBs may be re-added to this list when we detect
+        // List of blocks that need to be processed. blocks may be re-added to this list when we detect
         // that one of their successor blocks needs a live-in flags value.
-        let mut worklist = EntitySet::with_capacity(self.func.layout.ebb_capacity());
-        for ebb in self.func.layout.ebbs() {
-            worklist.insert(ebb);
+        let mut worklist = EntitySet::with_capacity(self.func.layout.block_capacity());
+        for block in self.func.layout.blocks() {
+            worklist.insert(block);
         }
 
-        while let Some(ebb) = worklist.pop() {
-            if let Some(value) = self.visit_ebb(ebb, errors)? {
-                // The EBB has live-in flags. Check if the value changed.
-                match self.livein[ebb].expand() {
-                    // Revisit any predecessor blocks the first time we see a live-in for `ebb`.
+        while let Some(block) = worklist.pop() {
+            if let Some(value) = self.visit_block(block, errors)? {
+                // The block has live-in flags. Check if the value changed.
+                match self.livein[block].expand() {
+                    // Revisit any predecessor blocks the first time we see a live-in for `block`.
                     None => {
-                        self.livein[ebb] = value.into();
-                        for BasicBlock { ebb: pred, .. } in self.cfg.pred_iter(ebb) {
+                        self.livein[block] = value.into();
+                        for BlockPredecessor { block: pred, .. } in self.cfg.pred_iter(block) {
                             worklist.insert(pred);
                         }
                     }
                     Some(old) if old != value => {
                         return errors.fatal((
-                            ebb,
+                            block,
                             format!("conflicting live-in CPU flags: {} and {}", old, value),
                         ));
                     }
@@ -76,24 +76,24 @@ impl<'a> FlagsVerifier<'a> {
                 }
             } else {
                 // Existing live-in flags should never be able to disappear.
-                assert_eq!(self.livein[ebb].expand(), None);
+                assert_eq!(self.livein[block].expand(), None);
             }
         }
 
         Ok(())
     }
 
-    /// Check flags usage in `ebb` and return the live-in flags value, if any.
-    fn visit_ebb(
+    /// Check flags usage in `block` and return the live-in flags value, if any.
+    fn visit_block(
         &self,
-        ebb: ir::Ebb,
+        block: ir::Block,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<Option<ir::Value>> {
         // The single currently live flags value.
         let mut live_val = None;
 
         // Visit instructions backwards so we can track liveness accurately.
-        for inst in self.func.layout.ebb_insts(ebb).rev() {
+        for inst in self.func.layout.block_insts(block).rev() {
             // Check if `inst` interferes with existing live flags.
             if let Some(live) = live_val {
                 for &res in self.func.dfg.inst_results(inst) {
@@ -130,7 +130,7 @@ impl<'a> FlagsVerifier<'a> {
                 }
             }
 
-            // Include live-in flags to successor EBBs.
+            // Include live-in flags to successor blocks.
             match self.func.dfg.analyze_branch(inst) {
                 BranchInfo::NotABranch => {}
                 BranchInfo::SingleDest(dest, _) => {

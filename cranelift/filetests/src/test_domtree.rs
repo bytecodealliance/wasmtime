@@ -3,11 +3,11 @@
 //! The `test domtree` test command looks for annotations on instructions like this:
 //!
 //! ```clif
-//!     jump ebb3 ; dominates: ebb3
+//!     jump block3 ; dominates: block3
 //! ```
 //!
 //! This annotation means that the jump instruction is expected to be the immediate dominator of
-//! `ebb3`.
+//! `block3`.
 //!
 //! We verify that the dominator tree annotations are complete and correct.
 //!
@@ -58,31 +58,31 @@ impl SubTest for TestDomtree {
                         ));
                     }
                 };
-                for src_ebb in tail.split_whitespace() {
-                    let ebb = match context.details.map.lookup_str(src_ebb) {
-                        Some(AnyEntity::Ebb(ebb)) => ebb,
-                        _ => return Err(format!("expected defined EBB, got {}", src_ebb)),
+                for src_block in tail.split_whitespace() {
+                    let block = match context.details.map.lookup_str(src_block) {
+                        Some(AnyEntity::Block(block)) => block,
+                        _ => return Err(format!("expected defined block, got {}", src_block)),
                     };
 
-                    // Annotations say that `inst` is the idom of `ebb`.
-                    if expected.insert(ebb, inst).is_some() {
-                        return Err(format!("multiple dominators for {}", src_ebb));
+                    // Annotations say that `inst` is the idom of `block`.
+                    if expected.insert(block, inst).is_some() {
+                        return Err(format!("multiple dominators for {}", src_block));
                     }
 
                     // Compare to computed domtree.
-                    match domtree.idom(ebb) {
+                    match domtree.idom(block) {
                         Some(got_inst) if got_inst != inst => {
                             return Err(format!(
                                 "mismatching idoms for {}:\n\
                                  want: {}, got: {}",
-                                src_ebb, inst, got_inst
+                                src_block, inst, got_inst
                             ));
                         }
                         None => {
                             return Err(format!(
                                 "mismatching idoms for {}:\n\
                                  want: {}, got: unreachable",
-                                src_ebb, inst
+                                src_block, inst
                             ));
                         }
                         _ => {}
@@ -92,18 +92,18 @@ impl SubTest for TestDomtree {
         }
 
         // Now we know that everything in `expected` is consistent with `domtree`.
-        // All other EBB's should be either unreachable or the entry block.
-        for ebb in func
+        // All other block's should be either unreachable or the entry block.
+        for block in func
             .layout
-            .ebbs()
+            .blocks()
             .skip(1)
-            .filter(|ebb| !expected.contains_key(ebb))
+            .filter(|block| !expected.contains_key(block))
         {
-            if let Some(got_inst) = domtree.idom(ebb) {
+            if let Some(got_inst) = domtree.idom(block) {
                 return Err(format!(
                     "mismatching idoms for renumbered {}:\n\
                      want: unrechable, got: {}",
-                    ebb, got_inst
+                    block, got_inst
                 ));
             }
         }
@@ -118,8 +118,8 @@ fn filecheck_text(func: &Function, domtree: &DominatorTree) -> Result<String, fm
     let mut s = String::new();
 
     write!(s, "cfg_postorder:")?;
-    for &ebb in domtree.cfg_postorder() {
-        write!(s, " {}", ebb)?;
+    for &block in domtree.cfg_postorder() {
+        write!(s, " {}", block)?;
     }
     writeln!(s)?;
 
@@ -129,10 +129,10 @@ fn filecheck_text(func: &Function, domtree: &DominatorTree) -> Result<String, fm
     dtpo.compute(domtree, &func.layout);
     let mut stack = Vec::new();
     stack.extend(func.layout.entry_block());
-    while let Some(ebb) = stack.pop() {
-        write!(s, "    {}:", ebb)?;
+    while let Some(block) = stack.pop() {
+        write!(s, "    {}:", block)?;
         let i = stack.len();
-        for ch in dtpo.children(ebb) {
+        for ch in dtpo.children(block) {
             write!(s, " {}", ch)?;
             stack.push(ch);
         }

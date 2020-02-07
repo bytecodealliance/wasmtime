@@ -525,7 +525,7 @@ struct ObjectRelocSink {
 }
 
 impl RelocSink for ObjectRelocSink {
-    fn reloc_ebb(&mut self, _offset: CodeOffset, _reloc: Reloc, _ebb_offset: CodeOffset) {
+    fn reloc_block(&mut self, _offset: CodeOffset, _reloc: Reloc, _block_offset: CodeOffset) {
         unimplemented!();
     }
 

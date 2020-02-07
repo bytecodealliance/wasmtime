@@ -1,7 +1,7 @@
 //! Source map associating entities with their source locations.
 //!
 //! When the parser reads in a source file, it records the locations of the
-//! definitions of entities like instructions, EBBs, and values.
+//! definitions of entities like instructions, blocks, and values.
 //!
 //! The `SourceMap` struct defined in this module makes this mapping available
 //! to parser clients.
@@ -10,7 +10,7 @@ use crate::error::{Location, ParseResult};
 use crate::lexer::split_entity_name;
 use cranelift_codegen::ir::entities::AnyEntity;
 use cranelift_codegen::ir::{
-    Ebb, FuncRef, GlobalValue, Heap, JumpTable, SigRef, StackSlot, Table, Value,
+    Block, FuncRef, GlobalValue, Heap, JumpTable, SigRef, StackSlot, Table, Value,
 };
 use std::collections::HashMap;
 
@@ -28,9 +28,9 @@ impl SourceMap {
         self.locations.contains_key(&v.into())
     }
 
-    /// Look up a EBB entity.
-    pub fn contains_ebb(&self, ebb: Ebb) -> bool {
-        self.locations.contains_key(&ebb.into())
+    /// Look up a block entity.
+    pub fn contains_block(&self, block: Block) -> bool {
+        self.locations.contains_key(&block.into())
     }
 
     /// Look up a stack slot entity.
@@ -79,11 +79,11 @@ impl SourceMap {
                     Some(v.into())
                 }
             }),
-            "ebb" => Ebb::with_number(num).and_then(|ebb| {
-                if !self.contains_ebb(ebb) {
+            "block" => Block::with_number(num).and_then(|block| {
+                if !self.contains_block(block) {
                     None
                 } else {
-                    Some(ebb.into())
+                    Some(block.into())
                 }
             }),
             "ss" => StackSlot::with_number(num).and_then(|ss| {
@@ -158,8 +158,8 @@ impl SourceMap {
         self.def_entity(entity.into(), loc)
     }
 
-    /// Define the ebb `entity`.
-    pub fn def_ebb(&mut self, entity: Ebb, loc: Location) -> ParseResult<()> {
+    /// Define the block `entity`.
+    pub fn def_block(&mut self, entity: Block, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 
@@ -218,8 +218,8 @@ mod tests {
         let tf = parse_test(
             "function %detail() {
                                ss10 = incoming_arg 13
-                               jt10 = jump_table [ebb0]
-                             ebb0(v4: i32, v7: i32):
+                               jt10 = jump_table [block0]
+                             block0(v4: i32, v7: i32):
                                v10 = iadd v4, v7
                              }",
             ParseOptions::default(),
@@ -231,7 +231,7 @@ mod tests {
         assert_eq!(map.lookup_str("ss1"), None);
         assert_eq!(map.lookup_str("ss10").unwrap().to_string(), "ss10");
         assert_eq!(map.lookup_str("jt10").unwrap().to_string(), "jt10");
-        assert_eq!(map.lookup_str("ebb0").unwrap().to_string(), "ebb0");
+        assert_eq!(map.lookup_str("block0").unwrap().to_string(), "block0");
         assert_eq!(map.lookup_str("v4").unwrap().to_string(), "v4");
         assert_eq!(map.lookup_str("v7").unwrap().to_string(), "v7");
         assert_eq!(map.lookup_str("v10").unwrap().to_string(), "v10");

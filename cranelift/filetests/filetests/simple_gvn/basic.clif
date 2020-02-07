@@ -1,7 +1,7 @@
 test simple-gvn
 
 function %simple_redundancy(i32, i32) -> i32 {
-ebb0(v0: i32, v1: i32):
+block0(v0: i32, v1: i32):
     v2 = iadd v0, v1
     v3 = iadd v0, v1
     v4 = imul v2, v3
@@ -10,7 +10,7 @@ ebb0(v0: i32, v1: i32):
 }
 
 function %cascading_redundancy(i32, i32) -> i32 {
-ebb0(v0: i32, v1: i32):
+block0(v0: i32, v1: i32):
     v2 = iadd v0, v1
     v3 = iadd v0, v1
     v4 = imul v2, v3
@@ -21,22 +21,22 @@ ebb0(v0: i32, v1: i32):
 }
 
 function %redundancies_on_some_paths(i32, i32, i32) -> i32 {
-ebb0(v0: i32, v1: i32, v2: i32):
+block0(v0: i32, v1: i32, v2: i32):
     v3 = iadd v0, v1
-    brz v3, ebb1
-    jump ebb3
+    brz v3, block1
+    jump block3
 
-ebb3:
+block3:
     v4 = iadd v0, v1
-    jump ebb2(v4)
-; check: jump ebb2(v3)
+    jump block2(v4)
+; check: jump block2(v3)
 
-ebb1:
+block1:
     v5 = iadd v0, v1
-    jump ebb2(v5)
-; check: jump ebb2(v3)
+    jump block2(v5)
+; check: jump block2(v3)
 
-ebb2(v6: i32):
+block2(v6: i32):
     v7 = iadd v0, v1
     v8 = iadd v6, v7
 ; check: v8 = iadd v6, v3

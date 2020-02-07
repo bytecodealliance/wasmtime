@@ -5,7 +5,7 @@ target i686 haswell
 ; regex: V=v\d+
 
 function %iadd(i64, i64) -> i64 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v10 = iadd v1, v2
     ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
     ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)
@@ -16,7 +16,7 @@ ebb0(v1: i64, v2: i64):
 }
 
 function %isub(i64, i64) -> i64 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v10 = isub v1, v2
     ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
     ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)
@@ -27,7 +27,7 @@ ebb0(v1: i64, v2: i64):
 }
 
 function %imul(i64, i64) -> i64 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v10 = imul v1, v2
     ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
     ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)
@@ -42,7 +42,7 @@ ebb0(v1: i64, v2: i64):
 }
 
 function %icmp_eq(i64, i64) -> b1 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v10 = icmp eq v1, v2
     ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
     ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)
@@ -53,7 +53,7 @@ ebb0(v1: i64, v2: i64):
 }
 
 function %icmp_imm_eq(i64) -> b1 {
-ebb0(v1: i64):
+block0(v1: i64):
     v10 = icmp_imm eq v1, 0
     ; check: $(v1_lsb=$V) -> $(v1_lsb_a=$V)
     ; nextln: $(v1_msb=$V) -> $(v1_msb_a=$V)
@@ -67,7 +67,7 @@ ebb0(v1: i64):
 }
 
 function %icmp_ne(i64, i64) -> b1 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v10 = icmp ne v1, v2
     ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
     ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)
@@ -78,7 +78,7 @@ ebb0(v1: i64, v2: i64):
 }
 
 function %icmp_imm_ne(i64) -> b1 {
-ebb0(v1: i64):
+block0(v1: i64):
     v10 = icmp_imm ne v1, 0
     ; check: $(v1_lsb=$V) -> $(v1_lsb_a=$V)
     ; nextln: $(v1_msb=$V) -> $(v1_msb_a=$V)
@@ -92,7 +92,7 @@ ebb0(v1: i64):
 }
 
 function %icmp_sgt(i64, i64) -> b1 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v10 = icmp sgt v1, v2
     ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
     ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)
@@ -106,7 +106,7 @@ ebb0(v1: i64, v2: i64):
 }
 
 function %icmp_imm_sgt(i64) -> b1 {
-ebb0(v1: i64):
+block0(v1: i64):
     v10 = icmp_imm sgt v1, 0
     ; check: $(v1_lsb=$V) -> $(v1_lsb_a=$V)
     ; nextln: $(v1_msb=$V) -> $(v1_msb_a=$V)
@@ -123,7 +123,7 @@ ebb0(v1: i64):
 }
 
 function %icmp_sge(i64, i64) -> b1 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v10 = icmp sge v1, v2
     ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
     ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)
@@ -137,7 +137,7 @@ ebb0(v1: i64, v2: i64):
 }
 
 function %icmp_imm_sge(i64) -> b1 {
-ebb0(v1: i64):
+block0(v1: i64):
     v10 = icmp_imm sge v1, 0
     ; check: $(v1_lsb=$V) -> $(v1_lsb_a=$V)
     ; nextln: $(v1_msb=$V) -> $(v1_msb_a=$V)
@@ -154,7 +154,7 @@ ebb0(v1: i64):
 }
 
 function %icmp_slt(i64, i64) -> b1 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v10 = icmp slt v1, v2
     ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
     ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)
@@ -168,7 +168,7 @@ ebb0(v1: i64, v2: i64):
 }
 
 function %icmp_imm_slt(i64) -> b1 {
-ebb0(v1: i64):
+block0(v1: i64):
     v10 = icmp_imm slt v1, 0
     ; check: $(v1_lsb=$V) -> $(v1_lsb_a=$V)
     ; nextln: $(v1_msb=$V) -> $(v1_msb_a=$V)
@@ -185,7 +185,7 @@ ebb0(v1: i64):
 }
 
 function %icmp_sle(i64, i64) -> b1 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v10 = icmp sle v1, v2
     ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
     ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)
@@ -199,7 +199,7 @@ ebb0(v1: i64, v2: i64):
 }
 
 function %icmp_imm_sle(i64) -> b1 {
-ebb0(v1: i64):
+block0(v1: i64):
     v10 = icmp_imm sle v1, 0
     ; check: $(v1_lsb=$V) -> $(v1_lsb_a=$V)
     ; nextln: $(v1_msb=$V) -> $(v1_msb_a=$V)
@@ -216,7 +216,7 @@ ebb0(v1: i64):
 }
 
 function %icmp_ugt(i64, i64) -> b1 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v10 = icmp ugt v1, v2
     ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
     ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)
@@ -230,7 +230,7 @@ ebb0(v1: i64, v2: i64):
 }
 
 function %icmp_imm_ugt(i64) -> b1 {
-ebb0(v1: i64):
+block0(v1: i64):
     v10 = icmp_imm ugt v1, 0
     ; check: $(v1_lsb=$V) -> $(v1_lsb_a=$V)
     ; nextln: $(v1_msb=$V) -> $(v1_msb_a=$V)
@@ -247,7 +247,7 @@ ebb0(v1: i64):
 }
 
 function %icmp_uge(i64, i64) -> b1 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v10 = icmp uge v1, v2
     ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
     ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)
@@ -261,7 +261,7 @@ ebb0(v1: i64, v2: i64):
 }
 
 function %icmp_imm_uge(i64) -> b1 {
-ebb0(v1: i64):
+block0(v1: i64):
     v10 = icmp_imm uge v1, 0
     ; check: $(v1_lsb=$V) -> $(v1_lsb_a=$V)
     ; nextln: $(v1_msb=$V) -> $(v1_msb_a=$V)
@@ -278,7 +278,7 @@ ebb0(v1: i64):
 }
 
 function %icmp_ult(i64, i64) -> b1 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v10 = icmp ult v1, v2
     ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
     ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)
@@ -292,7 +292,7 @@ ebb0(v1: i64, v2: i64):
 }
 
 function %icmp_imm_ult(i64) -> b1 {
-ebb0(v1: i64):
+block0(v1: i64):
     v10 = icmp_imm ult v1, 0
     ; check: $(v1_lsb=$V) -> $(v1_lsb_a=$V)
     ; nextln: $(v1_msb=$V) -> $(v1_msb_a=$V)
@@ -309,7 +309,7 @@ ebb0(v1: i64):
 }
 
 function %icmp_ule(i64, i64) -> b1 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v10 = icmp ule v1, v2
     ; check: v1 = iconcat $(v1_lsb=$V), $(v1_msb=$V)
     ; nextln: v2 = iconcat $(v2_lsb=$V), $(v2_msb=$V)
@@ -323,7 +323,7 @@ ebb0(v1: i64, v2: i64):
 }
 
 function %icmp_imm_ule(i64) -> b1 {
-ebb0(v1: i64):
+block0(v1: i64):
     v10 = icmp_imm ule v1, 0
     ; check: $(v1_lsb=$V) -> $(v1_lsb_a=$V)
     ; nextln: $(v1_msb=$V) -> $(v1_msb_a=$V)

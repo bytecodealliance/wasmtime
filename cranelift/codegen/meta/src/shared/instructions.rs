@@ -18,8 +18,8 @@ fn define_control_flow(
     imm: &Immediates,
     entities: &EntityRefs,
 ) {
-    let EBB = &Operand::new("EBB", &entities.ebb).with_doc("Destination extended basic block");
-    let args = &Operand::new("args", &entities.varargs).with_doc("EBB arguments");
+    let block = &Operand::new("block", &entities.block).with_doc("Destination basic block");
+    let args = &Operand::new("args", &entities.varargs).with_doc("block arguments");
 
     ig.push(
         Inst::new(
@@ -27,13 +27,13 @@ fn define_control_flow(
             r#"
         Jump.
 
-        Unconditionally jump to an extended basic block, passing the specified
-        EBB arguments. The number and types of arguments must match the
-        destination EBB.
+        Unconditionally jump to a basic block, passing the specified
+        block arguments. The number and types of arguments must match the
+        destination block.
         "#,
             &formats.jump,
         )
-        .operands_in(vec![EBB, args])
+        .operands_in(vec![block, args])
         .is_terminator(true)
         .is_branch(true),
     );
@@ -42,9 +42,9 @@ fn define_control_flow(
         Inst::new(
             "fallthrough",
             r#"
-        Fall through to the next EBB.
+        Fall through to the next block.
 
-        This is the same as `jump`, except the destination EBB must be
+        This is the same as `jump`, except the destination block must be
         the next one in the layout.
 
         Jumps are turned into fall-through instructions by the branch
@@ -53,7 +53,7 @@ fn define_control_flow(
         "#,
             &formats.jump,
         )
-        .operands_in(vec![EBB, args])
+        .operands_in(vec![block, args])
         .is_terminator(true)
         .is_branch(true),
     );
@@ -81,7 +81,7 @@ fn define_control_flow(
         "#,
                 &formats.branch,
             )
-            .operands_in(vec![c, EBB, args])
+            .operands_in(vec![c, block, args])
             .is_branch(true),
         );
 
@@ -96,7 +96,7 @@ fn define_control_flow(
         "#,
                 &formats.branch,
             )
-            .operands_in(vec![c, EBB, args])
+            .operands_in(vec![c, block, args])
             .is_branch(true),
         );
     }
@@ -124,14 +124,14 @@ fn define_control_flow(
         and take the branch if the condition is true:
 
         ```text
-            br_icmp ugt v1, v2, ebb4(v5, v6)
+            br_icmp ugt v1, v2, block4(v5, v6)
         ```
 
         is semantically equivalent to:
 
         ```text
             v10 = icmp ugt, v1, v2
-            brnz v10, ebb4(v5, v6)
+            brnz v10, block4(v5, v6)
         ```
 
         Some RISC architectures like MIPS and RISC-V provide instructions that
@@ -140,7 +140,7 @@ fn define_control_flow(
         "#,
                 &formats.branch_icmp,
             )
-            .operands_in(vec![Cond, x, y, EBB, args])
+            .operands_in(vec![Cond, x, y, block, args])
             .is_branch(true),
         );
 
@@ -154,7 +154,7 @@ fn define_control_flow(
         "#,
                 &formats.branch_int,
             )
-            .operands_in(vec![Cond, f, EBB, args])
+            .operands_in(vec![Cond, f, block, args])
             .is_branch(true),
         );
     }
@@ -172,7 +172,7 @@ fn define_control_flow(
         "#,
                 &formats.branch_float,
             )
-            .operands_in(vec![Cond, f, EBB, args])
+            .operands_in(vec![Cond, f, block, args])
             .is_branch(true),
         );
     }
@@ -188,8 +188,8 @@ fn define_control_flow(
         Indirect branch via jump table.
 
         Use ``x`` as an unsigned index into the jump table ``JT``. If a jump
-        table entry is found, branch to the corresponding EBB. If no entry was
-        found or the index is out-of-bounds, branch to the given default EBB.
+        table entry is found, branch to the corresponding block. If no entry was
+        found or the index is out-of-bounds, branch to the given default block.
 
         Note that this branch instruction can't pass arguments to the targeted
         blocks. Split critical edges as needed to work around this.
@@ -202,7 +202,7 @@ fn define_control_flow(
         "#,
                 &formats.branch_table,
             )
-            .operands_in(vec![x, EBB, JT])
+            .operands_in(vec![x, block, JT])
             .is_terminator(true)
             .is_branch(true),
         );
@@ -1407,7 +1407,7 @@ pub(crate) fn define(
         satisfy instruction constraints.
 
         The register diversions created by this instruction must be undone
-        before the value leaves the EBB. At the entry to a new EBB, all live
+        before the value leaves the block. At the entry to a new block, all live
         values must be in their originally assigned registers.
         "#,
             &formats.reg_move,

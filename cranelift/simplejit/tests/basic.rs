@@ -41,8 +41,8 @@ fn define_simple_function(module: &mut Module<SimpleJITBackend>) -> FuncId {
     let mut func_ctx = FunctionBuilderContext::new();
     {
         let mut bcx: FunctionBuilder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
-        let ebb = bcx.create_ebb();
-        bcx.switch_to_block(ebb);
+        let block = bcx.create_block();
+        bcx.switch_to_block(block);
         bcx.ins().return_(&[]);
     }
 
@@ -90,16 +90,16 @@ fn switch_error() {
     let mut func_ctx = FunctionBuilderContext::new();
     {
         let mut bcx: FunctionBuilder = FunctionBuilder::new(&mut func, &mut func_ctx);
-        let start = bcx.create_ebb();
-        let bb0 = bcx.create_ebb();
-        let bb1 = bcx.create_ebb();
-        let bb2 = bcx.create_ebb();
-        let bb3 = bcx.create_ebb();
+        let start = bcx.create_block();
+        let bb0 = bcx.create_block();
+        let bb1 = bcx.create_block();
+        let bb2 = bcx.create_block();
+        let bb3 = bcx.create_block();
         println!("{} {} {} {} {}", start, bb0, bb1, bb2, bb3);
 
         bcx.declare_var(Variable::new(0), types::I32);
         bcx.declare_var(Variable::new(1), types::I32);
-        let in_val = bcx.append_ebb_param(start, types::I32);
+        let in_val = bcx.append_block_param(start, types::I32);
         bcx.switch_to_block(start);
         bcx.def_var(Variable::new(0), in_val);
         bcx.ins().jump(bb0, &[]);
@@ -168,8 +168,8 @@ fn libcall_function() {
     let mut func_ctx = FunctionBuilderContext::new();
     {
         let mut bcx: FunctionBuilder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
-        let ebb = bcx.create_ebb();
-        bcx.switch_to_block(ebb);
+        let block = bcx.create_block();
+        bcx.switch_to_block(block);
 
         let int = module.target_config().pointer_type();
         let zero = bcx.ins().iconst(I16, 0);

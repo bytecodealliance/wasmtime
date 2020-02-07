@@ -223,10 +223,10 @@ mod tests {
     #[test]
     fn types() {
         let mut func = Function::new();
-        let ebb0 = func.dfg.make_ebb();
-        let arg0 = func.dfg.append_ebb_param(ebb0, I32);
+        let block0 = func.dfg.make_block();
+        let arg0 = func.dfg.append_block_param(block0, I32);
         let mut pos = FuncCursor::new(&mut func);
-        pos.insert_ebb(ebb0);
+        pos.insert_block(block0);
 
         // Explicit types.
         let v0 = pos.ins().iconst(I32, 3);
@@ -244,10 +244,10 @@ mod tests {
     #[test]
     fn reuse_results() {
         let mut func = Function::new();
-        let ebb0 = func.dfg.make_ebb();
-        let arg0 = func.dfg.append_ebb_param(ebb0, I32);
+        let block0 = func.dfg.make_block();
+        let arg0 = func.dfg.append_block_param(block0, I32);
         let mut pos = FuncCursor::new(&mut func);
-        pos.insert_ebb(ebb0);
+        pos.insert_block(block0);
 
         let v0 = pos.ins().iadd_imm(arg0, 17);
         assert_eq!(pos.func.dfg.value_type(v0), I32);

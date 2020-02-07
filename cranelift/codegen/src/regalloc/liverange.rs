@@ -6,29 +6,29 @@
 //!
 //! # Local Live Ranges
 //!
-//! Inside a single extended basic block, the live range of a value is always an interval between
-//! two program points (if the value is live in the EBB at all). The starting point is either:
+//! Inside a single basic block, the live range of a value is always an interval between
+//! two program points (if the value is live in the block at all). The starting point is either:
 //!
 //! 1. The instruction that defines the value, or
-//! 2. The EBB header, because the value is an argument to the EBB, or
-//! 3. The EBB header, because the value is defined in another EBB and live-in to this one.
+//! 2. The block header, because the value is an argument to the block, or
+//! 3. The block header, because the value is defined in another block and live-in to this one.
 //!
 //! The ending point of the local live range is the last of the following program points in the
-//! EBB:
+//! block:
 //!
-//! 1. The last use in the EBB, where a *use* is an instruction that has the value as an argument.
-//! 2. The last branch or jump instruction in the EBB that can reach a use.
+//! 1. The last use in the block, where a *use* is an instruction that has the value as an argument.
+//! 2. The last branch or jump instruction in the block that can reach a use.
 //! 3. If the value has no uses anywhere (a *dead value*), the program point that defines it.
 //!
-//! Note that 2. includes loop back-edges to the same EBB. In general, if a value is defined
+//! Note that 2. includes loop back-edges to the same block. In general, if a value is defined
 //! outside a loop and used inside the loop, it will be live in the entire loop.
 //!
 //! # Global Live Ranges
 //!
-//! Values that appear in more than one EBB have a *global live range* which can be seen as the
-//! disjoint union of the per-EBB local intervals for all of the EBBs where the value is live.
-//! Together with a `ProgramOrder` which provides a linear ordering of the EBBs, the global live
-//! range becomes a linear sequence of disjoint intervals, at most one per EBB.
+//! Values that appear in more than one block have a *global live range* which can be seen as the
+//! disjoint union of the per-block local intervals for all of the blocks where the value is live.
+//! Together with a `ProgramOrder` which provides a linear ordering of the blocks, the global live
+//! range becomes a linear sequence of disjoint intervals, at most one per block.
 //!
 //! In the special case of a dead value, the global live range is a single interval where the start
 //! and end points are the same. The global live range of a value is never completely empty.
@@ -64,58 +64,58 @@
 //! ## Current representation
 //!
 //! Our current implementation uses a sorted array of compressed intervals, represented by their
-//! boundaries (Ebb, Inst), sorted by Ebb. This is a simple data structure, enables coalescing of
+//! boundaries (Block, Inst), sorted by Block. This is a simple data structure, enables coalescing of
 //! intervals easily, and shows some nice performance behavior. See
 //! https://github.com/bytecodealliance/cranelift/issues/1084 for benchmarks against using a
-//! bforest::Map<Ebb, Inst>.
+//! bforest::Map<Block, Inst>.
 //!
-//! ## EBB ordering
+//! ## block ordering
 //!
-//! The relative order of EBBs is used to maintain a sorted list of live-in intervals and to
-//! coalesce adjacent live-in intervals when the prior interval covers the whole EBB. This doesn't
+//! The relative order of blocks is used to maintain a sorted list of live-in intervals and to
+//! coalesce adjacent live-in intervals when the prior interval covers the whole block. This doesn't
 //! depend on any property of the program order, so alternative orderings are possible:
 //!
-//! 1. The EBB layout order. This is what we currently use.
+//! 1. The block layout order. This is what we currently use.
 //! 2. A topological order of the dominator tree. All the live-in intervals would come after the
 //!    def interval.
-//! 3. A numerical order by EBB number. Performant because it doesn't need to indirect through the
+//! 3. A numerical order by block number. Performant because it doesn't need to indirect through the
 //!    `ProgramOrder` for comparisons.
 //!
 //! These orderings will cause small differences in coalescing opportunities, but all of them would
 //! do a decent job of compressing a long live range. The numerical order might be preferable
 //! because:
 //!
-//! - It has better performance because EBB numbers can be compared directly without any table
+//! - It has better performance because block numbers can be compared directly without any table
 //!   lookups.
-//! - If EBB numbers are not reused, it is safe to allocate new EBBs without getting spurious
-//!   live-in intervals from any coalesced representations that happen to cross a new EBB.
+//! - If block numbers are not reused, it is safe to allocate new blocks without getting spurious
+//!   live-in intervals from any coalesced representations that happen to cross a new block.
 //!
 //! For comparing instructions, the layout order is always what we want.
 //!
 //! ## Alternative representation
 //!
-//! Since a local live-in interval always begins at its EBB header, it is uniquely described by its
-//! end point instruction alone. We can use the layout to look up the EBB containing the end point.
+//! Since a local live-in interval always begins at its block header, it is uniquely described by its
+//! end point instruction alone. We can use the layout to look up the block containing the end point.
 //! This means that a sorted `Vec<Inst>` would be enough to represent the set of live-in intervals.
 //!
 //! Coalescing is an important compression technique because some live ranges can span thousands of
-//! EBBs. We can represent that by switching to a sorted `Vec<ProgramPoint>` representation where
-//! an `[Ebb, Inst]` pair represents a coalesced range, while an `Inst` entry without a preceding
-//! `Ebb` entry represents a single live-in interval.
+//! blocks. We can represent that by switching to a sorted `Vec<ProgramPoint>` representation where
+//! an `[Block, Inst]` pair represents a coalesced range, while an `Inst` entry without a preceding
+//! `Block` entry represents a single live-in interval.
 //!
 //! This representation is more compact for a live range with many uncoalesced live-in intervals.
 //! It is more complicated to work with, though, so it is probably not worth it. The performance
-//! benefits of switching to a numerical EBB order only appears if the binary search is doing
-//! EBB-EBB comparisons.
+//! benefits of switching to a numerical block order only appears if the binary search is doing
+//! block-block comparisons.
 //!
-//! A `BTreeMap<Ebb, Inst>` could have been used for the live-in intervals, but it doesn't provide
+//! A `BTreeMap<Block, Inst>` could have been used for the live-in intervals, but it doesn't provide
 //! the necessary API to make coalescing easy, nor does it optimize for our types' sizes.
 //!
-//! Even the specialized `bforest::Map<Ebb, Inst>` implementation is slower than a plain sorted
+//! Even the specialized `bforest::Map<Block, Inst>` implementation is slower than a plain sorted
 //! array, see https://github.com/bytecodealliance/cranelift/issues/1084 for details.
 
 use crate::entity::SparseMapValue;
-use crate::ir::{Ebb, ExpandedProgramPoint, Inst, Layout, ProgramOrder, ProgramPoint, Value};
+use crate::ir::{Block, ExpandedProgramPoint, Inst, Layout, ProgramOrder, ProgramPoint, Value};
 use crate::regalloc::affinity::Affinity;
 use core::cmp::Ordering;
 use core::marker::PhantomData;
@@ -124,14 +124,14 @@ use smallvec::SmallVec;
 /// Global live range of a single SSA value.
 ///
 /// As [explained in the module documentation](index.html#local-live-ranges), the live range of an
-/// SSA value is the disjoint union of a set of intervals, each local to a single EBB, and with at
-/// most one interval per EBB. We further distinguish between:
+/// SSA value is the disjoint union of a set of intervals, each local to a single block, and with at
+/// most one interval per block. We further distinguish between:
 ///
-/// 1. The *def interval* is the local interval in the EBB where the value is defined, and
-/// 2. The *live-in intervals* are the local intervals in the remaining EBBs.
+/// 1. The *def interval* is the local interval in the block where the value is defined, and
+/// 2. The *live-in intervals* are the local intervals in the remaining blocks.
 ///
-/// A live-in interval always begins at the EBB header, while the def interval can begin at the
-/// defining instruction, or at the EBB header for an EBB argument value.
+/// A live-in interval always begins at the block header, while the def interval can begin at the
+/// defining instruction, or at the block header for an block argument value.
 ///
 /// All values have a def interval, but a large proportion of values don't have any live-in
 /// intervals. These are called *local live ranges*.
@@ -139,11 +139,11 @@ use smallvec::SmallVec;
 /// # Program order requirements
 ///
 /// The internal representation of a `LiveRange` depends on a consistent `ProgramOrder` both for
-/// ordering instructions inside an EBB *and* for ordering EBBs. The methods that depend on the
+/// ordering instructions inside an block *and* for ordering blocks. The methods that depend on the
 /// ordering take an explicit `ProgramOrder` object, and it is the caller's responsibility to
 /// ensure that the provided ordering is consistent between calls.
 ///
-/// In particular, changing the order of EBBs or inserting new EBBs will invalidate live ranges.
+/// In particular, changing the order of blocks or inserting new blocks will invalidate live ranges.
 ///
 /// Inserting new instructions in the layout is safe, but removing instructions is not. Besides the
 /// instructions using or defining their value, `LiveRange` structs can contain references to
@@ -152,7 +152,7 @@ pub type LiveRange = GenericLiveRange<Layout>;
 
 // See comment of liveins below.
 pub struct Interval {
-    begin: Ebb,
+    begin: Block,
     end: Inst,
 }
 
@@ -168,10 +168,10 @@ pub struct GenericLiveRange<PO: ProgramOrder> {
     /// The preferred register allocation for this value.
     pub affinity: Affinity,
 
-    /// The instruction or EBB header where this value is defined.
+    /// The instruction or block header where this value is defined.
     def_begin: ProgramPoint,
 
-    /// The end point of the def interval. This must always belong to the same EBB as `def_begin`.
+    /// The end point of the def interval. This must always belong to the same block as `def_begin`.
     ///
     /// We always have `def_begin <= def_end` with equality implying a dead def live range with no
     /// uses.
@@ -179,12 +179,12 @@ pub struct GenericLiveRange<PO: ProgramOrder> {
 
     /// Additional live-in intervals sorted in program order.
     ///
-    /// This vector is empty for most values which are only used in one EBB.
+    /// This vector is empty for most values which are only used in one block.
     ///
-    /// An entry `ebb -> inst` means that the live range is live-in to `ebb`, continuing up to
-    /// `inst` which may belong to a later EBB in the program order.
+    /// An entry `block -> inst` means that the live range is live-in to `block`, continuing up to
+    /// `inst` which may belong to a later block in the program order.
     ///
-    /// The entries are non-overlapping, and none of them overlap the EBB where the value is
+    /// The entries are non-overlapping, and none of them overlap the block where the value is
     /// defined.
     liveins: SmallVec<[Interval; 2]>,
 
@@ -210,7 +210,7 @@ macro_rules! cmp {
 impl<PO: ProgramOrder> GenericLiveRange<PO> {
     /// Create a new live range for `value` defined at `def`.
     ///
-    /// The live range will be created as dead, but it can be extended with `extend_in_ebb()`.
+    /// The live range will be created as dead, but it can be extended with `extend_in_block()`.
     pub fn new(value: Value, def: ProgramPoint, affinity: Affinity) -> Self {
         Self {
             value,
@@ -222,14 +222,14 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
         }
     }
 
-    /// Finds an entry in the compressed set of live-in intervals that contains `ebb`, or return
+    /// Finds an entry in the compressed set of live-in intervals that contains `block`, or return
     /// the position where to insert such a new entry.
-    fn lookup_entry_containing_ebb(&self, ebb: Ebb, order: &PO) -> Result<usize, usize> {
+    fn lookup_entry_containing_block(&self, block: Block, order: &PO) -> Result<usize, usize> {
         self.liveins
-            .binary_search_by(|interval| order.cmp(interval.begin, ebb))
+            .binary_search_by(|interval| order.cmp(interval.begin, block))
             .or_else(|n| {
-                // The previous interval's end might cover the searched ebb.
-                if n > 0 && cmp!(order, ebb <= self.liveins[n - 1].end) {
+                // The previous interval's end might cover the searched block.
+                if n > 0 && cmp!(order, block <= self.liveins[n - 1].end) {
                     Ok(n - 1)
                 } else {
                     Err(n)
@@ -237,23 +237,23 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
             })
     }
 
-    /// Extend the local interval for `ebb` so it reaches `to` which must belong to `ebb`.
+    /// Extend the local interval for `block` so it reaches `to` which must belong to `block`.
     /// Create a live-in interval if necessary.
     ///
-    /// If the live range already has a local interval in `ebb`, extend its end point so it
+    /// If the live range already has a local interval in `block`, extend its end point so it
     /// includes `to`, and return false.
     ///
-    /// If the live range did not previously have a local interval in `ebb`, add one so the value
-    /// is live-in to `ebb`, extending to `to`. Return true.
+    /// If the live range did not previously have a local interval in `block`, add one so the value
+    /// is live-in to `block`, extending to `to`. Return true.
     ///
     /// The return value can be used to detect if we just learned that the value is live-in to
-    /// `ebb`. This can trigger recursive extensions in `ebb`'s CFG predecessor blocks.
-    pub fn extend_in_ebb(&mut self, ebb: Ebb, inst: Inst, order: &PO) -> bool {
+    /// `block`. This can trigger recursive extensions in `block`'s CFG predecessor blocks.
+    pub fn extend_in_block(&mut self, block: Block, inst: Inst, order: &PO) -> bool {
         // First check if we're extending the def interval.
         //
-        // We're assuming here that `inst` never precedes `def_begin` in the same EBB, but we can't
-        // check it without a method for getting `inst`'s EBB.
-        if cmp!(order, ebb <= self.def_end) && cmp!(order, inst >= self.def_begin) {
+        // We're assuming here that `inst` never precedes `def_begin` in the same block, but we can't
+        // check it without a method for getting `inst`'s block.
+        if cmp!(order, block <= self.def_end) && cmp!(order, inst >= self.def_begin) {
             let inst_pp = inst.into();
             debug_assert_ne!(
                 inst_pp, self.def_begin,
@@ -266,7 +266,7 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
         }
 
         // Now check if we're extending any of the existing live-in intervals.
-        match self.lookup_entry_containing_ebb(ebb, order) {
+        match self.lookup_entry_containing_block(block, order) {
             Ok(n) => {
                 // We found one interval and might need to extend it.
                 if cmp!(order, inst <= self.liveins[n].end) {
@@ -278,7 +278,7 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
                 // coalesce the two intervals:
                 // [ival.begin; ival.end] + [next.begin; next.end] = [ival.begin; next.end]
                 if let Some(next) = &self.liveins.get(n + 1) {
-                    if order.is_ebb_gap(inst, next.begin) {
+                    if order.is_block_gap(inst, next.begin) {
                         // At this point we can choose to remove the current interval or the next
                         // one; remove the next one to avoid one memory move.
                         let next_end = next.end;
@@ -295,17 +295,17 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
             }
 
             Err(n) => {
-                // No interval was found containing the current EBB: we need to insert a new one,
+                // No interval was found containing the current block: we need to insert a new one,
                 // unless there's a coalescing opportunity with the previous or next one.
                 let coalesce_next = self
                     .liveins
                     .get(n)
-                    .filter(|next| order.is_ebb_gap(inst, next.begin))
+                    .filter(|next| order.is_block_gap(inst, next.begin))
                     .is_some();
                 let coalesce_prev = self
                     .liveins
                     .get(n.wrapping_sub(1))
-                    .filter(|prev| order.is_ebb_gap(prev.end, ebb))
+                    .filter(|prev| order.is_block_gap(prev.end, block))
                     .is_some();
 
                 match (coalesce_prev, coalesce_next) {
@@ -324,8 +324,8 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
                         self.liveins[n - 1].end = inst;
                     }
                     (false, true) => {
-                        debug_assert!(cmp!(order, ebb <= self.liveins[n].begin));
-                        self.liveins[n].begin = ebb;
+                        debug_assert!(cmp!(order, block <= self.liveins[n].begin));
+                        self.liveins[n].begin = block;
                     }
 
                     (false, false) => {
@@ -333,7 +333,7 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
                         self.liveins.insert(
                             n,
                             Interval {
-                                begin: ebb,
+                                begin: block,
                                 end: inst,
                             },
                         );
@@ -355,15 +355,15 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
 
     /// Is this a local live range?
     ///
-    /// A local live range is only used in the same EBB where it was defined. It is allowed to span
-    /// multiple basic blocks within that EBB.
+    /// A local live range is only used in the same block where it was defined. It is allowed to span
+    /// multiple basic blocks within that block.
     pub fn is_local(&self) -> bool {
         self.liveins.is_empty()
     }
 
     /// Get the program point where this live range is defined.
     ///
-    /// This will be an EBB header when the value is an EBB argument, otherwise it is the defining
+    /// This will be an block header when the value is an block argument, otherwise it is the defining
     /// instruction.
     pub fn def(&self) -> ProgramPoint {
         self.def_begin
@@ -371,33 +371,33 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
 
     /// Move the definition of this value to a new program point.
     ///
-    /// It is only valid to move the definition within the same EBB, and it can't be moved beyond
+    /// It is only valid to move the definition within the same block, and it can't be moved beyond
     /// `def_local_end()`.
     pub fn move_def_locally(&mut self, def: ProgramPoint) {
         self.def_begin = def;
     }
 
-    /// Get the local end-point of this live range in the EBB where it is defined.
+    /// Get the local end-point of this live range in the block where it is defined.
     ///
-    /// This can be the EBB header itself in the case of a dead EBB argument.
+    /// This can be the block header itself in the case of a dead block argument.
     /// Otherwise, it will be the last local use or branch/jump that can reach a use.
     pub fn def_local_end(&self) -> ProgramPoint {
         self.def_end
     }
 
-    /// Get the local end-point of this live range in an EBB where it is live-in.
+    /// Get the local end-point of this live range in an block where it is live-in.
     ///
-    /// If this live range is not live-in to `ebb`, return `None`. Otherwise, return the end-point
-    /// of this live range's local interval in `ebb`.
+    /// If this live range is not live-in to `block`, return `None`. Otherwise, return the end-point
+    /// of this live range's local interval in `block`.
     ///
-    /// If the live range is live through all of `ebb`, the terminator of `ebb` is a correct
+    /// If the live range is live through all of `block`, the terminator of `block` is a correct
     /// answer, but it is also possible that an even later program point is returned. So don't
-    /// depend on the returned `Inst` to belong to `ebb`.
-    pub fn livein_local_end(&self, ebb: Ebb, order: &PO) -> Option<Inst> {
-        self.lookup_entry_containing_ebb(ebb, order)
+    /// depend on the returned `Inst` to belong to `block`.
+    pub fn livein_local_end(&self, block: Block, order: &PO) -> Option<Inst> {
+        self.lookup_entry_containing_block(block, order)
             .and_then(|i| {
                 let inst = self.liveins[i].end;
-                if cmp!(order, ebb < inst) {
+                if cmp!(order, block < inst) {
                     Ok(inst)
                 } else {
                     // Can be any error type, really, since it's discarded by ok().
@@ -407,25 +407,25 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
             .ok()
     }
 
-    /// Is this value live-in to `ebb`?
+    /// Is this value live-in to `block`?
     ///
-    /// An EBB argument is not considered to be live in.
-    pub fn is_livein(&self, ebb: Ebb, order: &PO) -> bool {
-        self.livein_local_end(ebb, order).is_some()
+    /// An block argument is not considered to be live in.
+    pub fn is_livein(&self, block: Block, order: &PO) -> bool {
+        self.livein_local_end(block, order).is_some()
     }
 
     /// Get all the live-in intervals.
     ///
     /// Note that the intervals are stored in a compressed form so each entry may span multiple
-    /// EBBs where the value is live in.
-    pub fn liveins<'a>(&'a self) -> impl Iterator<Item = (Ebb, Inst)> + 'a {
+    /// blocks where the value is live in.
+    pub fn liveins<'a>(&'a self) -> impl Iterator<Item = (Block, Inst)> + 'a {
         self.liveins
             .iter()
             .map(|interval| (interval.begin, interval.end))
     }
 
-    /// Check if this live range overlaps a definition in `ebb`.
-    pub fn overlaps_def(&self, def: ExpandedProgramPoint, ebb: Ebb, order: &PO) -> bool {
+    /// Check if this live range overlaps a definition in `block`.
+    pub fn overlaps_def(&self, def: ExpandedProgramPoint, block: Block, order: &PO) -> bool {
         // Two defs at the same program point always overlap, even if one is dead.
         if def == self.def_begin.into() {
             return true;
@@ -437,29 +437,29 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
         }
 
         // Check for an overlap with a live-in range.
-        match self.livein_local_end(ebb, order) {
+        match self.livein_local_end(block, order) {
             Some(inst) => cmp!(order, def < inst),
             None => false,
         }
     }
 
-    /// Check if this live range reaches a use at `user` in `ebb`.
-    pub fn reaches_use(&self, user: Inst, ebb: Ebb, order: &PO) -> bool {
+    /// Check if this live range reaches a use at `user` in `block`.
+    pub fn reaches_use(&self, user: Inst, block: Block, order: &PO) -> bool {
         // Check for an overlap with the local range.
         if cmp!(order, user > self.def_begin) && cmp!(order, user <= self.def_end) {
             return true;
         }
 
         // Check for an overlap with a live-in range.
-        match self.livein_local_end(ebb, order) {
+        match self.livein_local_end(block, order) {
             Some(inst) => cmp!(order, user <= inst),
             None => false,
         }
     }
 
-    /// Check if this live range is killed at `user` in `ebb`.
-    pub fn killed_at(&self, user: Inst, ebb: Ebb, order: &PO) -> bool {
-        self.def_local_end() == user.into() || self.livein_local_end(ebb, order) == Some(user)
+    /// Check if this live range is killed at `user` in `block`.
+    pub fn killed_at(&self, user: Inst, block: Block, order: &PO) -> bool {
+        self.def_local_end() == user.into() || self.livein_local_end(block, order) == Some(user)
     }
 }
 
@@ -474,15 +474,15 @@ impl<PO: ProgramOrder> SparseMapValue<Value> for GenericLiveRange<PO> {
 mod tests {
     use super::{GenericLiveRange, Interval};
     use crate::entity::EntityRef;
-    use crate::ir::{Ebb, Inst, Value};
+    use crate::ir::{Block, Inst, Value};
     use crate::ir::{ExpandedProgramPoint, ProgramOrder};
     use alloc::vec::Vec;
     use core::cmp::Ordering;
 
     // Dummy program order which simply compares indexes.
-    // It is assumed that EBBs have indexes that are multiples of 10, and instructions have indexes
-    // in between. `is_ebb_gap` assumes that terminator instructions have indexes of the form
-    // ebb * 10 + 1. This is used in the coalesce test.
+    // It is assumed that blocks have indexes that are multiples of 10, and instructions have indexes
+    // in between. `is_block_gap` assumes that terminator instructions have indexes of the form
+    // block * 10 + 1. This is used in the coalesce test.
     struct ProgOrder {}
 
     impl ProgramOrder for ProgOrder {
@@ -494,7 +494,7 @@ mod tests {
             fn idx(pp: ExpandedProgramPoint) -> usize {
                 match pp {
                     ExpandedProgramPoint::Inst(i) => i.index(),
-                    ExpandedProgramPoint::Ebb(e) => e.index(),
+                    ExpandedProgramPoint::Block(e) => e.index(),
                 }
             }
 
@@ -503,31 +503,31 @@ mod tests {
             ia.cmp(&ib)
         }
 
-        fn is_ebb_gap(&self, inst: Inst, ebb: Ebb) -> bool {
-            inst.index() % 10 == 1 && ebb.index() / 10 == inst.index() / 10 + 1
+        fn is_block_gap(&self, inst: Inst, block: Block) -> bool {
+            inst.index() % 10 == 1 && block.index() / 10 == inst.index() / 10 + 1
         }
     }
 
     impl ProgOrder {
-        // Get the EBB corresponding to `inst`.
-        fn inst_ebb(&self, inst: Inst) -> Ebb {
+        // Get the block corresponding to `inst`.
+        fn inst_block(&self, inst: Inst) -> Block {
             let i = inst.index();
-            Ebb::new(i - i % 10)
+            Block::new(i - i % 10)
         }
 
-        // Get the EBB of a program point.
-        fn pp_ebb<PP: Into<ExpandedProgramPoint>>(&self, pp: PP) -> Ebb {
+        // Get the block of a program point.
+        fn pp_block<PP: Into<ExpandedProgramPoint>>(&self, pp: PP) -> Block {
             match pp.into() {
-                ExpandedProgramPoint::Inst(i) => self.inst_ebb(i),
-                ExpandedProgramPoint::Ebb(e) => e,
+                ExpandedProgramPoint::Inst(i) => self.inst_block(i),
+                ExpandedProgramPoint::Block(e) => e,
             }
         }
 
         // Validate the live range invariants.
         fn validate(&self, lr: &GenericLiveRange<Self>) {
-            // The def interval must cover a single EBB.
-            let def_ebb = self.pp_ebb(lr.def_begin);
-            assert_eq!(def_ebb, self.pp_ebb(lr.def_end));
+            // The def interval must cover a single block.
+            let def_block = self.pp_block(lr.def_begin);
+            assert_eq!(def_block, self.pp_block(lr.def_end));
 
             // Check that the def interval isn't backwards.
             match self.cmp(lr.def_begin, lr.def_end) {
@@ -552,7 +552,7 @@ mod tests {
                 assert!(
                     self.cmp(lr.def_end, begin) == Ordering::Less
                         || self.cmp(lr.def_begin, end) == Ordering::Greater,
-                    "Interval can't overlap the def EBB"
+                    "Interval can't overlap the def block"
                 );
 
                 // Save for next round.
@@ -567,10 +567,10 @@ mod tests {
     #[test]
     fn dead_def_range() {
         let v0 = Value::new(0);
-        let e0 = Ebb::new(0);
+        let e0 = Block::new(0);
         let i1 = Inst::new(1);
         let i2 = Inst::new(2);
-        let e2 = Ebb::new(2);
+        let e2 = Block::new(2);
         let lr = GenericLiveRange::new(v0, i1.into(), Default::default());
         assert!(lr.is_dead());
         assert!(lr.is_local());
@@ -588,13 +588,13 @@ mod tests {
     #[test]
     fn dead_arg_range() {
         let v0 = Value::new(0);
-        let e2 = Ebb::new(2);
+        let e2 = Block::new(2);
         let lr = GenericLiveRange::new(v0, e2.into(), Default::default());
         assert!(lr.is_dead());
         assert!(lr.is_local());
         assert_eq!(lr.def(), e2.into());
         assert_eq!(lr.def_local_end(), e2.into());
-        // The def interval of an EBB argument does not count as live-in.
+        // The def interval of an block argument does not count as live-in.
         assert_eq!(lr.livein_local_end(e2, PO), None);
         PO.validate(&lr);
     }
@@ -602,13 +602,13 @@ mod tests {
     #[test]
     fn local_def() {
         let v0 = Value::new(0);
-        let e10 = Ebb::new(10);
+        let e10 = Block::new(10);
         let i11 = Inst::new(11);
         let i12 = Inst::new(12);
         let i13 = Inst::new(13);
         let mut lr = GenericLiveRange::new(v0, i11.into(), Default::default());
 
-        assert_eq!(lr.extend_in_ebb(e10, i13, PO), false);
+        assert_eq!(lr.extend_in_block(e10, i13, PO), false);
         PO.validate(&lr);
         assert!(!lr.is_dead());
         assert!(lr.is_local());
@@ -616,7 +616,7 @@ mod tests {
         assert_eq!(lr.def_local_end(), i13.into());
 
         // Extending to an already covered inst should not change anything.
-        assert_eq!(lr.extend_in_ebb(e10, i12, PO), false);
+        assert_eq!(lr.extend_in_block(e10, i12, PO), false);
         PO.validate(&lr);
         assert_eq!(lr.def(), i11.into());
         assert_eq!(lr.def_local_end(), i13.into());
@@ -625,15 +625,15 @@ mod tests {
     #[test]
     fn local_arg() {
         let v0 = Value::new(0);
-        let e10 = Ebb::new(10);
+        let e10 = Block::new(10);
         let i11 = Inst::new(11);
         let i12 = Inst::new(12);
         let i13 = Inst::new(13);
         let mut lr = GenericLiveRange::new(v0, e10.into(), Default::default());
 
-        // Extending a dead EBB argument in its own block should not indicate that a live-in
+        // Extending a dead block argument in its own block should not indicate that a live-in
         // interval was created.
-        assert_eq!(lr.extend_in_ebb(e10, i12, PO), false);
+        assert_eq!(lr.extend_in_block(e10, i12, PO), false);
         PO.validate(&lr);
         assert!(!lr.is_dead());
         assert!(lr.is_local());
@@ -641,13 +641,13 @@ mod tests {
         assert_eq!(lr.def_local_end(), i12.into());
 
         // Extending to an already covered inst should not change anything.
-        assert_eq!(lr.extend_in_ebb(e10, i11, PO), false);
+        assert_eq!(lr.extend_in_block(e10, i11, PO), false);
         PO.validate(&lr);
         assert_eq!(lr.def(), e10.into());
         assert_eq!(lr.def_local_end(), i12.into());
 
         // Extending further.
-        assert_eq!(lr.extend_in_ebb(e10, i13, PO), false);
+        assert_eq!(lr.extend_in_block(e10, i13, PO), false);
         PO.validate(&lr);
         assert_eq!(lr.def(), e10.into());
         assert_eq!(lr.def_local_end(), i13.into());
@@ -656,28 +656,28 @@ mod tests {
     #[test]
     fn global_def() {
         let v0 = Value::new(0);
-        let e10 = Ebb::new(10);
+        let e10 = Block::new(10);
         let i11 = Inst::new(11);
         let i12 = Inst::new(12);
-        let e20 = Ebb::new(20);
+        let e20 = Block::new(20);
         let i21 = Inst::new(21);
         let i22 = Inst::new(22);
         let i23 = Inst::new(23);
         let mut lr = GenericLiveRange::new(v0, i11.into(), Default::default());
 
-        assert_eq!(lr.extend_in_ebb(e10, i12, PO), false);
+        assert_eq!(lr.extend_in_block(e10, i12, PO), false);
 
         // Adding a live-in interval.
-        assert_eq!(lr.extend_in_ebb(e20, i22, PO), true);
+        assert_eq!(lr.extend_in_block(e20, i22, PO), true);
         PO.validate(&lr);
         assert_eq!(lr.livein_local_end(e20, PO), Some(i22));
 
         // Non-extending the live-in.
-        assert_eq!(lr.extend_in_ebb(e20, i21, PO), false);
+        assert_eq!(lr.extend_in_block(e20, i21, PO), false);
         assert_eq!(lr.livein_local_end(e20, PO), Some(i22));
 
         // Extending the existing live-in.
-        assert_eq!(lr.extend_in_ebb(e20, i23, PO), false);
+        assert_eq!(lr.extend_in_block(e20, i23, PO), false);
         PO.validate(&lr);
         assert_eq!(lr.livein_local_end(e20, PO), Some(i23));
     }
@@ -686,35 +686,35 @@ mod tests {
     fn coalesce() {
         let v0 = Value::new(0);
         let i11 = Inst::new(11);
-        let e20 = Ebb::new(20);
+        let e20 = Block::new(20);
         let i21 = Inst::new(21);
-        let e30 = Ebb::new(30);
+        let e30 = Block::new(30);
         let i31 = Inst::new(31);
-        let e40 = Ebb::new(40);
+        let e40 = Block::new(40);
         let i41 = Inst::new(41);
         let mut lr = GenericLiveRange::new(v0, i11.into(), Default::default());
 
-        assert_eq!(lr.extend_in_ebb(e30, i31, PO,), true);
+        assert_eq!(lr.extend_in_block(e30, i31, PO,), true);
         assert_eq!(lr.liveins().collect::<Vec<_>>(), [(e30, i31)]);
 
         // Coalesce to previous
-        assert_eq!(lr.extend_in_ebb(e40, i41, PO,), true);
+        assert_eq!(lr.extend_in_block(e40, i41, PO,), true);
         assert_eq!(lr.liveins().collect::<Vec<_>>(), [(e30, i41)]);
 
         // Coalesce to next
-        assert_eq!(lr.extend_in_ebb(e20, i21, PO,), true);
+        assert_eq!(lr.extend_in_block(e20, i21, PO,), true);
         assert_eq!(lr.liveins().collect::<Vec<_>>(), [(e20, i41)]);
 
         let mut lr = GenericLiveRange::new(v0, i11.into(), Default::default());
 
-        assert_eq!(lr.extend_in_ebb(e40, i41, PO,), true);
+        assert_eq!(lr.extend_in_block(e40, i41, PO,), true);
         assert_eq!(lr.liveins().collect::<Vec<_>>(), [(e40, i41)]);
 
-        assert_eq!(lr.extend_in_ebb(e20, i21, PO,), true);
+        assert_eq!(lr.extend_in_block(e20, i21, PO,), true);
         assert_eq!(lr.liveins().collect::<Vec<_>>(), [(e20, i21), (e40, i41)]);
 
         // Coalesce to previous and next
-        assert_eq!(lr.extend_in_ebb(e30, i31, PO,), true);
+        assert_eq!(lr.extend_in_block(e30, i31, PO,), true);
         assert_eq!(lr.liveins().collect::<Vec<_>>(), [(e20, i41)]);
     }
 }

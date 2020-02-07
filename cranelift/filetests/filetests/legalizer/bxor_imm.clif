@@ -2,7 +2,7 @@ test legalizer
 target x86_64
 
 function %foo(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
+block0(v0: i64, v1: i64):
     v2 = bxor_imm.i64 v0, 0x100000000
     return v2
 }

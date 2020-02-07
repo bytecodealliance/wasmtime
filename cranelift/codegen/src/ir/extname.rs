@@ -32,8 +32,8 @@ pub enum ExternalName {
         /// Arbitrary.
         index: u32,
     },
-    /// A test case function name of up to 10 ascii characters. This is
-    /// not intended to be used outside test cases.
+    /// A test case function name of up to a hardcoded amount of ascii
+    /// characters. This is not intended to be used outside test cases.
     TestCase {
         /// How many of the bytes in `ascii` are valid?
         length: u8,

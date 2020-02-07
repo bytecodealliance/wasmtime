@@ -6,7 +6,7 @@ target x86_64
 function %foo() -> f64 {
   fn0 = %bar()
 
-ebb0:
+block0:
   v0 = f64const 0.0
   call fn0()
   fallthrough_return v0
@@ -16,7 +16,7 @@ ebb0:
 function %foo() -> f64 {
   fn0 = %bar() -> f64, f64
 
-ebb0:
+block0:
   v0, v1 = call fn0()
   fallthrough_return v1
 }

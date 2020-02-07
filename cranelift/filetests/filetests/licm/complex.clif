@@ -2,95 +2,95 @@ test licm
 target riscv32
 
 function %complex(i32) -> i32 system_v {
-ebb0(v0: i32):
-[UJ#1b]    jump ebb1(v0)
+block0(v0: i32):
+[UJ#1b]    jump block1(v0)
 
-         ebb1(v1: i32):
+         block1(v1: i32):
             v2 = iconst.i32 1
             v3 = iconst.i32 4
             v4 = iadd v2, v1
-[SBzero#18] brz v1, ebb2(v2)
-[UJ#1b]     jump ebb4(v4)
+[SBzero#18] brz v1, block2(v2)
+[UJ#1b]     jump block4(v4)
 
-         ebb2(v5: i32):
+         block2(v5: i32):
             v6 = iconst.i32 2
             v7 = iadd v5, v4
             v8 = iadd v6, v1
-[UJ#1b]   jump ebb3(v8)
+[UJ#1b]   jump block3(v8)
 
-         ebb3(v9: i32):
+         block3(v9: i32):
             v10 = iadd v9, v5
             v11 = iadd.i32 v1, v4
-[SBzero#18] brz.i32 v1, ebb2(v9)
-[UJ#1b]   jump ebb6(v10)
+[SBzero#18] brz.i32 v1, block2(v9)
+[UJ#1b]   jump block6(v10)
 
-         ebb4(v12: i32):
+         block4(v12: i32):
             v13 = iconst.i32 3
             v14 = iadd v12, v13
             v15 = iadd.i32 v4, v13
-[UJ#1b]   jump ebb5(v13)
+[UJ#1b]   jump block5(v13)
 
-         ebb5(v16: i32):
+         block5(v16: i32):
             v17 = iadd.i32 v14, v4
-[SBzero#18] brz.i32 v1, ebb4(v16)
-[UJ#1b]   jump ebb6(v16)
+[SBzero#18] brz.i32 v1, block4(v16)
+[UJ#1b]   jump block6(v16)
 
-         ebb6(v18: i32):
+         block6(v18: i32):
             v19 = iadd v18, v2
             v20 = iadd.i32 v2, v3
-[SBzero#18] brz.i32 v1, ebb1(v20)
-[UJ#1b]     jump ebb7
+[SBzero#18] brz.i32 v1, block1(v20)
+[UJ#1b]     jump block7
 
-         ebb7:
+         block7:
 [Iret#19]   return v19
 }
 
 ; sameln: function %complex
-; nextln: ebb0(v0: i32):
+; nextln: block0(v0: i32):
 ; nextln:     v2 = iconst.i32 1
 ; nextln:     v3 = iconst.i32 4
 ; nextln:     v6 = iconst.i32 2
 ; nextln:     v13 = iconst.i32 3
 ; nextln:     v20 = iadd v2, v3
-; nextln:     jump ebb1(v0)
+; nextln:     jump block1(v0)
 ; nextln: 
-; nextln: ebb1(v1: i32):
+; nextln: block1(v1: i32):
 ; nextln:     v4 = iadd.i32 v2, v1
-; nextln:     brz v1, ebb8(v2)
-; nextln:     jump ebb9(v4)
+; nextln:     brz v1, block8(v2)
+; nextln:     jump block9(v4)
 ; nextln: 
-; nextln: ebb8(v21: i32):
+; nextln: block8(v21: i32):
 ; nextln:     v8 = iadd.i32 v6, v1
 ; nextln:     v11 = iadd.i32 v1, v4
-; nextln:     jump ebb2(v21)
+; nextln:     jump block2(v21)
 ; nextln: 
-; nextln: ebb2(v5: i32):
+; nextln: block2(v5: i32):
 ; nextln:     v7 = iadd v5, v4
-; nextln:     jump ebb3(v8)
+; nextln:     jump block3(v8)
 ; nextln: 
-; nextln: ebb3(v9: i32):
+; nextln: block3(v9: i32):
 ; nextln:     v10 = iadd v9, v5
-; nextln:     brz.i32 v1, ebb2(v9)
-; nextln:     jump ebb6(v10)
+; nextln:     brz.i32 v1, block2(v9)
+; nextln:     jump block6(v10)
 ; nextln: 
-; nextln: ebb9(v22: i32):
+; nextln: block9(v22: i32):
 ; nextln:     v15 = iadd.i32 v4, v13
-; nextln:     jump ebb4(v22)
+; nextln:     jump block4(v22)
 ; nextln: 
-; nextln: ebb4(v12: i32):
+; nextln: block4(v12: i32):
 ; nextln:     v14 = iadd v12, v13
-; nextln:     jump ebb5(v13)
+; nextln:     jump block5(v13)
 ; nextln: 
-; nextln: ebb5(v16: i32):
+; nextln: block5(v16: i32):
 ; nextln:     v17 = iadd.i32 v14, v4
-; nextln:     brz.i32 v1, ebb4(v16)
-; nextln:     jump ebb6(v16)
+; nextln:     brz.i32 v1, block4(v16)
+; nextln:     jump block6(v16)
 ; nextln: 
-; nextln: ebb6(v18: i32):
+; nextln: block6(v18: i32):
 ; nextln:     v19 = iadd v18, v2
-; nextln:     brz.i32 v1, ebb1(v20)
-; nextln:     jump ebb7
+; nextln:     brz.i32 v1, block1(v20)
+; nextln:     jump block7
 ; nextln: 
-; nextln: ebb7:
+; nextln: block7:
 ; nextln:     return v19
 ; nextln: }

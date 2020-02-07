@@ -95,7 +95,7 @@ pub struct RecipeConstraints {
     /// If the instruction takes a variable number of operands, the register constraints for those
     /// operands must be computed dynamically.
     ///
-    /// - For branches and jumps, EBB arguments must match the expectations of the destination EBB.
+    /// - For branches and jumps, block arguments must match the expectations of the destination block.
     /// - For calls and returns, the calling convention ABI specifies constraints.
     pub ins: &'static [OperandConstraint],
 
@@ -173,7 +173,7 @@ pub struct BranchRange {
 impl BranchRange {
     /// Determine if this branch range can represent the range from `branch` to `dest`, where
     /// `branch` is the code offset of the branch instruction itself and `dest` is the code offset
-    /// of the destination EBB header.
+    /// of the destination block header.
     ///
     /// This method does not detect if the range is larger than 2 GB.
     pub fn contains(self, branch: CodeOffset, dest: CodeOffset) -> bool {

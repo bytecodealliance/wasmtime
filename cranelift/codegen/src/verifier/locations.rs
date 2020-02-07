@@ -15,7 +15,7 @@ use crate::verifier::{VerifierErrors, VerifierStepResult};
 /// instruction encoding recipes.
 ///
 /// Values can be temporarily diverted to a different location by using the `regmove`, `regspill`,
-/// and `regfill` instructions, but only inside an EBB.
+/// and `regfill` instructions, but only inside an block.
 ///
 /// If a liveness analysis is provided, it is used to verify that there are no active register
 /// diversions across control flow edges.
@@ -54,11 +54,11 @@ impl<'a> LocationVerifier<'a> {
         let dfg = &self.func.dfg;
         let mut divert = RegDiversions::new();
 
-        for ebb in self.func.layout.ebbs() {
-            divert.at_ebb(&self.func.entry_diversions, ebb);
+        for block in self.func.layout.blocks() {
+            divert.at_block(&self.func.entry_diversions, block);
 
             let mut is_after_branch = false;
-            for inst in self.func.layout.ebb_insts(ebb) {
+            for inst in self.func.layout.block_insts(block) {
                 let enc = self.func.encodings[inst];
 
                 if enc.is_legal() {
@@ -332,24 +332,24 @@ impl<'a> LocationVerifier<'a> {
                 "No branch information for {}",
                 dfg.display_inst(inst, self.isa)
             ),
-            SingleDest(ebb, _) => {
-                let unique_predecessor = self.cfg.pred_iter(ebb).count() == 1;
+            SingleDest(block, _) => {
+                let unique_predecessor = self.cfg.pred_iter(block).count() == 1;
                 let mut val_to_remove = vec![];
                 for (&value, d) in divert.iter() {
                     let lr = &liveness[value];
                     if is_after_branch && unique_predecessor {
                         // Forward diversions based on the targeted branch.
-                        if !lr.is_livein(ebb, &self.func.layout) {
+                        if !lr.is_livein(block, &self.func.layout) {
                             val_to_remove.push(value)
                         }
-                    } else if lr.is_livein(ebb, &self.func.layout) {
+                    } else if lr.is_livein(block, &self.func.layout) {
                         return errors.fatal((
                             inst,
                             format!(
                                 "SingleDest: {} is diverted to {} and live in to {}",
                                 value,
                                 d.to.display(&self.reginfo),
-                                ebb,
+                                block,
                             ),
                         ));
                     }
@@ -358,34 +358,34 @@ impl<'a> LocationVerifier<'a> {
                     for val in val_to_remove.into_iter() {
                         divert.remove(val);
                     }
-                    debug_assert!(divert.check_ebb_entry(&self.func.entry_diversions, ebb));
+                    debug_assert!(divert.check_block_entry(&self.func.entry_diversions, block));
                 }
             }
-            Table(jt, ebb) => {
+            Table(jt, block) => {
                 for (&value, d) in divert.iter() {
                     let lr = &liveness[value];
-                    if let Some(ebb) = ebb {
-                        if lr.is_livein(ebb, &self.func.layout) {
+                    if let Some(block) = block {
+                        if lr.is_livein(block, &self.func.layout) {
                             return errors.fatal((
                                 inst,
                                 format!(
                                     "Table.default: {} is diverted to {} and live in to {}",
                                     value,
                                     d.to.display(&self.reginfo),
-                                    ebb,
+                                    block,
                                 ),
                             ));
                         }
                     }
-                    for ebb in self.func.jump_tables[jt].iter() {
-                        if lr.is_livein(*ebb, &self.func.layout) {
+                    for block in self.func.jump_tables[jt].iter() {
+                        if lr.is_livein(*block, &self.func.layout) {
                             return errors.fatal((
                                 inst,
                                 format!(
                                     "Table.case: {} is diverted to {} and live in to {}",
                                     value,
                                     d.to.display(&self.reginfo),
-                                    ebb,
+                                    block,
                                 ),
                             ));
                         }

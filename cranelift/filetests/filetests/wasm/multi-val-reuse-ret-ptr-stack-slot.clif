@@ -16,7 +16,7 @@ function %foo() -> i32, f32 {
     ; nextln: fn0 = %f sig0
     ; nextln: fn1 = %g sig1
 
-ebb0:
+block0:
     v0, v1, v2, v3, v4 = call fn0()
     ; check:  v18 = stack_addr.i64 ss0
     ; nextln: v25 = func_addr.i64 fn0

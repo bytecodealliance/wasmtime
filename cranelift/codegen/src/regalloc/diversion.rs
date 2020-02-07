@@ -4,12 +4,12 @@
 //! Sometimes, it is necessary to move register values to a different register in order to satisfy
 //! instruction constraints.
 //!
-//! These register diversions are local to an EBB. No values can be diverted when entering a new
-//! EBB.
+//! These register diversions are local to an block. No values can be diverted when entering a new
+//! block.
 
 use crate::fx::FxHashMap;
 use crate::hash_map::{Entry, Iter};
-use crate::ir::{Ebb, StackSlot, Value, ValueLoc, ValueLocations};
+use crate::ir::{Block, StackSlot, Value, ValueLoc, ValueLocations};
 use crate::ir::{InstructionData, Opcode};
 use crate::isa::{RegInfo, RegUnit};
 use core::fmt;
@@ -38,22 +38,22 @@ impl Diversion {
     }
 }
 
-/// Keep track of diversions in an EBB.
+/// Keep track of diversions in an block.
 #[derive(Clone)]
 pub struct RegDiversions {
     current: FxHashMap<Value, Diversion>,
 }
 
-/// Keep track of diversions at the entry of EBB.
+/// Keep track of diversions at the entry of block.
 #[derive(Clone)]
 struct EntryRegDiversionsValue {
-    key: Ebb,
+    key: Block,
     divert: RegDiversions,
 }
 
-/// Map EBB to their matching RegDiversions at basic blocks entry.
+/// Map block to their matching RegDiversions at basic blocks entry.
 pub struct EntryRegDiversions {
-    map: SparseMap<Ebb, EntryRegDiversionsValue>,
+    map: SparseMap<Block, EntryRegDiversionsValue>,
 }
 
 impl RegDiversions {
@@ -178,22 +178,22 @@ impl RegDiversions {
     }
 
     /// Resets the state of the current diversions to the recorded diversions at the entry of the
-    /// given `ebb`. The recoded diversions is available after coloring on `func.entry_diversions`
+    /// given `block`. The recoded diversions is available after coloring on `func.entry_diversions`
     /// field.
-    pub fn at_ebb(&mut self, entry_diversions: &EntryRegDiversions, ebb: Ebb) {
+    pub fn at_block(&mut self, entry_diversions: &EntryRegDiversions, block: Block) {
         self.clear();
-        if let Some(entry_divert) = entry_diversions.map.get(ebb) {
+        if let Some(entry_divert) = entry_diversions.map.get(block) {
             let iter = entry_divert.divert.current.iter();
             self.current.extend(iter);
         }
     }
 
-    /// Copy the current state of the diversions, and save it for the entry of the `ebb` given as
+    /// Copy the current state of the diversions, and save it for the entry of the `block` given as
     /// argument.
     ///
-    /// Note: This function can only be called once on an `ebb` with a given `entry_diversions`
+    /// Note: This function can only be called once on a `Block` with a given `entry_diversions`
     /// argument, otherwise it would panic.
-    pub fn save_for_ebb(&mut self, entry_diversions: &mut EntryRegDiversions, target: Ebb) {
+    pub fn save_for_block(&mut self, entry_diversions: &mut EntryRegDiversions, target: Block) {
         // No need to save anything if there is no diversions to be recorded.
         if self.is_empty() {
             return;
@@ -208,9 +208,9 @@ impl RegDiversions {
         });
     }
 
-    /// Check that the recorded entry for a given `ebb` matches what is recorded in the
+    /// Check that the recorded entry for a given `block` matches what is recorded in the
     /// `entry_diversions`.
-    pub fn check_ebb_entry(&self, entry_diversions: &EntryRegDiversions, target: Ebb) -> bool {
+    pub fn check_block_entry(&self, entry_diversions: &EntryRegDiversions, target: Block) -> bool {
         let entry_divert = match entry_diversions.map.get(target) {
             Some(entry_divert) => entry_divert,
             None => return self.is_empty(),
@@ -235,7 +235,7 @@ impl RegDiversions {
 }
 
 impl EntryRegDiversions {
-    /// Create a new empty entry diversion, to associate diversions to each EBB entry.
+    /// Create a new empty entry diversion, to associate diversions to each block entry.
     pub fn new() -> Self {
         Self {
             map: SparseMap::new(),
@@ -259,9 +259,9 @@ impl Clone for EntryRegDiversions {
 }
 
 /// Implement `SparseMapValue`, as required to make use of a `SparseMap` for mapping the entry
-/// diversions for each EBB.
-impl SparseMapValue<Ebb> for EntryRegDiversionsValue {
-    fn key(&self) -> Ebb {
+/// diversions for each block.
+impl SparseMapValue<Block> for EntryRegDiversionsValue {
+    fn key(&self) -> Block {
         self.key
     }
 }

@@ -14,7 +14,7 @@ use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, Va
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
-    AbiParam, ArgumentExtension, ArgumentLoc, ConstantData, Ebb, ExtFuncData, ExternalName,
+    AbiParam, ArgumentExtension, ArgumentLoc, Block, ConstantData, ExtFuncData, ExternalName,
     FuncRef, Function, GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle, JumpTable,
     JumpTableData, MemFlags, Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind,
     Table, TableData, Type, Value, ValueLoc,
@@ -334,14 +334,14 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Allocate a new EBB.
-    fn add_ebb(&mut self, ebb: Ebb, loc: Location) -> ParseResult<Ebb> {
-        self.map.def_ebb(ebb, loc)?;
-        while self.function.dfg.num_ebbs() <= ebb.index() {
-            self.function.dfg.make_ebb();
+    // Allocate a new block.
+    fn add_block(&mut self, block: Block, loc: Location) -> ParseResult<Block> {
+        self.map.def_block(block, loc)?;
+        while self.function.dfg.num_blocks() <= block.index() {
+            self.function.dfg.make_block();
         }
-        self.function.layout.append_ebb(ebb);
-        Ok(ebb)
+        self.function.layout.append_block(block);
+        Ok(block)
     }
 }
 
@@ -554,11 +554,11 @@ impl<'a> Parser<'a> {
         err!(self.loc, "expected jump table number: jt«n»")
     }
 
-    // Match and consume an ebb reference.
-    fn match_ebb(&mut self, err_msg: &str) -> ParseResult<Ebb> {
-        if let Some(Token::Ebb(ebb)) = self.token() {
+    // Match and consume an block reference.
+    fn match_block(&mut self, err_msg: &str) -> ParseResult<Block> {
+        if let Some(Token::Block(block)) = self.token() {
             self.consume();
-            Ok(ebb)
+            Ok(block)
         } else {
             err!(self.loc, err_msg)
         }
@@ -1686,9 +1686,9 @@ impl<'a> Parser<'a> {
 
         let mut data = JumpTableData::new();
 
-        // jump-table-decl ::= JumpTable(jt) "=" "jump_table" "[" * Ebb(dest) {"," Ebb(dest)} "]"
+        // jump-table-decl ::= JumpTable(jt) "=" "jump_table" "[" * Block(dest) {"," Block(dest)} "]"
         match self.token() {
-            Some(Token::Ebb(dest)) => {
+            Some(Token::Block(dest)) => {
                 self.consume();
                 data.push_entry(dest);
 
@@ -1696,7 +1696,7 @@ impl<'a> Parser<'a> {
                     match self.token() {
                         Some(Token::Comma) => {
                             self.consume();
-                            if let Some(Token::Ebb(dest)) = self.token() {
+                            if let Some(Token::Block(dest)) = self.token() {
                                 self.consume();
                                 data.push_entry(dest);
                             } else {
@@ -1727,13 +1727,13 @@ impl<'a> Parser<'a> {
     //
     fn parse_function_body(&mut self, ctx: &mut Context) -> ParseResult<()> {
         while self.token() != Some(Token::RBrace) {
-            self.parse_extended_basic_block(ctx)?;
+            self.parse_basic_block(ctx)?;
         }
 
         // Now that we've seen all defined values in the function, ensure that
         // all references refer to a definition.
-        for ebb in &ctx.function.layout {
-            for inst in ctx.function.layout.ebb_insts(ebb) {
+        for block in &ctx.function.layout {
+            for inst in ctx.function.layout.block_insts(block) {
                 for value in ctx.function.dfg.inst_args(inst) {
                     if !ctx.map.contains_value(*value) {
                         return err!(
@@ -1756,29 +1756,29 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    // Parse an extended basic block, add contents to `ctx`.
+    // Parse a basic block, add contents to `ctx`.
     //
-    // extended-basic-block ::= * ebb-header { instruction }
-    // ebb-header           ::= Ebb(ebb) [ebb-params] ":"
+    // extended-basic-block ::= * block-header { instruction }
+    // block-header           ::= Block(block) [block-params] ":"
     //
-    fn parse_extended_basic_block(&mut self, ctx: &mut Context) -> ParseResult<()> {
-        // Collect comments for the next ebb.
+    fn parse_basic_block(&mut self, ctx: &mut Context) -> ParseResult<()> {
+        // Collect comments for the next block.
         self.start_gathering_comments();
 
-        let ebb_num = self.match_ebb("expected EBB header")?;
-        let ebb = ctx.add_ebb(ebb_num, self.loc)?;
+        let block_num = self.match_block("expected block header")?;
+        let block = ctx.add_block(block_num, self.loc)?;
 
         if !self.optional(Token::Colon) {
-            // ebb-header ::= Ebb(ebb) [ * ebb-params ] ":"
-            self.parse_ebb_params(ctx, ebb)?;
-            self.match_token(Token::Colon, "expected ':' after EBB parameters")?;
+            // block-header ::= Block(block) [ * block-params ] ":"
+            self.parse_block_params(ctx, block)?;
+            self.match_token(Token::Colon, "expected ':' after block parameters")?;
         }
 
         // Collect any trailing comments.
         self.token();
-        self.claim_gathered_comments(ebb);
+        self.claim_gathered_comments(block);
 
-        // extended-basic-block ::= ebb-header * { instruction }
+        // extended-basic-block ::= block-header * { instruction }
         while match self.token() {
             Some(Token::Value(_))
             | Some(Token::Identifier(_))
@@ -1808,64 +1808,76 @@ impl<'a> Parser<'a> {
                 }
                 Some(Token::Equal) => {
                     self.consume();
-                    self.parse_instruction(&results, srcloc, encoding, result_locations, ctx, ebb)?;
+                    self.parse_instruction(
+                        &results,
+                        srcloc,
+                        encoding,
+                        result_locations,
+                        ctx,
+                        block,
+                    )?;
                 }
                 _ if !results.is_empty() => return err!(self.loc, "expected -> or ="),
-                _ => {
-                    self.parse_instruction(&results, srcloc, encoding, result_locations, ctx, ebb)?
-                }
+                _ => self.parse_instruction(
+                    &results,
+                    srcloc,
+                    encoding,
+                    result_locations,
+                    ctx,
+                    block,
+                )?,
             }
         }
 
         Ok(())
     }
 
-    // Parse parenthesized list of EBB parameters. Returns a vector of (u32, Type) pairs with the
+    // Parse parenthesized list of block parameters. Returns a vector of (u32, Type) pairs with the
     // value numbers of the defined values and the defined types.
     //
-    // ebb-params ::= * "(" ebb-param { "," ebb-param } ")"
-    fn parse_ebb_params(&mut self, ctx: &mut Context, ebb: Ebb) -> ParseResult<()> {
-        // ebb-params ::= * "(" ebb-param { "," ebb-param } ")"
-        self.match_token(Token::LPar, "expected '(' before EBB parameters")?;
+    // block-params ::= * "(" block-param { "," block-param } ")"
+    fn parse_block_params(&mut self, ctx: &mut Context, block: Block) -> ParseResult<()> {
+        // block-params ::= * "(" block-param { "," block-param } ")"
+        self.match_token(Token::LPar, "expected '(' before block parameters")?;
 
-        // ebb-params ::= "(" * ebb-param { "," ebb-param } ")"
-        self.parse_ebb_param(ctx, ebb)?;
+        // block-params ::= "(" * block-param { "," block-param } ")"
+        self.parse_block_param(ctx, block)?;
 
-        // ebb-params ::= "(" ebb-param * { "," ebb-param } ")"
+        // block-params ::= "(" block-param * { "," block-param } ")"
         while self.optional(Token::Comma) {
-            // ebb-params ::= "(" ebb-param { "," * ebb-param } ")"
-            self.parse_ebb_param(ctx, ebb)?;
+            // block-params ::= "(" block-param { "," * block-param } ")"
+            self.parse_block_param(ctx, block)?;
         }
 
-        // ebb-params ::= "(" ebb-param { "," ebb-param } * ")"
-        self.match_token(Token::RPar, "expected ')' after EBB parameters")?;
+        // block-params ::= "(" block-param { "," block-param } * ")"
+        self.match_token(Token::RPar, "expected ')' after block parameters")?;
 
         Ok(())
     }
 
-    // Parse a single EBB parameter declaration, and append it to `ebb`.
+    // Parse a single block parameter declaration, and append it to `block`.
     //
-    // ebb-param ::= * Value(v) ":" Type(t) arg-loc?
+    // block-param ::= * Value(v) ":" Type(t) arg-loc?
     // arg-loc ::= "[" value-location "]"
     //
-    fn parse_ebb_param(&mut self, ctx: &mut Context, ebb: Ebb) -> ParseResult<()> {
-        // ebb-param ::= * Value(v) ":" Type(t) arg-loc?
-        let v = self.match_value("EBB argument must be a value")?;
+    fn parse_block_param(&mut self, ctx: &mut Context, block: Block) -> ParseResult<()> {
+        // block-param ::= * Value(v) ":" Type(t) arg-loc?
+        let v = self.match_value("block argument must be a value")?;
         let v_location = self.loc;
-        // ebb-param ::= Value(v) * ":" Type(t) arg-loc?
-        self.match_token(Token::Colon, "expected ':' after EBB argument")?;
-        // ebb-param ::= Value(v) ":" * Type(t) arg-loc?
+        // block-param ::= Value(v) * ":" Type(t) arg-loc?
+        self.match_token(Token::Colon, "expected ':' after block argument")?;
+        // block-param ::= Value(v) ":" * Type(t) arg-loc?
 
         while ctx.function.dfg.num_values() <= v.index() {
             ctx.function.dfg.make_invalid_value_for_parser();
         }
 
-        let t = self.match_type("expected EBB argument type")?;
-        // Allocate the EBB argument.
-        ctx.function.dfg.append_ebb_param_for_parser(ebb, t, v);
+        let t = self.match_type("expected block argument type")?;
+        // Allocate the block argument.
+        ctx.function.dfg.append_block_param_for_parser(block, t, v);
         ctx.map.def_value(v, v_location)?;
 
-        // ebb-param ::= Value(v) ":" Type(t) * arg-loc?
+        // block-param ::= Value(v) ":" Type(t) * arg-loc?
         if self.optional(Token::LBracket) {
             let loc = self.parse_value_location(ctx)?;
             ctx.function.locations[v] = loc;
@@ -1981,7 +1993,7 @@ impl<'a> Parser<'a> {
         Ok(results)
     }
 
-    // Parse a value alias, and append it to `ebb`.
+    // Parse a value alias, and append it to `block`.
     //
     // value_alias ::= [inst-results] "->" Value(v)
     //
@@ -2022,7 +2034,7 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    // Parse an instruction, append it to `ebb`.
+    // Parse an instruction, append it to `block`.
     //
     // instruction ::= [inst-results "="] Opcode(opc) ["." Type] ...
     //
@@ -2033,7 +2045,7 @@ impl<'a> Parser<'a> {
         encoding: Option<Encoding>,
         result_locations: Option<Vec<ValueLoc>>,
         ctx: &mut Context,
-        ebb: Ebb,
+        block: Block,
     ) -> ParseResult<()> {
         // Define the result values.
         for val in results {
@@ -2077,7 +2089,7 @@ impl<'a> Parser<'a> {
             ctx.function
                 .dfg
                 .make_inst_results_for_parser(inst, ctrl_typevar, results);
-        ctx.function.layout.append_inst(inst, ebb);
+        ctx.function.layout.append_inst(inst, block);
         ctx.map
             .def_entity(inst.into(), opcode_loc)
             .expect("duplicate inst references created");
@@ -2345,23 +2357,23 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::NullAry => InstructionData::NullAry { opcode },
             InstructionFormat::Jump => {
-                // Parse the destination EBB number.
-                let ebb_num = self.match_ebb("expected jump destination EBB")?;
+                // Parse the destination block number.
+                let block_num = self.match_block("expected jump destination block")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::Jump {
                     opcode,
-                    destination: ebb_num,
+                    destination: block_num,
                     args: args.into_value_list(&[], &mut ctx.function.dfg.value_lists),
                 }
             }
             InstructionFormat::Branch => {
                 let ctrl_arg = self.match_value("expected SSA value control operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let ebb_num = self.match_ebb("expected branch destination EBB")?;
+                let block_num = self.match_block("expected branch destination block")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::Branch {
                     opcode,
-                    destination: ebb_num,
+                    destination: block_num,
                     args: args.into_value_list(&[ctrl_arg], &mut ctx.function.dfg.value_lists),
                 }
             }
@@ -2369,12 +2381,12 @@ impl<'a> Parser<'a> {
                 let cond = self.match_enum("expected intcc condition code")?;
                 let arg = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let ebb_num = self.match_ebb("expected branch destination EBB")?;
+                let block_num = self.match_block("expected branch destination block")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::BranchInt {
                     opcode,
                     cond,
-                    destination: ebb_num,
+                    destination: block_num,
                     args: args.into_value_list(&[arg], &mut ctx.function.dfg.value_lists),
                 }
             }
@@ -2382,12 +2394,12 @@ impl<'a> Parser<'a> {
                 let cond = self.match_enum("expected floatcc condition code")?;
                 let arg = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let ebb_num = self.match_ebb("expected branch destination EBB")?;
+                let block_num = self.match_block("expected branch destination block")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::BranchFloat {
                     opcode,
                     cond,
-                    destination: ebb_num,
+                    destination: block_num,
                     args: args.into_value_list(&[arg], &mut ctx.function.dfg.value_lists),
                 }
             }
@@ -2397,26 +2409,26 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value second operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let ebb_num = self.match_ebb("expected branch destination EBB")?;
+                let block_num = self.match_block("expected branch destination block")?;
                 let args = self.parse_opt_value_list()?;
                 InstructionData::BranchIcmp {
                     opcode,
                     cond,
-                    destination: ebb_num,
+                    destination: block_num,
                     args: args.into_value_list(&[lhs, rhs], &mut ctx.function.dfg.value_lists),
                 }
             }
             InstructionFormat::BranchTable => {
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let ebb_num = self.match_ebb("expected branch destination EBB")?;
+                let block_num = self.match_block("expected branch destination block")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let table = self.match_jt()?;
                 ctx.check_jt(table, self.loc)?;
                 InstructionData::BranchTable {
                     opcode,
                     arg,
-                    destination: ebb_num,
+                    destination: block_num,
                     table,
                 }
             }
@@ -2810,7 +2822,7 @@ mod tests {
     fn aliases() {
         let (func, details) = Parser::new(
             "function %qux() system_v {
-                                           ebb0:
+                                           block0:
                                              v4 = iconst.i8 6
                                              v3 -> v4
                                              v1 = iadd_imm v3, 17
@@ -2925,45 +2937,45 @@ mod tests {
     }
 
     #[test]
-    fn ebb_header() {
+    fn block_header() {
         let (func, _) = Parser::new(
-            "function %ebbs() system_v {
-                                     ebb0:
-                                     ebb4(v3: i32):
+            "function %blocks() system_v {
+                                     block0:
+                                     block4(v3: i32):
                                      }",
         )
         .parse_function(None)
         .unwrap();
-        assert_eq!(func.name.to_string(), "%ebbs");
+        assert_eq!(func.name.to_string(), "%blocks");
 
-        let mut ebbs = func.layout.ebbs();
+        let mut blocks = func.layout.blocks();
 
-        let ebb0 = ebbs.next().unwrap();
-        assert_eq!(func.dfg.ebb_params(ebb0), &[]);
+        let block0 = blocks.next().unwrap();
+        assert_eq!(func.dfg.block_params(block0), &[]);
 
-        let ebb4 = ebbs.next().unwrap();
-        let ebb4_args = func.dfg.ebb_params(ebb4);
-        assert_eq!(ebb4_args.len(), 1);
-        assert_eq!(func.dfg.value_type(ebb4_args[0]), types::I32);
+        let block4 = blocks.next().unwrap();
+        let block4_args = func.dfg.block_params(block4);
+        assert_eq!(block4_args.len(), 1);
+        assert_eq!(func.dfg.value_type(block4_args[0]), types::I32);
     }
 
     #[test]
-    fn duplicate_ebb() {
+    fn duplicate_block() {
         let ParseError {
             location,
             message,
             is_warning,
         } = Parser::new(
-            "function %ebbs() system_v {
-                ebb0:
-                ebb0:
+            "function %blocks() system_v {
+                block0:
+                block0:
                     return 2",
         )
         .parse_function(None)
         .unwrap_err();
 
         assert_eq!(location.line_number, 3);
-        assert_eq!(message, "duplicate entity: ebb0");
+        assert_eq!(message, "duplicate entity: block0");
         assert!(!is_warning);
     }
 
@@ -2974,7 +2986,7 @@ mod tests {
             message,
             is_warning,
         } = Parser::new(
-            "function %ebbs() system_v {
+            "function %blocks() system_v {
                 jt0 = jump_table []
                 jt0 = jump_table []",
         )
@@ -2993,7 +3005,7 @@ mod tests {
             message,
             is_warning,
         } = Parser::new(
-            "function %ebbs() system_v {
+            "function %blocks() system_v {
                 ss0 = explicit_slot 8
                 ss0 = explicit_slot 8",
         )
@@ -3012,7 +3024,7 @@ mod tests {
             message,
             is_warning,
         } = Parser::new(
-            "function %ebbs() system_v {
+            "function %blocks() system_v {
                 gv0 = vmctx
                 gv0 = vmctx",
         )
@@ -3031,7 +3043,7 @@ mod tests {
             message,
             is_warning,
         } = Parser::new(
-            "function %ebbs() system_v {
+            "function %blocks() system_v {
                 heap0 = static gv0, min 0x1000, bound 0x10_0000, offset_guard 0x1000
                 heap0 = static gv0, min 0x1000, bound 0x10_0000, offset_guard 0x1000",
         )
@@ -3050,7 +3062,7 @@ mod tests {
             message,
             is_warning,
         } = Parser::new(
-            "function %ebbs() system_v {
+            "function %blocks() system_v {
                 sig0 = ()
                 sig0 = ()",
         )
@@ -3069,7 +3081,7 @@ mod tests {
             message,
             is_warning,
         } = Parser::new(
-            "function %ebbs() system_v {
+            "function %blocks() system_v {
                 sig0 = ()
                 fn0 = %foo sig0
                 fn0 = %foo sig0",
@@ -3089,9 +3101,9 @@ mod tests {
                          function %comment() system_v { ; decl
                             ss10  = outgoing_arg 13 ; stackslot.
                             ; Still stackslot.
-                            jt10 = jump_table [ebb0]
+                            jt10 = jump_table [block0]
                             ; Jumptable
-                         ebb0: ; Basic block
+                         block0: ; Basic block
                          trap user42; Instruction
                          } ; Trailing.
                          ; More trailing.",
@@ -3112,7 +3124,7 @@ mod tests {
         assert_eq!(comments[2].text, "; Still stackslot.");
         assert_eq!(comments[3].entity.to_string(), "jt10");
         assert_eq!(comments[3].text, "; Jumptable");
-        assert_eq!(comments[4].entity.to_string(), "ebb0");
+        assert_eq!(comments[4].entity.to_string(), "block0");
         assert_eq!(comments[4].text, "; Basic block");
 
         assert_eq!(comments[5].entity.to_string(), "inst0");
@@ -3195,7 +3207,7 @@ mod tests {
         // Valid characters in the name:
         let func = Parser::new(
             "function u1:2() system_v {
-                                           ebb0:
+                                           block0:
                                              trap int_divz
                                            }",
         )
@@ -3207,7 +3219,7 @@ mod tests {
         // Invalid characters in the name:
         let mut parser = Parser::new(
             "function u123:abc() system_v {
-                                           ebb0:
+                                           block0:
                                              trap stk_ovf
                                            }",
         );
@@ -3216,7 +3228,7 @@ mod tests {
         // Incomplete function names should not be valid:
         let mut parser = Parser::new(
             "function u() system_v {
-                                           ebb0:
+                                           block0:
                                              trap int_ovf
                                            }",
         );
@@ -3224,7 +3236,7 @@ mod tests {
 
         let mut parser = Parser::new(
             "function u0() system_v {
-                                           ebb0:
+                                           block0:
                                              trap int_ovf
                                            }",
         );
@@ -3232,7 +3244,7 @@ mod tests {
 
         let mut parser = Parser::new(
             "function u0:() system_v {
-                                           ebb0:
+                                           block0:
                                              trap int_ovf
                                            }",
         );
@@ -3242,7 +3254,7 @@ mod tests {
     #[test]
     fn change_default_calling_convention() {
         let code = "function %test() {
-        ebb0:
+        block0:
             return
         }";
 

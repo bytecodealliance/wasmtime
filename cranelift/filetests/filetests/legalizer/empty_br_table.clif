@@ -6,12 +6,12 @@ target x86_64
 function u0:0(i64) {
     jt0 = jump_table []
 
-ebb0(v0: i64):
-    br_table v0, ebb1, jt0
-; check:  ebb0(v0: i64):
-; nextln:   jump ebb1
+block0(v0: i64):
+    br_table v0, block1, jt0
+; check:  block0(v0: i64):
+; nextln:   jump block1
 
-ebb1:
+block1:
     return
 }
 ; not: jump_table

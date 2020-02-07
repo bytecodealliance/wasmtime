@@ -7,31 +7,31 @@ target riscv32
 ; resolve that conflict since v1 will just interfere with the inserted copy too.
 
 ;function %c1(i32) -> i32 {
-;ebb0(v0: i32):
+;block0(v0: i32):
 ;    v1 = iadd_imm v0, 1
 ;    v2 = iconst.i32 1
-;    brz v1, ebb1(v2)
-;    jump ebb2
+;    brz v1, block1(v2)
+;    jump block2
 ;
-;ebb1(v3: i32):
+;block1(v3: i32):
 ;    return v3
 ;
-;ebb2:
-;    jump ebb1(v1)
+;block2:
+;    jump block1(v1)
 ;}
 
 ; Same thing with v1 and v2 swapped to reverse the order of definitions.
 
 function %c2(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = iadd_imm v0, 1
     v2 = iconst.i32 1
-    brz v2, ebb1(v1)
-    jump ebb2
+    brz v2, block1(v1)
+    jump block2
 
-ebb1(v3: i32):
+block1(v3: i32):
     return v3
 
-ebb2:
-    jump ebb1(v2)
+block2:
+    jump block1(v2)
 }

@@ -1,54 +1,54 @@
 test domtree
 
 function %test(i32) {
-    ebb0(v0: i32):
-        brz v0, ebb1    ; dominates: ebb1
-        jump ebb12      ; dominates: ebb12
-    ebb12:
-        brnz v0, ebb2   ; dominates: ebb2 ebb5
-        jump ebb3       ; dominates: ebb3
-    ebb1:
-        jump ebb4       ; dominates: ebb4
-    ebb2:
-        jump ebb5
-    ebb3:
-        jump ebb5
-    ebb4:
-        brz v0, ebb6    ; dominates: ebb6 ebb10
-        jump ebb7       ; dominates: ebb7
-    ebb5:
+    block0(v0: i32):
+        brz v0, block1    ; dominates: block1
+        jump block12      ; dominates: block12
+    block12:
+        brnz v0, block2   ; dominates: block2 block5
+        jump block3       ; dominates: block3
+    block1:
+        jump block4       ; dominates: block4
+    block2:
+        jump block5
+    block3:
+        jump block5
+    block4:
+        brz v0, block6    ; dominates: block6 block10
+        jump block7       ; dominates: block7
+    block5:
         return
-    ebb6:
-        brz v0, ebb8    ; dominates: ebb11 ebb8
-        jump ebb13      ; dominates: ebb13
-    ebb13:
-        brnz v0, ebb9   ; dominates: ebb9
-        jump ebb10
-    ebb7:
-        jump ebb10
-    ebb8:
-        jump ebb11
-    ebb9:
-        jump ebb11
-    ebb10:
+    block6:
+        brz v0, block8    ; dominates: block11 block8
+        jump block13      ; dominates: block13
+    block13:
+        brnz v0, block9   ; dominates: block9
+        jump block10
+    block7:
+        jump block10
+    block8:
+        jump block11
+    block9:
+        jump block11
+    block10:
         return
-    ebb11:
+    block11:
         return
 }
 
 ; check: domtree_preorder {
-; nextln: ebb0: ebb1 ebb12
-; nextln: ebb1: ebb4
-; nextln: ebb4: ebb6 ebb7 ebb10
-; nextln: ebb6: ebb8 ebb13 ebb11
-; nextln: ebb8:
-; nextln: ebb13: ebb9
-; nextln: ebb9:
-; nextln: ebb11:
-; nextln: ebb7:
-; nextln: ebb10:
-; nextln: ebb12: ebb2 ebb3 ebb5
-; nextln: ebb2:
-; nextln: ebb3:
-; nextln: ebb5:
+; nextln: block0: block1 block12
+; nextln: block1: block4
+; nextln: block4: block6 block7 block10
+; nextln: block6: block8 block13 block11
+; nextln: block8:
+; nextln: block13: block9
+; nextln: block9:
+; nextln: block11:
+; nextln: block7:
+; nextln: block10:
+; nextln: block12: block2 block3 block5
+; nextln: block2:
+; nextln: block3:
+; nextln: block5:
 ; nextln: }

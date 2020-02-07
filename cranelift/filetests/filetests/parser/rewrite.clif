@@ -1,16 +1,16 @@
-; It is possible to refer to instructions and EBBs that have not yet been
+; It is possible to refer to instructions and blocks that have not yet been
 ; defined in the lexical order.
 test cat
 
 ; Defining numbers.
 function %defs() {
-ebb100(v20: i32):
+block100(v20: i32):
     v1000 = iconst.i32x8 5
     v9200 = f64const 0x4.0p0
     trap user4
 }
 ; sameln: function %defs() fast {
-; nextln: ebb100(v20: i32):
+; nextln: block100(v20: i32):
 ; nextln:     v1000 = iconst.i32x8 5
 ; nextln:     v9200 = f64const 0x1.0000000000000p2
 ; nextln:     trap user4
@@ -18,14 +18,14 @@ ebb100(v20: i32):
 
 ; Using values.
 function %use_value() {
-ebb100(v20: i32):
+block100(v20: i32):
     v1000 = iadd_imm v20, 5
     v200 = iadd v20, v1000
-    jump ebb100(v1000)
+    jump block100(v1000)
 }
 ; sameln: function %use_value() fast {
-; nextln: ebb100(v20: i32):
+; nextln: block100(v20: i32):
 ; nextln:     v1000 = iadd_imm v20, 5
 ; nextln:     v200 = iadd v20, v1000
-; nextln:     jump ebb100(v1000)
+; nextln:     jump block100(v1000)
 ; nextln: }

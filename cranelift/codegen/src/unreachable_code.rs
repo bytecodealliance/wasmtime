@@ -9,7 +9,7 @@ use log::debug;
 
 /// Eliminate unreachable code.
 ///
-/// This pass deletes whole EBBs that can't be reached from the entry block. It does not delete
+/// This pass deletes whole blocks that can't be reached from the entry block. It does not delete
 /// individual instructions whose results are unused.
 ///
 /// The reachability analysis is performed by the dominator tree analysis.
@@ -20,27 +20,27 @@ pub fn eliminate_unreachable_code(
 ) {
     let _tt = timing::unreachable_code();
     let mut pos = FuncCursor::new(func);
-    while let Some(ebb) = pos.next_ebb() {
-        if domtree.is_reachable(ebb) {
+    while let Some(block) = pos.next_block() {
+        if domtree.is_reachable(block) {
             continue;
         }
 
-        debug!("Eliminating unreachable {}", ebb);
+        debug!("Eliminating unreachable {}", block);
         // Move the cursor out of the way and make sure the next lop iteration goes to the right
-        // EBB.
-        pos.prev_ebb();
+        // block.
+        pos.prev_block();
 
-        // Remove all instructions from `ebb`.
-        while let Some(inst) = pos.func.layout.first_inst(ebb) {
+        // Remove all instructions from `block`.
+        while let Some(inst) = pos.func.layout.first_inst(block) {
             debug!(" - {}", pos.func.dfg.display_inst(inst, None));
             pos.func.layout.remove_inst(inst);
         }
 
-        // Once the EBB is completely empty, we can update the CFG which removes it from any
+        // Once the block is completely empty, we can update the CFG which removes it from any
         // predecessor lists.
-        cfg.recompute_ebb(pos.func, ebb);
+        cfg.recompute_block(pos.func, block);
 
-        // Finally, remove the EBB from the layout.
-        pos.func.layout.remove_ebb(ebb);
+        // Finally, remove the block from the layout.
+        pos.func.layout.remove_block(block);
     }
 }

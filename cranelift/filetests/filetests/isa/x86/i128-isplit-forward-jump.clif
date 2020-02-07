@@ -2,24 +2,24 @@ test compile
 target x86_64
 
 function u0:0() -> i128 system_v {
-ebb0:
+block0:
     v0 = iconst.i64 0
     v1 = iconst.i64 0
     v2 = iconcat v0, v1
-    jump ebb5
+    jump block5
 
-ebb2:
-    jump ebb4(v27)
+block2:
+    jump block4(v27)
 
-ebb4(v23: i128):
+block4(v23: i128):
     return v23
 
-ebb5:
+block5:
     v27 = bxor.i128 v2, v2
     v32 = iconst.i32 0
-    brz v32, ebb2
-    jump ebb6
+    brz v32, block2
+    jump block6
 
-ebb6:
+block6:
     trap user0
 }

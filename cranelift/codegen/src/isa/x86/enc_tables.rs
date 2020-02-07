@@ -253,7 +253,7 @@ fn expand_sdivrem(
         _ => panic!("Need sdiv/srem: {}", func.dfg.display_inst(inst, None)),
     };
 
-    let old_ebb = func.layout.pp_ebb(inst);
+    let old_block = func.layout.pp_block(inst);
     let result = func.dfg.first_result(inst);
     let ty = func.dfg.value_type(result);
 
@@ -297,17 +297,17 @@ fn expand_sdivrem(
         return;
     }
 
-    // EBB handling the nominal case.
-    let nominal = pos.func.dfg.make_ebb();
+    // block handling the nominal case.
+    let nominal = pos.func.dfg.make_block();
 
-    // EBB handling the -1 divisor case.
-    let minus_one = pos.func.dfg.make_ebb();
+    // block handling the -1 divisor case.
+    let minus_one = pos.func.dfg.make_block();
 
-    // Final EBB with one argument representing the final result value.
-    let done = pos.func.dfg.make_ebb();
+    // Final block with one argument representing the final result value.
+    let done = pos.func.dfg.make_block();
 
-    // Move the `inst` result value onto the `done` EBB.
-    pos.func.dfg.attach_ebb_param(done, result);
+    // Move the `inst` result value onto the `done` block.
+    pos.func.dfg.attach_block_param(done, result);
 
     // Start by checking for a -1 divisor which needs to be handled specially.
     let is_m1 = pos.ins().ifcmp_imm(y, -1);
@@ -316,14 +316,14 @@ fn expand_sdivrem(
 
     // Now it is safe to execute the `x86_sdivmodx` instruction which will still trap on division
     // by zero.
-    pos.insert_ebb(nominal);
+    pos.insert_block(nominal);
     let xhi = pos.ins().sshr_imm(x, i64::from(ty.lane_bits()) - 1);
     let (quot, rem) = pos.ins().x86_sdivmodx(x, xhi, y);
     let divres = if is_srem { rem } else { quot };
     pos.ins().jump(done, &[divres]);
 
     // Now deal with the -1 divisor case.
-    pos.insert_ebb(minus_one);
+    pos.insert_block(minus_one);
     let m1_result = if is_srem {
         // x % -1 = 0.
         pos.ins().iconst(ty, 0)
@@ -342,12 +342,12 @@ fn expand_sdivrem(
 
     // Finally insert a label for the completion.
     pos.next_inst();
-    pos.insert_ebb(done);
+    pos.insert_block(done);
 
-    cfg.recompute_ebb(pos.func, old_ebb);
-    cfg.recompute_ebb(pos.func, nominal);
-    cfg.recompute_ebb(pos.func, minus_one);
-    cfg.recompute_ebb(pos.func, done);
+    cfg.recompute_block(pos.func, old_block);
+    cfg.recompute_block(pos.func, nominal);
+    cfg.recompute_block(pos.func, minus_one);
+    cfg.recompute_block(pos.func, done);
 }
 
 /// Expand the `udiv` and `urem` instructions using `x86_udivmodx`.
@@ -421,7 +421,7 @@ fn expand_minmax(
         } => (args[0], args[1], ir::Opcode::X86Fmax, ir::Opcode::Band),
         _ => panic!("Expected fmin/fmax: {}", func.dfg.display_inst(inst, None)),
     };
-    let old_ebb = func.layout.pp_ebb(inst);
+    let old_block = func.layout.pp_block(inst);
 
     // We need to handle the following conditions, depending on how x and y compare:
     //
@@ -430,20 +430,20 @@ fn expand_minmax(
     //    fmin(0.0, -0.0) -> -0.0 and fmax(0.0, -0.0) -> 0.0.
     // 3. UN: We need to produce a quiet NaN that is canonical if the inputs are canonical.
 
-    // EBB handling case 1) where operands are ordered but not equal.
-    let one_ebb = func.dfg.make_ebb();
+    // block handling case 1) where operands are ordered but not equal.
+    let one_block = func.dfg.make_block();
 
-    // EBB handling case 3) where one operand is NaN.
-    let uno_ebb = func.dfg.make_ebb();
+    // block handling case 3) where one operand is NaN.
+    let uno_block = func.dfg.make_block();
 
-    // EBB that handles the unordered or equal cases 2) and 3).
-    let ueq_ebb = func.dfg.make_ebb();
+    // block that handles the unordered or equal cases 2) and 3).
+    let ueq_block = func.dfg.make_block();
 
-    // EBB handling case 2) where operands are ordered and equal.
-    let eq_ebb = func.dfg.make_ebb();
+    // block handling case 2) where operands are ordered and equal.
+    let eq_block = func.dfg.make_block();
 
-    // Final EBB with one argument representing the final result value.
-    let done = func.dfg.make_ebb();
+    // Final block with one argument representing the final result value.
+    let done = func.dfg.make_block();
 
     // The basic blocks are laid out to minimize branching for the common cases:
     //
@@ -451,21 +451,21 @@ fn expand_minmax(
     // 2) One branch taken.
     // 3) Two branches taken, one jump.
 
-    // Move the `inst` result value onto the `done` EBB.
+    // Move the `inst` result value onto the `done` block.
     let result = func.dfg.first_result(inst);
     let ty = func.dfg.value_type(result);
     func.dfg.clear_results(inst);
-    func.dfg.attach_ebb_param(done, result);
+    func.dfg.attach_block_param(done, result);
 
     // Test for case 1) ordered and not equal.
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
     let cmp_ueq = pos.ins().fcmp(FloatCC::UnorderedOrEqual, x, y);
-    pos.ins().brnz(cmp_ueq, ueq_ebb, &[]);
-    pos.ins().jump(one_ebb, &[]);
+    pos.ins().brnz(cmp_ueq, ueq_block, &[]);
+    pos.ins().jump(one_block, &[]);
 
     // Handle the common ordered, not equal (LT|GT) case.
-    pos.insert_ebb(one_ebb);
+    pos.insert_block(one_block);
     let one_inst = pos.ins().Binary(x86_opc, ty, x, y).0;
     let one_result = pos.func.dfg.first_result(one_inst);
     pos.ins().jump(done, &[one_result]);
@@ -473,21 +473,21 @@ fn expand_minmax(
     // Case 3) Unordered.
     // We know that at least one operand is a NaN that needs to be propagated. We simply use an
     // `fadd` instruction which has the same NaN propagation semantics.
-    pos.insert_ebb(uno_ebb);
+    pos.insert_block(uno_block);
     let uno_result = pos.ins().fadd(x, y);
     pos.ins().jump(done, &[uno_result]);
 
     // Case 2) or 3).
-    pos.insert_ebb(ueq_ebb);
+    pos.insert_block(ueq_block);
     // Test for case 3) (UN) one value is NaN.
     // TODO: When we get support for flag values, we can reuse the above comparison.
     let cmp_uno = pos.ins().fcmp(FloatCC::Unordered, x, y);
-    pos.ins().brnz(cmp_uno, uno_ebb, &[]);
-    pos.ins().jump(eq_ebb, &[]);
+    pos.ins().brnz(cmp_uno, uno_block, &[]);
+    pos.ins().jump(eq_block, &[]);
 
     // We are now in case 2) where x and y compare EQ.
     // We need a bitwise operation to get the sign right.
-    pos.insert_ebb(eq_ebb);
+    pos.insert_block(eq_block);
     let bw_inst = pos.ins().Binary(bitwise_opc, ty, x, y).0;
     let bw_result = pos.func.dfg.first_result(bw_inst);
     // This should become a fall-through for this second most common case.
@@ -496,14 +496,14 @@ fn expand_minmax(
 
     // Finally insert a label for the completion.
     pos.next_inst();
-    pos.insert_ebb(done);
+    pos.insert_block(done);
 
-    cfg.recompute_ebb(pos.func, old_ebb);
-    cfg.recompute_ebb(pos.func, one_ebb);
-    cfg.recompute_ebb(pos.func, uno_ebb);
-    cfg.recompute_ebb(pos.func, ueq_ebb);
-    cfg.recompute_ebb(pos.func, eq_ebb);
-    cfg.recompute_ebb(pos.func, done);
+    cfg.recompute_block(pos.func, old_block);
+    cfg.recompute_block(pos.func, one_block);
+    cfg.recompute_block(pos.func, uno_block);
+    cfg.recompute_block(pos.func, ueq_block);
+    cfg.recompute_block(pos.func, eq_block);
+    cfg.recompute_block(pos.func, done);
 }
 
 /// x86 has no unsigned-to-float conversions. We handle the easy case of zero-extending i32 to
@@ -540,33 +540,33 @@ fn expand_fcvt_from_uint(
         _ => unimplemented!(),
     }
 
-    let old_ebb = pos.func.layout.pp_ebb(inst);
+    let old_block = pos.func.layout.pp_block(inst);
 
-    // EBB handling the case where x >= 0.
-    let poszero_ebb = pos.func.dfg.make_ebb();
+    // block handling the case where x >= 0.
+    let poszero_block = pos.func.dfg.make_block();
 
-    // EBB handling the case where x < 0.
-    let neg_ebb = pos.func.dfg.make_ebb();
+    // block handling the case where x < 0.
+    let neg_block = pos.func.dfg.make_block();
 
-    // Final EBB with one argument representing the final result value.
-    let done = pos.func.dfg.make_ebb();
+    // Final block with one argument representing the final result value.
+    let done = pos.func.dfg.make_block();
 
-    // Move the `inst` result value onto the `done` EBB.
+    // Move the `inst` result value onto the `done` block.
     pos.func.dfg.clear_results(inst);
-    pos.func.dfg.attach_ebb_param(done, result);
+    pos.func.dfg.attach_block_param(done, result);
 
     // If x as a signed int is not negative, we can use the existing `fcvt_from_sint` instruction.
     let is_neg = pos.ins().icmp_imm(IntCC::SignedLessThan, x, 0);
-    pos.ins().brnz(is_neg, neg_ebb, &[]);
-    pos.ins().jump(poszero_ebb, &[]);
+    pos.ins().brnz(is_neg, neg_block, &[]);
+    pos.ins().jump(poszero_block, &[]);
 
     // Easy case: just use a signed conversion.
-    pos.insert_ebb(poszero_ebb);
+    pos.insert_block(poszero_block);
     let posres = pos.ins().fcvt_from_sint(ty, x);
     pos.ins().jump(done, &[posres]);
 
     // Now handle the negative case.
-    pos.insert_ebb(neg_ebb);
+    pos.insert_block(neg_block);
 
     // Divide x by two to get it in range for the signed conversion, keep the LSB, and scale it
     // back up on the FP side.
@@ -581,12 +581,12 @@ fn expand_fcvt_from_uint(
 
     // Finally insert a label for the completion.
     pos.next_inst();
-    pos.insert_ebb(done);
+    pos.insert_block(done);
 
-    cfg.recompute_ebb(pos.func, old_ebb);
-    cfg.recompute_ebb(pos.func, poszero_ebb);
-    cfg.recompute_ebb(pos.func, neg_ebb);
-    cfg.recompute_ebb(pos.func, done);
+    cfg.recompute_block(pos.func, old_block);
+    cfg.recompute_block(pos.func, poszero_block);
+    cfg.recompute_block(pos.func, neg_block);
+    cfg.recompute_block(pos.func, done);
 }
 
 fn expand_fcvt_to_sint(
@@ -604,16 +604,16 @@ fn expand_fcvt_to_sint(
         } => arg,
         _ => panic!("Need fcvt_to_sint: {}", func.dfg.display_inst(inst, None)),
     };
-    let old_ebb = func.layout.pp_ebb(inst);
+    let old_block = func.layout.pp_block(inst);
     let xty = func.dfg.value_type(x);
     let result = func.dfg.first_result(inst);
     let ty = func.dfg.value_type(result);
 
-    // Final EBB after the bad value checks.
-    let done = func.dfg.make_ebb();
+    // Final block after the bad value checks.
+    let done = func.dfg.make_block();
 
-    // EBB for checking failure cases.
-    let maybe_trap_ebb = func.dfg.make_ebb();
+    // block for checking failure cases.
+    let maybe_trap_block = func.dfg.make_block();
 
     // The `x86_cvtt2si` performs the desired conversion, but it doesn't trap on NaN or overflow.
     // It produces an INT_MIN result instead.
@@ -626,7 +626,7 @@ fn expand_fcvt_to_sint(
         .ins()
         .icmp_imm(IntCC::NotEqual, result, 1 << (ty.lane_bits() - 1));
     pos.ins().brnz(is_done, done, &[]);
-    pos.ins().jump(maybe_trap_ebb, &[]);
+    pos.ins().jump(maybe_trap_block, &[]);
 
     // We now have the following possibilities:
     //
@@ -634,7 +634,7 @@ fn expand_fcvt_to_sint(
     // 2. The input was NaN -> trap bad_toint
     // 3. The input was out of range -> trap int_ovf
     //
-    pos.insert_ebb(maybe_trap_ebb);
+    pos.insert_block(maybe_trap_block);
 
     // Check for NaN.
     let is_nan = pos.ins().fcmp(FloatCC::Unordered, x, x);
@@ -683,11 +683,11 @@ fn expand_fcvt_to_sint(
     pos.ins().trapnz(overflow, ir::TrapCode::IntegerOverflow);
 
     pos.ins().jump(done, &[]);
-    pos.insert_ebb(done);
+    pos.insert_block(done);
 
-    cfg.recompute_ebb(pos.func, old_ebb);
-    cfg.recompute_ebb(pos.func, maybe_trap_ebb);
-    cfg.recompute_ebb(pos.func, done);
+    cfg.recompute_block(pos.func, old_block);
+    cfg.recompute_block(pos.func, maybe_trap_block);
+    cfg.recompute_block(pos.func, done);
 }
 
 fn expand_fcvt_to_sint_sat(
@@ -709,18 +709,18 @@ fn expand_fcvt_to_sint_sat(
         ),
     };
 
-    let old_ebb = func.layout.pp_ebb(inst);
+    let old_block = func.layout.pp_block(inst);
     let xty = func.dfg.value_type(x);
     let result = func.dfg.first_result(inst);
     let ty = func.dfg.value_type(result);
 
-    // Final EBB after the bad value checks.
-    let done_ebb = func.dfg.make_ebb();
-    let intmin_ebb = func.dfg.make_ebb();
-    let minsat_ebb = func.dfg.make_ebb();
-    let maxsat_ebb = func.dfg.make_ebb();
+    // Final block after the bad value checks.
+    let done_block = func.dfg.make_block();
+    let intmin_block = func.dfg.make_block();
+    let minsat_block = func.dfg.make_block();
+    let maxsat_block = func.dfg.make_block();
     func.dfg.clear_results(inst);
-    func.dfg.attach_ebb_param(done_ebb, result);
+    func.dfg.attach_block_param(done_block, result);
 
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
@@ -732,25 +732,25 @@ fn expand_fcvt_to_sint_sat(
     let is_done = pos
         .ins()
         .icmp_imm(IntCC::NotEqual, cvtt2si, 1 << (ty.lane_bits() - 1));
-    pos.ins().brnz(is_done, done_ebb, &[cvtt2si]);
-    pos.ins().jump(intmin_ebb, &[]);
+    pos.ins().brnz(is_done, done_block, &[cvtt2si]);
+    pos.ins().jump(intmin_block, &[]);
 
     // We now have the following possibilities:
     //
     // 1. INT_MIN was actually the correct conversion result.
     // 2. The input was NaN -> replace the result value with 0.
     // 3. The input was out of range -> saturate the result to the min/max value.
-    pos.insert_ebb(intmin_ebb);
+    pos.insert_block(intmin_block);
 
     // Check for NaN, which is truncated to 0.
     let zero = pos.ins().iconst(ty, 0);
     let is_nan = pos.ins().fcmp(FloatCC::Unordered, x, x);
-    pos.ins().brnz(is_nan, done_ebb, &[zero]);
-    pos.ins().jump(minsat_ebb, &[]);
+    pos.ins().brnz(is_nan, done_block, &[zero]);
+    pos.ins().jump(minsat_block, &[]);
 
     // Check for case 1: INT_MIN is the correct result.
     // Determine the smallest floating point number that would convert to INT_MIN.
-    pos.insert_ebb(minsat_ebb);
+    pos.insert_block(minsat_block);
     let mut overflow_cc = FloatCC::LessThan;
     let output_bits = ty.lane_bits();
     let flimit = match xty {
@@ -786,11 +786,11 @@ fn expand_fcvt_to_sint_sat(
         _ => panic!("Don't know the min value for {}", ty),
     };
     let min_value = pos.ins().iconst(ty, min_imm);
-    pos.ins().brnz(overflow, done_ebb, &[min_value]);
-    pos.ins().jump(maxsat_ebb, &[]);
+    pos.ins().brnz(overflow, done_block, &[min_value]);
+    pos.ins().jump(maxsat_block, &[]);
 
     // Finally, we could have a positive value that is too large.
-    pos.insert_ebb(maxsat_ebb);
+    pos.insert_block(maxsat_block);
     let fzero = match xty {
         ir::types::F32 => pos.ins().f32const(Ieee32::with_bits(0)),
         ir::types::F64 => pos.ins().f64const(Ieee64::with_bits(0)),
@@ -805,20 +805,20 @@ fn expand_fcvt_to_sint_sat(
     let max_value = pos.ins().iconst(ty, max_imm);
 
     let overflow = pos.ins().fcmp(FloatCC::GreaterThanOrEqual, x, fzero);
-    pos.ins().brnz(overflow, done_ebb, &[max_value]);
+    pos.ins().brnz(overflow, done_block, &[max_value]);
 
     // Recycle the original instruction.
-    pos.func.dfg.replace(inst).jump(done_ebb, &[cvtt2si]);
+    pos.func.dfg.replace(inst).jump(done_block, &[cvtt2si]);
 
     // Finally insert a label for the completion.
     pos.next_inst();
-    pos.insert_ebb(done_ebb);
+    pos.insert_block(done_block);
 
-    cfg.recompute_ebb(pos.func, old_ebb);
-    cfg.recompute_ebb(pos.func, intmin_ebb);
-    cfg.recompute_ebb(pos.func, minsat_ebb);
-    cfg.recompute_ebb(pos.func, maxsat_ebb);
-    cfg.recompute_ebb(pos.func, done_ebb);
+    cfg.recompute_block(pos.func, old_block);
+    cfg.recompute_block(pos.func, intmin_block);
+    cfg.recompute_block(pos.func, minsat_block);
+    cfg.recompute_block(pos.func, maxsat_block);
+    cfg.recompute_block(pos.func, done_block);
 }
 
 fn expand_fcvt_to_uint(
@@ -837,26 +837,26 @@ fn expand_fcvt_to_uint(
         _ => panic!("Need fcvt_to_uint: {}", func.dfg.display_inst(inst, None)),
     };
 
-    let old_ebb = func.layout.pp_ebb(inst);
+    let old_block = func.layout.pp_block(inst);
     let xty = func.dfg.value_type(x);
     let result = func.dfg.first_result(inst);
     let ty = func.dfg.value_type(result);
 
-    // EBB handle numbers < 2^(N-1).
-    let below_uint_max_ebb = func.dfg.make_ebb();
+    // block handle numbers < 2^(N-1).
+    let below_uint_max_block = func.dfg.make_block();
 
-    // EBB handle numbers < 0.
-    let below_zero_ebb = func.dfg.make_ebb();
+    // block handle numbers < 0.
+    let below_zero_block = func.dfg.make_block();
 
-    // EBB handling numbers >= 2^(N-1).
-    let large = func.dfg.make_ebb();
+    // block handling numbers >= 2^(N-1).
+    let large = func.dfg.make_block();
 
-    // Final EBB after the bad value checks.
-    let done = func.dfg.make_ebb();
+    // Final block after the bad value checks.
+    let done = func.dfg.make_block();
 
-    // Move the `inst` result value onto the `done` EBB.
+    // Move the `inst` result value onto the `done` block.
     func.dfg.clear_results(inst);
-    func.dfg.attach_ebb_param(done, result);
+    func.dfg.attach_block_param(done, result);
 
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
@@ -871,11 +871,11 @@ fn expand_fcvt_to_uint(
     let is_large = pos.ins().ffcmp(x, pow2nm1);
     pos.ins()
         .brff(FloatCC::GreaterThanOrEqual, is_large, large, &[]);
-    pos.ins().jump(below_uint_max_ebb, &[]);
+    pos.ins().jump(below_uint_max_block, &[]);
 
     // We need to generate a specific trap code when `x` is NaN, so reuse the flags from the
     // previous comparison.
-    pos.insert_ebb(below_uint_max_ebb);
+    pos.insert_block(below_uint_max_block);
     pos.ins().trapff(
         FloatCC::Unordered,
         is_large,
@@ -887,13 +887,13 @@ fn expand_fcvt_to_uint(
     let is_neg = pos.ins().ifcmp_imm(sres, 0);
     pos.ins()
         .brif(IntCC::SignedGreaterThanOrEqual, is_neg, done, &[sres]);
-    pos.ins().jump(below_zero_ebb, &[]);
+    pos.ins().jump(below_zero_block, &[]);
 
-    pos.insert_ebb(below_zero_ebb);
+    pos.insert_block(below_zero_block);
     pos.ins().trap(ir::TrapCode::IntegerOverflow);
 
     // Handle the case where x >= 2^(N-1) and not NaN.
-    pos.insert_ebb(large);
+    pos.insert_block(large);
     let adjx = pos.ins().fsub(x, pow2nm1);
     let lres = pos.ins().x86_cvtt2si(ty, adjx);
     let is_neg = pos.ins().ifcmp_imm(lres, 0);
@@ -906,13 +906,13 @@ fn expand_fcvt_to_uint(
 
     // Finally insert a label for the completion.
     pos.next_inst();
-    pos.insert_ebb(done);
+    pos.insert_block(done);
 
-    cfg.recompute_ebb(pos.func, old_ebb);
-    cfg.recompute_ebb(pos.func, below_uint_max_ebb);
-    cfg.recompute_ebb(pos.func, below_zero_ebb);
-    cfg.recompute_ebb(pos.func, large);
-    cfg.recompute_ebb(pos.func, done);
+    cfg.recompute_block(pos.func, old_block);
+    cfg.recompute_block(pos.func, below_uint_max_block);
+    cfg.recompute_block(pos.func, below_zero_block);
+    cfg.recompute_block(pos.func, large);
+    cfg.recompute_block(pos.func, done);
 }
 
 fn expand_fcvt_to_uint_sat(
@@ -934,27 +934,27 @@ fn expand_fcvt_to_uint_sat(
         ),
     };
 
-    let old_ebb = func.layout.pp_ebb(inst);
+    let old_block = func.layout.pp_block(inst);
     let xty = func.dfg.value_type(x);
     let result = func.dfg.first_result(inst);
     let ty = func.dfg.value_type(result);
 
-    // EBB handle numbers < 2^(N-1).
-    let below_pow2nm1_or_nan_ebb = func.dfg.make_ebb();
-    let below_pow2nm1_ebb = func.dfg.make_ebb();
+    // block handle numbers < 2^(N-1).
+    let below_pow2nm1_or_nan_block = func.dfg.make_block();
+    let below_pow2nm1_block = func.dfg.make_block();
 
-    // EBB handling numbers >= 2^(N-1).
-    let large = func.dfg.make_ebb();
+    // block handling numbers >= 2^(N-1).
+    let large = func.dfg.make_block();
 
-    // EBB handling numbers < 2^N.
-    let uint_large_ebb = func.dfg.make_ebb();
+    // block handling numbers < 2^N.
+    let uint_large_block = func.dfg.make_block();
 
-    // Final EBB after the bad value checks.
-    let done = func.dfg.make_ebb();
+    // Final block after the bad value checks.
+    let done = func.dfg.make_block();
 
-    // Move the `inst` result value onto the `done` EBB.
+    // Move the `inst` result value onto the `done` block.
     func.dfg.clear_results(inst);
-    func.dfg.attach_ebb_param(done, result);
+    func.dfg.attach_block_param(done, result);
 
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
@@ -970,16 +970,16 @@ fn expand_fcvt_to_uint_sat(
     let is_large = pos.ins().ffcmp(x, pow2nm1);
     pos.ins()
         .brff(FloatCC::GreaterThanOrEqual, is_large, large, &[]);
-    pos.ins().jump(below_pow2nm1_or_nan_ebb, &[]);
+    pos.ins().jump(below_pow2nm1_or_nan_block, &[]);
 
     // We need to generate zero when `x` is NaN, so reuse the flags from the previous comparison.
-    pos.insert_ebb(below_pow2nm1_or_nan_ebb);
+    pos.insert_block(below_pow2nm1_or_nan_block);
     pos.ins().brff(FloatCC::Unordered, is_large, done, &[zero]);
-    pos.ins().jump(below_pow2nm1_ebb, &[]);
+    pos.ins().jump(below_pow2nm1_block, &[]);
 
     // Now we know that x < 2^(N-1) and not NaN. If the result of the cvtt2si is positive, we're
     // done; otherwise saturate to the minimum unsigned value, that is 0.
-    pos.insert_ebb(below_pow2nm1_ebb);
+    pos.insert_block(below_pow2nm1_block);
     let sres = pos.ins().x86_cvtt2si(ty, x);
     let is_neg = pos.ins().ifcmp_imm(sres, 0);
     pos.ins()
@@ -987,7 +987,7 @@ fn expand_fcvt_to_uint_sat(
     pos.ins().jump(done, &[zero]);
 
     // Handle the case where x >= 2^(N-1) and not NaN.
-    pos.insert_ebb(large);
+    pos.insert_block(large);
     let adjx = pos.ins().fsub(x, pow2nm1);
     let lres = pos.ins().x86_cvtt2si(ty, adjx);
     let max_value = pos.ins().iconst(
@@ -1001,9 +1001,9 @@ fn expand_fcvt_to_uint_sat(
     let is_neg = pos.ins().ifcmp_imm(lres, 0);
     pos.ins()
         .brif(IntCC::SignedLessThan, is_neg, done, &[max_value]);
-    pos.ins().jump(uint_large_ebb, &[]);
+    pos.ins().jump(uint_large_block, &[]);
 
-    pos.insert_ebb(uint_large_ebb);
+    pos.insert_block(uint_large_block);
     let lfinal = pos.ins().iadd_imm(lres, 1 << (ty.lane_bits() - 1));
 
     // Recycle the original instruction as a jump.
@@ -1011,14 +1011,14 @@ fn expand_fcvt_to_uint_sat(
 
     // Finally insert a label for the completion.
     pos.next_inst();
-    pos.insert_ebb(done);
+    pos.insert_block(done);
 
-    cfg.recompute_ebb(pos.func, old_ebb);
-    cfg.recompute_ebb(pos.func, below_pow2nm1_or_nan_ebb);
-    cfg.recompute_ebb(pos.func, below_pow2nm1_ebb);
-    cfg.recompute_ebb(pos.func, large);
-    cfg.recompute_ebb(pos.func, uint_large_ebb);
-    cfg.recompute_ebb(pos.func, done);
+    cfg.recompute_block(pos.func, old_block);
+    cfg.recompute_block(pos.func, below_pow2nm1_or_nan_block);
+    cfg.recompute_block(pos.func, below_pow2nm1_block);
+    cfg.recompute_block(pos.func, large);
+    cfg.recompute_block(pos.func, uint_large_block);
+    cfg.recompute_block(pos.func, done);
 }
 
 /// Convert shuffle instructions.

@@ -1,82 +1,82 @@
 //! Function layout.
 //!
-//! The order of extended basic blocks in a function and the order of instructions in an EBB is
+//! The order of basic blocks in a function and the order of instructions in an block is
 //! determined by the `Layout` data structure defined in this module.
 
 use crate::entity::SecondaryMap;
 use crate::ir::dfg::DataFlowGraph;
 use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder};
-use crate::ir::{Ebb, Inst};
+use crate::ir::{Block, Inst};
 use crate::packed_option::PackedOption;
 use crate::timing;
 use core::cmp;
 use core::iter::{IntoIterator, Iterator};
 use log::debug;
 
-/// The `Layout` struct determines the layout of EBBs and instructions in a function. It does not
-/// contain definitions of instructions or EBBs, but depends on `Inst` and `Ebb` entity references
+/// The `Layout` struct determines the layout of blocks and instructions in a function. It does not
+/// contain definitions of instructions or blocks, but depends on `Inst` and `Block` entity references
 /// being defined elsewhere.
 ///
 /// This data structure determines:
 ///
-/// - The order of EBBs in the function.
-/// - Which EBB contains a given instruction.
-/// - The order of instructions with an EBB.
+/// - The order of blocks in the function.
+/// - Which block contains a given instruction.
+/// - The order of instructions with an block.
 ///
 /// While data dependencies are not recorded, instruction ordering does affect control
 /// dependencies, so part of the semantics of the program are determined by the layout.
 ///
 #[derive(Clone)]
 pub struct Layout {
-    /// Linked list nodes for the layout order of EBBs Forms a doubly linked list, terminated in
+    /// Linked list nodes for the layout order of blocks Forms a doubly linked list, terminated in
     /// both ends by `None`.
-    ebbs: SecondaryMap<Ebb, EbbNode>,
+    blocks: SecondaryMap<Block, BlockNode>,
 
-    /// Linked list nodes for the layout order of instructions. Forms a double linked list per EBB,
+    /// Linked list nodes for the layout order of instructions. Forms a double linked list per block,
     /// terminated in both ends by `None`.
     insts: SecondaryMap<Inst, InstNode>,
 
-    /// First EBB in the layout order, or `None` when no EBBs have been laid out.
-    first_ebb: Option<Ebb>,
+    /// First block in the layout order, or `None` when no blocks have been laid out.
+    first_block: Option<Block>,
 
-    /// Last EBB in the layout order, or `None` when no EBBs have been laid out.
-    last_ebb: Option<Ebb>,
+    /// Last block in the layout order, or `None` when no blocks have been laid out.
+    last_block: Option<Block>,
 }
 
 impl Layout {
     /// Create a new empty `Layout`.
     pub fn new() -> Self {
         Self {
-            ebbs: SecondaryMap::new(),
+            blocks: SecondaryMap::new(),
             insts: SecondaryMap::new(),
-            first_ebb: None,
-            last_ebb: None,
+            first_block: None,
+            last_block: None,
         }
     }
 
     /// Clear the layout.
     pub fn clear(&mut self) {
-        self.ebbs.clear();
+        self.blocks.clear();
         self.insts.clear();
-        self.first_ebb = None;
-        self.last_ebb = None;
+        self.first_block = None;
+        self.last_block = None;
     }
 
-    /// Returns the capacity of the `EbbData` map.
-    pub fn ebb_capacity(&self) -> usize {
-        self.ebbs.capacity()
+    /// Returns the capacity of the `BlockData` map.
+    pub fn block_capacity(&self) -> usize {
+        self.blocks.capacity()
     }
 }
 
 /// Sequence numbers.
 ///
-/// All instructions and EBBs are given a sequence number that can be used to quickly determine
+/// All instructions and blocks are given a sequence number that can be used to quickly determine
 /// their relative position in the layout. The sequence numbers are not contiguous, but are assigned
 /// like line numbers in BASIC: 10, 20, 30, ...
 ///
-/// The EBB sequence numbers are strictly increasing, and so are the instruction sequence numbers
-/// within an EBB. The instruction sequence numbers are all between the sequence number of their
-/// containing EBB and the following EBB.
+/// The block sequence numbers are strictly increasing, and so are the instruction sequence numbers
+/// within an block. The instruction sequence numbers are all between the sequence number of their
+/// containing block and the following block.
 ///
 /// The result is that sequence numbers work like BASIC line numbers for the textual form of the IR.
 type SequenceNumber = u32;
@@ -127,11 +127,11 @@ impl ProgramOrder for Layout {
         a_seq.cmp(&b_seq)
     }
 
-    fn is_ebb_gap(&self, inst: Inst, ebb: Ebb) -> bool {
+    fn is_block_gap(&self, inst: Inst, block: Block) -> bool {
         let i = &self.insts[inst];
-        let e = &self.ebbs[ebb];
+        let e = &self.blocks[block];
 
-        i.next.is_none() && i.ebb == e.prev
+        i.next.is_none() && i.block == e.prev
     }
 }
 
@@ -139,71 +139,71 @@ impl ProgramOrder for Layout {
 impl Layout {
     /// Get the sequence number of a program point that must correspond to an entity in the layout.
     fn seq<PP: Into<ExpandedProgramPoint>>(&self, pp: PP) -> SequenceNumber {
-        // When `PP = Inst` or `PP = Ebb`, we expect this dynamic type check to be optimized out.
+        // When `PP = Inst` or `PP = Block`, we expect this dynamic type check to be optimized out.
         match pp.into() {
-            ExpandedProgramPoint::Ebb(ebb) => self.ebbs[ebb].seq,
+            ExpandedProgramPoint::Block(block) => self.blocks[block].seq,
             ExpandedProgramPoint::Inst(inst) => self.insts[inst].seq,
         }
     }
 
-    /// Get the last sequence number in `ebb`.
-    fn last_ebb_seq(&self, ebb: Ebb) -> SequenceNumber {
-        // Get the seq of the last instruction if it exists, otherwise use the EBB header seq.
-        self.ebbs[ebb]
+    /// Get the last sequence number in `block`.
+    fn last_block_seq(&self, block: Block) -> SequenceNumber {
+        // Get the seq of the last instruction if it exists, otherwise use the block header seq.
+        self.blocks[block]
             .last_inst
             .map(|inst| self.insts[inst].seq)
-            .unwrap_or(self.ebbs[ebb].seq)
+            .unwrap_or(self.blocks[block].seq)
     }
 
-    /// Assign a valid sequence number to `ebb` such that the numbers are still monotonic. This may
+    /// Assign a valid sequence number to `block` such that the numbers are still monotonic. This may
     /// require renumbering.
-    fn assign_ebb_seq(&mut self, ebb: Ebb) {
-        debug_assert!(self.is_ebb_inserted(ebb));
+    fn assign_block_seq(&mut self, block: Block) {
+        debug_assert!(self.is_block_inserted(block));
 
-        // Get the sequence number immediately before `ebb`, or 0.
-        let prev_seq = self.ebbs[ebb]
+        // Get the sequence number immediately before `block`, or 0.
+        let prev_seq = self.blocks[block]
             .prev
-            .map(|prev_ebb| self.last_ebb_seq(prev_ebb))
+            .map(|prev_block| self.last_block_seq(prev_block))
             .unwrap_or(0);
 
-        // Get the sequence number immediately following `ebb`.
-        let next_seq = if let Some(inst) = self.ebbs[ebb].first_inst.expand() {
+        // Get the sequence number immediately following `block`.
+        let next_seq = if let Some(inst) = self.blocks[block].first_inst.expand() {
             self.insts[inst].seq
-        } else if let Some(next_ebb) = self.ebbs[ebb].next.expand() {
-            self.ebbs[next_ebb].seq
+        } else if let Some(next_block) = self.blocks[block].next.expand() {
+            self.blocks[next_block].seq
         } else {
-            // There is nothing after `ebb`. We can just use a major stride.
-            self.ebbs[ebb].seq = prev_seq + MAJOR_STRIDE;
+            // There is nothing after `block`. We can just use a major stride.
+            self.blocks[block].seq = prev_seq + MAJOR_STRIDE;
             return;
         };
 
         // Check if there is room between these sequence numbers.
         if let Some(seq) = midpoint(prev_seq, next_seq) {
-            self.ebbs[ebb].seq = seq;
+            self.blocks[block].seq = seq;
         } else {
             // No available integers between `prev_seq` and `next_seq`. We have to renumber.
-            self.renumber_from_ebb(ebb, prev_seq + MINOR_STRIDE, prev_seq + LOCAL_LIMIT);
+            self.renumber_from_block(block, prev_seq + MINOR_STRIDE, prev_seq + LOCAL_LIMIT);
         }
     }
 
     /// Assign a valid sequence number to `inst` such that the numbers are still monotonic. This may
     /// require renumbering.
     fn assign_inst_seq(&mut self, inst: Inst) {
-        let ebb = self
-            .inst_ebb(inst)
+        let block = self
+            .inst_block(inst)
             .expect("inst must be inserted before assigning an seq");
 
         // Get the sequence number immediately before `inst`.
         let prev_seq = match self.insts[inst].prev.expand() {
             Some(prev_inst) => self.insts[prev_inst].seq,
-            None => self.ebbs[ebb].seq,
+            None => self.blocks[block].seq,
         };
 
         // Get the sequence number immediately following `inst`.
         let next_seq = if let Some(next_inst) = self.insts[inst].next.expand() {
             self.insts[next_inst].seq
-        } else if let Some(next_ebb) = self.ebbs[ebb].next.expand() {
-            self.ebbs[next_ebb].seq
+        } else if let Some(next_block) = self.blocks[block].next.expand() {
+            self.blocks[next_block].seq
         } else {
             // There is nothing after `inst`. We can just use a major stride.
             self.insts[inst].seq = prev_seq + MAJOR_STRIDE;
@@ -219,7 +219,7 @@ impl Layout {
         }
     }
 
-    /// Renumber instructions starting from `inst` until the end of the EBB or until numbers catch
+    /// Renumber instructions starting from `inst` until the end of the block or until numbers catch
     /// up.
     ///
     /// Return `None` if renumbering has caught up and the sequence is monotonic again. Otherwise
@@ -260,31 +260,36 @@ impl Layout {
         }
     }
 
-    /// Renumber starting from `ebb` to `seq` and continuing until the sequence numbers are
+    /// Renumber starting from `block` to `seq` and continuing until the sequence numbers are
     /// monotonic again.
-    fn renumber_from_ebb(&mut self, ebb: Ebb, first_seq: SequenceNumber, limit: SequenceNumber) {
-        let mut ebb = ebb;
+    fn renumber_from_block(
+        &mut self,
+        block: Block,
+        first_seq: SequenceNumber,
+        limit: SequenceNumber,
+    ) {
+        let mut block = block;
         let mut seq = first_seq;
 
         loop {
-            self.ebbs[ebb].seq = seq;
+            self.blocks[block].seq = seq;
 
-            // Renumber instructions in `ebb`. Stop when the numbers catch up.
-            if let Some(inst) = self.ebbs[ebb].first_inst.expand() {
+            // Renumber instructions in `block`. Stop when the numbers catch up.
+            if let Some(inst) = self.blocks[block].first_inst.expand() {
                 seq = match self.renumber_insts(inst, seq + MINOR_STRIDE, limit) {
                     Some(s) => s,
                     None => return,
                 }
             }
 
-            // Advance to the next EBB.
-            ebb = match self.ebbs[ebb].next.expand() {
+            // Advance to the next block.
+            block = match self.blocks[block].next.expand() {
                 Some(next) => next,
                 None => return,
             };
 
             // Stop renumbering once the numbers catch up.
-            if seq < self.ebbs[ebb].seq {
+            if seq < self.blocks[block].seq {
                 return;
             }
 
@@ -296,27 +301,27 @@ impl Layout {
     /// monotonic again.
     fn renumber_from_inst(&mut self, inst: Inst, first_seq: SequenceNumber, limit: SequenceNumber) {
         if let Some(seq) = self.renumber_insts(inst, first_seq, limit) {
-            // Renumbering spills over into next EBB.
-            if let Some(next_ebb) = self.ebbs[self.inst_ebb(inst).unwrap()].next.expand() {
-                self.renumber_from_ebb(next_ebb, seq + MINOR_STRIDE, limit);
+            // Renumbering spills over into next block.
+            if let Some(next_block) = self.blocks[self.inst_block(inst).unwrap()].next.expand() {
+                self.renumber_from_block(next_block, seq + MINOR_STRIDE, limit);
             }
         }
     }
 
-    /// Renumber all EBBs and instructions in the layout.
+    /// Renumber all blocks and instructions in the layout.
     ///
     /// This doesn't affect the position of anything, but it gives more room in the internal
     /// sequence numbers for inserting instructions later.
     fn full_renumber(&mut self) {
         let _tt = timing::layout_renumber();
         let mut seq = 0;
-        let mut next_ebb = self.first_ebb;
-        while let Some(ebb) = next_ebb {
-            self.ebbs[ebb].seq = seq;
+        let mut next_block = self.first_block;
+        while let Some(block) = next_block {
+            self.blocks[block].seq = seq;
             seq += MAJOR_STRIDE;
-            next_ebb = self.ebbs[ebb].next.expand();
+            next_block = self.blocks[block].next.expand();
 
-            let mut next_inst = self.ebbs[ebb].first_inst.expand();
+            let mut next_inst = self.blocks[block].first_inst.expand();
             while let Some(inst) = next_inst {
                 self.insts[inst].seq = seq;
                 seq += MAJOR_STRIDE;
@@ -327,169 +332,169 @@ impl Layout {
     }
 }
 
-/// Methods for laying out EBBs.
+/// Methods for laying out blocks.
 ///
-/// An unknown EBB starts out as *not inserted* in the EBB layout. The layout is a linear order of
-/// inserted EBBs. Once an EBB has been inserted in the layout, instructions can be added. An EBB
+/// An unknown block starts out as *not inserted* in the block layout. The layout is a linear order of
+/// inserted blocks. Once an block has been inserted in the layout, instructions can be added. An block
 /// can only be removed from the layout when it is empty.
 ///
-/// Since every EBB must end with a terminator instruction which cannot fall through, the layout of
-/// EBBs do not affect the semantics of the program.
+/// Since every block must end with a terminator instruction which cannot fall through, the layout of
+/// blocks do not affect the semantics of the program.
 ///
 impl Layout {
-    /// Is `ebb` currently part of the layout?
-    pub fn is_ebb_inserted(&self, ebb: Ebb) -> bool {
-        Some(ebb) == self.first_ebb || self.ebbs[ebb].prev.is_some()
+    /// Is `block` currently part of the layout?
+    pub fn is_block_inserted(&self, block: Block) -> bool {
+        Some(block) == self.first_block || self.blocks[block].prev.is_some()
     }
 
-    /// Insert `ebb` as the last EBB in the layout.
-    pub fn append_ebb(&mut self, ebb: Ebb) {
+    /// Insert `block` as the last block in the layout.
+    pub fn append_block(&mut self, block: Block) {
         debug_assert!(
-            !self.is_ebb_inserted(ebb),
-            "Cannot append EBB that is already in the layout"
+            !self.is_block_inserted(block),
+            "Cannot append block that is already in the layout"
         );
         {
-            let node = &mut self.ebbs[ebb];
+            let node = &mut self.blocks[block];
             debug_assert!(node.first_inst.is_none() && node.last_inst.is_none());
-            node.prev = self.last_ebb.into();
+            node.prev = self.last_block.into();
             node.next = None.into();
         }
-        if let Some(last) = self.last_ebb {
-            self.ebbs[last].next = ebb.into();
+        if let Some(last) = self.last_block {
+            self.blocks[last].next = block.into();
         } else {
-            self.first_ebb = Some(ebb);
+            self.first_block = Some(block);
         }
-        self.last_ebb = Some(ebb);
-        self.assign_ebb_seq(ebb);
+        self.last_block = Some(block);
+        self.assign_block_seq(block);
     }
 
-    /// Insert `ebb` in the layout before the existing EBB `before`.
-    pub fn insert_ebb(&mut self, ebb: Ebb, before: Ebb) {
+    /// Insert `block` in the layout before the existing block `before`.
+    pub fn insert_block(&mut self, block: Block, before: Block) {
         debug_assert!(
-            !self.is_ebb_inserted(ebb),
-            "Cannot insert EBB that is already in the layout"
+            !self.is_block_inserted(block),
+            "Cannot insert block that is already in the layout"
         );
         debug_assert!(
-            self.is_ebb_inserted(before),
-            "EBB Insertion point not in the layout"
+            self.is_block_inserted(before),
+            "block Insertion point not in the layout"
         );
-        let after = self.ebbs[before].prev;
+        let after = self.blocks[before].prev;
         {
-            let node = &mut self.ebbs[ebb];
+            let node = &mut self.blocks[block];
             node.next = before.into();
             node.prev = after;
         }
-        self.ebbs[before].prev = ebb.into();
+        self.blocks[before].prev = block.into();
         match after.expand() {
-            None => self.first_ebb = Some(ebb),
-            Some(a) => self.ebbs[a].next = ebb.into(),
+            None => self.first_block = Some(block),
+            Some(a) => self.blocks[a].next = block.into(),
         }
-        self.assign_ebb_seq(ebb);
+        self.assign_block_seq(block);
     }
 
-    /// Insert `ebb` in the layout *after* the existing EBB `after`.
-    pub fn insert_ebb_after(&mut self, ebb: Ebb, after: Ebb) {
+    /// Insert `block` in the layout *after* the existing block `after`.
+    pub fn insert_block_after(&mut self, block: Block, after: Block) {
         debug_assert!(
-            !self.is_ebb_inserted(ebb),
-            "Cannot insert EBB that is already in the layout"
+            !self.is_block_inserted(block),
+            "Cannot insert block that is already in the layout"
         );
         debug_assert!(
-            self.is_ebb_inserted(after),
-            "EBB Insertion point not in the layout"
+            self.is_block_inserted(after),
+            "block Insertion point not in the layout"
         );
-        let before = self.ebbs[after].next;
+        let before = self.blocks[after].next;
         {
-            let node = &mut self.ebbs[ebb];
+            let node = &mut self.blocks[block];
             node.next = before;
             node.prev = after.into();
         }
-        self.ebbs[after].next = ebb.into();
+        self.blocks[after].next = block.into();
         match before.expand() {
-            None => self.last_ebb = Some(ebb),
-            Some(b) => self.ebbs[b].prev = ebb.into(),
+            None => self.last_block = Some(block),
+            Some(b) => self.blocks[b].prev = block.into(),
         }
-        self.assign_ebb_seq(ebb);
+        self.assign_block_seq(block);
     }
 
-    /// Remove `ebb` from the layout.
-    pub fn remove_ebb(&mut self, ebb: Ebb) {
-        debug_assert!(self.is_ebb_inserted(ebb), "EBB not in the layout");
-        debug_assert!(self.first_inst(ebb).is_none(), "EBB must be empty.");
+    /// Remove `block` from the layout.
+    pub fn remove_block(&mut self, block: Block) {
+        debug_assert!(self.is_block_inserted(block), "block not in the layout");
+        debug_assert!(self.first_inst(block).is_none(), "block must be empty.");
 
-        // Clear the `ebb` node and extract links.
+        // Clear the `block` node and extract links.
         let prev;
         let next;
         {
-            let n = &mut self.ebbs[ebb];
+            let n = &mut self.blocks[block];
             prev = n.prev;
             next = n.next;
             n.prev = None.into();
             n.next = None.into();
         }
-        // Fix up links to `ebb`.
+        // Fix up links to `block`.
         match prev.expand() {
-            None => self.first_ebb = next.expand(),
-            Some(p) => self.ebbs[p].next = next,
+            None => self.first_block = next.expand(),
+            Some(p) => self.blocks[p].next = next,
         }
         match next.expand() {
-            None => self.last_ebb = prev.expand(),
-            Some(n) => self.ebbs[n].prev = prev,
+            None => self.last_block = prev.expand(),
+            Some(n) => self.blocks[n].prev = prev,
         }
     }
 
-    /// Return an iterator over all EBBs in layout order.
-    pub fn ebbs(&self) -> Ebbs {
-        Ebbs {
+    /// Return an iterator over all blocks in layout order.
+    pub fn blocks(&self) -> Blocks {
+        Blocks {
             layout: self,
-            next: self.first_ebb,
+            next: self.first_block,
         }
     }
 
     /// Get the function's entry block.
-    /// This is simply the first EBB in the layout order.
-    pub fn entry_block(&self) -> Option<Ebb> {
-        self.first_ebb
+    /// This is simply the first block in the layout order.
+    pub fn entry_block(&self) -> Option<Block> {
+        self.first_block
     }
 
-    /// Get the last EBB in the layout.
-    pub fn last_ebb(&self) -> Option<Ebb> {
-        self.last_ebb
+    /// Get the last block in the layout.
+    pub fn last_block(&self) -> Option<Block> {
+        self.last_block
     }
 
-    /// Get the block preceding `ebb` in the layout order.
-    pub fn prev_ebb(&self, ebb: Ebb) -> Option<Ebb> {
-        self.ebbs[ebb].prev.expand()
+    /// Get the block preceding `block` in the layout order.
+    pub fn prev_block(&self, block: Block) -> Option<Block> {
+        self.blocks[block].prev.expand()
     }
 
-    /// Get the block following `ebb` in the layout order.
-    pub fn next_ebb(&self, ebb: Ebb) -> Option<Ebb> {
-        self.ebbs[ebb].next.expand()
+    /// Get the block following `block` in the layout order.
+    pub fn next_block(&self, block: Block) -> Option<Block> {
+        self.blocks[block].next.expand()
     }
 }
 
 #[derive(Clone, Debug, Default)]
-struct EbbNode {
-    prev: PackedOption<Ebb>,
-    next: PackedOption<Ebb>,
+struct BlockNode {
+    prev: PackedOption<Block>,
+    next: PackedOption<Block>,
     first_inst: PackedOption<Inst>,
     last_inst: PackedOption<Inst>,
     seq: SequenceNumber,
 }
 
-/// Iterate over EBBs in layout order. See `Layout::ebbs()`.
-pub struct Ebbs<'f> {
+/// Iterate over blocks in layout order. See `Layout::blocks()`.
+pub struct Blocks<'f> {
     layout: &'f Layout,
-    next: Option<Ebb>,
+    next: Option<Block>,
 }
 
-impl<'f> Iterator for Ebbs<'f> {
-    type Item = Ebb;
+impl<'f> Iterator for Blocks<'f> {
+    type Item = Block;
 
-    fn next(&mut self) -> Option<Ebb> {
+    fn next(&mut self) -> Option<Block> {
         match self.next {
-            Some(ebb) => {
-                self.next = self.layout.next_ebb(ebb);
-                Some(ebb)
+            Some(block) => {
+                self.next = self.layout.next_block(block);
+                Some(block)
             }
             None => None,
         }
@@ -498,70 +503,70 @@ impl<'f> Iterator for Ebbs<'f> {
 
 /// Use a layout reference in a for loop.
 impl<'f> IntoIterator for &'f Layout {
-    type Item = Ebb;
-    type IntoIter = Ebbs<'f>;
+    type Item = Block;
+    type IntoIter = Blocks<'f>;
 
-    fn into_iter(self) -> Ebbs<'f> {
-        self.ebbs()
+    fn into_iter(self) -> Blocks<'f> {
+        self.blocks()
     }
 }
 
 /// Methods for arranging instructions.
 ///
 /// An instruction starts out as *not inserted* in the layout. An instruction can be inserted into
-/// an EBB at a given position.
+/// an block at a given position.
 impl Layout {
-    /// Get the EBB containing `inst`, or `None` if `inst` is not inserted in the layout.
-    pub fn inst_ebb(&self, inst: Inst) -> Option<Ebb> {
-        self.insts[inst].ebb.into()
+    /// Get the block containing `inst`, or `None` if `inst` is not inserted in the layout.
+    pub fn inst_block(&self, inst: Inst) -> Option<Block> {
+        self.insts[inst].block.into()
     }
 
-    /// Get the EBB containing the program point `pp`. Panic if `pp` is not in the layout.
-    pub fn pp_ebb<PP>(&self, pp: PP) -> Ebb
+    /// Get the block containing the program point `pp`. Panic if `pp` is not in the layout.
+    pub fn pp_block<PP>(&self, pp: PP) -> Block
     where
         PP: Into<ExpandedProgramPoint>,
     {
         match pp.into() {
-            ExpandedProgramPoint::Ebb(ebb) => ebb,
+            ExpandedProgramPoint::Block(block) => block,
             ExpandedProgramPoint::Inst(inst) => {
-                self.inst_ebb(inst).expect("Program point not in layout")
+                self.inst_block(inst).expect("Program point not in layout")
             }
         }
     }
 
-    /// Append `inst` to the end of `ebb`.
-    pub fn append_inst(&mut self, inst: Inst, ebb: Ebb) {
-        debug_assert_eq!(self.inst_ebb(inst), None);
+    /// Append `inst` to the end of `block`.
+    pub fn append_inst(&mut self, inst: Inst, block: Block) {
+        debug_assert_eq!(self.inst_block(inst), None);
         debug_assert!(
-            self.is_ebb_inserted(ebb),
-            "Cannot append instructions to EBB not in layout"
+            self.is_block_inserted(block),
+            "Cannot append instructions to block not in layout"
         );
         {
-            let ebb_node = &mut self.ebbs[ebb];
+            let block_node = &mut self.blocks[block];
             {
                 let inst_node = &mut self.insts[inst];
-                inst_node.ebb = ebb.into();
-                inst_node.prev = ebb_node.last_inst;
+                inst_node.block = block.into();
+                inst_node.prev = block_node.last_inst;
                 debug_assert!(inst_node.next.is_none());
             }
-            if ebb_node.first_inst.is_none() {
-                ebb_node.first_inst = inst.into();
+            if block_node.first_inst.is_none() {
+                block_node.first_inst = inst.into();
             } else {
-                self.insts[ebb_node.last_inst.unwrap()].next = inst.into();
+                self.insts[block_node.last_inst.unwrap()].next = inst.into();
             }
-            ebb_node.last_inst = inst.into();
+            block_node.last_inst = inst.into();
         }
         self.assign_inst_seq(inst);
     }
 
-    /// Fetch an ebb's first instruction.
-    pub fn first_inst(&self, ebb: Ebb) -> Option<Inst> {
-        self.ebbs[ebb].first_inst.into()
+    /// Fetch an block's first instruction.
+    pub fn first_inst(&self, block: Block) -> Option<Inst> {
+        self.blocks[block].first_inst.into()
     }
 
-    /// Fetch an ebb's last instruction.
-    pub fn last_inst(&self, ebb: Ebb) -> Option<Inst> {
-        self.ebbs[ebb].last_inst.into()
+    /// Fetch an block's last instruction.
+    pub fn last_inst(&self, block: Block) -> Option<Inst> {
+        self.blocks[block].last_inst.into()
     }
 
     /// Fetch the instruction following `inst`.
@@ -574,11 +579,11 @@ impl Layout {
         self.insts[inst].prev.expand()
     }
 
-    /// Fetch the first instruction in an ebb's terminal branch group.
-    pub fn canonical_branch_inst(&self, dfg: &DataFlowGraph, ebb: Ebb) -> Option<Inst> {
+    /// Fetch the first instruction in an block's terminal branch group.
+    pub fn canonical_branch_inst(&self, dfg: &DataFlowGraph, block: Block) -> Option<Inst> {
         // Basic blocks permit at most two terminal branch instructions.
         // If two, the former is conditional and the latter is unconditional.
-        let last = self.last_inst(ebb)?;
+        let last = self.last_inst(block)?;
         if let Some(prev) = self.prev_inst(last) {
             if dfg[prev].opcode().is_branch() {
                 return Some(prev);
@@ -587,22 +592,22 @@ impl Layout {
         Some(last)
     }
 
-    /// Insert `inst` before the instruction `before` in the same EBB.
+    /// Insert `inst` before the instruction `before` in the same block.
     pub fn insert_inst(&mut self, inst: Inst, before: Inst) {
-        debug_assert_eq!(self.inst_ebb(inst), None);
-        let ebb = self
-            .inst_ebb(before)
+        debug_assert_eq!(self.inst_block(inst), None);
+        let block = self
+            .inst_block(before)
             .expect("Instruction before insertion point not in the layout");
         let after = self.insts[before].prev;
         {
             let inst_node = &mut self.insts[inst];
-            inst_node.ebb = ebb.into();
+            inst_node.block = block.into();
             inst_node.next = before.into();
             inst_node.prev = after;
         }
         self.insts[before].prev = inst.into();
         match after.expand() {
-            None => self.ebbs[ebb].first_inst = inst.into(),
+            None => self.blocks[block].first_inst = inst.into(),
             Some(a) => self.insts[a].next = inst.into(),
         }
         self.assign_inst_seq(inst);
@@ -610,7 +615,7 @@ impl Layout {
 
     /// Remove `inst` from the layout.
     pub fn remove_inst(&mut self, inst: Inst) {
-        let ebb = self.inst_ebb(inst).expect("Instruction already removed.");
+        let block = self.inst_block(inst).expect("Instruction already removed.");
         // Clear the `inst` node and extract links.
         let prev;
         let next;
@@ -618,37 +623,37 @@ impl Layout {
             let n = &mut self.insts[inst];
             prev = n.prev;
             next = n.next;
-            n.ebb = None.into();
+            n.block = None.into();
             n.prev = None.into();
             n.next = None.into();
         }
         // Fix up links to `inst`.
         match prev.expand() {
-            None => self.ebbs[ebb].first_inst = next,
+            None => self.blocks[block].first_inst = next,
             Some(p) => self.insts[p].next = next,
         }
         match next.expand() {
-            None => self.ebbs[ebb].last_inst = prev,
+            None => self.blocks[block].last_inst = prev,
             Some(n) => self.insts[n].prev = prev,
         }
     }
 
-    /// Iterate over the instructions in `ebb` in layout order.
-    pub fn ebb_insts(&self, ebb: Ebb) -> Insts {
+    /// Iterate over the instructions in `block` in layout order.
+    pub fn block_insts(&self, block: Block) -> Insts {
         Insts {
             layout: self,
-            head: self.ebbs[ebb].first_inst.into(),
-            tail: self.ebbs[ebb].last_inst.into(),
+            head: self.blocks[block].first_inst.into(),
+            tail: self.blocks[block].last_inst.into(),
         }
     }
 
-    /// Split the EBB containing `before` in two.
+    /// Split the block containing `before` in two.
     ///
-    /// Insert `new_ebb` after the old EBB and move `before` and the following instructions to
-    /// `new_ebb`:
+    /// Insert `new_block` after the old block and move `before` and the following instructions to
+    /// `new_block`:
     ///
     /// ```text
-    /// old_ebb:
+    /// old_block:
     ///     i1
     ///     i2
     ///     i3 << before
@@ -657,69 +662,69 @@ impl Layout {
     /// becomes:
     ///
     /// ```text
-    /// old_ebb:
+    /// old_block:
     ///     i1
     ///     i2
-    /// new_ebb:
+    /// new_block:
     ///     i3 << before
     ///     i4
     /// ```
-    pub fn split_ebb(&mut self, new_ebb: Ebb, before: Inst) {
-        let old_ebb = self
-            .inst_ebb(before)
+    pub fn split_block(&mut self, new_block: Block, before: Inst) {
+        let old_block = self
+            .inst_block(before)
             .expect("The `before` instruction must be in the layout");
-        debug_assert!(!self.is_ebb_inserted(new_ebb));
+        debug_assert!(!self.is_block_inserted(new_block));
 
-        // Insert new_ebb after old_ebb.
-        let next_ebb = self.ebbs[old_ebb].next;
-        let last_inst = self.ebbs[old_ebb].last_inst;
+        // Insert new_block after old_block.
+        let next_block = self.blocks[old_block].next;
+        let last_inst = self.blocks[old_block].last_inst;
         {
-            let node = &mut self.ebbs[new_ebb];
-            node.prev = old_ebb.into();
-            node.next = next_ebb;
+            let node = &mut self.blocks[new_block];
+            node.prev = old_block.into();
+            node.next = next_block;
             node.first_inst = before.into();
             node.last_inst = last_inst;
         }
-        self.ebbs[old_ebb].next = new_ebb.into();
+        self.blocks[old_block].next = new_block.into();
 
         // Fix backwards link.
-        if Some(old_ebb) == self.last_ebb {
-            self.last_ebb = Some(new_ebb);
+        if Some(old_block) == self.last_block {
+            self.last_block = Some(new_block);
         } else {
-            self.ebbs[next_ebb.unwrap()].prev = new_ebb.into();
+            self.blocks[next_block.unwrap()].prev = new_block.into();
         }
 
         // Disconnect the instruction links.
         let prev_inst = self.insts[before].prev;
         self.insts[before].prev = None.into();
-        self.ebbs[old_ebb].last_inst = prev_inst;
+        self.blocks[old_block].last_inst = prev_inst;
         match prev_inst.expand() {
-            None => self.ebbs[old_ebb].first_inst = None.into(),
+            None => self.blocks[old_block].first_inst = None.into(),
             Some(pi) => self.insts[pi].next = None.into(),
         }
 
-        // Fix the instruction -> ebb pointers.
+        // Fix the instruction -> block pointers.
         let mut opt_i = Some(before);
         while let Some(i) = opt_i {
-            debug_assert_eq!(self.insts[i].ebb.expand(), Some(old_ebb));
-            self.insts[i].ebb = new_ebb.into();
+            debug_assert_eq!(self.insts[i].block.expand(), Some(old_block));
+            self.insts[i].block = new_block.into();
             opt_i = self.insts[i].next.into();
         }
 
-        self.assign_ebb_seq(new_ebb);
+        self.assign_block_seq(new_block);
     }
 }
 
 #[derive(Clone, Debug, Default)]
 struct InstNode {
-    /// The Ebb containing this instruction, or `None` if the instruction is not yet inserted.
-    ebb: PackedOption<Ebb>,
+    /// The Block containing this instruction, or `None` if the instruction is not yet inserted.
+    block: PackedOption<Block>,
     prev: PackedOption<Inst>,
     next: PackedOption<Inst>,
     seq: SequenceNumber,
 }
 
-/// Iterate over instructions in an EBB in layout order. See `Layout::ebb_insts()`.
+/// Iterate over instructions in an block in layout order. See `Layout::block_insts()`.
 pub struct Insts<'f> {
     layout: &'f Layout,
     head: Option<Inst>,
@@ -763,7 +768,7 @@ mod tests {
     use super::Layout;
     use crate::cursor::{Cursor, CursorPosition};
     use crate::entity::EntityRef;
-    use crate::ir::{Ebb, Inst, ProgramOrder, SourceLoc};
+    use crate::ir::{Block, Inst, ProgramOrder, SourceLoc};
     use alloc::vec::Vec;
     use core::cmp::Ordering;
 
@@ -810,76 +815,76 @@ mod tests {
         }
     }
 
-    fn verify(layout: &mut Layout, ebbs: &[(Ebb, &[Inst])]) {
-        // Check that EBBs are inserted and instructions belong the right places.
+    fn verify(layout: &mut Layout, blocks: &[(Block, &[Inst])]) {
+        // Check that blocks are inserted and instructions belong the right places.
         // Check forward linkage with iterators.
         // Check that layout sequence numbers are strictly monotonic.
         {
             let mut seq = 0;
-            let mut ebb_iter = layout.ebbs();
-            for &(ebb, insts) in ebbs {
-                assert!(layout.is_ebb_inserted(ebb));
-                assert_eq!(ebb_iter.next(), Some(ebb));
-                assert!(layout.ebbs[ebb].seq > seq);
-                seq = layout.ebbs[ebb].seq;
+            let mut block_iter = layout.blocks();
+            for &(block, insts) in blocks {
+                assert!(layout.is_block_inserted(block));
+                assert_eq!(block_iter.next(), Some(block));
+                assert!(layout.blocks[block].seq > seq);
+                seq = layout.blocks[block].seq;
 
-                let mut inst_iter = layout.ebb_insts(ebb);
+                let mut inst_iter = layout.block_insts(block);
                 for &inst in insts {
-                    assert_eq!(layout.inst_ebb(inst), Some(ebb));
+                    assert_eq!(layout.inst_block(inst), Some(block));
                     assert_eq!(inst_iter.next(), Some(inst));
                     assert!(layout.insts[inst].seq > seq);
                     seq = layout.insts[inst].seq;
                 }
                 assert_eq!(inst_iter.next(), None);
             }
-            assert_eq!(ebb_iter.next(), None);
+            assert_eq!(block_iter.next(), None);
         }
 
         // Check backwards linkage with a cursor.
         let mut cur = LayoutCursor::new(layout);
-        for &(ebb, insts) in ebbs.into_iter().rev() {
-            assert_eq!(cur.prev_ebb(), Some(ebb));
+        for &(block, insts) in blocks.into_iter().rev() {
+            assert_eq!(cur.prev_block(), Some(block));
             for &inst in insts.into_iter().rev() {
                 assert_eq!(cur.prev_inst(), Some(inst));
             }
             assert_eq!(cur.prev_inst(), None);
         }
-        assert_eq!(cur.prev_ebb(), None);
+        assert_eq!(cur.prev_block(), None);
     }
 
     #[test]
-    fn append_ebb() {
+    fn append_block() {
         let mut layout = Layout::new();
-        let e0 = Ebb::new(0);
-        let e1 = Ebb::new(1);
-        let e2 = Ebb::new(2);
+        let e0 = Block::new(0);
+        let e1 = Block::new(1);
+        let e2 = Block::new(2);
 
         {
             let imm = &layout;
-            assert!(!imm.is_ebb_inserted(e0));
-            assert!(!imm.is_ebb_inserted(e1));
+            assert!(!imm.is_block_inserted(e0));
+            assert!(!imm.is_block_inserted(e1));
         }
         verify(&mut layout, &[]);
 
-        layout.append_ebb(e1);
-        assert!(!layout.is_ebb_inserted(e0));
-        assert!(layout.is_ebb_inserted(e1));
-        assert!(!layout.is_ebb_inserted(e2));
-        let v: Vec<Ebb> = layout.ebbs().collect();
+        layout.append_block(e1);
+        assert!(!layout.is_block_inserted(e0));
+        assert!(layout.is_block_inserted(e1));
+        assert!(!layout.is_block_inserted(e2));
+        let v: Vec<Block> = layout.blocks().collect();
         assert_eq!(v, [e1]);
 
-        layout.append_ebb(e2);
-        assert!(!layout.is_ebb_inserted(e0));
-        assert!(layout.is_ebb_inserted(e1));
-        assert!(layout.is_ebb_inserted(e2));
-        let v: Vec<Ebb> = layout.ebbs().collect();
+        layout.append_block(e2);
+        assert!(!layout.is_block_inserted(e0));
+        assert!(layout.is_block_inserted(e1));
+        assert!(layout.is_block_inserted(e2));
+        let v: Vec<Block> = layout.blocks().collect();
         assert_eq!(v, [e1, e2]);
 
-        layout.append_ebb(e0);
-        assert!(layout.is_ebb_inserted(e0));
-        assert!(layout.is_ebb_inserted(e1));
-        assert!(layout.is_ebb_inserted(e2));
-        let v: Vec<Ebb> = layout.ebbs().collect();
+        layout.append_block(e0);
+        assert!(layout.is_block_inserted(e0));
+        assert!(layout.is_block_inserted(e1));
+        assert!(layout.is_block_inserted(e2));
+        let v: Vec<Block> = layout.blocks().collect();
         assert_eq!(v, [e1, e2, e0]);
 
         {
@@ -899,111 +904,111 @@ mod tests {
         assert_eq!(cur.prev_inst(), None);
         assert_eq!(cur.position(), CursorPosition::Nowhere);
 
-        assert_eq!(cur.next_ebb(), Some(e1));
+        assert_eq!(cur.next_block(), Some(e1));
         assert_eq!(cur.position(), CursorPosition::Before(e1));
         assert_eq!(cur.next_inst(), None);
         assert_eq!(cur.position(), CursorPosition::After(e1));
         assert_eq!(cur.next_inst(), None);
         assert_eq!(cur.position(), CursorPosition::After(e1));
-        assert_eq!(cur.next_ebb(), Some(e2));
+        assert_eq!(cur.next_block(), Some(e2));
         assert_eq!(cur.prev_inst(), None);
         assert_eq!(cur.position(), CursorPosition::Before(e2));
-        assert_eq!(cur.next_ebb(), Some(e0));
-        assert_eq!(cur.next_ebb(), None);
+        assert_eq!(cur.next_block(), Some(e0));
+        assert_eq!(cur.next_block(), None);
         assert_eq!(cur.position(), CursorPosition::Nowhere);
 
-        // Backwards through the EBBs.
-        assert_eq!(cur.prev_ebb(), Some(e0));
+        // Backwards through the blocks.
+        assert_eq!(cur.prev_block(), Some(e0));
         assert_eq!(cur.position(), CursorPosition::After(e0));
-        assert_eq!(cur.prev_ebb(), Some(e2));
-        assert_eq!(cur.prev_ebb(), Some(e1));
-        assert_eq!(cur.prev_ebb(), None);
+        assert_eq!(cur.prev_block(), Some(e2));
+        assert_eq!(cur.prev_block(), Some(e1));
+        assert_eq!(cur.prev_block(), None);
         assert_eq!(cur.position(), CursorPosition::Nowhere);
     }
 
     #[test]
-    fn insert_ebb() {
+    fn insert_block() {
         let mut layout = Layout::new();
-        let e0 = Ebb::new(0);
-        let e1 = Ebb::new(1);
-        let e2 = Ebb::new(2);
+        let e0 = Block::new(0);
+        let e1 = Block::new(1);
+        let e2 = Block::new(2);
 
         {
             let imm = &layout;
-            assert!(!imm.is_ebb_inserted(e0));
-            assert!(!imm.is_ebb_inserted(e1));
+            assert!(!imm.is_block_inserted(e0));
+            assert!(!imm.is_block_inserted(e1));
 
-            let v: Vec<Ebb> = layout.ebbs().collect();
+            let v: Vec<Block> = layout.blocks().collect();
             assert_eq!(v, []);
         }
 
-        layout.append_ebb(e1);
-        assert!(!layout.is_ebb_inserted(e0));
-        assert!(layout.is_ebb_inserted(e1));
-        assert!(!layout.is_ebb_inserted(e2));
+        layout.append_block(e1);
+        assert!(!layout.is_block_inserted(e0));
+        assert!(layout.is_block_inserted(e1));
+        assert!(!layout.is_block_inserted(e2));
         verify(&mut layout, &[(e1, &[])]);
 
-        layout.insert_ebb(e2, e1);
-        assert!(!layout.is_ebb_inserted(e0));
-        assert!(layout.is_ebb_inserted(e1));
-        assert!(layout.is_ebb_inserted(e2));
+        layout.insert_block(e2, e1);
+        assert!(!layout.is_block_inserted(e0));
+        assert!(layout.is_block_inserted(e1));
+        assert!(layout.is_block_inserted(e2));
         verify(&mut layout, &[(e2, &[]), (e1, &[])]);
 
-        layout.insert_ebb(e0, e1);
-        assert!(layout.is_ebb_inserted(e0));
-        assert!(layout.is_ebb_inserted(e1));
-        assert!(layout.is_ebb_inserted(e2));
+        layout.insert_block(e0, e1);
+        assert!(layout.is_block_inserted(e0));
+        assert!(layout.is_block_inserted(e1));
+        assert!(layout.is_block_inserted(e2));
         verify(&mut layout, &[(e2, &[]), (e0, &[]), (e1, &[])]);
     }
 
     #[test]
-    fn insert_ebb_after() {
+    fn insert_block_after() {
         let mut layout = Layout::new();
-        let e0 = Ebb::new(0);
-        let e1 = Ebb::new(1);
-        let e2 = Ebb::new(2);
+        let e0 = Block::new(0);
+        let e1 = Block::new(1);
+        let e2 = Block::new(2);
 
-        layout.append_ebb(e1);
-        layout.insert_ebb_after(e2, e1);
+        layout.append_block(e1);
+        layout.insert_block_after(e2, e1);
         verify(&mut layout, &[(e1, &[]), (e2, &[])]);
 
-        layout.insert_ebb_after(e0, e1);
+        layout.insert_block_after(e0, e1);
         verify(&mut layout, &[(e1, &[]), (e0, &[]), (e2, &[])]);
     }
 
     #[test]
     fn append_inst() {
         let mut layout = Layout::new();
-        let e1 = Ebb::new(1);
+        let e1 = Block::new(1);
 
-        layout.append_ebb(e1);
-        let v: Vec<Inst> = layout.ebb_insts(e1).collect();
+        layout.append_block(e1);
+        let v: Vec<Inst> = layout.block_insts(e1).collect();
         assert_eq!(v, []);
 
         let i0 = Inst::new(0);
         let i1 = Inst::new(1);
         let i2 = Inst::new(2);
 
-        assert_eq!(layout.inst_ebb(i0), None);
-        assert_eq!(layout.inst_ebb(i1), None);
-        assert_eq!(layout.inst_ebb(i2), None);
+        assert_eq!(layout.inst_block(i0), None);
+        assert_eq!(layout.inst_block(i1), None);
+        assert_eq!(layout.inst_block(i2), None);
 
         layout.append_inst(i1, e1);
-        assert_eq!(layout.inst_ebb(i0), None);
-        assert_eq!(layout.inst_ebb(i1), Some(e1));
-        assert_eq!(layout.inst_ebb(i2), None);
-        let v: Vec<Inst> = layout.ebb_insts(e1).collect();
+        assert_eq!(layout.inst_block(i0), None);
+        assert_eq!(layout.inst_block(i1), Some(e1));
+        assert_eq!(layout.inst_block(i2), None);
+        let v: Vec<Inst> = layout.block_insts(e1).collect();
         assert_eq!(v, [i1]);
 
         layout.append_inst(i2, e1);
-        assert_eq!(layout.inst_ebb(i0), None);
-        assert_eq!(layout.inst_ebb(i1), Some(e1));
-        assert_eq!(layout.inst_ebb(i2), Some(e1));
-        let v: Vec<Inst> = layout.ebb_insts(e1).collect();
+        assert_eq!(layout.inst_block(i0), None);
+        assert_eq!(layout.inst_block(i1), Some(e1));
+        assert_eq!(layout.inst_block(i2), Some(e1));
+        let v: Vec<Inst> = layout.block_insts(e1).collect();
         assert_eq!(v, [i1, i2]);
 
         // Test double-ended instruction iterator.
-        let v: Vec<Inst> = layout.ebb_insts(e1).rev().collect();
+        let v: Vec<Inst> = layout.block_insts(e1).rev().collect();
         assert_eq!(v, [i2, i1]);
 
         layout.append_inst(i0, e1);
@@ -1036,45 +1041,45 @@ mod tests {
         cur.goto_inst(i2);
         assert_eq!(cur.remove_inst(), i2);
         verify(cur.layout, &[(e1, &[i1, i0])]);
-        assert_eq!(cur.layout.inst_ebb(i2), None);
+        assert_eq!(cur.layout.inst_block(i2), None);
         assert_eq!(cur.remove_inst(), i0);
         verify(cur.layout, &[(e1, &[i1])]);
-        assert_eq!(cur.layout.inst_ebb(i0), None);
+        assert_eq!(cur.layout.inst_block(i0), None);
         assert_eq!(cur.position(), CursorPosition::After(e1));
         cur.layout.remove_inst(i1);
         verify(cur.layout, &[(e1, &[])]);
-        assert_eq!(cur.layout.inst_ebb(i1), None);
+        assert_eq!(cur.layout.inst_block(i1), None);
     }
 
     #[test]
     fn insert_inst() {
         let mut layout = Layout::new();
-        let e1 = Ebb::new(1);
+        let e1 = Block::new(1);
 
-        layout.append_ebb(e1);
-        let v: Vec<Inst> = layout.ebb_insts(e1).collect();
+        layout.append_block(e1);
+        let v: Vec<Inst> = layout.block_insts(e1).collect();
         assert_eq!(v, []);
 
         let i0 = Inst::new(0);
         let i1 = Inst::new(1);
         let i2 = Inst::new(2);
 
-        assert_eq!(layout.inst_ebb(i0), None);
-        assert_eq!(layout.inst_ebb(i1), None);
-        assert_eq!(layout.inst_ebb(i2), None);
+        assert_eq!(layout.inst_block(i0), None);
+        assert_eq!(layout.inst_block(i1), None);
+        assert_eq!(layout.inst_block(i2), None);
 
         layout.append_inst(i1, e1);
-        assert_eq!(layout.inst_ebb(i0), None);
-        assert_eq!(layout.inst_ebb(i1), Some(e1));
-        assert_eq!(layout.inst_ebb(i2), None);
-        let v: Vec<Inst> = layout.ebb_insts(e1).collect();
+        assert_eq!(layout.inst_block(i0), None);
+        assert_eq!(layout.inst_block(i1), Some(e1));
+        assert_eq!(layout.inst_block(i2), None);
+        let v: Vec<Inst> = layout.block_insts(e1).collect();
         assert_eq!(v, [i1]);
 
         layout.insert_inst(i2, i1);
-        assert_eq!(layout.inst_ebb(i0), None);
-        assert_eq!(layout.inst_ebb(i1), Some(e1));
-        assert_eq!(layout.inst_ebb(i2), Some(e1));
-        let v: Vec<Inst> = layout.ebb_insts(e1).collect();
+        assert_eq!(layout.inst_block(i0), None);
+        assert_eq!(layout.inst_block(i1), Some(e1));
+        assert_eq!(layout.inst_block(i2), Some(e1));
+        let v: Vec<Inst> = layout.block_insts(e1).collect();
         assert_eq!(v, [i2, i1]);
 
         layout.insert_inst(i0, i1);
@@ -1082,16 +1087,16 @@ mod tests {
     }
 
     #[test]
-    fn multiple_ebbs() {
+    fn multiple_blocks() {
         let mut layout = Layout::new();
 
-        let e0 = Ebb::new(0);
-        let e1 = Ebb::new(1);
+        let e0 = Block::new(0);
+        let e1 = Block::new(1);
 
         assert_eq!(layout.entry_block(), None);
-        layout.append_ebb(e0);
+        layout.append_block(e0);
         assert_eq!(layout.entry_block(), Some(e0));
-        layout.append_ebb(e1);
+        layout.append_block(e1);
         assert_eq!(layout.entry_block(), Some(e0));
 
         let i0 = Inst::new(0);
@@ -1104,84 +1109,84 @@ mod tests {
         layout.append_inst(i2, e1);
         layout.append_inst(i3, e1);
 
-        let v0: Vec<Inst> = layout.ebb_insts(e0).collect();
-        let v1: Vec<Inst> = layout.ebb_insts(e1).collect();
+        let v0: Vec<Inst> = layout.block_insts(e0).collect();
+        let v1: Vec<Inst> = layout.block_insts(e1).collect();
         assert_eq!(v0, [i0, i1]);
         assert_eq!(v1, [i2, i3]);
     }
 
     #[test]
-    fn split_ebb() {
+    fn split_block() {
         let mut layout = Layout::new();
 
-        let e0 = Ebb::new(0);
-        let e1 = Ebb::new(1);
-        let e2 = Ebb::new(2);
+        let e0 = Block::new(0);
+        let e1 = Block::new(1);
+        let e2 = Block::new(2);
 
         let i0 = Inst::new(0);
         let i1 = Inst::new(1);
         let i2 = Inst::new(2);
         let i3 = Inst::new(3);
 
-        layout.append_ebb(e0);
+        layout.append_block(e0);
         layout.append_inst(i0, e0);
-        assert_eq!(layout.inst_ebb(i0), Some(e0));
-        layout.split_ebb(e1, i0);
-        assert_eq!(layout.inst_ebb(i0), Some(e1));
+        assert_eq!(layout.inst_block(i0), Some(e0));
+        layout.split_block(e1, i0);
+        assert_eq!(layout.inst_block(i0), Some(e1));
 
         {
             let mut cur = LayoutCursor::new(&mut layout);
-            assert_eq!(cur.next_ebb(), Some(e0));
+            assert_eq!(cur.next_block(), Some(e0));
             assert_eq!(cur.next_inst(), None);
-            assert_eq!(cur.next_ebb(), Some(e1));
+            assert_eq!(cur.next_block(), Some(e1));
             assert_eq!(cur.next_inst(), Some(i0));
             assert_eq!(cur.next_inst(), None);
-            assert_eq!(cur.next_ebb(), None);
+            assert_eq!(cur.next_block(), None);
 
             // Check backwards links.
-            assert_eq!(cur.prev_ebb(), Some(e1));
+            assert_eq!(cur.prev_block(), Some(e1));
             assert_eq!(cur.prev_inst(), Some(i0));
             assert_eq!(cur.prev_inst(), None);
-            assert_eq!(cur.prev_ebb(), Some(e0));
+            assert_eq!(cur.prev_block(), Some(e0));
             assert_eq!(cur.prev_inst(), None);
-            assert_eq!(cur.prev_ebb(), None);
+            assert_eq!(cur.prev_block(), None);
         }
 
         layout.append_inst(i1, e0);
         layout.append_inst(i2, e0);
         layout.append_inst(i3, e0);
-        layout.split_ebb(e2, i2);
+        layout.split_block(e2, i2);
 
-        assert_eq!(layout.inst_ebb(i0), Some(e1));
-        assert_eq!(layout.inst_ebb(i1), Some(e0));
-        assert_eq!(layout.inst_ebb(i2), Some(e2));
-        assert_eq!(layout.inst_ebb(i3), Some(e2));
+        assert_eq!(layout.inst_block(i0), Some(e1));
+        assert_eq!(layout.inst_block(i1), Some(e0));
+        assert_eq!(layout.inst_block(i2), Some(e2));
+        assert_eq!(layout.inst_block(i3), Some(e2));
 
         {
             let mut cur = LayoutCursor::new(&mut layout);
-            assert_eq!(cur.next_ebb(), Some(e0));
+            assert_eq!(cur.next_block(), Some(e0));
             assert_eq!(cur.next_inst(), Some(i1));
             assert_eq!(cur.next_inst(), None);
-            assert_eq!(cur.next_ebb(), Some(e2));
+            assert_eq!(cur.next_block(), Some(e2));
             assert_eq!(cur.next_inst(), Some(i2));
             assert_eq!(cur.next_inst(), Some(i3));
             assert_eq!(cur.next_inst(), None);
-            assert_eq!(cur.next_ebb(), Some(e1));
+            assert_eq!(cur.next_block(), Some(e1));
             assert_eq!(cur.next_inst(), Some(i0));
             assert_eq!(cur.next_inst(), None);
-            assert_eq!(cur.next_ebb(), None);
+            assert_eq!(cur.next_block(), None);
 
-            assert_eq!(cur.prev_ebb(), Some(e1));
+            assert_eq!(cur.prev_block(), Some(e1));
             assert_eq!(cur.prev_inst(), Some(i0));
             assert_eq!(cur.prev_inst(), None);
-            assert_eq!(cur.prev_ebb(), Some(e2));
+            assert_eq!(cur.prev_block(), Some(e2));
             assert_eq!(cur.prev_inst(), Some(i3));
             assert_eq!(cur.prev_inst(), Some(i2));
             assert_eq!(cur.prev_inst(), None);
-            assert_eq!(cur.prev_ebb(), Some(e0));
+            assert_eq!(cur.prev_block(), Some(e0));
             assert_eq!(cur.prev_inst(), Some(i1));
             assert_eq!(cur.prev_inst(), None);
-            assert_eq!(cur.prev_ebb(), None);
+            assert_eq!(cur.prev_block(), None);
         }
 
         // Check `ProgramOrder`.
@@ -1189,9 +1194,9 @@ mod tests {
         assert_eq!(layout.cmp(e2, i2), Ordering::Less);
         assert_eq!(layout.cmp(i3, i2), Ordering::Greater);
 
-        assert_eq!(layout.is_ebb_gap(i1, e2), true);
-        assert_eq!(layout.is_ebb_gap(i3, e1), true);
-        assert_eq!(layout.is_ebb_gap(i1, e1), false);
-        assert_eq!(layout.is_ebb_gap(i2, e1), false);
+        assert_eq!(layout.is_block_gap(i1, e2), true);
+        assert_eq!(layout.is_block_gap(i3, e1), true);
+        assert_eq!(layout.is_block_gap(i1, e1), false);
+        assert_eq!(layout.is_block_gap(i2, e1), false);
     }
 }

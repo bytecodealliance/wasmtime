@@ -6,7 +6,7 @@ function %heap_base_type(i64 vmctx) {
     gv1 = load.i32 notrap aligned gv0
     heap0 = static gv1, offset_guard 0x1000, bound 0x1_0000, index_type i32 ; error: heap base has type i32, which is not the pointer type i64
 
-ebb0(v0: i64):
+block0(v0: i64):
     return
 }
 
@@ -14,7 +14,7 @@ function %invalid_base(i64 vmctx) {
     gv0 = vmctx
     heap0 = dynamic gv1, bound gv0, offset_guard 0x1000, index_type i64 ; error: invalid base global value gv1
 
-ebb0(v0: i64):
+block0(v0: i64):
     return
 }
 
@@ -22,7 +22,7 @@ function %invalid_bound(i64 vmctx) {
     gv0 = vmctx
     heap0 = dynamic gv0, bound gv1, offset_guard 0x1000, index_type i64 ; error: invalid bound global value gv1
 
-ebb0(v0: i64):
+block0(v0: i64):
     return
 }
 
@@ -31,7 +31,7 @@ function %heap_bound_type(i64 vmctx) {
     gv1 = load.i16 notrap aligned gv0
     heap0 = dynamic gv0, bound gv1, offset_guard 0x1000, index_type i32 ; error: heap index type i32 differs from the type of its bound, i16
 
-ebb0(v0: i64):
+block0(v0: i64):
     return
 }
 
@@ -39,7 +39,7 @@ function %heap_addr_index_type(i64 vmctx, i64) {
     gv0 = vmctx
     heap0 = static gv0, offset_guard 0x1000, bound 0x1_0000, index_type i32
 
-ebb0(v0: i64, v1: i64):
+block0(v0: i64, v1: i64):
     v2 = heap_addr.i64 heap0, v1, 0; error: index type i64 differs from heap index type i32
     return
 }

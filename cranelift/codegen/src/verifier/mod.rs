@@ -1,40 +1,40 @@
 //! A verifier for ensuring that functions are well formed.
 //! It verifies:
 //!
-//! EBB integrity
+//! block integrity
 //!
-//! - All instructions reached from the `ebb_insts` iterator must belong to
-//!   the EBB as reported by `inst_ebb()`.
-//! - Every EBB must end in a terminator instruction, and no other instruction
+//! - All instructions reached from the `block_insts` iterator must belong to
+//!   the block as reported by `inst_block()`.
+//! - Every block must end in a terminator instruction, and no other instruction
 //!   can be a terminator.
-//! - Every value in the `ebb_params` iterator belongs to the EBB as reported by `value_ebb`.
+//! - Every value in the `block_params` iterator belongs to the block as reported by `value_block`.
 //!
 //! Instruction integrity
 //!
 //! - The instruction format must match the opcode.
 //! - All result values must be created for multi-valued instructions.
-//! - All referenced entities must exist. (Values, EBBs, stack slots, ...)
+//! - All referenced entities must exist. (Values, blocks, stack slots, ...)
 //! - Instructions must not reference (eg. branch to) the entry block.
 //!
 //! SSA form
 //!
 //! - Values must be defined by an instruction that exists and that is inserted in
-//!   an EBB, or be an argument of an existing EBB.
+//!   an block, or be an argument of an existing block.
 //! - Values used by an instruction must dominate the instruction.
 //!
 //! Control flow graph and dominator tree integrity:
 //!
-//! - All predecessors in the CFG must be branches to the EBB.
-//! - All branches to an EBB must be present in the CFG.
+//! - All predecessors in the CFG must be branches to the block.
+//! - All branches to an block must be present in the CFG.
 //! - A recomputed dominator tree is identical to the existing one.
 //!
 //! Type checking
 //!
 //! - Compare input and output values against the opcode's type constraints.
 //!   For polymorphic opcodes, determine the controlling type variable first.
-//! - Branches and jumps must pass arguments to destination EBBs that match the
+//! - Branches and jumps must pass arguments to destination blocks that match the
 //!   expected types exactly. The number of arguments must match.
-//! - All EBBs in a jump table must take no arguments.
+//! - All blocks in a jump table must take no arguments.
 //! - Function calls are type checked against their signature.
 //! - The entry block must take arguments that match the signature of the current
 //!   function.
@@ -60,12 +60,12 @@ use self::flags::verify_flags;
 use crate::dbg::DisplayList;
 use crate::dominator_tree::DominatorTree;
 use crate::entity::SparseSet;
-use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir;
 use crate::ir::entities::AnyEntity;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{
-    types, ArgumentLoc, Ebb, FuncRef, Function, GlobalValue, Inst, InstructionData, JumpTable,
+    types, ArgumentLoc, Block, FuncRef, Function, GlobalValue, Inst, InstructionData, JumpTable,
     Opcode, SigRef, StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc,
 };
 use crate::isa::TargetIsa;
@@ -495,30 +495,30 @@ impl<'a> Verifier<'a> {
 
     fn verify_jump_tables(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         for (jt, jt_data) in &self.func.jump_tables {
-            for &ebb in jt_data.iter() {
-                self.verify_ebb(jt, ebb, errors)?;
+            for &block in jt_data.iter() {
+                self.verify_block(jt, block, errors)?;
             }
         }
         Ok(())
     }
 
-    /// Check that the given EBB can be encoded as a BB, by checking that only
-    /// branching instructions are ending the EBB.
-    fn encodable_as_bb(&self, ebb: Ebb, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        match self.func.is_ebb_basic(ebb) {
+    /// Check that the given block can be encoded as a BB, by checking that only
+    /// branching instructions are ending the block.
+    fn encodable_as_bb(&self, block: Block, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+        match self.func.is_block_basic(block) {
             Ok(()) => Ok(()),
             Err((inst, message)) => errors.fatal((inst, self.context(inst), message)),
         }
     }
 
-    fn ebb_integrity(
+    fn block_integrity(
         &self,
-        ebb: Ebb,
+        block: Block,
         inst: Inst,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         let is_terminator = self.func.dfg[inst].opcode().is_terminator();
-        let is_last_inst = self.func.layout.last_inst(ebb) == Some(inst);
+        let is_last_inst = self.func.layout.last_inst(block) == Some(inst);
 
         if is_terminator && !is_last_inst {
             // Terminating instructions only occur at the end of blocks.
@@ -527,30 +527,30 @@ impl<'a> Verifier<'a> {
                 self.context(inst),
                 format!(
                     "a terminator instruction was encountered before the end of {}",
-                    ebb
+                    block
                 ),
             ));
         }
         if is_last_inst && !is_terminator {
-            return errors.fatal((ebb, "block does not end in a terminator instruction"));
+            return errors.fatal((block, "block does not end in a terminator instruction"));
         }
 
-        // Instructions belong to the correct ebb.
-        let inst_ebb = self.func.layout.inst_ebb(inst);
-        if inst_ebb != Some(ebb) {
+        // Instructions belong to the correct block.
+        let inst_block = self.func.layout.inst_block(inst);
+        if inst_block != Some(block) {
             return errors.fatal((
                 inst,
                 self.context(inst),
-                format!("should belong to {} not {:?}", ebb, inst_ebb),
+                format!("should belong to {} not {:?}", block, inst_block),
             ));
         }
 
-        // Parameters belong to the correct ebb.
-        for &arg in self.func.dfg.ebb_params(ebb) {
+        // Parameters belong to the correct block.
+        for &arg in self.func.dfg.block_params(block) {
             match self.func.dfg.value_def(arg) {
-                ValueDef::Param(arg_ebb, _) => {
-                    if ebb != arg_ebb {
-                        return errors.fatal((arg, format!("does not belong to {}", ebb)));
+                ValueDef::Param(arg_block, _) => {
+                    if block != arg_block {
+                        return errors.fatal((arg, format!("does not belong to {}", block)));
                     }
                 }
                 _ => {
@@ -656,13 +656,13 @@ impl<'a> Verifier<'a> {
                 ref args,
                 ..
             } => {
-                self.verify_ebb(inst, destination, errors)?;
+                self.verify_block(inst, destination, errors)?;
                 self.verify_value_list(inst, args, errors)?;
             }
             BranchTable {
                 table, destination, ..
             } => {
-                self.verify_ebb(inst, destination, errors)?;
+                self.verify_block(inst, destination, errors)?;
                 self.verify_jump_table(inst, table, errors)?;
             }
             BranchTableBase { table, .. }
@@ -775,18 +775,18 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn verify_ebb(
+    fn verify_block(
         &self,
         loc: impl Into<AnyEntity>,
-        e: Ebb,
+        e: Block,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
-        if !self.func.dfg.ebb_is_valid(e) || !self.func.layout.is_ebb_inserted(e) {
-            return errors.fatal((loc, format!("invalid ebb reference {}", e)));
+        if !self.func.dfg.block_is_valid(e) || !self.func.layout.is_block_inserted(e) {
+            return errors.fatal((loc, format!("invalid block reference {}", e)));
         }
         if let Some(entry_block) = self.func.layout.entry_block() {
             if e == entry_block {
-                return errors.fatal((loc, format!("invalid reference to entry ebb {}", e)));
+                return errors.fatal((loc, format!("invalid reference to entry block {}", e)));
             }
         }
         Ok(())
@@ -947,8 +947,8 @@ impl<'a> Verifier<'a> {
         self.verify_value(loc_inst, v, errors)?;
 
         let dfg = &self.func.dfg;
-        let loc_ebb = self.func.layout.pp_ebb(loc_inst);
-        let is_reachable = self.expected_domtree.is_reachable(loc_ebb);
+        let loc_block = self.func.layout.pp_block(loc_inst);
+        let is_reachable = self.expected_domtree.is_reachable(loc_block);
 
         // SSA form
         match dfg.value_def(v) {
@@ -961,12 +961,12 @@ impl<'a> Verifier<'a> {
                         format!("{} is defined by invalid instruction {}", v, def_inst),
                     ));
                 }
-                // Defining instruction is inserted in an EBB.
-                if self.func.layout.inst_ebb(def_inst) == None {
+                // Defining instruction is inserted in an block.
+                if self.func.layout.inst_block(def_inst) == None {
                     return errors.fatal((
                         loc_inst,
                         self.context(loc_inst),
-                        format!("{} is defined by {} which has no EBB", v, def_inst),
+                        format!("{} is defined by {} which has no block", v, def_inst),
                     ));
                 }
                 // Defining instruction dominates the instruction that uses the value.
@@ -990,33 +990,33 @@ impl<'a> Verifier<'a> {
                     }
                 }
             }
-            ValueDef::Param(ebb, _) => {
-                // Value is defined by an existing EBB.
-                if !dfg.ebb_is_valid(ebb) {
+            ValueDef::Param(block, _) => {
+                // Value is defined by an existing block.
+                if !dfg.block_is_valid(block) {
                     return errors.fatal((
                         loc_inst,
                         self.context(loc_inst),
-                        format!("{} is defined by invalid EBB {}", v, ebb),
+                        format!("{} is defined by invalid block {}", v, block),
                     ));
                 }
-                // Defining EBB is inserted in the layout
-                if !self.func.layout.is_ebb_inserted(ebb) {
+                // Defining block is inserted in the layout
+                if !self.func.layout.is_block_inserted(block) {
                     return errors.fatal((
                         loc_inst,
                         self.context(loc_inst),
-                        format!("{} is defined by {} which is not in the layout", v, ebb),
+                        format!("{} is defined by {} which is not in the layout", v, block),
                     ));
                 }
-                // The defining EBB dominates the instruction using this value.
+                // The defining block dominates the instruction using this value.
                 if is_reachable
                     && !self
                         .expected_domtree
-                        .dominates(ebb, loc_inst, &self.func.layout)
+                        .dominates(block, loc_inst, &self.func.layout)
                 {
                     return errors.fatal((
                         loc_inst,
                         self.context(loc_inst),
-                        format!("uses value arg from non-dominating {}", ebb),
+                        format!("uses value arg from non-dominating {}", block),
                     ));
                 }
             }
@@ -1081,17 +1081,17 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         // We consider two `DominatorTree`s to be equal if they return the same immediate
-        // dominator for each EBB. Therefore the current domtree is valid if it matches the freshly
+        // dominator for each block. Therefore the current domtree is valid if it matches the freshly
         // computed one.
-        for ebb in self.func.layout.ebbs() {
-            let expected = self.expected_domtree.idom(ebb);
-            let got = domtree.idom(ebb);
+        for block in self.func.layout.blocks() {
+            let expected = self.expected_domtree.idom(block);
+            let got = domtree.idom(block);
             if got != expected {
                 return errors.fatal((
-                    ebb,
+                    block,
                     format!(
                         "invalid domtree, expected idom({}) = {:?}, got {:?}",
-                        ebb, expected, got
+                        block, expected, got
                     ),
                 ));
             }
@@ -1100,37 +1100,37 @@ impl<'a> Verifier<'a> {
         if domtree.cfg_postorder().len() != self.expected_domtree.cfg_postorder().len() {
             return errors.fatal((
                 AnyEntity::Function,
-                "incorrect number of Ebbs in postorder traversal",
+                "incorrect number of Blocks in postorder traversal",
             ));
         }
-        for (index, (&test_ebb, &true_ebb)) in domtree
+        for (index, (&test_block, &true_block)) in domtree
             .cfg_postorder()
             .iter()
             .zip(self.expected_domtree.cfg_postorder().iter())
             .enumerate()
         {
-            if test_ebb != true_ebb {
+            if test_block != true_block {
                 return errors.fatal((
-                    test_ebb,
+                    test_block,
                     format!(
-                        "invalid domtree, postorder ebb number {} should be {}, got {}",
-                        index, true_ebb, test_ebb
+                        "invalid domtree, postorder block number {} should be {}, got {}",
+                        index, true_block, test_block
                     ),
                 ));
             }
         }
-        // We verify rpo_cmp on pairs of adjacent ebbs in the postorder
-        for (&prev_ebb, &next_ebb) in domtree.cfg_postorder().iter().adjacent_pairs() {
+        // We verify rpo_cmp on pairs of adjacent blocks in the postorder
+        for (&prev_block, &next_block) in domtree.cfg_postorder().iter().adjacent_pairs() {
             if self
                 .expected_domtree
-                .rpo_cmp(prev_ebb, next_ebb, &self.func.layout)
+                .rpo_cmp(prev_block, next_block, &self.func.layout)
                 != Ordering::Greater
             {
                 return errors.fatal((
-                    next_ebb,
+                    next_block,
                     format!(
                         "invalid domtree, rpo_cmp does not says {} is greater than {}",
-                        prev_ebb, next_ebb
+                        prev_block, next_block
                     ),
                 ));
             }
@@ -1139,26 +1139,26 @@ impl<'a> Verifier<'a> {
     }
 
     fn typecheck_entry_block_params(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        if let Some(ebb) = self.func.layout.entry_block() {
+        if let Some(block) = self.func.layout.entry_block() {
             let expected_types = &self.func.signature.params;
-            let ebb_param_count = self.func.dfg.num_ebb_params(ebb);
+            let block_param_count = self.func.dfg.num_block_params(block);
 
-            if ebb_param_count != expected_types.len() {
+            if block_param_count != expected_types.len() {
                 return errors.fatal((
-                    ebb,
+                    block,
                     format!(
                         "entry block parameters ({}) must match function signature ({})",
-                        ebb_param_count,
+                        block_param_count,
                         expected_types.len()
                     ),
                 ));
             }
 
-            for (i, &arg) in self.func.dfg.ebb_params(ebb).iter().enumerate() {
+            for (i, &arg) in self.func.dfg.block_params(block).iter().enumerate() {
                 let arg_type = self.func.dfg.value_type(arg);
                 if arg_type != expected_types[i].value_type {
                     errors.report((
-                        ebb,
+                        block,
                         format!(
                             "entry block parameter {} expected to have type {}, got {}",
                             i, expected_types[i], arg_type
@@ -1295,38 +1295,38 @@ impl<'a> Verifier<'a> {
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
         match self.func.dfg.analyze_branch(inst) {
-            BranchInfo::SingleDest(ebb, _) => {
+            BranchInfo::SingleDest(block, _) => {
                 let iter = self
                     .func
                     .dfg
-                    .ebb_params(ebb)
+                    .block_params(block)
                     .iter()
                     .map(|&v| self.func.dfg.value_type(v));
                 self.typecheck_variable_args_iterator(inst, iter, errors)?;
             }
-            BranchInfo::Table(table, ebb) => {
-                if let Some(ebb) = ebb {
-                    let arg_count = self.func.dfg.num_ebb_params(ebb);
+            BranchInfo::Table(table, block) => {
+                if let Some(block) = block {
+                    let arg_count = self.func.dfg.num_block_params(block);
                     if arg_count != 0 {
                         return errors.nonfatal((
                             inst,
                             self.context(inst),
                             format!(
                                 "takes no arguments, but had target {} with {} arguments",
-                                ebb, arg_count,
+                                block, arg_count,
                             ),
                         ));
                     }
                 }
-                for ebb in self.func.jump_tables[table].iter() {
-                    let arg_count = self.func.dfg.num_ebb_params(*ebb);
+                for block in self.func.jump_tables[table].iter() {
+                    let arg_count = self.func.dfg.num_block_params(*block);
                     if arg_count != 0 {
                         return errors.nonfatal((
                             inst,
                             self.context(inst),
                             format!(
                                 "takes no arguments, but had target {} with {} arguments",
-                                ebb, arg_count,
+                                block, arg_count,
                             ),
                         ));
                     }
@@ -1658,28 +1658,29 @@ impl<'a> Verifier<'a> {
         cfg: &ControlFlowGraph,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
-        let mut expected_succs = BTreeSet::<Ebb>::new();
-        let mut got_succs = BTreeSet::<Ebb>::new();
+        let mut expected_succs = BTreeSet::<Block>::new();
+        let mut got_succs = BTreeSet::<Block>::new();
         let mut expected_preds = BTreeSet::<Inst>::new();
         let mut got_preds = BTreeSet::<Inst>::new();
 
-        for ebb in self.func.layout.ebbs() {
-            expected_succs.extend(self.expected_cfg.succ_iter(ebb));
-            got_succs.extend(cfg.succ_iter(ebb));
+        for block in self.func.layout.blocks() {
+            expected_succs.extend(self.expected_cfg.succ_iter(block));
+            got_succs.extend(cfg.succ_iter(block));
 
-            let missing_succs: Vec<Ebb> = expected_succs.difference(&got_succs).cloned().collect();
+            let missing_succs: Vec<Block> =
+                expected_succs.difference(&got_succs).cloned().collect();
             if !missing_succs.is_empty() {
                 errors.report((
-                    ebb,
+                    block,
                     format!("cfg lacked the following successor(s) {:?}", missing_succs),
                 ));
                 continue;
             }
 
-            let excess_succs: Vec<Ebb> = got_succs.difference(&expected_succs).cloned().collect();
+            let excess_succs: Vec<Block> = got_succs.difference(&expected_succs).cloned().collect();
             if !excess_succs.is_empty() {
                 errors.report((
-                    ebb,
+                    block,
                     format!("cfg had unexpected successor(s) {:?}", excess_succs),
                 ));
                 continue;
@@ -1687,15 +1688,18 @@ impl<'a> Verifier<'a> {
 
             expected_preds.extend(
                 self.expected_cfg
-                    .pred_iter(ebb)
-                    .map(|BasicBlock { inst, .. }| inst),
+                    .pred_iter(block)
+                    .map(|BlockPredecessor { inst, .. }| inst),
             );
-            got_preds.extend(cfg.pred_iter(ebb).map(|BasicBlock { inst, .. }| inst));
+            got_preds.extend(
+                cfg.pred_iter(block)
+                    .map(|BlockPredecessor { inst, .. }| inst),
+            );
 
             let missing_preds: Vec<Inst> = expected_preds.difference(&got_preds).cloned().collect();
             if !missing_preds.is_empty() {
                 errors.report((
-                    ebb,
+                    block,
                     format!(
                         "cfg lacked the following predecessor(s) {:?}",
                         missing_preds
@@ -1707,7 +1711,7 @@ impl<'a> Verifier<'a> {
             let excess_preds: Vec<Inst> = got_preds.difference(&expected_preds).cloned().collect();
             if !excess_preds.is_empty() {
                 errors.report((
-                    ebb,
+                    block,
                     format!("cfg had unexpected predecessor(s) {:?}", excess_preds),
                 ));
                 continue;
@@ -1969,12 +1973,12 @@ impl<'a> Verifier<'a> {
         self.typecheck_entry_block_params(errors)?;
         self.typecheck_function_signature(errors)?;
 
-        for ebb in self.func.layout.ebbs() {
-            if self.func.layout.first_inst(ebb).is_none() {
-                return errors.fatal((ebb, format!("{} cannot be empty", ebb)));
+        for block in self.func.layout.blocks() {
+            if self.func.layout.first_inst(block).is_none() {
+                return errors.fatal((block, format!("{} cannot be empty", block)));
             }
-            for inst in self.func.layout.ebb_insts(ebb) {
-                self.ebb_integrity(ebb, inst, errors)?;
+            for inst in self.func.layout.block_insts(block) {
+                self.block_integrity(block, inst, errors)?;
                 self.instruction_integrity(inst, errors)?;
                 self.verify_safepoint_unused(inst, errors)?;
                 self.typecheck(inst, errors)?;
@@ -1982,7 +1986,7 @@ impl<'a> Verifier<'a> {
                 self.immediate_constraints(inst, errors)?;
             }
 
-            self.encodable_as_bb(ebb, errors)?;
+            self.encodable_as_bb(block, errors)?;
         }
 
         verify_flags(self.func, &self.expected_cfg, self.isa, errors)?;
@@ -2039,20 +2043,20 @@ mod tests {
     #[test]
     fn bad_instruction_format() {
         let mut func = Function::new();
-        let ebb0 = func.dfg.make_ebb();
-        func.layout.append_ebb(ebb0);
+        let block0 = func.dfg.make_block();
+        func.layout.append_block(block0);
         let nullary_with_bad_opcode = func.dfg.make_inst(InstructionData::UnaryImm {
             opcode: Opcode::F32const,
             imm: 0.into(),
         });
-        func.layout.append_inst(nullary_with_bad_opcode, ebb0);
+        func.layout.append_inst(nullary_with_bad_opcode, block0);
         func.layout.append_inst(
             func.dfg.make_inst(InstructionData::Jump {
                 opcode: Opcode::Jump,
-                destination: ebb0,
+                destination: block0,
                 args: EntityList::default(),
             }),
-            ebb0,
+            block0,
         );
         let flags = &settings::Flags::new(settings::builder());
         let verifier = Verifier::new(&func, flags.into());
@@ -2093,8 +2097,8 @@ mod tests {
     fn test_printing_contextual_errors() {
         // Build function.
         let mut func = Function::new();
-        let ebb0 = func.dfg.make_ebb();
-        func.layout.append_ebb(ebb0);
+        let block0 = func.dfg.make_block();
+        func.layout.append_block(block0);
 
         // Build instruction: v0, v1 = iconst 42
         let inst = func.dfg.make_inst(InstructionData::UnaryImm {
@@ -2103,7 +2107,7 @@ mod tests {
         });
         func.dfg.append_result(inst, types::I32);
         func.dfg.append_result(inst, types::I32);
-        func.layout.append_inst(inst, ebb0);
+        func.layout.append_inst(inst, block0);
 
         // Setup verifier.
         let mut errors = VerifierErrors::default();
@@ -2120,16 +2124,16 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_ebb() {
+    fn test_empty_block() {
         let mut func = Function::new();
-        let ebb0 = func.dfg.make_ebb();
-        func.layout.append_ebb(ebb0);
+        let block0 = func.dfg.make_block();
+        func.layout.append_block(block0);
 
         let flags = &settings::Flags::new(settings::builder());
         let verifier = Verifier::new(&func, flags.into());
         let mut errors = VerifierErrors::default();
         let _ = verifier.run(&mut errors);
 
-        assert_err_with_msg!(errors, "ebb0 cannot be empty");
+        assert_err_with_msg!(errors, "block0 cannot be empty");
     }
 }

@@ -8,7 +8,7 @@ target x86_64
 
 function %big() system_v {
     ss0 = explicit_slot 4097
-ebb0:
+block0:
     return
 }
 
@@ -16,7 +16,7 @@ ebb0:
 ; nextln:     ss0 = explicit_slot 4097, offset -4113
 ; nextln:     ss1 = incoming_arg 16, offset -16
 ; nextln: 
-; nextln:                                 ebb0(v0: i64 [%rbp]):
+; nextln:                                 block0(v0: i64 [%rbp]):
 ; nextln: [RexOp1pushq#50]                    x86_push v0
 ; nextln: [RexOp1copysp#8089]                 copy_special %rsp -> %rbp
 ; nextln: [RexOp1adjustsp_id#d081]            adjust_sp_down_imm 4112
@@ -30,7 +30,7 @@ ebb0:
 
 function %bigger() system_v {
     ss0 = explicit_slot 8192
-ebb0:
+block0:
     return
 }
 
@@ -38,7 +38,7 @@ ebb0:
 ; nextln:     ss0 = explicit_slot 8192, offset -8208
 ; nextln:     ss1 = incoming_arg 16, offset -16
 ; nextln: 
-; nextln:                                 ebb0(v0: i64 [%rbp]):
+; nextln:                                 block0(v0: i64 [%rbp]):
 ; nextln: [RexOp1pushq#50]                    x86_push v0
 ; nextln: [RexOp1copysp#8089]                 copy_special %rsp -> %rbp
 ; nextln: [RexOp1adjustsp_id#d081]            adjust_sp_down_imm 8192
@@ -52,7 +52,7 @@ ebb0:
 
 function %biggest() system_v {
     ss0 = explicit_slot 8193
-ebb0:
+block0:
     return
 }
 
@@ -62,7 +62,7 @@ ebb0:
 ; nextln:     sig0 = (i64 [%rax]) -> i64 [%rax] probestack
 ; nextln:     fn0 = colocated %Probestack sig0
 ; nextln: 
-; nextln:                                 ebb0(v0: i64 [%rbp]):
+; nextln:                                 block0(v0: i64 [%rbp]):
 ; nextln: [RexOp1pushq#50]                    x86_push v0
 ; nextln: [RexOp1copysp#8089]                 copy_special %rsp -> %rbp
 ; nextln: [RexOp1pu_id#b8,%rax]               v1 = iconst.i64 8208

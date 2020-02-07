@@ -1,7 +1,7 @@
 test run
 
 function %test_compare_i32() -> b1 {
-ebb0:
+block0:
     v0 = iconst.i32 42
     v1 = iconst.i32 42
     v2 = icmp eq v0, v1

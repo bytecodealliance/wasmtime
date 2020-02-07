@@ -3,14 +3,14 @@ test compile
 target i686 haswell
 
 function %iadd(i64, i64) -> i64 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v10 = iadd v1, v2
     ; check: iadd_ifcout
     return v10
 }
 
 function %isub(i64, i64) -> i64 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v10 = isub v1, v2
     ; check: isub_ifbout
     return v10

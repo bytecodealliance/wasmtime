@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use core::fmt::{Display, Formatter, Result, Write};
 
 use crate::entity::SecondaryMap;
-use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::Function;
 use crate::write::{FuncWriter, PlainWriter};
 
@@ -27,7 +27,7 @@ impl<'a> CFGPrinter<'a> {
     /// Write the CFG for this function to `w`.
     pub fn write(&self, w: &mut dyn Write) -> Result {
         self.header(w)?;
-        self.ebb_nodes(w)?;
+        self.block_nodes(w)?;
         self.cfg_connections(w)?;
         writeln!(w, "}}")
     }
@@ -40,7 +40,7 @@ impl<'a> CFGPrinter<'a> {
         Ok(())
     }
 
-    fn ebb_nodes(&self, w: &mut dyn Write) -> Result {
+    fn block_nodes(&self, w: &mut dyn Write) -> Result {
         let mut aliases = SecondaryMap::<_, Vec<_>>::new();
         for v in self.func.dfg.values() {
             // VADFS returns the immediate target of an alias
@@ -49,11 +49,11 @@ impl<'a> CFGPrinter<'a> {
             }
         }
 
-        for ebb in &self.func.layout {
-            write!(w, "    {} [shape=record, label=\"{{", ebb)?;
-            crate::write::write_ebb_header(w, self.func, None, ebb, 4)?;
+        for block in &self.func.layout {
+            write!(w, "    {} [shape=record, label=\"{{", block)?;
+            crate::write::write_block_header(w, self.func, None, block, 4)?;
             // Add all outgoing branch instructions to the label.
-            for inst in self.func.layout.ebb_insts(ebb) {
+            for inst in self.func.layout.block_insts(block) {
                 write!(w, " | <{}>", inst)?;
                 PlainWriter.write_instruction(w, self.func, &aliases, None, inst, 0)?;
             }
@@ -63,9 +63,13 @@ impl<'a> CFGPrinter<'a> {
     }
 
     fn cfg_connections(&self, w: &mut dyn Write) -> Result {
-        for ebb in &self.func.layout {
-            for BasicBlock { ebb: parent, inst } in self.cfg.pred_iter(ebb) {
-                writeln!(w, "    {}:{} -> {}", parent, inst, ebb)?;
+        for block in &self.func.layout {
+            for BlockPredecessor {
+                block: parent,
+                inst,
+            } in self.cfg.pred_iter(block)
+            {
+                writeln!(w, "    {}:{} -> {}", parent, inst, block)?;
             }
         }
         Ok(())

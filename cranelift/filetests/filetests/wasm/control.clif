@@ -6,60 +6,60 @@ target i686 haswell
 target x86_64 haswell
 
 function %br_if(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = iconst.i32 1
-    brz v0, ebb1(v1)
-    jump ebb2
+    brz v0, block1(v1)
+    jump block2
 
-ebb1(v2: i32):
+block1(v2: i32):
     return v2
 
-ebb2:
-    jump ebb1(v0)
+block2:
+    jump block1(v0)
 }
 
 function %br_if_not(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = iconst.i32 1
-    brnz v0, ebb1(v0)
-    jump ebb2
+    brnz v0, block1(v0)
+    jump block2
 
-ebb1(v2: i32):
+block1(v2: i32):
     return v2
 
-ebb2:
-    jump ebb1(v0)
+block2:
+    jump block1(v0)
 }
 
 function %br_if_fallthrough(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = iconst.i32 1
-    brz v0, ebb1(v1)
+    brz v0, block1(v1)
     ; This jump gets converted to a fallthrough.
-    jump ebb1(v0)
+    jump block1(v0)
 
-ebb1(v2: i32):
+block1(v2: i32):
     return v2
 }
 
 function %undefined() {
-ebb0:
+block0:
     trap user0
 }
 
 function %br_table(i32) {
-jt0 = jump_table [ebb3, ebb1, ebb2]
+jt0 = jump_table [block3, block1, block2]
 
-ebb0(v0: i32):
-    br_table v0, ebb4, jt0
+block0(v0: i32):
+    br_table v0, block4, jt0
 
-ebb4:
+block4:
     trap oob
 
-ebb1:
+block1:
     return
-ebb2:
+block2:
     return
-ebb3:
+block3:
     return
 }

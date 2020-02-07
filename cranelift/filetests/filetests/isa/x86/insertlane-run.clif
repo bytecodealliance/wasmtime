@@ -4,7 +4,7 @@ set enable_simd
 ; TODO once SIMD vector comparison is implemented, remove use of extractlane below
 
 function %test_insertlane_b8() -> b8 {
-ebb0:
+block0:
     v1 = bconst.b8 true
     v2 = vconst.b8x16 [false false false false false false false false false false false false false
      false false false]
@@ -15,7 +15,7 @@ ebb0:
 ; run
 
 function %test_insertlane_f32() -> b1 {
-ebb0:
+block0:
     v0 = f32const 0x42.42
     v1 = vconst.f32x4 0x00
     v2 = insertlane v1, 1, v0
@@ -26,7 +26,7 @@ ebb0:
 ; run
 
 function %test_insertlane_f64_lane1() -> b1 {
-ebb0:
+block0:
     v0 = f64const 0x42.42
     v1 = vconst.f64x2 0x00
     v2 = insertlane v1, 1, v0
@@ -37,7 +37,7 @@ ebb0:
 ; run
 
 function %test_insertlane_f64_lane0() -> b1 {
-ebb0:
+block0:
     v0 = f64const 0x42.42
     v1 = vconst.f64x2 0x00
     v2 = insertlane v1, 0, v0

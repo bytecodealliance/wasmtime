@@ -5,7 +5,7 @@ target i686
 ; allocator can move it to a register that can be.
 
 function %test(i32 [%rdi]) -> i32 system_v {
-ebb0(v0: i32 [%rdi]):
+block0(v0: i32 [%rdi]):
     v1 = ireduce.i8 v0
     v2 = sextend.i32 v1
     return v2

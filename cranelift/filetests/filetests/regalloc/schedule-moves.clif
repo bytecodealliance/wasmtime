@@ -2,7 +2,7 @@ test regalloc
 target i686 haswell
 
 function %pr165() system_v {
-ebb0:
+block0:
     v0 = iconst.i32 0x0102_0304
     v1 = iconst.i32 0x1102_0304
     v2 = iconst.i32 0x2102_0304
@@ -20,7 +20,7 @@ ebb0:
 ; Same as above, but use so many registers that spilling is required.
 ; Note: This is also a candidate for using xchg instructions.
 function %emergency_spill() system_v {
-ebb0:
+block0:
     v0 = iconst.i32 0x0102_0304
     v1 = iconst.i32 0x1102_0304
     v2 = iconst.i32 0x2102_0304

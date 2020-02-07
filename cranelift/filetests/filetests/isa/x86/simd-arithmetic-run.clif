@@ -3,7 +3,7 @@ set enable_simd
 target x86_64 skylake
 
 function %iadd_i32x4() -> b1 {
-ebb0:
+block0:
     v0 = vconst.i32x4 [1 1 1 1]
     v1 = vconst.i32x4 [1 2 3 4]
     v2 = iadd v0, v1
@@ -21,7 +21,7 @@ ebb0:
 ; run
 
 function %iadd_i8x16_with_overflow() -> b1 {
-ebb0:
+block0:
     v0 = vconst.i8x16 [255 255 255 255 255 255 255 255 255 255 255 255 255 255 255 255]
     v1 = vconst.i8x16 [2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2]
     v2 = iadd v0, v1
@@ -35,7 +35,7 @@ ebb0:
 ; run
 
 function %isub_i32x4() -> b1 {
-ebb0:
+block0:
     v0 = vconst.i32x4 [1 1 1 1]
     v1 = vconst.i32x4 [1 2 3 4]
     v2 = isub v0, v1
@@ -54,7 +54,7 @@ ebb0:
 
 
 function %ineg_i32x4() -> b1 {
-ebb0:
+block0:
     v0 = vconst.i32x4 [1 1 1 1]
     v2 = ineg v0
 
@@ -66,7 +66,7 @@ ebb0:
 ; run
 
 function %imul_i32x4() -> b1 {
-ebb0:
+block0:
     v0 = vconst.i32x4 [-1 0 1 -2147483647] ; e.g. -2147483647 == 0x80_00_00_01
     v1 = vconst.i32x4 [2 2 2 2]
     v2 = imul v0, v1
@@ -87,7 +87,7 @@ ebb0:
 ; run
 
 function %imul_i16x8() -> b1 {
-ebb0:
+block0:
     v0 = vconst.i16x8 [-1 0 1 32767 0 0 0 0] ; e.g. 32767 == 0x7f_ff
     v1 = vconst.i16x8 [2 2 2 2 0 0 0 0]
     v2 = imul v0, v1
@@ -110,7 +110,7 @@ ebb0:
 ; run
 
 function %sadd_sat_i8x16() -> b1 {
-ebb0:
+block0:
     v0 = vconst.i8x16 [127 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
     v1 = vconst.i8x16 [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
 
@@ -123,7 +123,7 @@ ebb0:
 ; run
 
 function %uadd_sat_i16x8() -> b1 {
-ebb0:
+block0:
     v0 = vconst.i16x8 [-1 0 0 0 0 0 0 0]
     v1 = vconst.i16x8 [-1 1 1 1 1 1 1 1]
 
@@ -136,7 +136,7 @@ ebb0:
 ; run
 
 function %sub_sat_i8x16() -> b1 {
-ebb0:
+block0:
     v0 = vconst.i8x16 [128 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] ; 128 == 0x80 == -128
     v1 = vconst.i8x16 [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
 
@@ -155,7 +155,7 @@ ebb0:
 ; run
 
 function %add_sub_f32x4() -> b1 {
-ebb0:
+block0:
     v0 = vconst.f32x4 [0x4.2 0.0 0.0 0.0]
     v1 = vconst.f32x4 [0x1.0 0x1.0 0x1.0 0x1.0]
     v2 = vconst.f32x4 [0x5.2 0x1.0 0x1.0 0x1.0]
@@ -173,7 +173,7 @@ ebb0:
 ; run
 
 function %mul_div_f32x4() -> b1 {
-ebb0:
+block0:
     v0 = vconst.f32x4 [0x4.2 -0x2.1 0x2.0 0.0]
     v1 = vconst.f32x4 [0x3.4 0x6.7 0x8.9 0xa.b]
     v2 = vconst.f32x4 [0xd.68 -0xd.47 0x11.2 0x0.0]
@@ -191,7 +191,7 @@ ebb0:
 ; run
 
 function %sqrt_f64x2() -> b1 {
-ebb0:
+block0:
     v0 = vconst.f64x2 [0x9.0 0x1.0]
     v1 = sqrt v0
     v2 = vconst.f64x2 [0x3.0 0x1.0]
@@ -202,7 +202,7 @@ ebb0:
 ; run
 
 function %fmax_f64x2() -> b1 {
-ebb0:
+block0:
     v0 = vconst.f64x2 [-0.0 -0x1.0]
     v1 = vconst.f64x2 [+0.0 +0x1.0]
 
@@ -215,7 +215,7 @@ ebb0:
 ; run
 
 function %fmin_f64x2() -> b1 {
-ebb0:
+block0:
     v0 = vconst.f64x2 [-0x1.0 -0x1.0]
     v1 = vconst.f64x2 [+0.0 +0x1.0]
 
@@ -228,7 +228,7 @@ ebb0:
 ; run
 
 function %fneg_f64x2() -> b1 {
-ebb0:
+block0:
     v0 = vconst.f64x2 [0x1.0 -0x1.0]
     v1 = fneg v0
 
@@ -241,7 +241,7 @@ ebb0:
 ; run
 
 function %fneg_f32x4() -> b1 {
-ebb0:
+block0:
     v0 = vconst.f32x4 [0x0.0 -0x0.0 -Inf Inf]
     v1 = fneg v0
 
@@ -254,7 +254,7 @@ ebb0:
 ; run
 
 function %fabs_f32x4() -> b1 {
-ebb0:
+block0:
     v0 = vconst.f32x4 [0x0.0 -0x1.0 0x2.0 -0x3.0]
     v1 = fabs v0
 

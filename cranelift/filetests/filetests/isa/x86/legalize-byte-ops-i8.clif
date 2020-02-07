@@ -7,7 +7,7 @@ function u0:0(i8, i8) fast {
 fn0 = %black_box(i8)
 ss0 = explicit_slot 1 ; black box
 
-ebb0(v0: i8, v1: i8):
+block0(v0: i8, v1: i8):
     v99 = stack_addr.i64 ss0
 
     ; check: istore8 $(V), $(V)

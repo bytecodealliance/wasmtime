@@ -6,7 +6,7 @@ function %RV32I(i32 link [%x1]) -> i32 link [%x1] {
     sig0 = ()
     fn0 = %foo()
 
-ebb0(v9999: i32):
+block0(v9999: i32):
     [-,%x10]            v1 = iconst.i32 1
     [-,%x21]            v2 = iconst.i32 2
 
@@ -94,96 +94,96 @@ ebb0(v9999: i32):
     call_indirect sig0, v1()                    ; bin: 000500e7
     call_indirect sig0, v2()                    ; bin: 000a80e7
 
-    brz v1, ebb3
-    fallthrough ebb4
+    brz v1, block3
+    fallthrough block4
 
-ebb4:
-    brnz v1, ebb1
-    fallthrough ebb5
+block4:
+    brnz v1, block1
+    fallthrough block5
 
-ebb5:
+block5:
     ; jalr %x0, %x1, 0
     return v9999                        ; bin: 00008067
 
-ebb1:
+block1:
     ; beq 0x000
-    br_icmp eq v1, v2, ebb1             ; bin: 01550063
-    fallthrough ebb100
+    br_icmp eq v1, v2, block1             ; bin: 01550063
+    fallthrough block100
 
-ebb100:
+block100:
     ; bne 0xffc
-    br_icmp ne v1, v2, ebb1             ; bin: ff551ee3
-    fallthrough ebb101
+    br_icmp ne v1, v2, block1             ; bin: ff551ee3
+    fallthrough block101
 
-ebb101:
+block101:
     ; blt 0xff8
-    br_icmp slt v1, v2, ebb1            ; bin: ff554ce3
-    fallthrough ebb102
+    br_icmp slt v1, v2, block1            ; bin: ff554ce3
+    fallthrough block102
 
-ebb102:
+block102:
     ; bge 0xff4
-    br_icmp sge v1, v2, ebb1            ; bin: ff555ae3
-    fallthrough ebb103
+    br_icmp sge v1, v2, block1            ; bin: ff555ae3
+    fallthrough block103
 
-ebb103:
+block103:
     ; bltu 0xff0
-    br_icmp ult v1, v2, ebb1            ; bin: ff5568e3
-    fallthrough ebb104
+    br_icmp ult v1, v2, block1            ; bin: ff5568e3
+    fallthrough block104
 
-ebb104:
+block104:
     ; bgeu 0xfec
-    br_icmp uge v1, v2, ebb1            ; bin: ff5576e3
-    fallthrough ebb105
+    br_icmp uge v1, v2, block1            ; bin: ff5576e3
+    fallthrough block105
 
-ebb105:
+block105:
 
     ; Forward branches.
-    fallthrough ebb106
+    fallthrough block106
 
-ebb106:
+block106:
     ; beq 0x018
-    br_icmp eq v2, v1, ebb2             ; bin: 00aa8c63
-    fallthrough ebb107
+    br_icmp eq v2, v1, block2             ; bin: 00aa8c63
+    fallthrough block107
 
-ebb107:
+block107:
     ; bne 0x014
-    br_icmp ne v2, v1, ebb2             ; bin: 00aa9a63
-    fallthrough ebb108
+    br_icmp ne v2, v1, block2             ; bin: 00aa9a63
+    fallthrough block108
 
-ebb108:
+block108:
     ; blt 0x010
-    br_icmp slt v2, v1, ebb2            ; bin: 00aac863
-    fallthrough ebb109
+    br_icmp slt v2, v1, block2            ; bin: 00aac863
+    fallthrough block109
 
-ebb109:
+block109:
     ; bge 0x00c
-    br_icmp sge v2, v1, ebb2            ; bin: 00aad663
-    fallthrough ebb110
+    br_icmp sge v2, v1, block2            ; bin: 00aad663
+    fallthrough block110
 
-ebb110:
+block110:
     ; bltu 0x008
-    br_icmp ult v2, v1, ebb2            ; bin: 00aae463
-    fallthrough ebb111
+    br_icmp ult v2, v1, block2            ; bin: 00aae463
+    fallthrough block111
 
-ebb111:
+block111:
     ; bgeu 0x004
-    br_icmp uge v2, v1, ebb2            ; bin: 00aaf263
+    br_icmp uge v2, v1, block2            ; bin: 00aaf263
 
-    fallthrough ebb2
+    fallthrough block2
 
-ebb2:
+block2:
     ; jal %x0, 0x00000
-    jump ebb2                           ; bin: 0000006f
+    jump block2                           ; bin: 0000006f
 
-ebb3:
+block3:
     ; beq x, %x0
-    brz v1, ebb3                        ; bin: 00050063
-    fallthrough ebb6
+    brz v1, block3                        ; bin: 00050063
+    fallthrough block6
 
-ebb6:
+block6:
     ; bne x, %x0
-    brnz v1, ebb3                       ; bin: fe051ee3
+    brnz v1, block3                       ; bin: fe051ee3
 
     ; jal %x0, 0x1ffff4
-    jump ebb2                           ; bin: ff5ff06f
+    jump block2                           ; bin: ff5ff06f
 }

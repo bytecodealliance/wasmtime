@@ -2,7 +2,7 @@ test postopt
 target x86_64
 
 function %dual_loads(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
+block0(v0: i64, v1: i64):
 [DynRexOp1rr#8001] v3 = iadd v0, v1
                    v4 = load.i64 v3
                    v5 = uload8.i64 v3
@@ -15,7 +15,7 @@ ebb0(v0: i64, v1: i64):
 }
 
 ; sameln: function %dual_loads
-; nextln: ebb0(v0: i64, v1: i64):
+; nextln: block0(v0: i64, v1: i64):
 ; nextln:    v3 = iadd v0, v1
 ; nextln:    v4 = load_complex.i64 v0+v1
 ; nextln:    v5 = uload8_complex.i64 v0+v1
@@ -28,7 +28,7 @@ ebb0(v0: i64, v1: i64):
 ; nextln: }
 
 function %dual_loads2(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
+block0(v0: i64, v1: i64):
 [DynRexOp1rr#8001] v3 = iadd v0, v1
                    v4 = load.i64 v3+1
                    v5 = uload8.i64 v3+1
@@ -41,7 +41,7 @@ ebb0(v0: i64, v1: i64):
 }
 
 ; sameln: function %dual_loads2
-; nextln: ebb0(v0: i64, v1: i64):
+; nextln: block0(v0: i64, v1: i64):
 ; nextln:    v3 = iadd v0, v1
 ; nextln:    v4 = load_complex.i64 v0+v1+1
 ; nextln:    v5 = uload8_complex.i64 v0+v1+1
@@ -54,7 +54,7 @@ ebb0(v0: i64, v1: i64):
 ; nextln: }
 
 function %dual_stores(i64, i64, i64) {
-ebb0(v0: i64, v1: i64, v2: i64):
+block0(v0: i64, v1: i64, v2: i64):
 [DynRexOp1rr#8001] v3 = iadd v0, v1
 [RexOp1st#8089]    store.i64 v2, v3
 [RexOp1st#88]      istore8.i64 v2, v3
@@ -64,7 +64,7 @@ ebb0(v0: i64, v1: i64, v2: i64):
 }
 
 ; sameln: function %dual_stores
-; nextln: ebb0(v0: i64, v1: i64, v2: i64):
+; nextln: block0(v0: i64, v1: i64, v2: i64):
 ; nextln:    v3 = iadd v0, v1
 ; nextln:    store_complex v2, v0+v1
 ; nextln:    istore8_complex v2, v0+v1
@@ -74,7 +74,7 @@ ebb0(v0: i64, v1: i64, v2: i64):
 ; nextln: }
 
 function %dual_stores2(i64, i64, i64) {
-ebb0(v0: i64, v1: i64, v2: i64):
+block0(v0: i64, v1: i64, v2: i64):
 [DynRexOp1rr#8001] v3 = iadd v0, v1
 [RexOp1stDisp8#8089]    store.i64 v2, v3+1
 [RexOp1stDisp8#88]      istore8.i64 v2, v3+1
@@ -84,7 +84,7 @@ ebb0(v0: i64, v1: i64, v2: i64):
 }
 
 ; sameln: function %dual_stores2
-; nextln: ebb0(v0: i64, v1: i64, v2: i64):
+; nextln: block0(v0: i64, v1: i64, v2: i64):
 ; nextln:    v3 = iadd v0, v1
 ; nextln:    store_complex v2, v0+v1+1
 ; nextln:    istore8_complex v2, v0+v1+1

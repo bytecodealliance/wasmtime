@@ -112,7 +112,7 @@ pub(crate) struct InstructionContent {
     /// Indices in operands_out of output operands that are values.
     pub value_results: Vec<usize>,
 
-    /// True for instructions that terminate the EBB.
+    /// True for instructions that terminate the block.
     pub is_terminator: bool,
     /// True for all branch or jump instructions.
     pub is_branch: bool,

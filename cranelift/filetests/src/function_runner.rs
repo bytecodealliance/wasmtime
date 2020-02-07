@@ -98,7 +98,7 @@ mod test {
             "
             test run
             function %test() -> b8 {
-            ebb0:
+            block0:
                 nop
                 v1 = bconst.b8 true
                 return v1

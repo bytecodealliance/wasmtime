@@ -6,8 +6,8 @@ use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::flowgraph::ControlFlowGraph;
 use cranelift_codegen::ir::types::{F32, F64};
 use cranelift_codegen::ir::{
-    self, Ebb, FuncRef, Function, GlobalValueData, Inst, InstBuilder, InstructionData, StackSlots,
-    TrapCode,
+    self, Block, FuncRef, Function, GlobalValueData, Inst, InstBuilder, InstructionData,
+    StackSlots, TrapCode,
 };
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
@@ -46,17 +46,17 @@ pub fn run(
     std::env::set_var("RUST_BACKTRACE", "0"); // Disable backtraces to reduce verbosity
 
     for (func, _) in test_file.functions {
-        let (orig_ebb_count, orig_inst_count) = (ebb_count(&func), inst_count(&func));
+        let (orig_block_count, orig_inst_count) = (block_count(&func), inst_count(&func));
 
         match reduce(isa, func, verbose) {
             Ok((func, crash_msg)) => {
                 println!("Crash message: {}", crash_msg);
                 println!("\n{}", func);
                 println!(
-                    "{} ebbs {} insts -> {} ebbs {} insts",
-                    orig_ebb_count,
+                    "{} blocks {} insts -> {} blocks {} insts",
+                    orig_block_count,
                     orig_inst_count,
-                    ebb_count(&func),
+                    block_count(&func),
                     inst_count(&func)
                 );
             }
@@ -68,7 +68,7 @@ pub fn run(
 }
 
 enum ProgressStatus {
-    /// The mutation raised or reduced the amount of instructions or ebbs.
+    /// The mutation raised or reduced the amount of instructions or blocks.
     ExpandedOrShrinked,
 
     /// The mutation only changed an instruction. Performing another round of mutations may only
@@ -92,16 +92,16 @@ trait Mutator {
 
 /// Try to remove instructions.
 struct RemoveInst {
-    ebb: Ebb,
+    block: Block,
     inst: Inst,
 }
 
 impl RemoveInst {
     fn new(func: &Function) -> Self {
-        let first_ebb = func.layout.entry_block().unwrap();
-        let first_inst = func.layout.first_inst(first_ebb).unwrap();
+        let first_block = func.layout.entry_block().unwrap();
+        let first_inst = func.layout.first_inst(first_block).unwrap();
         Self {
-            ebb: first_ebb,
+            block: first_block,
             inst: first_inst,
         }
     }
@@ -117,12 +117,12 @@ impl Mutator for RemoveInst {
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, ProgressStatus)> {
-        next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst).map(|(prev_ebb, prev_inst)| {
+        next_inst_ret_prev(&func, &mut self.block, &mut self.inst).map(|(prev_block, prev_inst)| {
             func.layout.remove_inst(prev_inst);
-            let msg = if func.layout.ebb_insts(prev_ebb).next().is_none() {
-                // Make sure empty ebbs are removed, as `next_inst_ret_prev` depends on non empty ebbs
-                func.layout.remove_ebb(prev_ebb);
-                format!("Remove inst {} and empty ebb {}", prev_inst, prev_ebb)
+            let msg = if func.layout.block_insts(prev_block).next().is_none() {
+                // Make sure empty blocks are removed, as `next_inst_ret_prev` depends on non empty blocks
+                func.layout.remove_block(prev_block);
+                format!("Remove inst {} and empty block {}", prev_inst, prev_block)
             } else {
                 format!("Remove inst {}", prev_inst)
             };
@@ -133,16 +133,16 @@ impl Mutator for RemoveInst {
 
 /// Try to replace instructions with `iconst` or `fconst`.
 struct ReplaceInstWithConst {
-    ebb: Ebb,
+    block: Block,
     inst: Inst,
 }
 
 impl ReplaceInstWithConst {
     fn new(func: &Function) -> Self {
-        let first_ebb = func.layout.entry_block().unwrap();
-        let first_inst = func.layout.first_inst(first_ebb).unwrap();
+        let first_block = func.layout.entry_block().unwrap();
+        let first_inst = func.layout.first_inst(first_block).unwrap();
         Self {
-            ebb: first_ebb,
+            block: first_block,
             inst: first_inst,
         }
     }
@@ -174,71 +174,73 @@ impl Mutator for ReplaceInstWithConst {
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, ProgressStatus)> {
-        next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst).map(|(_prev_ebb, prev_inst)| {
-            let num_results = func.dfg.inst_results(prev_inst).len();
+        next_inst_ret_prev(&func, &mut self.block, &mut self.inst).map(
+            |(_prev_block, prev_inst)| {
+                let num_results = func.dfg.inst_results(prev_inst).len();
 
-            let opcode = func.dfg[prev_inst].opcode();
-            if num_results == 0
-                || opcode == ir::Opcode::Iconst
-                || opcode == ir::Opcode::F32const
-                || opcode == ir::Opcode::F64const
-            {
-                return (func, format!(""), ProgressStatus::Skip);
-            }
+                let opcode = func.dfg[prev_inst].opcode();
+                if num_results == 0
+                    || opcode == ir::Opcode::Iconst
+                    || opcode == ir::Opcode::F32const
+                    || opcode == ir::Opcode::F64const
+                {
+                    return (func, format!(""), ProgressStatus::Skip);
+                }
 
-            if num_results == 1 {
-                let ty = func.dfg.value_type(func.dfg.first_result(prev_inst));
-                let new_inst_name = Self::const_for_type(func.dfg.replace(prev_inst), ty);
-                return (
+                if num_results == 1 {
+                    let ty = func.dfg.value_type(func.dfg.first_result(prev_inst));
+                    let new_inst_name = Self::const_for_type(func.dfg.replace(prev_inst), ty);
+                    return (
+                        func,
+                        format!("Replace inst {} with {}.", prev_inst, new_inst_name),
+                        ProgressStatus::Changed,
+                    );
+                }
+
+                // At least 2 results. Replace each instruction with as many const instructions as
+                // there are results.
+                let mut pos = FuncCursor::new(&mut func).at_inst(prev_inst);
+
+                // Copy result SSA names into our own vector; otherwise we couldn't mutably borrow pos
+                // in the loop below.
+                let results = pos.func.dfg.inst_results(prev_inst).to_vec();
+
+                // Detach results from the previous instruction, since we're going to reuse them.
+                pos.func.dfg.clear_results(prev_inst);
+
+                let mut inst_names = Vec::new();
+                for r in results {
+                    let ty = pos.func.dfg.value_type(r);
+                    let builder = pos.ins().with_results([Some(r)]);
+                    let new_inst_name = Self::const_for_type(builder, ty);
+                    inst_names.push(new_inst_name);
+                }
+
+                // Remove the instruction.
+                assert_eq!(pos.remove_inst(), prev_inst);
+
+                (
                     func,
-                    format!("Replace inst {} with {}.", prev_inst, new_inst_name),
-                    ProgressStatus::Changed,
-                );
-            }
-
-            // At least 2 results. Replace each instruction with as many const instructions as
-            // there are results.
-            let mut pos = FuncCursor::new(&mut func).at_inst(prev_inst);
-
-            // Copy result SSA names into our own vector; otherwise we couldn't mutably borrow pos
-            // in the loop below.
-            let results = pos.func.dfg.inst_results(prev_inst).to_vec();
-
-            // Detach results from the previous instruction, since we're going to reuse them.
-            pos.func.dfg.clear_results(prev_inst);
-
-            let mut inst_names = Vec::new();
-            for r in results {
-                let ty = pos.func.dfg.value_type(r);
-                let builder = pos.ins().with_results([Some(r)]);
-                let new_inst_name = Self::const_for_type(builder, ty);
-                inst_names.push(new_inst_name);
-            }
-
-            // Remove the instruction.
-            assert_eq!(pos.remove_inst(), prev_inst);
-
-            (
-                func,
-                format!("Replace inst {} with {}", prev_inst, inst_names.join(" / ")),
-                ProgressStatus::ExpandedOrShrinked,
-            )
-        })
+                    format!("Replace inst {} with {}", prev_inst, inst_names.join(" / ")),
+                    ProgressStatus::ExpandedOrShrinked,
+                )
+            },
+        )
     }
 }
 
 /// Try to replace instructions with `trap`.
 struct ReplaceInstWithTrap {
-    ebb: Ebb,
+    block: Block,
     inst: Inst,
 }
 
 impl ReplaceInstWithTrap {
     fn new(func: &Function) -> Self {
-        let first_ebb = func.layout.entry_block().unwrap();
-        let first_inst = func.layout.first_inst(first_ebb).unwrap();
+        let first_block = func.layout.entry_block().unwrap();
+        let first_inst = func.layout.first_inst(first_block).unwrap();
         Self {
-            ebb: first_ebb,
+            block: first_block,
             inst: first_inst,
         }
     }
@@ -254,54 +256,56 @@ impl Mutator for ReplaceInstWithTrap {
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, ProgressStatus)> {
-        next_inst_ret_prev(&func, &mut self.ebb, &mut self.inst).map(|(_prev_ebb, prev_inst)| {
-            let status = if func.dfg[prev_inst].opcode() == ir::Opcode::Trap {
-                ProgressStatus::Skip
-            } else {
-                func.dfg.replace(prev_inst).trap(TrapCode::User(0));
-                ProgressStatus::Changed
-            };
-            (
-                func,
-                format!("Replace inst {} with trap", prev_inst),
-                status,
-            )
-        })
+        next_inst_ret_prev(&func, &mut self.block, &mut self.inst).map(
+            |(_prev_block, prev_inst)| {
+                let status = if func.dfg[prev_inst].opcode() == ir::Opcode::Trap {
+                    ProgressStatus::Skip
+                } else {
+                    func.dfg.replace(prev_inst).trap(TrapCode::User(0));
+                    ProgressStatus::Changed
+                };
+                (
+                    func,
+                    format!("Replace inst {} with trap", prev_inst),
+                    status,
+                )
+            },
+        )
     }
 }
 
-/// Try to remove an ebb.
-struct RemoveEbb {
-    ebb: Ebb,
+/// Try to remove an block.
+struct RemoveBlock {
+    block: Block,
 }
 
-impl RemoveEbb {
+impl RemoveBlock {
     fn new(func: &Function) -> Self {
         Self {
-            ebb: func.layout.entry_block().unwrap(),
+            block: func.layout.entry_block().unwrap(),
         }
     }
 }
 
-impl Mutator for RemoveEbb {
+impl Mutator for RemoveBlock {
     fn name(&self) -> &'static str {
-        "remove ebb"
+        "remove block"
     }
 
     fn mutation_count(&self, func: &Function) -> usize {
-        ebb_count(func)
+        block_count(func)
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, ProgressStatus)> {
-        func.layout.next_ebb(self.ebb).map(|next_ebb| {
-            self.ebb = next_ebb;
-            while let Some(inst) = func.layout.last_inst(self.ebb) {
+        func.layout.next_block(self.block).map(|next_block| {
+            self.block = next_block;
+            while let Some(inst) = func.layout.last_inst(self.block) {
                 func.layout.remove_inst(inst);
             }
-            func.layout.remove_ebb(self.ebb);
+            func.layout.remove_block(self.block);
             (
                 func,
-                format!("Remove ebb {}", next_ebb),
+                format!("Remove block {}", next_block),
                 ProgressStatus::ExpandedOrShrinked,
             )
         })
@@ -333,8 +337,8 @@ impl Mutator for RemoveUnusedEntities {
         let name = match self.kind {
             0 => {
                 let mut ext_func_usage_map = HashMap::new();
-                for ebb in func.layout.ebbs() {
-                    for inst in func.layout.ebb_insts(ebb) {
+                for block in func.layout.blocks() {
+                    for inst in func.layout.block_insts(block) {
                         match func.dfg[inst] {
                             // Add new cases when there are new instruction formats taking a `FuncRef`.
                             InstructionData::Call { func_ref, .. }
@@ -383,8 +387,8 @@ impl Mutator for RemoveUnusedEntities {
                 }
 
                 let mut signatures_usage_map = HashMap::new();
-                for ebb in func.layout.ebbs() {
-                    for inst in func.layout.ebb_insts(ebb) {
+                for block in func.layout.blocks() {
+                    for inst in func.layout.block_insts(block) {
                         // Add new cases when there are new instruction formats taking a `SigRef`.
                         if let InstructionData::CallIndirect { sig_ref, .. } = func.dfg[inst] {
                             signatures_usage_map
@@ -431,8 +435,8 @@ impl Mutator for RemoveUnusedEntities {
             }
             2 => {
                 let mut stack_slot_usage_map = HashMap::new();
-                for ebb in func.layout.ebbs() {
-                    for inst in func.layout.ebb_insts(ebb) {
+                for block in func.layout.blocks() {
+                    for inst in func.layout.block_insts(block) {
                         match func.dfg[inst] {
                             // Add new cases when there are new instruction formats taking a `StackSlot`.
                             InstructionData::StackLoad { stack_slot, .. }
@@ -490,8 +494,8 @@ impl Mutator for RemoveUnusedEntities {
             }
             3 => {
                 let mut global_value_usage_map = HashMap::new();
-                for ebb in func.layout.ebbs() {
-                    for inst in func.layout.ebb_insts(ebb) {
+                for block in func.layout.blocks() {
+                    for inst in func.layout.block_insts(block) {
                         // Add new cases when there are new instruction formats taking a `GlobalValue`.
                         if let InstructionData::UnaryGlobalValue { global_value, .. } =
                             func.dfg[inst]
@@ -545,15 +549,15 @@ impl Mutator for RemoveUnusedEntities {
 }
 
 struct MergeBlocks {
-    ebb: Ebb,
-    prev_ebb: Option<Ebb>,
+    block: Block,
+    prev_block: Option<Block>,
 }
 
 impl MergeBlocks {
     fn new(func: &Function) -> Self {
         Self {
-            ebb: func.layout.entry_block().unwrap(),
-            prev_ebb: None,
+            block: func.layout.entry_block().unwrap(),
+            prev_block: None,
         }
     }
 }
@@ -564,30 +568,30 @@ impl Mutator for MergeBlocks {
     }
 
     fn mutation_count(&self, func: &Function) -> usize {
-        // N ebbs may result in at most N-1 merges.
-        ebb_count(func) - 1
+        // N blocks may result in at most N-1 merges.
+        block_count(func) - 1
     }
 
     fn mutate(&mut self, mut func: Function) -> Option<(Function, String, ProgressStatus)> {
-        let ebb = match func.layout.next_ebb(self.ebb) {
-            Some(ebb) => ebb,
+        let block = match func.layout.next_block(self.block) {
+            Some(block) => block,
             None => return None,
         };
 
-        self.ebb = ebb;
+        self.block = block;
 
         let mut cfg = ControlFlowGraph::new();
         cfg.compute(&func);
 
-        if cfg.pred_iter(ebb).count() != 1 {
+        if cfg.pred_iter(block).count() != 1 {
             return Some((
                 func,
-                format!("did nothing for {}", ebb),
+                format!("did nothing for {}", block),
                 ProgressStatus::Skip,
             ));
         }
 
-        let pred = cfg.pred_iter(ebb).next().unwrap();
+        let pred = cfg.pred_iter(block).next().unwrap();
 
         // If the branch instruction that lead us to this block is preceded by another branch
         // instruction, then we have a conditional jump sequence that we should not break by
@@ -596,86 +600,90 @@ impl Mutator for MergeBlocks {
             if func.dfg[pred_pred_inst].opcode().is_branch() {
                 return Some((
                     func,
-                    format!("did nothing for {}", ebb),
+                    format!("did nothing for {}", block),
                     ProgressStatus::Skip,
                 ));
             }
         }
 
-        assert!(func.dfg.ebb_params(ebb).len() == func.dfg.inst_variable_args(pred.inst).len());
+        assert!(func.dfg.block_params(block).len() == func.dfg.inst_variable_args(pred.inst).len());
 
-        // If there were any EBB parameters in ebb, then the last instruction in pred will
-        // fill these parameters. Make the EBB params aliases of the terminator arguments.
-        for (ebb_param, arg) in func
+        // If there were any block parameters in block, then the last instruction in pred will
+        // fill these parameters. Make the block params aliases of the terminator arguments.
+        for (block_param, arg) in func
             .dfg
-            .detach_ebb_params(ebb)
+            .detach_block_params(block)
             .as_slice(&func.dfg.value_lists)
             .iter()
             .cloned()
             .zip(func.dfg.inst_variable_args(pred.inst).iter().cloned())
             .collect::<Vec<_>>()
         {
-            if ebb_param != arg {
-                func.dfg.change_to_alias(ebb_param, arg);
+            if block_param != arg {
+                func.dfg.change_to_alias(block_param, arg);
             }
         }
 
-        // Remove the terminator branch to the current EBB.
+        // Remove the terminator branch to the current block.
         func.layout.remove_inst(pred.inst);
 
         // Move all the instructions to the predecessor.
-        while let Some(inst) = func.layout.first_inst(ebb) {
+        while let Some(inst) = func.layout.first_inst(block) {
             func.layout.remove_inst(inst);
-            func.layout.append_inst(inst, pred.ebb);
+            func.layout.append_inst(inst, pred.block);
         }
 
-        // Remove the predecessor EBB.
-        func.layout.remove_ebb(ebb);
+        // Remove the predecessor block.
+        func.layout.remove_block(block);
 
-        // Record the previous EBB: if we caused a crash (as signaled by a call to did_crash), then
-        // we'll start back to this EBB.
-        self.prev_ebb = Some(pred.ebb);
+        // Record the previous block: if we caused a crash (as signaled by a call to did_crash), then
+        // we'll start back to this block.
+        self.prev_block = Some(pred.block);
 
         Some((
             func,
-            format!("merged {} and {}", pred.ebb, ebb),
+            format!("merged {} and {}", pred.block, block),
             ProgressStatus::ExpandedOrShrinked,
         ))
     }
 
     fn did_crash(&mut self) {
-        self.ebb = self.prev_ebb.unwrap();
+        self.block = self.prev_block.unwrap();
     }
 }
 
-fn next_inst_ret_prev(func: &Function, ebb: &mut Ebb, inst: &mut Inst) -> Option<(Ebb, Inst)> {
-    let prev = (*ebb, *inst);
+fn next_inst_ret_prev(
+    func: &Function,
+    block: &mut Block,
+    inst: &mut Inst,
+) -> Option<(Block, Inst)> {
+    let prev = (*block, *inst);
     if let Some(next_inst) = func.layout.next_inst(*inst) {
         *inst = next_inst;
         return Some(prev);
     }
-    if let Some(next_ebb) = func.layout.next_ebb(*ebb) {
-        *ebb = next_ebb;
-        *inst = func.layout.first_inst(*ebb).expect("no inst");
+    if let Some(next_block) = func.layout.next_block(*block) {
+        *block = next_block;
+        *inst = func.layout.first_inst(*block).expect("no inst");
         return Some(prev);
     }
     None
 }
 
-fn ebb_count(func: &Function) -> usize {
-    func.layout.ebbs().count()
+fn block_count(func: &Function) -> usize {
+    func.layout.blocks().count()
 }
 
 fn inst_count(func: &Function) -> usize {
     func.layout
-        .ebbs()
-        .map(|ebb| func.layout.ebb_insts(ebb).count())
+        .blocks()
+        .map(|block| func.layout.block_insts(block).count())
         .sum()
 }
 
 fn resolve_aliases(func: &mut Function) {
-    for ebb in func.layout.ebbs() {
-        for inst in func.layout.ebb_insts(ebb) {
+    for block in func.layout.blocks() {
+        for inst in func.layout.block_insts(block) {
             func.dfg.resolve_aliases_in_arguments(inst);
         }
     }
@@ -713,7 +721,7 @@ fn reduce(
                 0 => Box::new(RemoveInst::new(&func)),
                 1 => Box::new(ReplaceInstWithConst::new(&func)),
                 2 => Box::new(ReplaceInstWithTrap::new(&func)),
-                3 => Box::new(RemoveEbb::new(&func)),
+                3 => Box::new(RemoveBlock::new(&func)),
                 4 => Box::new(RemoveUnusedEntities::new()),
                 5 => Box::new(MergeBlocks::new(&func)),
                 _ => break,
@@ -775,10 +783,10 @@ fn reduce(
         }
 
         progress_bar.println(format!(
-            "After pass {}, remaining insts/ebbs: {}/{} ({})",
+            "After pass {}, remaining insts/blocks: {}/{} ({})",
             pass_idx,
             inst_count(&func),
-            ebb_count(&func),
+            block_count(&func),
             if should_keep_reducing {
                 "will keep reducing"
             } else {
@@ -861,7 +869,7 @@ impl<'a> CrashCheckContext<'a> {
             Ok(None) => {}
             // The verifier panicked. Compiling it will probably give the same panic.
             // We treat it as succeeding to make it possible to reduce for the actual error.
-            // FIXME prevent verifier panic on removing ebb0.
+            // FIXME prevent verifier panic on removing block0.
             Err(_) => return CheckResult::Succeed,
         }
 
@@ -869,11 +877,13 @@ impl<'a> CrashCheckContext<'a> {
         {
             // For testing purposes we emulate a panic caused by the existence of
             // a `call` instruction.
-            let contains_call = func.layout.ebbs().any(|ebb| {
-                func.layout.ebb_insts(ebb).any(|inst| match func.dfg[inst] {
-                    InstructionData::Call { .. } => true,
-                    _ => false,
-                })
+            let contains_call = func.layout.blocks().any(|block| {
+                func.layout
+                    .block_insts(block)
+                    .any(|inst| match func.dfg[inst] {
+                        InstructionData::Call { .. } => true,
+                        _ => false,
+                    })
             });
             if contains_call {
                 return CheckResult::Crash("test crash".to_string());
@@ -934,9 +944,9 @@ mod tests {
             assert_eq!(crash_msg, "test crash");
 
             assert_eq!(
-                ebb_count(&func_reduced_twice),
-                ebb_count(&reduced_func),
-                "reduction wasn't maximal for ebbs"
+                block_count(&func_reduced_twice),
+                block_count(&reduced_func),
+                "reduction wasn't maximal for blocks"
             );
             assert_eq!(
                 inst_count(&func_reduced_twice),

@@ -16,7 +16,7 @@ function %stack_addr() {
            ss4 = explicit_slot 8, offset 0
            ss5 = explicit_slot 8, offset 1024
 
-ebb0:
+block0:
 [-,%rcx]   v0 = stack_addr.i64 ss0                      ; bin: 48 8d 8c 24 00000808
 [-,%rcx]   v1 = stack_addr.i64 ss1                      ; bin: 48 8d 8c 24 00000408
 [-,%rcx]   v2 = stack_addr.i64 ss2                      ; bin: 48 8d 8c 24 00000008

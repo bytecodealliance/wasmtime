@@ -2,7 +2,7 @@ test legalizer
 target x86_64
 
 ; Test legalization for various forms of table addresses.
-; regex: EBB=ebb\d+
+; regex: BB=block\d+
 
 function %table_addrs(i32, i64, i64 vmctx) {
     gv4 = vmctx
@@ -20,12 +20,12 @@ function %table_addrs(i32, i64, i64 vmctx) {
     ; check: table2 = dynamic gv0, min 0x0001_0000, bound gv1, element_size 1, index_type i64
     ; check: table3 = dynamic gv0, min 0, bound gv1, element_size 16, index_type i64
 
-ebb0(v0: i32, v1: i64, v3: i64):
+block0(v0: i32, v1: i64, v3: i64):
     v4 = table_addr.i64 table0, v0, +0
     ; check:         v8 = load.i32 notrap aligned v3+88
     ; check:         v9 = icmp uge v0, v8
-    ; check:         brz v9, $(resume_1=$EBB)
-    ; nextln:        jump $(trap_1=$EBB)
+    ; check:         brz v9, $(resume_1=$BB)
+    ; nextln:        jump $(trap_1=$BB)
     ; check:     $trap_1:
     ; nextln:        trap table_oob
     ; check:     $resume_1:
@@ -36,8 +36,8 @@ ebb0(v0: i32, v1: i64, v3: i64):
     v5 = table_addr.i64 table1, v0, +0
     ; check:         v12 = load.i32 notrap aligned v3+88
     ; check:         v13 = icmp.i32 uge v0, v12
-    ; check:         brz v13, $(resume_2=$EBB)
-    ; nextln:        jump $(trap_2=$EBB)
+    ; check:         brz v13, $(resume_2=$BB)
+    ; nextln:        jump $(trap_2=$BB)
     ; check:     $trap_2:
     ; nextln:        trap table_oob
     ; check:     $resume_2:
@@ -49,8 +49,8 @@ ebb0(v0: i32, v1: i64, v3: i64):
     v6 = table_addr.i64 table2, v1, +0
     ; check:         v17 = iadd_imm.i64 v3, 80
     ; check:         v18 = icmp.i64 uge v1, v17
-    ; check:         brz v18, $(resume_3=$EBB)
-    ; nextln:        jump $(trap_3=$EBB)
+    ; check:         brz v18, $(resume_3=$BB)
+    ; nextln:        jump $(trap_3=$BB)
     ; check:     $trap_3:
     ; nextln:        trap table_oob
     ; check:     $resume_3:
@@ -60,8 +60,8 @@ ebb0(v0: i32, v1: i64, v3: i64):
     v7 = table_addr.i64 table3, v1, +0
     ; check:         v20 = iadd_imm.i64 v3, 80
     ; check:         v21 = icmp.i64 uge v1, v20
-    ; check:         brz v21, $(resume_4=$EBB)
-    ; nextln:        jump $(trap_4=$EBB)
+    ; check:         brz v21, $(resume_4=$BB)
+    ; nextln:        jump $(trap_4=$BB)
     ; check:     $trap_4:
     ; nextln:        trap table_oob
     ; check:     $resume_4:

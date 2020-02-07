@@ -1,4 +1,4 @@
-use cranelift_codegen::ir::{Ebb, Function, Inst, InstructionData, Signature};
+use cranelift_codegen::ir::{Block, Function, Inst, InstructionData, Signature};
 use serde_derive::{Deserialize, Serialize};
 
 /// Serializable version of the original Cranelift IR
@@ -758,27 +758,27 @@ impl SerInst {
     }
 }
 
-/// Serializable version of Cranelift IR Ebbs.
+/// Serializable version of Cranelift IR Blocks.
 #[derive(Clone, Deserialize, Serialize, Debug)]
-pub struct SerEbb {
-    pub ebb: String,
+pub struct SerBlock {
+    pub block: String,
     pub params: Vec<String>,
     pub insts: Vec<SerInst>,
 }
 
-impl SerEbb {
+impl SerBlock {
     pub fn new(name: String) -> Self {
         Self {
-            ebb: name,
+            block: name,
             params: Vec::new(),
             insts: Vec::new(),
         }
     }
 }
 
-pub fn populate_inst(func: &Function, ebb: Ebb) -> Vec<SerInst> {
+pub fn populate_inst(func: &Function, block: Block) -> Vec<SerInst> {
     let mut ser_vec: Vec<SerInst> = Vec::new();
-    let ret_iter = func.layout.ebb_insts(ebb);
+    let ret_iter = func.layout.block_insts(block);
     for inst in ret_iter {
         let ser_inst: SerInst = SerInst::new(inst, &func);
         ser_vec.push(ser_inst);
@@ -786,10 +786,10 @@ pub fn populate_inst(func: &Function, ebb: Ebb) -> Vec<SerInst> {
     ser_vec
 }
 
-/// Translating Ebb parameters into serializable parameters.
-pub fn populate_params(func: &Function, ebb: Ebb) -> Vec<String> {
+/// Translating Block parameters into serializable parameters.
+pub fn populate_params(func: &Function, block: Block) -> Vec<String> {
     let mut ser_vec: Vec<String> = Vec::new();
-    let parameters = func.dfg.ebb_params(ebb);
+    let parameters = func.dfg.block_params(block);
     for param in parameters {
         ser_vec.push(param.to_string());
     }
@@ -799,27 +799,27 @@ pub fn populate_params(func: &Function, ebb: Ebb) -> Vec<String> {
 /// Serializable Data Flow Graph.
 #[derive(Deserialize, Serialize, Debug)]
 pub struct SerDataFlowGraph {
-    ebbs: Vec<SerEbb>,
+    blocks: Vec<SerBlock>,
 }
 
-/// Serialize all parts of the Cranelift Ebb data structure, this includes name, parameters, and
+/// Serialize all parts of the Cranelift Block data structure, this includes name, parameters, and
 /// instructions.
-pub fn populate_ebbs(func: &Function) -> Vec<SerEbb> {
-    let mut ebb_vec: Vec<SerEbb> = Vec::new();
-    for ebb in func.layout.ebbs() {
-        let mut ser_ebb: SerEbb = SerEbb::new(ebb.to_string());
-        ser_ebb.params = populate_params(&func, ebb);
-        ser_ebb.insts = populate_inst(&func, ebb);
-        ebb_vec.push(ser_ebb);
+pub fn populate_blocks(func: &Function) -> Vec<SerBlock> {
+    let mut block_vec: Vec<SerBlock> = Vec::new();
+    for block in func.layout.blocks() {
+        let mut ser_block: SerBlock = SerBlock::new(block.to_string());
+        ser_block.params = populate_params(&func, block);
+        ser_block.insts = populate_inst(&func, block);
+        block_vec.push(ser_block);
     }
-    ebb_vec
+    block_vec
 }
 
-/// Serializable Cranelift IR data flow graph, including all ebbs.
+/// Serializable Cranelift IR data flow graph, including all blocks.
 impl SerDataFlowGraph {
     pub fn create_new(func: &Function) -> Self {
         Self {
-            ebbs: populate_ebbs(func),
+            blocks: populate_blocks(func),
         }
     }
 

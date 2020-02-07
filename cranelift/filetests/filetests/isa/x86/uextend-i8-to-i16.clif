@@ -2,13 +2,13 @@ test compile
 target x86_64
 
 function u0:0(i8) -> i16 fast {
-ebb0(v0: i8):
+block0(v0: i8):
     v1 = uextend.i16 v0
     return v1
 }
 
 function u0:1(i8) -> i16 fast {
-ebb0(v0: i8):
+block0(v0: i8):
     v1 = sextend.i16 v0
     return v1
 }

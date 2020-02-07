@@ -13,7 +13,7 @@ use core::str::FromStr;
 
 use crate::ir;
 use crate::ir::types;
-use crate::ir::{Ebb, FuncRef, JumpTable, SigRef, Type, Value};
+use crate::ir::{Block, FuncRef, JumpTable, SigRef, Type, Value};
 use crate::isa;
 
 use crate::bitset::BitSet;
@@ -164,7 +164,7 @@ impl Default for VariableArgs {
 impl InstructionData {
     /// Return information about the destination of a branch or jump instruction.
     ///
-    /// Any instruction that can transfer control to another EBB reveals its possible destinations
+    /// Any instruction that can transfer control to another block reveals its possible destinations
     /// here.
     pub fn analyze_branch<'a>(&'a self, pool: &'a ValueListPool) -> BranchInfo<'a> {
         match *self {
@@ -208,7 +208,7 @@ impl InstructionData {
     /// branch or jump.
     ///
     /// Multi-destination branches like `br_table` return `None`.
-    pub fn branch_destination(&self) -> Option<Ebb> {
+    pub fn branch_destination(&self) -> Option<Block> {
         match *self {
             Self::Jump { destination, .. }
             | Self::Branch { destination, .. }
@@ -227,7 +227,7 @@ impl InstructionData {
     /// single destination branch or jump.
     ///
     /// Multi-destination branches like `br_table` return `None`.
-    pub fn branch_destination_mut(&mut self) -> Option<&mut Ebb> {
+    pub fn branch_destination_mut(&mut self) -> Option<&mut Block> {
         match *self {
             Self::Jump {
                 ref mut destination,
@@ -279,15 +279,15 @@ impl InstructionData {
 /// Information about branch and jump instructions.
 pub enum BranchInfo<'a> {
     /// This is not a branch or jump instruction.
-    /// This instruction will not transfer control to another EBB in the function, but it may still
+    /// This instruction will not transfer control to another block in the function, but it may still
     /// affect control flow by returning or trapping.
     NotABranch,
 
-    /// This is a branch or jump to a single destination EBB, possibly taking value arguments.
-    SingleDest(Ebb, &'a [Value]),
+    /// This is a branch or jump to a single destination block, possibly taking value arguments.
+    SingleDest(Block, &'a [Value]),
 
-    /// This is a jump table branch which can have many destination EBBs and maybe one default EBB.
-    Table(JumpTable, Option<Ebb>),
+    /// This is a jump table branch which can have many destination blocks and maybe one default block.
+    Table(JumpTable, Option<Block>),
 }
 
 /// Information about call instructions.

@@ -87,7 +87,7 @@ fn legalize_inst(
                     return LegalizeInstResult::SplitLegalizePending;
                 }
             }
-            ir::ValueDef::Param(_ebb, _num) => {}
+            ir::ValueDef::Param(_block, _num) => {}
         }
 
         let res = pos.func.dfg.inst_results(inst).to_vec();
@@ -148,10 +148,10 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
     let mut pos = FuncCursor::new(func);
     let func_begin = pos.position();
 
-    // Split ebb params before trying to legalize instructions, so that the newly introduced
+    // Split block params before trying to legalize instructions, so that the newly introduced
     // isplit instructions get legalized.
-    while let Some(ebb) = pos.next_ebb() {
-        split::split_ebb_params(pos.func, cfg, ebb);
+    while let Some(block) = pos.next_block() {
+        split::split_block_params(pos.func, cfg, block);
     }
 
     pos.set_position(func_begin);
@@ -159,9 +159,9 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
     // This must be a set to prevent trying to legalize `isplit` and `vsplit` twice in certain cases.
     let mut pending_splits = BTreeSet::new();
 
-    // Process EBBs in layout order. Some legalization actions may split the current EBB or append
-    // new ones to the end. We need to make sure we visit those new EBBs too.
-    while let Some(_ebb) = pos.next_ebb() {
+    // Process blocks in layout order. Some legalization actions may split the current block or append
+    // new ones to the end. We need to make sure we visit those new blocks too.
+    while let Some(_block) = pos.next_block() {
         // Keep track of the cursor position before the instruction being processed, so we can
         // double back when replacing instructions.
         let mut prev_pos = pos.position();
@@ -225,48 +225,48 @@ fn expand_cond_trap(
         _ => panic!("Expected cond trap: {}", func.dfg.display_inst(inst, None)),
     };
 
-    // Split the EBB after `inst`:
+    // Split the block after `inst`:
     //
     //     trapnz arg
     //     ..
     //
     // Becomes:
     //
-    //     brz arg, new_ebb_resume
-    //     jump new_ebb_trap
+    //     brz arg, new_block_resume
+    //     jump new_block_trap
     //
-    //   new_ebb_trap:
+    //   new_block_trap:
     //     trap
     //
-    //   new_ebb_resume:
+    //   new_block_resume:
     //     ..
-    let old_ebb = func.layout.pp_ebb(inst);
-    let new_ebb_trap = func.dfg.make_ebb();
-    let new_ebb_resume = func.dfg.make_ebb();
+    let old_block = func.layout.pp_block(inst);
+    let new_block_trap = func.dfg.make_block();
+    let new_block_resume = func.dfg.make_block();
 
     // Replace trap instruction by the inverted condition.
     if trapz {
-        func.dfg.replace(inst).brnz(arg, new_ebb_resume, &[]);
+        func.dfg.replace(inst).brnz(arg, new_block_resume, &[]);
     } else {
-        func.dfg.replace(inst).brz(arg, new_ebb_resume, &[]);
+        func.dfg.replace(inst).brz(arg, new_block_resume, &[]);
     }
 
     // Add jump instruction after the inverted branch.
     let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.use_srcloc(inst);
-    pos.ins().jump(new_ebb_trap, &[]);
+    pos.ins().jump(new_block_trap, &[]);
 
     // Insert the new label and the unconditional trap terminator.
-    pos.insert_ebb(new_ebb_trap);
+    pos.insert_block(new_block_trap);
     pos.ins().trap(code);
 
     // Insert the new label and resume the execution when the trap fails.
-    pos.insert_ebb(new_ebb_resume);
+    pos.insert_block(new_block_resume);
 
     // Finally update the CFG.
-    cfg.recompute_ebb(pos.func, old_ebb);
-    cfg.recompute_ebb(pos.func, new_ebb_resume);
-    cfg.recompute_ebb(pos.func, new_ebb_trap);
+    cfg.recompute_block(pos.func, old_block);
+    cfg.recompute_block(pos.func, new_block_resume);
+    cfg.recompute_block(pos.func, new_block_trap);
 }
 
 /// Jump tables.
@@ -292,7 +292,7 @@ fn expand_br_table_jt(
 ) {
     use crate::ir::condcodes::IntCC;
 
-    let (arg, default_ebb, table) = match func.dfg[inst] {
+    let (arg, default_block, table) = match func.dfg[inst] {
         ir::InstructionData::BranchTable {
             opcode: ir::Opcode::BrTable,
             arg,
@@ -304,22 +304,22 @@ fn expand_br_table_jt(
 
     // Rewrite:
     //
-    //     br_table $idx, default_ebb, $jt
+    //     br_table $idx, default_block, $jt
     //
     // To:
     //
     //     $oob = ifcmp_imm $idx, len($jt)
-    //     brif uge $oob, default_ebb
-    //     jump fallthrough_ebb
+    //     brif uge $oob, default_block
+    //     jump fallthrough_block
     //
-    //   fallthrough_ebb:
+    //   fallthrough_block:
     //     $base = jump_table_base.i64 $jt
     //     $rel_addr = jump_table_entry.i64 $idx, $base, 4, $jt
     //     $addr = iadd $base, $rel_addr
     //     indirect_jump_table_br $addr, $jt
 
-    let ebb = func.layout.pp_ebb(inst);
-    let jump_table_ebb = func.dfg.make_ebb();
+    let block = func.layout.pp_block(inst);
+    let jump_table_block = func.dfg.make_block();
 
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
@@ -330,9 +330,9 @@ fn expand_br_table_jt(
         .ins()
         .icmp_imm(IntCC::UnsignedGreaterThanOrEqual, arg, table_size);
 
-    pos.ins().brnz(oob, default_ebb, &[]);
-    pos.ins().jump(jump_table_ebb, &[]);
-    pos.insert_ebb(jump_table_ebb);
+    pos.ins().brnz(oob, default_block, &[]);
+    pos.ins().jump(jump_table_block, &[]);
+    pos.insert_block(jump_table_block);
 
     let addr_ty = isa.pointer_type();
 
@@ -351,8 +351,8 @@ fn expand_br_table_jt(
     pos.ins().indirect_jump_table_br(addr, table);
 
     pos.remove_inst();
-    cfg.recompute_ebb(pos.func, ebb);
-    cfg.recompute_ebb(pos.func, jump_table_ebb);
+    cfg.recompute_block(pos.func, block);
+    cfg.recompute_block(pos.func, jump_table_block);
 }
 
 /// Expand br_table to series of conditionals.
@@ -364,7 +364,7 @@ fn expand_br_table_conds(
 ) {
     use crate::ir::condcodes::IntCC;
 
-    let (arg, default_ebb, table) = match func.dfg[inst] {
+    let (arg, default_block, table) = match func.dfg[inst] {
         ir::InstructionData::BranchTable {
             opcode: ir::Opcode::BrTable,
             arg,
@@ -374,15 +374,15 @@ fn expand_br_table_conds(
         _ => panic!("Expected br_table: {}", func.dfg.display_inst(inst, None)),
     };
 
-    let ebb = func.layout.pp_ebb(inst);
+    let block = func.layout.pp_block(inst);
 
     // This is a poor man's jump table using just a sequence of conditional branches.
     let table_size = func.jump_tables[table].len();
-    let mut cond_failed_ebb = vec![];
+    let mut cond_failed_block = vec![];
     if table_size >= 1 {
-        cond_failed_ebb = alloc::vec::Vec::with_capacity(table_size - 1);
+        cond_failed_block = alloc::vec::Vec::with_capacity(table_size - 1);
         for _ in 0..table_size - 1 {
-            cond_failed_ebb.push(func.dfg.make_ebb());
+            cond_failed_block.push(func.dfg.make_block());
         }
     }
 
@@ -397,19 +397,19 @@ fn expand_br_table_conds(
         pos.ins().brnz(t, dest, &[]);
         // Jump to the next case.
         if i < table_size - 1 {
-            let ebb = cond_failed_ebb[i];
-            pos.ins().jump(ebb, &[]);
-            pos.insert_ebb(ebb);
+            let block = cond_failed_block[i];
+            pos.ins().jump(block, &[]);
+            pos.insert_block(block);
         }
     }
 
     // `br_table` jumps to the default destination if nothing matches
-    pos.ins().jump(default_ebb, &[]);
+    pos.ins().jump(default_block, &[]);
 
     pos.remove_inst();
-    cfg.recompute_ebb(pos.func, ebb);
-    for failed_ebb in cond_failed_ebb.into_iter() {
-        cfg.recompute_ebb(pos.func, failed_ebb);
+    cfg.recompute_block(pos.func, block);
+    for failed_block in cond_failed_block.into_iter() {
+        cfg.recompute_block(pos.func, failed_block);
     }
 }
 
@@ -433,23 +433,23 @@ fn expand_select(
 
     // Replace `result = select ctrl, tval, fval` with:
     //
-    //   brnz ctrl, new_ebb(tval)
-    //   jump new_ebb(fval)
-    // new_ebb(result):
-    let old_ebb = func.layout.pp_ebb(inst);
+    //   brnz ctrl, new_block(tval)
+    //   jump new_block(fval)
+    // new_block(result):
+    let old_block = func.layout.pp_block(inst);
     let result = func.dfg.first_result(inst);
     func.dfg.clear_results(inst);
-    let new_ebb = func.dfg.make_ebb();
-    func.dfg.attach_ebb_param(new_ebb, result);
+    let new_block = func.dfg.make_block();
+    func.dfg.attach_block_param(new_block, result);
 
-    func.dfg.replace(inst).brnz(ctrl, new_ebb, &[tval]);
+    func.dfg.replace(inst).brnz(ctrl, new_block, &[tval]);
     let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.use_srcloc(inst);
-    pos.ins().jump(new_ebb, &[fval]);
-    pos.insert_ebb(new_ebb);
+    pos.ins().jump(new_block, &[fval]);
+    pos.insert_block(new_block);
 
-    cfg.recompute_ebb(pos.func, new_ebb);
-    cfg.recompute_ebb(pos.func, old_ebb);
+    cfg.recompute_block(pos.func, new_block);
+    cfg.recompute_block(pos.func, old_block);
 }
 
 fn expand_br_icmp(
@@ -458,7 +458,7 @@ fn expand_br_icmp(
     cfg: &mut ControlFlowGraph,
     _isa: &dyn TargetIsa,
 ) {
-    let (cond, a, b, destination, ebb_args) = match func.dfg[inst] {
+    let (cond, a, b, destination, block_args) = match func.dfg[inst] {
         ir::InstructionData::BranchIcmp {
             cond,
             destination,
@@ -474,16 +474,16 @@ fn expand_br_icmp(
         _ => panic!("Expected br_icmp {}", func.dfg.display_inst(inst, None)),
     };
 
-    let old_ebb = func.layout.pp_ebb(inst);
+    let old_block = func.layout.pp_block(inst);
     func.dfg.clear_results(inst);
 
     let icmp_res = func.dfg.replace(inst).icmp(cond, a, b);
     let mut pos = FuncCursor::new(func).after_inst(inst);
     pos.use_srcloc(inst);
-    pos.ins().brnz(icmp_res, destination, &ebb_args);
+    pos.ins().brnz(icmp_res, destination, &block_args);
 
-    cfg.recompute_ebb(pos.func, destination);
-    cfg.recompute_ebb(pos.func, old_ebb);
+    cfg.recompute_block(pos.func, destination);
+    cfg.recompute_block(pos.func, old_block);
 }
 
 /// Expand illegal `f32const` and `f64const` instructions.

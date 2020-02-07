@@ -3,60 +3,60 @@ target riscv32
 
 function %nested_loops(i32) -> i32 {
 
-ebb0(v0: i32):
-    jump ebb1(v0)
+block0(v0: i32):
+    jump block1(v0)
 
-ebb1(v1: i32):
+block1(v1: i32):
     v2 = iconst.i32 1
     v3 = iconst.i32 2
     v4 = iadd v2, v3
     v5 = isub v1, v2
-    jump ebb2(v5, v5)
+    jump block2(v5, v5)
 
-ebb2(v10: i32, v11: i32):
-    brz v11, ebb4(v10)
-    jump ebb3
+block2(v10: i32, v11: i32):
+    brz v11, block4(v10)
+    jump block3
 
-ebb3:
+block3:
     v12 = iconst.i32 1
     v15 = iadd v12, v5
     v13 = isub v11, v12
-    jump ebb2(v10,v13)
+    jump block2(v10,v13)
 
-ebb4(v20: i32):
-    brz v20, ebb5(v20)
-    jump ebb1(v20)
+block4(v20: i32):
+    brz v20, block5(v20)
+    jump block1(v20)
 
-ebb5(v30: i32):
+block5(v30: i32):
     return v30
 
 }
 
 ; sameln:function %nested_loops(i32) -> i32 {
-; nextln: ebb0(v0: i32):
+; nextln: block0(v0: i32):
 ; nextln:     v2 = iconst.i32 1
 ; nextln:     v3 = iconst.i32 2
 ; nextln:     v4 = iadd v2, v3
 ; nextln:     v12 = iconst.i32 1
-; nextln:     jump ebb1(v0)
+; nextln:     jump block1(v0)
 ; nextln: 
-; nextln: ebb1(v1: i32):
+; nextln: block1(v1: i32):
 ; nextln:     v5 = isub v1, v2
 ; nextln:     v15 = iadd.i32 v12, v5
-; nextln:     jump ebb2(v5, v5)
+; nextln:     jump block2(v5, v5)
 ; nextln: 
-; nextln: ebb2(v10: i32, v11: i32):
-; nextln:     brz v11, ebb4(v10)
-; nextln:     jump ebb3
+; nextln: block2(v10: i32, v11: i32):
+; nextln:     brz v11, block4(v10)
+; nextln:     jump block3
 ; nextln: 
-; nextln: ebb3:
+; nextln: block3:
 ; nextln:     v13 = isub.i32 v11, v12
-; nextln:     jump ebb2(v10, v13)
+; nextln:     jump block2(v10, v13)
 ; nextln: 
-; nextln: ebb4(v20: i32):
-; nextln:     brz v20, ebb5(v20)
-; nextln:     jump ebb1(v20)
+; nextln: block4(v20: i32):
+; nextln:     brz v20, block5(v20)
+; nextln:     jump block1(v20)
 ; nextln: 
-; nextln: ebb5(v30: i32):
+; nextln: block5(v30: i32):
 ; nextln:     return v30
 ; nextln: }

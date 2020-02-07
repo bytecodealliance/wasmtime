@@ -2,7 +2,7 @@ test run
 target x86_64
 
 function %reverse_bits_zero() -> b1 {
-ebb0:
+block0:
     v0 = iconst.i64 0
     v1 = iconcat v0, v0
     v2 = bitrev.i128 v1
@@ -12,7 +12,7 @@ ebb0:
 ; run
 
 function %reverse_bits_one() -> b1 {
-ebb0:
+block0:
     v0 = iconst.i64 0
     v1 = iconst.i64 1
     v2 = iconcat v0, v1
@@ -29,7 +29,7 @@ ebb0:
 ; run
 
 function %reverse_bits() -> b1 {
-ebb0:
+block0:
     v0 = iconst.i64 0x06AD_8667_69EC_41BA
     v1 = iconst.i64 0x6C83_D81A_6E28_83AB
     v2 = iconcat v0, v1

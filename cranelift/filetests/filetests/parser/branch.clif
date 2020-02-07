@@ -3,114 +3,114 @@ test cat
 
 ; Jumps with no arguments. The '()' empty argument list is optional.
 function %minimal() {
-ebb0:
-    jump ebb1
+block0:
+    jump block1
 
-ebb1:
-    jump ebb0()
+block1:
+    jump block0()
 }
 ; sameln: function %minimal() fast {
-; nextln: ebb0:
-; nextln:     jump ebb1
+; nextln: block0:
+; nextln:     jump block1
 ; nextln: 
-; nextln: ebb1:
-; nextln:     jump ebb0
+; nextln: block1:
+; nextln:     jump block0
 ; nextln: }
 
 ; Jumps with 1 arg.
 function %onearg(i32) {
-ebb0(v90: i32):
-    jump ebb1(v90)
+block0(v90: i32):
+    jump block1(v90)
 
-ebb1(v91: i32):
-    jump ebb0(v91)
+block1(v91: i32):
+    jump block0(v91)
 }
 ; sameln: function %onearg(i32) fast {
-; nextln: ebb0(v90: i32):
-; nextln:     jump ebb1(v90)
+; nextln: block0(v90: i32):
+; nextln:     jump block1(v90)
 ; nextln: 
-; nextln: ebb1(v91: i32):
-; nextln:     jump ebb0(v91)
+; nextln: block1(v91: i32):
+; nextln:     jump block0(v91)
 ; nextln: }
 
 ; Jumps with 2 args.
 function %twoargs(i32, f32) {
-ebb0(v90: i32, v91: f32):
-    jump ebb1(v90, v91)
+block0(v90: i32, v91: f32):
+    jump block1(v90, v91)
 
-ebb1(v92: i32, v93: f32):
-    jump ebb0(v92, v93)
+block1(v92: i32, v93: f32):
+    jump block0(v92, v93)
 }
 ; sameln: function %twoargs(i32, f32) fast {
-; nextln: ebb0(v90: i32, v91: f32):
-; nextln:     jump ebb1(v90, v91)
+; nextln: block0(v90: i32, v91: f32):
+; nextln:     jump block1(v90, v91)
 ; nextln: 
-; nextln: ebb1(v92: i32, v93: f32):
-; nextln:     jump ebb0(v92, v93)
+; nextln: block1(v92: i32, v93: f32):
+; nextln:     jump block0(v92, v93)
 ; nextln: }
 
 ; Branches with no arguments. The '()' empty argument list is optional.
 function %minimal(i32) {
-ebb0(v90: i32):
-    brz v90, ebb1
+block0(v90: i32):
+    brz v90, block1
 
-ebb1:
-    brnz v90, ebb1()
+block1:
+    brnz v90, block1()
 }
 ; sameln: function %minimal(i32) fast {
-; nextln: ebb0(v90: i32):
-; nextln:     brz v90, ebb1
+; nextln: block0(v90: i32):
+; nextln:     brz v90, block1
 ; nextln: 
-; nextln: ebb1:
-; nextln:     brnz.i32 v90, ebb1
+; nextln: block1:
+; nextln:     brnz.i32 v90, block1
 ; nextln: }
 
 function %twoargs(i32, f32) {
-ebb0(v90: i32, v91: f32):
-    brz v90, ebb1(v90, v91)
+block0(v90: i32, v91: f32):
+    brz v90, block1(v90, v91)
 
-ebb1(v92: i32, v93: f32):
-    brnz v90, ebb0(v92, v93)
+block1(v92: i32, v93: f32):
+    brnz v90, block0(v92, v93)
 }
 ; sameln: function %twoargs(i32, f32) fast {
-; nextln: ebb0(v90: i32, v91: f32):
-; nextln:     brz v90, ebb1(v90, v91)
+; nextln: block0(v90: i32, v91: f32):
+; nextln:     brz v90, block1(v90, v91)
 ; nextln: 
-; nextln: ebb1(v92: i32, v93: f32):
-; nextln:     brnz.i32 v90, ebb0(v92, v93)
+; nextln: block1(v92: i32, v93: f32):
+; nextln:     brnz.i32 v90, block0(v92, v93)
 ; nextln: }
 
 function %jumptable(i32) {
     jt200 = jump_table []
-    jt2 = jump_table [ebb10, ebb40, ebb20, ebb30]
+    jt2 = jump_table [block10, block40, block20, block30]
 
-ebb10(v3: i32):
-    br_table v3, ebb50, jt2
+block10(v3: i32):
+    br_table v3, block50, jt2
 
-ebb20:
+block20:
     trap user2
-ebb30:
+block30:
     trap user3
-ebb40:
+block40:
     trap user4
-ebb50:
+block50:
     trap user1    
 }
 ; sameln: function %jumptable(i32) fast {
-; check:      jt2 = jump_table [ebb10, ebb40, ebb20, ebb30]
+; check:      jt2 = jump_table [block10, block40, block20, block30]
 ; check:      jt200 = jump_table []
-; check:  ebb10(v3: i32):
-; nextln:     br_table v3, ebb50, jt2
+; check:  block10(v3: i32):
+; nextln:     br_table v3, block50, jt2
 ; nextln: 
-; nextln: ebb20:
+; nextln: block20:
 ; nextln:     trap user2
 ; nextln: 
-; nextln: ebb30:
+; nextln: block30:
 ; nextln:     trap user3
 ; nextln: 
-; nextln: ebb40:
+; nextln: block40:
 ; nextln:     trap user4
 ; nextln: 
-; nextln: ebb50:
+; nextln: block50:
 ; nextln:     trap user1
 ; nextln: }

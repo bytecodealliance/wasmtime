@@ -9,7 +9,7 @@ function %i64_load(i32, i64 vmctx) -> i64 {
     gv0 = vmctx
     heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
-ebb0(v0: i32, v1: i64):
+block0(v0: i32, v1: i64):
     v2 = heap_addr.i64 heap0, v0, 1
     v3 = load.i64 v2
     return v3
@@ -19,7 +19,7 @@ function %i64_store(i64, i32, i64 vmctx) {
     gv0 = vmctx
     heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
-ebb0(v0: i64, v1: i32, v2: i64):
+block0(v0: i64, v1: i32, v2: i64):
     v3 = heap_addr.i64 heap0, v1, 1
     store v0, v3
     return
@@ -29,7 +29,7 @@ function %i64_load8_s(i32, i64 vmctx) -> i64 {
     gv0 = vmctx
     heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
-ebb0(v0: i32, v1: i64):
+block0(v0: i32, v1: i64):
     v2 = heap_addr.i64 heap0, v0, 1
     v3 = sload8.i64 v2
     return v3
@@ -39,7 +39,7 @@ function %i64_load8_u(i32, i64 vmctx) -> i64 {
     gv0 = vmctx
     heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
-ebb0(v0: i32, v1: i64):
+block0(v0: i32, v1: i64):
     v2 = heap_addr.i64 heap0, v0, 1
     v3 = uload8.i64 v2
     return v3
@@ -49,7 +49,7 @@ function %i64_store8(i64, i32, i64 vmctx) {
     gv0 = vmctx
     heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
-ebb0(v0: i64, v1: i32, v2: i64):
+block0(v0: i64, v1: i32, v2: i64):
     v3 = heap_addr.i64 heap0, v1, 1
     istore8 v0, v3
     return
@@ -59,7 +59,7 @@ function %i64_load16_s(i32, i64 vmctx) -> i64 {
     gv0 = vmctx
     heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
-ebb0(v0: i32, v1: i64):
+block0(v0: i32, v1: i64):
     v2 = heap_addr.i64 heap0, v0, 1
     v3 = sload16.i64 v2
     return v3
@@ -69,7 +69,7 @@ function %i64_load16_u(i32, i64 vmctx) -> i64 {
     gv0 = vmctx
     heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
-ebb0(v0: i32, v1: i64):
+block0(v0: i32, v1: i64):
     v2 = heap_addr.i64 heap0, v0, 1
     v3 = uload16.i64 v2
     return v3
@@ -79,7 +79,7 @@ function %i64_store16(i64, i32, i64 vmctx) {
     gv0 = vmctx
     heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
-ebb0(v0: i64, v1: i32, v2: i64):
+block0(v0: i64, v1: i32, v2: i64):
     v3 = heap_addr.i64 heap0, v1, 1
     istore16 v0, v3
     return
@@ -89,7 +89,7 @@ function %i64_load32_s(i32, i64 vmctx) -> i64 {
     gv0 = vmctx
     heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
-ebb0(v0: i32, v1: i64):
+block0(v0: i32, v1: i64):
     v2 = heap_addr.i64 heap0, v0, 1
     v3 = sload32.i64 v2
     return v3
@@ -99,7 +99,7 @@ function %i64_load32_u(i32, i64 vmctx) -> i64 {
     gv0 = vmctx
     heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
-ebb0(v0: i32, v1: i64):
+block0(v0: i32, v1: i64):
     v2 = heap_addr.i64 heap0, v0, 1
     v3 = uload32.i64 v2
     return v3
@@ -109,7 +109,7 @@ function %i64_store32(i64, i32, i64 vmctx) {
     gv0 = vmctx
     heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
-ebb0(v0: i64, v1: i32, v2: i64):
+block0(v0: i64, v1: i32, v2: i64):
     v3 = heap_addr.i64 heap0, v1, 1
     istore32 v0, v3
     return

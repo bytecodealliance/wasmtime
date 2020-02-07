@@ -7,8 +7,8 @@ target x86_64 haswell
 function %return_4_b1s(b1, b1, b1, b1) -> b1, b1, b1, b1 {
 ;; check: function %return_4_b1s(b1 [%rsi], b1 [%rdx], b1 [%rcx], b1 [%r8], i64 sret [%rdi], i64 fp [%rbp]) -> i64 sret [%rax], i64 fp [%rbp] fast {
 
-ebb0(v0: b1, v1: b1, v2: b1, v3: b1):
-; check: ebb0(v0: b1 [%rsi], v1: b1 [%rdx], v2: b1 [%rcx], v3: b1 [%r8], v4: i64 [%rdi], v13: i64 [%rbp]):
+block0(v0: b1, v1: b1, v2: b1, v3: b1):
+; check: block0(v0: b1 [%rsi], v1: b1 [%rdx], v2: b1 [%rcx], v3: b1 [%r8], v4: i64 [%rdi], v13: i64 [%rbp]):
 
     return v0, v1, v2, v3
     ; check:  v5 = bint.i8 v0
@@ -32,8 +32,8 @@ function %call_4_b1s() {
     fn0 = colocated %return_4_b1s(b1, b1, b1, b1) -> b1, b1, b1, b1
     ; check: sig0 = (b1 [%rsi], b1 [%rdx], b1 [%rcx], b1 [%r8], i64 sret [%rdi]) -> i64 sret [%rax] fast
 
-ebb0:
-; check: ebb0(v26: i64 [%rbp], v27: i64 [%rbx]):
+block0:
+; check: block0(v26: i64 [%rbp], v27: i64 [%rbx]):
 
     v0 = bconst.b1 true
     v1 = bconst.b1 false

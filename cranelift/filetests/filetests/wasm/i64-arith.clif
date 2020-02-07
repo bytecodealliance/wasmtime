@@ -7,7 +7,7 @@ target x86_64 baseline
 ; Constants.
 
 function %i64_const() -> i64 {
-ebb0:
+block0:
     v0 = iconst.i64 0x8765_4321
     return v0
 }
@@ -15,19 +15,19 @@ ebb0:
 ; Unary operations.
 
 function %i64_clz(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = clz v0
     return v1
 }
 
 function %i64_ctz(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = ctz v0
     return v1
 }
 
 function %i64_popcnt(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = popcnt v0
     return v1
 }
@@ -35,91 +35,91 @@ ebb0(v0: i64):
 ; Binary operations.
 
 function %i64_add(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
+block0(v0: i64, v1: i64):
     v2 = iadd v0, v1
     return v2
 }
 
 function %i64_sub(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
+block0(v0: i64, v1: i64):
     v2 = isub v0, v1
     return v2
 }
 
 function %i64_mul(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
+block0(v0: i64, v1: i64):
     v2 = imul v0, v1
     return v2
 }
 
 function %i32_div_s(i32, i32) -> i32 {
-ebb0(v0: i32, v1: i32):
+block0(v0: i32, v1: i32):
     v2 = sdiv v0, v1
     return v2
 }
 
 function %i32_div_u(i32, i32) -> i32 {
-ebb0(v0: i32, v1: i32):
+block0(v0: i32, v1: i32):
     v2 = udiv v0, v1
     return v2
 }
 
 function %i32_rem_s(i32, i32) -> i32 {
-ebb0(v0: i32, v1: i32):
+block0(v0: i32, v1: i32):
     v2 = srem v0, v1
     return v2
 }
 
 function %i32_rem_u(i32, i32) -> i32 {
-ebb0(v0: i32, v1: i32):
+block0(v0: i32, v1: i32):
     v2 = urem v0, v1
     return v2
 }
 
 function %i64_and(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
+block0(v0: i64, v1: i64):
     v2 = band v0, v1
     return v2
 }
 
 function %i64_or(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
+block0(v0: i64, v1: i64):
     v2 = bor v0, v1
     return v2
 }
 
 function %i64_xor(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
+block0(v0: i64, v1: i64):
     v2 = bxor v0, v1
     return v2
 }
 
 function %i64_shl(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
+block0(v0: i64, v1: i64):
     v2 = ishl v0, v1
     return v2
 }
 
 function %i64_shr_s(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
+block0(v0: i64, v1: i64):
     v2 = sshr v0, v1
     return v2
 }
 
 function %i64_shr_u(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
+block0(v0: i64, v1: i64):
     v2 = ushr v0, v1
     return v2
 }
 
 function %i64_rotl(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
+block0(v0: i64, v1: i64):
     v2 = rotl v0, v1
     return v2
 }
 
 function %i64_rotr(i64, i64) -> i64 {
-ebb0(v0: i64, v1: i64):
+block0(v0: i64, v1: i64):
     v2 = rotr v0, v1
     return v2
 }

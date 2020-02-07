@@ -6,7 +6,7 @@ function %add_members(i32, i64 vmctx) -> f32 baldrdash_system_v {
     gv2 = load.i32 notrap aligned gv0+72
     heap0 = dynamic gv1, min 0x1000, bound gv2, offset_guard 0
 
-ebb0(v0: i32, v6: i64):
+block0(v0: i32, v6: i64):
     v1 = heap_addr.i64 heap0, v0, 20
     v2 = load.f32 v1+16
     v3 = heap_addr.i64 heap0, v0, 24

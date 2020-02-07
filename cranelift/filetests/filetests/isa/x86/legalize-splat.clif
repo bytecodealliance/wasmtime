@@ -5,7 +5,7 @@ target x86_64 haswell
 
 ; use baldrdash_system_v calling convention here for simplicity (avoids prologue, epilogue)
 function %test_splat_i32() -> i32x4 baldrdash_system_v {
-ebb0:
+block0:
     v0 = iconst.i32 42
     v1 = splat.i32x4 v0
     return v1
@@ -14,7 +14,7 @@ ebb0:
 ; sameln: function %test_splat_i32() -> i32x4 [%xmm0] baldrdash_system_v {
 ; nextln:   ss0 = incoming_arg 0, offset 0
 ; nextln: 
-; nextln:   ebb0:
+; nextln:   block0:
 ; nextln:     v0 = iconst.i32 42
 ; nextln:     v2 = scalar_to_vector.i32x4 v0
 ; nextln:     v1 = x86_pshufd v2, 0
@@ -24,13 +24,13 @@ ebb0:
 
 
 function %test_splat_i64() -> i64x2 baldrdash_system_v {
-ebb0:
+block0:
     v0 = iconst.i64 42
     v1 = splat.i64x2 v0
     return v1
 }
 
-; check:   ebb0:
+; check:   block0:
 ; nextln:     v0 = iconst.i64 42
 ; nextln:     v2 = scalar_to_vector.i64x2 v0
 ; nextln:     v1 = x86_pinsr v2, 1, v0
@@ -39,13 +39,13 @@ ebb0:
 
 
 function %test_splat_b16() -> b16x8 baldrdash_system_v {
-ebb0:
+block0:
     v0 = bconst.b16 true
     v1 = splat.b16x8 v0
     return v1
 }
 
-; check:   ebb0:
+; check:   block0:
 ; nextln:     v0 = bconst.b16 true
 ; nextln:     v2 = scalar_to_vector.b16x8 v0
 ; nextln:     v3 = x86_pinsr v2, 1, v0
@@ -57,13 +57,13 @@ ebb0:
 
 
 function %test_splat_i8() -> i8x16 baldrdash_system_v {
-ebb0:
+block0:
     v0 = iconst.i8 42
     v1 = splat.i8x16 v0
     return v1
 }
 
-; check:   ebb0:
+; check:   block0:
 ; nextln:     v2 = iconst.i32 42
 ; nextln:     v0 = ireduce.i8 v2
 ; nextln:     v3 = scalar_to_vector.i8x16 v0

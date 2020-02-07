@@ -105,7 +105,7 @@ impl binemit::CodeSink for RodataSink {
         }
     }
 
-    fn reloc_ebb(&mut self, _reloc: binemit::Reloc, _ebb_offset: binemit::CodeOffset) {}
+    fn reloc_block(&mut self, _reloc: binemit::Reloc, _block_offset: binemit::CodeOffset) {}
     fn reloc_external(&mut self, _: binemit::Reloc, _: &ir::ExternalName, _: binemit::Addend) {}
     fn reloc_constant(&mut self, _: binemit::Reloc, _: ir::ConstantOffset) {}
     fn reloc_jt(&mut self, _reloc: binemit::Reloc, _jt: ir::JumpTable) {}

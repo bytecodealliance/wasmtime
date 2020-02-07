@@ -5,7 +5,7 @@ target i686 baseline
 
 ; ignored
 function %t_urem32_p0(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = urem_imm v0, 0
     ; check: urem_imm v0, 0
     return v1
@@ -13,7 +13,7 @@ ebb0(v0: i32):
 
 ; converted to constant zero
 function %t_urem32_p1(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = urem_imm v0, 1
     ; check: iconst.i32 0
     return v1
@@ -21,7 +21,7 @@ ebb0(v0: i32):
 
 ; shift
 function %t_urem32_p2(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = urem_imm v0, 2
     ; check: band_imm v0, 1
     return v1
@@ -29,7 +29,7 @@ ebb0(v0: i32):
 
 ; shift
 function %t_urem32_p2p31(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = urem_imm v0, 0x8000_0000
     ; check: band_imm v0, 0x7fff_ffff
     return v1
@@ -40,7 +40,7 @@ ebb0(v0: i32):
 
 ; ignored
 function %t_urem64_p0(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = urem_imm v0, 0
     ; check: urem_imm v0, 0
     return v1
@@ -48,7 +48,7 @@ ebb0(v0: i64):
 
 ; converted to constant zero
 function %t_urem64_p1(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = urem_imm v0, 1
     ; check: iconst.i64 0
     return v1
@@ -56,7 +56,7 @@ ebb0(v0: i64):
 
 ; shift
 function %t_urem64_p2(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = urem_imm v0, 2
     ; check: band_imm v0, 1
    return v1
@@ -64,7 +64,7 @@ ebb0(v0: i64):
 
 ; shift
 function %t_urem64_p2p63(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = urem_imm v0, 0x8000_0000_0000_0000
     ; check: band_imm v0, 0x7fff_ffff_ffff_ffff
     return v1
@@ -75,7 +75,7 @@ ebb0(v0: i64):
 
 ; ignored
 function %t_srem32_n1(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = srem_imm v0, -1
     ; check: srem_imm v0, -1
     return v1
@@ -83,7 +83,7 @@ ebb0(v0: i32):
 
 ; ignored
 function %t_srem32_p0(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = srem_imm v0, 0
     ; check: srem_imm v0, 0
     return v1
@@ -91,7 +91,7 @@ ebb0(v0: i32):
 
 ; converted to constant zero
 function %t_srem32_p1(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = srem_imm v0, 1
     ; check: iconst.i32 0
     return v1
@@ -99,7 +99,7 @@ ebb0(v0: i32):
 
 ; shift
 function %t_srem32_p2(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = srem_imm v0, 2
     ; check: ushr_imm v0, 31
     ; check: iadd v0, v2
@@ -110,7 +110,7 @@ ebb0(v0: i32):
 
 ; shift
 function %t_srem32_n2(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = srem_imm v0, -2
     ; check: ushr_imm v0, 31
     ; check: iadd v0, v2
@@ -121,7 +121,7 @@ ebb0(v0: i32):
 
 ; shift
 function %t_srem32_p4(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = srem_imm v0, 4
     ; check: sshr_imm v0, 1
     ; check: ushr_imm v2, 30
@@ -133,7 +133,7 @@ ebb0(v0: i32):
 
 ; shift
 function %t_srem32_n4(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = srem_imm v0, -4
     ; check: sshr_imm v0, 1
     ; check: ushr_imm v2, 30
@@ -145,7 +145,7 @@ ebb0(v0: i32):
 
 ; shift
 function %t_srem32_p2p30(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = srem_imm v0, 0x4000_0000
     ; check: sshr_imm v0, 29
     ; check: ushr_imm v2, 2
@@ -157,7 +157,7 @@ ebb0(v0: i32):
 
 ; shift
 function %t_srem32_n2p30(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = srem_imm v0, -0x4000_0000
     ; check: sshr_imm v0, 29
     ; check: ushr_imm v2, 2
@@ -170,7 +170,7 @@ ebb0(v0: i32):
 ; there's no positive version of this, since -(-0x8000_0000) isn't
 ; representable.
 function %t_srem32_n2p31(i32) -> i32 {
-ebb0(v0: i32):
+block0(v0: i32):
     v1 = srem_imm v0, -0x8000_0000
     ; check: sshr_imm v0, 30
     ; check: ushr_imm v2, 1
@@ -185,7 +185,7 @@ ebb0(v0: i32):
 
 ; ignored
 function %t_srem64_n1(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, -1
     ; check: srem_imm v0, -1
     return v1
@@ -193,7 +193,7 @@ ebb0(v0: i64):
 
 ; ignored
 function %t_srem64_p0(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, 0
     ; check: srem_imm v0, 0
     return v1
@@ -201,7 +201,7 @@ ebb0(v0: i64):
 
 ; converted to constant zero
 function %t_srem64_p1(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, 1
     ; check: iconst.i64 0
     return v1
@@ -209,7 +209,7 @@ ebb0(v0: i64):
 
 ; shift
 function %t_srem64_p2(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, 2
     ; check: ushr_imm v0, 63
     ; check: iadd v0, v2
@@ -220,7 +220,7 @@ ebb0(v0: i64):
 
 ; shift
 function %t_srem64_n2(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, -2
     ; check: ushr_imm v0, 63
     ; check: iadd v0, v2
@@ -231,7 +231,7 @@ ebb0(v0: i64):
 
 ; shift
 function %t_srem64_p4(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, 4
     ; check: sshr_imm v0, 1
     ; check: ushr_imm v2, 62
@@ -243,7 +243,7 @@ ebb0(v0: i64):
 
 ; shift
 function %t_srem64_n4(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, -4
     ; check: sshr_imm v0, 1
     ; check: ushr_imm v2, 62
@@ -255,7 +255,7 @@ ebb0(v0: i64):
 
 ; shift
 function %t_srem64_p2p62(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, 0x4000_0000_0000_0000
     ; check: sshr_imm v0, 61
     ; check: ushr_imm v2, 2
@@ -267,7 +267,7 @@ ebb0(v0: i64):
 
 ; shift
 function %t_srem64_n2p62(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, -0x4000_0000_0000_0000
     ; check: sshr_imm v0, 61
     ; check: ushr_imm v2, 2
@@ -280,7 +280,7 @@ ebb0(v0: i64):
 ; there's no positive version of this, since -(-0x8000_0000_0000_0000) isn't
 ; representable.
 function %t_srem64_n2p63(i64) -> i64 {
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = srem_imm v0, -0x8000_0000_0000_0000
     ; check: sshr_imm v0, 62
     ; check: ushr_imm v2, 1

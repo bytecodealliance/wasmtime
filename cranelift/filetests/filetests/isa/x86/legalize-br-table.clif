@@ -2,20 +2,20 @@ test compile
 set opt_level=speed_and_size
 target x86_64
 ; regex: V=v\d+
-; regex: EBB=ebb\d+
+; regex: BB=block\d+
 
 function u0:0(i64) system_v {
     ss0 = explicit_slot 1
-    jt0 = jump_table [ebb1]
+    jt0 = jump_table [block1]
 
-ebb0(v0: i64):
+block0(v0: i64):
     v1 = stack_addr.i64 ss0
     v2 = load.i8 v1
-    br_table v2, ebb2, jt0
+    br_table v2, block2, jt0
 ; check:     $(oob=$V) = ifcmp_imm $(idx=$V), 1
-; ebb2 is replaced by ebb1 by fold_redundant_jump
-; nextln:    brif uge $oob, ebb1
-; nextln:    fallthrough $(inb=$EBB)
+; block2 is replaced by block1 by fold_redundant_jump
+; nextln:    brif uge $oob, block1
+; nextln:    fallthrough $(inb=$BB)
 ; check:   $inb:
 ; nextln:    $(final_idx=$V) = uextend.i64 $idx
 ; nextln:    $(base=$V) = jump_table_base.i64 jt0
@@ -23,9 +23,9 @@ ebb0(v0: i64):
 ; nextln:    $(addr=$V) = iadd $base, $rel_addr
 ; nextln:    indirect_jump_table_br $addr, jt0
 
-ebb2:
-    jump ebb1
+block2:
+    jump block1
 
-ebb1:
+block1:
     return
 }

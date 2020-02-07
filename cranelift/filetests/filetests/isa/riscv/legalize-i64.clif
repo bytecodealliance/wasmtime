@@ -5,11 +5,11 @@ target riscv32 supports_m=1
 ; regex: V=v\d+
 
 function %bitwise_and(i64, i64) -> i64 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v3 = band v1, v2
     return v3
 }
-; check: ebb0($(v1l=$V): i32, $(v1h=$V): i32, $(v2l=$V): i32, $(v2h=$V): i32, $(link=$V): i32):
+; check: block0($(v1l=$V): i32, $(v1h=$V): i32, $(v2l=$V): i32, $(v2h=$V): i32, $(link=$V): i32):
 ; check: [R#ec
 ; sameln: $(v3l=$V) = band $v1l, $v2l
 ; check: [R#ec
@@ -18,11 +18,11 @@ ebb0(v1: i64, v2: i64):
 ; check: return $v3l, $v3h, $link
 
 function %bitwise_or(i64, i64) -> i64 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v3 = bor v1, v2
     return v3
 }
-; check: ebb0($(v1l=$V): i32, $(v1h=$V): i32, $(v2l=$V): i32, $(v2h=$V): i32, $(link=$V): i32):
+; check: block0($(v1l=$V): i32, $(v1h=$V): i32, $(v2l=$V): i32, $(v2h=$V): i32, $(link=$V): i32):
 ; check: [R#cc
 ; sameln: $(v3l=$V) = bor $v1l, $v2l
 ; check: [R#cc
@@ -31,11 +31,11 @@ ebb0(v1: i64, v2: i64):
 ; check: return $v3l, $v3h, $link
 
 function %bitwise_xor(i64, i64) -> i64 {
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v3 = bxor v1, v2
     return v3
 }
-; check: ebb0($(v1l=$V): i32, $(v1h=$V): i32, $(v2l=$V): i32, $(v2h=$V): i32, $(link=$V): i32):
+; check: block0($(v1l=$V): i32, $(v1h=$V): i32, $(v2l=$V): i32, $(v2h=$V): i32, $(link=$V): i32):
 ; check: [R#8c
 ; sameln: $(v3l=$V) = bxor $v1l, $v2l
 ; check: [R#8c
@@ -47,11 +47,11 @@ function %arith_add(i64, i64) -> i64 {
 ; Legalizing iadd.i64 requires two steps:
 ; 1. Narrow to iadd_cout.i32, then
 ; 2. Expand iadd_cout.i32 since RISC-V has no carry flag.
-ebb0(v1: i64, v2: i64):
+block0(v1: i64, v2: i64):
     v3 = iadd v1, v2
     return v3
 }
-; check: ebb0($(v1l=$V): i32, $(v1h=$V): i32, $(v2l=$V): i32, $(v2h=$V): i32, $(link=$V): i32):
+; check: block0($(v1l=$V): i32, $(v1h=$V): i32, $(v2l=$V): i32, $(v2h=$V): i32, $(link=$V): i32):
 ; check: [R#0c
 ; sameln: $(v3l=$V) = iadd $v1l, $v2l
 ; check: $(c=$V) = icmp ult $v3l, $v1l

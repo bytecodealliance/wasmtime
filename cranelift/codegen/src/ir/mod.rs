@@ -33,7 +33,7 @@ pub use crate::ir::builder::{
 pub use crate::ir::constant::{ConstantData, ConstantOffset, ConstantPool};
 pub use crate::ir::dfg::{DataFlowGraph, ValueDef};
 pub use crate::ir::entities::{
-    Constant, Ebb, FuncRef, GlobalValue, Heap, Immediate, Inst, JumpTable, SigRef, StackSlot,
+    Block, Constant, FuncRef, GlobalValue, Heap, Immediate, Inst, JumpTable, SigRef, StackSlot,
     Table, Value,
 };
 pub use crate::ir::extfunc::{
@@ -73,8 +73,8 @@ pub type JumpTables = PrimaryMap<JumpTable, JumpTableData>;
 /// Map of instruction encodings.
 pub type InstEncodings = SecondaryMap<Inst, isa::Encoding>;
 
-/// Code offsets for EBBs.
-pub type EbbOffsets = SecondaryMap<Ebb, binemit::CodeOffset>;
+/// Code offsets for blocks.
+pub type BlockOffsets = SecondaryMap<Block, binemit::CodeOffset>;
 
 /// Code offsets for Jump Tables.
 pub type JumpTableOffsets = SecondaryMap<JumpTable, binemit::CodeOffset>;

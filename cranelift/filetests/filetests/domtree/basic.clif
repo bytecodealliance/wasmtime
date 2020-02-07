@@ -1,25 +1,25 @@
 test domtree
 
 function %test(i32) {
-    ebb0(v0: i32):
-        jump ebb1     ; dominates: ebb1
-    ebb1:
-        brz v0, ebb3  ; dominates: ebb3
-        jump ebb2     ; dominates: ebb2
-    ebb2:
-        jump ebb3
-    ebb3:
+    block0(v0: i32):
+        jump block1     ; dominates: block1
+    block1:
+        brz v0, block3  ; dominates: block3
+        jump block2     ; dominates: block2
+    block2:
+        jump block3
+    block3:
         return
 }
 ; check: cfg_postorder:
-; sameln: ebb2
-; sameln: ebb3
-; sameln: ebb1
-; sameln: ebb0
+; sameln: block2
+; sameln: block3
+; sameln: block1
+; sameln: block0
 
 ; check: domtree_preorder {
-; nextln: ebb0: ebb1
-; nextln: ebb1: ebb3 ebb2
-; nextln: ebb3:
-; nextln: ebb2:
+; nextln: block0: block1
+; nextln: block1: block3 block2
+; nextln: block3:
+; nextln: block2:
 ; nextln: }

@@ -4,16 +4,16 @@ set enable_pinned_reg=true
 target x86_64 haswell
 
 function u0:0(i32, i32, i32, i64 vmctx) -> i64 uext system_v {
-ebb0(v0: i32, v1: i32, v2: i32, v3: i64):
+block0(v0: i32, v1: i32, v2: i32, v3: i64):
     v5 = iconst.i32 -8
     v114 = iconst.i32 0
     v16 = iconst.i32 -8
     v17 = popcnt v16
     v192 = ifcmp_imm v17, -1
     trapif ne v192, user0
-    jump ebb12
+    jump block12
 
-ebb12:
+block12:
     v122 = iconst.i32 0
     v123 = ushr_imm v122, 31
     v124 = iadd v122, v123
@@ -23,51 +23,51 @@ ebb12:
     v31 -> v204
     v210 = ifcmp_imm v31, -1
     trapif ne v210, user0
-    jump ebb18
+    jump block18
 
-ebb18:
+block18:
     v215 = iconst.i32 0
-    jump ebb19(v215)
+    jump block19(v215)
 
-ebb19(v32: i32):
+block19(v32: i32):
     v35 = iconst.i32 0
     v218 = ifcmp_imm v35, -1
     trapif ne v218, user0
-    jump ebb21
+    jump block21
 
-ebb21:
+block21:
     v223 = iconst.i32 0
-    jump ebb22(v223)
+    jump block22(v223)
 
-ebb22(v36: i32):
+block22(v36: i32):
     v136 = iconst.i32 0
     v40 -> v136
     v227 = ifcmp_imm v136, -1
     trapif ne v227, user0
-    jump ebb24
+    jump block24
 
-ebb24:
+block24:
     v232 = iconst.i32 0
-    jump ebb25(v232)
+    jump block25(v232)
 
-ebb25(v41: i32):
+block25(v41: i32):
     v142 = iconst.i32 0
     v45 -> v142
     v236 = ifcmp_imm v142, -1
     trapif ne v236, user0
-    jump ebb27
+    jump block27
 
-ebb27:
+block27:
     v241 = iconst.i32 0
-    jump ebb28(v241)
+    jump block28(v241)
 
-ebb28(v46: i32):
+block28(v46: i32):
     v49 = iconst.i32 0
     v244 = ifcmp_imm v49, -1
     trapif ne v244, user0
-    jump ebb30
+    jump block30
 
-ebb30:
+block30:
     v254 = iconst.i32 0
     v53 -> v254
     v54 = iconst.i32 -23
@@ -80,9 +80,9 @@ ebb30:
     v148 = iadd v146, v147
     v57 -> v148
     v58 = ishl v53, v148
-    jump ebb35
+    jump block35
 
-ebb35:
+block35:
     v262 = iconst.i32 0
     v263, v264 = x86_sdivmodx v46, v262, v58
     v59 -> v263
@@ -93,9 +93,9 @@ ebb35:
     v280 = iconst.i32 0
     v281 = ffcmp v61, v61
     trapff ord v281, user0
-    jump ebb41(v280)
+    jump block41(v280)
 
-ebb41(v62: i32):
+block41(v62: i32):
     v157 = iconst.i32 0
     v158 = sshr_imm v157, 4
     v159 = iconst.i32 0
@@ -103,9 +103,9 @@ ebb41(v62: i32):
     v75 -> v160
     v308 = ifcmp_imm v160, -1
     trapif ne v308, user0
-    jump ebb52
+    jump block52
 
-ebb52:
+block52:
     v87 = iconst.i32 -23
     v88 = iconst.i32 -23
     v89 = popcnt v88

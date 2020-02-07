@@ -148,22 +148,22 @@ mod tests {
     use super::*;
     use crate::entity::EntityRef;
 
-    /// An opaque reference to an extended basic block in a function.
+    /// An opaque reference to a basic block in a function.
     #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-    pub struct Ebb(u32);
-    entity_impl!(Ebb, "ebb");
+    pub struct Block(u32);
+    entity_impl!(Block, "block");
 
     #[test]
     fn comparator() {
-        let ebb1 = Ebb::new(1);
-        let ebb2 = Ebb::new(2);
-        let ebb3 = Ebb::new(3);
-        let ebb4 = Ebb::new(4);
-        let vals = [ebb1, ebb2, ebb4];
+        let block1 = Block::new(1);
+        let block2 = Block::new(2);
+        let block3 = Block::new(3);
+        let block4 = Block::new(4);
+        let vals = [block1, block2, block4];
         let comp = ();
-        assert_eq!(comp.search(ebb1, &vals), Ok(0));
-        assert_eq!(comp.search(ebb3, &vals), Err(2));
-        assert_eq!(comp.search(ebb4, &vals), Ok(2));
+        assert_eq!(comp.search(block1, &vals), Ok(0));
+        assert_eq!(comp.search(block3, &vals), Err(2));
+        assert_eq!(comp.search(block4, &vals), Ok(2));
     }
 
     #[test]

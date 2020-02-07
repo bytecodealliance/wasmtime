@@ -3,7 +3,7 @@ set enable_simd
 target x86_64 skylake
 
 function %iadd_i32x4() -> b1 {
-ebb0:
+block0:
 [-, %xmm0]    v0 = vconst.i32x4 [1 1 1 1]
 [-, %xmm1]    v1 = vconst.i32x4 [1 2 3 4]
 [-, %xmm0]    v2 = iadd v0, v1      ; bin: 66 0f fe c1
@@ -19,7 +19,7 @@ ebb0:
 }
 
 function %iadd_i8x16_with_overflow() -> b1 {
-ebb0:
+block0:
 [-, %xmm0]    v0 = vconst.i8x16 [255 255 255 255 255 255 255 255 255 255 255 255 255 255 255 255]
 [-, %xmm7]    v1 = vconst.i8x16 [2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2]
 [-, %xmm0]    v2 = iadd v0, v1      ; bin: 66 0f fc c7
@@ -31,19 +31,19 @@ ebb0:
 }
 
 function %iadd_i16x8(i16x8, i16x8) -> i16x8 {
-ebb0(v0: i16x8 [%xmm1], v1: i16x8 [%xmm2]):
+block0(v0: i16x8 [%xmm1], v1: i16x8 [%xmm2]):
 [-, %xmm1]  v2 = iadd v0, v1      ; bin: 66 0f fd ca
             return v2
 }
 
 function %iadd_i64x2(i64x2, i64x2) -> i64x2 {
-ebb0(v0: i64x2 [%xmm3], v1: i64x2 [%xmm4]):
+block0(v0: i64x2 [%xmm3], v1: i64x2 [%xmm4]):
 [-, %xmm3]  v2 = iadd v0, v1      ; bin: 66 0f d4 dc
             return v2
 }
 
 function %isub_i32x4() -> b1 {
-ebb0:
+block0:
 [-, %xmm3]    v0 = vconst.i32x4 [1 1 1 1]
 [-, %xmm5]    v1 = vconst.i32x4 [1 2 3 4]
 [-, %xmm3]    v2 = isub v0, v1  ; bin: 66 0f fa dd
@@ -59,25 +59,25 @@ ebb0:
 }
 
 function %isub_i64x2(i64x2, i64x2) -> i64x2 {
-ebb0(v0: i64x2 [%xmm0], v1: i64x2 [%xmm1]):
+block0(v0: i64x2 [%xmm0], v1: i64x2 [%xmm1]):
 [-, %xmm0]  v2 = isub v0, v1      ; bin: 66 0f fb c1
     return v2
 }
 
 function %isub_i16x8(i16x8, i16x8) -> i16x8 {
-ebb0(v0: i16x8 [%xmm3], v1: i16x8 [%xmm4]):
+block0(v0: i16x8 [%xmm3], v1: i16x8 [%xmm4]):
 [-, %xmm3]  v2 = isub v0, v1      ; bin: 66 0f f9 dc
     return v2
 }
 
 function %isub_i8x16(i8x16, i8x16) -> i8x16 {
-ebb0(v0: i8x16 [%xmm3], v1: i8x16 [%xmm4]):
+block0(v0: i8x16 [%xmm3], v1: i8x16 [%xmm4]):
 [-, %xmm3]  v2 = isub v0, v1      ; bin: 66 0f f8 dc
     return v2
 }
 
 function %imul_i32x4() -> b1 {
-ebb0:
+block0:
 [-, %xmm0]    v0 = vconst.i32x4 [-1 0 1 -2147483647] ; e.g. -2147483647 == 0x80_00_00_01
 [-, %xmm1]    v1 = vconst.i32x4 [2 2 2 2]
 [-, %xmm0]    v2 = imul v0, v1 ; bin: 66 0f 38 40 c1
@@ -98,7 +98,7 @@ ebb0:
 
 
 function %imul_i16x8() -> b1 {
-ebb0:
+block0:
 [-, %xmm1]    v0 = vconst.i16x8 [-1 0 1 32767 0 0 0 0] ; e.g. 32767 == 0x7f_ff
 [-, %xmm2]    v1 = vconst.i16x8 [2 2 2 2 0 0 0 0]
 [-, %xmm1]    v2 = imul v0, v1 ; bin: 66 0f d5 ca
@@ -121,7 +121,7 @@ ebb0:
 
 
 function %sadd_sat_i8x16() -> b1 {
-ebb0:
+block0:
 [-, %xmm2]    v0 = vconst.i8x16 [127 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
 [-, %xmm3]    v1 = vconst.i8x16 [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
 
@@ -134,7 +134,7 @@ ebb0:
 
 
 function %uadd_sat_i16x8() -> b1 {
-ebb0:
+block0:
 [-, %xmm2]    v0 = vconst.i16x8 [-1 0 0 0 0 0 0 0]
 [-, %xmm3]    v1 = vconst.i16x8 [-1 1 1 1 1 1 1 1]
 
@@ -147,7 +147,7 @@ ebb0:
 
 
 function %sub_sat_i8x16() -> b1 {
-ebb0:
+block0:
 [-, %xmm2]    v0 = vconst.i8x16 [128 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] ; 128 == 0x80 == -128
 [-, %xmm3]    v1 = vconst.i8x16 [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
 
@@ -166,7 +166,7 @@ ebb0:
 
 
 function %sub_sat_i16x8() {
-ebb0:
+block0:
 [-, %xmm3]    v0 = vconst.i16x8 [0 0 0 0 0 0 0 0]
 [-, %xmm5]    v1 = vconst.i16x8 [1 1 1 1 1 1 1 1]
 [-, %xmm3]    v2 = ssub_sat v0, v1 ; bin: 66 0f e9 dd
@@ -175,7 +175,7 @@ ebb0:
 }
 
 function %float_arithmetic_f32x4(f32x4, f32x4) {
-ebb0(v0: f32x4 [%xmm3], v1: f32x4 [%xmm5]):
+block0(v0: f32x4 [%xmm3], v1: f32x4 [%xmm5]):
 [-, %xmm3]    v2 = fadd v0, v1      ; bin: 40 0f 58 dd
 [-, %xmm3]    v3 = fsub v0, v1      ; bin: 40 0f 5c dd
 [-, %xmm3]    v4 = fmul v0, v1      ; bin: 40 0f 59 dd
@@ -187,7 +187,7 @@ ebb0(v0: f32x4 [%xmm3], v1: f32x4 [%xmm5]):
 }
 
 function %float_arithmetic_f64x2(f64x2, f64x2) {
-ebb0(v0: f64x2 [%xmm3], v1: f64x2 [%xmm5]):
+block0(v0: f64x2 [%xmm3], v1: f64x2 [%xmm5]):
 [-, %xmm3]    v2 = fadd v0, v1      ; bin: 66 40 0f 58 dd
 [-, %xmm3]    v3 = fsub v0, v1      ; bin: 66 40 0f 5c dd
 [-, %xmm3]    v4 = fmul v0, v1      ; bin: 66 40 0f 59 dd

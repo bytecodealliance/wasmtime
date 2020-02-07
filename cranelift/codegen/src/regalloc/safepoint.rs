@@ -32,7 +32,7 @@ fn insert_and_encode_safepoint<'f>(
 }
 
 // The emit_stackmaps() function analyzes each instruction to retrieve the liveness of
-// the defs and operands by traversing a function's ebbs in layout order.
+// the defs and operands by traversing a function's blocks in layout order.
 pub fn emit_stackmaps(
     func: &mut Function,
     domtree: &DominatorTree,
@@ -42,13 +42,13 @@ pub fn emit_stackmaps(
 ) {
     let mut curr = func.layout.entry_block();
 
-    while let Some(ebb) = curr {
-        tracker.ebb_top(ebb, &func.dfg, liveness, &func.layout, domtree);
+    while let Some(block) = curr {
+        tracker.block_top(block, &func.dfg, liveness, &func.layout, domtree);
         tracker.drop_dead_params();
         let mut pos = FuncCursor::new(func);
 
-        // From the top of the ebb, step through the instructions.
-        pos.goto_top(ebb);
+        // From the top of the block, step through the instructions.
+        pos.goto_top(block);
 
         while let Some(inst) = pos.next_inst() {
             if let InstructionData::Trap {
@@ -67,6 +67,6 @@ pub fn emit_stackmaps(
             tracker.process_inst(inst, &pos.func.dfg, liveness);
             tracker.drop_dead(inst);
         }
-        curr = func.layout.next_ebb(ebb);
+        curr = func.layout.next_block(block);
     }
 }

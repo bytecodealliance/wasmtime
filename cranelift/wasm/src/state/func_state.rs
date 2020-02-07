@@ -9,7 +9,7 @@
 use crate::environ::{FuncEnvironment, GlobalVariable, WasmResult};
 use crate::translation_utils::{FuncIndex, GlobalIndex, MemoryIndex, SignatureIndex, TableIndex};
 use crate::{HashMap, Occupied, Vacant};
-use cranelift_codegen::ir::{self, Ebb, Inst, Value};
+use cranelift_codegen::ir::{self, Block, Inst, Value};
 use std::vec::Vec;
 
 /// Information about the presence of an associated `else` for an `if`, or the
@@ -35,24 +35,24 @@ pub enum ElseData {
     /// these cases, we pre-allocate the `else` block.
     WithElse {
         /// This is the `else` block.
-        else_block: Ebb,
+        else_block: Block,
     },
 }
 
 /// A control stack frame can be an `if`, a `block` or a `loop`, each one having the following
 /// fields:
 ///
-/// - `destination`: reference to the `Ebb` that will hold the code after the control block;
+/// - `destination`: reference to the `Block` that will hold the code after the control block;
 /// - `num_return_values`: number of values returned by the control block;
 /// - `original_stack_size`: size of the value stack at the beginning of the control block.
 ///
 /// Moreover, the `if` frame has the `branch_inst` field that points to the `brz` instruction
 /// separating the `true` and `false` branch. The `loop` frame has a `header` field that references
-/// the `Ebb` that contains the beginning of the body of the loop.
+/// the `Block` that contains the beginning of the body of the loop.
 #[derive(Debug)]
 pub enum ControlStackFrame {
     If {
-        destination: Ebb,
+        destination: Block,
         else_data: ElseData,
         num_param_values: usize,
         num_return_values: usize,
@@ -72,15 +72,15 @@ pub enum ControlStackFrame {
         // `state.reachable` when we hit the `end` in the `if .. else .. end`.
     },
     Block {
-        destination: Ebb,
+        destination: Block,
         num_param_values: usize,
         num_return_values: usize,
         original_stack_size: usize,
         exit_is_branched_to: bool,
     },
     Loop {
-        destination: Ebb,
-        header: Ebb,
+        destination: Block,
+        header: Block,
         num_param_values: usize,
         num_return_values: usize,
         original_stack_size: usize,
@@ -115,14 +115,14 @@ impl ControlStackFrame {
             } => num_param_values,
         }
     }
-    pub fn following_code(&self) -> Ebb {
+    pub fn following_code(&self) -> Block {
         match *self {
             Self::If { destination, .. }
             | Self::Block { destination, .. }
             | Self::Loop { destination, .. } => destination,
         }
     }
-    pub fn br_destination(&self) -> Ebb {
+    pub fn br_destination(&self) -> Block {
         match *self {
             Self::If { destination, .. } | Self::Block { destination, .. } => destination,
             Self::Loop { header, .. } => header,
@@ -254,7 +254,7 @@ impl FuncTranslationState {
     ///
     /// This resets the state to containing only a single block representing the whole function.
     /// The exit block is the last block in the function which will contain the return instruction.
-    pub(crate) fn initialize(&mut self, sig: &ir::Signature, exit_block: Ebb) {
+    pub(crate) fn initialize(&mut self, sig: &ir::Signature, exit_block: Block) {
         self.clear();
         self.push_block(
             exit_block,
@@ -343,7 +343,7 @@ impl FuncTranslationState {
     /// Push a block on the control stack.
     pub(crate) fn push_block(
         &mut self,
-        following_code: Ebb,
+        following_code: Block,
         num_param_types: usize,
         num_result_types: usize,
     ) {
@@ -360,8 +360,8 @@ impl FuncTranslationState {
     /// Push a loop on the control stack.
     pub(crate) fn push_loop(
         &mut self,
-        header: Ebb,
-        following_code: Ebb,
+        header: Block,
+        following_code: Block,
         num_param_types: usize,
         num_result_types: usize,
     ) {
@@ -378,7 +378,7 @@ impl FuncTranslationState {
     /// Push an if on the control stack.
     pub(crate) fn push_if(
         &mut self,
-        destination: Ebb,
+        destination: Block,
         else_data: ElseData,
         num_param_types: usize,
         num_result_types: usize,

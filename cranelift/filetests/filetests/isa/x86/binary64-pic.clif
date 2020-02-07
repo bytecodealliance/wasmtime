@@ -25,7 +25,7 @@ function %I64() {
     ss2 = incoming_arg 1024, offset -2048
     ss3 = incoming_arg 8, offset -2056
 
-ebb0:
+block0:
 
     ; Colocated functions.
 

@@ -2,7 +2,7 @@
 
 use crate::dbg::DisplayList;
 use crate::dominator_tree::{DominatorTree, DominatorTreePreorder};
-use crate::flowgraph::{BasicBlock, ControlFlowGraph};
+use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::{ExpandedProgramPoint, Function};
 use crate::regalloc::liveness::Liveness;
 use crate::regalloc::virtregs::VirtRegs;
@@ -13,7 +13,7 @@ use crate::verifier::{VerifierErrors, VerifierStepResult};
 ///
 /// Conventional SSA form is represented in Cranelift with the help of virtual registers:
 ///
-/// - Two values are said to be *PHI-related* if one is an EBB argument and the other is passed as
+/// - Two values are said to be *PHI-related* if one is an block argument and the other is passed as
 ///   a branch argument in a location that matches the first value.
 /// - PHI-related values must belong to the same virtual register.
 /// - Two values in the same virtual register must not have overlapping live ranges.
@@ -76,10 +76,10 @@ impl<'a> CssaVerifier<'a> {
 
                 // Check topological ordering with the previous values in the virtual register.
                 let def: ExpandedProgramPoint = self.func.dfg.value_def(val).into();
-                let def_ebb = self.func.layout.pp_ebb(def);
+                let def_block = self.func.layout.pp_block(def);
                 for &prev_val in &values[0..idx] {
                     let prev_def: ExpandedProgramPoint = self.func.dfg.value_def(prev_val).into();
-                    let prev_ebb = self.func.layout.pp_ebb(prev_def);
+                    let prev_block = self.func.layout.pp_block(prev_def);
 
                     if prev_def == def {
                         return errors.fatal((
@@ -95,7 +95,7 @@ impl<'a> CssaVerifier<'a> {
                     }
 
                     // Enforce topological ordering of defs in the virtual register.
-                    if self.preorder.dominates(def_ebb, prev_ebb)
+                    if self.preorder.dominates(def_block, prev_block)
                         && self.domtree.dominates(def, prev_def, &self.func.layout)
                     {
                         return errors.fatal((
@@ -115,12 +115,12 @@ impl<'a> CssaVerifier<'a> {
                 // We only have to check against the nearest dominating value.
                 for &prev_val in values[0..idx].iter().rev() {
                     let prev_def: ExpandedProgramPoint = self.func.dfg.value_def(prev_val).into();
-                    let prev_ebb = self.func.layout.pp_ebb(prev_def);
+                    let prev_block = self.func.layout.pp_block(prev_def);
 
-                    if self.preorder.dominates(prev_ebb, def_ebb)
+                    if self.preorder.dominates(prev_block, def_block)
                         && self.domtree.dominates(prev_def, def, &self.func.layout)
                     {
-                        if self.liveness[prev_val].overlaps_def(def, def_ebb, &self.func.layout) {
+                        if self.liveness[prev_val].overlaps_def(def, def_block, &self.func.layout) {
                             return errors.fatal((
                                 val,
                                 format!(
@@ -142,24 +142,24 @@ impl<'a> CssaVerifier<'a> {
     }
 
     fn check_cssa(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        for ebb in self.func.layout.ebbs() {
-            let ebb_params = self.func.dfg.ebb_params(ebb);
-            for BasicBlock { inst: pred, .. } in self.cfg.pred_iter(ebb) {
+        for block in self.func.layout.blocks() {
+            let block_params = self.func.dfg.block_params(block);
+            for BlockPredecessor { inst: pred, .. } in self.cfg.pred_iter(block) {
                 let pred_args = self.func.dfg.inst_variable_args(pred);
                 // This should have been caught by an earlier verifier pass.
                 assert_eq!(
-                    ebb_params.len(),
+                    block_params.len(),
                     pred_args.len(),
                     "Wrong arguments on branch."
                 );
 
-                for (&ebb_param, &pred_arg) in ebb_params.iter().zip(pred_args) {
-                    if !self.virtregs.same_class(ebb_param, pred_arg) {
+                for (&block_param, &pred_arg) in block_params.iter().zip(pred_args) {
+                    if !self.virtregs.same_class(block_param, pred_arg) {
                         return errors.fatal((
                             pred,
                             format!(
                                 "{} and {} must be in the same virtual register",
-                                ebb_param, pred_arg
+                                block_param, pred_arg
                             ),
                         ));
                     }

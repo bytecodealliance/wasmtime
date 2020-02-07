@@ -44,7 +44,7 @@ impl ConstImm {
 pub fn fold_constants(func: &mut ir::Function) {
     let mut pos = FuncCursor::new(func);
 
-    while let Some(_ebb) = pos.next_ebb() {
+    while let Some(_block) = pos.next_block() {
         while let Some(inst) = pos.next_inst() {
             use self::ir::InstructionData::*;
             match pos.func.dfg[inst] {
@@ -225,7 +225,7 @@ fn fold_unary(dfg: &mut ir::DataFlowGraph, inst: ir::Inst, opcode: ir::Opcode, a
 }
 
 fn fold_branch(pos: &mut FuncCursor, inst: ir::Inst, opcode: ir::Opcode) {
-    let (cond, ebb, args) = {
+    let (cond, block, args) = {
         let values = pos.func.dfg.inst_args(inst);
         let inst_data = &pos.func.dfg[inst];
         (
@@ -246,8 +246,8 @@ fn fold_branch(pos: &mut FuncCursor, inst: ir::Inst, opcode: ir::Opcode) {
     };
 
     if (branch_if_zero && !truthiness) || (!branch_if_zero && truthiness) {
-        pos.func.dfg.replace(inst).jump(ebb, &args);
-        // remove the rest of the ebb to avoid verifier errors
+        pos.func.dfg.replace(inst).jump(block, &args);
+        // remove the rest of the block to avoid verifier errors
         while let Some(next_inst) = pos.func.layout.next_inst(inst) {
             pos.func.layout.remove_inst(next_inst);
         }

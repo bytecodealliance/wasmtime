@@ -5,7 +5,7 @@ target x86_64 baseline
 ; clz/ctz on 64 bit operands
 
 function %i64_clz(i64) -> i64 {
-ebb0(v10: i64):
+block0(v10: i64):
   v11 = clz v10
   ; check: x86_bsr
   ; check: selectif.i64
@@ -13,7 +13,7 @@ ebb0(v10: i64):
 }
 
 function %i64_ctz(i64) -> i64 {
-ebb1(v20: i64):
+block1(v20: i64):
   v21 = ctz v20
   ; check: x86_bsf
   ; check: selectif.i64
@@ -24,7 +24,7 @@ ebb1(v20: i64):
 ; clz/ctz on 32 bit operands
 
 function %i32_clz(i32) -> i32 {
-ebb0(v10: i32):
+block0(v10: i32):
   v11 = clz v10
   ; check: x86_bsr
   ; check: selectif.i32
@@ -32,7 +32,7 @@ ebb0(v10: i32):
 }
 
 function %i32_ctz(i32) -> i32 {
-ebb1(v20: i32):
+block1(v20: i32):
   v21 = ctz v20
   ; check: x86_bsf
   ; check: selectif.i32
@@ -43,7 +43,7 @@ ebb1(v20: i32):
 ; popcount on 64 bit operands
 
 function %i64_popcount(i64) -> i64 {
-ebb0(v30: i64):
+block0(v30: i64):
   v31 = popcnt v30;
   ; check: ushr_imm
   ; check: iconst.i64
@@ -69,7 +69,7 @@ ebb0(v30: i64):
 ; popcount on 32 bit operands
 
 function %i32_popcount(i32) -> i32 {
-ebb0(v40: i32):
+block0(v40: i32):
   v41 = popcnt v40;
   ; check: ushr_imm
   ; check: iconst.i32

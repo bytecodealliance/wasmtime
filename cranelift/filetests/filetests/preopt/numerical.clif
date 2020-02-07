@@ -2,7 +2,7 @@ test preopt
 target x86_64
 
 function %iadd_fold() -> i32 {
-ebb0:
+block0:
     v0 = iconst.i32 37
     v1 = iconst.i32 5
     v2 = iadd v0, v1
@@ -11,7 +11,7 @@ ebb0:
     return v4
 }
 ; sameln: function %iadd_fold
-; nextln: ebb0:
+; nextln: block0:
 ; nextln:     v0 = iconst.i32 37
 ; nextln:     v1 = iconst.i32 5
 ; nextln:     v2 = iconst.i32 42
@@ -21,14 +21,14 @@ ebb0:
 ; nextln: }
 
 function %isub_fold() -> i32 {
-ebb0:
+block0:
     v0 = iconst.i32 42
     v1 = iconst.i32 1
     v2 = isub v0, v1
     return v2
 }
 ; sameln: function %isub_fold
-; nextln: ebb0:
+; nextln: block0:
 ; nextln:     v0 = iconst.i32 42
 ; nextln:     v1 = iconst.i32 1
 ; nextln:     v2 = iconst.i32 41

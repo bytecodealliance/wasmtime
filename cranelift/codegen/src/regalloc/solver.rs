@@ -34,20 +34,20 @@
 //! # Register diversions and global interference
 //!
 //! We can divert register values temporarily to satisfy constraints, but we need to put the
-//! values back into their originally assigned register locations before leaving the EBB.
-//! Otherwise, values won't be in the right register at the entry point of other EBBs.
+//! values back into their originally assigned register locations before leaving the block.
+//! Otherwise, values won't be in the right register at the entry point of other blocks.
 //!
 //! Some values are *local*, and we don't need to worry about putting those values back since they
-//! are not used in any other EBBs.
+//! are not used in any other blocks.
 //!
 //! When we assign register locations to defines, we are assigning both the register used locally
 //! immediately after the instruction and the register used globally when the defined value is used
-//! in a different EBB. We need to avoid interference both locally at the instruction and globally.
+//! in a different block. We need to avoid interference both locally at the instruction and globally.
 //!
 //! We have multiple mappings of values to registers:
 //!
 //! 1. The initial local mapping before the instruction. This includes any diversions from previous
-//!    instructions in the EBB, but not diversions for the current instruction.
+//!    instructions in the block, but not diversions for the current instruction.
 //! 2. The local mapping after applying the additional reassignments required to satisfy the
 //!    constraints of the current instruction.
 //! 3. The local mapping after the instruction. This excludes values killed by the instruction and
