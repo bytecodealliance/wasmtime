@@ -162,7 +162,9 @@ pub(crate) fn path_open(
                             Descriptor::OsHandle(file) => unsafe {
                                 fstatat(file.as_raw_fd(), resolved.path(), AtFlag::SYMLINK_NOFOLLOW)
                             },
-                            Descriptor::VirtualFile(_) => unimplemented!("virt fstatat"),
+                            Descriptor::VirtualFile(virt) => {
+                                virt.openat(std::path::Path::new(resolved.path()), false, false, 0, 0)?.filestat_get()
+                            }
                             Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
                                 unreachable!("streams do not have paths and should not be accessible via PathGet");
                             }
@@ -185,8 +187,8 @@ pub(crate) fn path_open(
                             Descriptor::OsHandle(file) => unsafe {
                                 fstatat(file.as_raw_fd(), resolved.path(), AtFlag::SYMLINK_NOFOLLOW)
                             },
-                            Descriptor::VirtualFile(_) => {
-                                unimplemented!("virt fstatat");
+                            Descriptor::VirtualFile(virt) => {
+                                virt.openat(std::path::Path::new(resolved.path()), false, false, 0, 0)?.filestat_get()
                             }
                             Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
                                 unreachable!("streams do not have paths and should not be accessible via PathGet");
@@ -263,8 +265,8 @@ pub(crate) fn path_filestat_get(
                 .map_err(Into::into)
                 .and_then(host_impl::filestat_from_nix)
         }
-        Descriptor::VirtualFile(_) => {
-            unimplemented!("virt path_filestat_get");
+        Descriptor::VirtualFile(virt) => {
+            virt.openat(std::path::Path::new(resolved.path()), false, false, 0, 0)?.filestat_get()
         }
         Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
             unreachable!("streams do not have paths and should not be accessible via PathGet");
@@ -331,7 +333,9 @@ pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
             unsafe { unlinkat(file.as_raw_fd(), resolved.path(), AtFlag::REMOVEDIR) }
                 .map_err(Into::into)
         }
-        Descriptor::VirtualFile(_) => unimplemented!("virtual unlinkat"),
+        Descriptor::VirtualFile(virt) => {
+            virt.remove_directory(resolved.path())
+        }
         Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
             unreachable!("streams do not have paths and should not be accessible via PathGet");
         }

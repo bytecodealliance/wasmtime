@@ -39,6 +39,21 @@ impl FileType {
     pub(crate) fn to_wasi(&self) -> __wasi_filetype_t {
         *self as __wasi_filetype_t
     }
+
+    pub(crate) fn from_wasi(wasi_filetype: u8) -> Option<Self> {
+        use FileType::*;
+        match wasi_filetype {
+            __WASI_FILETYPE_UNKNOWN => Some(Unknown),
+            __WASI_FILETYPE_BLOCK_DEVICE => Some(BlockDevice),
+            __WASI_FILETYPE_CHARACTER_DEVICE => Some(CharacterDevice),
+            __WASI_FILETYPE_DIRECTORY => Some(Directory),
+            __WASI_FILETYPE_REGULAR_FILE => Some(RegularFile),
+            __WASI_FILETYPE_SOCKET_DGRAM => Some(SocketDgram),
+            __WASI_FILETYPE_SOCKET_STREAM => Some(SocketStream),
+            __WASI_FILETYPE_SYMBOLIC_LINK => Some(Symlink),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
