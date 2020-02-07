@@ -77,22 +77,25 @@ impl GlobalFrameInfo {
         }
 
         let mut ranges = self.ranges.write().unwrap();
+        // First up assert that our chunk of jit functions doesn't collide with
+        // any other known chunks of jit functions...
         if let Some((_, prev)) = ranges.range(max..).next() {
             assert!(prev.start > max);
         }
         if let Some((prev_end, _)) = ranges.range(..=min).next_back() {
             assert!(*prev_end < min);
         }
-        assert!(ranges
-            .insert(
-                max,
-                ModuleFrameInfo {
-                    start: min,
-                    functions,
-                    names: names.clone()
-                }
-            )
-            .is_none());
+
+        // ... then insert our range and assert nothing was there previously
+        let prev = ranges.insert(
+            max,
+            ModuleFrameInfo {
+                start: min,
+                functions,
+                names: names.clone(),
+            },
+        );
+        assert!(prev.is_none());
         Some(GlobalFrameInfoRegistration { key: max })
     }
 
