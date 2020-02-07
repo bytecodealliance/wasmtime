@@ -25,6 +25,13 @@ impl Region {
             rhs_end >= self_start
         }
     }
+
+    pub fn extend(&self, new_len: u32) -> Self {
+        Self {
+            start: self.start,
+            len: self.len + new_len,
+        }
+    }
 }
 
 #[cfg(test)]

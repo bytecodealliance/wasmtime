@@ -5,6 +5,7 @@ use crate::region::Region;
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct BorrowHandle(usize);
 
+#[derive(Debug)]
 pub struct GuestBorrows {
     immutable: HashMap<BorrowHandle, Region>,
     mutable: HashMap<BorrowHandle, Region>,

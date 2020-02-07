@@ -1,7 +1,7 @@
 use crate::Region;
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum GuestError {
     #[error("Invalid enum value {0}")]
     InvalidEnumValue(&'static str),
