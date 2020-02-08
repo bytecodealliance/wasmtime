@@ -124,6 +124,11 @@ impl Compiler {
                 }
                 #[cfg(feature = "lightbeam")]
                 CompilationStrategy::Lightbeam => {
+                    return Err(SetupError::Compile(CompileError::Codegen(
+                        "Lightbeam support is temporarily disabled in this version of Wasmtime."
+                            .to_owned(),
+                    )));
+                    /*
                     wasmtime_environ::lightbeam::Lightbeam::compile_module(
                         module,
                         module_translation,
@@ -132,6 +137,7 @@ impl Compiler {
                         debug_data.is_some(),
                         &self.cache_config,
                     )
+                    */
                 }
             }
             .map_err(SetupError::Compile)?;
