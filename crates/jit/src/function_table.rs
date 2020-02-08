@@ -109,14 +109,14 @@ impl Drop for FunctionTable {
 /// Represents a runtime function table.
 ///
 /// This is used to register JIT code with the operating system to enable stack walking and unwinding.
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(unix)]
 pub(crate) struct FunctionTable {
     functions: Vec<u32>,
     relocs: Vec<FunctionTableReloc>,
     published: Option<Vec<usize>>,
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(unix)]
 impl FunctionTable {
     /// Creates a new function table.
     pub fn new() -> Self {
@@ -191,7 +191,7 @@ impl FunctionTable {
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(unix)]
 impl Drop for FunctionTable {
     fn drop(&mut self) {
         extern "C" {
