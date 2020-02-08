@@ -62,12 +62,6 @@ RUST_BACKTRACE=1 cargo test \
   --package wasmtime-interface-types \
   --package wasmtime-obj \
 
-# Test wasmtime-wasi-c, which doesn't support Windows.
-if [ "${OS:-Not}" != "Windows_NT" ]; then
-    RUST_BACKTRACE=1 cargo test \
-      --package wasmtime-wasi-c
-fi
-
 # Make sure the documentation builds.
 banner "Rust documentation: $topdir/target/doc/wasmtime/index.html"
 cargo doc
