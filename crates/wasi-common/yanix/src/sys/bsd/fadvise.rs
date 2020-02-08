@@ -1,6 +1,7 @@
 use crate::{Errno, Result};
 use std::{convert::TryInto, os::unix::prelude::*};
 
+#[cfg(not(any(target_os = "freebsd", target_os = "netbsd")))]
 #[derive(Debug, Copy, Clone)]
 #[repr(i32)]
 pub enum PosixFadviseAdvice {
@@ -10,6 +11,18 @@ pub enum PosixFadviseAdvice {
     NoReuse,
     WillNeed,
     DontNeed,
+}
+
+#[cfg(any(target_os = "freebsd", target_os = "netbsd"))]
+#[derive(Debug, Copy, Clone)]
+#[repr(i32)]
+pub enum PosixFadviseAdvice {
+    Normal = libc::POSIX_FADV_NORMAL,
+    Sequential = libc::POSIX_FADV_SEQUENTIAL,
+    Random = libc::POSIX_FADV_RANDOM,
+    NoReuse = libc::POSIX_FADV_NOREUSE,
+    WillNeed = libc::POSIX_FADV_WILLNEED,
+    DontNeed = libc::POSIX_FADV_DONTNEED,
 }
 
 // There's no posix_fadvise on macOS but we can use fcntl with F_RDADVISE
@@ -38,9 +51,23 @@ pub unsafe fn posix_fadvise(
     Errno::from_success_code(libc::fcntl(fd, libc::F_RDADVISE, &advisory))
 }
 
-// TODO
-// On non-macOS BSD's we leave it as no-op for now
-#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+#[cfg(any(target_os = "freebsd", target_os = "netbsd"))]
+pub unsafe fn posix_fadvise(
+    fd: RawFd,
+    offset: libc::off_t,
+    len: libc::off_t,
+    advice: PosixFadviseAdvice,
+) -> Result<()> {
+    Errno::from_success_code(libc::posix_fadvise(fd, offset, len, advice as libc::c_int))
+}
+
+// On BSDs without support we leave it as no-op
+#[cfg(not(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "freebsd",
+    target_os = "netbsd"
+)))]
 pub unsafe fn posix_fadvise(
     _fd: RawFd,
     _offset: libc::off_t,
