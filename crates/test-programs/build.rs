@@ -204,7 +204,10 @@ mod wasi_tests {
             fn ignore(testsuite: &str, name: &str) -> bool {
                 if testsuite == "wasi-tests" {
                     match name {
+                        // TODO: virtfs files cannot be poll_oneoff'd yet
+                        "poll_oneoff_virtualfs" => true,
                         // TODO: virtfs does not support filetimes yet.
+                        "path_filestat_virtualfs" |
                         "fd_filestat_set_virtualfs" => true,
                         // TODO: virtfs does not support symlinks yet.
                         "nofollow_errors_virtualfs" |
@@ -216,8 +219,7 @@ mod wasi_tests {
                         "path_symlink_trailing_slashes_virtualfs" => true,
                         // TODO: virtfs does not support rename yet.
                         "path_rename_trailing_slashes_virtualfs" |
-                        "path_rename_virtualfs" |
-                        "poll_oneoff_virtualfs" => false,
+                        "path_rename_virtualfs" => true,
                         _ => false,
                     }
                 } else {
@@ -235,7 +237,10 @@ mod wasi_tests {
                         "truncation_rights" => true,
                         "path_link" => true,
                         "dangling_fd" => true,
+                        // TODO: virtfs files cannot be poll_oneoff'd yet
+                        "poll_oneoff_virtualfs" => true,
                         // TODO: virtfs does not support filetimes yet.
+                        "path_filestat_virtualfs" |
                         "fd_filestat_set_virtualfs" => true,
                         // TODO: virtfs does not support symlinks yet.
                         "nofollow_errors_virtualfs" |
@@ -247,8 +252,7 @@ mod wasi_tests {
                         "path_symlink_trailing_slashes_virtualfs" => true,
                         // TODO: virtfs does not support rename yet.
                         "path_rename_trailing_slashes_virtualfs" |
-                        "path_rename_virtualfs" |
-                        "poll_oneoff_virtualfs" => false,
+                        "path_rename_virtualfs" => true,
                         _ => false,
                     }
                 } else {

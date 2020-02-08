@@ -30,19 +30,13 @@ pub trait VirtualFile: MovableFile {
         path: &Path,
         read: bool,
         write: bool,
-        oflags: u16,
-        fs_flags: wasi::__wasi_fdflags_t,
+        oflags: wasi::__wasi_oflags_t,
+        fd_flags: wasi::__wasi_fdflags_t,
     ) -> Result<Box<dyn VirtualFile>>;
 
-    fn remove_directory(
-        &self,
-        path: &str,
-    ) -> Result<()>;
+    fn remove_directory(&self, path: &str) -> Result<()>;
 
-    fn unlink_file(
-        &self,
-        path: &str,
-    ) -> Result<()>;
+    fn unlink_file(&self, path: &str) -> Result<()>;
 
     fn datasync(&self) -> Result<()> {
         Err(Error::EINVAL)
@@ -108,7 +102,7 @@ pub trait VirtualFile: MovableFile {
         Err(Error::EBADF)
     }
 
-    fn fdstat_set_flags(&self, _fdflags: wasi::__wasi_fdflags_t) -> Result<()> {
+    fn fdstat_set_flags(&mut self, _fdflags: wasi::__wasi_fdflags_t) -> Result<()> {
         Err(Error::EBADF)
     }
 
@@ -125,15 +119,17 @@ pub trait VirtualFile: MovableFile {
 
 pub struct InMemoryFile {
     cursor: usize,
-    fs_flags: wasi::__wasi_fdflags_t,
+    fd_flags: wasi::__wasi_fdflags_t,
+    parent: Rc<RefCell<Option<Box<dyn VirtualFile>>>>,
     data: Rc<RefCell<Vec<u8>>>,
 }
 
 impl InMemoryFile {
-    pub fn new(fs_flags: wasi::__wasi_fdflags_t) -> Self {
+    pub fn new(fd_flags: wasi::__wasi_fdflags_t) -> Self {
         Self {
             cursor: 0,
-            fs_flags,
+            fd_flags,
+            parent: Rc::new(RefCell::new(None)),
             data: Rc::new(RefCell::new(Vec::new())),
         }
     }
@@ -144,61 +140,82 @@ impl InMemoryFile {
 }
 
 impl MovableFile for InMemoryFile {
-    fn set_parent(&self, _new_parent: Option<Box<dyn VirtualFile>>) {
-        // We don't need to record the parent directory for InMemoryFile, there's nothing to walk
-        // up the filesystem like this.
-        //
-        // TODO: this might be wrong for `openat(<file>, "..")`?
+    fn set_parent(&self, new_parent: Option<Box<dyn VirtualFile>>) {
+        *self.parent.borrow_mut() = new_parent;
     }
 }
 
 impl VirtualFile for InMemoryFile {
     fn fdstat_get(&self) -> wasi::__wasi_fdflags_t {
-        self.fs_flags
+        self.fd_flags
     }
 
     fn try_clone(&self) -> io::Result<Box<dyn VirtualFile>> {
         Ok(Box::new(InMemoryFile {
             cursor: 0,
-            // TODO: do fs_flags need to be behind an rc too?
-            fs_flags: self.fs_flags,
+            // TODO: do fd_flags need to be behind an rc too?
+            fd_flags: self.fd_flags,
+            parent: Rc::clone(&self.parent),
             data: Rc::clone(&self.data),
         }))
     }
 
     fn readlinkat(&self, _path: &Path) -> Result<String> {
         // no symlink support, so always say it's invalid.
-        Err(Error::EINVAL)
+        Err(Error::ENOTDIR)
     }
 
     fn openat(
         &self,
-        _path: &Path,
-        _read: bool,
-        _write: bool,
-        _oflags: u16,
-        _fs_flags: wasi::__wasi_fdflags_t,
+        path: &Path,
+        read: bool,
+        write: bool,
+        oflags: wasi::__wasi_oflags_t,
+        fd_flags: wasi::__wasi_fdflags_t,
     ) -> Result<Box<dyn VirtualFile>> {
-        Err(Error::EACCES)
+        log::trace!("InMemoryFile::openat(path={:?}, read={:?}, write={:?}, oflags={:?}, fd_flags={:?}", path, read, write, oflags, fd_flags);
+
+        if oflags & wasi::__WASI_OFLAGS_DIRECTORY != 0 {
+            log::trace!("InMemoryFile::openat was passed oflags DIRECTORY, but {:?} is a file.", path);
+            log::trace!("  return ENOTDIR");
+            return Err(Error::ENOTDIR);
+        }
+
+        if path == Path::new(".") {
+            return self.try_clone().map_err(Into::into)
+        } else if path == Path::new("..") {
+            match &*self.parent.borrow() {
+                Some(file) => {
+                    file.try_clone().map_err(Into::into)
+                }
+                None => {
+                    self.try_clone().map_err(Into::into)
+                }
+            }
+        } else {
+            Err(Error::EACCES)
+        }
     }
 
-    fn remove_directory(
-        &self,
-        _path: &str,
-    ) -> Result<()> {
+    fn remove_directory(&self, _path: &str) -> Result<()> {
         Err(Error::ENOTDIR)
     }
 
-    fn unlink_file(
-        &self,
-        _path: &str,
-    ) -> Result<()> {
+    fn unlink_file(&self, _path: &str) -> Result<()> {
         Err(Error::ENOTDIR)
     }
 
     fn write_vectored(&mut self, iovs: &[io::IoSlice]) -> Result<usize> {
         let mut data = self.data.borrow_mut();
-        let mut cursor = self.cursor;
+
+        // If this file is in append mode, we write to the end.
+        let write_start = if self.fd_flags & wasi::__WASI_FDFLAGS_APPEND != 0 {
+            data.len()
+        } else {
+            self.cursor
+        };
+
+        let mut cursor = write_start;
         for iov in iovs {
             for el in iov.iter() {
                 if cursor == data.len() {
@@ -209,9 +226,20 @@ impl VirtualFile for InMemoryFile {
                 cursor += 1;
             }
         }
-        let len = cursor - self.cursor;
-        self.cursor = cursor;
+
+        let len = cursor - write_start;
+
+        // If we are not appending, adjust the cursor appropriately for the write, too.
+        if self.fd_flags & wasi::__WASI_FDFLAGS_APPEND == 0 {
+            self.cursor = cursor;
+        }
+
         Ok(len)
+    }
+
+    fn fdstat_set_flags(&mut self, fdflags: wasi::__wasi_fdflags_t) -> Result<()> {
+        self.fd_flags = fdflags;
+        Ok(())
     }
 
     fn read_vectored(&mut self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
@@ -268,9 +296,13 @@ impl VirtualFile for InMemoryFile {
         match offset {
             SeekFrom::Current(offset) => {
                 let new_cursor = if offset < 0 {
-                    self.cursor.checked_sub(-offset as usize).ok_or(Error::EINVAL)?
+                    self.cursor
+                        .checked_sub(-offset as usize)
+                        .ok_or(Error::EINVAL)?
                 } else {
-                    self.cursor.checked_add(offset as usize).ok_or(Error::EINVAL)?
+                    self.cursor
+                        .checked_add(offset as usize)
+                        .ok_or(Error::EINVAL)?
                 };
                 self.cursor = std::cmp::min(self.data.borrow().len(), new_cursor);
             }
@@ -325,7 +357,6 @@ impl VirtualFile for InMemoryFile {
         self.data.borrow_mut().resize(st_size as usize, 0);
         Ok(())
     }
-
 
     fn filestat_get(&self) -> Result<wasi::__wasi_filestat_t> {
         let stat = wasi::__wasi_filestat_t {
@@ -404,18 +435,20 @@ impl VirtualFile for VirtualDir {
     }
 
     fn readlinkat(&self, _path: &Path) -> Result<String> {
-        // no symlink support, so always say it's invalid.
-        Err(Error::EINVAL)
+        // Files are not symbolic links or directories, faithfully report ENOTDIR.
+        Err(Error::ENOTDIR)
     }
 
     fn openat(
         &self,
         path: &Path,
-        _read: bool,
-        _write: bool,
-        oflags: u16,
-        fs_flags: wasi::__wasi_fdflags_t,
+        read: bool,
+        write: bool,
+        oflags: wasi::__wasi_oflags_t,
+        fd_flags: wasi::__wasi_fdflags_t,
     ) -> Result<Box<dyn VirtualFile>> {
+        log::trace!("VirtualDir::openat(path={:?}, read={:?}, write={:?}, oflags={:?}, fd_flags={:?}", path, read, write, oflags, fd_flags);
+
         if path == Path::new(".") {
             return self.try_clone().map_err(Into::into);
         } else if path == Path::new("..") {
@@ -438,9 +471,15 @@ impl VirtualFile for VirtualDir {
             Entry::Occupied(e) => {
                 let creat_excl_mask = wasi::__WASI_OFLAGS_CREAT | wasi::__WASI_OFLAGS_EXCL;
                 if (oflags & creat_excl_mask) == creat_excl_mask {
-                    // open must fail when oflags has O_CREAT and O_EXCL, if it would not create
-                    // the named file
+                    log::trace!("VirtualDir::openat was passed oflags CREAT|EXCL, but the file {:?} exists.", file_name);
+                    log::trace!("  return EEXIST");
                     return Err(Error::EEXIST);
+                }
+
+                if (oflags & wasi::__WASI_OFLAGS_DIRECTORY) != 0 && e.get().get_file_type() != wasi::__WASI_FILETYPE_DIRECTORY {
+                    log::trace!("VirtualDir::openat was passed oflags DIRECTORY, but {:?} is a file.", file_name);
+                    log::trace!("  return ENOTDIR");
+                    return Err(Error::ENOTDIR);
                 }
 
                 e.get().try_clone().map_err(Into::into)
@@ -455,12 +494,11 @@ impl VirtualFile for VirtualDir {
                         return Err(Error::ENOSPC);
                     }
 
-                    println!("created new file: {}", path.display());
-                    let file = Box::new(InMemoryFile::new(fs_flags));
+                    log::trace!("VirtualDir::openat creating an InMemoryFile named {}", path.display());
+
+                    let file = Box::new(InMemoryFile::new(fd_flags));
                     file.set_parent(Some(self.try_clone().expect("can clone self")));
-                    v.insert(file)
-                        .try_clone()
-                        .map_err(Into::into)
+                    v.insert(file).try_clone().map_err(Into::into)
                 } else {
                     Err(Error::EACCES)
                 }
@@ -468,10 +506,7 @@ impl VirtualFile for VirtualDir {
         }
     }
 
-    fn remove_directory(
-        &self,
-        path: &str,
-    ) -> Result<()> {
+    fn remove_directory(&self, path: &str) -> Result<()> {
         let trimmed_path = path.trim_end_matches('/');
         let mut entries = self.entries.borrow_mut();
         match entries.entry(Path::new(trimmed_path).to_path_buf()) {
@@ -496,16 +531,13 @@ impl VirtualFile for VirtualDir {
                 Ok(())
             }
             Entry::Vacant(_) => {
-                log::error!("Failed to open {}", trimmed_path);
+                log::trace!("VirtualDir::remove_directory failed to remove {}, no such entry", trimmed_path);
                 Err(Error::ENOENT)
             }
         }
     }
 
-    fn unlink_file(
-        &self,
-        path: &str,
-    ) -> Result<()> {
+    fn unlink_file(&self, path: &str) -> Result<()> {
         let trimmed_path = path.trim_end_matches('/');
 
         // Special case: we may be unlinking this directory itself if path is `"."`. In that case,
@@ -531,7 +563,7 @@ impl VirtualFile for VirtualDir {
                 Ok(())
             }
             Entry::Vacant(_) => {
-                log::error!("Failed to unlink {}", trimmed_path);
+                log::trace!("VirtualDir::unlink_file failed to remove {}, no such entry", trimmed_path);
                 Err(Error::ENOENT)
             }
         }
@@ -571,12 +603,13 @@ impl VirtualFile for VirtualDir {
             type Item = Result<Dirent>;
 
             fn next(&mut self) -> Option<Self::Item> {
-                log::warn!("virtualdiriter continuing with start == {}", self.start);
+                log::trace!("VirtualDirIter::next continuing from {}", self.start);
                 if self.start == SELF_DIR_COOKIE {
                     self.start += 1;
                     return Some(Ok(Dirent {
                         name: ".".to_owned(),
-                        ftype: FileType::from_wasi(wasi::__WASI_FILETYPE_DIRECTORY).expect("directories are valid file types"),
+                        ftype: FileType::from_wasi(wasi::__WASI_FILETYPE_DIRECTORY)
+                            .expect("directories are valid file types"),
                         ino: 0,
                         cookie: self.start as u64,
                     }));
@@ -585,7 +618,8 @@ impl VirtualFile for VirtualDir {
                     self.start += 1;
                     return Some(Ok(Dirent {
                         name: "..".to_owned(),
-                        ftype: FileType::from_wasi(wasi::__WASI_FILETYPE_DIRECTORY).expect("directories are valid file types"),
+                        ftype: FileType::from_wasi(wasi::__WASI_FILETYPE_DIRECTORY)
+                            .expect("directories are valid file types"),
                         ino: 0,
                         cookie: self.start as u64,
                     }));
@@ -599,17 +633,23 @@ impl VirtualFile for VirtualDir {
                     return None;
                 }
 
-
                 self.start += 1;
 
-                let (path, file) = entries.iter().skip(start as usize).next().expect("seeked less than the length of entries");
+                let (path, file) = entries
+                    .iter()
+                    .skip(start as usize)
+                    .next()
+                    .expect("seeked less than the length of entries");
 
-                log::trace!("DIRENT {:?} has cookie {}", path.to_str(), self.start);
                 let entry = Dirent {
-                    name: path.to_str().expect("wasi paths are valid utf8 strings").to_owned(),
-                    ftype: FileType::from_wasi(file.get_file_type()).expect("virtfs reports valid wasi file types"),
+                    name: path
+                        .to_str()
+                        .expect("wasi paths are valid utf8 strings")
+                        .to_owned(),
+                    ftype: FileType::from_wasi(file.get_file_type())
+                        .expect("virtfs reports valid wasi file types"),
                     ino: 0,
-                    cookie: self.start as u64
+                    cookie: self.start as u64,
                 };
 
                 Some(Ok(entry))
@@ -623,7 +663,10 @@ impl VirtualFile for VirtualDir {
                 0
             }
         };
-        Ok(Box::new(VirtualDirIter { start: cookie, entries: Rc::clone(&self.entries) }))
+        Ok(Box::new(VirtualDirIter {
+            start: cookie,
+            entries: Rc::clone(&self.entries),
+        }))
     }
 
     fn filestat_get(&self) -> Result<wasi::__wasi_filestat_t> {

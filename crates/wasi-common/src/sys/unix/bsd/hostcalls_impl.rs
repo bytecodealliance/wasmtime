@@ -41,9 +41,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
                 })
                 .map_err(Into::into)
         }
-        Descriptor::VirtualFile(virt) => {
-            virt.unlinkat(resolved.path())
-        }
+        Descriptor::VirtualFile(virt) => virt.unlinkat(resolved.path()),
         Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
             unreachable!("streams do not have paths and should not be accessible via PathGet");
         }
