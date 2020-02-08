@@ -70,8 +70,14 @@ impl<'a, 'b> PathRef<'a, 'b> {
                 &file, &self.path,
             )?))),
             Descriptor::VirtualFile(virt) => virt
-                    .openat(Path::new(&self.path), false, false, wasi::__WASI_OFLAGS_DIRECTORY, 0)
-                    .map(|file| Descriptor::VirtualFile(file)),
+                .openat(
+                    Path::new(&self.path),
+                    false,
+                    false,
+                    wasi::__WASI_OFLAGS_DIRECTORY,
+                    0,
+                )
+                .map(|file| Descriptor::VirtualFile(file)),
             other => {
                 panic!("invalid descriptor for open: {:?}", other);
             }

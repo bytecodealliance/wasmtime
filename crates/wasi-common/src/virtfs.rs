@@ -173,24 +173,30 @@ impl VirtualFile for InMemoryFile {
         oflags: wasi::__wasi_oflags_t,
         fd_flags: wasi::__wasi_fdflags_t,
     ) -> Result<Box<dyn VirtualFile>> {
-        log::trace!("InMemoryFile::openat(path={:?}, read={:?}, write={:?}, oflags={:?}, fd_flags={:?}", path, read, write, oflags, fd_flags);
+        log::trace!(
+            "InMemoryFile::openat(path={:?}, read={:?}, write={:?}, oflags={:?}, fd_flags={:?}",
+            path,
+            read,
+            write,
+            oflags,
+            fd_flags
+        );
 
         if oflags & wasi::__WASI_OFLAGS_DIRECTORY != 0 {
-            log::trace!("InMemoryFile::openat was passed oflags DIRECTORY, but {:?} is a file.", path);
+            log::trace!(
+                "InMemoryFile::openat was passed oflags DIRECTORY, but {:?} is a file.",
+                path
+            );
             log::trace!("  return ENOTDIR");
             return Err(Error::ENOTDIR);
         }
 
         if path == Path::new(".") {
-            return self.try_clone().map_err(Into::into)
+            return self.try_clone().map_err(Into::into);
         } else if path == Path::new("..") {
             match &*self.parent.borrow() {
-                Some(file) => {
-                    file.try_clone().map_err(Into::into)
-                }
-                None => {
-                    self.try_clone().map_err(Into::into)
-                }
+                Some(file) => file.try_clone().map_err(Into::into),
+                None => self.try_clone().map_err(Into::into),
             }
         } else {
             Err(Error::EACCES)
@@ -447,7 +453,14 @@ impl VirtualFile for VirtualDir {
         oflags: wasi::__wasi_oflags_t,
         fd_flags: wasi::__wasi_fdflags_t,
     ) -> Result<Box<dyn VirtualFile>> {
-        log::trace!("VirtualDir::openat(path={:?}, read={:?}, write={:?}, oflags={:?}, fd_flags={:?}", path, read, write, oflags, fd_flags);
+        log::trace!(
+            "VirtualDir::openat(path={:?}, read={:?}, write={:?}, oflags={:?}, fd_flags={:?}",
+            path,
+            read,
+            write,
+            oflags,
+            fd_flags
+        );
 
         if path == Path::new(".") {
             return self.try_clone().map_err(Into::into);
@@ -476,8 +489,13 @@ impl VirtualFile for VirtualDir {
                     return Err(Error::EEXIST);
                 }
 
-                if (oflags & wasi::__WASI_OFLAGS_DIRECTORY) != 0 && e.get().get_file_type() != wasi::__WASI_FILETYPE_DIRECTORY {
-                    log::trace!("VirtualDir::openat was passed oflags DIRECTORY, but {:?} is a file.", file_name);
+                if (oflags & wasi::__WASI_OFLAGS_DIRECTORY) != 0
+                    && e.get().get_file_type() != wasi::__WASI_FILETYPE_DIRECTORY
+                {
+                    log::trace!(
+                        "VirtualDir::openat was passed oflags DIRECTORY, but {:?} is a file.",
+                        file_name
+                    );
                     log::trace!("  return ENOTDIR");
                     return Err(Error::ENOTDIR);
                 }
@@ -494,7 +512,10 @@ impl VirtualFile for VirtualDir {
                         return Err(Error::ENOSPC);
                     }
 
-                    log::trace!("VirtualDir::openat creating an InMemoryFile named {}", path.display());
+                    log::trace!(
+                        "VirtualDir::openat creating an InMemoryFile named {}",
+                        path.display()
+                    );
 
                     let file = Box::new(InMemoryFile::new(fd_flags));
                     file.set_parent(Some(self.try_clone().expect("can clone self")));
@@ -531,7 +552,10 @@ impl VirtualFile for VirtualDir {
                 Ok(())
             }
             Entry::Vacant(_) => {
-                log::trace!("VirtualDir::remove_directory failed to remove {}, no such entry", trimmed_path);
+                log::trace!(
+                    "VirtualDir::remove_directory failed to remove {}, no such entry",
+                    trimmed_path
+                );
                 Err(Error::ENOENT)
             }
         }
@@ -563,7 +587,10 @@ impl VirtualFile for VirtualDir {
                 Ok(())
             }
             Entry::Vacant(_) => {
-                log::trace!("VirtualDir::unlink_file failed to remove {}, no such entry", trimmed_path);
+                log::trace!(
+                    "VirtualDir::unlink_file failed to remove {}, no such entry",
+                    trimmed_path
+                );
                 Err(Error::ENOENT)
             }
         }

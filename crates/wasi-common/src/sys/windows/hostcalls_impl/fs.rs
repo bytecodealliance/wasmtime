@@ -212,17 +212,16 @@ pub(crate) fn path_open(
                 .map(|f| Descriptor::OsHandle(OsHandle::from(f)))
                 .map_err(Into::into)
         }
-        Descriptor::VirtualFile(virt) => {
-            virt.openat(
+        Descriptor::VirtualFile(virt) => virt
+            .openat(
                 std::path::Path::new(resolved.path()),
                 read,
                 write,
                 oflags,
                 fdflags,
             )
-                .map(|file| Descriptor::VirtualFile(file))
-                .map_err(Into::into)
-        }
+            .map(|file| Descriptor::VirtualFile(file))
+            .map_err(Into::into),
         Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
             unreachable!("streams do not have paths and should not be accessible via PathGet");
         }
