@@ -213,7 +213,15 @@ pub(crate) fn path_open(
                 .map_err(Into::into)
         }
         Descriptor::VirtualFile(virt) => {
-            unimplemented!("virtual open");
+            virt.openat(
+                std::path::Path::new(resolved.path()),
+                read,
+                write,
+                oflags,
+                fdflags,
+            )
+                .map(|file| Descriptor::VirtualFile(file))
+                .map_err(Into::into)
         }
         Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
             unreachable!("streams do not have paths and should not be accessible via PathGet");
@@ -653,7 +661,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
                 Err(Error::EINVAL)
             }
         }
-        Descriptor::VirtualFile(virt) => virt.unlinkat(resolved.path()),
+        Descriptor::VirtualFile(virt) => virt.unlink_file(resolved.path()),
         Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
             unreachable!("streams do not have paths and should not be accessible via PathGet");
         }
