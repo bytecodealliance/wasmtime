@@ -14,7 +14,7 @@ version="0.9.0"
 # Update the version numbers of the crates to $version.
 echo "Updating crate versions to $version"
 find -name Cargo.toml \
-    -not -path ./crates/wasi-common/WASI/tools/witx/Cargo.toml \
+    -not -path ./crates/wasi-common/wig/WASI/tools/witx/Cargo.toml \
     -exec sed -i.bk -e "s/^version = \"[[:digit:]].*/version = \"$version\"/" {} \;
 
 # Update the required version numbers of path dependencies.
