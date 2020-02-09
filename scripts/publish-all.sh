@@ -9,7 +9,7 @@ topdir=$(dirname "$0")/..
 cd "$topdir"
 
 # All the wasmtime-* crates have the same version number
-version="0.9.0"
+version="0.11.0"
 
 # Update the version numbers of the crates to $version.
 echo "Updating crate versions to $version"
@@ -26,7 +26,7 @@ find -name Cargo.toml \
 
 # Update our local Cargo.lock (not checked in).
 cargo update
-scripts/test-all.sh
+#scripts/test-all.sh
 
 # Commands needed to publish.
 #
