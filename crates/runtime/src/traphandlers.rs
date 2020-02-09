@@ -30,7 +30,7 @@ extern "C" {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(any(target_os = "linux", target_os = "macos"))] {
+    if #[cfg(unix)] {
         #[no_mangle]
         pub unsafe extern "C" fn HandleTrap(
             pc: *mut u8,

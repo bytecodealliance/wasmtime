@@ -34,7 +34,7 @@ use wasmtime_environ::wasm::{
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
 
 cfg_if::cfg_if! {
-    if #[cfg(any(target_os = "linux", target_os = "macos"))] {
+    if #[cfg(unix)] {
         pub type SignalHandler = dyn Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool;
 
         impl InstanceHandle {

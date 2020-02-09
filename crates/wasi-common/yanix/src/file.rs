@@ -1,5 +1,6 @@
 use crate::{Errno, Result};
 use bitflags::bitflags;
+use cfg_if::cfg_if;
 use std::{
     convert::TryInto,
     ffi::{CString, OsStr, OsString},
@@ -48,14 +49,23 @@ bitflags! {
         const APPEND = libc::O_APPEND;
         const CREAT = libc::O_CREAT;
         const DIRECTORY = libc::O_DIRECTORY;
-        #[cfg(any(target_os = "android",
-                  target_os = "ios",
-                  target_os = "linux",
-                  target_os = "macos",
-                  target_os = "netbsd",
-                  target_os = "openbsd",
-                  target_os = "emscripten"))]
-        const DSYNC = libc::O_DSYNC;
+        const DSYNC = {
+            // Have to use cfg_if: https://github.com/bitflags/bitflags/issues/137
+            cfg_if! {
+                if #[cfg(any(target_os = "android",
+                             target_os = "ios",
+                             target_os = "linux",
+                             target_os = "macos",
+                             target_os = "netbsd",
+                             target_os = "openbsd",
+                             target_os = "emscripten"))] {
+                    libc::O_DSYNC
+                } else if #[cfg(target_os = "freebsd")] {
+                    // https://github.com/bytecodealliance/wasmtime/pull/756
+                    libc::O_SYNC
+                }
+            }
+        };
         const EXCL = libc::O_EXCL;
         #[cfg(any(target_os = "dragonfly",
                   target_os = "freebsd",
