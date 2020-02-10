@@ -117,25 +117,52 @@ pub trait VirtualFile: MovableFile {
     fn get_rights_inheriting(&self) -> wasi::__wasi_rights_t;
 }
 
+struct FileContents {
+    content: Vec<u8>,
+    flags: wasi::__wasi_fdflags_t,
+}
+
+impl FileContents {
+    fn new(fd_flags: wasi::__wasi_fdflags_t) -> Self {
+        Self {
+            content: Vec::new(),
+            flags: fd_flags,
+        }
+    }
+
+    fn fd_flags(&self) -> &wasi::__wasi_fdflags_t {
+        &self.flags
+    }
+
+    fn fd_flags_mut(&mut self) -> &mut wasi::__wasi_fdflags_t {
+        &mut self.flags
+    }
+
+    fn content_mut(&mut self) -> &mut Vec<u8> {
+        &mut self.content
+    }
+}
+
+/// An `InMemoryFile` is a shared handle to some underlying data. The relationship is analagous to
+/// a filesystem wherein a file descriptor is one view into a possibly-shared underlying collection
+/// of data and permissions on a filesystem.
 pub struct InMemoryFile {
     cursor: usize,
-    fd_flags: wasi::__wasi_fdflags_t,
     parent: Rc<RefCell<Option<Box<dyn VirtualFile>>>>,
-    data: Rc<RefCell<Vec<u8>>>,
+    data: Rc<RefCell<FileContents>>,
 }
 
 impl InMemoryFile {
     pub fn new(fd_flags: wasi::__wasi_fdflags_t) -> Self {
         Self {
             cursor: 0,
-            fd_flags,
             parent: Rc::new(RefCell::new(None)),
-            data: Rc::new(RefCell::new(Vec::new())),
+            data: Rc::new(RefCell::new(FileContents::new(fd_flags))),
         }
     }
 
     pub fn append(&self, data: &[u8]) {
-        self.data.borrow_mut().extend_from_slice(data);
+        self.data.borrow_mut().content_mut().extend_from_slice(data);
     }
 }
 
@@ -147,14 +174,12 @@ impl MovableFile for InMemoryFile {
 
 impl VirtualFile for InMemoryFile {
     fn fdstat_get(&self) -> wasi::__wasi_fdflags_t {
-        self.fd_flags
+        *self.data.borrow().fd_flags()
     }
 
     fn try_clone(&self) -> io::Result<Box<dyn VirtualFile>> {
         Ok(Box::new(InMemoryFile {
             cursor: 0,
-            // TODO: do fd_flags need to be behind an rc too?
-            fd_flags: self.fd_flags,
             parent: Rc::clone(&self.parent),
             data: Rc::clone(&self.data),
         }))
@@ -214,9 +239,13 @@ impl VirtualFile for InMemoryFile {
     fn write_vectored(&mut self, iovs: &[io::IoSlice]) -> Result<usize> {
         let mut data = self.data.borrow_mut();
 
+        let append_mode = data.fd_flags() & wasi::__WASI_FDFLAGS_APPEND != 0;
+
+        let content = data.content_mut();
+
         // If this file is in append mode, we write to the end.
-        let write_start = if self.fd_flags & wasi::__WASI_FDFLAGS_APPEND != 0 {
-            data.len()
+        let write_start = if append_mode {
+            content.len()
         } else {
             self.cursor
         };
@@ -224,10 +253,10 @@ impl VirtualFile for InMemoryFile {
         let mut cursor = write_start;
         for iov in iovs {
             for el in iov.iter() {
-                if cursor == data.len() {
-                    data.push(*el);
+                if cursor == content.len() {
+                    content.push(*el);
                 } else {
-                    data[cursor] = *el;
+                    content[cursor] = *el;
                 }
                 cursor += 1;
             }
@@ -236,7 +265,7 @@ impl VirtualFile for InMemoryFile {
         let len = cursor - write_start;
 
         // If we are not appending, adjust the cursor appropriately for the write, too.
-        if self.fd_flags & wasi::__WASI_FDFLAGS_APPEND == 0 {
+        if !append_mode {
             self.cursor = cursor;
         }
 
@@ -244,7 +273,7 @@ impl VirtualFile for InMemoryFile {
     }
 
     fn fdstat_set_flags(&mut self, fdflags: wasi::__wasi_fdflags_t) -> Result<()> {
-        self.fd_flags = fdflags;
+        *self.data.borrow_mut().fd_flags_mut() = fdflags;
         Ok(())
     }
 
@@ -253,12 +282,12 @@ impl VirtualFile for InMemoryFile {
         let mut cursor = self.cursor;
         for iov in iovs {
             for i in 0..iov.len() {
-                if cursor >= data.len() {
+                if cursor >= data.content.len() {
                     let count = cursor - self.cursor;
                     self.cursor = cursor;
                     return Ok(count);
                 }
-                iov[i] = data[cursor];
+                iov[i] = data.content[cursor];
                 cursor += 1;
             }
         }
@@ -272,11 +301,11 @@ impl VirtualFile for InMemoryFile {
         let data = self.data.borrow();
         let mut cursor = offset;
         for i in 0..buf.len() {
-            if cursor >= data.len() as u64 {
+            if cursor >= data.content.len() as u64 {
                 let count = cursor - offset;
                 return Ok(count as usize);
             }
-            buf[i] = data[cursor as usize];
+            buf[i] = data.content[cursor as usize];
             cursor += 1;
         }
 
@@ -288,10 +317,10 @@ impl VirtualFile for InMemoryFile {
         let mut data = self.data.borrow_mut();
         let mut cursor = offset;
         for el in buf.iter() {
-            if cursor == data.len() as u64 {
-                data.push(*el);
+            if cursor == data.content.len() as u64 {
+                data.content.push(*el);
             } else {
-                data[cursor as usize] = *el;
+                data.content[cursor as usize] = *el;
             }
             cursor += 1;
         }
@@ -299,6 +328,7 @@ impl VirtualFile for InMemoryFile {
     }
 
     fn seek(&mut self, offset: SeekFrom) -> Result<u64> {
+        let content_len = self.data.borrow().content.len();
         match offset {
             SeekFrom::Current(offset) => {
                 let new_cursor = if offset < 0 {
@@ -310,13 +340,13 @@ impl VirtualFile for InMemoryFile {
                         .checked_add(offset as usize)
                         .ok_or(Error::EINVAL)?
                 };
-                self.cursor = std::cmp::min(self.data.borrow().len(), new_cursor);
+                self.cursor = std::cmp::min(content_len, new_cursor);
             }
             SeekFrom::End(offset) => {
-                self.cursor = self.data.borrow().len().saturating_sub(offset as usize);
+                self.cursor = content_len.saturating_sub(offset as usize);
             }
             SeekFrom::Start(offset) => {
-                self.cursor = std::cmp::min(self.data.borrow().len(), offset as usize);
+                self.cursor = std::cmp::min(content_len, offset as usize);
             }
         }
 
@@ -349,8 +379,8 @@ impl VirtualFile for InMemoryFile {
         let new_limit = offset + len;
         let mut data = self.data.borrow_mut();
 
-        if new_limit > data.len() as u64 {
-            data.resize(new_limit as usize, 0);
+        if new_limit > data.content.len() as u64 {
+            data.content.resize(new_limit as usize, 0);
         }
 
         Ok(())
@@ -360,7 +390,7 @@ impl VirtualFile for InMemoryFile {
         if st_size > std::usize::MAX as u64 {
             return Err(Error::EFBIG);
         }
-        self.data.borrow_mut().resize(st_size as usize, 0);
+        self.data.borrow_mut().content.resize(st_size as usize, 0);
         Ok(())
     }
 
@@ -369,7 +399,7 @@ impl VirtualFile for InMemoryFile {
             dev: 0,
             ino: 0,
             nlink: 0,
-            size: self.data.borrow().len() as u64,
+            size: self.data.borrow().content.len() as u64,
             atim: 0,
             ctim: 0,
             mtim: 0,
