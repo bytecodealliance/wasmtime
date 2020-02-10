@@ -1,8 +1,8 @@
 use anyhow::{bail, Context};
 use std::fs::File;
 use std::path::Path;
-use wasmtime::{Instance, Module, Store};
 use wasi_common::VirtualDir;
+use wasmtime::{Instance, Module, Store};
 
 #[derive(Clone, Copy, Debug)]
 pub enum PreopenType {
@@ -12,7 +12,12 @@ pub enum PreopenType {
     Virtual,
 }
 
-pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>, preopen_type: PreopenType) -> anyhow::Result<()> {
+pub fn instantiate(
+    data: &[u8],
+    bin_name: &str,
+    workspace: Option<&Path>,
+    preopen_type: PreopenType,
+) -> anyhow::Result<()> {
     let store = Store::default();
 
     // Create our wasi context with pretty standard arguments/inheritance/etc.

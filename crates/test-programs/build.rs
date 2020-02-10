@@ -144,19 +144,19 @@ mod wasi_tests {
             .expect("to_str");
 
         writeln!(out, "    #[test]")?;
-        let test_fn_name = format!("{}{}", &stemstr.replace("-", "_"), if let PreopenType::Virtual = preopen_type {
-            "_virtualfs"
-        } else {
-            ""
-        });
+        let test_fn_name = format!(
+            "{}{}",
+            &stemstr.replace("-", "_"),
+            if let PreopenType::Virtual = preopen_type {
+                "_virtualfs"
+            } else {
+                ""
+            }
+        );
         if ignore(testsuite, &test_fn_name) {
             writeln!(out, "    #[ignore]")?;
         }
-        writeln!(
-            out,
-            "    fn r#{}() -> anyhow::Result<()> {{",
-            test_fn_name,
-        )?;
+        writeln!(out, "    fn r#{}() -> anyhow::Result<()> {{", test_fn_name,)?;
         writeln!(out, "        setup_log();")?;
         writeln!(
             out,
@@ -178,10 +178,8 @@ mod wasi_tests {
                         "        let workspace = utils::prepare_workspace(&bin_name)?;"
                     )?;
                     "Some(workspace.path())"
-                },
-                PreopenType::Virtual => {
-                    "Some(std::path::Path::new(&bin_name))"
                 }
+                PreopenType::Virtual => "Some(std::path::Path::new(&bin_name))",
             }
         };
         writeln!(
