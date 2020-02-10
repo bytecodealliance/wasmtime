@@ -525,9 +525,16 @@ pub(crate) fn path_filestat_get(
     resolved: PathGet,
     dirflags: wasi::__wasi_lookupflags_t,
 ) -> Result<wasi::__wasi_filestat_t> {
-    let path = resolved.concatenate()?;
-    let file = File::open(path)?;
-    host_impl::filestat_from_win(&file)
+    match resolved.dirfd() {
+        Descriptor::VirtualFile(virt) => virt
+            .openat(&Path::new(resolved.path()), false, false, 0, 0)?
+            .filestat_get(),
+        _ => {
+            let path = resolved.concatenate()?;
+            let file = File::open(path)?;
+            host_impl::filestat_from_win(&file)
+        }
+    }
 }
 
 pub(crate) fn path_filestat_set_times(
@@ -668,6 +675,11 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
 }
 
 pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
-    let path = resolved.concatenate()?;
-    std::fs::remove_dir(&path).map_err(Into::into)
+    match resolved.dirfd() {
+        Descriptor::VirtualFile(virt) => virt.remove_directory(resolved.path()),
+        _ => {
+            let path = resolved.concatenate()?;
+            std::fs::remove_dir(&path).map_err(Into::into)
+        }
+    }
 }
