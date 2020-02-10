@@ -574,7 +574,7 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
         csr_stack_size += (num_fprs * types::F64X2.bytes() as usize) as i32;
 
         // Ensure that csr stack space is 16-byte aligned for ideal SIMD value placement.
-        csr_stack_size = csr_stack_size & !0b1111 + 16;
+        csr_stack_size = (csr_stack_size + 15) & !0b1111;
     }
 
     // TODO: eventually use the 32 bytes (shadow store) as spill slot. This currently doesn't work
@@ -732,7 +732,7 @@ fn insert_common_prologue(
                 total_stack_size += csrs.iter(FPR).len() as i64 * types::F64X2.bytes() as i64;
 
                 // Ensure that csr stack space is 16-byte aligned for ideal SIMD value placement.
-                total_stack_size = total_stack_size & !0b1111 + 16;
+                total_stack_size = (total_stack_size + 15) & !0b1111;
             }
 
             insert_stack_check(pos, total_stack_size, stack_limit_arg);
