@@ -851,8 +851,8 @@ fn insert_common_prologue(
         pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::rax as u16);
 
         for reg in csrs.iter(FPR) {
-            // Append param to entry EBB
-            let csr_arg = pos.func.dfg.append_ebb_param(ebb, types::F64X2);
+            // Append param to entry Block
+            let csr_arg = pos.func.dfg.append_block_param(block, types::F64X2);
 
             // Assign it a location
             pos.func.locations[csr_arg] = ir::ValueLoc::Reg(reg);
