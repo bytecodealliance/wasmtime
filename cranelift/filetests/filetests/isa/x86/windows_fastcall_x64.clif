@@ -34,14 +34,14 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64):
 
 ; check that we preserve xmm6 and above if we're using them locally
 function %float_callee_saves(f64, f64, f64, f64) windows_fastcall {
-ebb0(v0: f64, v1: f64, v2: f64, v3: f64):
+block0(v0: f64, v1: f64, v2: f64, v3: f64):
 ; explicitly use a callee-save register
 [-, %xmm6]  v4 = fadd v0, v1
 [-, %xmm7]  v5 = fadd v0, v1
     return
 }
 ; check: function %float_callee_sav(f64 [%xmm0], f64 [%xmm1], f64 [%xmm2], f64 [%xmm3], i64 fp [%rbp], f64x2 csr [%xmm6], f64x2 csr [%xmm7]) -> i64 fp [%rbp], f64x2 csr [%xmm6], f64x2 csr [%xmm7] windows_fastcall {
-; check: ebb0(v0: f64 [%xmm0], v1: f64 [%xmm1], v2: f64 [%xmm2], v3: f64 [%xmm3], v6: i64 [%rbp], v8: f64x2 [%xmm6], v9: f64x2 [%xmm7]):
+; check: block0(v0: f64 [%xmm0], v1: f64 [%xmm1], v2: f64 [%xmm2], v3: f64 [%xmm3], v6: i64 [%rbp], v8: f64x2 [%xmm6], v9: f64x2 [%xmm7]):
 ; nextln:                         x86_push v6
 ; nextln:                         copy_special %rsp -> %rbp
 ; nextln:                         v7 = stack_addr.i64 ss0
