@@ -1795,14 +1795,14 @@ fn define_simd(
 
         let is_zero_128bit =
             InstructionPredicate::new_is_all_zeroes(&*formats.unary_const, "constant_handle");
-        let template = rec_vconst_optimized.nonrex().opcodes(&PXOR);
+        let template = rec_vconst_optimized.opcodes(&PXOR).infer_rex();
         e.enc_32_64_func(instruction.clone(), template, |builder| {
             builder.inst_predicate(is_zero_128bit)
         });
 
         let is_ones_128bit =
             InstructionPredicate::new_is_all_ones(&*formats.unary_const, "constant_handle");
-        let template = rec_vconst_optimized.nonrex().opcodes(&PCMPEQB);
+        let template = rec_vconst_optimized.opcodes(&PCMPEQB).infer_rex();
         e.enc_32_64_func(instruction, template, |builder| {
             builder.inst_predicate(is_ones_128bit)
         });
@@ -1816,7 +1816,7 @@ fn define_simd(
     // in memory) but some performance measurements are needed.
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         let instruction = vconst.bind(vector(ty, sse_vector_size));
-        let template = rec_vconst.nonrex().opcodes(&MOVUPS_LOAD);
+        let template = rec_vconst.opcodes(&MOVUPS_LOAD).infer_rex();
         e.enc_32_64_maybe_isap(instruction, template, None); // from SSE
     }
 
@@ -1826,7 +1826,10 @@ fn define_simd(
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         // Store
         let bound_store = store.bind(vector(ty, sse_vector_size)).bind(Any);
-        e.enc_32_64(bound_store.clone(), rec_fst.opcodes(&MOVUPS_STORE));
+        e.enc_32_64(
+            bound_store.clone(),
+            rec_fst.opcodes(&MOVUPS_STORE).infer_rex(),
+        );
         e.enc_32_64(bound_store.clone(), rec_fstDisp8.opcodes(&MOVUPS_STORE));
         e.enc_32_64(bound_store, rec_fstDisp32.opcodes(&MOVUPS_STORE));
 

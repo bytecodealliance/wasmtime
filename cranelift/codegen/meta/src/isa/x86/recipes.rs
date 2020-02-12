@@ -46,6 +46,16 @@ impl<'builder> RecipeGroup<'builder> {
         self.templates.push(template.clone());
         template
     }
+    fn add_template_inferred(
+        &mut self,
+        recipe: EncodingRecipeBuilder,
+        infer_function: &'static str,
+    ) -> Rc<Template<'builder>> {
+        let template =
+            Rc::new(Template::new(recipe, self.regs).inferred_rex_compute_size(infer_function));
+        self.templates.push(template.clone());
+        template
+    }
     fn add_template(&mut self, template: Template<'builder>) -> Rc<Template<'builder>> {
         let template = Rc::new(template);
         self.templates.push(template.clone());
@@ -1481,7 +1491,7 @@ pub(crate) fn define<'shared>(
         );
 
         // XX /r register-indirect store of FPR with no offset.
-        recipes.add_template_recipe(
+        recipes.add_template_inferred(
             EncodingRecipeBuilder::new("fst", &formats.store, 1)
                 .operands_in(vec![fpr, gpr])
                 .inst_predicate(has_no_offset)
@@ -1504,6 +1514,7 @@ pub(crate) fn define<'shared>(
                         }
                     "#,
                 ),
+            "size_plus_maybe_sib_or_offset_inreg1_plus_rex_prefix_for_inreg0_inreg1",
         );
 
         let has_small_offset =
@@ -2515,7 +2526,7 @@ pub(crate) fn define<'shared>(
             ),
     );
 
-    recipes.add_template_recipe(
+    recipes.add_template_inferred(
         EncodingRecipeBuilder::new("vconst", &formats.unary_const, 5)
             .operands_out(vec![fpr])
             .clobbers_flags(false)
@@ -2526,9 +2537,10 @@ pub(crate) fn define<'shared>(
                     const_disp4(constant_handle, func, sink);
                 "#,
             ),
+        "size_with_inferred_rex_for_outreg0",
     );
 
-    recipes.add_template_recipe(
+    recipes.add_template_inferred(
         EncodingRecipeBuilder::new("vconst_optimized", &formats.unary_const, 1)
             .operands_out(vec![fpr])
             .clobbers_flags(false)
@@ -2538,6 +2550,7 @@ pub(crate) fn define<'shared>(
                     modrm_rr(out_reg0, out_reg0, sink);
                 "#,
             ),
+        "size_with_inferred_rex_for_outreg0",
     );
 
     recipes.add_template_recipe(

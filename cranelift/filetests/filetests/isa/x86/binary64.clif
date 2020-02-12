@@ -1679,3 +1679,11 @@ block0:
     [-, %r10]   v0 = bconst.b64 true    ; bin: 41 ba 00000001
     return
 }
+
+function %V128() {
+block0:
+    [-,%r10]            v3 = iconst.i64 0x2102_0304_f1f2_f3f4 ; bin: 49 ba 21020304f1f2f3f4
+    [-, %xmm9]          v4 = vconst.i32x4 [0 1 2 3]  ; bin: 44 0f 10 0d 00000005 PCRelRodata4(23)
+                        store v4, v3    ; bin: heap_oob 45 0f 11 0a
+                        return
+}

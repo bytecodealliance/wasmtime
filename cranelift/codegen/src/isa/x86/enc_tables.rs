@@ -123,6 +123,22 @@ fn size_plus_maybe_sib_or_offset_for_inreg_1(
     sizing.base_size + if needs_sib_or_offset { 1 } else { 0 }
 }
 
+/// Calculates the size while inferring if the first and second input registers (inreg0, inreg1)
+/// require a dynamic REX prefix and if the second input register (inreg1) requires a SIB or offset.
+fn size_plus_maybe_sib_or_offset_inreg1_plus_rex_prefix_for_inreg0_inreg1(
+    sizing: &RecipeSizing,
+    enc: Encoding,
+    inst: Inst,
+    divert: &RegDiversions,
+    func: &Function,
+) -> u8 {
+    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
+        || test_input(0, inst, divert, func, is_extended_reg)
+        || test_input(1, inst, divert, func, is_extended_reg);
+    size_plus_maybe_sib_or_offset_for_inreg_1(sizing, enc, inst, divert, func)
+        + if needs_rex { 1 } else { 0 }
+}
+
 /// Infers whether a dynamic REX prefix will be emitted, for use with one input reg.
 ///
 /// A REX prefix is known to be emitted if either:
@@ -195,6 +211,19 @@ fn size_with_inferred_rex_for_inreg0_outreg0(
 ) -> u8 {
     let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
         || test_input(0, inst, divert, func, is_extended_reg)
+        || test_result(0, inst, divert, func, is_extended_reg);
+    sizing.base_size + if needs_rex { 1 } else { 0 }
+}
+
+/// Infers whether a dynamic REX prefix will be emitted, based on a single output register.
+fn size_with_inferred_rex_for_outreg0(
+    sizing: &RecipeSizing,
+    enc: Encoding,
+    inst: Inst,
+    divert: &RegDiversions,
+    func: &Function,
+) -> u8 {
+    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
         || test_result(0, inst, divert, func, is_extended_reg);
     sizing.base_size + if needs_rex { 1 } else { 0 }
 }
