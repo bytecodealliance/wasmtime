@@ -613,7 +613,7 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
         // the low 128 bits here, but we may find that in practice we should preserve all of
         // YMM6-15 (or even ZMM6-15?)
         let csr_arg =
-            ir::AbiParam::special_reg(types::F64X2, ir::ArgumentPurpose::CalleeSaved, fp_csr);
+            ir::AbiParam::special_reg(types::F64, ir::ArgumentPurpose::CalleeSaved, fp_csr);
         func.signature.params.push(csr_arg);
         func.signature.returns.push(csr_arg);
     }
@@ -852,7 +852,7 @@ fn insert_common_prologue(
 
         for reg in csrs.iter(FPR) {
             // Append param to entry Block
-            let csr_arg = pos.func.dfg.append_block_param(block, types::F64X2);
+            let csr_arg = pos.func.dfg.append_block_param(block, types::F64);
 
             // Assign it a location
             pos.func.locations[csr_arg] = ir::ValueLoc::Reg(reg);
@@ -1048,7 +1048,7 @@ fn insert_common_epilogue(
 
         for reg in csrs.iter(FPR) {
             let value = pos.ins().load(
-                types::F64X2,
+                types::F64,
                 ir::MemFlags::trusted(),
                 stack_addr,
                 fpr_offset,
