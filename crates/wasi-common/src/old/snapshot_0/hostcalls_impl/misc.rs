@@ -254,14 +254,10 @@ pub(crate) fn poll_oneoff(
                         let event = wasi::__wasi_event_t {
                             userdata: subscription.userdata,
                             error: err.as_wasi_error().as_raw_errno(),
-                            u: wasi::__wasi_event_u_t {
-                                tag: wasi::__WASI_EVENTTYPE_FD_READ,
-                                u: wasi::__wasi_event_u_u_t {
-                                    fd_read: wasi::__wasi_event_fd_readwrite_t {
-                                        nbytes: 0,
-                                        flags: 0,
-                                    },
-                                },
+                            r#type: wasi::__WASI_EVENTTYPE_FD_READ,
+                            fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+                                nbytes: 0,
+                                flags: 0,
                             },
                         };
                         events.push(event);
@@ -286,14 +282,10 @@ pub(crate) fn poll_oneoff(
                         let event = wasi::__wasi_event_t {
                             userdata: subscription.userdata,
                             error: err.as_wasi_error().as_raw_errno(),
-                            u: wasi::__wasi_event_u_t {
-                                tag: wasi::__WASI_EVENTTYPE_FD_WRITE,
-                                u: wasi::__wasi_event_u_u_t {
-                                    fd_write: wasi::__wasi_event_fd_readwrite_t {
-                                        nbytes: 0,
-                                        flags: 0,
-                                    },
-                                },
+                            r#type: wasi::__WASI_EVENTTYPE_FD_WRITE,
+                            fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+                                nbytes: 0,
+                                flags: 0,
                             },
                         };
                         events.push(event);

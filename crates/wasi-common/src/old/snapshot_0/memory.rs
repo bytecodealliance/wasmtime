@@ -461,34 +461,14 @@ pub(crate) fn enc_events(
             .expect("the number of events cannot exceed the number of subscriptions") = {
             let userdata = PrimInt::to_le(event.userdata);
             let error = PrimInt::to_le(event.error);
-            let u = match event.u.tag {
-                wasi::__WASI_EVENTTYPE_FD_READ => wasi::__wasi_event_u_u_t {
-                    fd_read: {
-                        wasi::__wasi_event_fd_readwrite_t {
-                            flags: PrimInt::to_le(unsafe { event.u.u.fd_read.flags }),
-                            nbytes: PrimInt::to_le(unsafe { event.u.u.fd_read.nbytes }),
-                        }
-                    },
-                },
-                wasi::__WASI_EVENTTYPE_FD_WRITE => wasi::__wasi_event_u_u_t {
-                    fd_write: {
-                        wasi::__wasi_event_fd_readwrite_t {
-                            flags: PrimInt::to_le(unsafe { event.u.u.fd_write.flags }),
-                            nbytes: PrimInt::to_le(unsafe { event.u.u.fd_write.nbytes }),
-                        }
-                    },
-                },
-                wasi::__WASI_EVENTTYPE_CLOCK => wasi::__wasi_event_u_u_t { clock: () },
-                _ => unreachable!("invalid WASI_EVENTTYPE"),
-            };
-
+            let r#type = PrimInt::to_le(event.r#type);
+            let flags = PrimInt::to_le(event.fd_readwrite.flags);
+            let nbytes = PrimInt::to_le(event.fd_readwrite.nbytes);
             wasi::__wasi_event_t {
                 userdata,
                 error,
-                u: wasi::__wasi_event_u_t {
-                    tag: PrimInt::to_le(event.u.tag),
-                    u,
-                },
+                r#type,
+                fd_readwrite: wasi::__wasi_event_fd_readwrite_t { flags, nbytes },
             }
         };
     }
