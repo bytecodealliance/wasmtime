@@ -35,10 +35,23 @@ fn write_u32<T: ByteOrder>(sink: &mut dyn FrameUnwindSink, v: u32) {
 /// Note: the Cranelift x86 ISA RU enum matches the Windows unwind GPR encoding values.
 #[derive(Debug, PartialEq, Eq)]
 enum UnwindCode {
-    PushRegister { offset: u8, reg: RegUnit },
-    SaveXmm { offset: u8, reg: RegUnit, stack_offset: u32 },
-    StackAlloc { offset: u8, size: u32 },
-    SetFramePointer { offset: u8, sp_offset: u8 },
+    PushRegister {
+        offset: u8,
+        reg: RegUnit,
+    },
+    SaveXmm {
+        offset: u8,
+        reg: RegUnit,
+        stack_offset: u32,
+    },
+    StackAlloc {
+        offset: u8,
+        size: u32,
+    },
+    SetFramePointer {
+        offset: u8,
+        sp_offset: u8,
+    },
 }
 
 impl UnwindCode {
@@ -61,7 +74,11 @@ impl UnwindCode {
                         | (UnwindOperation::PushNonvolatileRegister as u8),
                 );
             }
-            Self::SaveXmm { offset, reg, stack_offset } => {
+            Self::SaveXmm {
+                offset,
+                reg,
+                stack_offset,
+            } => {
                 write_u8(sink, *offset);
                 if *stack_offset <= core::u16::MAX as u32 {
                     write_u8(
@@ -124,7 +141,7 @@ impl UnwindCode {
                 } else {
                     3
                 }
-            },
+            }
             _ => 1,
         }
     }
@@ -229,7 +246,12 @@ impl UnwindInfo {
                         _ => {}
                     }
                 }
-                InstructionData::Store { opcode: Opcode::Store, args: [arg1, arg2], flags, offset } => {
+                InstructionData::Store {
+                    opcode: Opcode::Store,
+                    args: [arg1, _arg2],
+                    flags: _flags,
+                    offset,
+                } => {
                     if let ValueLoc::Reg(ru) = func.locations[arg1] {
                         let offset_int: i32 = offset.into();
                         assert!(offset_int >= 0);

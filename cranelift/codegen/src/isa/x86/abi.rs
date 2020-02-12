@@ -1047,12 +1047,9 @@ fn insert_common_epilogue(
         pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::rbp as u16);
 
         for reg in csrs.iter(FPR) {
-            let value = pos.ins().load(
-                types::F64,
-                ir::MemFlags::trusted(),
-                stack_addr,
-                fpr_offset,
-            );
+            let value = pos
+                .ins()
+                .load(types::F64, ir::MemFlags::trusted(), stack_addr, fpr_offset);
             fpr_offset += types::F64X2.bytes() as i32;
 
             if let Some(ref mut cfa_state) = cfa_state.as_mut() {
