@@ -906,7 +906,7 @@ dependencies = [
  "smallvec",
  "thiserror",
  "typemap",
- "wasmparser 0.51.0",
+ "wasmparser 0.51.1",
  "wat",
 ]
 
@@ -1877,9 +1877,9 @@ checksum = "073da89bf1c84db000dd68ce660c1b4a08e3a2d28fd1e3394ab9e7abdde4a0f8"
 
 [[package]]
 name = "wasmparser"
-version = "0.51.0"
+version = "0.51.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6860a452de64c9f5fb5af92a630b3894c0414a5f6a113f184ad2376d7a39fb40"
+checksum = "9e41b27a1677fe28c115de49efca55dabb14f7fece2c32947ffb9b1064fe5bd4"
 
 [[package]]
 name = "wasmprinter"
@@ -1888,7 +1888,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bd423d45b95fcee11775472bfdce66c63c45ada23c1b338e0a63d623a6c475b"
 dependencies = [
  "anyhow",
- "wasmparser 0.51.0",
+ "wasmparser 0.51.1",
 ]
 
 [[package]]
@@ -1907,7 +1907,7 @@ dependencies = [
  "rustc-demangle",
  "target-lexicon",
  "wasi-common",
- "wasmparser 0.51.0",
+ "wasmparser 0.51.1",
  "wasmtime-environ",
  "wasmtime-jit",
  "wasmtime-runtime",
@@ -1961,7 +1961,7 @@ dependencies = [
  "more-asserts",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.51.0",
+ "wasmparser 0.51.1",
  "wasmtime-environ",
 ]
 
@@ -1994,7 +1994,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml",
- "wasmparser 0.51.0",
+ "wasmparser 0.51.1",
  "winapi",
  "zstd",
 ]
@@ -2018,7 +2018,7 @@ dependencies = [
  "binaryen",
  "env_logger 0.7.1",
  "log",
- "wasmparser 0.51.0",
+ "wasmparser 0.51.1",
  "wasmprinter",
  "wasmtime",
  "wat",
@@ -2031,7 +2031,7 @@ dependencies = [
  "anyhow",
  "walrus",
  "wasm-webidl-bindings",
- "wasmparser 0.51.0",
+ "wasmparser 0.51.1",
  "wasmtime",
  "wasmtime-environ",
  "wasmtime-jit",
@@ -2054,7 +2054,7 @@ dependencies = [
  "region",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.51.0",
+ "wasmparser 0.51.1",
  "wasmtime-debug",
  "wasmtime-environ",
  "wasmtime-runtime",
@@ -2079,7 +2079,7 @@ dependencies = [
  "pyo3",
  "region",
  "target-lexicon",
- "wasmparser 0.51.0",
+ "wasmparser 0.51.1",
  "wasmtime",
  "wasmtime-interface-types",
  "wasmtime-wasi",
