@@ -78,4 +78,4 @@ https://github.com/NuxiNL/cloudabi#capability-based-security
 
 The Fuchsia project has a blog post on the topic of capability-based OS security:
 
-https://fuchsia.googlesource.com/fuchsia/+/master/docs/the-book/dotdot.md
+https://fuchsia.dev/fuchsia-src/concepts/filesystems/dotdot
