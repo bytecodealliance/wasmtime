@@ -1835,7 +1835,10 @@ fn define_simd(
 
         // Load
         let bound_load = load.bind(vector(ty, sse_vector_size)).bind(Any);
-        e.enc_32_64(bound_load.clone(), rec_fld.opcodes(&MOVUPS_LOAD));
+        e.enc_32_64(
+            bound_load.clone(),
+            rec_fld.opcodes(&MOVUPS_LOAD).infer_rex(),
+        );
         e.enc_32_64(bound_load.clone(), rec_fldDisp8.opcodes(&MOVUPS_LOAD));
         e.enc_32_64(bound_load, rec_fldDisp32.opcodes(&MOVUPS_LOAD));
 

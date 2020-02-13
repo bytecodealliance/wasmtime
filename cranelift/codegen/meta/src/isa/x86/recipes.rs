@@ -2002,7 +2002,7 @@ pub(crate) fn define<'shared>(
         );
 
         // XX /r float load with no offset.
-        recipes.add_template_recipe(
+        recipes.add_template_inferred(
             EncodingRecipeBuilder::new("fld", &formats.load, 1)
                 .operands_in(vec![gpr])
                 .operands_out(vec![fpr])
@@ -2026,6 +2026,7 @@ pub(crate) fn define<'shared>(
                         }
                     "#,
                 ),
+            "size_plus_maybe_sib_or_offset_for_inreg_0_plus_rex_prefix_for_inreg0_outreg0",
         );
 
         let has_small_offset =

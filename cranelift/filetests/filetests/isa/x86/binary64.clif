@@ -1682,8 +1682,11 @@ block0:
 
 function %V128() {
 block0:
-    [-,%r10]            v3 = iconst.i64 0x2102_0304_f1f2_f3f4 ; bin: 49 ba 21020304f1f2f3f4
-    [-, %xmm9]          v4 = vconst.i32x4 [0 1 2 3]  ; bin: 44 0f 10 0d 00000005 PCRelRodata4(23)
-                        store v4, v3    ; bin: heap_oob 45 0f 11 0a
+    [-,%r10]            v3 = iconst.i64 0x2102_0304_f1f2_f3f4  ; bin: 49 ba 21020304f1f2f3f4
+    [-, %xmm9]          v4 = vconst.i32x4 [0 1 2 3]  ; bin: 44 0f 10 0d 0000000f PCRelRodata4(33)
+                        store v4, v3  ; bin: heap_oob 45 0f 11 0a
+
+    [-, %r11]           v5 = iconst.i64 0x1234
+    [-, %xmm2]          v6 = load.i32x4 v5  ; bin: heap_oob 41 0f 10 13
                         return
 }
