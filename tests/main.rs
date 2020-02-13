@@ -1,13 +1,15 @@
-use memory::GuestRef;
 use proptest::prelude::*;
+use wiggle_runtime::{
+    GuestError, GuestErrorType, GuestMemory, GuestPtr, GuestPtrMut, GuestRef, GuestRefMut,
+};
 
-generate::from_witx!({
+wiggle_generate::from_witx!({
     witx: ["tests/test.witx"],
     ctx: WasiCtx,
 });
 
 pub struct WasiCtx {
-    guest_errors: Vec<::memory::GuestError>,
+    guest_errors: Vec<GuestError>,
 }
 
 impl WasiCtx {
@@ -27,17 +29,16 @@ impl foo::Foo for WasiCtx {
     fn baz(
         &mut self,
         input1: types::Excuse,
-        input2_ptr: ::memory::GuestPtrMut<types::Excuse>,
-        input3_ptr: ::memory::GuestPtr<types::Excuse>,
-        input4_ptr_ptr: ::memory::GuestPtrMut<::memory::GuestPtr<types::Excuse>>,
+        input2_ptr: GuestPtrMut<types::Excuse>,
+        input3_ptr: GuestPtr<types::Excuse>,
+        input4_ptr_ptr: GuestPtrMut<GuestPtr<types::Excuse>>,
     ) -> Result<(), types::Errno> {
         println!("BAZ input1 {:?}", input1);
         // Read enum value from mutable:
-        let mut input2_ref: ::memory::GuestRefMut<types::Excuse> =
-            input2_ptr.as_ref_mut().map_err(|e| {
-                eprintln!("input2_ptr error: {}", e);
-                types::Errno::InvalidArg
-            })?;
+        let mut input2_ref: GuestRefMut<types::Excuse> = input2_ptr.as_ref_mut().map_err(|e| {
+            eprintln!("input2_ptr error: {}", e);
+            types::Errno::InvalidArg
+        })?;
         let input2: types::Excuse = *input2_ref;
         println!("input2 {:?}", input2);
 
@@ -53,7 +54,7 @@ impl foo::Foo for WasiCtx {
         println!("wrote to input2_ref {:?}", input3);
 
         // Read ptr value from mutable ptr:
-        let input4_ptr: ::memory::GuestPtr<types::Excuse> =
+        let input4_ptr: GuestPtr<types::Excuse> =
             input4_ptr_ptr.read_ptr_from_guest().map_err(|e| {
                 eprintln!("input4_ptr_ptr error: {}", e);
                 types::Errno::InvalidArg
@@ -96,12 +97,12 @@ impl foo::Foo for WasiCtx {
 // it must implement GuestErrorType with type Context = WasiCtx.
 // The context type should let you do logging or debugging or whatever you need
 // with these errors. We just push them to vecs.
-impl ::memory::GuestErrorType for types::Errno {
+impl GuestErrorType for types::Errno {
     type Context = WasiCtx;
     fn success() -> types::Errno {
         types::Errno::Ok
     }
-    fn from_error(e: ::memory::GuestError, ctx: &mut WasiCtx) -> types::Errno {
+    fn from_error(e: GuestError, ctx: &mut WasiCtx) -> types::Errno {
         eprintln!("GUEST ERROR: {:?}", e);
         ctx.guest_errors.push(e);
         types::Errno::InvalidArg
@@ -200,8 +201,7 @@ impl BatExercise {
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
         let mut host_memory = HostMemory::new();
-        let mut guest_memory =
-            memory::GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
+        let mut guest_memory = GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
 
         let bat_err = foo::bat(
             &mut ctx,
@@ -300,8 +300,7 @@ impl BazExercise {
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
         let mut host_memory = HostMemory::new();
-        let mut guest_memory =
-            memory::GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
+        let mut guest_memory = GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
 
         *guest_memory
             .ptr_mut(self.input2_loc.ptr)
@@ -399,8 +398,7 @@ impl SumOfPairExercise {
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
         let mut host_memory = HostMemory::new();
-        let mut guest_memory =
-            memory::GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
+        let mut guest_memory = GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
 
         *guest_memory
             .ptr_mut(self.input_loc.ptr)
@@ -492,8 +490,7 @@ impl SumPairPtrsExercise {
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
         let mut host_memory = HostMemory::new();
-        let mut guest_memory =
-            memory::GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
+        let mut guest_memory = GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
 
         *guest_memory
             .ptr_mut(self.input_first_loc.ptr)

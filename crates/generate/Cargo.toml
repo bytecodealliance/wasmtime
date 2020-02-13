@@ -1,14 +1,14 @@
 [package]
-name = "generate"
+name = "wiggle-generate"
 version = "0.1.0"
-authors = ["Jakub Konka <kubkon@jakubkonka.com>"]
+authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>"]
 edition = "2018"
 
 [lib]
 proc-macro = true
 
 [dependencies]
-memory = { path = "../memory" }
+wiggle-runtime = { path = "../runtime" }
 witx = { path = "../WASI/tools/witx" }
 quote = "1.0"
 proc-macro2 = "1.0"

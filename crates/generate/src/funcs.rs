@@ -30,7 +30,7 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
     });
 
     let abi_args = quote!(
-            ctx: &mut #ctx_type, memory: &mut ::memory::GuestMemory,
+            ctx: &mut #ctx_type, memory: &mut wiggle_runtime::GuestMemory,
             #(#params),*
     );
     let abi_ret = if let Some(ret) = &coretype.ret {
@@ -62,8 +62,8 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
             };
             let err_typename = names.type_ref(&tref, anon_lifetime());
             quote! {
-                let e = ::memory::GuestError::InFunc { funcname: #funcname, location: #location, err: Box::new(e) };
-                let err: #err_typename = ::memory::GuestErrorType::from_error(e, ctx);
+                let e = wiggle_runtime::GuestError::InFunc { funcname: #funcname, location: #location, err: Box::new(e) };
+                let err: #err_typename = wiggle_runtime::GuestErrorType::from_error(e, ctx);
                 return #abi_ret::from(err);
             }
         } else {
@@ -111,7 +111,7 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
     let success = if let Some(ref err_type) = err_type {
         let err_typename = names.type_ref(&err_type, anon_lifetime());
         quote! {
-            let success:#err_typename = ::memory::GuestErrorType::success();
+            let success:#err_typename = wiggle_runtime::GuestErrorType::success();
             #abi_ret::from(success)
         }
     } else {

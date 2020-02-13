@@ -62,11 +62,11 @@ impl Names {
                 witx::Type::Builtin(builtin) => self.builtin_type(*builtin),
                 witx::Type::Pointer(pointee) => {
                     let pointee_type = self.type_ref(&pointee, lifetime.clone());
-                    quote!(::memory::GuestPtrMut<#lifetime, #pointee_type>)
+                    quote!(wiggle_runtime::GuestPtrMut<#lifetime, #pointee_type>)
                 }
                 witx::Type::ConstPointer(pointee) => {
                     let pointee_type = self.type_ref(&pointee, lifetime.clone());
-                    quote!(::memory::GuestPtr<#lifetime, #pointee_type>)
+                    quote!(wiggle_runtime::GuestPtr<#lifetime, #pointee_type>)
                 }
                 _ => unimplemented!("anonymous type ref"),
             },

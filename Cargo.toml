@@ -1,12 +1,12 @@
 [package]
 name = "wiggle"
 version = "0.1.0"
-authors = ["Jakub Konka <kubkonk@jakubkonka.com>"]
+authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkonk@jakubkonka.com>"]
 edition = "2018"
 
 [dependencies]
-generate = { path = "crates/generate" }
-memory = { path = "crates/memory" }
+wiggle-generate = { path = "crates/generate" }
+wiggle-runtime = { path = "crates/runtime" }
 
 [dev-dependencies]
 proptest = "0.9"
@@ -14,6 +14,6 @@ proptest = "0.9"
 [workspace]
 members = [
   "crates/generate",
-  "crates/memory"
+  "crates/runtime"
 ]
 exclude = ["crates/WASI"]
