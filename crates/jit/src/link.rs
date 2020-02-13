@@ -113,9 +113,12 @@ cfg_if::cfg_if! {
             pub fn __chkstk();
         }
         const PROBESTACK: unsafe extern "C" fn() = __chkstk;
-    } else if #[cfg(all(target_arch="armv7"))] {
+    } else if #[cfg(all(target_arch="arm"))] {
         // armv7 doesn't have __chkstk/___chkstk nor __rust_probestack.
-        const PROBESTACK: unsafe extern "C" fn() = std::ptr::null() as _;
+        extern "C" fn dummy() {
+            unsafe { core::hint::unreachable_unchecked() }
+        }
+        const PROBESTACK: unsafe extern "C" fn() = dummy;
     } else if #[cfg(all(target_os = "windows", target_env = "gnu"))] {
         extern "C" {
             // ___chkstk (note the triple underscore) is implemented in compiler-builtins/src/x86_64.rs
