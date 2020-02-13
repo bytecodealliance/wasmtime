@@ -217,20 +217,6 @@ impl Backend for FaerieBackend {
             ref data_relocs,
         } = data_ctx.description();
 
-        let size = init.size();
-        let mut bytes = Vec::with_capacity(size);
-        match *init {
-            Init::Uninitialized => {
-                panic!("data is not initialized yet");
-            }
-            Init::Zeros { .. } => {
-                bytes.resize(size, 0);
-            }
-            Init::Bytes { ref contents } => {
-                bytes.extend_from_slice(contents);
-            }
-        }
-
         for &(offset, id) in function_relocs {
             let to = &namespace.get_function_decl(&function_decls[id]).name;
             self.artifact
@@ -256,9 +242,22 @@ impl Backend for FaerieBackend {
                 .map_err(|e| ModuleError::Backend(e.to_string()))?;
         }
 
-        self.artifact
-            .define(name, bytes)
-            .expect("inconsistent declaration");
+        match *init {
+            Init::Uninitialized => {
+                panic!("data is not initialized yet");
+            }
+            Init::Zeros { size } => {
+                self.artifact
+                    .define_zero_init(name, size)
+                    .expect("inconsistent declaration");
+            }
+            Init::Bytes { ref contents } => {
+                self.artifact
+                    .define(name, contents.to_vec())
+                    .expect("inconsistent declaration");
+            }
+        }
+
         Ok(FaerieCompiledData {})
     }
 

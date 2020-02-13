@@ -243,20 +243,6 @@ impl Backend for ObjectBackend {
             ref data_relocs,
         } = data_ctx.description();
 
-        let size = init.size();
-        let mut data = Vec::with_capacity(size);
-        match *init {
-            Init::Uninitialized => {
-                panic!("data is not initialized yet");
-            }
-            Init::Zeros { .. } => {
-                data.resize(size, 0);
-            }
-            Init::Bytes { ref contents } => {
-                data.extend_from_slice(contents);
-            }
-        }
-
         let reloc_size = match self.isa.triple().pointer_width().unwrap() {
             PointerWidth::U16 => 16,
             PointerWidth::U32 => 32,
@@ -285,16 +271,29 @@ impl Backend for ObjectBackend {
         }
 
         let symbol = self.data_objects[data_id].unwrap();
-        let section = self.object.section_id(if writable {
+        let section_kind = if let Init::Zeros { .. } = *init {
+            StandardSection::UninitializedData
+        } else if writable {
             StandardSection::Data
         } else if relocs.is_empty() {
             StandardSection::ReadOnlyData
         } else {
             StandardSection::ReadOnlyDataWithRel
-        });
-        let offset =
-            self.object
-                .add_symbol_data(symbol, section, &data, u64::from(align.unwrap_or(1)));
+        };
+        let section = self.object.section_id(section_kind);
+
+        let align = u64::from(align.unwrap_or(1));
+        let offset = match *init {
+            Init::Uninitialized => {
+                panic!("data is not initialized yet");
+            }
+            Init::Zeros { size } => self
+                .object
+                .add_symbol_bss(symbol, section, size as u64, align),
+            Init::Bytes { ref contents } => self
+                .object
+                .add_symbol_data(symbol, section, &contents, align),
+        };
         if !relocs.is_empty() {
             self.relocs.push(SymbolRelocs {
                 section,
