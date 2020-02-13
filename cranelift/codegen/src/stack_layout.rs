@@ -47,7 +47,7 @@ pub fn layout_stack(
     let mut incoming_max = 0;
     let mut outgoing_max = 0;
     let mut min_align = alignment;
-    let mut must_align = is_leaf;
+    let mut must_align = !is_leaf;
 
     for slot in frame.values() {
         if slot.size > max_size {
@@ -145,7 +145,7 @@ mod tests {
         let sss = &mut StackSlots::new();
 
         // For all these test cases, assume it will call.
-        let is_leaf = true;
+        let is_leaf = false;
 
         // An empty layout should have 0-sized stack frame.
         assert_eq!(layout_stack(sss, is_leaf, 1), Ok(0));

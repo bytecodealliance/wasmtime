@@ -295,8 +295,8 @@ impl Function {
     /// to be confused with a "leaf function" in Windows terminology.
     pub fn is_leaf(&self) -> bool {
         // Conservative result: if there's at least one function signature referenced in this
-        // function, assume it may call.
-        !self.dfg.signatures.is_empty()
+        // function, assume it is not a leaf.
+        self.dfg.signatures.is_empty()
     }
 }
 
