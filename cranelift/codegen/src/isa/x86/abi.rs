@@ -608,10 +608,12 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
 
     for fp_csr in csrs.iter(FPR) {
         // The calling convention described in
-        // https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention only specifically
-        // discusses XMM6-XMM15, which are 128-bit registers. It may be sufficient to preserve only
-        // the low 128 bits here, but we may find that in practice we should preserve all of
-        // YMM6-15 (or even ZMM6-15?)
+        // https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention only requires
+        // preserving the low 128 bits of XMM6-XMM15.
+        //
+        // TODO: For now, add just an `F64` rather than `F64X2` because `F64X2` would require
+        // encoding a fstDisp8 with REX bits set, and we currently can't encode that. F64 causes a
+        // whole XMM register to be preserved anyway.
         let csr_arg =
             ir::AbiParam::special_reg(types::F64, ir::ArgumentPurpose::CalleeSaved, fp_csr);
         func.signature.params.push(csr_arg);
