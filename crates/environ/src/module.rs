@@ -2,6 +2,7 @@
 
 use crate::module_environ::FunctionBodyData;
 use crate::tunables::Tunables;
+use crate::WASM_MAX_PAGES;
 use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{
@@ -58,8 +59,8 @@ impl MemoryStyle {
         // A heap with a maximum that doesn't exceed the static memory bound specified by the
         // tunables make it static.
         //
-        // If the module doesn't declare explicit maximum treat it as 4GiB.
-        let maximum = memory.maximum.unwrap_or(0x1_0000);
+        // If the module doesn't declare an explicit maximum treat it as 4GiB.
+        let maximum = memory.maximum.unwrap_or(WASM_MAX_PAGES);
         if maximum <= tunables.static_memory_bound {
             assert_ge!(tunables.static_memory_bound, memory.minimum);
             return (
