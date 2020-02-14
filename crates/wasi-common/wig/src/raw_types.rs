@@ -173,10 +173,7 @@ fn gen_datatype(
                 output.extend(quote!(#[allow(missing_debug_implementations)]));
 
                 output.extend(quote!(pub struct #wasi_name));
-                let tag_name = match &u.tag {
-                    witx::TypeRef::Name(nt) => format_ident!("__wasi_{}_t", nt.name.as_str()),
-                    witx::TypeRef::Value { .. } => unreachable!("union tag must be named type"),
-                };
+                let tag_name = format_ident!("__wasi_{}_t", u.tag.name.as_str());
                 let inner = quote!(pub tag: #tag_name, pub u: #u_name,);
                 output.extend(TokenStream::from(TokenTree::Group(Group::new(
                     Delimiter::Brace,
