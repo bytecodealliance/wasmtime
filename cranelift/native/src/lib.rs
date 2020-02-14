@@ -82,6 +82,15 @@ fn parse_x86_cpuid(isa_builder: &mut isa::Builder) -> Result<(), &'static str> {
         if info.has_bmi2() {
             isa_builder.enable("has_bmi2").unwrap();
         }
+        if info.has_avx2() {
+            isa_builder.enable("has_avx2").unwrap();
+        }
+        if info.has_avx512dq() {
+            isa_builder.enable("has_avx512dq").unwrap();
+        }
+        if info.has_avx512vl() {
+            isa_builder.enable("has_avx512vl").unwrap();
+        }
     }
     if let Some(info) = cpuid.get_extended_function_info() {
         if info.has_lzcnt() {
