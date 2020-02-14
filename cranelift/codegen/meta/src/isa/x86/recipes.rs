@@ -142,6 +142,26 @@ fn replace_nonrex_constraints(
         .collect()
 }
 
+fn replace_evex_constraints(
+    regs: &IsaRegs,
+    constraints: Vec<OperandConstraint>,
+) -> Vec<OperandConstraint> {
+    constraints
+        .into_iter()
+        .map(|constraint| match constraint {
+            OperandConstraint::RegClass(rc_index) => {
+                let new_rc_index = if rc_index == regs.class_by_name("FPR") {
+                    regs.class_by_name("FPR32")
+                } else {
+                    rc_index
+                };
+                OperandConstraint::RegClass(new_rc_index)
+            }
+            _ => constraint,
+        })
+        .collect()
+}
+
 /// Specifies how the REX prefix is emitted by a Recipe.
 #[derive(Copy, Clone, PartialEq)]
 pub enum RexRecipeKind {
@@ -161,6 +181,9 @@ pub enum RexRecipeKind {
     /// Because such a Recipe has a non-constant instruction size, it must have
     /// a special `compute_size` handler for the inferrable-REX case.
     InferRex,
+
+    /// The Recipe must hardcode the emission of an EVEX prefix.
+    Evex,
 }
 
 impl Default for RexRecipeKind {
@@ -298,7 +321,7 @@ impl<'builder> Template<'builder> {
     pub fn build(mut self) -> (EncodingRecipe, u16) {
         let (opcode, bits) = decode_opcodes(&self.op_bytes, self.rrr_bits, self.w_bit);
 
-        let (recipe_name, rex_prefix_size) = match self.rex_kind {
+        let (recipe_name, size_addendum) = match self.rex_kind {
             RexRecipeKind::Unspecified | RexRecipeKind::NeverEmitRex => {
                 // Ensure the operands are limited to non-REX constraints.
                 let operands_in = self.recipe.operands_in.unwrap_or_default();
@@ -307,9 +330,11 @@ impl<'builder> Template<'builder> {
                 self.recipe.operands_out =
                     Some(replace_nonrex_constraints(self.regs, operands_out));
 
-                (opcode.into(), 0)
+                (opcode.into(), self.op_bytes.len() as u64)
             }
-            RexRecipeKind::AlwaysEmitRex => ("Rex".to_string() + opcode, 1),
+            RexRecipeKind::AlwaysEmitRex => {
+                ("Rex".to_string() + opcode, self.op_bytes.len() as u64 + 1)
+            }
             RexRecipeKind::InferRex => {
                 // Hook up the right function for inferred compute_size().
                 assert!(
@@ -319,11 +344,19 @@ impl<'builder> Template<'builder> {
                 );
                 self.recipe.compute_size = self.inferred_rex_compute_size;
 
-                ("DynRex".to_string() + opcode, 0)
+                ("DynRex".to_string() + opcode, self.op_bytes.len() as u64)
+            }
+            RexRecipeKind::Evex => {
+                // Allow the operands to expand limits to EVEX constraints.
+                let operands_in = self.recipe.operands_in.unwrap_or_default();
+                self.recipe.operands_in = Some(replace_evex_constraints(self.regs, operands_in));
+                let operands_out = self.recipe.operands_out.unwrap_or_default();
+                self.recipe.operands_out = Some(replace_evex_constraints(self.regs, operands_out));
+
+                ("Evex".to_string() + opcode, 4 + 1)
             }
         };
 
-        let size_addendum = self.op_bytes.len() as u64 + rex_prefix_size;
         self.recipe.base_size += size_addendum;
 
         // Branch ranges are relative to the end of the instruction.
@@ -386,6 +419,7 @@ pub(crate) fn define<'shared>(
     let abcd = regs.class_by_name("ABCD");
     let gpr = regs.class_by_name("GPR");
     let fpr = regs.class_by_name("FPR");
+    let fpr32 = regs.class_by_name("FPR32");
     let flag = regs.class_by_name("FLAG");
 
     // Operand constraints shorthands.
@@ -3325,6 +3359,24 @@ pub(crate) fn define<'shared>(
                     sink.put1(0x17);
                 "#,
             ),
+    );
+
+    recipes.add_template(
+        Template::new(
+        EncodingRecipeBuilder::new("evex_reg_vvvv_rm_128", &formats.binary, 1)
+            .operands_in(vec![fpr32, fpr32])
+            .operands_out(vec![fpr32])
+            .emit(
+                r#"
+                // instruction encoding operands: reg (op1, w), vvvv (op2, r), rm (op3, r)
+                // this maps to:                  out_reg0,     in_reg0,       in_reg1
+                let context = EvexContext::Other { length: EvexVectorLength::V128 };
+                let masking = EvexMasking::None;
+                put_evex(bits, out_reg0, in_reg0, in_reg1, context, masking, sink); // params: reg, vvvv, rm
+                modrm_rr(in_reg1, out_reg0, sink); // params: rm, reg
+                "#,
+            ),
+        regs).rex_kind(RexRecipeKind::Evex)
     );
 
     recipes
