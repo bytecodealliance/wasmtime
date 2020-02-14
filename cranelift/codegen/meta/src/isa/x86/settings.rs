@@ -8,8 +8,19 @@ pub(crate) fn define(shared: &SettingGroup) -> SettingGroup {
     let has_ssse3 = settings.add_bool("has_ssse3", "SSSE3: CPUID.01H:ECX.SSSE3[bit 9]", false);
     let has_sse41 = settings.add_bool("has_sse41", "SSE4.1: CPUID.01H:ECX.SSE4_1[bit 19]", false);
     let has_sse42 = settings.add_bool("has_sse42", "SSE4.2: CPUID.01H:ECX.SSE4_2[bit 20]", false);
+    let has_avx = settings.add_bool("has_avx", "AVX: CPUID.01H:ECX.AVX[bit 28]", false);
+    let has_avx2 = settings.add_bool("has_avx2", "AVX2: CPUID.07H:EBX.AVX2[bit 5]", false);
+    let has_avx512dq = settings.add_bool(
+        "has_avx512dq",
+        "AVX512DQ: CPUID.07H:EBX.AVX512DQ[bit 17]",
+        false,
+    );
+    let has_avx512vl = settings.add_bool(
+        "has_avx512vl",
+        "AVX512DQ: CPUID.07H:EBX.AVX512VL[bit 31]",
+        false,
+    );
     let has_popcnt = settings.add_bool("has_popcnt", "POPCNT: CPUID.01H:ECX.POPCNT[bit 23]", false);
-    settings.add_bool("has_avx", "AVX: CPUID.01H:ECX.AVX[bit 28]", false);
 
     // CPUID.(EAX=07H, ECX=0H):EBX
     let has_bmi1 = settings.add_bool(
@@ -47,6 +58,17 @@ pub(crate) fn define(shared: &SettingGroup) -> SettingGroup {
     settings.add_predicate(
         "use_sse42_simd",
         predicate!(shared_enable_simd && has_sse41 && has_sse42),
+    );
+
+    settings.add_predicate("use_avx_simd", predicate!(shared_enable_simd && has_avx));
+    settings.add_predicate("use_avx2_simd", predicate!(shared_enable_simd && has_avx2));
+    settings.add_predicate(
+        "use_avx512dq_simd",
+        predicate!(shared_enable_simd && has_avx512dq),
+    );
+    settings.add_predicate(
+        "use_avx512vl_simd",
+        predicate!(shared_enable_simd && has_avx512vl),
     );
 
     settings.add_predicate("use_popcnt", predicate!(has_popcnt && has_sse42));
