@@ -1,6 +1,6 @@
 //! Unwind information for x64 Windows.
 
-use super::registers::RU;
+use super::registers::{GPR, RU};
 use crate::binemit::FrameUnwindSink;
 use crate::ir::{Function, InstructionData, Opcode};
 use crate::isa::{CallConv, RegUnit, TargetIsa};
@@ -54,7 +54,8 @@ impl UnwindCode {
                 write_u8(sink, *offset);
                 write_u8(
                     sink,
-                    ((*reg as u8) << 4) | (UnwindOperation::PushNonvolatileRegister as u8),
+                    ((GPR.index_of(*reg) as u8) << 4)
+                        | (UnwindOperation::PushNonvolatileRegister as u8),
                 );
             }
             Self::StackAlloc { offset, size } => {
@@ -262,7 +263,10 @@ impl UnwindInfo {
         write_u8(sink, node_count as u8);
 
         if let Some(reg) = self.frame_register {
-            write_u8(sink, (self.frame_register_offset << 4) | reg as u8);
+            write_u8(
+                sink,
+                (self.frame_register_offset << 4) | GPR.index_of(reg) as u8,
+            );
         } else {
             write_u8(sink, 0);
         }

@@ -180,7 +180,7 @@ impl RegClassData {
     /// Returns true if `other` is a subclass of this register class.
     /// A register class is considered to be a subclass of itself.
     pub fn has_subclass<RCI: Into<RegClassIndex>>(&self, other: RCI) -> bool {
-        self.subclasses & (1 << other.into().0) != 0
+        self.subclasses & (1 << other.into().0) as u32 != 0
     }
 
     /// Get the top-level register class containing this class.
@@ -196,7 +196,7 @@ impl RegClassData {
 
     /// Does this register class contain `regunit`?
     pub fn contains(&self, regunit: RegUnit) -> bool {
-        self.mask[(regunit / 32) as usize] & (1u32 << (regunit % 32)) != 0
+        self.mask[(regunit / 32) as usize] & (1u32 << (regunit % 32) as u32) != 0
     }
 
     /// If the pinned register is used, is the given regunit the pinned register of this class?
@@ -206,6 +206,17 @@ impl RegClassData {
             && self
                 .pinned_reg
                 .map_or(false, |pinned_reg| pinned_reg == regunit)
+    }
+
+    /// Calculate the index of the register inside the class.
+    pub fn index_of(&self, regunit: RegUnit) -> u16 {
+        assert!(
+            self.contains(regunit),
+            "the {} register class does not contain {}",
+            self.name,
+            regunit
+        );
+        regunit - self.first
     }
 }
 
