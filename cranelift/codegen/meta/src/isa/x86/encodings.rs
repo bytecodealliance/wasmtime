@@ -1612,6 +1612,7 @@ fn define_simd(
     let x86_ptest = x86.by_name("x86_ptest");
 
     // Shorthands for recipes.
+    let rec_evex_reg_vvvv_rm_128 = r.template("evex_reg_vvvv_rm_128");
     let rec_f_ib = r.template("f_ib");
     let rec_fa = r.template("fa");
     let rec_fa_ib = r.template("fa_ib");
@@ -1647,6 +1648,7 @@ fn define_simd(
     let use_ssse3_simd = settings.predicate_by_name("use_ssse3_simd");
     let use_sse41_simd = settings.predicate_by_name("use_sse41_simd");
     let use_sse42_simd = settings.predicate_by_name("use_sse42_simd");
+    let use_avx512dq_simd = settings.predicate_by_name("use_avx512dq_simd");
 
     // SIMD vector size: eventually multiple vector sizes may be supported but for now only
     // SSE-sized vectors are available.
@@ -1925,6 +1927,16 @@ fn define_simd(
     ] {
         let imul = imul.bind(vector(*ty, sse_vector_size));
         e.enc_32_64_maybe_isap(imul, rec_fa.opcodes(opcodes), *isap);
+    }
+
+    // SIMD integer multiplication for I64x2 using a AVX512.
+    {
+        let imul = imul.bind(vector(I64, sse_vector_size));
+        e.enc_32_64_maybe_isap(
+            imul,
+            rec_evex_reg_vvvv_rm_128.opcodes(&PMULLQ).w(),
+            Some(use_avx512dq_simd), // TODO need an OR predicate to join with AVX512VL
+        );
     }
 
     // SIMD integer average with rounding.
