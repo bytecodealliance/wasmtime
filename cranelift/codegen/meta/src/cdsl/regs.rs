@@ -57,12 +57,12 @@ impl RegBank {
                 // Ultimate try: try to parse a number and use this in the array, eg r15 on x86.
                 if let Ok(as_num) = name_without_prefix.parse::<u8>() {
                     assert!(
-                        (as_num - self.first_unit) < self.units,
+                        as_num < self.units,
                         "trying to get {}, but bank only has {} registers!",
                         name,
                         self.units
                     );
-                    (as_num - self.first_unit) as usize
+                    as_num as usize
                 } else {
                     panic!("invalid register name {}", name);
                 }
