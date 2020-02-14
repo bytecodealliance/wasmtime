@@ -39,17 +39,41 @@ pub fn gen(args: TokenStream, mode: Mode) -> TokenStream {
 }
 
 fn gen_datatypes(output: &mut TokenStream, doc: &witx::Document, mode: Mode) {
+    let mut test_contents = TokenStream::new();
     for namedtype in doc.typenames() {
         if mode.include_target_types() != namedtype_has_target_size(&namedtype) {
             continue;
         }
-
-        gen_datatype(output, mode, &namedtype);
+        gen_datatype(output, &mut test_contents, mode, &namedtype);
+    }
+    match mode {
+        Mode::Wasi | Mode::Wasi32 => output.extend(quote! {
+            #[cfg(test)]
+            mod test {
+                use super::*;
+                #test_contents
+            }
+        }),
+        Mode::Host => {} // Don't emit tests for host reprs - the layout is different
     }
 }
 
-fn gen_datatype(output: &mut TokenStream, mode: Mode, namedtype: &witx::NamedType) {
+fn gen_datatype(
+    output: &mut TokenStream,
+    test_contents: &mut TokenStream,
+    mode: Mode,
+    namedtype: &witx::NamedType,
+) {
     let wasi_name = format_ident!("__wasi_{}_t", namedtype.name.as_str());
+    let (size, align) = {
+        use witx::Layout;
+        let sa = namedtype.type_().mem_size_align();
+        (sa.size, sa.align)
+    };
+    let mut test_code = quote! {
+        assert_eq!(::std::mem::size_of::<#wasi_name>(), #size, concat!("Size of: ", stringify!(#wasi_name)));
+        assert_eq!(::std::mem::align_of::<#wasi_name>(), #align, concat!("Align of: ", stringify!(#wasi_name)));
+    };
     match &namedtype.tref {
         witx::TypeRef::Name(alias_to) => {
             let to = tref_tokens(mode, &alias_to.tref);
@@ -102,10 +126,23 @@ fn gen_datatype(output: &mut TokenStream, mode: Mode, namedtype: &witx::NamedTyp
                 output.extend(quote!(pub struct #wasi_name));
 
                 let mut inner = TokenStream::new();
-                for member in &s.members {
-                    let member_name = format_ident!("r#{}", member.name.as_str());
-                    let member_type = tref_tokens(mode, &member.tref);
+                for ml in s.member_layout().iter() {
+                    let member_name = format_ident!("r#{}", ml.member.name.as_str());
+                    let member_type = tref_tokens(mode, &ml.member.tref);
+                    let offset = ml.offset;
                     inner.extend(quote!(pub #member_name: #member_type,));
+                    test_code.extend(quote!{
+                        assert_eq!(
+                            unsafe { &(*(::std::ptr::null::<#wasi_name>())).#member_name as *const _ as usize },
+                            #offset,
+                            concat!(
+                                "Offset of field: ",
+                                stringify!(#wasi_name),
+                                "::",
+                                stringify!(#member_name),
+                            )
+                        );
+                    });
                 }
                 let braced = Group::new(Delimiter::Brace, inner);
                 output.extend(TokenStream::from(TokenTree::Group(braced)));
@@ -174,6 +211,14 @@ fn gen_datatype(output: &mut TokenStream, mode: Mode, namedtype: &witx::NamedTyp
         // Generate strerror for errno type
         gen_errno_strerror(output, namedtype);
     }
+
+    let test_func_name = format_ident!("wig_test_layout_{}", namedtype.name.as_str());
+    test_contents.extend(quote! {
+        #[test]
+        fn #test_func_name() {
+            #test_code
+        }
+    });
 }
 
 fn gen_errno_strerror(output: &mut TokenStream, namedtype: &witx::NamedType) {
