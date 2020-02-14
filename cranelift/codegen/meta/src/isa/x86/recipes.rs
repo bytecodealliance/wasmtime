@@ -162,9 +162,9 @@ fn replace_evex_constraints(
         .collect()
 }
 
-/// Specifies how the REX prefix is emitted by a Recipe.
+/// Specifies how the prefix (e.g. REX) is emitted by a Recipe.
 #[derive(Copy, Clone, PartialEq)]
-pub enum RexRecipeKind {
+pub enum RecipePrefixKind {
     /// The REX emission behavior is not hardcoded for the Recipe
     /// and may be overridden when using the Template.
     Unspecified,
@@ -186,7 +186,7 @@ pub enum RexRecipeKind {
     Evex,
 }
 
-impl Default for RexRecipeKind {
+impl Default for RecipePrefixKind {
     fn default() -> Self {
         Self::Unspecified
     }
@@ -206,7 +206,7 @@ pub(crate) struct Template<'builder> {
     recipe: EncodingRecipeBuilder,
 
     /// How is the REX prefix emitted?
-    rex_kind: RexRecipeKind,
+    rex_kind: RecipePrefixKind,
 
     /// Function for `compute_size()` when REX is inferrable.
     inferred_rex_compute_size: Option<&'static str>,
@@ -228,7 +228,7 @@ impl<'builder> Template<'builder> {
         Self {
             regs,
             recipe,
-            rex_kind: RexRecipeKind::default(),
+            rex_kind: RecipePrefixKind::default(),
             inferred_rex_compute_size: None,
             when_prefixed: None,
             w_bit: 0,
@@ -240,7 +240,7 @@ impl<'builder> Template<'builder> {
     fn name(&self) -> &str {
         &self.recipe.name
     }
-    fn rex_kind(self, kind: RexRecipeKind) -> Self {
+    fn rex_kind(self, kind: RecipePrefixKind) -> Self {
         Self {
             rex_kind: kind,
             ..self
@@ -280,16 +280,16 @@ impl<'builder> Template<'builder> {
     }
     pub fn nonrex(&self) -> Self {
         assert!(
-            self.rex_kind != RexRecipeKind::AlwaysEmitRex,
+            self.rex_kind != RecipePrefixKind::AlwaysEmitRex,
             "Template requires REX prefix."
         );
         let mut copy = self.clone();
-        copy.rex_kind = RexRecipeKind::NeverEmitRex;
+        copy.rex_kind = RecipePrefixKind::NeverEmitRex;
         copy
     }
     pub fn rex(&self) -> Self {
         assert!(
-            self.rex_kind != RexRecipeKind::NeverEmitRex,
+            self.rex_kind != RecipePrefixKind::NeverEmitRex,
             "Template requires no REX prefix."
         );
         if let Some(prefixed) = &self.when_prefixed {
@@ -301,12 +301,12 @@ impl<'builder> Template<'builder> {
             return ret;
         }
         let mut copy = self.clone();
-        copy.rex_kind = RexRecipeKind::AlwaysEmitRex;
+        copy.rex_kind = RecipePrefixKind::AlwaysEmitRex;
         copy
     }
     pub fn infer_rex(&self) -> Self {
         assert!(
-            self.rex_kind != RexRecipeKind::NeverEmitRex,
+            self.rex_kind != RecipePrefixKind::NeverEmitRex,
             "Template requires no REX prefix."
         );
         assert!(
@@ -314,7 +314,7 @@ impl<'builder> Template<'builder> {
             "infer_rex used with when_prefixed()."
         );
         let mut copy = self.clone();
-        copy.rex_kind = RexRecipeKind::InferRex;
+        copy.rex_kind = RecipePrefixKind::InferRex;
         copy
     }
 
@@ -322,7 +322,7 @@ impl<'builder> Template<'builder> {
         let (opcode, bits) = decode_opcodes(&self.op_bytes, self.rrr_bits, self.w_bit);
 
         let (recipe_name, size_addendum) = match self.rex_kind {
-            RexRecipeKind::Unspecified | RexRecipeKind::NeverEmitRex => {
+            RecipePrefixKind::Unspecified | RecipePrefixKind::NeverEmitRex => {
                 // Ensure the operands are limited to non-REX constraints.
                 let operands_in = self.recipe.operands_in.unwrap_or_default();
                 self.recipe.operands_in = Some(replace_nonrex_constraints(self.regs, operands_in));
@@ -332,10 +332,10 @@ impl<'builder> Template<'builder> {
 
                 (opcode.into(), self.op_bytes.len() as u64)
             }
-            RexRecipeKind::AlwaysEmitRex => {
+            RecipePrefixKind::AlwaysEmitRex => {
                 ("Rex".to_string() + opcode, self.op_bytes.len() as u64 + 1)
             }
-            RexRecipeKind::InferRex => {
+            RecipePrefixKind::InferRex => {
                 // Hook up the right function for inferred compute_size().
                 assert!(
                     self.inferred_rex_compute_size.is_some(),
@@ -346,7 +346,7 @@ impl<'builder> Template<'builder> {
 
                 ("DynRex".to_string() + opcode, self.op_bytes.len() as u64)
             }
-            RexRecipeKind::Evex => {
+            RecipePrefixKind::Evex => {
                 // Allow the operands to expand limits to EVEX constraints.
                 let operands_in = self.recipe.operands_in.unwrap_or_default();
                 self.recipe.operands_in = Some(replace_evex_constraints(self.regs, operands_in));
@@ -2626,7 +2626,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .rex_kind(RexRecipeKind::AlwaysEmitRex),
+        .rex_kind(RecipePrefixKind::AlwaysEmitRex),
     );
 
     recipes.add_template(
@@ -2660,7 +2660,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .rex_kind(RexRecipeKind::AlwaysEmitRex),
+        .rex_kind(RecipePrefixKind::AlwaysEmitRex),
     );
 
     recipes.add_template(
@@ -2961,7 +2961,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .rex_kind(RexRecipeKind::AlwaysEmitRex),
+        .rex_kind(RecipePrefixKind::AlwaysEmitRex),
     );
 
     recipes.add_template(
@@ -3002,7 +3002,7 @@ pub(crate) fn define<'shared>(
                 ),
             regs,
         )
-        .rex_kind(RexRecipeKind::AlwaysEmitRex),
+        .rex_kind(RecipePrefixKind::AlwaysEmitRex),
     );
 
     recipes.add_template(
@@ -3376,7 +3376,7 @@ pub(crate) fn define<'shared>(
                 modrm_rr(in_reg1, out_reg0, sink); // params: rm, reg
                 "#,
             ),
-        regs).rex_kind(RexRecipeKind::Evex)
+        regs).rex_kind(RecipePrefixKind::Evex)
     );
 
     recipes
