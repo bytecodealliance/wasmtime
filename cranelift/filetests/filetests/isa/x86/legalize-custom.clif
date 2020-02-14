@@ -90,3 +90,44 @@ block0(v0: f32, v1: f32):
     ; check: $done(v2: f32):
     ; nextln: return v2
 }
+
+function %ineg_legalized_i8() {
+block0:
+    v0 = iconst.i8 1
+    v1 = ineg v0
+    ; check: v2 = iconst.i32 1
+    ; nextln: v0 = ireduce.i8 v2
+    ; nextln: v3 = iconst.i8 0
+    ; nextln: v4 = uextend.i32 v3
+    ; nextln: v5 = uextend.i32 v0
+    ; nextln: v6 = isub v4, v5
+    ; nextln: v1 = ireduce.i8 v6
+
+    return
+}
+
+function %ineg_legalized_i16() {
+block0:
+    v0 = iconst.i16 1
+    v1 = ineg v0
+    ; check: v2 = iconst.i32 1
+    ; nextln: v0 = ireduce.i16 v2
+    ; nextln: v3 = iconst.i16 0
+    ; nextln: v4 = uextend.i32 v3
+    ; nextln: v5 = uextend.i32 v0
+    ; nextln: v6 = isub v4, v5
+    ; nextln: v1 = ireduce.i16 v6
+
+    return
+}
+
+function %ineg_legalized_i32() {
+block0:
+    v0 = iconst.i32 1
+    v1 = ineg v0
+    ; check: v0 = iconst.i32 1
+    ; nextln: v2 = iconst.i32 0
+    ; nextln: v1 = isub v2, v0
+
+    return
+}

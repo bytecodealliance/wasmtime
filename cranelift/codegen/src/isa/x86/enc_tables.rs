@@ -1213,7 +1213,7 @@ fn convert_insertlane(
     }
 }
 
-/// For SIMD negation, convert an `ineg` to a `vconst + isub`.
+/// For SIMD or scalar integer negation, convert `ineg` to `vconst + isub` or `iconst + isub`.
 fn convert_ineg(
     inst: ir::Inst,
     func: &mut ir::Function,
@@ -1229,10 +1229,16 @@ fn convert_ineg(
     } = pos.func.dfg[inst]
     {
         let value_type = pos.func.dfg.value_type(arg);
-        if value_type.is_vector() && value_type.lane_type().is_int() {
+        let zero_value = if value_type.is_vector() && value_type.lane_type().is_int() {
             let zero_immediate = pos.func.dfg.constants.insert(vec![0; 16].into());
-            let zero_value = pos.ins().vconst(value_type, zero_immediate); // this should be legalized to a PXOR
-            pos.func.dfg.replace(inst).isub(zero_value, arg);
-        }
+            pos.ins().vconst(value_type, zero_immediate) // this should be legalized to a PXOR
+        } else if value_type.is_int() {
+            pos.ins().iconst(value_type, 0)
+        } else {
+            panic!("Can't convert ineg of type {}", value_type)
+        };
+        pos.func.dfg.replace(inst).isub(zero_value, arg);
+    } else {
+        unreachable!()
     }
 }

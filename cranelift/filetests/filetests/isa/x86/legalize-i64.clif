@@ -338,3 +338,20 @@ block0(v1: i64):
     ; nextln: v10 = bor $b1, $c2
     return v10
 }
+
+function %ineg_legalized_i64() {
+block0:
+    v0 = iconst.i64 1
+    v1 = ineg v0
+    ; check: v2 = iconst.i32 1
+    ; nextln: v3 = iconst.i32 0
+    ; nextln: v0 = iconcat v2, v3
+    ; nextln: v5 = iconst.i32 0
+    ; nextln: v6 = iconst.i32 0
+    ; nextln: v4 = iconcat v5, v6
+    ; nextln: v7, v8 = isub_ifbout v5, v2
+    ; nextln: v9 = isub_ifbin v6, v3, v8
+    ; nextln: v1 = iconcat v7, v9
+
+    return
+}

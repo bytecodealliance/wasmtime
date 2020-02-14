@@ -319,6 +319,8 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         ],
     );
 
+    group.custom_legalize(ineg, "convert_ineg");
+
     group.build_and_add_to(&mut shared.transform_groups);
 
     let mut narrow = TransformGroupBuilder::new(
@@ -612,4 +614,17 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     narrow.custom_legalize(ineg, "convert_ineg");
 
     narrow.build_and_add_to(&mut shared.transform_groups);
+
+    let mut widen = TransformGroupBuilder::new(
+        "x86_widen",
+        r#"
+    Legalize instructions by widening.
+
+    Use x86-specific instructions if needed."#,
+    )
+    .isa("x86")
+    .chain_with(shared.transform_groups.by_name("widen").id);
+
+    widen.custom_legalize(ineg, "convert_ineg");
+    widen.build_and_add_to(&mut shared.transform_groups);
 }
