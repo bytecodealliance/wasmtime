@@ -3,17 +3,17 @@ use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder
 pub(crate) fn define() -> IsaRegs {
     let mut regs = IsaRegsBuilder::new();
 
+    let builder = RegBankBuilder::new("FloatRegs", "xmm")
+        .units(32)
+        .track_pressure(true);
+    let float_regs = regs.add_bank(builder);
+
     let builder = RegBankBuilder::new("IntRegs", "r")
         .units(16)
         .names(vec!["rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi"])
         .track_pressure(true)
         .pinned_reg(15);
     let int_regs = regs.add_bank(builder);
-
-    let builder = RegBankBuilder::new("FloatRegs", "xmm")
-        .units(16)
-        .track_pressure(true);
-    let float_regs = regs.add_bank(builder);
 
     let builder = RegBankBuilder::new("FlagRegs", "")
         .units(1)
@@ -24,7 +24,10 @@ pub(crate) fn define() -> IsaRegs {
     let builder = RegClassBuilder::new_toplevel("GPR", int_regs);
     let gpr = regs.add_class(builder);
 
-    let builder = RegClassBuilder::new_toplevel("FPR", float_regs);
+    let builder = RegClassBuilder::new_toplevel("FPR32", float_regs);
+    let fpr32 = regs.add_class(builder);
+
+    let builder = RegClassBuilder::subclass_of("FPR", fpr32, 0, 16);
     let fpr = regs.add_class(builder);
 
     let builder = RegClassBuilder::new_toplevel("FLAG", flag_reg);
