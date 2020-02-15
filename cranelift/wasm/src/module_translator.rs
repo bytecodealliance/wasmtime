@@ -1,6 +1,6 @@
 //! Translation skeleton that traverses the whole WebAssembly module and call helper functions
 //! to deal with each part of it.
-use crate::environ::{ModuleEnvironment, WasmError, WasmResult};
+use crate::environ::{ModuleEnvironment, WasmResult};
 use crate::sections_translator::{
     parse_code_section, parse_data_section, parse_element_section, parse_export_section,
     parse_function_section, parse_global_section, parse_import_section, parse_memory_section,
@@ -67,11 +67,8 @@ pub fn translate_module<'data>(
                 parse_data_section(data, environ)?;
             }
 
-            SectionContent::DataCount(_) => {
-                return Err(WasmError::InvalidWebAssembly {
-                    message: "don't know how to handle the data count section yet",
-                    offset: reader.current_position(),
-                });
+            SectionContent::DataCount(count) => {
+                environ.reserve_passive_data(count)?;
             }
 
             SectionContent::Custom {

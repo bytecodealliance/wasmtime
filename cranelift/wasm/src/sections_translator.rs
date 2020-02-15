@@ -11,7 +11,8 @@ use crate::environ::{ModuleEnvironment, WasmError, WasmResult};
 use crate::state::ModuleTranslationState;
 use crate::translation_utils::{
     tabletype_to_type, type_to_type, FuncIndex, Global, GlobalIndex, GlobalInit, Memory,
-    MemoryIndex, SignatureIndex, Table, TableElementType, TableIndex,
+    MemoryIndex, PassiveDataIndex, PassiveElemIndex, SignatureIndex, Table, TableElementType,
+    TableIndex,
 };
 use crate::{wasm_unsupported, HashMap};
 use core::convert::TryFrom;
@@ -19,10 +20,11 @@ use cranelift_codegen::ir::immediates::V128Imm;
 use cranelift_codegen::ir::{self, AbiParam, Signature};
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::EntityRef;
+use std::boxed::Box;
 use std::vec::Vec;
 use wasmparser::{
-    self, CodeSectionReader, Data, DataKind, DataSectionReader, Element, ElementItem, ElementKind,
-    ElementSectionReader, Export, ExportSectionReader, ExternalKind, FuncType,
+    self, CodeSectionReader, Data, DataKind, DataSectionReader, Element, ElementItem, ElementItems,
+    ElementKind, ElementSectionReader, Export, ExportSectionReader, ExternalKind, FuncType,
     FunctionSectionReader, GlobalSectionReader, GlobalType, ImportSectionEntryType,
     ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader, Naming, NamingReader,
     Operator, TableSectionReader, Type, TypeSectionReader,
@@ -288,6 +290,19 @@ pub fn parse_start_section(index: u32, environ: &mut dyn ModuleEnvironment) -> W
     Ok(())
 }
 
+fn read_elems(items: &ElementItems) -> WasmResult<Box<[FuncIndex]>> {
+    let items_reader = items.get_items_reader()?;
+    let mut elems = Vec::with_capacity(usize::try_from(items_reader.get_count()).unwrap());
+    for item in items_reader {
+        let elem = match item? {
+            ElementItem::Null => FuncIndex::reserved_value(),
+            ElementItem::Func(index) => FuncIndex::from_u32(index),
+        };
+        elems.push(elem);
+    }
+    Ok(elems.into_boxed_slice())
+}
+
 /// Parses the Element section of the wasm module.
 pub fn parse_element_section<'data>(
     elements: ElementSectionReader<'data>,
@@ -295,7 +310,7 @@ pub fn parse_element_section<'data>(
 ) -> WasmResult<()> {
     environ.reserve_table_elements(elements.get_count())?;
 
-    for entry in elements {
+    for (index, entry) in elements.into_iter().enumerate() {
         let Element { kind, items, ty } = entry?;
         if ty != Type::AnyFunc {
             return Err(wasm_unsupported!(
@@ -303,41 +318,37 @@ pub fn parse_element_section<'data>(
                 ty
             ));
         }
-        if let ElementKind::Active {
-            table_index,
-            init_expr,
-        } = kind
-        {
-            let mut init_expr_reader = init_expr.get_binary_reader();
-            let (base, offset) = match init_expr_reader.read_operator()? {
-                Operator::I32Const { value } => (None, value as u32 as usize),
-                Operator::GlobalGet { global_index } => {
-                    (Some(GlobalIndex::from_u32(global_index)), 0)
-                }
-                ref s => {
-                    return Err(wasm_unsupported!(
-                        "unsupported init expr in element section: {:?}",
-                        s
-                    ));
-                }
-            };
-            let items_reader = items.get_items_reader()?;
-            let mut elems = Vec::with_capacity(usize::try_from(items_reader.get_count()).unwrap());
-            for item in items_reader {
-                let elem = match item? {
-                    ElementItem::Null => FuncIndex::reserved_value(),
-                    ElementItem::Func(index) => FuncIndex::from_u32(index),
+        let segments = read_elems(&items)?;
+        match kind {
+            ElementKind::Active {
+                table_index,
+                init_expr,
+            } => {
+                let mut init_expr_reader = init_expr.get_binary_reader();
+                let (base, offset) = match init_expr_reader.read_operator()? {
+                    Operator::I32Const { value } => (None, value as u32 as usize),
+                    Operator::GlobalGet { global_index } => {
+                        (Some(GlobalIndex::from_u32(global_index)), 0)
+                    }
+                    ref s => {
+                        return Err(wasm_unsupported!(
+                            "unsupported init expr in element section: {:?}",
+                            s
+                        ));
+                    }
                 };
-                elems.push(elem);
+                environ.declare_table_elements(
+                    TableIndex::from_u32(table_index),
+                    base,
+                    offset,
+                    segments,
+                )?
             }
-            environ.declare_table_elements(
-                TableIndex::from_u32(table_index),
-                base,
-                offset,
-                elems.into_boxed_slice(),
-            )?
-        } else {
-            return Err(wasm_unsupported!("unsupported passive elements section",));
+            ElementKind::Passive => {
+                let index = PassiveElemIndex::from_u32(index as u32);
+                environ.declare_passive_element(index, segments)?;
+            }
+            ElementKind::Declared => return Err(wasm_unsupported!("element kind declared")),
         }
     }
     Ok(())
@@ -365,37 +376,37 @@ pub fn parse_data_section<'data>(
 ) -> WasmResult<()> {
     environ.reserve_data_initializers(data.get_count())?;
 
-    for entry in data {
+    for (index, entry) in data.into_iter().enumerate() {
         let Data { kind, data } = entry?;
-        if let DataKind::Active {
-            memory_index,
-            init_expr,
-        } = kind
-        {
-            let mut init_expr_reader = init_expr.get_binary_reader();
-            let (base, offset) = match init_expr_reader.read_operator()? {
-                Operator::I32Const { value } => (None, value as u32 as usize),
-                Operator::GlobalGet { global_index } => {
-                    (Some(GlobalIndex::from_u32(global_index)), 0)
-                }
-                ref s => {
-                    return Err(wasm_unsupported!(
-                        "unsupported init expr in data section: {:?}",
-                        s
-                    ))
-                }
-            };
-            environ.declare_data_initialization(
-                MemoryIndex::from_u32(memory_index),
-                base,
-                offset,
-                data,
-            )?;
-        } else {
-            return Err(wasm_unsupported!(
-                "unsupported passive data section: {:?}",
-                kind
-            ));
+        match kind {
+            DataKind::Active {
+                memory_index,
+                init_expr,
+            } => {
+                let mut init_expr_reader = init_expr.get_binary_reader();
+                let (base, offset) = match init_expr_reader.read_operator()? {
+                    Operator::I32Const { value } => (None, value as u32 as usize),
+                    Operator::GlobalGet { global_index } => {
+                        (Some(GlobalIndex::from_u32(global_index)), 0)
+                    }
+                    ref s => {
+                        return Err(wasm_unsupported!(
+                            "unsupported init expr in data section: {:?}",
+                            s
+                        ))
+                    }
+                };
+                environ.declare_data_initialization(
+                    MemoryIndex::from_u32(memory_index),
+                    base,
+                    offset,
+                    data,
+                )?;
+            }
+            DataKind::Passive => {
+                let index = PassiveDataIndex::from_u32(index as u32);
+                environ.declare_passive_data(index, data)?;
+            }
         }
     }
 
