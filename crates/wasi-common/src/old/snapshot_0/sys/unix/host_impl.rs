@@ -8,10 +8,7 @@ use crate::old::snapshot_0::{
 };
 use std::ffi::OsStr;
 use std::os::unix::prelude::OsStrExt;
-use yanix::{
-    file::{OFlag, SFlag},
-    Errno,
-};
+use yanix::{file::OFlag, Errno};
 
 pub(crate) use sys_impl::host_impl::*;
 
@@ -159,24 +156,6 @@ pub(crate) fn nix_from_oflags(oflags: wasi::__wasi_oflags_t) -> OFlag {
     nix_flags
 }
 
-pub(crate) fn filetype_from_nix(sflags: SFlag) -> FileType {
-    if sflags.contains(SFlag::IFCHR) {
-        FileType::CharacterDevice
-    } else if sflags.contains(SFlag::IFBLK) {
-        FileType::BlockDevice
-    } else if sflags.contains(SFlag::IFSOCK) {
-        FileType::SocketStream
-    } else if sflags.contains(SFlag::IFDIR) {
-        FileType::Directory
-    } else if sflags.contains(SFlag::IFREG) {
-        FileType::RegularFile
-    } else if sflags.contains(SFlag::IFLNK) {
-        FileType::Symlink
-    } else {
-        FileType::Unknown
-    }
-}
-
 pub(crate) fn filestat_from_nix(filestat: libc::stat) -> Result<wasi::__wasi_filestat_t> {
     use std::convert::TryInto;
 
@@ -186,7 +165,7 @@ pub(crate) fn filestat_from_nix(filestat: libc::stat) -> Result<wasi::__wasi_fil
             .ok_or(Error::EOVERFLOW)
     }
 
-    let filetype = SFlag::from_bits_truncate(filestat.st_mode);
+    let filetype = yanix::file::FileType::from_stat_st_mode(filestat.st_mode);
     let dev = stdev_from_nix(filestat.st_dev)?;
     let ino = stino_from_nix(filestat.st_ino)?;
     let atim = filestat_to_timestamp(
@@ -210,31 +189,8 @@ pub(crate) fn filestat_from_nix(filestat: libc::stat) -> Result<wasi::__wasi_fil
         atim,
         ctim,
         mtim,
-        filetype: filetype_from_nix(filetype).to_wasi(),
+        filetype: FileType::from(filetype).to_wasi(),
     })
-}
-
-pub(crate) fn dirent_filetype_from_host(
-    host_entry: &libc::dirent,
-) -> Result<wasi::__wasi_filetype_t> {
-    match host_entry.d_type {
-        libc::DT_FIFO => Ok(wasi::__WASI_FILETYPE_UNKNOWN),
-        libc::DT_CHR => Ok(wasi::__WASI_FILETYPE_CHARACTER_DEVICE),
-        libc::DT_DIR => Ok(wasi::__WASI_FILETYPE_DIRECTORY),
-        libc::DT_BLK => Ok(wasi::__WASI_FILETYPE_BLOCK_DEVICE),
-        libc::DT_REG => Ok(wasi::__WASI_FILETYPE_REGULAR_FILE),
-        libc::DT_LNK => Ok(wasi::__WASI_FILETYPE_SYMBOLIC_LINK),
-        libc::DT_SOCK => {
-            // TODO how to discriminate between STREAM and DGRAM?
-            // Perhaps, we should create a more general WASI filetype
-            // such as __WASI_FILETYPE_SOCKET, and then it would be
-            // up to the client to check whether it's actually
-            // STREAM or DGRAM?
-            Ok(wasi::__WASI_FILETYPE_UNKNOWN)
-        }
-        libc::DT_UNKNOWN => Ok(wasi::__WASI_FILETYPE_UNKNOWN),
-        _ => Err(Error::EINVAL),
-    }
 }
 
 /// Creates owned WASI path from OS string.
@@ -245,16 +201,22 @@ pub(crate) fn path_from_host<S: AsRef<OsStr>>(s: S) -> Result<String> {
     helpers::path_from_slice(s.as_ref().as_bytes()).map(String::from)
 }
 
-impl From<yanix::dir::FileType> for FileType {
-    fn from(ft: yanix::dir::FileType) -> Self {
-        use yanix::dir::FileType::*;
+impl From<yanix::file::FileType> for FileType {
+    fn from(ft: yanix::file::FileType) -> Self {
+        use yanix::file::FileType::*;
         match ft {
             RegularFile => Self::RegularFile,
             Symlink => Self::Symlink,
             Directory => Self::Directory,
             BlockDevice => Self::BlockDevice,
             CharacterDevice => Self::CharacterDevice,
-            /* Unknown | Socket | Fifo */ _ => Self::Unknown,
+            /* Unknown | Socket | Fifo */
+            _ => Self::Unknown,
+            // TODO how to discriminate between STREAM and DGRAM?
+            // Perhaps, we should create a more general WASI filetype
+            // such as __WASI_FILETYPE_SOCKET, and then it would be
+            // up to the client to check whether it's actually
+            // STREAM or DGRAM?
         }
     }
 }
