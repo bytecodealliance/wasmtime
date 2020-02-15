@@ -90,16 +90,43 @@ bitflags! {
     }
 }
 
-bitflags! {
-    pub struct SFlag: libc::mode_t {
-        const IFIFO = libc::S_IFIFO;
-        const IFCHR = libc::S_IFCHR;
-        const IFDIR = libc::S_IFDIR;
-        const IFBLK = libc::S_IFBLK;
-        const IFREG = libc::S_IFREG;
-        const IFLNK = libc::S_IFLNK;
-        const IFSOCK = libc::S_IFSOCK;
-        const IFMT = libc::S_IFMT;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileType {
+    CharacterDevice,
+    Directory,
+    BlockDevice,
+    RegularFile,
+    Symlink,
+    Fifo,
+    Socket,
+    Unknown,
+}
+
+impl FileType {
+    pub fn from_stat_st_mode(st_mode: libc::mode_t) -> Self {
+        match st_mode & libc::S_IFMT {
+            libc::S_IFIFO => Self::Fifo,
+            libc::S_IFCHR => Self::CharacterDevice,
+            libc::S_IFDIR => Self::Directory,
+            libc::S_IFBLK => Self::BlockDevice,
+            libc::S_IFREG => Self::RegularFile,
+            libc::S_IFLNK => Self::Symlink,
+            libc::S_IFSOCK => Self::Socket,
+            _ => Self::Unknown, // Should we actually panic here since this one *should* never happen?
+        }
+    }
+
+    pub fn from_dirent_d_type(d_type: u8) -> Self {
+        match d_type {
+            libc::DT_CHR => Self::CharacterDevice,
+            libc::DT_DIR => Self::Directory,
+            libc::DT_BLK => Self::BlockDevice,
+            libc::DT_REG => Self::RegularFile,
+            libc::DT_LNK => Self::Symlink,
+            libc::DT_SOCK => Self::Socket,
+            libc::DT_FIFO => Self::Fifo,
+            /* libc::DT_UNKNOWN */ _ => Self::Unknown,
+        }
     }
 }
 

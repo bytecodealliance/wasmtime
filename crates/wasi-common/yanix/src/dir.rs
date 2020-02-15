@@ -1,4 +1,5 @@
 use crate::{
+    file::FileType,
     sys::dir::{iter_impl, EntryImpl},
     Errno, Result,
 };
@@ -84,7 +85,7 @@ impl Entry {
 
     /// Returns the type of this directory entry.
     pub fn file_type(&self) -> FileType {
-        FileType::from_raw(self.0.d_type)
+        FileType::from_dirent_d_type(self.0.d_type)
     }
 }
 
@@ -96,47 +97,6 @@ pub struct SeekLoc(pub(crate) libc::c_long);
 impl SeekLoc {
     pub fn to_raw(&self) -> i64 {
         self.0.into()
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-#[repr(u8)]
-pub enum FileType {
-    CharacterDevice = libc::DT_CHR,
-    Directory = libc::DT_DIR,
-    BlockDevice = libc::DT_BLK,
-    RegularFile = libc::DT_REG,
-    Symlink = libc::DT_LNK,
-    Fifo = libc::DT_FIFO,
-    Socket = libc::DT_SOCK,
-    Unknown = libc::DT_UNKNOWN,
-}
-
-impl FileType {
-    pub fn from_raw(file_type: u8) -> Self {
-        match file_type {
-            libc::DT_CHR => Self::CharacterDevice,
-            libc::DT_DIR => Self::Directory,
-            libc::DT_BLK => Self::BlockDevice,
-            libc::DT_REG => Self::RegularFile,
-            libc::DT_LNK => Self::Symlink,
-            libc::DT_SOCK => Self::Socket,
-            libc::DT_FIFO => Self::Fifo,
-            /* libc::DT_UNKNOWN */ _ => Self::Unknown,
-        }
-    }
-
-    pub fn to_raw(&self) -> u8 {
-        match self {
-            Self::CharacterDevice => libc::DT_CHR,
-            Self::Directory => libc::DT_DIR,
-            Self::BlockDevice => libc::DT_BLK,
-            Self::RegularFile => libc::DT_REG,
-            Self::Symlink => libc::DT_LNK,
-            Self::Socket => libc::DT_SOCK,
-            Self::Fifo => libc::DT_FIFO,
-            Self::Unknown => libc::DT_UNKNOWN,
-        }
     }
 }
 

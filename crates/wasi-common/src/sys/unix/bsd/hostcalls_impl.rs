@@ -23,7 +23,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
             // is created before fstatat sees it, we're racing with that change anyway
             // and unlinkat could have legitimately seen the directory if the race had
             // turned out differently.
-            use yanix::file::{fstatat, SFlag};
+            use yanix::file::{fstatat, FileType};
 
             if errno == Errno::EPERM {
                 if let Ok(stat) = unsafe {
@@ -33,7 +33,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
                         AtFlag::SYMLINK_NOFOLLOW,
                     )
                 } {
-                    if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::IFDIR) {
+                    if FileType::from_stat_st_mode(stat.st_mode) == FileType::Directory {
                         errno = Errno::EISDIR;
                     }
                 } else {

@@ -94,7 +94,7 @@ pub(crate) fn path_open(
     fs_flags: wasi::__wasi_fdflags_t,
 ) -> Result<File> {
     use yanix::{
-        file::{fstatat, openat, AtFlag, Mode, OFlag, SFlag},
+        file::{fstatat, openat, AtFlag, FileType, Mode, OFlag},
         Errno,
     };
 
@@ -143,7 +143,7 @@ pub(crate) fn path_open(
                                 AtFlag::SYMLINK_NOFOLLOW,
                             )
                         } {
-                            if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::IFSOCK) {
+                            if FileType::from_stat_st_mode(stat.st_mode) == FileType::Socket {
                                 return Err(Error::ENOTSUP);
                             } else {
                                 return Err(Error::ENXIO);
@@ -164,7 +164,7 @@ pub(crate) fn path_open(
                                 AtFlag::SYMLINK_NOFOLLOW,
                             )
                         } {
-                            if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::IFLNK) {
+                            if FileType::from_stat_st_mode(stat.st_mode) == FileType::Symlink {
                                 return Err(Error::ELOOP);
                             }
                         }
