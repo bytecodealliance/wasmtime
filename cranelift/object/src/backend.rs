@@ -54,14 +54,14 @@ impl ObjectBuilder {
         name: String,
         collect_traps: ObjectTrapCollection,
         libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
-    ) -> ModuleResult<Self> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             isa,
             name,
             collect_traps,
             libcall_names,
             function_alignment: 1,
-        })
+        }
     }
 
     /// Set the alignment used for functions.
