@@ -6,16 +6,8 @@ use std::os::unix::prelude::AsRawFd;
 pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     use yanix::file::{unlinkat, AtFlag};
 
-    match resolved.dirfd() {
-        Descriptor::OsHandle(file) => {
-            unsafe { unlinkat(file.as_raw_fd(), resolved.path(), AtFlag::empty()) }
-                .map_err(Into::into)
-        }
-        Descriptor::VirtualFile(virt) => virt.unlink_file(resolved.path()),
-        Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-            unreachable!("streams do not have paths and should not be accessible via PathGet");
-        }
-    }
+    unsafe { unlinkat(resolved.dirfd().as_raw_fd(), resolved.path(), AtFlag::empty()) }
+        .map_err(Into::into)
 }
 
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
@@ -24,17 +16,7 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
     log::debug!("path_symlink old_path = {:?}", old_path);
     log::debug!("path_symlink resolved = {:?}", resolved);
 
-    match resolved.dirfd() {
-        Descriptor::OsHandle(file) => {
-            unsafe { symlinkat(old_path, file.as_raw_fd(), resolved.path()) }.map_err(Into::into)
-        }
-        Descriptor::VirtualFile(_) => {
-            unimplemented!("virtual path_symlink");
-        }
-        Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-            unreachable!("streams do not have paths and should not be accessible via PathGet");
-        }
-    }
+    unsafe { symlinkat(old_path, resolved.dirfd().as_raw_fd(), resolved.path()) }.map_err(Into::into)
 }
 
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {

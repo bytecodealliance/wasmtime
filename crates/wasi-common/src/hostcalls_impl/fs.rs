@@ -740,7 +740,12 @@ pub(crate) unsafe fn path_readlink(
 
     let mut buf = dec_slice_of_mut_u8(memory, buf_ptr, buf_len)?;
 
-    let host_bufused = hostcalls_impl::path_readlink(resolved, &mut buf)?;
+    let host_bufused = match resolved.dirfd() {
+        Descriptor::VirtualFile(_virt) => {
+            unimplemented!("virtual readlink");
+        }
+        _ => hostcalls_impl::path_readlink(resolved, &mut buf)?
+    };
 
     trace!("     | (buf_ptr,*buf_used)={:?}", buf);
     trace!("     | *buf_used={:?}", host_bufused);
@@ -957,7 +962,13 @@ pub(crate) unsafe fn path_filestat_get(
         path,
         false,
     )?;
-    let host_filestat = hostcalls_impl::path_filestat_get(resolved, dirflags)?;
+    let host_filestat = match resolved.dirfd() {
+        Descriptor::VirtualFile(virt) => {
+            virt.openat(std::path::Path::new(resolved.path()), false, false, 0, 0)?
+                .filestat_get()?
+        }
+        _ => { hostcalls_impl::path_filestat_get(resolved, dirflags)? }
+    };
 
     trace!("     | *filestat_ptr={:?}", host_filestat);
 
@@ -999,7 +1010,14 @@ pub(crate) unsafe fn path_filestat_set_times(
         false,
     )?;
 
-    hostcalls_impl::path_filestat_set_times(resolved, dirflags, st_atim, st_mtim, fst_flags)
+    match resolved.dirfd() {
+        Descriptor::VirtualFile(_virt) => {
+            unimplemented!("virtual filestat_set_times");
+        }
+        _ => {
+            hostcalls_impl::path_filestat_set_times(resolved, dirflags, st_atim, st_mtim, fst_flags)
+        }
+    }
 }
 
 pub(crate) unsafe fn path_symlink(
@@ -1029,7 +1047,14 @@ pub(crate) unsafe fn path_symlink(
     let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved_new = path_get(fe, wasi::__WASI_RIGHTS_PATH_SYMLINK, 0, 0, new_path, true)?;
 
-    hostcalls_impl::path_symlink(old_path, resolved_new)
+    match resolved_new.dirfd() {
+        Descriptor::VirtualFile(_virt) => {
+            unimplemented!("virtual path_symlink");
+        }
+        _non_virtual => {
+            hostcalls_impl::path_symlink(old_path, resolved_new)
+        }
+    }
 }
 
 pub(crate) unsafe fn path_unlink_file(
@@ -1053,7 +1078,12 @@ pub(crate) unsafe fn path_unlink_file(
     let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved = path_get(fe, wasi::__WASI_RIGHTS_PATH_UNLINK_FILE, 0, 0, path, false)?;
 
-    hostcalls_impl::path_unlink_file(resolved)
+    match resolved.dirfd() {
+        Descriptor::VirtualFile(virt) => {
+            virt.unlink_file(resolved.path())
+        }
+        _ => hostcalls_impl::path_unlink_file(resolved)
+    }
 }
 
 pub(crate) unsafe fn path_remove_directory(
@@ -1086,7 +1116,10 @@ pub(crate) unsafe fn path_remove_directory(
 
     log::debug!("path_remove_directory resolved={:?}", resolved);
 
-    hostcalls_impl::path_remove_directory(resolved)
+    match resolved.dirfd() {
+        Descriptor::VirtualFile(virt) => virt.remove_directory(resolved.path()),
+        _ => hostcalls_impl::path_remove_directory(resolved)
+    }
 }
 
 pub(crate) unsafe fn fd_prestat_get(

@@ -69,23 +69,16 @@ pub(crate) fn path_create_directory<'a>(base: &File, path: &str) -> Result<()> {
 pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
     use yanix::file::{linkat, AtFlag};
 
-    match (resolved_old.dirfd(), resolved_new.dirfd()) {
-        (Descriptor::OsHandle(resolved_old_file), Descriptor::OsHandle(resolved_new_file)) => {
-            unsafe {
-                linkat(
-                    resolved_old_file.as_raw_fd(),
-                    resolved_old.path(),
-                    resolved_new_file.as_raw_fd(),
-                    resolved_new.path(),
-                    AtFlag::SYMLINK_FOLLOW,
-                )
-            }
-            .map_err(Into::into)
-        }
-        _ => {
-            unimplemented!("path_link with one or more virtual files");
-        }
+    unsafe {
+        linkat(
+            resolved_old.dirfd().as_raw_fd(),
+            resolved_old.path(),
+            resolved_new.dirfd().as_raw_fd(),
+            resolved_new.path(),
+            AtFlag::SYMLINK_FOLLOW,
+        )
     }
+    .map_err(Into::into)
 }
 
 pub(crate) fn path_open(
@@ -124,32 +117,13 @@ pub(crate) fn path_open(
     log::debug!("path_open resolved = {:?}", resolved);
     log::debug!("path_open oflags = {:?}", nix_all_oflags);
 
-    let fd_no = match resolved.dirfd() {
-        Descriptor::OsHandle(file) => unsafe {
-            openat(
-                file.as_raw_fd(),
-                resolved.path(),
-                nix_all_oflags,
-                Mode::from_bits_truncate(0o666),
-            )
-        },
-        Descriptor::VirtualFile(virt) => {
-            // openat on virtual files will give us the boxed virtual file
-            // so we can directly turn it into the file.
-            return virt
-                .openat(
-                    std::path::Path::new(resolved.path()),
-                    read,
-                    write,
-                    oflags,
-                    fs_flags,
-                )
-                .map(|file| Descriptor::VirtualFile(file))
-                .map_err(Into::into);
-        }
-        Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-            unreachable!("streams do not have paths and should not be accessible via PathGet");
-        }
+    let fd_no = unsafe {
+        openat(
+            resolved.dirfd().as_raw_fd(),
+            resolved.path(),
+            nix_all_oflags,
+            Mode::from_bits_truncate(0o666),
+        )
     };
     let new_fd = match fd_no {
         Ok(fd) => fd,
@@ -158,16 +132,8 @@ pub(crate) fn path_open(
                 match errno {
                     // Linux returns ENXIO instead of EOPNOTSUPP when opening a socket
                     Errno::ENXIO => {
-                        if let Ok(stat) = match resolved.dirfd() {
-                            Descriptor::OsHandle(file) => unsafe {
-                                fstatat(file.as_raw_fd(), resolved.path(), AtFlag::SYMLINK_NOFOLLOW)
-                            },
-                            Descriptor::VirtualFile(virt) => virt
-                                .openat(std::path::Path::new(resolved.path()), false, false, 0, 0)?
-                                .filestat_get(),
-                            Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-                                unreachable!("streams do not have paths and should not be accessible via PathGet");
-                            }
+                        if let Ok(stat) = unsafe {
+                            fstatat(resolved.dirfd().as_raw_fd(), resolved.path(), AtFlag::SYMLINK_NOFOLLOW)
                         } {
                             if FileType::from_stat_st_mode(stat.st_mode) == FileType::Socket {
                                 return Err(Error::ENOTSUP);
@@ -183,16 +149,8 @@ pub(crate) fn path_open(
                     Errno::ENOTDIR
                         if !(nix_all_oflags & (OFlag::NOFOLLOW | OFlag::DIRECTORY)).is_empty() =>
                     {
-                        if let Ok(stat) = match resolved.dirfd() {
-                            Descriptor::OsHandle(file) => unsafe {
-                                fstatat(file.as_raw_fd(), resolved.path(), AtFlag::SYMLINK_NOFOLLOW)
-                            },
-                            Descriptor::VirtualFile(virt) => virt
-                                .openat(std::path::Path::new(resolved.path()), false, false, 0, 0)?
-                                .filestat_get(),
-                            Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-                                unreachable!("streams do not have paths and should not be accessible via PathGet");
-                            }
+                        if let Ok(stat) = unsafe {
+                            fstatat(resolved.dirfd().as_raw_fd(), resolved.path(), AtFlag::SYMLINK_NOFOLLOW)
                         } {
                             if FileType::from_stat_st_mode(stat.st_mode) == FileType::Symlink {
                                 return Err(Error::ELOOP);
@@ -224,17 +182,9 @@ pub(crate) fn path_open(
 pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
     use std::cmp::min;
     use yanix::file::readlinkat;
-    let read_link = match resolved.dirfd() {
-        Descriptor::OsHandle(file) => unsafe { readlinkat(file.as_raw_fd(), resolved.path()) }
-            .map_err(Into::into)
-            .and_then(host_impl::path_from_host)?,
-        Descriptor::VirtualFile(_) => {
-            unimplemented!("virtual readlink");
-        }
-        Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-            unreachable!("streams do not have paths and should not be accessible via PathGet");
-        }
-    };
+    let read_link = unsafe { readlinkat(resolved.dirfd().as_raw_fd(), resolved.path()) }
+        .map_err(Into::into)
+        .and_then(host_impl::path_from_host)?;
     let copy_len = min(read_link.len(), buf.len());
     if copy_len > 0 {
         buf[..copy_len].copy_from_slice(&read_link.as_bytes()[..copy_len]);
@@ -259,20 +209,9 @@ pub(crate) fn path_filestat_get(
         _ => AtFlag::SYMLINK_NOFOLLOW,
     };
 
-    let filestat = match resolved.dirfd() {
-        Descriptor::OsHandle(file) => {
-            unsafe { fstatat(file.as_raw_fd(), resolved.path(), atflags) }
-                .map_err(Into::into)
-                .and_then(host_impl::filestat_from_nix)
-        }
-        Descriptor::VirtualFile(virt) => virt
-            .openat(std::path::Path::new(resolved.path()), false, false, 0, 0)?
-            .filestat_get(),
-        Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-            unreachable!("streams do not have paths and should not be accessible via PathGet");
-        }
-    };
-    filestat
+    unsafe { fstatat(resolved.dirfd().as_raw_fd(), resolved.path(), atflags) }
+        .map_err(Into::into)
+        .and_then(host_impl::filestat_from_nix)
 }
 
 pub(crate) fn path_filestat_set_times(
@@ -312,32 +251,14 @@ pub(crate) fn path_filestat_set_times(
         FileTime::Omit
     };
 
-    match resolved.dirfd() {
-        Descriptor::OsHandle(file) => {
-            utimensat(file, resolved.path(), atim, mtim, symlink_nofollow).map_err(Into::into)
-        }
-        Descriptor::VirtualFile(_) => {
-            unimplemented!("virt utimensat");
-        }
-        Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-            unreachable!("streams do not have paths and should not be accessible via PathGet");
-        }
-    }
+    utimensat(&resolved.dirfd().as_os_handle(), resolved.path(), atim, mtim, symlink_nofollow).map_err(Into::into)
 }
 
 pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
     use yanix::file::{unlinkat, AtFlag};
 
-    match resolved.dirfd() {
-        Descriptor::OsHandle(file) => {
-            unsafe { unlinkat(file.as_raw_fd(), resolved.path(), AtFlag::REMOVEDIR) }
-                .map_err(Into::into)
-        }
-        Descriptor::VirtualFile(virt) => virt.remove_directory(resolved.path()),
-        Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-            unreachable!("streams do not have paths and should not be accessible via PathGet");
-        }
-    }
+    unsafe { unlinkat(resolved.dirfd().as_raw_fd(), resolved.path(), AtFlag::REMOVEDIR) }
+        .map_err(Into::into)
 }
 
 pub(crate) fn fd_readdir<'a>(
