@@ -45,11 +45,11 @@ impl<'descriptor> Handle<'descriptor> {
         match self {
             Handle::OsHandle(file) => file
                 .try_clone()
-                .map(|f| Descriptor::OsHandle(OsHandle::from(f))),
+                .map(|f| OsHandle::from(f).into()),
             Handle::Stream(stream) => stream
                 .try_clone()
-                .map(|f| Descriptor::OsHandle(OsHandle::from(f))),
-            Handle::VirtualFile(virt) => virt.try_clone().map(|f| Descriptor::VirtualFile(f)),
+                .map(|f| OsHandle::from(f).into()),
+            Handle::VirtualFile(virt) => virt.try_clone().map(Descriptor::VirtualFile),
         }
     }
 }
@@ -78,6 +78,18 @@ pub(crate) enum Descriptor {
     Stdin,
     Stdout,
     Stderr,
+}
+
+impl From<OsHandle> for Descriptor {
+    fn from(handle: OsHandle) -> Self {
+        Descriptor::OsHandle(handle)
+    }
+}
+
+impl From<Box<dyn VirtualFile>> for Descriptor {
+    fn from(virt: Box<dyn VirtualFile>) -> Self {
+        Descriptor::VirtualFile(virt)
+    }
 }
 
 impl fmt::Debug for Descriptor {
@@ -165,7 +177,7 @@ impl FdEntry {
             Descriptor::OsHandle(handle) => unsafe { determine_type_and_access_rights(&handle) }
                 .map(|(file_type, rights_base, rights_inheriting)| Self {
                     file_type,
-                    descriptor: Descriptor::OsHandle(handle),
+                    descriptor: handle.into(),
                     rights_base,
                     rights_inheriting,
                     preopen_path: None,
@@ -177,7 +189,7 @@ impl FdEntry {
 
                 Ok(Self {
                     file_type,
-                    descriptor: Descriptor::VirtualFile(virt),
+                    descriptor: virt.into(),
                     rights_base,
                     rights_inheriting,
                     preopen_path: None,
@@ -226,7 +238,7 @@ impl FdEntry {
     }
 
     pub(crate) fn null() -> Result<Self> {
-        Self::from(Descriptor::OsHandle(OsHandle::from(dev_null()?)))
+        Self::from(OsHandle::from(dev_null()?).into())
     }
 
     /// Convert this `FdEntry` into a host `Descriptor` object provided the specified
