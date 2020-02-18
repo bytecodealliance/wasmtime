@@ -24,7 +24,7 @@ mod values;
 pub use crate::callable::Callable;
 pub use crate::externals::*;
 pub use crate::frame_info::FrameInfo;
-pub use crate::func::{Func, WasmArg, WasmRet};
+pub use crate::func::{Func, WasmRet, WasmTy};
 pub use crate::instance::Instance;
 pub use crate::module::Module;
 pub use crate::r#ref::{AnyRef, HostInfo, HostRef};

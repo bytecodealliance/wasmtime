@@ -20,7 +20,7 @@ pub fn is_wasi_module(name: &str) -> bool {
 /// This is an internal structure used to acquire a handle on the caller's
 /// wasm memory buffer.
 ///
-/// This exploits how we can implement `WasmArg` for ourselves locally even
+/// This exploits how we can implement `WasmTy` for ourselves locally even
 /// though crates in general should not be doing that. This is a crate in
 /// the wasmtime project, however, so we should be able to keep up with our own
 /// changes.
@@ -33,10 +33,14 @@ struct WasiCallerMemory {
     len: usize,
 }
 
-impl wasmtime::WasmArg for WasiCallerMemory {
+impl wasmtime::WasmTy for WasiCallerMemory {
     type Abi = ();
 
     fn push(_dst: &mut Vec<wasmtime::ValType>) {}
+
+    fn matches(_tys: impl Iterator<Item = wasmtime::ValType>) -> bool {
+        true
+    }
 
     fn from_abi(vmctx: *mut wasmtime_runtime::VMContext, _abi: ()) -> Self {
         unsafe {
@@ -56,6 +60,8 @@ impl wasmtime::WasmArg for WasiCallerMemory {
             }
         }
     }
+
+    fn into_abi(self) {}
 }
 
 impl WasiCallerMemory {

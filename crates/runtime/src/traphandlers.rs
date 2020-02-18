@@ -9,23 +9,15 @@ use std::any::Any;
 use std::cell::Cell;
 use std::error::Error;
 use std::fmt;
+use std::mem;
 use std::ptr;
 use wasmtime_environ::ir;
 
 extern "C" {
-    fn WasmtimeCallTrampoline(
+    fn RegisterSetjmp(
         jmp_buf: *mut *const u8,
-        vmctx: *mut u8,
-        caller_vmctx: *mut u8,
-        trampoline: *const VMFunctionBody,
-        callee: *const VMFunctionBody,
-        values_vec: *mut u8,
-    ) -> i32;
-    fn WasmtimeCall(
-        jmp_buf: *mut *const u8,
-        vmctx: *mut u8,
-        caller_vmctx: *mut u8,
-        callee: *const VMFunctionBody,
+        callback: extern "C" fn(*mut u8),
+        payload: *mut u8,
     ) -> i32;
     fn Unwind(jmp_buf: *const u8) -> !;
 }
@@ -154,33 +146,36 @@ pub unsafe fn wasmtime_call_trampoline(
     callee: *const VMFunctionBody,
     values_vec: *mut u8,
 ) -> Result<(), Trap> {
-    CallThreadState::new(vmctx).with(|cx| {
-        WasmtimeCallTrampoline(
-            cx.jmp_buf.as_ptr(),
-            vmctx as *mut u8,
-            caller_vmctx as *mut u8,
-            trampoline,
-            callee,
-            values_vec,
-        )
+    catch_traps(vmctx, || {
+        mem::transmute::<
+            _,
+            extern "C" fn(*mut VMContext, *mut VMContext, *const VMFunctionBody, *mut u8),
+        >(trampoline)(vmctx, caller_vmctx, callee, values_vec)
     })
 }
 
-/// Call the wasm function pointed to by `callee`, which has no arguments or
-/// return values.
-pub unsafe fn wasmtime_call(
-    vmctx: *mut VMContext,
-    caller_vmctx: *mut VMContext,
-    callee: *const VMFunctionBody,
-) -> Result<(), Trap> {
-    CallThreadState::new(vmctx).with(|cx| {
-        WasmtimeCall(
+/// Catches any wasm traps that happen within the execution of `closure`,
+/// returning them as a `Result`.
+///
+/// Highly unsafe since `closure` won't have any dtors run.
+pub unsafe fn catch_traps<F>(vmctx: *mut VMContext, mut closure: F) -> Result<(), Trap>
+where
+    F: FnMut(),
+{
+    return CallThreadState::new(vmctx).with(|cx| {
+        RegisterSetjmp(
             cx.jmp_buf.as_ptr(),
-            vmctx as *mut u8,
-            caller_vmctx as *mut u8,
-            callee,
+            call_closure::<F>,
+            &mut closure as *mut F as *mut u8,
         )
-    })
+    });
+
+    extern "C" fn call_closure<F>(payload: *mut u8)
+    where
+        F: FnMut(),
+    {
+        unsafe { (*(payload as *mut F))() }
+    }
 }
 
 /// Temporary state stored on the stack which is registered in the `tls` module
