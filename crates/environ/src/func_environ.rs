@@ -22,30 +22,6 @@ pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
     ir::ExternalName::user(0, func_index.as_u32())
 }
 
-/// Compute an `ir::ExternalName` for the `memory.grow` libcall for
-/// 32-bit locally-defined memories.
-pub fn get_memory32_grow_name() -> ir::ExternalName {
-    ir::ExternalName::user(1, 0)
-}
-
-/// Compute an `ir::ExternalName` for the `memory.grow` libcall for
-/// 32-bit imported memories.
-pub fn get_imported_memory32_grow_name() -> ir::ExternalName {
-    ir::ExternalName::user(1, 1)
-}
-
-/// Compute an `ir::ExternalName` for the `memory.size` libcall for
-/// 32-bit locally-defined memories.
-pub fn get_memory32_size_name() -> ir::ExternalName {
-    ir::ExternalName::user(1, 2)
-}
-
-/// Compute an `ir::ExternalName` for the `memory.size` libcall for
-/// 32-bit imported memories.
-pub fn get_imported_memory32_size_name() -> ir::ExternalName {
-    ir::ExternalName::user(1, 3)
-}
-
 /// An index type for builtin functions.
 pub struct BuiltinFunctionIndex(u32);
 

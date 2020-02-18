@@ -6,10 +6,7 @@ use crate::compilation::{
     Compilation, CompileError, CompiledFunction, CompiledFunctionUnwindInfo, Relocation,
     RelocationTarget, TrapInformation,
 };
-use crate::func_environ::{
-    get_func_name, get_imported_memory32_grow_name, get_imported_memory32_size_name,
-    get_memory32_grow_name, get_memory32_size_name, FuncEnvironment,
-};
+use crate::func_environ::{get_func_name, FuncEnvironment};
 use crate::module::Module;
 use crate::module_environ::FunctionBodyData;
 use crate::CacheConfig;
@@ -46,15 +43,7 @@ impl binemit::RelocSink for RelocSink {
         name: &ExternalName,
         addend: binemit::Addend,
     ) {
-        let reloc_target = if *name == get_memory32_grow_name() {
-            RelocationTarget::Memory32Grow
-        } else if *name == get_imported_memory32_grow_name() {
-            RelocationTarget::ImportedMemory32Grow
-        } else if *name == get_memory32_size_name() {
-            RelocationTarget::Memory32Size
-        } else if *name == get_imported_memory32_size_name() {
-            RelocationTarget::ImportedMemory32Size
-        } else if let ExternalName::User { namespace, index } = *name {
+        let reloc_target = if let ExternalName::User { namespace, index } = *name {
             debug_assert_eq!(namespace, 0);
             RelocationTarget::UserFunc(FuncIndex::from_u32(index))
         } else if let ExternalName::LibCall(libcall) = *name {

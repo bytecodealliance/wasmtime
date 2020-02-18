@@ -5,16 +5,6 @@ use wasmtime_environ::settings;
 use wasmtime_environ::settings::Configurable;
 use wasmtime_environ::{Compilation, Module, RelocationTarget, Relocations};
 
-fn get_reloc_target_special_import_name(target: RelocationTarget) -> Option<&'static str> {
-    Some(match target {
-        RelocationTarget::Memory32Grow => &"wasmtime_memory32_grow",
-        RelocationTarget::ImportedMemory32Grow => &"wasmtime_memory32_grow",
-        RelocationTarget::Memory32Size => &"wasmtime_memory32_size",
-        RelocationTarget::ImportedMemory32Size => &"wasmtime_imported_memory32_size",
-        _ => return None,
-    })
-}
-
 /// Defines module functions
 pub fn declare_functions(
     obj: &mut Artifact,
@@ -24,14 +14,6 @@ pub fn declare_functions(
     for i in 0..module.imported_funcs.len() {
         let string_name = format!("_wasm_function_{}", i);
         obj.declare(string_name, Decl::function_import())?;
-    }
-    for (_, function_relocs) in relocations.iter() {
-        for r in function_relocs {
-            let special_import_name = get_reloc_target_special_import_name(r.reloc_target);
-            if let Some(special_import_name) = special_import_name {
-                obj.declare(special_import_name, Decl::function_import())?;
-            }
-        }
     }
     for (i, _function_relocs) in relocations.iter().rev() {
         let func_index = module.func_index(i);
@@ -78,16 +60,6 @@ pub fn emit_functions(
                     obj.link(Link {
                         from: &string_name,
                         to: &target_name,
-                        at: r.offset as u64,
-                    })?;
-                }
-                RelocationTarget::Memory32Grow
-                | RelocationTarget::ImportedMemory32Grow
-                | RelocationTarget::Memory32Size
-                | RelocationTarget::ImportedMemory32Size => {
-                    obj.link(Link {
-                        from: &string_name,
-                        to: get_reloc_target_special_import_name(r.reloc_target).expect("name"),
                         at: r.offset as u64,
                     })?;
                 }
