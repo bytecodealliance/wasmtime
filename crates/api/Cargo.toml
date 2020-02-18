@@ -44,3 +44,7 @@ default = ['wat']
 # to cranelift. Requires Nightly Rust currently, and this is not enabled by
 # default.
 lightbeam = ["wasmtime-jit/lightbeam"]
+
+[[test]]
+name = "host-segfault"
+harness = false
