@@ -6,7 +6,6 @@ use crate::export::Export;
 use crate::imports::Imports;
 use crate::jit_int::GdbJitImageRegistration;
 use crate::memory::LinearMemory;
-use crate::mmap::Mmap;
 use crate::signalhandlers;
 use crate::table::Table;
 use crate::traphandlers::{wasmtime_call, Trap};
@@ -18,6 +17,7 @@ use crate::vmcontext::{
 use crate::TrapRegistration;
 use memoffset::offset_of;
 use more_asserts::assert_lt;
+use std::alloc::{self, Layout};
 use std::any::Any;
 use std::cell::Cell;
 use std::collections::HashSet;
@@ -73,9 +73,6 @@ pub(crate) struct Instance {
     /// create reference cycles because wasm instances can't cyclically
     /// import from each other.
     dependencies: HashSet<InstanceHandle>,
-
-    /// The underlying mmap that holds this `Instance`.
-    mmap: Cell<Mmap>,
 
     /// The `Module` this `Instance` was instantiated from.
     module: Arc<Module>,
@@ -511,6 +508,14 @@ impl Instance {
             .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
             .set(index, val)
     }
+
+    fn alloc_layout(&self) -> Layout {
+        let size = mem::size_of_val(self)
+            .checked_add(usize::try_from(self.offsets.size_of_vmctx()).unwrap())
+            .unwrap();
+        let align = mem::align_of_val(self);
+        Layout::from_size_align(size, align).unwrap()
+    }
 }
 
 /// A handle holding an `Instance` of a WebAssembly module.
@@ -564,20 +569,10 @@ impl InstanceHandle {
 
         let offsets = VMOffsets::new(mem::size_of::<*const u8>() as u8, &module);
 
-        let mut instance_mmap = Mmap::with_at_least(
-            mem::size_of::<Instance>()
-                .checked_add(usize::try_from(offsets.size_of_vmctx()).unwrap())
-                .unwrap(),
-        )
-        .map_err(InstantiationError::Resource)?;
-
         let handle = {
-            #[allow(clippy::cast_ptr_alignment)]
-            let instance_ptr = instance_mmap.as_mut_ptr() as *mut Instance;
             let instance = Instance {
                 refcount: Cell::new(1),
                 dependencies: imports.dependencies,
-                mmap: Cell::new(instance_mmap),
                 module,
                 offsets,
                 memories,
@@ -589,6 +584,11 @@ impl InstanceHandle {
                 trap_registration,
                 vmctx: VMContext {},
             };
+            let layout = instance.alloc_layout();
+            let instance_ptr = alloc::alloc(layout) as *mut Instance;
+            if instance_ptr.is_null() {
+                alloc::handle_alloc_error(layout);
+            }
             ptr::write(instance_ptr, instance);
             InstanceHandle {
                 instance: instance_ptr,
@@ -790,9 +790,11 @@ impl Drop for InstanceHandle {
         let count = instance.refcount.get();
         instance.refcount.set(count - 1);
         if count == 1 {
-            let mmap = instance.mmap.replace(Mmap::new());
-            unsafe { ptr::drop_in_place(self.instance) };
-            mem::drop(mmap);
+            let layout = instance.alloc_layout();
+            unsafe {
+                ptr::drop_in_place(self.instance);
+                alloc::dealloc(self.instance.cast(), layout);
+            }
         }
     }
 }
