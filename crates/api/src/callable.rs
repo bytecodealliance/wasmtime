@@ -160,7 +160,7 @@ impl WrappedCallable for WasmtimeFn {
         let exec_code_buf = self
             .store
             .compiler_mut()
-            .get_published_trampoline(body, &signature, value_size)
+            .get_published_trampoline(&signature, value_size)
             .map_err(|e| Trap::new(format!("trampoline error: {:?}", e)))?;
 
         // Call the trampoline.
@@ -169,6 +169,7 @@ impl WrappedCallable for WasmtimeFn {
                 vmctx,
                 ptr::null_mut(),
                 exec_code_buf,
+                body,
                 values_vec.as_mut_ptr() as *mut u8,
             )
         } {

@@ -17,6 +17,7 @@ extern "C" {
         jmp_buf: *mut *const u8,
         vmctx: *mut u8,
         caller_vmctx: *mut u8,
+        trampoline: *const VMFunctionBody,
         callee: *const VMFunctionBody,
         values_vec: *mut u8,
     ) -> i32;
@@ -133,13 +134,23 @@ impl fmt::Display for Trap {
 
 impl std::error::Error for Trap {}
 
-/// Call the wasm function pointed to by `callee`. `values_vec` points to
-/// a buffer which holds the incoming arguments, and to which the outgoing
-/// return values will be written.
-#[no_mangle]
-pub unsafe extern "C" fn wasmtime_call_trampoline(
+/// Call the wasm function pointed to by `callee`.
+///
+/// * `vmctx` - the callee vmctx argument
+/// * `caller_vmctx` - the caller vmctx argument
+/// * `trampoline` - the jit-generated trampoline whose ABI takes 4 values, the
+///   callee vmctx, the caller vmctx, the `callee` argument below, and then the
+///   `values_vec` argument.
+/// * `callee` - the third argument to the `trampoline` function
+/// * `values_vec` - points to a buffer which holds the incoming arguments, and to
+///   which the outgoing return values will be written.
+///
+/// Wildly unsafe because it calls raw function pointers and reads/writes raw
+/// function pointers.
+pub unsafe fn wasmtime_call_trampoline(
     vmctx: *mut VMContext,
     caller_vmctx: *mut VMContext,
+    trampoline: *const VMFunctionBody,
     callee: *const VMFunctionBody,
     values_vec: *mut u8,
 ) -> Result<(), Trap> {
@@ -148,6 +159,7 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
             cx.jmp_buf.as_ptr(),
             vmctx as *mut u8,
             caller_vmctx as *mut u8,
+            trampoline,
             callee,
             values_vec,
         )
@@ -156,8 +168,7 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
 
 /// Call the wasm function pointed to by `callee`, which has no arguments or
 /// return values.
-#[no_mangle]
-pub unsafe extern "C" fn wasmtime_call(
+pub unsafe fn wasmtime_call(
     vmctx: *mut VMContext,
     caller_vmctx: *mut VMContext,
     callee: *const VMFunctionBody,

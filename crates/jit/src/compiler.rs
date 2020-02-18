@@ -22,6 +22,7 @@ use wasmtime_environ::{
 };
 use wasmtime_runtime::{
     InstantiationError, SignatureRegistry, TrapRegistration, TrapRegistry, VMFunctionBody,
+    VMSharedSignatureIndex,
 };
 
 /// Select which kind of compilation to use.
@@ -51,7 +52,7 @@ pub struct Compiler {
 
     code_memory: CodeMemory,
     trap_registry: TrapRegistry,
-    trampoline_park: HashMap<*const VMFunctionBody, *const VMFunctionBody>,
+    trampoline_park: HashMap<VMSharedSignatureIndex, *const VMFunctionBody>,
     signatures: SignatureRegistry,
     strategy: CompilationStrategy,
     cache_config: CacheConfig,
@@ -200,37 +201,31 @@ impl Compiler {
     /// Create a trampoline for invoking a function.
     pub(crate) fn get_trampoline(
         &mut self,
-        callee_address: *const VMFunctionBody,
         signature: &ir::Signature,
         value_size: usize,
     ) -> Result<*const VMFunctionBody, SetupError> {
-        use std::collections::hash_map::Entry::{Occupied, Vacant};
-        Ok(match self.trampoline_park.entry(callee_address) {
-            Occupied(entry) => *entry.get(),
-            Vacant(entry) => {
-                let body = make_trampoline(
-                    &*self.isa,
-                    &mut self.code_memory,
-                    &mut self.fn_builder_ctx,
-                    callee_address,
-                    signature,
-                    value_size,
-                )?;
-
-                entry.insert(body);
-                body
-            }
-        })
+        let index = self.signatures.register(signature);
+        if let Some(trampoline) = self.trampoline_park.get(&index) {
+            return Ok(*trampoline);
+        }
+        let body = make_trampoline(
+            &*self.isa,
+            &mut self.code_memory,
+            &mut self.fn_builder_ctx,
+            signature,
+            value_size,
+        )?;
+        self.trampoline_park.insert(index, body);
+        return Ok(body);
     }
 
     /// Create and publish a trampoline for invoking a function.
     pub fn get_published_trampoline(
         &mut self,
-        callee_address: *const VMFunctionBody,
         signature: &ir::Signature,
         value_size: usize,
     ) -> Result<*const VMFunctionBody, SetupError> {
-        let result = self.get_trampoline(callee_address, signature, value_size)?;
+        let result = self.get_trampoline(signature, value_size)?;
         self.publish_compiled_code();
         Ok(result)
     }
@@ -256,7 +251,6 @@ fn make_trampoline(
     isa: &dyn TargetIsa,
     code_memory: &mut CodeMemory,
     fn_builder_ctx: &mut FunctionBuilderContext,
-    callee_address: *const VMFunctionBody,
     signature: &ir::Signature,
     value_size: usize,
 ) -> Result<*const VMFunctionBody, SetupError> {
@@ -270,6 +264,9 @@ fn make_trampoline(
     ));
 
     // Add the caller `vmctx` parameter.
+    wrapper_sig.params.push(ir::AbiParam::new(pointer_type));
+
+    // Add the `callee_address` parameter.
     wrapper_sig.params.push(ir::AbiParam::new(pointer_type));
 
     // Add the `values_vec` parameter.
@@ -287,9 +284,9 @@ fn make_trampoline(
         builder.switch_to_block(block0);
         builder.seal_block(block0);
 
-        let (vmctx_ptr_val, caller_vmctx_ptr_val, values_vec_ptr_val) = {
+        let (vmctx_ptr_val, caller_vmctx_ptr_val, callee_value, values_vec_ptr_val) = {
             let params = builder.func.dfg.block_params(block0);
-            (params[0], params[1], params[2])
+            (params[0], params[1], params[2], params[3])
         };
 
         // Load the argument values out of `values_vec`.
@@ -318,10 +315,6 @@ fn make_trampoline(
 
         let new_sig = builder.import_signature(signature.clone());
 
-        // TODO: It's possible to make this a direct call. We just need Cranelift
-        // to support functions declared with an immediate integer address.
-        // ExternalName::Absolute(u64). Let's do it.
-        let callee_value = builder.ins().iconst(pointer_type, callee_address as i64);
         let call = builder
             .ins()
             .call_indirect(new_sig, callee_value, &callee_args);
