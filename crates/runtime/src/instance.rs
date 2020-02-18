@@ -347,10 +347,14 @@ impl Instance {
         &*self.host_state
     }
 
-    fn invoke_function(&self, index: FuncIndex) -> Result<(), InstantiationError> {
-        // TODO: Check that the callee's calling convention matches what we expect.
+    /// Invoke the WebAssembly start function of the instance, if one is present.
+    fn invoke_start_function(&self) -> Result<(), InstantiationError> {
+        let start_index = match self.module.start_func {
+            Some(idx) => idx,
+            None => return Ok(()),
+        };
 
-        let (callee_address, callee_vmctx) = match self.module.defined_func_index(index) {
+        let (callee_address, callee_vmctx) = match self.module.defined_func_index(start_index) {
             Some(defined_index) => {
                 let body = *self
                     .finished_functions
@@ -359,8 +363,8 @@ impl Instance {
                 (body as *const _, self.vmctx_ptr())
             }
             None => {
-                assert_lt!(index.index(), self.module.imported_funcs.len());
-                let import = self.imported_function(index);
+                assert_lt!(start_index.index(), self.module.imported_funcs.len());
+                let import = self.imported_function(start_index);
                 (import.body, import.vmctx)
             }
         };
@@ -368,15 +372,6 @@ impl Instance {
         // Make the call.
         unsafe { wasmtime_call(callee_vmctx, self.vmctx_ptr(), callee_address) }
             .map_err(InstantiationError::StartTrap)
-    }
-
-    /// Invoke the WebAssembly start function of the instance, if one is present.
-    fn invoke_start_function(&self) -> Result<(), InstantiationError> {
-        if let Some(start_index) = self.module.start_func {
-            self.invoke_function(start_index)
-        } else {
-            Ok(())
-        }
     }
 
     /// Return the offset from the vmctx pointer to its containing Instance.
