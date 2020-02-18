@@ -2,6 +2,7 @@
 
 use crate::module_environ::FunctionBodyData;
 use crate::tunables::Tunables;
+use crate::WASM_MAX_PAGES;
 use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{
@@ -55,18 +56,19 @@ pub enum MemoryStyle {
 impl MemoryStyle {
     /// Decide on an implementation style for the given `Memory`.
     pub fn for_memory(memory: Memory, tunables: &Tunables) -> (Self, u64) {
-        if let Some(maximum) = memory.maximum {
-            if maximum <= tunables.static_memory_bound {
-                // A heap with a declared maximum can be immovable, so make
-                // it static.
-                assert_ge!(tunables.static_memory_bound, memory.minimum);
-                return (
-                    Self::Static {
-                        bound: tunables.static_memory_bound,
-                    },
-                    tunables.static_memory_offset_guard_size,
-                );
-            }
+        // A heap with a maximum that doesn't exceed the static memory bound specified by the
+        // tunables make it static.
+        //
+        // If the module doesn't declare an explicit maximum treat it as 4GiB.
+        let maximum = memory.maximum.unwrap_or(WASM_MAX_PAGES);
+        if maximum <= tunables.static_memory_bound {
+            assert_ge!(tunables.static_memory_bound, memory.minimum);
+            return (
+                Self::Static {
+                    bound: tunables.static_memory_bound,
+                },
+                tunables.static_memory_offset_guard_size,
+            );
         }
 
         // Otherwise, make it dynamic.
