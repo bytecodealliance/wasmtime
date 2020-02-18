@@ -1147,6 +1147,123 @@ pub(crate) fn define(
         .can_store(true),
     );
 
+    let I16x8 = &TypeVar::new(
+        "I16x8",
+        "A SIMD vector with exactly 8 lanes of 16-bit values",
+        TypeSetBuilder::new()
+            .ints(16..16)
+            .simd_lanes(8..8)
+            .includes_scalars(false)
+            .build(),
+    );
+    let a = &Operand::new("a", I16x8).with_doc("Value loaded");
+
+    ig.push(
+        Inst::new(
+            "uload8x8",
+            r#"
+        Load an 8x8 vector (64 bits) from memory at ``p + Offset`` and zero-extend into an i16x8 
+        vector.
+        "#,
+            &formats.load,
+        )
+        .operands_in(vec![MemFlags, p, Offset])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "sload8x8",
+            r#"
+        Load an 8x8 vector (64 bits) from memory at ``p + Offset`` and sign-extend into an i16x8 
+        vector.
+        "#,
+            &formats.load,
+        )
+        .operands_in(vec![MemFlags, p, Offset])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
+    let I32x4 = &TypeVar::new(
+        "I32x4",
+        "A SIMD vector with exactly 4 lanes of 32-bit values",
+        TypeSetBuilder::new()
+            .ints(32..32)
+            .simd_lanes(4..4)
+            .includes_scalars(false)
+            .build(),
+    );
+    let a = &Operand::new("a", I32x4).with_doc("Value loaded");
+
+    ig.push(
+        Inst::new(
+            "uload16x4",
+            r#"
+        Load an 16x4 vector (64 bits) from memory at ``p + Offset`` and zero-extend into an i32x4 
+        vector.
+        "#,
+            &formats.load,
+        )
+        .operands_in(vec![MemFlags, p, Offset])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "sload16x4",
+            r#"
+        Load a 16x4 vector (64 bits) from memory at ``p + Offset`` and sign-extend into an i32x4 
+        vector.
+        "#,
+            &formats.load,
+        )
+        .operands_in(vec![MemFlags, p, Offset])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
+    let I64x2 = &TypeVar::new(
+        "I64x2",
+        "A SIMD vector with exactly 2 lanes of 64-bit values",
+        TypeSetBuilder::new()
+            .ints(64..64)
+            .simd_lanes(2..2)
+            .includes_scalars(false)
+            .build(),
+    );
+    let a = &Operand::new("a", I64x2).with_doc("Value loaded");
+
+    ig.push(
+        Inst::new(
+            "uload32x2",
+            r#"
+        Load an 32x2 vector (64 bits) from memory at ``p + Offset`` and zero-extend into an i64x2 
+        vector.
+        "#,
+            &formats.load,
+        )
+        .operands_in(vec![MemFlags, p, Offset])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "sload32x2",
+            r#"
+        Load a 32x2 vector (64 bits) from memory at ``p + Offset`` and sign-extend into an i64x2 
+        vector.
+        "#,
+            &formats.load,
+        )
+        .operands_in(vec![MemFlags, p, Offset])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
     let x = &Operand::new("x", Mem).with_doc("Value to be stored");
     let a = &Operand::new("a", Mem).with_doc("Value loaded");
     let Offset =
