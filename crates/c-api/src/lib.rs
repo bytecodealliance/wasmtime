@@ -1231,6 +1231,16 @@ pub unsafe extern "C" fn wasm_externtype_kind(et: *const wasm_externtype_t) -> w
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn wasm_func_type(f: *const wasm_func_t) -> *mut wasm_functype_t {
+    let ft = Box::new(wasm_functype_t {
+        functype: (*f).func().borrow().ty().clone(),
+        params_cache: None,
+        returns_cache: None,
+    });
+    Box::into_raw(ft)
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn wasm_func_param_arity(f: *const wasm_func_t) -> usize {
     (*f).func().borrow().param_arity()
 }
