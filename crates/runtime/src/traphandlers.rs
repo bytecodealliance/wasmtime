@@ -17,7 +17,7 @@ extern "C" {
         jmp_buf: *mut *const u8,
         vmctx: *mut u8,
         caller_vmctx: *mut u8,
-        trampolien: *const VMFunctionBody,
+        trampoline: *const VMFunctionBody,
         callee: *const VMFunctionBody,
         values_vec: *mut u8,
     ) -> i32;
