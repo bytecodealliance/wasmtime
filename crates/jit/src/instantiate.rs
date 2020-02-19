@@ -7,6 +7,7 @@ use crate::compiler::Compiler;
 use crate::imports::resolve_imports;
 use crate::link::link_module;
 use crate::resolver::Resolver;
+use std::collections::HashMap;
 use std::io::Write;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -19,8 +20,8 @@ use wasmtime_environ::{
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{
-    GdbJitImageRegistration, InstanceHandle, InstantiationError, TrapRegistration, VMFunctionBody,
-    VMSharedSignatureIndex,
+    GdbJitImageRegistration, InstanceHandle, InstantiationError, SignatureRegistry,
+    TrapRegistration, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
 };
 
 /// An error condition while setting up a wasm instance, be it validation,
@@ -50,10 +51,12 @@ pub enum SetupError {
 struct RawCompiledModule<'data> {
     module: Module,
     finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
     data_initializers: Box<[DataInitializer<'data>]>,
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<GdbJitImageRegistration>,
     trap_registration: TrapRegistration,
+    sig_registry: Arc<SignatureRegistry>,
 }
 
 impl<'data> RawCompiledModule<'data> {
@@ -78,13 +81,19 @@ impl<'data> RawCompiledModule<'data> {
             None
         };
 
-        let (finished_functions, jt_offsets, relocations, dbg_image, trap_registration) = compiler
-            .compile(
-                &translation.module,
-                translation.module_translation.as_ref().unwrap(),
-                translation.function_body_inputs,
-                debug_data,
-            )?;
+        let (
+            finished_functions,
+            trampolines,
+            jt_offsets,
+            relocations,
+            dbg_image,
+            trap_registration,
+        ) = compiler.compile(
+            &translation.module,
+            translation.module_translation.as_ref().unwrap(),
+            translation.function_body_inputs,
+            debug_data,
+        )?;
 
         link_module(
             &translation.module,
@@ -135,10 +144,12 @@ impl<'data> RawCompiledModule<'data> {
         Ok(Self {
             module: translation.module,
             finished_functions: finished_functions.into_boxed_slice(),
+            trampolines,
             data_initializers: translation.data_initializers.into_boxed_slice(),
             signatures: signatures.into_boxed_slice(),
             dbg_jit_registration,
             trap_registration,
+            sig_registry: compiler.signatures().clone(),
         })
     }
 }
@@ -147,10 +158,12 @@ impl<'data> RawCompiledModule<'data> {
 pub struct CompiledModule {
     module: Arc<Module>,
     finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
     data_initializers: Box<[OwnedDataInitializer]>,
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
     trap_registration: TrapRegistration,
+    sig_registry: Arc<SignatureRegistry>,
 }
 
 impl CompiledModule {
@@ -166,6 +179,7 @@ impl CompiledModule {
         Ok(Self::from_parts(
             raw.module,
             raw.finished_functions,
+            raw.trampolines,
             raw.data_initializers
                 .iter()
                 .map(OwnedDataInitializer::new)
@@ -174,6 +188,7 @@ impl CompiledModule {
             raw.signatures.clone(),
             raw.dbg_jit_registration,
             raw.trap_registration,
+            raw.sig_registry,
         ))
     }
 
@@ -181,18 +196,22 @@ impl CompiledModule {
     pub fn from_parts(
         module: Module,
         finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
+        trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
         data_initializers: Box<[OwnedDataInitializer]>,
         signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         dbg_jit_registration: Option<GdbJitImageRegistration>,
         trap_registration: TrapRegistration,
+        sig_registry: Arc<SignatureRegistry>,
     ) -> Self {
         Self {
             module: Arc::new(module),
             finished_functions,
+            trampolines,
             data_initializers,
             signatures,
             dbg_jit_registration: dbg_jit_registration.map(Rc::new),
             trap_registration,
+            sig_registry,
         }
     }
 
@@ -218,11 +237,12 @@ impl CompiledModule {
                 data: &*init.data,
             })
             .collect::<Vec<_>>();
-        let imports = resolve_imports(&self.module, resolver)?;
+        let imports = resolve_imports(&self.module, &self.sig_registry, resolver)?;
         InstanceHandle::new(
             Arc::clone(&self.module),
             self.trap_registration.clone(),
             self.finished_functions.clone(),
+            self.trampolines.clone(),
             imports,
             &data_initializers,
             self.signatures.clone(),

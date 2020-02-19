@@ -7,15 +7,19 @@ use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::{Global, GlobalInit, Memory, Table, TableElementType};
 use wasmtime_environ::{MemoryPlan, MemoryStyle, Module, TablePlan};
 use wasmtime_runtime::{
-    Export, Imports, InstanceHandle, LinkError, VMFunctionImport, VMGlobalImport, VMMemoryImport,
-    VMTableImport,
+    Export, Imports, InstanceHandle, LinkError, SignatureRegistry, VMFunctionImport,
+    VMGlobalImport, VMMemoryImport, VMTableImport,
 };
 
 /// This function allows to match all imports of a `Module` with concrete definitions provided by
 /// a `Resolver`.
 ///
 /// If all imports are satisfied returns an `Imports` instance required for a module instantiation.
-pub fn resolve_imports(module: &Module, resolver: &mut dyn Resolver) -> Result<Imports, LinkError> {
+pub fn resolve_imports(
+    module: &Module,
+    signatures: &SignatureRegistry,
+    resolver: &mut dyn Resolver,
+) -> Result<Imports, LinkError> {
     let mut dependencies = HashSet::new();
 
     let mut function_imports = PrimaryMap::with_capacity(module.imported_funcs.len());
@@ -24,13 +28,14 @@ pub fn resolve_imports(module: &Module, resolver: &mut dyn Resolver) -> Result<I
             Some(export_value) => match export_value {
                 Export::Function(f) => {
                     let import_signature = &module.local.signatures[module.local.functions[index]];
-                    if f.signature != *import_signature {
+                    let signature = signatures.lookup(f.signature).unwrap();
+                    if signature != *import_signature {
                         // TODO: If the difference is in the calling convention,
                         // we could emit a wrapper function to fix it up.
                         return Err(LinkError(format!(
                             "{}/{}: incompatible import type: exported function with signature {} \
                              incompatible with function import with signature {}",
-                            module_name, field, f.signature, import_signature
+                            module_name, field, signature, import_signature
                         )));
                     }
                     dependencies.insert(unsafe { InstanceHandle::from_vmctx(f.vmctx) });

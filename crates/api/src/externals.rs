@@ -84,7 +84,7 @@ impl Extern {
     pub(crate) fn get_wasmtime_export(&self) -> wasmtime_runtime::Export {
         match self {
             Extern::Func(f) => f.wasmtime_function().clone().into(),
-            Extern::Global(g) => g.inner.wasmtime_export.clone().into(),
+            Extern::Global(g) => g.wasmtime_export.clone().into(),
             Extern::Memory(m) => m.wasmtime_export.clone().into(),
             Extern::Table(t) => t.wasmtime_export.clone().into(),
         }
@@ -205,7 +205,7 @@ impl Global {
     /// Returns the current [`Val`] of this global.
     pub fn get(&self) -> Val {
         unsafe {
-            let definition = &mut *self.inner.wasmtime_export.definition;
+            let definition = &mut *self.wasmtime_export.definition;
             match self.ty().content() {
                 ValType::I32 => Val::from(*definition.as_i32()),
                 ValType::I64 => Val::from(*definition.as_i64()),
@@ -237,7 +237,7 @@ impl Global {
             bail!("cross-`Store` values are not supported");
         }
         unsafe {
-            let definition = &mut *self.inner.wasmtime_export.definition;
+            let definition = &mut *self.wasmtime_export.definition;
             match val {
                 Val::I32(i) => *definition.as_i32_mut() = i,
                 Val::I64(i) => *definition.as_i64_mut() = i,
@@ -596,17 +596,10 @@ impl Memory {
     ) -> Memory {
         let ty = MemoryType::from_wasmtime_memory(&wasmtime_export.memory.memory);
         Memory {
-<<<<<<< HEAD
             store: store.clone(),
             ty: ty,
-            wasmtime_handle: instance_handle,
-            wasmtime_export: export,
-=======
-            _store: store.clone(),
-            ty,
             wasmtime_handle,
             wasmtime_export,
->>>>>>> Refactor wasmtime_runtime::Export
         }
     }
 }

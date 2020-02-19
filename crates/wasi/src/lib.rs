@@ -58,6 +58,8 @@ impl wasmtime::WasmTy for WasiCallerMemory {
     }
 
     fn into_abi(self) {}
+    unsafe fn load(_ptr: &mut *const u128) {}
+    unsafe fn store(_abi: Self::Abi, _ptr: *mut u128) {}
 }
 
 impl WasiCallerMemory {

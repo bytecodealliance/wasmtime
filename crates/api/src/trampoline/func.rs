@@ -5,12 +5,14 @@ use crate::{Callable, FuncType, Store, Trap, Val};
 use anyhow::{bail, Result};
 use std::any::Any;
 use std::cmp;
+use std::collections::HashMap;
+use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use std::rc::Rc;
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::ir::types;
 use wasmtime_environ::isa::TargetIsa;
-use wasmtime_environ::wasm::{DefinedFuncIndex, FuncIndex};
+use wasmtime_environ::wasm::FuncIndex;
 use wasmtime_environ::{
     ir, settings, CompiledFunction, CompiledFunctionUnwindInfo, Export, Module,
 };
@@ -21,7 +23,7 @@ use wasmtime_jit::trampoline::{
     binemit, pretty_error, Context, FunctionBuilder, FunctionBuilderContext,
 };
 use wasmtime_jit::{native, CodeMemory};
-use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody};
+use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody, VMTrampoline};
 
 struct TrampolineState {
     func: Rc<dyn Callable + 'static>,
@@ -145,7 +147,7 @@ fn make_trampoline(
     stub_sig.params.push(ir::AbiParam::new(pointer_type));
 
     // Compute the size of the values vector. The vmctx and caller vmctx are passed separately.
-    let value_size = 16;
+    let value_size = mem::size_of::<u128>();
     let values_vec_len = ((value_size as usize)
         * cmp::max(signature.params.len() - 2, signature.returns.len()))
         as u32;
@@ -264,10 +266,12 @@ pub fn create_handle_with_function(
 
     let mut fn_builder_ctx = FunctionBuilderContext::new();
     let mut module = Module::new();
-    let mut finished_functions: PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]> =
-        PrimaryMap::new();
+    let mut finished_functions = PrimaryMap::new();
+    let mut trampolines = HashMap::new();
     let mut code_memory = CodeMemory::new();
 
+    // First up we manufacture a trampoline which has the ABI specified by `ft`
+    // and calls into `stub_fn`...
     let sig_id = module.local.signatures.push(sig.clone());
     let func_id = module.local.functions.push(sig_id);
     module
@@ -280,16 +284,31 @@ pub fn create_handle_with_function(
         func_id.index() as u32,
         &sig,
     );
-    code_memory.publish();
-
     finished_functions.push(trampoline);
 
-    let trampoline_state = TrampolineState::new(func.clone(), code_memory);
+    // ... and then we also need a trampoline with the standard "trampoline ABI"
+    // which enters into the ABI specified by `ft`. Note that this is only used
+    // if `Func::call` is called on an object created by `Func::new`.
+    let trampoline = wasmtime_jit::make_trampoline(
+        &*isa,
+        &mut code_memory,
+        &mut fn_builder_ctx,
+        &sig,
+        mem::size_of::<u128>(),
+    )?;
+    let sig_id = store.compiler().signatures().register(&sig);
+    trampolines.insert(sig_id, trampoline);
 
+    // Next up we wrap everything up into an `InstanceHandle` by publishing our
+    // code memory (makes it executable) and ensuring all our various bits of
+    // state make it into the instance constructors.
+    code_memory.publish();
+    let trampoline_state = TrampolineState::new(func.clone(), code_memory);
     create_handle(
         module,
         store,
         finished_functions,
+        trampolines,
         Box::new(trampoline_state),
     )
 }
@@ -297,6 +316,7 @@ pub fn create_handle_with_function(
 pub unsafe fn create_handle_with_raw_function(
     ft: &FuncType,
     func: *mut [VMFunctionBody],
+    trampoline: VMTrampoline,
     store: &Store,
     state: Box<dyn Any>,
 ) -> Result<InstanceHandle> {
@@ -314,6 +334,7 @@ pub unsafe fn create_handle_with_raw_function(
 
     let mut module = Module::new();
     let mut finished_functions = PrimaryMap::new();
+    let mut trampolines = HashMap::new();
 
     let sig_id = module.local.signatures.push(sig.clone());
     let func_id = module.local.functions.push(sig_id);
@@ -321,6 +342,8 @@ pub unsafe fn create_handle_with_raw_function(
         .exports
         .insert("trampoline".to_string(), Export::Function(func_id));
     finished_functions.push(func);
+    let sig_id = store.compiler().signatures().register(&sig);
+    trampolines.insert(sig_id, trampoline);
 
-    create_handle(module, store, finished_functions, state)
+    create_handle(module, store, finished_functions, trampolines, state)
 }

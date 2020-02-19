@@ -3,7 +3,7 @@
 
 use crate::instance::{InstanceHandle, SignalHandler};
 use crate::trap_registry::TrapDescription;
-use crate::vmcontext::{VMContext, VMFunctionBody};
+use crate::vmcontext::{VMContext, VMFunctionBody, VMTrampoline};
 use backtrace::Backtrace;
 use std::any::Any;
 use std::cell::Cell;
@@ -170,7 +170,7 @@ impl Trap {
 pub unsafe fn wasmtime_call_trampoline(
     vmctx: *mut VMContext,
     caller_vmctx: *mut VMContext,
-    trampoline: *const VMFunctionBody,
+    trampoline: VMTrampoline,
     callee: *const VMFunctionBody,
     values_vec: *mut u8,
 ) -> Result<(), Trap> {

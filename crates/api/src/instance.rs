@@ -124,24 +124,21 @@ impl Instance {
         let config = store.engine().config();
         let instance_handle = instantiate(config, module.compiled_module(), imports)?;
 
-        let exports = {
-            let mut exports = Vec::with_capacity(module.exports().len());
-            for export in module.exports() {
-                let name = export.name().to_string();
-                let export = instance_handle.lookup(&name).expect("export");
-                exports.push(Extern::from_wasmtime_export(
-                    store,
-                    instance_handle.clone(),
-                    export,
-                ));
-            }
-            exports.into_boxed_slice()
-        };
+        let mut exports = Vec::with_capacity(module.exports().len());
+        for export in module.exports() {
+            let name = export.name().to_string();
+            let export = instance_handle.lookup(&name).expect("export");
+            exports.push(Extern::from_wasmtime_export(
+                store,
+                instance_handle.clone(),
+                export,
+            ));
+        }
         module.register_frame_info();
         Ok(Instance {
             instance_handle,
             module: module.clone(),
-            exports,
+            exports: exports.into_boxed_slice(),
         })
     }
 

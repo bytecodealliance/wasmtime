@@ -51,7 +51,7 @@ pub use crate::traphandlers::{
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
     VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
-    VMTableDefinition, VMTableImport,
+    VMTableDefinition, VMTableImport, VMTrampoline,
 };
 
 /// Version number of this crate.

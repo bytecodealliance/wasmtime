@@ -1,7 +1,7 @@
 use crate::vmcontext::{
-    VMContext, VMFunctionBody, VMGlobalDefinition, VMMemoryDefinition, VMTableDefinition,
+    VMContext, VMFunctionBody, VMGlobalDefinition, VMMemoryDefinition, VMSharedSignatureIndex,
+    VMTableDefinition,
 };
-use wasmtime_environ::ir;
 use wasmtime_environ::wasm::Global;
 use wasmtime_environ::{MemoryPlan, TablePlan};
 
@@ -29,7 +29,9 @@ pub struct ExportFunction {
     /// Pointer to the containing `VMContext`.
     pub vmctx: *mut VMContext,
     /// The function signature declaration, used for compatibilty checking.
-    pub signature: ir::Signature,
+    ///
+    /// Note that this indexes within the module associated with `vmctx`.
+    pub signature: VMSharedSignatureIndex,
 }
 
 impl From<ExportFunction> for Export {

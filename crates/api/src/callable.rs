@@ -4,11 +4,9 @@ use crate::trap::Trap;
 use crate::types::FuncType;
 use crate::values::Val;
 use std::cmp::max;
-use std::mem;
 use std::ptr;
 use std::rc::Rc;
-use wasmtime_environ::ir;
-use wasmtime_runtime::{InstanceHandle, ExportFunction};
+use wasmtime_runtime::{ExportFunction, InstanceHandle, VMTrampoline};
 
 /// A trait representing a function that can be imported and called from inside
 /// WebAssembly.
@@ -97,14 +95,21 @@ pub(crate) struct WasmtimeFn {
     store: Store,
     instance: InstanceHandle,
     export: ExportFunction,
+    trampoline: VMTrampoline,
 }
 
 impl WasmtimeFn {
-    pub fn new(store: &Store, instance: InstanceHandle, export: ExportFunction) -> WasmtimeFn {
+    pub fn new(
+        store: &Store,
+        instance: InstanceHandle,
+        export: ExportFunction,
+        trampoline: VMTrampoline,
+    ) -> WasmtimeFn {
         WasmtimeFn {
             store: store.clone(),
             instance,
             export,
+            trampoline,
         }
     }
 }
@@ -112,26 +117,31 @@ impl WasmtimeFn {
 impl WrappedCallable for WasmtimeFn {
     fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
         let f = self.wasmtime_function();
-        if f.signature.params.len() - 2 != params.len() {
+        let signature = self
+            .store
+            .compiler()
+            .signatures()
+            .lookup(f.signature)
+            .expect("missing signature");
+        if signature.params.len() - 2 != params.len() {
             return Err(Trap::new(format!(
                 "expected {} arguments, got {}",
-                f.signature.params.len() - 2,
+                signature.params.len() - 2,
                 params.len()
             )));
         }
-        if f.signature.returns.len() != results.len() {
+        if signature.returns.len() != results.len() {
             return Err(Trap::new(format!(
                 "expected {} results, got {}",
-                f.signature.returns.len(),
+                signature.returns.len(),
                 results.len()
             )));
         }
 
-        let value_size = mem::size_of::<u128>();
         let mut values_vec = vec![0; max(params.len(), results.len())];
 
         // Store the argument values into `values_vec`.
-        let param_tys = f.signature.params.iter().skip(2);
+        let param_tys = signature.params.iter().skip(2);
         for ((arg, slot), ty) in params.iter().zip(&mut values_vec).zip(param_tys) {
             if arg.ty().get_wasmtime_type() != Some(ty.value_type) {
                 return Err(Trap::new("argument type mismatch"));
@@ -141,19 +151,12 @@ impl WrappedCallable for WasmtimeFn {
             }
         }
 
-        // Get the trampoline to call for this function.
-        let exec_code_buf = self
-            .store
-            .compiler_mut()
-            .get_published_trampoline(&f.signature, value_size)
-            .map_err(|e| Trap::new(format!("trampoline error: {:?}", e)))?;
-
         // Call the trampoline.
         if let Err(error) = unsafe {
             wasmtime_runtime::wasmtime_call_trampoline(
                 f.vmctx,
                 ptr::null_mut(),
-                exec_code_buf,
+                self.trampoline,
                 f.address,
                 values_vec.as_mut_ptr() as *mut u8,
             )
@@ -162,7 +165,7 @@ impl WrappedCallable for WasmtimeFn {
         }
 
         // Load the return values out of `values_vec`.
-        for (index, abi_param) in f.signature.returns.iter().enumerate() {
+        for (index, abi_param) in signature.returns.iter().enumerate() {
             unsafe {
                 let ptr = values_vec.as_ptr().add(index);
 

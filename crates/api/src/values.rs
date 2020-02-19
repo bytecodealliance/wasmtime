@@ -202,10 +202,9 @@ pub(crate) fn into_checked_anyfunc(
         },
         Val::FuncRef(f) => {
             let f = f.wasmtime_function();
-            let type_index = store.compiler().signatures().register(&f.signature);
             wasmtime_runtime::VMCallerCheckedAnyfunc {
                 func_ptr: f.address,
-                type_index,
+                type_index: f.signature,
                 vmctx: f.vmctx,
             }
         }
@@ -220,15 +219,10 @@ pub(crate) fn from_checked_anyfunc(
     if item.type_index == wasmtime_runtime::VMSharedSignatureIndex::default() {
         Val::AnyRef(AnyRef::Null);
     }
-    let signature = store
-        .compiler()
-        .signatures()
-        .lookup(item.type_index)
-        .expect("signature");
     let instance_handle = unsafe { wasmtime_runtime::InstanceHandle::from_vmctx(item.vmctx) };
     let export = wasmtime_runtime::ExportFunction {
         address: item.func_ptr,
-        signature,
+        signature: item.type_index,
         vmctx: item.vmctx,
     };
     let f = Func::from_wasmtime_function(export, store, instance_handle);

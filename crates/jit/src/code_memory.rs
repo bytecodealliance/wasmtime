@@ -71,10 +71,9 @@ impl CodeMemory {
     ) -> Result<&mut [VMFunctionBody], String> {
         let size = Self::function_allocation_size(func);
 
-        let start = self.position as u32;
-        let (buf, table) = self.allocate(size)?;
+        let (buf, table, start) = self.allocate(size)?;
 
-        let (_, _, _, vmfunc) = Self::copy_function(func, start, buf, table);
+        let (_, _, _, vmfunc) = Self::copy_function(func, start as u32, buf, table);
 
         Ok(vmfunc)
     }
@@ -90,9 +89,9 @@ impl CodeMemory {
             .into_iter()
             .fold(0, |acc, func| acc + Self::function_allocation_size(func));
 
-        let mut start = self.position as u32;
-        let (mut buf, mut table) = self.allocate(total_len)?;
+        let (mut buf, mut table, start) = self.allocate(total_len)?;
         let mut result = Vec::with_capacity(compilation.len());
+        let mut start = start as u32;
 
         for func in compilation.into_iter() {
             let (next_start, next_buf, next_table, vmfunc) =
@@ -134,8 +133,14 @@ impl CodeMemory {
     /// that it can be written to and patched, though we make it readonly before
     /// actually executing from it.
     ///
+    /// A few values are returned:
+    ///
+    /// * A mutable slice which references the allocated memory
+    /// * A function table instance where unwind information is registered
+    /// * The offset within the current mmap that the slice starts at
+    ///
     /// TODO: Add an alignment flag.
-    fn allocate(&mut self, size: usize) -> Result<(&mut [u8], &mut FunctionTable), String> {
+    fn allocate(&mut self, size: usize) -> Result<(&mut [u8], &mut FunctionTable, usize), String> {
         if self.current.mmap.len() - self.position < size {
             self.push_current(cmp::max(0x10000, size))?;
         }
@@ -146,6 +151,7 @@ impl CodeMemory {
         Ok((
             &mut self.current.mmap.as_mut_slice()[old_position..self.position],
             &mut self.current.table,
+            old_position,
         ))
     }
 
