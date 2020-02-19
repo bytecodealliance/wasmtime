@@ -70,9 +70,17 @@ impl BuiltinFunctionIndex {
     pub const fn get_elem_drop_index() -> Self {
         Self(9)
     }
+    /// Returns an index for wasm's `memory.copy` for locally defined memories.
+    pub const fn get_memory_copy_index() -> Self {
+        Self(10)
+    }
+    /// Returns an index for wasm's `memory.copy` for imported memories.
+    pub const fn get_imported_memory_copy_index() -> Self {
+        Self(11)
+    }
     /// Returns the total number of builtin functions.
     pub const fn builtin_functions_total_number() -> u32 {
-        10
+        12
     }
 
     /// Return the index as an u32 number.
@@ -110,6 +118,10 @@ pub struct FuncEnvironment<'module_environment> {
     /// The external function signature for implementing wasm's `elem.drop`.
     elem_drop_sig: Option<ir::SigRef>,
 
+    /// The external function signature for implementing wasm's `memory.copy`
+    /// (it's the same for both local and imported memories).
+    memory_copy_sig: Option<ir::SigRef>,
+
     /// Offsets to struct fields accessed by JIT code.
     offsets: VMOffsets,
 }
@@ -128,6 +140,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             table_copy_sig: None,
             table_init_sig: None,
             elem_drop_sig: None,
+            memory_copy_sig: None,
             offsets: VMOffsets::new(target_config.pointer_bytes(), module),
         }
     }
@@ -369,6 +382,51 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     fn get_elem_drop_func(&mut self, func: &mut Function) -> (ir::SigRef, BuiltinFunctionIndex) {
         let sig = self.get_elem_drop_sig(func);
         (sig, BuiltinFunctionIndex::get_elem_drop_index())
+    }
+
+    fn get_memory_copy_sig(&mut self, func: &mut Function) -> ir::SigRef {
+        let sig = self.memory_copy_sig.unwrap_or_else(|| {
+            func.import_signature(Signature {
+                params: vec![
+                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                    // Memory index.
+                    AbiParam::new(I32),
+                    // Destination address.
+                    AbiParam::new(I32),
+                    // Source address.
+                    AbiParam::new(I32),
+                    // Length.
+                    AbiParam::new(I32),
+                    // Source location.
+                    AbiParam::new(I32),
+                ],
+                returns: vec![],
+                call_conv: self.target_config.default_call_conv,
+            })
+        });
+        self.memory_copy_sig = Some(sig);
+        sig
+    }
+
+    fn get_memory_copy_func(
+        &mut self,
+        func: &mut Function,
+        memory_index: MemoryIndex,
+    ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
+        let sig = self.get_memory_copy_sig(func);
+        if let Some(defined_memory_index) = self.module.defined_memory_index(memory_index) {
+            (
+                sig,
+                defined_memory_index.index(),
+                BuiltinFunctionIndex::get_memory_copy_index(),
+            )
+        } else {
+            (
+                sig,
+                memory_index.index(),
+                BuiltinFunctionIndex::get_imported_memory_copy_index(),
+            )
+        }
     }
 
     /// Translates load of builtin function and returns a pair of values `vmctx`
@@ -968,16 +1026,30 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_memory_copy(
         &mut self,
-        _pos: FuncCursor,
-        _index: MemoryIndex,
+        mut pos: FuncCursor,
+        memory_index: MemoryIndex,
         _heap: ir::Heap,
-        _dst: ir::Value,
-        _src: ir::Value,
-        _len: ir::Value,
+        dst: ir::Value,
+        src: ir::Value,
+        len: ir::Value,
     ) -> WasmResult<()> {
-        Err(WasmError::Unsupported(
-            "bulk memory: `memory.copy`".to_string(),
-        ))
+        let (func_sig, memory_index, func_idx) =
+            self.get_memory_copy_func(&mut pos.func, memory_index);
+
+        let memory_index_arg = pos.ins().iconst(I32, memory_index as i64);
+
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        let src_loc = pos.srcloc();
+        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
+
+        pos.ins().call_indirect(
+            func_sig,
+            func_addr,
+            &[vmctx, memory_index_arg, dst, src, len, src_loc_arg],
+        );
+
+        Ok(())
     }
 
     fn translate_memory_fill(
@@ -1005,7 +1077,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         _len: ir::Value,
     ) -> WasmResult<()> {
         Err(WasmError::Unsupported(
-            "bulk memory: `memory.copy`".to_string(),
+            "bulk memory: `memory.init`".to_string(),
         ))
     }
 

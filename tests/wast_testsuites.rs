@@ -22,6 +22,8 @@ fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
         || wast.iter().any(|s| s == "table_copy.wast")
         || wast.iter().any(|s| s == "elem_drop.wast")
         || wast.iter().any(|s| s == "elem-ref-null.wast")
+        || wast.iter().any(|s| s == "memory-copy.wast")
+        || wast.iter().any(|s| s == "imported-memory-copy.wast")
         || wast
             .iter()
             .any(|s| s == "table_copy_on_imported_tables.wast");
