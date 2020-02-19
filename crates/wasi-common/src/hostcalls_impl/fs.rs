@@ -801,7 +801,9 @@ pub(crate) unsafe fn path_rename(
     log::debug!("path_rename resolved_old={:?}", resolved_old);
     log::debug!("path_rename resolved_new={:?}", resolved_new);
 
-    if let (Descriptor::OsHandle(_), Descriptor::OsHandle(_)) = (resolved_old.dirfd(), resolved_new.dirfd()) {
+    if let (Descriptor::OsHandle(_), Descriptor::OsHandle(_)) =
+        (resolved_old.dirfd(), resolved_new.dirfd())
+    {
         hostcalls_impl::path_rename(resolved_old, resolved_new)
     } else {
         // Virtual files do not support rename, at the moment, and streams don't have paths to
