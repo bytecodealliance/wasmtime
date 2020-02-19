@@ -553,24 +553,20 @@ impl Func {
         Ok(results.into_boxed_slice())
     }
 
-    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::Export {
-        self.callable.wasmtime_export()
+    pub(crate) fn wasmtime_function(&self) -> &wasmtime_runtime::ExportFunction {
+        self.callable.wasmtime_function()
     }
 
     pub(crate) fn from_wasmtime_function(
-        export: wasmtime_runtime::Export,
+        export: wasmtime_runtime::ExportFunction,
         store: &Store,
         instance_handle: InstanceHandle,
     ) -> Self {
         // This is only called with `Export::Function`, and since it's coming
         // from wasmtime_runtime itself we should support all the types coming
         // out of it, so assert such here.
-        let ty = if let wasmtime_runtime::Export::Function { signature, .. } = &export {
-            FuncType::from_wasmtime_signature(signature.clone())
-                .expect("core wasm signature should be supported")
-        } else {
-            panic!("expected function export")
-        };
+        let ty = FuncType::from_wasmtime_signature(export.signature.clone())
+            .expect("core wasm signature should be supported");
         let callable = WasmtimeFn::new(store, instance_handle, export);
         Func::from_wrapped(store, ty, Rc::new(callable))
     }

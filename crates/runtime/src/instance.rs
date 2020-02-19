@@ -32,7 +32,12 @@ use wasmtime_environ::wasm::{
     DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
     ElemIndex, FuncIndex, GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
+<<<<<<< HEAD
 use wasmtime_environ::{ir, DataInitializer, Module, TableElements, VMOffsets};
+=======
+use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
+use crate::{ExportFunction, ExportTable, ExportMemory, ExportGlobal};
+>>>>>>> Refactor wasmtime_runtime::Export
 
 cfg_if::cfg_if! {
     if #[cfg(unix)] {
@@ -313,11 +318,12 @@ impl Instance {
                         let import = self.imported_function(*index);
                         (import.body, import.vmctx)
                     };
-                Export::Function {
+                ExportFunction {
                     address,
                     signature,
                     vmctx,
                 }
+                .into()
             }
             wasmtime_environ::Export::Table(index) => {
                 let (definition, vmctx) =
@@ -327,11 +333,12 @@ impl Instance {
                         let import = self.imported_table(*index);
                         (import.from, import.vmctx)
                     };
-                Export::Table {
+                ExportTable {
                     definition,
                     vmctx,
                     table: self.module.local.table_plans[*index].clone(),
                 }
+                .into()
             }
             wasmtime_environ::Export::Memory(index) => {
                 let (definition, vmctx) =
@@ -341,22 +348,23 @@ impl Instance {
                         let import = self.imported_memory(*index);
                         (import.from, import.vmctx)
                     };
-                Export::Memory {
+                ExportMemory {
                     definition,
                     vmctx,
                     memory: self.module.local.memory_plans[*index].clone(),
                 }
+                .into()
             }
-            wasmtime_environ::Export::Global(index) => Export::Global {
-                definition: if let Some(def_index) = self.module.local.defined_global_index(*index)
-                {
+            wasmtime_environ::Export::Global(index) => ExportGlobal {
+                definition: if let Some(def_index) = self.module.local.defined_global_index(*index) {
                     self.global_ptr(def_index)
                 } else {
                     self.imported_global(*index).from
                 },
                 vmctx: self.vmctx_ptr(),
                 global: self.module.local.globals[*index],
-            },
+            }
+            .into(),
         }
     }
 

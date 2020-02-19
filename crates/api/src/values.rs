@@ -201,19 +201,12 @@ pub(crate) fn into_checked_anyfunc(
             vmctx: ptr::null_mut(),
         },
         Val::FuncRef(f) => {
-            let (vmctx, func_ptr, signature) = match f.wasmtime_export() {
-                wasmtime_runtime::Export::Function {
-                    vmctx,
-                    address,
-                    signature,
-                } => (*vmctx, *address, signature),
-                _ => panic!("expected function export"),
-            };
-            let type_index = store.compiler().signatures().register(signature);
+            let f = f.wasmtime_function();
+            let type_index = store.compiler().signatures().register(&f.signature);
             wasmtime_runtime::VMCallerCheckedAnyfunc {
-                func_ptr,
+                func_ptr: f.address,
                 type_index,
-                vmctx,
+                vmctx: f.vmctx,
             }
         }
         _ => bail!("val is not funcref"),
@@ -233,7 +226,7 @@ pub(crate) fn from_checked_anyfunc(
         .lookup(item.type_index)
         .expect("signature");
     let instance_handle = unsafe { wasmtime_runtime::InstanceHandle::from_vmctx(item.vmctx) };
-    let export = wasmtime_runtime::Export::Function {
+    let export = wasmtime_runtime::ExportFunction {
         address: item.func_ptr,
         signature,
         vmctx: item.vmctx,

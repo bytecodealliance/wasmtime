@@ -36,7 +36,7 @@ mod vmcontext;
 
 pub mod libcalls;
 
-pub use crate::export::Export;
+pub use crate::export::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{InstanceHandle, InstantiationError, LinkError};
 pub use crate::jit_int::GdbJitImageRegistration;

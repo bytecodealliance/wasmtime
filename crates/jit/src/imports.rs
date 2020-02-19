@@ -22,28 +22,24 @@ pub fn resolve_imports(module: &Module, resolver: &mut dyn Resolver) -> Result<I
     for (index, (module_name, field, import_idx)) in module.imported_funcs.iter() {
         match resolver.resolve(*import_idx, module_name, field) {
             Some(export_value) => match export_value {
-                Export::Function {
-                    address,
-                    signature,
-                    vmctx,
-                } => {
+                Export::Function(f) => {
                     let import_signature = &module.local.signatures[module.local.functions[index]];
-                    if signature != *import_signature {
+                    if f.signature != *import_signature {
                         // TODO: If the difference is in the calling convention,
                         // we could emit a wrapper function to fix it up.
                         return Err(LinkError(format!(
                             "{}/{}: incompatible import type: exported function with signature {} \
                              incompatible with function import with signature {}",
-                            module_name, field, signature, import_signature
+                            module_name, field, f.signature, import_signature
                         )));
                     }
-                    dependencies.insert(unsafe { InstanceHandle::from_vmctx(vmctx) });
+                    dependencies.insert(unsafe { InstanceHandle::from_vmctx(f.vmctx) });
                     function_imports.push(VMFunctionImport {
-                        body: address,
-                        vmctx,
+                        body: f.address,
+                        vmctx: f.vmctx,
                     });
                 }
-                Export::Table { .. } | Export::Memory { .. } | Export::Global { .. } => {
+                Export::Table(_) | Export::Memory(_) | Export::Global(_) => {
                     return Err(LinkError(format!(
                         "{}/{}: incompatible import type: export incompatible with function import",
                         module_name, field
@@ -63,26 +59,22 @@ pub fn resolve_imports(module: &Module, resolver: &mut dyn Resolver) -> Result<I
     for (index, (module_name, field, import_idx)) in module.imported_tables.iter() {
         match resolver.resolve(*import_idx, module_name, field) {
             Some(export_value) => match export_value {
-                Export::Table {
-                    definition,
-                    vmctx,
-                    table,
-                } => {
+                Export::Table(t) => {
                     let import_table = &module.local.table_plans[index];
-                    if !is_table_compatible(&table, import_table) {
+                    if !is_table_compatible(&t.table, import_table) {
                         return Err(LinkError(format!(
                             "{}/{}: incompatible import type: exported table incompatible with \
                              table import",
                             module_name, field,
                         )));
                     }
-                    dependencies.insert(unsafe { InstanceHandle::from_vmctx(vmctx) });
+                    dependencies.insert(unsafe { InstanceHandle::from_vmctx(t.vmctx) });
                     table_imports.push(VMTableImport {
-                        from: definition,
-                        vmctx,
+                        from: t.definition,
+                        vmctx: t.vmctx,
                     });
                 }
-                Export::Global { .. } | Export::Memory { .. } | Export::Function { .. } => {
+                Export::Global(_) | Export::Memory(_) | Export::Function(_) => {
                     return Err(LinkError(format!(
                         "{}/{}: incompatible import type: export incompatible with table import",
                         module_name, field
@@ -102,13 +94,9 @@ pub fn resolve_imports(module: &Module, resolver: &mut dyn Resolver) -> Result<I
     for (index, (module_name, field, import_idx)) in module.imported_memories.iter() {
         match resolver.resolve(*import_idx, module_name, field) {
             Some(export_value) => match export_value {
-                Export::Memory {
-                    definition,
-                    vmctx,
-                    memory,
-                } => {
+                Export::Memory(m) => {
                     let import_memory = &module.local.memory_plans[index];
-                    if !is_memory_compatible(&memory, import_memory) {
+                    if !is_memory_compatible(&m.memory, import_memory) {
                         return Err(LinkError(format!(
                             "{}/{}: incompatible import type: exported memory incompatible with \
                              memory import",
@@ -123,19 +111,19 @@ pub fn resolve_imports(module: &Module, resolver: &mut dyn Resolver) -> Result<I
                         MemoryStyle::Static {
                             bound: import_bound,
                         },
-                    ) = (memory.style, &import_memory.style)
+                    ) = (m.memory.style, &import_memory.style)
                     {
                         assert_ge!(bound, *import_bound);
                     }
-                    assert_ge!(memory.offset_guard_size, import_memory.offset_guard_size);
+                    assert_ge!(m.memory.offset_guard_size, import_memory.offset_guard_size);
 
-                    dependencies.insert(unsafe { InstanceHandle::from_vmctx(vmctx) });
+                    dependencies.insert(unsafe { InstanceHandle::from_vmctx(m.vmctx) });
                     memory_imports.push(VMMemoryImport {
-                        from: definition,
-                        vmctx,
+                        from: m.definition,
+                        vmctx: m.vmctx,
                     });
                 }
-                Export::Table { .. } | Export::Global { .. } | Export::Function { .. } => {
+                Export::Table(_) | Export::Global(_) | Export::Function(_) => {
                     return Err(LinkError(format!(
                         "{}/{}: incompatible import type: export incompatible with memory import",
                         module_name, field
@@ -155,28 +143,24 @@ pub fn resolve_imports(module: &Module, resolver: &mut dyn Resolver) -> Result<I
     for (index, (module_name, field, import_idx)) in module.imported_globals.iter() {
         match resolver.resolve(*import_idx, module_name, field) {
             Some(export_value) => match export_value {
-                Export::Table { .. } | Export::Memory { .. } | Export::Function { .. } => {
+                Export::Table(_) | Export::Memory(_) | Export::Function(_) => {
                     return Err(LinkError(format!(
                         "{}/{}: incompatible import type: exported global incompatible with \
                          global import",
                         module_name, field
                     )));
                 }
-                Export::Global {
-                    definition,
-                    vmctx,
-                    global,
-                } => {
+                Export::Global(g) => {
                     let imported_global = module.local.globals[index];
-                    if !is_global_compatible(&global, &imported_global) {
+                    if !is_global_compatible(&g.global, &imported_global) {
                         return Err(LinkError(format!(
                             "{}/{}: incompatible import type: exported global incompatible with \
                              global import",
                             module_name, field
                         )));
                     }
-                    dependencies.insert(unsafe { InstanceHandle::from_vmctx(vmctx) });
-                    global_imports.push(VMGlobalImport { from: definition });
+                    dependencies.insert(unsafe { InstanceHandle::from_vmctx(g.vmctx) });
+                    global_imports.push(VMGlobalImport { from: g.definition });
                 }
             },
             None => {
