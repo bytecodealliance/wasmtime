@@ -14,24 +14,25 @@ use crate::vmcontext::{
     VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
     VMTableDefinition, VMTableImport,
 };
-use crate::TrapRegistration;
+use crate::{TrapDescription, TrapRegistration};
 use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::alloc::{self, Layout};
 use std::any::Any;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::{mem, ptr, slice};
 use thiserror::Error;
-use wasmtime_environ::entity::{BoxedSlice, EntityRef, PrimaryMap};
+use wasmtime_environ::entity::{packed_option::ReservedValue, BoxedSlice, EntityRef, PrimaryMap};
 use wasmtime_environ::wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
-    GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
+    GlobalIndex, GlobalInit, MemoryIndex, PassiveElemIndex, SignatureIndex, TableIndex,
 };
-use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
+use wasmtime_environ::{ir, DataInitializer, Module, TableElements, VMOffsets};
 
 cfg_if::cfg_if! {
     if #[cfg(unix)] {
@@ -86,6 +87,10 @@ pub(crate) struct Instance {
     /// WebAssembly table data.
     tables: BoxedSlice<DefinedTableIndex, Table>,
 
+    /// Passive elements in this instantiation. As `elem.drop`s happen, these
+    /// entries get replaced into empty slices.
+    passive_elements: RefCell<HashMap<PassiveElemIndex, Box<[VMCallerCheckedAnyfunc]>>>,
+
     /// Pointers to functions in executable memory.
     finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
 
@@ -122,6 +127,14 @@ impl Instance {
     fn signature_id(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
         let index = usize::try_from(index.as_u32()).unwrap();
         unsafe { *self.signature_ids_ptr().add(index) }
+    }
+
+    pub(crate) fn module(&self) -> &Arc<Module> {
+        &self.module
+    }
+
+    pub(crate) fn module_ref(&self) -> &Module {
+        &*self.module
     }
 
     /// Return a pointer to the `VMSharedSignatureIndex`s.
@@ -527,6 +540,91 @@ impl Instance {
         Layout::from_size_align(size, align).unwrap()
     }
 
+    /// Get a `VMCallerCheckedAnyfunc` for the given `FuncIndex`.
+    fn get_caller_checked_anyfunc(&self, index: FuncIndex) -> VMCallerCheckedAnyfunc {
+        if index == FuncIndex::reserved_value() {
+            return VMCallerCheckedAnyfunc::default();
+        }
+
+        let sig = self.module.local.functions[index];
+        let type_index = self.signature_id(sig);
+
+        let (func_ptr, vmctx) = if let Some(def_index) = self.module.local.defined_func_index(index)
+        {
+            (
+                self.finished_functions[def_index] as *const _,
+                self.vmctx_ptr(),
+            )
+        } else {
+            let import = self.imported_function(index);
+            (import.body, import.vmctx)
+        };
+        VMCallerCheckedAnyfunc {
+            func_ptr,
+            type_index,
+            vmctx,
+        }
+    }
+
+    /// The `table.init` operation: initializes a portion of a table with a
+    /// passive element.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `Trap` error when the range within the table is out of bounds
+    /// or the range within the passive element is out of bounds.
+    pub(crate) fn table_init(
+        &self,
+        table_index: TableIndex,
+        elem_index: PassiveElemIndex,
+        dst: u32,
+        src: u32,
+        len: u32,
+        source_loc: ir::SourceLoc,
+    ) -> Result<(), Trap> {
+        // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
+
+        let table = self.get_table(table_index);
+        let passive_elements = self.passive_elements.borrow();
+        let elem = passive_elements
+            .get(&elem_index)
+            .map(|e| &**e)
+            .unwrap_or_else(|| &[]);
+
+        if src
+            .checked_add(len)
+            .map_or(true, |n| n as usize > elem.len())
+            || dst.checked_add(len).map_or(true, |m| m > table.size())
+        {
+            return Err(Trap::Wasm {
+                desc: TrapDescription {
+                    source_loc,
+                    trap_code: ir::TrapCode::TableOutOfBounds,
+                },
+                backtrace: backtrace::Backtrace::new(),
+            });
+        }
+
+        for (dst, src) in (dst..dst + len).zip(src..src + len) {
+            table
+                .set(dst, elem[src as usize].clone())
+                .expect("should never panic because we already did the bounds check above");
+        }
+
+        Ok(())
+    }
+
+    /// Drop an element.
+    pub(crate) fn elem_drop(&self, elem_index: PassiveElemIndex) {
+        // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-elem-drop
+
+        let mut passive_elements = self.passive_elements.borrow_mut();
+        // Note that dropping a non-passive element is a no-op (not a trap).
+        if let Some(elem) = passive_elements.get_mut(&elem_index) {
+            mem::replace(elem, vec![].into_boxed_slice());
+        }
+    }
+
     /// Get a table by index regardless of whether it is locally-defined or an
     /// imported, foreign table.
     pub(crate) fn get_table(&self, table_index: TableIndex) -> &Table {
@@ -611,6 +709,7 @@ impl InstanceHandle {
                 offsets,
                 memories,
                 tables,
+                passive_elements: Default::default(),
                 finished_functions,
                 dbg_jit_registration,
                 host_state,
@@ -681,6 +780,7 @@ impl InstanceHandle {
 
         // Apply the initializers.
         initialize_tables(instance)?;
+        initialize_passive_elements(instance);
         initialize_memories(instance, data_initializers)?;
         initialize_globals(instance);
 
@@ -721,12 +821,12 @@ impl InstanceHandle {
 
     /// Return a reference-counting pointer to a module.
     pub fn module(&self) -> &Arc<Module> {
-        &self.instance().module
+        self.instance().module()
     }
 
     /// Return a reference to a module.
     pub fn module_ref(&self) -> &Module {
-        &self.instance().module
+        self.instance().module_ref()
     }
 
     /// Lookup an export with the given name.
@@ -846,9 +946,9 @@ fn check_table_init_bounds(instance: &Instance) -> Result<(), InstantiationError
 
         let size = usize::try_from(table.size()).unwrap();
         if size < start + init.elements.len() {
-            return Err(InstantiationError::Link(LinkError(
+            return Err(InstantiationError::TableOutOfBounds(
                 "elements segment does not fit".to_owned(),
-            )));
+            ));
         }
     }
 
@@ -944,36 +1044,47 @@ fn get_table_init_start(init: &TableElements, instance: &Instance) -> usize {
 
 /// Initialize the table memory from the provided initializers.
 fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
-    let vmctx = instance.vmctx_ptr();
     let module = Arc::clone(&instance.module);
     for init in &module.table_elements {
         let start = get_table_init_start(init, instance);
         let table = instance.get_table(init.table_index);
 
         for (i, func_idx) in init.elements.iter().enumerate() {
-            let callee_sig = instance.module.local.functions[*func_idx];
-            let (callee_ptr, callee_vmctx) =
-                if let Some(index) = instance.module.local.defined_func_index(*func_idx) {
-                    (instance.finished_functions[index] as *const _, vmctx)
-                } else {
-                    let imported_func = instance.imported_function(*func_idx);
-                    (imported_func.body, imported_func.vmctx)
-                };
-            let type_index = instance.signature_id(callee_sig);
+            let anyfunc = instance.get_caller_checked_anyfunc(*func_idx);
             table
-                .set(
-                    u32::try_from(start + i).unwrap(),
-                    VMCallerCheckedAnyfunc {
-                        func_ptr: callee_ptr,
-                        type_index,
-                        vmctx: callee_vmctx,
-                    },
-                )
+                .set(u32::try_from(start + i).unwrap(), anyfunc)
                 .unwrap();
         }
     }
 
     Ok(())
+}
+
+/// Initialize the `Instance::passive_elements` map by resolving the
+/// `Module::passive_elements`'s `FuncIndex`s into `VMCallerCheckedAnyfunc`s for
+/// this instance.
+fn initialize_passive_elements(instance: &Instance) {
+    let mut passive_elements = instance.passive_elements.borrow_mut();
+    debug_assert!(
+        passive_elements.is_empty(),
+        "should only be called once, at initialization time"
+    );
+
+    passive_elements.extend(
+        instance
+            .module
+            .passive_elements
+            .iter()
+            .map(|(idx, segments)| {
+                (
+                    *idx,
+                    segments
+                        .iter()
+                        .map(|s| instance.get_caller_checked_anyfunc(*s))
+                        .collect(),
+                )
+            }),
+    );
 }
 
 /// Allocate memory for just the memories of the current module.
@@ -1058,6 +1169,13 @@ pub enum InstantiationError {
     /// Insufficient resources available for execution.
     #[error("Insufficient resources: {0}")]
     Resource(String),
+
+    /// A table out of bounds error.
+    ///
+    /// Depending on whether bulk memory is enabled or not, this is either a
+    /// link error or a trap raised during instantiation.
+    #[error("Table out of bounds error: {0}")]
+    TableOutOfBounds(String),
 
     /// A wasm link error occured.
     #[error("Failed to link module")]

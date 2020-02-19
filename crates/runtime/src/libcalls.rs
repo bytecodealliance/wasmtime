@@ -6,7 +6,9 @@ use crate::table::Table;
 use crate::traphandlers::raise_lib_trap;
 use crate::vmcontext::VMContext;
 use wasmtime_environ::ir;
-use wasmtime_environ::wasm::{DefinedMemoryIndex, DefinedTableIndex, MemoryIndex, TableIndex};
+use wasmtime_environ::wasm::{
+    DefinedMemoryIndex, DefinedTableIndex, MemoryIndex, PassiveElemIndex, TableIndex,
+};
 
 /// Implementation of f32.ceil
 pub extern "C" fn wasmtime_f32_ceil(x: f32) -> f32 {
@@ -229,4 +231,34 @@ pub unsafe extern "C" fn wasmtime_table_copy_imported_imported(
     if let Err(trap) = Table::copy(dst_table, src_table, dst, src, len, source_loc) {
         raise_lib_trap(trap);
     }
+}
+
+/// Implementation of `table.init`.
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_table_init(
+    vmctx: *mut VMContext,
+    table_index: u32,
+    elem_index: u32,
+    dst: u32,
+    src: u32,
+    len: u32,
+    source_loc: u32,
+) {
+    let table_index = TableIndex::from_u32(table_index);
+    let source_loc = ir::SourceLoc::new(source_loc);
+    let elem_index = PassiveElemIndex::from_u32(elem_index);
+
+    let instance = (&mut *vmctx).instance();
+
+    if let Err(trap) = instance.table_init(table_index, elem_index, dst, src, len, source_loc) {
+        raise_lib_trap(trap);
+    }
+}
+
+/// Implementation of `elem.drop`.
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_elem_drop(vmctx: *mut VMContext, elem_index: u32) {
+    let elem_index = PassiveElemIndex::from_u32(elem_index);
+    let instance = (&mut *vmctx).instance();
+    instance.elem_drop(elem_index);
 }

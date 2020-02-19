@@ -237,6 +237,11 @@ impl Module {
             },
         }
     }
+
+    /// Get the given passive element, if it exists.
+    pub fn get_passive_element(&self, index: PassiveElemIndex) -> Option<&[FuncIndex]> {
+        self.passive_elements.get(&index).map(|es| &**es)
+    }
 }
 
 impl ModuleLocal {
