@@ -175,9 +175,7 @@ fn make_rw_event(event: &FdEventData, nbytes: Result<u64>) -> wasi::__wasi_event
         userdata: event.userdata,
         r#type: event.r#type,
         error: error.as_raw_errno(),
-        u: wasi::__wasi_event_u_t {
-            fd_readwrite: wasi::__wasi_event_fd_readwrite_t { nbytes, flags: 0 },
-        },
+        fd_readwrite: wasi::__wasi_event_fd_readwrite_t { nbytes, flags: 0 },
     }
 }
 
@@ -186,11 +184,9 @@ fn make_timeout_event(timeout: &ClockEventData) -> wasi::__wasi_event_t {
         userdata: timeout.userdata,
         r#type: wasi::__WASI_EVENTTYPE_CLOCK,
         error: wasi::__WASI_ERRNO_SUCCESS,
-        u: wasi::__wasi_event_u_t {
-            fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
-                nbytes: 0,
-                flags: 0,
-            },
+        fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+            nbytes: 0,
+            flags: 0,
         },
     }
 }
