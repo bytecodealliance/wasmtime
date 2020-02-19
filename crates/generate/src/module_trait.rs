@@ -15,7 +15,7 @@ pub fn define_module_trait(names: &Names, m: &Module) -> TokenStream {
             let arg_type = match arg.tref.type_().passed_by() {
                 witx::TypePassedBy::Value { .. } => quote!(#arg_typename),
                 witx::TypePassedBy::Pointer { .. } => quote!(&#arg_typename),
-                witx::TypePassedBy::PointerLengthPair { .. } => unimplemented!(),
+                witx::TypePassedBy::PointerLengthPair { .. } => quote!(&#arg_typename),
             };
             quote!(#arg_name: #arg_type)
         });

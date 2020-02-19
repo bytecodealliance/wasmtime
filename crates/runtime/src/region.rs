@@ -26,10 +26,11 @@ impl Region {
         }
     }
 
-    pub fn extend(&self, new_len: u32) -> Self {
+    pub fn extend(&self, times: u32) -> Self {
+        let len = self.len * times;
         Self {
             start: self.start,
-            len: self.len + new_len,
+            len,
         }
     }
 }

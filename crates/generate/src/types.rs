@@ -30,7 +30,7 @@ pub fn define_datatype(names: &Names, namedtype: &witx::NamedType) -> TokenStrea
             witx::Type::ConstPointer(p) => {
                 define_witx_pointer(names, &namedtype.name, quote!(wiggle_runtime::GuestPtr), p)
             }
-            witx::Type::Array { .. } => unimplemented!("array types"),
+            witx::Type::Array(arr) => define_witx_array(names, &namedtype.name, &arr),
         },
     }
 }
@@ -156,7 +156,7 @@ pub fn type_needs_lifetime(tref: &witx::TypeRef) -> bool {
         witx::Type::Struct(s) => !struct_is_copy(&s),
         witx::Type::Union { .. } => true,
         witx::Type::Pointer { .. } | witx::Type::ConstPointer { .. } => true,
-        witx::Type::Array { .. } => unimplemented!(),
+        witx::Type::Array { .. } => true,
     }
 }
 
@@ -378,6 +378,12 @@ fn define_witx_pointer(
     let pointee_type = names.type_ref(pointee, quote!('a));
 
     quote!(pub type #ident<'a> = #pointer_type<'a, #pointee_type>;)
+}
+
+fn define_witx_array(names: &Names, name: &witx::Id, arr_raw: &witx::TypeRef) -> TokenStream {
+    let ident = names.type_(name);
+    let pointee_type = names.type_ref(arr_raw, quote!('a));
+    quote!(pub type #ident<'a> = wiggle_runtime::GuestArray<'a, #pointee_type>;)
 }
 
 fn int_repr_tokens(int_repr: witx::IntRepr) -> TokenStream {

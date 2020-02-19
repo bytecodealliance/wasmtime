@@ -1,7 +1,4 @@
-use super::{
-    array::{GuestArray, GuestArrayMut},
-    GuestMemory,
-};
+use super::{array::GuestArray, GuestMemory};
 use crate::{
     borrow::BorrowHandle, GuestError, GuestType, GuestTypeClone, GuestTypeCopy, GuestTypePtr,
     Region,
@@ -47,7 +44,7 @@ impl<'a, T: GuestType> GuestPtr<'a, T> {
     }
 
     pub fn array(&self, num_elems: u32) -> Result<GuestArray<'a, T>, GuestError> {
-        let region = self.region.extend((num_elems - 1) * T::size());
+        let region = self.region.extend(num_elems);
         if self.mem.contains(region) {
             let ptr = GuestPtr {
                 mem: self.mem,
@@ -193,20 +190,6 @@ where
         offset: u32,
     ) -> Result<GuestPtrMut<'a, CastTo>, GuestError> {
         self.mem.ptr_mut(self.region.start + offset)
-    }
-
-    pub fn array_mut(&self, num_elems: u32) -> Result<GuestArrayMut<'a, T>, GuestError> {
-        let region = self.region.extend((num_elems - 1) * T::size());
-        if self.mem.contains(region) {
-            let ptr = GuestPtrMut {
-                mem: self.mem,
-                region: self.region,
-                type_: self.type_,
-            };
-            Ok(GuestArrayMut { ptr, num_elems })
-        } else {
-            Err(GuestError::PtrOutOfBounds(region))
-        }
     }
 }
 

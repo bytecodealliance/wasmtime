@@ -82,7 +82,7 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
         match param.tref.type_().passed_by() {
             witx::TypePassedBy::Value { .. } => quote!(#name),
             witx::TypePassedBy::Pointer { .. } => quote!(&#name),
-            witx::TypePassedBy::PointerLengthPair { .. } => unimplemented!(),
+            witx::TypePassedBy::PointerLengthPair { .. } => quote!(&#name),
         }
     });
 
@@ -236,6 +236,36 @@ fn marshal_arg(
                             #error_handling
                         }
                     },
+                    Err(e) => {
+                        #error_handling
+                    }
+                };
+            }
+        }
+        witx::Type::Array(arr) => {
+            let pointee_type = names.type_ref(arr, anon_lifetime());
+            let ptr_name = names.func_ptr_binding(&param.name);
+            let len_name = names.func_len_binding(&param.name);
+            let name = names.func_param(&param.name);
+            quote! {
+                let num_elems = match memory.ptr::<u32>(#len_name as u32) {
+                    Ok(p) => match p.as_ref() {
+                        Ok(r) => r,
+                        Err(e) => {
+                            #error_handling
+                        }
+                    }
+                    Err(e) => {
+                        #error_handling
+                    }
+                };
+                let #name = match memory.ptr::<#pointee_type>(#ptr_name as u32) {
+                    Ok(p) => match p.array(*num_elems) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            #error_handling
+                        }
+                    }
                     Err(e) => {
                         #error_handling
                     }
