@@ -207,7 +207,7 @@ pub(crate) fn path_open(
     opts.access_mode(access_mode.bits())
         .custom_flags(file_flags_from_fdflags(fdflags).bits())
         .open(&path)
-        .map(|f| Descriptor::OsHandle(OsHandle::from(f)))
+        .map(|f| OsHandle::from(f).into())
         .map_err(Into::into)
 }
 
@@ -397,7 +397,6 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
     } else {
         Ok(0)
     }
-    }
 }
 
 fn strip_trailing_slashes_and_concatenate(resolved: &PathGet) -> Result<Option<PathBuf>> {
@@ -407,7 +406,6 @@ fn strip_trailing_slashes_and_concatenate(resolved: &PathGet) -> Result<Option<P
     } else {
         Ok(None)
     }
-}
 }
 
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
@@ -453,9 +451,7 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
                 WinError::ERROR_INVALID_NAME => {
                     // If source contains trailing slashes, check if we are dealing with
                     // a file instead of a dir, and if so, throw ENOTDIR.
-                    if let Some(path) =
-                        strip_trailing_slashes_and_concatenate(&resolved_old)?
-                    {
+                    if let Some(path) = strip_trailing_slashes_and_concatenate(&resolved_old)? {
                         if path.is_file() {
                             return Err(Error::ENOTDIR);
                         }
@@ -470,7 +466,6 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
             Err(Error::EIO)
         }
     })
-    }
 }
 
 pub(crate) fn fd_filestat_get(file: &std::fs::File) -> Result<wasi::__wasi_filestat_t> {
@@ -530,9 +525,7 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
                     }
                     WinError::ERROR_INVALID_NAME => {
                         // does the target without trailing slashes exist?
-                        if let Some(path) =
-                            strip_trailing_slashes_and_concatenate(&resolved)?
-                        {
+                        if let Some(path) = strip_trailing_slashes_and_concatenate(&resolved)? {
                             if path.exists() {
                                 return Err(Error::EEXIST);
                             }
@@ -548,7 +541,6 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
             }
         }
     })
-    }
 }
 
 pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {

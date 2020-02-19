@@ -8,35 +8,41 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
         file::{unlinkat, AtFlag},
         Errno, YanixError,
     };
-    unsafe { unlinkat(resolved.dirfd().as_raw_fd(), resolved.path(), AtFlag::empty()) }
-        .map_err(|err| {
-            if let YanixError::Errno(mut errno) = err {
-                // Non-Linux implementations may return EPERM when attempting to remove a
-                // directory without REMOVEDIR. While that's what POSIX specifies, it's
-                // less useful. Adjust this to EISDIR. It doesn't matter that this is not
-                // atomic with the unlinkat, because if the file is removed and a directory
-                // is created before fstatat sees it, we're racing with that change anyway
-                // and unlinkat could have legitimately seen the directory if the race had
-                // turned out differently.
-                use yanix::file::{fstatat, SFlag};
+    unsafe {
+        unlinkat(
+            resolved.dirfd().as_raw_fd(),
+            resolved.path(),
+            AtFlag::empty(),
+        )
+    }
+    .map_err(|err| {
+        if let YanixError::Errno(mut errno) = err {
+            // Non-Linux implementations may return EPERM when attempting to remove a
+            // directory without REMOVEDIR. While that's what POSIX specifies, it's
+            // less useful. Adjust this to EISDIR. It doesn't matter that this is not
+            // atomic with the unlinkat, because if the file is removed and a directory
+            // is created before fstatat sees it, we're racing with that change anyway
+            // and unlinkat could have legitimately seen the directory if the race had
+            // turned out differently.
+            use yanix::file::{fstatat, SFlag};
 
-                if errno == Errno::EPERM {
-                    if let Ok(stat) = unsafe {
-                        fstatat(file.as_raw_fd(), resolved.path(), AtFlag::SYMLINK_NOFOLLOW)
-                    } {
-                        if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::IFDIR) {
-                            errno = Errno::EISDIR;
-                        }
-                    } else {
-                        errno = Errno::last();
+            if errno == Errno::EPERM {
+                if let Ok(stat) =
+                    unsafe { fstatat(file.as_raw_fd(), resolved.path(), AtFlag::SYMLINK_NOFOLLOW) }
+                {
+                    if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::IFDIR) {
+                        errno = Errno::EISDIR;
                     }
+                } else {
+                    errno = Errno::last();
                 }
-                errno.into()
-            } else {
-                err
             }
-        })
-        .map_err(Into::into)
+            errno.into()
+        } else {
+            err
+        }
+    })
+    .map_err(Into::into)
 }
 
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
@@ -58,9 +64,9 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
                     // the trailing slash and check if the path exists, and
                     // adjust the error code appropriately.
                     let new_path = resolved.path().trim_end_matches('/');
-                    if let Ok(_) = unsafe {
-                        fstatat(file.as_raw_fd(), new_path, AtFlag::SYMLINK_NOFOLLOW)
-                    } {
+                    if let Ok(_) =
+                        unsafe { fstatat(file.as_raw_fd(), new_path, AtFlag::SYMLINK_NOFOLLOW) }
+                    {
                         Err(Error::EEXIST)
                     } else {
                         Err(Error::ENOTDIR)

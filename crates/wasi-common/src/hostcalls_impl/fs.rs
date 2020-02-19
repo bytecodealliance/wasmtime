@@ -744,7 +744,7 @@ pub(crate) unsafe fn path_readlink(
         Descriptor::VirtualFile(_virt) => {
             unimplemented!("virtual readlink");
         }
-        _ => hostcalls_impl::path_readlink(resolved, &mut buf)?
+        _ => hostcalls_impl::path_readlink(resolved, &mut buf)?,
     };
 
     trace!("     | (buf_ptr,*buf_used)={:?}", buf);
@@ -801,7 +801,13 @@ pub(crate) unsafe fn path_rename(
     log::debug!("path_rename resolved_old={:?}", resolved_old);
     log::debug!("path_rename resolved_new={:?}", resolved_new);
 
-    hostcalls_impl::path_rename(resolved_old, resolved_new)
+    if let (Descriptor::OsHandle(_), Descriptor::OsHandle(_)) = (resolved_old.dirfd(), resolved_new.dirfd()) {
+        hostcalls_impl::path_rename(resolved_old, resolved_new)
+    } else {
+        // Virtual files do not support rename, at the moment, and streams don't have paths to
+        // rename, so any combination of Descriptor that gets here is an error in the making.
+        panic!("path_rename with one or more non-OS files");
+    }
 }
 
 pub(crate) unsafe fn fd_filestat_get(
@@ -963,11 +969,10 @@ pub(crate) unsafe fn path_filestat_get(
         false,
     )?;
     let host_filestat = match resolved.dirfd() {
-        Descriptor::VirtualFile(virt) => {
-            virt.openat(std::path::Path::new(resolved.path()), false, false, 0, 0)?
-                .filestat_get()?
-        }
-        _ => { hostcalls_impl::path_filestat_get(resolved, dirflags)? }
+        Descriptor::VirtualFile(virt) => virt
+            .openat(std::path::Path::new(resolved.path()), false, false, 0, 0)?
+            .filestat_get()?,
+        _ => hostcalls_impl::path_filestat_get(resolved, dirflags)?,
     };
 
     trace!("     | *filestat_ptr={:?}", host_filestat);
@@ -1051,9 +1056,7 @@ pub(crate) unsafe fn path_symlink(
         Descriptor::VirtualFile(_virt) => {
             unimplemented!("virtual path_symlink");
         }
-        _non_virtual => {
-            hostcalls_impl::path_symlink(old_path, resolved_new)
-        }
+        _non_virtual => hostcalls_impl::path_symlink(old_path, resolved_new),
     }
 }
 
@@ -1079,10 +1082,8 @@ pub(crate) unsafe fn path_unlink_file(
     let resolved = path_get(fe, wasi::__WASI_RIGHTS_PATH_UNLINK_FILE, 0, 0, path, false)?;
 
     match resolved.dirfd() {
-        Descriptor::VirtualFile(virt) => {
-            virt.unlink_file(resolved.path())
-        }
-        _ => hostcalls_impl::path_unlink_file(resolved)
+        Descriptor::VirtualFile(virt) => virt.unlink_file(resolved.path()),
+        _ => hostcalls_impl::path_unlink_file(resolved),
     }
 }
 
@@ -1118,7 +1119,7 @@ pub(crate) unsafe fn path_remove_directory(
 
     match resolved.dirfd() {
         Descriptor::VirtualFile(virt) => virt.remove_directory(resolved.path()),
-        _ => hostcalls_impl::path_remove_directory(resolved)
+        _ => hostcalls_impl::path_remove_directory(resolved),
     }
 }
 

@@ -6,8 +6,14 @@ use std::os::unix::prelude::AsRawFd;
 pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     use yanix::file::{unlinkat, AtFlag};
 
-    unsafe { unlinkat(resolved.dirfd().as_raw_fd(), resolved.path(), AtFlag::empty()) }
-        .map_err(Into::into)
+    unsafe {
+        unlinkat(
+            resolved.dirfd().as_raw_fd(),
+            resolved.path(),
+            AtFlag::empty(),
+        )
+    }
+    .map_err(Into::into)
 }
 
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
@@ -16,7 +22,8 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
     log::debug!("path_symlink old_path = {:?}", old_path);
     log::debug!("path_symlink resolved = {:?}", resolved);
 
-    unsafe { symlinkat(old_path, resolved.dirfd().as_raw_fd(), resolved.path()) }.map_err(Into::into)
+    unsafe { symlinkat(old_path, resolved.dirfd().as_raw_fd(), resolved.path()) }
+        .map_err(Into::into)
 }
 
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {

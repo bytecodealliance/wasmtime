@@ -43,12 +43,8 @@ pub(crate) enum Handle<'handle> {
 impl<'descriptor> Handle<'descriptor> {
     pub(crate) fn try_clone(&self) -> io::Result<Descriptor> {
         match self {
-            Handle::OsHandle(file) => file
-                .try_clone()
-                .map(|f| OsHandle::from(f).into()),
-            Handle::Stream(stream) => stream
-                .try_clone()
-                .map(|f| OsHandle::from(f).into()),
+            Handle::OsHandle(file) => file.try_clone().map(|f| OsHandle::from(f).into()),
+            Handle::Stream(stream) => stream.try_clone().map(|f| OsHandle::from(f).into()),
             Handle::VirtualFile(virt) => virt.try_clone().map(Descriptor::VirtualFile),
         }
     }
