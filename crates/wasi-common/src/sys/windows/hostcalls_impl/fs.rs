@@ -372,7 +372,7 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
     // we need to strip the prefix from the absolute path
     // as otherwise we will error out since WASI is not capable
     // of dealing with absolute paths
-    let dir_path = get_file_path(file)?;
+    let dir_path = get_file_path(&resolved.dirfd().as_os_handle())?;
     let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
     let target_path = target_path
         .strip_prefix(dir_path)
@@ -402,7 +402,7 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
 fn strip_trailing_slashes_and_concatenate(resolved: &PathGet) -> Result<Option<PathBuf>> {
     if resolved.path().ends_with('/') {
         let suffix = resolved.path().trim_end_matches('/');
-        concatenate(file, Path::new(suffix)).map(Some)
+        concatenate(&resolved.dirfd().as_os_handle(), Path::new(suffix)).map(Some)
     } else {
         Ok(None)
     }
@@ -502,7 +502,7 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
     use std::os::windows::fs::{symlink_dir, symlink_file};
     use winx::winerror::WinError;
 
-    let old_path = concatenate(file, Path::new(old_path))?;
+    let old_path = concatenate(&resolved.dirfd().as_os_handle(), Path::new(old_path))?;
     let new_path = resolved.concatenate()?;
 
     // try creating a file symlink

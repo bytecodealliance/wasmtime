@@ -1,4 +1,3 @@
-use crate::fdentry::Descriptor;
 use crate::hostcalls_impl::PathGet;
 use crate::{Error, Result};
 use std::os::unix::prelude::AsRawFd;
@@ -27,9 +26,13 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
             use yanix::file::{fstatat, SFlag};
 
             if errno == Errno::EPERM {
-                if let Ok(stat) =
-                    unsafe { fstatat(file.as_raw_fd(), resolved.path(), AtFlag::SYMLINK_NOFOLLOW) }
-                {
+                if let Ok(stat) = unsafe {
+                    fstatat(
+                        resolved.dirfd().as_raw_fd(),
+                        resolved.path(),
+                        AtFlag::SYMLINK_NOFOLLOW,
+                    )
+                } {
                     if SFlag::from_bits_truncate(stat.st_mode).contains(SFlag::IFDIR) {
                         errno = Errno::EISDIR;
                     }
@@ -64,9 +67,13 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
                     // the trailing slash and check if the path exists, and
                     // adjust the error code appropriately.
                     let new_path = resolved.path().trim_end_matches('/');
-                    if let Ok(_) =
-                        unsafe { fstatat(file.as_raw_fd(), new_path, AtFlag::SYMLINK_NOFOLLOW) }
-                    {
+                    if let Ok(_) = unsafe {
+                        fstatat(
+                            resolved.dirfd().as_raw_fd(),
+                            new_path,
+                            AtFlag::SYMLINK_NOFOLLOW,
+                        )
+                    } {
                         Err(Error::EEXIST)
                     } else {
                         Err(Error::ENOTDIR)
