@@ -26,7 +26,7 @@ use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody};
 /// instances are equivalent in their functionality.
 #[derive(Clone)]
 pub struct Func {
-    _store: Store,
+    store: Store,
     callable: Rc<dyn WrappedCallable + 'static>,
     ty: FuncType,
 }
@@ -272,7 +272,7 @@ impl Func {
         callable: Rc<dyn WrappedCallable + 'static>,
     ) -> Func {
         Func {
-            _store: store.clone(),
+            store: store.clone(),
             callable,
             ty,
         }
@@ -303,6 +303,13 @@ impl Func {
     /// This function should not panic unless the underlying function itself
     /// initiates a panic.
     pub fn call(&self, params: &[Val]) -> Result<Box<[Val]>, Trap> {
+        for param in params {
+            if !param.comes_from_same_store(&self.store) {
+                return Err(Trap::new(
+                    "cross-`Store` values are not currently supported",
+                ));
+            }
+        }
         let mut results = vec![Val::null(); self.result_arity()];
         self.callable.call(params, &mut results)?;
         Ok(results.into_boxed_slice())
@@ -420,6 +427,10 @@ impl Func {
         ///
         /// See the [`Func::get1`] method for more documentation.
         (get10, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10)
+    }
+
+    pub(crate) fn store(&self) -> &Store {
+        &self.store
     }
 }
 

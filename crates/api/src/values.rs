@@ -133,6 +133,13 @@ impl Val {
     pub fn unwrap_anyref(&self) -> AnyRef {
         self.anyref().expect("expected anyref")
     }
+
+    pub(crate) fn comes_from_same_store(&self, store: &Store) -> bool {
+        match self {
+            Val::FuncRef(f) => Store::same(store, f.store()),
+            _ => true,
+        }
+    }
 }
 
 impl From<i32> for Val {
@@ -175,6 +182,9 @@ pub(crate) fn into_checked_anyfunc(
     val: Val,
     store: &Store,
 ) -> Result<wasmtime_runtime::VMCallerCheckedAnyfunc> {
+    if !val.comes_from_same_store(store) {
+        bail!("cross-`Store` values are not supported");
+    }
     Ok(match val {
         Val::AnyRef(AnyRef::Null) => wasmtime_runtime::VMCallerCheckedAnyfunc {
             func_ptr: ptr::null(),
@@ -206,7 +216,7 @@ pub(crate) fn from_checked_anyfunc(
     store: &Store,
 ) -> Val {
     if item.type_index == wasmtime_runtime::VMSharedSignatureIndex::default() {
-        return Val::AnyRef(AnyRef::Null);
+        Val::AnyRef(AnyRef::Null);
     }
     let signature = store
         .compiler()
