@@ -29,7 +29,7 @@ fn check_wat(wat: &str) -> Result<()> {
     any(target_os = "linux", target_os = "macos"),
     target_pointer_width = "64"
 ))]
-fn test_simulate_dwarf_simple_x86_64() -> Result<()> {
+fn test_debug_dwarf_simulate_simple_x86_64() -> Result<()> {
     check_wat(
         r#"
 ;; check: DW_TAG_compile_unit 

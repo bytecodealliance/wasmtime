@@ -29,7 +29,7 @@ fn check_wasm(wasm_path: &str, directives: &str) -> Result<()> {
     any(target_os = "linux", target_os = "macos"),
     target_pointer_width = "64"
 ))]
-fn test_dwarf_translate() -> Result<()> {
+fn test_debug_dwarf_translate() -> Result<()> {
     check_wasm(
         "tests/debug/testsuite/fib-wasm.wasm",
         r##"

@@ -1,0 +1,6 @@
+name: 'Set up a DWARFDUMP env'
+description: 'Set up a DWARFDUMP env (see tests/debug/dump.rs)'
+
+runs:
+  using: node12
+  main: 'main.js'
