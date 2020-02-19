@@ -6,11 +6,7 @@ use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::{wasm, Module};
 use wasmtime_runtime::InstanceHandle;
 
-pub fn create_global(
-    store: &Store,
-    gt: &GlobalType,
-    val: Val,
-) -> Result<InstanceHandle> {
+pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<InstanceHandle> {
     let global = wasm::Global {
         ty: match gt.content().get_wasmtime_type() {
             Some(t) => t,
