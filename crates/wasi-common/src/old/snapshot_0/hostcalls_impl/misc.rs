@@ -219,9 +219,9 @@ pub(crate) fn poll_oneoff(
     let mut timeout: Option<ClockEventData> = None;
     let mut fd_events = Vec::new();
     for subscription in subscriptions {
-        match subscription.r#type {
+        match subscription.u.tag {
             wasi::__WASI_EVENTTYPE_CLOCK => {
-                let clock = unsafe { subscription.u.clock };
+                let clock = unsafe { subscription.u.u.clock };
                 let delay = wasi_clock_to_relative_ns_delay(clock)?;
 
                 log::debug!("poll_oneoff event.u.clock = {:?}", clock);
@@ -236,17 +236,10 @@ pub(crate) fn poll_oneoff(
                     *timeout = current;
                 }
             }
-            r#type
-                if r#type == wasi::__WASI_EVENTTYPE_FD_READ
-                    || r#type == wasi::__WASI_EVENTTYPE_FD_WRITE =>
-            {
-                let wasi_fd = unsafe { subscription.u.fd_readwrite.file_descriptor };
-                let rights = if r#type == wasi::__WASI_EVENTTYPE_FD_READ {
-                    wasi::__WASI_RIGHTS_FD_READ
-                } else {
-                    wasi::__WASI_RIGHTS_FD_WRITE
-                };
 
+            wasi::__WASI_EVENTTYPE_FD_READ => {
+                let wasi_fd = unsafe { subscription.u.u.fd_read.file_descriptor };
+                let rights = wasi::__WASI_RIGHTS_FD_READ | wasi::__WASI_RIGHTS_POLL_FD_READWRITE;
                 match unsafe {
                     wasi_ctx
                         .get_fd_entry(wasi_fd)
@@ -254,19 +247,45 @@ pub(crate) fn poll_oneoff(
                 } {
                     Ok(descriptor) => fd_events.push(FdEventData {
                         descriptor,
-                        r#type: subscription.r#type,
+                        r#type: wasi::__WASI_EVENTTYPE_FD_READ,
                         userdata: subscription.userdata,
                     }),
                     Err(err) => {
                         let event = wasi::__wasi_event_t {
                             userdata: subscription.userdata,
-                            r#type,
                             error: err.as_wasi_error().as_raw_errno(),
-                            u: wasi::__wasi_event_u_t {
-                                fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
-                                    nbytes: 0,
-                                    flags: 0,
-                                },
+                            r#type: wasi::__WASI_EVENTTYPE_FD_READ,
+                            fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+                                nbytes: 0,
+                                flags: 0,
+                            },
+                        };
+                        events.push(event);
+                    }
+                };
+            }
+
+            wasi::__WASI_EVENTTYPE_FD_WRITE => {
+                let wasi_fd = unsafe { subscription.u.u.fd_write.file_descriptor };
+                let rights = wasi::__WASI_RIGHTS_FD_WRITE | wasi::__WASI_RIGHTS_POLL_FD_READWRITE;
+                match unsafe {
+                    wasi_ctx
+                        .get_fd_entry(wasi_fd)
+                        .and_then(|fe| fe.as_descriptor(rights, 0))
+                } {
+                    Ok(descriptor) => fd_events.push(FdEventData {
+                        descriptor,
+                        r#type: wasi::__WASI_EVENTTYPE_FD_WRITE,
+                        userdata: subscription.userdata,
+                    }),
+                    Err(err) => {
+                        let event = wasi::__wasi_event_t {
+                            userdata: subscription.userdata,
+                            error: err.as_wasi_error().as_raw_errno(),
+                            r#type: wasi::__WASI_EVENTTYPE_FD_WRITE,
+                            fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+                                nbytes: 0,
+                                flags: 0,
                             },
                         };
                         events.push(event);

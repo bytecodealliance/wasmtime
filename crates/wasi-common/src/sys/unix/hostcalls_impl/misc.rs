@@ -111,13 +111,11 @@ fn poll_oneoff_handle_timeout_event(
 ) {
     events.push(wasi::__wasi_event_t {
         userdata: timeout.userdata,
-        r#type: wasi::__WASI_EVENTTYPE_CLOCK,
         error: wasi::__WASI_ERRNO_SUCCESS,
-        u: wasi::__wasi_event_u_t {
-            fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
-                nbytes: 0,
-                flags: 0,
-            },
+        r#type: wasi::__WASI_EVENTTYPE_CLOCK,
+        fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+            flags: 0,
+            nbytes: 0,
         },
     });
 }
@@ -149,49 +147,41 @@ fn poll_oneoff_handle_fd_event<'a>(
         let output_event = if revents.contains(PollFlags::POLLNVAL) {
             wasi::__wasi_event_t {
                 userdata: fd_event.userdata,
-                r#type: fd_event.r#type,
                 error: wasi::__WASI_ERRNO_BADF,
-                u: wasi::__wasi_event_u_t {
-                    fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
-                        nbytes: 0,
-                        flags: wasi::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
-                    },
+                r#type: fd_event.r#type,
+                fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+                    nbytes: 0,
+                    flags: wasi::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
                 },
             }
         } else if revents.contains(PollFlags::POLLERR) {
             wasi::__wasi_event_t {
                 userdata: fd_event.userdata,
-                r#type: fd_event.r#type,
                 error: wasi::__WASI_ERRNO_IO,
-                u: wasi::__wasi_event_u_t {
-                    fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
-                        nbytes: 0,
-                        flags: wasi::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
-                    },
+                r#type: fd_event.r#type,
+                fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+                    nbytes: 0,
+                    flags: wasi::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
                 },
             }
         } else if revents.contains(PollFlags::POLLHUP) {
             wasi::__wasi_event_t {
                 userdata: fd_event.userdata,
-                r#type: fd_event.r#type,
                 error: wasi::__WASI_ERRNO_SUCCESS,
-                u: wasi::__wasi_event_u_t {
-                    fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
-                        nbytes: 0,
-                        flags: wasi::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
-                    },
+                r#type: fd_event.r#type,
+                fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+                    nbytes: 0,
+                    flags: wasi::__WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP,
                 },
             }
         } else if revents.contains(PollFlags::POLLIN) | revents.contains(PollFlags::POLLOUT) {
             wasi::__wasi_event_t {
                 userdata: fd_event.userdata,
-                r#type: fd_event.r#type,
                 error: wasi::__WASI_ERRNO_SUCCESS,
-                u: wasi::__wasi_event_u_t {
-                    fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
-                        nbytes: nbytes.try_into()?,
-                        flags: 0,
-                    },
+                r#type: fd_event.r#type,
+                fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+                    nbytes: nbytes.try_into()?,
+                    flags: 0,
                 },
             }
         } else {

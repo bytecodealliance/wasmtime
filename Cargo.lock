@@ -497,6 +497,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "diff"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e25ea47919b1560c4e3b7fe0aaab9becf5b84a10325ddf7db0f0ba5e1026499"
+
+[[package]]
 name = "digest"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2231,13 +2237,13 @@ dependencies = [
 
 [[package]]
 name = "witx"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6ee25990cb94f39b8d5637b8c7d9b9eaaed76795d95f45342a7ef3d2e574931"
+version = "0.8.0"
 dependencies = [
- "clap",
+ "anyhow",
+ "diff",
  "log",
  "pretty_env_logger",
+ "structopt",
  "thiserror",
  "wast 3.0.4",
 ]
