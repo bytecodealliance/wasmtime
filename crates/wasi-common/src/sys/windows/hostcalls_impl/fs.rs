@@ -495,7 +495,7 @@ pub(crate) fn path_filestat_set_times(
         .access_mode(AccessMode::FILE_WRITE_ATTRIBUTES.bits())
         .open(path)?;
     let modifiable_fd = Descriptor::OsHandle(OsHandle::from(file));
-    fd_filestat_set_times_impl(&modifiable_fd.as_handle(), st_atim, st_mtim, fst_flags)
+    fd_filestat_set_times_impl(&modifiable_fd, st_atim, st_mtim, fst_flags)
 }
 
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {

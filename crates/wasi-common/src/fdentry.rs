@@ -10,64 +10,6 @@ use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::{fmt, fs, io};
 
-pub(crate) enum HandleMut<'handle> {
-    OsHandle(&'handle mut OsHandle),
-    VirtualFile(&'handle mut dyn VirtualFile),
-    Stream(OsHandleRef<'handle>),
-}
-
-impl<'descriptor> fmt::Debug for HandleMut<'descriptor> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            HandleMut::OsHandle(file) => {
-                // coerce to the target debug-printable type
-                let file: &fs::File = file;
-                write!(f, "{:?}", file)
-            }
-            HandleMut::Stream(stream) => {
-                // coerce to the target debug-printable type
-                let file: &fs::File = stream;
-                write!(f, "{:?}", file)
-            }
-            HandleMut::VirtualFile(_) => write!(f, "VirtualFile"),
-        }
-    }
-}
-
-pub(crate) enum Handle<'handle> {
-    OsHandle(&'handle OsHandle),
-    VirtualFile(&'handle dyn VirtualFile),
-    Stream(OsHandleRef<'handle>),
-}
-
-impl<'descriptor> Handle<'descriptor> {
-    pub(crate) fn try_clone(&self) -> io::Result<Descriptor> {
-        match self {
-            Handle::OsHandle(file) => file.try_clone().map(|f| OsHandle::from(f).into()),
-            Handle::Stream(stream) => stream.try_clone().map(|f| OsHandle::from(f).into()),
-            Handle::VirtualFile(virt) => virt.try_clone().map(Descriptor::VirtualFile),
-        }
-    }
-}
-
-impl<'descriptor> fmt::Debug for Handle<'descriptor> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Handle::OsHandle(file) => {
-                // coerce to the target debug-printable type
-                let file: &fs::File = file;
-                write!(f, "{:?}", file)
-            }
-            Handle::Stream(stream) => {
-                // coerce to the target debug-printable type
-                let file: &fs::File = stream;
-                write!(f, "{:?}", file)
-            }
-            Handle::VirtualFile(_) => write!(f, "VirtualFile"),
-        }
-    }
-}
-
 pub(crate) enum Descriptor {
     OsHandle(OsHandle),
     VirtualFile(Box<dyn VirtualFile>),
@@ -101,13 +43,23 @@ impl fmt::Debug for Descriptor {
 }
 
 impl Descriptor {
+    pub(crate) fn try_clone(&self) -> io::Result<Descriptor> {
+        match self {
+            Descriptor::OsHandle(file) => file.try_clone().map(|f| OsHandle::from(f).into()),
+            Descriptor::VirtualFile(virt) => virt.try_clone().map(Descriptor::VirtualFile),
+            Descriptor::Stdin => Ok(Descriptor::Stdin),
+            Descriptor::Stdout => Ok(Descriptor::Stdout),
+            Descriptor::Stderr => Ok(Descriptor::Stderr),
+        }
+    }
+
     /// Return a reference to the `OsHandle` or `VirtualFile` treating it as an
     /// actual file/dir, and allowing operations which require an actual file and
     /// not just a stream or socket file descriptor.
-    pub(crate) fn as_file<'descriptor>(&'descriptor self) -> Result<Handle<'descriptor>> {
+    pub(crate) fn as_file<'descriptor>(&'descriptor self) -> Result<&'descriptor Descriptor> {
         match self {
-            Self::OsHandle(handle) => Ok(Handle::OsHandle(handle)),
-            Self::VirtualFile(virt) => Ok(Handle::VirtualFile(virt.as_ref())),
+            Self::OsHandle(_) => Ok(self),
+            Self::VirtualFile(_) => Ok(self),
             _ => Err(Error::EBADF),
         }
     }
@@ -115,31 +67,11 @@ impl Descriptor {
     /// Like `as_file`, but return a mutable reference.
     pub(crate) fn as_file_mut<'descriptor>(
         &'descriptor mut self,
-    ) -> Result<HandleMut<'descriptor>> {
+    ) -> Result<&'descriptor mut Descriptor> {
         match self {
-            Self::OsHandle(handle) => Ok(HandleMut::OsHandle(handle)),
-            Self::VirtualFile(virt) => Ok(HandleMut::VirtualFile(virt.as_mut())),
+            Self::OsHandle(_) => Ok(self),
+            Self::VirtualFile(_) => Ok(self),
             _ => Err(Error::EBADF),
-        }
-    }
-
-    pub(crate) fn as_handle<'descriptor>(&'descriptor self) -> Handle<'descriptor> {
-        match self {
-            Self::VirtualFile(virt) => Handle::VirtualFile(virt.as_ref()),
-            Self::OsHandle(handle) => Handle::OsHandle(handle),
-            other @ Self::Stdin | other @ Self::Stderr | other @ Self::Stdout => {
-                Handle::Stream(other.as_os_handle())
-            }
-        }
-    }
-
-    pub(crate) fn as_handle_mut<'descriptor>(&'descriptor mut self) -> HandleMut<'descriptor> {
-        match self {
-            Self::VirtualFile(virt) => HandleMut::VirtualFile(virt.as_mut()),
-            Self::OsHandle(handle) => HandleMut::OsHandle(handle),
-            other @ Self::Stdin | other @ Self::Stderr | other @ Self::Stdout => {
-                HandleMut::Stream(other.as_os_handle())
-            }
         }
     }
 
