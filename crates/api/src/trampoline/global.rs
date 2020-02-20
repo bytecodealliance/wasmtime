@@ -4,30 +4,9 @@ use crate::{GlobalType, Mutability, Val};
 use anyhow::{bail, Result};
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::{wasm, Module};
-use wasmtime_runtime::{InstanceHandle, VMGlobalDefinition};
+use wasmtime_runtime::InstanceHandle;
 
-#[allow(dead_code)]
-pub struct GlobalState {
-    definition: Box<VMGlobalDefinition>,
-    handle: InstanceHandle,
-}
-
-pub fn create_global(
-    store: &Store,
-    gt: &GlobalType,
-    val: Val,
-) -> Result<(wasmtime_runtime::Export, GlobalState)> {
-    let mut definition = Box::new(VMGlobalDefinition::new());
-    unsafe {
-        match val {
-            Val::I32(i) => *definition.as_i32_mut() = i,
-            Val::I64(i) => *definition.as_i64_mut() = i,
-            Val::F32(f) => *definition.as_u32_mut() = f,
-            Val::F64(f) => *definition.as_u64_mut() = f,
-            _ => unimplemented!("create_global for {:?}", gt),
-        }
-    }
-
+pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<InstanceHandle> {
     let global = wasm::Global {
         ty: match gt.content().get_wasmtime_type() {
             Some(t) => t,
@@ -37,16 +16,20 @@ pub fn create_global(
             Mutability::Const => false,
             Mutability::Var => true,
         },
-        initializer: wasm::GlobalInit::Import, // TODO is it right?
-    };
-    let handle =
-        create_handle(Module::new(), store, PrimaryMap::new(), Box::new(())).expect("handle");
-    Ok((
-        wasmtime_runtime::Export::Global {
-            definition: definition.as_mut(),
-            vmctx: handle.vmctx_ptr(),
-            global,
+        initializer: match val {
+            Val::I32(i) => wasm::GlobalInit::I32Const(i),
+            Val::I64(i) => wasm::GlobalInit::I64Const(i),
+            Val::F32(f) => wasm::GlobalInit::F32Const(f),
+            Val::F64(f) => wasm::GlobalInit::F64Const(f),
+            _ => unimplemented!("create_global for {:?}", gt),
         },
-        GlobalState { definition, handle },
-    ))
+    };
+    let mut module = Module::new();
+    let global_id = module.globals.push(global);
+    module.exports.insert(
+        "global".to_string(),
+        wasmtime_environ::Export::Global(global_id),
+    );
+    let handle = create_handle(module, store, PrimaryMap::new(), Box::new(()))?;
+    Ok(handle)
 }

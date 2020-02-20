@@ -16,8 +16,6 @@ use std::any::Any;
 use std::rc::Rc;
 use wasmtime_runtime::VMFunctionBody;
 
-pub use self::global::GlobalState;
-
 pub fn generate_func_export(
     ft: &FuncType,
     func: &Rc<dyn Callable + 'static>,
@@ -46,8 +44,10 @@ pub fn generate_global_export(
     store: &Store,
     gt: &GlobalType,
     val: Val,
-) -> Result<(wasmtime_runtime::Export, GlobalState)> {
-    create_global(store, gt, val)
+) -> Result<(wasmtime_runtime::InstanceHandle, wasmtime_runtime::Export)> {
+    let instance = create_global(store, gt, val)?;
+    let export = instance.lookup("global").expect("global export");
+    Ok((instance, export))
 }
 
 pub fn generate_memory_export(

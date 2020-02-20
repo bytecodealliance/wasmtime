@@ -4,7 +4,6 @@ use crate::Mutability;
 use crate::{ExternType, GlobalType, MemoryType, TableType, ValType};
 use crate::{Func, Store};
 use anyhow::{anyhow, bail, Result};
-use std::rc::Rc;
 use std::slice;
 use wasmtime_environ::wasm;
 use wasmtime_runtime::InstanceHandle;
@@ -104,7 +103,7 @@ impl Extern {
                 Extern::Memory(Memory::from_wasmtime_memory(export, store, instance_handle))
             }
             wasmtime_runtime::Export::Global { .. } => {
-                Extern::Global(Global::from_wasmtime_global(export, store))
+                Extern::Global(Global::from_wasmtime_global(export, store, instance_handle))
             }
             wasmtime_runtime::Export::Table { .. } => {
                 Extern::Table(Table::from_wasmtime_table(export, store, instance_handle))
@@ -154,15 +153,10 @@ impl From<Table> for Extern {
 /// instances are equivalent in their functionality.
 #[derive(Clone)]
 pub struct Global {
-    inner: Rc<GlobalInner>,
-}
-
-struct GlobalInner {
     _store: Store,
     ty: GlobalType,
     wasmtime_export: wasmtime_runtime::Export,
-    #[allow(dead_code)]
-    wasmtime_state: Option<crate::trampoline::GlobalState>,
+    wasmtime_handle: InstanceHandle,
 }
 
 impl Global {
@@ -181,24 +175,22 @@ impl Global {
         if val.ty() != *ty.content() {
             bail!("value provided does not match the type of this global");
         }
-        let (wasmtime_export, wasmtime_state) = generate_global_export(store, &ty, val)?;
+        let (wasmtime_handle, wasmtime_export) = generate_global_export(store, &ty, val)?;
         Ok(Global {
-            inner: Rc::new(GlobalInner {
-                _store: store.clone(),
-                ty,
-                wasmtime_export,
-                wasmtime_state: Some(wasmtime_state),
-            }),
+            _store: store.clone(),
+            ty,
+            wasmtime_export,
+            wasmtime_handle,
         })
     }
 
     /// Returns the underlying type of this `global`.
     pub fn ty(&self) -> &GlobalType {
-        &self.inner.ty
+        &self.ty
     }
 
     fn wasmtime_global_definition(&self) -> *mut wasmtime_runtime::VMGlobalDefinition {
-        match self.inner.wasmtime_export {
+        match self.wasmtime_export {
             wasmtime_runtime::Export::Global { definition, .. } => definition,
             _ => panic!("global definition not found"),
         }
@@ -249,10 +241,14 @@ impl Global {
     }
 
     pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::Export {
-        &self.inner.wasmtime_export
+        &self.wasmtime_export
     }
 
-    pub(crate) fn from_wasmtime_global(export: wasmtime_runtime::Export, store: &Store) -> Global {
+    pub(crate) fn from_wasmtime_global(
+        export: wasmtime_runtime::Export,
+        store: &Store,
+        wasmtime_handle: InstanceHandle,
+    ) -> Global {
         let global = if let wasmtime_runtime::Export::Global { ref global, .. } = export {
             global
         } else {
@@ -263,12 +259,10 @@ impl Global {
         let ty = GlobalType::from_wasmtime_global(&global)
             .expect("core wasm global type should be supported");
         Global {
-            inner: Rc::new(GlobalInner {
-                _store: store.clone(),
-                ty: ty,
-                wasmtime_export: export,
-                wasmtime_state: None,
-            }),
+            _store: store.clone(),
+            ty: ty,
+            wasmtime_export: export,
+            wasmtime_handle,
         }
     }
 }
