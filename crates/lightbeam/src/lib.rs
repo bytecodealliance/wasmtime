@@ -8,7 +8,7 @@ mod backend;
 mod disassemble;
 mod error;
 mod function_body;
-mod microwasm;
+pub mod microwasm;
 mod module;
 mod translate_sections;
 
@@ -20,6 +20,7 @@ pub use crate::function_body::translate_wasm as translate_function;
 pub use crate::module::{
     translate, ExecutableModule, ExecutionError, ModuleContext, Signature, TranslatedModule,
 };
+pub use disassemble::disassemble;
 
 pub struct StrErr {
     pub message: std::borrow::Cow<'static, str>,
