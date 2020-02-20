@@ -29,10 +29,6 @@ pub fn link_module(
                     }
                     None => panic!("direct call to import"),
                 },
-                RelocationTarget::Memory32Grow => wasmtime_memory32_grow as usize,
-                RelocationTarget::Memory32Size => wasmtime_memory32_size as usize,
-                RelocationTarget::ImportedMemory32Grow => wasmtime_imported_memory32_grow as usize,
-                RelocationTarget::ImportedMemory32Size => wasmtime_imported_memory32_size as usize,
                 RelocationTarget::LibCall(libcall) => {
                     use cranelift_codegen::ir::LibCall::*;
                     match libcall {

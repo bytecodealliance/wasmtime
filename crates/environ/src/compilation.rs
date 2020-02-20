@@ -247,14 +247,6 @@ pub enum RelocationTarget {
     UserFunc(FuncIndex),
     /// A compiler-generated libcall.
     LibCall(ir::LibCall),
-    /// Function for growing a locally-defined 32-bit memory by the specified amount of pages.
-    Memory32Grow,
-    /// Function for growing an imported 32-bit memory by the specified amount of pages.
-    ImportedMemory32Grow,
-    /// Function for query current size of a locally-defined 32-bit linear memory.
-    Memory32Size,
-    /// Function for query current size of an imported 32-bit linear memory.
-    ImportedMemory32Size,
     /// Jump table index.
     JumpTable(FuncIndex, ir::JumpTable),
 }
