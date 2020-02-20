@@ -15,7 +15,9 @@
 //! [swarm testing]: https://www.cs.utah.edu/~regehr/papers/swarm12.pdf
 
 use arbitrary::{Arbitrary, Unstructured};
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
+use std::mem;
+use wasmparser::*;
 
 #[derive(Arbitrary, Debug)]
 struct Swarm {
@@ -46,8 +48,12 @@ use ApiCall::*;
 #[derive(Default)]
 struct Scope {
     id_counter: usize,
-    modules: BTreeSet<usize>,
-    instances: BTreeSet<usize>,
+    predicted_rss: usize,
+    /// Map from a module id to the predicted amount of rss it will take to
+    /// instantiate.
+    modules: BTreeMap<usize, usize>,
+    /// Map from an instance id to the amount of rss it's expected to be using.
+    instances: BTreeMap<usize, usize>,
 }
 
 impl Scope {
@@ -75,6 +81,7 @@ impl Arbitrary for ApiCalls {
         calls.push(StoreNew);
 
         let mut scope = Scope::default();
+        let max_rss = 1 << 30; // 1GB
 
         for _ in 0..input.arbitrary_len::<ApiCall>()? {
             let mut choices: Vec<fn(_, &mut Scope) -> arbitrary::Result<ApiCall>> = vec![];
@@ -82,40 +89,43 @@ impl Arbitrary for ApiCalls {
             if swarm.module_new {
                 choices.push(|input, scope| {
                     let id = scope.next_id();
-                    scope.modules.insert(id);
                     let wasm = super::WasmOptTtf::arbitrary(input)?;
+                    let predicted_rss = predict_rss(&wasm.wasm).unwrap_or(0);
+                    scope.modules.insert(id, predicted_rss);
                     Ok(ModuleNew { id, wasm })
                 });
             }
             if swarm.module_drop && !scope.modules.is_empty() {
                 choices.push(|input, scope| {
-                    let modules: Vec<_> = scope.modules.iter().cloned().collect();
-                    let id = *input.choose(&modules)?;
+                    let modules: Vec<_> = scope.modules.keys().collect();
+                    let id = **input.choose(&modules)?;
                     scope.modules.remove(&id);
                     Ok(ModuleDrop { id })
                 });
             }
-            if swarm.instance_new && !scope.modules.is_empty() {
+            if swarm.instance_new && !scope.modules.is_empty() && scope.predicted_rss < max_rss {
                 choices.push(|input, scope| {
-                    let modules: Vec<_> = scope.modules.iter().cloned().collect();
-                    let module = *input.choose(&modules)?;
+                    let modules: Vec<_> = scope.modules.iter().collect();
+                    let (&module, &predicted_rss) = *input.choose(&modules)?;
                     let id = scope.next_id();
-                    scope.instances.insert(id);
+                    scope.instances.insert(id, predicted_rss);
+                    scope.predicted_rss += predicted_rss;
                     Ok(InstanceNew { id, module })
                 });
             }
             if swarm.instance_drop && !scope.instances.is_empty() {
                 choices.push(|input, scope| {
-                    let instances: Vec<_> = scope.instances.iter().cloned().collect();
-                    let id = *input.choose(&instances)?;
+                    let instances: Vec<_> = scope.instances.iter().collect();
+                    let (&id, &rss) = *input.choose(&instances)?;
                     scope.instances.remove(&id);
+                    scope.predicted_rss -= rss;
                     Ok(InstanceDrop { id })
                 });
             }
             if swarm.call_exported_func && !scope.instances.is_empty() {
                 choices.push(|input, scope| {
-                    let instances: Vec<_> = scope.instances.iter().cloned().collect();
-                    let instance = *input.choose(&instances)?;
+                    let instances: Vec<_> = scope.instances.keys().collect();
+                    let instance = **input.choose(&instances)?;
                     let nth = usize::arbitrary(input)?;
                     Ok(CallExportedFunc { instance, nth })
                 });
@@ -146,4 +156,49 @@ fn arbitrary_config(
     // TODO: flags, features, and compilation strategy.
 
     Ok(())
+}
+
+/// Attempt to heuristically predict how much rss instantiating the `wasm`
+/// provided will take in wasmtime.
+///
+/// The intention of this function is to prevent out-of-memory situations from
+/// trivially instantiating a bunch of modules. We're basically taking any
+/// random sequence of fuzz inputs and generating API calls, but if we
+/// instantiate a million things we'd reasonably expect that to exceed the fuzz
+/// limit of 2GB because, well, instantiation does take a bit of memory.
+///
+/// This prediction will prevent new instances from being created once we've
+/// created a bunch of instances. Once instances start being dropped, though,
+/// it'll free up new slots to start making new instances.
+fn predict_rss(wasm: &[u8]) -> Result<usize> {
+    let mut prediction = 0;
+    let mut reader = ModuleReader::new(wasm)?;
+    while !reader.eof() {
+        let section = reader.read()?;
+        match section.code {
+            // For each declared memory we'll have to map that all in, so add in
+            // the minimum amount of memory to our predicted rss.
+            SectionCode::Memory => {
+                for entry in section.get_memory_section_reader()? {
+                    let initial = entry?.limits.initial as usize;
+                    prediction += initial * 64 * 1024;
+                }
+            }
+
+            // We'll need to allocate tables and space for table elements, and
+            // currently this is 3 pointers per table entry.
+            SectionCode::Table => {
+                for entry in section.get_table_section_reader()? {
+                    let initial = entry?.limits.initial as usize;
+                    prediction += initial * 3 * mem::size_of::<usize>();
+                }
+            }
+
+            // ... and for now nothing else is counted. If we run into issues
+            // with the fuzzers though we can always try to take into account
+            // more things
+            _ => {}
+        }
+    }
+    Ok(prediction)
 }
