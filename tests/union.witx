@@ -1,0 +1,28 @@
+(use "errno.witx")
+(use "excuse.witx")
+
+(typename $reason
+  (union $excuse
+    (field $dog_ate f32)
+    (field $traffic s32)
+    (empty $sleeping)))
+
+(typename $reason_mut
+  (union $excuse
+    (field $dog_ate (@witx pointer f32))
+    (field $traffic (@witx pointer s32))
+    (empty $sleeping)))
+
+(module $union_example
+  (@interface func (export "get_tag")
+    (param $r $reason)
+    (result $error $errno)
+    (result $t $excuse)
+  )
+
+  (@interface func (export "reason_mult")
+    (param $r $reason_mut)
+    (param $multiply_by u32)
+    (result $error $errno)
+  )
+)

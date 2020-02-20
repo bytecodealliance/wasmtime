@@ -305,6 +305,10 @@ fn marshal_arg(
                 };
             }
         }
+        witx::Type::Union(_u) => {
+            let name = names.func_param(&param.name);
+            quote!(let #name = unimplemented!("union argument marshaling");)
+        }
         _ => unimplemented!("argument type marshalling"),
     }
 }
