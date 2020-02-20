@@ -628,6 +628,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "failure"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8273f13c977665c5db7eb2b99ae520952fe5ac831ae4cd09d80c4c7042b5ed9"
+dependencies = [
+ "backtrace",
+ "failure_derive",
+]
+
+[[package]]
+name = "failure_derive"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bc225b78e0391e4b8683440bf2e63c2deeeb2ce5189eab46e2b68c6d3725d08"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "synstructure",
+]
+
+[[package]]
 name = "fake-simd"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -647,6 +669,17 @@ checksum = "8505b75b31ef7285168dd237c4a7db3c1f3e0927e7d314e670bc98e854272fe9"
 dependencies = [
  "env_logger 0.6.2",
  "log",
+]
+
+[[package]]
+name = "filecheck"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ded7985594ab426ef685362e5183168eb3b5aacc9f4e26819e8d82d224f33449"
+dependencies = [
+ "failure",
+ "failure_derive",
+ "regex",
 ]
 
 [[package]]
@@ -1935,6 +1968,7 @@ dependencies = [
  "anyhow",
  "faerie",
  "file-per-thread-logger",
+ "filecheck",
  "libc",
  "more-asserts",
  "pretty_env_logger",
