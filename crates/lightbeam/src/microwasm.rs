@@ -1086,6 +1086,7 @@ pub struct MicrowasmConv<'a, R, M> {
     current_position: Option<u64>,
     module: &'a M,
     current_id: u32,
+    pointer_type: SignlessType,
     control_frames: ControlFrames,
     unreachable: bool,
 }
@@ -1094,6 +1095,15 @@ pub struct MicrowasmConv<'a, R, M> {
 enum SigT {
     T,
     Concrete(SignlessType),
+}
+
+impl fmt::Display for SigT {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::T => write!(f, "{{any}}"),
+            Self::Concrete(ty) => write!(f, "{}", ty),
+        }
+    }
 }
 
 impl From<SignlessType> for SigT {
@@ -1106,6 +1116,34 @@ impl From<SignlessType> for SigT {
 pub struct OpSig {
     input: SmallVec<[SigT; 3]>,
     output: SmallVec<[SigT; 3]>,
+}
+
+impl fmt::Display for OpSig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "(")?;
+
+        let mut iter = self.input.iter();
+        if let Some(t) = iter.next() {
+            write!(f, "{}", t)?;
+        }
+
+        for t in iter {
+            write!(f, ", {}", t)?;
+        }
+
+        write!(f, ") -> (")?;
+
+        let mut iter = self.output.iter();
+        if let Some(t) = iter.next() {
+            write!(f, "{}", t)?;
+        }
+
+        for t in iter {
+            write!(f, ", {}", t)?;
+        }
+
+        write!(f, ")")
+    }
 }
 
 impl OpSig {
@@ -1153,6 +1191,7 @@ where
         params: impl IntoIterator<Item = SignlessType>,
         returns: impl IntoIterator<Item = SignlessType>,
         mut reader: R,
+        pointer_type: SignlessType,
     ) -> Result<Self, Error> {
         let func_body = FunctionBody::new(&mut reader)
             .map_err(|e| Error::Microwasm(format!("Failed to get locals reader: {}", e)))?;
@@ -1186,6 +1225,7 @@ where
             current_position: None,
             current_id: 0,
             control_frames: Default::default(),
+            pointer_type,
             unreachable: false,
         };
 
@@ -1322,14 +1362,14 @@ where
                 sig!((self.module.global_type(*global_index).to_microwasm_type()) -> ())
             }
 
-            WasmOperator::F32Load { .. } => sig!((I32) -> (F32)),
-            WasmOperator::F64Load { .. } => sig!((I32) -> (F64)),
+            WasmOperator::F32Load { .. } => sig!((self.pointer_type) -> (F32)),
+            WasmOperator::F64Load { .. } => sig!((self.pointer_type) -> (F64)),
 
             WasmOperator::I32Load { .. }
             | WasmOperator::I32Load8S { .. }
             | WasmOperator::I32Load8U { .. }
             | WasmOperator::I32Load16S { .. }
-            | WasmOperator::I32Load16U { .. } => sig!((I32) -> (I32)),
+            | WasmOperator::I32Load16U { .. } => sig!((self.pointer_type) -> (I32)),
 
             WasmOperator::I64Load { .. }
             | WasmOperator::I64Load8S { .. }
@@ -1337,20 +1377,20 @@ where
             | WasmOperator::I64Load16S { .. }
             | WasmOperator::I64Load16U { .. }
             | WasmOperator::I64Load32S { .. }
-            | WasmOperator::I64Load32U { .. } => sig!((I32) -> (I64)),
+            | WasmOperator::I64Load32U { .. } => sig!((self.pointer_type) -> (I64)),
 
-            WasmOperator::F32Store { .. } => sig!((I32, F32) -> ()),
-            WasmOperator::F64Store { .. } => sig!((I32, F64) -> ()),
+            WasmOperator::F32Store { .. } => sig!((self.pointer_type, F32) -> ()),
+            WasmOperator::F64Store { .. } => sig!((self.pointer_type, F64) -> ()),
             WasmOperator::I32Store { .. }
             | WasmOperator::I32Store8 { .. }
-            | WasmOperator::I32Store16 { .. } => sig!((I32, I32) -> ()),
+            | WasmOperator::I32Store16 { .. } => sig!((self.pointer_type, I32) -> ()),
             WasmOperator::I64Store { .. }
             | WasmOperator::I64Store8 { .. }
             | WasmOperator::I64Store16 { .. }
-            | WasmOperator::I64Store32 { .. } => sig!((I32, I64) -> ()),
+            | WasmOperator::I64Store32 { .. } => sig!((self.pointer_type, I64) -> ()),
 
-            WasmOperator::MemorySize { .. } => sig!(() -> (I32)),
-            WasmOperator::MemoryGrow { .. } => sig!((I32) -> (I32)),
+            WasmOperator::MemorySize { .. } => sig!(() -> (self.pointer_type)),
+            WasmOperator::MemoryGrow { .. } => sig!((self.pointer_type) -> (self.pointer_type)),
 
             WasmOperator::I32Const { .. } => sig!(() -> (I32)),
             WasmOperator::I64Const { .. } => sig!(() -> (I64)),
@@ -1506,7 +1546,7 @@ where
             _ => {
                 return Err(wasm_reader::Error::new(
                     strerr("Opcode Unimplemented"),
-                    None,
+                    self.current_position,
                 ))
             }
         };
@@ -1529,7 +1569,12 @@ where
         for p in sig.input.iter().rev() {
             let stack_ty = match self.stack.pop() {
                 Some(e) => e,
-                None => return Err(wasm_reader::Error::new(strerr("Stack is empty"), None)),
+                None => {
+                    return Err(wasm_reader::Error::new(
+                        strerr("Stack is empty"),
+                        self.current_position,
+                    ))
+                }
             };
 
             let ty = match p {
@@ -1544,7 +1589,15 @@ where
                 SigT::Concrete(ty) => *ty,
             };
 
-            debug_assert_eq!(ty, stack_ty);
+            if ty != stack_ty {
+                return Err(wasm_reader::Error::new(
+                    strerr(format!(
+                        "Error in params for op (sig {}): expected {}, found {}",
+                        sig, ty, stack_ty
+                    )),
+                    self.current_position,
+                ));
+            }
         }
 
         for p in sig.output.into_iter().rev() {
@@ -1554,7 +1607,7 @@ where
                     None => {
                         return Err(wasm_reader::Error::new(
                             strerr("Type parameter was not set"),
-                            None,
+                            self.current_position,
                         ))
                     }
                 },

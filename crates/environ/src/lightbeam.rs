@@ -34,8 +34,11 @@ impl crate::compilation::Compiler for Lightbeam {
         let mut relocations = PrimaryMap::with_capacity(function_body_inputs.len());
         let mut traps = PrimaryMap::with_capacity(function_body_inputs.len());
 
-        let mut codegen_session: lightbeam::CodeGenSession<_> =
-            lightbeam::CodeGenSession::new(function_body_inputs.len() as u32, &env);
+        let mut codegen_session: lightbeam::CodeGenSession<_> = lightbeam::CodeGenSession::new(
+            function_body_inputs.len() as u32,
+            &env,
+            lightbeam::microwasm::I64,
+        );
 
         for (i, function_body) in &function_body_inputs {
             let func_index = module.local.func_index(i);

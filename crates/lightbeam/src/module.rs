@@ -300,8 +300,9 @@ impl Signature for CraneliftSignature {
         // TODO: We want to instead add the `VMContext` to the signature used by
         //       cranelift, removing the special-casing from the internals.
         assert_eq!(self.params[0].purpose, ir::ArgumentPurpose::VMContext);
+        // `self.params[1]` should be caller vmctx
         assert_eq!(self.call_conv, isa::CallConv::SystemV);
-        &self.params[1..]
+        &self.params[2..]
     }
 
     fn returns(&self) -> &[Self::Type] {
