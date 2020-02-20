@@ -57,6 +57,7 @@ where
         ty.params().iter().map(SigType::to_microwasm_type),
         ty.returns().iter().map(SigType::to_microwasm_type),
         body,
+        session.pointer_type(),
     )?
     .flat_map(|ops| match ops {
         Ok(ops) => Left(ops.into_iter().map(Ok)),
@@ -284,7 +285,7 @@ where
                             // TODO: We can `take` this if it's a `Right`
                             match block.calling_convention.as_ref() {
                                 Some(Left(cc)) => {
-                                    ctx.apply_cc(cc)?;
+                                    ctx.apply_cc(cc.as_ref())?;
                                 }
                                 Some(Right(virt)) => {
                                     ctx.set_state(virt.clone())?;

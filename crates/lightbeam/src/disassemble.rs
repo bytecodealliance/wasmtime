@@ -3,9 +3,9 @@ use dynasmrt::AssemblyOffset;
 use std::error::Error;
 use std::fmt::{Display, Write};
 
-pub fn disassemble(
+pub fn disassemble<D: Display>(
     mem: &[u8],
-    mut ops: &[(AssemblyOffset, impl Display)],
+    mut ops: &[(AssemblyOffset, D)],
 ) -> Result<(), Box<dyn Error>> {
     let cs = Capstone::new()
         .x86()
