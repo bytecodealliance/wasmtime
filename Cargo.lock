@@ -606,7 +606,7 @@ dependencies = [
  "serde",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.51.4",
+ "wasmparser",
  "wat",
 ]
 
@@ -1264,7 +1264,7 @@ dependencies = [
  "thiserror",
  "typemap",
  "wasm-reader",
- "wasmparser 0.51.4",
+ "wasmparser",
  "wat",
 ]
 
@@ -2363,9 +2363,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-reader"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31750f98e742156b680d794821a15bf7a71bb7fd44a8a62ee3cbe2252960c45e"
+checksum = "1841a399936f9436ca0a66ce6699a576dc1165f4f5c1e4b1507dca1a407b2d43"
 dependencies = [
  "auto_enums",
  "byteorder",
@@ -2373,7 +2373,7 @@ dependencies = [
  "derive_more",
  "failure",
  "wasm-reader-traits",
- "wasmparser 0.47.0",
+ "wasmparser",
 ]
 
 [[package]]
@@ -2384,12 +2384,6 @@ checksum = "21cb1b641741d0d8d103d1276b94958fedbf4dae5d43e8e492d27697a9eb5531"
 dependencies = [
  "frunk_core",
 ]
-
-[[package]]
-name = "wasmparser"
-version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1add8db5a53a2f64f13418b241982c4ab533d7a9e1e8a5dcadccce633d8d393b"
 
 [[package]]
 name = "wasmparser"
@@ -2404,7 +2398,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bd423d45b95fcee11775472bfdce66c63c45ada23c1b338e0a63d623a6c475b"
 dependencies = [
  "anyhow",
- "wasmparser 0.51.4",
+ "wasmparser",
 ]
 
 [[package]]
@@ -2424,7 +2418,7 @@ dependencies = [
  "target-lexicon",
  "tempfile",
  "wasi-common",
- "wasmparser 0.51.4",
+ "wasmparser",
  "wasmtime-environ",
  "wasmtime-jit",
  "wasmtime-profiling",
@@ -2492,7 +2486,7 @@ dependencies = [
  "more-asserts",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.51.4",
+ "wasmparser",
  "wasmtime-environ",
 ]
 
@@ -2525,7 +2519,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml",
- "wasmparser 0.51.4",
+ "wasmparser",
  "winapi",
  "zstd",
 ]
@@ -2553,7 +2547,7 @@ dependencies = [
  "env_logger 0.7.1",
  "log",
  "rayon",
- "wasmparser 0.51.4",
+ "wasmparser",
  "wasmprinter",
  "wasmtime",
  "wat",
@@ -2575,7 +2569,7 @@ dependencies = [
  "region",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.51.4",
+ "wasmparser",
  "wasmtime-debug",
  "wasmtime-environ",
  "wasmtime-profiling",
@@ -2618,7 +2612,7 @@ dependencies = [
  "pyo3",
  "region",
  "target-lexicon",
- "wasmparser 0.51.4",
+ "wasmparser",
  "wasmtime",
  "wasmtime-wasi",
 ]

@@ -5,6 +5,7 @@ use crate::compilation::{Compilation, CompileError};
 use crate::func_environ::FuncEnvironment;
 use crate::module::Module;
 use crate::module_environ::FunctionBodyData;
+use crate::CacheConfig;
 // TODO: Put this in `compilation`
 use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
 use crate::cranelift::{RelocSink, TrapSink};
@@ -25,6 +26,7 @@ impl crate::compilation::Compiler for Lightbeam {
         isa: &dyn isa::TargetIsa,
         // TODO
         generate_debug_info: bool,
+        _cache_config: &CacheConfig,
     ) -> Result<ModuleCacheDataTupleType, CompileError> {
         if generate_debug_info {
             return Err(CompileError::DebugInfoNotSupported);
