@@ -1,6 +1,7 @@
 use proptest::prelude::*;
 use wiggle_runtime::{
-    GuestError, GuestErrorType, GuestMemory, GuestPtr, GuestPtrMut, GuestRef, GuestRefMut,
+    GuestArray, GuestError, GuestErrorType, GuestMemory, GuestPtr, GuestPtrMut, GuestRef,
+    GuestRefMut,
 };
 
 wiggle_generate::from_witx!({
@@ -97,25 +98,20 @@ impl foo::Foo for WasiCtx {
         &mut self,
         excuses: &types::ConstExcuseArray,
     ) -> Result<types::Excuse, types::Errno> {
-        let excuses = &*excuses
-            .as_ref()
-            .expect("dereferencing GuestArray should succeed");
         let last = excuses
+            .iter()
             .last()
             .expect("input array is non-empty")
-            .as_ptr()
+            .expect("valid ptr to ptr")
             .read_ptr_from_guest()
             .expect("valid ptr to some Excuse value");
         Ok(*last.as_ref().expect("dereferencing ptr should succeed"))
     }
 
     fn populate_excuses(&mut self, excuses: &types::ExcuseArray) -> Result<(), types::Errno> {
-        let excuses = &*excuses
-            .as_ref()
-            .expect("dereferencing GuestArray should succeed");
-        for excuse in excuses {
+        for excuse in excuses.iter() {
             let ptr_to_ptr = excuse
-                .as_ptr()
+                .expect("valid ptr to ptr")
                 .read_ptr_from_guest()
                 .expect("valid ptr to some Excuse value");
             let mut ptr = ptr_to_ptr
@@ -752,19 +748,14 @@ impl PopulateExcusesExcercise {
         );
         assert_eq!(res, types::Errno::Ok.into(), "populate excuses errno");
 
-        let arr = {
-            let ptr: GuestPtr<'_, GuestPtr<'_, types::Excuse>> = guest_memory
-                .ptr(self.array_ptr_loc.ptr)
-                .expect("ptr to the first element of array");
-            &*ptr
-                .array(self.elements.len() as u32)
-                .expect("as array")
-                .as_ref()
-                .expect("deref to &[]")
-        };
-        for el in arr {
+        let arr: GuestArray<'_, GuestPtr<'_, types::Excuse>> = guest_memory
+            .ptr(self.array_ptr_loc.ptr)
+            .expect("ptr to the first element of array")
+            .array(self.elements.len() as u32)
+            .expect("as array");
+        for el in arr.iter() {
             let ptr_to_ptr = el
-                .as_ptr()
+                .expect("valid ptr to ptr")
                 .read_ptr_from_guest()
                 .expect("valid ptr to some Excuse value");
             assert_eq!(

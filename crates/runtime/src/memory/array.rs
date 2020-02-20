@@ -1,5 +1,5 @@
 use super::ptr::{GuestPtr, GuestRef};
-use crate::{GuestError, GuestType};
+use crate::{GuestError, GuestType, GuestTypeCopy};
 use std::{fmt, ops::Deref};
 
 pub struct GuestArray<'a, T>
@@ -27,53 +27,119 @@ impl<'a, T> GuestArray<'a, T>
 where
     T: GuestType,
 {
+    pub fn iter(&self) -> GuestArrayIter<'a, T> {
+        let next = GuestPtr {
+            mem: self.ptr.mem,
+            region: self.ptr.region,
+            type_: self.ptr.type_,
+        };
+        GuestArrayIter {
+            next,
+            num_elems: self.num_elems,
+            count: 0,
+        }
+    }
+}
+
+pub struct GuestArrayIter<'a, T>
+where
+    T: GuestType,
+{
+    next: GuestPtr<'a, T>,
+    num_elems: u32,
+    count: u32,
+}
+
+impl<'a, T> Iterator for GuestArrayIter<'a, T>
+where
+    T: GuestType,
+{
+    type Item = Result<GuestPtr<'a, T>, GuestError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.count < self.num_elems {
+            // ok...
+            Some(T::validate(&self.next).and_then(|()| {
+                let curr = GuestPtr {
+                    mem: self.next.mem,
+                    region: self.next.region,
+                    type_: self.next.type_,
+                };
+                self.next = self.next.elem(1)?;
+                self.count += 1;
+                Ok(curr)
+            }))
+        } else {
+            // no more elements...
+            None
+        }
+    }
+}
+
+impl<'a, T> GuestArray<'a, T>
+where
+    T: GuestTypeCopy,
+{
     pub fn as_ref(&self) -> Result<GuestArrayRef<'a, T>, GuestError> {
-        let mut refs = Vec::new();
         let mut next = self.ptr.elem(0)?;
         for _ in 0..self.num_elems {
             T::validate(&next)?;
-            let handle = {
-                let mut borrows = next.mem.borrows.borrow_mut();
-                borrows
-                    .borrow_immut(next.region)
-                    .ok_or_else(|| GuestError::PtrBorrowed(next.region))?
-            };
-            refs.push(GuestRef {
-                mem: next.mem,
-                region: next.region,
-                handle,
-                type_: next.type_,
-            });
             next = next.elem(1)?;
         }
-        Ok(GuestArrayRef { refs })
+        let region = self.ptr.region.extend(self.num_elems);
+        let handle = {
+            let mut borrows = self.ptr.mem.borrows.borrow_mut();
+            borrows
+                .borrow_immut(region)
+                .ok_or_else(|| GuestError::PtrBorrowed(region))?
+        };
+        let ref_ = GuestRef {
+            mem: self.ptr.mem,
+            region,
+            handle,
+            type_: self.ptr.type_,
+        };
+        Ok(GuestArrayRef {
+            ref_,
+            num_elems: self.num_elems,
+        })
     }
 }
 
 pub struct GuestArrayRef<'a, T>
 where
-    T: GuestType,
+    T: GuestTypeCopy,
 {
-    refs: Vec<GuestRef<'a, T>>,
+    ref_: GuestRef<'a, T>,
+    num_elems: u32,
 }
 
 impl<'a, T> fmt::Debug for GuestArrayRef<'a, T>
 where
-    T: GuestType + fmt::Debug,
+    T: GuestTypeCopy + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "GuestArrayRef {{ refs: {:?} }}", self.refs)
+        write!(
+            f,
+            "GuestArrayRef {{ ref_: {:?}, num_elems: {:?} }}",
+            self.ref_, self.num_elems
+        )
     }
 }
 
 impl<'a, T> Deref for GuestArrayRef<'a, T>
 where
-    T: GuestType,
+    T: GuestTypeCopy,
 {
-    type Target = [GuestRef<'a, T>];
+    type Target = [T];
 
     fn deref(&self) -> &Self::Target {
-        self.refs.as_slice()
+        unsafe {
+            std::slice::from_raw_parts(
+                self.ref_.as_ptr().as_raw() as *const _,
+                self.num_elems as usize,
+            )
+        }
     }
 }
 
@@ -130,21 +196,11 @@ mod test {
         // extract as array
         let ptr: GuestPtr<i32> = guest_memory.ptr(0).expect("ptr to first el");
         let arr = ptr.array(3).expect("convert ptr to array");
-        let as_ref = arr
-            .as_ref()
-            .expect("array borrowed immutably")
-            .iter()
-            .map(|x| **x)
-            .collect::<Vec<_>>();
-        assert_eq!(&as_ref, &[1, 2, 3]);
+        let as_ref = &*arr.as_ref().expect("array borrowed immutably");
+        assert_eq!(as_ref, &[1, 2, 3]);
         // borrowing again should be fine
-        let as_ref2 = arr
-            .as_ref()
-            .expect("array borrowed immutably again")
-            .iter()
-            .map(|x| **x)
-            .collect::<Vec<_>>();
-        assert_eq!(&as_ref2, &as_ref);
+        let as_ref2 = &*arr.as_ref().expect("array borrowed immutably again");
+        assert_eq!(as_ref2, as_ref);
     }
 
     #[test]
@@ -189,18 +245,17 @@ mod test {
         // extract as array
         let ptr: GuestPtr<GuestPtr<u8>> = guest_memory.ptr(12).expect("ptr to first el");
         let arr = ptr.array(3).expect("convert ptr to array");
-        let as_ref = arr
-            .as_ref()
-            .expect("array borrowed immutably")
+        let contents = arr
             .iter()
-            .map(|x| {
-                *x.as_ptr()
+            .map(|ptr_ptr| {
+                *ptr_ptr
+                    .expect("valid ptr to ptr")
                     .read_ptr_from_guest()
                     .expect("valid ptr to some value")
                     .as_ref()
                     .expect("deref ptr to some value")
             })
             .collect::<Vec<_>>();
-        assert_eq!(&as_ref, &[255, 254, 253]);
+        assert_eq!(&contents, &[255, 254, 253]);
     }
 }
