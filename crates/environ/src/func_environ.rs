@@ -78,9 +78,17 @@ impl BuiltinFunctionIndex {
     pub const fn get_imported_memory_copy_index() -> Self {
         Self(11)
     }
+    /// Returns an index for wasm's `memory.fill` for locally defined memories.
+    pub const fn get_memory_fill_index() -> Self {
+        Self(12)
+    }
+    /// Returns an index for wasm's `memory.fill` for imported memories.
+    pub const fn get_imported_memory_fill_index() -> Self {
+        Self(13)
+    }
     /// Returns the total number of builtin functions.
     pub const fn builtin_functions_total_number() -> u32 {
-        12
+        14
     }
 
     /// Return the index as an u32 number.
@@ -122,6 +130,10 @@ pub struct FuncEnvironment<'module_environment> {
     /// (it's the same for both local and imported memories).
     memory_copy_sig: Option<ir::SigRef>,
 
+    /// The external function signature for implementing wasm's `memory.fill`
+    /// (it's the same for both local and imported memories).
+    memory_fill_sig: Option<ir::SigRef>,
+
     /// Offsets to struct fields accessed by JIT code.
     offsets: VMOffsets,
 }
@@ -141,6 +153,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             table_init_sig: None,
             elem_drop_sig: None,
             memory_copy_sig: None,
+            memory_fill_sig: None,
             offsets: VMOffsets::new(target_config.pointer_bytes(), module),
         }
     }
@@ -425,6 +438,51 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 sig,
                 memory_index.index(),
                 BuiltinFunctionIndex::get_imported_memory_copy_index(),
+            )
+        }
+    }
+
+    fn get_memory_fill_sig(&mut self, func: &mut Function) -> ir::SigRef {
+        let sig = self.memory_fill_sig.unwrap_or_else(|| {
+            func.import_signature(Signature {
+                params: vec![
+                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                    // Memory index.
+                    AbiParam::new(I32),
+                    // Destination address.
+                    AbiParam::new(I32),
+                    // Value.
+                    AbiParam::new(I32),
+                    // Length.
+                    AbiParam::new(I32),
+                    // Source location.
+                    AbiParam::new(I32),
+                ],
+                returns: vec![],
+                call_conv: self.target_config.default_call_conv,
+            })
+        });
+        self.memory_fill_sig = Some(sig);
+        sig
+    }
+
+    fn get_memory_fill_func(
+        &mut self,
+        func: &mut Function,
+        memory_index: MemoryIndex,
+    ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
+        let sig = self.get_memory_fill_sig(func);
+        if let Some(defined_memory_index) = self.module.defined_memory_index(memory_index) {
+            (
+                sig,
+                defined_memory_index.index(),
+                BuiltinFunctionIndex::get_memory_fill_index(),
+            )
+        } else {
+            (
+                sig,
+                memory_index.index(),
+                BuiltinFunctionIndex::get_imported_memory_fill_index(),
             )
         }
     }
@@ -1054,16 +1112,30 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_memory_fill(
         &mut self,
-        _pos: FuncCursor,
-        _index: MemoryIndex,
+        mut pos: FuncCursor,
+        memory_index: MemoryIndex,
         _heap: ir::Heap,
-        _dst: ir::Value,
-        _val: ir::Value,
-        _len: ir::Value,
+        dst: ir::Value,
+        val: ir::Value,
+        len: ir::Value,
     ) -> WasmResult<()> {
-        Err(WasmError::Unsupported(
-            "bulk memory: `memory.fill`".to_string(),
-        ))
+        let (func_sig, memory_index, func_idx) =
+            self.get_memory_fill_func(&mut pos.func, memory_index);
+
+        let memory_index_arg = pos.ins().iconst(I32, memory_index as i64);
+
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        let src_loc = pos.srcloc();
+        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
+
+        pos.ins().call_indirect(
+            func_sig,
+            func_addr,
+            &[vmctx, memory_index_arg, dst, val, len, src_loc_arg],
+        );
+
+        Ok(())
     }
 
     fn translate_memory_init(

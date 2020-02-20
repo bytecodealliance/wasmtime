@@ -643,6 +643,7 @@ impl Instance {
         // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-memory-copy
 
         let memory = self.memory(memory_index);
+
         if src
             .checked_add(len)
             .map_or(true, |n| n as usize > memory.current_length)
@@ -688,6 +689,69 @@ impl Instance {
             let foreign_memory = &*import.from;
             let foreign_index = foreign_instance.memory_index(foreign_memory);
             foreign_instance.defined_memory_copy(foreign_index, dst, src, len, source_loc)
+        }
+    }
+
+    /// Perform the `memory.fill` operation on a locally defined memory.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `Trap` error if the memory range is out of bounds.
+    pub(crate) fn defined_memory_fill(
+        &self,
+        memory_index: DefinedMemoryIndex,
+        dst: u32,
+        val: u32,
+        len: u32,
+        source_loc: ir::SourceLoc,
+    ) -> Result<(), Trap> {
+        let memory = self.memory(memory_index);
+
+        if dst
+            .checked_add(len)
+            .map_or(true, |m| m as usize > memory.current_length)
+        {
+            return Err(Trap::Wasm {
+                desc: TrapDescription {
+                    source_loc,
+                    trap_code: ir::TrapCode::HeapOutOfBounds,
+                },
+                backtrace: Backtrace::new(),
+            });
+        }
+
+        let dst = isize::try_from(dst).unwrap();
+        let val = val as u8;
+
+        // Bounds and casts are checked above, by this point we know that
+        // everything is safe.
+        unsafe {
+            let dst = memory.base.offset(dst);
+            ptr::write_bytes(dst, val, len as usize);
+        }
+
+        Ok(())
+    }
+
+    /// Perform the `memory.fill` operation on an imported memory.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `Trap` error if the memory range is out of bounds.
+    pub(crate) fn imported_memory_fill(
+        &self,
+        memory_index: MemoryIndex,
+        dst: u32,
+        val: u32,
+        len: u32,
+        source_loc: ir::SourceLoc,
+    ) -> Result<(), Trap> {
+        let import = self.imported_memory(memory_index);
+        unsafe {
+            let foreign_instance = (&*import.vmctx).instance();
+            let foreign_memory = &*import.from;
+            let foreign_index = foreign_instance.memory_index(foreign_memory);
+            foreign_instance.defined_memory_fill(foreign_index, dst, val, len, source_loc)
         }
     }
 

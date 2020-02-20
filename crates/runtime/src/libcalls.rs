@@ -298,3 +298,39 @@ pub unsafe extern "C" fn wasmtime_imported_memory_copy(
         raise_lib_trap(trap);
     }
 }
+
+/// Implementation of `memory.fill` for locally defined memories.
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_memory_fill(
+    vmctx: *mut VMContext,
+    memory_index: u32,
+    dst: u32,
+    val: u32,
+    len: u32,
+    source_loc: u32,
+) {
+    let memory_index = DefinedMemoryIndex::from_u32(memory_index);
+    let source_loc = ir::SourceLoc::new(source_loc);
+    let instance = (&mut *vmctx).instance();
+    if let Err(trap) = instance.defined_memory_fill(memory_index, dst, val, len, source_loc) {
+        raise_lib_trap(trap);
+    }
+}
+
+/// Implementation of `memory.fill` for imported memories.
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_imported_memory_fill(
+    vmctx: *mut VMContext,
+    memory_index: u32,
+    dst: u32,
+    val: u32,
+    len: u32,
+    source_loc: u32,
+) {
+    let memory_index = MemoryIndex::from_u32(memory_index);
+    let source_loc = ir::SourceLoc::new(source_loc);
+    let instance = (&mut *vmctx).instance();
+    if let Err(trap) = instance.imported_memory_fill(memory_index, dst, val, len, source_loc) {
+        raise_lib_trap(trap);
+    }
+}
