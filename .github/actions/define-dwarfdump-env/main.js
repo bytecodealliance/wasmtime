@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-const stdio = { stdio: 'inherit' };
-
 // On OSX pointing to brew's LLVM location.
 if (process.platform == 'darwin') {
   console.log("::set-env name=DWARFDUMP::/usr/local/opt/llvm/bin/llvm-dwarfdump");
