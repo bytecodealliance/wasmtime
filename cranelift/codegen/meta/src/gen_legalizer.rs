@@ -560,7 +560,7 @@ fn gen_transform_group<'a>(
     fmt: &mut Formatter,
 ) {
     fmt.doc_comment(group.doc);
-    fmt.line("#[allow(unused_variables,unused_assignments,non_snake_case)]");
+    fmt.line("#[allow(unused_variables,unused_assignments,unused_imports,non_snake_case)]");
 
     // Function arguments.
     fmtln!(fmt, "pub fn {}(", group.name);
