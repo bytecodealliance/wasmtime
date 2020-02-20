@@ -1,10 +1,12 @@
 use crate::callable::{NativeCallable, WasmtimeFn, WrappedCallable};
 use crate::{Callable, FuncType, Store, Trap, Val, ValType};
 use std::fmt;
+use std::mem;
 use std::panic::{self, AssertUnwindSafe};
+use std::ptr;
 use std::rc::Rc;
 use wasmtime_jit::InstanceHandle;
-use wasmtime_runtime::VMContext;
+use wasmtime_runtime::{VMContext, VMFunctionBody};
 
 /// A WebAssembly function which can be called.
 ///
@@ -38,7 +40,7 @@ macro_rules! wrappers {
         pub fn $name<F, $($args,)* R>(store: &Store, func: F) -> Func
         where
             F: Fn($($args),*) -> R + 'static,
-            $($args: WasmArg,)*
+            $($args: WasmTy,)*
             R: WasmRet,
         {
             #[allow(non_snake_case)]
@@ -49,7 +51,7 @@ macro_rules! wrappers {
             ) -> R::Abi
             where
                 F: Fn($($args),*) -> R + 'static,
-                $($args: WasmArg,)*
+                $($args: WasmTy,)*
                 R: WasmRet,
             {
                 let ret = {
@@ -84,6 +86,70 @@ macro_rules! wrappers {
                 let callable = Rc::new(WasmtimeFn::new(store, instance, export));
                 Func::from_wrapped(store, ty, callable)
             }
+        }
+    )*)
+}
+
+macro_rules! getters {
+    ($(
+        $(#[$doc:meta])*
+        ($name:ident $(,$args:ident)*)
+    )*) => ($(
+        $(#[$doc])*
+        #[allow(non_snake_case)]
+        pub fn $name<$($args,)* R>(&self)
+            -> Option<impl Fn($($args,)*) -> Result<R, Trap>>
+        where
+            $($args: WasmTy,)*
+            R: WasmTy,
+        {
+            // Verify all the paramers match the expected parameters, and that
+            // there are no extra parameters...
+            let mut params = self.ty().params().iter().cloned();
+            $(
+                if !$args::matches(&mut params) {
+                    return None;
+                }
+            )*
+            if !params.next().is_none() {
+                return None;
+            }
+
+            // ... then do the same for the results...
+            let mut results = self.ty().results().iter().cloned();
+            if !R::matches(&mut results) {
+                return None;
+            }
+            if !results.next().is_none() {
+                return None;
+            }
+
+            // ... and then once we've passed the typechecks we can hand out our
+            // object since our `transmute` below should be safe!
+            let (address, vmctx) = match self.wasmtime_export() {
+                wasmtime_runtime::Export::Function { address, vmctx, signature: _} => {
+                    (*address, *vmctx)
+                }
+                _ => return None,
+            };
+            Some(move |$($args: $args),*| -> Result<R, Trap> {
+                unsafe {
+                    let f = mem::transmute::<
+                        *const VMFunctionBody,
+                        unsafe extern "C" fn(
+                            *mut VMContext,
+                            *mut VMContext,
+                            $($args::Abi,)*
+                        ) -> R::Abi,
+                    >(address);
+                    let mut ret = None;
+                    $(let $args = $args.into_abi();)*
+                    wasmtime_runtime::catch_traps(vmctx, || {
+                        ret = Some(f(vmctx, ptr::null_mut(), $($args,)*));
+                    }).map_err(Trap::from_jit)?;
+                    Ok(R::from_abi(vmctx, ret.unwrap()))
+                }
+            })
         }
     )*)
 }
@@ -267,6 +333,50 @@ impl Func {
         let callable = WasmtimeFn::new(store, instance_handle, export);
         Func::from_wrapped(store, ty, Rc::new(callable))
     }
+
+    getters! {
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get0)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// This function serves as an optimized version of the [`Func::call`]
+        /// method if the type signature of a function is statically known to
+        /// the program. This method is faster than `call` on a few metrics:
+        ///
+        /// * Runtime type-checking only happens once, when this method is
+        ///   called.
+        /// * The result values, if any, aren't boxed into a vector.
+        /// * Arguments and return values don't go through boxing and unboxing.
+        /// * No trampolines are used to transfer control flow to/from JIT code,
+        ///   instead this function jumps directly into JIT code.
+        ///
+        /// For more information about which Rust types match up to which wasm
+        /// types, see the documentation on [`Func::wrap1`].
+        ///
+        /// # Return
+        ///
+        /// This function will return `None` if the type signature asserted
+        /// statically does not match the runtime type signature. `Some`,
+        /// however, will be returned if the underlying function takes one
+        /// parameter of type `A` and returns the parameter `R`. Currently `R`
+        /// can either be `()` (no return values) or one wasm type. At this time
+        /// a multi-value return isn't supported.
+        ///
+        /// The returned closure will always return a `Result<R, Trap>` and an
+        /// `Err` is returned if a trap happens while the wasm is executing.
+        (get1, A)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get2, A, B)
+    }
 }
 
 impl fmt::Debug for Func {
@@ -283,65 +393,104 @@ impl fmt::Debug for Func {
 /// stable over time.
 ///
 /// For more information see [`Func::wrap1`]
-pub trait WasmArg {
+pub trait WasmTy {
     #[doc(hidden)]
-    type Abi;
+    type Abi: Copy;
     #[doc(hidden)]
     fn push(dst: &mut Vec<ValType>);
     #[doc(hidden)]
+    fn matches(tys: impl Iterator<Item = ValType>) -> bool;
+    #[doc(hidden)]
     fn from_abi(vmctx: *mut VMContext, abi: Self::Abi) -> Self;
+    #[doc(hidden)]
+    fn into_abi(self) -> Self::Abi;
 }
 
-impl WasmArg for () {
+impl WasmTy for () {
     type Abi = ();
     fn push(_dst: &mut Vec<ValType>) {}
+    fn matches(_tys: impl Iterator<Item = ValType>) -> bool {
+        true
+    }
     #[inline]
     fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
         abi
     }
+    #[inline]
+    fn into_abi(self) -> Self::Abi {
+        self
+    }
 }
 
-impl WasmArg for i32 {
+impl WasmTy for i32 {
     type Abi = Self;
     fn push(dst: &mut Vec<ValType>) {
         dst.push(ValType::I32);
     }
+    fn matches(mut tys: impl Iterator<Item = ValType>) -> bool {
+        tys.next() == Some(ValType::I32)
+    }
     #[inline]
     fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
         abi
     }
+    #[inline]
+    fn into_abi(self) -> Self::Abi {
+        self
+    }
 }
 
-impl WasmArg for i64 {
+impl WasmTy for i64 {
     type Abi = Self;
     fn push(dst: &mut Vec<ValType>) {
         dst.push(ValType::I64);
     }
+    fn matches(mut tys: impl Iterator<Item = ValType>) -> bool {
+        tys.next() == Some(ValType::I64)
+    }
     #[inline]
     fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
         abi
     }
+    #[inline]
+    fn into_abi(self) -> Self::Abi {
+        self
+    }
 }
 
-impl WasmArg for f32 {
+impl WasmTy for f32 {
     type Abi = Self;
     fn push(dst: &mut Vec<ValType>) {
         dst.push(ValType::F32);
     }
+    fn matches(mut tys: impl Iterator<Item = ValType>) -> bool {
+        tys.next() == Some(ValType::F32)
+    }
     #[inline]
     fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
         abi
     }
+    #[inline]
+    fn into_abi(self) -> Self::Abi {
+        self
+    }
 }
 
-impl WasmArg for f64 {
+impl WasmTy for f64 {
     type Abi = Self;
     fn push(dst: &mut Vec<ValType>) {
         dst.push(ValType::F64);
     }
+    fn matches(mut tys: impl Iterator<Item = ValType>) -> bool {
+        tys.next() == Some(ValType::F64)
+    }
     #[inline]
     fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
         abi
+    }
+    #[inline]
+    fn into_abi(self) -> Self::Abi {
+        self
     }
 }
 
@@ -359,31 +508,41 @@ pub trait WasmRet {
     #[doc(hidden)]
     fn push(dst: &mut Vec<ValType>);
     #[doc(hidden)]
+    fn matches(tys: impl Iterator<Item = ValType>) -> bool;
+    #[doc(hidden)]
     fn into_abi(self) -> Self::Abi;
 }
 
-impl<T: WasmArg> WasmRet for T {
-    type Abi = T;
+impl<T: WasmTy> WasmRet for T {
+    type Abi = T::Abi;
     fn push(dst: &mut Vec<ValType>) {
         T::push(dst)
+    }
+
+    fn matches(tys: impl Iterator<Item = ValType>) -> bool {
+        T::matches(tys)
     }
 
     #[inline]
     fn into_abi(self) -> Self::Abi {
-        self
+        T::into_abi(self)
     }
 }
 
-impl<T: WasmArg> WasmRet for Result<T, Trap> {
-    type Abi = T;
+impl<T: WasmTy> WasmRet for Result<T, Trap> {
+    type Abi = T::Abi;
     fn push(dst: &mut Vec<ValType>) {
         T::push(dst)
+    }
+
+    fn matches(tys: impl Iterator<Item = ValType>) -> bool {
+        T::matches(tys)
     }
 
     #[inline]
     fn into_abi(self) -> Self::Abi {
         match self {
-            Ok(val) => return val,
+            Ok(val) => return val.into_abi(),
             Err(trap) => handle_trap(trap),
         }
 

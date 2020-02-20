@@ -44,7 +44,7 @@ pub use crate::mmap::Mmap;
 pub use crate::sig_registry::SignatureRegistry;
 pub use crate::trap_registry::{TrapDescription, TrapRegistration, TrapRegistry};
 pub use crate::traphandlers::resume_panic;
-pub use crate::traphandlers::{raise_user_trap, wasmtime_call, wasmtime_call_trampoline, Trap};
+pub use crate::traphandlers::{catch_traps, raise_user_trap, wasmtime_call_trampoline, Trap};
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
     VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,

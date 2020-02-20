@@ -8,7 +8,7 @@ use crate::jit_int::GdbJitImageRegistration;
 use crate::memory::LinearMemory;
 use crate::signalhandlers;
 use crate::table::Table;
-use crate::traphandlers::{wasmtime_call, Trap};
+use crate::traphandlers::{catch_traps, Trap};
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport,
     VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
@@ -367,8 +367,15 @@ impl Instance {
         };
 
         // Make the call.
-        unsafe { wasmtime_call(callee_vmctx, self.vmctx_ptr(), callee_address) }
+        unsafe {
+            catch_traps(callee_vmctx, || {
+                mem::transmute::<
+                    *const VMFunctionBody,
+                    unsafe extern "C" fn(*mut VMContext, *mut VMContext),
+                >(callee_address)(callee_vmctx, self.vmctx_ptr())
+            })
             .map_err(InstantiationError::StartTrap)
+        }
     }
 
     /// Return the offset from the vmctx pointer to its containing Instance.

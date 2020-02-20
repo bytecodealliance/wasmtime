@@ -1,6 +1,7 @@
 use anyhow::Result;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
-use wasmtime::{Func, Instance, Module, Store, Trap, ValType};
+use wasmtime::{Callable, Func, FuncType, Instance, Module, Store, Trap, Val, ValType};
 
 #[test]
 fn func_constructors() {
@@ -199,5 +200,92 @@ fn trap_import() -> Result<()> {
     .unwrap()
     .downcast::<Trap>()?;
     assert_eq!(trap.message(), "foo");
+    Ok(())
+}
+
+#[test]
+fn get_from_wrapper() {
+    let store = Store::default();
+    let f = Func::wrap0(&store, || {});
+    assert!(f.get0::<()>().is_some());
+    assert!(f.get0::<i32>().is_none());
+    assert!(f.get1::<(), ()>().is_some());
+    assert!(f.get1::<i32, ()>().is_none());
+    assert!(f.get1::<i32, i32>().is_none());
+    assert!(f.get2::<(), (), ()>().is_some());
+    assert!(f.get2::<i32, i32, ()>().is_none());
+    assert!(f.get2::<i32, i32, i32>().is_none());
+
+    let f = Func::wrap0(&store, || -> i32 { loop {} });
+    assert!(f.get0::<i32>().is_some());
+    let f = Func::wrap0(&store, || -> f32 { loop {} });
+    assert!(f.get0::<f32>().is_some());
+    let f = Func::wrap0(&store, || -> f64 { loop {} });
+    assert!(f.get0::<f64>().is_some());
+
+    let f = Func::wrap1(&store, |_: i32| {});
+    assert!(f.get1::<i32, ()>().is_some());
+    assert!(f.get1::<i64, ()>().is_none());
+    assert!(f.get1::<f32, ()>().is_none());
+    assert!(f.get1::<f64, ()>().is_none());
+    let f = Func::wrap1(&store, |_: i64| {});
+    assert!(f.get1::<i64, ()>().is_some());
+    let f = Func::wrap1(&store, |_: f32| {});
+    assert!(f.get1::<f32, ()>().is_some());
+    let f = Func::wrap1(&store, |_: f64| {});
+    assert!(f.get1::<f64, ()>().is_some());
+}
+
+#[test]
+fn get_from_signature() {
+    struct Foo;
+    impl Callable for Foo {
+        fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
+            panic!()
+        }
+    }
+    let store = Store::default();
+    let ty = FuncType::new(Box::new([]), Box::new([]));
+    let f = Func::new(&store, ty, Rc::new(Foo));
+    assert!(f.get0::<()>().is_some());
+    assert!(f.get0::<i32>().is_none());
+    assert!(f.get1::<i32, ()>().is_none());
+
+    let ty = FuncType::new(Box::new([ValType::I32]), Box::new([ValType::F64]));
+    let f = Func::new(&store, ty, Rc::new(Foo));
+    assert!(f.get0::<()>().is_none());
+    assert!(f.get0::<i32>().is_none());
+    assert!(f.get1::<i32, ()>().is_none());
+    assert!(f.get1::<i32, f64>().is_some());
+}
+
+#[test]
+fn get_from_module() -> anyhow::Result<()> {
+    let store = Store::default();
+    let module = Module::new(
+        &store,
+        r#"
+            (module
+                (func (export "f0"))
+                (func (export "f1") (param i32))
+                (func (export "f2") (result i32)
+                    i32.const 0)
+            )
+
+        "#,
+    )?;
+    let instance = Instance::new(&module, &[])?;
+    let f0 = instance.get_export("f0").unwrap().func().unwrap();
+    assert!(f0.get0::<()>().is_some());
+    assert!(f0.get0::<i32>().is_none());
+    let f1 = instance.get_export("f1").unwrap().func().unwrap();
+    assert!(f1.get0::<()>().is_none());
+    assert!(f1.get1::<i32, ()>().is_some());
+    assert!(f1.get1::<i32, f32>().is_none());
+    let f2 = instance.get_export("f2").unwrap().func().unwrap();
+    assert!(f2.get0::<()>().is_none());
+    assert!(f2.get0::<i32>().is_some());
+    assert!(f2.get1::<i32, ()>().is_none());
+    assert!(f2.get1::<i32, f32>().is_none());
     Ok(())
 }
