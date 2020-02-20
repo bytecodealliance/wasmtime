@@ -106,7 +106,6 @@ macro_rules! getters {
             // Verify all the paramers match the expected parameters, and that
             // there are no extra parameters...
             let mut params = self.ty().params().iter().cloned();
-            eprintln!("{:?}", params);
             $(
                 if !$args::matches(&mut params) {
                     return None;
