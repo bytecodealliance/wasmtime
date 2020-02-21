@@ -41,6 +41,8 @@ block0(v0: f64, v1: f64, v2: f64, v3: f64):
     return
 }
 ; check: function %float_callee_sav(f64 [%xmm0], f64 [%xmm1], f64 [%xmm2], f64 [%xmm3], i64 fp [%rbp], f64 csr [%xmm6], f64 csr [%xmm7]) -> i64 fp [%rbp], f64 csr [%xmm6], f64 csr [%xmm7] windows_fastcall {
+; nextln:                         ss0 = spill_slot 32, offset -80
+; nextln:                         ss1 = incoming_arg 16, offset -48
 ; check: block0(v0: f64 [%xmm0], v1: f64 [%xmm1], v2: f64 [%xmm2], v3: f64 [%xmm3], v6: i64 [%rbp], v8: f64 [%xmm6], v9: f64 [%xmm7]):
 ; nextln:                         x86_push v6
 ; nextln:                         copy_special %rsp -> %rbp
