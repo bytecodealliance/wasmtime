@@ -22,9 +22,9 @@ impl Names {
         let ident = format_ident!("{}", id.as_str().to_camel_case());
         quote!(#ident)
     }
-    pub fn builtin_type(&self, b: BuiltinType) -> TokenStream {
+    pub fn builtin_type(&self, b: BuiltinType, lifetime: TokenStream) -> TokenStream {
         match b {
-            BuiltinType::String => quote!(String),
+            BuiltinType::String => quote!(wiggle_runtime::GuestString<#lifetime>),
             BuiltinType::U8 => quote!(u8),
             BuiltinType::U16 => quote!(u16),
             BuiltinType::U32 => quote!(u32),
@@ -35,7 +35,7 @@ impl Names {
             BuiltinType::S64 => quote!(i64),
             BuiltinType::F32 => quote!(f32),
             BuiltinType::F64 => quote!(f64),
-            BuiltinType::Char8 => quote!(char),
+            BuiltinType::Char8 => quote!(u8),
             BuiltinType::USize => quote!(usize),
         }
     }
@@ -59,7 +59,7 @@ impl Names {
                 }
             }
             TypeRef::Value(ty) => match &**ty {
-                witx::Type::Builtin(builtin) => self.builtin_type(*builtin),
+                witx::Type::Builtin(builtin) => self.builtin_type(*builtin, lifetime.clone()),
                 witx::Type::Pointer(pointee) => {
                     let pointee_type = self.type_ref(&pointee, lifetime.clone());
                     quote!(wiggle_runtime::GuestPtrMut<#lifetime, #pointee_type>)

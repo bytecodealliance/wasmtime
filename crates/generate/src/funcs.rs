@@ -181,7 +181,36 @@ fn marshal_arg(
                     let #name = #name as #interface_typename;
                 }
             }
-            witx::BuiltinType::String => unimplemented!("string types unimplemented"),
+            witx::BuiltinType::String => {
+                let lifetime = anon_lifetime();
+                let ptr_name = names.func_ptr_binding(&param.name);
+                let len_name = names.func_len_binding(&param.name);
+                let name = names.func_param(&param.name);
+                quote! {
+                    let num_elems = match memory.ptr::<u32>(#len_name as u32) {
+                        Ok(p) => match p.as_ref() {
+                            Ok(r) => r,
+                            Err(e) => {
+                                #error_handling
+                            }
+                        }
+                        Err(e) => {
+                            #error_handling
+                        }
+                    };
+                    let #name: wiggle_runtime::GuestString<#lifetime> = match memory.ptr::<u8>(#ptr_name as u32) {
+                        Ok(p) => match p.array(*num_elems) {
+                            Ok(s) => s.into(),
+                            Err(e) => {
+                                #error_handling
+                            }
+                        }
+                        Err(e) => {
+                            #error_handling
+                        }
+                    };
+                }
+            }
         },
         witx::Type::Pointer(pointee) => {
             let pointee_type = names.type_ref(pointee, anon_lifetime());

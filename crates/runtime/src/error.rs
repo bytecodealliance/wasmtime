@@ -27,4 +27,6 @@ pub enum GuestError {
         #[source]
         err: Box<GuestError>,
     },
+    #[error("Invalid UTF-8 encountered")]
+    InvalidUtf8(#[from] std::str::Utf8Error),
 }

@@ -285,14 +285,18 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
 
 fn define_builtin(names: &Names, name: &witx::Id, builtin: witx::BuiltinType) -> TokenStream {
     let ident = names.type_(name);
-    let built = names.builtin_type(builtin);
-    quote!(pub type #ident = #built;)
+    let built = names.builtin_type(builtin, quote!('a));
+    if let witx::BuiltinType::String = builtin {
+        quote!(pub type #ident<'a> = #built;)
+    } else {
+        quote!(pub type #ident = #built;)
+    }
 }
 
 pub fn type_needs_lifetime(tref: &witx::TypeRef) -> bool {
     match &*tref.type_() {
         witx::Type::Builtin(b) => match b {
-            witx::BuiltinType::String => unimplemented!(),
+            witx::BuiltinType::String => true,
             _ => false,
         },
         witx::Type::Enum { .. }
@@ -392,7 +396,7 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
         let type_ = match &m.tref {
             witx::TypeRef::Name(nt) => names.type_(&nt.name),
             witx::TypeRef::Value(ty) => match &**ty {
-                witx::Type::Builtin(builtin) => names.builtin_type(*builtin),
+                witx::Type::Builtin(builtin) => names.builtin_type(*builtin, quote!('a)),
                 witx::Type::Pointer(pointee) => {
                     let pointee_type = names.type_ref(&pointee, quote!('a));
                     quote!(wiggle_runtime::GuestPtrMut<'a, #pointee_type>)
@@ -410,7 +414,7 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
         let type_ = match &ml.member.tref {
             witx::TypeRef::Name(nt) => names.type_(&nt.name),
             witx::TypeRef::Value(ty) => match &**ty {
-                witx::Type::Builtin(builtin) => names.builtin_type(*builtin),
+                witx::Type::Builtin(builtin) => names.builtin_type(*builtin, quote!('a)),
                 witx::Type::Pointer(pointee) => {
                     let pointee_type = names.type_ref(&pointee, anon_lifetime());
                     quote!(wiggle_runtime::GuestPtrMut::<#pointee_type>)
@@ -453,7 +457,7 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
             }
             witx::TypeRef::Value(ty) => match &**ty {
                 witx::Type::Builtin(builtin) => {
-                    let type_ = names.builtin_type(*builtin);
+                    let type_ = names.builtin_type(*builtin, anon_lifetime());
                     quote! {
                         let #name = #type_::read_from_guest(&location.cast(#offset)?)?;
                     }

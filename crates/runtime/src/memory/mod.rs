@@ -1,8 +1,10 @@
 mod array;
 mod ptr;
+mod string;
 
 pub use array::*;
 pub use ptr::*;
+pub use string::*;
 
 use crate::{borrow::GuestBorrows, GuestError, GuestType, Region};
 use std::{cell::RefCell, fmt, marker::PhantomData, rc::Rc};
