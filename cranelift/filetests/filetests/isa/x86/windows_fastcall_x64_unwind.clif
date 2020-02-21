@@ -177,33 +177,33 @@ block0(v0: i64, v1: i64):
 ; nextln:     unwind_codes: [
 ; nextln:         UnwindCode {
 ; nextln:             offset: 42,
+; nextln:             op: SaveXmm128,
+; nextln:             info: 8,
+; nextln:             value: U16(
+; nextln:                 2,
+; nextln:             ),
+; nextln:           },
+; nextln:         UnwindCode {
+; nextln:             offset: 36,
+; nextln:             op: SaveXmm128,
+; nextln:             info: 7,
+; nextln:             value: U16(
+; nextln:                 1,
+; nextln:             ),
+; nextln:         },
+; nextln:         UnwindCode {
+; nextln:             offset: 31,
+; nextln:             op: SaveXmm128,
+; nextln:             info: 6,
+; nextln:             value: U16(
+; nextln:                 0,
+; nextln:             ),
+; nextln:         },
+; nextln:         UnwindCode {
+; nextln:             offset: 19,
 ; nextln:             op: SmallStackAlloc,
-; nextln:             info: 5,
+; nextln:             info: 12,
 ; nextln:             value: None,
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:           offset: 38,
-; nextln:           op: SaveXmm128,
-; nextln:           info: 8,
-; nextln:           value: U16(
-; nextln:             2,
-; nextln:           ),
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:           offset: 32,
-; nextln:           op: SaveXmm128,
-; nextln:           info: 7,
-; nextln:           value: U16(
-; nextln:             1,
-; nextln:           ),
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:           offset: 27,
-; nextln:           op: SaveXmm128,
-; nextln:           info: 6,
-; nextln:           value: U16(
-; nextln:             0,
-; nextln:           ),
 ; nextln:         },
 ; nextln:         UnwindCode {
 ; nextln:             offset: 15,
