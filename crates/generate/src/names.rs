@@ -1,4 +1,4 @@
-use heck::{CamelCase, SnakeCase};
+use heck::{CamelCase, ShoutySnakeCase, SnakeCase};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use witx::{AtomType, BuiltinType, Id, TypeRef};
@@ -80,6 +80,10 @@ impl Names {
         } else {
             format_ident!("{}", id.as_str().to_camel_case())
         }
+    }
+
+    pub fn flag_member(&self, id: &Id) -> Ident {
+        format_ident!("{}", id.as_str().to_shouty_snake_case())
     }
 
     pub fn struct_member(&self, id: &Id) -> Ident {

@@ -153,6 +153,7 @@ fn marshal_arg(
 
     match &*tref.type_() {
         witx::Type::Enum(_e) => try_into_conversion,
+        witx::Type::Flags(_f) => try_into_conversion,
         witx::Type::Builtin(b) => match b {
             witx::BuiltinType::U8 | witx::BuiltinType::U16 | witx::BuiltinType::Char8 => {
                 try_into_conversion
@@ -329,7 +330,7 @@ where
             | witx::BuiltinType::Char8 => write_val_to_ptr,
             witx::BuiltinType::String => unimplemented!("string types"),
         },
-        witx::Type::Enum(_e) => write_val_to_ptr,
+        witx::Type::Enum(_) | witx::Type::Flags(_) => write_val_to_ptr,
         _ => unimplemented!("marshal result"),
     }
 }
