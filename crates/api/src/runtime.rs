@@ -3,11 +3,12 @@ use std::cell::RefCell;
 use std::fmt;
 use std::path::Path;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use wasmparser::{OperatorValidatorConfig, ValidatingParserConfig};
 use wasmtime_environ::settings::{self, Configurable};
 use wasmtime_environ::CacheConfig;
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
+use wasmtime_profiling::{JitDumpAgent, ProfilingAgent, ProfilingStrategy};
 
 // Runtime Environment
 
@@ -25,6 +26,7 @@ pub struct Config {
     pub(crate) debug_info: bool,
     pub(crate) strategy: CompilationStrategy,
     pub(crate) cache_config: CacheConfig,
+    pub(crate) profiler: Option<Arc<Mutex<Box<dyn ProfilingAgent + Send>>>>,
 }
 
 impl Config {
@@ -58,6 +60,7 @@ impl Config {
             flags,
             strategy: CompilationStrategy::Auto,
             cache_config: CacheConfig::new_cache_disabled(),
+            profiler: None,
         }
     }
 
@@ -208,6 +211,20 @@ impl Config {
             Strategy::Lightbeam => {
                 anyhow::bail!("lightbeam compilation strategy wasn't enabled at compile time");
             }
+        };
+        Ok(self)
+    }
+
+    /// Creates a default profiler based on the profiling strategy choosen
+    ///
+    /// Profiler creation calls the type's default initializer where the purpose is
+    /// really just to put in place the type used for profiling.
+    pub fn profiler(&mut self, profile: ProfilingStrategy) -> Result<&mut Self> {
+        match profile {
+            ProfilingStrategy::JitDumpProfiler => {
+                self.profiler = { Some(Arc::new(Mutex::new(Box::new(JitDumpAgent::default())))) }
+            }
+            _ => self.profiler = { None },
         };
         Ok(self)
     }

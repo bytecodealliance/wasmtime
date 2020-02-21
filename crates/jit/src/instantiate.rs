@@ -9,7 +9,7 @@ use crate::link::link_module;
 use crate::resolver::Resolver;
 use std::io::Write;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use thiserror::Error;
 use wasmtime_debug::read_debuginfo;
 use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
@@ -17,6 +17,7 @@ use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
 use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleEnvironment,
 };
+use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{
     GdbJitImageRegistration, InstanceHandle, InstantiationError, TrapRegistration, VMFunctionBody,
     VMSharedSignatureIndex,
@@ -61,6 +62,7 @@ impl<'data> RawCompiledModule<'data> {
         compiler: &mut Compiler,
         data: &'data [u8],
         debug_info: bool,
+        profiler: Option<&Arc<Mutex<Box<dyn ProfilingAgent + Send>>>>,
     ) -> Result<Self, SetupError> {
         let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
 
@@ -103,6 +105,21 @@ impl<'data> RawCompiledModule<'data> {
         // Make all code compiled thus far executable.
         compiler.publish_compiled_code();
 
+        // Initialize profiler and load the wasm module
+        match profiler {
+            Some(_) => {
+                let region_name = String::from("wasm_module");
+                let mut profiler = profiler.unwrap().lock().unwrap();
+                match &dbg_image {
+                    Some(dbg) => {
+                        compiler.profiler_module_load(&mut profiler, &region_name, Some(&dbg))
+                    }
+                    _ => compiler.profiler_module_load(&mut profiler, &region_name, None),
+                };
+            }
+            _ => (),
+        };
+
         let dbg_jit_registration = if let Some(img) = dbg_image {
             let mut bytes = Vec::new();
             bytes.write_all(&img).expect("all written");
@@ -139,8 +156,9 @@ impl CompiledModule {
         compiler: &mut Compiler,
         data: &'data [u8],
         debug_info: bool,
+        profiler: Option<&Arc<Mutex<Box<dyn ProfilingAgent + Send>>>>,
     ) -> Result<Self, SetupError> {
-        let raw = RawCompiledModule::<'data>::new(compiler, data, debug_info)?;
+        let raw = RawCompiledModule::<'data>::new(compiler, data, debug_info, profiler)?;
 
         Ok(Self::from_parts(
             raw.module,
@@ -246,7 +264,7 @@ impl OwnedDataInitializer {
 
 /// Create a new wasm instance by compiling the wasm module in `data` and instatiating it.
 ///
-/// This is equivalent to createing a `CompiledModule` and calling `instantiate()` on it,
+/// This is equivalent to creating a `CompiledModule` and calling `instantiate()` on it,
 /// but avoids creating an intermediate copy of the data initializers.
 ///
 /// # Unsafety
@@ -258,7 +276,9 @@ pub unsafe fn instantiate(
     data: &[u8],
     resolver: &mut dyn Resolver,
     debug_info: bool,
+    profiler: Option<&Arc<Mutex<Box<dyn ProfilingAgent + Send>>>>,
 ) -> Result<InstanceHandle, SetupError> {
-    let instance = CompiledModule::new(compiler, data, debug_info)?.instantiate(resolver)?;
+    let instance =
+        CompiledModule::new(compiler, data, debug_info, profiler)?.instantiate(resolver)?;
     Ok(instance)
 }

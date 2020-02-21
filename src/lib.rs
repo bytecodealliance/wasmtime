@@ -31,6 +31,7 @@ use anyhow::{bail, Result};
 use std::path::PathBuf;
 use structopt::StructOpt;
 use wasmtime::{Config, Strategy};
+use wasmtime_profiling::ProfilingStrategy;
 
 pub use obj::compile_to_obj;
 
@@ -40,6 +41,13 @@ fn pick_compilation_strategy(cranelift: bool, lightbeam: bool) -> Result<Strateg
         (false, true) => Strategy::Cranelift,
         (false, false) => Strategy::Auto,
         (true, true) => bail!("Can't enable --cranelift and --lightbeam at the same time"),
+    })
+}
+
+fn pick_profiling_strategy(jitdump: bool) -> Result<ProfilingStrategy> {
+    Ok(match jitdump {
+        true => ProfilingStrategy::JitDumpProfiler,
+        false => ProfilingStrategy::NullProfiler,
     })
 }
 
@@ -120,6 +128,10 @@ struct CommonOptions {
     #[structopt(long, conflicts_with = "cranelift")]
     lightbeam: bool,
 
+    /// Generate jitdump file (supported on --features=profiling build)
+    #[structopt(long)]
+    jitdump: bool,
+
     /// Run optimization passes on translated functions
     #[structopt(short = "O", long)]
     optimize: bool,
@@ -136,7 +148,8 @@ impl CommonOptions {
             .wasm_reference_types(self.enable_reference_types || self.enable_all)
             .wasm_multi_value(self.enable_multi_value || self.enable_all)
             .wasm_threads(self.enable_threads || self.enable_all)
-            .strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?;
+            .strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?
+            .profiler(pick_profiling_strategy(self.jitdump)?)?;
         if self.optimize {
             config.cranelift_opt_level(wasmtime::OptLevel::Speed);
         }

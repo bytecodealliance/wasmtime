@@ -29,6 +29,7 @@ wasmtime-environ = { path = "crates/environ" }
 wasmtime-interface-types = { path = "crates/interface-types" }
 wasmtime-jit = { path = "crates/jit" }
 wasmtime-obj = { path = "crates/obj" }
+wasmtime-profiling = { path = "crates/profiling" }
 wasmtime-wast = { path = "crates/wast" }
 wasmtime-wasi = { path = "crates/wasi" }
 wasi-common = { path = "crates/wasi-common" }
@@ -75,6 +76,7 @@ lightbeam = [
     "wasmtime-wast/lightbeam",
     "wasmtime/lightbeam",
 ]
+jitdump = ["wasmtime-profiling/jitdump"]
 test_programs = ["test-programs/test_programs"]
 
 [badges]
