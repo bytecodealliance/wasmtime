@@ -12,7 +12,7 @@ into executable machine code.
 [![Documentation Status](https://readthedocs.org/projects/cranelift/badge/?version=latest)](https://cranelift.readthedocs.io/en/latest/?badge=latest)
 [![Build Status](https://github.com/bytecodealliance/cranelift/workflows/CI/badge.svg)](https://github.com/bytecodealliance/cranelift/actions)
 [![Fuzzit Status](https://app.fuzzit.dev/badge?org_id=bytecodealliance)](https://app.fuzzit.dev/orgs/bytecodealliance/dashboard)
-[![Gitter chat](https://badges.gitter.im/bytecodealliance/bytecodealliance.svg)](https://gitter.im/CraneStation/Lobby)
+[![Chat](https://img.shields.io/badge/chat-zulip-brightgreen.svg)](https://bytecodealliance.zulipchat.com/#narrow/stream/217117-cranelift/topic/general)
 ![Minimum rustc 1.37](https://img.shields.io/badge/rustc-1.37+-green.svg)
 
 For more information, see [the

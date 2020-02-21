@@ -13,13 +13,11 @@ is reflected in the code or documentation yet. If you see things that seem
 missing or that don't make sense, or even that just don't work the way you
 expect them to, we're interested to hear about it!
 
-We have a [chat room on Gitter], and questions are also welcome as issues
-in the [Cranelift issue tracker]. Some folks also hang out in the #cranelift
-IRC channel on [irc.mozilla.org].
+We have a [stream] in the Bytecode Alliance Zulip instance, and questions are
+also welcome as issues in the [Cranelift issue tracker].
 
-[chat room on Gitter]: https://gitter.im/CraneStation/Lobby
+[stream]: https://bytecodealliance.zulipchat.com/#narrow/stream/217117-cranelift/topic/general
 [Cranelift issue tracker]: https://github.com/bytecodealliance/cranelift/issues/new
-[irc.mozilla.org]: https://wiki.mozilla.org/IRC
 
 ### Mentoring
 
