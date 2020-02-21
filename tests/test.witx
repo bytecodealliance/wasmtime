@@ -18,6 +18,15 @@
     $awd
     $suv))
 
+(typename $cookie
+  (int u64
+    (const $start 0)))
+
+(typename $bool
+  (enum u8
+    $false
+    $true))
+
 (typename $pair_ints
   (struct
     (field $first s32)
@@ -76,5 +85,10 @@
     (param $a_string string)
     (result $error $errno)
     (result $total_bytes u32)
+  )
+  (@interface func (export "cookie_cutter")
+    (param $init_cookie $cookie)
+    (result $error $errno)
+    (result $is_start $bool)
   )
 )
