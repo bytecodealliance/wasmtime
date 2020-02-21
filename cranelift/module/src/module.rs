@@ -7,12 +7,14 @@
 
 use super::HashMap;
 use crate::data_context::DataContext;
+use crate::traps::TrapSite;
 use crate::Backend;
 use cranelift_codegen::binemit::{self, CodeInfo};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::{ir, isa, CodegenError, Context};
 use log::info;
 use std::borrow::ToOwned;
+use std::convert::TryInto;
 use std::string::String;
 use std::vec::Vec;
 use thiserror::Error;
@@ -139,6 +141,9 @@ pub enum ModuleError {
     /// Indicates an identifier was defined, but was declared as an import
     #[error("Invalid to define identifier declared as an import: {0}")]
     InvalidImportDefinition(String),
+    /// Indicates a too-long function was defined
+    #[error("Function {0} exceeds the maximum function size")]
+    FunctionTooLarge(String),
     /// Wraps a `cranelift-codegen` error
     #[error("Compilation error: {0}")]
     Compilation(#[from] CodegenError),
@@ -566,6 +571,48 @@ where
                 contents: &self.contents,
             },
             total_size,
+        )?);
+
+        self.contents.functions[func].compiled = compiled;
+        self.functions_to_finalize.push(func);
+        Ok(total_size)
+    }
+
+    /// Define a function, taking the function body from the given `bytes`.
+    ///
+    /// This function is generally only useful if you need to precisely specify
+    /// the emitted instructions for some reason; otherwise, you should use
+    /// `define_function`.
+    ///
+    /// Returns the size of the function's code.
+    pub fn define_function_bytes(
+        &mut self,
+        func: FuncId,
+        bytes: &[u8],
+        traps: Vec<TrapSite>,
+    ) -> ModuleResult<binemit::CodeOffset> {
+        info!("defining function {} with bytes", func);
+        let info = &self.contents.functions[func];
+        if info.compiled.is_some() {
+            return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
+        }
+        if !info.decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
+        }
+
+        let total_size: u32 = match bytes.len().try_into() {
+            Ok(total_size) => total_size,
+            _ => Err(ModuleError::FunctionTooLarge(info.decl.name.clone()))?,
+        };
+
+        let compiled = Some(self.backend.define_function_bytes(
+            func,
+            &info.decl.name,
+            bytes,
+            &ModuleNamespace::<B> {
+                contents: &self.contents,
+            },
+            traps,
         )?);
 
         self.contents.functions[func].compiled = compiled;

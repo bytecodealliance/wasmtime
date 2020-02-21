@@ -8,7 +8,7 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, ir, settings};
 use cranelift_module::{
     Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleNamespace,
-    ModuleResult,
+    ModuleResult, TrapSite,
 };
 use cranelift_native;
 #[cfg(not(windows))]
@@ -191,6 +191,23 @@ impl SimpleJITBackend {
             _ => panic!("invalid ExternalName {}", name),
         }
     }
+
+    fn record_function_for_perf(&self, ptr: *mut u8, size: usize, name: &str) {
+        // The Linux perf tool supports JIT code via a /tmp/perf-$PID.map file,
+        // which contains memory regions and their associated names.  If we
+        // are profiling with perf and saving binaries to PERF_BUILDID_DIR
+        // for post-profile analysis, write information about each function
+        // we define.
+        if cfg!(target_os = "linux") && ::std::env::var_os("PERF_BUILDID_DIR").is_some() {
+            let mut map_file = ::std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(format!("/tmp/perf-{}.map", ::std::process::id()))
+                .unwrap();
+
+            let _ = writeln!(map_file, "{:x} {:x} {}", ptr as usize, size, name);
+        }
+    }
 }
 
 impl<'simple_jit_backend> Backend for SimpleJITBackend {
@@ -267,15 +284,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        if cfg!(target_os = "linux") && ::std::env::var_os("PERF_BUILDID_DIR").is_some() {
-            let mut map_file = ::std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(format!("/tmp/perf-{}.map", ::std::process::id()))
-                .unwrap();
-
-            let _ = writeln!(map_file, "{:x} {:x} {}", ptr as usize, code_size, name);
-        }
+        self.record_function_for_perf(ptr, size, name);
 
         let mut reloc_sink = SimpleJITRelocSink::new();
         // Ignore traps for now. For now, frontends should just avoid generating code
@@ -296,6 +305,34 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             code: ptr,
             size,
             relocs: reloc_sink.relocs,
+        })
+    }
+
+    fn define_function_bytes(
+        &mut self,
+        _id: FuncId,
+        name: &str,
+        bytes: &[u8],
+        _namespace: &ModuleNamespace<Self>,
+        _traps: Vec<TrapSite>,
+    ) -> ModuleResult<Self::CompiledFunction> {
+        let size = bytes.len();
+        let ptr = self
+            .memory
+            .code
+            .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
+            .expect("TODO: handle OOM etc.");
+
+        self.record_function_for_perf(ptr, size, name);
+
+        unsafe {
+            ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, size);
+        }
+
+        Ok(Self::CompiledFunction {
+            code: ptr,
+            size,
+            relocs: vec![],
         })
     }
 

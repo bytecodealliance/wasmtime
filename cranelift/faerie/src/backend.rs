@@ -10,9 +10,10 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, binemit, ir};
 use cranelift_module::{
     Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleError,
-    ModuleNamespace, ModuleResult,
+    ModuleNamespace, ModuleResult, TrapSite,
 };
 use faerie;
+use std::convert::TryInto;
 use std::fs::File;
 use target_lexicon::Triple;
 
@@ -195,6 +196,31 @@ impl Backend for FaerieBackend {
 
         self.artifact
             .define(name, code)
+            .expect("inconsistent declaration");
+
+        Ok(FaerieCompiledFunction { code_length })
+    }
+
+    fn define_function_bytes(
+        &mut self,
+        _id: FuncId,
+        name: &str,
+        bytes: &[u8],
+        _namespace: &ModuleNamespace<Self>,
+        traps: Vec<TrapSite>,
+    ) -> ModuleResult<FaerieCompiledFunction> {
+        let code_length: u32 = match bytes.len().try_into() {
+            Ok(code_length) => code_length,
+            _ => Err(ModuleError::FunctionTooLarge(name.to_string()))?,
+        };
+
+        if let Some(ref mut trap_manifest) = self.trap_manifest {
+            let trap_sink = FaerieTrapSink::new_with_sites(name, code_length, traps);
+            trap_manifest.add_sink(trap_sink);
+        }
+
+        self.artifact
+            .define(name, bytes.to_vec())
             .expect("inconsistent declaration");
 
         Ok(FaerieCompiledFunction { code_length })

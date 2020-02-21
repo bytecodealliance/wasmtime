@@ -1,6 +1,6 @@
 //! Defines `ObjectBackend`.
 
-use crate::traps::{ObjectTrapSink, ObjectTrapSite};
+use crate::traps::ObjectTrapSink;
 use cranelift_codegen::binemit::{
     Addend, CodeOffset, NullStackmapSink, NullTrapSink, Reloc, RelocSink,
 };
@@ -9,7 +9,7 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, binemit, ir};
 use cranelift_module::{
     Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleNamespace,
-    ModuleResult,
+    ModuleResult, TrapSite,
 };
 use object::write::{
     Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
@@ -79,7 +79,7 @@ pub struct ObjectBackend {
     object: Object,
     functions: SecondaryMap<FuncId, Option<SymbolId>>,
     data_objects: SecondaryMap<DataId, Option<SymbolId>>,
-    traps: SecondaryMap<FuncId, Vec<ObjectTrapSite>>,
+    traps: SecondaryMap<FuncId, Vec<TrapSite>>,
     relocs: Vec<SymbolRelocs>,
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
@@ -223,6 +223,23 @@ impl Backend for ObjectBackend {
             });
         }
         self.traps[func_id] = trap_sink.sites;
+        Ok(ObjectCompiledFunction)
+    }
+
+    fn define_function_bytes(
+        &mut self,
+        func_id: FuncId,
+        _name: &str,
+        bytes: &[u8],
+        _namespace: &ModuleNamespace<Self>,
+        traps: Vec<TrapSite>,
+    ) -> ModuleResult<ObjectCompiledFunction> {
+        let symbol = self.functions[func_id].unwrap();
+        let section = self.object.section_id(StandardSection::Text);
+        let _offset = self
+            .object
+            .add_symbol_data(symbol, section, bytes, self.function_alignment);
+        self.traps[func_id] = traps;
         Ok(ObjectCompiledFunction)
     }
 
@@ -462,7 +479,7 @@ pub struct ObjectProduct {
     /// Symbol IDs for data objects (both declared and defined).
     pub data_objects: SecondaryMap<DataId, Option<SymbolId>>,
     /// Trap sites for defined functions.
-    pub traps: SecondaryMap<FuncId, Vec<ObjectTrapSite>>,
+    pub traps: SecondaryMap<FuncId, Vec<TrapSite>>,
 }
 
 impl ObjectProduct {
