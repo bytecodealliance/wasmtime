@@ -1,9 +1,6 @@
 use proptest::prelude::*;
 use wiggle_runtime::GuestError;
-use wiggle_test::HostMemory;
-
-mod ctx;
-use ctx::WasiCtx;
+use wiggle_test::{impl_errno, HostMemory, WasiCtx};
 
 wiggle_generate::from_witx!({
     witx: ["tests/trivial.witx"],

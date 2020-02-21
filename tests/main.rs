@@ -3,15 +3,12 @@ use std::convert::TryFrom;
 use wiggle_runtime::{
     GuestArray, GuestError, GuestPtr, GuestPtrMut, GuestRef, GuestRefMut, GuestString,
 };
-use wiggle_test::{HostMemory, MemArea};
+use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle_generate::from_witx!({
     witx: ["tests/test.witx"],
     ctx: WasiCtx,
 });
-
-mod ctx;
-use ctx::WasiCtx;
 
 impl_errno!(types::Errno);
 
