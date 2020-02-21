@@ -11,11 +11,7 @@ pub trait GuestType: Sized {
 }
 
 pub trait GuestTypeCopy: GuestType + Copy {}
-pub trait GuestTypeClone: GuestType + Clone {
-    fn read_from_guest<'a>(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError>;
-    fn write_to_guest<'a>(&self, location: &GuestPtrMut<'a, Self>);
-}
-pub trait GuestTypePtr<'a>: GuestType {
+pub trait GuestTypeClone<'a>: GuestType + Clone {
     fn read_from_guest(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError>;
     fn write_to_guest(&self, location: &GuestPtrMut<'a, Self>);
 }

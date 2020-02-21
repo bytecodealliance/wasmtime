@@ -1,8 +1,5 @@
 use super::{array::GuestArray, GuestMemory};
-use crate::{
-    borrow::BorrowHandle, GuestError, GuestType, GuestTypeClone, GuestTypeCopy, GuestTypePtr,
-    Region,
-};
+use crate::{borrow::BorrowHandle, GuestError, GuestType, GuestTypeClone, GuestTypeCopy, Region};
 use std::{
     fmt,
     marker::PhantomData,
@@ -81,18 +78,9 @@ where
 
 impl<'a, T> GuestPtr<'a, T>
 where
-    T: GuestTypeClone,
+    T: GuestTypeClone<'a>,
 {
     pub fn clone_from_guest(&self) -> Result<T, GuestError> {
-        T::read_from_guest(self)
-    }
-}
-
-impl<'a, T> GuestPtr<'a, T>
-where
-    T: GuestTypePtr<'a>,
-{
-    pub fn read_ptr_from_guest(&self) -> Result<T, GuestError> {
         T::read_from_guest(self)
     }
 }
@@ -123,9 +111,9 @@ where
 }
 
 // Operations for reading and writing Ptrs to memory:
-impl<'a, T> GuestTypePtr<'a> for GuestPtr<'a, T>
+impl<'a, T> GuestTypeClone<'a> for GuestPtr<'a, T>
 where
-    T: GuestType,
+    T: GuestType + Clone,
 {
     fn read_from_guest(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
         // location is guaranteed to be in GuestMemory and aligned to 4
@@ -220,7 +208,7 @@ where
 
 impl<'a, T> GuestPtrMut<'a, T>
 where
-    T: GuestTypePtr<'a>,
+    T: GuestTypeClone<'a>,
 {
     pub fn read_ptr_from_guest(&self) -> Result<T, GuestError> {
         T::read_from_guest(&self.as_immut())
@@ -228,19 +216,6 @@ where
 
     pub fn write_ptr_to_guest(&self, ptr: &T) {
         T::write_to_guest(ptr, &self);
-    }
-}
-
-impl<'a, T> GuestPtrMut<'a, T>
-where
-    T: GuestTypeClone,
-{
-    pub fn clone_from_guest(&self) -> Result<T, GuestError> {
-        T::read_from_guest(&self.as_immut())
-    }
-
-    pub fn clone_to_guest(&self, val: &T) {
-        T::write_to_guest(val, &self)
     }
 }
 
@@ -270,9 +245,9 @@ where
 }
 
 // Reading and writing GuestPtrMuts to memory:
-impl<'a, T> GuestTypePtr<'a> for GuestPtrMut<'a, T>
+impl<'a, T> GuestTypeClone<'a> for GuestPtrMut<'a, T>
 where
-    T: GuestType,
+    T: GuestType + Clone,
 {
     fn read_from_guest(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
         // location is guaranteed to be in GuestMemory and aligned to 4

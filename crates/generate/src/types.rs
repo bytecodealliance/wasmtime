@@ -179,7 +179,7 @@ fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDatatype) -> Toke
         }
 
         impl wiggle_runtime::GuestTypeCopy for #ident {}
-        impl wiggle_runtime::GuestTypeClone for #ident {
+        impl<'a> wiggle_runtime::GuestTypeClone<'a> for #ident {
             fn read_from_guest(location: &wiggle_runtime::GuestPtr<#ident>) -> Result<#ident, wiggle_runtime::GuestError> {
                 Ok(*location.as_ref()?)
             }
@@ -267,7 +267,7 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
         }
 
         impl wiggle_runtime::GuestTypeCopy for #ident {}
-        impl wiggle_runtime::GuestTypeClone for #ident {
+        impl<'a> wiggle_runtime::GuestTypeClone<'a> for #ident {
             fn read_from_guest(location: &wiggle_runtime::GuestPtr<#ident>) -> Result<#ident, wiggle_runtime::GuestError> {
                 use ::std::convert::TryFrom;
                 let raw: #repr = unsafe { (location.as_raw() as *const #repr).read() };
@@ -502,7 +502,7 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
                 Ok(())
             }
         }
-        impl<'a> wiggle_runtime::GuestTypePtr<'a> for #ident<'a> {
+        impl<'a> wiggle_runtime::GuestTypeClone<'a> for #ident<'a> {
             fn read_from_guest(location: &wiggle_runtime::GuestPtr<'a, #ident<'a>>) -> Result<#ident<'a>, wiggle_runtime::GuestError> {
                 #(#member_reads)*
                 Ok(#ident { #(#member_names),* })

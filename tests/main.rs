@@ -56,11 +56,13 @@ impl foo::Foo for WasiCtx {
         println!("wrote to input2_ref {:?}", input3);
 
         // Read ptr value from mutable ptr:
-        let input4_ptr: GuestPtr<types::Excuse> =
-            input4_ptr_ptr.read_ptr_from_guest().map_err(|e| {
-                eprintln!("input4_ptr_ptr error: {}", e);
-                types::Errno::InvalidArg
-            })?;
+        let input4_ptr: GuestPtr<types::Excuse> = wiggle_runtime::GuestTypeClone::read_from_guest(
+            &input4_ptr_ptr.as_immut(),
+        )
+        .map_err(|e| {
+            eprintln!("input4_ptr_ptr error: {}", e);
+            types::Errno::InvalidArg
+        })?;
 
         // Read enum value from that ptr:
         let input4: types::Excuse = *input4_ptr.as_ref().map_err(|e| {
@@ -99,22 +101,22 @@ impl foo::Foo for WasiCtx {
         &mut self,
         excuses: &types::ConstExcuseArray,
     ) -> Result<types::Excuse, types::Errno> {
-        let last = excuses
-            .iter()
-            .last()
-            .expect("input array is non-empty")
-            .expect("valid ptr to ptr")
-            .read_ptr_from_guest()
-            .expect("valid ptr to some Excuse value");
+        let last = wiggle_runtime::GuestTypeClone::read_from_guest(
+            &excuses
+                .iter()
+                .last()
+                .expect("input array is non-empty")
+                .expect("valid ptr to ptr"),
+        )
+        .expect("valid ptr to some Excuse value");
         Ok(*last.as_ref().expect("dereferencing ptr should succeed"))
     }
 
     fn populate_excuses(&mut self, excuses: &types::ExcuseArray) -> Result<(), types::Errno> {
         for excuse in excuses.iter() {
-            let ptr_to_ptr = excuse
-                .expect("valid ptr to ptr")
-                .read_ptr_from_guest()
-                .expect("valid ptr to some Excuse value");
+            let ptr_to_ptr =
+                wiggle_runtime::GuestTypeClone::read_from_guest(&excuse.expect("valid ptr to ptr"))
+                    .expect("valid ptr to some Excuse value");
             let mut ptr = ptr_to_ptr
                 .as_ref_mut()
                 .expect("dereferencing mut ptr should succeed");
@@ -767,10 +769,9 @@ impl PopulateExcusesExcercise {
             .array(self.elements.len() as u32)
             .expect("as array");
         for el in arr.iter() {
-            let ptr_to_ptr = el
-                .expect("valid ptr to ptr")
-                .read_ptr_from_guest()
-                .expect("valid ptr to some Excuse value");
+            let ptr_to_ptr =
+                wiggle_runtime::GuestTypeClone::read_from_guest(&el.expect("valid ptr to ptr"))
+                    .expect("valid ptr to some Excuse value");
             assert_eq!(
                 *ptr_to_ptr
                     .as_ref()
