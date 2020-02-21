@@ -1,9 +1,6 @@
 use proptest::prelude::*;
-use std::convert::TryFrom;
-use wiggle_runtime::{
-    GuestArray, GuestError, GuestErrorType, GuestPtr, GuestPtrMut, GuestRef, GuestRefMut,
-};
-use wiggle_test::{HostMemory, MemArea};
+use wiggle_runtime::GuestError;
+use wiggle_test::HostMemory;
 
 mod ctx;
 use ctx::WasiCtx;

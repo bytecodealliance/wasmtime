@@ -1,8 +1,7 @@
 use proptest::prelude::*;
 use std::convert::TryFrom;
 use wiggle_runtime::{
-    GuestArray, GuestError, GuestErrorType, GuestPtr, GuestPtrMut, GuestRef, GuestRefMut,
-    GuestString,
+    GuestArray, GuestError, GuestPtr, GuestPtrMut, GuestRef, GuestRefMut, GuestString,
 };
 use wiggle_test::{HostMemory, MemArea};
 
@@ -803,7 +802,11 @@ impl HelloStringExercise {
                 },
             )
             .prop_filter("non-overlapping pointers", |e| {
-                non_overlapping_set(&[&e.string_ptr_loc, &e.string_len_loc, &e.return_ptr_loc])
+                MemArea::non_overlapping_set(&[
+                    &e.string_ptr_loc,
+                    &e.string_len_loc,
+                    &e.return_ptr_loc,
+                ])
             })
             .boxed()
     }
@@ -811,7 +814,7 @@ impl HelloStringExercise {
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
         let mut host_memory = HostMemory::new();
-        let mut guest_memory = GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
+        let mut guest_memory = host_memory.guest_memory();
 
         // Populate string length
         *guest_memory
@@ -880,7 +883,7 @@ impl CookieCutterExercise {
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
         let mut host_memory = HostMemory::new();
-        let mut guest_memory = GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
+        let mut guest_memory = host_memory.guest_memory();
 
         let res = foo::cookie_cutter(
             &mut ctx,
