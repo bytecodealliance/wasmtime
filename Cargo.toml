@@ -9,11 +9,13 @@ wiggle-generate = { path = "crates/generate" }
 wiggle-runtime = { path = "crates/runtime" }
 
 [dev-dependencies]
+wiggle-test = { path = "crates/test" }
 proptest = "0.9"
 
 [workspace]
 members = [
   "crates/generate",
-  "crates/runtime"
+  "crates/runtime",
+  "crates/test",
 ]
 exclude = ["crates/WASI"]

@@ -1,10 +1,4 @@
-(typename $errno
-    (enum u32
-        $ok
-        $invalid_arg
-        $dont_want_to
-        $physically_unable
-        $picket_line))
+(use "errno.witx")
 
 (typename $excuse
   (enum u8
@@ -44,10 +38,6 @@
 (typename $excuse_array (array (@witx pointer $excuse)))
 
 (module $foo
-  (@interface func (export "bar")
-    (param $an_int u32)
-    (param $an_float f32)
-    (result $error $errno))
   (@interface func (export "baz")
     (param $an_excuse $excuse)
     (param $an_excuse_by_reference (@witx pointer $excuse))
