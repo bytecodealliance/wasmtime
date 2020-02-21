@@ -11,24 +11,12 @@ wiggle_generate::from_witx!({
     ctx: WasiCtx,
 });
 
-pub struct WasiCtx {
-    guest_errors: Vec<GuestError>,
-}
+mod ctx;
+use ctx::WasiCtx;
 
-impl WasiCtx {
-    pub fn new() -> Self {
-        Self {
-            guest_errors: vec![],
-        }
-    }
-}
+impl_errno!(types::Errno);
 
 impl foo::Foo for WasiCtx {
-    fn bar(&mut self, an_int: u32, an_float: f32) -> Result<(), types::Errno> {
-        println!("BAR: {} {}", an_int, an_float);
-        Ok(())
-    }
-
     fn baz(
         &mut self,
         input1: types::Excuse,
@@ -154,22 +142,6 @@ impl foo::Foo for WasiCtx {
         Ok(res)
     }
 }
-// Errno is used as a first return value in the functions above, therefore
-// it must implement GuestErrorType with type Context = WasiCtx.
-// The context type should let you do logging or debugging or whatever you need
-// with these errors. We just push them to vecs.
-impl GuestErrorType for types::Errno {
-    type Context = WasiCtx;
-    fn success() -> types::Errno {
-        types::Errno::Ok
-    }
-    fn from_error(e: GuestError, ctx: &mut WasiCtx) -> types::Errno {
-        eprintln!("GUEST ERROR: {:?}", e);
-        ctx.guest_errors.push(e);
-        types::Errno::InvalidArg
-    }
-}
-
 #[derive(Debug)]
 struct BatExercise {
     pub input: u32,

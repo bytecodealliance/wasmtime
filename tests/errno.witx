@@ -1,0 +1,8 @@
+(typename $errno
+    (enum u32
+        $ok
+        $invalid_arg
+        $dont_want_to
+        $physically_unable
+        $picket_line))
+
