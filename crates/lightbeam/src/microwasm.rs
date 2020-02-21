@@ -1817,7 +1817,9 @@ where
 
         let op_sig = self.op_sig(&op)?;
 
-        self.apply_op(op_sig)?;
+        self.apply_op(op_sig).map_err(|e| {
+            wasm_reader::Error::new(strerr(format!("{} (in {:?})", e, op)), current_position)
+        })?;
 
         Ok(Some(match op {
             WasmOperator::Unreachable => {

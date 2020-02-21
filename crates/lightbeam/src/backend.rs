@@ -20,35 +20,7 @@ use std::{
     iter, mem,
     ops::{Deref, RangeInclusive},
 };
-
-// TODO: Get rid of this! It's a total hack.
-mod magic {
-    use cranelift_codegen::ir;
-
-    /// Compute an `ir::ExternalName` for the `memory.grow` libcall for
-    /// 32-bit locally-defined memories.
-    pub fn get_memory32_grow_name() -> ir::ExternalName {
-        ir::ExternalName::user(1, 0)
-    }
-
-    /// Compute an `ir::ExternalName` for the `memory.grow` libcall for
-    /// 32-bit imported memories.
-    pub fn get_imported_memory32_grow_name() -> ir::ExternalName {
-        ir::ExternalName::user(1, 1)
-    }
-
-    /// Compute an `ir::ExternalName` for the `memory.size` libcall for
-    /// 32-bit locally-defined memories.
-    pub fn get_memory32_size_name() -> ir::ExternalName {
-        ir::ExternalName::user(1, 2)
-    }
-
-    /// Compute an `ir::ExternalName` for the `memory.size` libcall for
-    /// 32-bit imported memories.
-    pub fn get_imported_memory32_size_name() -> ir::ExternalName {
-        ir::ExternalName::user(1, 3)
-    }
-}
+// use wasmtime_environ::BuiltinFunctionIndex;
 
 /// Size of a pointer on the target in bytes.
 const WORD_SIZE: u32 = 8;
@@ -534,8 +506,8 @@ const FLOAT_ARGS_IN_GPRS: &[GPR] = &[XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, X
 const FLOAT_RETURN_GPRS: &[GPR] = &[XMM0, XMM1];
 // List of scratch registers taken from https://wiki.osdev.org/System_V_ABI
 const SCRATCH_REGS: &[GPR] = &[
-    RDX, RCX, R8, R9, RAX, R10, R11, XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7, XMM8, XMM9,
-    XMM10, XMM11, XMM12, XMM13, XMM14, XMM15,
+    RSI, RDX, RCX, R8, R9, RAX, R10, R11, XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7, XMM8,
+    XMM9, XMM10, XMM11, XMM12, XMM13, XMM14, XMM15,
 ];
 const VMCTX: RegId = rq::RDI;
 const CALLER_VMCTX: RegId = rq::RSI;
@@ -5483,13 +5455,16 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         self.save_volatile(..locs.len())?;
 
+        self.pass_outgoing_args(&locs)?;
+
         if func_def_loc == FunctionDefLocation::PossiblyExternal {
+            assert!(self.block_state.regs.is_free(GPR::Rq(CALLER_VMCTX)));
             dynasm!(self.asm
                 ; mov Rq(CALLER_VMCTX), Rq(VMCTX)
             );
+            self.block_state.regs.mark_used(GPR::Rq(CALLER_VMCTX));
         }
 
-        self.pass_outgoing_args(&locs)?;
         // 2 bytes for the 64-bit `mov` opcode + register ident, the rest is the immediate
         self.reloc_sink.reloc_external(
             (self.asm.offset().0
@@ -5503,11 +5478,16 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             0,
         );
         let temp = self.take_reg(I64).unwrap();
+
         dynasm!(self.asm
             ; mov Rq(temp.rq().unwrap()), QWORD 0xDEAD_BEEF_DEAD_BEEF_u64 as i64
             ; call Rq(temp.rq().unwrap())
         );
         self.block_state.regs.release(temp)?;
+
+        if func_def_loc == FunctionDefLocation::PossiblyExternal {
+            self.block_state.regs.release(GPR::Rq(CALLER_VMCTX))?;
+        }
 
         for i in locs {
             self.free_value(i.into())?;
@@ -5518,24 +5498,38 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Ok(())
     }
 
+    fn builtin_function_call<
+        A: IntoIterator<Item = SignlessType>,
+        R: IntoIterator<Item = SignlessType>,
+    >(
+        &mut self,
+        i: BuiltinFunctionIndex,
+        args: A,
+        rets: R,
+    ) -> Result<(), Error>
+    where
+        A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+        R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+    {
+        unimplemented!()
+    }
+
     // TODO: Other memory indices
     pub fn memory_size(&mut self) -> Result<(), Error> {
         let memory_index = 0;
         if let Some(defined_memory_index) = self.module_context.defined_memory_index(memory_index) {
             self.push(ValueLocation::Immediate(defined_memory_index.into()))?;
-            self.relocated_function_call(
-                &magic::get_memory32_size_name(),
+            self.builtin_function_call(
+                BuiltinFunctionIndex::get_memory32_size_index(),
                 [self.pointer_type].iter().copied(),
                 [self.pointer_type].iter().copied(),
-                FunctionDefLocation::PossiblyExternal,
             )?;
         } else {
             self.push(ValueLocation::Immediate(memory_index.into()))?;
-            self.relocated_function_call(
-                &magic::get_imported_memory32_size_name(),
+            self.builtin_function_call(
+                BuiltinFunctionIndex::get_imported_memory32_size_index(),
                 [self.pointer_type].iter().copied(),
                 [self.pointer_type].iter().copied(),
-                FunctionDefLocation::PossiblyExternal,
             )?;
         }
         Ok(())
@@ -5546,19 +5540,17 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let memory_index = 0;
         if let Some(defined_memory_index) = self.module_context.defined_memory_index(memory_index) {
             self.push(ValueLocation::Immediate(defined_memory_index.into()))?;
-            self.relocated_function_call(
-                &magic::get_memory32_grow_name(),
+            self.builtin_function_call(
+                BuiltinFunctionIndex::get_memory32_grow_index(),
                 [self.pointer_type, self.pointer_type].iter().copied(),
                 [self.pointer_type].iter().copied(),
-                FunctionDefLocation::PossiblyExternal,
             )?;
         } else {
             self.push(ValueLocation::Immediate(memory_index.into()))?;
-            self.relocated_function_call(
-                &magic::get_imported_memory32_grow_name(),
+            self.builtin_function_call(
+                BuiltinFunctionIndex::get_imported_memory32_grow_index(),
                 [self.pointer_type, self.pointer_type].iter().copied(),
                 [self.pointer_type].iter().copied(),
-                FunctionDefLocation::PossiblyExternal,
             )?;
         }
         Ok(())
@@ -5765,11 +5757,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         }
 
         self.save_volatile(..locs.len())?;
-        dynasm!(self.asm
-            ; push Rq(VMCTX)
-        );
-        self.block_state.depth.reserve(1);
-        let depth = self.block_state.depth;
 
         self.pass_outgoing_args(&locs)?;
 
@@ -5834,7 +5821,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     self.module_context.vmcaller_checked_anyfunc_type_index() as i32
             ], Rd(temp1.rq().unwrap())
             ;; self.trap_if(cc::NOT_EQUAL, TrapCode::BadSignature)
+        );
+
+        assert!(self.block_state.regs.is_free(GPR::Rq(CALLER_VMCTX)));
+        dynasm!(self.asm
             ; mov Rq(CALLER_VMCTX), Rq(VMCTX)
+        );
+        self.block_state.regs.mark_used(GPR::Rq(CALLER_VMCTX));
+
+        dynasm!(self.asm
             ; mov Rq(VMCTX), [
                 Rq(temp0.rq().unwrap()) +
                     Rq(callee_reg.rq().unwrap()) +
@@ -5847,6 +5842,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ]
         );
 
+        self.block_state.regs.release(GPR::Rq(CALLER_VMCTX))?;
         self.block_state.regs.release(temp0)?;
         self.block_state.regs.release(temp1)?;
         self.free_value(callee)?;
@@ -5857,11 +5853,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         self.push_function_returns(return_types)?;
 
-        self.set_stack_depth(depth)?;
-        dynasm!(self.asm
-            ; pop Rq(VMCTX)
-        );
-        self.block_state.depth.free(1);
         Ok(())
     }
 
@@ -6009,10 +6000,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 ;; callback(&mut self.asm)
             );
         }
-
-        dynasm!(self.asm
-            ; mov Rq(VMCTX), Rq(CALLER_VMCTX)
-        );
     }
 
     pub fn trap(&mut self, trap_id: TrapCode) {

@@ -39,7 +39,7 @@ impl crate::compilation::Compiler for Lightbeam {
         let mut codegen_session: lightbeam::CodeGenSession<_> = lightbeam::CodeGenSession::new(
             function_body_inputs.len() as u32,
             &env,
-            lightbeam::microwasm::I64,
+            lightbeam::microwasm::I32,
         );
 
         for (i, function_body) in &function_body_inputs {
