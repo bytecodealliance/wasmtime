@@ -626,8 +626,14 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     // Set up the cursor and insert the prologue
     let entry_block = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_block);
-    let prologue_cfa_state =
-        insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, fpr_slot.as_ref(), isa);
+    let prologue_cfa_state = insert_common_prologue(
+        &mut pos,
+        local_stack_size,
+        reg_type,
+        &csrs,
+        fpr_slot.as_ref(),
+        isa,
+    );
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
@@ -886,7 +892,11 @@ fn insert_common_prologue(
         // `stack_store` is not directly encodable in x86_64 at the moment, so we'll need a base
         // address. We are well after postopt could run, so load the CSR region base once here,
         // instead of hoping that the addr/store will be combined later.
-        let stack_addr = pos.ins().stack_addr(types::I64, *fpr_slot.expect("if FPRs are preserved, a stack slot is allocated for them"), 0);
+        let stack_addr = pos.ins().stack_addr(
+            types::I64,
+            *fpr_slot.expect("if FPRs are preserved, a stack slot is allocated for them"),
+            0,
+        );
 
         // At this point we won't be using volatile registers for anything except for return
         // At this point we have not saved any CSRs yet, and arguments are all in registers. So
@@ -1010,7 +1020,11 @@ fn insert_common_epilogue(
         // `stack_store` is not directly encodable in x86_64 at the moment, so we'll need a base
         // address. We are well after postopt could run, so load the CSR region base once here,
         // instead of hoping that the addr/store will be combined later.
-        let stack_addr = pos.ins().stack_addr(types::I64, *fpr_slot.expect("if FPRs are preserved, a stack slot is allocated for them"), 0);
+        let stack_addr = pos.ins().stack_addr(
+            types::I64,
+            *fpr_slot.expect("if FPRs are preserved, a stack slot is allocated for them"),
+            0,
+        );
 
         // At this point we won't be using volatile registers for anything except for return
         // registers. Arbitrarily pick RBP as it won't hold an interesting value, and we're about
