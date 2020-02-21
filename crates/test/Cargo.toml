@@ -1,0 +1,9 @@
+[package]
+name = "wiggle-test"
+version = "0.1.0"
+authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>"]
+edition = "2018"
+
+[dependencies]
+wiggle-runtime = { path = "../runtime" }
+proptest = "0.9"

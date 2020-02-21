@@ -1,9 +1,10 @@
 use proptest::prelude::*;
 use std::convert::TryFrom;
 use wiggle_runtime::{
-    GuestArray, GuestError, GuestErrorType, GuestMemory, GuestPtr, GuestPtrMut, GuestRef,
-    GuestRefMut, GuestString,
+    GuestArray, GuestError, GuestErrorType, GuestPtr, GuestPtrMut, GuestRef, GuestRefMut,
+    GuestString,
 };
+use wiggle_test::{HostMemory, MemArea};
 
 wiggle_generate::from_witx!({
     witx: ["tests/test.witx"],
@@ -169,92 +170,6 @@ impl GuestErrorType for types::Errno {
     }
 }
 
-#[repr(align(4096))]
-struct HostMemory {
-    buffer: [u8; 4096],
-}
-impl HostMemory {
-    pub fn new() -> Self {
-        HostMemory { buffer: [0; 4096] }
-    }
-    pub fn as_mut_ptr(&mut self) -> *mut u8 {
-        self.buffer.as_mut_ptr()
-    }
-    pub fn len(&self) -> usize {
-        self.buffer.len()
-    }
-    pub fn mem_area_strat(align: u32) -> BoxedStrategy<MemArea> {
-        prop::num::u32::ANY
-            .prop_filter_map("needs to fit in memory", move |p| {
-                let p_aligned = p - (p % align); // Align according to argument
-                let ptr = p_aligned % 4096; // Put inside memory
-                if ptr + align < 4096 {
-                    Some(MemArea { ptr, len: align })
-                } else {
-                    None
-                }
-            })
-            .boxed()
-    }
-}
-
-#[derive(Debug)]
-struct MemArea {
-    ptr: u32,
-    len: u32,
-}
-
-// This code is a whole lot like the Region::overlaps func thats at the core of the code under
-// test.
-// So, I implemented this one with std::ops::Range so it is less likely I wrote the same bug in two
-// places.
-fn overlapping(a: &MemArea, b: &MemArea) -> bool {
-    // a_range is all elems in A
-    let a_range = std::ops::Range {
-        start: a.ptr,
-        end: a.ptr + a.len, // std::ops::Range is open from the right
-    };
-    // b_range is all elems in B
-    let b_range = std::ops::Range {
-        start: b.ptr,
-        end: b.ptr + b.len,
-    };
-    // No element in B is contained in A:
-    for b_elem in b_range.clone() {
-        if a_range.contains(&b_elem) {
-            return true;
-        }
-    }
-    // No element in A is contained in B:
-    for a_elem in a_range {
-        if b_range.contains(&a_elem) {
-            return true;
-        }
-    }
-    return false;
-}
-
-fn non_overlapping_set(areas: &[&MemArea]) -> bool {
-    // A is all areas
-    for (i, a) in areas.iter().enumerate() {
-        // (A, B) is every pair of areas
-        for b in areas[i + 1..].iter() {
-            if overlapping(a, b) {
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
-#[test]
-fn hostmemory_is_aligned() {
-    let mut h = HostMemory::new();
-    assert_eq!(h.as_mut_ptr() as usize % 4096, 0);
-    let mut h = Box::new(HostMemory::new());
-    assert_eq!(h.as_mut_ptr() as usize % 4096, 0);
-}
-
 #[derive(Debug)]
 struct BatExercise {
     pub input: u32,
@@ -265,7 +180,7 @@ impl BatExercise {
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
         let mut host_memory = HostMemory::new();
-        let mut guest_memory = GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
+        let mut guest_memory = host_memory.guest_memory();
 
         let bat_err = foo::bat(
             &mut ctx,
@@ -352,7 +267,7 @@ impl BazExercise {
                 },
             )
             .prop_filter("non-overlapping pointers", |e| {
-                non_overlapping_set(&[
+                MemArea::non_overlapping_set(&[
                     &e.input2_loc,
                     &e.input3_loc,
                     &e.input4_loc,
@@ -364,7 +279,7 @@ impl BazExercise {
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
         let mut host_memory = HostMemory::new();
-        let mut guest_memory = GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
+        let mut guest_memory = host_memory.guest_memory();
 
         *guest_memory
             .ptr_mut(self.input2_loc.ptr)
@@ -454,7 +369,7 @@ impl SumOfPairExercise {
                 return_loc,
             })
             .prop_filter("non-overlapping pointers", |e| {
-                non_overlapping_set(&[&e.input_loc, &e.return_loc])
+                MemArea::non_overlapping_set(&[&e.input_loc, &e.return_loc])
             })
             .boxed()
     }
@@ -462,7 +377,7 @@ impl SumOfPairExercise {
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
         let mut host_memory = HostMemory::new();
-        let mut guest_memory = GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
+        let mut guest_memory = host_memory.guest_memory();
 
         *guest_memory
             .ptr_mut(self.input_loc.ptr)
@@ -542,7 +457,7 @@ impl SumPairPtrsExercise {
                 },
             )
             .prop_filter("non-overlapping pointers", |e| {
-                non_overlapping_set(&[
+                MemArea::non_overlapping_set(&[
                     &e.input_first_loc,
                     &e.input_second_loc,
                     &e.input_struct_loc,
@@ -554,7 +469,7 @@ impl SumPairPtrsExercise {
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
         let mut host_memory = HostMemory::new();
-        let mut guest_memory = GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
+        let mut guest_memory = host_memory.guest_memory();
 
         *guest_memory
             .ptr_mut(self.input_first_loc.ptr)
@@ -643,7 +558,7 @@ impl ReduceExcusesExcercise {
             .prop_filter("non-overlapping pointers", |e| {
                 let mut all = vec![&e.array_ptr_loc, &e.array_len_loc, &e.return_ptr_loc];
                 all.extend(e.excuse_ptr_locs.iter());
-                non_overlapping_set(&all)
+                MemArea::non_overlapping_set(&all)
             })
             .boxed()
     }
@@ -651,7 +566,7 @@ impl ReduceExcusesExcercise {
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
         let mut host_memory = HostMemory::new();
-        let mut guest_memory = GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
+        let mut guest_memory = host_memory.guest_memory();
 
         // Populate memory with pointers to generated Excuse values
         for (&excuse, ptr) in self.excuse_values.iter().zip(self.excuse_ptr_locs.iter()) {
@@ -739,7 +654,7 @@ impl PopulateExcusesExcercise {
             .prop_filter("non-overlapping pointers", |e| {
                 let mut all = vec![&e.array_ptr_loc, &e.array_len_loc];
                 all.extend(e.elements.iter());
-                non_overlapping_set(&all)
+                MemArea::non_overlapping_set(&all)
             })
             .boxed()
     }
@@ -747,7 +662,7 @@ impl PopulateExcusesExcercise {
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
         let mut host_memory = HostMemory::new();
-        let mut guest_memory = GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
+        let mut guest_memory = host_memory.guest_memory();
 
         // Populate array length info
         *guest_memory
@@ -838,7 +753,7 @@ impl ConfigureCarExercise {
                 },
             )
             .prop_filter("non-overlapping ptrs", |e| {
-                non_overlapping_set(&[&e.other_config_by_ptr, &e.return_ptr_loc])
+                MemArea::non_overlapping_set(&[&e.other_config_by_ptr, &e.return_ptr_loc])
             })
             .boxed()
     }
@@ -846,7 +761,7 @@ impl ConfigureCarExercise {
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
         let mut host_memory = HostMemory::new();
-        let mut guest_memory = GuestMemory::new(host_memory.as_mut_ptr(), host_memory.len() as u32);
+        let mut guest_memory = host_memory.guest_memory();
 
         // Populate input ptr
         *guest_memory
