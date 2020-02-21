@@ -26,11 +26,15 @@ fn instantiate(
     let mut resolver = SimpleResolver { imports };
     unsafe {
         let instance = compiled_module
-            .instantiate(&mut resolver)
+            .instantiate(
+                config.validating_config.operator_config.enable_bulk_memory,
+                &mut resolver,
+            )
             .map_err(|e| -> Error {
                 match e {
                     InstantiationError::StartTrap(trap) => Trap::from_jit(trap).into(),
-                    e @ InstantiationError::TableOutOfBounds(_) => {
+                    e @ InstantiationError::TableOutOfBounds(_)
+                    | e @ InstantiationError::MemoryOutOfBounds(_) => {
                         let msg = e.to_string();
                         if config.validating_config.operator_config.enable_bulk_memory {
                             Trap::new(msg).into()

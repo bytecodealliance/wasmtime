@@ -186,7 +186,8 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             | ("bulk_memory_operations", "table_init")
             | ("bulk_memory_operations", "elem")
             | ("bulk_memory_operations", "memory_copy")
-            | ("bulk_memory_operations", "memory_fill") => return false,
+            | ("bulk_memory_operations", "memory_fill")
+            | ("bulk_memory_operations", "linking") => return false,
             ("bulk_memory_operations", _) => return true,
 
             _ => {}

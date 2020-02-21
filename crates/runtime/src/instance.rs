@@ -21,6 +21,7 @@ use more_asserts::assert_lt;
 use std::alloc::{self, Layout};
 use std::any::Any;
 use std::cell::{Cell, RefCell};
+use std::cmp;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryFrom;
@@ -810,6 +811,7 @@ impl InstanceHandle {
         data_initializers: &[DataInitializer<'_>],
         vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
+        is_bulk_memory: bool,
         host_state: Box<dyn Any>,
     ) -> Result<Self, InstantiationError> {
         let tables = create_tables(&module);
@@ -904,9 +906,14 @@ impl InstanceHandle {
             VMBuiltinFunctionsArray::initialized(),
         );
 
-        // Check initializer bounds before initializing anything.
-        check_table_init_bounds(instance)?;
-        check_memory_init_bounds(instance, data_initializers)?;
+        // Check initializer bounds before initializing anything. Only do this
+        // when bulk memory is disabled, since the bulk memory proposal changes
+        // instantiation such that the intermediate results of failed
+        // initializations are visible.
+        if !is_bulk_memory {
+            check_table_init_bounds(instance)?;
+            check_memory_init_bounds(instance, data_initializers)?;
+        }
 
         // Apply the initializers.
         initialize_tables(instance)?;
@@ -1133,9 +1140,9 @@ fn check_memory_init_bounds(
         unsafe {
             let mem_slice = get_memory_slice(init, instance);
             if mem_slice.get_mut(start..start + init.data.len()).is_none() {
-                return Err(InstantiationError::Link(LinkError(
-                    "data segment does not fit".to_owned(),
-                )));
+                return Err(InstantiationError::MemoryOutOfBounds(
+                    "data segment does not fit".into(),
+                ));
             }
         }
     }
@@ -1179,11 +1186,29 @@ fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
         let start = get_table_init_start(init, instance);
         let table = instance.get_table(init.table_index);
 
+        // Even if there aren't any elements being initialized, if its out of
+        // bounds, then we report an error. This is required by the bulk memory
+        // proposal and the way that it uses `table.init` during instantiation.
+        if start > table.size() as usize {
+            return Err(InstantiationError::TableOutOfBounds(
+                "active element segment does not fit in table".into(),
+            ));
+        }
+
         for (i, func_idx) in init.elements.iter().enumerate() {
             let anyfunc = instance.get_caller_checked_anyfunc(*func_idx);
             table
                 .set(u32::try_from(start + i).unwrap(), anyfunc)
-                .unwrap();
+                // Note that when multi-value is disabled, this will never fail
+                // since we bounds check table element initialization before
+                // doing any table slot writes. However when multi-value is
+                // enabled, these become runtime traps and the intermediate
+                // table slot writes are visible.
+                .map_err(|()| {
+                    InstantiationError::TableOutOfBounds(
+                        "active element segment does not fit in table".into(),
+                    )
+                })?;
         }
     }
 
@@ -1239,8 +1264,25 @@ fn initialize_memories(
         let start = get_memory_init_start(init, instance);
         unsafe {
             let mem_slice = get_memory_slice(init, instance);
-            let to_init = &mut mem_slice[start..start + init.data.len()];
-            to_init.copy_from_slice(init.data);
+
+            let end = start.saturating_add(init.data.len());
+            let actual_end = cmp::min(mem_slice.len(), end);
+            let num_uncopied = end - actual_end;
+
+            let to_init = &mut mem_slice[start..actual_end];
+            to_init.copy_from_slice(&init.data[..init.data.len() - num_uncopied]);
+
+            // Note that if bulk memory is disabled, we'll never hit this case
+            // because we did an eager bounds check in
+            // `check_memory_init_bounds`. However when bulk memory is enabled,
+            // we need the incremental writes up to the OOB trap to be visible,
+            // since this is dictated by the updated spec for the bulk memory
+            // proposal.
+            if num_uncopied > 0 {
+                return Err(InstantiationError::MemoryOutOfBounds(
+                    "active data segment does not fit in memory".into(),
+                ));
+            }
         }
     }
 
@@ -1306,6 +1348,13 @@ pub enum InstantiationError {
     /// link error or a trap raised during instantiation.
     #[error("Table out of bounds error: {0}")]
     TableOutOfBounds(String),
+
+    /// A memory out of bounds error.
+    ///
+    /// Depending on whether bulk memory is enabled or not, this is either a
+    /// link error or a trap raised during instantiation.
+    #[error("Memory out of bounds error: {0}")]
+    MemoryOutOfBounds(String),
 
     /// A wasm link error occured.
     #[error("Failed to link module")]
