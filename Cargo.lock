@@ -345,7 +345,7 @@ dependencies = [
  "log",
  "serde",
  "smallvec",
- "target-lexicon 0.10.0",
+ "target-lexicon",
  "thiserror",
 ]
 
@@ -383,7 +383,7 @@ dependencies = [
  "cranelift-codegen",
  "log",
  "smallvec",
- "target-lexicon 0.10.0",
+ "target-lexicon",
 ]
 
 [[package]]
@@ -394,7 +394,7 @@ checksum = "564ee82268bc25b914fcf331edfc2452f2d9ca34f976b187b4ca668beba250c8"
 dependencies = [
  "cranelift-codegen",
  "raw-cpuid",
- "target-lexicon 0.10.0",
+ "target-lexicon",
 ]
 
 [[package]]
@@ -625,7 +625,7 @@ dependencies = [
  "log",
  "scroll",
  "string-interner",
- "target-lexicon 0.10.0",
+ "target-lexicon",
  "thiserror",
 ]
 
@@ -1118,7 +1118,7 @@ dependencies = [
  "goblin",
  "parity-wasm",
  "scroll",
- "target-lexicon 0.10.0",
+ "target-lexicon",
  "uuid",
 ]
 
@@ -1696,17 +1696,6 @@ dependencies = [
 
 [[package]]
 name = "target-lexicon"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b0ab4982b8945c35cc1c46a83a9094c414f6828a099ce5dcaa8ee2b04642dcb"
-dependencies = [
- "failure",
- "failure_derive",
- "serde_json",
-]
-
-[[package]]
-name = "target-lexicon"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab0e7238dcc7b40a7be719a25365910f6807bd864f4cce6b2e6b873658e2b19d"
@@ -1742,7 +1731,7 @@ dependencies = [
  "cfg-if",
  "os_pipe",
  "pretty_env_logger",
- "target-lexicon 0.10.0",
+ "target-lexicon",
  "tempfile",
  "wasi-common",
  "wasmtime",
@@ -1992,7 +1981,7 @@ dependencies = [
  "rayon",
  "region",
  "rustc-demangle",
- "target-lexicon 0.10.0",
+ "target-lexicon",
  "wasi-common",
  "wasmparser 0.51.2",
  "wasmtime-environ",
@@ -2023,7 +2012,7 @@ dependencies = [
  "pretty_env_logger",
  "rayon",
  "structopt",
- "target-lexicon 0.10.0",
+ "target-lexicon",
  "tempfile",
  "test-programs",
  "wasi-common",
@@ -2049,7 +2038,7 @@ dependencies = [
  "faerie",
  "gimli",
  "more-asserts",
- "target-lexicon 0.10.0",
+ "target-lexicon",
  "thiserror",
  "wasmparser 0.51.2",
  "wasmtime-environ",
@@ -2080,7 +2069,7 @@ dependencies = [
  "rayon",
  "serde",
  "sha2",
- "target-lexicon 0.10.0",
+ "target-lexicon",
  "tempfile",
  "thiserror",
  "toml",
@@ -2142,7 +2131,7 @@ dependencies = [
  "cranelift-wasm",
  "more-asserts",
  "region",
- "target-lexicon 0.10.0",
+ "target-lexicon",
  "thiserror",
  "wasmparser 0.51.2",
  "wasmtime-debug",
@@ -2173,7 +2162,7 @@ dependencies = [
  "object",
  "scroll",
  "serde",
- "target-lexicon 0.4.0",
+ "target-lexicon",
 ]
 
 [[package]]
@@ -2183,7 +2172,7 @@ dependencies = [
  "anyhow",
  "pyo3",
  "region",
- "target-lexicon 0.10.0",
+ "target-lexicon",
  "wasmparser 0.51.2",
  "wasmtime",
  "wasmtime-interface-types",

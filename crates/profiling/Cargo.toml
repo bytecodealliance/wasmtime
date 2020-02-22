@@ -17,7 +17,7 @@ serde = { version = "1.0.99", features = ["derive"] }
 scroll = "0.10.1"
 gimli = "0.20.0"
 object = "0.17.0"
-target-lexicon = "0.4.0"
+target-lexicon = "0.10.0"
 lazy_static = "1.4"
 
 [badges]
