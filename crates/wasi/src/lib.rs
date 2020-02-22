@@ -38,8 +38,8 @@ impl wasmtime::WasmTy for WasiCallerMemory {
 
     fn push(_dst: &mut Vec<wasmtime::ValType>) {}
 
-    fn matches(_tys: impl Iterator<Item = wasmtime::ValType>) -> bool {
-        true
+    fn matches(_tys: impl Iterator<Item = wasmtime::ValType>) -> anyhow::Result<()> {
+        Ok(())
     }
 
     fn from_abi(vmctx: *mut wasmtime_runtime::VMContext, _abi: ()) -> Self {

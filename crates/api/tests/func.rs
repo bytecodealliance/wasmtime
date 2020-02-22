@@ -207,33 +207,33 @@ fn trap_import() -> Result<()> {
 fn get_from_wrapper() {
     let store = Store::default();
     let f = Func::wrap0(&store, || {});
-    assert!(f.get0::<()>().is_some());
-    assert!(f.get0::<i32>().is_none());
-    assert!(f.get1::<(), ()>().is_some());
-    assert!(f.get1::<i32, ()>().is_none());
-    assert!(f.get1::<i32, i32>().is_none());
-    assert!(f.get2::<(), (), ()>().is_some());
-    assert!(f.get2::<i32, i32, ()>().is_none());
-    assert!(f.get2::<i32, i32, i32>().is_none());
+    assert!(f.get0::<()>().is_ok());
+    assert!(f.get0::<i32>().is_err());
+    assert!(f.get1::<(), ()>().is_ok());
+    assert!(f.get1::<i32, ()>().is_err());
+    assert!(f.get1::<i32, i32>().is_err());
+    assert!(f.get2::<(), (), ()>().is_ok());
+    assert!(f.get2::<i32, i32, ()>().is_err());
+    assert!(f.get2::<i32, i32, i32>().is_err());
 
     let f = Func::wrap0(&store, || -> i32 { loop {} });
-    assert!(f.get0::<i32>().is_some());
+    assert!(f.get0::<i32>().is_ok());
     let f = Func::wrap0(&store, || -> f32 { loop {} });
-    assert!(f.get0::<f32>().is_some());
+    assert!(f.get0::<f32>().is_ok());
     let f = Func::wrap0(&store, || -> f64 { loop {} });
-    assert!(f.get0::<f64>().is_some());
+    assert!(f.get0::<f64>().is_ok());
 
     let f = Func::wrap1(&store, |_: i32| {});
-    assert!(f.get1::<i32, ()>().is_some());
-    assert!(f.get1::<i64, ()>().is_none());
-    assert!(f.get1::<f32, ()>().is_none());
-    assert!(f.get1::<f64, ()>().is_none());
+    assert!(f.get1::<i32, ()>().is_ok());
+    assert!(f.get1::<i64, ()>().is_err());
+    assert!(f.get1::<f32, ()>().is_err());
+    assert!(f.get1::<f64, ()>().is_err());
     let f = Func::wrap1(&store, |_: i64| {});
-    assert!(f.get1::<i64, ()>().is_some());
+    assert!(f.get1::<i64, ()>().is_ok());
     let f = Func::wrap1(&store, |_: f32| {});
-    assert!(f.get1::<f32, ()>().is_some());
+    assert!(f.get1::<f32, ()>().is_ok());
     let f = Func::wrap1(&store, |_: f64| {});
-    assert!(f.get1::<f64, ()>().is_some());
+    assert!(f.get1::<f64, ()>().is_ok());
 }
 
 #[test]
@@ -247,16 +247,16 @@ fn get_from_signature() {
     let store = Store::default();
     let ty = FuncType::new(Box::new([]), Box::new([]));
     let f = Func::new(&store, ty, Rc::new(Foo));
-    assert!(f.get0::<()>().is_some());
-    assert!(f.get0::<i32>().is_none());
-    assert!(f.get1::<i32, ()>().is_none());
+    assert!(f.get0::<()>().is_ok());
+    assert!(f.get0::<i32>().is_err());
+    assert!(f.get1::<i32, ()>().is_err());
 
     let ty = FuncType::new(Box::new([ValType::I32]), Box::new([ValType::F64]));
     let f = Func::new(&store, ty, Rc::new(Foo));
-    assert!(f.get0::<()>().is_none());
-    assert!(f.get0::<i32>().is_none());
-    assert!(f.get1::<i32, ()>().is_none());
-    assert!(f.get1::<i32, f64>().is_some());
+    assert!(f.get0::<()>().is_err());
+    assert!(f.get0::<i32>().is_err());
+    assert!(f.get1::<i32, ()>().is_err());
+    assert!(f.get1::<i32, f64>().is_ok());
 }
 
 #[test]
@@ -276,16 +276,16 @@ fn get_from_module() -> anyhow::Result<()> {
     )?;
     let instance = Instance::new(&module, &[])?;
     let f0 = instance.get_export("f0").unwrap().func().unwrap();
-    assert!(f0.get0::<()>().is_some());
-    assert!(f0.get0::<i32>().is_none());
+    assert!(f0.get0::<()>().is_ok());
+    assert!(f0.get0::<i32>().is_err());
     let f1 = instance.get_export("f1").unwrap().func().unwrap();
-    assert!(f1.get0::<()>().is_none());
-    assert!(f1.get1::<i32, ()>().is_some());
-    assert!(f1.get1::<i32, f32>().is_none());
+    assert!(f1.get0::<()>().is_err());
+    assert!(f1.get1::<i32, ()>().is_ok());
+    assert!(f1.get1::<i32, f32>().is_err());
     let f2 = instance.get_export("f2").unwrap().func().unwrap();
-    assert!(f2.get0::<()>().is_none());
-    assert!(f2.get0::<i32>().is_some());
-    assert!(f2.get1::<i32, ()>().is_none());
-    assert!(f2.get1::<i32, f32>().is_none());
+    assert!(f2.get0::<()>().is_err());
+    assert!(f2.get0::<i32>().is_ok());
+    assert!(f2.get1::<i32, ()>().is_err());
+    assert!(f2.get1::<i32, f32>().is_err());
     Ok(())
 }

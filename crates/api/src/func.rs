@@ -1,5 +1,6 @@
 use crate::callable::{NativeCallable, WasmtimeFn, WrappedCallable};
 use crate::{Callable, FuncType, Store, Trap, Val, ValType};
+use anyhow::{ensure, Context as _};
 use std::fmt;
 use std::mem;
 use std::panic::{self, AssertUnwindSafe};
@@ -98,7 +99,7 @@ macro_rules! getters {
         $(#[$doc])*
         #[allow(non_snake_case)]
         pub fn $name<$($args,)* R>(&self)
-            -> Option<impl Fn($($args,)*) -> Result<R, Trap>>
+            -> anyhow::Result<impl Fn($($args,)*) -> Result<R, Trap>>
         where
             $($args: WasmTy,)*
             R: WasmTy,
@@ -106,23 +107,19 @@ macro_rules! getters {
             // Verify all the paramers match the expected parameters, and that
             // there are no extra parameters...
             let mut params = self.ty().params().iter().cloned();
+            let n = 0;
             $(
-                if !$args::matches(&mut params) {
-                    return None;
-                }
+                let n = n + 1;
+                $args::matches(&mut params)
+                    .with_context(|| format!("Type mismatch in argument {}", n))?;
             )*
-            if !params.next().is_none() {
-                return None;
-            }
+            ensure!(params.next().is_none(), "Type mismatch: too many arguments (expected {})", n);
 
             // ... then do the same for the results...
             let mut results = self.ty().results().iter().cloned();
-            if !R::matches(&mut results) {
-                return None;
-            }
-            if !results.next().is_none() {
-                return None;
-            }
+            R::matches(&mut results)
+                .context("Type mismatch in return type")?;
+            ensure!(results.next().is_none(), "Type mismatch: too many return values (expected 1)");
 
             // ... and then once we've passed the typechecks we can hand out our
             // object since our `transmute` below should be safe!
@@ -130,9 +127,9 @@ macro_rules! getters {
                 wasmtime_runtime::Export::Function { address, vmctx, signature: _} => {
                     (*address, *vmctx)
                 }
-                _ => return None,
+                _ => panic!("expected function export"),
             };
-            Some(move |$($args: $args),*| -> Result<R, Trap> {
+            Ok(move |$($args: $args),*| -> Result<R, Trap> {
                 unsafe {
                     let f = mem::transmute::<
                         *const VMFunctionBody,
@@ -447,7 +444,7 @@ pub trait WasmTy {
     #[doc(hidden)]
     fn push(dst: &mut Vec<ValType>);
     #[doc(hidden)]
-    fn matches(tys: impl Iterator<Item = ValType>) -> bool;
+    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()>;
     #[doc(hidden)]
     fn from_abi(vmctx: *mut VMContext, abi: Self::Abi) -> Self;
     #[doc(hidden)]
@@ -457,8 +454,8 @@ pub trait WasmTy {
 impl WasmTy for () {
     type Abi = ();
     fn push(_dst: &mut Vec<ValType>) {}
-    fn matches(_tys: impl Iterator<Item = ValType>) -> bool {
-        true
+    fn matches(_tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        Ok(())
     }
     #[inline]
     fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
@@ -475,8 +472,14 @@ impl WasmTy for i32 {
     fn push(dst: &mut Vec<ValType>) {
         dst.push(ValType::I32);
     }
-    fn matches(mut tys: impl Iterator<Item = ValType>) -> bool {
-        tys.next() == Some(ValType::I32)
+    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        let next = tys.next();
+        ensure!(
+            next == Some(ValType::I32),
+            "Type mismatch, expected i32, got {:?}",
+            next
+        );
+        Ok(())
     }
     #[inline]
     fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
@@ -493,8 +496,14 @@ impl WasmTy for i64 {
     fn push(dst: &mut Vec<ValType>) {
         dst.push(ValType::I64);
     }
-    fn matches(mut tys: impl Iterator<Item = ValType>) -> bool {
-        tys.next() == Some(ValType::I64)
+    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        let next = tys.next();
+        ensure!(
+            next == Some(ValType::I64),
+            "Type mismatch, expected i64, got {:?}",
+            next
+        );
+        Ok(())
     }
     #[inline]
     fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
@@ -511,8 +520,14 @@ impl WasmTy for f32 {
     fn push(dst: &mut Vec<ValType>) {
         dst.push(ValType::F32);
     }
-    fn matches(mut tys: impl Iterator<Item = ValType>) -> bool {
-        tys.next() == Some(ValType::F32)
+    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        let next = tys.next();
+        ensure!(
+            next == Some(ValType::F32),
+            "Type mismatch, expected f32, got {:?}",
+            next
+        );
+        Ok(())
     }
     #[inline]
     fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
@@ -529,8 +544,14 @@ impl WasmTy for f64 {
     fn push(dst: &mut Vec<ValType>) {
         dst.push(ValType::F64);
     }
-    fn matches(mut tys: impl Iterator<Item = ValType>) -> bool {
-        tys.next() == Some(ValType::F64)
+    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        let next = tys.next();
+        ensure!(
+            next == Some(ValType::F64),
+            "Type mismatch, expected f64, got {:?}",
+            next
+        );
+        Ok(())
     }
     #[inline]
     fn from_abi(_vmctx: *mut VMContext, abi: Self::Abi) -> Self {
@@ -556,7 +577,7 @@ pub trait WasmRet {
     #[doc(hidden)]
     fn push(dst: &mut Vec<ValType>);
     #[doc(hidden)]
-    fn matches(tys: impl Iterator<Item = ValType>) -> bool;
+    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()>;
     #[doc(hidden)]
     fn into_abi(self) -> Self::Abi;
 }
@@ -567,7 +588,7 @@ impl<T: WasmTy> WasmRet for T {
         T::push(dst)
     }
 
-    fn matches(tys: impl Iterator<Item = ValType>) -> bool {
+    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
         T::matches(tys)
     }
 
@@ -583,7 +604,7 @@ impl<T: WasmTy> WasmRet for Result<T, Trap> {
         T::push(dst)
     }
 
-    fn matches(tys: impl Iterator<Item = ValType>) -> bool {
+    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
         T::matches(tys)
     }
 
