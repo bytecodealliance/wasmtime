@@ -213,61 +213,61 @@ impl Func {
         /// possible for when WebAssembly calls the function provided. With
         /// sufficient inlining and optimization the WebAssembly will call
         /// straight into `func` provided, with no extra fluff entailed.
-        (wrap1, A)
+        (wrap1, A1)
 
         /// Creates a new `Func` from the given Rust closure, which takes 2
         /// arguments.
         ///
         /// For more information about this function, see [`Func::wrap1`].
-        (wrap2, A, B)
+        (wrap2, A1, A2)
 
         /// Creates a new `Func` from the given Rust closure, which takes 3
         /// arguments.
         ///
         /// For more information about this function, see [`Func::wrap1`].
-        (wrap3, A, B, C)
+        (wrap3, A1, A2, A3)
 
         /// Creates a new `Func` from the given Rust closure, which takes 4
         /// arguments.
         ///
         /// For more information about this function, see [`Func::wrap1`].
-        (wrap4, A, B, C, D)
+        (wrap4, A1, A2, A3, A4)
 
         /// Creates a new `Func` from the given Rust closure, which takes 5
         /// arguments.
         ///
         /// For more information about this function, see [`Func::wrap1`].
-        (wrap5, A, B, C, D, E)
+        (wrap5, A1, A2, A3, A4, A5)
 
         /// Creates a new `Func` from the given Rust closure, which takes 6
         /// arguments.
         ///
         /// For more information about this function, see [`Func::wrap1`].
-        (wrap6, A, B, C, D, E, G)
+        (wrap6, A1, A2, A3, A4, A5, A6)
 
         /// Creates a new `Func` from the given Rust closure, which takes 7
         /// arguments.
         ///
         /// For more information about this function, see [`Func::wrap1`].
-        (wrap7, A, B, C, D, E, G, H)
+        (wrap7, A1, A2, A3, A4, A5, A6, A7)
 
         /// Creates a new `Func` from the given Rust closure, which takes 8
         /// arguments.
         ///
         /// For more information about this function, see [`Func::wrap1`].
-        (wrap8, A, B, C, D, E, G, H, I)
+        (wrap8, A1, A2, A3, A4, A5, A6, A7, A8)
 
         /// Creates a new `Func` from the given Rust closure, which takes 9
         /// arguments.
         ///
         /// For more information about this function, see [`Func::wrap1`].
-        (wrap9, A, B, C, D, E, G, H, I, J)
+        (wrap9, A1, A2, A3, A4, A5, A6, A7, A8, A9)
 
         /// Creates a new `Func` from the given Rust closure, which takes 10
         /// arguments.
         ///
         /// For more information about this function, see [`Func::wrap1`].
-        (wrap10, A, B, C, D, E, G, H, I, J, K)
+        (wrap10, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10)
     }
 
     fn from_wrapped(
@@ -369,13 +369,61 @@ impl Func {
         ///
         /// The returned closure will always return a `Result<R, Trap>` and an
         /// `Err` is returned if a trap happens while the wasm is executing.
-        (get1, A)
+        (get1, A1)
 
         /// Extracts a natively-callable object from this `Func`, if the
         /// signature matches.
         ///
         /// See the [`Func::get1`] method for more documentation.
-        (get2, A, B)
+        (get2, A1, A2)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get3, A1, A2, A3)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get4, A1, A2, A3, A4)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get5, A1, A2, A3, A4, A5)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get6, A1, A2, A3, A4, A5, A6)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get7, A1, A2, A3, A4, A5, A6, A7)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get8, A1, A2, A3, A4, A5, A6, A7, A8)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get9, A1, A2, A3, A4, A5, A6, A7, A8, A9)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get10, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10)
     }
 }
 
