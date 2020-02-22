@@ -376,6 +376,54 @@ impl Func {
         ///
         /// See the [`Func::get1`] method for more documentation.
         (get2, A1, A2)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get3, A1, A2, A3)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get4, A1, A2, A3, A4)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get5, A1, A2, A3, A4, A5)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get6, A1, A2, A3, A4, A5, A6)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get7, A1, A2, A3, A4, A5, A6, A7)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get8, A1, A2, A3, A4, A5, A6, A7, A8)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get9, A1, A2, A3, A4, A5, A6, A7, A8, A9)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get10, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10)
     }
 }
 
