@@ -623,7 +623,7 @@ dependencies = [
  "goblin",
  "indexmap",
  "log",
- "scroll 0.10.1",
+ "scroll",
  "string-interner",
  "target-lexicon 0.10.0",
  "thiserror",
@@ -773,7 +773,7 @@ checksum = "3081214398d39e4bd7f2c1975f0488ed04614ffdd976c6fc7a0708278552c0da"
 dependencies = [
  "log",
  "plain",
- "scroll 0.10.1",
+ "scroll",
 ]
 
 [[package]]
@@ -1117,7 +1117,7 @@ dependencies = [
  "flate2",
  "goblin",
  "parity-wasm",
- "scroll 0.10.1",
+ "scroll",
  "target-lexicon 0.10.0",
  "uuid",
 ]
@@ -1518,15 +1518,6 @@ name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
-
-[[package]]
-name = "scroll"
-version = "0.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f84d114ef17fd144153d608fba7c446b0145d038985e7a8cc5d08bb0ce20383"
-dependencies = [
- "rustc_version",
-]
 
 [[package]]
 name = "scroll"
@@ -2180,7 +2171,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "object",
- "scroll 0.9.2",
+ "scroll",
  "serde",
  "target-lexicon 0.4.0",
 ]
