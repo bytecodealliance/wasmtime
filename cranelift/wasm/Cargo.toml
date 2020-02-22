@@ -11,7 +11,7 @@ keywords = ["webassembly", "wasm"]
 edition = "2018"
 
 [dependencies]
-wasmparser = { version = "0.49.0", default-features = false }
+wasmparser = { version = "0.51.0", default-features = false }
 cranelift-codegen = { path = "../cranelift-codegen", version = "0.58.0", default-features = false }
 cranelift-entity = { path = "../cranelift-entity", version = "0.58.0" }
 cranelift-frontend = { path = "../cranelift-frontend", version = "0.58.0", default-features = false }

@@ -55,7 +55,7 @@ pub enum WasmError {
     #[error("Invalid input WebAssembly code at offset {offset}: {message}")]
     InvalidWebAssembly {
         /// A string describing the validation error.
-        message: &'static str,
+        message: std::string::String,
         /// The bytecode offset where the error occurred.
         offset: usize,
     },
@@ -90,8 +90,10 @@ macro_rules! wasm_unsupported {
 impl From<BinaryReaderError> for WasmError {
     /// Convert from a `BinaryReaderError` to a `WasmError`.
     fn from(e: BinaryReaderError) -> Self {
-        let BinaryReaderError { message, offset } = e;
-        Self::InvalidWebAssembly { message, offset }
+        Self::InvalidWebAssembly {
+            message: e.message().into(),
+            offset: e.offset(),
+        }
     }
 }
 
