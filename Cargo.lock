@@ -1877,23 +1877,23 @@ checksum = "078775d0255232fb988e6fccf26ddc9d1ac274299aaedcedce21c6f72cc533ce"
 
 [[package]]
 name = "walrus"
-version = "0.13.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85ce93ab0c27412ba41d509f2410fa575ecbfdb4a6aba0e02e79e12c09745485"
+checksum = "84651d7b04ebbecf715a28859d1dc5053b98c6a5a20bd7343d8f015947b86481"
 dependencies = [
  "anyhow",
  "id-arena",
  "leb128",
  "log",
  "walrus-macro",
- "wasmparser 0.39.3",
+ "wasmparser 0.48.2",
 ]
 
 [[package]]
 name = "walrus-macro"
-version = "0.13.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8757b0da38353d55a9687f4dee68a8f441f980dd36e16ab07d6e6c673f505f76"
+checksum = "2b1845ca33b1fcec5624f0e5ea617e41a8adea37f71eb117d3ff81a089d5e3f9"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -1929,21 +1929,15 @@ dependencies = [
 
 [[package]]
 name = "wasm-webidl-bindings"
-version = "0.6.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5cae185868c6038a48f487b9af3766ee0c68d4a85fa3610c3a0522092b3cec1"
+checksum = "42298d64a28700ecd5aa47d8037bcf832b7be0c88ad6b272ebb5d92d7e052a8c"
 dependencies = [
  "anyhow",
  "id-arena",
  "leb128",
  "walrus",
 ]
-
-[[package]]
-name = "wasmparser"
-version = "0.39.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c702914acda5feeeffbc29e4d953e5b9ce79d8b98da4dbf18a77086e116c5470"
 
 [[package]]
 name = "wasmparser"
