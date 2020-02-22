@@ -1,8 +1,0 @@
-(use "errno.witx")
-
-(module $trivial
-  (@interface func (export "int_float_args")
-    (param $an_int u32)
-    (param $an_float f32)
-    (result $error $errno))
-)

@@ -1,0 +1,8 @@
+(use "errno.witx")
+(module $strings
+  (@interface func (export "hello_string")
+    (param $a_string string)
+    (result $error $errno)
+    (result $total_bytes u32)
+  )
+)

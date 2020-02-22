@@ -1,0 +1,12 @@
+(use "errno.witx")
+
+(module $atoms
+  (@interface func (export "int_float_args")
+    (param $an_int u32)
+    (param $an_float f32)
+    (result $error $errno))
+  (@interface func (export "double_int_return_float")
+    (param $an_int u32)
+    (result $error $errno)
+    (result $doubled_it f32))
+)
