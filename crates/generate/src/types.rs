@@ -567,14 +567,14 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
             witx::TypeRef::Name(nt) => {
                 let type_ = names.type_(&nt.name);
                 quote! {
-                    let #name = #type_::read_from_guest(&location.cast(#offset)?)?;
+                    let #name: #type_ = *location.cast(#offset)?.as_ref()?;
                 }
             }
             witx::TypeRef::Value(ty) => match &**ty {
                 witx::Type::Builtin(builtin) => {
                     let type_ = names.builtin_type(*builtin, anon_lifetime());
                     quote! {
-                        let #name = #type_::read_from_guest(&location.cast(#offset)?)?;
+                        let #name: #type_ = *location.cast(#offset)?.as_ref()?;
                     }
                 }
                 witx::Type::Pointer(pointee) => {
@@ -597,7 +597,31 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
     let member_writes = s.member_layout().into_iter().map(|ml| {
         let name = names.struct_member(&ml.member.name);
         let offset = ml.offset as u32;
-        quote!( self.#name.write_to_guest(&location.cast(#offset).expect("cast to inner member")); )
+        match &ml.member.tref {
+            witx::TypeRef::Name(_) => {
+                quote! {
+                    *location.cast(#offset).expect("cast to inner member").as_ref_mut().expect("inner member as ref mut") = self.#name;
+                }
+            }
+            witx::TypeRef::Value(ty) => match &**ty {
+                witx::Type::Builtin(_) => {
+                    quote! {
+                        *location.cast(#offset).expect("cast to inner member").as_ref_mut().expect("inner member as ref mut") = self.#name;
+                    }
+                }
+                witx::Type::Pointer(_) => {
+                    quote! {
+                        self.#name.write_to_guest(&location.cast(#offset).expect("cast to inner member"));
+                    }
+                }
+                witx::Type::ConstPointer(_) => {
+                    quote! {
+                        self.#name.write_to_guest(&location.cast(#offset).expect("cast to inner member"));
+                    }
+                }
+                _ => unimplemented!("other anonymous struct members"),
+            },
+        }
     });
 
     quote! {
