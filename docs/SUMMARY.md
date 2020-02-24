@@ -33,5 +33,6 @@
   - [Testing](./contributing-testing.md)
   - [Fuzzing](./contributing-fuzzing.md)
   - [CI](./contributing-ci.md)
+  - [Release Process](./contributing-release-process.md)
   - [Governance](./contributing-governance.md)
   - [Code of Conduct](./contributing-coc.md)

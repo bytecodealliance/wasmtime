@@ -8,36 +8,10 @@ set -euo pipefail
 topdir=$(dirname "$0")/..
 cd "$topdir"
 
-# All the wasmtime-* crates have the same version number
-version="0.9.0"
-
-# Update the version numbers of the crates to $version.
-echo "Updating crate versions to $version"
-find -name Cargo.toml \
-    -not -path ./crates/wasi-common/WASI/tools/witx/Cargo.toml \
-    -exec sed -i.bk -e "s/^version = \"[[:digit:]].*/version = \"$version\"/" {} \;
-
-# Update the required version numbers of path dependencies.
-find -name Cargo.toml \
-    -not -path ./crates/wasi-common/wig/WASI/tools/witx/Cargo.toml \
-    -exec sed -i.bk \
-        -e "/\> *= *{.*\<path *= *\"/s/version = \"[^\"]*\"/version = \"$version\"/" \
-        {} \;
-
-# Update our local Cargo.lock (not checked in).
-cargo update
-scripts/test-all.sh
-
 # Commands needed to publish.
 #
 # Note that libraries need to be published in topological order.
 
-echo git checkout -b bump-version-to-$version
-echo git commit -a -m "\"Bump version to $version"\"
-echo git tag v$version
-echo git push origin bump-version-to-$version
-echo "# Don't forget to click the above link to open a pull-request!"
-echo git push origin v$version
 for cargo_toml in \
     crates/wasi-common/wasi-common-cbindgen/Cargo.toml \
     crates/wasi-common/winx/Cargo.toml \
