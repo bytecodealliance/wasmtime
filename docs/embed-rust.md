@@ -68,11 +68,8 @@ let answer = instance.get_export("answer").expect("answer").func().expect("funct
 The exported function can be called using the `call` method. The exported "answer" function accepts no parameters and returns a single `i32` value.
 
 ```rust
-let answer = instance.get_export("answer").expect("answer").func().expect("function");
-match answer.call(&[]).expect("success")[0].i32() {
-    Some(result) => println!("Answer: {}", result),
-    None => println!("no value")
-};
+let result = answer.call(&[]).expect("success");
+println!("Answer: {:?}", result[0].i32());
 ```
 
 The names of the WebAssembly module's imports and exports can be discovered by means of module's corresponding methods.
@@ -92,9 +89,7 @@ fn main() {
     let instance = Instance::new(&module, &[]).expect("wasm instance");
 
     let answer = instance.get_export("answer").expect("answer").func().expect("function");
-    match answer.call(&[]).expect("success")[0].i32() {
-        Some(result) => println!("Answer: {}", result),
-        None => println!("no value")
-    };
+    let result = answer.call(&[]).expect("success");
+    println!("Answer: {:?}", result[0].i32());
 }
 ```
