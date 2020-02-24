@@ -19,7 +19,7 @@ pub fn compile_to_obj(
     target: Option<&Triple>,
     strategy: Strategy,
     enable_simd: bool,
-    optimize: bool,
+    opt_level: wasmtime::OptLevel,
     debug_info: bool,
     artifact_name: String,
     cache_config: &CacheConfig,
@@ -38,8 +38,15 @@ pub fn compile_to_obj(
         flag_builder.enable("enable_simd").unwrap();
     }
 
-    if optimize {
-        flag_builder.set("opt_level", "speed").unwrap();
+    match opt_level {
+        wasmtime::OptLevel::None => {}
+        wasmtime::OptLevel::Speed => {
+            flag_builder.set("opt_level", "speed").unwrap();
+        }
+        wasmtime::OptLevel::SpeedAndSize => {
+            flag_builder.set("opt_level", "speed_and_size").unwrap();
+        }
+        other => bail!("unknown optimization level {:?}", other),
     }
 
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
