@@ -12,7 +12,7 @@ arbitrary = { version = "0.3.2", features = ["derive"] }
 binaryen = "0.10.0"
 env_logger = "0.7.1"
 log = "0.4.8"
-wasmparser = "0.51.0"
+wasmparser = "0.51.2"
 wasmprinter = "0.2.1"
 wasmtime = { path = "../api", version = "0.9.0" }
 
