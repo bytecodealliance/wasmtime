@@ -517,7 +517,7 @@ jobs:
         find dist/ -name '*.whl' -type f -exec cp '{}' tmp/whl -v \;
 
     - name: Publish Python wheels on Pypi
-      uses: pypa/gh-action-pypi-publish@v1.0.0a0
+      uses: pypa/gh-action-pypi-publish@37e305e7413032d8422456179fee28fac7d25187
       if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
       with:
         user: __token__
