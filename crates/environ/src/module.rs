@@ -169,7 +169,7 @@ pub struct Module {
     pub func_names: HashMap<FuncIndex, String>,
 }
 
-/// Local informatio known about a wasm module, the bare minimum necessary to
+/// Local information known about a wasm module, the bare minimum necessary to
 /// translate function bodies.
 ///
 /// This is stored within a `Module` and it implements `Hash`, unlike `Module`,
