@@ -552,9 +552,9 @@ dependencies = [
 
 [[package]]
 name = "dynasmrt"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a393aaeb4441a48bcf47b5b6155971f82cc1eb77e22855403ccc0415ac8328d"
+checksum = "7dce4800e1140e94ad07e35e789df569516fd795223600a96f3b01887a42e0da"
 dependencies = [
  "byteorder",
  "memmap",
@@ -1020,9 +1020,8 @@ checksum = "0debeb9fcf88823ea64d64e4a815ab1643f33127d995978e099942ce38f25238"
 
 [[package]]
 name = "multi_mut"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "816df386e5557ac1843a96f1ba8a7cbf4ab175d05ccc15c87a3cda27b4fbdece"
+version = "0.1.5"
+source = "git+https://github.com/golddranks/multi_mut#561e9f7506e8aeddd7ee672d0f844437babe3da8"
 
 [[package]]
 name = "nom"
