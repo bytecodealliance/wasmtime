@@ -75,7 +75,7 @@ impl WasmToObjCommand {
             self.target.as_ref(),
             strategy,
             self.common.enable_simd,
-            self.common.optimize,
+            self.common.opt_level(),
             self.common.debug_info,
             self.output.clone(),
             &cache_config,

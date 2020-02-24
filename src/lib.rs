@@ -132,9 +132,17 @@ struct CommonOptions {
     #[structopt(long)]
     jitdump: bool,
 
-    /// Run optimization passes on translated functions
+    /// Run optimization passes on translated functions, on by default
     #[structopt(short = "O", long)]
     optimize: bool,
+
+    /// Optimization level for generated functions (0, 1, 2 (default), or s)
+    #[structopt(
+        long,
+        parse(try_from_str = parse_opt_level),
+        default_value = "2",
+    )]
+    opt_level: wasmtime::OptLevel,
 }
 
 impl CommonOptions {
@@ -148,11 +156,9 @@ impl CommonOptions {
             .wasm_reference_types(self.enable_reference_types || self.enable_all)
             .wasm_multi_value(self.enable_multi_value || self.enable_all)
             .wasm_threads(self.enable_threads || self.enable_all)
+            .cranelift_opt_level(self.opt_level())
             .strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?
             .profiler(pick_profiling_strategy(self.jitdump)?)?;
-        if self.optimize {
-            config.cranelift_opt_level(wasmtime::OptLevel::Speed);
-        }
         if !self.disable_cache {
             match &self.config {
                 Some(path) => {
@@ -164,5 +170,25 @@ impl CommonOptions {
             }
         }
         Ok(config)
+    }
+
+    fn opt_level(&self) -> wasmtime::OptLevel {
+        match (self.optimize, self.opt_level.clone()) {
+            (true, _) => wasmtime::OptLevel::Speed,
+            (false, other) => other,
+        }
+    }
+}
+
+fn parse_opt_level(opt_level: &str) -> Result<wasmtime::OptLevel> {
+    match opt_level {
+        "s" => Ok(wasmtime::OptLevel::SpeedAndSize),
+        "0" => Ok(wasmtime::OptLevel::None),
+        "1" => Ok(wasmtime::OptLevel::Speed),
+        "2" => Ok(wasmtime::OptLevel::Speed),
+        other => bail!(
+            "unknown optimization level `{}`, only 0,1,2,s accepted",
+            other
+        ),
     }
 }
