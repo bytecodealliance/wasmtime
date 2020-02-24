@@ -136,7 +136,8 @@ struct CommonOptions {
     #[structopt(short = "O", long)]
     optimize: bool,
 
-    /// Optimization level for generated functions (0, 1, 2 (default), or s)
+    /// Optimization level for generated functions (0 (none), 1, 2 (most), or s
+    /// (size))
     #[structopt(
         long,
         parse(try_from_str = parse_opt_level),
