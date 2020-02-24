@@ -10,11 +10,12 @@ pub trait GuestType: Sized {
     fn validate<'a>(location: &GuestPtr<'a, Self>) -> Result<(), GuestError>;
 }
 
-pub trait GuestTypeCopy: GuestType + Copy {}
 pub trait GuestTypeClone<'a>: GuestType + Clone {
     fn read_from_guest(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError>;
     fn write_to_guest(&self, location: &GuestPtrMut<'a, Self>);
 }
+// Following trait system in Rust, Copy implies Clone
+pub trait GuestTypeCopy<'a>: GuestTypeClone<'a> + Copy {}
 
 macro_rules! builtin_type {
     ( $( $t:ident ), * ) => {
@@ -33,7 +34,15 @@ macro_rules! builtin_type {
                 Ok(())
             }
         }
-        impl GuestTypeCopy for $t {}
+        impl<'a> GuestTypeClone<'a> for $t {
+            fn read_from_guest(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
+                Ok(*location.as_ref()?)
+            }
+            fn write_to_guest(&self, location: &GuestPtrMut<'a, Self>) {
+                unsafe { (location.as_raw() as *mut $t).write(*self) };
+            }
+        }
+        impl<'a> GuestTypeCopy<'a> for $t {}
         )*
     };
 }

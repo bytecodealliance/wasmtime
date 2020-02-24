@@ -79,7 +79,7 @@ where
 
 impl<'a, T> GuestArray<'a, T>
 where
-    T: GuestTypeCopy,
+    T: GuestTypeCopy<'a>,
 {
     pub fn as_ref(&self) -> Result<GuestArrayRef<'a, T>, GuestError> {
         let mut next = self.ptr.elem(0)?;
@@ -109,7 +109,7 @@ where
 
 pub struct GuestArrayRef<'a, T>
 where
-    T: GuestTypeCopy,
+    T: GuestTypeCopy<'a>,
 {
     ref_: GuestRef<'a, T>,
     num_elems: u32,
@@ -117,7 +117,7 @@ where
 
 impl<'a, T> fmt::Debug for GuestArrayRef<'a, T>
 where
-    T: GuestTypeCopy + fmt::Debug,
+    T: GuestTypeCopy<'a> + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -130,7 +130,7 @@ where
 
 impl<'a, T> Deref for GuestArrayRef<'a, T>
 where
-    T: GuestTypeCopy,
+    T: GuestTypeCopy<'a>,
 {
     type Target = [T];
 

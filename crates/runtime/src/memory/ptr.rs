@@ -57,7 +57,7 @@ impl<'a, T: GuestType> GuestPtr<'a, T> {
 
 impl<'a, T> GuestPtr<'a, T>
 where
-    T: GuestTypeCopy,
+    T: GuestTypeCopy<'a>,
 {
     pub fn as_ref(&self) -> Result<GuestRef<'a, T>, GuestError> {
         T::validate(&self)?;
@@ -183,7 +183,7 @@ where
 
 impl<'a, T> GuestPtrMut<'a, T>
 where
-    T: GuestTypeCopy,
+    T: GuestTypeCopy<'a>,
 {
     pub fn as_ref(&self) -> Result<GuestRef<'a, T>, GuestError> {
         self.as_immut().as_ref()
@@ -298,7 +298,7 @@ impl<'a, T> GuestRef<'a, T> {
 
 impl<'a, T> Deref for GuestRef<'a, T>
 where
-    T: GuestTypeCopy,
+    T: GuestTypeCopy<'a>,
 {
     type Target = T;
 
@@ -357,7 +357,7 @@ impl<'a, T> GuestRefMut<'a, T> {
 
 impl<'a, T> ::std::ops::Deref for GuestRefMut<'a, T>
 where
-    T: GuestTypeCopy,
+    T: GuestTypeCopy<'a>,
 {
     type Target = T;
 
@@ -372,7 +372,7 @@ where
 
 impl<'a, T> DerefMut for GuestRefMut<'a, T>
 where
-    T: GuestTypeCopy,
+    T: GuestTypeCopy<'a>,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe {

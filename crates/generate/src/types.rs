@@ -125,7 +125,7 @@ fn define_int(names: &Names, name: &witx::Id, i: &witx::IntDatatype) -> TokenStr
             }
         }
 
-        impl wiggle_runtime::GuestTypeCopy for #ident {}
+        impl<'a> wiggle_runtime::GuestTypeCopy<'a> for #ident {}
         impl<'a> wiggle_runtime::GuestTypeClone<'a> for #ident {
             fn read_from_guest(location: &wiggle_runtime::GuestPtr<#ident>) -> Result<#ident, wiggle_runtime::GuestError> {
                 Ok(*location.as_ref()?)
@@ -278,7 +278,7 @@ fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDatatype) -> Toke
             }
         }
 
-        impl wiggle_runtime::GuestTypeCopy for #ident {}
+        impl<'a> wiggle_runtime::GuestTypeCopy<'a> for #ident {}
         impl<'a> wiggle_runtime::GuestTypeClone<'a> for #ident {
             fn read_from_guest(location: &wiggle_runtime::GuestPtr<#ident>) -> Result<#ident, wiggle_runtime::GuestError> {
                 Ok(*location.as_ref()?)
@@ -381,7 +381,7 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
             }
         }
 
-        impl wiggle_runtime::GuestTypeCopy for #ident {}
+        impl<'a> wiggle_runtime::GuestTypeCopy<'a> for #ident {}
         impl<'a> wiggle_runtime::GuestTypeClone<'a> for #ident {
             fn read_from_guest(location: &wiggle_runtime::GuestPtr<#ident>) -> Result<#ident, wiggle_runtime::GuestError> {
                 use ::std::convert::TryFrom;
@@ -496,7 +496,15 @@ fn define_copy_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) 
                 Ok(())
             }
         }
-        impl wiggle_runtime::GuestTypeCopy for #ident {}
+        impl<'a> wiggle_runtime::GuestTypeClone<'a> for #ident {
+            fn read_from_guest(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<#ident, wiggle_runtime::GuestError> {
+                Ok(*location.as_ref()?)
+            }
+            fn write_to_guest(&self, location: &wiggle_runtime::GuestPtrMut<'a, Self>) {
+                unsafe { (location.as_raw() as *mut #ident).write(*self) };
+            }
+        }
+        impl<'a> wiggle_runtime::GuestTypeCopy<'a> for #ident {}
     }
 }
 
@@ -567,14 +575,14 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
             witx::TypeRef::Name(nt) => {
                 let type_ = names.type_(&nt.name);
                 quote! {
-                    let #name: #type_ = *location.cast(#offset)?.as_ref()?;
+                    let #name = #type_::read_from_guest(&location.cast(#offset)?)?;
                 }
             }
             witx::TypeRef::Value(ty) => match &**ty {
                 witx::Type::Builtin(builtin) => {
                     let type_ = names.builtin_type(*builtin, anon_lifetime());
                     quote! {
-                        let #name: #type_ = *location.cast(#offset)?.as_ref()?;
+                    let #name = #type_::read_from_guest(&location.cast(#offset)?)?;
                     }
                 }
                 witx::Type::Pointer(pointee) => {
@@ -597,30 +605,8 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
     let member_writes = s.member_layout().into_iter().map(|ml| {
         let name = names.struct_member(&ml.member.name);
         let offset = ml.offset as u32;
-        match &ml.member.tref {
-            witx::TypeRef::Name(_) => {
-                quote! {
-                    *location.cast(#offset).expect("cast to inner member").as_ref_mut().expect("inner member as ref mut") = self.#name;
-                }
-            }
-            witx::TypeRef::Value(ty) => match &**ty {
-                witx::Type::Builtin(_) => {
-                    quote! {
-                        *location.cast(#offset).expect("cast to inner member").as_ref_mut().expect("inner member as ref mut") = self.#name;
-                    }
-                }
-                witx::Type::Pointer(_) => {
-                    quote! {
-                        self.#name.write_to_guest(&location.cast(#offset).expect("cast to inner member"));
-                    }
-                }
-                witx::Type::ConstPointer(_) => {
-                    quote! {
-                        self.#name.write_to_guest(&location.cast(#offset).expect("cast to inner member"));
-                    }
-                }
-                _ => unimplemented!("other anonymous struct members"),
-            },
+        quote! {
+            self.#name.write_to_guest(&location.cast(#offset).expect("cast to inner member"));
         }
     });
 
