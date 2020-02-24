@@ -1,8 +1,13 @@
 (typename $errno
     (enum u32
+        ;;; Success
         $ok
+        ;;; Invalid argument
         $invalid_arg
+        ;;; I really don't want to
         $dont_want_to
+        ;;; I am physically unable to
         $physically_unable
+        ;;; Well, that's a picket line alright!
         $picket_line))
 
