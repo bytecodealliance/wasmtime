@@ -7,7 +7,8 @@ use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
     self, translate_module, DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
-    ModuleTranslationState, SignatureIndex, Table, TableIndex, TargetEnvironment, WasmResult,
+    ModuleTranslationState, PassiveDataIndex, PassiveElemIndex, SignatureIndex, Table, TableIndex,
+    TargetEnvironment, WasmError, WasmResult,
 };
 use std::convert::TryFrom;
 
@@ -324,6 +325,16 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         Ok(())
     }
 
+    fn declare_passive_element(
+        &mut self,
+        _: PassiveElemIndex,
+        _: Box<[FuncIndex]>,
+    ) -> WasmResult<()> {
+        Err(WasmError::Unsupported(
+            "bulk memory: passive element segment".into(),
+        ))
+    }
+
     fn define_function_body(
         &mut self,
         _module_translation: &ModuleTranslationState,
@@ -360,6 +371,12 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             data,
         });
         Ok(())
+    }
+
+    fn declare_passive_data(&mut self, _: PassiveDataIndex, _: &'data [u8]) -> WasmResult<()> {
+        Err(WasmError::Unsupported(
+            "bulk memory: passive data segment".into(),
+        ))
     }
 
     fn declare_func_name(&mut self, func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
