@@ -3,6 +3,7 @@
 //! or unregister generated object images with debuggers.
 
 use std::ptr;
+use std::sync::{atomic::{AtomicPtr, Ordering}, Mutex};
 
 #[repr(C)]
 struct JITCodeEntry {
@@ -15,6 +16,10 @@ struct JITCodeEntry {
 const JIT_NOACTION: u32 = 0;
 const JIT_REGISTER_FN: u32 = 1;
 const JIT_UNREGISTER_FN: u32 = 2;
+
+lazy_static::lazy_static! {
+    pub static ref JIT_DESCRIPTOR_LOCK: Mutex<()> = Mutex::new(());
+}
 
 #[repr(C)]
 struct JITDescriptor {
@@ -45,7 +50,7 @@ extern "C" fn __jit_debug_register_code() {
 
 /// Registeration for JIT image
 pub struct GdbJitImageRegistration {
-    entry: *mut JITCodeEntry,
+    entry: AtomicPtr<JITCodeEntry>,
     file: Vec<u8>,
 }
 
@@ -67,26 +72,27 @@ impl GdbJitImageRegistration {
 impl Drop for GdbJitImageRegistration {
     fn drop(&mut self) {
         unsafe {
-            unregister_gdb_jit_image(self.entry);
+            unregister_gdb_jit_image(self.entry.load(Ordering::SeqCst));
         }
     }
 }
 
-unsafe fn register_gdb_jit_image(file: &[u8]) -> *mut JITCodeEntry {
+unsafe fn register_gdb_jit_image(file: &[u8]) -> AtomicPtr<JITCodeEntry> {
     // Create a code entry for the file, which gives the start and size of the symbol file.
-    let entry = Box::into_raw(Box::new(JITCodeEntry {
+    let _lock = JIT_DESCRIPTOR_LOCK.lock();
+    let entry = AtomicPtr::new(Box::into_raw(Box::new(JITCodeEntry {
         next_entry: __jit_debug_descriptor.first_entry,
         prev_entry: ptr::null_mut(),
         symfile_addr: file.as_ptr(),
         symfile_size: file.len() as u64,
-    }));
+    })));
     // Add it to the linked list in the JIT descriptor.
     if !__jit_debug_descriptor.first_entry.is_null() {
-        (*__jit_debug_descriptor.first_entry).prev_entry = entry;
+        (*__jit_debug_descriptor.first_entry).prev_entry = entry.load(Ordering::SeqCst);
     }
-    __jit_debug_descriptor.first_entry = entry;
+    __jit_debug_descriptor.first_entry = entry.load(Ordering::SeqCst);
     // Point the relevant_entry field of the descriptor at the entry.
-    __jit_debug_descriptor.relevant_entry = entry;
+    __jit_debug_descriptor.relevant_entry = entry.load(Ordering::SeqCst);
     // Set action_flag to JIT_REGISTER and call __jit_debug_register_code.
     __jit_debug_descriptor.action_flag = JIT_REGISTER_FN;
     __jit_debug_register_code();
@@ -98,6 +104,7 @@ unsafe fn register_gdb_jit_image(file: &[u8]) -> *mut JITCodeEntry {
 
 unsafe fn unregister_gdb_jit_image(entry: *mut JITCodeEntry) {
     // Remove the code entry corresponding to the code from the linked list.
+    let _lock = JIT_DESCRIPTOR_LOCK.lock();
     if !(*entry).prev_entry.is_null() {
         (*(*entry).prev_entry).next_entry = (*entry).next_entry;
     } else {

@@ -14,7 +14,7 @@ use wasmtime_runtime::VMFunctionBody;
 /// Performs all required relocations inside the function code, provided the necessary metadata.
 pub fn link_module(
     module: &Module,
-    allocated_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    allocated_functions: &PrimaryMap<DefinedFuncIndex, *const [VMFunctionBody]>,
     jt_offsets: &PrimaryMap<DefinedFuncIndex, JumpTableOffsets>,
     relocations: Relocations,
 ) {

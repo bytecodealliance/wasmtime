@@ -11,6 +11,7 @@ use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_wasm::ModuleTranslationState;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::sync::RwLock;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
@@ -51,13 +52,19 @@ pub enum CompilationStrategy {
 pub struct Compiler {
     isa: Box<dyn TargetIsa>,
 
-    code_memory: CodeMemory,
     trap_registry: TrapRegistry,
-    trampoline_park: HashMap<VMSharedSignatureIndex, *const VMFunctionBody>,
     signatures: SignatureRegistry,
     strategy: CompilationStrategy,
     cache_config: CacheConfig,
+    inner: RwLock<CompilerInner>,
+}
 
+unsafe impl Send for CompilerInner {}
+unsafe impl Sync for CompilerInner {}
+
+struct CompilerInner {
+    code_memory: CodeMemory,
+    trampoline_park: HashMap<VMSharedSignatureIndex, *const VMFunctionBody>,
     /// The `FunctionBuilderContext`, shared between trampline function compilations.
     fn_builder_ctx: FunctionBuilderContext,
 }
@@ -71,13 +78,15 @@ impl Compiler {
     ) -> Self {
         Self {
             isa,
-            code_memory: CodeMemory::new(),
-            trampoline_park: HashMap::new(),
             signatures: SignatureRegistry::new(),
-            fn_builder_ctx: FunctionBuilderContext::new(),
             strategy,
             trap_registry: TrapRegistry::default(),
             cache_config,
+            inner: RwLock::new(CompilerInner {
+                code_memory: CodeMemory::new(),
+                trampoline_park: HashMap::new(),
+                fn_builder_ctx: FunctionBuilderContext::new(),
+            })
         }
     }
 }
@@ -95,14 +104,14 @@ impl Compiler {
 
     /// Compile the given function bodies.
     pub(crate) fn compile<'data>(
-        &mut self,
+        &self,
         module: &Module,
         module_translation: &ModuleTranslationState,
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         debug_data: Option<DebugInfoData>,
     ) -> Result<
         (
-            PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+            PrimaryMap<DefinedFuncIndex, *const [VMFunctionBody]>,
             PrimaryMap<DefinedFuncIndex, ir::JumpTableOffsets>,
             Relocations,
             Option<Vec<u8>>,
@@ -138,8 +147,9 @@ impl Compiler {
             }
             .map_err(SetupError::Compile)?;
 
+        let mut inner = self.inner.write().unwrap();
         let allocated_functions =
-            allocate_functions(&mut self.code_memory, &compilation).map_err(|message| {
+            allocate_functions(&mut inner.code_memory, &compilation).map_err(|message| {
                 SetupError::Instantiate(InstantiationError::Resource(format!(
                     "failed to allocate memory for functions: {}",
                     message
@@ -201,28 +211,29 @@ impl Compiler {
 
     /// Create a trampoline for invoking a function.
     pub(crate) fn get_trampoline(
-        &mut self,
+        &self,
         signature: &ir::Signature,
         value_size: usize,
     ) -> Result<*const VMFunctionBody, SetupError> {
         let index = self.signatures.register(signature);
-        if let Some(trampoline) = self.trampoline_park.get(&index) {
+        let inner = &mut *self.inner.write().unwrap();
+        if let Some(trampoline) = inner.trampoline_park.get(&index) {
             return Ok(*trampoline);
         }
         let body = make_trampoline(
             &*self.isa,
-            &mut self.code_memory,
-            &mut self.fn_builder_ctx,
+            &mut inner.code_memory,
+            &mut inner.fn_builder_ctx,
             signature,
             value_size,
         )?;
-        self.trampoline_park.insert(index, body);
+        inner.trampoline_park.insert(index, body);
         return Ok(body);
     }
 
     /// Create and publish a trampoline for invoking a function.
     pub fn get_published_trampoline(
-        &mut self,
+        &self,
         signature: &ir::Signature,
         value_size: usize,
     ) -> Result<*const VMFunctionBody, SetupError> {
@@ -232,17 +243,17 @@ impl Compiler {
     }
 
     /// Make memory containing compiled code executable.
-    pub(crate) fn publish_compiled_code(&mut self) {
-        self.code_memory.publish();
+    pub(crate) fn publish_compiled_code(&self) {
+        self.inner.write().unwrap().code_memory.publish();
     }
 
     pub(crate) fn profiler_module_load(
-        &mut self,
+        &self,
         profiler: &mut Box<dyn ProfilingAgent + Send>,
         module_name: &str,
         dbg_image: Option<&[u8]>,
     ) -> () {
-        self.code_memory
+        self.inner.write().unwrap().code_memory
             .profiler_module_load(profiler, module_name, dbg_image);
     }
 
@@ -379,20 +390,20 @@ fn make_trampoline(
 fn allocate_functions(
     code_memory: &mut CodeMemory,
     compilation: &Compilation,
-) -> Result<PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>, String> {
+) -> Result<PrimaryMap<DefinedFuncIndex, *const [VMFunctionBody]>, String> {
     let fat_ptrs = code_memory.allocate_for_compilation(compilation)?;
 
     // Second, create a PrimaryMap from result vector of pointers.
     let mut result = PrimaryMap::with_capacity(compilation.len());
     for i in 0..fat_ptrs.len() {
-        let fat_ptr: *mut [VMFunctionBody] = fat_ptrs[i];
+        let fat_ptr: *const [VMFunctionBody] = fat_ptrs[i];
         result.push(fat_ptr);
     }
     Ok(result)
 }
 
 fn register_traps(
-    allocated_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    allocated_functions: &PrimaryMap<DefinedFuncIndex, *const [VMFunctionBody]>,
     traps: &Traps,
     registry: &TrapRegistry,
 ) -> TrapRegistration {

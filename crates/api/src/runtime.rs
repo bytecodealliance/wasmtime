@@ -1,8 +1,6 @@
 use anyhow::Result;
-use std::cell::RefCell;
 use std::fmt;
 use std::path::Path;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use wasmparser::{OperatorValidatorConfig, ValidatingParserConfig};
 use wasmtime_environ::settings::{self, Configurable};
@@ -447,12 +445,12 @@ impl Engine {
 #[derive(Clone)]
 pub struct Store {
     // FIXME(#777) should be `Arc` and this type should be thread-safe
-    inner: Rc<StoreInner>,
+    inner: Arc<StoreInner>,
 }
 
 struct StoreInner {
     engine: Engine,
-    compiler: RefCell<Compiler>,
+    compiler: Compiler,
 }
 
 impl Store {
@@ -465,9 +463,9 @@ impl Store {
             engine.config.cache_config.clone(),
         );
         Store {
-            inner: Rc::new(StoreInner {
+            inner: Arc::new(StoreInner {
                 engine: engine.clone(),
-                compiler: RefCell::new(compiler),
+                compiler,
             }),
         }
     }
@@ -477,12 +475,8 @@ impl Store {
         &self.inner.engine
     }
 
-    pub(crate) fn compiler(&self) -> std::cell::Ref<'_, Compiler> {
-        self.inner.compiler.borrow()
-    }
-
-    pub(crate) fn compiler_mut(&self) -> std::cell::RefMut<'_, Compiler> {
-        self.inner.compiler.borrow_mut()
+    pub(crate) fn compiler(&self) -> &Compiler {
+        &self.inner.compiler
     }
 
     /// Returns whether the stores `a` and `b` refer to the same underlying
@@ -492,7 +486,7 @@ impl Store {
     /// to the same underlying storage, and this method can be used to determine
     /// whether two stores are indeed the same.
     pub fn same(a: &Store, b: &Store) -> bool {
-        Rc::ptr_eq(&a.inner, &b.inner)
+        Arc::ptr_eq(&a.inner, &b.inner)
     }
 }
 
