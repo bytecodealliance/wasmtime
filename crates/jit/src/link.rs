@@ -22,7 +22,7 @@ pub fn link_module(
         for r in function_relocs {
             use self::libcalls::*;
             let target_func_address: usize = match r.reloc_target {
-                RelocationTarget::UserFunc(index) => match module.defined_func_index(index) {
+                RelocationTarget::UserFunc(index) => match module.local.defined_func_index(index) {
                     Some(f) => {
                         let fatptr: *const [VMFunctionBody] = allocated_functions[f];
                         fatptr as *const VMFunctionBody as usize
@@ -45,7 +45,7 @@ pub fn link_module(
                     }
                 }
                 RelocationTarget::JumpTable(func_index, jt) => {
-                    match module.defined_func_index(func_index) {
+                    match module.local.defined_func_index(func_index) {
                         Some(f) => {
                             let offset = *jt_offsets
                                 .get(f)

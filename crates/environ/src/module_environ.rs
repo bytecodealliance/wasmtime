@@ -47,7 +47,7 @@ pub struct ModuleTranslation<'data> {
 impl<'data> ModuleTranslation<'data> {
     /// Return a new `FuncEnvironment` for translating a function.
     pub fn func_env(&self) -> FuncEnvironment<'_> {
-        FuncEnvironment::new(self.target_config, &self.module)
+        FuncEnvironment::new(self.target_config, &self.module.local)
     }
 }
 
@@ -108,6 +108,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     fn reserve_signatures(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
+            .local
             .signatures
             .reserve_exact(usize::try_from(num).unwrap());
         Ok(())
@@ -116,7 +117,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     fn declare_signature(&mut self, sig: ir::Signature) -> WasmResult<()> {
         let sig = translate_signature(sig, self.pointer_type());
         // TODO: Deduplicate signatures.
-        self.result.module.signatures.push(sig);
+        self.result.module.local.signatures.push(sig);
         Ok(())
     }
 
@@ -127,35 +128,37 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         field: &str,
     ) -> WasmResult<()> {
         debug_assert_eq!(
-            self.result.module.functions.len(),
+            self.result.module.local.functions.len(),
             self.result.module.imported_funcs.len(),
             "Imported functions must be declared first"
         );
-        self.result.module.functions.push(sig_index);
+        self.result.module.local.functions.push(sig_index);
 
         self.result.module.imported_funcs.push((
             String::from(module),
             String::from(field),
             self.imports,
         ));
+        self.result.module.local.num_imported_funcs += 1;
         self.imports += 1;
         Ok(())
     }
 
     fn declare_table_import(&mut self, table: Table, module: &str, field: &str) -> WasmResult<()> {
         debug_assert_eq!(
-            self.result.module.table_plans.len(),
+            self.result.module.local.table_plans.len(),
             self.result.module.imported_tables.len(),
             "Imported tables must be declared first"
         );
         let plan = TablePlan::for_table(table, &self.result.tunables);
-        self.result.module.table_plans.push(plan);
+        self.result.module.local.table_plans.push(plan);
 
         self.result.module.imported_tables.push((
             String::from(module),
             String::from(field),
             self.imports,
         ));
+        self.result.module.local.num_imported_tables += 1;
         self.imports += 1;
         Ok(())
     }
@@ -167,18 +170,19 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         field: &str,
     ) -> WasmResult<()> {
         debug_assert_eq!(
-            self.result.module.memory_plans.len(),
+            self.result.module.local.memory_plans.len(),
             self.result.module.imported_memories.len(),
             "Imported memories must be declared first"
         );
         let plan = MemoryPlan::for_memory(memory, &self.result.tunables);
-        self.result.module.memory_plans.push(plan);
+        self.result.module.local.memory_plans.push(plan);
 
         self.result.module.imported_memories.push((
             String::from(module),
             String::from(field),
             self.imports,
         ));
+        self.result.module.local.num_imported_memories += 1;
         self.imports += 1;
         Ok(())
     }
@@ -190,17 +194,18 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         field: &str,
     ) -> WasmResult<()> {
         debug_assert_eq!(
-            self.result.module.globals.len(),
+            self.result.module.local.globals.len(),
             self.result.module.imported_globals.len(),
             "Imported globals must be declared first"
         );
-        self.result.module.globals.push(global);
+        self.result.module.local.globals.push(global);
 
         self.result.module.imported_globals.push((
             String::from(module),
             String::from(field),
             self.imports,
         ));
+        self.result.module.local.num_imported_globals += 1;
         self.imports += 1;
         Ok(())
     }
@@ -216,6 +221,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     fn reserve_func_types(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
+            .local
             .functions
             .reserve_exact(usize::try_from(num).unwrap());
         self.result
@@ -225,13 +231,14 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn declare_func_type(&mut self, sig_index: SignatureIndex) -> WasmResult<()> {
-        self.result.module.functions.push(sig_index);
+        self.result.module.local.functions.push(sig_index);
         Ok(())
     }
 
     fn reserve_tables(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
+            .local
             .table_plans
             .reserve_exact(usize::try_from(num).unwrap());
         Ok(())
@@ -239,13 +246,14 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
 
     fn declare_table(&mut self, table: Table) -> WasmResult<()> {
         let plan = TablePlan::for_table(table, &self.result.tunables);
-        self.result.module.table_plans.push(plan);
+        self.result.module.local.table_plans.push(plan);
         Ok(())
     }
 
     fn reserve_memories(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
+            .local
             .memory_plans
             .reserve_exact(usize::try_from(num).unwrap());
         Ok(())
@@ -253,20 +261,21 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
 
     fn declare_memory(&mut self, memory: Memory) -> WasmResult<()> {
         let plan = MemoryPlan::for_memory(memory, &self.result.tunables);
-        self.result.module.memory_plans.push(plan);
+        self.result.module.local.memory_plans.push(plan);
         Ok(())
     }
 
     fn reserve_globals(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
+            .local
             .globals
             .reserve_exact(usize::try_from(num).unwrap());
         Ok(())
     }
 
     fn declare_global(&mut self, global: Global) -> WasmResult<()> {
-        self.result.module.globals.push(global);
+        self.result.module.local.globals.push(global);
         Ok(())
     }
 

@@ -69,7 +69,7 @@ impl GlobalFrameInfo {
             if end > max {
                 max = end;
             }
-            let func_index = module.module().func_index(i);
+            let func_index = module.module().local.func_index(i);
             assert!(functions.insert(end, (start, func_index)).is_none());
         }
         if functions.len() == 0 {

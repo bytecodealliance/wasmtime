@@ -27,7 +27,7 @@ pub fn resolve_imports(module: &Module, resolver: &mut dyn Resolver) -> Result<I
                     signature,
                     vmctx,
                 } => {
-                    let import_signature = &module.signatures[module.functions[index]];
+                    let import_signature = &module.local.signatures[module.local.functions[index]];
                     if signature != *import_signature {
                         // TODO: If the difference is in the calling convention,
                         // we could emit a wrapper function to fix it up.
@@ -68,7 +68,7 @@ pub fn resolve_imports(module: &Module, resolver: &mut dyn Resolver) -> Result<I
                     vmctx,
                     table,
                 } => {
-                    let import_table = &module.table_plans[index];
+                    let import_table = &module.local.table_plans[index];
                     if !is_table_compatible(&table, import_table) {
                         return Err(LinkError(format!(
                             "{}/{}: incompatible import type: exported table incompatible with \
@@ -107,7 +107,7 @@ pub fn resolve_imports(module: &Module, resolver: &mut dyn Resolver) -> Result<I
                     vmctx,
                     memory,
                 } => {
-                    let import_memory = &module.memory_plans[index];
+                    let import_memory = &module.local.memory_plans[index];
                     if !is_memory_compatible(&memory, import_memory) {
                         return Err(LinkError(format!(
                             "{}/{}: incompatible import type: exported memory incompatible with \
@@ -167,7 +167,7 @@ pub fn resolve_imports(module: &Module, resolver: &mut dyn Resolver) -> Result<I
                     vmctx,
                     global,
                 } => {
-                    let imported_global = module.globals[index];
+                    let imported_global = module.local.globals[index];
                     if !is_global_compatible(&global, &imported_global) {
                         return Err(LinkError(format!(
                             "{}/{}: incompatible import type: exported global incompatible with \

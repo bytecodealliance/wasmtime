@@ -1,13 +1,13 @@
 //! Support for compiling with Cranelift.
 
 use crate::address_map::{FunctionAddressMap, InstructionAddressMap};
-use crate::cache::{ModuleCacheData, ModuleCacheDataTupleType, ModuleCacheEntry};
+use crate::cache::{ModuleCacheDataTupleType, ModuleCacheEntry};
 use crate::compilation::{
     Compilation, CompileError, CompiledFunction, CompiledFunctionUnwindInfo, Relocation,
     RelocationTarget, TrapInformation,
 };
 use crate::func_environ::{get_func_name, FuncEnvironment};
-use crate::module::Module;
+use crate::module::{Module, ModuleLocal};
 use crate::module_environ::FunctionBodyData;
 use crate::CacheConfig;
 use cranelift_codegen::ir::{self, ExternalName};
@@ -16,6 +16,7 @@ use cranelift_codegen::{binemit, isa, Context};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, ModuleTranslationState};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use std::hash::{Hash, Hasher};
 
 /// Implementation of a relocation sink that just saves all the information for later
 pub struct RelocSink {
@@ -160,149 +161,191 @@ pub struct Cranelift;
 impl crate::compilation::Compiler for Cranelift {
     /// Compile the module using Cranelift, producing a compilation result with
     /// associated relocations.
-    fn compile_module<'data, 'module>(
-        module: &'module Module,
+    fn compile_module(
+        module: &Module,
         module_translation: &ModuleTranslationState,
-        function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
+        function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'_>>,
         isa: &dyn isa::TargetIsa,
         generate_debug_info: bool,
         cache_config: &CacheConfig,
     ) -> Result<ModuleCacheDataTupleType, CompileError> {
-        let cache_entry = ModuleCacheEntry::new(
-            module,
-            &function_body_inputs,
-            isa,
-            "cranelift",
-            generate_debug_info,
-            cache_config,
+        let cache_entry = ModuleCacheEntry::new("cranelift", cache_config);
+
+        let data = cache_entry.get_data(
+            (
+                &module.local,
+                HashedModuleTranslationState(module_translation),
+                function_body_inputs,
+                Isa(isa),
+                generate_debug_info,
+            ),
+            compile,
+        )?;
+        Ok(data.into_tuple())
+    }
+}
+
+fn compile(
+    (
+        module,
+        HashedModuleTranslationState(module_translation),
+        function_body_inputs,
+        Isa(isa),
+        generate_debug_info,
+    ): (
+        &ModuleLocal,
+        HashedModuleTranslationState<'_>,
+        PrimaryMap<DefinedFuncIndex, FunctionBodyData<'_>>,
+        Isa<'_, '_>,
+        bool,
+    ),
+) -> Result<ModuleCacheDataTupleType, CompileError> {
+    let mut functions = PrimaryMap::with_capacity(function_body_inputs.len());
+    let mut relocations = PrimaryMap::with_capacity(function_body_inputs.len());
+    let mut address_transforms = PrimaryMap::with_capacity(function_body_inputs.len());
+    let mut value_ranges = PrimaryMap::with_capacity(function_body_inputs.len());
+    let mut stack_slots = PrimaryMap::with_capacity(function_body_inputs.len());
+    let mut traps = PrimaryMap::with_capacity(function_body_inputs.len());
+
+    function_body_inputs
+        .into_iter()
+        .collect::<Vec<(DefinedFuncIndex, &FunctionBodyData<'_>)>>()
+        .par_iter()
+        .map_init(FuncTranslator::new, |func_translator, (i, input)| {
+            let func_index = module.func_index(*i);
+            let mut context = Context::new();
+            context.func.name = get_func_name(func_index);
+            context.func.signature = module.signatures[module.functions[func_index]].clone();
+            context.func.collect_frame_layout_info();
+            if generate_debug_info {
+                context.func.collect_debug_info();
+            }
+
+            func_translator.translate(
+                module_translation,
+                input.data,
+                input.module_offset,
+                &mut context.func,
+                &mut FuncEnvironment::new(isa.frontend_config(), module),
+            )?;
+
+            let mut code_buf: Vec<u8> = Vec::new();
+            let mut reloc_sink = RelocSink::new(func_index);
+            let mut trap_sink = TrapSink::new();
+            let mut stackmap_sink = binemit::NullStackmapSink {};
+            context
+                .compile_and_emit(
+                    isa,
+                    &mut code_buf,
+                    &mut reloc_sink,
+                    &mut trap_sink,
+                    &mut stackmap_sink,
+                )
+                .map_err(|error| {
+                    CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
+                })?;
+
+            let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context);
+
+            let address_transform = if generate_debug_info {
+                let body_len = code_buf.len();
+                Some(get_function_address_map(&context, input, body_len, isa))
+            } else {
+                None
+            };
+
+            let ranges = if generate_debug_info {
+                let ranges = context.build_value_labels_ranges(isa).map_err(|error| {
+                    CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
+                })?;
+                Some(ranges)
+            } else {
+                None
+            };
+
+            Ok((
+                code_buf,
+                context.func.jt_offsets,
+                reloc_sink.func_relocs,
+                address_transform,
+                ranges,
+                context.func.stack_slots,
+                trap_sink.traps,
+                unwind_info,
+            ))
+        })
+        .collect::<Result<Vec<_>, CompileError>>()?
+        .into_iter()
+        .for_each(
+            |(
+                function,
+                func_jt_offsets,
+                relocs,
+                address_transform,
+                ranges,
+                sss,
+                function_traps,
+                unwind_info,
+            )| {
+                functions.push(CompiledFunction {
+                    body: function,
+                    jt_offsets: func_jt_offsets,
+                    unwind_info,
+                });
+                relocations.push(relocs);
+                if let Some(address_transform) = address_transform {
+                    address_transforms.push(address_transform);
+                }
+                value_ranges.push(ranges.unwrap_or_default());
+                stack_slots.push(sss);
+                traps.push(function_traps);
+            },
         );
 
-        let data = match cache_entry.get_data() {
-            Some(data) => data,
-            None => {
-                let mut functions = PrimaryMap::with_capacity(function_body_inputs.len());
-                let mut relocations = PrimaryMap::with_capacity(function_body_inputs.len());
-                let mut address_transforms = PrimaryMap::with_capacity(function_body_inputs.len());
-                let mut value_ranges = PrimaryMap::with_capacity(function_body_inputs.len());
-                let mut stack_slots = PrimaryMap::with_capacity(function_body_inputs.len());
-                let mut traps = PrimaryMap::with_capacity(function_body_inputs.len());
+    // TODO: Reorganize where we create the Vec for the resolved imports.
 
-                function_body_inputs
-                    .into_iter()
-                    .collect::<Vec<(DefinedFuncIndex, &FunctionBodyData<'data>)>>()
-                    .par_iter()
-                    .map_init(FuncTranslator::new, |func_translator, (i, input)| {
-                        let func_index = module.func_index(*i);
-                        let mut context = Context::new();
-                        context.func.name = get_func_name(func_index);
-                        context.func.signature =
-                            module.signatures[module.functions[func_index]].clone();
-                        context.func.collect_frame_layout_info();
-                        if generate_debug_info {
-                            context.func.collect_debug_info();
-                        }
+    Ok((
+        Compilation::new(functions),
+        relocations,
+        address_transforms,
+        value_ranges,
+        stack_slots,
+        traps,
+    ))
+}
 
-                        func_translator.translate(
-                            module_translation,
-                            input.data,
-                            input.module_offset,
-                            &mut context.func,
-                            &mut FuncEnvironment::new(isa.frontend_config(), module),
-                        )?;
+/// This is a wrapper struct to hash the specific bits of `TargetIsa` that
+/// affect the output we care about. The trait itself can't implement `Hash`
+/// (it's not object safe) so we have to implement our own hashing.
+struct Isa<'a, 'b>(&'a (dyn isa::TargetIsa + 'b));
 
-                        let mut code_buf: Vec<u8> = Vec::new();
-                        let mut reloc_sink = RelocSink::new(func_index);
-                        let mut trap_sink = TrapSink::new();
-                        let mut stackmap_sink = binemit::NullStackmapSink {};
-                        context
-                            .compile_and_emit(
-                                isa,
-                                &mut code_buf,
-                                &mut reloc_sink,
-                                &mut trap_sink,
-                                &mut stackmap_sink,
-                            )
-                            .map_err(|error| {
-                                CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
-                            })?;
+impl Hash for Isa<'_, '_> {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        self.0.triple().hash(hasher);
 
-                        let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context);
+        // TODO: if this `to_string()` is too expensive then we should upstream
+        // a native hashing ability of flags into cranelift itself, but
+        // compilation and/or cache loading is relatively expensive so seems
+        // unlikely.
+        self.0.flags().to_string().hash(hasher);
 
-                        let address_transform = if generate_debug_info {
-                            let body_len = code_buf.len();
-                            Some(get_function_address_map(&context, input, body_len, isa))
-                        } else {
-                            None
-                        };
+        // TODO: ... and should we hash anything else? There's a lot of stuff in
+        // `TargetIsa`, like registers/encodings/etc. Should we be hashing that
+        // too? It seems like wasmtime doesn't configure it too too much, but
+        // this may become an issue at some point.
+    }
+}
 
-                        let ranges = if generate_debug_info {
-                            let ranges =
-                                context.build_value_labels_ranges(isa).map_err(|error| {
-                                    CompileError::Codegen(pretty_error(
-                                        &context.func,
-                                        Some(isa),
-                                        error,
-                                    ))
-                                })?;
-                            Some(ranges)
-                        } else {
-                            None
-                        };
+/// A wrapper struct around cranelift's `ModuleTranslationState` to implement
+/// `Hash` since it's not `Hash` upstream yet.
+///
+/// TODO: we should upstream a `Hash` implementation, it would be very small! At
+/// this moment though based on the definition it should be fine to not hash it
+/// since we'll re-hash the signatures later.
+struct HashedModuleTranslationState<'a>(&'a ModuleTranslationState);
 
-                        Ok((
-                            code_buf,
-                            context.func.jt_offsets,
-                            reloc_sink.func_relocs,
-                            address_transform,
-                            ranges,
-                            context.func.stack_slots,
-                            trap_sink.traps,
-                            unwind_info,
-                        ))
-                    })
-                    .collect::<Result<Vec<_>, CompileError>>()?
-                    .into_iter()
-                    .for_each(
-                        |(
-                            function,
-                            func_jt_offsets,
-                            relocs,
-                            address_transform,
-                            ranges,
-                            sss,
-                            function_traps,
-                            unwind_info,
-                        )| {
-                            functions.push(CompiledFunction {
-                                body: function,
-                                jt_offsets: func_jt_offsets,
-                                unwind_info,
-                            });
-                            relocations.push(relocs);
-                            if let Some(address_transform) = address_transform {
-                                address_transforms.push(address_transform);
-                            }
-                            value_ranges.push(ranges.unwrap_or_default());
-                            stack_slots.push(sss);
-                            traps.push(function_traps);
-                        },
-                    );
-
-                // TODO: Reorganize where we create the Vec for the resolved imports.
-
-                let data = ModuleCacheData::from_tuple((
-                    Compilation::new(functions),
-                    relocations,
-                    address_transforms,
-                    value_ranges,
-                    stack_slots,
-                    traps,
-                ));
-                cache_entry.update_data(&data);
-                data
-            }
-        };
-
-        Ok(data.into_tuple())
+impl Hash for HashedModuleTranslationState<'_> {
+    fn hash<H: Hasher>(&self, _hasher: &mut H) {
+        // nothing to hash right now
     }
 }

@@ -1,4 +1,4 @@
-use crate::module::{MemoryPlan, MemoryStyle, Module, TableStyle};
+use crate::module::{MemoryPlan, MemoryStyle, ModuleLocal, TableStyle};
 use crate::vmoffsets::VMOffsets;
 use crate::WASM_PAGE_SIZE;
 use cranelift_codegen::cursor::FuncCursor;
@@ -59,7 +59,7 @@ pub struct FuncEnvironment<'module_environment> {
     target_config: TargetFrontendConfig,
 
     /// The module-level environment which this function-level environment belongs to.
-    module: &'module_environment Module,
+    module: &'module_environment ModuleLocal,
 
     /// The Cranelift global holding the vmctx address.
     vmctx: Option<ir::GlobalValue>,
@@ -77,7 +77,10 @@ pub struct FuncEnvironment<'module_environment> {
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
-    pub fn new(target_config: TargetFrontendConfig, module: &'module_environment Module) -> Self {
+    pub fn new(
+        target_config: TargetFrontendConfig,
+        module: &'module_environment ModuleLocal,
+    ) -> Self {
         Self {
             target_config,
             module,

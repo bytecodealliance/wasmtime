@@ -25,7 +25,7 @@ pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<Instanc
         },
     };
     let mut module = Module::new();
-    let global_id = module.globals.push(global);
+    let global_id = module.local.globals.push(global);
     module.exports.insert(
         "global".to_string(),
         wasmtime_environ::Export::Global(global_id),

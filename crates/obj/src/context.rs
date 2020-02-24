@@ -18,14 +18,14 @@ pub fn layout_vmcontext(
     module: &Module,
     target_config: &TargetFrontendConfig,
 ) -> (Box<[u8]>, Box<[TableRelocation]>) {
-    let ofs = VMOffsets::new(target_config.pointer_bytes(), &module);
+    let ofs = VMOffsets::new(target_config.pointer_bytes(), &module.local);
     let out_len = ofs.size_of_vmctx() as usize;
     let mut out = vec![0; out_len];
 
     // Assign unique indicies to unique signatures.
     let mut signature_registry = HashMap::new();
     let mut signature_registry_len = signature_registry.len();
-    for (index, sig) in module.signatures.iter() {
+    for (index, sig) in module.local.signatures.iter() {
         let offset = ofs.vmctx_vmshared_signature_id(index) as usize;
         let target_index = match signature_registry.entry(sig) {
             Entry::Occupied(o) => *o.get(),
@@ -43,9 +43,9 @@ pub fn layout_vmcontext(
     }
 
     let num_tables_imports = module.imported_tables.len();
-    let mut table_relocs = Vec::with_capacity(module.table_plans.len() - num_tables_imports);
-    for (index, table) in module.table_plans.iter().skip(num_tables_imports) {
-        let def_index = module.defined_table_index(index).unwrap();
+    let mut table_relocs = Vec::with_capacity(module.local.table_plans.len() - num_tables_imports);
+    for (index, table) in module.local.table_plans.iter().skip(num_tables_imports) {
+        let def_index = module.local.defined_table_index(index).unwrap();
         let offset = ofs.vmctx_vmtable_definition(def_index) as usize;
         let current_elements = table.table.minimum;
         unsafe {
@@ -67,8 +67,8 @@ pub fn layout_vmcontext(
     }
 
     let num_globals_imports = module.imported_globals.len();
-    for (index, global) in module.globals.iter().skip(num_globals_imports) {
-        let def_index = module.defined_global_index(index).unwrap();
+    for (index, global) in module.local.globals.iter().skip(num_globals_imports) {
+        let def_index = module.local.defined_global_index(index).unwrap();
         let offset = ofs.vmctx_vmglobal_definition(def_index) as usize;
         let to = unsafe { out.as_mut_ptr().add(offset) };
         match global.initializer {

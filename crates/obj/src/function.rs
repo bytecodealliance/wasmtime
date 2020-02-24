@@ -16,7 +16,7 @@ pub fn declare_functions(
         obj.declare(string_name, Decl::function_import())?;
     }
     for (i, _function_relocs) in relocations.iter().rev() {
-        let func_index = module.func_index(i);
+        let func_index = module.local.func_index(i);
         let string_name = format!("_wasm_function_{}", func_index.index());
         obj.declare(string_name, Decl::function().global())?;
     }
@@ -43,14 +43,14 @@ pub fn emit_functions(
 
     for (i, _function_relocs) in relocations.iter() {
         let body = &compilation.get(i).body;
-        let func_index = module.func_index(i);
+        let func_index = module.local.func_index(i);
         let string_name = format!("_wasm_function_{}", func_index.index());
 
         obj.define(string_name, body.clone())?;
     }
 
     for (i, function_relocs) in relocations.iter() {
-        let func_index = module.func_index(i);
+        let func_index = module.local.func_index(i);
         let string_name = format!("_wasm_function_{}", func_index.index());
         for r in function_relocs {
             debug_assert_eq!(r.addend, 0);

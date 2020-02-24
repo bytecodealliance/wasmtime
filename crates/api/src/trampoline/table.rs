@@ -20,7 +20,7 @@ pub fn create_handle_with_table(store: &Store, table: &TableType) -> Result<Inst
     let tunable = Default::default();
 
     let table_plan = wasmtime_environ::TablePlan::for_table(table, &tunable);
-    let table_id = module.table_plans.push(table_plan);
+    let table_id = module.local.table_plans.push(table_plan);
     module.exports.insert(
         "table".to_string(),
         wasmtime_environ::Export::Table(table_id),

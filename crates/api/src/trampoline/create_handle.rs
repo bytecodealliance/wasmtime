@@ -27,6 +27,7 @@ pub(crate) fn create_handle(
 
     // Compute indices into the shared signature table.
     let signatures = module
+        .local
         .signatures
         .values()
         .map(|sig| store.compiler().signatures().register(sig))
