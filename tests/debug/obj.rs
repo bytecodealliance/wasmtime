@@ -16,7 +16,7 @@ pub fn compile_cranelift(
         target.as_ref(),
         Strategy::Cranelift,
         false,
-        false,
+        wasmtime::OptLevel::None,
         true,
         output
             .as_ref()
