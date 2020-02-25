@@ -549,22 +549,16 @@ impl VMBuiltinFunctionsArray {
         ptrs[BuiltinFunctionIndex::get_imported_memory32_size_index().index() as usize] =
             wasmtime_imported_memory32_size as usize;
 
-        ptrs[BuiltinFunctionIndex::get_table_copy_defined_defined_index().index() as usize] =
-            wasmtime_table_copy_defined_defined as usize;
-        ptrs[BuiltinFunctionIndex::get_table_copy_defined_imported_index().index() as usize] =
-            wasmtime_table_copy_defined_imported as usize;
-        ptrs[BuiltinFunctionIndex::get_table_copy_imported_defined_index().index() as usize] =
-            wasmtime_table_copy_imported_defined as usize;
-        ptrs[BuiltinFunctionIndex::get_table_copy_imported_imported_index().index() as usize] =
-            wasmtime_table_copy_imported_imported as usize;
+        ptrs[BuiltinFunctionIndex::get_table_copy_index().index() as usize] =
+            wasmtime_table_copy as usize;
 
         ptrs[BuiltinFunctionIndex::get_table_init_index().index() as usize] =
             wasmtime_table_init as usize;
         ptrs[BuiltinFunctionIndex::get_elem_drop_index().index() as usize] =
             wasmtime_elem_drop as usize;
 
-        ptrs[BuiltinFunctionIndex::get_memory_copy_index().index() as usize] =
-            wasmtime_memory_copy as usize;
+        ptrs[BuiltinFunctionIndex::get_defined_memory_copy_index().index() as usize] =
+            wasmtime_defined_memory_copy as usize;
         ptrs[BuiltinFunctionIndex::get_imported_memory_copy_index().index() as usize] =
             wasmtime_imported_memory_copy as usize;
         ptrs[BuiltinFunctionIndex::get_memory_fill_index().index() as usize] =

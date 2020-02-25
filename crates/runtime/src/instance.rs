@@ -14,8 +14,7 @@ use crate::vmcontext::{
     VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
     VMTableDefinition, VMTableImport,
 };
-use crate::{TrapDescription, TrapRegistration};
-use backtrace::Backtrace;
+use crate::TrapRegistration;
 use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::alloc::{self, Layout};
@@ -90,7 +89,8 @@ pub(crate) struct Instance {
     tables: BoxedSlice<DefinedTableIndex, Table>,
 
     /// Passive elements in this instantiation. As `elem.drop`s happen, these
-    /// entries get replaced into empty slices.
+    /// entries get removed. A missing entry is considered equivalent to an
+    /// empty slice.
     passive_elements: RefCell<HashMap<PassiveElemIndex, Box<[VMCallerCheckedAnyfunc]>>>,
 
     /// Pointers to functions in executable memory.
@@ -598,15 +598,10 @@ impl Instance {
             .map_or(true, |n| n as usize > elem.len())
             || dst.checked_add(len).map_or(true, |m| m > table.size())
         {
-            return Err(Trap::Wasm {
-                desc: TrapDescription {
-                    source_loc,
-                    trap_code: ir::TrapCode::TableOutOfBounds,
-                },
-                backtrace: Backtrace::new(),
-            });
+            return Err(Trap::wasm(source_loc, ir::TrapCode::TableOutOfBounds));
         }
 
+        // TODO(#983): investigate replacing this get/set loop with a `memcpy`.
         for (dst, src) in (dst..dst + len).zip(src..src + len) {
             table
                 .set(dst, elem[src as usize].clone())
@@ -621,10 +616,9 @@ impl Instance {
         // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-elem-drop
 
         let mut passive_elements = self.passive_elements.borrow_mut();
-        // Note that dropping a non-passive element is a no-op (not a trap).
-        if let Some(elem) = passive_elements.get_mut(&elem_index) {
-            mem::replace(elem, vec![].into_boxed_slice());
-        }
+        passive_elements.remove(&elem_index);
+        // Note that we don't check that we actually removed an element because
+        // dropping a non-passive element is a no-op (not a trap).
     }
 
     /// Do a `memory.copy` for a locally defined memory.
@@ -652,23 +646,17 @@ impl Instance {
                 .checked_add(len)
                 .map_or(true, |m| m as usize > memory.current_length)
         {
-            return Err(Trap::Wasm {
-                desc: TrapDescription {
-                    source_loc,
-                    trap_code: ir::TrapCode::HeapOutOfBounds,
-                },
-                backtrace: Backtrace::new(),
-            });
+            return Err(Trap::wasm(source_loc, ir::TrapCode::HeapOutOfBounds));
         }
 
-        let dst = isize::try_from(dst).unwrap();
-        let src = isize::try_from(src).unwrap();
+        let dst = usize::try_from(dst).unwrap();
+        let src = usize::try_from(src).unwrap();
 
         // Bounds and casts are checked above, by this point we know that
         // everything is safe.
         unsafe {
-            let dst = memory.base.offset(dst);
-            let src = memory.base.offset(src);
+            let dst = memory.base.add(dst);
+            let src = memory.base.add(src);
             ptr::copy(src, dst, len as usize);
         }
 
@@ -712,13 +700,7 @@ impl Instance {
             .checked_add(len)
             .map_or(true, |m| m as usize > memory.current_length)
         {
-            return Err(Trap::Wasm {
-                desc: TrapDescription {
-                    source_loc,
-                    trap_code: ir::TrapCode::HeapOutOfBounds,
-                },
-                backtrace: Backtrace::new(),
-            });
+            return Err(Trap::wasm(source_loc, ir::TrapCode::HeapOutOfBounds));
         }
 
         let dst = isize::try_from(dst).unwrap();
@@ -760,7 +742,7 @@ impl Instance {
     /// imported, foreign table.
     pub(crate) fn get_table(&self, table_index: TableIndex) -> &Table {
         if let Some(defined_table_index) = self.module.local.defined_table_index(table_index) {
-            &self.tables[defined_table_index]
+            self.get_defined_table(defined_table_index)
         } else {
             self.get_foreign_table(table_index)
         }
@@ -1083,9 +1065,9 @@ fn check_table_init_bounds(instance: &Instance) -> Result<(), InstantiationError
 
         let size = usize::try_from(table.size()).unwrap();
         if size < start + init.elements.len() {
-            return Err(InstantiationError::TableOutOfBounds(
-                "elements segment does not fit".to_owned(),
-            ));
+            return Err(InstantiationError::Link(LinkError(
+                "table out of bounds: elements segment does not fit".to_owned(),
+            )));
         }
     }
 
@@ -1140,9 +1122,9 @@ fn check_memory_init_bounds(
         unsafe {
             let mem_slice = get_memory_slice(init, instance);
             if mem_slice.get_mut(start..start + init.data.len()).is_none() {
-                return Err(InstantiationError::MemoryOutOfBounds(
-                    "data segment does not fit".into(),
-                ));
+                return Err(InstantiationError::Link(LinkError(
+                    "memory out of bounds: data segment does not fit".into(),
+                )));
             }
         }
     }
@@ -1190,9 +1172,10 @@ fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
         // bounds, then we report an error. This is required by the bulk memory
         // proposal and the way that it uses `table.init` during instantiation.
         if start > table.size() as usize {
-            return Err(InstantiationError::TableOutOfBounds(
-                "active element segment does not fit in table".into(),
-            ));
+            return Err(InstantiationError::Trap(Trap::wasm(
+                ir::SourceLoc::default(),
+                ir::TrapCode::HeapOutOfBounds,
+            )));
         }
 
         for (i, func_idx) in init.elements.iter().enumerate() {
@@ -1205,9 +1188,10 @@ fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
                 // enabled, these become runtime traps and the intermediate
                 // table slot writes are visible.
                 .map_err(|()| {
-                    InstantiationError::TableOutOfBounds(
-                        "active element segment does not fit in table".into(),
-                    )
+                    InstantiationError::Trap(Trap::wasm(
+                        ir::SourceLoc::default(),
+                        ir::TrapCode::HeapOutOfBounds,
+                    ))
                 })?;
         }
     }
@@ -1230,6 +1214,7 @@ fn initialize_passive_elements(instance: &Instance) {
             .module
             .passive_elements
             .iter()
+            .filter(|(_, segments)| !segments.is_empty())
             .map(|(idx, segments)| {
                 (
                     *idx,
@@ -1279,9 +1264,10 @@ fn initialize_memories(
             // since this is dictated by the updated spec for the bulk memory
             // proposal.
             if num_uncopied > 0 {
-                return Err(InstantiationError::MemoryOutOfBounds(
-                    "active data segment does not fit in memory".into(),
-                ));
+                return Err(InstantiationError::Trap(Trap::wasm(
+                    ir::SourceLoc::default(),
+                    ir::TrapCode::HeapOutOfBounds,
+                )));
             }
         }
     }
@@ -1342,23 +1328,13 @@ pub enum InstantiationError {
     #[error("Insufficient resources: {0}")]
     Resource(String),
 
-    /// A table out of bounds error.
-    ///
-    /// Depending on whether bulk memory is enabled or not, this is either a
-    /// link error or a trap raised during instantiation.
-    #[error("Table out of bounds error: {0}")]
-    TableOutOfBounds(String),
-
-    /// A memory out of bounds error.
-    ///
-    /// Depending on whether bulk memory is enabled or not, this is either a
-    /// link error or a trap raised during instantiation.
-    #[error("Memory out of bounds error: {0}")]
-    MemoryOutOfBounds(String),
-
     /// A wasm link error occured.
     #[error("Failed to link module")]
     Link(#[from] LinkError),
+
+    /// A trap ocurred during instantiation, after linking.
+    #[error("Trap occurred during instantiation")]
+    Trap(#[source] Trap),
 
     /// A compilation error occured.
     #[error("Trap occurred while invoking start function")]

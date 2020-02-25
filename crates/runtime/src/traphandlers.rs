@@ -140,6 +140,20 @@ impl fmt::Display for Trap {
 
 impl std::error::Error for Trap {}
 
+impl Trap {
+    /// Construct a new Wasm trap with the given source location and trap code.
+    ///
+    /// Internally saves a backtrace when constructed.
+    pub fn wasm(source_loc: ir::SourceLoc, trap_code: ir::TrapCode) -> Self {
+        let desc = TrapDescription {
+            source_loc,
+            trap_code,
+        };
+        let backtrace = Backtrace::new();
+        Trap::Wasm { desc, backtrace }
+    }
+}
+
 /// Call the wasm function pointed to by `callee`.
 ///
 /// * `vmctx` - the callee vmctx argument

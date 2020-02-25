@@ -45,50 +45,36 @@ impl BuiltinFunctionIndex {
     }
     /// Returns an index for wasm's `table.copy` when both tables are locally
     /// defined.
-    pub const fn get_table_copy_defined_defined_index() -> Self {
+    pub const fn get_table_copy_index() -> Self {
         Self(4)
-    }
-    /// Returns an index for wasm's `table.copy` when the destination table is
-    /// locally defined and the source table is imported.
-    pub const fn get_table_copy_defined_imported_index() -> Self {
-        Self(5)
-    }
-    /// Returns an index for wasm's `table.copy` when the destination table is
-    /// imported and the source table is locally defined.
-    pub const fn get_table_copy_imported_defined_index() -> Self {
-        Self(6)
-    }
-    /// Returns an index for wasm's `table.copy` when both tables are imported.
-    pub const fn get_table_copy_imported_imported_index() -> Self {
-        Self(7)
     }
     /// Returns an index for wasm's `table.init`.
     pub const fn get_table_init_index() -> Self {
-        Self(8)
+        Self(5)
     }
     /// Returns an index for wasm's `elem.drop`.
     pub const fn get_elem_drop_index() -> Self {
-        Self(9)
+        Self(6)
     }
     /// Returns an index for wasm's `memory.copy` for locally defined memories.
-    pub const fn get_memory_copy_index() -> Self {
-        Self(10)
+    pub const fn get_defined_memory_copy_index() -> Self {
+        Self(7)
     }
     /// Returns an index for wasm's `memory.copy` for imported memories.
     pub const fn get_imported_memory_copy_index() -> Self {
-        Self(11)
+        Self(8)
     }
     /// Returns an index for wasm's `memory.fill` for locally defined memories.
     pub const fn get_memory_fill_index() -> Self {
-        Self(12)
+        Self(9)
     }
     /// Returns an index for wasm's `memory.fill` for imported memories.
     pub const fn get_imported_memory_fill_index() -> Self {
-        Self(13)
+        Self(10)
     }
     /// Returns the total number of builtin functions.
     pub const fn builtin_functions_total_number() -> u32 {
-        14
+        11
     }
 
     /// Return the index as an u32 number.
@@ -245,7 +231,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
-    // NB: All `table_copy` libcall variants have the same signature.
     fn get_table_copy_sig(&mut self, func: &mut Function) -> ir::SigRef {
         let sig = self.table_copy_sig.unwrap_or_else(|| {
             func.import_signature(Signature {
@@ -279,61 +264,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         src_table_index: TableIndex,
     ) -> (ir::SigRef, usize, usize, BuiltinFunctionIndex) {
         let sig = self.get_table_copy_sig(func);
-        match (
-            self.module.is_imported_table(dst_table_index),
-            self.module.is_imported_table(src_table_index),
-        ) {
-            (false, false) => {
-                let dst_table_index = self
-                    .module
-                    .defined_table_index(dst_table_index)
-                    .unwrap()
-                    .index();
-                let src_table_index = self
-                    .module
-                    .defined_table_index(src_table_index)
-                    .unwrap()
-                    .index();
-                (
-                    sig,
-                    dst_table_index,
-                    src_table_index,
-                    BuiltinFunctionIndex::get_table_copy_defined_defined_index(),
-                )
-            }
-            (false, true) => {
-                let dst_table_index = self
-                    .module
-                    .defined_table_index(dst_table_index)
-                    .unwrap()
-                    .index();
-                (
-                    sig,
-                    dst_table_index,
-                    src_table_index.as_u32() as usize,
-                    BuiltinFunctionIndex::get_table_copy_defined_imported_index(),
-                )
-            }
-            (true, false) => {
-                let src_table_index = self
-                    .module
-                    .defined_table_index(src_table_index)
-                    .unwrap()
-                    .index();
-                (
-                    sig,
-                    dst_table_index.as_u32() as usize,
-                    src_table_index,
-                    BuiltinFunctionIndex::get_table_copy_imported_defined_index(),
-                )
-            }
-            (true, true) => (
-                sig,
-                dst_table_index.as_u32() as usize,
-                src_table_index.as_u32() as usize,
-                BuiltinFunctionIndex::get_table_copy_imported_imported_index(),
-            ),
-        }
+        (
+            sig,
+            dst_table_index.as_u32() as usize,
+            src_table_index.as_u32() as usize,
+            BuiltinFunctionIndex::get_table_copy_index(),
+        )
     }
 
     fn get_table_init_sig(&mut self, func: &mut Function) -> ir::SigRef {
@@ -431,7 +367,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             (
                 sig,
                 defined_memory_index.index(),
-                BuiltinFunctionIndex::get_memory_copy_index(),
+                BuiltinFunctionIndex::get_defined_memory_copy_index(),
             )
         } else {
             (

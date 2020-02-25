@@ -3,8 +3,7 @@
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
-use crate::{Trap, TrapDescription};
-use backtrace::Backtrace;
+use crate::Trap;
 use std::cell::RefCell;
 use std::convert::{TryFrom, TryInto};
 use wasmtime_environ::wasm::TableElementType;
@@ -112,13 +111,7 @@ impl Table {
                 .checked_add(len)
                 .map_or(true, |m| m > dst_table.size())
         {
-            return Err(Trap::Wasm {
-                desc: TrapDescription {
-                    source_loc,
-                    trap_code: ir::TrapCode::TableOutOfBounds,
-                },
-                backtrace: Backtrace::new(),
-            });
+            return Err(Trap::wasm(source_loc, ir::TrapCode::TableOutOfBounds));
         }
 
         let srcs = src_index..src_index + len;
@@ -126,6 +119,8 @@ impl Table {
 
         // Note on the unwraps: the bounds check above means that these will
         // never panic.
+        //
+        // TODO(#983): investigate replacing this get/set loop with a `memcpy`.
         if dst_index <= src_index {
             for (s, d) in (srcs).zip(dsts) {
                 dst_table.set(d, src_table.get(s).unwrap()).unwrap();

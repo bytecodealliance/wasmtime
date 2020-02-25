@@ -4,7 +4,7 @@ use crate::runtime::{Config, Store};
 use crate::trap::Trap;
 use anyhow::{Error, Result};
 use wasmtime_jit::{CompiledModule, Resolver};
-use wasmtime_runtime::{Export, InstanceHandle, InstantiationError, LinkError};
+use wasmtime_runtime::{Export, InstanceHandle, InstantiationError};
 
 struct SimpleResolver<'a> {
     imports: &'a [Extern],
@@ -32,15 +32,8 @@ fn instantiate(
             )
             .map_err(|e| -> Error {
                 match e {
-                    InstantiationError::StartTrap(trap) => Trap::from_jit(trap).into(),
-                    e @ InstantiationError::TableOutOfBounds(_)
-                    | e @ InstantiationError::MemoryOutOfBounds(_) => {
-                        let msg = e.to_string();
-                        if config.validating_config.operator_config.enable_bulk_memory {
-                            Trap::new(msg).into()
-                        } else {
-                            InstantiationError::Link(LinkError(msg)).into()
-                        }
+                    InstantiationError::StartTrap(trap) | InstantiationError::Trap(trap) => {
+                        Trap::from_jit(trap).into()
                     }
                     other => other.into(),
                 }
