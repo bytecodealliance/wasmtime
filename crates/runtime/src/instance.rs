@@ -1199,9 +1199,9 @@ fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
             let anyfunc = instance.get_caller_checked_anyfunc(*func_idx);
             table
                 .set(u32::try_from(start + i).unwrap(), anyfunc)
-                // Note that when multi-value is disabled, this will never fail
+                // Note that when bulk memory is disabled, this will never fail
                 // since we bounds check table element initialization before
-                // doing any table slot writes. However when multi-value is
+                // doing any table slot writes. However when bulk memory is
                 // enabled, these become runtime traps and the intermediate
                 // table slot writes are visible.
                 .map_err(|()| {
