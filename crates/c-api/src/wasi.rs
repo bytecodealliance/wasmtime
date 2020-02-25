@@ -192,15 +192,7 @@ pub unsafe extern "C" fn wasi_config_preopen_dir(
 #[repr(C)]
 pub struct wasi_instance_t {
     wasi: Wasi,
-    export_cache: HashMap<String, *mut wasm_extern_t>,
-}
-
-impl Drop for wasi_instance_t {
-    fn drop(&mut self) {
-        for v in self.export_cache.values() {
-            drop(unsafe { Box::from_raw(*v) });
-        }
-    }
+    export_cache: HashMap<String, Box<wasm_extern_t>>,
 }
 
 #[no_mangle]
@@ -260,14 +252,14 @@ pub unsafe extern "C" fn wasi_instance_bind_import(
                 return std::ptr::null_mut();
             }
 
-            *(*instance)
+            &**(*instance)
                 .export_cache
                 .entry(name.to_string())
                 .or_insert_with(|| {
-                    Box::into_raw(Box::new(wasm_extern_t {
+                    Box::new(wasm_extern_t {
                         which: ExternHost::Func(HostRef::new(export.clone())),
-                    }))
-                })
+                    })
+                }) as *const wasm_extern_t
         }
         None => std::ptr::null_mut(),
     }
