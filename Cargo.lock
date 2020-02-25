@@ -1021,7 +1021,7 @@ checksum = "0debeb9fcf88823ea64d64e4a815ab1643f33127d995978e099942ce38f25238"
 [[package]]
 name = "multi_mut"
 version = "0.1.5"
-source = "git+https://github.com/golddranks/multi_mut#561e9f7506e8aeddd7ee672d0f844437babe3da8"
+source = "git+https://github.com/golddranks/multi_mut?rev=561e9f7506e8aeddd7ee672d0f844437babe3da8#561e9f7506e8aeddd7ee672d0f844437babe3da8"
 
 [[package]]
 name = "nom"

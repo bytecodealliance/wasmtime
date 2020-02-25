@@ -20,7 +20,7 @@ itertools = "0.8.2"
 capstone = "0.6.0"
 thiserror = "1.0.11"
 cranelift-codegen = "0.59.0"
-multi_mut = { git = "https://github.com/golddranks/multi_mut" }
+multi_mut = { git = "https://github.com/golddranks/multi_mut", rev = "561e9f7506e8aeddd7ee672d0f844437babe3da8" }
 either = "1.5"
 typemap = "0.3"
 more-asserts = "0.2.1"
