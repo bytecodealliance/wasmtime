@@ -12,7 +12,7 @@ keywords = ["btree", "forest", "set", "map"]
 edition = "2018"
 
 [dependencies]
-cranelift-entity = { path = "../cranelift-entity", version = "0.59.0", default-features = false }
+cranelift-entity = { path = "../entity", version = "0.59.0", default-features = false }
 
 [badges]
 maintenance = { status = "experimental" }

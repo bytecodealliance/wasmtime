@@ -12,8 +12,8 @@ keywords = ["optimize", "compile", "compiler", "jit"]
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../cranelift-codegen", version = "0.59.0", default-features = false }
-cranelift-entity = { path = "../cranelift-entity", version = "0.59.0" }
+cranelift-codegen = { path = "../codegen", version = "0.59.0", default-features = false }
+cranelift-entity = { path = "../entity", version = "0.59.0" }
 # This is commented out because it doesn't build on Rust 1.25.0, which
 # cranelift currently supports.
 # rustc_apfloat = { version = "0.1.2", default-features = false }

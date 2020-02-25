@@ -14,8 +14,8 @@ edition = "2018"
 
 [dependencies]
 cranelift-codegen-shared = { path = "./shared", version = "0.59.0" }
-cranelift-entity = { path = "../cranelift-entity", version = "0.59.0" }
-cranelift-bforest = { path = "../cranelift-bforest", version = "0.59.0" }
+cranelift-entity = { path = "../entity", version = "0.59.0" }
+cranelift-bforest = { path = "../bforest", version = "0.59.0" }
 hashbrown = { version = "0.6", optional = true }
 target-lexicon = "0.10"
 log = { version = "0.4.6", default-features = false }

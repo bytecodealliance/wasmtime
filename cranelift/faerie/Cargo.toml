@@ -10,14 +10,14 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-module = { path = "../cranelift-module", version = "0.59.0" }
+cranelift-module = { path = "../module", version = "0.59.0" }
 faerie = "0.14.0"
 goblin = "0.1.0"
 anyhow = "1.0"
 target-lexicon = "0.10"
 
 [dependencies.cranelift-codegen]
-path = "../cranelift-codegen"
+path = "../codegen"
 version = "0.59.0"
 default-features = false
 features = ["std"]

@@ -11,8 +11,8 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../cranelift-codegen", version = "0.59.0", default-features = false }
-cranelift-entity = { path = "../cranelift-entity", version = "0.59.0" }
+cranelift-codegen = { path = "../codegen", version = "0.59.0", default-features = false }
+cranelift-entity = { path = "../entity", version = "0.59.0" }
 hashbrown = { version = "0.6", optional = true }
 log = { version = "0.4.6", default-features = false }
 thiserror = "1.0.4"

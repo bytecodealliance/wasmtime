@@ -10,7 +10,7 @@ edition = "2018"
 
 [dependencies]
 cranelift-codegen-shared = { path = "../shared", version = "0.59.0" }
-cranelift-entity = { path = "../../cranelift-entity", version = "0.59.0" }
+cranelift-entity = { path = "../../entity", version = "0.59.0" }
 
 [badges]
 maintenance = { status = "experimental" }

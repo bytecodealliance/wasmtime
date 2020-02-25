@@ -10,7 +10,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../cranelift-codegen", version = "0.59.0" }
+cranelift-codegen = { path = "../codegen", version = "0.59.0" }
 target-lexicon = "0.10"
 
 [badges]

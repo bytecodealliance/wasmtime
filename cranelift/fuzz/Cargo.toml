@@ -12,9 +12,9 @@ cargo-fuzz = true
 cargo-fuzz = "*"
 binaryen = { git = "https://github.com/pepyakin/binaryen-rs.git" }
 libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
-cranelift-codegen = { path = "../cranelift-codegen" }
-cranelift-wasm = { path = "../cranelift-wasm" }
-cranelift-reader = { path = "../cranelift-reader" }
+cranelift-codegen = { path = "../codegen" }
+cranelift-wasm = { path = "../wasm" }
+cranelift-reader = { path = "../reader" }
 target-lexicon = "0.10"
 
 # Prevent this from interfering with workspaces

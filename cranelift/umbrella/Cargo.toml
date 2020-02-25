@@ -12,8 +12,8 @@ keywords = ["compile", "compiler", "jit"]
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../cranelift-codegen", version = "0.59.0", default-features = false }
-cranelift-frontend = { path = "../cranelift-frontend", version = "0.59.0", default-features = false }
+cranelift-codegen = { path = "../codegen", version = "0.59.0", default-features = false }
+cranelift-frontend = { path = "../frontend", version = "0.59.0", default-features = false }
 
 [features]
 default = ["std"]

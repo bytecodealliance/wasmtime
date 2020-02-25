@@ -10,8 +10,8 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-module = { path = "../cranelift-module", version = "0.59.0" }
-cranelift-native = { path = "../cranelift-native", version = "0.59.0" }
+cranelift-module = { path = "../module", version = "0.59.0" }
+cranelift-native = { path = "../native", version = "0.59.0" }
 region = "2.0.0"
 libc = { version = "0.2.42" }
 errno = "0.2.4"
@@ -19,7 +19,7 @@ target-lexicon = "0.10"
 memmap = { version = "0.7.0", optional = true }
 
 [dependencies.cranelift-codegen]
-path = "../cranelift-codegen"
+path = "../codegen"
 version = "0.59.0"
 default-features = false
 features = ["std"]
@@ -32,9 +32,9 @@ selinux-fix = ['memmap']
 default = []
 
 [dev-dependencies]
-cranelift = { path = "../cranelift-umbrella", version = "0.59.0" }
-cranelift-frontend = { path = "../cranelift-frontend", version = "0.59.0" }
-cranelift-entity = { path = "../cranelift-entity", version = "0.59.0" }
+cranelift = { path = "../umbrella", version = "0.59.0" }
+cranelift-frontend = { path = "../frontend", version = "0.59.0" }
+cranelift-entity = { path = "../entity", version = "0.59.0" }
 
 [badges]
 maintenance = { status = "experimental" }
