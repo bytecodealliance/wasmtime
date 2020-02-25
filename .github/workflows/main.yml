@@ -30,6 +30,8 @@ jobs:
         curl -L https://github.com/rust-lang-nursery/mdBook/releases/download/v0.3.1/mdbook-v0.3.1-x86_64-unknown-linux-gnu.tar.gz | tar xzf -
         echo ::add-path::`pwd`
     - run: (cd docs && mdbook build)
+    - run: cargo build -p wasmtime
+    - run: (cd docs && mdbook test -L ../target/debug/deps)
     - uses: actions/upload-artifact@v1
       with:
         name: doc-book

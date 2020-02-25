@@ -164,7 +164,7 @@ wasm-bindgen = "0.2.54"
 
 Using this crate, we can then update our `src/lib.rs` with the following:
 
-```rust
+```rust,ignore
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -248,6 +248,7 @@ Only functions can be imported in Rust at this time, and they can be imported
 via raw interfaces like:
 
 ```rust
+# struct MyStruct;
 #[link(wasm_import_module = "the-wasm-import-module")]
 extern "C" {
     // imports the name `foo` from `the-wasm-import-module`
@@ -270,7 +271,7 @@ extern "C" {
 
 When you're using `wasm-bindgen` you would instead use:
 
-```rust
+```rust,ignore
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(module = "the-wasm-import-module")]
