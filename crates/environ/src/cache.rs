@@ -137,7 +137,7 @@ impl<'config> ModuleCacheEntryInner<'config> {
                 comp_ver = env!("GIT_REV"),
             )
         };
-        let root_path = cache_config.directory().join(compiler_dir);
+        let root_path = cache_config.directory().join("modules").join(compiler_dir);
 
         Self {
             root_path,
