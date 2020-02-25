@@ -421,6 +421,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cranelift-reader"
+version = "0.59.0"
+dependencies = [
+ "cranelift-codegen",
+ "target-lexicon",
+]
+
+[[package]]
 name = "cranelift-wasm"
 version = "0.59.0"
 dependencies = [
@@ -2114,7 +2122,11 @@ name = "wasmtime-fuzz"
 version = "0.12.0"
 dependencies = [
  "arbitrary 0.2.0",
+ "cranelift-codegen",
+ "cranelift-reader",
+ "cranelift-wasm",
  "libfuzzer-sys",
+ "target-lexicon",
  "wasmtime",
  "wasmtime-fuzzing",
 ]

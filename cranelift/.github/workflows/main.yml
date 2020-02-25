@@ -14,17 +14,6 @@ jobs:
     - run: find ./target/doc -maxdepth 1 -type d -name "cranelift*" | xargs -I{} cargo deadlinks --dir {}
       name: Run cargo-deadlinks
 
-    # Ensure fuzzer works by running it with a single input
-    - run: cargo install cargo-fuzz
-      if: matrix.rust == 'nightly'
-    - run: |
-        fuzz_module="ffaefab69523eb11935a9b420d58826c8ea65c4c"
-        cargo fuzz run fuzz_translate_module fuzz/corpus/fuzz_translate_module/$fuzz_module
-      env:
-        RUST_BACKTRACE: 1
-      if: matrix.rust == 'nightly'
-      continue-on-error: true
-
   meta_determinist_check:
     name: Meta deterministic check
     runs-on: ubuntu-latest

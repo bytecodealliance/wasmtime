@@ -107,6 +107,16 @@ jobs:
             | shuf \
             | head -n 100 \
             | xargs cargo fuzz run differential --release --debug-assertions
+    - run: |
+        find fuzz/corpus/reader_parse_test -type f \
+            | shuf \
+            | head -n 100 \
+            | xargs cargo fuzz run reader_parse_test --release --debug-assertions
+    - run: |
+        find fuzz/corpus/translate_module -type f \
+            | shuf \
+            | head -n 100 \
+            | xargs cargo fuzz run translate_module --release --debug-assertions
 
   # Install wasm32-unknown-emscripten target, and ensure `crates/wasi-common`
   # compiles to Emscripten.

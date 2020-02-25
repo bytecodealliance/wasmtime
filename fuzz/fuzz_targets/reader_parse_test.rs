@@ -1,7 +1,7 @@
 #![no_main]
-#[macro_use]
-extern crate libfuzzer_sys;
-extern crate cranelift_reader;
+
+use libfuzzer_sys::fuzz_target;
+
 use std::str;
 
 fuzz_target!(|data: &[u8]| {
