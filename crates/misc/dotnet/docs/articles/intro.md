@@ -165,10 +165,8 @@ Alternatively, the `run` function could be invoked without using the runtime bin
 
 ```c#
 ...
-using (var instance = module.Instantiate(new Host()))
-{
-    instance.Externs.Functions[0].Invoke();
-}
+using var instance = module.Instantiate(new Host());
+instance.Externs.Functions[0].Invoke();
 ...
 ```
 

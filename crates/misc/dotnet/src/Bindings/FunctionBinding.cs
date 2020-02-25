@@ -52,14 +52,12 @@ namespace Wasmtime.Bindings
             {
                 var parameters = Interop.ToValueTypeVec(Import.Parameters);
                 var results = Interop.ToValueTypeVec(Import.Results);
-                using (var funcType = Interop.wasm_functype_new(ref parameters, ref results))
-                {
-                    var callback = CreateCallback(store, host);
-                    var func = Interop.wasm_func_new(store.Handle, funcType, callback);
-                    // Store the callback with the safe handle to keep the delegate GC reachable
-                    func.Callback = callback;
-                    return func;
-                }
+                using var funcType = Interop.wasm_functype_new(ref parameters, ref results);
+                var callback = CreateCallback(store, host);
+                var func = Interop.wasm_func_new(store.Handle, funcType, callback);
+                // Store the callback with the safe handle to keep the delegate GC reachable
+                func.Callback = callback;
+                return func;
             }
         }
 

@@ -74,7 +74,7 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItFailsToInstantiateWithMissingImport()
         {
-            Action action = () => { using (var instance = Fixture.Module.Instantiate(new MissingImportsHost())) { } };
+            Action action = () => { using var instance = Fixture.Module.Instantiate(new MissingImportsHost()); };
 
             action
                 .Should()
@@ -85,7 +85,7 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItFailsToInstantiateWithStaticField()
         {
-            Action action = () => { using (var instance = Fixture.Module.Instantiate(new MemoryIsStaticHost())) { } };
+            Action action = () => { using var instance = Fixture.Module.Instantiate(new MemoryIsStaticHost()); };
 
             action
                 .Should()
@@ -96,7 +96,7 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItFailsToInstantiateWithNonReadOnlyField()
         {
-            Action action = () => { using (var instance = Fixture.Module.Instantiate(new MemoryIsNotReadOnlyHost())) { } };
+            Action action = () => { using var instance = Fixture.Module.Instantiate(new MemoryIsNotReadOnlyHost()); };
 
             action
                 .Should()
@@ -107,7 +107,7 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItFailsToInstantiateWithInvalidType()
         {
-            Action action = () => { using (var instance = Fixture.Module.Instantiate(new NotAMemoryHost())) { } };
+            Action action = () => { using var instance = Fixture.Module.Instantiate(new NotAMemoryHost()); };
 
             action
                 .Should()
@@ -118,7 +118,7 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItFailsToInstantiateWhenMemoryHasInvalidMinimum()
         {
-            Action action = () => { using (var instance = Fixture.Module.Instantiate(new InvalidMinimumHost())) { } };
+            Action action = () => { using var instance = Fixture.Module.Instantiate(new InvalidMinimumHost()); };
 
             action
                 .Should()
@@ -129,7 +129,7 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItFailsToInstantiateWhenMemoryHasInvalidMaximum()
         {
-            Action action = () => { using (var instance = Fixture.Module.Instantiate(new InvalidMaximumHost())) { } };
+            Action action = () => { using var instance = Fixture.Module.Instantiate(new InvalidMaximumHost()); };
 
             action
                 .Should()
@@ -141,47 +141,46 @@ namespace Wasmtime.Tests
         public void ItBindsTheGlobalsCorrectly()
         {
             var host = new ValidHost();
-            using (dynamic instance = Fixture.Module.Instantiate(host))
-            {
-                host.Mem.ReadString(0, 11).Should().Be("Hello World");
-                int written = host.Mem.WriteString(0, "WebAssembly Rocks!");
-                host.Mem.ReadString(0, written).Should().Be("WebAssembly Rocks!");
+            using dynamic instance = Fixture.Module.Instantiate(host);
 
-                host.Mem.ReadByte(20).Should().Be(1);
-                host.Mem.WriteByte(20, 11);
-                host.Mem.ReadByte(20).Should().Be(11);
-                ((byte)instance.ReadByte()).Should().Be(11);
+            host.Mem.ReadString(0, 11).Should().Be("Hello World");
+            int written = host.Mem.WriteString(0, "WebAssembly Rocks!");
+            host.Mem.ReadString(0, written).Should().Be("WebAssembly Rocks!");
 
-                host.Mem.ReadInt16(21).Should().Be(2);
-                host.Mem.WriteInt16(21, 12);
-                host.Mem.ReadInt16(21).Should().Be(12);
-                ((short)instance.ReadInt16()).Should().Be(12);
+            host.Mem.ReadByte(20).Should().Be(1);
+            host.Mem.WriteByte(20, 11);
+            host.Mem.ReadByte(20).Should().Be(11);
+            ((byte)instance.ReadByte()).Should().Be(11);
 
-                host.Mem.ReadInt32(23).Should().Be(3);
-                host.Mem.WriteInt32(23, 13);
-                host.Mem.ReadInt32(23).Should().Be(13);
-                ((int)instance.ReadInt32()).Should().Be(13);
+            host.Mem.ReadInt16(21).Should().Be(2);
+            host.Mem.WriteInt16(21, 12);
+            host.Mem.ReadInt16(21).Should().Be(12);
+            ((short)instance.ReadInt16()).Should().Be(12);
 
-                host.Mem.ReadInt64(27).Should().Be(4);
-                host.Mem.WriteInt64(27, 14);
-                host.Mem.ReadInt64(27).Should().Be(14);
-                ((long)instance.ReadInt64()).Should().Be(14);
+            host.Mem.ReadInt32(23).Should().Be(3);
+            host.Mem.WriteInt32(23, 13);
+            host.Mem.ReadInt32(23).Should().Be(13);
+            ((int)instance.ReadInt32()).Should().Be(13);
 
-                host.Mem.ReadSingle(35).Should().Be(5);
-                host.Mem.WriteSingle(35, 15);
-                host.Mem.ReadSingle(35).Should().Be(15);
-                ((float)instance.ReadFloat32()).Should().Be(15);
+            host.Mem.ReadInt64(27).Should().Be(4);
+            host.Mem.WriteInt64(27, 14);
+            host.Mem.ReadInt64(27).Should().Be(14);
+            ((long)instance.ReadInt64()).Should().Be(14);
 
-                host.Mem.ReadDouble(39).Should().Be(6);
-                host.Mem.WriteDouble(39, 16);
-                host.Mem.ReadDouble(39).Should().Be(16);
-                ((double)instance.ReadFloat64()).Should().Be(16);
+            host.Mem.ReadSingle(35).Should().Be(5);
+            host.Mem.WriteSingle(35, 15);
+            host.Mem.ReadSingle(35).Should().Be(15);
+            ((float)instance.ReadFloat32()).Should().Be(15);
 
-                host.Mem.ReadIntPtr(48).Should().Be((IntPtr)7);
-                host.Mem.WriteIntPtr(48, (IntPtr)17);
-                host.Mem.ReadIntPtr(48).Should().Be((IntPtr)17);
-                ((IntPtr)instance.ReadIntPtr()).Should().Be((IntPtr)17);
-            }
+            host.Mem.ReadDouble(39).Should().Be(6);
+            host.Mem.WriteDouble(39, 16);
+            host.Mem.ReadDouble(39).Should().Be(16);
+            ((double)instance.ReadFloat64()).Should().Be(16);
+
+            host.Mem.ReadIntPtr(48).Should().Be((IntPtr)7);
+            host.Mem.WriteIntPtr(48, (IntPtr)17);
+            host.Mem.ReadIntPtr(48).Should().Be((IntPtr)17);
+            ((IntPtr)instance.ReadIntPtr()).Should().Be((IntPtr)17);
         }
     }
 }

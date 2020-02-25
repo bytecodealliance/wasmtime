@@ -68,12 +68,11 @@ namespace Wasmtime.Bindings
                 Interop.wasm_limits_t limits = new Interop.wasm_limits_t();
                 limits.min = min;
                 limits.max = max;
-                using (var memoryType = Interop.wasm_memorytype_new(&limits))
-                {
-                    var handle = Interop.wasm_memory_new(store.Handle, memoryType);
-                    memory.Handle = handle;
-                    return handle;
-                }
+
+                using var memoryType = Interop.wasm_memorytype_new(&limits);
+                var handle = Interop.wasm_memory_new(store.Handle, memoryType);
+                memory.Handle = handle;
+                return handle;
             }
         }
 

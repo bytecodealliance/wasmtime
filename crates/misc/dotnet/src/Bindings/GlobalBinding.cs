@@ -59,14 +59,14 @@ namespace Wasmtime.Bindings
                 var valueTypeHandle = valueType.DangerousGetHandle();
                 valueType.SetHandleAsInvalid();
 
-                using (var globalType = Interop.wasm_globaltype_new(
+                using var globalType = Interop.wasm_globaltype_new(
                     valueTypeHandle,
-                    Import.IsMutable ? Interop.wasm_mutability_t.WASM_VAR : Interop.wasm_mutability_t.WASM_CONST))
-                {
-                    var handle = Interop.wasm_global_new(store.Handle, globalType, &v);
-                    global.Handle = handle;
-                    return handle;
-                }
+                    Import.IsMutable ? Interop.wasm_mutability_t.WASM_VAR : Interop.wasm_mutability_t.WASM_CONST
+                );
+
+                var handle = Interop.wasm_global_new(store.Handle, globalType, &v);
+                global.Handle = handle;
+                return handle;
             }
         }
 

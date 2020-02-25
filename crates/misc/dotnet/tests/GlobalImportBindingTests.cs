@@ -118,7 +118,7 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItFailsToInstantiateWithMissingImport()
         {
-            Action action = () => { using (var instance = Fixture.Module.Instantiate(new NoImportsHost())) { } };
+            Action action = () => { using var instance = Fixture.Module.Instantiate(new NoImportsHost()); };
 
             action
                 .Should()
@@ -129,7 +129,7 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItFailsToInstantiateWithStaticField()
         {
-            Action action = () => { using (var instance = Fixture.Module.Instantiate(new GlobalIsStaticHost())) { } };
+            Action action = () => { using var instance = Fixture.Module.Instantiate(new GlobalIsStaticHost()); };
 
             action
                 .Should()
@@ -140,7 +140,7 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItFailsToInstantiateWithNonReadOnlyField()
         {
-            Action action = () => { using (var instance = Fixture.Module.Instantiate(new GlobalIsNotReadOnlyHost())) { } };
+            Action action = () => { using var instance = Fixture.Module.Instantiate(new GlobalIsNotReadOnlyHost()); };
 
             action
                 .Should()
@@ -151,7 +151,7 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItFailsToInstantiateWithInvalidType()
         {
-            Action action = () => { using (var instance = Fixture.Module.Instantiate(new NotAGlobalHost())) { } };
+            Action action = () => { using var instance = Fixture.Module.Instantiate(new NotAGlobalHost()); };
 
             action
                 .Should()
@@ -162,7 +162,7 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItFailsToInstantiateWithInvalidGlobalType()
         {
-            Action action = () => { using (var instance = Fixture.Module.Instantiate(new NotAValidGlobalTypeHost())) { } };
+            Action action = () => { using var instance = Fixture.Module.Instantiate(new NotAValidGlobalTypeHost()); };
 
             action
                 .Should()
@@ -173,7 +173,7 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItFailsToInstantiateWithGlobalTypeMismatch()
         {
-            Action action = () => { using (var instance = Fixture.Module.Instantiate(new TypeMismatchHost())) { } };
+            Action action = () => { using var instance = Fixture.Module.Instantiate(new TypeMismatchHost()); };
 
             action
                 .Should()
@@ -184,7 +184,7 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItFailsToInstantiateWhenGlobalIsNotMut()
         {
-            Action action = () => { using (var instance = Fixture.Module.Instantiate(new NotMutHost())) { } };
+            Action action = () => { using var instance = Fixture.Module.Instantiate(new NotMutHost()); };
 
             action
                 .Should()
@@ -195,7 +195,7 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItFailsToInstantiateWhenGlobalIsMut()
         {
-            Action action = () => { using (var instance = Fixture.Module.Instantiate(new MutHost())) { } };
+            Action action = () => { using var instance = Fixture.Module.Instantiate(new MutHost()); };
 
             action
                 .Should()
@@ -207,53 +207,52 @@ namespace Wasmtime.Tests
         public void ItBindsTheGlobalsCorrectly()
         {
             var host = new ValidHost();
-            using (dynamic instance = Fixture.Module.Instantiate(host))
-            {
-                host.Int32Mut.Value.Should().Be(0);
-                ((int)instance.get_global_i32_mut()).Should().Be(0);
-                host.Int32.Value.Should().Be(1);
-                ((int)instance.get_global_i32()).Should().Be(1);
-                host.Int64Mut.Value.Should().Be(2);
-                ((long)instance.get_global_i64_mut()).Should().Be(2);
-                host.Int64.Value.Should().Be(3);
-                ((long)instance.get_global_i64()).Should().Be(3);
-                host.Float32Mut.Value.Should().Be(4);
-                ((float)instance.get_global_f32_mut()).Should().Be(4);
-                host.Float32.Value.Should().Be(5);
-                ((float)instance.get_global_f32()).Should().Be(5);
-                host.Float64Mut.Value.Should().Be(6);
-                ((double)instance.get_global_f64_mut()).Should().Be(6);
-                host.Float64.Value.Should().Be(7);
-                ((double)instance.get_global_f64()).Should().Be(7);
+            using dynamic instance = Fixture.Module.Instantiate(host);
 
-                host.Int32Mut.Value = 10;
-                host.Int32Mut.Value.Should().Be(10);
-                ((int)instance.get_global_i32_mut()).Should().Be(10);
-                instance.set_global_i32_mut(11);
-                host.Int32Mut.Value.Should().Be(11);
-                ((int)instance.get_global_i32_mut()).Should().Be(11);
+            host.Int32Mut.Value.Should().Be(0);
+            ((int)instance.get_global_i32_mut()).Should().Be(0);
+            host.Int32.Value.Should().Be(1);
+            ((int)instance.get_global_i32()).Should().Be(1);
+            host.Int64Mut.Value.Should().Be(2);
+            ((long)instance.get_global_i64_mut()).Should().Be(2);
+            host.Int64.Value.Should().Be(3);
+            ((long)instance.get_global_i64()).Should().Be(3);
+            host.Float32Mut.Value.Should().Be(4);
+            ((float)instance.get_global_f32_mut()).Should().Be(4);
+            host.Float32.Value.Should().Be(5);
+            ((float)instance.get_global_f32()).Should().Be(5);
+            host.Float64Mut.Value.Should().Be(6);
+            ((double)instance.get_global_f64_mut()).Should().Be(6);
+            host.Float64.Value.Should().Be(7);
+            ((double)instance.get_global_f64()).Should().Be(7);
 
-                host.Int64Mut.Value = 12;
-                host.Int64Mut.Value.Should().Be(12);
-                ((long)instance.get_global_i64_mut()).Should().Be(12);
-                instance.set_global_i64_mut(13);
-                host.Int64Mut.Value.Should().Be(13);
-                ((long)instance.get_global_i64_mut()).Should().Be(13);
+            host.Int32Mut.Value = 10;
+            host.Int32Mut.Value.Should().Be(10);
+            ((int)instance.get_global_i32_mut()).Should().Be(10);
+            instance.set_global_i32_mut(11);
+            host.Int32Mut.Value.Should().Be(11);
+            ((int)instance.get_global_i32_mut()).Should().Be(11);
 
-                host.Float32Mut.Value = 14;
-                host.Float32Mut.Value.Should().Be(14);
-                ((float)instance.get_global_f32_mut()).Should().Be(14);
-                instance.set_global_f32_mut(15);
-                host.Float32Mut.Value.Should().Be(15);
-                ((float)instance.get_global_f32_mut()).Should().Be(15);
+            host.Int64Mut.Value = 12;
+            host.Int64Mut.Value.Should().Be(12);
+            ((long)instance.get_global_i64_mut()).Should().Be(12);
+            instance.set_global_i64_mut(13);
+            host.Int64Mut.Value.Should().Be(13);
+            ((long)instance.get_global_i64_mut()).Should().Be(13);
 
-                host.Float64Mut.Value = 16;
-                host.Float64Mut.Value.Should().Be(16);
-                ((double)instance.get_global_f64_mut()).Should().Be(16);
-                instance.set_global_f64_mut(17);
-                host.Float64Mut.Value.Should().Be(17);
-                ((double)instance.get_global_f64_mut()).Should().Be(17);
-            }
+            host.Float32Mut.Value = 14;
+            host.Float32Mut.Value.Should().Be(14);
+            ((float)instance.get_global_f32_mut()).Should().Be(14);
+            instance.set_global_f32_mut(15);
+            host.Float32Mut.Value.Should().Be(15);
+            ((float)instance.get_global_f32_mut()).Should().Be(15);
+
+            host.Float64Mut.Value = 16;
+            host.Float64Mut.Value.Should().Be(16);
+            ((double)instance.get_global_f64_mut()).Should().Be(16);
+            instance.set_global_f64_mut(17);
+            host.Float64Mut.Value.Should().Be(17);
+            ((double)instance.get_global_f64_mut()).Should().Be(17);
         }
     }
 }

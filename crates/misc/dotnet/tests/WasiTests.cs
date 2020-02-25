@@ -145,25 +145,23 @@ namespace Wasmtime.Tests
         {
             const string MESSAGE = "WASM IS VERY COOL";
 
-            using (var file = new TempFile())
-            {
-                File.WriteAllText(file.Path, MESSAGE);
+            using var file = new TempFile();
+            File.WriteAllText(file.Path, MESSAGE);
 
-                var wasi = new WasiBuilder()
-                    .WithStandardInput(file.Path)
-                    .Build(Fixture.Module.Store);
+            var wasi = new WasiBuilder()
+                .WithStandardInput(file.Path)
+                .Build(Fixture.Module.Store);
 
-                using var instance = Fixture.Module.Instantiate(wasi);
-                dynamic inst = instance;
+            using var instance = Fixture.Module.Instantiate(wasi);
+            dynamic inst = instance;
 
-                var memory = instance.Externs.Memories[0];
-                memory.WriteInt32(0, 8);
-                memory.WriteInt32(4, MESSAGE.Length);
+            var memory = instance.Externs.Memories[0];
+            memory.WriteInt32(0, 8);
+            memory.WriteInt32(4, MESSAGE.Length);
 
-                Assert.Equal(0, inst.call_fd_read(0, 0, 1, 32));
-                Assert.Equal(MESSAGE.Length, memory.ReadInt32(32));
-                Assert.Equal(MESSAGE, memory.ReadString(8, MESSAGE.Length));
-            }
+            Assert.Equal(0, inst.call_fd_read(0, 0, 1, 32));
+            Assert.Equal(MESSAGE.Length, memory.ReadInt32(32));
+            Assert.Equal(MESSAGE, memory.ReadString(8, MESSAGE.Length));
         }
 
         [Theory]
@@ -173,33 +171,32 @@ namespace Wasmtime.Tests
         {
             const string MESSAGE = "WASM IS VERY COOL";
 
-            using (var file = new TempFile())
+            using var file = new TempFile();
+
+            var builder = new WasiBuilder();
+            if (fd == 1)
             {
-                var builder = new WasiBuilder();
-                if (fd == 1)
-                {
-                    builder.WithStandardOutput(file.Path);
-                }
-                else if (fd == 2)
-                {
-                    builder.WithStandardError(file.Path);
-                }
-
-                var wasi = builder.Build(Fixture.Module.Store);
-
-                using var instance = Fixture.Module.Instantiate(wasi);
-                dynamic inst = instance;
-
-                var memory = instance.Externs.Memories[0];
-                memory.WriteInt32(0, 8);
-                memory.WriteInt32(4, MESSAGE.Length);
-                memory.WriteString(8, MESSAGE);
-
-                Assert.Equal(0, inst.call_fd_write(fd, 0, 1, 32));
-                Assert.Equal(MESSAGE.Length, memory.ReadInt32(32));
-                Assert.Equal(0, inst.call_fd_close(fd));
-                Assert.Equal(MESSAGE, File.ReadAllText(file.Path));
+                builder.WithStandardOutput(file.Path);
             }
+            else if (fd == 2)
+            {
+                builder.WithStandardError(file.Path);
+            }
+
+            var wasi = builder.Build(Fixture.Module.Store);
+
+            using var instance = Fixture.Module.Instantiate(wasi);
+            dynamic inst = instance;
+
+            var memory = instance.Externs.Memories[0];
+            memory.WriteInt32(0, 8);
+            memory.WriteInt32(4, MESSAGE.Length);
+            memory.WriteString(8, MESSAGE);
+
+            Assert.Equal(0, inst.call_fd_write(fd, 0, 1, 32));
+            Assert.Equal(MESSAGE.Length, memory.ReadInt32(32));
+            Assert.Equal(0, inst.call_fd_close(fd));
+            Assert.Equal(MESSAGE, File.ReadAllText(file.Path));
         }
 
         [Fact]
@@ -207,44 +204,43 @@ namespace Wasmtime.Tests
         {
             const string MESSAGE = "WASM IS VERY COOL";
 
-            using (var file = new TempFile())
-            {
-                var wasi = new WasiBuilder()
-                    .WithPreopenedDirectory(Path.GetDirectoryName(file.Path), "/foo")
-                    .Build(Fixture.Module.Store);
+            using var file = new TempFile();
 
-                using var instance = Fixture.Module.Instantiate(wasi);
-                dynamic inst = instance;
+            var wasi = new WasiBuilder()
+                .WithPreopenedDirectory(Path.GetDirectoryName(file.Path), "/foo")
+                .Build(Fixture.Module.Store);
 
-                var memory = instance.Externs.Memories[0];
-                var fileName = Path.GetFileName(file.Path);
-                memory.WriteString(0, fileName);
+            using var instance = Fixture.Module.Instantiate(wasi);
+            dynamic inst = instance;
 
-                Assert.Equal(0, inst.call_path_open(
-                        3,
-                        0,
-                        0,
-                        fileName.Length,
-                        0,
-                        0x40 /* RIGHTS_FD_WRITE */,
-                        0,
-                        0,
-                        64
-                    )
-                );
+            var memory = instance.Externs.Memories[0];
+            var fileName = Path.GetFileName(file.Path);
+            memory.WriteString(0, fileName);
 
-                var fileFd = (int) memory.ReadInt32(64);
-                Assert.True(fileFd > 3);
+            Assert.Equal(0, inst.call_path_open(
+                    3,
+                    0,
+                    0,
+                    fileName.Length,
+                    0,
+                    0x40 /* RIGHTS_FD_WRITE */,
+                    0,
+                    0,
+                    64
+                )
+            );
 
-                memory.WriteInt32(0, 8);
-                memory.WriteInt32(4, MESSAGE.Length);
-                memory.WriteString(8, MESSAGE);
+            var fileFd = (int) memory.ReadInt32(64);
+            Assert.True(fileFd > 3);
 
-                Assert.Equal(0, inst.call_fd_write(fileFd, 0, 1, 64));
-                Assert.Equal(MESSAGE.Length, memory.ReadInt32(64));
-                Assert.Equal(0, inst.call_fd_close(fileFd));
-                Assert.Equal(MESSAGE, File.ReadAllText(file.Path));
-            }
+            memory.WriteInt32(0, 8);
+            memory.WriteInt32(4, MESSAGE.Length);
+            memory.WriteString(8, MESSAGE);
+
+            Assert.Equal(0, inst.call_fd_write(fileFd, 0, 1, 64));
+            Assert.Equal(MESSAGE.Length, memory.ReadInt32(64));
+            Assert.Equal(0, inst.call_fd_close(fileFd));
+            Assert.Equal(MESSAGE, File.ReadAllText(file.Path));
         }
     }
 }
