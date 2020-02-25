@@ -41,9 +41,6 @@ use wasmtime::*;
 let store = Store::default();
 ```
 
-The `HostRef` will be used a lot -- it is a "convenience" object to store and refer an object between the host and
-the embedded environments.
-
 The `hello.wasm` can be read from the file system and provided to the `Module` object constructor as `&[u8]`:
 
 ```rust
@@ -51,30 +48,28 @@ use std::fs::read;
 
 let hello_wasm = read("hello.wasm").expect("wasm file");
 
-let module = HostRef::new(Module::new(&store, &hello_wasm).expect("wasm module"));
+let module = Module::new(&store, &hello_wasm).expect("wasm module");
 ```
 
 The module instance can now be created. Normally, you would provide exports, but in this case, there are none required:
 
 ```rust
-let instance = Instance::new(&store, &module, &[]).expect("wasm instance");
+let instance = Instance::new(&module, &[]).expect("wasm instance");
 ```
 
 Everything is set. If a WebAssembly module has a start function -- it was run.
 The instance's exports can be used at this point. wasmtime provides functions
-to look up an export by name, and ensure that it's a function:
+to get an export by name, and ensure that it's a function:
 
 ```rust
-let answer = instance.find_export_by_name("answer").expect("answer").func().expect("function");
+let answer = instance.get_export("answer").expect("answer").func().expect("function");
 ```
 
-The exported function can be called using the `call` method. Remember that in most of the cases,
-a `HostRef<_>` object will be returned, so `borrow()` or `borrow_mut()` method has to be used to refer the
-specific object. The exported "answer" function accepts no parameters and returns a single `i32` value.
+The exported function can be called using the `call` method. The exported "answer" function accepts no parameters and returns a single `i32` value.
 
 ```rust
-let result = answer.borrow().call(&[]).expect("success");
-println!("Answer: {}", result[0].i32());
+let result = answer.call(&[]).expect("success");
+println!("Answer: {:?}", result[0].i32());
 ```
 
 The names of the WebAssembly module's imports and exports can be discovered by means of module's corresponding methods.
@@ -90,11 +85,11 @@ fn main() {
 
     let wasm = read("hello.wasm").expect("wasm file");
 
-    let module = HostRef::new(Module::new(&store, &wasm).expect("wasm module"));
-    let instance = Instance::new(&store, &module, &[]).expect("wasm instance");
+    let module = Module::new(&store, &wasm).expect("wasm module");
+    let instance = Instance::new(&module, &[]).expect("wasm instance");
 
-    let answer = instance.find_export_by_name("answer").expect("answer").func().expect("function");
-    let result = answer.borrow().call(&[]).expect("success");
-    println!("Answer: {}", result[0].i32());
+    let answer = instance.get_export("answer").expect("answer").func().expect("function");
+    let result = answer.call(&[]).expect("success");
+    println!("Answer: {:?}", result[0].i32());
 }
 ```
