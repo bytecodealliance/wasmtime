@@ -244,11 +244,7 @@ pub unsafe extern "C" fn wasi_instance_bind_import(
 
     match (*instance).wasi.get_export(name) {
         Some(export) => {
-            if export.ty().params() != func_type.params() {
-                return std::ptr::null_mut();
-            }
-
-            if export.ty().results() != func_type.results() {
+            if export.ty() != func_type {
                 return std::ptr::null_mut();
             }
 
