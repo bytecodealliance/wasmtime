@@ -854,7 +854,7 @@ namespace Wasmtime
         public static extern void wasi_config_inherit_env(WasiConfigHandle config);
 
         [DllImport(LibraryName)]
-        public static extern bool wasi_config_set_stdin(
+        public static extern bool wasi_config_set_stdin_file(
             WasiConfigHandle config,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string path
         ); 
@@ -863,7 +863,7 @@ namespace Wasmtime
         public static extern void wasi_config_inherit_stdin(WasiConfigHandle config);
 
         [DllImport(LibraryName)]
-        public static extern bool wasi_config_set_stdout(
+        public static extern bool wasi_config_set_stdout_file(
             WasiConfigHandle config,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string path
         ); 
@@ -872,7 +872,7 @@ namespace Wasmtime
         public static extern void wasi_config_inherit_stdout(WasiConfigHandle config);
 
         [DllImport(LibraryName)]
-        public static extern bool wasi_config_set_stderr(
+        public static extern bool wasi_config_set_stderr_file(
             WasiConfigHandle config,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string path
         ); 

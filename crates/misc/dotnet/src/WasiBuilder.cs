@@ -342,7 +342,7 @@ namespace Wasmtime
 
             if (!string.IsNullOrEmpty(_standardInputPath))
             {
-                if (!Interop.wasi_config_set_stdin(config, _standardInputPath))
+                if (!Interop.wasi_config_set_stdin_file(config, _standardInputPath))
                 {
                     throw new InvalidOperationException($"Failed to set stdin to file '{_standardInputPath}'.");
                 }
@@ -359,7 +359,7 @@ namespace Wasmtime
 
             if (!string.IsNullOrEmpty(_standardOutputPath))
             {
-                if (!Interop.wasi_config_set_stdout(config, _standardOutputPath))
+                if (!Interop.wasi_config_set_stdout_file(config, _standardOutputPath))
                 {
                     throw new InvalidOperationException($"Failed to set stdout to file '{_standardOutputPath}'.");
                 }
@@ -376,7 +376,7 @@ namespace Wasmtime
 
             if (!string.IsNullOrEmpty(_standardErrorPath))
             {
-                if (!Interop.wasi_config_set_stderr(config, _standardErrorPath))
+                if (!Interop.wasi_config_set_stderr_file(config, _standardErrorPath))
                 {
                     throw new InvalidOperationException($"Failed to set stderr to file '{_standardErrorPath}'.");
                 }

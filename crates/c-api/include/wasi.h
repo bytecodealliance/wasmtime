@@ -35,13 +35,13 @@ WASI_API_EXTERN void wasi_config_inherit_argv(wasi_config_t* config);
 WASI_API_EXTERN void wasi_config_set_env(wasi_config_t* config, int envc, const char* names[], const char* values[]);
 WASI_API_EXTERN void wasi_config_inherit_env(wasi_config_t* config);
 
-WASI_API_EXTERN bool wasi_config_set_stdin(wasi_config_t* config, const char* path);
+WASI_API_EXTERN bool wasi_config_set_stdin_file(wasi_config_t* config, const char* path);
 WASI_API_EXTERN void wasi_config_inherit_stdin(wasi_config_t* config);
 
-WASI_API_EXTERN bool wasi_config_set_stdout(wasi_config_t* config, const char* path);
+WASI_API_EXTERN bool wasi_config_set_stdout_file(wasi_config_t* config, const char* path);
 WASI_API_EXTERN void wasi_config_inherit_stdout(wasi_config_t* config);
 
-WASI_API_EXTERN bool wasi_config_set_stderr(wasi_config_t* config, const char* path);
+WASI_API_EXTERN bool wasi_config_set_stderr_file(wasi_config_t* config, const char* path);
 WASI_API_EXTERN void wasi_config_inherit_stderr(wasi_config_t* config);
 
 WASI_API_EXTERN bool wasi_config_preopen_dir(wasi_config_t* config, const char* path, const char* guest_path);

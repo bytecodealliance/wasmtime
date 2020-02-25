@@ -83,7 +83,7 @@ pub unsafe extern "C" fn wasi_config_inherit_env(config: *mut wasi_config_t) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasi_config_set_stdin(
+pub unsafe extern "C" fn wasi_config_set_stdin_file(
     config: *mut wasi_config_t,
     path: *const c_char,
 ) -> bool {
@@ -103,7 +103,7 @@ pub unsafe extern "C" fn wasi_config_inherit_stdin(config: *mut wasi_config_t) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasi_config_set_stdout(
+pub unsafe extern "C" fn wasi_config_set_stdout_file(
     config: *mut wasi_config_t,
     path: *const c_char,
 ) -> bool {
@@ -123,7 +123,7 @@ pub unsafe extern "C" fn wasi_config_inherit_stdout(config: *mut wasi_config_t) 
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasi_config_set_stderr(
+pub unsafe extern "C" fn wasi_config_set_stderr_file(
     config: *mut wasi_config_t,
     path: *const c_char,
 ) -> bool {
