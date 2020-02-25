@@ -47,20 +47,16 @@ pub unsafe extern "C" fn wasi_config_set_argv(
     argc: c_int,
     argv: *const *const c_char,
 ) {
-    let mut config = Box::from_raw(config);
-    config.builder = config.builder.args(
+    (*config).builder.args(
         slice::from_raw_parts(argv, argc as usize)
             .iter()
             .map(|a| slice::from_raw_parts(*a as *const u8, CStr::from_ptr(*a).to_bytes().len())),
     );
-    std::mem::forget(config);
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasi_config_inherit_argv(config: *mut wasi_config_t) {
-    let mut config = Box::from_raw(config);
-    config.builder = config.builder.inherit_args();
-    std::mem::forget(config);
+    (*config).builder.inherit_args();
 }
 
 #[no_mangle]
@@ -72,23 +68,18 @@ pub unsafe extern "C" fn wasi_config_set_env(
 ) {
     let names = slice::from_raw_parts(names, envc as usize);
     let values = slice::from_raw_parts(values, envc as usize);
-    let mut config = Box::from_raw(config);
 
-    for i in 0..envc as usize {
-        config.builder = config.builder.env(
-            CStr::from_ptr(names[i]).to_bytes(),
-            CStr::from_ptr(values[i]).to_bytes(),
-        );
-    }
-
-    std::mem::forget(config);
+    (*config).builder.envs(
+        names
+            .iter()
+            .map(|p| CStr::from_ptr(*p).to_bytes())
+            .zip(values.iter().map(|p| CStr::from_ptr(*p).to_bytes())),
+    );
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasi_config_inherit_env(config: *mut wasi_config_t) {
-    let mut config = Box::from_raw(config);
-    config.builder = config.builder.inherit_env();
-    std::mem::forget(config);
+    (*config).builder.inherit_env();
 }
 
 #[no_mangle]
@@ -101,18 +92,14 @@ pub unsafe extern "C" fn wasi_config_set_stdin(
         None => return false,
     };
 
-    let mut config = Box::from_raw(config);
-    config.builder = config.builder.stdin(file);
-    std::mem::forget(config);
+    (*config).builder.stdin(file);
 
     true
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasi_config_inherit_stdin(config: *mut wasi_config_t) {
-    let mut config = Box::from_raw(config);
-    config.builder = config.builder.inherit_stdin();
-    std::mem::forget(config);
+    (*config).builder.inherit_stdin();
 }
 
 #[no_mangle]
@@ -125,18 +112,14 @@ pub unsafe extern "C" fn wasi_config_set_stdout(
         None => return false,
     };
 
-    let mut config = Box::from_raw(config);
-    config.builder = config.builder.stdout(file);
-    std::mem::forget(config);
+    (*config).builder.stdout(file);
 
     true
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasi_config_inherit_stdout(config: *mut wasi_config_t) {
-    let mut config = Box::from_raw(config);
-    config.builder = config.builder.inherit_stdout();
-    std::mem::forget(config);
+    (*config).builder.inherit_stdout();
 }
 
 #[no_mangle]
@@ -149,18 +132,14 @@ pub unsafe extern "C" fn wasi_config_set_stderr(
         None => return false,
     };
 
-    let mut config = Box::from_raw(config);
-    config.builder = config.builder.stderr(file);
-    std::mem::forget(config);
+    (*config).builder.stderr(file);
 
     true
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasi_config_inherit_stderr(config: *mut wasi_config_t) {
-    let mut config = Box::from_raw(config);
-    config.builder = config.builder.inherit_stderr();
-    std::mem::forget(config);
+    (*config).builder.inherit_stderr();
 }
 
 #[no_mangle]
@@ -182,9 +161,7 @@ pub unsafe extern "C" fn wasi_config_preopen_dir(
         None => return false,
     };
 
-    let mut config = Box::from_raw(config);
-    config.builder = config.builder.preopened_dir(dir, guest_path);
-    std::mem::forget(config);
+    (*config).builder.preopened_dir(dir, guest_path);
 
     true
 }
@@ -202,7 +179,7 @@ pub unsafe extern "C" fn wasi_instance_new(
     trap: *mut *mut wasm_trap_t,
 ) -> *mut wasi_instance_t {
     let store = &(*store).store.borrow();
-    let config = Box::from_raw(config);
+    let mut config = Box::from_raw(config);
 
     match config.builder.build() {
         Ok(ctx) => Box::into_raw(Box::new(wasi_instance_t {

@@ -19,12 +19,12 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
 
     // Create our wasi context with pretty standard arguments/inheritance/etc.
     // Additionally register andy preopened directories if we have them.
-    let mut builder = wasi_common::WasiCtxBuilder::new()
-        .arg(bin_name)
-        .arg(".")
-        .inherit_stdio();
+    let mut builder = wasi_common::WasiCtxBuilder::new();
+
+    builder.arg(bin_name).arg(".").inherit_stdio();
+
     for (dir, file) in get_preopens(workspace)? {
-        builder = builder.preopened_dir(file, dir);
+        builder.preopened_dir(file, dir);
     }
 
     // The nonstandard thing we do with `WasiCtxBuilder` is to ensure that
@@ -32,7 +32,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
     // where `stdin` is never ready to be read. In some CI systems, however,
     // stdin is closed which causes tests to fail.
     let (reader, _writer) = os_pipe::pipe()?;
-    builder = builder.stdin(reader_to_file(reader));
+    builder.stdin(reader_to_file(reader));
     let snapshot1 = wasmtime_wasi::Wasi::new(&store, builder.build()?);
     let module = Module::new(&store, &data).context("failed to create wasm module")?;
     let imports = module
