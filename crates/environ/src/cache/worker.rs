@@ -608,6 +608,9 @@ impl WorkerThread {
                         {
                             continue; // skip active lock
                         }
+                        add_unrecognized!(file: path);
+                    }
+                    (2, false) => {
                         match path.extension().and_then(OsStr::to_str) {
                             // mod or stats file
                             None | Some("stats") => {
