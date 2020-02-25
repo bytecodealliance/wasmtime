@@ -19,7 +19,7 @@
 //!   instances, and modules! Therefore, always use nested blocks to ensure
 //!   drops run before raising a trap:
 //!
-//!   ```
+//!   ```ignore
 //!   pub extern "C" fn my_lib_function(...) {
 //!       let result = {
 //!           // Do everything in here so drops run at the end of the block.
