@@ -2,7 +2,7 @@
 
 The configuration file uses the [toml] format.
 You can create a configuration file at the default location with:
-```
+```sh
 $ wasmtime config new
 ```
 It will print the location regardless of the success.
