@@ -1,1 +1,1 @@
-doc-valid-idents = ["WebAssembly"]
+doc-valid-idents = [ "WebAssembly", "NaN", "SetCC" ]
