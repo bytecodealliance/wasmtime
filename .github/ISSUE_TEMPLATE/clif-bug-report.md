@@ -1,10 +1,10 @@
 ---
-name: "Bug report"
+name: "Cranelift Bug report"
 about: "Report a bug or a crash in Cranelift."
 labels: 'bug'
 ---
 
-Thanks for opening a bug report on Cranelift! Please answer the questions below
+Thanks for opening a bug report! Please answer the questions below
 if they're relevant and delete this text before submitting.
 
 - What are the steps to reproduce the issue? Can you include a CLIF test case,
