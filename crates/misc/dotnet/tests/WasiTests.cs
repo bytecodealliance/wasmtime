@@ -197,6 +197,7 @@ namespace Wasmtime.Tests
 
                 Assert.Equal(0, inst.call_fd_write(fd, 0, 1, 32));
                 Assert.Equal(MESSAGE.Length, memory.ReadInt32(32));
+                Assert.Equal(0, inst.call_fd_close(fd));
                 Assert.Equal(MESSAGE, File.ReadAllText(file.Path));
             }
         }
@@ -241,9 +242,8 @@ namespace Wasmtime.Tests
 
                 Assert.Equal(0, inst.call_fd_write(fileFd, 0, 1, 64));
                 Assert.Equal(MESSAGE.Length, memory.ReadInt32(64));
-                Assert.Equal(MESSAGE, File.ReadAllText(file.Path));
-
                 Assert.Equal(0, inst.call_fd_close(fileFd));
+                Assert.Equal(MESSAGE, File.ReadAllText(file.Path));
             }
         }
     }
