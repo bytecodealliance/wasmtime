@@ -499,7 +499,7 @@ namespace Wasmtime
             for (int i = 0; i < strings.Count; ++i)
             {
                 handles[i] = GCHandle.Alloc(
-                    Encoding.UTF8.GetBytes(strings[i]),
+                    Encoding.UTF8.GetBytes(strings[i] + '\0'),
                     GCHandleType.Pinned
                 );
             }
