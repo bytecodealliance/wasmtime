@@ -496,17 +496,13 @@ namespace Wasmtime
             // See: https://github.com/dotnet/runtime/issues/7315
             // Therefore, we need to marshal the strings manually
             var handles = new GCHandle[strings.Count];
+            var ptrs = new byte*[strings.Count];
             for (int i = 0; i < strings.Count; ++i)
             {
                 handles[i] = GCHandle.Alloc(
                     Encoding.UTF8.GetBytes(strings[i] + '\0'),
                     GCHandleType.Pinned
                 );
-            }
-
-            var ptrs = new byte*[strings.Count];
-            for (int i = 0; i < strings.Count; ++i)
-            {
                 ptrs[i] = (byte*)handles[i].AddrOfPinnedObject();
             }
 
