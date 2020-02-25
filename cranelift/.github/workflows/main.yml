@@ -13,15 +13,3 @@ jobs:
     - run: cargo install cargo-deadlinks
     - run: find ./target/doc -maxdepth 1 -type d -name "cranelift*" | xargs -I{} cargo deadlinks --dir {}
       name: Run cargo-deadlinks
-
-  meta_determinist_check:
-    name: Meta deterministic check
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v1
-      with:
-        submodules: true
-    - name: Install Rust
-      run: rustup update stable && rustup default stable
-    - run: cargo build
-    - run: ci/ensure_deterministic_build.sh

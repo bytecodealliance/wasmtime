@@ -219,6 +219,19 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
+  # Verify that cranelift's code generation is deterministic
+  meta_determinist_check:
+    name: Meta deterministic check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        submodules: true
+    - name: Install Rust
+      run: rustup update stable && rustup default stable
+    - run: cd cranelift/codegen && cargo build --features all-arch
+    - run: ci/ensure_deterministic_build.sh
+
   # Builds a Python wheel (package) for Windows/Mac/Linux. Note that we're
   # careful to create binary-compatible releases here to old releases of
   # Windows/Mac/Linux. This will also build wheels for Python 3.6, 3.7 and 3.8.
