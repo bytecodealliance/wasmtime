@@ -11,6 +11,7 @@ mod gen_binemit;
 mod gen_encodings;
 mod gen_inst;
 mod gen_legalizer;
+mod gen_listing;
 mod gen_registers;
 mod gen_settings;
 mod gen_types;
@@ -69,6 +70,13 @@ pub fn generate(isas: &[isa::Isa], out_dir: &str) -> Result<(), error::Error> {
             &shared_defs,
             &isa,
             &format!("encoding-{}.rs", isa.name),
+            &out_dir,
+        )?;
+
+        gen_listing::generate(
+            &shared_defs,
+            &isa,
+            &format!("listing-{}.txt", isa.name),
             &out_dir,
         )?;
 
