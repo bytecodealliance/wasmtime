@@ -13,11 +13,12 @@ cd "$topdir"
 # Note that libraries need to be published in topological order.
 
 for cargo_toml in \
-    crates/wasi-common/wasi-common-cbindgen/Cargo.toml \
     crates/wasi-common/winx/Cargo.toml \
+    crates/wasi-common/yanix/Cargo.toml \
     crates/wasi-common/wig/Cargo.toml \
     crates/wasi-common/Cargo.toml \
     crates/lightbeam/Cargo.toml \
+    crates/profiling/Cargo.toml \
     crates/environ/Cargo.toml \
     crates/obj/Cargo.toml \
     crates/runtime/Cargo.toml \
