@@ -7,6 +7,7 @@ use crate::cdsl::operands::Operand;
 use crate::cdsl::types::ValueType;
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
 
+use crate::shared::entities::EntityRefs;
 use crate::shared::formats::Formats;
 use crate::shared::immediates::Immediates;
 use crate::shared::types;
@@ -16,6 +17,7 @@ pub(crate) fn define(
     mut all_instructions: &mut AllInstructions,
     formats: &Formats,
     immediates: &Immediates,
+    entities: &EntityRefs,
 ) -> InstructionGroup {
     let mut ig = InstructionGroupBuilder::new(&mut all_instructions);
 
@@ -540,6 +542,40 @@ pub(crate) fn define(
         )
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
+    );
+
+    let i64_t = &TypeVar::new(
+        "i64_t",
+        "A scalar 64bit integer",
+        TypeSetBuilder::new().ints(64..64).build(),
+    );
+
+    let GV = &Operand::new("GV", &entities.global_value);
+    let addr = &Operand::new("addr", i64_t);
+
+    ig.push(
+        Inst::new(
+            "x86_elf_tls_get_addr",
+            r#"
+        Elf tls get addr -- This implements the GD TLS model for ELF. The clobber output should
+        not be used.
+            "#,
+            &formats.unary_global_value,
+        )
+        .operands_in(vec![GV])
+        .operands_out(vec![addr]),
+    );
+    ig.push(
+        Inst::new(
+            "x86_macho_tls_get_addr",
+            r#"
+        Mach-O tls get addr -- This implements TLS access for Mach-O. The clobber output should
+        not be used.
+            "#,
+            &formats.unary_global_value,
+        )
+        .operands_in(vec![GV])
+        .operands_out(vec![addr]),
     );
 
     ig.build()

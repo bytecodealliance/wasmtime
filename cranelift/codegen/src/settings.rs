@@ -379,6 +379,7 @@ mod tests {
             f.to_string(),
             "[shared]\n\
              opt_level = \"none\"\n\
+             tls_model = \"none\"\n\
              libcall_call_conv = \"isa_default\"\n\
              baldrdash_prologue_words = 0\n\
              probestack_size_log2 = 12\n\

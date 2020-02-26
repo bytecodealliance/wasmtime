@@ -61,6 +61,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let shuffle = insts.by_name("shuffle");
     let srem = insts.by_name("srem");
     let sshr = insts.by_name("sshr");
+    let tls_value = insts.by_name("tls_value");
     let trueif = insts.by_name("trueif");
     let udiv = insts.by_name("udiv");
     let umax = insts.by_name("umax");
@@ -325,6 +326,8 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     );
 
     group.custom_legalize(ineg, "convert_ineg");
+
+    group.custom_legalize(tls_value, "expand_tls_value");
 
     group.build_and_add_to(&mut shared.transform_groups);
 

@@ -17,7 +17,7 @@ use object::write::{
 use object::{RelocationEncoding, RelocationKind, SymbolFlags, SymbolKind, SymbolScope};
 use std::collections::HashMap;
 use std::mem;
-use target_lexicon::PointerWidth;
+use target_lexicon::{BinaryFormat, PointerWidth};
 
 #[derive(Debug)]
 /// Setting to enable collection of traps. Setting this to `Enabled` in
@@ -151,12 +151,19 @@ impl Backend for ObjectBackend {
         name: &str,
         linkage: Linkage,
         _writable: bool,
+        tls: bool,
         _align: Option<u8>,
     ) {
+        let kind = if tls {
+            SymbolKind::Tls
+        } else {
+            SymbolKind::Data
+        };
         let (scope, weak) = translate_linkage(linkage);
 
         if let Some(data) = self.data_objects[id] {
             let symbol = self.object.symbol_mut(data);
+            symbol.kind = kind;
             symbol.scope = scope;
             symbol.weak = weak;
         } else {
@@ -164,7 +171,7 @@ impl Backend for ObjectBackend {
                 name: name.as_bytes().to_vec(),
                 value: 0,
                 size: 0,
-                kind: SymbolKind::Data,
+                kind,
                 scope,
                 weak,
                 section: SymbolSection::Undefined,
@@ -183,7 +190,7 @@ impl Backend for ObjectBackend {
         code_size: u32,
     ) -> ModuleResult<ObjectCompiledFunction> {
         let mut code: Vec<u8> = vec![0; code_size as usize];
-        let mut reloc_sink = ObjectRelocSink::default();
+        let mut reloc_sink = ObjectRelocSink::new(self.object.format());
         let mut trap_sink = ObjectTrapSink::default();
         let mut stackmap_sink = NullStackmapSink {};
 
@@ -248,6 +255,7 @@ impl Backend for ObjectBackend {
         data_id: DataId,
         _name: &str,
         writable: bool,
+        tls: bool,
         align: Option<u8>,
         data_ctx: &DataContext,
         _namespace: &ModuleNamespace<Self>,
@@ -289,7 +297,13 @@ impl Backend for ObjectBackend {
 
         let symbol = self.data_objects[data_id].unwrap();
         let section_kind = if let Init::Zeros { .. } = *init {
-            StandardSection::UninitializedData
+            if tls {
+                StandardSection::UninitializedTls
+            } else {
+                StandardSection::UninitializedData
+            }
+        } else if tls {
+            StandardSection::Tls
         } else if writable {
             StandardSection::Data
         } else if relocs.is_empty() {
@@ -519,9 +533,18 @@ struct RelocRecord {
     addend: Addend,
 }
 
-#[derive(Default)]
 struct ObjectRelocSink {
+    format: BinaryFormat,
     relocs: Vec<RelocRecord>,
+}
+
+impl ObjectRelocSink {
+    fn new(format: BinaryFormat) -> Self {
+        Self {
+            format,
+            relocs: vec![],
+        }
+    }
 }
 
 impl RelocSink for ObjectRelocSink {
@@ -534,7 +557,7 @@ impl RelocSink for ObjectRelocSink {
         offset: CodeOffset,
         reloc: Reloc,
         name: &ir::ExternalName,
-        addend: Addend,
+        mut addend: Addend,
     ) {
         let (kind, encoding, size) = match reloc {
             Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
@@ -549,6 +572,35 @@ impl RelocSink for ObjectRelocSink {
                 32,
             ),
             Reloc::X86GOTPCRel4 => (RelocationKind::GotRelative, RelocationEncoding::Generic, 32),
+
+            Reloc::ElfX86_64TlsGd => {
+                assert_eq!(
+                    self.format,
+                    BinaryFormat::Elf,
+                    "ElfX86_64TlsGd is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(goblin::elf64::reloc::R_X86_64_TLSGD),
+                    RelocationEncoding::Generic,
+                    32,
+                )
+            }
+            Reloc::MachOX86_64Tlv => {
+                assert_eq!(
+                    self.format,
+                    BinaryFormat::Macho,
+                    "MachOX86_64Tlv is not supported for this file format"
+                );
+                addend += 4; // X86_64_RELOC_TLV has an implicit addend of -4
+                (
+                    RelocationKind::MachO {
+                        value: goblin::mach::relocation::X86_64_RELOC_TLV,
+                        relative: true,
+                    },
+                    RelocationEncoding::Generic,
+                    32,
+                )
+            }
             // FIXME
             _ => unimplemented!(),
         };

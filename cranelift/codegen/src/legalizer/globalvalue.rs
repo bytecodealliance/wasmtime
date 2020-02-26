@@ -40,7 +40,7 @@ pub fn expand_global_value(
             global_type,
             readonly,
         } => load_addr(inst, func, base, offset, global_type, readonly, isa),
-        ir::GlobalValueData::Symbol { .. } => symbol(inst, func, gv, isa),
+        ir::GlobalValueData::Symbol { tls, .. } => symbol(inst, func, gv, isa, tls),
     }
 }
 
@@ -123,7 +123,18 @@ fn load_addr(
 }
 
 /// Expand a `global_value` instruction for a symbolic name global.
-fn symbol(inst: ir::Inst, func: &mut ir::Function, gv: ir::GlobalValue, isa: &dyn TargetIsa) {
+fn symbol(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    gv: ir::GlobalValue,
+    isa: &dyn TargetIsa,
+    tls: bool,
+) {
     let ptr_ty = isa.pointer_type();
-    func.dfg.replace(inst).symbol_value(ptr_ty, gv);
+
+    if tls {
+        func.dfg.replace(inst).tls_value(ptr_ty, gv);
+    } else {
+        func.dfg.replace(inst).symbol_value(ptr_ty, gv);
+    }
 }

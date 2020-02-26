@@ -136,8 +136,10 @@ impl Backend for FaerieBackend {
         name: &str,
         linkage: Linkage,
         writable: bool,
+        tls: bool,
         align: Option<u8>,
     ) {
+        assert!(!tls, "Faerie doesn't yet support TLS");
         self.artifact
             .declare(name, translate_data_linkage(linkage, writable, align))
             .expect("inconsistent declarations");
@@ -231,10 +233,12 @@ impl Backend for FaerieBackend {
         _id: DataId,
         name: &str,
         _writable: bool,
+        tls: bool,
         _align: Option<u8>,
         data_ctx: &DataContext,
         namespace: &ModuleNamespace<Self>,
     ) -> ModuleResult<FaerieCompiledData> {
+        assert!(!tls, "Faerie doesn't yet support TLS");
         let &DataDescription {
             ref init,
             ref function_decls,

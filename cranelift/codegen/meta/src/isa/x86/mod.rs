@@ -24,6 +24,7 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
         &mut shared_defs.all_instructions,
         &shared_defs.formats,
         &shared_defs.imm,
+        &shared_defs.entities,
     );
     legalize::define(shared_defs, &inst_group);
 

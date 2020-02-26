@@ -63,6 +63,9 @@ pub enum GlobalValueData {
         /// away, after linking? If so, references to it can avoid going through a GOT. Note that
         /// symbols meant to be preemptible cannot be colocated.
         colocated: bool,
+
+        /// Does this symbol refer to a thread local storage value?
+        tls: bool,
     },
 }
 
@@ -110,11 +113,13 @@ impl fmt::Display for GlobalValueData {
                 ref name,
                 offset,
                 colocated,
+                tls,
             } => {
                 write!(
                     f,
-                    "symbol {}{}",
+                    "symbol {}{}{}",
                     if colocated { "colocated " } else { "" },
+                    if tls { "tls " } else { "" },
                     name
                 )?;
                 let offset_val: i64 = offset.into();

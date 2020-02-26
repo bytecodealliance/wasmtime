@@ -264,8 +264,10 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         _name: &str,
         _linkage: Linkage,
         _writable: bool,
+        tls: bool,
         _align: Option<u8>,
     ) {
+        assert!(!tls, "SimpleJIT doesn't yet support TLS");
         // Nothing to do.
     }
 
@@ -341,10 +343,13 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         _id: DataId,
         _name: &str,
         writable: bool,
+        tls: bool,
         align: Option<u8>,
         data: &DataContext,
         _namespace: &ModuleNamespace<Self>,
     ) -> ModuleResult<Self::CompiledData> {
+        assert!(!tls, "SimpleJIT doesn't yet support TLS");
+
         let &DataDescription {
             ref init,
             ref function_decls,

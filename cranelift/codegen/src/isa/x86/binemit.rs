@@ -4,7 +4,10 @@ use super::enc_tables::{needs_offset, needs_sib_byte};
 use super::registers::RU;
 use crate::binemit::{bad_encoding, CodeSink, Reloc};
 use crate::ir::condcodes::{CondCode, FloatCC, IntCC};
-use crate::ir::{Block, Constant, Function, Inst, InstructionData, JumpTable, Opcode, TrapCode};
+use crate::ir::{
+    Block, Constant, ExternalName, Function, Inst, InstructionData, JumpTable, LibCall, Opcode,
+    TrapCode,
+};
 use crate::isa::{RegUnit, StackBase, StackBaseMask, StackRef, TargetIsa};
 use crate::regalloc::RegDiversions;
 

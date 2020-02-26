@@ -2407,5 +2407,14 @@ pub(crate) fn define(
     define_control_flow(&mut e, shared_defs, settings, r);
     define_reftypes(&mut e, shared_defs, r);
 
+    let x86_elf_tls_get_addr = x86.by_name("x86_elf_tls_get_addr");
+    let x86_macho_tls_get_addr = x86.by_name("x86_macho_tls_get_addr");
+
+    let rec_elf_tls_get_addr = r.recipe("elf_tls_get_addr");
+    let rec_macho_tls_get_addr = r.recipe("macho_tls_get_addr");
+
+    e.enc64_rec(x86_elf_tls_get_addr, rec_elf_tls_get_addr, 0);
+    e.enc64_rec(x86_macho_tls_get_addr, rec_macho_tls_get_addr, 0);
+
     e
 }

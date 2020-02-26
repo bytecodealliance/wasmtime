@@ -1127,6 +1127,18 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    ig.push(
+        Inst::new(
+            "tls_value",
+            r#"
+        Compute the value of global GV, which is a TLS (thread local storage) value.
+        "#,
+            &formats.unary_global_value,
+        )
+        .operands_in(vec![GV])
+        .operands_out(vec![a]),
+    );
+
     let HeapOffset = &TypeVar::new(
         "HeapOffset",
         "An unsigned heap offset",

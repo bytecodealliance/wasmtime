@@ -340,7 +340,7 @@ impl InstructionBuilder {
         let polymorphic_info =
             verify_polymorphic(&operands_in, &operands_out, &self.format, &value_opnums);
 
-        // Infer from output operands whether an instruciton clobbers CPU flags or not.
+        // Infer from output operands whether an instruction clobbers CPU flags or not.
         let writes_cpu_flags = operands_out.iter().any(|op| op.is_cpu_flags());
 
         let camel_name = camel_case(&self.name);
