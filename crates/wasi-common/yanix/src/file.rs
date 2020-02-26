@@ -235,8 +235,15 @@ pub unsafe fn fstat(fd: RawFd) -> Result<libc::stat> {
 }
 
 /// `fionread()` function, equivalent to `ioctl(fd, FIONREAD, *bytes)`.
-pub unsafe fn fionread(fd: RawFd) -> Result<usize> {
+pub unsafe fn fionread(fd: RawFd) -> Result<u32> {
     let mut nread: libc::c_int = 0;
     Errno::from_result(libc::ioctl(fd, libc::FIONREAD, &mut nread as *mut _))?;
     Ok(nread.try_into()?)
+}
+
+/// This function is unsafe because it operates on a raw file descriptor.
+/// It's provided, because std::io::Seek requires a mutable borrow.
+pub unsafe fn tell(fd: RawFd) -> Result<u64> {
+    let offset: i64 = Errno::from_result(libc::lseek(fd, 0, libc::SEEK_CUR))?;
+    Ok(offset.try_into()?)
 }
