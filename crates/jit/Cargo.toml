@@ -19,7 +19,7 @@ cranelift-frontend = "0.59.0"
 wasmtime-environ = { path = "../environ", version = "0.12.0" }
 wasmtime-runtime = { path = "../runtime", version = "0.12.0" }
 wasmtime-debug = { path = "../debug", version = "0.12.0" }
-wasmtime-profiling = { path = "../profiling" }
+wasmtime-profiling = { path = "../profiling", version = "0.12.0" }
 region = "2.0.0"
 thiserror = "1.0.4"
 target-lexicon = { version = "0.10.0", default-features = false }
