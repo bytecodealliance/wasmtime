@@ -1,7 +1,7 @@
 //! Offsets and sizes of various structs in wasmtime-runtime's vmcontext
 //! module.
 
-use crate::module::Module;
+use crate::module::ModuleLocal;
 use crate::BuiltinFunctionIndex;
 use cranelift_codegen::ir;
 use cranelift_wasm::{
@@ -50,14 +50,14 @@ pub struct VMOffsets {
 
 impl VMOffsets {
     /// Return a new `VMOffsets` instance, for a given pointer size.
-    pub fn new(pointer_size: u8, module: &Module) -> Self {
+    pub fn new(pointer_size: u8, module: &ModuleLocal) -> Self {
         Self {
             pointer_size,
             num_signature_ids: cast_to_u32(module.signatures.len()),
-            num_imported_functions: cast_to_u32(module.imported_funcs.len()),
-            num_imported_tables: cast_to_u32(module.imported_tables.len()),
-            num_imported_memories: cast_to_u32(module.imported_memories.len()),
-            num_imported_globals: cast_to_u32(module.imported_globals.len()),
+            num_imported_functions: cast_to_u32(module.num_imported_funcs),
+            num_imported_tables: cast_to_u32(module.num_imported_tables),
+            num_imported_memories: cast_to_u32(module.num_imported_memories),
+            num_imported_globals: cast_to_u32(module.num_imported_globals),
             num_defined_tables: cast_to_u32(module.table_plans.len()),
             num_defined_memories: cast_to_u32(module.memory_plans.len()),
             num_defined_globals: cast_to_u32(module.globals.len()),

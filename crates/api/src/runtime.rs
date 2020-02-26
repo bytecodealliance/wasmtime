@@ -507,3 +507,71 @@ fn _assert_send_sync() {
     _assert::<Engine>();
     _assert::<Config>();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Module;
+    use tempfile::TempDir;
+
+    #[test]
+    fn cache_accounts_for_opt_level() -> Result<()> {
+        let td = TempDir::new()?;
+        let config_path = td.path().join("config.toml");
+        std::fs::write(
+            &config_path,
+            &format!(
+                "
+                    [cache]
+                    enabled = true
+                    directory = '{}'
+                ",
+                td.path().join("cache").display()
+            ),
+        )?;
+        let mut cfg = Config::new();
+        cfg.cranelift_opt_level(OptLevel::None)
+            .cache_config_load(&config_path)?;
+        let store = Store::new(&Engine::new(&cfg));
+        Module::new(&store, "(module (func))")?;
+        assert_eq!(store.engine().config.cache_config.cache_hits(), 0);
+        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+        Module::new(&store, "(module (func))")?;
+        assert_eq!(store.engine().config.cache_config.cache_hits(), 1);
+        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+
+        let mut cfg = Config::new();
+        cfg.cranelift_opt_level(OptLevel::Speed)
+            .cache_config_load(&config_path)?;
+        let store = Store::new(&Engine::new(&cfg));
+        Module::new(&store, "(module (func))")?;
+        assert_eq!(store.engine().config.cache_config.cache_hits(), 0);
+        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+        Module::new(&store, "(module (func))")?;
+        assert_eq!(store.engine().config.cache_config.cache_hits(), 1);
+        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+
+        let mut cfg = Config::new();
+        cfg.cranelift_opt_level(OptLevel::SpeedAndSize)
+            .cache_config_load(&config_path)?;
+        let store = Store::new(&Engine::new(&cfg));
+        Module::new(&store, "(module (func))")?;
+        assert_eq!(store.engine().config.cache_config.cache_hits(), 0);
+        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+        Module::new(&store, "(module (func))")?;
+        assert_eq!(store.engine().config.cache_config.cache_hits(), 1);
+        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+
+        let mut cfg = Config::new();
+        cfg.debug_info(true).cache_config_load(&config_path)?;
+        let store = Store::new(&Engine::new(&cfg));
+        Module::new(&store, "(module (func))")?;
+        assert_eq!(store.engine().config.cache_config.cache_hits(), 0);
+        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+        Module::new(&store, "(module (func))")?;
+        assert_eq!(store.engine().config.cache_config.cache_hits(), 1);
+        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+
+        Ok(())
+    }
+}

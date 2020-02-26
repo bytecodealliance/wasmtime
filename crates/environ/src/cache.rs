@@ -1,14 +1,13 @@
 use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
 use crate::compilation::{Compilation, Relocations, Traps};
-use crate::module::Module;
-use crate::module_environ::FunctionBodyData;
-use cranelift_codegen::{ir, isa};
+use cranelift_codegen::ir;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::DefinedFuncIndex;
 use log::{debug, trace, warn};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
+use std::hash::Hash;
 use std::hash::Hasher;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -23,7 +22,7 @@ use worker::Worker;
 pub struct ModuleCacheEntry<'config>(Option<ModuleCacheEntryInner<'config>>);
 
 struct ModuleCacheEntryInner<'config> {
-    mod_cache_path: PathBuf,
+    root_path: PathBuf,
     cache_config: &'config CacheConfig,
 }
 
@@ -51,21 +50,10 @@ pub type ModuleCacheDataTupleType = (
 struct Sha256Hasher(Sha256);
 
 impl<'config> ModuleCacheEntry<'config> {
-    pub fn new<'data>(
-        module: &Module,
-        function_body_inputs: &PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
-        isa: &dyn isa::TargetIsa,
-        compiler_name: &str,
-        generate_debug_info: bool,
-        cache_config: &'config CacheConfig,
-    ) -> Self {
+    pub fn new<'data>(compiler_name: &str, cache_config: &'config CacheConfig) -> Self {
         if cache_config.enabled() {
             Self(Some(ModuleCacheEntryInner::new(
-                module,
-                function_body_inputs,
-                isa,
                 compiler_name,
-                generate_debug_info,
                 cache_config,
             )))
         } else {
@@ -78,42 +66,47 @@ impl<'config> ModuleCacheEntry<'config> {
         Self(Some(inner))
     }
 
-    pub fn get_data(&self) -> Option<ModuleCacheData> {
-        if let Some(inner) = &self.0 {
-            inner.get_data().map(|val| {
-                inner
-                    .cache_config
-                    .worker()
-                    .on_cache_get_async(&inner.mod_cache_path); // call on success
-                val
-            })
-        } else {
-            None
-        }
-    }
+    pub fn get_data<T: Hash, E>(
+        &self,
+        state: T,
+        compute: fn(T) -> Result<ModuleCacheDataTupleType, E>,
+    ) -> Result<ModuleCacheData, E> {
+        let mut hasher = Sha256Hasher(Sha256::new());
+        state.hash(&mut hasher);
+        let hash: [u8; 32] = hasher.0.result().into();
+        // standard encoding uses '/' which can't be used for filename
+        let hash = base64::encode_config(&hash, base64::URL_SAFE_NO_PAD);
 
-    pub fn update_data(&self, data: &ModuleCacheData) {
-        if let Some(inner) = &self.0 {
-            if inner.update_data(data).is_some() {
-                inner
-                    .cache_config
-                    .worker()
-                    .on_cache_update_async(&inner.mod_cache_path); // call on success
-            }
+        let inner = match &self.0 {
+            Some(inner) => inner,
+            None => return compute(state).map(ModuleCacheData::from_tuple),
+        };
+
+        if let Some(cached_val) = inner.get_data(&hash) {
+            let mod_cache_path = inner.root_path.join(&hash);
+            inner.cache_config.on_cache_get_async(&mod_cache_path); // call on success
+            return Ok(cached_val);
         }
+        let val_to_cache = ModuleCacheData::from_tuple(compute(state)?);
+        if inner.update_data(&hash, &val_to_cache).is_some() {
+            let mod_cache_path = inner.root_path.join(&hash);
+            inner.cache_config.on_cache_update_async(&mod_cache_path); // call on success
+        }
+        Ok(val_to_cache)
     }
 }
 
 impl<'config> ModuleCacheEntryInner<'config> {
-    fn new<'data>(
-        module: &Module,
-        function_body_inputs: &PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
-        isa: &dyn isa::TargetIsa,
-        compiler_name: &str,
-        generate_debug_info: bool,
-        cache_config: &'config CacheConfig,
-    ) -> Self {
-        let hash = Sha256Hasher::digest(module, function_body_inputs);
+    fn new<'data>(compiler_name: &str, cache_config: &'config CacheConfig) -> Self {
+        // If debug assertions are enabled then assume that we're some sort of
+        // local build. We don't want local builds to stomp over caches between
+        // builds, so just use a separate cache directory based on the mtime of
+        // our executable, which should roughly correlate with "you changed the
+        // source code so you get a different directory".
+        //
+        // Otherwise if this is a release build we use the `GIT_REV` env var
+        // which is either the git rev if installed from git or the crate
+        // version if installed from crates.io.
         let compiler_dir = if cfg!(debug_assertions) {
             fn self_mtime() -> Option<String> {
                 let path = std::env::current_exe().ok()?;
@@ -138,26 +131,18 @@ impl<'config> ModuleCacheEntryInner<'config> {
                 comp_ver = env!("GIT_REV"),
             )
         };
-        let mod_filename = format!(
-            "mod-{mod_hash}{mod_dbg}",
-            mod_hash = base64::encode_config(&hash, base64::URL_SAFE_NO_PAD), // standard encoding uses '/' which can't be used for filename
-            mod_dbg = if generate_debug_info { ".d" } else { "" },
-        );
-        let mod_cache_path = cache_config
-            .directory()
-            .join(isa.triple().to_string())
-            .join(compiler_dir)
-            .join(mod_filename);
+        let root_path = cache_config.directory().join("modules").join(compiler_dir);
 
         Self {
-            mod_cache_path,
+            root_path,
             cache_config,
         }
     }
 
-    fn get_data(&self) -> Option<ModuleCacheData> {
-        trace!("get_data() for path: {}", self.mod_cache_path.display());
-        let compressed_cache_bytes = fs::read(&self.mod_cache_path).ok()?;
+    fn get_data(&self, hash: &str) -> Option<ModuleCacheData> {
+        let mod_cache_path = self.root_path.join(hash);
+        trace!("get_data() for path: {}", mod_cache_path.display());
+        let compressed_cache_bytes = fs::read(&mod_cache_path).ok()?;
         let cache_bytes = zstd::decode_all(&compressed_cache_bytes[..])
             .map_err(|err| warn!("Failed to decompress cached code: {}", err))
             .ok()?;
@@ -166,8 +151,9 @@ impl<'config> ModuleCacheEntryInner<'config> {
             .ok()
     }
 
-    fn update_data(&self, data: &ModuleCacheData) -> Option<()> {
-        trace!("update_data() for path: {}", self.mod_cache_path.display());
+    fn update_data(&self, hash: &str, data: &ModuleCacheData) -> Option<()> {
+        let mod_cache_path = self.root_path.join(hash);
+        trace!("update_data() for path: {}", mod_cache_path.display());
         let serialized_data = bincode::serialize(&data)
             .map_err(|err| warn!("Failed to serialize cached code: {}", err))
             .ok()?;
@@ -180,17 +166,17 @@ impl<'config> ModuleCacheEntryInner<'config> {
 
         // Optimize syscalls: first, try writing to disk. It should succeed in most cases.
         // Otherwise, try creating the cache directory and retry writing to the file.
-        if fs_write_atomic(&self.mod_cache_path, "mod", &compressed_data) {
+        if fs_write_atomic(&mod_cache_path, "mod", &compressed_data) {
             return Some(());
         }
 
         debug!(
             "Attempting to create the cache directory, because \
              failed to write cached code to disk, path: {}",
-            self.mod_cache_path.display(),
+            mod_cache_path.display(),
         );
 
-        let cache_dir = self.mod_cache_path.parent().unwrap();
+        let cache_dir = mod_cache_path.parent().unwrap();
         fs::create_dir_all(cache_dir)
             .map_err(|err| {
                 warn!(
@@ -201,7 +187,7 @@ impl<'config> ModuleCacheEntryInner<'config> {
             })
             .ok()?;
 
-        if fs_write_atomic(&self.mod_cache_path, "mod", &compressed_data) {
+        if fs_write_atomic(&mod_cache_path, "mod", &compressed_data) {
             Some(())
         } else {
             None
@@ -230,17 +216,6 @@ impl ModuleCacheData {
             self.stack_slots,
             self.traps,
         )
-    }
-}
-
-impl Sha256Hasher {
-    pub fn digest<'data>(
-        module: &Module,
-        function_body_inputs: &PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
-    ) -> [u8; 32] {
-        let mut hasher = Self(Sha256::new());
-        module.hash_for_cache(function_body_inputs, &mut hasher);
-        hasher.0.result().into()
     }
 }
 

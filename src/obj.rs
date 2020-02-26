@@ -109,7 +109,7 @@ pub fn compile_to_obj(
     }
 
     let module_vmctx_info = {
-        let ofs = VMOffsets::new(target_config.pointer_bytes(), &module);
+        let ofs = VMOffsets::new(target_config.pointer_bytes(), &module.local);
         ModuleVmctxInfo {
             memory_offset: if ofs.num_imported_memories > 0 {
                 ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))

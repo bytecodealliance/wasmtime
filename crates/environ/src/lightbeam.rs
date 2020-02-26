@@ -32,13 +32,13 @@ impl crate::compilation::Compiler for Lightbeam {
             return Err(CompileError::DebugInfoNotSupported);
         }
 
-        let env = FuncEnvironment::new(isa.frontend_config(), module);
+        let env = FuncEnvironment::new(isa.frontend_config(), &module.local);
         let mut relocations = PrimaryMap::new();
         let mut codegen_session: lightbeam::CodeGenSession<_> =
             lightbeam::CodeGenSession::new(function_body_inputs.len() as u32, &env);
 
         for (i, function_body) in &function_body_inputs {
-            let func_index = module.func_index(i);
+            let func_index = module.local.func_index(i);
             let mut reloc_sink = RelocSink::new(func_index);
 
             lightbeam::translate_function(

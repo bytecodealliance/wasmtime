@@ -1976,6 +1976,7 @@ dependencies = [
  "region",
  "rustc-demangle",
  "target-lexicon",
+ "tempfile",
  "wasi-common",
  "wasmparser 0.51.2",
  "wasmtime-environ",

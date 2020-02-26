@@ -11,6 +11,8 @@ use serde::{
 use std::fmt::Debug;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+use std::sync::Arc;
 use std::time::Duration;
 
 // wrapped, so we have named section in config,
@@ -88,6 +90,14 @@ pub struct CacheConfig {
 
     #[serde(skip)]
     worker: Option<Worker>,
+    #[serde(skip)]
+    state: Arc<CacheState>,
+}
+
+#[derive(Default, Debug)]
+struct CacheState {
+    hits: AtomicUsize,
+    misses: AtomicUsize,
 }
 
 /// Creates a new configuration file at specified path, or default path if None is passed.
@@ -324,6 +334,7 @@ impl CacheConfig {
             file_count_limit_percent_if_deleting: None,
             files_total_size_limit_percent_if_deleting: None,
             worker: None,
+            state: Arc::new(CacheState::default()),
         }
     }
 
@@ -364,6 +375,26 @@ impl CacheConfig {
     pub(super) fn worker(&self) -> &Worker {
         assert!(self.enabled);
         self.worker.as_ref().unwrap()
+    }
+
+    /// Returns the number of cache hits seen so far
+    pub fn cache_hits(&self) -> usize {
+        self.state.hits.load(SeqCst)
+    }
+
+    /// Returns the number of cache misses seen so far
+    pub fn cache_misses(&self) -> usize {
+        self.state.misses.load(SeqCst)
+    }
+
+    pub(crate) fn on_cache_get_async(&self, path: impl AsRef<Path>) {
+        self.state.hits.fetch_add(1, SeqCst);
+        self.worker().on_cache_get_async(path)
+    }
+
+    pub(crate) fn on_cache_update_async(&self, path: impl AsRef<Path>) {
+        self.state.misses.fetch_add(1, SeqCst);
+        self.worker().on_cache_update_async(path)
     }
 
     fn load_and_parse_file(config_file: Option<&Path>) -> Result<Self> {

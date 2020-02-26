@@ -151,7 +151,7 @@ impl Compiler {
         // Translate debug info (DWARF) only if at least one function is present.
         let dbg = if debug_data.is_some() && !allocated_functions.is_empty() {
             let target_config = self.isa.frontend_config();
-            let ofs = VMOffsets::new(target_config.pointer_bytes(), &module);
+            let ofs = VMOffsets::new(target_config.pointer_bytes(), &module.local);
 
             let mut funcs = Vec::new();
             for (i, allocated) in allocated_functions.into_iter() {

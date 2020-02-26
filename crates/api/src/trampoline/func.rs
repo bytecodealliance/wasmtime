@@ -81,7 +81,8 @@ unsafe extern "C" fn stub_fn(
 
         let (args, returns_len) = {
             let module = instance.module_ref();
-            let signature = &module.signatures[module.functions[FuncIndex::new(call_id as usize)]];
+            let signature =
+                &module.local.signatures[module.local.functions[FuncIndex::new(call_id as usize)]];
 
             let mut args = Vec::new();
             for i in 2..signature.params.len() {
@@ -101,7 +102,8 @@ unsafe extern "C" fn stub_fn(
         state.func.call(&args, &mut returns)?;
 
         let module = instance.module_ref();
-        let signature = &module.signatures[module.functions[FuncIndex::new(call_id as usize)]];
+        let signature =
+            &module.local.signatures[module.local.functions[FuncIndex::new(call_id as usize)]];
         for (i, ret) in returns.iter_mut().enumerate() {
             if ret.ty().get_wasmtime_type() != Some(signature.returns[i].value_type) {
                 return Err(Trap::new(
@@ -266,8 +268,8 @@ pub fn create_handle_with_function(
         PrimaryMap::new();
     let mut code_memory = CodeMemory::new();
 
-    let sig_id = module.signatures.push(sig.clone());
-    let func_id = module.functions.push(sig_id);
+    let sig_id = module.local.signatures.push(sig.clone());
+    let func_id = module.local.functions.push(sig_id);
     module
         .exports
         .insert("trampoline".to_string(), Export::Function(func_id));
@@ -313,8 +315,8 @@ pub unsafe fn create_handle_with_raw_function(
     let mut module = Module::new();
     let mut finished_functions = PrimaryMap::new();
 
-    let sig_id = module.signatures.push(sig.clone());
-    let func_id = module.functions.push(sig_id);
+    let sig_id = module.local.signatures.push(sig.clone());
+    let func_id = module.local.functions.push(sig_id);
     module
         .exports
         .insert("trampoline".to_string(), Export::Function(func_id));

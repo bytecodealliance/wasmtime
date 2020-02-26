@@ -96,6 +96,7 @@ impl<'data> RawCompiledModule<'data> {
             let signature_registry = compiler.signatures();
             translation
                 .module
+                .local
                 .signatures
                 .values()
                 .map(|sig| signature_registry.register(sig))
