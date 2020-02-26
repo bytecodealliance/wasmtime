@@ -24,24 +24,21 @@ async function runOnce() {
 
   const octokit = new github.GitHub(token);
 
-  // If this is a `dev` release then we need to actually delete the previous
-  // release since we can't overwrite a new one. We also need to update the
-  // `dev` tag while we're at it. So here you'll see:
-  //
-  // * Look for the `dev` release, then delete it if it exists
-  // * Update the `dev` release to our current sha, or create one if it doesn't
-  //   exist
-  if (name == 'dev') {
-    const releases = await octokit.paginate("GET /repos/:owner/:repo/releases", { owner, repo });
-    for (const release of releases) {
-      if (release.tag_name !== 'dev') {
-        continue;
-      }
-      const release_id = release.id;
-      core.info(`deleting release ${release_id}`);
-      await octokit.repos.deleteRelease({ owner, repo, release_id });
+  // Delete the previous release since we can't overwrite one. This may happen
+  // due to retrying an upload or it may happen because we're doing the dev
+  // release.
+  const releases = await octokit.paginate("GET /repos/:owner/:repo/releases", { owner, repo });
+  for (const release of releases) {
+    if (release.tag_name !== name) {
+      continue;
     }
+    const release_id = release.id;
+    core.info(`deleting release ${release_id}`);
+    await octokit.repos.deleteRelease({ owner, repo, release_id });
+  }
 
+  // We also need to update the `dev` tag while we're at it on the `dev` branch.
+  if (name == 'dev') {
     try {
       core.info(`updating dev tag`);
       await octokit.git.updateRef({
