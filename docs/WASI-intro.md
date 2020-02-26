@@ -26,39 +26,13 @@ toolchains will be able to implement WASI as well!
 
 ### Rust
 
-To install a WASI-enabled Rust toolchain:
-
-```
-rustup target add wasm32-wasi
-cargo build --target wasm32-wasi
-```
-
-Until now, Rust's WebAssembly support has had two main options, the
-Emscripten-based option, and the wasm32-unknown-unknown option. The latter
-option is lighter-weight, but only supports `no_std`. WASI enables a new
-wasm32-wasi target, which is similar to wasm32-unknown-unknown in
-that it doesn't depend on Emscripten, but it can use WASI to provide a
-decent subset of libstd.
+To install a WASI-enabled Rust toolchain, see the [online section of the
+guide](https://bytecodealliance.github.io/wasmtime/wasm-rust.html)
 
 ### C/C++
 
-All the parts needed to support wasm are included in upstream clang, lld, and
-compiler-rt, as of the LLVM 8.0 release. However, to use it, you'll need
-to build WebAssembly-targeted versions of the library parts, and it can
-be tricky to get all the CMake invocations lined up properly.
-
-To make things easier, we provide
-[prebuilt packages](https://github.com/CraneStation/wasi-sdk/releases)
-that provide builds of Clang and sysroot libraries.
-
-WASI doesn't yet support `setjmp`/`longjmp` or C++ exceptions, as it is
-waiting for [unwinding support in WebAssembly].
-
-[unwinding support in WebAssembly]: https://github.com/WebAssembly/exception-handling/
-
-Some C++ programs, particularly those using `<iostream>`, may see warnings
-about function signature mismatches; this is a
-[known bug](https://bugs.llvm.org/show_bug.cgi?id=40412).
+To install a WASI-enabled C/C++ toolchain, see the [online section of the
+guide](https://bytecodealliance.github.io/wasmtime/wasm-c.html)
 
 ## How can I run programs that use WASI?
 

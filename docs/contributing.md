@@ -6,8 +6,8 @@ the [Code of Conduct](./contributing-coc.html)!
 
 ## Join Our Chat
 
-We chat about Wasmtime development on Gitter &mdash; [join
-us!](https://gitter.im/CraneStation/Lobby)
+We chat about Wasmtime development on Zulip &mdash; [join
+us!](https://bytecodealliance.zulipchat.com/#narrow/stream/217126-wasmtime)
 
 If you're having trouble building Wasmtime, aren't sure why a test is failing,
 or have any other questions, feel free to ask here. You can also [open an
