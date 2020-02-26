@@ -46,6 +46,11 @@ impl Config {
             .set("enable_verifier", "false")
             .expect("should be valid flag");
 
+        // Turn on cranelift speed optimizations by default
+        flags
+            .set("opt_level", "speed")
+            .expect("should be valid flag");
+
         Config {
             debug_info: false,
             validating_config: ValidatingParserConfig {
