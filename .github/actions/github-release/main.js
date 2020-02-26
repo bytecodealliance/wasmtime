@@ -92,7 +92,7 @@ async function run() {
   const retries = 10;
   for (let i = 0; i < retries; i++) {
     try {
-      runOnce();
+      await runOnce();
       break;
     } catch (e) {
       if (i === retries - 1)
