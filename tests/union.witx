@@ -1,6 +1,9 @@
 (use "errno.witx")
 (use "excuse.witx")
 
+;; Every worker needs a union. Organize your workplace!
+;; Fight for the full product of your labor!
+
 (typename $reason
   (union $excuse
     (field $dog_ate f32)
