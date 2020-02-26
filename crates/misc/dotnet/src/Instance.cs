@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Dynamic;
 using Wasmtime.Externs;
+using Wasmtime.Bindings;
 
 namespace Wasmtime
 {
@@ -12,22 +13,23 @@ namespace Wasmtime
     /// </summary>
     public class Instance : DynamicObject, IDisposable
     {
-        internal Instance(Module module, IHost host)
+        internal Instance(Module module, Wasi wasi = null, IHost host = null)
         {
             Host = host;
             Module = module;
 
-            //Save the bindings to root the objects.
-            //Otherwise the GC may collect the delegates from ExternFunction for example.
-            _bindings = host.GetImportBindings(module);
-            var handles = _bindings.Select(b => b.Bind(module.Store, host)).ToList();
+            // Save the bindings to root the objects.
+            // Otherwise the GC may collect the callback delegates from FunctionHandles for example.
+            _bindings = Binding.GetImportBindings(module, wasi, host)
+                    .Select(b => b.Bind(module.Store, host))
+                    .ToArray();
 
             unsafe
             {
                 Handle = Interop.wasm_instance_new(
                     Module.Store.Handle,
                     Module.Handle,
-                    handles.Select(h => ToExtern(h)).ToArray(),
+                    _bindings.Select(h => ToExtern(h)).ToArray(),
                     out var trap);
 
                 if (trap != IntPtr.Zero)
@@ -39,12 +41,6 @@ namespace Wasmtime
             if (Handle.IsInvalid)
             {
                 throw new WasmtimeException($"Failed to instantiate module '{module.Name}'.");
-            }
-
-            // Dispose of all function handles (not needed at runtime)
-            foreach (var h in handles.Where(h => h is Interop.FunctionHandle))
-            {
-                h.Dispose();
             }
 
             Interop.wasm_instance_exports(Handle, out _externs);
@@ -71,17 +67,27 @@ namespace Wasmtime
         public Wasmtime.Externs.Externs Externs { get; private set; }
 
         /// <inheritdoc/>
-        public void Dispose()
+        public unsafe void Dispose()
         {
             if (!Handle.IsInvalid)
             {
                 Handle.Dispose();
                 Handle.SetHandleAsInvalid();
             }
-            if (_externs.size != UIntPtr.Zero)
+
+            if (!(_bindings is null))
+            {
+                foreach (var binding in _bindings)
+                {
+                    binding.Dispose();
+                }
+                _bindings = null;
+            }
+
+            if (!(_externs.data is null))
             {
                 Interop.wasm_extern_vec_delete(ref _externs);
-                _externs.size = UIntPtr.Zero;
+                _externs.data = null;
             }
         }
 
@@ -134,15 +140,18 @@ namespace Wasmtime
                 case Interop.MemoryHandle m:
                     return Interop.wasm_memory_as_extern(m);
 
+                case Interop.WasiExportHandle w:
+                    return w.DangerousGetHandle();
+
                 default:
                     throw new NotSupportedException("Unexpected handle type.");
             }
         }
 
         internal Interop.InstanceHandle Handle { get; private set; }
+        private SafeHandle[] _bindings;
         private Interop.wasm_extern_vec_t _externs;
         private Dictionary<string, ExternFunction> _functions;
         private Dictionary<string, ExternGlobal> _globals;
-        private List<Bindings.Binding> _bindings;
     }
 }

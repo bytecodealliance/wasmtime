@@ -142,13 +142,12 @@ namespace Tutorial
     {
         static void Main(string[] args)
         {
-            using (var engine = new Engine())
-            using (var store = engine.CreateStore())
-            using (var module = store.CreateModule("hello.wasm"))
-            using (dynamic instance = module.Instantiate(new Host()))
-            {
-                instance.run();
-            }
+            using var engine = new Engine();
+            using var store = engine.CreateStore();
+            using var module = store.CreateModule("hello.wasm");
+            using dynamic instance = module.Instantiate(new Host());
+
+            instance.run();
         }
     }
 }
@@ -166,10 +165,8 @@ Alternatively, the `run` function could be invoked without using the runtime bin
 
 ```c#
 ...
-using (var instance = module.Instantiate(new Host()))
-{
-    instance.Externs.Functions[0].Invoke();
-}
+using var instance = module.Instantiate(new Host());
+instance.Externs.Functions[0].Invoke();
 ...
 ```
 

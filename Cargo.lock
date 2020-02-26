@@ -1990,7 +1990,9 @@ dependencies = [
 name = "wasmtime-c-api"
 version = "0.9.0"
 dependencies = [
+ "wasi-common",
  "wasmtime",
+ "wasmtime-wasi",
 ]
 
 [[package]]

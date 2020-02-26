@@ -168,7 +168,7 @@ fn from_wasmtime_abiparam(param: &ir::AbiParam) -> Option<ValType> {
 /// A descriptor for a function in a WebAssembly module.
 ///
 /// WebAssembly functions can have 0 or more parameters and results.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FuncType {
     params: Box<[ValType]>,
     results: Box<[ValType]>,

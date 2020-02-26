@@ -11,7 +11,7 @@ namespace Wasmtime.Bindings
     /// <summary>
     /// Represents a host function binding.
     /// </summary>
-    public class FunctionBinding : Binding
+    internal class FunctionBinding : Binding
     {
         /// <summary>
         /// Constructs a new function binding.
@@ -46,23 +46,18 @@ namespace Wasmtime.Bindings
         /// </summary>
         public MethodInfo Method { get; private set; }
 
-        internal override SafeHandle Bind(Store store, IHost host)
+        public override SafeHandle Bind(Store store, IHost host)
         {
             unsafe
             {
-                if (_callback != null)
-                {
-                    throw new InvalidOperationException("Cannot bind more than once.");
-                }
-
-                _callback = CreateCallback(store, host);
-
                 var parameters = Interop.ToValueTypeVec(Import.Parameters);
                 var results = Interop.ToValueTypeVec(Import.Results);
-                using (var funcType = Interop.wasm_functype_new(ref parameters, ref results))
-                {
-                    return Interop.wasm_func_new(store.Handle, funcType, _callback);
-                }
+                using var funcType = Interop.wasm_functype_new(ref parameters, ref results);
+                var callback = CreateCallback(store, host);
+                var func = Interop.wasm_func_new(store.Handle, funcType, callback);
+                // Store the callback with the safe handle to keep the delegate GC reachable
+                func.Callback = callback;
+                return func;
             }
         }
 
@@ -70,17 +65,17 @@ namespace Wasmtime.Bindings
         {
             if (Method.IsStatic)
             {
-                ThrowBindingException(Import, Method, "method cannot be static");
+                throw CreateBindingException(Import, Method, "method cannot be static");
             }
 
             if (Method.IsGenericMethod)
             {
-                ThrowBindingException(Import, Method, "method cannot be generic");
+                throw CreateBindingException(Import, Method, "method cannot be generic");
             }
 
             if (Method.IsConstructor)
             {
-                ThrowBindingException(Import, Method, "method cannot be a constructor");
+                throw CreateBindingException(Import, Method, "method cannot be a constructor");
             }
 
             ValidateParameters();
@@ -93,7 +88,7 @@ namespace Wasmtime.Bindings
             var parameters = Method.GetParameters();
             if (parameters.Length != Import.Parameters.Count)
             {
-                ThrowBindingException(
+                throw CreateBindingException(
                     Import,
                     Method,
                     $"parameter mismatch: import requires {Import.Parameters.Count} but the method has {parameters.Length}");
@@ -106,18 +101,18 @@ namespace Wasmtime.Bindings
                 {
                     if (parameter.IsOut)
                     {
-                        ThrowBindingException(Import, Method, $"parameter '{parameter.Name}' cannot be an 'out' parameter");
+                        throw CreateBindingException(Import, Method, $"parameter '{parameter.Name}' cannot be an 'out' parameter");
                     }
                     else
                     {
-                        ThrowBindingException(Import, Method, $"parameter '{parameter.Name}' cannot be a 'ref' parameter");
+                        throw CreateBindingException(Import, Method, $"parameter '{parameter.Name}' cannot be a 'ref' parameter");
                     }
                 }
 
                 var expected = Import.Parameters[i];
                 if (!Interop.TryGetValueKind(parameter.ParameterType, out var kind) || !Interop.IsMatchingKind(kind, expected))
                 {
-                    ThrowBindingException(Import, Method, $"method parameter '{parameter.Name}' is expected to be of type '{Interop.ToString(expected)}'");
+                    throw CreateBindingException(Import, Method, $"method parameter '{parameter.Name}' is expected to be of type '{Interop.ToString(expected)}'");
                 }
             }
         }
@@ -129,7 +124,7 @@ namespace Wasmtime.Bindings
             {
                 if (Method.ReturnType != typeof(void))
                 {
-                    ThrowBindingException(Import, Method, "method must return void");
+                    throw CreateBindingException(Import, Method, "method must return void");
                 }
             }
             else if (resultsCount == 1)
@@ -137,14 +132,14 @@ namespace Wasmtime.Bindings
                 var expected = Import.Results[0];
                 if (!Interop.TryGetValueKind(Method.ReturnType, out var kind) || !Interop.IsMatchingKind(kind, expected))
                 {
-                    ThrowBindingException(Import, Method, $"return type is expected to be '{Interop.ToString(expected)}'");
+                    throw CreateBindingException(Import, Method, $"return type is expected to be '{Interop.ToString(expected)}'");
                 }
             }
             else
             {
                 if (!IsTupleOfSize(Method.ReturnType, resultsCount))
                 {
-                    ThrowBindingException(Import, Method, $"return type is expected to be a tuple of size {resultsCount}");
+                    throw CreateBindingException(Import, Method, $"return type is expected to be a tuple of size {resultsCount}");
                 }
 
                 var typeArguments =
@@ -163,7 +158,7 @@ namespace Wasmtime.Bindings
                     var expected = Import.Results[i];
                     if (!Interop.TryGetValueKind(typeArgument, out var kind) || !Interop.IsMatchingKind(kind, expected))
                     {
-                        ThrowBindingException(Import, Method, $"return tuple item #{i} is expected to be of type '{Interop.ToString(expected)}'");
+                        throw CreateBindingException(Import, Method, $"return tuple item #{i} is expected to be of type '{Interop.ToString(expected)}'");
                     }
 
                     ++i;
@@ -340,7 +335,5 @@ namespace Wasmtime.Bindings
                     throw new NotSupportedException("Unsupported return value type.");
             }
         }
-
-        private Interop.WasmFuncCallback _callback;
     }
 }
