@@ -1,6 +1,6 @@
 [package]
 name = "yanix"
-version = "0.9.0"
+version = "0.12.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Yet Another Nix crate: a Unix API helper library"
 license = "Apache-2.0 WITH LLVM-exception"

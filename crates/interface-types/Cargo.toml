@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-interface-types"
-version = "0.9.0"
+version = "0.12.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Support for wasm interface types with wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -15,11 +15,11 @@ anyhow = "1.0.19"
 walrus = "0.15"
 wasmparser = "0.51.2"
 wasm-webidl-bindings = "0.8"
-wasmtime = { path = "../api", version = "0.9.0" }
-wasmtime-jit = { path = "../jit", version = "0.9.0" }
-wasmtime-environ = { path = "../environ", version = "0.9.0" }
-wasmtime-runtime = { path = "../runtime", version = "0.9.0" }
-wasmtime-wasi = { path = "../wasi", version = "0.9.0" }
+wasmtime = { path = "../api", version = "0.12.0" }
+wasmtime-jit = { path = "../jit", version = "0.12.0" }
+wasmtime-environ = { path = "../environ", version = "0.12.0" }
+wasmtime-runtime = { path = "../runtime", version = "0.12.0" }
+wasmtime-wasi = { path = "../wasi", version = "0.12.0" }
 
 [badges]
 maintenance = { status = "actively-developed" }

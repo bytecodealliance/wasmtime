@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-jit"
-version = "0.9.0"
+version = "0.12.0"
 authors = ["The Wasmtime Project Developers"]
 description = "JIT-style execution for WebAsssembly code in Cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -16,9 +16,9 @@ cranelift-entity = { version = "0.59.0", features = ["enable-serde"] }
 cranelift-wasm = { version = "0.59.0", features = ["enable-serde"] }
 cranelift-native = "0.59.0"
 cranelift-frontend = "0.59.0"
-wasmtime-environ = { path = "../environ", version = "0.9.0" }
-wasmtime-runtime = { path = "../runtime", version = "0.9.0" }
-wasmtime-debug = { path = "../debug", version = "0.9.0" }
+wasmtime-environ = { path = "../environ", version = "0.12.0" }
+wasmtime-runtime = { path = "../runtime", version = "0.12.0" }
+wasmtime-debug = { path = "../debug", version = "0.12.0" }
 wasmtime-profiling = { path = "../profiling" }
 region = "2.0.0"
 thiserror = "1.0.4"
