@@ -240,7 +240,7 @@ impl WastContext {
         match directive {
             Module(mut module) => {
                 let binary = module.encode()?;
-                self.module(module.name.map(|s| s.name()), &binary)?;
+                self.module(module.id.map(|s| s.name()), &binary)?;
             }
             Register {
                 span: _,
