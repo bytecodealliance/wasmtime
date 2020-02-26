@@ -428,12 +428,12 @@ impl ReturnPairPtrsExercise {
         let ret_first_ptr: GuestPtr<i32> = ptr_pair_int_ptrs
             .cast::<GuestPtr<i32>>(0u32)
             .expect("extract ptr to first element in struct")
-            .clone_from_guest()
+            .read()
             .expect("read ptr to first element in struct");
         let ret_second_ptr: GuestPtr<i32> = ptr_pair_int_ptrs
             .cast::<GuestPtr<i32>>(4u32)
             .expect("extract ptr to second element in struct")
-            .clone_from_guest()
+            .read()
             .expect("read ptr to second element in struct");
         assert_eq!(
             self.input_first,

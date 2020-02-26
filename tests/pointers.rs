@@ -54,7 +54,7 @@ impl pointers::Pointers for WasiCtx {
         println!("input4 {:?}", input4);
 
         // Write ptr value to mutable ptr:
-        input4_ptr_ptr.write_ptr_to_guest(&input2_ptr.as_immut());
+        input4_ptr_ptr.write(&input2_ptr.as_immut());
 
         Ok(())
     }

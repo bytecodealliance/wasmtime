@@ -225,19 +225,19 @@ mod test {
         }
         {
             let ptr = guest_memory.ptr_mut(12).expect("ptr mut to first el");
-            ptr.write_ptr_to_guest(
+            ptr.write(
                 &guest_memory
                     .ptr::<GuestPtr<u8>>(0)
                     .expect("ptr to the first value"),
             );
             let ptr = guest_memory.ptr_mut(16).expect("ptr mut to first el");
-            ptr.write_ptr_to_guest(
+            ptr.write(
                 &guest_memory
                     .ptr::<GuestPtr<u8>>(4)
                     .expect("ptr to the second value"),
             );
             let ptr = guest_memory.ptr_mut(20).expect("ptr mut to first el");
-            ptr.write_ptr_to_guest(
+            ptr.write(
                 &guest_memory
                     .ptr::<GuestPtr<u8>>(8)
                     .expect("ptr to the third value"),

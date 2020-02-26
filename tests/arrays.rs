@@ -107,7 +107,7 @@ impl ReduceExcusesExcercise {
                 .ptr_mut(self.array_ptr_loc.ptr)
                 .expect("ptr to array mut");
             for ptr in &self.excuse_ptr_locs {
-                next.write_ptr_to_guest(
+                next.write(
                     &guest_memory
                         .ptr::<types::Excuse>(ptr.ptr)
                         .expect("ptr to Excuse value"),
@@ -203,7 +203,7 @@ impl PopulateExcusesExcercise {
                 .ptr_mut(self.array_ptr_loc.ptr)
                 .expect("ptr mut to the first element of array");
             for ptr in &self.elements {
-                next.write_ptr_to_guest(
+                next.write(
                     &guest_memory
                         .ptr_mut::<types::Excuse>(ptr.ptr)
                         .expect("ptr mut to Excuse value"),

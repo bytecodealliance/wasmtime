@@ -262,8 +262,8 @@ fn marshal_arg(
             let arg_name = names.func_ptr_binding(&param.name);
             let name = names.func_param(&param.name);
             quote! {
-                let #name = match memory.ptr_mut::<#pointee_type>(#arg_name as u32) {
-                    Ok(p) => match p.read_ptr_from_guest() {
+                let #name = match memory.ptr::<#pointee_type>(#arg_name as u32) {
+                    Ok(p) => match p.read() {
                         Ok(r) => r,
                         Err(e) => {
                             #error_handling
@@ -335,7 +335,7 @@ where
         // trait binding returns func_param name.
         let val_name = names.func_param(&result.name);
         let post = quote! {
-            #ptr_name.write_ptr_to_guest(&#val_name);
+            #ptr_name.write(&#val_name);
         };
         (pre, post)
     };

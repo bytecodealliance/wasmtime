@@ -80,7 +80,7 @@ impl<'a, T> GuestPtr<'a, T>
 where
     T: GuestTypeClone<'a>,
 {
-    pub fn clone_from_guest(&self) -> Result<T, GuestError> {
+    pub fn read(&self) -> Result<T, GuestError> {
         T::read_from_guest(self)
     }
 }
@@ -210,11 +210,11 @@ impl<'a, T> GuestPtrMut<'a, T>
 where
     T: GuestTypeClone<'a>,
 {
-    pub fn read_ptr_from_guest(&self) -> Result<T, GuestError> {
+    pub fn read(&self) -> Result<T, GuestError> {
         T::read_from_guest(&self.as_immut())
     }
 
-    pub fn write_ptr_to_guest(&self, ptr: &T) {
+    pub fn write(&self, ptr: &T) {
         T::write_to_guest(ptr, &self);
     }
 }
