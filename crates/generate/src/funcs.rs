@@ -153,6 +153,25 @@ fn marshal_arg(
         }
     };
 
+    let read_conversion = {
+        let pointee_type = names.type_ref(tref, anon_lifetime());
+        let arg_name = names.func_ptr_binding(&param.name);
+        let name = names.func_param(&param.name);
+        quote! {
+            let #name = match memory.ptr::<#pointee_type>(#arg_name as u32) {
+                Ok(p) => match p.read() {
+                    Ok(r) => r,
+                    Err(e) => {
+                        #error_handling
+                    }
+                },
+                Err(e) => {
+                    #error_handling
+                }
+            };
+        }
+    };
+
     match &*tref.type_() {
         witx::Type::Enum(_e) => try_into_conversion,
         witx::Type::Flags(_f) => try_into_conversion,
@@ -257,24 +276,7 @@ fn marshal_arg(
                 };
             }
         }
-        witx::Type::Struct(s) if !struct_is_copy(&s) => {
-            let pointee_type = names.type_ref(tref, anon_lifetime());
-            let arg_name = names.func_ptr_binding(&param.name);
-            let name = names.func_param(&param.name);
-            quote! {
-                let #name = match memory.ptr::<#pointee_type>(#arg_name as u32) {
-                    Ok(p) => match p.read() {
-                        Ok(r) => r,
-                        Err(e) => {
-                            #error_handling
-                        }
-                    },
-                    Err(e) => {
-                        #error_handling
-                    }
-                };
-            }
-        }
+        witx::Type::Struct(s) if !struct_is_copy(&s) => read_conversion,
         witx::Type::Array(arr) => {
             let pointee_type = names.type_ref(arr, anon_lifetime());
             let ptr_name = names.func_ptr_binding(&param.name);
@@ -305,10 +307,7 @@ fn marshal_arg(
                 };
             }
         }
-        witx::Type::Union(_u) => {
-            let name = names.func_param(&param.name);
-            quote!(let #name = unimplemented!("union argument marshaling");)
-        }
+        witx::Type::Union(_u) => read_conversion,
         _ => unimplemented!("argument type marshalling"),
     }
 }
