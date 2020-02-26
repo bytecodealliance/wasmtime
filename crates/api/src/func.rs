@@ -6,8 +6,7 @@ use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::rc::Rc;
-use wasmtime_jit::InstanceHandle;
-use wasmtime_runtime::{VMContext, VMFunctionBody};
+use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody};
 
 /// A WebAssembly function which can be called.
 ///
