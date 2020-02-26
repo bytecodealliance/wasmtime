@@ -98,6 +98,7 @@ async function run() {
         console.log("RETRYING after 10s");
         await sleep(10000)
       }
+    }
   }
 }
 
