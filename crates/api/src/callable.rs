@@ -6,8 +6,7 @@ use crate::values::Val;
 use std::ptr;
 use std::rc::Rc;
 use wasmtime_environ::ir;
-use wasmtime_jit::InstanceHandle;
-use wasmtime_runtime::Export;
+use wasmtime_runtime::{Export, InstanceHandle};
 
 /// A trait representing a function that can be imported and called from inside
 /// WebAssembly.

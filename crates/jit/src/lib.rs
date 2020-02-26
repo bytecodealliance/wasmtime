@@ -40,9 +40,5 @@ pub use crate::link::link_module;
 pub use crate::resolver::{NullResolver, Resolver};
 pub use crate::target_tunables::target_tunables;
 
-// Re-export `InstanceHandle` so that users won't need to separately depend on
-// wasmtime-runtime in common cases.
-pub use wasmtime_runtime::{InstanceHandle, InstantiationError};
-
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
