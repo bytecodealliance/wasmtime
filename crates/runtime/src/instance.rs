@@ -20,7 +20,6 @@ use more_asserts::assert_lt;
 use std::alloc::{self, Layout};
 use std::any::Any;
 use std::cell::{Cell, RefCell};
-use std::cmp;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryFrom;
@@ -210,6 +209,16 @@ impl Instance {
     /// Return a pointer to the `VMTableDefinition`s.
     fn tables_ptr(&self) -> *mut VMTableDefinition {
         unsafe { self.vmctx_plus_offset(self.offsets.vmctx_tables_begin()) }
+    }
+
+    /// Get a locally defined or imported memory.
+    pub(crate) fn get_memory(&self, index: MemoryIndex) -> VMMemoryDefinition {
+        if let Some(defined_index) = self.module.local.defined_memory_index(index) {
+            self.memory(defined_index)
+        } else {
+            let import = self.imported_memory(index);
+            *unsafe { import.from.as_ref().unwrap() }
+        }
     }
 
     /// Return the indexed `VMMemoryDefinition`.
@@ -1168,10 +1177,10 @@ fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
         let start = get_table_init_start(init, instance);
         let table = instance.get_table(init.table_index);
 
-        // Even if there aren't any elements being initialized, if its out of
-        // bounds, then we report an error. This is required by the bulk memory
-        // proposal and the way that it uses `table.init` during instantiation.
-        if start > table.size() as usize {
+        if start
+            .checked_add(init.elements.len())
+            .map_or(true, |end| end > table.size() as usize)
+        {
             return Err(InstantiationError::Trap(Trap::wasm(
                 ir::SourceLoc::default(),
                 ir::TrapCode::HeapOutOfBounds,
@@ -1182,17 +1191,7 @@ fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
             let anyfunc = instance.get_caller_checked_anyfunc(*func_idx);
             table
                 .set(u32::try_from(start + i).unwrap(), anyfunc)
-                // Note that when bulk memory is disabled, this will never fail
-                // since we bounds check table element initialization before
-                // doing any table slot writes. However when bulk memory is
-                // enabled, these become runtime traps and the intermediate
-                // table slot writes are visible.
-                .map_err(|()| {
-                    InstantiationError::Trap(Trap::wasm(
-                        ir::SourceLoc::default(),
-                        ir::TrapCode::HeapOutOfBounds,
-                    ))
-                })?;
+                .unwrap();
         }
     }
 
@@ -1246,29 +1245,24 @@ fn initialize_memories(
     data_initializers: &[DataInitializer<'_>],
 ) -> Result<(), InstantiationError> {
     for init in data_initializers {
+        let memory = instance.get_memory(init.location.memory_index);
+
         let start = get_memory_init_start(init, instance);
+        if start
+            .checked_add(init.data.len())
+            .map_or(true, |end| end > memory.current_length)
+        {
+            return Err(InstantiationError::Trap(Trap::wasm(
+                ir::SourceLoc::default(),
+                ir::TrapCode::HeapOutOfBounds,
+            )));
+        }
+
         unsafe {
             let mem_slice = get_memory_slice(init, instance);
-
-            let end = start.saturating_add(init.data.len());
-            let actual_end = cmp::min(mem_slice.len(), end);
-            let num_uncopied = end - actual_end;
-
-            let to_init = &mut mem_slice[start..actual_end];
-            to_init.copy_from_slice(&init.data[..init.data.len() - num_uncopied]);
-
-            // Note that if bulk memory is disabled, we'll never hit this case
-            // because we did an eager bounds check in
-            // `check_memory_init_bounds`. However when bulk memory is enabled,
-            // we need the incremental writes up to the OOB trap to be visible,
-            // since this is dictated by the updated spec for the bulk memory
-            // proposal.
-            if num_uncopied > 0 {
-                return Err(InstantiationError::Trap(Trap::wasm(
-                    ir::SourceLoc::default(),
-                    ir::TrapCode::HeapOutOfBounds,
-                )));
-            }
+            let end = start + init.data.len();
+            let to_init = &mut mem_slice[start..end];
+            to_init.copy_from_slice(init.data);
         }
     }
 
