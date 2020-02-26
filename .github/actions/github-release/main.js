@@ -8,7 +8,7 @@ function sleep(milliseconds) {
   return new Promise(resolve => setTimeout(resolve, milliseconds))
 }
 
-async function run() {
+async function runOnce() {
   // Load all our inputs and env vars. Note that `getInput` reads from `INPUT_*`
   const files = core.getInput('files');
   const name = core.getInput('name');
@@ -76,28 +76,32 @@ async function run() {
   });
 
   // Upload all the relevant assets for this release as just general blobs.
-  const retries = 10;
   for (const file of glob.sync(files)) {
     const size = fs.statSync(file).size;
     core.info(`upload ${file}`);
-    for (let i = 0; i < retries; i++) {
-      try {
-        await octokit.repos.uploadReleaseAsset({
-          data: fs.createReadStream(file),
-          headers: { 'content-length': size, 'content-type': 'application/octet-stream' },
-          name: path.basename(file),
-          url: release.data.upload_url,
-        });
-        break;
-      } catch (e) {
-        if (i === retries - 1)
-          throw e;
-        console.log("ERROR: ", JSON.stringify(e, null, 2));
-        console.log("ERROR: ", e.message);
-        console.log(e.stack);
-        console.log("RETRYING after 10s");
-        await sleep(10000)
-      }
+    await octokit.repos.uploadReleaseAsset({
+      data: fs.createReadStream(file),
+      headers: { 'content-length': size, 'content-type': 'application/octet-stream' },
+      name: path.basename(file),
+      url: release.data.upload_url,
+    });
+  }
+}
+
+async function run() {
+  const retries = 10;
+  for (let i = 0; i < retries; i++) {
+    try {
+      runOnce();
+      break;
+    } catch (e) {
+      if (i === retries - 1)
+        throw e;
+      console.log("ERROR: ", JSON.stringify(e, null, 2));
+      console.log("ERROR: ", e.message);
+      console.log(e.stack);
+      console.log("RETRYING after 10s");
+      await sleep(10000)
     }
   }
 }
