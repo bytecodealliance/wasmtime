@@ -287,7 +287,7 @@ impl WastContext {
                     Err(e) => e,
                 };
                 let error_message = format!("{:?}", err);
-                if !error_message.contains(&message) {
+                if !is_matching_assert_invalid_error_message(&message, &error_message) {
                     bail!(
                         "assert_invalid: expected \"{}\", got \"{}\"",
                         message,
@@ -341,6 +341,16 @@ impl WastContext {
             std::fs::read(path).with_context(|| format!("failed to read `{}`", path.display()))?;
         self.run_buffer(path.to_str().unwrap(), &bytes)
     }
+}
+
+fn is_matching_assert_invalid_error_message(expected: &str, actual: &str) -> bool {
+    actual.contains(expected)
+        // Waiting on https://github.com/WebAssembly/bulk-memory-operations/pull/137
+        // to propagate to WebAssembly/testsuite.
+        || (expected.contains("unknown table") && actual.contains("unknown elem"))
+        // `elem.wast` and `proposals/bulk-memory-operations/elem.wast` disagree
+        // on the expected error message for the same error.
+        || (expected.contains("out of bounds") && actual.contains("does not fit"))
 }
 
 fn extract_lane_as_i8(bytes: u128, lane: usize) -> i8 {

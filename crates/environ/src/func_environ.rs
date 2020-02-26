@@ -1,7 +1,7 @@
 use crate::module::{MemoryPlan, MemoryStyle, ModuleLocal, TableStyle};
 use crate::vmoffsets::VMOffsets;
 use crate::WASM_PAGE_SIZE;
-use cranelift_codegen::cursor::FuncCursor;
+use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
@@ -23,6 +23,7 @@ pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
 }
 
 /// An index type for builtin functions.
+#[derive(Copy, Clone, Debug)]
 pub struct BuiltinFunctionIndex(u32);
 
 impl BuiltinFunctionIndex {
@@ -42,9 +43,38 @@ impl BuiltinFunctionIndex {
     pub const fn get_imported_memory32_size_index() -> Self {
         Self(3)
     }
+    /// Returns an index for wasm's `table.copy` when both tables are locally
+    /// defined.
+    pub const fn get_table_copy_index() -> Self {
+        Self(4)
+    }
+    /// Returns an index for wasm's `table.init`.
+    pub const fn get_table_init_index() -> Self {
+        Self(5)
+    }
+    /// Returns an index for wasm's `elem.drop`.
+    pub const fn get_elem_drop_index() -> Self {
+        Self(6)
+    }
+    /// Returns an index for wasm's `memory.copy` for locally defined memories.
+    pub const fn get_defined_memory_copy_index() -> Self {
+        Self(7)
+    }
+    /// Returns an index for wasm's `memory.copy` for imported memories.
+    pub const fn get_imported_memory_copy_index() -> Self {
+        Self(8)
+    }
+    /// Returns an index for wasm's `memory.fill` for locally defined memories.
+    pub const fn get_memory_fill_index() -> Self {
+        Self(9)
+    }
+    /// Returns an index for wasm's `memory.fill` for imported memories.
+    pub const fn get_imported_memory_fill_index() -> Self {
+        Self(10)
+    }
     /// Returns the total number of builtin functions.
     pub const fn builtin_functions_total_number() -> u32 {
-        4
+        11
     }
 
     /// Return the index as an u32 number.
@@ -72,6 +102,24 @@ pub struct FuncEnvironment<'module_environment> {
     /// for locally-defined memories.
     memory_grow_sig: Option<ir::SigRef>,
 
+    /// The external function signature for implementing wasm's `table.copy`
+    /// (it's the same for both local and imported tables).
+    table_copy_sig: Option<ir::SigRef>,
+
+    /// The external function signature for implementing wasm's `table.init`.
+    table_init_sig: Option<ir::SigRef>,
+
+    /// The external function signature for implementing wasm's `elem.drop`.
+    elem_drop_sig: Option<ir::SigRef>,
+
+    /// The external function signature for implementing wasm's `memory.copy`
+    /// (it's the same for both local and imported memories).
+    memory_copy_sig: Option<ir::SigRef>,
+
+    /// The external function signature for implementing wasm's `memory.fill`
+    /// (it's the same for both local and imported memories).
+    memory_fill_sig: Option<ir::SigRef>,
+
     /// Offsets to struct fields accessed by JIT code.
     offsets: VMOffsets,
 }
@@ -87,6 +135,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             vmctx: None,
             memory32_size_sig: None,
             memory_grow_sig: None,
+            table_copy_sig: None,
+            table_init_sig: None,
+            elem_drop_sig: None,
+            memory_copy_sig: None,
+            memory_fill_sig: None,
             offsets: VMOffsets::new(target_config.pointer_bytes(), module),
         }
     }
@@ -174,6 +227,198 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 self.get_memory32_size_sig(func),
                 self.module.defined_memory_index(index).unwrap().index(),
                 BuiltinFunctionIndex::get_memory32_size_index(),
+            )
+        }
+    }
+
+    fn get_table_copy_sig(&mut self, func: &mut Function) -> ir::SigRef {
+        let sig = self.table_copy_sig.unwrap_or_else(|| {
+            func.import_signature(Signature {
+                params: vec![
+                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                    // Destination table index.
+                    AbiParam::new(I32),
+                    // Source table index.
+                    AbiParam::new(I32),
+                    // Index within destination table.
+                    AbiParam::new(I32),
+                    // Index within source table.
+                    AbiParam::new(I32),
+                    // Number of elements to copy.
+                    AbiParam::new(I32),
+                    // Source location.
+                    AbiParam::new(I32),
+                ],
+                returns: vec![],
+                call_conv: self.target_config.default_call_conv,
+            })
+        });
+        self.table_copy_sig = Some(sig);
+        sig
+    }
+
+    fn get_table_copy_func(
+        &mut self,
+        func: &mut Function,
+        dst_table_index: TableIndex,
+        src_table_index: TableIndex,
+    ) -> (ir::SigRef, usize, usize, BuiltinFunctionIndex) {
+        let sig = self.get_table_copy_sig(func);
+        (
+            sig,
+            dst_table_index.as_u32() as usize,
+            src_table_index.as_u32() as usize,
+            BuiltinFunctionIndex::get_table_copy_index(),
+        )
+    }
+
+    fn get_table_init_sig(&mut self, func: &mut Function) -> ir::SigRef {
+        let sig = self.table_init_sig.unwrap_or_else(|| {
+            func.import_signature(Signature {
+                params: vec![
+                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                    // Table index.
+                    AbiParam::new(I32),
+                    // Segment index.
+                    AbiParam::new(I32),
+                    // Destination index within table.
+                    AbiParam::new(I32),
+                    // Source index within segment.
+                    AbiParam::new(I32),
+                    // Number of elements to initialize.
+                    AbiParam::new(I32),
+                    // Source location.
+                    AbiParam::new(I32),
+                ],
+                returns: vec![],
+                call_conv: self.target_config.default_call_conv,
+            })
+        });
+        self.table_init_sig = Some(sig);
+        sig
+    }
+
+    fn get_table_init_func(
+        &mut self,
+        func: &mut Function,
+        table_index: TableIndex,
+    ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
+        let sig = self.get_table_init_sig(func);
+        let table_index = table_index.as_u32() as usize;
+        (
+            sig,
+            table_index,
+            BuiltinFunctionIndex::get_table_init_index(),
+        )
+    }
+
+    fn get_elem_drop_sig(&mut self, func: &mut Function) -> ir::SigRef {
+        let sig = self.elem_drop_sig.unwrap_or_else(|| {
+            func.import_signature(Signature {
+                params: vec![
+                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                    // Element index.
+                    AbiParam::new(I32),
+                ],
+                returns: vec![],
+                call_conv: self.target_config.default_call_conv,
+            })
+        });
+        self.elem_drop_sig = Some(sig);
+        sig
+    }
+
+    fn get_elem_drop_func(&mut self, func: &mut Function) -> (ir::SigRef, BuiltinFunctionIndex) {
+        let sig = self.get_elem_drop_sig(func);
+        (sig, BuiltinFunctionIndex::get_elem_drop_index())
+    }
+
+    fn get_memory_copy_sig(&mut self, func: &mut Function) -> ir::SigRef {
+        let sig = self.memory_copy_sig.unwrap_or_else(|| {
+            func.import_signature(Signature {
+                params: vec![
+                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                    // Memory index.
+                    AbiParam::new(I32),
+                    // Destination address.
+                    AbiParam::new(I32),
+                    // Source address.
+                    AbiParam::new(I32),
+                    // Length.
+                    AbiParam::new(I32),
+                    // Source location.
+                    AbiParam::new(I32),
+                ],
+                returns: vec![],
+                call_conv: self.target_config.default_call_conv,
+            })
+        });
+        self.memory_copy_sig = Some(sig);
+        sig
+    }
+
+    fn get_memory_copy_func(
+        &mut self,
+        func: &mut Function,
+        memory_index: MemoryIndex,
+    ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
+        let sig = self.get_memory_copy_sig(func);
+        if let Some(defined_memory_index) = self.module.defined_memory_index(memory_index) {
+            (
+                sig,
+                defined_memory_index.index(),
+                BuiltinFunctionIndex::get_defined_memory_copy_index(),
+            )
+        } else {
+            (
+                sig,
+                memory_index.index(),
+                BuiltinFunctionIndex::get_imported_memory_copy_index(),
+            )
+        }
+    }
+
+    fn get_memory_fill_sig(&mut self, func: &mut Function) -> ir::SigRef {
+        let sig = self.memory_fill_sig.unwrap_or_else(|| {
+            func.import_signature(Signature {
+                params: vec![
+                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                    // Memory index.
+                    AbiParam::new(I32),
+                    // Destination address.
+                    AbiParam::new(I32),
+                    // Value.
+                    AbiParam::new(I32),
+                    // Length.
+                    AbiParam::new(I32),
+                    // Source location.
+                    AbiParam::new(I32),
+                ],
+                returns: vec![],
+                call_conv: self.target_config.default_call_conv,
+            })
+        });
+        self.memory_fill_sig = Some(sig);
+        sig
+    }
+
+    fn get_memory_fill_func(
+        &mut self,
+        func: &mut Function,
+        memory_index: MemoryIndex,
+    ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
+        let sig = self.get_memory_fill_sig(func);
+        if let Some(defined_memory_index) = self.module.defined_memory_index(memory_index) {
+            (
+                sig,
+                defined_memory_index.index(),
+                BuiltinFunctionIndex::get_memory_fill_index(),
+            )
+        } else {
+            (
+                sig,
+                memory_index.index(),
+                BuiltinFunctionIndex::get_imported_memory_fill_index(),
             )
         }
     }
@@ -775,26 +1020,58 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_memory_copy(
         &mut self,
-        _pos: FuncCursor,
-        _index: MemoryIndex,
+        mut pos: FuncCursor,
+        memory_index: MemoryIndex,
         _heap: ir::Heap,
-        _dst: ir::Value,
-        _src: ir::Value,
-        _len: ir::Value,
+        dst: ir::Value,
+        src: ir::Value,
+        len: ir::Value,
     ) -> WasmResult<()> {
-        Err(WasmError::Unsupported("bulk memory".to_string()))
+        let (func_sig, memory_index, func_idx) =
+            self.get_memory_copy_func(&mut pos.func, memory_index);
+
+        let memory_index_arg = pos.ins().iconst(I32, memory_index as i64);
+
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        let src_loc = pos.srcloc();
+        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
+
+        pos.ins().call_indirect(
+            func_sig,
+            func_addr,
+            &[vmctx, memory_index_arg, dst, src, len, src_loc_arg],
+        );
+
+        Ok(())
     }
 
     fn translate_memory_fill(
         &mut self,
-        _pos: FuncCursor,
-        _index: MemoryIndex,
+        mut pos: FuncCursor,
+        memory_index: MemoryIndex,
         _heap: ir::Heap,
-        _dst: ir::Value,
-        _val: ir::Value,
-        _len: ir::Value,
+        dst: ir::Value,
+        val: ir::Value,
+        len: ir::Value,
     ) -> WasmResult<()> {
-        Err(WasmError::Unsupported("bulk memory".to_string()))
+        let (func_sig, memory_index, func_idx) =
+            self.get_memory_fill_func(&mut pos.func, memory_index);
+
+        let memory_index_arg = pos.ins().iconst(I32, memory_index as i64);
+
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        let src_loc = pos.srcloc();
+        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
+
+        pos.ins().call_indirect(
+            func_sig,
+            func_addr,
+            &[vmctx, memory_index_arg, dst, val, len, src_loc_arg],
+        );
+
+        Ok(())
     }
 
     fn translate_memory_init(
@@ -807,11 +1084,15 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         _src: ir::Value,
         _len: ir::Value,
     ) -> WasmResult<()> {
-        Err(WasmError::Unsupported("bulk memory".to_string()))
+        Err(WasmError::Unsupported(
+            "bulk memory: `memory.init`".to_string(),
+        ))
     }
 
     fn translate_data_drop(&mut self, _pos: FuncCursor, _seg_index: u32) -> WasmResult<()> {
-        Err(WasmError::Unsupported("bulk memory".to_string()))
+        Err(WasmError::Unsupported(
+            "bulk memory: `data.drop`".to_string(),
+        ))
     }
 
     fn translate_table_size(
@@ -820,37 +1101,98 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         _index: TableIndex,
         _table: ir::Table,
     ) -> WasmResult<ir::Value> {
-        Err(WasmError::Unsupported("bulk memory".to_string()))
+        Err(WasmError::Unsupported(
+            "bulk memory: `table.size`".to_string(),
+        ))
     }
 
     fn translate_table_copy(
         &mut self,
-        _pos: FuncCursor,
-        _dst_table_index: TableIndex,
+        mut pos: FuncCursor,
+        dst_table_index: TableIndex,
         _dst_table: ir::Table,
-        _src_table_index: TableIndex,
+        src_table_index: TableIndex,
         _src_table: ir::Table,
-        _dst: ir::Value,
-        _src: ir::Value,
-        _len: ir::Value,
+        dst: ir::Value,
+        src: ir::Value,
+        len: ir::Value,
     ) -> WasmResult<()> {
-        Err(WasmError::Unsupported("bulk memory".to_string()))
+        let (func_sig, dst_table_index_arg, src_table_index_arg, func_idx) =
+            self.get_table_copy_func(&mut pos.func, dst_table_index, src_table_index);
+
+        let dst_table_index_arg = pos.ins().iconst(I32, dst_table_index_arg as i64);
+        let src_table_index_arg = pos.ins().iconst(I32, src_table_index_arg as i64);
+
+        let src_loc = pos.srcloc();
+        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
+
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        pos.ins().call_indirect(
+            func_sig,
+            func_addr,
+            &[
+                vmctx,
+                dst_table_index_arg,
+                src_table_index_arg,
+                dst,
+                src,
+                len,
+                src_loc_arg,
+            ],
+        );
+
+        Ok(())
     }
 
     fn translate_table_init(
         &mut self,
-        _pos: FuncCursor,
-        _seg_index: u32,
-        _table_index: TableIndex,
+        mut pos: FuncCursor,
+        seg_index: u32,
+        table_index: TableIndex,
         _table: ir::Table,
-        _dst: ir::Value,
-        _src: ir::Value,
-        _len: ir::Value,
+        dst: ir::Value,
+        src: ir::Value,
+        len: ir::Value,
     ) -> WasmResult<()> {
-        Err(WasmError::Unsupported("bulk memory".to_string()))
+        let (func_sig, table_index_arg, func_idx) =
+            self.get_table_init_func(&mut pos.func, table_index);
+
+        let table_index_arg = pos.ins().iconst(I32, table_index_arg as i64);
+        let seg_index_arg = pos.ins().iconst(I32, seg_index as i64);
+
+        let src_loc = pos.srcloc();
+        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
+
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        pos.ins().call_indirect(
+            func_sig,
+            func_addr,
+            &[
+                vmctx,
+                table_index_arg,
+                seg_index_arg,
+                dst,
+                src,
+                len,
+                src_loc_arg,
+            ],
+        );
+
+        Ok(())
     }
 
-    fn translate_elem_drop(&mut self, _pos: FuncCursor, _seg_index: u32) -> WasmResult<()> {
-        Err(WasmError::Unsupported("bulk memory".to_string()))
+    fn translate_elem_drop(&mut self, mut pos: FuncCursor, elem_index: u32) -> WasmResult<()> {
+        let (func_sig, func_idx) = self.get_elem_drop_func(&mut pos.func);
+
+        let elem_index_arg = pos.ins().iconst(I32, elem_index as i64);
+
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        pos.ins()
+            .call_indirect(func_sig, func_addr, &[vmctx, elem_index_arg]);
+
+        Ok(())
     }
 }

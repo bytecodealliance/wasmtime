@@ -1,6 +1,6 @@
 use crate::externals::Extern;
 use crate::module::Module;
-use crate::runtime::Store;
+use crate::runtime::{Config, Store};
 use crate::trap::Trap;
 use anyhow::{Error, Result};
 use wasmtime_jit::{CompiledModule, Resolver};
@@ -19,16 +19,22 @@ impl Resolver for SimpleResolver<'_> {
 }
 
 fn instantiate(
+    config: &Config,
     compiled_module: &CompiledModule,
     imports: &[Extern],
 ) -> Result<InstanceHandle, Error> {
     let mut resolver = SimpleResolver { imports };
     unsafe {
         let instance = compiled_module
-            .instantiate(&mut resolver)
+            .instantiate(
+                config.validating_config.operator_config.enable_bulk_memory,
+                &mut resolver,
+            )
             .map_err(|e| -> Error {
                 match e {
-                    InstantiationError::StartTrap(trap) => Trap::from_jit(trap).into(),
+                    InstantiationError::StartTrap(trap) | InstantiationError::Trap(trap) => {
+                        Trap::from_jit(trap).into()
+                    }
                     other => other.into(),
                 }
             })?;
@@ -105,7 +111,8 @@ impl Instance {
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     pub fn new(module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
         let store = module.store();
-        let instance_handle = instantiate(module.compiled_module(), imports)?;
+        let config = store.engine().config();
+        let instance_handle = instantiate(config, module.compiled_module(), imports)?;
 
         let exports = {
             let mut exports = Vec::with_capacity(module.exports().len());

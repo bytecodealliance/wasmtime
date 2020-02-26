@@ -73,6 +73,20 @@ pub unsafe fn raise_user_trap(data: Box<dyn Error + Send + Sync>) -> ! {
     tls::with(|info| info.unwrap().unwind_with(UnwindReason::UserTrap(data)))
 }
 
+/// Raises a trap from inside library code immediately.
+///
+/// This function performs as-if a wasm trap was just executed. This trap
+/// payload is then returned from `wasmtime_call` and `wasmtime_call_trampoline`
+/// below.
+///
+/// # Safety
+///
+/// Only safe to call when wasm code is on the stack, aka `wasmtime_call` or
+/// `wasmtime_call_trampoline` must have been previously called.
+pub unsafe fn raise_lib_trap(trap: Trap) -> ! {
+    tls::with(|info| info.unwrap().unwind_with(UnwindReason::LibTrap(trap)))
+}
+
 /// Carries a Rust panic across wasm code and resumes the panic on the other
 /// side.
 ///
@@ -125,6 +139,20 @@ impl fmt::Display for Trap {
 }
 
 impl std::error::Error for Trap {}
+
+impl Trap {
+    /// Construct a new Wasm trap with the given source location and trap code.
+    ///
+    /// Internally saves a backtrace when constructed.
+    pub fn wasm(source_loc: ir::SourceLoc, trap_code: ir::TrapCode) -> Self {
+        let desc = TrapDescription {
+            source_loc,
+            trap_code,
+        };
+        let backtrace = Backtrace::new();
+        Trap::Wasm { desc, backtrace }
+    }
+}
 
 /// Call the wasm function pointed to by `callee`.
 ///
@@ -192,6 +220,7 @@ enum UnwindReason {
     None,
     Panic(Box<dyn Any + Send>),
     UserTrap(Box<dyn Error + Send + Sync>),
+    LibTrap(Trap),
     Trap { backtrace: Backtrace, pc: usize },
 }
 
@@ -219,6 +248,7 @@ impl CallThreadState {
                     debug_assert_eq!(ret, 0);
                     Err(Trap::User(data))
                 }
+                UnwindReason::LibTrap(trap) => Err(trap),
                 UnwindReason::Trap { backtrace, pc } => {
                     debug_assert_eq!(ret, 0);
                     let instance = unsafe { InstanceHandle::from_vmctx(self.vmctx) };

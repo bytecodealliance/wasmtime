@@ -19,19 +19,20 @@ use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::alloc::{self, Layout};
 use std::any::Any;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::{mem, ptr, slice};
 use thiserror::Error;
-use wasmtime_environ::entity::{BoxedSlice, EntityRef, PrimaryMap};
+use wasmtime_environ::entity::{packed_option::ReservedValue, BoxedSlice, EntityRef, PrimaryMap};
 use wasmtime_environ::wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
-    GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
+    GlobalIndex, GlobalInit, MemoryIndex, PassiveElemIndex, SignatureIndex, TableIndex,
 };
-use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
+use wasmtime_environ::{ir, DataInitializer, Module, TableElements, VMOffsets};
 
 cfg_if::cfg_if! {
     if #[cfg(unix)] {
@@ -86,6 +87,11 @@ pub(crate) struct Instance {
     /// WebAssembly table data.
     tables: BoxedSlice<DefinedTableIndex, Table>,
 
+    /// Passive elements in this instantiation. As `elem.drop`s happen, these
+    /// entries get removed. A missing entry is considered equivalent to an
+    /// empty slice.
+    passive_elements: RefCell<HashMap<PassiveElemIndex, Box<[VMCallerCheckedAnyfunc]>>>,
+
     /// Pointers to functions in executable memory.
     finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
 
@@ -122,6 +128,14 @@ impl Instance {
     fn signature_id(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
         let index = usize::try_from(index.as_u32()).unwrap();
         unsafe { *self.signature_ids_ptr().add(index) }
+    }
+
+    pub(crate) fn module(&self) -> &Arc<Module> {
+        &self.module
+    }
+
+    pub(crate) fn module_ref(&self) -> &Module {
+        &*self.module
     }
 
     /// Return a pointer to the `VMSharedSignatureIndex`s.
@@ -195,6 +209,16 @@ impl Instance {
     /// Return a pointer to the `VMTableDefinition`s.
     fn tables_ptr(&self) -> *mut VMTableDefinition {
         unsafe { self.vmctx_plus_offset(self.offsets.vmctx_tables_begin()) }
+    }
+
+    /// Get a locally defined or imported memory.
+    pub(crate) fn get_memory(&self, index: MemoryIndex) -> VMMemoryDefinition {
+        if let Some(defined_index) = self.module.local.defined_memory_index(index) {
+            self.memory(defined_index)
+        } else {
+            let import = self.imported_memory(index);
+            *unsafe { import.from.as_ref().unwrap() }
+        }
     }
 
     /// Return the indexed `VMMemoryDefinition`.
@@ -526,6 +550,226 @@ impl Instance {
         let align = mem::align_of_val(self);
         Layout::from_size_align(size, align).unwrap()
     }
+
+    /// Get a `VMCallerCheckedAnyfunc` for the given `FuncIndex`.
+    fn get_caller_checked_anyfunc(&self, index: FuncIndex) -> VMCallerCheckedAnyfunc {
+        if index == FuncIndex::reserved_value() {
+            return VMCallerCheckedAnyfunc::default();
+        }
+
+        let sig = self.module.local.functions[index];
+        let type_index = self.signature_id(sig);
+
+        let (func_ptr, vmctx) = if let Some(def_index) = self.module.local.defined_func_index(index)
+        {
+            (
+                self.finished_functions[def_index] as *const _,
+                self.vmctx_ptr(),
+            )
+        } else {
+            let import = self.imported_function(index);
+            (import.body, import.vmctx)
+        };
+        VMCallerCheckedAnyfunc {
+            func_ptr,
+            type_index,
+            vmctx,
+        }
+    }
+
+    /// The `table.init` operation: initializes a portion of a table with a
+    /// passive element.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `Trap` error when the range within the table is out of bounds
+    /// or the range within the passive element is out of bounds.
+    pub(crate) fn table_init(
+        &self,
+        table_index: TableIndex,
+        elem_index: PassiveElemIndex,
+        dst: u32,
+        src: u32,
+        len: u32,
+        source_loc: ir::SourceLoc,
+    ) -> Result<(), Trap> {
+        // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
+
+        let table = self.get_table(table_index);
+        let passive_elements = self.passive_elements.borrow();
+        let elem = passive_elements
+            .get(&elem_index)
+            .map(|e| &**e)
+            .unwrap_or_else(|| &[]);
+
+        if src
+            .checked_add(len)
+            .map_or(true, |n| n as usize > elem.len())
+            || dst.checked_add(len).map_or(true, |m| m > table.size())
+        {
+            return Err(Trap::wasm(source_loc, ir::TrapCode::TableOutOfBounds));
+        }
+
+        // TODO(#983): investigate replacing this get/set loop with a `memcpy`.
+        for (dst, src) in (dst..dst + len).zip(src..src + len) {
+            table
+                .set(dst, elem[src as usize].clone())
+                .expect("should never panic because we already did the bounds check above");
+        }
+
+        Ok(())
+    }
+
+    /// Drop an element.
+    pub(crate) fn elem_drop(&self, elem_index: PassiveElemIndex) {
+        // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-elem-drop
+
+        let mut passive_elements = self.passive_elements.borrow_mut();
+        passive_elements.remove(&elem_index);
+        // Note that we don't check that we actually removed an element because
+        // dropping a non-passive element is a no-op (not a trap).
+    }
+
+    /// Do a `memory.copy` for a locally defined memory.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `Trap` error when the source or destination ranges are out of
+    /// bounds.
+    pub(crate) fn defined_memory_copy(
+        &self,
+        memory_index: DefinedMemoryIndex,
+        dst: u32,
+        src: u32,
+        len: u32,
+        source_loc: ir::SourceLoc,
+    ) -> Result<(), Trap> {
+        // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-memory-copy
+
+        let memory = self.memory(memory_index);
+
+        if src
+            .checked_add(len)
+            .map_or(true, |n| n as usize > memory.current_length)
+            || dst
+                .checked_add(len)
+                .map_or(true, |m| m as usize > memory.current_length)
+        {
+            return Err(Trap::wasm(source_loc, ir::TrapCode::HeapOutOfBounds));
+        }
+
+        let dst = usize::try_from(dst).unwrap();
+        let src = usize::try_from(src).unwrap();
+
+        // Bounds and casts are checked above, by this point we know that
+        // everything is safe.
+        unsafe {
+            let dst = memory.base.add(dst);
+            let src = memory.base.add(src);
+            ptr::copy(src, dst, len as usize);
+        }
+
+        Ok(())
+    }
+
+    /// Perform a `memory.copy` on an imported memory.
+    pub(crate) fn imported_memory_copy(
+        &self,
+        memory_index: MemoryIndex,
+        dst: u32,
+        src: u32,
+        len: u32,
+        source_loc: ir::SourceLoc,
+    ) -> Result<(), Trap> {
+        let import = self.imported_memory(memory_index);
+        unsafe {
+            let foreign_instance = (&*import.vmctx).instance();
+            let foreign_memory = &*import.from;
+            let foreign_index = foreign_instance.memory_index(foreign_memory);
+            foreign_instance.defined_memory_copy(foreign_index, dst, src, len, source_loc)
+        }
+    }
+
+    /// Perform the `memory.fill` operation on a locally defined memory.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `Trap` error if the memory range is out of bounds.
+    pub(crate) fn defined_memory_fill(
+        &self,
+        memory_index: DefinedMemoryIndex,
+        dst: u32,
+        val: u32,
+        len: u32,
+        source_loc: ir::SourceLoc,
+    ) -> Result<(), Trap> {
+        let memory = self.memory(memory_index);
+
+        if dst
+            .checked_add(len)
+            .map_or(true, |m| m as usize > memory.current_length)
+        {
+            return Err(Trap::wasm(source_loc, ir::TrapCode::HeapOutOfBounds));
+        }
+
+        let dst = isize::try_from(dst).unwrap();
+        let val = val as u8;
+
+        // Bounds and casts are checked above, by this point we know that
+        // everything is safe.
+        unsafe {
+            let dst = memory.base.offset(dst);
+            ptr::write_bytes(dst, val, len as usize);
+        }
+
+        Ok(())
+    }
+
+    /// Perform the `memory.fill` operation on an imported memory.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `Trap` error if the memory range is out of bounds.
+    pub(crate) fn imported_memory_fill(
+        &self,
+        memory_index: MemoryIndex,
+        dst: u32,
+        val: u32,
+        len: u32,
+        source_loc: ir::SourceLoc,
+    ) -> Result<(), Trap> {
+        let import = self.imported_memory(memory_index);
+        unsafe {
+            let foreign_instance = (&*import.vmctx).instance();
+            let foreign_memory = &*import.from;
+            let foreign_index = foreign_instance.memory_index(foreign_memory);
+            foreign_instance.defined_memory_fill(foreign_index, dst, val, len, source_loc)
+        }
+    }
+
+    /// Get a table by index regardless of whether it is locally-defined or an
+    /// imported, foreign table.
+    pub(crate) fn get_table(&self, table_index: TableIndex) -> &Table {
+        if let Some(defined_table_index) = self.module.local.defined_table_index(table_index) {
+            self.get_defined_table(defined_table_index)
+        } else {
+            self.get_foreign_table(table_index)
+        }
+    }
+
+    /// Get a locally-defined table.
+    pub(crate) fn get_defined_table(&self, index: DefinedTableIndex) -> &Table {
+        &self.tables[index]
+    }
+
+    /// Get an imported, foreign table.
+    pub(crate) fn get_foreign_table(&self, index: TableIndex) -> &Table {
+        let import = self.imported_table(index);
+        let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
+        let foreign_table = unsafe { &mut *(import).from };
+        let foreign_index = foreign_instance.table_index(foreign_table);
+        &foreign_instance.tables[foreign_index]
+    }
 }
 
 /// A handle holding an `Instance` of a WebAssembly module.
@@ -558,6 +802,7 @@ impl InstanceHandle {
         data_initializers: &[DataInitializer<'_>],
         vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
+        is_bulk_memory: bool,
         host_state: Box<dyn Any>,
     ) -> Result<Self, InstantiationError> {
         let tables = create_tables(&module);
@@ -587,6 +832,7 @@ impl InstanceHandle {
                 offsets,
                 memories,
                 tables,
+                passive_elements: Default::default(),
                 finished_functions,
                 dbg_jit_registration,
                 host_state,
@@ -651,12 +897,18 @@ impl InstanceHandle {
             VMBuiltinFunctionsArray::initialized(),
         );
 
-        // Check initializer bounds before initializing anything.
-        check_table_init_bounds(instance)?;
-        check_memory_init_bounds(instance, data_initializers)?;
+        // Check initializer bounds before initializing anything. Only do this
+        // when bulk memory is disabled, since the bulk memory proposal changes
+        // instantiation such that the intermediate results of failed
+        // initializations are visible.
+        if !is_bulk_memory {
+            check_table_init_bounds(instance)?;
+            check_memory_init_bounds(instance, data_initializers)?;
+        }
 
         // Apply the initializers.
         initialize_tables(instance)?;
+        initialize_passive_elements(instance);
         initialize_memories(instance, data_initializers)?;
         initialize_globals(instance);
 
@@ -697,12 +949,12 @@ impl InstanceHandle {
 
     /// Return a reference-counting pointer to a module.
     pub fn module(&self) -> &Arc<Module> {
-        &self.instance().module
+        self.instance().module()
     }
 
     /// Return a reference to a module.
     pub fn module_ref(&self) -> &Module {
-        &self.instance().module
+        self.instance().module_ref()
     }
 
     /// Lookup an export with the given name.
@@ -778,6 +1030,11 @@ impl InstanceHandle {
         self.instance().table_set(table_index, index, val)
     }
 
+    /// Get a table defined locally within this module.
+    pub fn get_defined_table(&self, index: DefinedTableIndex) -> &Table {
+        self.instance().get_defined_table(index)
+    }
+
     /// Return a reference to the contained `Instance`.
     pub(crate) fn instance(&self) -> &Instance {
         unsafe { &*(self.instance as *const Instance) }
@@ -813,12 +1070,12 @@ fn check_table_init_bounds(instance: &Instance) -> Result<(), InstantiationError
     let module = Arc::clone(&instance.module);
     for init in &module.table_elements {
         let start = get_table_init_start(init, instance);
-        let table = get_table(init, instance);
+        let table = instance.get_table(init.table_index);
 
         let size = usize::try_from(table.size()).unwrap();
         if size < start + init.elements.len() {
             return Err(InstantiationError::Link(LinkError(
-                "elements segment does not fit".to_owned(),
+                "table out of bounds: elements segment does not fit".to_owned(),
             )));
         }
     }
@@ -875,7 +1132,7 @@ fn check_memory_init_bounds(
             let mem_slice = get_memory_slice(init, instance);
             if mem_slice.get_mut(start..start + init.data.len()).is_none() {
                 return Err(InstantiationError::Link(LinkError(
-                    "data segment does not fit".to_owned(),
+                    "memory out of bounds: data segment does not fit".into(),
                 )));
             }
         }
@@ -913,51 +1170,60 @@ fn get_table_init_start(init: &TableElements, instance: &Instance) -> usize {
     start
 }
 
-/// Return a byte-slice view of a table's data.
-fn get_table<'instance>(init: &TableElements, instance: &'instance Instance) -> &'instance Table {
-    if let Some(defined_table_index) = instance.module.local.defined_table_index(init.table_index) {
-        &instance.tables[defined_table_index]
-    } else {
-        let import = instance.imported_table(init.table_index);
-        let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
-        let foreign_table = unsafe { &mut *(import).from };
-        let foreign_index = foreign_instance.table_index(foreign_table);
-        &foreign_instance.tables[foreign_index]
-    }
-}
-
 /// Initialize the table memory from the provided initializers.
 fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
-    let vmctx = instance.vmctx_ptr();
     let module = Arc::clone(&instance.module);
     for init in &module.table_elements {
         let start = get_table_init_start(init, instance);
-        let table = get_table(init, instance);
+        let table = instance.get_table(init.table_index);
+
+        if start
+            .checked_add(init.elements.len())
+            .map_or(true, |end| end > table.size() as usize)
+        {
+            return Err(InstantiationError::Trap(Trap::wasm(
+                ir::SourceLoc::default(),
+                ir::TrapCode::HeapOutOfBounds,
+            )));
+        }
 
         for (i, func_idx) in init.elements.iter().enumerate() {
-            let callee_sig = instance.module.local.functions[*func_idx];
-            let (callee_ptr, callee_vmctx) =
-                if let Some(index) = instance.module.local.defined_func_index(*func_idx) {
-                    (instance.finished_functions[index] as *const _, vmctx)
-                } else {
-                    let imported_func = instance.imported_function(*func_idx);
-                    (imported_func.body, imported_func.vmctx)
-                };
-            let type_index = instance.signature_id(callee_sig);
+            let anyfunc = instance.get_caller_checked_anyfunc(*func_idx);
             table
-                .set(
-                    u32::try_from(start + i).unwrap(),
-                    VMCallerCheckedAnyfunc {
-                        func_ptr: callee_ptr,
-                        type_index,
-                        vmctx: callee_vmctx,
-                    },
-                )
+                .set(u32::try_from(start + i).unwrap(), anyfunc)
                 .unwrap();
         }
     }
 
     Ok(())
+}
+
+/// Initialize the `Instance::passive_elements` map by resolving the
+/// `Module::passive_elements`'s `FuncIndex`s into `VMCallerCheckedAnyfunc`s for
+/// this instance.
+fn initialize_passive_elements(instance: &Instance) {
+    let mut passive_elements = instance.passive_elements.borrow_mut();
+    debug_assert!(
+        passive_elements.is_empty(),
+        "should only be called once, at initialization time"
+    );
+
+    passive_elements.extend(
+        instance
+            .module
+            .passive_elements
+            .iter()
+            .filter(|(_, segments)| !segments.is_empty())
+            .map(|(idx, segments)| {
+                (
+                    *idx,
+                    segments
+                        .iter()
+                        .map(|s| instance.get_caller_checked_anyfunc(*s))
+                        .collect(),
+                )
+            }),
+    );
 }
 
 /// Allocate memory for just the memories of the current module.
@@ -979,10 +1245,23 @@ fn initialize_memories(
     data_initializers: &[DataInitializer<'_>],
 ) -> Result<(), InstantiationError> {
     for init in data_initializers {
+        let memory = instance.get_memory(init.location.memory_index);
+
         let start = get_memory_init_start(init, instance);
+        if start
+            .checked_add(init.data.len())
+            .map_or(true, |end| end > memory.current_length)
+        {
+            return Err(InstantiationError::Trap(Trap::wasm(
+                ir::SourceLoc::default(),
+                ir::TrapCode::HeapOutOfBounds,
+            )));
+        }
+
         unsafe {
             let mem_slice = get_memory_slice(init, instance);
-            let to_init = &mut mem_slice[start..start + init.data.len()];
+            let end = start + init.data.len();
+            let to_init = &mut mem_slice[start..end];
             to_init.copy_from_slice(init.data);
         }
     }
@@ -1046,6 +1325,10 @@ pub enum InstantiationError {
     /// A wasm link error occured.
     #[error("Failed to link module")]
     Link(#[from] LinkError),
+
+    /// A trap ocurred during instantiation, after linking.
+    #[error("Trap occurred during instantiation")]
+    Trap(#[source] Trap),
 
     /// A compilation error occured.
     #[error("Trap occurred while invoking start function")]

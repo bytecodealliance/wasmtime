@@ -3,10 +3,11 @@
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
+use crate::Trap;
 use std::cell::RefCell;
 use std::convert::{TryFrom, TryInto};
 use wasmtime_environ::wasm::TableElementType;
-use wasmtime_environ::{TablePlan, TableStyle};
+use wasmtime_environ::{ir, TablePlan, TableStyle};
 
 /// A table instance.
 #[derive(Debug)]
@@ -85,6 +86,52 @@ impl Table {
             }
             None => Err(()),
         }
+    }
+
+    /// Copy `len` elements from `src_table[src_index..]` into `dst_table[dst_index..]`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the range is out of bounds of either the source or
+    /// destination tables.
+    pub fn copy(
+        dst_table: &Self,
+        src_table: &Self,
+        dst_index: u32,
+        src_index: u32,
+        len: u32,
+        source_loc: ir::SourceLoc,
+    ) -> Result<(), Trap> {
+        // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-copy
+
+        if src_index
+            .checked_add(len)
+            .map_or(true, |n| n > src_table.size())
+            || dst_index
+                .checked_add(len)
+                .map_or(true, |m| m > dst_table.size())
+        {
+            return Err(Trap::wasm(source_loc, ir::TrapCode::TableOutOfBounds));
+        }
+
+        let srcs = src_index..src_index + len;
+        let dsts = dst_index..dst_index + len;
+
+        // Note on the unwraps: the bounds check above means that these will
+        // never panic.
+        //
+        // TODO(#983): investigate replacing this get/set loop with a `memcpy`.
+        if dst_index <= src_index {
+            for (s, d) in (srcs).zip(dsts) {
+                dst_table.set(d, src_table.get(s).unwrap()).unwrap();
+            }
+        } else {
+            for (s, d) in srcs.rev().zip(dsts.rev()) {
+                dst_table.set(d, src_table.get(s).unwrap()).unwrap();
+            }
+        }
+
+        Ok(())
     }
 
     /// Return a `VMTableDefinition` for exposing the table to compiled wasm code.

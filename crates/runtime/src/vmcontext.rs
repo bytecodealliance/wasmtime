@@ -536,15 +536,38 @@ impl VMBuiltinFunctionsArray {
 
     pub fn initialized() -> Self {
         use crate::libcalls::*;
+
         let mut ptrs = [0; Self::len()];
+
         ptrs[BuiltinFunctionIndex::get_memory32_grow_index().index() as usize] =
             wasmtime_memory32_grow as usize;
         ptrs[BuiltinFunctionIndex::get_imported_memory32_grow_index().index() as usize] =
             wasmtime_imported_memory32_grow as usize;
+
         ptrs[BuiltinFunctionIndex::get_memory32_size_index().index() as usize] =
             wasmtime_memory32_size as usize;
         ptrs[BuiltinFunctionIndex::get_imported_memory32_size_index().index() as usize] =
             wasmtime_imported_memory32_size as usize;
+
+        ptrs[BuiltinFunctionIndex::get_table_copy_index().index() as usize] =
+            wasmtime_table_copy as usize;
+
+        ptrs[BuiltinFunctionIndex::get_table_init_index().index() as usize] =
+            wasmtime_table_init as usize;
+        ptrs[BuiltinFunctionIndex::get_elem_drop_index().index() as usize] =
+            wasmtime_elem_drop as usize;
+
+        ptrs[BuiltinFunctionIndex::get_defined_memory_copy_index().index() as usize] =
+            wasmtime_defined_memory_copy as usize;
+        ptrs[BuiltinFunctionIndex::get_imported_memory_copy_index().index() as usize] =
+            wasmtime_imported_memory_copy as usize;
+        ptrs[BuiltinFunctionIndex::get_memory_fill_index().index() as usize] =
+            wasmtime_memory_fill as usize;
+        ptrs[BuiltinFunctionIndex::get_imported_memory_fill_index().index() as usize] =
+            wasmtime_imported_memory_fill as usize;
+
+        debug_assert!(ptrs.iter().cloned().all(|p| p != 0));
+
         Self { ptrs }
     }
 }

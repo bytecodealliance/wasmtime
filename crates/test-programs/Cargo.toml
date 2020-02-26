@@ -18,7 +18,7 @@ pretty_env_logger = "0.3.0"
 tempfile = "3.1.0"
 os_pipe = "0.9"
 anyhow = "1.0.19"
-wat = "1.0.2"
+wat = "1.0.10"
 
 [features]
 test_programs = []

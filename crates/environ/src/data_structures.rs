@@ -17,13 +17,13 @@ pub mod isa {
 }
 
 pub mod entity {
-    pub use cranelift_entity::{BoxedSlice, EntityRef, PrimaryMap};
+    pub use cranelift_entity::{packed_option, BoxedSlice, EntityRef, PrimaryMap};
 }
 
 pub mod wasm {
     pub use cranelift_wasm::{
         get_vmctx_value_label, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex,
         DefinedTableIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
-        SignatureIndex, Table, TableElementType, TableIndex,
+        PassiveElemIndex, SignatureIndex, Table, TableElementType, TableIndex,
     };
 }

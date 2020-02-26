@@ -5,8 +5,8 @@ use crate::{ExternType, GlobalType, MemoryType, TableType, ValType};
 use crate::{Func, Store};
 use anyhow::{anyhow, bail, Result};
 use std::slice;
-use wasmtime_environ::wasm;
-use wasmtime_runtime::InstanceHandle;
+use wasmtime_environ::{ir, wasm};
+use wasmtime_runtime::{self as runtime, InstanceHandle};
 
 // Externals
 
@@ -405,6 +405,41 @@ impl Table {
         } else {
             bail!("failed to grow table by `{}`", delta)
         }
+    }
+
+    /// Copy `len` elements from `src_table[src_index..]` into
+    /// `dst_table[dst_index..]`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the range is out of bounds of either the source or
+    /// destination tables.
+    pub fn copy(
+        dst_table: &Table,
+        dst_index: u32,
+        src_table: &Table,
+        src_index: u32,
+        len: u32,
+    ) -> Result<()> {
+        // NB: We must use the `dst_table`'s `wasmtime_handle` for the
+        // `dst_table_index` and vice versa for `src_table` since each table can
+        // come from different modules.
+
+        let dst_table_index = dst_table.wasmtime_table_index();
+        let dst_table = dst_table.wasmtime_handle.get_defined_table(dst_table_index);
+
+        let src_table_index = src_table.wasmtime_table_index();
+        let src_table = src_table.wasmtime_handle.get_defined_table(src_table_index);
+
+        runtime::Table::copy(
+            dst_table,
+            src_table,
+            dst_index,
+            src_index,
+            len,
+            ir::SourceLoc::default(),
+        )?;
+        Ok(())
     }
 
     pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::Export {

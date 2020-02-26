@@ -26,40 +26,38 @@ fn main() -> anyhow::Result<()> {
         writeln!(out, "#[allow(non_snake_case)]")?;
         writeln!(out, "mod {} {{", strategy)?;
 
-        test_directory(&mut out, "tests/misc_testsuite", strategy)?;
-        let spec_tests = test_directory(&mut out, "tests/spec_testsuite", strategy)?;
-        // Skip running spec_testsuite tests if the submodule isn't checked
-        // out.
-        if spec_tests > 0 {
-            test_directory(&mut out, "tests/spec_testsuite/proposals/simd", strategy)
-                .expect("generating tests");
+        with_test_module(&mut out, "misc", |out| {
+            test_directory(out, "tests/misc_testsuite", strategy)?;
+            test_directory_module(out, "tests/misc_testsuite/bulk-memory-operations", strategy)?;
+            test_directory_module(out, "tests/misc_testsuite/reference-types", strategy)?;
+            Ok(())
+        })?;
 
-            test_directory(
-                &mut out,
-                "tests/spec_testsuite/proposals/multi-value",
-                strategy,
-            )
-            .expect("generating tests");
-
-            test_directory(
-                &mut out,
-                "tests/spec_testsuite/proposals/reference-types",
-                strategy,
-            )
-            .expect("generating tests");
-
-            test_directory(
-                &mut out,
-                "tests/spec_testsuite/proposals/bulk-memory-operations",
-                strategy,
-            )
-            .expect("generating tests");
-        } else {
-            println!(
-                "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \
+        with_test_module(&mut out, "spec", |out| {
+            let spec_tests = test_directory(out, "tests/spec_testsuite", strategy)?;
+            // Skip running spec_testsuite tests if the submodule isn't checked
+            // out.
+            if spec_tests > 0 {
+                test_directory_module(out, "tests/spec_testsuite/proposals/simd", strategy)?;
+                test_directory_module(out, "tests/spec_testsuite/proposals/multi-value", strategy)?;
+                test_directory_module(
+                    out,
+                    "tests/spec_testsuite/proposals/reference-types",
+                    strategy,
+                )?;
+                test_directory_module(
+                    out,
+                    "tests/spec_testsuite/proposals/bulk-memory-operations",
+                    strategy,
+                )?;
+            } else {
+                println!(
+                    "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \
                  update --remote`."
-            );
-        }
+                );
+            }
+            Ok(())
+        })?;
 
         writeln!(out, "}}")?;
     }
@@ -70,6 +68,16 @@ fn main() -> anyhow::Result<()> {
     fs::write(&output, out)?;
     drop(Command::new("rustfmt").arg(&output).status());
     Ok(())
+}
+
+fn test_directory_module(
+    out: &mut String,
+    path: impl AsRef<Path>,
+    strategy: &str,
+) -> anyhow::Result<usize> {
+    let path = path.as_ref();
+    let testsuite = &extract_name(path);
+    with_test_module(out, testsuite, |out| test_directory(out, path, strategy))
 }
 
 fn test_directory(
@@ -100,11 +108,10 @@ fn test_directory(
     dir_entries.sort();
 
     let testsuite = &extract_name(path);
-    start_test_module(out, testsuite)?;
     for entry in dir_entries.iter() {
         write_testsuite_tests(out, entry, testsuite, strategy)?;
     }
-    finish_test_module(out)?;
+
     Ok(dir_entries.len())
 }
 
@@ -119,14 +126,19 @@ fn extract_name(path: impl AsRef<Path>) -> String {
         .replace("/", "_")
 }
 
-fn start_test_module(out: &mut String, testsuite: &str) -> anyhow::Result<()> {
-    writeln!(out, "mod {} {{", testsuite)?;
-    Ok(())
-}
+fn with_test_module<T>(
+    out: &mut String,
+    testsuite: &str,
+    f: impl FnOnce(&mut String) -> anyhow::Result<T>,
+) -> anyhow::Result<T> {
+    out.push_str("mod ");
+    out.push_str(testsuite);
+    out.push_str(" {\n");
 
-fn finish_test_module(out: &mut String) -> anyhow::Result<()> {
+    let result = f(out)?;
+
     out.push_str("}\n");
-    Ok(())
+    Ok(result)
 }
 
 fn write_testsuite_tests(
@@ -180,8 +192,15 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", "simd_load_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator V8x16LoadSplat { memarg: MemoryImmediate { flags: 0, offset: 0 } }
             ("simd", "simd_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16ShrS
 
+            // Still working on implementing these. See #929.
+            ("reference_types", "table_copy_on_imported_tables") => return false,
             ("reference_types", _) => return true,
-            ("bulk_memory_operations", _) => return true,
+
+            // Still working on implementing these. See #928
+            ("bulk_memory_operations", "bulk")
+            | ("bulk_memory_operations", "data")
+            | ("bulk_memory_operations", "memory_init")
+            | ("bulk_memory_operations", "imports") => return true,
 
             _ => {}
         },
