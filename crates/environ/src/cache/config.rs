@@ -3,8 +3,6 @@
 use super::Worker;
 use anyhow::{anyhow, bail, Context, Result};
 use directories::ProjectDirs;
-use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
-use std::sync::Arc;
 use log::{trace, warn};
 use serde::{
     de::{self, Deserializer},
@@ -13,6 +11,8 @@ use serde::{
 use std::fmt::Debug;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+use std::sync::Arc;
 use std::time::Duration;
 
 // wrapped, so we have named section in config,

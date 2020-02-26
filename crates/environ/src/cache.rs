@@ -84,17 +84,13 @@ impl<'config> ModuleCacheEntry<'config> {
 
         if let Some(cached_val) = inner.get_data(&hash) {
             let mod_cache_path = inner.root_path.join(&hash);
-            inner
-                .cache_config
-                .on_cache_get_async(&mod_cache_path); // call on success
+            inner.cache_config.on_cache_get_async(&mod_cache_path); // call on success
             return Ok(cached_val);
         }
         let val_to_cache = ModuleCacheData::from_tuple(compute(state)?);
         if inner.update_data(&hash, &val_to_cache).is_some() {
             let mod_cache_path = inner.root_path.join(&hash);
-            inner
-                .cache_config
-                .on_cache_update_async(&mod_cache_path); // call on success
+            inner.cache_config.on_cache_update_async(&mod_cache_path); // call on success
         }
         Ok(val_to_cache)
     }
