@@ -9,7 +9,7 @@ topdir=$(dirname "$0")/..
 cd "$topdir"
 
 # All the wasmtime-* crates have the same version number
-version="0.10.0"
+version="0.12.0"
 
 # Update the version numbers of the crates to $version.
 echo "Updating crate versions to $version"
