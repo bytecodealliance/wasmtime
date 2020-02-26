@@ -345,22 +345,12 @@ where
 
     match &*tref.type_() {
         witx::Type::Builtin(b) => match b {
-            witx::BuiltinType::U8
-            | witx::BuiltinType::S8
-            | witx::BuiltinType::U16
-            | witx::BuiltinType::S16
-            | witx::BuiltinType::U32
-            | witx::BuiltinType::S32
-            | witx::BuiltinType::U64
-            | witx::BuiltinType::S64
-            | witx::BuiltinType::F32
-            | witx::BuiltinType::F64
-            | witx::BuiltinType::USize
-            | witx::BuiltinType::Char8 => write_val_to_ptr,
-            witx::BuiltinType::String => unimplemented!("string types"),
+            witx::BuiltinType::String => unimplemented!("string result types"),
+            _ => write_val_to_ptr,
         },
-        witx::Type::Enum(_) | witx::Type::Flags(_) | witx::Type::Int(_) => write_val_to_ptr,
-        witx::Type::Struct(_) => write_val_to_ptr,
-        _ => unimplemented!("missing marshalling result for {:?}", &*tref.type_()),
+        witx::Type::Pointer { .. } | witx::Type::ConstPointer { .. } | witx::Type::Array { .. } => {
+            unimplemented!("pointer/array result types")
+        }
+        _ => write_val_to_ptr,
     }
 }
