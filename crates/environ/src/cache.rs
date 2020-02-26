@@ -86,7 +86,6 @@ impl<'config> ModuleCacheEntry<'config> {
             let mod_cache_path = inner.root_path.join(&hash);
             inner
                 .cache_config
-                .worker()
                 .on_cache_get_async(&mod_cache_path); // call on success
             return Ok(cached_val);
         }
@@ -95,7 +94,6 @@ impl<'config> ModuleCacheEntry<'config> {
             let mod_cache_path = inner.root_path.join(&hash);
             inner
                 .cache_config
-                .worker()
                 .on_cache_update_async(&mod_cache_path); // call on success
         }
         Ok(val_to_cache)
