@@ -201,12 +201,8 @@ impl JitDumpAgent {
         match target_lexicon::HOST.architecture {
             Architecture::X86_64 => elf::header::EM_X86_64 as u32,
             Architecture::I686 => elf::header::EM_386 as u32,
-            Architecture::Arm => elf::header::EM_ARM as u32,
-            Architecture::Armv4t => elf::header::EM_ARM as u32,
-            Architecture::Armv5te => elf::header::EM_ARM as u32,
-            Architecture::Armv7 => elf::header::EM_ARM as u32,
-            Architecture::Armv7s => elf::header::EM_ARM as u32,
-            Architecture::Aarch64 => elf::header::EM_AARCH64 as u32,
+            Architecture::Arm(_) => elf::header::EM_ARM as u32,
+            Architecture::Aarch64(_) => elf::header::EM_AARCH64 as u32,
             _ => unimplemented!("unrecognized architecture"),
         }
     }
