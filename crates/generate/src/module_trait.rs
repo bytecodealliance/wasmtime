@@ -1,8 +1,8 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
+use crate::lifetimes::{anon_lifetime, LifetimeExt};
 use crate::names::Names;
-use crate::types::{anon_lifetime, type_needs_lifetime};
 use witx::Module;
 
 pub fn define_module_trait(names: &Names, m: &Module) -> TokenStream {
@@ -11,8 +11,7 @@ pub fn define_module_trait(names: &Names, m: &Module) -> TokenStream {
         // Check if we're returning an entity anotated with a lifetime,
         // in which case, we'll need to annotate the function itself, and
         // hence will need an explicit lifetime (rather than anonymous)
-        let (lifetime, is_anonymous) = if f.results.iter().any(|ret| type_needs_lifetime(&ret.tref))
-        {
+        let (lifetime, is_anonymous) = if f.results.iter().any(|ret| ret.tref.needs_lifetime()) {
             (quote!('a), false)
         } else {
             (anon_lifetime(), true)

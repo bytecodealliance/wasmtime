@@ -3,7 +3,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use witx::{AtomType, BuiltinType, Id, TypeRef};
 
-use crate::types::type_needs_lifetime;
+use crate::lifetimes::LifetimeExt;
 use crate::Config;
 
 #[derive(Debug, Clone)]
@@ -52,7 +52,7 @@ impl Names {
         match tref {
             TypeRef::Name(nt) => {
                 let ident = self.type_(&nt.name);
-                if type_needs_lifetime(&nt.tref) {
+                if nt.tref.needs_lifetime() {
                     quote!(#ident<#lifetime>)
                 } else {
                     quote!(#ident)

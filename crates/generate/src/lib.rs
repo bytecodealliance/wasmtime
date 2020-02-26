@@ -2,6 +2,7 @@ extern crate proc_macro;
 
 mod config;
 mod funcs;
+mod lifetimes;
 mod module_trait;
 mod names;
 mod types;

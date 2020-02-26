@@ -1,3 +1,4 @@
+use crate::lifetimes::{anon_lifetime, LifetimeExt};
 use crate::names::Names;
 
 use proc_macro2::{Literal, TokenStream};
@@ -13,7 +14,7 @@ pub fn define_datatype(names: &Names, namedtype: &witx::NamedType) -> TokenStrea
             witx::Type::Int(i) => define_int(names, &namedtype.name, &i),
             witx::Type::Flags(f) => define_flags(names, &namedtype.name, &f),
             witx::Type::Struct(s) => {
-                if struct_is_copy(s) {
+                if !s.needs_lifetime() {
                     define_copy_struct(names, &namedtype.name, &s)
                 } else {
                     define_ptr_struct(names, &namedtype.name, &s)
@@ -39,7 +40,7 @@ pub fn define_datatype(names: &Names, namedtype: &witx::NamedType) -> TokenStrea
 fn define_alias(names: &Names, name: &witx::Id, to: &witx::NamedType) -> TokenStream {
     let ident = names.type_(name);
     let rhs = names.type_(&to.name);
-    if type_needs_lifetime(&to.tref) {
+    if to.tref.needs_lifetime() {
         quote!(pub type #ident<'a> = #rhs<'a>;)
     } else {
         quote!(pub type #ident = #rhs;)
@@ -407,66 +408,6 @@ fn define_builtin(names: &Names, name: &witx::Id, builtin: witx::BuiltinType) ->
     }
 }
 
-// XXX DRY - should move these funcs to be a trait that Type, BuiltinType, StructDatatype,
-// UnionDatatype all implement
-pub fn type_needs_lifetime(tref: &witx::TypeRef) -> bool {
-    match &*tref.type_() {
-        witx::Type::Builtin(b) => match b {
-            witx::BuiltinType::String => true,
-            _ => false,
-        },
-        witx::Type::Enum { .. }
-        | witx::Type::Flags { .. }
-        | witx::Type::Int { .. }
-        | witx::Type::Handle { .. } => false,
-        witx::Type::Struct(s) => !struct_is_copy(&s),
-        witx::Type::Union(u) => !union_is_copy(&u),
-        witx::Type::Pointer { .. } | witx::Type::ConstPointer { .. } => true,
-        witx::Type::Array { .. } => true,
-    }
-}
-
-pub fn struct_is_copy(s: &witx::StructDatatype) -> bool {
-    s.members.iter().all(|m| match &*m.tref.type_() {
-        witx::Type::Struct(s) => struct_is_copy(&s),
-        witx::Type::Builtin(b) => match &*b {
-            witx::BuiltinType::String => false,
-            _ => true,
-        },
-        witx::Type::ConstPointer { .. } | witx::Type::Pointer { .. } | witx::Type::Array { .. } => {
-            false
-        }
-        witx::Type::Union(u) => union_is_copy(u),
-        witx::Type::Enum { .. }
-        | witx::Type::Int { .. }
-        | witx::Type::Flags { .. }
-        | witx::Type::Handle { .. } => true,
-    })
-}
-pub fn union_is_copy(u: &witx::UnionDatatype) -> bool {
-    u.variants.iter().all(|m| {
-        if let Some(tref) = &m.tref {
-            match &*tref.type_() {
-                witx::Type::Struct(s) => struct_is_copy(&s),
-                witx::Type::Builtin(b) => match &*b {
-                    witx::BuiltinType::String => false,
-                    _ => true,
-                },
-                witx::Type::ConstPointer { .. }
-                | witx::Type::Pointer { .. }
-                | witx::Type::Array { .. } => false,
-                witx::Type::Union(u) => union_is_copy(u),
-                witx::Type::Enum { .. }
-                | witx::Type::Int { .. }
-                | witx::Type::Flags { .. }
-                | witx::Type::Handle { .. } => true,
-            }
-        } else {
-            true
-        }
-    })
-}
-
 fn define_copy_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -> TokenStream {
     let ident = names.type_(name);
     let size = s.mem_size_align().size as u32;
@@ -774,7 +715,7 @@ fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDatatype) -> Toke
     });
     let validate = union_validate(names, ident.clone(), u, &ulayout);
 
-    if union_is_copy(u) {
+    if !u.needs_lifetime() {
         // Type does not have a lifetime parameter:
         quote! {
             #[derive(Clone, Debug, PartialEq)]
@@ -886,8 +827,4 @@ fn atom_token(atom: witx::AtomType) -> TokenStream {
         witx::AtomType::F32 => quote!(f32),
         witx::AtomType::F64 => quote!(f64),
     }
-}
-
-pub fn anon_lifetime() -> TokenStream {
-    quote!('_)
 }

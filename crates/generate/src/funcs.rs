@@ -1,8 +1,8 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
+use crate::lifetimes::{anon_lifetime, LifetimeExt};
 use crate::names::Names;
-use crate::types::{anon_lifetime, struct_is_copy};
 
 pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
     let funcname = func.name.as_str();
@@ -258,7 +258,7 @@ fn marshal_arg(
                 };
             }
         }
-        witx::Type::Struct(s) if struct_is_copy(&s) => {
+        witx::Type::Struct(s) if !s.needs_lifetime() => {
             let pointee_type = names.type_ref(tref, anon_lifetime());
             let arg_name = names.func_ptr_binding(&param.name);
             let name = names.func_param(&param.name);
@@ -276,7 +276,7 @@ fn marshal_arg(
                 };
             }
         }
-        witx::Type::Struct(s) if !struct_is_copy(&s) => read_conversion,
+        witx::Type::Struct(s) if s.needs_lifetime() => read_conversion,
         witx::Type::Array(arr) => {
             let pointee_type = names.type_ref(arr, anon_lifetime());
             let ptr_name = names.func_ptr_binding(&param.name);
