@@ -30,7 +30,7 @@ any knowledge of WASI, WebAssembly, or sandboxing.
 #include <errno.h>
 
 int main(int argc, char **argv) {
-    int n, m;
+    ssize_t n, m;
     char buf[BUFSIZ];
 
     if (argc != 3) {
@@ -51,13 +51,15 @@ int main(int argc, char **argv) {
     }
 
     while ((n = read(in, buf, BUFSIZ)) > 0) {
+        char *ptr = buf;
         while (n > 0) {
-            m = write(out, buf, n);
+            m = write(out, ptr, (size_t)n);
             if (m < 0) {
                 fprintf(stderr, "write error: %s\n", strerror(errno));
                 exit(1);
             }
             n -= m;
+            ptr += m;
         }
     }
 
