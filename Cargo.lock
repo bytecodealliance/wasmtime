@@ -1257,7 +1257,6 @@ dependencies = [
  "lazy_static",
  "memoffset",
  "more-asserts",
- "multi_mut",
  "quickcheck",
  "smallvec",
  "staticvec",
@@ -1331,12 +1330,6 @@ name = "more-asserts"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0debeb9fcf88823ea64d64e4a815ab1643f33127d995978e099942ce38f25238"
-
-[[package]]
-name = "multi_mut"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "816df386e5557ac1843a96f1ba8a7cbf4ab175d05ccc15c87a3cda27b4fbdece"
 
 [[package]]
 name = "num"
