@@ -1,8 +1,8 @@
 # Using the `wasmtime` CLI
 
-While unlikely to be the main way that you execute WebAssembly code, the
-Wasmtime project provides a `wasmtime` CLI tool to conveniently experiment with
-WebAssembly modules from the command line and test things out locally.
+In addition to the embedding API which allows you to use Wasmtime as a
+library, the Wasmtime project also provies a `wasmtime` CLI tool to conveniently
+execute WebAssembly modules from the command line.
 
 This section will provide a guide to the `wasmtime` CLI and major functionality
 that it contains. In short, however, you can execute a WebAssembly file
