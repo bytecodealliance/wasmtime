@@ -308,6 +308,11 @@ fn marshal_arg(
             }
         }
         witx::Type::Union(_u) => read_conversion,
+        witx::Type::Handle(_h) => {
+            let name = names.func_param(&param.name);
+            let handle_type = names.type_ref(tref, anon_lifetime());
+            quote!( let #name = #handle_type::from(#name); )
+        }
         _ => unimplemented!("argument type marshalling"),
     }
 }

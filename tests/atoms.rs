@@ -14,7 +14,10 @@ impl atoms::Atoms for WasiCtx {
         println!("INT FLOAT ARGS: {} {}", an_int, an_float);
         Ok(())
     }
-    fn double_int_return_float(&mut self, an_int: u32) -> Result<f32, types::Errno> {
+    fn double_int_return_float(
+        &mut self,
+        an_int: u32,
+    ) -> Result<types::AliasToFloat, types::Errno> {
         Ok((an_int as f32) * 2.0)
     }
 }
@@ -75,7 +78,7 @@ impl DoubleIntExercise {
             self.return_loc.ptr as i32,
         );
 
-        let return_val: GuestRef<f32> = guest_memory
+        let return_val: GuestRef<types::AliasToFloat> = guest_memory
             .ptr(self.return_loc.ptr)
             .expect("return loc ptr")
             .as_ref()
