@@ -28,10 +28,10 @@ Cross-compiling to WebAssembly involves a number of knobs that need
 configuration, but you can often gloss over these internal details by using
 build tooling intended for the WASI target. For example we can start out writing
 a WebAssembly binary with [`cargo
-wasi`](https://github.com/alexcrichton/cargo-wasi).
+wasi`](https://github.com/bytecodealliance/cargo-wasi).
 
 First up we'll [install `cargo
-wasi`](https://alexcrichton.github.io/cargo-wasi/install.html):
+wasi`](https://bytecodealliance.github.io/cargo-wasi/install.html):
 
 ```sh
 $ cargo install cargo-wasi
@@ -71,7 +71,7 @@ Hello, world!
 ```
 
 You can check out the [introductory documentation of
-`cargo-wasi`](https://alexcrichton.github.io/cargo-wasi/hello-world.html) as
+`cargo-wasi`](https://bytecodealliance.github.io/cargo-wasi/hello-world.html) as
 well for some more information.
 
 ## Writing Libraries

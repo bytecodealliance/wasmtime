@@ -18,6 +18,7 @@
 - [Writing WebAssembly](./wasm.md)
   - [Rust](./wasm-rust.md)
   - [C/C++](./wasm-c.md)
+  - [WebAssembly Text Format (`*.wat`)](./wasm-wat.md)
   - [Example: Markdown Parser](./wasm-markdown.md)
 - [Embedding Wasmtime](embed.md)
   - [Rust API](./embed-rust.md)
