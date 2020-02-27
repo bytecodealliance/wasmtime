@@ -5,7 +5,7 @@ using System.Linq;
 namespace Wasmtime
 {
     /// <summary>
-    /// Represents a build of WASI instances.
+    /// Represents a builder of <see cref="Wasi"/> instances.
     /// </summary>
     public class WasiBuilder
     {

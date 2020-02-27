@@ -20,6 +20,17 @@ namespace Wasmtime
             }
         }
 
+        internal Engine(Interop.WasmConfigHandle config)
+        {
+            Handle = Interop.wasm_engine_new_with_config(config);
+            config.SetHandleAsInvalid();
+
+            if (Handle.IsInvalid)
+            {
+                throw new WasmtimeException("Failed to create Wasmtime engine.");
+            }
+        }
+
         /// <summary>
         /// Creates a new Wasmtime <see cref="Store" />.
         /// </summary>
