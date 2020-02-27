@@ -87,22 +87,13 @@ Hello, world!
 [📚 Read the Wasmtime guide here! 📚][guide]
 
 The [wasmtime guide][guide] is the best starting point to learn about what
-Wasmtime can do for you or help answer your questions about Wasmtime.
-
-### License
-
-This project is licensed under the Apache License, Version 2.0,
-([LICENSE](LICENSE) or http://www.apache.org/licenses/LICENSE-2.0) with
-the [LLVM exception](https://spdx.org/licenses/LLVM-exception.html).
-
-### Contributing
-
-**[See the "Contributing" section of the guide for information on
-hacking on Wasmtime!][contributing]**
+Wasmtime can do for you or help answer your questions about Wasmtime. If you're
+curious in contributing to Wasmtime, [it can also help you do
+that][contributing]!.
 
 [contributing]: https://bytecodealliance.github.io/wasmtime/contributing.html
 [guide]: https://bytecodealliance.github.io/wasmtime
 
 ---
 
-It's wasmtime.
+It's Wasmtime.
