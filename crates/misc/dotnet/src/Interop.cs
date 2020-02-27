@@ -858,6 +858,7 @@ namespace Wasmtime
         public static extern uint wasm_memory_size(MemoryHandle memory);
 
         [DllImport(LibraryName)]
+        [return: MarshalAs(UnmanagedType.I1)]
         public static extern bool wasm_memory_grow(MemoryHandle memory, uint delta);
 
         // Wasm config
@@ -894,6 +895,7 @@ namespace Wasmtime
         public static extern void wasi_config_inherit_env(WasiConfigHandle config);
 
         [DllImport(LibraryName)]
+        [return: MarshalAs(UnmanagedType.I1)]
         public static extern bool wasi_config_set_stdin_file(
             WasiConfigHandle config,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string path
@@ -903,6 +905,7 @@ namespace Wasmtime
         public static extern void wasi_config_inherit_stdin(WasiConfigHandle config);
 
         [DllImport(LibraryName)]
+        [return: MarshalAs(UnmanagedType.I1)]
         public static extern bool wasi_config_set_stdout_file(
             WasiConfigHandle config,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string path
@@ -912,6 +915,7 @@ namespace Wasmtime
         public static extern void wasi_config_inherit_stdout(WasiConfigHandle config);
 
         [DllImport(LibraryName)]
+        [return: MarshalAs(UnmanagedType.I1)]
         public static extern bool wasi_config_set_stderr_file(
             WasiConfigHandle config,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string path
@@ -921,6 +925,7 @@ namespace Wasmtime
         public static extern void wasi_config_inherit_stderr(WasiConfigHandle config);
 
         [DllImport(LibraryName)]
+        [return: MarshalAs(UnmanagedType.I1)]
         public static extern bool wasi_config_preopen_dir(
             WasiConfigHandle config,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
@@ -965,7 +970,7 @@ namespace Wasmtime
         public static extern void wasmtime_config_strategy_set(WasmConfigHandle config, wasmtime_strategy_t strategy);
 
         [DllImport(LibraryName)]
-        public static extern void wasmtime_config_cranelift_debug_verifier_set(WasmConfigHandle config, bool enable);
+        public static extern void wasmtime_config_cranelift_debug_verifier_set(WasmConfigHandle config, [MarshalAs(UnmanagedType.I1)] bool enable);
 
         [DllImport(LibraryName)]
         public static extern void wasmtime_config_cranelift_opt_level_set(WasmConfigHandle config, wasmtime_opt_level_t level);
