@@ -13,7 +13,3 @@ WASI doesn't yet support `setjmp`/`longjmp` or C++ exceptions, as it is
 waiting for [unwinding support in WebAssembly].
 
 [unwinding support in WebAssembly]: https://github.com/WebAssembly/exception-handling/
-
-Some C++ programs, particularly those using `<iostream>`, may see warnings
-about function signature mismatches; this is a
-[known bug](https://bugs.llvm.org/show_bug.cgi?id=40412).
