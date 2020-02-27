@@ -32,7 +32,7 @@ pub enum ObjectTrapCollection {
 /// A builder for `ObjectBackend`.
 pub struct ObjectBuilder {
     isa: Box<dyn TargetIsa>,
-    name: String,
+    name: Vec<u8>,
     collect_traps: ObjectTrapCollection,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     function_alignment: u64,
@@ -49,15 +49,15 @@ impl ObjectBuilder {
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
     /// argument, use `cranelift_module::default_libcall_names()`.
-    pub fn new(
+    pub fn new<V: Into<Vec<u8>>>(
         isa: Box<dyn TargetIsa>,
-        name: String,
+        name: V,
         collect_traps: ObjectTrapCollection,
         libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     ) -> Self {
         Self {
             isa,
-            name,
+            name: name.into(),
             collect_traps,
             libcall_names,
             function_alignment: 1,
@@ -104,7 +104,7 @@ impl Backend for ObjectBackend {
     fn new(builder: ObjectBuilder) -> Self {
         let triple = builder.isa.triple();
         let mut object = Object::new(triple.binary_format, triple.architecture);
-        object.add_file_symbol(builder.name.as_bytes().to_vec());
+        object.add_file_symbol(builder.name);
         Self {
             isa: builder.isa,
             object,
