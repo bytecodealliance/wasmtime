@@ -22,6 +22,41 @@ use std::{
 };
 // use wasmtime_environ::BuiltinFunctionIndex;
 
+mod magic {
+    /// An index type for builtin functions.
+    pub struct BuiltinFunctionIndex(u32);
+
+    impl BuiltinFunctionIndex {
+        /// Returns an index for wasm's `memory.grow` builtin function.
+        pub const fn get_memory32_grow_index() -> Self {
+            Self(0)
+        }
+        /// Returns an index for wasm's imported `memory.grow` builtin function.
+        pub const fn get_imported_memory32_grow_index() -> Self {
+            Self(1)
+        }
+        /// Returns an index for wasm's `memory.size` builtin function.
+        pub const fn get_memory32_size_index() -> Self {
+            Self(2)
+        }
+        /// Returns an index for wasm's imported `memory.size` builtin function.
+        pub const fn get_imported_memory32_size_index() -> Self {
+            Self(3)
+        }
+        /// Returns the total number of builtin functions.
+        pub const fn builtin_functions_total_number() -> u32 {
+            4
+        }
+
+        /// Return the index as an u32 number.
+        pub const fn index(&self) -> u32 {
+            self.0
+        }
+    }
+}
+
+use magic::BuiltinFunctionIndex;
+
 /// Size of a pointer on the target in bytes.
 const WORD_SIZE: u32 = 8;
 
