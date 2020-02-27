@@ -94,17 +94,24 @@ async function run() {
     } catch (e) {
       if (i === retries - 1)
         throw e;
-      console.log("ERROR: ", JSON.stringify(e, null, 2));
-      console.log("ERROR: ", e.message);
-      console.log(e.stack);
+      logError(e);
       console.log("RETRYING after 10s");
       await sleep(10000)
     }
   }
 }
 
+function logError(e) {
+  console.log("ERROR: ", e.message);
+  try {
+    console.log(JSON.stringify(e, null, 2));
+  } catch (e) {
+    // ignore json errors for now
+  }
+  console.log(e.stack);
+}
+
 run().catch(err => {
-  console.log("ERROR: ", JSON.stringify(err, null, 2));
+  logError(err);
   core.setFailed(err.message);
-  console.log(err.stack);
 });
