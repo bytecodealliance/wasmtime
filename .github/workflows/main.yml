@@ -337,6 +337,12 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
+    # Postprocess the macOS dylib a bit to have a more reasonable `LC_ID_DYLIB`
+    # directive than the default one that comes out of the linker when typically
+    # doing `cargo build`. For more info see #984
+    - run: install_name_tool -id "@rpath/libwasmtime.dylib" target/release/libwasmtime.dylib
+      if: matrix.os == 'macos-latest'
+
     # ... and now perform some goop to move all the relevant artifacts into
     # something that we'll upload from this action.
 
