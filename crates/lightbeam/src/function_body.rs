@@ -403,65 +403,65 @@ where
                         let max_params = then_block.params.max(else_block.params);
 
                         match (
-                        (&mut then_block.calling_convention, &then.to_drop),
-                        (&mut else_block.calling_convention, &else_.to_drop),
-                    ) {
-                        ((Some(Left(ref cc)), _), ref mut other @ (None, _))
-                        | (ref mut other @ (None, _), (Some(Left(ref cc)), _)) => {
-                            let mut cc = ctx.serialize_block_args(cc, max_params)?;
-                            if let Some(to_drop) = other.1 {
-                                drop_elements(&mut cc.arguments, to_drop.clone());
-                            }
-                            *other.0 = Some(Left(cc));
-                            Ok(())
-                        },
-                        (
-                            (ref mut then_cc @ None, then_to_drop),
-                            (ref mut else_cc @ None, else_to_drop),
-                        ) => {
-                            let virt_cc = if !then_block_should_serialize_args
-                                || !else_block_should_serialize_args
-                            {
-                                Some(ctx.virtual_calling_convention())
-                            } else {
-                                None
-                            };
-
-                            let cc = if then_block_should_serialize_args
-                                || else_block_should_serialize_args { let a = ctx.serialize_args(max_params)? ; Some(a) } else { None };
-
-                            **then_cc = if then_block_should_serialize_args {
-                                let mut cc = cc.clone().unwrap();
-                                if let Some(to_drop) = then_to_drop.clone() {
-                                    drop_elements(&mut cc.arguments, to_drop);
+                            (&mut then_block.calling_convention, &then.to_drop),
+                            (&mut else_block.calling_convention, &else_.to_drop),
+                        ) {
+                            ((Some(Left(ref cc)), _), ref mut other @ (None, _))
+                            | (ref mut other @ (None, _), (Some(Left(ref cc)), _)) => {
+                                let mut cc = ctx.serialize_block_args(cc, max_params)?;
+                                if let Some(to_drop) = other.1 {
+                                    drop_elements(&mut cc.arguments, to_drop.clone());
                                 }
-                                Some(Left(cc))
-                            } else {
-                                let mut cc = virt_cc.clone().unwrap();
-                                if let Some(to_drop) = then_to_drop.clone() {
-                                    drop_elements(&mut cc.stack, to_drop);
-                                }
-                                Some(Right(cc))
-                            };
-                            **else_cc = if else_block_should_serialize_args {
-                                let mut cc = cc.unwrap();
-                                if let Some(to_drop) = else_to_drop.clone() {
-                                    drop_elements(&mut cc.arguments, to_drop);
-                                }
-                                Some(Left(cc))
-                            } else {
-                                let mut cc = virt_cc.unwrap();
-                                if let Some(to_drop) = else_to_drop.clone() {
-                                    drop_elements(&mut cc.stack, to_drop);
-                                }
-                                Some(Right(cc))
-                            };
-                            Ok(())
-                        },
-                        _ => Err(Error::Microwasm(
-                            "unimplemented: Can't pass different params to different sides of `br_if` yet".to_string(),
-                        )),
-                    }
+                                *other.0 = Some(Left(cc));
+                                Ok(())
+                            },
+                            (
+                                (ref mut then_cc @ None, then_to_drop),
+                                (ref mut else_cc @ None, else_to_drop),
+                            ) => {
+                                let virt_cc = if !then_block_should_serialize_args
+                                    || !else_block_should_serialize_args
+                                {
+                                    Some(ctx.virtual_calling_convention())
+                                } else {
+                                    None
+                                };
+    
+                                let cc = if then_block_should_serialize_args
+                                    || else_block_should_serialize_args { let a = ctx.serialize_args(max_params)? ; Some(a) } else { None };
+    
+                                **then_cc = if then_block_should_serialize_args {
+                                    let mut cc = cc.clone().unwrap();
+                                    if let Some(to_drop) = then_to_drop.clone() {
+                                        drop_elements(&mut cc.arguments, to_drop);
+                                    }
+                                    Some(Left(cc))
+                                } else {
+                                    let mut cc = virt_cc.clone().unwrap();
+                                    if let Some(to_drop) = then_to_drop.clone() {
+                                        drop_elements(&mut cc.stack, to_drop);
+                                    }
+                                    Some(Right(cc))
+                                };
+                                **else_cc = if else_block_should_serialize_args {
+                                    let mut cc = cc.unwrap();
+                                    if let Some(to_drop) = else_to_drop.clone() {
+                                        drop_elements(&mut cc.arguments, to_drop);
+                                    }
+                                    Some(Left(cc))
+                                } else {
+                                    let mut cc = virt_cc.unwrap();
+                                    if let Some(to_drop) = else_to_drop.clone() {
+                                        drop_elements(&mut cc.stack, to_drop);
+                                    }
+                                    Some(Right(cc))
+                                };
+                                Ok(())
+                            },
+                            _ => Err(Error::Microwasm(
+                                "unimplemented: Can't pass different params to different sides of `br_if` yet".to_string(),
+                            )),
+                        }
                     };
 
                     match (then_block_parts, else_block_parts) {
@@ -516,76 +516,76 @@ where
                         .collect::<Vec<_>>();
 
                     ctx.br_table(target_labels, label, |ctx| {
-                    let mut cc = None;
-                    let mut max_params = params;
-                    let mut max_num_callers = num_callers;
+                        let mut cc = None;
+                        let mut max_params = params;
+                        let mut max_num_callers = num_callers;
 
-                    for target in targets.iter().chain(std::iter::once(&default)).unique() {
-                        let block = blocks.get_mut(&target.target).unwrap();
-                        block.actual_num_callers += 1;
+                        for target in targets.iter().chain(std::iter::once(&default)).unique() {
+                            let block = blocks.get_mut(&target.target).unwrap();
+                            block.actual_num_callers += 1;
 
-                        if block.calling_convention.is_some() {
-                            let new_cc = block.calling_convention.clone();
+                            if block.calling_convention.is_some() {
+                                let new_cc = block.calling_convention.clone();
 
-                            if !(cc.is_none() || cc == new_cc) {
-                                return Err(Error::Microwasm(
-                                    "Can't pass different params to different elements of `br_table` yet"
-                                    .to_string()));
+                                if !(cc.is_none() || cc == new_cc) {
+                                    return Err(Error::Microwasm(
+                                        "Can't pass different params to different elements of `br_table` yet"
+                                        .to_string()));
+                                }
+                                cc = new_cc;
                             }
-                            cc = new_cc;
+
+                            if let Some(max) = max_num_callers {
+                                max_num_callers = block.num_callers.map(|n| max.max(n));
+                            }
+
+                            max_params = max_params.max(
+                                block.params
+                                    + target
+                                        .to_drop
+                                        .as_ref()
+                                        .map(|t| t.clone().count())
+                                        .unwrap_or_default() as u32,
+                            );
                         }
 
-                        if let Some(max) = max_num_callers {
-                            max_num_callers = block.num_callers.map(|n| max.max(n));
+                        let temp: Result<
+                            Either<BlockCallingConvention, VirtualCallingConvention>,
+                            Error,
+                        > = cc
+                            .map(|cc| match cc {
+                                Left(cc) => {
+                                    let tmp = ctx.serialize_block_args(&cc, max_params)?;
+                                    Ok(Left(tmp))
+                                }
+                                Right(cc) => Ok(Right(cc)),
+                            })
+                            .unwrap_or_else(|| {
+                                if max_num_callers.map(|callers| callers <= 1).unwrap_or(false) {
+                                    Ok(Right(ctx.virtual_calling_convention()))
+                                } else {
+                                    let tmp = ctx.serialize_args(max_params)?;
+                                    Ok(Left(tmp))
+                                }
+                            });
+                        let cc = match temp.unwrap() {
+                            Right(rr) => Right(rr),
+                            Left(l) => Left(l),
+                        };
+
+                        for target in targets.iter().chain(std::iter::once(&default)).unique() {
+                            let block = blocks.get_mut(&target.target).unwrap();
+                            let mut cc = cc.clone();
+                            if let Some(to_drop) = target.to_drop.clone() {
+                                match &mut cc {
+                                    Left(cc) => drop_elements(&mut cc.arguments, to_drop),
+                                    Right(cc) => drop_elements(&mut cc.stack, to_drop),
+                                }
+                            }
+                            block.calling_convention = Some(cc);
                         }
-
-                        max_params = max_params.max(
-                            block.params
-                                + target
-                                    .to_drop
-                                    .as_ref()
-                                    .map(|t| t.clone().count())
-                                    .unwrap_or_default() as u32,
-                        );
-                    }
-
-                    let temp: Result<
-                        Either<BlockCallingConvention, VirtualCallingConvention>,
-                        Error,
-                    > = cc
-                        .map(|cc| match cc {
-                            Left(cc) => {
-                                let tmp = ctx.serialize_block_args(&cc, max_params)?;
-                                Ok(Left(tmp))
-                            }
-                            Right(cc) => Ok(Right(cc)),
-                        })
-                        .unwrap_or_else(|| {
-                            if max_num_callers.map(|callers| callers <= 1).unwrap_or(false) {
-                                Ok(Right(ctx.virtual_calling_convention()))
-                            } else {
-                                let tmp = ctx.serialize_args(max_params)?;
-                                Ok(Left(tmp))
-                            }
-                        });
-                    let cc = match temp.unwrap() {
-                        Right(rr) => Right(rr),
-                        Left(l) => Left(l),
-                    };
-
-                    for target in targets.iter().chain(std::iter::once(&default)).unique() {
-                        let block = blocks.get_mut(&target.target).unwrap();
-                        let mut cc = cc.clone();
-                        if let Some(to_drop) = target.to_drop.clone() {
-                            match &mut cc {
-                                Left(cc) => drop_elements(&mut cc.arguments, to_drop),
-                                Right(cc) => drop_elements(&mut cc.stack, to_drop),
-                            }
-                        }
-                        block.calling_convention = Some(cc);
-                    }
-                    Ok(())
-                })?;
+                        Ok(())
+                    })?;
                 }
                 Operator::Swap(depth) => ctx.swap(depth),
                 Operator::Pick(depth) => ctx.pick(depth),
