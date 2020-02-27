@@ -1,26 +1,25 @@
 use crate::{GuestError, GuestPtr, GuestPtrMut};
 
-pub trait GuestType: Sized {
+pub trait GuestType<'a>: Sized + Clone {
     // These are morally the same as Rust ::std::mem::size_of / align_of, but they return
     // a u32 because the wasm memory space is 32 bits. They have a different names so they
     // don't collide with the std::mem methods.
     fn size() -> u32;
     fn align() -> u32;
     fn name() -> String;
-    fn validate<'a>(location: &GuestPtr<'a, Self>) -> Result<(), GuestError>;
+    fn validate(location: &GuestPtr<'a, Self>) -> Result<(), GuestError>;
+    fn read(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError>;
+    fn write(&self, location: &GuestPtrMut<'a, Self>);
 }
 
-pub trait GuestTypeClone<'a>: GuestType + Clone {
-    fn read_from_guest(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError>;
-    fn write_to_guest(&self, location: &GuestPtrMut<'a, Self>);
-}
-// Following trait system in Rust, Copy implies Clone
-pub trait GuestTypeCopy<'a>: GuestTypeClone<'a> + Copy {}
+/// Represents any guest type which can transparently be represented
+/// as a host type.
+pub trait GuestTypeTransparent<'a>: GuestType<'a> + Copy {}
 
 macro_rules! builtin_type {
     ( $( $t:ident ), * ) => {
         $(
-        impl GuestType for $t {
+        impl<'a> GuestType<'a> for $t {
             fn size() -> u32 {
                 ::std::mem::size_of::<$t>() as u32
             }
@@ -33,25 +32,20 @@ macro_rules! builtin_type {
             fn validate(_ptr: &GuestPtr<$t>) -> Result<(), GuestError> {
                 Ok(())
             }
-        }
-        impl<'a> GuestTypeClone<'a> for $t {
-            fn read_from_guest(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
+            fn read(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
                 Ok(*location.as_ref()?)
             }
-            fn write_to_guest(&self, location: &GuestPtrMut<'a, Self>) {
+            fn write(&self, location: &GuestPtrMut<'a, Self>) {
                 unsafe { (location.as_raw() as *mut $t).write(*self) };
             }
         }
-        impl<'a> GuestTypeCopy<'a> for $t {}
+        impl<'a> GuestTypeTransparent<'a> for $t {}
         )*
     };
 }
 
 // These definitions correspond to all the witx BuiltinType variants that are Copy:
 builtin_type!(u8, i8, u16, i16, u32, i32, u64, i64, f32, f64, usize);
-
-// FIXME implement GuestType for char. needs to validate that its a code point. what is the sizeof a char?
-// FIXME implement GuestType for String. how does validate work for array types?
 
 pub trait GuestErrorType {
     type Context;

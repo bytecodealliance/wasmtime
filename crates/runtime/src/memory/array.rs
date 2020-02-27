@@ -1,11 +1,11 @@
 use super::ptr::{GuestPtr, GuestRef};
-use crate::{GuestError, GuestType, GuestTypeCopy};
+use crate::{GuestError, GuestType, GuestTypeTransparent};
 use std::{fmt, ops::Deref};
 
 #[derive(Clone)]
 pub struct GuestArray<'a, T>
 where
-    T: GuestType,
+    T: GuestType<'a>,
 {
     pub(super) ptr: GuestPtr<'a, T>,
     pub(super) num_elems: u32,
@@ -13,7 +13,7 @@ where
 
 impl<'a, T> fmt::Debug for GuestArray<'a, T>
 where
-    T: GuestType + fmt::Debug,
+    T: GuestType<'a> + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -26,7 +26,7 @@ where
 
 impl<'a, T> GuestArray<'a, T>
 where
-    T: GuestType,
+    T: GuestType<'a>,
 {
     pub fn iter(&self) -> GuestArrayIter<'a, T> {
         let next = GuestPtr {
@@ -44,7 +44,7 @@ where
 
 pub struct GuestArrayIter<'a, T>
 where
-    T: GuestType,
+    T: GuestType<'a>,
 {
     next: GuestPtr<'a, T>,
     num_elems: u32,
@@ -53,7 +53,7 @@ where
 
 impl<'a, T> Iterator for GuestArrayIter<'a, T>
 where
-    T: GuestType,
+    T: GuestType<'a>,
 {
     type Item = Result<GuestPtr<'a, T>, GuestError>;
 
@@ -79,7 +79,7 @@ where
 
 impl<'a, T> GuestArray<'a, T>
 where
-    T: GuestTypeCopy<'a>,
+    T: GuestTypeTransparent<'a>,
 {
     pub fn as_ref(&self) -> Result<GuestArrayRef<'a, T>, GuestError> {
         let mut next = self.ptr.elem(0)?;
@@ -109,7 +109,7 @@ where
 
 pub struct GuestArrayRef<'a, T>
 where
-    T: GuestTypeCopy<'a>,
+    T: GuestTypeTransparent<'a>,
 {
     ref_: GuestRef<'a, T>,
     num_elems: u32,
@@ -117,7 +117,7 @@ where
 
 impl<'a, T> fmt::Debug for GuestArrayRef<'a, T>
 where
-    T: GuestTypeCopy<'a> + fmt::Debug,
+    T: GuestTypeTransparent<'a> + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -130,7 +130,7 @@ where
 
 impl<'a, T> Deref for GuestArrayRef<'a, T>
 where
-    T: GuestTypeCopy<'a>,
+    T: GuestTypeTransparent<'a>,
 {
     type Target = [T];
 
@@ -148,7 +148,7 @@ where
 mod test {
     use crate::{
         memory::ptr::{GuestPtr, GuestPtrMut},
-        GuestError, GuestMemory, GuestTypeClone, Region,
+        GuestError, GuestMemory, GuestType, Region,
     };
 
     #[repr(align(4096))]
@@ -249,7 +249,7 @@ mod test {
         let contents = arr
             .iter()
             .map(|ptr_ptr| {
-                *GuestTypeClone::read_from_guest(&ptr_ptr.expect("valid ptr to ptr"))
+                *GuestType::read(&ptr_ptr.expect("valid ptr to ptr"))
                     .expect("valid ptr to some value")
                     .as_ref()
                     .expect("deref ptr to some value")

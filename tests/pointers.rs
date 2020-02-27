@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle_runtime::{GuestError, GuestPtr, GuestPtrMut, GuestRefMut};
+use wiggle_runtime::{GuestError, GuestPtr, GuestPtrMut, GuestRefMut, GuestType};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle_generate::from_witx!({
@@ -38,13 +38,11 @@ impl pointers::Pointers for WasiCtx {
         println!("wrote to input2_ref {:?}", input3);
 
         // Read ptr value from mutable ptr:
-        let input4_ptr: GuestPtr<types::Excuse> = wiggle_runtime::GuestTypeClone::read_from_guest(
-            &input4_ptr_ptr.as_immut(),
-        )
-        .map_err(|e| {
-            eprintln!("input4_ptr_ptr error: {}", e);
-            types::Errno::InvalidArg
-        })?;
+        let input4_ptr: GuestPtr<types::Excuse> = GuestType::read(&input4_ptr_ptr.as_immut())
+            .map_err(|e| {
+                eprintln!("input4_ptr_ptr error: {}", e);
+                types::Errno::InvalidArg
+            })?;
 
         // Read enum value from that ptr:
         let input4: types::Excuse = *input4_ptr.as_ref().map_err(|e| {

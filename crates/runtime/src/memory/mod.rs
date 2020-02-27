@@ -43,7 +43,7 @@ impl<'a> GuestMemory<'a> {
             && r.start <= (self.len - r.len)
     }
 
-    pub fn ptr<T: GuestType>(&'a self, at: u32) -> Result<GuestPtr<'a, T>, GuestError> {
+    pub fn ptr<T: GuestType<'a>>(&'a self, at: u32) -> Result<GuestPtr<'a, T>, GuestError> {
         let region = Region {
             start: at,
             len: T::size(),
@@ -61,7 +61,7 @@ impl<'a> GuestMemory<'a> {
         })
     }
 
-    pub fn ptr_mut<T: GuestType>(&'a self, at: u32) -> Result<GuestPtrMut<'a, T>, GuestError> {
+    pub fn ptr_mut<T: GuestType<'a>>(&'a self, at: u32) -> Result<GuestPtrMut<'a, T>, GuestError> {
         let ptr = self.ptr(at)?;
         Ok(GuestPtrMut {
             mem: ptr.mem,

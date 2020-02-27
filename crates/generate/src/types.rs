@@ -105,7 +105,7 @@ fn define_int(names: &Names, name: &witx::Id, i: &witx::IntDatatype) -> TokenStr
             }
         }
 
-        impl wiggle_runtime::GuestType for #ident {
+        impl<'a> wiggle_runtime::GuestType<'a> for #ident {
             fn size() -> u32 {
                 ::std::mem::size_of::<#repr>() as u32
             }
@@ -118,24 +118,24 @@ fn define_int(names: &Names, name: &witx::Id, i: &witx::IntDatatype) -> TokenStr
                 stringify!(#ident).to_owned()
             }
 
-            fn validate<'a>(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<(), wiggle_runtime::GuestError> {
+            fn validate(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<(), wiggle_runtime::GuestError> {
                 use ::std::convert::TryFrom;
                 let raw: #repr = unsafe { (location.as_raw() as *const #repr).read() };
                 let _ = #ident::try_from(raw)?;
                 Ok(())
             }
-        }
 
-        impl<'a> wiggle_runtime::GuestTypeCopy<'a> for #ident {}
-        impl<'a> wiggle_runtime::GuestTypeClone<'a> for #ident {
-            fn read_from_guest(location: &wiggle_runtime::GuestPtr<#ident>) -> Result<#ident, wiggle_runtime::GuestError> {
+            fn read(location: &wiggle_runtime::GuestPtr<#ident>) -> Result<#ident, wiggle_runtime::GuestError> {
                 Ok(*location.as_ref()?)
             }
-            fn write_to_guest(&self, location: &wiggle_runtime::GuestPtrMut<#ident>) {
+
+            fn write(&self, location: &wiggle_runtime::GuestPtrMut<#ident>) {
                 let val: #repr = #repr::from(*self);
                 unsafe { (location.as_raw() as *mut #repr).write(val) };
             }
         }
+
+        impl<'a> wiggle_runtime::GuestTypeTransparent<'a> for #ident {}
     }
 }
 
@@ -258,7 +258,7 @@ fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDatatype) -> Toke
             }
         }
 
-        impl wiggle_runtime::GuestType for #ident {
+        impl<'a> wiggle_runtime::GuestType<'a> for #ident {
             fn size() -> u32 {
                 ::std::mem::size_of::<#repr>() as u32
             }
@@ -271,24 +271,24 @@ fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDatatype) -> Toke
                 stringify!(#ident).to_owned()
             }
 
-            fn validate<'a>(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<(), wiggle_runtime::GuestError> {
+            fn validate(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<(), wiggle_runtime::GuestError> {
                 use ::std::convert::TryFrom;
                 let raw: #repr = unsafe { (location.as_raw() as *const #repr).read() };
                 let _ = #ident::try_from(raw)?;
                 Ok(())
             }
-        }
 
-        impl<'a> wiggle_runtime::GuestTypeCopy<'a> for #ident {}
-        impl<'a> wiggle_runtime::GuestTypeClone<'a> for #ident {
-            fn read_from_guest(location: &wiggle_runtime::GuestPtr<#ident>) -> Result<#ident, wiggle_runtime::GuestError> {
+            fn read(location: &wiggle_runtime::GuestPtr<#ident>) -> Result<#ident, wiggle_runtime::GuestError> {
                 Ok(*location.as_ref()?)
             }
-            fn write_to_guest(&self, location: &wiggle_runtime::GuestPtrMut<#ident>) {
+
+            fn write(&self, location: &wiggle_runtime::GuestPtrMut<#ident>) {
                 let val: #repr = #repr::from(*self);
                 unsafe { (location.as_raw() as *mut #repr).write(val) };
             }
         }
+
+        impl<'a> wiggle_runtime::GuestTypeTransparent<'a> for #ident {}
     }
 }
 
@@ -364,37 +364,39 @@ fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenS
             }
         }
 
-        impl wiggle_runtime::GuestType for #ident {
+        impl<'a> wiggle_runtime::GuestType<'a> for #ident {
             fn size() -> u32 {
                 ::std::mem::size_of::<#repr>() as u32
             }
+
             fn align() -> u32 {
                 ::std::mem::align_of::<#repr>() as u32
             }
+
             fn name() -> String {
                 stringify!(#ident).to_owned()
             }
-            fn validate<'a>(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<(), wiggle_runtime::GuestError> {
+
+            fn validate(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<(), wiggle_runtime::GuestError> {
                 use ::std::convert::TryFrom;
                 let raw: #repr = unsafe { (location.as_raw() as *const #repr).read() };
                 let _ = #ident::try_from(raw)?;
                 Ok(())
             }
-        }
 
-        impl<'a> wiggle_runtime::GuestTypeCopy<'a> for #ident {}
-        impl<'a> wiggle_runtime::GuestTypeClone<'a> for #ident {
-            fn read_from_guest(location: &wiggle_runtime::GuestPtr<#ident>) -> Result<#ident, wiggle_runtime::GuestError> {
+            fn read(location: &wiggle_runtime::GuestPtr<#ident>) -> Result<#ident, wiggle_runtime::GuestError> {
                 // Perform validation as part of as_ref:
                 let r = location.as_ref()?;
                 Ok(*r)
             }
-            fn write_to_guest(&self, location: &wiggle_runtime::GuestPtrMut<#ident>) {
+
+            fn write(&self, location: &wiggle_runtime::GuestPtrMut<#ident>) {
                 let val: #repr = #repr::from(*self);
                 unsafe { (location.as_raw() as *mut #repr).write(val) };
             }
         }
 
+        impl<'a> wiggle_runtime::GuestTypeTransparent<'a> for #ident {}
     }
 }
 
@@ -434,30 +436,35 @@ fn define_handle(names: &Names, name: &witx::Id, h: &witx::HandleDatatype) -> To
                 write!(f, "{}({})", stringify!(#ident), self.0)
             }
         }
-        impl wiggle_runtime::GuestType for #ident {
+
+        impl<'a> wiggle_runtime::GuestType<'a> for #ident {
             fn size() -> u32 {
                 #size
             }
+
             fn align() -> u32 {
                 #align
             }
+
             fn name() -> String {
                 stringify!(#ident).to_owned()
             }
+
             fn validate(ptr: &wiggle_runtime::GuestPtr<#ident>) -> Result<(), wiggle_runtime::GuestError> {
                 Ok(())
             }
-        }
-        impl<'a> wiggle_runtime::GuestTypeClone<'a> for #ident {
-            fn read_from_guest(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<#ident, wiggle_runtime::GuestError> {
+
+            fn read(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<#ident, wiggle_runtime::GuestError> {
                 let r = location.as_ref()?;
                 Ok(*r)
             }
-            fn write_to_guest(&self, location: &wiggle_runtime::GuestPtrMut<'a, Self>) {
+
+            fn write(&self, location: &wiggle_runtime::GuestPtrMut<'a, Self>) {
                 unsafe { (location.as_raw() as *mut #ident).write(*self) };
             }
         }
-        impl<'a> wiggle_runtime::GuestTypeCopy<'a> for #ident {}
+
+        impl<'a> wiggle_runtime::GuestTypeTransparent<'a> for #ident {}
     }
 }
 
@@ -509,31 +516,35 @@ fn define_copy_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) 
             #(#member_decls),*
         }
 
-        impl wiggle_runtime::GuestType for #ident {
+        impl<'a> wiggle_runtime::GuestType<'a> for #ident {
             fn size() -> u32 {
                 #size
             }
+
             fn align() -> u32 {
                 #align
             }
+
             fn name() -> String {
                 stringify!(#ident).to_owned()
             }
+
             fn validate(ptr: &wiggle_runtime::GuestPtr<#ident>) -> Result<(), wiggle_runtime::GuestError> {
                 #(#member_valids)*
                 Ok(())
             }
-        }
-        impl<'a> wiggle_runtime::GuestTypeClone<'a> for #ident {
-            fn read_from_guest(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<#ident, wiggle_runtime::GuestError> {
+
+            fn read(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<#ident, wiggle_runtime::GuestError> {
                 let r = location.as_ref()?;
                 Ok(*r)
             }
-            fn write_to_guest(&self, location: &wiggle_runtime::GuestPtrMut<'a, Self>) {
+
+            fn write(&self, location: &wiggle_runtime::GuestPtrMut<'a, Self>) {
                 unsafe { (location.as_raw() as *mut #ident).write(*self) };
             }
         }
-        impl<'a> wiggle_runtime::GuestTypeCopy<'a> for #ident {}
+
+        impl<'a> wiggle_runtime::GuestTypeTransparent<'a> for #ident {}
     }
 }
 
@@ -604,26 +615,26 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
             witx::TypeRef::Name(nt) => {
                 let type_ = names.type_(&nt.name);
                 quote! {
-                    let #name = #type_::read_from_guest(&location.cast(#offset)?)?;
+                    let #name = <#type_ as wiggle_runtime::GuestType>::read(&location.cast(#offset)?)?;
                 }
             }
             witx::TypeRef::Value(ty) => match &**ty {
                 witx::Type::Builtin(builtin) => {
                     let type_ = names.builtin_type(*builtin, anon_lifetime());
                     quote! {
-                    let #name = #type_::read_from_guest(&location.cast(#offset)?)?;
+                    let #name = <#type_ as wiggle_runtime::GuestType>::read(&location.cast(#offset)?)?;
                     }
                 }
                 witx::Type::Pointer(pointee) => {
                     let pointee_type = names.type_ref(&pointee, anon_lifetime());
                     quote! {
-                        let #name = wiggle_runtime::GuestPtrMut::<#pointee_type>::read_from_guest(&location.cast(#offset)?)?;
+                        let #name = <wiggle_runtime::GuestPtrMut::<#pointee_type> as wiggle_runtime::GuestType>::read(&location.cast(#offset)?)?;
                     }
                 }
                 witx::Type::ConstPointer(pointee) => {
                     let pointee_type = names.type_ref(&pointee, anon_lifetime());
                     quote! {
-                        let #name = wiggle_runtime::GuestPtr::<#pointee_type>::read_from_guest(&location.cast(#offset)?)?;
+                        let #name = <wiggle_runtime::GuestPtr::<#pointee_type> as wiggle_runtime::GuestType>::read(&location.cast(#offset)?)?;
                     }
                 }
                 _ => unimplemented!("other anonymous struct members"),
@@ -635,7 +646,7 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
         let name = names.struct_member(&ml.member.name);
         let offset = ml.offset as u32;
         quote! {
-            self.#name.write_to_guest(&location.cast(#offset).expect("cast to inner member"));
+            self.#name.write(&location.cast(#offset).expect("cast to inner member"));
         }
     });
 
@@ -645,27 +656,30 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
             #(#member_decls),*
         }
 
-        impl<'a> wiggle_runtime::GuestType for #ident<'a> {
+        impl<'a> wiggle_runtime::GuestType<'a> for #ident<'a> {
             fn size() -> u32 {
                 #size
             }
+
             fn align() -> u32 {
                 #align
             }
+
             fn name() -> String {
                 stringify!(#ident).to_owned()
             }
-            fn validate(ptr: &wiggle_runtime::GuestPtr<#ident>) -> Result<(), wiggle_runtime::GuestError> {
+
+            fn validate(ptr: &wiggle_runtime::GuestPtr<'a, #ident<'a>>) -> Result<(), wiggle_runtime::GuestError> {
                 #(#member_valids)*
                 Ok(())
             }
-        }
-        impl<'a> wiggle_runtime::GuestTypeClone<'a> for #ident<'a> {
-            fn read_from_guest(location: &wiggle_runtime::GuestPtr<'a, #ident<'a>>) -> Result<#ident<'a>, wiggle_runtime::GuestError> {
+
+            fn read(location: &wiggle_runtime::GuestPtr<'a, #ident<'a>>) -> Result<#ident<'a>, wiggle_runtime::GuestError> {
                 #(#member_reads)*
                 Ok(#ident { #(#member_names),* })
             }
-            fn write_to_guest(&self, location: &wiggle_runtime::GuestPtrMut<'a, Self>) {
+
+            fn write(&self, location: &wiggle_runtime::GuestPtrMut<'a, Self>) {
                 #(#member_writes)*
             }
         }
@@ -694,11 +708,12 @@ fn union_validate(
         let err = with_err(v.name.as_str());
         let variantname = names.enum_variant(&v.name);
         if let Some(tref) = &v.tref {
-            let varianttype = names.type_ref(tref, anon_lifetime());
+            let lifetime = anon_lifetime();
+            let varianttype = names.type_ref(tref, lifetime.clone());
             quote! {
                 #tagname::#variantname => {
                     let variant_ptr = ptr.cast::<#varianttype>(#contents_offset).map_err(#err)?;
-                    wiggle_runtime::GuestType::validate(&variant_ptr).map_err(#err)?;
+                    <#varianttype as wiggle_runtime::GuestType>::validate(&variant_ptr).map_err(#err)?;
                 }
             }
         } else {
@@ -743,7 +758,7 @@ fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDatatype) -> Toke
             quote! {
                 #tagname::#variantname => {
                     let variant_ptr = location.cast::<#varianttype>(#contents_offset).expect("union variant ptr validated");
-                    let variant_val = wiggle_runtime::GuestTypeClone::read_from_guest(&variant_ptr)?;
+                    let variant_val = <#varianttype as wiggle_runtime::GuestType>::read(&variant_ptr)?;
                     Ok(#ident::#variantname(variant_val))
                 }
             }
@@ -765,7 +780,7 @@ fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDatatype) -> Toke
                 #ident::#variantname(contents) => {
                     #write_tag
                     let variant_ptr = location.cast::<#varianttype>(#contents_offset).expect("union variant ptr validated");
-                    contents.write_to_guest(&variant_ptr);
+                    <#varianttype as wiggle_runtime::GuestType>::write(&contents, &variant_ptr);
                 }
             }
         } else {
@@ -785,31 +800,35 @@ fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDatatype) -> Toke
             pub enum #ident {
                 #(#variants),*
             }
-            impl wiggle_runtime::GuestType for #ident {
+
+            impl<'a> wiggle_runtime::GuestType<'a> for #ident {
                 fn size() -> u32 {
                     #size
                 }
+
                 fn align() -> u32 {
                     #align
                 }
+
                 fn name() -> String {
                     stringify!(#ident).to_owned()
                 }
-                fn validate(ptr: &wiggle_runtime::GuestPtr<#ident>) -> Result<(), wiggle_runtime::GuestError> {
+
+                fn validate(ptr: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<(), wiggle_runtime::GuestError> {
                     #validate
                 }
-            }
-            impl<#lifetime> wiggle_runtime::GuestTypeClone<#lifetime> for #ident {
-                fn read_from_guest(location: &wiggle_runtime::GuestPtr<'a, #ident>)
+
+                fn read(location: &wiggle_runtime::GuestPtr<'a, #ident>)
                         -> Result<Self, wiggle_runtime::GuestError> {
-                    wiggle_runtime::GuestType::validate(location)?;
+                    <#ident as wiggle_runtime::GuestType>::validate(location)?;
                     let tag = *location.cast::<#tagname>(0).expect("validated tag ptr").as_ref().expect("validated tag ref");
                     match tag {
                         #(#read_variant)*
                     }
 
                 }
-                fn write_to_guest(&self, location: &wiggle_runtime::GuestPtrMut<'a, #ident>) {
+
+                fn write(&self, location: &wiggle_runtime::GuestPtrMut<'a, #ident>) {
                     match self {
                         #(#write_variant)*
                     }
@@ -823,31 +842,34 @@ fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDatatype) -> Toke
                 #(#variants),*
             }
 
-            impl<#lifetime> wiggle_runtime::GuestType for #ident<#lifetime> {
+            impl<#lifetime> wiggle_runtime::GuestType<#lifetime> for #ident<#lifetime> {
                 fn size() -> u32 {
                     #size
                 }
+
                 fn align() -> u32 {
                     #align
                 }
+
                 fn name() -> String {
                     stringify!(#ident).to_owned()
                 }
-                fn validate(ptr: &wiggle_runtime::GuestPtr<#ident>) -> Result<(), wiggle_runtime::GuestError> {
+
+                fn validate(ptr: &wiggle_runtime::GuestPtr<#lifetime, #ident<#lifetime>>) -> Result<(), wiggle_runtime::GuestError> {
                     #validate
                 }
-            }
-            impl<#lifetime> wiggle_runtime::GuestTypeClone<#lifetime> for #ident<#lifetime> {
-                fn read_from_guest(location: &wiggle_runtime::GuestPtr<'a, #ident>)
+
+                fn read(location: &wiggle_runtime::GuestPtr<#lifetime, #ident<#lifetime>>)
                         -> Result<Self, wiggle_runtime::GuestError> {
-                    wiggle_runtime::GuestType::validate(location)?;
+                    <#ident as wiggle_runtime::GuestType>::validate(location)?;
                     let tag = *location.cast::<#tagname>(0).expect("validated tag ptr").as_ref().expect("validated tag ref");
                     match tag {
                         #(#read_variant)*
                     }
 
                 }
-                fn write_to_guest(&self, location: &wiggle_runtime::GuestPtrMut<'a, #ident>) {
+
+                fn write(&self, location: &wiggle_runtime::GuestPtrMut<#lifetime, #ident<#lifetime>>) {
                     match self {
                         #(#write_variant)*
                     }

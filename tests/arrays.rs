@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle_runtime::{GuestArray, GuestError, GuestPtr, GuestPtrMut};
+use wiggle_runtime::{GuestArray, GuestError, GuestPtr, GuestPtrMut, GuestType};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle_generate::from_witx!({
@@ -14,7 +14,7 @@ impl arrays::Arrays for WasiCtx {
         &mut self,
         excuses: &types::ConstExcuseArray,
     ) -> Result<types::Excuse, types::Errno> {
-        let last = wiggle_runtime::GuestTypeClone::read_from_guest(
+        let last = GuestType::read(
             &excuses
                 .iter()
                 .last()
@@ -27,9 +27,8 @@ impl arrays::Arrays for WasiCtx {
 
     fn populate_excuses(&mut self, excuses: &types::ExcuseArray) -> Result<(), types::Errno> {
         for excuse in excuses.iter() {
-            let ptr_to_ptr =
-                wiggle_runtime::GuestTypeClone::read_from_guest(&excuse.expect("valid ptr to ptr"))
-                    .expect("valid ptr to some Excuse value");
+            let ptr_to_ptr = GuestType::read(&excuse.expect("valid ptr to ptr"))
+                .expect("valid ptr to some Excuse value");
             let mut ptr = ptr_to_ptr
                 .as_ref_mut()
                 .expect("dereferencing mut ptr should succeed");
@@ -226,9 +225,8 @@ impl PopulateExcusesExcercise {
             .array(self.elements.len() as u32)
             .expect("as array");
         for el in arr.iter() {
-            let ptr_to_ptr =
-                wiggle_runtime::GuestTypeClone::read_from_guest(&el.expect("valid ptr to ptr"))
-                    .expect("valid ptr to some Excuse value");
+            let ptr_to_ptr = GuestType::read(&el.expect("valid ptr to ptr"))
+                .expect("valid ptr to some Excuse value");
             assert_eq!(
                 *ptr_to_ptr
                     .as_ref()

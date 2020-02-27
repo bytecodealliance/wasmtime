@@ -1,5 +1,5 @@
 use super::{array::GuestArray, GuestMemory};
-use crate::{borrow::BorrowHandle, GuestError, GuestType, GuestTypeClone, GuestTypeCopy, Region};
+use crate::{borrow::BorrowHandle, GuestError, GuestType, GuestTypeTransparent, Region};
 use std::{
     fmt,
     marker::PhantomData,
@@ -26,7 +26,7 @@ where
     }
 }
 
-impl<'a, T: GuestType> GuestPtr<'a, T> {
+impl<'a, T: GuestType<'a>> GuestPtr<'a, T> {
     pub fn as_raw(&self) -> *const u8 {
         (self.mem.ptr as usize + self.region.start as usize) as *const u8
     }
@@ -36,7 +36,10 @@ impl<'a, T: GuestType> GuestPtr<'a, T> {
             .ptr(self.region.start + (elements * self.region.len as i32) as u32)
     }
 
-    pub fn cast<CastTo: GuestType>(&self, offset: u32) -> Result<GuestPtr<'a, CastTo>, GuestError> {
+    pub fn cast<CastTo: GuestType<'a>>(
+        &self,
+        offset: u32,
+    ) -> Result<GuestPtr<'a, CastTo>, GuestError> {
         self.mem.ptr(self.region.start + offset)
     }
 
@@ -57,7 +60,7 @@ impl<'a, T: GuestType> GuestPtr<'a, T> {
 
 impl<'a, T> GuestPtr<'a, T>
 where
-    T: GuestTypeCopy<'a>,
+    T: GuestTypeTransparent<'a>,
 {
     pub fn as_ref(&self) -> Result<GuestRef<'a, T>, GuestError> {
         T::validate(&self)?;
@@ -78,16 +81,16 @@ where
 
 impl<'a, T> GuestPtr<'a, T>
 where
-    T: GuestTypeClone<'a>,
+    T: GuestType<'a>,
 {
     pub fn read(&self) -> Result<T, GuestError> {
-        T::read_from_guest(self)
+        T::read(self)
     }
 }
 
-impl<'a, T> GuestType for GuestPtr<'a, T>
+impl<'a, T> GuestType<'a> for GuestPtr<'a, T>
 where
-    T: GuestType,
+    T: GuestType<'a>,
 {
     fn size() -> u32 {
         4
@@ -101,21 +104,16 @@ where
         format!("GuestPtr<{}>", T::name())
     }
 
-    fn validate<'b>(location: &GuestPtr<'b, GuestPtr<'b, T>>) -> Result<(), GuestError> {
+    fn validate(location: &GuestPtr<'a, GuestPtr<'a, T>>) -> Result<(), GuestError> {
         // location is guaranteed to be in GuestMemory and aligned to 4
         let raw_ptr: u32 = unsafe { *(location.as_raw() as *const u32) };
         // GuestMemory can validate that the raw pointer contents are legal for T:
         let _guest_ptr: GuestPtr<T> = location.mem.ptr(raw_ptr)?;
         Ok(())
     }
-}
 
-// Operations for reading and writing Ptrs to memory:
-impl<'a, T> GuestTypeClone<'a> for GuestPtr<'a, T>
-where
-    T: GuestType + Clone,
-{
-    fn read_from_guest(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
+    // Operations for reading and writing Ptrs to memory:
+    fn read(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
         // location is guaranteed to be in GuestMemory and aligned to 4
         let raw_ptr: u32 = unsafe { *(location.as_raw() as *const u32) };
         // GuestMemory can validate that the raw pointer contents are legal for T:
@@ -123,7 +121,7 @@ where
         Ok(guest_ptr)
     }
 
-    fn write_to_guest(&self, location: &GuestPtrMut<'a, Self>) {
+    fn write(&self, location: &GuestPtrMut<'a, Self>) {
         // location is guaranteed to be in GuestMemory and aligned to 4
         unsafe {
             let raw_ptr: *mut u32 = location.as_raw() as *mut u32;
@@ -154,7 +152,7 @@ where
 
 impl<'a, T> GuestPtrMut<'a, T>
 where
-    T: GuestType,
+    T: GuestType<'a>,
 {
     pub fn as_immut(&self) -> GuestPtr<'a, T> {
         GuestPtr {
@@ -173,7 +171,7 @@ where
             .ptr_mut(self.region.start + (elements * self.region.len as i32) as u32)
     }
 
-    pub fn cast<CastTo: GuestType>(
+    pub fn cast<CastTo: GuestType<'a>>(
         &self,
         offset: u32,
     ) -> Result<GuestPtrMut<'a, CastTo>, GuestError> {
@@ -183,7 +181,7 @@ where
 
 impl<'a, T> GuestPtrMut<'a, T>
 where
-    T: GuestTypeCopy<'a>,
+    T: GuestTypeTransparent<'a>,
 {
     pub fn as_ref(&self) -> Result<GuestRef<'a, T>, GuestError> {
         self.as_immut().as_ref()
@@ -208,20 +206,20 @@ where
 
 impl<'a, T> GuestPtrMut<'a, T>
 where
-    T: GuestTypeClone<'a>,
+    T: GuestType<'a>,
 {
     pub fn read(&self) -> Result<T, GuestError> {
-        T::read_from_guest(&self.as_immut())
+        T::read(&self.as_immut())
     }
 
     pub fn write(&self, ptr: &T) {
-        T::write_to_guest(ptr, &self);
+        T::write(ptr, &self);
     }
 }
 
-impl<'a, T> GuestType for GuestPtrMut<'a, T>
+impl<'a, T> GuestType<'a> for GuestPtrMut<'a, T>
 where
-    T: GuestType,
+    T: GuestType<'a>,
 {
     fn size() -> u32 {
         4
@@ -235,21 +233,16 @@ where
         format!("GuestPtrMut<{}>", T::name())
     }
 
-    fn validate<'b>(location: &GuestPtr<'b, GuestPtrMut<'b, T>>) -> Result<(), GuestError> {
+    fn validate(location: &GuestPtr<'a, GuestPtrMut<'a, T>>) -> Result<(), GuestError> {
         // location is guaranteed to be in GuestMemory and aligned to 4
         let raw_ptr: u32 = unsafe { *(location.as_raw() as *const u32) };
         // GuestMemory can validate that the raw pointer contents are legal for T:
         let _guest_ptr: GuestPtr<T> = location.mem.ptr(raw_ptr)?;
         Ok(())
     }
-}
 
-// Reading and writing GuestPtrMuts to memory:
-impl<'a, T> GuestTypeClone<'a> for GuestPtrMut<'a, T>
-where
-    T: GuestType + Clone,
-{
-    fn read_from_guest(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
+    // Reading and writing GuestPtrMuts to memory:
+    fn read(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
         // location is guaranteed to be in GuestMemory and aligned to 4
         let raw_ptr: u32 = unsafe { *(location.as_raw() as *const u32) };
         // GuestMemory can validate that the raw pointer contents are legal for T:
@@ -257,7 +250,7 @@ where
         Ok(guest_ptr_mut)
     }
 
-    fn write_to_guest(&self, location: &GuestPtrMut<'a, Self>) {
+    fn write(&self, location: &GuestPtrMut<'a, Self>) {
         // location is guaranteed to be in GuestMemory and aligned to 4
         unsafe {
             let raw_ptr: *mut u32 = location.as_raw() as *mut u32;
@@ -298,7 +291,7 @@ impl<'a, T> GuestRef<'a, T> {
 
 impl<'a, T> Deref for GuestRef<'a, T>
 where
-    T: GuestTypeCopy<'a>,
+    T: GuestTypeTransparent<'a>,
 {
     type Target = T;
 
@@ -357,7 +350,7 @@ impl<'a, T> GuestRefMut<'a, T> {
 
 impl<'a, T> ::std::ops::Deref for GuestRefMut<'a, T>
 where
-    T: GuestTypeCopy<'a>,
+    T: GuestTypeTransparent<'a>,
 {
     type Target = T;
 
@@ -372,7 +365,7 @@ where
 
 impl<'a, T> DerefMut for GuestRefMut<'a, T>
 where
-    T: GuestTypeCopy<'a>,
+    T: GuestTypeTransparent<'a>,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe {
