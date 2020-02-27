@@ -13,7 +13,6 @@ use dynasmrt::DynasmApi;
 use itertools::Either::{self, Left, Right};
 #[cfg(debug_assertions)]
 use more_asserts::assert_ge;
-use multi_mut::HashMapMultiMut;
 use std::{collections::HashMap, fmt, hash::Hash, io, iter, mem};
 
 #[derive(Debug)]
@@ -379,7 +378,13 @@ where
                     }
                 }
                 Operator::BrIf { then, else_ } => {
-                    let (then_block, else_block) = blocks.pair_mut(&then.target, &else_.target);
+                    let (then_target, mut then_block) = blocks.remove_entry(&then.target).ok_or_else(|| {
+                        Error::Microwasm("Programmer error: block does not exist".into())
+                    })?;
+                    let (else_target, mut else_block) = blocks.remove_entry(&else_.target).ok_or_else(|| {
+                        Error::Microwasm("Programmer error: block does not exist".into())
+                    })?;
+
                     // TODO: If actual_num_callers == num_callers then we can remove this block from the hashmap.
                     //       This frees memory and acts as a kind of verification that `num_callers` is set
                     //       correctly. It doesn't help for loops and block ends generated from Wasm.
@@ -477,6 +482,9 @@ where
                             )))
                         }
                     };
+
+                    blocks.insert(then_target, then_block);
+                    blocks.insert(else_target, else_block);
                 }
                 Operator::BrTable(BrTable { targets, default }) => {
                     use itertools::Itertools;
