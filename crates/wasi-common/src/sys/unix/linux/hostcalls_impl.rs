@@ -5,7 +5,6 @@ use std::os::unix::prelude::AsRawFd;
 
 pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     use yanix::file::{unlinkat, AtFlag};
-
     unsafe {
         unlinkat(
             resolved.dirfd().as_raw_fd(),

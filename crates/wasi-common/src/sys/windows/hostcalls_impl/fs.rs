@@ -490,7 +490,6 @@ pub(crate) fn path_filestat_set_times(
 ) -> Result<()> {
     use winx::file::AccessMode;
     let path = resolved.concatenate()?;
-    // TODO: is it intentional to ignore the original access mode here?
     let file = OpenOptions::new()
         .access_mode(AccessMode::FILE_WRITE_ATTRIBUTES.bits())
         .open(path)?;
