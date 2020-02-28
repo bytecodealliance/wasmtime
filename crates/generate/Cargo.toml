@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 wiggle-runtime = { path = "../runtime" }
-witx = { path = "../WASI/tools/witx" }
+witx = "0.8.3"
 quote = "1.0"
 proc-macro2 = "1.0"
 heck = "0.3"
