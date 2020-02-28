@@ -1,6 +1,6 @@
 use crate::fdentry::{Descriptor, FdEntry};
 use crate::sys::fdentry_impl::OsHandle;
-use crate::virtfs::VirtualFile;
+use crate::virtfs::{VirtualDir, VirtualDirEntry};
 use crate::{wasi, Error, Result};
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -232,11 +232,30 @@ impl WasiCtxBuilder {
     }
 
     /// Add a preopened virtual directory.
-    pub fn preopened_virt<P: AsRef<Path>>(
-        mut self,
-        dir: Box<dyn VirtualFile>,
-        guest_path: P,
-    ) -> Self {
+    pub fn preopened_virt<P: AsRef<Path>>(mut self, dir: VirtualDirEntry, guest_path: P) -> Self {
+        fn populate_directory(virtentry: HashMap<String, VirtualDirEntry>, dir: &mut VirtualDir) {
+            for (path, entry) in virtentry.into_iter() {
+                match entry {
+                    VirtualDirEntry::Directory(dir_entries) => {
+                        let mut subdir = VirtualDir::new(true);
+                        populate_directory(dir_entries, &mut subdir);
+                        dir.add_dir(subdir, path);
+                    }
+                    VirtualDirEntry::File(content) => {
+                        dir.add_file(content, path);
+                    }
+                }
+            }
+        }
+
+        let dir = if let VirtualDirEntry::Directory(entries) = dir {
+            let mut dir = VirtualDir::new(true);
+            populate_directory(entries, &mut dir);
+            Box::new(dir)
+        } else {
+            panic!("the root of a VirtualDirEntry tree must be a VirtualDirEntry::Directory");
+        };
+
         self.preopens
             .as_mut()
             .unwrap()

@@ -1,7 +1,7 @@
 use anyhow::{bail, Context};
 use std::fs::File;
 use std::path::Path;
-use wasi_common::VirtualDir;
+use wasi_common::VirtualDirEntry;
 use wasmtime::{Instance, Module, Store};
 
 #[derive(Clone, Copy, Debug)]
@@ -36,7 +36,7 @@ pub fn instantiate(
             PreopenType::Virtual => {
                 // we can ignore the workspace path for virtual preopens because virtual preopens
                 // don't exist in the filesystem anyway - no name conflict concerns.
-                builder = builder.preopened_virt(Box::new(VirtualDir::new(true)), ".");
+                builder = builder.preopened_virt(VirtualDirEntry::empty_directory(), ".");
             }
         }
     }
