@@ -180,6 +180,21 @@ namespace Wasmtime
             }
         }
 
+        internal class WasmConfigHandle : SafeHandle
+        {
+            public WasmConfigHandle() : base(IntPtr.Zero, true)
+            {
+            }
+
+            public override bool IsInvalid => handle == IntPtr.Zero;
+
+            protected override bool ReleaseHandle()
+            {
+                Interop.wasm_config_delete(handle);
+                return true;
+            }
+        }
+
         internal class WasiConfigHandle : SafeHandle
         {
             public WasiConfigHandle() : base(IntPtr.Zero, true)
@@ -275,6 +290,20 @@ namespace Wasmtime
             WASM_F64,
             WASM_ANYREF = 128,
             WASM_FUNCREF,
+        }
+
+        internal enum wasmtime_strategy_t : byte
+        {
+            WASMTIME_STRATEGY_AUTO,
+            WASMTIME_STRATEGY_CRANELIFT,
+            WASMTIME_STRATEGY_LIGHTBEAM
+        }
+
+        internal enum wasmtime_opt_level_t : byte
+        {
+            WASMTIME_OPT_LEVEL_NONE,
+            WASMTIME_OPT_LEVEL_SPEED,
+            WASMTIME_OPT_LEVEL_SPEED_AND_SIZE
         }
 
         [StructLayout(LayoutKind.Explicit)]
@@ -513,6 +542,9 @@ namespace Wasmtime
 
         [DllImport(LibraryName)]
         public static extern EngineHandle wasm_engine_new();
+
+        [DllImport(LibraryName)]
+        public static extern EngineHandle wasm_engine_new_with_config(WasmConfigHandle config);
 
         [DllImport(LibraryName)]
         public static extern void wasm_engine_delete(IntPtr engine);
@@ -826,7 +858,16 @@ namespace Wasmtime
         public static extern uint wasm_memory_size(MemoryHandle memory);
 
         [DllImport(LibraryName)]
+        [return: MarshalAs(UnmanagedType.I1)]
         public static extern bool wasm_memory_grow(MemoryHandle memory, uint delta);
+
+        // Wasm config
+
+        [DllImport(LibraryName)]
+        public static extern WasmConfigHandle wasm_config_new();
+
+        [DllImport(LibraryName)]
+        public static extern void wasm_config_delete(IntPtr config);
 
         // WASI config
 
@@ -854,6 +895,7 @@ namespace Wasmtime
         public static extern void wasi_config_inherit_env(WasiConfigHandle config);
 
         [DllImport(LibraryName)]
+        [return: MarshalAs(UnmanagedType.I1)]
         public static extern bool wasi_config_set_stdin_file(
             WasiConfigHandle config,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string path
@@ -863,6 +905,7 @@ namespace Wasmtime
         public static extern void wasi_config_inherit_stdin(WasiConfigHandle config);
 
         [DllImport(LibraryName)]
+        [return: MarshalAs(UnmanagedType.I1)]
         public static extern bool wasi_config_set_stdout_file(
             WasiConfigHandle config,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string path
@@ -872,6 +915,7 @@ namespace Wasmtime
         public static extern void wasi_config_inherit_stdout(WasiConfigHandle config);
 
         [DllImport(LibraryName)]
+        [return: MarshalAs(UnmanagedType.I1)]
         public static extern bool wasi_config_set_stderr_file(
             WasiConfigHandle config,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string path
@@ -881,6 +925,7 @@ namespace Wasmtime
         public static extern void wasi_config_inherit_stderr(WasiConfigHandle config);
 
         [DllImport(LibraryName)]
+        [return: MarshalAs(UnmanagedType.I1)]
         public static extern bool wasi_config_preopen_dir(
             WasiConfigHandle config,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
@@ -900,5 +945,34 @@ namespace Wasmtime
 
         [DllImport(LibraryName)]
         public static extern IntPtr wasi_instance_bind_import(WasiInstanceHandle instance, IntPtr importType);
-    }
+
+        // Wasmtime config
+
+        [DllImport(LibraryName)]
+        public static extern void wasmtime_config_debug_info_set(WasmConfigHandle config, [MarshalAs(UnmanagedType.I1)] bool enable);
+
+        [DllImport(LibraryName)]
+        public static extern void wasmtime_config_wasm_threads_set(WasmConfigHandle config, [MarshalAs(UnmanagedType.I1)] bool enable);
+
+        [DllImport(LibraryName)]
+        public static extern void wasmtime_config_wasm_reference_types_set(WasmConfigHandle config, [MarshalAs(UnmanagedType.I1)] bool enable);
+
+        [DllImport(LibraryName)]
+        public static extern IntPtr wasmtime_config_wasm_simd_set(WasmConfigHandle config, [MarshalAs(UnmanagedType.I1)] bool enable);
+
+        [DllImport(LibraryName)]
+        public static extern void wasmtime_config_wasm_bulk_memory_set(WasmConfigHandle config, [MarshalAs(UnmanagedType.I1)] bool enable);
+
+        [DllImport(LibraryName)]
+        public static extern void wasmtime_config_wasm_multi_value_set(WasmConfigHandle config, [MarshalAs(UnmanagedType.I1)] bool enable);
+
+        [DllImport(LibraryName)]
+        public static extern void wasmtime_config_strategy_set(WasmConfigHandle config, wasmtime_strategy_t strategy);
+
+        [DllImport(LibraryName)]
+        public static extern void wasmtime_config_cranelift_debug_verifier_set(WasmConfigHandle config, [MarshalAs(UnmanagedType.I1)] bool enable);
+
+        [DllImport(LibraryName)]
+        public static extern void wasmtime_config_cranelift_opt_level_set(WasmConfigHandle config, wasmtime_opt_level_t level);
+   }
 }

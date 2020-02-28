@@ -831,7 +831,7 @@ pub unsafe extern "C" fn wasm_module_new(
 ) -> *mut wasm_module_t {
     let binary = (*binary).as_slice();
     let store = &(*store).store.borrow();
-    let module = match Module::from_binary_unchecked(store, binary) {
+    let module = match Module::from_binary(store, binary) {
         Ok(module) => module,
         Err(_) => return ptr::null_mut(),
     };
