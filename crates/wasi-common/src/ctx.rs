@@ -232,7 +232,11 @@ impl WasiCtxBuilder {
     }
 
     /// Add a preopened virtual directory.
-    pub fn preopened_virt<P: AsRef<Path>>(mut self, dir: VirtualDirEntry, guest_path: P) -> Self {
+    pub fn preopened_virt<P: AsRef<Path>>(
+        &mut self,
+        dir: VirtualDirEntry,
+        guest_path: P,
+    ) -> &mut Self {
         fn populate_directory(virtentry: HashMap<String, VirtualDirEntry>, dir: &mut VirtualDir) {
             for (path, entry) in virtentry.into_iter() {
                 match entry {

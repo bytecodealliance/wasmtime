@@ -31,12 +31,12 @@ pub fn instantiate(
             PreopenType::OS => {
                 let preopen_dir = wasi_common::preopen_dir(workspace)
                     .context(format!("error while preopening {:?}", workspace))?;
-                builder = builder.preopened_dir(preopen_dir, ".");
+                builder.preopened_dir(preopen_dir, ".");
             }
             PreopenType::Virtual => {
                 // we can ignore the workspace path for virtual preopens because virtual preopens
                 // don't exist in the filesystem anyway - no name conflict concerns.
-                builder = builder.preopened_virt(VirtualDirEntry::empty_directory(), ".");
+                builder.preopened_virt(VirtualDirEntry::empty_directory(), ".");
             }
         }
     }
