@@ -224,10 +224,10 @@ impl WasiCtxBuilder {
 
     /// Add a preopened directory.
     pub fn preopened_dir<P: AsRef<Path>>(&mut self, dir: File, guest_path: P) -> &mut Self {
-        self.preopens
-            .as_mut()
-            .unwrap()
-            .push((guest_path.as_ref().to_owned(), Descriptor::OsHandle(OsHandle::from(dir))));
+        self.preopens.as_mut().unwrap().push((
+            guest_path.as_ref().to_owned(),
+            Descriptor::OsHandle(OsHandle::from(dir)),
+        ));
         self
     }
 
