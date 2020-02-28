@@ -137,7 +137,15 @@ impl Val {
     pub(crate) fn comes_from_same_store(&self, store: &Store) -> bool {
         match self {
             Val::FuncRef(f) => Store::same(store, f.store()),
-            _ => true,
+
+            // TODO: need to implement this once we actually finalize what
+            // `anyref` will look like and it's actually implemented to pass it
+            // to compiled wasm as well.
+            Val::AnyRef(_) => false,
+
+            // Integers have no association with any particular store, so
+            // they're always considered as "yes I came from that store",
+            Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) | Val::V128(_) => true,
         }
     }
 }
