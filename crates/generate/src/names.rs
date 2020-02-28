@@ -77,6 +77,8 @@ impl Names {
         // FIXME this is a hack - just a proof of concept.
         if id.as_str().starts_with('2') {
             format_ident!("TooBig")
+        } else if id.as_str() == "type" {
+            format_ident!("Type")
         } else {
             format_ident!("{}", id.as_str().to_camel_case())
         }
@@ -91,7 +93,12 @@ impl Names {
     }
 
     pub fn struct_member(&self, id: &Id) -> Ident {
-        format_ident!("{}", id.as_str().to_snake_case())
+        // FIXME this is a hack - just a proof of concept.
+        if id.as_str() == "type" {
+            format_ident!("type_")
+        } else {
+            format_ident!("{}", id.as_str().to_snake_case())
+        }
     }
 
     pub fn module(&self, id: &Id) -> Ident {
@@ -107,7 +114,12 @@ impl Names {
     }
 
     pub fn func_param(&self, id: &Id) -> Ident {
-        format_ident!("{}", id.as_str().to_snake_case())
+        // FIXME this is a hack - just a proof of concept.
+        if id.as_str() == "in" {
+            format_ident!("in_")
+        } else {
+            format_ident!("{}", id.as_str().to_snake_case())
+        }
     }
 
     /// For when you need a {name}_ptr binding for passing a value by reference:
