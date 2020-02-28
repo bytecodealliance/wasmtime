@@ -140,6 +140,25 @@ impl Arbitrary for ApiCalls {
 
         Ok(ApiCalls { calls })
     }
+
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        arbitrary::size_hint::recursion_guard(depth, |depth| {
+            arbitrary::size_hint::or(
+                // This is the stuff we unconditionally need, which affects the
+                // minimum size.
+                arbitrary::size_hint::and(
+                    <Swarm as Arbitrary>::size_hint(depth),
+                    // `arbitrary_config` uses two bools when
+                    // `swarm.config_debug_info` is true.
+                    <(bool, bool) as Arbitrary>::size_hint(depth),
+                ),
+                // We can generate arbitrary `WasmOptTtf` instances, which have
+                // no upper bound on the number of bytes they consume. This sets
+                // the upper bound to `None`.
+                <super::WasmOptTtf as Arbitrary>::size_hint(depth),
+            )
+        })
+    }
 }
 
 fn arbitrary_config(
