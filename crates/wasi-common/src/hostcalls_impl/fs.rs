@@ -11,6 +11,7 @@ use crate::sys::{host_impl, hostcalls_impl};
 use crate::{helpers, host, wasi, wasi32, Error, Result};
 use filetime::{set_file_handle_times, FileTime};
 use log::trace;
+use std::convert::TryInto;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::ops::DerefMut;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -79,8 +80,18 @@ pub(crate) unsafe fn fd_pread(
     if offset > i64::max_value() as u64 {
         return Err(Error::EIO);
     }
-    let buf_size = iovs.iter().map(|v| v.buf_len).sum();
-    let mut buf = vec![0; buf_size];
+    let buf_size = iovs
+        .iter()
+        .map(|iov| {
+            let cast_iovlen: wasi32::size_t = iov
+                .buf_len
+                .try_into()
+                .expect("iovec are bounded by wasi max sizes");
+            cast_iovlen
+        })
+        .fold(Some(0u32), |len, iov| len.and_then(|x| x.checked_add(iov)))
+        .ok_or(Error::EINVAL)?;
+    let mut buf = vec![0; buf_size as usize];
     let host_nread = match file {
         Descriptor::OsHandle(fd) => hostcalls_impl::fd_pread(&fd, &mut buf, offset)?,
         Descriptor::VirtualFile(virt) => virt.pread(&mut buf, offset)?,
@@ -139,8 +150,18 @@ pub(crate) unsafe fn fd_pwrite(
     if offset > i64::max_value() as u64 {
         return Err(Error::EIO);
     }
-    let buf_size = iovs.iter().map(|v| v.buf_len).sum();
-    let mut buf = Vec::with_capacity(buf_size);
+    let buf_size = iovs
+        .iter()
+        .map(|iov| {
+            let cast_iovlen: wasi32::size_t = iov
+                .buf_len
+                .try_into()
+                .expect("iovec are bounded by wasi max sizes");
+            cast_iovlen
+        })
+        .fold(Some(0u32), |len, iov| len.and_then(|x| x.checked_add(iov)))
+        .ok_or(Error::EINVAL)?;
+    let mut buf = Vec::with_capacity(buf_size as usize);
     for iov in &iovs {
         buf.extend_from_slice(std::slice::from_raw_parts(
             iov.buf as *const u8,

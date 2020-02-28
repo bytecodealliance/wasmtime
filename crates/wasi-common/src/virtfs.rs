@@ -1,6 +1,6 @@
 use crate::host::Dirent;
 use crate::host::FileType;
-use crate::{wasi, Error, Result};
+use crate::{wasi, wasi32, Error, Result};
 use filetime::FileTime;
 use log::trace;
 use std::cell::RefCell;
@@ -377,11 +377,17 @@ impl VirtualFile for InMemoryFile {
 
         let max_size = iovs
             .iter()
-            .map(|iov| iov.len() as u64)
-            .fold(Some(0u64), |len, iov| len.and_then(|x| x.checked_add(iov)))
-            .ok_or(Error::EFBIG)?;
+            .map(|iov| {
+                let cast_iovlen: wasi32::size_t = iov
+                    .len()
+                    .try_into()
+                    .expect("iovec are bounded by wasi max sizes");
+                cast_iovlen
+            })
+            .fold(Some(0u32), |len, iov| len.and_then(|x| x.checked_add(iov)))
+            .expect("write_vectored will not be called with invalid iovs");
 
-        if let Some(end) = write_start.checked_add(max_size) {
+        if let Some(end) = write_start.checked_add(max_size as wasi::__wasi_filesize_t) {
             if end > data.max_size() {
                 return Err(Error::EFBIG);
             }
