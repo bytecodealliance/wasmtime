@@ -2,7 +2,7 @@ use proptest::prelude::*;
 use wiggle_runtime::{GuestArray, GuestError, GuestPtr, GuestPtrMut, GuestType};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
-wiggle_generate::from_witx!({
+wiggle::from_witx!({
     witx: ["tests/arrays.witx"],
     ctx: WasiCtx,
 });

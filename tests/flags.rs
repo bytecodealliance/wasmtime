@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use wiggle_runtime::{GuestError, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
-wiggle_generate::from_witx!({
+wiggle::from_witx!({
     witx: ["tests/flags.witx"],
     ctx: WasiCtx,
 });

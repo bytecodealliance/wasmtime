@@ -2,7 +2,7 @@ use proptest::prelude::*;
 use wiggle_runtime::{GuestError, GuestPtr, GuestPtrMut, GuestRefMut, GuestType};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
-wiggle_generate::from_witx!({
+wiggle::from_witx!({
     witx: ["tests/pointers.witx"],
     ctx: WasiCtx,
 });

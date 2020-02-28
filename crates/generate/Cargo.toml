@@ -5,7 +5,6 @@ authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.co
 edition = "2018"
 
 [lib]
-proc-macro = true
 
 [dependencies]
 wiggle-runtime = { path = "../runtime" }
