@@ -27,7 +27,7 @@ pub fn generate(config: Config) -> TokenStream {
         let modtrait = define_module_trait(&names, &module);
         let ctx_type = names.ctx_type();
         quote!(
-            mod #modname {
+            pub mod #modname {
                 use super::#ctx_type;
                 use super::types::*;
                 #(#fs)*
@@ -38,7 +38,7 @@ pub fn generate(config: Config) -> TokenStream {
     });
 
     quote!(
-        mod types {
+        pub mod types {
             #(#types)*
         }
         #(#modules)*
