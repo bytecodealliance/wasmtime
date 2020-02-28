@@ -45,7 +45,7 @@ intend WASI to be implementable in many wasm VMs.
 ### Wasmtime
 
 [Wasmtime] is a non-Web WebAssembly engine which is part of the
-[CraneStation project](https://github.com/CraneStation/). To build
+[Bytecode Alliance project](https://bytecodealliance.org). To build
 it, download the code and build with `cargo build --release`. It can
 run WASI-using wasm programs by simply running `wasmtime foo.wasm`,
 or `cargo run --bin wasmtime foo.wasm`.
