@@ -1,0 +1,21 @@
+test verifier
+
+function %test_1(i32) {
+    block0(v0: i32):
+        return          ; error: terminator
+        return
+}
+function %test_2(i32) {
+    block0(v0: i32):
+        jump block2       ; error: a terminator instruction was encountered before the end of block0
+        brz v0, block3
+    block2:
+        jump block3
+    block3:
+        return
+}
+
+function %test_3(i32) { ; Ok
+    block0(v0: i32):
+        return
+}

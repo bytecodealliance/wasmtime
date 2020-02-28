@@ -1,0 +1,11 @@
+[package]
+authors = ["The Cranelift Project Developers"]
+name = "cranelift-codegen-shared"
+version = "0.59.0"
+description = "For code shared between cranelift-codegen-meta and cranelift-codegen"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/cranelift"
+readme = "README.md"
+edition = "2018"
+
+# Since this is a shared dependency of several packages, please strive to keep this dependency-free.

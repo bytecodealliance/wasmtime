@@ -1,0 +1,25 @@
+[package]
+authors = ["The Cranelift Project Developers"]
+name = "cranelift"
+version = "0.59.0"
+description = "Umbrella for commonly-used cranelift crates"
+license = "Apache-2.0 WITH LLVM-exception"
+documentation = "https://cranelift.readthedocs.io/"
+repository = "https://github.com/bytecodealliance/cranelift"
+categories = ["no-std"]
+readme = "README.md"
+keywords = ["compile", "compiler", "jit"]
+edition = "2018"
+
+[dependencies]
+cranelift-codegen = { path = "../codegen", version = "0.59.0", default-features = false }
+cranelift-frontend = { path = "../frontend", version = "0.59.0", default-features = false }
+
+[features]
+default = ["std"]
+std = ["cranelift-codegen/std", "cranelift-frontend/std"]
+core = ["cranelift-codegen/core", "cranelift-frontend/core"]
+
+[badges]
+maintenance = { status = "experimental" }
+travis-ci = { repository = "bytecodealliance/cranelift" }

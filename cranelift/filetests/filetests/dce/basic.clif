@@ -1,0 +1,46 @@
+test dce
+
+function %simple() -> i32 {
+block0:
+    v2 = iconst.i32 2
+    v3 = iconst.i32 3
+    return v3
+}
+; sameln: function %simple
+; nextln: block0:
+; nextln:     v3 = iconst.i32 3
+; nextln:     return v3
+; nextln: }
+
+function %some_branching(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v3 = iconst.i32 70
+    v4 = iconst.i32 71
+    v5 = iconst.i32 72
+    v8 = iconst.i32 73
+    brz v0, block1
+    jump block2(v8)
+
+block1:
+    v2 = iadd v0, v3
+    return v0
+
+block2(v9: i32):
+    v6 = iadd v1, v4
+    v7 = iadd v6, v9
+    return v7
+}
+; sameln: function %some_branching
+; nextln: block0(v0: i32, v1: i32):
+; nextln:     v4 = iconst.i32 71
+; nextln:     v8 = iconst.i32 73
+; nextln:     brz v0, block1
+; nextln:     jump block2(v8)
+; nextln: 
+; nextln: block1:
+; nextln:     return v0
+; nextln: 
+; nextln: block2(v9: i32):
+; nextln:     v6 = iadd.i32 v1, v4
+; nextln:     v7 = iadd v6, v9
+; nextln:     return v7

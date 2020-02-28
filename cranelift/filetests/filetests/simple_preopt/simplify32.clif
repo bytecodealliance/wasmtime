@@ -1,0 +1,61 @@
+test simple_preopt
+target i686
+
+;; 32-bits platforms.
+
+function %iadd_imm(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 2
+    v2 = iadd v0, v1
+    return v2
+}
+; sameln: function %iadd_imm
+; nextln: block0(v0: i32):
+; nextln:     v1 = iconst.i32 2
+; nextln:     v2 = iadd_imm v0, 2
+; nextln:     return v2
+; nextln: }
+
+function %isub_imm(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 2
+    v2 = isub v0, v1
+    return v2
+}
+; sameln: function %isub_imm
+; nextln: block0(v0: i32):
+; nextln:     v1 = iconst.i32 2
+; nextln:     v2 = iadd_imm v0, -2
+; nextln:     return v2
+; nextln: }
+
+function %icmp_imm(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 2
+    v2 = icmp slt v0, v1
+    v3 = bint.i32 v2
+    return v3
+}
+; sameln: function %icmp_imm
+; nextln: block0(v0: i32):
+; nextln:     v1 = iconst.i32 2
+; nextln:     v2 = icmp_imm slt v0, 2
+; nextln:     v3 = bint.i32 v2
+; nextln:     return v3
+; nextln: }
+
+;; Don't simplify operations that would get illegal because of lack of native
+;; support.
+function %iadd_imm(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 2
+    v2 = iadd v0, v1
+    return v2
+}
+; sameln: function %iadd_imm
+; nextln: block0(v0: i64):
+; nextln:     v1 = iconst.i64 2
+; nextln:     v2 = iadd v0, v1
+; nextln:     return v2
+; nextln: }
+

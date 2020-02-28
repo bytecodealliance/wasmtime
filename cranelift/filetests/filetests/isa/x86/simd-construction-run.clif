@@ -1,0 +1,14 @@
+test run
+set enable_simd
+target x86_64 skylake
+
+function %splat_i64x2() -> b1 {
+block0:
+    v0 = iconst.i64 -1
+    v1 = splat.i64x2 v0
+    v2 = vconst.i64x2 [-1 -1]
+    v3 = icmp eq v1, v2
+    v8 = vall_true v3
+    return v8
+}
+; run

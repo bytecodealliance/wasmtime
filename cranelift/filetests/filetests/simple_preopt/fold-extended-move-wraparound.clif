@@ -1,0 +1,14 @@
+test simple_preopt
+target x86_64
+
+function %wraparound(i64 vmctx) -> f32 system_v {
+    gv0 = vmctx
+    gv1 = iadd_imm.i64 gv0, 48
+
+block35(v0: i64):
+    v88 = iconst.i64 0
+    v89 = iconst.i64 0x8000_0000_0000_0000
+    v90 = ishl_imm v88, 0x8000_0000_0000_0000
+    v91 = sshr v90, v89; check: sshr_imm v90, 0x8000_0000_0000_0000
+    trap user0
+}

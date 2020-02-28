@@ -1,0 +1,75 @@
+; Test basic code generation for 32-bit reftypes
+; This test is the 32-bit version of r64.clif. If you change this test you
+; should most likely update that test as well.
+test compile
+set enable_safepoints=true
+
+target i686 haswell
+
+function %select_ref(i32, r32, r32) -> r32 {
+block0(v0: i32, v1: r32, v2: r32):
+    brz v0, block1(v2)
+    jump block1(v1)
+
+block1(v3: r32):
+    return v3
+}
+
+function %table_set(i32, r32, i32 vmctx) {
+    gv0 = vmctx
+    gv1 = load.i32 notrap aligned gv0
+    gv2 = load.i32 notrap aligned gv0 +4
+    table0 = dynamic gv1, element_size 1, bound gv2, index_type i32
+
+block0(v0: i32, v1: r32, v2: i32):
+    v3 = table_addr.i32 table0, v0, +0;
+    store.r32 notrap aligned v1, v3
+    return
+}
+
+function %table_get(i32, i32 vmctx) -> r32 {
+    gv0 = vmctx
+    gv1 = load.i32 notrap aligned gv0
+    gv2 = load.i32 notrap aligned gv0 +4
+    table0 = dynamic gv1, element_size 1, bound gv2, index_type i32
+
+block0(v0: i32, v1: i32):
+    v2 = table_addr.i32 table0, v0, +0;
+    v3 = load.r32 notrap aligned v2
+    return v3
+}
+
+function %test_refs(r32, r32, r32, i32 vmctx) {
+    fn0 = %select_ref(i32, r32, r32) -> r32
+    fn1 = %table_set(i32, r32, i32 vmctx)
+    fn2 = %table_get(i32, i32 vmctx) -> r32
+
+block0(v0: r32, v1: r32, v2: r32, v3: i32):
+    v4 = iconst.i32 0
+    v5 = iconst.i32 1
+    v8 = iconst.i32 2
+
+    ; Shuffle around the first two refs
+    v6 = call fn0(v4, v0, v1)
+    v7 = call fn0(v5, v0, v1)
+
+    ; Store in the table
+    call fn1(v4, v6, v3)
+    call fn1(v5, v7, v3)
+    call fn1(v8, v2, v3)
+
+    ; Load from the table
+    v9 = call fn2(v4, v3)
+    v10 = call fn2(v5, v3)
+    v11 = call fn2(v8, v3)
+
+    ; Compare the results
+    v12 = is_null v9
+    trapnz v12, user0
+    v13 = is_null v10
+    trapnz v13, user0
+    v14 = is_invalid v11
+    trapnz v14, user0
+
+    return
+}

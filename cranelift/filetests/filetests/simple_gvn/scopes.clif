@@ -1,0 +1,82 @@
+test simple-gvn
+
+function %two_diamonds(i32, i32, i32, i32, i32) {
+block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32):
+    v5 = iconst.i32 16
+    ; check: v5 = iconst.i32 16
+    brz v0, block1
+    jump block5
+
+block5:
+    v6 = iconst.i32 17
+    ; check: v6 = iconst.i32 17
+    v7 = iconst.i32 16
+    ; not: v7 = iconst.i32 16
+    jump block2
+
+block1:
+    v8 = iconst.i32 18
+    ; check: v8 = iconst.i32 18
+    v9 = iconst.i32 17
+    ; check: v9 = iconst.i32 17
+    v10 = iconst.i32 16
+    ; not: v10 = iconst.i32 16
+    jump block2
+
+block2:
+    v11 = iconst.i32 19
+    ; check: v11 = iconst.i32 19
+    v12 = iconst.i32 18
+    ; check: v12 = iconst.i32 18
+    v13 = iconst.i32 17
+    ; check: v13 = iconst.i32 17
+    v14 = iconst.i32 16
+    ; not: v14 = iconst.i32 16
+    brz v1, block3
+    jump block6
+
+block6:
+    v15 = iconst.i32 20
+    ; check: v15 = iconst.i32 20
+    v16 = iconst.i32 19
+    ; not: v16 = iconst.i32 19
+    v17 = iconst.i32 18
+    ; not: v17 = iconst.i32 18
+    v18 = iconst.i32 17
+    ; not: v18 = iconst.i32 17
+    v19 = iconst.i32 16
+    ; not: v19 = iconst.i32 16
+    jump block4
+
+block3:
+    v20 = iconst.i32 21
+    ; check: v20 = iconst.i32 21
+    v21 = iconst.i32 20
+    ; check: v21 = iconst.i32 20
+    v22 = iconst.i32 19
+    ; not: v22 = iconst.i32 19
+    v23 = iconst.i32 18
+    ; not: v23 = iconst.i32 18
+    v24 = iconst.i32 17
+    ; not: v24 = iconst.i32 17
+    v25 = iconst.i32 16
+    ; not: v25 = iconst.i32 16
+    jump block4
+
+block4:
+    v26 = iconst.i32 22
+    ; check: v26 = iconst.i32 22
+    v27 = iconst.i32 21
+    ; check: v27 = iconst.i32 21
+    v28 = iconst.i32 20
+    ; check: v28 = iconst.i32 20
+    v29 = iconst.i32 19
+    ; not: v29 = iconst.i32 19
+    v30 = iconst.i32 18
+    ; not: v30 = iconst.i32 18
+    v31 = iconst.i32 17
+    ; not: v31 = iconst.i32 17
+    v32 = iconst.i32 16
+    ; not: v32 = iconst.i32 16
+    return
+}

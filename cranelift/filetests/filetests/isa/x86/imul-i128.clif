@@ -1,0 +1,20 @@
+test run
+target x86_64 haswell
+
+function %test_imul_i128() -> b1 {
+block0:
+    v11 = iconst.i64 0xf2347ac4503f1e24
+    v12 = iconst.i64 0x0098fe985354ab06
+    v1 = iconcat v11, v12
+    v21 = iconst.i64 0xf606ba453589ef89
+    v22 = iconst.i64 0x042e1f3054ca7432
+    v2 = iconcat v21, v22
+    v31 = iconst.i64 0xbe2044b2742ebd44
+    v32 = iconst.i64 0xa363ce3b6849f307
+    v3 = iconcat v31, v32
+    v4 = imul v1, v2
+    v5 = icmp eq v3, v4
+    return v5
+}
+
+; run

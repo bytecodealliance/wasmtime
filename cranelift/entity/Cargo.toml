@@ -1,0 +1,22 @@
+[package]
+authors = ["The Cranelift Project Developers"]
+name = "cranelift-entity"
+version = "0.59.0"
+description = "Data structures using entity references as mapping keys"
+license = "Apache-2.0 WITH LLVM-exception"
+documentation = "https://cranelift.readthedocs.io/"
+repository = "https://github.com/bytecodealliance/cranelift"
+categories = ["no-std"]
+readme = "README.md"
+keywords = ["entity", "set", "map"]
+edition = "2018"
+
+[dependencies]
+serde = { version = "1.0.94", features = ["derive"], optional = true }
+
+[features]
+enable-serde = ["serde"]
+
+[badges]
+maintenance = { status = "experimental" }
+travis-ci = { repository = "bytecodealliance/cranelift" }

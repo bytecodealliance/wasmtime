@@ -1,0 +1,101 @@
+; Test basic code generation for f64 arithmetic WebAssembly instructions.
+test compile
+
+target x86_64 haswell
+target x86_64 baseline
+
+; Constants.
+
+function %f64_const() -> f64 {
+block0:
+    v1 = f64const 0x3.0
+    return v1
+}
+
+; Unary operations
+
+function %f64_abs(f64) -> f64 {
+block0(v0: f64):
+    v1 = fabs v0
+    return v1
+}
+
+function %f64_neg(f64) -> f64 {
+block0(v0: f64):
+    v1 = fneg v0
+    return v1
+}
+
+function %f64_sqrt(f64) -> f64 {
+block0(v0: f64):
+    v1 = sqrt v0
+    return v1
+}
+
+function %f64_ceil(f64) -> f64 {
+block0(v0: f64):
+    v1 = ceil v0
+    return v1
+}
+
+function %f64_floor(f64) -> f64 {
+block0(v0: f64):
+    v1 = floor v0
+    return v1
+}
+
+function %f64_trunc(f64) -> f64 {
+block0(v0: f64):
+    v1 = trunc v0
+    return v1
+}
+
+function %f64_nearest (f64) -> f64 {
+block0(v0: f64):
+    v1 = nearest v0
+    return v1
+}
+
+; Binary Operations
+
+function %f64_add(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+    v2 = fadd v0, v1
+    return v2
+}
+
+function %f64_sub(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+    v2 = fsub v0, v1
+    return v2
+}
+
+function %f64_mul(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+    v2 = fmul v0, v1
+    return v2
+}
+
+function %f64_div(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+    v2 = fdiv v0, v1
+    return v2
+}
+
+function %f64_min(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+    v2 = fmin v0, v1
+    return v2
+}
+
+function %f64_max(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+    v2 = fmax v0, v1
+    return v2
+}
+
+function %f64_copysign(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+    v2 = fcopysign v0, v1
+    return v2
+}

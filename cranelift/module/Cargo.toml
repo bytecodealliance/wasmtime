@@ -1,0 +1,27 @@
+[package]
+name = "cranelift-module"
+version = "0.59.0"
+authors = ["The Cranelift Project Developers"]
+description = "Support for linking functions and data with Cranelift"
+repository = "https://github.com/bytecodealliance/cranelift"
+documentation = "https://cranelift.readthedocs.io/"
+categories = ["no-std"]
+license = "Apache-2.0 WITH LLVM-exception"
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+cranelift-codegen = { path = "../codegen", version = "0.59.0", default-features = false }
+cranelift-entity = { path = "../entity", version = "0.59.0" }
+hashbrown = { version = "0.6", optional = true }
+log = { version = "0.4.6", default-features = false }
+thiserror = "1.0.4"
+
+[features]
+default = ["std"]
+std = ["cranelift-codegen/std"]
+core = ["hashbrown", "cranelift-codegen/core"]
+
+[badges]
+maintenance = { status = "experimental" }
+travis-ci = { repository = "bytecodealliance/cranelift" }

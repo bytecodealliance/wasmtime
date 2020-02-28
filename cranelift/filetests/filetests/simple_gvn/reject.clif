@@ -1,0 +1,56 @@
+test simple-gvn
+
+function %other_side_effects(i32) -> i32 {
+block0(v0: i32):
+   regmove v0, %10 -> %20
+   regmove v0, %10 -> %20
+   regmove v0, %20 -> %10
+; check: regmove v0, %10 -> %20
+; check: regmove v0, %10 -> %20
+    return v0
+}
+
+function %differing_typevars() -> i64 {
+block0:
+    v0 = iconst.i32 7
+    v1 = iconst.i64 7
+    v2 = iconst.i64 8
+; check: v0 = iconst.i32 7
+; check: v1 = iconst.i64 7
+; check: v2 = iconst.i64 8
+    v3 = uextend.i64 v0
+    v4 = iadd v2, v1
+    v5 = iadd v4, v3
+    return v5
+}
+
+function %cpu_flags() -> b1 {
+block0:
+    v0 = iconst.i32 7
+    v1 = iconst.i32 8
+    v2 = ifcmp v0, v1
+    v3 = trueif eq v2
+    v4 = ifcmp v0, v1
+    v5 = trueif eq v4
+    v6 = bor v3, v5
+; check: v2 = ifcmp v0, v1
+; check: v3 = trueif eq v2
+; check: v4 = ifcmp v0, v1
+; check: v5 = trueif eq v4
+    return v6
+}
+
+function %spill() -> i32 {
+block0:
+    v0 = iconst.i32 7
+    v1 = spill v0
+    v2 = fill v1
+    v3 = spill v0
+    v4 = fill v1
+    v5 = bor v2, v4
+; check: v1 = spill v0
+; check: v2 = fill v1
+; check: v3 = spill v0
+; check: v4 = fill v1
+    return v5
+}

@@ -1,0 +1,19 @@
+[package]
+authors = ["The Cranelift Project Developers"]
+name = "cranelift-bforest"
+version = "0.59.0"
+description = "A forest of B+-trees"
+license = "Apache-2.0 WITH LLVM-exception"
+documentation = "https://cranelift.readthedocs.io/"
+repository = "https://github.com/bytecodealliance/cranelift"
+categories = ["no-std"]
+readme = "README.md"
+keywords = ["btree", "forest", "set", "map"]
+edition = "2018"
+
+[dependencies]
+cranelift-entity = { path = "../entity", version = "0.59.0", default-features = false }
+
+[badges]
+maintenance = { status = "experimental" }
+travis-ci = { repository = "bytecodealliance/cranelift" }

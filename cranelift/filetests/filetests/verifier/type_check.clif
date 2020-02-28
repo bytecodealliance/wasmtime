@@ -1,0 +1,115 @@
+test verifier
+
+function %entry_block_signature_mismatch(i32) {
+    block0: ; error: entry block parameters (0) must match function signature (1)
+        return
+}
+
+function %entry_block_arg_type(i32) {
+    block0(v0: f32): ; error: entry block parameter 0 expected to have type i32, got f32
+        return
+}
+
+function %incorrect_arg_type(i32, b1) -> i32 {
+    block0(v0: i32, v1: b1):
+        v2 = iadd v0, v1 ; error: arg 1 (v1) has type b1, expected i32
+        return v2
+}
+
+function %incorrect_return_type() -> f32 {
+    block0:
+        v0 = iconst.i32 1
+        return v0 ; error: arg 0 (v0) has type i32, must match function signature of f32
+}
+
+function %too_many_return_values() {
+    block0:
+        v0 = iconst.i32 1
+        return v0 ; error: arguments of return must match function signature
+}
+
+function %too_few_return_values() -> f32, i64 {
+    block0:
+        return ; error: arguments of return must match function signature
+}
+
+function %type_mismatch_controlling_variable() {
+    block0:
+        v0 = iconst.i32 5
+        v1 = iconst.i64 6
+        v2 = iadd v0, v1 ; error: arg 1 (v1) has type i64, expected i32
+        return
+}
+
+function %fn_call_too_few_args() {
+    fn2 = %great_fn(i32, f32)
+    block0:
+        call fn2() ; error: mismatched argument count for `call fn2()`: got 0, expected 2
+        return
+}
+
+function %fn_call_too_many_args() {
+    fn5 = %best_fn()
+    block0:
+        v0 = iconst.i64 56
+        v1 = f32const 0.0
+        call fn5(v0, v1) ; error: mismatched argument count for `call fn5(v0, v1)`: got 2, expected 0
+        return
+}
+
+function %fn_call_incorrect_arg_type(i64) {
+    sig9 = (f32)
+    block0(v0: i64):
+        v1 = iconst.i32 56
+        call_indirect sig9, v0(v1) ; error: arg 0 (v1) has type i32, expected f32
+        return
+}
+
+; TODO: Should we instead just verify that jump tables contain no blocks that take arguments? This
+; error doesn't occur if no instruction uses the jump table.
+function %jump_table_args() {
+    jt1 = jump_table [block1]
+    block0:
+        v0 = iconst.i32 0
+        br_table v0, block2, jt1 ; error: takes no arguments, but had target block1 with 1 arguments
+
+    block1(v5: i32):
+        return
+    block2:
+        return
+}
+
+function %jump_args() {
+    block0:
+        v0 = iconst.i16 10
+        v3 = iconst.i64 20
+        jump block1(v0, v3) ; error: arg 0 (v0) has type i16, expected i64
+                          ; error: arg 1 (v3) has type i64, expected i16
+    block1(v10: i64, v11: i16):
+        return
+}
+
+function %jump_args2() {
+    block0:
+        v0 = iconst.i16 10
+        v3 = iconst.i64 20
+        brz v0, block1(v0, v3) ; error: arg 0 (v0) has type i16, expected i64
+                             ; error: arg 1 (v3) has type i64, expected i16
+        jump block1(v3, v0)
+    block1(v10: i64, v11: i16):
+        return
+}
+
+function %bad_extend() {
+block0:
+    v0 = iconst.i32 10
+    v1 = uextend.i16 v0 ; error: input i32 must be smaller than output i16
+    return
+}
+
+function %bad_reduce() {
+block0:
+    v0 = iconst.i32 10
+    v1 = ireduce.i64 v0 ; error: input i32 must be larger than output i64
+    return
+}

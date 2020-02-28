@@ -1,0 +1,103 @@
+; Test basic code generation for f32 arithmetic WebAssembly instructions.
+test compile
+
+target i686 haswell
+target i686 baseline
+target x86_64 haswell
+target x86_64 baseline
+
+; Constants.
+
+function %f32_const() -> f32 {
+block0:
+    v1 = f32const 0x3.0
+    return v1
+}
+
+; Unary operations
+
+function %f32_abs(f32) -> f32 {
+block0(v0: f32):
+    v1 = fabs v0
+    return v1
+}
+
+function %f32_neg(f32) -> f32 {
+block0(v0: f32):
+    v1 = fneg v0
+    return v1
+}
+
+function %f32_sqrt(f32) -> f32 {
+block0(v0: f32):
+    v1 = sqrt v0
+    return v1
+}
+
+function %f32_ceil(f32) -> f32 {
+block0(v0: f32):
+    v1 = ceil v0
+    return v1
+}
+
+function %f32_floor(f32) -> f32 {
+block0(v0: f32):
+    v1 = floor v0
+    return v1
+}
+
+function %f32_trunc(f32) -> f32 {
+block0(v0: f32):
+    v1 = trunc v0
+    return v1
+}
+
+function %f32_nearest (f32) -> f32 {
+block0(v0: f32):
+    v1 = nearest v0
+    return v1
+}
+
+; Binary Operations
+
+function %f32_add(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = fadd v0, v1
+    return v2
+}
+
+function %f32_sub(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = fsub v0, v1
+    return v2
+}
+
+function %f32_mul(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = fmul v0, v1
+    return v2
+}
+
+function %f32_div(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = fdiv v0, v1
+    return v2
+}
+
+function %f32_min(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = fmin v0, v1
+    return v2
+}
+
+function %f32_max(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = fmax v0, v1
+    return v2
+}
+
+function %f32_copysign(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = fcopysign v0, v1
+    return v2
+}

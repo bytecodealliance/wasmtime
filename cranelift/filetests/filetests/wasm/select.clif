@@ -1,0 +1,30 @@
+; Test basic code generation for the select WebAssembly instruction.
+test compile
+
+target i686 haswell
+
+target x86_64 haswell
+
+function %select_i32(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = select v2, v0, v1
+    return v3
+}
+
+function %select_i64(i64, i64, i32) -> i64 {
+block0(v0: i64, v1: i64, v2: i32):
+    v3 = select v2, v0, v1
+    return v3
+}
+
+function %select_f32(f32, f32, i32) -> f32 {
+block0(v0: f32, v1: f32, v2: i32):
+    v3 = select v2, v0, v1
+    return v3
+}
+
+function %select_f64(f64, f64, i32) -> f64 {
+block0(v0: f64, v1: f64, v2: i32):
+    v3 = select v2, v0, v1
+    return v3
+}

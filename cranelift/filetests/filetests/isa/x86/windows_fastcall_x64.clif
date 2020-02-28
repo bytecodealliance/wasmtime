@@ -1,0 +1,45 @@
+test compile
+set opt_level=speed_and_size
+set is_pic
+target x86_64 haswell
+
+; check if for one arg we use the right register
+function %one_arg(i64) windows_fastcall {
+block0(v0: i64):
+    return
+}
+; check: function %one_arg(i64 [%rcx], i64 fp [%rbp]) -> i64 fp [%rbp] windows_fastcall {
+; nextln: ss0 = incoming_arg 16, offset -48
+
+; check if we still use registers for 4 arguments
+function %four_args(i64, i64, i64, i64) windows_fastcall {
+block0(v0: i64, v1: i64, v2: i64, v3: i64):
+    return
+}
+; check: function %four_args(i64 [%rcx], i64 [%rdx], i64 [%r8], i64 [%r9], i64 fp [%rbp]) -> i64 fp [%rbp] windows_fastcall {
+
+; check if float arguments are passed through XMM registers
+function %four_float_args(f64, f64, f64, f64) windows_fastcall {
+block0(v0: f64, v1: f64, v2: f64, v3: f64):
+    return
+}
+; check: function %four_float_args(f64 [%xmm0], f64 [%xmm1], f64 [%xmm2], f64 [%xmm3], i64 fp [%rbp]) -> i64 fp [%rbp] windows_fastcall {
+
+; check if we use stack space for > 4 arguments
+function %five_args(i64, i64, i64, i64, i64) windows_fastcall {
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64):
+    return
+}
+; check: function %five_args(i64 [%rcx], i64 [%rdx], i64 [%r8], i64 [%r9], i64 [32], i64 fp [%rbp]) -> i64 fp [%rbp] windows_fastcall {
+
+function %mixed_int_float(i64, f64, i64, f32) windows_fastcall {
+block0(v0: i64, v1: f64, v2: i64, v3: f32):
+    return
+}
+; check: function %mixed_int_float(i64 [%rcx], f64 [%xmm1], i64 [%r8], f32 [%xmm3], i64 fp [%rbp]) -> i64 fp [%rbp] windows_fastcall {
+
+function %ret_val_float(f32, f64, i64, i64) -> f64 windows_fastcall {
+block0(v0: f32, v1: f64, v2: i64, v3: i64):
+    return v1
+}
+; check: function %ret_val_float(f32 [%xmm0], f64 [%xmm1], i64 [%r8], i64 [%r9], i64 fp [%rbp]) -> f64 [%xmm0], i64 fp [%rbp] windows_fastcall {

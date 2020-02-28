@@ -1,0 +1,10 @@
+test binemit
+target x86_64
+
+function %test_raw_bitcast_i16x8_to_b32x4() {
+block0:
+[-, %rbx]   v0 = bconst.b16 true
+[-, %xmm2]  v1 = scalar_to_vector.b16x8 v0
+[-, %xmm2]  v2 = raw_bitcast.i32x4 v1       ; bin:
+            return
+}

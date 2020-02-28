@@ -1,0 +1,83 @@
+; Test code generation for WebAssembly i32 comparison operators.
+test compile
+
+target i686 haswell
+
+target x86_64 haswell
+
+function %i32_eqz(i32) -> i32 {
+block0(v0: i32):
+    v1 = icmp_imm eq v0, 0
+    v2 = bint.i32 v1
+    return v2
+}
+
+function %i32_eq(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp eq v0, v1
+    v3 = bint.i32 v2
+    return v3
+}
+
+function %i32_ne(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp ne v0, v1
+    v3 = bint.i32 v2
+    return v3
+}
+
+function %i32_lt_s(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp slt v0, v1
+    v3 = bint.i32 v2
+    return v3
+}
+
+function %i32_lt_u(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp ult v0, v1
+    v3 = bint.i32 v2
+    return v3
+}
+
+function %i32_gt_s(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp sgt v0, v1
+    v3 = bint.i32 v2
+    return v3
+}
+
+function %i32_gt_u(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp ugt v0, v1
+    v3 = bint.i32 v2
+    return v3
+}
+
+function %i32_le_s(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp sle v0, v1
+    v3 = bint.i32 v2
+    return v3
+}
+
+function %i32_le_u(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp ule v0, v1
+    v3 = bint.i32 v2
+    return v3
+}
+
+function %i32_ge_s(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp sge v0, v1
+    v3 = bint.i32 v2
+    return v3
+}
+
+function %i32_ge_u(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp uge v0, v1
+    v3 = bint.i32 v2
+    return v3
+}

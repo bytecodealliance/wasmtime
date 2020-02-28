@@ -1,0 +1,24 @@
+test cat
+test verifier
+
+function %add_i96(i32, i32, i32, i32, i32, i32) -> i32, i32, i32 {
+block1(v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32):
+    v10, v11 = iadd_ifcout v1, v4
+    ;check: v10, v11 = iadd_ifcout v1, v4
+    v20, v21 = iadd_ifcarry v2, v5, v11
+    ; check: v20, v21 = iadd_ifcarry v2, v5, v11
+    v30 = iadd_ifcin v3, v6, v21
+    ; check: v30 = iadd_ifcin v3, v6, v21
+    return v10, v20, v30
+}
+
+function %sub_i96(i32, i32, i32, i32, i32, i32) -> i32, i32, i32 {
+block1(v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32):
+    v10, v11 = isub_ifbout v1, v4
+    ;check: v10, v11 = isub_ifbout v1, v4
+    v20, v21 = isub_ifborrow v2, v5, v11
+    ; check: v20, v21 = isub_ifborrow v2, v5, v11
+    v30 = isub_ifbin v3, v6, v21
+    ; check: v30 = isub_ifbin v3, v6, v21
+    return v10, v20, v30
+}
