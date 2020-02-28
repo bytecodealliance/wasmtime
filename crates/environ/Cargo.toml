@@ -1,0 +1,52 @@
+[package]
+name = "wasmtime-environ"
+version = "0.12.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Standalone environment support for WebAsssembly code in Cranelift"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+documentation = "https://docs.rs/wasmtime-environ/"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0"
+cranelift-codegen = { version = "0.59.0", features = ["enable-serde"] }
+cranelift-entity = { version = "0.59.0", features = ["enable-serde"] }
+cranelift-wasm = { version = "0.59.0", features = ["enable-serde"] }
+wasmparser = "0.51.2"
+lightbeam = { path = "../lightbeam", optional = true, version = "0.12.0" }
+indexmap = "1.0.2"
+rayon = "1.2.1"
+thiserror = "1.0.4"
+directories = "2.0.1"
+sha2 = "0.8.0"
+base64 = "0.11.0"
+serde = { version = "1.0.94", features = ["derive"] }
+bincode = "1.1.4"
+log = { version = "0.4.8", default-features = false }
+zstd = "0.5"
+toml = "0.5.5"
+file-per-thread-logger = "0.1.1"
+more-asserts = "0.2.1"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winapi = "0.3.7"
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+libc = "0.2.60"
+errno = "0.2.4"
+
+[dev-dependencies]
+tempfile = "3"
+target-lexicon = { version = "0.10.0", default-features = false }
+pretty_env_logger = "0.3.0"
+rand = { version = "0.7.0", default-features = false, features = ["small_rng"] }
+cranelift-codegen = { version = "0.59.0", features = ["enable-serde", "all-arch"] }
+filetime = "0.2.7"
+lazy_static = "1.3.0"
+
+[badges]
+maintenance = { status = "actively-developed" }

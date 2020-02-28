@@ -1,0 +1,35 @@
+[package]
+name = "lightbeam"
+version = "0.12.0"
+authors = ["The Lightbeam Project Developers"]
+description = "An optimising one-pass streaming compiler for WebAssembly"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm", "compile", "compiler", "jit"]
+edition = "2018"
+
+[dependencies]
+smallvec = "1.0.0"
+dynasm = "0.5.2"
+dynasmrt = "0.5.2"
+wasmparser = "0.51.2"
+memoffset = "0.5.3"
+itertools = "0.8.2"
+capstone = "0.6.0"
+thiserror = "1.0.9"
+cranelift-codegen = "0.59.0"
+multi_mut = "0.1"
+either = "1.5"
+typemap = "0.3"
+more-asserts = "0.2.1"
+
+[dev-dependencies]
+lazy_static = "1.2"
+wat = "1.0.9"
+quickcheck = "0.9.0"
+anyhow = "1.0"
+
+[badges]
+maintenance = { status = "experimental" }

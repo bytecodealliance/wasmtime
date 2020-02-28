@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <WasmtimeVersion>0.12.0</WasmtimeVersion>
+    <WasmtimeLibraryName>wasmtime</WasmtimeLibraryName>
+    <WasmtimePackageName>wasmtime-c-api</WasmtimePackageName>
+  </PropertyGroup>
+</Project>

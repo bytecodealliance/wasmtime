@@ -1,0 +1,20 @@
+[package]
+authors = ["The Wasmtime Project Developers"]
+description = "Fuzzing infrastructure for Wasmtime"
+edition = "2018"
+name = "wasmtime-fuzzing"
+publish = false
+version = "0.12.0"
+
+[dependencies]
+anyhow = "1.0.22"
+arbitrary = { version = "0.3.2", features = ["derive"] }
+binaryen = "0.10.0"
+env_logger = "0.7.1"
+log = "0.4.8"
+wasmparser = "0.51.2"
+wasmprinter = "0.2.1"
+wasmtime = { path = "../api", version = "0.12.0" }
+
+[dev-dependencies]
+wat = "1.0.10"

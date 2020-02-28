@@ -1,0 +1,13 @@
+*.bk
+*.swp
+*.swo
+*.swx
+tags
+target
+.*.rustfmt
+cranelift.dbg*
+rusty-tags.*
+*~
+\#*\#
+docs/book
+.vscode/

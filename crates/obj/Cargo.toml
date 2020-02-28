@@ -1,0 +1,20 @@
+[package]
+name = "wasmtime-obj"
+version = "0.12.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Native object file output for WebAsssembly code in Wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0"
+wasmtime-environ = { path = "../environ", version = "0.12.0" }
+faerie = "0.14.0"
+more-asserts = "0.2.1"
+
+[badges]
+maintenance = { status = "experimental" }

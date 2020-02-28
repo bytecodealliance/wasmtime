@@ -1,0 +1,83 @@
+[package]
+name = "wasmtime-cli"
+version = "0.12.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Command-line interface for Wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+documentation = "https://cranelift.readthedocs.io/"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+edition = "2018"
+default-run = "wasmtime"
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "wasmtime"
+path = "src/bin/wasmtime.rs"
+doc = false
+
+[dependencies]
+# Enable all supported architectures by default.
+wasmtime = { path = "crates/api" }
+wasmtime-debug = { path = "crates/debug" }
+wasmtime-environ = { path = "crates/environ" }
+wasmtime-interface-types = { path = "crates/interface-types" }
+wasmtime-jit = { path = "crates/jit" }
+wasmtime-obj = { path = "crates/obj" }
+wasmtime-profiling = { path = "crates/profiling" }
+wasmtime-wast = { path = "crates/wast" }
+wasmtime-wasi = { path = "crates/wasi" }
+wasi-common = { path = "crates/wasi-common" }
+structopt = { version = "0.3.5", features = ["color", "suggestions"] }
+faerie = "0.14.0"
+anyhow = "1.0.19"
+target-lexicon = { version = "0.10.0", default-features = false }
+pretty_env_logger = "0.3.0"
+file-per-thread-logger = "0.1.1"
+wat = "1.0.10"
+libc = "0.2.60"
+rayon = "1.2.1"
+wasm-webidl-bindings = "0.8"
+
+[dev-dependencies]
+wasmtime-runtime = { path = "crates/runtime" }
+more-asserts = "0.2.1"
+# This feature requires the wasm32-wasi target be installed. It enables
+# wasm32-wasi integration tests. To enable, run
+# `cargo test --features test-programs`.
+test-programs = { path = "crates/test-programs" }
+tempfile = "3.1.0"
+filecheck = "0.4.0"
+
+[build-dependencies]
+anyhow = "1.0.19"
+
+[profile.release.build-override]
+opt-level = 0
+
+[workspace]
+members = [
+  "crates/fuzzing",
+  "crates/misc/rust",
+  "crates/misc/py",
+  "crates/c-api",
+  "fuzz",
+]
+
+[features]
+lightbeam = [
+    "wasmtime-environ/lightbeam",
+    "wasmtime-jit/lightbeam",
+    "wasmtime-wast/lightbeam",
+    "wasmtime/lightbeam",
+]
+jitdump = ["wasmtime-profiling/jitdump"]
+test_programs = ["test-programs/test_programs"]
+
+[badges]
+maintenance = { status = "actively-developed" }

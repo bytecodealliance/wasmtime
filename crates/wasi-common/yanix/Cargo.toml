@@ -1,0 +1,18 @@
+[package]
+name = "yanix"
+version = "0.12.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Yet Another Nix crate: a Unix API helper library"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+edition = "2018"
+
+[dependencies]
+log = "0.4"
+libc = { version = "0.2", features = ["extra_traits"] }
+thiserror = "1.0"
+bitflags = "1.2"
+cfg-if = "0.1.9"
+
+[badges]
+maintenance = { status = "actively-developed" }

@@ -1,0 +1,45 @@
+[package]
+name = "wasmtime-fuzz"
+version = "0.12.0"
+authors = ["The Wasmtime Project Developers"]
+edition = "2018"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+arbitrary = "0.2.0"
+wasmtime-fuzzing = { path = "../crates/fuzzing" }
+wasmtime = { path = "../crates/api" }
+libfuzzer-sys = "0.2.1"
+
+[[bin]]
+name = "compile"
+path = "fuzz_targets/compile.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "instantiate"
+path = "fuzz_targets/instantiate.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "instantiate_translated"
+path = "fuzz_targets/instantiate_translated.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "api_calls"
+path = "fuzz_targets/api_calls.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "differential"
+path = "fuzz_targets/differential.rs"
+test = false
+doc = false

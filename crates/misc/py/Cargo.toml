@@ -1,0 +1,30 @@
+[package]
+name = "wasmtime-py"
+version = "0.12.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Python extension for Wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+categories = ["wasm", "python"]
+keywords = ["webassembly", "wasm"]
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+edition = "2018"
+
+[lib]
+name = "_wasmtime"
+crate-type = ["cdylib"]
+test = false
+doc = false
+
+[dependencies]
+wasmtime = { path = "../../api", version = "0.12.0" }
+wasmtime-interface-types = { path = "../../interface-types", version = "0.12.0" }
+wasmtime-wasi = { path = "../../wasi", version = "0.12.0" }
+target-lexicon = { version = "0.10.0", default-features = false }
+anyhow = "1.0.19"
+region = "2.0.0"
+wasmparser = "0.51.2"
+pyo3 = { version = "0.8.0", features = ["extension-module"] }
+
+[badges]
+maintenance = { status = "actively-developed" }

@@ -1,0 +1,1 @@
+(module (memory 1))

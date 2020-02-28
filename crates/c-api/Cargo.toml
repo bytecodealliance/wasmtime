@@ -1,0 +1,22 @@
+[package]
+name = "wasmtime-c-api"
+version = "0.12.0"
+authors = ["The Wasmtime Project Developers"]
+description = "C API to expose the Wasmtime runtime"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+edition = "2018"
+publish = false
+
+[lib]
+name = "wasmtime"
+crate-type = ["staticlib", "cdylib"]
+doc = false
+test = false
+doctest = false
+
+[dependencies]
+wasmtime = { path = "../api" }
+wasi-common = { path = "../wasi-common" }
+wasmtime-wasi = { path = "../wasi" }
