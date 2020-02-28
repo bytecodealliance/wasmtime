@@ -45,12 +45,3 @@ walkdir = "2.2"
 default = ["disas", "wasm", "cranelift-codegen/all-arch"]
 disas = ["capstone"]
 wasm = ["wat", "cranelift-wasm"]
-
-# We want debug symbols on release binaries by default since it allows profiling
-# tools to give more accurate information. We can always strip them out later if
-# necessary.
-[profile.release]
-debug = true
-# debug-assertions = true # uncomment to make bugpoint blazingly fast!
-[profile.bench]
-debug = true
