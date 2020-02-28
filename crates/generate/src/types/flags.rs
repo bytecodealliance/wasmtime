@@ -35,10 +35,11 @@ pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDataty
 
         impl #ident {
             #(#flag_constructors);*;
+            pub const EMPTY_FLAGS: #ident = #ident(0 as #repr);
             pub const ALL_FLAGS: #ident = #ident(#all_values_token);
 
             pub fn contains(&self, other: &#ident) -> bool {
-                #repr::from(!*self & *other) == 0 as #repr
+                !*self & *other == Self::EMPTY_FLAGS
             }
         }
 
