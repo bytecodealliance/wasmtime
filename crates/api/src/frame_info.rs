@@ -134,6 +134,8 @@ impl Drop for GlobalFrameInfoRegistration {
 /// Whenever a WebAssembly trap occurs an instance of [`Trap`] is created. Each
 /// [`Trap`] has a backtrace of the WebAssembly frames that led to the trap, and
 /// each frame is described by this structure.
+///
+/// [`Trap`]: crate::Trap
 #[derive(Debug)]
 pub struct FrameInfo {
     module_name: Option<String>,
