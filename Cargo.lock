@@ -2133,6 +2133,7 @@ dependencies = [
  "binaryen",
  "env_logger 0.7.1",
  "log",
+ "rayon",
  "wasmparser 0.51.2",
  "wasmprinter",
  "wasmtime",
