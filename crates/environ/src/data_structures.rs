@@ -24,6 +24,6 @@ pub mod wasm {
     pub use cranelift_wasm::{
         get_vmctx_value_label, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex,
         DefinedTableIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex,
-        PassiveElemIndex, SignatureIndex, Table, TableElementType, TableIndex,
+        ElemIndex, SignatureIndex, Table, TableElementType, TableIndex,
     };
 }
