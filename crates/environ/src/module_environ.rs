@@ -6,8 +6,8 @@ use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
-    self, translate_module, DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
-    ModuleTranslationState, DataIndex, ElemIndex, SignatureIndex, Table, TableIndex,
+    self, translate_module, DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex,
+    Memory, MemoryIndex, ModuleTranslationState, SignatureIndex, Table, TableIndex,
     TargetEnvironment, WasmError, WasmResult,
 };
 use std::convert::TryFrom;

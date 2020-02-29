@@ -36,7 +36,7 @@ use crate::table::Table;
 use crate::traphandlers::raise_lib_trap;
 use crate::vmcontext::VMContext;
 use wasmtime_environ::ir;
-use wasmtime_environ::wasm::{DefinedMemoryIndex, MemoryIndex, ElemIndex, TableIndex};
+use wasmtime_environ::wasm::{DefinedMemoryIndex, ElemIndex, MemoryIndex, TableIndex};
 
 /// Implementation of f32.ceil
 pub extern "C" fn wasmtime_f32_ceil(x: f32) -> f32 {
