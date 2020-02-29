@@ -81,6 +81,8 @@ pub struct ApiCalls {
 
 impl Arbitrary for ApiCalls {
     fn arbitrary(input: &mut Unstructured) -> arbitrary::Result<Self> {
+        crate::init_fuzzing();
+
         let swarm = Swarm::arbitrary(input)?;
         let mut calls = vec![];
 
