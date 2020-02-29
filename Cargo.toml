@@ -62,6 +62,7 @@ opt-level = 0
 
 [workspace]
 members = [
+  "cranelift",
   "crates/fuzzing",
   "crates/misc/rust",
   "crates/misc/py",
