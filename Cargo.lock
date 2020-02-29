@@ -41,15 +41,9 @@ checksum = "7825f6833612eb2414095684fcf6c635becf3ce97fe48cf6421321e93bfbd53c"
 
 [[package]]
 name = "arbitrary"
-version = "0.2.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64cf76cb6e2222ed0ea86b2b0ee2f71c96ec6edd5af42e84d59160e91b836ec4"
-
-[[package]]
-name = "arbitrary"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "491d5e42b1a073ff1fc1e0a02744b3f8bee9cf4bfd552053cac36c64b879795d"
+checksum = "16971f2f0ce65c5cf2a1546cc6a0af102ecb11e265ddaa9433fb3e5bfdf676a4"
 dependencies = [
  "derive_arbitrary",
 ]
@@ -521,9 +515,9 @@ dependencies = [
 
 [[package]]
 name = "derive_arbitrary"
-version = "0.3.3"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dab2f0544254a47cabc58956cc7ebda74c3b796bb2761e3fe8f29fdde632ad95"
+checksum = "caedd6a71b6d00bdc458ec8ffbfd12689c1ee7ffa69ad9933310aaf2f08f18d8"
 dependencies = [
  "proc-macro2",
  "syn",
@@ -955,11 +949,11 @@ checksum = "eb147597cdf94ed43ab7a9038716637d2d1bf2bc571da995d0028dec06bd3018"
 
 [[package]]
 name = "libfuzzer-sys"
-version = "0.2.1"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e969cd2be7a2aae0acbbe205da49134148db2287fb45a811bf441ed72f09a35"
+checksum = "fb789afcc589a08928d1e466087445ab740a0f70a2ee23d9349a0e3723d65e1b"
 dependencies = [
- "arbitrary 0.3.3",
+ "arbitrary",
  "cc",
 ]
 
@@ -2121,7 +2115,6 @@ dependencies = [
 name = "wasmtime-fuzz"
 version = "0.12.0"
 dependencies = [
- "arbitrary 0.2.0",
  "cranelift-codegen",
  "cranelift-reader",
  "cranelift-wasm",
@@ -2136,7 +2129,7 @@ name = "wasmtime-fuzzing"
 version = "0.12.0"
 dependencies = [
  "anyhow",
- "arbitrary 0.3.3",
+ "arbitrary",
  "binaryen",
  "env_logger 0.7.1",
  "log",

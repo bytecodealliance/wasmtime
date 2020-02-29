@@ -44,6 +44,10 @@ impl Arbitrary for WasmOptTtf {
         let wasm = module.write();
         Ok(WasmOptTtf { wasm })
     }
+
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        <Vec<u8> as Arbitrary>::size_hint(depth)
+    }
 }
 
 /// A description of configuration options that we should do differential
