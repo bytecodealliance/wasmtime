@@ -162,8 +162,8 @@ where
         }
     }
 
-    pub fn as_raw(&self) -> *const u8 {
-        self.as_immut().as_raw()
+    pub fn as_raw(&self) -> *mut u8 {
+        (self.mem.ptr as usize + self.region.start as usize) as *mut u8
     }
 
     pub fn elem(&self, elements: i32) -> Result<Self, GuestError> {
