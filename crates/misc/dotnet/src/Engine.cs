@@ -40,6 +40,24 @@ namespace Wasmtime
             return new Store(this);
         }
 
+        /// <summary>
+        /// Converts the WebAssembly text format to the binary format
+        /// </summary>
+        /// <returns>Returns the binary-encoded wasm module.</returns>
+        public byte[] WatToWasm(string wat)
+        {
+            unsafe
+            {
+                if (!Interop.wasmtime_wat2wasm(out var bytes, Handle, wat)) {
+                    throw new WasmtimeException("failed to parse input wat");
+                }
+                var byteSpan = new ReadOnlySpan<byte>(bytes.data, checked((int)bytes.size));
+                var ret = byteSpan.ToArray();
+                Interop.wasm_byte_vec_delete(ref bytes);
+                return ret;
+            }
+        }
+
         /// <inheritdoc/>
         public void Dispose()
         {

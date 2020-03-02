@@ -20,3 +20,4 @@ doctest = false
 wasmtime = { path = "../api" }
 wasi-common = { path = "../wasi-common" }
 wasmtime-wasi = { path = "../wasi" }
+wat = "1.0"

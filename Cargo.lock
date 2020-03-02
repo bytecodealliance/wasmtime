@@ -2263,6 +2263,7 @@ dependencies = [
  "wasi-common",
  "wasmtime",
  "wasmtime-wasi",
+ "wat",
 ]
 
 [[package]]

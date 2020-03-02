@@ -6,7 +6,7 @@ namespace Wasmtime.Tests
 {
     public class MemoryImportBindingFixture : ModuleFixture
     {
-        protected override string ModuleFileName => "MemoryImportBinding.wasm";
+        protected override string ModuleFileName => "MemoryImportBinding.wat";
     }
 
     public class MemoryImportBindingTests : IClassFixture<MemoryImportBindingFixture>
