@@ -2505,16 +2505,7 @@ version = "0.12.0"
 dependencies = [
  "anyhow",
  "wasmtime",
- "wast 9.0.0",
-]
-
-[[package]]
-name = "wast"
-version = "3.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "233648f540f07fce9b972436f2fbcae8a750c1121b6d32d949e1a44b4d9fc7b1"
-dependencies = [
- "leb128",
+ "wast",
 ]
 
 [[package]]
@@ -2532,7 +2523,7 @@ version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56173f7f4fb59aebe35a7e71423845e1c6c7144bfb56362d497931b6b3bed0f6"
 dependencies = [
- "wast 9.0.0",
+ "wast",
 ]
 
 [[package]]
@@ -2596,7 +2587,7 @@ dependencies = [
 
 [[package]]
 name = "witx"
-version = "0.8.0"
+version = "0.8.3"
 dependencies = [
  "anyhow",
  "diff",
@@ -2604,7 +2595,7 @@ dependencies = [
  "pretty_env_logger",
  "structopt",
  "thiserror",
- "wast 3.0.4",
+ "wast",
 ]
 
 [[package]]
