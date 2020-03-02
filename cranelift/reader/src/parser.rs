@@ -704,7 +704,7 @@ impl<'a> Parser<'a> {
                 value = u16::from_str_radix(&text[2..], 16)
                     .map_err(|_| self.error("unable to parse i16 as a hexadecimal immediate"))?;
             } else {
-            // Parse it as a i16 to check for overflow and other issues.
+                // Parse it as a i16 to check for overflow and other issues.
                 value = text
                     .parse()
                     .map_err(|_| self.error("expected i16 decimal immediate"))?;
@@ -743,7 +743,7 @@ impl<'a> Parser<'a> {
                 value = u32::from_str_radix(&text[2..], 16)
                     .map_err(|_| self.error("unable to parse i32 as a hexadecimal immediate"))?;
             } else {
-            // Parse it as a i32 to check for overflow and other issues.
+                // Parse it as a i32 to check for overflow and other issues.
                 value = text
                     .parse()
                     .map_err(|_| self.error("expected i32 decimal immediate"))?;
@@ -3361,6 +3361,78 @@ mod tests {
         assert_eq!(parse_as_uimm8("0xff").unwrap(), 255);
         assert!(parse_as_uimm8("-1").is_err());
         assert!(parse_as_uimm8("0xffa").is_err());
+    }
+
+    #[test]
+    fn i16_as_hex() {
+        fn parse_as_imm16(text: &str) -> ParseResult<i16> {
+            Parser::new(text).match_imm16("unable to parse i16")
+        }
+
+        assert_eq!(parse_as_imm16("0x8000").unwrap(), -32768);
+        assert_eq!(parse_as_imm16("0xffff").unwrap(), -1);
+        assert_eq!(parse_as_imm16("0").unwrap(), 0);
+        assert_eq!(parse_as_imm16("0x7fff").unwrap(), 32767);
+        assert_eq!(
+            parse_as_imm16("-0x0001").unwrap(),
+            parse_as_imm16("0xffff").unwrap()
+        );
+        assert_eq!(
+            parse_as_imm16("-0x7fff").unwrap(),
+            parse_as_imm16("0x8001").unwrap()
+        );
+        assert!(parse_as_imm16("0xffffa").is_err());
+    }
+
+    #[test]
+    fn i32_as_hex() {
+        fn parse_as_imm32(text: &str) -> ParseResult<i32> {
+            Parser::new(text).match_imm32("unable to parse i32")
+        }
+
+        assert_eq!(parse_as_imm32("0x80000000").unwrap(), -2147483648);
+        assert_eq!(parse_as_imm32("0xffffffff").unwrap(), -1);
+        assert_eq!(parse_as_imm32("0").unwrap(), 0);
+        assert_eq!(parse_as_imm32("0x7fffffff").unwrap(), 2147483647);
+        assert_eq!(
+            parse_as_imm32("-0x00000001").unwrap(),
+            parse_as_imm32("0xffffffff").unwrap()
+        );
+        assert_eq!(
+            parse_as_imm32("-0x7fffffff").unwrap(),
+            parse_as_imm32("0x80000001").unwrap()
+        );
+        assert!(parse_as_imm32("0xffffffffa").is_err());
+    }
+
+    #[test]
+    fn i64_as_hex() {
+        fn parse_as_imm64(text: &str) -> ParseResult<Imm64> {
+            Parser::new(text).match_imm64("unable to parse Imm64")
+        }
+
+        assert_eq!(
+            parse_as_imm64("0x8000000000000000").unwrap(),
+            Imm64::new(-9223372036854775808)
+        );
+        assert_eq!(
+            parse_as_imm64("0xffffffffffffffff").unwrap(),
+            Imm64::new(-1)
+        );
+        assert_eq!(parse_as_imm64("0").unwrap(), Imm64::new(0));
+        assert_eq!(
+            parse_as_imm64("0x7fffffffffffffff").unwrap(),
+            Imm64::new(9223372036854775807)
+        );
+        assert_eq!(
+            parse_as_imm64("-0x0000000000000001").unwrap(),
+            parse_as_imm64("0xffffffffffffffff").unwrap()
+        );
+        assert_eq!(
+            parse_as_imm64("-0x7fffffffffffffff").unwrap(),
+            parse_as_imm64("0x8000000000000001").unwrap()
+        );
+        assert!(parse_as_imm64("0xffffffffffffffffa").is_err());
     }
 
     #[test]
