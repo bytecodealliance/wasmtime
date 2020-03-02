@@ -36,7 +36,7 @@ use crate::table::Table;
 use crate::traphandlers::raise_lib_trap;
 use crate::vmcontext::VMContext;
 use wasmtime_environ::ir;
-use wasmtime_environ::wasm::{DefinedMemoryIndex, MemoryIndex, PassiveElemIndex, TableIndex};
+use wasmtime_environ::wasm::{DefinedMemoryIndex, ElemIndex, MemoryIndex, TableIndex};
 
 /// Implementation of f32.ceil
 pub extern "C" fn wasmtime_f32_ceil(x: f32) -> f32 {
@@ -204,7 +204,7 @@ pub unsafe extern "C" fn wasmtime_table_init(
     let result = {
         let table_index = TableIndex::from_u32(table_index);
         let source_loc = ir::SourceLoc::new(source_loc);
-        let elem_index = PassiveElemIndex::from_u32(elem_index);
+        let elem_index = ElemIndex::from_u32(elem_index);
         let instance = (&mut *vmctx).instance();
         instance.table_init(table_index, elem_index, dst, src, len, source_loc)
     };
@@ -215,7 +215,7 @@ pub unsafe extern "C" fn wasmtime_table_init(
 
 /// Implementation of `elem.drop`.
 pub unsafe extern "C" fn wasmtime_elem_drop(vmctx: *mut VMContext, elem_index: u32) {
-    let elem_index = PassiveElemIndex::from_u32(elem_index);
+    let elem_index = ElemIndex::from_u32(elem_index);
     let instance = (&mut *vmctx).instance();
     instance.elem_drop(elem_index);
 }

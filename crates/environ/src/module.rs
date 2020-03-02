@@ -5,8 +5,8 @@ use crate::WASM_MAX_PAGES;
 use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{
-    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, Global,
-    GlobalIndex, Memory, MemoryIndex, PassiveElemIndex, SignatureIndex, Table, TableIndex,
+    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex,
+    FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
 use indexmap::IndexMap;
 use more_asserts::assert_ge;
@@ -166,7 +166,7 @@ pub struct Module {
     pub table_elements: Vec<TableElements>,
 
     /// WebAssembly passive elements.
-    pub passive_elements: HashMap<PassiveElemIndex, Box<[FuncIndex]>>,
+    pub passive_elements: HashMap<ElemIndex, Box<[FuncIndex]>>,
 
     /// WebAssembly table initializers.
     pub func_names: HashMap<FuncIndex, String>,
@@ -239,7 +239,7 @@ impl Module {
     }
 
     /// Get the given passive element, if it exists.
-    pub fn get_passive_element(&self, index: PassiveElemIndex) -> Option<&[FuncIndex]> {
+    pub fn get_passive_element(&self, index: ElemIndex) -> Option<&[FuncIndex]> {
         self.passive_elements.get(&index).map(|es| &**es)
     }
 }

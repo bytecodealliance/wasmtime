@@ -8,8 +8,8 @@
 
 use crate::state::{FuncTranslationState, ModuleTranslationState};
 use crate::translation_utils::{
-    FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, PassiveDataIndex, PassiveElemIndex,
-    SignatureIndex, Table, TableIndex,
+    DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
+    Table, TableIndex,
 };
 use core::convert::From;
 use cranelift_codegen::cursor::FuncCursor;
@@ -606,7 +606,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
     /// Declare a passive element segment.
     fn declare_passive_element(
         &mut self,
-        index: PassiveElemIndex,
+        index: ElemIndex,
         elements: Box<[FuncIndex]>,
     ) -> WasmResult<()>;
 
@@ -620,11 +620,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
     }
 
     /// Declare a passive data segment.
-    fn declare_passive_data(
-        &mut self,
-        data_index: PassiveDataIndex,
-        data: &'data [u8],
-    ) -> WasmResult<()>;
+    fn declare_passive_data(&mut self, data_index: DataIndex, data: &'data [u8]) -> WasmResult<()>;
 
     /// Provides the contents of a function body.
     ///
