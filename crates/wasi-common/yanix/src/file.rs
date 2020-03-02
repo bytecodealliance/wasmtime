@@ -3,7 +3,7 @@ use bitflags::bitflags;
 use cfg_if::cfg_if;
 use std::{
     convert::TryInto,
-    ffi::{CString, OsStr, OsString},
+    ffi::{CStr, OsStr, OsString},
     os::unix::prelude::*,
 };
 
@@ -130,27 +130,25 @@ impl FileType {
     }
 }
 
-pub unsafe fn openat<P: AsRef<OsStr>>(
+pub unsafe fn openat<P: AsRef<CStr>>(
     dirfd: RawFd,
     path: P,
     oflag: OFlag,
     mode: Mode,
 ) -> Result<RawFd> {
-    let path = CString::new(path.as_ref().as_bytes())?;
     Errno::from_result(libc::openat(
         dirfd,
-        path.as_ptr(),
+        path.as_ref().as_ptr(),
         oflag.bits(),
         libc::c_uint::from(mode.bits()),
     ))
 }
 
-pub unsafe fn readlinkat<P: AsRef<OsStr>>(dirfd: RawFd, path: P) -> Result<OsString> {
-    let path = CString::new(path.as_ref().as_bytes())?;
+pub unsafe fn readlinkat<P: AsRef<CStr>>(dirfd: RawFd, path: P) -> Result<OsString> {
     let buffer = &mut [0u8; libc::PATH_MAX as usize + 1];
     Errno::from_result(libc::readlinkat(
         dirfd,
-        path.as_ptr(),
+        path.as_ref().as_ptr(),
         buffer.as_mut_ptr() as *mut _,
         buffer.len(),
     ))
@@ -160,67 +158,58 @@ pub unsafe fn readlinkat<P: AsRef<OsStr>>(dirfd: RawFd, path: P) -> Result<OsStr
     })
 }
 
-pub unsafe fn mkdirat<P: AsRef<OsStr>>(dirfd: RawFd, path: P, mode: Mode) -> Result<()> {
-    let path = CString::new(path.as_ref().as_bytes())?;
-    Errno::from_success_code(libc::mkdirat(dirfd, path.as_ptr(), mode.bits()))
+pub unsafe fn mkdirat<P: AsRef<CStr>>(dirfd: RawFd, path: P, mode: Mode) -> Result<()> {
+    Errno::from_success_code(libc::mkdirat(dirfd, path.as_ref().as_ptr(), mode.bits()))
 }
 
-pub unsafe fn linkat<P: AsRef<OsStr>>(
+pub unsafe fn linkat<P: AsRef<CStr>>(
     old_dirfd: RawFd,
     old_path: P,
     new_dirfd: RawFd,
     new_path: P,
     flags: AtFlag,
 ) -> Result<()> {
-    let old_path = CString::new(old_path.as_ref().as_bytes())?;
-    let new_path = CString::new(new_path.as_ref().as_bytes())?;
     Errno::from_success_code(libc::linkat(
         old_dirfd,
-        old_path.as_ptr(),
+        old_path.as_ref().as_ptr(),
         new_dirfd,
-        new_path.as_ptr(),
+        new_path.as_ref().as_ptr(),
         flags.bits(),
     ))
 }
 
-pub unsafe fn unlinkat<P: AsRef<OsStr>>(dirfd: RawFd, path: P, flags: AtFlag) -> Result<()> {
-    let path = CString::new(path.as_ref().as_bytes())?;
-    Errno::from_success_code(libc::unlinkat(dirfd, path.as_ptr(), flags.bits()))
+pub unsafe fn unlinkat<P: AsRef<CStr>>(dirfd: RawFd, path: P, flags: AtFlag) -> Result<()> {
+    Errno::from_success_code(libc::unlinkat(dirfd, path.as_ref().as_ptr(), flags.bits()))
 }
 
-pub unsafe fn renameat<P: AsRef<OsStr>>(
+pub unsafe fn renameat<P: AsRef<CStr>>(
     old_dirfd: RawFd,
     old_path: P,
     new_dirfd: RawFd,
     new_path: P,
 ) -> Result<()> {
-    let old_path = CString::new(old_path.as_ref().as_bytes())?;
-    let new_path = CString::new(new_path.as_ref().as_bytes())?;
     Errno::from_success_code(libc::renameat(
         old_dirfd,
-        old_path.as_ptr(),
+        old_path.as_ref().as_ptr(),
         new_dirfd,
-        new_path.as_ptr(),
+        new_path.as_ref().as_ptr(),
     ))
 }
 
-pub unsafe fn symlinkat<P: AsRef<OsStr>>(old_path: P, new_dirfd: RawFd, new_path: P) -> Result<()> {
-    let old_path = CString::new(old_path.as_ref().as_bytes())?;
-    let new_path = CString::new(new_path.as_ref().as_bytes())?;
+pub unsafe fn symlinkat<P: AsRef<CStr>>(old_path: P, new_dirfd: RawFd, new_path: P) -> Result<()> {
     Errno::from_success_code(libc::symlinkat(
-        old_path.as_ptr(),
+        old_path.as_ref().as_ptr(),
         new_dirfd,
-        new_path.as_ptr(),
+        new_path.as_ref().as_ptr(),
     ))
 }
 
-pub unsafe fn fstatat<P: AsRef<OsStr>>(dirfd: RawFd, path: P, flags: AtFlag) -> Result<libc::stat> {
+pub unsafe fn fstatat<P: AsRef<CStr>>(dirfd: RawFd, path: P, flags: AtFlag) -> Result<libc::stat> {
     use std::mem::MaybeUninit;
-    let path = CString::new(path.as_ref().as_bytes())?;
     let mut filestat = MaybeUninit::<libc::stat>::uninit();
     Errno::from_result(libc::fstatat(
         dirfd,
-        path.as_ptr(),
+        path.as_ref().as_ptr(),
         filestat.as_mut_ptr(),
         flags.bits(),
     ))?;

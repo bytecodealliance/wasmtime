@@ -1,5 +1,6 @@
 pub(crate) mod fdentry_impl;
 pub(crate) mod host_impl;
+mod host_string;
 pub(crate) mod hostcalls_impl;
 
 mod filetime;
@@ -25,6 +26,10 @@ cfg_if::cfg_if! {
 use crate::Result;
 use std::fs::{File, OpenOptions};
 use std::path::Path;
+
+pub(crate) use host_string::{
+    hoststring_ends_with_slash, hoststring_from_osstring, osstr_ends_with_slash, HostString,
+};
 
 pub(crate) fn dev_null() -> Result<File> {
     OpenOptions::new()

@@ -71,7 +71,7 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
         })
 }
 
-pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
+pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<OsString> {
     use winx::file::get_file_path;
     use winx::winerror::WinError;
 
@@ -87,7 +87,7 @@ pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
             target_path
                 .strip_prefix(dir_path)
                 .map_err(|_| Error::ENOTCAPABLE)
-                .and_then(|path| path.to_str().map(String::from).ok_or(Error::EILSEQ))
+                .and_then(Into::into)
         }
         Err(e) => match e.raw_os_error() {
             Some(e) => {

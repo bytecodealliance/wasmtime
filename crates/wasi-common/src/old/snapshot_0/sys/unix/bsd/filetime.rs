@@ -35,15 +35,14 @@ cfg_if! {
 /// The original implementation can be found here: [filetime::unix::macos::set_times]
 ///
 /// [filetime::unix::macos::set_times]: https://github.com/alexcrichton/filetime/blob/master/src/unix/macos.rs#L49
-pub(crate) fn utimensat(
+pub(crate) fn utimensat<P: AsRef<CStr>>(
     dirfd: &File,
-    path: &str,
+    path: P,
     atime: FileTime,
     mtime: FileTime,
     symlink_nofollow: bool,
 ) -> Result<()> {
     use crate::old::snapshot_0::sys::unix::filetime::to_timespec;
-    use std::ffi::CString;
     use std::os::unix::prelude::*;
 
     // Attempt to use the `utimensat` syscall, but if it's not supported by the
@@ -55,9 +54,15 @@ pub(crate) fn utimensat(
             0
         };
 
-        let p = CString::new(path.as_bytes())?;
         let times = [to_timespec(&atime)?, to_timespec(&mtime)?];
-        let rc = unsafe { func(dirfd.as_raw_fd(), p.as_ptr(), times.as_ptr(), flags) };
+        let rc = unsafe {
+            func(
+                dirfd.as_raw_fd(),
+                path.as_ref().as_ptr(),
+                times.as_ptr(),
+                flags,
+            )
+        };
         if rc == 0 {
             return Ok(());
         } else {

@@ -1,5 +1,6 @@
 use crate::hostcalls_impl::PathGet;
 use crate::{Error, Result};
+use std::ffi::CStr;
 use std::os::unix::prelude::AsRawFd;
 
 pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
@@ -48,7 +49,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     .map_err(Into::into)
 }
 
-pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
+pub(crate) fn path_symlink(old_path: &CStr, resolved: PathGet) -> Result<()> {
     use yanix::{
         file::{fstatat, symlinkat, AtFlag},
         Errno, YanixError,

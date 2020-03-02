@@ -1,28 +1,27 @@
 use crate::sys::unix::filetime::FileTime;
 use crate::Result;
+use std::ffi::CStr;
 use std::{fs, io};
 
 /// Combines `openat` with `utimes` to emulate `utimensat` on platforms where it is
 /// not available. The logic for setting file times is based on [filetime::unix::set_file_handles_times].
 ///
 /// [filetime::unix::set_file_handles_times]: https://github.com/alexcrichton/filetime/blob/master/src/unix/utimes.rs#L24
-pub(crate) fn utimesat(
+pub(crate) fn utimesat<P: AsRef<CStr>>(
     dirfd: &fs::File,
-    path: &str,
+    path: P,
     atime: FileTime,
     mtime: FileTime,
     symlink_nofollow: bool,
 ) -> Result<()> {
-    use std::ffi::CString;
     use std::os::unix::prelude::*;
     // emulate *at syscall by reading the path from a combination of
     // (fd, path)
-    let p = CString::new(path.as_bytes())?;
     let mut flags = libc::O_RDWR;
     if symlink_nofollow {
         flags |= libc::O_NOFOLLOW;
     }
-    let fd = unsafe { libc::openat(dirfd.as_raw_fd(), p.as_ptr(), flags) };
+    let fd = unsafe { libc::openat(dirfd.as_raw_fd(), path.as_ref().as_ptr(), flags) };
     let f = unsafe { fs::File::from_raw_fd(fd) };
     let (atime, mtime) = get_times(atime, mtime, || f.metadata().map_err(Into::into))?;
     let times = [to_timeval(atime), to_timeval(mtime)];

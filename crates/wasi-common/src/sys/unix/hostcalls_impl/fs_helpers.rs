@@ -2,6 +2,7 @@
 #![allow(unused_unsafe)]
 use crate::sys::host_impl;
 use crate::{wasi, Result};
+use std::ffi::{CStr, OsString};
 use std::fs::File;
 use yanix::file::OFlag;
 
@@ -36,7 +37,7 @@ pub(crate) fn path_open_rights(
     (needed_base, needed_inheriting)
 }
 
-pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
+pub(crate) fn openat(dirfd: &File, path: &CStr) -> Result<File> {
     use std::os::unix::prelude::{AsRawFd, FromRawFd};
     use yanix::file::{openat, Mode};
 
@@ -54,13 +55,11 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
     .map_err(Into::into)
 }
 
-pub(crate) fn readlinkat(dirfd: &File, path: &str) -> Result<String> {
+pub(crate) fn readlinkat(dirfd: &File, path: &CStr) -> Result<OsString> {
     use std::os::unix::prelude::AsRawFd;
     use yanix::file::readlinkat;
 
     log::debug!("path_get readlinkat path = {:?}", path);
 
-    unsafe { readlinkat(dirfd.as_raw_fd(), path) }
-        .map_err(Into::into)
-        .and_then(host_impl::path_from_host)
+    unsafe { readlinkat(dirfd.as_raw_fd(), path) }.map_err(Into::into)
 }

@@ -1,14 +1,17 @@
 #![allow(non_camel_case_types)]
-use crate::old::snapshot_0::sys::host_impl;
 use crate::old::snapshot_0::sys::hostcalls_impl::fs_helpers::*;
 use crate::old::snapshot_0::{error::WasiError, fdentry::FdEntry, wasi, Error, Result};
+use crate::sys::{
+    hoststring_ends_with_slash, hoststring_from_osstring, osstr_ends_with_slash, HostString,
+};
+use std::ffi::OsStr;
 use std::fs::File;
 use std::path::{Component, Path};
 
 #[derive(Debug)]
 pub(crate) struct PathGet {
     dirfd: File,
-    path: String,
+    path: HostString,
 }
 
 impl PathGet {
@@ -16,7 +19,7 @@ impl PathGet {
         &self.dirfd
     }
 
-    pub(crate) fn path(&self) -> &str {
+    pub(crate) fn path(&self) -> &HostString {
         &self.path
     }
 }
@@ -57,7 +60,7 @@ pub(crate) fn path_get(
 
     // Stack of paths left to process. This is initially the `path` argument to this function, but
     // any symlinks we encounter are processed by pushing them on the stack.
-    let mut path_stack = vec![path.to_owned()];
+    let mut path_stack = vec![OsStr::new(path).to_os_string()];
 
     // Track the number of symlinks we've expanded, so we can return `ELOOP` after too many.
     let mut symlink_expansions = 0;
@@ -69,7 +72,7 @@ pub(crate) fn path_get(
             Some(cur_path) => {
                 log::debug!("path_get cur_path = {:?}", cur_path);
 
-                let ends_with_slash = cur_path.ends_with('/');
+                let ends_with_slash = osstr_ends_with_slash(&cur_path);
                 let mut components = Path::new(&cur_path).components();
                 let head = match components.next() {
                     None => return Err(Error::ENOENT),
@@ -78,9 +81,9 @@ pub(crate) fn path_get(
                 let tail = components.as_path();
 
                 if tail.components().next().is_some() {
-                    let mut tail = host_impl::path_from_host(tail.as_os_str())?;
+                    let mut tail = tail.as_os_str().to_os_string();
                     if ends_with_slash {
-                        tail.push('/');
+                        tail.push("/");
                     }
                     path_stack.push(tail);
                 }
@@ -105,14 +108,16 @@ pub(crate) fn path_get(
                         }
                     }
                     Component::Normal(head) => {
-                        let mut head = host_impl::path_from_host(head)?;
+                        let mut head = head.to_os_string();
                         if ends_with_slash {
                             // preserve trailing slash
-                            head.push('/');
+                            head.push("/");
                         }
+                        let head = hoststring_from_osstring(head);
 
                         if !path_stack.is_empty() || (ends_with_slash && !needs_final_component) {
-                            match openat(dir_stack.last().ok_or(Error::ENOTCAPABLE)?, &head) {
+                            match openat(dir_stack.last().ok_or(Error::ENOTCAPABLE)?, head.as_ref())
+                            {
                                 Ok(new_dir) => {
                                     dir_stack.push(new_dir);
                                 }
@@ -127,7 +132,7 @@ pub(crate) fn path_get(
                                             // attempt symlink expansion
                                             let mut link_path = readlinkat(
                                                 dir_stack.last().ok_or(Error::ENOTCAPABLE)?,
-                                                &head,
+                                                head.as_ref(),
                                             )?;
 
                                             symlink_expansions += 1;
@@ -135,8 +140,8 @@ pub(crate) fn path_get(
                                                 return Err(Error::ELOOP);
                                             }
 
-                                            if head.ends_with('/') {
-                                                link_path.push('/');
+                                            if hoststring_ends_with_slash(&head) {
+                                                link_path.push("/");
                                             }
 
                                             log::debug!(
@@ -159,15 +164,18 @@ pub(crate) fn path_get(
                         {
                             // if there's a trailing slash, or if `LOOKUP_SYMLINK_FOLLOW` is set, attempt
                             // symlink expansion
-                            match readlinkat(dir_stack.last().ok_or(Error::ENOTCAPABLE)?, &head) {
+                            match readlinkat(
+                                dir_stack.last().ok_or(Error::ENOTCAPABLE)?,
+                                head.as_ref(),
+                            ) {
                                 Ok(mut link_path) => {
                                     symlink_expansions += 1;
                                     if symlink_expansions > MAX_SYMLINK_EXPANSIONS {
                                         return Err(Error::ELOOP);
                                     }
 
-                                    if head.ends_with('/') {
-                                        link_path.push('/');
+                                    if hoststring_ends_with_slash(&head) {
+                                        link_path.push("/");
                                     }
 
                                     log::debug!(
@@ -205,7 +213,7 @@ pub(crate) fn path_get(
                 // input path has trailing slashes and `needs_final_component` is not set
                 return Ok(PathGet {
                     dirfd: dir_stack.pop().ok_or(Error::ENOTCAPABLE)?,
-                    path: String::from("."),
+                    path: hoststring_from_osstring(OsStr::new(".").to_os_string()),
                 });
             }
         }

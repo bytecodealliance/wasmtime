@@ -9,9 +9,9 @@ pub(crate) const UTIME_OMIT: i32 = 1_073_741_822;
 
 /// Wrapper for `utimensat` syscall. In Emscripten, there is no point in dynamically resolving
 /// if `utimensat` is available as it always was and will be.
-pub(crate) fn utimensat(
+pub(crate) fn utimensat<P: AsRef<CStr>>(
     dirfd: &File,
-    path: &str,
+    path: P,
     atime: FileTime,
     mtime: FileTime,
     symlink_nofollow: bool,
@@ -25,9 +25,15 @@ pub(crate) fn utimensat(
     } else {
         0
     };
-    let p = CString::new(path.as_bytes())?;
     let times = [to_timespec(&atime)?, to_timespec(&mtime)?];
-    let rc = unsafe { libc::utimensat(dirfd.as_raw_fd(), p.as_ptr(), times.as_ptr(), flags) };
+    let rc = unsafe {
+        libc::utimensat(
+            dirfd.as_raw_fd(),
+            path.as_ref().as_ptr(),
+            times.as_ptr(),
+            flags,
+        )
+    };
     if rc == 0 {
         Ok(())
     } else {

@@ -9,8 +9,10 @@ use crate::old::snapshot_0::sys::hostcalls_impl::fs_helpers::path_open_rights;
 use crate::old::snapshot_0::sys::{host_impl, hostcalls_impl};
 use crate::old::snapshot_0::{helpers, host, wasi, wasi32, Error, Result};
 use crate::sandboxed_tty_writer::SandboxedTTYWriter;
+use crate::sys::hoststring_from_osstring;
 use filetime::{set_file_handle_times, FileTime};
 use log::trace;
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::ops::DerefMut;
@@ -900,7 +902,9 @@ pub(crate) unsafe fn path_symlink(
     let fe = wasi_ctx.get_fd_entry(dirfd)?;
     let resolved_new = path_get(fe, wasi::__WASI_RIGHTS_PATH_SYMLINK, 0, 0, new_path, true)?;
 
-    hostcalls_impl::path_symlink(old_path, resolved_new)
+    let owned_old = hoststring_from_osstring(OsStr::new(old_path).to_os_string());
+
+    hostcalls_impl::path_symlink(owned_old.as_ref(), resolved_new)
 }
 
 pub(crate) unsafe fn path_unlink_file(
