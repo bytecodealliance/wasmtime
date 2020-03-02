@@ -50,7 +50,7 @@ fn define_copy_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) 
 
     quote! {
         #[repr(C)]
-        #[derive(Copy, Clone, Debug, ::std::hash::Hash, Eq, PartialEq)]
+        #[derive(Copy, Clone, Debug, PartialEq)]
         pub struct #ident {
             #(#member_decls),*
         }
@@ -185,12 +185,12 @@ fn define_ptr_struct(names: &Names, name: &witx::Id, s: &witx::StructDatatype) -
         let name = names.struct_member(&ml.member.name);
         let offset = ml.offset as u32;
         quote! {
-            self.#name.write(&location.cast(#offset).expect("cast to inner member"));
+            wiggle_runtime::GuestType::write(&self.#name, &location.cast(#offset).expect("cast to inner member"));
         }
     });
 
     quote! {
-        #[derive(Clone)]
+        #[derive(Clone, Debug)]
         pub struct #ident<'a> {
             #(#member_decls),*
         }

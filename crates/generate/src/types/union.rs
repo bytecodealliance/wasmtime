@@ -71,7 +71,7 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
     if !u.needs_lifetime() {
         // Type does not have a lifetime parameter:
         quote! {
-            #[derive(Clone, Debug, PartialEq)]
+            #[derive(Copy, Clone, Debug, PartialEq)]
             pub enum #ident {
                 #(#variants),*
             }
@@ -112,7 +112,7 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
         }
     } else {
         quote! {
-            #[derive(Clone)]
+            #[derive(Clone, Debug)]
             pub enum #ident<#lifetime> {
                 #(#variants),*
             }
