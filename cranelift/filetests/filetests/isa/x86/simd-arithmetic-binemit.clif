@@ -78,7 +78,7 @@ block0(v0: i8x16 [%xmm3], v1: i8x16 [%xmm4]):
 
 function %imul_i32x4() -> b1 {
 block0:
-[-, %xmm0]    v0 = vconst.i32x4 [-1 0 1 -2147483647] ; e.g. -2147483647 == 0x80_00_00_01
+[-, %xmm0]    v0 = vconst.i32x4 [-1 0 1 0x80_00_00_01]
 [-, %xmm1]    v1 = vconst.i32x4 [2 2 2 2]
 [-, %xmm0]    v2 = imul v0, v1 ; bin: 66 0f 38 40 c1
 
@@ -99,7 +99,7 @@ block0:
 
 function %imul_i16x8() -> b1 {
 block0:
-[-, %xmm1]    v0 = vconst.i16x8 [-1 0 1 32767 0 0 0 0] ; e.g. 32767 == 0x7f_ff
+[-, %xmm1]    v0 = vconst.i16x8 [-1 0 1 0x7f_ff 0 0 0 0]
 [-, %xmm2]    v1 = vconst.i16x8 [2 2 2 2 0 0 0 0]
 [-, %xmm1]    v2 = imul v0, v1 ; bin: 66 0f d5 ca
 
