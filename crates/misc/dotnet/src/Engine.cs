@@ -60,7 +60,7 @@ namespace Wasmtime
                         var errorSpan = new ReadOnlySpan<byte>(error.data, checked((int)error.size));
                         var message = Encoding.UTF8.GetString(errorSpan);
                         Interop.wasm_byte_vec_delete(ref error);
-                        throw new WasmtimeException("failed to parse input wat");
+                        throw new WasmtimeException("failed to parse input wat: " + message);
                     }
                     var byteSpan = new ReadOnlySpan<byte>(bytes.data, checked((int)bytes.size));
                     var ret = byteSpan.ToArray();
