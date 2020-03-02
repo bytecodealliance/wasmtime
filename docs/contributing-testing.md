@@ -3,7 +3,7 @@
 This section describes how to run Wasmtime's tests and add new tests.
 
 Before continuing, make sure you can [build
-Wasmtime](./contributing-building.html) successfully. Can't run the tests if you
+Wasmtime](./contributing-building.md) successfully. Can't run the tests if you
 can't build it!
 
 ## Running All Tests
