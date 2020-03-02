@@ -141,7 +141,8 @@ impl Val {
             // TODO: need to implement this once we actually finalize what
             // `anyref` will look like and it's actually implemented to pass it
             // to compiled wasm as well.
-            Val::AnyRef(_) => false,
+            Val::AnyRef(AnyRef::Ref(_)) | Val::AnyRef(AnyRef::Other(_)) => false,
+            Val::AnyRef(AnyRef::Null) => true,
 
             // Integers have no association with any particular store, so
             // they're always considered as "yes I came from that store",
