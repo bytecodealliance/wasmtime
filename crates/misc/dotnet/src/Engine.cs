@@ -49,15 +49,17 @@ namespace Wasmtime
         public byte[] WatToWasm(string wat)
         {
             var watBytes = Encoding.UTF8.GetBytes(wat);
-            var watBytesHandle = GCHandle.Alloc(watBytes, GCHandleType.Pinned);
-            try
+            unsafe
             {
-                unsafe
+                fixed (byte *ptr = watBytes)
                 {
                     Interop.wasm_byte_vec_t watByteVec;
                     watByteVec.size = (UIntPtr)watBytes.Length;
-                    watByteVec.data = (byte*)watBytesHandle.AddrOfPinnedObject();
-                    if (!Interop.wasmtime_wat2wasm(Handle, ref watByteVec, out var bytes)) {
+                    watByteVec.data = ptr;
+                    if (!Interop.wasmtime_wat2wasm(Handle, ref watByteVec, out var bytes, out var error)) {
+                        var errorSpan = new ReadOnlySpan<byte>(error.data, checked((int)error.size));
+                        var message = Encoding.UTF8.GetString(errorSpan);
+                        Interop.wasm_byte_vec_delete(ref error);
                         throw new WasmtimeException("failed to parse input wat");
                     }
                     var byteSpan = new ReadOnlySpan<byte>(bytes.data, checked((int)bytes.size));
@@ -65,10 +67,6 @@ namespace Wasmtime
                     Interop.wasm_byte_vec_delete(ref bytes);
                     return ret;
                 }
-            }
-            finally
-            {
-                watBytesHandle.Free();
             }
         }
 

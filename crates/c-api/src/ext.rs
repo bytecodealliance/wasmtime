@@ -93,16 +93,27 @@ pub unsafe extern "C" fn wasmtime_wat2wasm(
     _engine: *mut wasm_engine_t,
     wat: *const wasm_byte_vec_t,
     ret: *mut wasm_byte_vec_t,
+    error: *mut wasm_byte_vec_t,
 ) -> bool {
     let wat = match str::from_utf8((*wat).as_slice()) {
         Ok(s) => s,
-        Err(_) => return false,
+        Err(_) => {
+            if !error.is_null() {
+                (*error).set_from_slice(b"input was not valid utf-8");
+            }
+            return false;
+        }
     };
     match wat::parse_str(wat) {
         Ok(bytes) => {
             (*ret).set_from_slice(&bytes);
             true
         }
-        Err(_) => false,
+        Err(e) => {
+            if !error.is_null() {
+                (*error).set_from_slice(e.to_string().as_bytes());
+            }
+            false
+        }
     }
 }

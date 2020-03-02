@@ -980,7 +980,8 @@ namespace Wasmtime
         public static extern bool wasmtime_wat2wasm(
             EngineHandle engine,
             ref wasm_byte_vec_t wat,
-            out wasm_byte_vec_t vec
+            out wasm_byte_vec_t vec,
+            out wasm_byte_vec_t error_message
         );
    }
 }
