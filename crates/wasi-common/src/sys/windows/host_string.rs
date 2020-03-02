@@ -1,5 +1,5 @@
 use std::ffi::{OsStr, OsString};
-use std::os::windows::ffi::{OsStrExt, OsStringExt};
+use std::os::windows::ffi::OsStrExt;
 
 /// A string in the format OS APIs prefer to consume. For Windows, this is
 /// just `OsString`.
@@ -17,5 +17,5 @@ pub(crate) fn hoststring_ends_with_slash(host: &HostString) -> bool {
 
 /// Test whether the given `OsStr` ends with a slash.
 pub(crate) fn osstr_ends_with_slash(os: &OsStr) {
-    os.encode_wide().last() == Some(u16, '/')
+    os.encode_wide().last() == Some('/' as u16)
 }

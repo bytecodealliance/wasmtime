@@ -59,10 +59,14 @@ pub(crate) fn path_symlink(old_path: &CStr, resolved: PathGet) -> Result<()> {
     log::debug!("path_symlink old_path = {:?}", old_path);
     log::debug!("path_symlink resolved = {:?}", resolved);
 
+    eprintln!("path_symlink: resolved.path='{:?}'", resolved.path());
     unsafe { symlinkat(old_path, resolved.dirfd().as_raw_fd(), resolved.path()) }.or_else(|err| {
+        eprintln!("  path_symlink: error: {:?}", err);
         if let YanixError::Errno(errno) = err {
+            eprintln!("    path_symlink: yanix error: {:?}", errno);
             match errno {
                 Errno::ENOTDIR => {
+                    eprintln!("      path_symlink: yanix ENOTDIR");
                     // On BSD, symlinkat returns ENOTDIR when it should in fact
                     // return a EEXIST. It seems that it gets confused with by
                     // the trailing slash in the target path. Thus, we strip
@@ -70,9 +74,15 @@ pub(crate) fn path_symlink(old_path: &CStr, resolved: PathGet) -> Result<()> {
                     // adjust the error code appropriately.
                     let dirfd = resolved.dirfd().as_raw_fd();
                     let new_path = trim_end_slashes(resolved.into_path());
+                    eprintln!("        path_symlink: new_path='{:?}'", new_path);
                     if let Ok(_) = unsafe { fstatat(dirfd, new_path, AtFlag::SYMLINK_NOFOLLOW) } {
+                        eprintln!("          path_symlink: EEXIST");
                         Err(Error::EEXIST)
                     } else {
+                        eprintln!(
+                            "          path_symlink: leaving as ENOTDIR, errno={:?}",
+                            std::io::Error::last_os_error()
+                        );
                         Err(Error::ENOTDIR)
                     }
                 }
