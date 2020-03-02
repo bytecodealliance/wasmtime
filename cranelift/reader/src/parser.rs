@@ -687,10 +687,35 @@ impl<'a> Parser<'a> {
     fn match_imm16(&mut self, err_msg: &str) -> ParseResult<i16> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
+            let negative = text.starts_with('-');
+            let positive = text.starts_with('+');
+            let text = if negative || positive {
+                // Strip sign prefix.
+                &text[1..]
+            } else {
+                text
+            };
+            let mut value;
             // Lexer just gives us raw text that looks like an integer.
+            if text.starts_with("0x") {
+                // Skip underscores.
+                let text = text.replace("_", "");
+                // Parse it as a i16 in hexadecimal form.
+                value = u16::from_str_radix(&text[2..], 16)
+                    .map_err(|_| self.error("unable to parse i16 as a hexadecimal immediate"))?;
+            } else {
             // Parse it as a i16 to check for overflow and other issues.
-            text.parse()
-                .map_err(|_| self.error("expected i16 decimal immediate"))
+                value = text
+                    .parse()
+                    .map_err(|_| self.error("expected i16 decimal immediate"))?;
+            }
+            if negative {
+                value = Ok(value.wrapping_neg())?;
+                if value as i16 > 0 {
+                    return Err(self.error("negative number too small"));
+                }
+            }
+            Ok(value as i16)
         } else {
             err!(self.loc, err_msg)
         }
@@ -701,10 +726,35 @@ impl<'a> Parser<'a> {
     fn match_imm32(&mut self, err_msg: &str) -> ParseResult<i32> {
         if let Some(Token::Integer(text)) = self.token() {
             self.consume();
+            let negative = text.starts_with('-');
+            let positive = text.starts_with('+');
+            let text = if negative || positive {
+                // Strip sign prefix.
+                &text[1..]
+            } else {
+                text
+            };
+            let mut value;
             // Lexer just gives us raw text that looks like an integer.
+            if text.starts_with("0x") {
+                // Skip underscores.
+                let text = text.replace("_", "");
+                // Parse it as a i32 in hexadecimal form.
+                value = u32::from_str_radix(&text[2..], 16)
+                    .map_err(|_| self.error("unable to parse i32 as a hexadecimal immediate"))?;
+            } else {
             // Parse it as a i32 to check for overflow and other issues.
-            text.parse()
-                .map_err(|_| self.error("expected i32 decimal immediate"))
+                value = text
+                    .parse()
+                    .map_err(|_| self.error("expected i32 decimal immediate"))?;
+            }
+            if negative {
+                value = Ok(value.wrapping_neg())?;
+                if value as i32 > 0 {
+                    return Err(self.error("negative number too small"));
+                }
+            }
+            Ok(value as i32)
         } else {
             err!(self.loc, err_msg)
         }
@@ -3334,12 +3384,12 @@ mod tests {
         can_parse_as_constant_data!("1 2 3 4", I32X4);
         can_parse_as_constant_data!("1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16", I8X16);
         can_parse_as_constant_data!("0x1.1 0x2.2 0x3.3 0x4.4", F32X4);
+        can_parse_as_constant_data!("0x0 0x1 0x2 0x3", I32X4);
         can_parse_as_constant_data!("true false true false true false true false", B16X8);
         can_parse_as_constant_data!("0 -1", I64X2);
         can_parse_as_constant_data!("true false", B64X2);
         can_parse_as_constant_data!("true true true true true", B32X4); // note that parse_literals_to_constant_data will leave extra tokens unconsumed
 
-        cannot_parse_as_constant_data!("0x0 0x1 0x2 0x3", I32X4);
         cannot_parse_as_constant_data!("1 2 3", I32X4);
         cannot_parse_as_constant_data!(" ", F32X4);
     }
