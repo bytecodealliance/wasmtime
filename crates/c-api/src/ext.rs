@@ -2,8 +2,7 @@
 //! to the wasmtime implementation.
 
 use crate::{wasm_byte_vec_t, wasm_config_t, wasm_engine_t};
-use std::ffi::CStr;
-use std::os::raw::c_char;
+use std::str;
 use wasmtime::{OptLevel, Strategy};
 
 #[repr(u8)]
@@ -92,10 +91,10 @@ pub unsafe extern "C" fn wasmtime_config_cranelift_opt_level_set(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_wat2wasm(
     _engine: *mut wasm_engine_t,
-    wat: *const c_char,
+    wat: *const wasm_byte_vec_t,
     ret: *mut wasm_byte_vec_t,
 ) -> bool {
-    let wat = match CStr::from_ptr(wat).to_str() {
+    let wat = match str::from_utf8((*wat).as_slice()) {
         Ok(s) => s,
         Err(_) => return false,
     };

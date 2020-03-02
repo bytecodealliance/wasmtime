@@ -979,7 +979,7 @@ namespace Wasmtime
         [return: MarshalAs(UnmanagedType.I1)]
         public static extern bool wasmtime_wat2wasm(
             EngineHandle engine,
-            string wat,
+            ref wasm_byte_vec_t wat,
             out wasm_byte_vec_t vec
         );
    }

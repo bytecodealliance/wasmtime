@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Text;
+using System.Runtime.InteropServices;
 
 namespace Wasmtime
 {
@@ -46,15 +48,27 @@ namespace Wasmtime
         /// <returns>Returns the binary-encoded wasm module.</returns>
         public byte[] WatToWasm(string wat)
         {
-            unsafe
+            var watBytes = Encoding.UTF8.GetBytes(wat);
+            var watBytesHandle = GCHandle.Alloc(watBytes, GCHandleType.Pinned);
+            try
             {
-                if (!Interop.wasmtime_wat2wasm(out var bytes, Handle, wat)) {
-                    throw new WasmtimeException("failed to parse input wat");
+                unsafe
+                {
+                    Interop.wasm_byte_vec_t watByteVec;
+                    watByteVec.size = (UIntPtr)watBytes.Length;
+                    watByteVec.data = (byte*)watBytesHandle.AddrOfPinnedObject();
+                    if (!Interop.wasmtime_wat2wasm(Handle, ref watByteVec, out var bytes)) {
+                        throw new WasmtimeException("failed to parse input wat");
+                    }
+                    var byteSpan = new ReadOnlySpan<byte>(bytes.data, checked((int)bytes.size));
+                    var ret = byteSpan.ToArray();
+                    Interop.wasm_byte_vec_delete(ref bytes);
+                    return ret;
                 }
-                var byteSpan = new ReadOnlySpan<byte>(bytes.data, checked((int)bytes.size));
-                var ret = byteSpan.ToArray();
-                Interop.wasm_byte_vec_delete(ref bytes);
-                return ret;
+            }
+            finally
+            {
+                watBytesHandle.Free();
             }
         }
 
