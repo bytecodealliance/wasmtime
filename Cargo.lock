@@ -2490,7 +2490,6 @@ dependencies = [
  "wasmtime",
  "wasmtime-debug",
  "wasmtime-environ",
- "wasmtime-interface-types",
  "wasmtime-jit",
  "wasmtime-obj",
  "wasmtime-profiling",
@@ -2578,21 +2577,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasmtime-interface-types"
-version = "0.12.0"
-dependencies = [
- "anyhow",
- "walrus",
- "wasm-webidl-bindings",
- "wasmparser 0.51.2",
- "wasmtime",
- "wasmtime-environ",
- "wasmtime-jit",
- "wasmtime-runtime",
- "wasmtime-wasi",
-]
-
-[[package]]
 name = "wasmtime-jit"
 version = "0.12.0"
 dependencies = [
@@ -2649,7 +2633,6 @@ dependencies = [
  "target-lexicon",
  "wasmparser 0.51.2",
  "wasmtime",
- "wasmtime-interface-types",
  "wasmtime-wasi",
 ]
 
@@ -2677,7 +2660,6 @@ version = "0.12.0"
 dependencies = [
  "anyhow",
  "wasmtime",
- "wasmtime-interface-types",
  "wasmtime-rust-macro",
  "wasmtime-wasi",
 ]

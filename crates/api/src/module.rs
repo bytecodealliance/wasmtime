@@ -418,6 +418,28 @@ impl Module {
                         }
                     }
                 }
+                SectionCode::Custom {
+                    name: "webidl-bindings",
+                    ..
+                }
+                | SectionCode::Custom {
+                    name: "wasm-interface-types",
+                    ..
+                } => {
+                    bail!(
+                        "\
+support for interface types has temporarily been removed from `wasmtime`
+
+for more information about this temoprary you can read on the issue online:
+
+    https://github.com/bytecodealliance/wasmtime/issues/1271
+
+and for re-adding support for interface types you can see this issue:
+
+    https://github.com/bytecodealliance/wasmtime/issues/677
+"
+                    );
+                }
                 _ => {
                     // skip other sections
                 }
