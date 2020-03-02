@@ -978,9 +978,9 @@ namespace Wasmtime
         [DllImport(LibraryName, CharSet=CharSet.Ansi)]
         [return: MarshalAs(UnmanagedType.I1)]
         public static extern bool wasmtime_wat2wasm(
-            out wasm_byte_vec_t vec,
             EngineHandle engine,
-            string wat
+            string wat,
+            out wasm_byte_vec_t vec
         );
    }
 }

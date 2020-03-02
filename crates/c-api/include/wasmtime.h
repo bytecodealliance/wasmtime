@@ -39,9 +39,9 @@ WASMTIME_CONFIG_PROP(cranelift_opt_level, wasmtime_opt_level_t)
 ///////////////////////////////////////////////////////////////////////////////
 
 bool wasmtime_wat2wasm(
-    wasm_byte_vec_t *ret,
     wasm_engine_t *engine,
     const char* wat,
+    own wasm_byte_vec_t *ret,
 );
 
 #ifdef __cplusplus

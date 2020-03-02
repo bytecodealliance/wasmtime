@@ -91,9 +91,9 @@ pub unsafe extern "C" fn wasmtime_config_cranelift_opt_level_set(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_wat2wasm(
-    ret: *mut wasm_byte_vec_t,
     _engine: *mut wasm_engine_t,
     wat: *const c_char,
+    ret: *mut wasm_byte_vec_t,
 ) -> bool {
     let wat = match CStr::from_ptr(wat).to_str() {
         Ok(s) => s,
