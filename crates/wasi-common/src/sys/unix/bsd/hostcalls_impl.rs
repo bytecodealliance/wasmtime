@@ -1,6 +1,7 @@
 use crate::hostcalls_impl::PathGet;
+use crate::sys::HostString;
 use crate::{Error, Result};
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use std::os::unix::prelude::AsRawFd;
 
 pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
@@ -67,14 +68,9 @@ pub(crate) fn path_symlink(old_path: &CStr, resolved: PathGet) -> Result<()> {
                     // the trailing slash in the target path. Thus, we strip
                     // the trailing slash and check if the path exists, and
                     // adjust the error code appropriately.
-                    let new_path = resolved.path().trim_end_matches('/');
-                    if let Ok(_) = unsafe {
-                        fstatat(
-                            resolved.dirfd().as_raw_fd(),
-                            new_path,
-                            AtFlag::SYMLINK_NOFOLLOW,
-                        )
-                    } {
+                    let dirfd = resolved.dirfd().as_raw_fd();
+                    let new_path = trim_end_slashes(resolved.into_path());
+                    if let Ok(_) = unsafe { fstatat(dirfd, new_path, AtFlag::SYMLINK_NOFOLLOW) } {
                         Err(Error::EEXIST)
                     } else {
                         Err(Error::ENOTDIR)
@@ -123,7 +119,7 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
                         )
                     } {
                         // check if destination contains a trailing slash
-                        if resolved_new.path().contains('/') {
+                        if resolved_new.path().as_bytes().contains(&b'/') {
                             Err(Error::ENOTDIR)
                         } else {
                             Err(Error::ENOENT)
@@ -167,4 +163,13 @@ pub(crate) mod fd_readdir_impl {
         // function), we're locking the `Dir` member of this `OsHandle`.
         Ok(dir.lock().unwrap())
     }
+}
+
+/// Trim trailing slash characters from the given `HostString`.
+fn trim_end_slashes(host: HostString) -> HostString {
+    let mut bytes = host.into_bytes();
+    while let Some(b'/') = bytes.last() {
+        bytes.pop();
+    }
+    unsafe { CString::from_vec_unchecked(bytes) }
 }

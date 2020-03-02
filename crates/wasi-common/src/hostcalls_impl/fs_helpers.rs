@@ -22,6 +22,11 @@ impl PathGet {
     pub(crate) fn path(&self) -> &HostString {
         &self.path
     }
+
+    #[allow(dead_code)] // not all hosts need this
+    pub(crate) fn into_path(self) -> HostString {
+        self.path
+    }
 }
 
 /// Normalizes a path to ensure that the target path is located under the directory provided.
