@@ -1,24 +1,23 @@
 use anyhow::{bail, Result};
-use std::env;
 use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use tempfile::NamedTempFile;
 
-fn run_wasmtime(args: &[&str]) -> Result<()> {
-    let cargo = env::var("CARGO").unwrap_or("cargo".to_string());
-    let pkg_dir = env!("CARGO_MANIFEST_DIR");
-    let success = Command::new(cargo)
-        .current_dir(pkg_dir)
-        .stdout(Stdio::null())
-        .args(&["run", "-q", "--"])
-        .args(args)
-        .status()?
-        .success();
-    if !success {
-        bail!("Failed to execute wasmtime with: {:?}", args);
+fn run_wasmtime(args: &[&str]) -> Result<String> {
+    let mut me = std::env::current_exe()?;
+    me.pop(); // chop off the file name
+    me.pop(); // chop off `deps`
+    me.push("wasmtime");
+    let output = Command::new(&me).args(args).output()?;
+    if !output.status.success() {
+        bail!(
+            "Failed to execute wasmtime with: {:?}\n{}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
-    Ok(())
+    Ok(String::from_utf8(output.stdout).unwrap())
 }
 
 fn build_wasm(wat_path: impl AsRef<Path>) -> Result<NamedTempFile> {
@@ -37,8 +36,10 @@ fn run_wasmtime_simple() -> Result<()> {
         wasm.path().to_str().unwrap(),
         "--invoke",
         "simple",
+        "--disable-cache",
         "4",
-    ])
+    ])?;
+    Ok(())
 }
 
 // Wasmtime shakk when not enough arguments were provided.
@@ -46,7 +47,14 @@ fn run_wasmtime_simple() -> Result<()> {
 fn run_wasmtime_simple_fail_no_args() -> Result<()> {
     let wasm = build_wasm("tests/wasm/simple.wat")?;
     assert!(
-        run_wasmtime(&["run", wasm.path().to_str().unwrap(), "--invoke", "simple"]).is_err(),
+        run_wasmtime(&[
+            "run",
+            wasm.path().to_str().unwrap(),
+            "--disable-cache",
+            "--invoke",
+            "simple",
+        ])
+        .is_err(),
         "shall fail"
     );
     Ok(())
@@ -61,6 +69,8 @@ fn run_wasmtime_simple_wat() -> Result<()> {
         wasm.path().to_str().unwrap(),
         "--invoke",
         "simple",
+        "--disable-cache",
         "4",
-    ])
+    ])?;
+    Ok(())
 }
