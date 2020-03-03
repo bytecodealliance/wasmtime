@@ -69,7 +69,7 @@ pub(crate) fn path_symlink(old_path: &CStr, resolved: PathGet) -> Result<()> {
                     // the trailing slash and check if the path exists, and
                     // adjust the error code appropriately.
                     let dirfd = resolved.dirfd().as_raw_fd();
-                    let new_path = trim_end_slashes(resolved.into_path());
+                    let new_path = trim_end_slashes(resolved.path().clone());
                     if let Ok(_) = unsafe { fstatat(dirfd, new_path, AtFlag::SYMLINK_NOFOLLOW) } {
                         Err(Error::EEXIST)
                     } else {
