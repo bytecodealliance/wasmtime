@@ -180,6 +180,11 @@ impl UnwindInfo {
         let mut unwind_codes = Vec::new();
         let mut found_end = false;
 
+        // For the time being, FPR preservation is split into a stack_addr and later store/load.
+        // Store the register used for stack store and ensure it is the same register with no
+        // intervening changes to the frame size.
+        let mut frame_start_reg = None;
+
         for (offset, inst, size) in func.inst_offsets(entry_block, &isa.encoding_info()) {
             // x64 ABI prologues cannot exceed 255 bytes in length
             if (offset + size) > 255 {
@@ -194,6 +199,8 @@ impl UnwindInfo {
                 InstructionData::Unary { opcode, arg } => {
                     match opcode {
                         Opcode::X86Push => {
+                            frame_offset += 8;
+
                             unwind_codes.push(UnwindCode::PushRegister {
                                 offset: unwind_offset,
                                 reg: func.locations[arg].unwrap_reg(),
@@ -238,6 +245,8 @@ impl UnwindInfo {
                             let imm: i64 = imm.into();
                             assert!(imm <= core::u32::MAX as i64);
 
+                            frame_offset += imm as u32;
+
                             unwind_codes.push(UnwindCode::StackAlloc {
                                 offset: unwind_offset,
                                 size: imm as u32,
@@ -248,15 +257,18 @@ impl UnwindInfo {
                 }
                 InstructionData::Store {
                     opcode: Opcode::Store,
-                    args: [arg1, _arg2],
+                    args: [arg1, arg2],
                     flags: _flags,
                     offset,
                 } => {
-                    if let ValueLoc::Reg(ru) = func.locations[arg1] {
+                    if let (ValueLoc::Reg(ru), ValueLoc::Reg(base_ru) = (func.locations[arg1], func.locations[arg2]) {
+                        if base_ru != frame_start_reg {
+                            continue;
+                        }
                         let offset_int: i32 = offset.into();
-                        assert!(offset_int >= 0);
-                        assert!(offset_int % 16 == 0);
-                        let scaled_offset = offset_int as u32 / 16;
+                        assert!(offset_int >= 0, "negative fpr offset would store outside the stack frame, and is almost certainly an error");
+                        assert!(offset_int % 16 == 0, "xmm preservation offset must be 16-byte aligned, but was {:#x}", offset_int);
+                        let scaled_offset = offset_int / 16;
                         if FPR.contains(ru) {
                             unwind_codes.push(UnwindCode::SaveXmm {
                                 offset: unwind_offset,

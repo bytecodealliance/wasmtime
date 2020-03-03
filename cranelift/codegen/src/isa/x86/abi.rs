@@ -892,17 +892,14 @@ fn insert_common_prologue(
         // `stack_store` is not directly encodable in x86_64 at the moment, so we'll need a base
         // address. We are well after postopt could run, so load the CSR region base once here,
         // instead of hoping that the addr/store will be combined later.
+        // See also: https://github.com/bytecodealliance/wasmtime/pull/1198
         let stack_addr = pos.ins().stack_addr(
             types::I64,
             *fpr_slot.expect("if FPRs are preserved, a stack slot is allocated for them"),
             0,
         );
 
-        // At this point we won't be using volatile registers for anything except for return
-        // At this point we have not saved any CSRs yet, and arguments are all in registers. So
-        // pick a location for `stack_addr` that is neither non-volatile nor an argument: RAX will
-        // do.
-        pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::rax as u16);
+        pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::r11 as u16);
 
         for reg in csrs.iter(FPR) {
             // Append param to entry Block
@@ -1017,19 +1014,18 @@ fn insert_common_epilogue(
     if csrs.iter(FPR).len() != 0 {
         let mut fpr_offset = 0;
 
-        // `stack_store` is not directly encodable in x86_64 at the moment, so we'll need a base
+        // `stack_load` is not directly encodable in x86_64 at the moment, so we'll need a base
         // address. We are well after postopt could run, so load the CSR region base once here,
         // instead of hoping that the addr/store will be combined later.
+        //
+        // See also: https://github.com/bytecodealliance/wasmtime/pull/1198
         let stack_addr = pos.ins().stack_addr(
             types::I64,
             *fpr_slot.expect("if FPRs are preserved, a stack slot is allocated for them"),
             0,
         );
 
-        // At this point we won't be using volatile registers for anything except for return
-        // registers. Arbitrarily pick RBP as it won't hold an interesting value, and we're about
-        // to restore it at the end of the function anyway.
-        pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::rbp as u16);
+        pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::r11 as u16);
 
         for reg in csrs.iter(FPR) {
             let value = pos
