@@ -13,7 +13,7 @@ use crate::verifier::{VerifierErrors, VerifierStepResult};
 ///
 /// Conventional SSA form is represented in Cranelift with the help of virtual registers:
 ///
-/// - Two values are said to be *PHI-related* if one is an block argument and the other is passed as
+/// - Two values are said to be *PHI-related* if one is a block argument and the other is passed as
 ///   a branch argument in a location that matches the first value.
 /// - PHI-related values must belong to the same virtual register.
 /// - Two values in the same virtual register must not have overlapping live ranges.

@@ -10,7 +10,7 @@ use core::u32;
 /// begin or end. It can be either:
 ///
 /// 1. An instruction or
-/// 2. An block header.
+/// 2. A block header.
 ///
 /// This corresponds more or less to the lines in the textual form of Cranelift IR.
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -47,7 +47,7 @@ impl From<ValueDef> for ProgramPoint {
 pub enum ExpandedProgramPoint {
     /// An instruction in the function.
     Inst(Inst),
-    /// An block header.
+    /// A block header.
     Block(Block),
 }
 

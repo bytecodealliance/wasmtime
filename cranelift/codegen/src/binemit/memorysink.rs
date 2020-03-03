@@ -74,7 +74,7 @@ impl<'a> MemoryCodeSink<'a> {
 
 /// A trait for receiving relocations for code that is emitted directly into memory.
 pub trait RelocSink {
-    /// Add a relocation referencing an block at the current offset.
+    /// Add a relocation referencing a block at the current offset.
     fn reloc_block(&mut self, _: CodeOffset, _: Reloc, _: CodeOffset);
 
     /// Add a relocation referencing an external symbol at the current offset.

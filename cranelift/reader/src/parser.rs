@@ -558,7 +558,7 @@ impl<'a> Parser<'a> {
         err!(self.loc, "expected jump table number: jt«n»")
     }
 
-    // Match and consume an block reference.
+    // Match and consume a block reference.
     fn match_block(&mut self, err_msg: &str) -> ParseResult<Block> {
         if let Some(Token::Block(block)) = self.token() {
             self.consume();

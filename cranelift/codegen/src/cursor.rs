@@ -13,10 +13,10 @@ pub enum CursorPosition {
     /// Cursor is pointing at an existing instruction.
     /// New instructions will be inserted *before* the current instruction.
     At(ir::Inst),
-    /// Cursor is before the beginning of an block. No instructions can be inserted. Calling
+    /// Cursor is before the beginning of a block. No instructions can be inserted. Calling
     /// `next_inst()` will move to the first instruction in the block.
     Before(ir::Block),
-    /// Cursor is pointing after the end of an block.
+    /// Cursor is pointing after the end of a block.
     /// New instructions will be appended to the block.
     After(ir::Block),
 }
@@ -368,7 +368,7 @@ pub trait Cursor {
 
     /// Move to the next instruction in the same block and return it.
     ///
-    /// - If the cursor was positioned before an block, go to the first instruction in that block.
+    /// - If the cursor was positioned before a block, go to the first instruction in that block.
     /// - If there are no more instructions in the block, go to the `After(block)` position and return
     ///   `None`.
     /// - If the cursor wasn't pointing anywhere, keep doing that.
@@ -377,7 +377,7 @@ pub trait Cursor {
     ///
     /// # Examples
     ///
-    /// The `next_inst()` method is intended for iterating over the instructions in an block like
+    /// The `next_inst()` method is intended for iterating over the instructions in a block like
     /// this:
     ///
     /// ```
@@ -438,7 +438,7 @@ pub trait Cursor {
 
     /// Move to the previous instruction in the same block and return it.
     ///
-    /// - If the cursor was positioned after an block, go to the last instruction in that block.
+    /// - If the cursor was positioned after a block, go to the last instruction in that block.
     /// - If there are no more instructions in the block, go to the `Before(block)` position and return
     ///   `None`.
     /// - If the cursor wasn't pointing anywhere, keep doing that.
@@ -494,7 +494,7 @@ pub trait Cursor {
     ///
     /// - If pointing at an instruction, the new instruction is inserted before the current
     ///   instruction.
-    /// - If pointing at the bottom of an block, the new instruction is appended to the block.
+    /// - If pointing at the bottom of a block, the new instruction is appended to the block.
     /// - Otherwise panic.
     ///
     /// In either case, the cursor is not moved, such that repeated calls to `insert_inst()` causes
@@ -532,16 +532,16 @@ pub trait Cursor {
         inst
     }
 
-    /// Insert an block at the current position and switch to it.
+    /// Insert a block at the current position and switch to it.
     ///
     /// As far as possible, this method behaves as if the block header were an instruction inserted
     /// at the current position.
     ///
     /// - If the cursor is pointing at an existing instruction, *the current block is split in two*
     ///   and the current instruction becomes the first instruction in the inserted block.
-    /// - If the cursor points at the bottom of an block, the new block is inserted after the current
+    /// - If the cursor points at the bottom of a block, the new block is inserted after the current
     ///   one, and moved to the bottom of the new block where instructions can be appended.
-    /// - If the cursor points to the top of an block, the new block is inserted above the current one.
+    /// - If the cursor points to the top of a block, the new block is inserted above the current one.
     /// - If the cursor is not pointing at anything, the new block is placed last in the layout.
     ///
     /// This means that it is always valid to call this method, and it always leaves the cursor in

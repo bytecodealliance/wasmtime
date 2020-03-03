@@ -16,7 +16,7 @@ use crate::verifier::{VerifierErrors, VerifierStepResult};
 /// - All values in the program must have a live range.
 /// - The live range def point must match where the value is defined.
 /// - The live range must reach all uses.
-/// - When a live range is live-in to an block, it must be live at all the predecessors.
+/// - When a live range is live-in to a block, it must be live at all the predecessors.
 /// - The live range affinity must be compatible with encoding constraints.
 ///
 /// We don't verify that live ranges are minimal. This would require recomputing live ranges for

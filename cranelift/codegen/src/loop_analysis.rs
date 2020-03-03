@@ -71,7 +71,7 @@ impl LoopAnalysis {
         self.loops[lp].parent.expand()
     }
 
-    /// Determine if an Block belongs to a loop by running a finger along the loop tree.
+    /// Determine if a Block belongs to a loop by running a finger along the loop tree.
     ///
     /// Returns `true` if `block` is in loop `lp`.
     pub fn is_in_loop(&self, block: Block, lp: Loop) -> bool {

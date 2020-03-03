@@ -163,7 +163,7 @@ fn try_fold_redundant_jump(
         }
     };
 
-    // For the moment, only attempt to fold a branch to an block that is parameterless.
+    // For the moment, only attempt to fold a branch to a block that is parameterless.
     // These blocks are mainly produced by critical edge splitting.
     //
     // TODO: Allow folding blocks that define SSA values and function as phi nodes.

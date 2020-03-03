@@ -274,7 +274,7 @@ impl Mutator for ReplaceInstWithTrap {
     }
 }
 
-/// Try to remove an block.
+/// Try to remove a block.
 struct RemoveBlock {
     block: Block,
 }

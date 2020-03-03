@@ -121,7 +121,7 @@ fn static_addr(
         pos.func.dfg.replace(inst).iconst(addr_ty, 0);
 
         // Split Block, as the trap is a terminator instruction.
-        let curr_block = pos.current_block().expect("Cursor is not in an block");
+        let curr_block = pos.current_block().expect("Cursor is not in a block");
         let new_block = pos.func.dfg.make_block();
         pos.insert_block(new_block);
         cfg.recompute_block(pos.func, curr_block);

@@ -1,6 +1,6 @@
 //! Function layout.
 //!
-//! The order of basic blocks in a function and the order of instructions in an block is
+//! The order of basic blocks in a function and the order of instructions in a block is
 //! determined by the `Layout` data structure defined in this module.
 
 use crate::entity::SecondaryMap;
@@ -21,7 +21,7 @@ use log::debug;
 ///
 /// - The order of blocks in the function.
 /// - Which block contains a given instruction.
-/// - The order of instructions with an block.
+/// - The order of instructions with a block.
 ///
 /// While data dependencies are not recorded, instruction ordering does affect control
 /// dependencies, so part of the semantics of the program are determined by the layout.
@@ -75,7 +75,7 @@ impl Layout {
 /// like line numbers in BASIC: 10, 20, 30, ...
 ///
 /// The block sequence numbers are strictly increasing, and so are the instruction sequence numbers
-/// within an block. The instruction sequence numbers are all between the sequence number of their
+/// within a block. The instruction sequence numbers are all between the sequence number of their
 /// containing block and the following block.
 ///
 /// The result is that sequence numbers work like BASIC line numbers for the textual form of the IR.
@@ -335,7 +335,7 @@ impl Layout {
 /// Methods for laying out blocks.
 ///
 /// An unknown block starts out as *not inserted* in the block layout. The layout is a linear order of
-/// inserted blocks. Once an block has been inserted in the layout, instructions can be added. An block
+/// inserted blocks. Once a block has been inserted in the layout, instructions can be added. A block
 /// can only be removed from the layout when it is empty.
 ///
 /// Since every block must end with a terminator instruction which cannot fall through, the layout of
@@ -514,7 +514,7 @@ impl<'f> IntoIterator for &'f Layout {
 /// Methods for arranging instructions.
 ///
 /// An instruction starts out as *not inserted* in the layout. An instruction can be inserted into
-/// an block at a given position.
+/// a block at a given position.
 impl Layout {
     /// Get the block containing `inst`, or `None` if `inst` is not inserted in the layout.
     pub fn inst_block(&self, inst: Inst) -> Option<Block> {
@@ -559,12 +559,12 @@ impl Layout {
         self.assign_inst_seq(inst);
     }
 
-    /// Fetch an block's first instruction.
+    /// Fetch a block's first instruction.
     pub fn first_inst(&self, block: Block) -> Option<Inst> {
         self.blocks[block].first_inst.into()
     }
 
-    /// Fetch an block's last instruction.
+    /// Fetch a block's last instruction.
     pub fn last_inst(&self, block: Block) -> Option<Inst> {
         self.blocks[block].last_inst.into()
     }
@@ -579,7 +579,7 @@ impl Layout {
         self.insts[inst].prev.expand()
     }
 
-    /// Fetch the first instruction in an block's terminal branch group.
+    /// Fetch the first instruction in a block's terminal branch group.
     pub fn canonical_branch_inst(&self, dfg: &DataFlowGraph, block: Block) -> Option<Inst> {
         // Basic blocks permit at most two terminal branch instructions.
         // If two, the former is conditional and the latter is unconditional.
@@ -724,7 +724,7 @@ struct InstNode {
     seq: SequenceNumber,
 }
 
-/// Iterate over instructions in an block in layout order. See `Layout::block_insts()`.
+/// Iterate over instructions in a block in layout order. See `Layout::block_insts()`.
 pub struct Insts<'f> {
     layout: &'f Layout,
     head: Option<Inst>,

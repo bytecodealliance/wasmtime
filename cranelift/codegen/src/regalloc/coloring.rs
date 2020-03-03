@@ -24,7 +24,7 @@
 //!    a register.
 //!
 //! 5. The code must be in Conventional SSA form. Among other things, this means that values passed
-//!    as arguments when branching to an block must belong to the same virtual register as the
+//!    as arguments when branching to a block must belong to the same virtual register as the
 //!    corresponding block argument value.
 //!
 //! # Iteration order
@@ -35,7 +35,7 @@
 //! defined by the instruction and only consider the colors of other values that are live at the
 //! instruction.
 //!
-//! The first time we see a branch to an block, the block's argument values are colored to match the
+//! The first time we see a branch to a block, the block's argument values are colored to match the
 //! registers currently holding branch argument values passed to the predecessor branch. By
 //! visiting blocks in a CFG topological order, we guarantee that at least one predecessor branch has
 //! been visited before the destination block. Therefore, the block's arguments are already colored.
@@ -224,7 +224,7 @@ impl<'a> Context<'a> {
                         SingleDest(block, _) => block,
                     };
 
-                    // We have a single branch with a single target, and an block with a single
+                    // We have a single branch with a single target, and a block with a single
                     // predecessor. Thus we can forward the diversion set to the next block.
                     if self.cfg.pred_iter(target).count() == 1 {
                         // Transfer the diversion to the next block.

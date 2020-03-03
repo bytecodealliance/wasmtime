@@ -18,7 +18,7 @@
 //!
 //! The set of `LiveRange` instances can answer these questions through their `def_local_end` and
 //! `livein_local_end` queries. The coloring algorithm visits blocks in a topological order of the
-//! dominator tree, so it can compute the set of live values at the beginning of an block by starting
+//! dominator tree, so it can compute the set of live values at the beginning of a block by starting
 //! from the set of live values at the dominating branch instruction and filtering it with
 //! `livein_local_end`. These sets do not need to be stored in the liveness analysis.
 //!

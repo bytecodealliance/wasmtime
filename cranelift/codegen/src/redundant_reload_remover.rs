@@ -122,7 +122,7 @@ use cranelift_entity::{PrimaryMap, SecondaryMap};
 // =============================================================================================
 // Data structures used for discovery of trees
 
-// `ZeroOneOrMany` is used to record the number of predecessors an Block block has.  The `Zero` case
+// `ZeroOneOrMany` is used to record the number of predecessors a Block block has.  The `Zero` case
 // is included so as to cleanly handle the case where the incoming graph has unreachable Blocks.
 
 #[derive(Clone, PartialEq)]
@@ -184,7 +184,7 @@ struct AvailEnv {
 }
 
 // `ProcessingStackElem` combines AvailEnv with contextual information needed to "navigate" within
-// an Block.
+// a Block.
 //
 // A ProcessingStackElem conceptually has the lifetime of exactly one Block: once the current Block is
 // completed, the ProcessingStackElem will be abandoned.  In practice the top level state,
@@ -192,7 +192,7 @@ struct AvailEnv {
 //
 // Note that ProcessingStackElem must contain a CursorPosition.  The CursorPosition, which
 // indicates where we are in the current Block, cannot be implicitly maintained by looping over all
-// the instructions in an Block in turn, because we may choose to suspend processing the current Block
+// the instructions in a Block in turn, because we may choose to suspend processing the current Block
 // at a side exit, continue by processing the subtree reached via the side exit, and only later
 // resume the current Block.
 
