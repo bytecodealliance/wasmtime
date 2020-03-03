@@ -51,32 +51,6 @@ fn pick_profiling_strategy(jitdump: bool) -> Result<ProfilingStrategy> {
     })
 }
 
-fn init_file_per_thread_logger(prefix: &'static str) {
-    file_per_thread_logger::initialize(prefix);
-
-    // Extending behavior of default spawner:
-    // https://docs.rs/rayon/1.1.0/rayon/struct.ThreadPoolBuilder.html#method.spawn_handler
-    // Source code says DefaultSpawner is implementation detail and
-    // shouldn't be used directly.
-    rayon::ThreadPoolBuilder::new()
-        .spawn_handler(move |thread| {
-            let mut b = std::thread::Builder::new();
-            if let Some(name) = thread.name() {
-                b = b.name(name.to_owned());
-            }
-            if let Some(stack_size) = thread.stack_size() {
-                b = b.stack_size(stack_size);
-            }
-            b.spawn(move || {
-                file_per_thread_logger::initialize(prefix);
-                thread.run()
-            })?;
-            Ok(())
-        })
-        .build_global()
-        .unwrap();
-}
-
 /// Common options for commands that translate WebAssembly modules
 #[derive(StructOpt)]
 struct CommonOptions {
@@ -88,9 +62,9 @@ struct CommonOptions {
     #[structopt(long, conflicts_with = "lightbeam")]
     cranelift: bool,
 
-    /// Enable debug output
-    #[structopt(short, long)]
-    debug: bool,
+    /// Enable debug output, currently unused
+    #[structopt(short = "d", long = "debug")]
+    _debug: bool,
 
     /// Generate debug information
     #[structopt(short = "g")]

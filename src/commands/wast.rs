@@ -1,6 +1,6 @@
 //! The module that implements the `wasmtime wast` command.
 
-use crate::{init_file_per_thread_logger, CommonOptions};
+use crate::CommonOptions;
 use anyhow::{Context as _, Result};
 use std::path::PathBuf;
 use structopt::{clap::AppSettings, StructOpt};
@@ -26,12 +26,7 @@ pub struct WastCommand {
 impl WastCommand {
     /// Executes the command.
     pub fn execute(&self) -> Result<()> {
-        if self.common.debug {
-            pretty_env_logger::init();
-        } else {
-            let prefix = "wast.dbg.";
-            init_file_per_thread_logger(prefix);
-        }
+        pretty_env_logger::init();
 
         let config = self.common.config()?;
         let store = Store::new(&Engine::new(&config));

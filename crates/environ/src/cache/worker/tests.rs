@@ -20,7 +20,7 @@ fn test_on_get_create_stats_file() {
         cache_dir
     );
     assert!(cache_config.enabled());
-    let worker = Worker::start_new(&cache_config, None);
+    let worker = Worker::start_new(&cache_config);
 
     let mod_file = cache_dir.join("some-mod");
     worker.on_cache_get_async(mod_file);
@@ -48,7 +48,7 @@ fn test_on_get_update_usage_counter() {
         cache_dir
     );
     assert!(cache_config.enabled());
-    let worker = Worker::start_new(&cache_config, None);
+    let worker = Worker::start_new(&cache_config);
 
     let mod_file = cache_dir.join("some-mod");
     let stats_file = cache_dir.join("some-mod.stats");
@@ -85,7 +85,7 @@ fn test_on_get_recompress_no_mod_file() {
         cache_dir
     );
     assert!(cache_config.enabled());
-    let worker = Worker::start_new(&cache_config, None);
+    let worker = Worker::start_new(&cache_config);
 
     let mod_file = cache_dir.join("some-mod");
     let stats_file = cache_dir.join("some-mod.stats");
@@ -127,7 +127,7 @@ fn test_on_get_recompress_with_mod_file() {
         cache_dir
     );
     assert!(cache_config.enabled());
-    let worker = Worker::start_new(&cache_config, None);
+    let worker = Worker::start_new(&cache_config);
 
     let mod_file = cache_dir.join("some-mod");
     let mod_data = "some test data to be compressed";
@@ -213,7 +213,7 @@ fn test_on_get_recompress_lock() {
         cache_dir
     );
     assert!(cache_config.enabled());
-    let worker = Worker::start_new(&cache_config, None);
+    let worker = Worker::start_new(&cache_config);
 
     let mod_file = cache_dir.join("some-mod");
     let mod_data = "some test data to be compressed";
@@ -281,7 +281,7 @@ fn test_on_update_fresh_stats_file() {
         cache_dir
     );
     assert!(cache_config.enabled());
-    let worker = Worker::start_new(&cache_config, None);
+    let worker = Worker::start_new(&cache_config);
 
     let mod_file = cache_dir.join("some-mod");
     let stats_file = cache_dir.join("some-mod.stats");
@@ -335,7 +335,7 @@ fn test_on_update_cleanup_limits_trash_locks() {
         cache_dir
     );
     assert!(cache_config.enabled());
-    let worker = Worker::start_new(&cache_config, None);
+    let worker = Worker::start_new(&cache_config);
     let content_1k = "a".repeat(1_000);
     let content_10k = "a".repeat(10_000);
 
@@ -472,7 +472,7 @@ fn test_on_update_cleanup_lru_policy() {
         cache_dir
     );
     assert!(cache_config.enabled());
-    let worker = Worker::start_new(&cache_config, None);
+    let worker = Worker::start_new(&cache_config);
     let content_1k = "a".repeat(1_000);
     let content_5k = "a".repeat(5_000);
     let content_10k = "a".repeat(10_000);
@@ -605,7 +605,7 @@ fn test_on_update_cleanup_future_files() {
         cache_dir
     );
     assert!(cache_config.enabled());
-    let worker = Worker::start_new(&cache_config, None);
+    let worker = Worker::start_new(&cache_config);
     let content_1k = "a".repeat(1_000);
 
     let mods_files_dir = cache_dir.join("target-triple").join("compiler-version");
@@ -710,7 +710,7 @@ fn test_on_update_cleanup_self_lock() {
         cache_dir
     );
     assert!(cache_config.enabled());
-    let worker = Worker::start_new(&cache_config, None);
+    let worker = Worker::start_new(&cache_config);
 
     let mod_file = cache_dir.join("some-mod");
     let trash_file = cache_dir.join("trash-file.txt");

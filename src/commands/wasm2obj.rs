@@ -1,7 +1,7 @@
 //! The module that implements the `wasmtime wasm2obj` command.
 
 use crate::obj::compile_to_obj;
-use crate::{init_file_per_thread_logger, pick_compilation_strategy, CommonOptions};
+use crate::{pick_compilation_strategy, CommonOptions};
 use anyhow::{anyhow, Context as _, Result};
 use std::{
     fs::File,
@@ -50,17 +50,12 @@ pub struct WasmToObjCommand {
 impl WasmToObjCommand {
     /// Executes the command.
     pub fn execute(&self) -> Result<()> {
+        pretty_env_logger::init();
+
         self.handle_module()
     }
 
     fn handle_module(&self) -> Result<()> {
-        if self.common.debug {
-            pretty_env_logger::init();
-        } else {
-            let prefix = "wasm2obj.dbg.";
-            init_file_per_thread_logger(prefix);
-        }
-
         let cache_config = if self.common.disable_cache {
             CacheConfig::new_cache_disabled()
         } else {

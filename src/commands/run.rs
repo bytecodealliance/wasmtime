@@ -1,6 +1,6 @@
 //! The module that implements the `wasmtime run` command.
 
-use crate::{init_file_per_thread_logger, CommonOptions};
+use crate::CommonOptions;
 use anyhow::{bail, Context as _, Result};
 use std::{
     ffi::{OsStr, OsString},
@@ -89,12 +89,7 @@ pub struct RunCommand {
 impl RunCommand {
     /// Executes the command.
     pub fn execute(&self) -> Result<()> {
-        if self.common.debug {
-            pretty_env_logger::init();
-        } else {
-            let prefix = "wasmtime.dbg.";
-            init_file_per_thread_logger(prefix);
-        }
+        pretty_env_logger::init();
 
         let config = self.common.config()?;
         let engine = Engine::new(&config);
