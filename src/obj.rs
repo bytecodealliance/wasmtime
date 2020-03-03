@@ -140,7 +140,7 @@ pub fn compile_to_obj(
         emit_debugsections(
             &mut obj,
             &module_vmctx_info,
-            target_config,
+            &*isa,
             &debug_data,
             &address_transform,
             &value_ranges,

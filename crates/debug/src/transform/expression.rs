@@ -5,7 +5,7 @@ use more_asserts::{assert_le, assert_lt};
 use std::collections::{HashMap, HashSet};
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::ir::{StackSlots, ValueLabel, ValueLabelsRanges, ValueLoc};
-use wasmtime_environ::isa::RegUnit;
+use wasmtime_environ::isa::{RegUnit, TargetIsa};
 use wasmtime_environ::wasm::{get_vmctx_value_label, DefinedFuncIndex};
 use wasmtime_environ::ModuleMemoryOffset;
 
@@ -37,9 +37,10 @@ enum CompiledExpressionPart {
 }
 
 #[derive(Debug)]
-pub struct CompiledExpression {
+pub struct CompiledExpression<'a> {
     parts: Vec<CompiledExpressionPart>,
     need_deref: bool,
+    isa: &'a dyn TargetIsa,
 }
 
 impl Clone for CompiledExpressionPart {
@@ -52,77 +53,87 @@ impl Clone for CompiledExpressionPart {
     }
 }
 
-impl CompiledExpression {
-    pub fn vmctx() -> CompiledExpression {
-        CompiledExpression::from_label(get_vmctx_value_label())
+impl<'a> CompiledExpression<'a> {
+    pub fn vmctx(isa: &'a dyn TargetIsa) -> CompiledExpression {
+        CompiledExpression::from_label(get_vmctx_value_label(), isa)
     }
 
-    pub fn from_label(label: ValueLabel) -> CompiledExpression {
+    pub fn from_label(label: ValueLabel, isa: &'a dyn TargetIsa) -> CompiledExpression<'a> {
         CompiledExpression {
             parts: vec![
                 CompiledExpressionPart::Local(label),
                 CompiledExpressionPart::Code(vec![gimli::constants::DW_OP_stack_value.0 as u8]),
             ],
             need_deref: false,
+            isa,
         }
     }
 }
 
-fn map_reg(reg: RegUnit) -> Register {
-    static mut REG_X86_MAP: Option<HashMap<RegUnit, Register>> = None;
-    // FIXME lazy initialization?
-    unsafe {
-        if REG_X86_MAP.is_none() {
-            REG_X86_MAP = Some(HashMap::new());
+fn map_reg(isa: &dyn TargetIsa, reg: RegUnit) -> Register {
+    // TODO avoid duplication with fde.rs
+    assert!(isa.name() == "x86" && isa.pointer_bits() == 64);
+    // Mapping from https://github.com/bytecodealliance/cranelift/pull/902 by @iximeow
+    const X86_GP_REG_MAP: [gimli::Register; 16] = [
+        X86_64::RAX,
+        X86_64::RCX,
+        X86_64::RDX,
+        X86_64::RBX,
+        X86_64::RSP,
+        X86_64::RBP,
+        X86_64::RSI,
+        X86_64::RDI,
+        X86_64::R8,
+        X86_64::R9,
+        X86_64::R10,
+        X86_64::R11,
+        X86_64::R12,
+        X86_64::R13,
+        X86_64::R14,
+        X86_64::R15,
+    ];
+    const X86_XMM_REG_MAP: [gimli::Register; 16] = [
+        X86_64::XMM0,
+        X86_64::XMM1,
+        X86_64::XMM2,
+        X86_64::XMM3,
+        X86_64::XMM4,
+        X86_64::XMM5,
+        X86_64::XMM6,
+        X86_64::XMM7,
+        X86_64::XMM8,
+        X86_64::XMM9,
+        X86_64::XMM10,
+        X86_64::XMM11,
+        X86_64::XMM12,
+        X86_64::XMM13,
+        X86_64::XMM14,
+        X86_64::XMM15,
+    ];
+    let reg_info = isa.register_info();
+    let bank = reg_info.bank_containing_regunit(reg).unwrap();
+    match bank.name {
+        "IntRegs" => {
+            // x86 GP registers have a weird mapping to DWARF registers, so we use a
+            // lookup table.
+            X86_GP_REG_MAP[(reg - bank.first_unit) as usize]
         }
-        if let Some(val) = REG_X86_MAP.as_mut().unwrap().get(&reg) {
-            return *val;
+        "FloatRegs" => X86_XMM_REG_MAP[(reg - bank.first_unit) as usize],
+        _ => {
+            panic!("unsupported register bank: {}", bank.name);
         }
-        let result = match reg {
-            0 => X86_64::RAX,
-            1 => X86_64::RCX,
-            2 => X86_64::RDX,
-            3 => X86_64::RBX,
-            4 => X86_64::RSP,
-            5 => X86_64::RBP,
-            6 => X86_64::RSI,
-            7 => X86_64::RDI,
-            8 => X86_64::R8,
-            9 => X86_64::R9,
-            10 => X86_64::R10,
-            11 => X86_64::R11,
-            12 => X86_64::R12,
-            13 => X86_64::R13,
-            14 => X86_64::R14,
-            15 => X86_64::R15,
-            16 => X86_64::XMM0,
-            17 => X86_64::XMM1,
-            18 => X86_64::XMM2,
-            19 => X86_64::XMM3,
-            20 => X86_64::XMM4,
-            21 => X86_64::XMM5,
-            22 => X86_64::XMM6,
-            23 => X86_64::XMM7,
-            24 => X86_64::XMM8,
-            25 => X86_64::XMM9,
-            26 => X86_64::XMM10,
-            27 => X86_64::XMM11,
-            28 => X86_64::XMM12,
-            29 => X86_64::XMM13,
-            30 => X86_64::XMM14,
-            31 => X86_64::XMM15,
-            _ => panic!("unknown x86_64 register {}", reg),
-        };
-        REG_X86_MAP.as_mut().unwrap().insert(reg, result);
-        result
     }
 }
 
-fn translate_loc(loc: ValueLoc, frame_info: Option<&FunctionFrameInfo>) -> Option<Vec<u8>> {
+fn translate_loc(
+    loc: ValueLoc,
+    frame_info: Option<&FunctionFrameInfo>,
+    isa: &dyn TargetIsa,
+) -> Option<Vec<u8>> {
     use gimli::write::Writer;
     match loc {
         ValueLoc::Reg(reg) => {
-            let machine_reg = map_reg(reg).0 as u8;
+            let machine_reg = map_reg(isa, reg).0 as u8;
             Some(if machine_reg < 32 {
                 vec![gimli::constants::DW_OP_reg0.0 + machine_reg]
             } else {
@@ -164,13 +175,14 @@ fn append_memory_deref(
     frame_info: &FunctionFrameInfo,
     vmctx_loc: ValueLoc,
     endian: gimli::RunTimeEndian,
+    isa: &dyn TargetIsa,
 ) -> write::Result<bool> {
     use gimli::write::Writer;
     let mut writer = write::EndianVec::new(endian);
     // FIXME for imported memory
     match vmctx_loc {
         ValueLoc::Reg(vmctx_reg) => {
-            let reg = map_reg(vmctx_reg);
+            let reg = map_reg(isa, vmctx_reg);
             writer.write_u8(gimli::constants::DW_OP_breg0.0 + reg.0 as u8)?;
             let memory_offset = match frame_info.vmctx_memory_offset() {
                 Some(offset) => offset,
@@ -213,7 +225,7 @@ fn append_memory_deref(
     Ok(true)
 }
 
-impl CompiledExpression {
+impl<'a> CompiledExpression<'a> {
     pub fn is_simple(&self) -> bool {
         if let [CompiledExpressionPart::Code(_)] = self.parts.as_slice() {
             true
@@ -284,7 +296,7 @@ impl CompiledExpression {
                     CompiledExpressionPart::Code(c) => code_buf.extend_from_slice(c.as_slice()),
                     CompiledExpressionPart::Local(label) => {
                         let loc = *label_location.get(&label).expect("loc");
-                        if let Some(expr) = translate_loc(loc, frame_info) {
+                        if let Some(expr) = translate_loc(loc, frame_info, self.isa) {
                             code_buf.extend_from_slice(&expr)
                         } else {
                             continue 'range;
@@ -294,8 +306,14 @@ impl CompiledExpression {
                         if let (Some(vmctx_loc), Some(frame_info)) =
                             (label_location.get(&vmctx_label), frame_info)
                         {
-                            if !append_memory_deref(&mut code_buf, frame_info, *vmctx_loc, endian)
-                                .expect("append_memory_deref")
+                            if !append_memory_deref(
+                                &mut code_buf,
+                                frame_info,
+                                *vmctx_loc,
+                                endian,
+                                self.isa,
+                            )
+                            .expect("append_memory_deref")
                             {
                                 continue 'range;
                             }
@@ -309,7 +327,7 @@ impl CompiledExpression {
                 if let (Some(vmctx_loc), Some(frame_info)) =
                     (label_location.get(&vmctx_label), frame_info)
                 {
-                    if !append_memory_deref(&mut code_buf, frame_info, *vmctx_loc, endian)
+                    if !append_memory_deref(&mut code_buf, frame_info, *vmctx_loc, endian, self.isa)
                         .expect("append_memory_deref")
                     {
                         continue 'range;
@@ -342,11 +360,12 @@ fn is_old_expression_format(buf: &[u8]) -> bool {
     buf.contains(&(gimli::constants::DW_OP_plus_uconst.0 as u8))
 }
 
-pub fn compile_expression<R>(
+pub fn compile_expression<'a, R>(
     expr: &Expression<R>,
     encoding: gimli::Encoding,
     frame_base: Option<&CompiledExpression>,
-) -> Result<Option<CompiledExpression>, Error>
+    isa: &'a dyn TargetIsa,
+) -> Result<Option<CompiledExpression<'a>>, Error>
 where
     R: Reader,
 {
@@ -437,7 +456,11 @@ where
         }
     }
 
-    Ok(Some(CompiledExpression { parts, need_deref }))
+    Ok(Some(CompiledExpression {
+        parts,
+        need_deref,
+        isa,
+    }))
 }
 
 #[derive(Debug, Clone)]

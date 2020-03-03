@@ -64,6 +64,7 @@ use crate::timing;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use core::fmt;
+use core::fmt::{Debug, Formatter};
 use target_lexicon::{triple, Architecture, PointerWidth, Triple};
 use thiserror::Error;
 
@@ -388,5 +389,16 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         _sink: &mut dyn binemit::FrameUnwindSink,
     ) {
         // No-op by default
+    }
+}
+
+impl Debug for &dyn TargetIsa {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "TargetIsa {{ triple: {:?}, pointer_width: {:?}}}",
+            self.triple(),
+            self.pointer_width()
+        )
     }
 }

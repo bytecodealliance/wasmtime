@@ -5,10 +5,11 @@ use super::refs::{PendingDebugInfoRefs, PendingUnitRefs};
 use super::{DebugInputContext, Reader, TransformError};
 use anyhow::Error;
 use gimli::{write, AttributeValue, DebugLineOffset, DebugStr, DebuggingInformationEntry};
+use wasmtime_environ::isa::TargetIsa;
 
 pub(crate) enum FileAttributeContext<'a> {
     Root(Option<DebugLineOffset>),
-    Children(&'a Vec<write::FileId>, Option<&'a CompiledExpression>),
+    Children(&'a Vec<write::FileId>, Option<&'a CompiledExpression<'a>>),
 }
 
 fn is_exprloc_to_loclist_allowed(attr_name: gimli::constants::DwAt) -> bool {
@@ -41,6 +42,7 @@ pub(crate) fn clone_die_attributes<'a, R>(
     pending_die_refs: &mut PendingUnitRefs,
     pending_di_refs: &mut PendingDebugInfoRefs,
     file_context: FileAttributeContext<'a>,
+    isa: &dyn TargetIsa,
 ) -> Result<(), Error>
 where
     R: Reader,
@@ -130,7 +132,9 @@ where
                 };
                 let mut result = None;
                 while let Some(loc) = locs.next()? {
-                    if let Some(expr) = compile_expression(&loc.data, unit_encoding, frame_base)? {
+                    if let Some(expr) =
+                        compile_expression(&loc.data, unit_encoding, frame_base, isa)?
+                    {
                         if result.is_none() {
                             result = Some(Vec::new());
                         }
@@ -168,7 +172,7 @@ where
                 } else {
                     None
                 };
-                if let Some(expr) = compile_expression(expr, unit_encoding, frame_base)? {
+                if let Some(expr) = compile_expression(expr, unit_encoding, frame_base, isa)? {
                     if expr.is_simple() {
                         if let Some(expr) = expr.build() {
                             write::AttributeValue::Exprloc(expr)
