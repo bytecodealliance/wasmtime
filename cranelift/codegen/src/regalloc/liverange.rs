@@ -131,7 +131,7 @@ use smallvec::SmallVec;
 /// 2. The *live-in intervals* are the local intervals in the remaining blocks.
 ///
 /// A live-in interval always begins at the block header, while the def interval can begin at the
-/// defining instruction, or at the block header for an block argument value.
+/// defining instruction, or at the block header for a block argument value.
 ///
 /// All values have a def interval, but a large proportion of values don't have any live-in
 /// intervals. These are called *local live ranges*.
@@ -139,7 +139,7 @@ use smallvec::SmallVec;
 /// # Program order requirements
 ///
 /// The internal representation of a `LiveRange` depends on a consistent `ProgramOrder` both for
-/// ordering instructions inside an block *and* for ordering blocks. The methods that depend on the
+/// ordering instructions inside a block *and* for ordering blocks. The methods that depend on the
 /// ordering take an explicit `ProgramOrder` object, and it is the caller's responsibility to
 /// ensure that the provided ordering is consistent between calls.
 ///
@@ -363,7 +363,7 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
 
     /// Get the program point where this live range is defined.
     ///
-    /// This will be an block header when the value is an block argument, otherwise it is the defining
+    /// This will be a block header when the value is a block argument, otherwise it is the defining
     /// instruction.
     pub fn def(&self) -> ProgramPoint {
         self.def_begin
@@ -385,7 +385,7 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
         self.def_end
     }
 
-    /// Get the local end-point of this live range in an block where it is live-in.
+    /// Get the local end-point of this live range in a block where it is live-in.
     ///
     /// If this live range is not live-in to `block`, return `None`. Otherwise, return the end-point
     /// of this live range's local interval in `block`.
@@ -409,7 +409,7 @@ impl<PO: ProgramOrder> GenericLiveRange<PO> {
 
     /// Is this value live-in to `block`?
     ///
-    /// An block argument is not considered to be live in.
+    /// A block argument is not considered to be live in.
     pub fn is_livein(&self, block: Block, order: &PO) -> bool {
         self.livein_local_end(block, order).is_some()
     }
@@ -594,7 +594,7 @@ mod tests {
         assert!(lr.is_local());
         assert_eq!(lr.def(), e2.into());
         assert_eq!(lr.def_local_end(), e2.into());
-        // The def interval of an block argument does not count as live-in.
+        // The def interval of a block argument does not count as live-in.
         assert_eq!(lr.livein_local_end(e2, PO), None);
         PO.validate(&lr);
     }

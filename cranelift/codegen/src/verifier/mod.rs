@@ -19,13 +19,13 @@
 //! SSA form
 //!
 //! - Values must be defined by an instruction that exists and that is inserted in
-//!   an block, or be an argument of an existing block.
+//!   a block, or be an argument of an existing block.
 //! - Values used by an instruction must dominate the instruction.
 //!
 //! Control flow graph and dominator tree integrity:
 //!
 //! - All predecessors in the CFG must be branches to the block.
-//! - All branches to an block must be present in the CFG.
+//! - All branches to a block must be present in the CFG.
 //! - A recomputed dominator tree is identical to the existing one.
 //!
 //! Type checking
@@ -961,7 +961,7 @@ impl<'a> Verifier<'a> {
                         format!("{} is defined by invalid instruction {}", v, def_inst),
                     ));
                 }
-                // Defining instruction is inserted in an block.
+                // Defining instruction is inserted in a block.
                 if self.func.layout.inst_block(def_inst) == None {
                     return errors.fatal((
                         loc_inst,

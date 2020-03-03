@@ -333,7 +333,7 @@ impl SSABuilder {
         // Part 1: With a mutable borrow of self, update the DataFlowGraph if necessary.
         let case = match self.ssa_blocks[ssa_block] {
             SSABlockData::BlockHeader(ref mut data) => {
-                // The block has multiple predecessors so we append an Block parameter that
+                // The block has multiple predecessors so we append a Block parameter that
                 // will serve as a value.
                 if data.sealed {
                     if data.predecessors.len() == 1 {
@@ -408,7 +408,7 @@ impl SSABuilder {
         self.block_headers[block] = ssa_block.into();
         ssa_block
     }
-    /// Gets the header block corresponding to an Block, panics if the Block or the header block
+    /// Gets the header block corresponding to a Block, panics if the Block or the header block
     /// isn't declared.
     pub fn header_block(&self, block: Block) -> SSABlock {
         self.block_headers
@@ -491,7 +491,7 @@ impl SSABuilder {
             }
         };
 
-        // For each undef var we look up values in the predecessors and create an block parameter
+        // For each undef var we look up values in the predecessors and create a block parameter
         // only if necessary.
         for (var, val) in undef_vars {
             let ty = func.dfg.value_type(val);
@@ -516,13 +516,13 @@ impl SSABuilder {
         }
     }
 
-    /// Given the local SSA Value of a Variable in an Block, perform a recursive lookup on
+    /// Given the local SSA Value of a Variable in a Block, perform a recursive lookup on
     /// predecessors to determine if it is redundant with another Value earlier in the CFG.
     ///
     /// If such a Value exists and is redundant, the local Value is replaced by the
-    /// corresponding non-local Value. If the original Value was an Block parameter,
+    /// corresponding non-local Value. If the original Value was a Block parameter,
     /// the parameter may be removed if redundant. Parameters are placed eagerly by callers
-    /// to avoid infinite loops when looking up a Value for an Block that is in a CFG loop.
+    /// to avoid infinite loops when looking up a Value for a Block that is in a CFG loop.
     ///
     /// Doing this lookup for each Value in each Block preserves SSA form during construction.
     ///
@@ -623,7 +623,7 @@ impl SSABuilder {
             }
             ZeroOneOrMore::One(pred_val) => {
                 // Here all the predecessors use a single value to represent our variable
-                // so we don't need to have it as an block argument.
+                // so we don't need to have it as a block argument.
                 // We need to replace all the occurrences of val with pred_val but since
                 // we can't afford a re-writing pass right now we just declare an alias.
                 // Resolve aliases eagerly so that we can check for cyclic aliasing,
@@ -692,7 +692,7 @@ impl SSABuilder {
     ) -> Option<(Block, SSABlock, Inst)> {
         match func.dfg.analyze_branch(jump_inst) {
             BranchInfo::NotABranch => {
-                panic!("you have declared a non-branch instruction as a predecessor to an block");
+                panic!("you have declared a non-branch instruction as a predecessor to a block");
             }
             // For a single destination appending a jump argument to the instruction
             // is sufficient.

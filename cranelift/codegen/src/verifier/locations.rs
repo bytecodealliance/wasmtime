@@ -15,7 +15,7 @@ use crate::verifier::{VerifierErrors, VerifierStepResult};
 /// instruction encoding recipes.
 ///
 /// Values can be temporarily diverted to a different location by using the `regmove`, `regspill`,
-/// and `regfill` instructions, but only inside an block.
+/// and `regfill` instructions, but only inside a block.
 ///
 /// If a liveness analysis is provided, it is used to verify that there are no active register
 /// diversions across control flow edges.

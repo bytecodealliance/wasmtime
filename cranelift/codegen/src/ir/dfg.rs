@@ -376,7 +376,7 @@ impl DataFlowGraph {
 pub enum ValueDef {
     /// Value is the n'th result of an instruction.
     Result(Inst, usize),
-    /// Value is the n'th parameter to an block.
+    /// Value is the n'th parameter to a block.
     Param(Block, usize),
 }
 
@@ -393,7 +393,7 @@ impl ValueDef {
     pub fn unwrap_block(&self) -> Block {
         match *self {
             Self::Param(block, _) => block,
-            _ => panic!("Value is not an block parameter"),
+            _ => panic!("Value is not a block parameter"),
         }
     }
 
@@ -419,7 +419,7 @@ enum ValueData {
     /// Value is defined by an instruction.
     Inst { ty: Type, num: u16, inst: Inst },
 
-    /// Value is an block parameter.
+    /// Value is a block parameter.
     Param { ty: Type, num: u16, block: Block },
 
     /// Value is an alias of another value.
@@ -804,12 +804,12 @@ impl DataFlowGraph {
     /// last `block` parameter. This can disrupt all the branch instructions jumping to this
     /// `block` for which you have to change the branch argument order if necessary.
     ///
-    /// Panics if `val` is not an block parameter.
+    /// Panics if `val` is not a block parameter.
     pub fn swap_remove_block_param(&mut self, val: Value) -> usize {
         let (block, num) = if let ValueData::Param { num, block, .. } = self.values[val] {
             (block, num)
         } else {
-            panic!("{} must be an block parameter", val);
+            panic!("{} must be a block parameter", val);
         };
         self.blocks[block]
             .params
@@ -826,7 +826,7 @@ impl DataFlowGraph {
             {
                 *old_num = num;
             } else {
-                panic!("{} should be an Block parameter", last_arg_val);
+                panic!("{} should be a Block parameter", last_arg_val);
             }
         }
         num as usize
@@ -838,7 +838,7 @@ impl DataFlowGraph {
         let (block, num) = if let ValueData::Param { num, block, .. } = self.values[val] {
             (block, num)
         } else {
-            panic!("{} must be an block parameter", val);
+            panic!("{} must be a block parameter", val);
         };
         self.blocks[block]
             .params
@@ -853,7 +853,7 @@ impl DataFlowGraph {
                     *num -= 1;
                 }
                 _ => panic!(
-                    "{} must be an block parameter",
+                    "{} must be a block parameter",
                     self.blocks[block]
                         .params
                         .get(index as usize, &self.value_lists)
@@ -880,7 +880,7 @@ impl DataFlowGraph {
         };
     }
 
-    /// Replace an block parameter with a new value of type `ty`.
+    /// Replace a block parameter with a new value of type `ty`.
     ///
     /// The `old_value` must be an attached block parameter. It is removed from its place in the list
     /// of parameters and replaced by a new value of type `new_type`. The new value gets the same
@@ -894,7 +894,7 @@ impl DataFlowGraph {
         let (block, num) = if let ValueData::Param { num, block, .. } = self.values[old_value] {
             (block, num)
         } else {
-            panic!("{} must be an block parameter", old_value);
+            panic!("{} must be a block parameter", old_value);
         };
         let new_arg = self.make_value(ValueData::Param {
             ty: new_type,

@@ -1,6 +1,6 @@
-//! Track which values are live in an block with instruction granularity.
+//! Track which values are live in a block with instruction granularity.
 //!
-//! The `LiveValueTracker` keeps track of the set of live SSA values at each instruction in an block.
+//! The `LiveValueTracker` keeps track of the set of live SSA values at each instruction in a block.
 //! The sets of live values are computed on the fly as the tracker is moved from instruction to
 //! instruction, starting at the block header.
 
@@ -16,13 +16,13 @@ use alloc::vec::Vec;
 
 type ValueList = EntityList<Value>;
 
-/// Compute and track live values throughout an block.
+/// Compute and track live values throughout a block.
 pub struct LiveValueTracker {
     /// The set of values that are live at the current program point.
     live: LiveValueVec,
 
     /// Saved set of live values for every jump and branch that can potentially be an immediate
-    /// dominator of an block.
+    /// dominator of a block.
     ///
     /// This is the set of values that are live *before* the branch.
     idom_sets: FxHashMap<Inst, ValueList>,

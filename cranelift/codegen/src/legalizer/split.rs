@@ -95,7 +95,7 @@ pub fn vsplit(
     split_any(func, cfg, pos, srcloc, value, Opcode::Vconcat)
 }
 
-/// After splitting an block argument, we need to go back and fix up all of the predecessor
+/// After splitting a block argument, we need to go back and fix up all of the predecessor
 /// instructions. This is potentially a recursive operation, but we don't implement it recursively
 /// since that could use up too muck stack.
 ///
@@ -260,7 +260,7 @@ fn split_value(
             }
         }
         ValueDef::Param(block, num) => {
-            // This is an block parameter.
+            // This is a block parameter.
             // We can split the parameter value unless this is the entry block.
             if pos.func.layout.entry_block() != Some(block) {
                 reuse = Some(split_block_param(pos, block, num, value, concat, repairs));

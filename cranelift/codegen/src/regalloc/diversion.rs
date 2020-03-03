@@ -4,7 +4,7 @@
 //! Sometimes, it is necessary to move register values to a different register in order to satisfy
 //! instruction constraints.
 //!
-//! These register diversions are local to an block. No values can be diverted when entering a new
+//! These register diversions are local to a block. No values can be diverted when entering a new
 //! block.
 
 use crate::fx::FxHashMap;
@@ -38,7 +38,7 @@ impl Diversion {
     }
 }
 
-/// Keep track of diversions in an block.
+/// Keep track of diversions in a block.
 #[derive(Clone)]
 pub struct RegDiversions {
     current: FxHashMap<Value, Diversion>,

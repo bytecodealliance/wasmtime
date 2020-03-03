@@ -810,7 +810,7 @@ enum BranchOrderKind {
 
 /// Reorder branches to encourage fallthroughs.
 ///
-/// When an block ends with a conditional branch followed by an unconditional
+/// When a block ends with a conditional branch followed by an unconditional
 /// branch, this will reorder them if one of them is branching to the next Block
 /// layout-wise. The unconditional jump can then become a fallthrough.
 fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, inst: Inst) {

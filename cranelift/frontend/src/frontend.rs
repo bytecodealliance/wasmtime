@@ -40,11 +40,11 @@ pub struct FunctionBuilder<'a> {
 
 #[derive(Clone, Default)]
 struct BlockData {
-    /// An Block is "pristine" iff no instructions have been added since the last
+    /// A Block is "pristine" iff no instructions have been added since the last
     /// call to `switch_to_block()`.
     pristine: bool,
 
-    /// An Block is "filled" iff a terminator instruction has been inserted since
+    /// A Block is "filled" iff a terminator instruction has been inserted since
     /// the last call to `switch_to_block()`.
     ///
     /// A filled block cannot be pristine.
@@ -832,7 +832,7 @@ impl<'a> FunctionBuilder<'a> {
         );
     }
 
-    /// An Block is 'filled' when a terminator instruction is present.
+    /// A Block is 'filled' when a terminator instruction is present.
     fn fill_current_block(&mut self) {
         self.func_ctx.blocks[self.position.block.unwrap()].filled = true;
     }

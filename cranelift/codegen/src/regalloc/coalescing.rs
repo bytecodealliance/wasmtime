@@ -2,7 +2,7 @@
 //!
 //! Conventional SSA (CSSA) form is a subset of SSA form where any (transitively) phi-related
 //! values do not interfere. We construct CSSA by building virtual registers that are as large as
-//! possible and inserting copies where necessary such that all argument values passed to an block
+//! possible and inserting copies where necessary such that all argument values passed to a block
 //! parameter will belong to the same virtual register as the block parameter value itself.
 
 use crate::cursor::{Cursor, EncCursor};
@@ -233,7 +233,7 @@ impl<'a> Context<'a> {
             }
 
             // Check for basic interference: If `arg` overlaps a value defined at the entry to
-            // `block`, it can never be used as an block argument.
+            // `block`, it can never be used as a block argument.
             let interference = {
                 let lr = &self.liveness[arg];
 
@@ -874,7 +874,7 @@ struct VirtualCopies {
 
     // Filter for the currently active node iterator.
     //
-    // An block => (set_id, num) entry means that branches to `block` are active in `set_id` with
+    // A block => (set_id, num) entry means that branches to `block` are active in `set_id` with
     // branch argument number `num`.
     filter: FxHashMap<Block, (u8, usize)>,
 }
@@ -953,7 +953,7 @@ impl VirtualCopies {
         debug_assert_eq!(popped, Some(param));
 
         // The domtree pre-order in `self.params` guarantees that all parameters defined at the
-        // same block will be adjacent. This means we can see when all parameters at an block have been
+        // same block will be adjacent. This means we can see when all parameters at a block have been
         // merged.
         //
         // We don't care about the last parameter - when that is merged we are done.

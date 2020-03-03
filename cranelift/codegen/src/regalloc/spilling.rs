@@ -199,7 +199,7 @@ impl<'a> Context<'a> {
         self.pressure.reset();
         self.take_live_regs(liveins);
 
-        // An block can have an arbitrary (up to 2^16...) number of parameters, so they are not
+        // A block can have an arbitrary (up to 2^16...) number of parameters, so they are not
         // guaranteed to fit in registers.
         for lv in params {
             if let Affinity::Reg(rci) = lv.affinity {

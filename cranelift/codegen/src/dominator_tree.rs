@@ -284,9 +284,9 @@ impl DominatorTree {
         //
         // 1. Each block is a node, with outgoing edges for all the branches in the block.
         // 2. Each basic block is a node, with outgoing edges for the single branch at the end of
-        //    the BB. (An block is a linear sequence of basic blocks).
+        //    the BB. (A block is a linear sequence of basic blocks).
         //
-        // The first graph is a contraction of the second one. We want to compute an block post-order
+        // The first graph is a contraction of the second one. We want to compute a block post-order
         // that is compatible both graph interpretations. That is, if you compute a BB post-order
         // and then remove those BBs that do not correspond to block headers, you get a post-order of
         // the block graph.
@@ -302,15 +302,15 @@ impl DominatorTree {
         //
         // Edge pruning:
         //
-        //     In the BB graph, we keep an edge to an block the first time we visit the *source* side
+        //     In the BB graph, we keep an edge to a block the first time we visit the *source* side
         //     of the edge. Any subsequent edges to the same block are pruned.
         //
-        //     The equivalent tree is reached in the block graph by keeping the first edge to an block
+        //     The equivalent tree is reached in the block graph by keeping the first edge to a block
         //     in a top-down traversal of the successors. (And then visiting edges in a bottom-up
         //     order).
         //
         // This pruning method makes it possible to compute the DFT without storing lots of
-        // information about the progress through an block.
+        // information about the progress through a block.
 
         // During this algorithm only, use `rpo_number` to hold the following state:
         //
@@ -348,7 +348,7 @@ impl DominatorTree {
     /// Push `block` successors onto `self.stack`, filtering out those that have already been seen.
     ///
     /// The successors are pushed in program order which is important to get a split-invariant
-    /// post-order. Split-invariant means that if an block is split in two, we get the same
+    /// post-order. Split-invariant means that if a block is split in two, we get the same
     /// post-order except for the insertion of the new block header at the split point.
     fn push_successors(&mut self, func: &Function, block: Block) {
         for inst in func.layout.block_insts(block) {
@@ -543,7 +543,7 @@ impl DominatorTreePreorder {
     }
 }
 
-/// An iterator that enumerates the direct children of an block in the dominator tree.
+/// An iterator that enumerates the direct children of a block in the dominator tree.
 pub struct ChildIter<'a> {
     dtpo: &'a DominatorTreePreorder,
     next: PackedOption<Block>,
@@ -580,7 +580,7 @@ impl DominatorTreePreorder {
     /// time. This is less general than the `DominatorTree` method because it only works with block
     /// program points.
     ///
-    /// An block is considered to dominate itself.
+    /// A block is considered to dominate itself.
     pub fn dominates(&self, a: Block, b: Block) -> bool {
         let na = &self.nodes[a];
         let nb = &self.nodes[b];

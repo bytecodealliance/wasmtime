@@ -185,10 +185,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (params, results) = blocktype_params_results(module_translation_state, *ty)?;
             let (destination, else_data) = if params == results {
                 // It is possible there is no `else` block, so we will only
-                // allocate an block for it if/when we find the `else`. For now,
+                // allocate a block for it if/when we find the `else`. For now,
                 // we if the condition isn't true, then we jump directly to the
                 // destination block following the whole `if...end`. If we do end
-                // up discovering an `else`, then we will allocate an block for it
+                // up discovering an `else`, then we will allocate a block for it
                 // and go back and patch the jump.
                 let destination = block_with_params(builder, results, environ)?;
                 let branch_inst = builder
@@ -212,7 +212,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             builder.seal_block(next_block); // Only predecessor is the current block.
             builder.switch_to_block(next_block);
 
-            // Here we append an argument to an Block targeted by an argumentless jump instruction
+            // Here we append an argument to a Block targeted by an argumentless jump instruction
             // But in fact there are two cases:
             // - either the If does not have a Else clause, in that case ty = EmptyBlock
             //   and we add nothing;
@@ -241,7 +241,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                         // We have a branch from the head of the `if` to the `else`.
                         state.reachable = true;
 
-                        // Ensure we have an block for the `else` block (it may have
+                        // Ensure we have a block for the `else` block (it may have
                         // already been pre-allocated, see `ElseData` for details).
                         let else_block = match *else_data {
                             ElseData::NoElse { branch_inst } => {
