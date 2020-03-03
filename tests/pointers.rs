@@ -11,7 +11,7 @@ impl_errno!(types::Errno);
 
 impl pointers::Pointers for WasiCtx {
     fn pointers_and_enums(
-        &mut self,
+        &self,
         input1: types::Excuse,
         input2_ptr: GuestPtrMut<types::Excuse>,
         input3_ptr: GuestPtr<types::Excuse>,

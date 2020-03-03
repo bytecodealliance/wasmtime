@@ -10,14 +10,11 @@ wiggle::from_witx!({
 impl_errno!(types::Errno);
 
 impl atoms::Atoms for WasiCtx {
-    fn int_float_args(&mut self, an_int: u32, an_float: f32) -> Result<(), types::Errno> {
+    fn int_float_args(&self, an_int: u32, an_float: f32) -> Result<(), types::Errno> {
         println!("INT FLOAT ARGS: {} {}", an_int, an_float);
         Ok(())
     }
-    fn double_int_return_float(
-        &mut self,
-        an_int: u32,
-    ) -> Result<types::AliasToFloat, types::Errno> {
+    fn double_int_return_float(&self, an_int: u32) -> Result<types::AliasToFloat, types::Errno> {
         Ok((an_int as f32) * 2.0)
     }
 }

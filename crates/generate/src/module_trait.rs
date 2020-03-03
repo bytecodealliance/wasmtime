@@ -39,9 +39,9 @@ pub fn define_module_trait(names: &Names, m: &Module) -> TokenStream {
             .unwrap_or(quote!(()));
 
         if is_anonymous {
-            quote!(fn #funcname(&mut self, #(#args),*) -> Result<(#(#rets),*), #err>;)
+            quote!(fn #funcname(&self, #(#args),*) -> Result<(#(#rets),*), #err>;)
         } else {
-            quote!(fn #funcname<#lifetime>(&mut self, #(#args),*) -> Result<(#(#rets),*), #err>;)
+            quote!(fn #funcname<#lifetime>(&self, #(#args),*) -> Result<(#(#rets),*), #err>;)
         }
     });
     quote! {

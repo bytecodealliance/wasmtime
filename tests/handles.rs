@@ -12,10 +12,10 @@ wiggle::from_witx!({
 impl_errno!(types::Errno);
 
 impl handle_examples::HandleExamples for WasiCtx {
-    fn fd_create(&mut self) -> Result<types::Fd, types::Errno> {
+    fn fd_create(&self) -> Result<types::Fd, types::Errno> {
         Ok(types::Fd::from(FD_VAL))
     }
-    fn fd_consume(&mut self, fd: types::Fd) -> Result<(), types::Errno> {
+    fn fd_consume(&self, fd: types::Fd) -> Result<(), types::Errno> {
         println!("FD_CONSUME {}", fd);
         if fd == types::Fd::from(FD_VAL) {
             Ok(())

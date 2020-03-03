@@ -50,5 +50,5 @@ builtin_type!(u8, i8, u16, i16, u32, i32, u64, i64, f32, f64, usize);
 pub trait GuestErrorType {
     type Context;
     fn success() -> Self;
-    fn from_error(e: GuestError, ctx: &mut Self::Context) -> Self;
+    fn from_error(e: GuestError, ctx: &Self::Context) -> Self;
 }

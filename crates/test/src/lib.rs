@@ -91,16 +91,17 @@ mod test {
     }
 }
 
+use std::cell::RefCell;
 use wiggle_runtime::GuestError;
 
 pub struct WasiCtx {
-    pub guest_errors: Vec<GuestError>,
+    pub guest_errors: RefCell<Vec<GuestError>>,
 }
 
 impl WasiCtx {
     pub fn new() -> Self {
         Self {
-            guest_errors: vec![],
+            guest_errors: RefCell::new(vec![]),
         }
     }
 }
@@ -117,9 +118,9 @@ macro_rules! impl_errno {
             fn success() -> $errno {
                 <$errno>::Ok
             }
-            fn from_error(e: GuestError, ctx: &mut WasiCtx) -> $errno {
+            fn from_error(e: GuestError, ctx: &WasiCtx) -> $errno {
                 eprintln!("GUEST ERROR: {:?}", e);
-                ctx.guest_errors.push(e);
+                ctx.guest_errors.borrow_mut().push(e);
                 types::Errno::InvalidArg
             }
         }

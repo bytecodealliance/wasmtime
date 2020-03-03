@@ -32,7 +32,7 @@ fn mult_zero_nan(a: f32, b: u32) -> f32 {
 }
 
 impl union_example::UnionExample for WasiCtx {
-    fn get_tag(&mut self, u: &types::Reason) -> Result<types::Excuse, types::Errno> {
+    fn get_tag(&self, u: &types::Reason) -> Result<types::Excuse, types::Errno> {
         println!("GET TAG: {:?}", u);
         match u {
             types::Reason::DogAte { .. } => Ok(types::Excuse::DogAte),
@@ -40,11 +40,7 @@ impl union_example::UnionExample for WasiCtx {
             types::Reason::Sleeping { .. } => Ok(types::Excuse::Sleeping),
         }
     }
-    fn reason_mult(
-        &mut self,
-        u: &types::ReasonMut<'_>,
-        multiply_by: u32,
-    ) -> Result<(), types::Errno> {
+    fn reason_mult(&self, u: &types::ReasonMut<'_>, multiply_by: u32) -> Result<(), types::Errno> {
         match u {
             types::ReasonMut::DogAte(fptr) => {
                 let mut f = fptr.as_ref_mut().expect("valid pointer");

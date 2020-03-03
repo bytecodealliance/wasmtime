@@ -11,7 +11,7 @@ impl_errno!(types::Errno);
 
 impl arrays::Arrays for WasiCtx {
     fn reduce_excuses(
-        &mut self,
+        &self,
         excuses: &types::ConstExcuseArray,
     ) -> Result<types::Excuse, types::Errno> {
         let last = GuestType::read(
@@ -25,7 +25,7 @@ impl arrays::Arrays for WasiCtx {
         Ok(*last.as_ref().expect("dereferencing ptr should succeed"))
     }
 
-    fn populate_excuses(&mut self, excuses: &types::ExcuseArray) -> Result<(), types::Errno> {
+    fn populate_excuses(&self, excuses: &types::ExcuseArray) -> Result<(), types::Errno> {
         for excuse in excuses.iter() {
             let ptr_to_ptr = GuestType::read(&excuse.expect("valid ptr to ptr"))
                 .expect("valid ptr to some Excuse value");

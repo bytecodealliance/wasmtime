@@ -12,7 +12,7 @@ impl_errno!(types::Errno);
 
 impl flags::Flags for WasiCtx {
     fn configure_car(
-        &mut self,
+        &self,
         old_config: types::CarConfig,
         other_config_ptr: GuestPtr<types::CarConfig>,
     ) -> Result<types::CarConfig, types::Errno> {

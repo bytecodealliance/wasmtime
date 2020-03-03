@@ -10,11 +10,11 @@ wiggle::from_witx!({
 impl_errno!(types::Errno);
 
 impl structs::Structs for WasiCtx {
-    fn sum_of_pair(&mut self, an_pair: &types::PairInts) -> Result<i64, types::Errno> {
+    fn sum_of_pair(&self, an_pair: &types::PairInts) -> Result<i64, types::Errno> {
         Ok(an_pair.first as i64 + an_pair.second as i64)
     }
 
-    fn sum_of_pair_of_ptrs(&mut self, an_pair: &types::PairIntPtrs) -> Result<i64, types::Errno> {
+    fn sum_of_pair_of_ptrs(&self, an_pair: &types::PairIntPtrs) -> Result<i64, types::Errno> {
         let first = *an_pair
             .first
             .as_ref()
@@ -26,7 +26,7 @@ impl structs::Structs for WasiCtx {
         Ok(first as i64 + second as i64)
     }
 
-    fn sum_of_int_and_ptr(&mut self, an_pair: &types::PairIntAndPtr) -> Result<i64, types::Errno> {
+    fn sum_of_int_and_ptr(&self, an_pair: &types::PairIntAndPtr) -> Result<i64, types::Errno> {
         let first = *an_pair
             .first
             .as_ref()
@@ -35,7 +35,7 @@ impl structs::Structs for WasiCtx {
         Ok(first as i64 + second)
     }
 
-    fn return_pair_ints(&mut self) -> Result<types::PairInts, types::Errno> {
+    fn return_pair_ints(&self) -> Result<types::PairInts, types::Errno> {
         Ok(types::PairInts {
             first: 10,
             second: 20,
@@ -43,7 +43,7 @@ impl structs::Structs for WasiCtx {
     }
 
     fn return_pair_of_ptrs<'a>(
-        &mut self,
+        &self,
         first: GuestPtr<'a, i32>,
         second: GuestPtr<'a, i32>,
     ) -> Result<types::PairIntPtrs<'a>, types::Errno> {
