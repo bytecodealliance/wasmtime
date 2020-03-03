@@ -351,7 +351,7 @@ impl DominatorTree {
     /// post-order. Split-invariant means that if a block is split in two, we get the same
     /// post-order except for the insertion of the new block header at the split point.
     fn push_successors(&mut self, func: &Function, block: Block) {
-        for inst in func.layout.block_insts(block) {
+        for inst in func.layout.block_likely_branches(block) {
             match func.dfg.analyze_branch(inst) {
                 BranchInfo::SingleDest(succ, _) => self.push_if_unseen(succ),
                 BranchInfo::Table(jt, dest) => {

@@ -647,6 +647,24 @@ impl Layout {
         }
     }
 
+    /// Iterate over a limited set of instruction which are likely the branches of `block` in layout
+    /// order. Any instruction not visited by this iterator is not a branch, but an instruction visited by this may not be a branch.
+    pub fn block_likely_branches(&self, block: Block) -> Insts {
+        // Note: Checking whether an instruction is a branch or not while walking backward might add
+        // extra overhead. However, we know that the number of branches is limited to 2 at the end of
+        // each block, and therefore we can just iterate over the last 2 instructions.
+        let mut iter = self.block_insts(block);
+        let head = iter.head;
+        let tail = iter.tail;
+        iter.next_back();
+        let head = iter.next_back().or(head);
+        Insts {
+            layout: self,
+            head,
+            tail,
+        }
+    }
+
     /// Split the block containing `before` in two.
     ///
     /// Insert `new_block` after the old block and move `before` and the following instructions to
