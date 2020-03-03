@@ -11,6 +11,7 @@ use gimli::write;
 use gimli::{AttributeValue, DebuggingInformationEntry, Unit};
 use std::collections::HashSet;
 use wasmtime_environ::entity::EntityRef;
+use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
 
 struct InheritedAttr<T> {
@@ -148,6 +149,7 @@ pub(crate) fn clone_unit<'a, R>(
     out_units: &mut write::UnitTable,
     out_strings: &mut write::StringTable,
     translated: &mut HashSet<u32>,
+    isa: &dyn TargetIsa,
 ) -> Result<Option<(write::UnitId, UnitRefsMap, PendingDebugInfoRefs)>, Error>
 where
     R: Reader,
@@ -203,6 +205,7 @@ where
                     &mut pending_die_refs,
                     &mut pending_di_refs,
                     FileAttributeContext::Root(Some(debug_line_offset)),
+                    isa,
                 )?;
 
                 let (wp_die_id, vmctx_die_id) =
@@ -296,7 +299,7 @@ where
         }
 
         if let Some(AttributeValue::Exprloc(expr)) = entry.attr_value(gimli::DW_AT_frame_base)? {
-            if let Some(expr) = compile_expression(&expr, unit.encoding(), None)? {
+            if let Some(expr) = compile_expression(&expr, unit.encoding(), None, isa)? {
                 current_frame_base.push(new_stack_len, expr);
             }
         }
@@ -343,6 +346,7 @@ where
             &mut pending_die_refs,
             &mut pending_di_refs,
             FileAttributeContext::Children(&file_map, current_frame_base.top()),
+            isa,
         )?;
 
         if entry.tag() == gimli::DW_TAG_subprogram && !current_scope_ranges.is_empty() {
@@ -354,6 +358,7 @@ where
                 current_value_range.top(),
                 current_scope_ranges.top().expect("range"),
                 out_strings,
+                isa,
             )?;
         }
     }

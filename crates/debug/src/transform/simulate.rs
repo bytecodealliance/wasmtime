@@ -12,6 +12,7 @@ use wasmtime_environ::wasm::get_vmctx_value_label;
 use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
 
 pub use crate::read_debuginfo::{DebugInfoData, FunctionMetadata, WasmType};
+use wasmtime_environ::isa::TargetIsa;
 
 const PRODUCER_NAME: &str = "wasmtime";
 
@@ -175,6 +176,7 @@ fn generate_vars(
     func_meta: &FunctionMetadata,
     locals_names: Option<&HashMap<u32, String>>,
     out_strings: &mut write::StringTable,
+    isa: &dyn TargetIsa,
 ) {
     let vmctx_label = get_vmctx_value_label();
 
@@ -192,6 +194,7 @@ fn generate_vars(
                 Some(frame_info),
                 scope_ranges,
                 out_strings,
+                isa,
             )
             .expect("append_vmctx_info success");
         } else {
@@ -207,7 +210,7 @@ fn generate_vars(
             let loc_list_id = {
                 let endian = gimli::RunTimeEndian::Little;
 
-                let expr = CompiledExpression::from_label(*label);
+                let expr = CompiledExpression::from_label(*label, isa);
                 let mut locs = Vec::new();
                 for (begin, length, data) in
                     expr.build_with_locals(scope_ranges, addr_tr, Some(frame_info), endian)
@@ -258,6 +261,7 @@ pub fn generate_simulated_dwarf(
     out_encoding: gimli::Encoding,
     out_units: &mut write::UnitTable,
     out_strings: &mut write::StringTable,
+    isa: &dyn TargetIsa,
 ) -> Result<(), Error> {
     let path = di
         .wasm_file
@@ -365,6 +369,7 @@ pub fn generate_simulated_dwarf(
                 &di.wasm_file.funcs[index],
                 locals_names.and_then(|m| m.get(&(index as u32))),
                 out_strings,
+                isa,
             );
         }
     }

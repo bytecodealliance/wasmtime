@@ -2,6 +2,7 @@ use super::address_transform::AddressTransform;
 use super::expression::{CompiledExpression, FunctionFrameInfo};
 use anyhow::Error;
 use gimli::write;
+use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::{ModuleMemoryOffset, ModuleVmctxInfo, ValueLabelsRanges};
 
@@ -109,11 +110,12 @@ pub(crate) fn append_vmctx_info(
     frame_info: Option<&FunctionFrameInfo>,
     scope_ranges: &[(u64, u64)],
     out_strings: &mut write::StringTable,
+    isa: &dyn TargetIsa,
 ) -> Result<(), Error> {
     let loc = {
         let endian = gimli::RunTimeEndian::Little;
 
-        let expr = CompiledExpression::vmctx();
+        let expr = CompiledExpression::vmctx(isa);
         let mut locs = Vec::new();
         for (begin, length, data) in
             expr.build_with_locals(scope_ranges, addr_tr, frame_info, endian)

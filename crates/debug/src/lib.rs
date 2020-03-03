@@ -5,8 +5,8 @@
 use anyhow::Error;
 use faerie::{Artifact, Decl};
 use more_asserts::assert_gt;
-use target_lexicon::{BinaryFormat, Triple};
-use wasmtime_environ::isa::TargetFrontendConfig;
+use target_lexicon::BinaryFormat;
+use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
 
 pub use crate::read_debuginfo::{read_debuginfo, DebugInfoData, WasmFileInfo};
@@ -29,13 +29,13 @@ impl SymbolResolver for FunctionRelocResolver {
 pub fn emit_debugsections(
     obj: &mut Artifact,
     vmctx_info: &ModuleVmctxInfo,
-    target_config: TargetFrontendConfig,
+    isa: &dyn TargetIsa,
     debuginfo_data: &DebugInfoData,
     at: &ModuleAddressMap,
     ranges: &ValueLabelsRanges,
 ) -> Result<(), Error> {
     let resolver = FunctionRelocResolver {};
-    let dwarf = transform_dwarf(target_config, debuginfo_data, at, vmctx_info, ranges)?;
+    let dwarf = transform_dwarf(isa, debuginfo_data, at, vmctx_info, ranges)?;
     emit_dwarf(obj, dwarf, &resolver)?;
     Ok(())
 }
@@ -52,8 +52,7 @@ impl<'a> SymbolResolver for ImageRelocResolver<'a> {
 }
 
 pub fn emit_debugsections_image(
-    triple: Triple,
-    target_config: TargetFrontendConfig,
+    isa: &dyn TargetIsa,
     debuginfo_data: &DebugInfoData,
     vmctx_info: &ModuleVmctxInfo,
     at: &ModuleAddressMap,
@@ -64,9 +63,9 @@ pub fn emit_debugsections_image(
         .iter()
         .map(|(ptr, _)| *ptr as u64)
         .collect::<Vec<u64>>();
-    let mut obj = Artifact::new(triple, String::from("module"));
+    let mut obj = Artifact::new(isa.triple().clone(), String::from("module"));
     let resolver = ImageRelocResolver { func_offsets };
-    let dwarf = transform_dwarf(target_config, debuginfo_data, at, vmctx_info, ranges)?;
+    let dwarf = transform_dwarf(isa, debuginfo_data, at, vmctx_info, ranges)?;
 
     // Assuming all functions in the same code block, looking min/max of its range.
     assert_gt!(funcs.len(), 0);

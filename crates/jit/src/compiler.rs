@@ -174,8 +174,7 @@ impl Compiler {
                 }
             };
             let bytes = emit_debugsections_image(
-                self.isa.triple().clone(),
-                target_config,
+                &*self.isa,
                 debug_data.as_ref().unwrap(),
                 &module_vmctx_info,
                 &address_transform,
