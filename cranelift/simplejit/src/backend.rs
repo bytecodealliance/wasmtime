@@ -278,7 +278,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         ctx: &cranelift_codegen::Context,
         _namespace: &ModuleNamespace<Self>,
         code_size: u32,
-    ) -> ModuleResult<Self::CompiledFunction> {
+    ) -> ModuleResult<(Self::CompiledFunction, Option<&Vec<TrapSite>>)> {
         let size = code_size as usize;
         let ptr = self
             .memory
@@ -303,11 +303,14 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             )
         };
 
-        Ok(Self::CompiledFunction {
-            code: ptr,
-            size,
-            relocs: reloc_sink.relocs,
-        })
+        Ok((
+            Self::CompiledFunction {
+                code: ptr,
+                size,
+                relocs: reloc_sink.relocs,
+            },
+            None,
+        ))
     }
 
     fn define_function_bytes(
@@ -317,7 +320,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         bytes: &[u8],
         _namespace: &ModuleNamespace<Self>,
         _traps: Vec<TrapSite>,
-    ) -> ModuleResult<Self::CompiledFunction> {
+    ) -> ModuleResult<(Self::CompiledFunction, Option<&Vec<TrapSite>>)> {
         let size = bytes.len();
         let ptr = self
             .memory
@@ -331,11 +334,14 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, size);
         }
 
-        Ok(Self::CompiledFunction {
-            code: ptr,
-            size,
-            relocs: vec![],
-        })
+        Ok((
+            Self::CompiledFunction {
+                code: ptr,
+                size,
+                relocs: vec![],
+            },
+            None,
+        ))
     }
 
     fn define_data(

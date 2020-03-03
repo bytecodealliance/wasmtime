@@ -59,7 +59,8 @@ impl FaerieTrapManifest {
     }
 
     /// Put a `FaerieTrapSink` into manifest
-    pub fn add_sink(&mut self, sink: FaerieTrapSink) {
+    pub fn add_sink(&mut self, sink: FaerieTrapSink) -> &Vec<TrapSite> {
         self.sinks.push(sink);
+        &self.sinks.last().unwrap().sites
     }
 }

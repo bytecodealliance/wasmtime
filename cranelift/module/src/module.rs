@@ -352,6 +352,11 @@ where
     backend: B,
 }
 
+pub struct ModuleCompiledFunction<'a> {
+    pub size: binemit::CodeOffset,
+    pub traps: Option<&'a Vec<TrapSite>>,
+}
+
 impl<B> Module<B>
 where
     B: Backend,
@@ -557,7 +562,7 @@ where
         &mut self,
         func: FuncId,
         ctx: &mut Context,
-    ) -> ModuleResult<binemit::CodeOffset> {
+    ) -> ModuleResult<ModuleCompiledFunction> {
         info!(
             "defining function {}: {}",
             func,
@@ -572,7 +577,7 @@ where
             return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
         }
 
-        let compiled = Some(self.backend.define_function(
+        let (compiled, traps) = self.backend.define_function(
             func,
             &info.decl.name,
             ctx,
@@ -580,11 +585,14 @@ where
                 contents: &self.contents,
             },
             total_size,
-        )?);
+        )?;
 
-        self.contents.functions[func].compiled = compiled;
+        self.contents.functions[func].compiled = Some(compiled);
         self.functions_to_finalize.push(func);
-        Ok(total_size)
+        Ok(ModuleCompiledFunction {
+            size: total_size,
+            traps,
+        })
     }
 
     /// Define a function, taking the function body from the given `bytes`.
@@ -599,7 +607,7 @@ where
         func: FuncId,
         bytes: &[u8],
         traps: Vec<TrapSite>,
-    ) -> ModuleResult<binemit::CodeOffset> {
+    ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {} with bytes", func);
         let info = &self.contents.functions[func];
         if info.compiled.is_some() {
@@ -614,7 +622,7 @@ where
             _ => Err(ModuleError::FunctionTooLarge(info.decl.name.clone()))?,
         };
 
-        let compiled = Some(self.backend.define_function_bytes(
+        let (compiled, traps) = self.backend.define_function_bytes(
             func,
             &info.decl.name,
             bytes,
@@ -622,11 +630,14 @@ where
                 contents: &self.contents,
             },
             traps,
-        )?);
+        )?;
 
-        self.contents.functions[func].compiled = compiled;
+        self.contents.functions[func].compiled = Some(compiled);
         self.functions_to_finalize.push(func);
-        Ok(total_size)
+        Ok(ModuleCompiledFunction {
+            size: total_size,
+            traps,
+        })
     }
 
     /// Define a data object, producing the data contents from the given `DataContext`.
