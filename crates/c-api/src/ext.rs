@@ -1,7 +1,8 @@
 //! This file defines the extern "C" API extension, which are specific
 //! to the wasmtime implementation.
 
-use crate::wasm_config_t;
+use crate::{wasm_byte_vec_t, wasm_config_t, wasm_engine_t};
+use std::str;
 use wasmtime::{OptLevel, Strategy};
 
 #[repr(u8)]
@@ -85,4 +86,34 @@ pub unsafe extern "C" fn wasmtime_config_cranelift_opt_level_set(
         WASMTIME_OPT_LEVEL_SPEED => OptLevel::Speed,
         WASMTIME_OPT_LEVEL_SPEED_AND_SIZE => OptLevel::SpeedAndSize,
     });
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_wat2wasm(
+    _engine: *mut wasm_engine_t,
+    wat: *const wasm_byte_vec_t,
+    ret: *mut wasm_byte_vec_t,
+    error: *mut wasm_byte_vec_t,
+) -> bool {
+    let wat = match str::from_utf8((*wat).as_slice()) {
+        Ok(s) => s,
+        Err(_) => {
+            if !error.is_null() {
+                (*error).set_from_slice(b"input was not valid utf-8");
+            }
+            return false;
+        }
+    };
+    match wat::parse_str(wat) {
+        Ok(bytes) => {
+            (*ret).set_from_slice(&bytes);
+            true
+        }
+        Err(e) => {
+            if !error.is_null() {
+                (*error).set_from_slice(e.to_string().as_bytes());
+            }
+            false
+        }
+    }
 }

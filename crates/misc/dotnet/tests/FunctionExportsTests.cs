@@ -8,7 +8,7 @@ namespace Wasmtime.Tests
 {
     public class FunctionExportsFixture : ModuleFixture
     {
-        protected override string ModuleFileName => "FunctionExports.wasm";
+        protected override string ModuleFileName => "FunctionExports.wat";
     }
 
     public class FunctionExportsTests : IClassFixture<FunctionExportsFixture>

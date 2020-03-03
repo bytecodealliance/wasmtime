@@ -7,7 +7,7 @@ namespace Wasmtime.Tests
 {
     public class FunctionThunkingFixture : ModuleFixture
     {
-        protected override string ModuleFileName => "FunctionThunking.wasm";
+        protected override string ModuleFileName => "FunctionThunking.wat";
     }
 
     public class FunctionThunkingTests : IClassFixture<FunctionThunkingFixture>

@@ -15,15 +15,13 @@ namespace Wasmtime
                 throw new ArgumentNullException(nameof(store));
             }
 
-            var bytesHandle = GCHandle.Alloc(bytes, GCHandleType.Pinned);
-
-            try
+            unsafe
             {
-                unsafe
+                fixed (byte *ptr = bytes)
                 {
                     Interop.wasm_byte_vec_t vec;
                     vec.size = (UIntPtr)bytes.Length;
-                    vec.data = (byte*)bytesHandle.AddrOfPinnedObject();
+                    vec.data = ptr;
 
                     Handle = Interop.wasm_module_new(store.Handle, ref vec);
                 }
@@ -32,10 +30,6 @@ namespace Wasmtime
                 {
                     throw new WasmtimeException($"WebAssembly module '{name}' is not valid.");
                 }
-            }
-            finally
-            {
-                bytesHandle.Free();
             }
 
             Store = store;
