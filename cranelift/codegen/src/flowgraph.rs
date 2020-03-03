@@ -120,7 +120,7 @@ impl ControlFlowGraph {
     }
 
     fn compute_block(&mut self, func: &Function, block: Block) {
-        for inst in func.layout.block_insts(block) {
+        for inst in func.layout.block_likely_branches(block) {
             match func.dfg.analyze_branch(inst) {
                 BranchInfo::SingleDest(dest, _) => {
                     self.add_edge(block, inst, dest);
