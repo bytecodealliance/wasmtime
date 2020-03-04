@@ -1,4 +1,4 @@
-use crate::{Errno, Result};
+use crate::{Error, Result};
 use bitflags::bitflags;
 use cfg_if::cfg_if;
 use std::{
@@ -137,7 +137,7 @@ pub unsafe fn openat<P: AsRef<OsStr>>(
     mode: Mode,
 ) -> Result<RawFd> {
     let path = CString::new(path.as_ref().as_bytes())?;
-    Errno::from_result(libc::openat(
+    Error::from_result(libc::openat(
         dirfd,
         path.as_ptr(),
         oflag.bits(),
@@ -148,7 +148,7 @@ pub unsafe fn openat<P: AsRef<OsStr>>(
 pub unsafe fn readlinkat<P: AsRef<OsStr>>(dirfd: RawFd, path: P) -> Result<OsString> {
     let path = CString::new(path.as_ref().as_bytes())?;
     let buffer = &mut [0u8; libc::PATH_MAX as usize + 1];
-    Errno::from_result(libc::readlinkat(
+    Error::from_result(libc::readlinkat(
         dirfd,
         path.as_ptr(),
         buffer.as_mut_ptr() as *mut _,
@@ -162,7 +162,7 @@ pub unsafe fn readlinkat<P: AsRef<OsStr>>(dirfd: RawFd, path: P) -> Result<OsStr
 
 pub unsafe fn mkdirat<P: AsRef<OsStr>>(dirfd: RawFd, path: P, mode: Mode) -> Result<()> {
     let path = CString::new(path.as_ref().as_bytes())?;
-    Errno::from_success_code(libc::mkdirat(dirfd, path.as_ptr(), mode.bits()))
+    Error::from_success_code(libc::mkdirat(dirfd, path.as_ptr(), mode.bits()))
 }
 
 pub unsafe fn linkat<P: AsRef<OsStr>>(
@@ -174,7 +174,7 @@ pub unsafe fn linkat<P: AsRef<OsStr>>(
 ) -> Result<()> {
     let old_path = CString::new(old_path.as_ref().as_bytes())?;
     let new_path = CString::new(new_path.as_ref().as_bytes())?;
-    Errno::from_success_code(libc::linkat(
+    Error::from_success_code(libc::linkat(
         old_dirfd,
         old_path.as_ptr(),
         new_dirfd,
@@ -185,7 +185,7 @@ pub unsafe fn linkat<P: AsRef<OsStr>>(
 
 pub unsafe fn unlinkat<P: AsRef<OsStr>>(dirfd: RawFd, path: P, flags: AtFlag) -> Result<()> {
     let path = CString::new(path.as_ref().as_bytes())?;
-    Errno::from_success_code(libc::unlinkat(dirfd, path.as_ptr(), flags.bits()))
+    Error::from_success_code(libc::unlinkat(dirfd, path.as_ptr(), flags.bits()))
 }
 
 pub unsafe fn renameat<P: AsRef<OsStr>>(
@@ -196,7 +196,7 @@ pub unsafe fn renameat<P: AsRef<OsStr>>(
 ) -> Result<()> {
     let old_path = CString::new(old_path.as_ref().as_bytes())?;
     let new_path = CString::new(new_path.as_ref().as_bytes())?;
-    Errno::from_success_code(libc::renameat(
+    Error::from_success_code(libc::renameat(
         old_dirfd,
         old_path.as_ptr(),
         new_dirfd,
@@ -207,7 +207,7 @@ pub unsafe fn renameat<P: AsRef<OsStr>>(
 pub unsafe fn symlinkat<P: AsRef<OsStr>>(old_path: P, new_dirfd: RawFd, new_path: P) -> Result<()> {
     let old_path = CString::new(old_path.as_ref().as_bytes())?;
     let new_path = CString::new(new_path.as_ref().as_bytes())?;
-    Errno::from_success_code(libc::symlinkat(
+    Error::from_success_code(libc::symlinkat(
         old_path.as_ptr(),
         new_dirfd,
         new_path.as_ptr(),
@@ -218,7 +218,7 @@ pub unsafe fn fstatat<P: AsRef<OsStr>>(dirfd: RawFd, path: P, flags: AtFlag) -> 
     use std::mem::MaybeUninit;
     let path = CString::new(path.as_ref().as_bytes())?;
     let mut filestat = MaybeUninit::<libc::stat>::uninit();
-    Errno::from_result(libc::fstatat(
+    Error::from_result(libc::fstatat(
         dirfd,
         path.as_ptr(),
         filestat.as_mut_ptr(),
@@ -230,20 +230,20 @@ pub unsafe fn fstatat<P: AsRef<OsStr>>(dirfd: RawFd, path: P, flags: AtFlag) -> 
 pub unsafe fn fstat(fd: RawFd) -> Result<libc::stat> {
     use std::mem::MaybeUninit;
     let mut filestat = MaybeUninit::<libc::stat>::uninit();
-    Errno::from_result(libc::fstat(fd, filestat.as_mut_ptr()))?;
+    Error::from_result(libc::fstat(fd, filestat.as_mut_ptr()))?;
     Ok(filestat.assume_init())
 }
 
 /// `fionread()` function, equivalent to `ioctl(fd, FIONREAD, *bytes)`.
 pub unsafe fn fionread(fd: RawFd) -> Result<u32> {
     let mut nread: libc::c_int = 0;
-    Errno::from_result(libc::ioctl(fd, libc::FIONREAD, &mut nread as *mut _))?;
+    Error::from_result(libc::ioctl(fd, libc::FIONREAD, &mut nread as *mut _))?;
     Ok(nread.try_into()?)
 }
 
 /// This function is unsafe because it operates on a raw file descriptor.
 /// It's provided, because std::io::Seek requires a mutable borrow.
 pub unsafe fn tell(fd: RawFd) -> Result<u64> {
-    let offset: i64 = Errno::from_result(libc::lseek(fd, 0, libc::SEEK_CUR))?;
+    let offset: i64 = Error::from_result(libc::lseek(fd, 0, libc::SEEK_CUR))?;
     Ok(offset.try_into()?)
 }
