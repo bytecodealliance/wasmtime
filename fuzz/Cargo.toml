@@ -46,15 +46,3 @@ name = "differential"
 path = "fuzz_targets/differential.rs"
 test = false
 doc = false
-
-[[bin]]
-name = "translate_module"
-path = "fuzz_targets/translate_module.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "reader_parse_test"
-path = "fuzz_targets/reader_parse_test.rs"
-test = false
-doc = false
