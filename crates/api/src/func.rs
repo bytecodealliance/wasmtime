@@ -264,6 +264,36 @@ impl Func {
         ///
         /// For more information about this function, see [`Func::wrap1`].
         (wrap10, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10)
+
+        /// Creates a new `Func` from the given Rust closure, which takes 11
+        /// arguments.
+        ///
+        /// For more information about this function, see [`Func::wrap1`].
+        (wrap11, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11)
+
+        /// Creates a new `Func` from the given Rust closure, which takes 12
+        /// arguments.
+        ///
+        /// For more information about this function, see [`Func::wrap1`].
+        (wrap12, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12)
+
+        /// Creates a new `Func` from the given Rust closure, which takes 13
+        /// arguments.
+        ///
+        /// For more information about this function, see [`Func::wrap1`].
+        (wrap13, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13)
+
+        /// Creates a new `Func` from the given Rust closure, which takes 14
+        /// arguments.
+        ///
+        /// For more information about this function, see [`Func::wrap1`].
+        (wrap14, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14)
+
+        /// Creates a new `Func` from the given Rust closure, which takes 15
+        /// arguments.
+        ///
+        /// For more information about this function, see [`Func::wrap1`].
+        (wrap15, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15)
     }
 
     fn from_wrapped(
@@ -420,6 +450,36 @@ impl Func {
         ///
         /// See the [`Func::get1`] method for more documentation.
         (get10, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get11, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get12, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get13, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get14, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14)
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func::get1`] method for more documentation.
+        (get15, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15)
     }
 }
 
