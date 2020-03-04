@@ -92,10 +92,10 @@ mod test {
     use super::*;
     #[test]
     fn hostmemory_is_aligned() {
-        let mut h = HostMemory::new();
-        assert_eq!(h.buffer.as_mut_ptr() as usize % 4096, 0);
-        let mut h = Box::new(HostMemory::new());
-        assert_eq!(h.buffer.as_mut_ptr() as usize % 4096, 0);
+        let h = HostMemory::new();
+        assert_eq!(h.base().0 as usize % 4096, 0);
+        let h = Box::new(h);
+        assert_eq!(h.base().0 as usize % 4096, 0);
     }
 }
 
