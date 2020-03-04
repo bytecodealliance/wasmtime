@@ -11,7 +11,10 @@ use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_wasm::ModuleTranslationState;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::sync::{atomic::{AtomicPtr, Ordering}, RwLock};
+use std::sync::{
+    atomic::{AtomicPtr, Ordering},
+    RwLock,
+};
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
@@ -83,7 +86,7 @@ impl Compiler {
                 code_memory: CodeMemory::new(),
                 trampoline_park: HashMap::new(),
                 fn_builder_ctx: FunctionBuilderContext::new(),
-            })
+            }),
         }
     }
 }
@@ -145,8 +148,8 @@ impl Compiler {
             .map_err(SetupError::Compile)?;
 
         let mut inner = self.inner.write().unwrap();
-        let allocated_functions =
-            allocate_functions(&mut inner.code_memory, &compilation).map_err(|message| {
+        let allocated_functions = allocate_functions(&mut inner.code_memory, &compilation)
+            .map_err(|message| {
                 SetupError::Instantiate(InstantiationError::Resource(format!(
                     "failed to allocate memory for functions: {}",
                     message
@@ -250,7 +253,10 @@ impl Compiler {
         module_name: &str,
         dbg_image: Option<&[u8]>,
     ) -> () {
-        self.inner.write().unwrap().code_memory
+        self.inner
+            .write()
+            .unwrap()
+            .code_memory
             .profiler_module_load(profiler, module_name, dbg_image);
     }
 

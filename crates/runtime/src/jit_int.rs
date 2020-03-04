@@ -3,7 +3,10 @@
 //! or unregister generated object images with debuggers.
 
 use std::ptr;
-use std::sync::{atomic::{AtomicPtr, Ordering}, Mutex};
+use std::sync::{
+    atomic::{AtomicPtr, Ordering},
+    Mutex,
+};
 
 #[repr(C)]
 struct JITCodeEntry {
