@@ -37,10 +37,25 @@ impl Block {
 
 const DISASSEMBLE: bool = false;
 
+pub trait OffsetSink {
+    fn offset(&mut self, offset_in_wasm_function: ir::SourceLoc, offset_in_compiled_function: usize);
+}
+
+pub struct NullOffsetSink;
+
+impl OffsetSink for NullOffsetSink {
+    fn offset(&mut self, _: ir::SourceLoc, _: usize) {}
+}
+
+pub struct Sinks<'a> {
+    pub relocs: &'a mut dyn binemit::RelocSink,
+    pub traps: &'a mut dyn binemit::TrapSink,
+    pub offsets: &'a mut dyn OffsetSink,
+}
+
 pub fn translate_wasm<M, R>(
     session: &mut CodeGenSession<M>,
-    reloc_sink: &mut dyn binemit::RelocSink,
-    trap_sink: &mut (dyn binemit::TrapSink + 'static),
+    sinks: Sinks<'_>,
     func_idx: u32,
     body: R,
 ) -> Result<(), Error>
@@ -63,14 +78,13 @@ where
         Err(e) => Right(iter::once(Err(Error::Microwasm(e.to_string())))),
     });
 
-    translate(session, reloc_sink, trap_sink, func_idx, microwasm_conv)?;
+    translate(session, sinks, func_idx, microwasm_conv)?;
     Ok(())
 }
 
 pub fn translate<M, I, L: Send + Sync + 'static>(
     session: &mut CodeGenSession<M>,
-    reloc_sink: &mut dyn binemit::RelocSink,
-    trap_sink: &mut (dyn binemit::TrapSink + 'static),
+    mut sinks: Sinks<'_>,
     func_idx: u32,
     body: I,
 ) -> Result<(), Error>
@@ -104,7 +118,7 @@ where
     let module_context = &*session.module_context;
     let mut op_offset_map = mem::replace(&mut session.op_offset_map, vec![]);
     {
-        let ctx = &mut session.new_context(func_idx, reloc_sink, trap_sink);
+        let ctx = &mut session.new_context(func_idx, &mut *sinks.relocs, &mut *sinks.traps);
         op_offset_map.push((
             ctx.asm.offset(),
             Box::new(format!("Function {}:", func_idx)),
@@ -144,6 +158,8 @@ where
             } = op_and_meta?;
 
             ctx.set_source_loc(loc);
+
+            sinks.offsets.offset(loc, ctx.asm.offset().0);
 
             if let Some(Ok(WithMeta {
                 data: Operator::Label(label),
@@ -856,11 +872,11 @@ where
                                 callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
                             )?;
                         } else {
-                            ctx.call_direct(
-                                function_index,
-                                callee_ty.params().iter().map(|t| t.to_microwasm_type()),
-                                callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
-                            )?;
+                           ctx.call_direct(
+                               defined_index,
+                               callee_ty.params().iter().map(|t| t.to_microwasm_type()),
+                               callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
+                           )?;
                         }
                     } else {
                         ctx.call_direct_imported(

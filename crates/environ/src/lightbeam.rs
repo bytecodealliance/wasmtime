@@ -7,11 +7,15 @@ use crate::module::Module;
 use crate::module_environ::FunctionBodyData;
 use crate::CacheConfig;
 // TODO: Put this in `compilation`
-use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
+use crate::address_map::{
+    FunctionAddressMap, InstructionAddressMap, ModuleAddressMap, ValueLabelsRanges,
+};
 use crate::cranelift::{RelocSink, TrapSink};
-use cranelift_codegen::isa;
+use cranelift_codegen::{ir, isa};
 use cranelift_entity::{PrimaryMap, SecondaryMap};
 use cranelift_wasm::{DefinedFuncIndex, ModuleTranslationState};
+use lightbeam::{CodeGenSession, OffsetSink, Sinks};
+use std::mem;
 
 /// A compiler that compiles a WebAssembly module with Lightbeam, directly translating the Wasm file.
 pub struct Lightbeam;
@@ -32,11 +36,69 @@ impl crate::compilation::Compiler for Lightbeam {
             return Err(CompileError::DebugInfoNotSupported);
         }
 
+        struct WasmtimeOffsetSink {
+            offset: usize,
+            last: Option<(ir::SourceLoc, usize)>,
+            address_map: FunctionAddressMap,
+        }
+
+        impl WasmtimeOffsetSink {
+            fn new(offset: usize, address_map: FunctionAddressMap) -> Self {
+                WasmtimeOffsetSink {
+                    offset,
+                    last: None,
+                    address_map,
+                }
+            }
+
+            fn finalize(mut self, body_len: usize) -> FunctionAddressMap {
+                if let Some((srcloc, code_offset)) = self.last {
+                    self.address_map.instructions.push(InstructionAddressMap {
+                        srcloc,
+                        code_offset,
+                        code_len: body_len - code_offset,
+                    });
+                }
+
+                self.address_map.body_len = body_len - self.address_map.body_offset;
+
+                self.address_map
+            }
+        }
+
+        impl OffsetSink for WasmtimeOffsetSink {
+            fn offset(
+                &mut self,
+                offset_in_wasm_function: ir::SourceLoc,
+                offset_in_compiled_function: usize,
+            ) {
+                if self.last.as_ref().map(|(s, _)| s) == Some(&offset_in_wasm_function) {
+                    return;
+                }
+
+                let offset_in_compiled_function = offset_in_compiled_function - self.offset;
+
+                let last = mem::replace(
+                    &mut self.last,
+                    Some((offset_in_wasm_function, offset_in_compiled_function)),
+                );
+
+                if let Some((srcloc, code_offset)) = last {
+                    self.address_map.instructions.push(InstructionAddressMap {
+                        srcloc,
+                        code_offset,
+                        code_len: offset_in_compiled_function - code_offset,
+                    })
+                }
+            }
+        }
+
         let env = FuncEnvironment::new(isa.frontend_config(), &module.local);
         let mut relocations = PrimaryMap::with_capacity(function_body_inputs.len());
         let mut traps = PrimaryMap::with_capacity(function_body_inputs.len());
+        let mut module_addresses = ModuleAddressMap::with_capacity(function_body_inputs.len());
 
-        let mut codegen_session: lightbeam::CodeGenSession<_> = lightbeam::CodeGenSession::new(
+        let mut codegen_session: CodeGenSession<_> = CodeGenSession::new(
             function_body_inputs.len() as u32,
             &env,
             lightbeam::microwasm::I32,
@@ -45,13 +107,30 @@ impl crate::compilation::Compiler for Lightbeam {
         for (i, function_body) in &function_body_inputs {
             let func_index = module.local.func_index(i);
 
+            let start_offset = codegen_session.offset();
+
             let mut reloc_sink = RelocSink::new(func_index);
             let mut trap_sink = TrapSink::new();
+            let mut offsetsink = WasmtimeOffsetSink::new(
+                start_offset,
+                FunctionAddressMap {
+                    instructions: vec![],
+                    start_srcloc: ir::SourceLoc::new(function_body.module_offset as u32),
+                    end_srcloc: ir::SourceLoc::new(
+                        (function_body.module_offset + function_body.data.len()) as u32,
+                    ),
+                    body_offset: 0,
+                    body_len: 0,
+                },
+            );
 
             lightbeam::translate_function(
                 &mut codegen_session,
-                &mut reloc_sink,
-                &mut trap_sink,
+                Sinks {
+                    relocs: &mut reloc_sink,
+                    traps: &mut trap_sink,
+                    offsets: &mut offsetsink,
+                },
                 i.as_u32(),
                 std::io::Cursor::new(function_body.data),
             )
@@ -59,6 +138,7 @@ impl crate::compilation::Compiler for Lightbeam {
 
             relocations.push(reloc_sink.func_relocs);
             traps.push(trap_sink.traps);
+            module_addresses.push(offsetsink.finalize(codegen_session.offset() - start_offset));
         }
 
         let code_section = codegen_session
@@ -76,7 +156,7 @@ impl crate::compilation::Compiler for Lightbeam {
         Ok((
             Compilation::from_buffer(code_section.buffer(), code_section_ranges_and_jt),
             relocations,
-            ModuleAddressMap::new(),
+            module_addresses,
             ValueLabelsRanges::new(),
             PrimaryMap::new(),
             traps,

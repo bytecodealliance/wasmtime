@@ -12,7 +12,6 @@ use dynasm::dynasm;
 use dynasmrt::x64::Assembler;
 use dynasmrt::{AssemblyOffset, DynamicLabel, DynasmApi, DynasmLabelApi, ExecutableBuffer};
 use std::{
-    any::Any,
     cmp::Ordering,
     convert::{TryFrom, TryInto},
     fmt::Display,
@@ -42,10 +41,6 @@ mod magic {
         /// Returns an index for wasm's imported `memory.size` builtin function.
         pub const fn get_imported_memory32_size_index() -> Self {
             Self(3)
-        }
-        /// Returns the total number of builtin functions.
-        pub const fn builtin_functions_total_number() -> u32 {
-            4
         }
 
         /// Return the index as an u32 number.
@@ -137,6 +132,60 @@ where
             Some(val) => CCLoc::Reg(*val),
         },
     })
+}
+
+fn arg_locs_skip_caller_vmctx<I: IntoIterator<Item = SignlessType>>(
+    types: I,
+) -> impl ExactSizeIterator<Item = CCLoc> + DoubleEndedIterator + Clone
+where
+    I::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+{
+    #[derive(Debug, Clone)]
+    struct WithInt<I> {
+        caller_vmctx_ty: Option<SignlessType>,
+        iter: I,
+    }
+
+    impl<I> Iterator for WithInt<I>
+    where
+        I: Iterator<Item = SignlessType>,
+    {
+        type Item = SignlessType;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            self.caller_vmctx_ty.take().or_else(|| self.iter.next())
+        }
+
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            let ty_len = if self.caller_vmctx_ty.is_some() { 1 } else { 0 };
+            let (lower, upper) = self.iter.size_hint();
+
+            (lower + ty_len, upper.map(|u| u + ty_len))
+        }
+    }
+
+    impl<I> DoubleEndedIterator for WithInt<I>
+    where
+        I: DoubleEndedIterator<Item = SignlessType>,
+    {
+        fn next_back(&mut self) -> Option<Self::Item> {
+            self.iter
+                .next_back()
+                .or_else(|| self.caller_vmctx_ty.take())
+        }
+    }
+
+    impl<I> ExactSizeIterator for WithInt<I> where I: ExactSizeIterator<Item = SignlessType> {}
+
+    let mut out = arg_locs(WithInt {
+        caller_vmctx_ty: Some(I32),
+        iter: types.into_iter(),
+    });
+
+    // Skip the first element
+    let _ = out.next();
+
+    out
 }
 
 pub fn ret_locs(types: impl IntoIterator<Item = SignlessType>) -> Result<Vec<CCLoc>, Error> {
@@ -535,7 +584,7 @@ impl ValueLocation {
 // In system-v calling convention the first 6 arguments are passed via registers.
 // All rest arguments are passed on the stack.
 // Usually system-v uses rdi and rsi, but rdi is used for the vmctx and rsi is used for the _caller_ vmctx
-const INTEGER_ARGS_IN_GPRS: &[GPR] = &[RDX, RCX, R8, R9];
+const INTEGER_ARGS_IN_GPRS: &[GPR] = &[GPR::Rq(CALLER_VMCTX), RDX, RCX, R8, R9];
 const INTEGER_RETURN_GPRS: &[GPR] = &[RAX, RDX];
 const FLOAT_ARGS_IN_GPRS: &[GPR] = &[XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7];
 const FLOAT_RETURN_GPRS: &[GPR] = &[XMM0, XMM1];
@@ -569,6 +618,10 @@ impl<'module, M> CodeGenSession<'module, M> {
             module_context,
             pointer_type,
         }
+    }
+
+    pub fn offset(&self) -> usize {
+        self.assembler.offset().0
     }
 
     pub fn pointer_type(&self) -> SignlessType {
@@ -683,80 +736,44 @@ pub struct BlockState {
 
 type Stack = Vec<ValueLocation>;
 
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-enum LabelValue {
-    I32(i32),
-    I64(i64),
-}
-
-impl From<Value> for LabelValue {
-    fn from(other: Value) -> LabelValue {
-        match other {
-            Value::I32(v) => LabelValue::I32(v),
-            Value::I64(v) => LabelValue::I64(v),
-            Value::F32(v) => LabelValue::I32(v.to_bits() as _),
-            Value::F64(v) => LabelValue::I64(v.to_bits() as _),
-        }
-    }
-}
-
 mod labels {
-    use super::{Assembler, IntoLabel, Label};
-    use std::{
-        any::{Any, TypeId},
-        collections::hash_map::{HashMap, RandomState},
-        hash::{BuildHasher, BuildHasherDefault, Hash, Hasher},
-    };
+    use super::Label;
+    use std::collections::HashMap;
 
     pub struct LabelInfo {
         pub label: Label,
         pub align: u32,
-        pub callback: Box<dyn FnOnce(&'_ mut Assembler)>,
+        pub inner: LabelValue,
     }
 
-    pub struct Labels<S = RandomState> {
-        builder: S,
-        map: HashMap<u64, LabelInfo, BuildHasherDefault<hashers::null::PassThroughHasher>>,
+    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    pub enum LabelValue {
+        Ret,
+        I32(i32),
+        I64(i64),
     }
 
-    impl<S: Default> Default for Labels<S> {
-        fn default() -> Self {
-            Labels {
-                builder: Default::default(),
-                map: Default::default(),
-            }
-        }
+    #[derive(Default)]
+    pub struct Labels {
+        map: HashMap<LabelValue, LabelInfo>,
     }
 
-    impl<S: BuildHasher> Labels<S> {
-        fn hash<K: Hash + Any>(&self, k: &K) -> u64 {
-            let mut hasher = self.builder.build_hasher();
-            (TypeId::of::<K>(), k).hash(&mut hasher);
-            hasher.finish()
-        }
-
+    impl Labels {
         pub fn drain(&mut self) -> impl Iterator<Item = LabelInfo> + '_ {
             self.map.drain().map(|(_, info)| info)
         }
 
-        pub fn get<K: Hash + Any>(&self, k: &K) -> Option<&LabelInfo> {
-            self.map.get(&self.hash(k))
-        }
-
-        pub fn insert<L>(&mut self, l: impl FnOnce() -> Label, align: u32, label: L) -> Label
-        where
-            L: IntoLabel,
-            L::Callback: 'static,
-        {
-            let key = label.key();
-            let val = self
-                .map
-                .entry(self.hash(&key))
-                .or_insert_with(move || LabelInfo {
-                    label: l(),
-                    align,
-                    callback: Box::new(label.callback()),
-                });
+        pub fn insert(
+            &mut self,
+            l: impl FnOnce() -> Label,
+            align: u32,
+            label: LabelValue,
+        ) -> Label {
+            let val = self.map.entry(label).or_insert_with(move || LabelInfo {
+                label: l(),
+                align,
+                inner: label,
+            });
 
             val.align = val.align.max(align);
 
@@ -765,7 +782,7 @@ mod labels {
     }
 }
 
-use labels::{LabelInfo, Labels};
+use labels::{LabelInfo, LabelValue, Labels};
 
 pub struct Context<'this, M> {
     pub asm: &'this mut Assembler,
@@ -1806,7 +1823,7 @@ macro_rules! binop {
                         $direct_imm(&mut *self, lreg, i);
                     } else {
                         let scratch = self.take_reg($ty).unwrap();
-                        self.immediate_to_reg(scratch, i);
+                        self.immediate_to_reg(scratch, i)?;
 
                         dynasm!(self.asm
                             ; $instr $reg_ty(lreg.$reg_fn().unwrap()), $reg_ty(scratch.$reg_fn().unwrap())
@@ -2425,11 +2442,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         pass_args: impl FnOnce(&mut Self) -> Result<(), Error>,
     ) -> Result<(), Error> {
         let mut val = self.pop()?;
-        let label = target
-            .into()
-            .label()
-            .copied()
-            .unwrap_or_else(|| self.ret_label());
+        let label = self.target_to_label(target.into());
 
         let cond = match val {
             ValueLocation::Cond(cc) => !cc,
@@ -2465,11 +2478,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         pass_args: impl FnOnce(&mut Self) -> Result<(), Error>,
     ) -> Result<(), Error> {
         let mut val = self.pop()?;
-        let label = target
-            .into()
-            .label()
-            .copied()
-            .unwrap_or_else(|| self.ret_label());
+        let label = self.target_to_label(target.into());
 
         let cond = match val {
             ValueLocation::Cond(cc) => cc,
@@ -2568,7 +2577,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     (out_reg, true)
                 };
 
-                self.immediate_to_reg(tmp, (count as u32).into());
+                self.immediate_to_reg(tmp, (count as u32).into())?;
                 dynasm!(self.asm
                     ; cmp Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
                     ; cmova Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
@@ -2609,14 +2618,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
 
             if let Some(def) = default {
-                match def {
-                    BrTarget::Label(label) => dynasm!(self.asm
-                        ; jmp =>label.0
-                    ),
-                    BrTarget::Return => dynasm!(self.asm
-                        ; ret
-                    ),
-                }
+                self.br(def);
             }
 
             self.define_label(end_label);
@@ -2676,7 +2678,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 {
                     // TODO: This would be made simpler and more efficient with a proper SSE
                     //       representation.
-                    self.save_regs(&[r], ..)?;
+                    self.save_regs(std::iter::once(r))?;
                 }
 
                 self.block_state.regs.mark_used(r);
@@ -2830,7 +2832,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Ok(())
     }
 
-    fn immediate_to_reg(&mut self, reg: GPR, val: Value) {
+    fn immediate_to_reg(&mut self, reg: GPR, val: Value) -> Result<(), Error> {
         match reg {
             GPR::Rq(r) => {
                 let val = val.as_bytes();
@@ -2844,13 +2846,17 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     );
                 }
             }
-            GPR::Rx(r) => {
-                let label = self.aligned_label(16, LabelValue::from(val));
-                dynasm!(self.asm
-                    ; movq Rx(r), [=>label.0]
-                );
+            reg @ GPR::Rx(_) => {
+                if let Some(tmp) = self.take_reg(GPRType::Rq) {
+                    self.immediate_to_reg(tmp, val)?;
+                    let tmp = ValueLocation::Reg(tmp);
+                    self.copy_value(tmp, CCLoc::Reg(reg))?;
+                    self.free_value(tmp)?;
+                }
             }
         }
+
+        Ok(())
     }
 
     // The `&` and `&mut` aren't necessary (`ValueLocation` is copy) but it ensures that we don't get
@@ -3056,7 +3062,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
             (ValueLocation::Immediate(i), CCLoc::Reg(out_reg)) => {
                 // TODO: Floats
-                self.immediate_to_reg(out_reg, i);
+                self.immediate_to_reg(out_reg, i)?;
             }
         }
         Ok(())
@@ -5486,19 +5492,18 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
         R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
     {
-        let locs = arg_locs(args);
+        let locs = arg_locs_skip_caller_vmctx(args);
 
-        self.save_volatile(..locs.len())?;
-
-        self.pass_outgoing_args(&locs)?;
+        self.save_volatile()?;
 
         if func_def_loc == FunctionDefLocation::PossiblyExternal {
-            assert!(self.block_state.regs.is_free(GPR::Rq(CALLER_VMCTX)));
             dynasm!(self.asm
                 ; mov Rq(CALLER_VMCTX), Rq(VMCTX)
             );
             self.block_state.regs.mark_used(GPR::Rq(CALLER_VMCTX));
         }
+
+        self.pass_outgoing_args(&locs)?;
 
         // 2 bytes for the 64-bit `mov` opcode + register ident, the rest is the immediate
         self.reloc_sink.reloc_external(
@@ -5546,7 +5551,29 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
         R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
     {
-        unimplemented!()
+        let locs = arg_locs(args);
+
+        self.save_volatile()?;
+
+        self.pass_outgoing_args(&locs)?;
+
+        let temp = self.take_reg(I64).unwrap();
+        dynasm!(self.asm
+            ; mov Rq(temp.rq().unwrap()), [
+                Rq(VMCTX) + self.module_context.vmctx_builtin_function(i.index()) as i32
+            ]
+            ; call Rq(temp.rq().unwrap())
+        );
+
+        self.block_state.regs.release(temp)?;
+
+        for i in locs {
+            self.free_value(i.into())?;
+        }
+
+        self.push_function_returns(rets)?;
+
+        Ok(())
     }
 
     // TODO: Other memory indices
@@ -5595,41 +5622,29 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     // TODO: This inefficiently duplicates registers but it's not really possible
     //       to double up stack space right now.
     /// Saves volatile (i.e. caller-saved) registers before a function call, if they are used.
-    fn save_volatile(&mut self, _bounds: impl std::ops::RangeBounds<usize>) -> Result<(), Error> {
-        self.save_regs(SCRATCH_REGS, ..)?;
+    fn save_volatile(&mut self) -> Result<(), Error> {
+        self.save_regs(SCRATCH_REGS.iter().copied())?;
         Ok(())
     }
 
-    fn save_regs<I>(
-        &mut self,
-        regs: &I,
-        bounds: impl std::ops::RangeBounds<usize>,
-    ) -> Result<(), Error>
+    fn save_regs<I>(&mut self, to_save: I) -> Result<(), Error>
     where
-        for<'a> &'a I: IntoIterator<Item = &'a GPR>,
-        I: ?Sized,
+        I: IntoIterator<Item = GPR>,
+        I::IntoIter: Clone,
     {
-        use std::ops::Bound::*;
+        // TODO: We can filter out any unused registers
+        // let regs = self.block_state.regs.clone();
+        let to_save = to_save.into_iter(); //.filter(|&r| !regs.is_free(r));
+        if to_save.clone().count() == 0 {
+            return Ok(());
+        }
 
         let mut stack = mem::replace(&mut self.block_state.stack, vec![]);
-        let (start, end) = (
-            match bounds.end_bound() {
-                Unbounded => 0,
-                Included(v) => stack.len().saturating_sub(1 + v),
-                Excluded(v) => stack.len().saturating_sub(*v),
-            },
-            match bounds.start_bound() {
-                Unbounded => stack.len(),
-                Included(v) => stack.len().saturating_sub(*v),
-                Excluded(v) => stack.len().saturating_sub(1 + v),
-            },
-        );
-
-        let mut slice = &mut stack[start..end];
+        let mut slice = &mut stack[..];
 
         while let Some((first, rest)) = slice.split_first_mut() {
             if let ValueLocation::Reg(vreg) = *first {
-                if regs.into_iter().any(|r| *r == vreg) {
+                if to_save.clone().any(|r| r == vreg) {
                     let old = *first;
                     *first = self.push_physical(old)?;
                     for val in &mut *rest {
@@ -5645,6 +5660,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         }
 
         mem::replace(&mut self.block_state.stack, stack);
+
+        // for reg in to_save {
+        // assert!(self.block_state.regs.is_free(reg));
+        // }
+
         Ok(())
     }
 
@@ -5721,7 +5741,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                             "Programmer error: We shouldn't need to push \
                              intermediate args if we don't have any argument sources in registers"
                                 .to_string(),
-                        ))
+                        ));
                     }
                     Some(val) => *val,
                 };
@@ -5772,7 +5792,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
         R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
     {
-        let locs = arg_locs(arg_types);
+        let locs = arg_locs_skip_caller_vmctx(arg_types);
 
         for loc in locs.clone() {
             if let CCLoc::Reg(r) = loc {
@@ -5785,13 +5805,18 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             .put_into_temp_register(I32, &mut callee)?
             .ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
+        self.save_volatile()?;
+
+        dynasm!(self.asm
+            ; mov Rq(CALLER_VMCTX), Rq(VMCTX)
+        );
+        self.block_state.regs.mark_used(GPR::Rq(CALLER_VMCTX));
+
         for loc in locs.clone() {
             if let CCLoc::Reg(r) = loc {
                 self.block_state.regs.release(r)?;
             }
         }
-
-        self.save_volatile(..locs.len())?;
 
         self.pass_outgoing_args(&locs)?;
 
@@ -5857,12 +5882,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ], Rd(temp1.rq().unwrap())
             ;; self.trap_if(cc::NOT_EQUAL, TrapCode::BadSignature)
         );
-
-        assert!(self.block_state.regs.is_free(GPR::Rq(CALLER_VMCTX)));
-        dynasm!(self.asm
-            ; mov Rq(CALLER_VMCTX), Rq(VMCTX)
-        );
-        self.block_state.regs.mark_used(GPR::Rq(CALLER_VMCTX));
 
         dynasm!(self.asm
             ; mov Rq(VMCTX), [
@@ -5930,9 +5949,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
         R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
     {
-        let locs = arg_locs(arg_types);
+        let locs = arg_locs_skip_caller_vmctx(arg_types);
 
-        self.save_volatile(..locs.len())?;
+        self.save_volatile()?;
 
         let (_, label) = self.func_starts[defined_index as usize];
 
@@ -5963,7 +5982,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
         R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
     {
-        let locs = arg_locs(arg_types);
+        let locs = arg_locs_skip_caller_vmctx(arg_types);
 
         dynasm!(self.asm
             ; push Rq(VMCTX)
@@ -5971,7 +5990,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.block_state.depth.reserve(1);
         let depth = self.block_state.depth;
 
-        self.save_volatile(..locs.len())?;
+        self.save_volatile()?;
         self.pass_outgoing_args(&locs)?;
 
         let callee = self.take_reg(I64).unwrap();
@@ -6012,11 +6031,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     where
         P::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
     {
-        self.apply_cc(BlockCallingConvention::function_start(arg_locs(params)))?;
+        self.apply_cc(BlockCallingConvention::function_start(
+            arg_locs_skip_caller_vmctx(params),
+        ))?;
         Ok(())
     }
 
     pub fn ret(&mut self) {
+        // let label = self.label(LabelValue::Ret);
+        // self.define_label(label);
         dynasm!(self.asm
             ; ret
         );
@@ -6026,14 +6049,32 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         for LabelInfo {
             label,
             align,
-            callback,
+            inner,
         } in self.labels.drain()
         {
-            dynasm!(self.asm
-                ; .align align as usize
-                ;; self.asm.dynamic_label(label.0)
-                ;; callback(&mut self.asm)
-            );
+            match inner {
+                LabelValue::I32(val) => {
+                    dynasm!(self.asm
+                        ; .align align as usize
+                        ;; self.asm.dynamic_label(label.0)
+                        ; .dword val
+                    );
+                }
+                LabelValue::I64(val) => {
+                    dynasm!(self.asm
+                        ; .align align as usize
+                        ;; self.asm.dynamic_label(label.0)
+                        ; .qword val
+                    );
+                }
+                LabelValue::Ret => {
+                    dynasm!(self.asm
+                        ; .align align as usize
+                        ;; self.asm.dynamic_label(label.0)
+                        ; ret
+                    );
+                }
+            }
         }
     }
 
@@ -6057,33 +6098,17 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         #[derive(Copy, Clone, Hash)]
         struct RetLabel;
 
-        self.label(TaggedLabel(RetLabel, |asm: &mut Assembler| {
-            dynasm!(asm
-                ; ret
-            );
-        }))
+        self.label(LabelValue::Ret)
     }
 
-    fn label<L>(&mut self, intolabel: L) -> Label
-    where
-        L: IntoLabel,
-        L::Callback: 'static,
-    {
-        self.aligned_label(1, intolabel)
+    fn label(&mut self, label: LabelValue) -> Label {
+        self.aligned_label(1, label)
     }
 
-    fn aligned_label<L>(&mut self, align: u32, intolabel: L) -> Label
-    where
-        L: IntoLabel,
-        L::Callback: 'static,
-    {
-        if let Some(LabelInfo { label, .. }) = self.labels.get(&intolabel.key()) {
-            return *label;
-        }
-
+    fn aligned_label(&mut self, align: u32, label: LabelValue) -> Label {
         let asm = &mut self.asm;
         self.labels
-            .insert(|| Label(asm.new_dynamic_label()), align, intolabel)
+            .insert(|| Label(asm.new_dynamic_label()), align, label)
     }
 
     fn target_to_label(&mut self, target: BrTarget<Label>) -> Label {
@@ -6091,110 +6116,5 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             BrTarget::Label(label) => label,
             BrTarget::Return => self.ret_label(),
         }
-    }
-}
-
-pub trait IntoLabel {
-    type Key: Hash + Any;
-    type Callback: FnOnce(&'_ mut Assembler);
-
-    fn key(&self) -> Self::Key;
-    fn callback(self) -> Self::Callback;
-}
-
-struct TaggedLabel<Tag, Label>(pub Tag, pub Label);
-
-impl<Tag, Label> IntoLabel for TaggedLabel<Tag, Label>
-where
-    Label: IntoLabel,
-    Tag: Hash + Copy + 'static,
-{
-    type Key = (Tag, Label::Key);
-    type Callback = Label::Callback;
-
-    fn key(&self) -> Self::Key {
-        (self.0, self.1.key())
-    }
-
-    fn callback(self) -> Self::Callback {
-        self.1.callback()
-    }
-}
-
-impl<F> IntoLabel for F
-where
-    F: FnOnce(&'_ mut Assembler),
-{
-    type Key = ();
-    type Callback = F;
-
-    fn key(&self) -> Self::Key {
-        ()
-    }
-
-    fn callback(self) -> Self::Callback {
-        self
-    }
-}
-
-type LabelValueCallback = impl FnOnce(&'_ mut Assembler);
-
-impl IntoLabel for LabelValue {
-    type Key = LabelValue;
-    type Callback = LabelValueCallback;
-
-    fn key(&self) -> Self::Key {
-        *self
-    }
-
-    fn callback(self) -> Self::Callback {
-        move |asm| match self {
-            LabelValue::I32(val) => dynasm!(asm
-                ; .dword val
-            ),
-            LabelValue::I64(val) => dynasm!(asm
-                ; .qword val
-            ),
-        }
-    }
-}
-
-/// Hack to work around some limitations in `impl Trait` - this forces Rust to only consider
-/// `fn tuple_callback` as a defining use and not `type Callback`. It assumes that `type Callback`
-/// captures the `A` and `B` type parameters, when we only need to capture the callback.
-mod tuple_callback_hack {
-    use super::Assembler;
-
-    pub type TupleCallback<A, B> = impl FnOnce(&'_ mut Assembler);
-
-    pub fn tuple_callback<A, B>(a: A, b: B) -> TupleCallback<A, B>
-    where
-        A: FnOnce(&'_ mut Assembler),
-        B: FnOnce(&'_ mut Assembler),
-    {
-        move |asm| {
-            a(&mut *asm);
-            b(&mut *asm);
-        }
-    }
-}
-
-impl<A, B> IntoLabel for (A, B)
-where
-    A: IntoLabel,
-    B: IntoLabel,
-{
-    type Key = (A::Key, B::Key);
-    type Callback = tuple_callback_hack::TupleCallback<A::Callback, B::Callback>;
-
-    fn key(&self) -> Self::Key {
-        (self.0.key(), self.1.key())
-    }
-
-    fn callback(self) -> Self::Callback {
-        tuple_callback_hack::tuple_callback::<A::Callback, B::Callback>(
-            self.0.callback(),
-            self.1.callback(),
-        )
     }
 }

@@ -85,6 +85,11 @@ impl BuiltinFunctionIndex {
         13
     }
 
+    /// Create a new `BuiltinFunctionIndex` from its index
+    pub const fn from_u32(i: u32) -> Self {
+        Self(i)
+    }
+
     /// Return the index as an u32 number.
     pub const fn index(&self) -> u32 {
         self.0
@@ -560,6 +565,11 @@ impl lightbeam::ModuleContext for FuncEnvironment<'_> {
         self.module
             .defined_memory_index(MemoryIndex::from_u32(memory_index))
             .map(DefinedMemoryIndex::as_u32)
+    }
+
+    fn vmctx_builtin_function(&self, func_index: u32) -> u32 {
+        self.offsets
+            .vmctx_builtin_function(BuiltinFunctionIndex::from_u32(func_index))
     }
 
     fn vmctx_vmfunction_import_body(&self, func_index: u32) -> u32 {
