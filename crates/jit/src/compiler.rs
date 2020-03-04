@@ -11,7 +11,7 @@ use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_wasm::ModuleTranslationState;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::sync::RwLock;
+use std::sync::{atomic::{AtomicPtr, Ordering}, RwLock};
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
@@ -59,12 +59,9 @@ pub struct Compiler {
     inner: RwLock<CompilerInner>,
 }
 
-unsafe impl Send for CompilerInner {}
-unsafe impl Sync for CompilerInner {}
-
 struct CompilerInner {
     code_memory: CodeMemory,
-    trampoline_park: HashMap<VMSharedSignatureIndex, *const VMFunctionBody>,
+    trampoline_park: HashMap<VMSharedSignatureIndex, AtomicPtr<VMFunctionBody>>,
     /// The `FunctionBuilderContext`, shared between trampline function compilations.
     fn_builder_ctx: FunctionBuilderContext,
 }
@@ -214,11 +211,11 @@ impl Compiler {
         &self,
         signature: &ir::Signature,
         value_size: usize,
-    ) -> Result<*const VMFunctionBody, SetupError> {
+    ) -> Result<*mut VMFunctionBody, SetupError> {
         let index = self.signatures.register(signature);
         let inner = &mut *self.inner.write().unwrap();
         if let Some(trampoline) = inner.trampoline_park.get(&index) {
-            return Ok(*trampoline);
+            return Ok(trampoline.load(Ordering::SeqCst));
         }
         let body = make_trampoline(
             &*self.isa,
@@ -227,7 +224,7 @@ impl Compiler {
             signature,
             value_size,
         )?;
-        inner.trampoline_park.insert(index, body);
+        inner.trampoline_park.insert(index, AtomicPtr::new(body));
         return Ok(body);
     }
 
@@ -236,7 +233,7 @@ impl Compiler {
         &self,
         signature: &ir::Signature,
         value_size: usize,
-    ) -> Result<*const VMFunctionBody, SetupError> {
+    ) -> Result<*mut VMFunctionBody, SetupError> {
         let result = self.get_trampoline(signature, value_size)?;
         self.publish_compiled_code();
         Ok(result)
@@ -275,7 +272,7 @@ fn make_trampoline(
     fn_builder_ctx: &mut FunctionBuilderContext,
     signature: &ir::Signature,
     value_size: usize,
-) -> Result<*const VMFunctionBody, SetupError> {
+) -> Result<*mut VMFunctionBody, SetupError> {
     let pointer_type = isa.pointer_type();
     let mut wrapper_sig = ir::Signature::new(isa.frontend_config().default_call_conv);
 
@@ -384,7 +381,7 @@ fn make_trampoline(
             unwind_info,
         })
         .map_err(|message| SetupError::Instantiate(InstantiationError::Resource(message)))?
-        .as_ptr())
+        .as_mut_ptr())
 }
 
 fn allocate_functions(
