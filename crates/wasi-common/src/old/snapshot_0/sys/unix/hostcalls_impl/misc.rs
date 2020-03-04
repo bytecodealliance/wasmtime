@@ -87,12 +87,9 @@ pub(crate) fn poll_oneoff(
         match poll(&mut poll_fds, poll_timeout) {
             Err(_) => {
                 let last_err = io::Error::last_os_error();
-                if let Some(errno) = last_err.raw_os_error() {
-                    if errno == libc::EINTR {
-                        continue;
-                    }
+                if last_err.raw_os_error().unwrap() == libc::EINTR {
+                    continue;
                 }
-
                 return Err(last_err.into());
             }
             Ok(ready) => break ready,

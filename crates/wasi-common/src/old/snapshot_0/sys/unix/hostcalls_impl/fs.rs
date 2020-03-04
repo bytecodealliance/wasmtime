@@ -125,52 +125,54 @@ pub(crate) fn path_open(
         Ok(fd) => fd,
         Err(e) => {
             if let yanix::Error::Io(ref err) = e {
-                if let Some(errno) = err.raw_os_error() {
-                    match errno {
-                        // Linux returns ENXIO instead of EOPNOTSUPP when opening a socket
-                        libc::ENXIO => {
-                            if let Ok(stat) = unsafe {
-                                fstatat(
-                                    resolved.dirfd().as_raw_fd(),
-                                    resolved.path(),
-                                    AtFlag::SYMLINK_NOFOLLOW,
-                                )
-                            } {
+                match err.raw_os_error().unwrap() {
+                    // Linux returns ENXIO instead of EOPNOTSUPP when opening a socket
+                    libc::ENXIO => {
+                        match unsafe {
+                            fstatat(
+                                resolved.dirfd().as_raw_fd(),
+                                resolved.path(),
+                                AtFlag::SYMLINK_NOFOLLOW,
+                            )
+                        } {
+                            Ok(stat) => {
                                 if FileType::from_stat_st_mode(stat.st_mode) == FileType::Socket {
                                     return Err(Error::ENOTSUP);
-                                } else {
-                                    return Err(Error::ENXIO);
                                 }
-                            } else {
-                                return Err(Error::ENXIO);
+                            }
+                            Err(err) => {
+                                log::debug!("path_open fstatat error: {:?}", err);
                             }
                         }
-                        // Linux returns ENOTDIR instead of ELOOP when using O_NOFOLLOW|O_DIRECTORY
-                        // on a symlink.
-                        libc::ENOTDIR
-                            if !(nix_all_oflags & (OFlag::NOFOLLOW | OFlag::DIRECTORY))
-                                .is_empty() =>
-                        {
-                            if let Ok(stat) = unsafe {
-                                fstatat(
-                                    resolved.dirfd().as_raw_fd(),
-                                    resolved.path(),
-                                    AtFlag::SYMLINK_NOFOLLOW,
-                                )
-                            } {
+                    }
+                    // Linux returns ENOTDIR instead of ELOOP when using O_NOFOLLOW|O_DIRECTORY
+                    // on a symlink.
+                    libc::ENOTDIR
+                        if !(nix_all_oflags & (OFlag::NOFOLLOW | OFlag::DIRECTORY)).is_empty() =>
+                    {
+                        match unsafe {
+                            fstatat(
+                                resolved.dirfd().as_raw_fd(),
+                                resolved.path(),
+                                AtFlag::SYMLINK_NOFOLLOW,
+                            )
+                        } {
+                            Ok(stat) => {
                                 if FileType::from_stat_st_mode(stat.st_mode) == FileType::Symlink {
                                     return Err(Error::ELOOP);
                                 }
                             }
-                            return Err(Error::ENOTDIR);
+                            Err(err) => {
+                                log::debug!("path_open fstatat error: {:?}", err);
+                            }
                         }
-                        // FreeBSD returns EMLINK instead of ELOOP when using O_NOFOLLOW on
-                        // a symlink.
-                        libc::EMLINK if !(nix_all_oflags & OFlag::NOFOLLOW).is_empty() => {
-                            return Err(Error::ELOOP);
-                        }
-                        _ => {}
                     }
+                    // FreeBSD returns EMLINK instead of ELOOP when using O_NOFOLLOW on
+                    // a symlink.
+                    libc::EMLINK if !(nix_all_oflags & OFlag::NOFOLLOW).is_empty() => {
+                        return Err(Error::ELOOP);
+                    }
+                    _ => {}
                 }
             }
 
