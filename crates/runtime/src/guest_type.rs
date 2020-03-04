@@ -1,54 +1,80 @@
-use crate::{GuestError, GuestPtr, GuestPtrMut};
-
-pub trait GuestType<'a>: Sized + Clone {
-    // These are morally the same as Rust ::std::mem::size_of / align_of, but they return
-    // a u32 because the wasm memory space is 32 bits. They have a different names so they
-    // don't collide with the std::mem methods.
-    fn size() -> u32;
-    fn align() -> u32;
-    fn name() -> String;
-    fn validate(location: &GuestPtr<'a, Self>) -> Result<(), GuestError>;
-    fn read(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError>;
-    fn write(&self, location: &GuestPtrMut<'a, Self>);
-}
-
-/// Represents any guest type which can transparently be represented
-/// as a host type.
-pub trait GuestTypeTransparent<'a>: GuestType<'a> + Copy {}
-
-macro_rules! builtin_type {
-    ( $( $t:ident ), * ) => {
-        $(
-        impl<'a> GuestType<'a> for $t {
-            fn size() -> u32 {
-                ::std::mem::size_of::<$t>() as u32
-            }
-            fn align() -> u32 {
-                ::std::mem::align_of::<$t>() as u32
-            }
-            fn name() -> String {
-                ::std::stringify!($t).to_owned()
-            }
-            fn validate(_ptr: &GuestPtr<$t>) -> Result<(), GuestError> {
-                Ok(())
-            }
-            fn read(location: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
-                Ok(*location.as_ref()?)
-            }
-            fn write(&self, location: &GuestPtrMut<'a, Self>) {
-                unsafe { (location.as_raw() as *mut $t).write(*self) };
-            }
-        }
-        impl<'a> GuestTypeTransparent<'a> for $t {}
-        )*
-    };
-}
-
-// These definitions correspond to all the witx BuiltinType variants that are Copy:
-builtin_type!(u8, i8, u16, i16, u32, i32, u64, i64, f32, f64, usize);
+use crate::{GuestError, GuestPtr};
+use std::mem;
 
 pub trait GuestErrorType {
     type Context;
     fn success() -> Self;
     fn from_error(e: GuestError, ctx: &Self::Context) -> Self;
+}
+
+pub trait GuestType<'a>: Sized {
+    fn guest_size() -> u32;
+    fn guest_align() -> usize;
+    fn read(ptr: &GuestPtr<'a, Self>) -> Result<Self, GuestError>;
+    fn write(ptr: &GuestPtr<'_, Self>, val: Self) -> Result<(), GuestError>;
+}
+
+macro_rules! primitives {
+    ($($i:ident)*) => ($(
+        impl<'a> GuestType<'a> for $i {
+            fn guest_size() -> u32 { mem::size_of::<Self>() as u32 }
+            fn guest_align() -> usize { mem::align_of::<Self>() }
+
+            fn read(ptr: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
+
+                // Any bit pattern for any primitive implemented with this
+                // macro is safe, so our `as_raw` method will guarantee that if
+                // we are given a pointer it's valid for the size of our type
+                // as well as properly aligned. Consequently we should be able
+                // to safely ready the pointer just after we validated it,
+                // returning it along here.
+                let host_ptr = ptr.mem().validate_size_align(
+                    ptr.offset(),
+                    Self::guest_align(),
+                    Self::guest_size(),
+                )?;
+                Ok(unsafe { *host_ptr.cast::<Self>() })
+            }
+
+            fn write(ptr: &GuestPtr<'_, Self>, val: Self) -> Result<(), GuestError> {
+                let host_ptr = ptr.mem().validate_size_align(
+                    ptr.offset(),
+                    Self::guest_align(),
+                    Self::guest_size(),
+                )?;
+                // Similar to above `as_raw` will do a lot of validation, and
+                // then afterwards we can safely write our value into the
+                // memory location.
+                unsafe {
+                    *host_ptr.cast::<Self>() = val;
+                }
+                Ok(())
+            }
+        }
+    )*)
+}
+
+primitives! {
+    i8 i16 i32 i64 i128 isize
+    u8 u16 u32 u64 u128 usize
+    f32 f64
+}
+
+// Support pointers-to-pointers where pointers are always 32-bits in wasm land
+impl<'a, T> GuestType<'a> for GuestPtr<'a, T> {
+    fn guest_size() -> u32 {
+        u32::guest_size()
+    }
+    fn guest_align() -> usize {
+        u32::guest_align()
+    }
+
+    fn read(ptr: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
+        let offset = ptr.cast::<u32>().read()?;
+        Ok(GuestPtr::new(ptr.mem(), offset))
+    }
+
+    fn write(ptr: &GuestPtr<'_, Self>, val: Self) -> Result<(), GuestError> {
+        ptr.cast::<u32>().write(val.offset())
+    }
 }

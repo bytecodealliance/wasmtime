@@ -11,7 +11,7 @@ pub(super) fn define_handle(
 ) -> TokenStream {
     let ident = names.type_(name);
     let size = h.mem_size_align().size as u32;
-    let align = h.mem_size_align().align as u32;
+    let align = h.mem_size_align().align as usize;
     quote! {
         #[derive(Copy, Clone, Debug, ::std::hash::Hash, Eq, PartialEq)]
         pub struct #ident(u32);
@@ -46,32 +46,21 @@ pub(super) fn define_handle(
         }
 
         impl<'a> wiggle_runtime::GuestType<'a> for #ident {
-            fn size() -> u32 {
+            fn guest_size() -> u32 {
                 #size
             }
 
-            fn align() -> u32 {
+            fn guest_align() -> usize {
                 #align
             }
 
-            fn name() -> String {
-                stringify!(#ident).to_owned()
-            }
-
-            fn validate(ptr: &wiggle_runtime::GuestPtr<#ident>) -> Result<(), wiggle_runtime::GuestError> {
-                Ok(())
-            }
-
             fn read(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<#ident, wiggle_runtime::GuestError> {
-                let r = location.as_ref()?;
-                Ok(*r)
+                Ok(#ident(u32::read(&location.cast())?))
             }
 
-            fn write(&self, location: &wiggle_runtime::GuestPtrMut<'a, Self>) {
-                unsafe { (location.as_raw() as *mut #ident).write(*self) };
+            fn write(location: &wiggle_runtime::GuestPtr<'_, Self>, val: Self) -> Result<(), wiggle_runtime::GuestError> {
+                u32::write(&location.cast(), val.0)
             }
         }
-
-        impl<'a> wiggle_runtime::GuestTypeTransparent<'a> for #ident {}
     }
 }

@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle_runtime::{GuestArray, GuestError, GuestPtr, GuestPtrMut, GuestType};
+use wiggle_runtime::{GuestError, GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
@@ -14,25 +14,25 @@ impl arrays::Arrays for WasiCtx {
         &self,
         excuses: &types::ConstExcuseArray,
     ) -> Result<types::Excuse, types::Errno> {
-        let last = GuestType::read(
-            &excuses
-                .iter()
-                .last()
-                .expect("input array is non-empty")
-                .expect("valid ptr to ptr"),
-        )
-        .expect("valid ptr to some Excuse value");
-        Ok(*last.as_ref().expect("dereferencing ptr should succeed"))
+        let last = &excuses
+            .iter()
+            .last()
+            .expect("input array is non-empty")
+            .expect("valid ptr to ptr")
+            .read()
+            .expect("valid ptr to some Excuse value");
+        Ok(last.read().expect("dereferencing ptr should succeed"))
     }
 
     fn populate_excuses(&self, excuses: &types::ExcuseArray) -> Result<(), types::Errno> {
         for excuse in excuses.iter() {
-            let ptr_to_ptr = GuestType::read(&excuse.expect("valid ptr to ptr"))
+            let ptr_to_excuse = excuse
+                .expect("valid ptr to ptr")
+                .read()
                 .expect("valid ptr to some Excuse value");
-            let mut ptr = ptr_to_ptr
-                .as_ref_mut()
+            ptr_to_excuse
+                .write(types::Excuse::Sleeping)
                 .expect("dereferencing mut ptr should succeed");
-            *ptr = types::Excuse::Sleeping;
         }
         Ok(())
     }
@@ -43,7 +43,6 @@ struct ReduceExcusesExcercise {
     excuse_values: Vec<types::Excuse>,
     excuse_ptr_locs: Vec<MemArea>,
     array_ptr_loc: MemArea,
-    array_len_loc: MemArea,
     return_ptr_loc: MemArea,
 }
 
@@ -57,22 +56,18 @@ impl ReduceExcusesExcercise {
                     proptest::collection::vec(HostMemory::mem_area_strat(4), len_usize..=len_usize),
                     HostMemory::mem_area_strat(4 * len),
                     HostMemory::mem_area_strat(4),
-                    HostMemory::mem_area_strat(4),
                 )
             })
             .prop_map(
-                |(excuse_values, excuse_ptr_locs, array_ptr_loc, array_len_loc, return_ptr_loc)| {
-                    Self {
-                        excuse_values,
-                        excuse_ptr_locs,
-                        array_ptr_loc,
-                        array_len_loc,
-                        return_ptr_loc,
-                    }
+                |(excuse_values, excuse_ptr_locs, array_ptr_loc, return_ptr_loc)| Self {
+                    excuse_values,
+                    excuse_ptr_locs,
+                    array_ptr_loc,
+                    return_ptr_loc,
                 },
             )
             .prop_filter("non-overlapping pointers", |e| {
-                let mut all = vec![&e.array_ptr_loc, &e.array_len_loc, &e.return_ptr_loc];
+                let mut all = vec![&e.array_ptr_loc, &e.return_ptr_loc];
                 all.extend(e.excuse_ptr_locs.iter());
                 MemArea::non_overlapping_set(&all)
             })
@@ -82,44 +77,31 @@ impl ReduceExcusesExcercise {
     pub fn test(&self) {
         let mut ctx = WasiCtx::new();
         let mut host_memory = HostMemory::new();
-        let mut guest_memory = host_memory.guest_memory();
 
         // Populate memory with pointers to generated Excuse values
         for (&excuse, ptr) in self.excuse_values.iter().zip(self.excuse_ptr_locs.iter()) {
-            *guest_memory
-                .ptr_mut(ptr.ptr)
-                .expect("ptr mut to Excuse value")
-                .as_ref_mut()
-                .expect("deref ptr mut to Excuse value") = excuse;
+            host_memory
+                .ptr(ptr.ptr)
+                .write(excuse)
+                .expect("deref ptr mut to Excuse value");
         }
-
-        // Populate array length info
-        *guest_memory
-            .ptr_mut(self.array_len_loc.ptr)
-            .expect("ptr to array len")
-            .as_ref_mut()
-            .expect("deref ptr mut to array len") = self.excuse_ptr_locs.len() as u32;
 
         // Populate the array with pointers to generated Excuse values
         {
-            let mut next: GuestPtrMut<'_, GuestPtr<types::Excuse>> = guest_memory
-                .ptr_mut(self.array_ptr_loc.ptr)
-                .expect("ptr to array mut");
-            for ptr in &self.excuse_ptr_locs {
-                next.write(
-                    &guest_memory
-                        .ptr::<types::Excuse>(ptr.ptr)
-                        .expect("ptr to Excuse value"),
-                );
-                next = next.elem(1).expect("increment ptr by 1");
+            let array: GuestPtr<'_, [GuestPtr<types::Excuse>]> =
+                host_memory.ptr((self.array_ptr_loc.ptr, self.excuse_ptr_locs.len() as u32));
+            for (slot, ptr) in array.iter().zip(&self.excuse_ptr_locs) {
+                let slot = slot.expect("array should be in bounds");
+                slot.write(host_memory.ptr(ptr.ptr))
+                    .expect("should succeed in writing array");
             }
         }
 
         let res = arrays::reduce_excuses(
             &mut ctx,
-            &mut guest_memory,
+            &mut host_memory,
             self.array_ptr_loc.ptr as i32,
-            self.array_len_loc.ptr as i32,
+            self.excuse_ptr_locs.len() as i32,
             self.return_ptr_loc.ptr as i32,
         );
 
@@ -129,10 +111,9 @@ impl ReduceExcusesExcercise {
             .excuse_values
             .last()
             .expect("generated vec of excuses should be non-empty");
-        let given: types::Excuse = *guest_memory
+        let given: types::Excuse = host_memory
             .ptr(self.return_ptr_loc.ptr)
-            .expect("ptr to returned value")
-            .as_ref()
+            .read()
             .expect("deref ptr to returned value");
         assert_eq!(expected, given, "reduce excuses return val");
     }
@@ -156,7 +137,6 @@ fn excuse_strat() -> impl Strategy<Value = types::Excuse> {
 #[derive(Debug)]
 struct PopulateExcusesExcercise {
     array_ptr_loc: MemArea,
-    array_len_loc: MemArea,
     elements: Vec<MemArea>,
 }
 
@@ -167,17 +147,15 @@ impl PopulateExcusesExcercise {
                 let len_usize = len as usize;
                 (
                     HostMemory::mem_area_strat(4 * len),
-                    HostMemory::mem_area_strat(4),
                     proptest::collection::vec(HostMemory::mem_area_strat(4), len_usize..=len_usize),
                 )
             })
-            .prop_map(|(array_ptr_loc, array_len_loc, elements)| Self {
+            .prop_map(|(array_ptr_loc, elements)| Self {
                 array_ptr_loc,
-                array_len_loc,
                 elements,
             })
             .prop_filter("non-overlapping pointers", |e| {
-                let mut all = vec![&e.array_ptr_loc, &e.array_len_loc];
+                let mut all = vec![&e.array_ptr_loc];
                 all.extend(e.elements.iter());
                 MemArea::non_overlapping_set(&all)
             })
@@ -185,51 +163,38 @@ impl PopulateExcusesExcercise {
     }
 
     pub fn test(&self) {
-        let mut ctx = WasiCtx::new();
-        let mut host_memory = HostMemory::new();
-        let mut guest_memory = host_memory.guest_memory();
-
-        // Populate array length info
-        *guest_memory
-            .ptr_mut(self.array_len_loc.ptr)
-            .expect("ptr mut to array len")
-            .as_ref_mut()
-            .expect("deref ptr mut to array len") = self.elements.len() as u32;
+        let ctx = WasiCtx::new();
+        let host_memory = HostMemory::new();
 
         // Populate array with valid pointers to Excuse type in memory
-        {
-            let mut next: GuestPtrMut<'_, GuestPtrMut<types::Excuse>> = guest_memory
-                .ptr_mut(self.array_ptr_loc.ptr)
-                .expect("ptr mut to the first element of array");
-            for ptr in &self.elements {
-                next.write(
-                    &guest_memory
-                        .ptr_mut::<types::Excuse>(ptr.ptr)
-                        .expect("ptr mut to Excuse value"),
-                );
-                next = next.elem(1).expect("increment ptr by 1");
-            }
+        let ptr = host_memory.ptr::<[GuestPtr<'_, types::Excuse>]>((
+            self.array_ptr_loc.ptr,
+            self.elements.len() as u32,
+        ));
+        for (ptr, val) in ptr.iter().zip(&self.elements) {
+            ptr.expect("should be valid pointer")
+                .write(host_memory.ptr(val.ptr))
+                .expect("failed to write value");
         }
 
         let res = arrays::populate_excuses(
-            &mut ctx,
-            &mut guest_memory,
+            &ctx,
+            &host_memory,
             self.array_ptr_loc.ptr as i32,
-            self.array_len_loc.ptr as i32,
+            self.elements.len() as i32,
         );
         assert_eq!(res, types::Errno::Ok.into(), "populate excuses errno");
 
-        let arr: GuestArray<'_, GuestPtr<'_, types::Excuse>> = guest_memory
-            .ptr(self.array_ptr_loc.ptr)
-            .expect("ptr to the first element of array")
-            .array(self.elements.len() as u32)
-            .expect("as array");
+        let arr: GuestPtr<'_, [GuestPtr<'_, types::Excuse>]> =
+            host_memory.ptr((self.array_ptr_loc.ptr, self.elements.len() as u32));
         for el in arr.iter() {
-            let ptr_to_ptr = GuestType::read(&el.expect("valid ptr to ptr"))
+            let ptr_to_ptr = el
+                .expect("valid ptr to ptr")
+                .read()
                 .expect("valid ptr to some Excuse value");
             assert_eq!(
-                *ptr_to_ptr
-                    .as_ref()
+                ptr_to_ptr
+                    .read()
                     .expect("dereferencing ptr to some Excuse value"),
                 types::Excuse::Sleeping,
                 "element should equal Excuse::Sleeping"

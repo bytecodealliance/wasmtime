@@ -1,17 +1,14 @@
 use proptest::prelude::*;
+use std::cell::UnsafeCell;
 use wiggle_runtime::GuestMemory;
 
 #[repr(align(4096))]
 pub struct HostMemory {
-    buffer: [u8; 4096],
+    buffer: UnsafeCell<[u8; 4096]>,
 }
 impl HostMemory {
     pub fn new() -> Self {
-        HostMemory { buffer: [0; 4096] }
-    }
-
-    pub fn guest_memory<'a>(&'a mut self) -> GuestMemory<'a> {
-        GuestMemory::new(self.buffer.as_mut_ptr(), self.buffer.len() as u32)
+        HostMemory { buffer: UnsafeCell::new([0; 4096]) }
     }
 
     pub fn mem_area_strat(align: u32) -> BoxedStrategy<MemArea> {
@@ -26,6 +23,15 @@ impl HostMemory {
                 }
             })
             .boxed()
+    }
+}
+
+unsafe impl GuestMemory for HostMemory {
+    fn base(&self) -> (*mut u8, u32) {
+        unsafe {
+            let ptr = self.buffer.get();
+            ((*ptr).as_mut_ptr(), (*ptr).len() as u32)
+        }
     }
 }
 

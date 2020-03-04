@@ -1,4 +1,4 @@
-use crate::lifetimes::{anon_lifetime, LifetimeExt};
+use crate::lifetimes::LifetimeExt;
 use crate::names::Names;
 
 use proc_macro2::TokenStream;
@@ -8,7 +8,7 @@ use witx::Layout;
 pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDatatype) -> TokenStream {
     let ident = names.type_(name);
     let size = u.mem_size_align().size as u32;
-    let align = u.mem_size_align().align as u32;
+    let align = u.mem_size_align().align as usize;
     let ulayout = u.union_layout();
     let contents_offset = ulayout.contents_offset as u32;
 
@@ -32,8 +32,8 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
             let varianttype = names.type_ref(tref, lifetime.clone());
             quote! {
                 #tagname::#variantname => {
-                    let variant_ptr = location.cast::<#varianttype>(#contents_offset).expect("union variant ptr validated");
-                    let variant_val = <#varianttype as wiggle_runtime::GuestType>::read(&variant_ptr)?;
+                    let variant_ptr = location.cast::<u8>().add(#contents_offset)?;
+                    let variant_val = <#varianttype as wiggle_runtime::GuestType>::read(&variant_ptr.cast())?;
                     Ok(#ident::#variantname(variant_val))
                 }
             }
@@ -45,17 +45,15 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
     let write_variant = u.variants.iter().map(|v| {
         let variantname = names.enum_variant(&v.name);
         let write_tag = quote! {
-            let tag_ptr = location.cast::<#tagname>(0).expect("union tag ptr TODO error report");
-            let mut tag_ref = tag_ptr.as_ref_mut().expect("union tag ref TODO error report");
-            *tag_ref = #tagname::#variantname;
+            location.cast().write(#tagname::#variantname)?;
         };
         if let Some(tref) = &v.tref {
             let varianttype = names.type_ref(tref, lifetime.clone());
             quote! {
                 #ident::#variantname(contents) => {
                     #write_tag
-                    let variant_ptr = location.cast::<#varianttype>(#contents_offset).expect("union variant ptr validated");
-                    <#varianttype as wiggle_runtime::GuestType>::write(&contents, &variant_ptr);
+                    let variant_ptr = location.cast::<u8>().add(#contents_offset)?;
+                    <#varianttype as wiggle_runtime::GuestType>::write(&variant_ptr.cast(), contents)?;
                 }
             }
         } else {
@@ -66,134 +64,46 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
             }
         }
     });
-    let validate = union_validate(names, ident.clone(), u, &ulayout);
 
-    if !u.needs_lifetime() {
-        // Type does not have a lifetime parameter:
-        quote! {
-            #[derive(Copy, Clone, Debug, PartialEq)]
-            pub enum #ident {
-                #(#variants),*
-            }
-
-            impl<'a> wiggle_runtime::GuestType<'a> for #ident {
-                fn size() -> u32 {
-                    #size
-                }
-
-                fn align() -> u32 {
-                    #align
-                }
-
-                fn name() -> String {
-                    stringify!(#ident).to_owned()
-                }
-
-                fn validate(ptr: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<(), wiggle_runtime::GuestError> {
-                    #validate
-                }
-
-                fn read(location: &wiggle_runtime::GuestPtr<'a, #ident>)
-                        -> Result<Self, wiggle_runtime::GuestError> {
-                    <#ident as wiggle_runtime::GuestType>::validate(location)?;
-                    let tag = *location.cast::<#tagname>(0).expect("validated tag ptr").as_ref().expect("validated tag ref");
-                    match tag {
-                        #(#read_variant)*
-                    }
-
-                }
-
-                fn write(&self, location: &wiggle_runtime::GuestPtrMut<'a, #ident>) {
-                    match self {
-                        #(#write_variant)*
-                    }
-                }
-            }
-        }
+    let (enum_lifetime, extra_derive) = if u.needs_lifetime() {
+        (quote!(<'a>), quote!())
     } else {
-        quote! {
-            #[derive(Clone, Debug)]
-            pub enum #ident<#lifetime> {
-                #(#variants),*
-            }
-
-            impl<#lifetime> wiggle_runtime::GuestType<#lifetime> for #ident<#lifetime> {
-                fn size() -> u32 {
-                    #size
-                }
-
-                fn align() -> u32 {
-                    #align
-                }
-
-                fn name() -> String {
-                    stringify!(#ident).to_owned()
-                }
-
-                fn validate(ptr: &wiggle_runtime::GuestPtr<#lifetime, #ident<#lifetime>>) -> Result<(), wiggle_runtime::GuestError> {
-                    #validate
-                }
-
-                fn read(location: &wiggle_runtime::GuestPtr<#lifetime, #ident<#lifetime>>)
-                        -> Result<Self, wiggle_runtime::GuestError> {
-                    <#ident as wiggle_runtime::GuestType>::validate(location)?;
-                    let tag = *location.cast::<#tagname>(0).expect("validated tag ptr").as_ref().expect("validated tag ref");
-                    match tag {
-                        #(#read_variant)*
-                    }
-
-                }
-
-                fn write(&self, location: &wiggle_runtime::GuestPtrMut<#lifetime, #ident<#lifetime>>) {
-                    match self {
-                        #(#write_variant)*
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn union_validate(
-    names: &Names,
-    typename: TokenStream,
-    u: &witx::UnionDatatype,
-    ulayout: &witx::UnionLayout,
-) -> TokenStream {
-    let tagname = names.type_(&u.tag.name);
-    let contents_offset = ulayout.contents_offset as u32;
-
-    let with_err = |f: &str| -> TokenStream {
-        quote!(|e| wiggle_runtime::GuestError::InDataField {
-            typename: stringify!(#typename).to_owned(),
-            field: #f.to_owned(),
-            err: Box::new(e),
-        })
+        (quote!(), quote!(, Copy, PartialEq))
     };
 
-    let tag_err = with_err("<tag>");
-    let variant_validation = u.variants.iter().map(|v| {
-        let err = with_err(v.name.as_str());
-        let variantname = names.enum_variant(&v.name);
-        if let Some(tref) = &v.tref {
-            let lifetime = anon_lifetime();
-            let varianttype = names.type_ref(tref, lifetime.clone());
-            quote! {
-                #tagname::#variantname => {
-                    let variant_ptr = ptr.cast::<#varianttype>(#contents_offset).map_err(#err)?;
-                    <#varianttype as wiggle_runtime::GuestType>::validate(&variant_ptr).map_err(#err)?;
-                }
-            }
-        } else {
-            quote! { #tagname::#variantname => {} }
-        }
-    });
-
     quote! {
-        let tag = *ptr.cast::<#tagname>(0).map_err(#tag_err)?.as_ref().map_err(#tag_err)?;
-        match tag {
-            #(#variant_validation)*
+        #[derive(Clone, Debug #extra_derive)]
+        pub enum #ident #enum_lifetime {
+            #(#variants),*
         }
-        Ok(())
+
+        impl<'a> wiggle_runtime::GuestType<'a> for #ident #enum_lifetime {
+            fn guest_size() -> u32 {
+                #size
+            }
+
+            fn guest_align() -> usize {
+                #align
+            }
+
+            fn read(location: &wiggle_runtime::GuestPtr<'a, Self>)
+                -> Result<Self, wiggle_runtime::GuestError>
+            {
+                let tag = location.cast().read()?;
+                match tag {
+                    #(#read_variant)*
+                }
+
+            }
+
+            fn write(location: &wiggle_runtime::GuestPtr<'_, Self>, val: Self)
+                -> Result<(), wiggle_runtime::GuestError>
+            {
+                match val {
+                    #(#write_variant)*
+                }
+                Ok(())
+            }
+        }
     }
 }

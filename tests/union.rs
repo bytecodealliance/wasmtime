@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle_runtime::{GuestError, GuestType};
+use wiggle_runtime::{GuestError, GuestMemory, GuestType};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
@@ -43,16 +43,16 @@ impl union_example::UnionExample for WasiCtx {
     fn reason_mult(&self, u: &types::ReasonMut<'_>, multiply_by: u32) -> Result<(), types::Errno> {
         match u {
             types::ReasonMut::DogAte(fptr) => {
-                let mut f = fptr.as_ref_mut().expect("valid pointer");
-                let val = *f;
+                let val = fptr.read().expect("valid pointer");
                 println!("REASON MULT DogAte({})", val);
-                *f = mult_zero_nan(val, multiply_by);
+                fptr.write(mult_zero_nan(val, multiply_by))
+                    .expect("valid pointer");
             }
             types::ReasonMut::Traffic(iptr) => {
-                let mut i = iptr.as_ref_mut().expect("valid pointer");
-                let val: i32 = *i;
+                let val = iptr.read().expect("valid pointer");
                 println!("REASON MULT Traffic({})", val);
-                *i = mult_lose_overflow(val, multiply_by);
+                iptr.write(mult_lose_overflow(val, multiply_by))
+                    .expect("valid pointer");
             }
             types::ReasonMut::Sleeping => {
                 println!("REASON MULT Sleeping");
@@ -90,8 +90,8 @@ impl GetTagExercise {
     pub fn strat() -> BoxedStrategy<Self> {
         (
             reason_strat(),
-            HostMemory::mem_area_strat(types::Reason::size()),
-            HostMemory::mem_area_strat(types::Excuse::size()),
+            HostMemory::mem_area_strat(types::Reason::guest_size()),
+            HostMemory::mem_area_strat(types::Excuse::guest_size()),
         )
             .prop_map(|(input, input_loc, return_loc)| GetTagExercise {
                 input,
@@ -105,46 +105,39 @@ impl GetTagExercise {
     }
 
     pub fn test(&self) {
-        let mut ctx = WasiCtx::new();
-        let mut host_memory = HostMemory::new();
-        let mut guest_memory = host_memory.guest_memory();
+        let ctx = WasiCtx::new();
+        let host_memory = HostMemory::new();
 
         let discriminant: u8 = reason_tag(&self.input).into();
-        *guest_memory
-            .ptr_mut(self.input_loc.ptr)
-            .expect("input discriminant ptr")
-            .as_ref_mut()
-            .expect("input discriminant ref_mut") = discriminant;
+        host_memory
+            .ptr(self.input_loc.ptr)
+            .write(discriminant)
+            .expect("input discriminant ptr");
         match self.input {
             types::Reason::DogAte(f) => {
-                *guest_memory
-                    .ptr_mut(self.input_loc.ptr + 4)
-                    .expect("input contents ptr")
-                    .as_ref_mut()
-                    .expect("input contents ref_mut") = f;
+                host_memory
+                    .ptr(self.input_loc.ptr + 4)
+                    .write(f)
+                    .expect("input contents ref_mut");
             }
-            types::Reason::Traffic(v) => {
-                *guest_memory
-                    .ptr_mut(self.input_loc.ptr + 4)
-                    .expect("input contents ptr")
-                    .as_ref_mut()
-                    .expect("input contents ref_mut") = v;
-            }
+            types::Reason::Traffic(v) => host_memory
+                .ptr(self.input_loc.ptr + 4)
+                .write(v)
+                .expect("input contents ref_mut"),
             types::Reason::Sleeping => {} // Do nothing
         }
         let e = union_example::get_tag(
-            &mut ctx,
-            &mut guest_memory,
+            &ctx,
+            &host_memory,
             self.input_loc.ptr as i32,
             self.return_loc.ptr as i32,
         );
 
         assert_eq!(e, types::Errno::Ok.into(), "get_tag errno");
 
-        let return_val: types::Excuse = *guest_memory
+        let return_val: types::Excuse = host_memory
             .ptr(self.return_loc.ptr)
-            .expect("return ptr")
-            .as_ref()
+            .read()
             .expect("return ref");
 
         assert_eq!(return_val, reason_tag(&self.input), "get_tag return value");
@@ -170,7 +163,7 @@ impl ReasonMultExercise {
     pub fn strat() -> BoxedStrategy<Self> {
         (
             reason_strat(),
-            HostMemory::mem_area_strat(types::Reason::size()),
+            HostMemory::mem_area_strat(types::Reason::guest_size()),
             HostMemory::mem_area_strat(4),
             prop::num::u32::ANY,
         )
@@ -189,42 +182,37 @@ impl ReasonMultExercise {
     }
 
     pub fn test(&self) {
-        let mut ctx = WasiCtx::new();
-        let mut host_memory = HostMemory::new();
-        let mut guest_memory = host_memory.guest_memory();
+        let ctx = WasiCtx::new();
+        let host_memory = HostMemory::new();
 
         let discriminant: u8 = reason_tag(&self.input).into();
-        *guest_memory
-            .ptr_mut(self.input_loc.ptr)
-            .expect("input discriminant ptr")
-            .as_ref_mut()
-            .expect("input discriminant ref_mut") = discriminant;
-        *guest_memory
-            .ptr_mut(self.input_loc.ptr + 4)
-            .expect("input pointer ptr")
-            .as_ref_mut()
-            .expect("input pointer ref_mut") = self.input_pointee_loc.ptr;
+        host_memory
+            .ptr(self.input_loc.ptr)
+            .write(discriminant)
+            .expect("input discriminant ref_mut");
+        host_memory
+            .ptr(self.input_loc.ptr + 4)
+            .write(self.input_pointee_loc.ptr)
+            .expect("input pointer ref_mut");
 
         match self.input {
             types::Reason::DogAte(f) => {
-                *guest_memory
-                    .ptr_mut(self.input_pointee_loc.ptr)
-                    .expect("input contents ptr")
-                    .as_ref_mut()
-                    .expect("input contents ref_mut") = f;
+                host_memory
+                    .ptr(self.input_pointee_loc.ptr)
+                    .write(f)
+                    .expect("input contents ref_mut");
             }
             types::Reason::Traffic(v) => {
-                *guest_memory
-                    .ptr_mut(self.input_pointee_loc.ptr)
-                    .expect("input contents ptr")
-                    .as_ref_mut()
-                    .expect("input contents ref_mut") = v;
+                host_memory
+                    .ptr(self.input_pointee_loc.ptr)
+                    .write(v)
+                    .expect("input contents ref_mut");
             }
             types::Reason::Sleeping => {} // Do nothing
         }
         let e = union_example::reason_mult(
-            &mut ctx,
-            &mut guest_memory,
+            &ctx,
+            &host_memory,
             self.input_loc.ptr as i32,
             self.multiply_by as i32,
         );
@@ -233,10 +221,9 @@ impl ReasonMultExercise {
 
         match self.input {
             types::Reason::DogAte(f) => {
-                let f_result: f32 = *guest_memory
+                let f_result: f32 = host_memory
                     .ptr(self.input_pointee_loc.ptr)
-                    .expect("input contents ptr")
-                    .as_ref()
+                    .read()
                     .expect("input contents ref_mut");
                 assert_eq!(
                     mult_zero_nan(f, self.multiply_by),
@@ -245,10 +232,9 @@ impl ReasonMultExercise {
                 )
             }
             types::Reason::Traffic(v) => {
-                let v_result: i32 = *guest_memory
+                let v_result: i32 = host_memory
                     .ptr(self.input_pointee_loc.ptr)
-                    .expect("input contents ptr")
-                    .as_ref()
+                    .read()
                     .expect("input contents ref_mut");
                 assert_eq!(
                     mult_lose_overflow(v, self.multiply_by),

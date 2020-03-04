@@ -126,35 +126,24 @@ pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDataty
         }
 
         impl<'a> wiggle_runtime::GuestType<'a> for #ident {
-            fn size() -> u32 {
-                ::std::mem::size_of::<#repr>() as u32
+            fn guest_size() -> u32 {
+                #repr::guest_size()
             }
 
-            fn align() -> u32 {
-                ::std::mem::align_of::<#repr>() as u32
+            fn guest_align() -> usize {
+                #repr::guest_align()
             }
 
-            fn name() -> String {
-                stringify!(#ident).to_owned()
+            fn read(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<#ident, wiggle_runtime::GuestError> {
+                use std::convert::TryFrom;
+                let bits = #repr::read(&location.cast())?;
+                #ident::try_from(bits)
             }
 
-            fn validate(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<(), wiggle_runtime::GuestError> {
-                use ::std::convert::TryFrom;
-                let raw: #repr = unsafe { (location.as_raw() as *const #repr).read() };
-                let _ = #ident::try_from(raw)?;
-                Ok(())
-            }
-
-            fn read(location: &wiggle_runtime::GuestPtr<#ident>) -> Result<#ident, wiggle_runtime::GuestError> {
-                Ok(*location.as_ref()?)
-            }
-
-            fn write(&self, location: &wiggle_runtime::GuestPtrMut<#ident>) {
-                let val: #repr = #repr::from(*self);
-                unsafe { (location.as_raw() as *mut #repr).write(val) };
+            fn write(location: &wiggle_runtime::GuestPtr<'_, #ident>, val: Self) -> Result<(), wiggle_runtime::GuestError> {
+                let val: #repr = #repr::from(val);
+                #repr::write(&location.cast(), val)
             }
         }
-
-        impl<'a> wiggle_runtime::GuestTypeTransparent<'a> for #ident {}
     }
 }

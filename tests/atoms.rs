@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle_runtime::{GuestError, GuestRef};
+use wiggle_runtime::{GuestError, GuestMemory};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
@@ -29,16 +29,10 @@ struct IntFloatExercise {
 
 impl IntFloatExercise {
     pub fn test(&self) {
-        let mut ctx = WasiCtx::new();
-        let mut host_memory = HostMemory::new();
-        let mut guest_memory = host_memory.guest_memory();
+        let ctx = WasiCtx::new();
+        let host_memory = HostMemory::new();
 
-        let e = atoms::int_float_args(
-            &mut ctx,
-            &mut guest_memory,
-            self.an_int as i32,
-            self.an_float,
-        );
+        let e = atoms::int_float_args(&ctx, &host_memory, self.an_int as i32, self.an_float);
 
         assert_eq!(e, types::Errno::Ok.into(), "int_float_args error");
     }
@@ -64,24 +58,22 @@ struct DoubleIntExercise {
 
 impl DoubleIntExercise {
     pub fn test(&self) {
-        let mut ctx = WasiCtx::new();
-        let mut host_memory = HostMemory::new();
-        let mut guest_memory = host_memory.guest_memory();
+        let ctx = WasiCtx::new();
+        let host_memory = HostMemory::new();
 
         let e = atoms::double_int_return_float(
-            &mut ctx,
-            &mut guest_memory,
+            &ctx,
+            &host_memory,
             self.input as i32,
             self.return_loc.ptr as i32,
         );
 
-        let return_val: GuestRef<types::AliasToFloat> = guest_memory
-            .ptr(self.return_loc.ptr)
-            .expect("return loc ptr")
-            .as_ref()
-            .expect("return val ref");
+        let return_val = host_memory
+            .ptr::<types::AliasToFloat>(self.return_loc.ptr)
+            .read()
+            .expect("failed to read return");
         assert_eq!(e, types::Errno::Ok.into(), "errno");
-        assert_eq!(*return_val, (self.input as f32) * 2.0, "return val");
+        assert_eq!(return_val, (self.input as f32) * 2.0, "return val");
     }
 
     pub fn strat() -> BoxedStrategy<Self> {

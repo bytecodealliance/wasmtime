@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle_runtime::{GuestError, GuestPtr, GuestPtrMut, GuestRefMut, GuestType};
+use wiggle_runtime::{GuestError, GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
@@ -10,49 +10,52 @@ wiggle::from_witx!({
 impl_errno!(types::Errno);
 
 impl pointers::Pointers for WasiCtx {
-    fn pointers_and_enums(
+    fn pointers_and_enums<'a>(
         &self,
         input1: types::Excuse,
-        input2_ptr: GuestPtrMut<types::Excuse>,
-        input3_ptr: GuestPtr<types::Excuse>,
-        input4_ptr_ptr: GuestPtrMut<GuestPtr<types::Excuse>>,
+        input2_ptr: GuestPtr<'a, types::Excuse>,
+        input3_ptr: GuestPtr<'a, types::Excuse>,
+        input4_ptr_ptr: GuestPtr<'a, GuestPtr<'a, types::Excuse>>,
     ) -> Result<(), types::Errno> {
         println!("BAZ input1 {:?}", input1);
-        // Read enum value from mutable:
-        let mut input2_ref: GuestRefMut<types::Excuse> = input2_ptr.as_ref_mut().map_err(|e| {
+        let input2: types::Excuse = input2_ptr.read().map_err(|e| {
             eprintln!("input2_ptr error: {}", e);
             types::Errno::InvalidArg
         })?;
-        let input2: types::Excuse = *input2_ref;
         println!("input2 {:?}", input2);
 
         // Read enum value from immutable ptr:
-        let input3 = *input3_ptr.as_ref().map_err(|e| {
+        let input3 = input3_ptr.read().map_err(|e| {
             eprintln!("input3_ptr error: {}", e);
             types::Errno::InvalidArg
         })?;
         println!("input3 {:?}", input3);
 
         // Write enum to mutable ptr:
-        *input2_ref = input3;
+        input2_ptr.write(input3).map_err(|e| {
+            eprintln!("input2_ptr error: {}", e);
+            types::Errno::InvalidArg
+        })?;
         println!("wrote to input2_ref {:?}", input3);
 
         // Read ptr value from mutable ptr:
-        let input4_ptr: GuestPtr<types::Excuse> = GuestType::read(&input4_ptr_ptr.as_immut())
-            .map_err(|e| {
-                eprintln!("input4_ptr_ptr error: {}", e);
-                types::Errno::InvalidArg
-            })?;
+        let input4_ptr: GuestPtr<types::Excuse> = input4_ptr_ptr.read().map_err(|e| {
+            eprintln!("input4_ptr_ptr error: {}", e);
+            types::Errno::InvalidArg
+        })?;
 
         // Read enum value from that ptr:
-        let input4: types::Excuse = *input4_ptr.as_ref().map_err(|e| {
+        let input4: types::Excuse = input4_ptr.read().map_err(|e| {
             eprintln!("input4_ptr error: {}", e);
             types::Errno::InvalidArg
         })?;
         println!("input4 {:?}", input4);
 
         // Write ptr value to mutable ptr:
-        input4_ptr_ptr.write(&input2_ptr.as_immut());
+        input4_ptr_ptr.write(input2_ptr).map_err(|e| {
+            eprintln!("input4_ptr_ptr error: {}", e);
+            types::Errno::InvalidArg
+        })?;
 
         Ok(())
     }
@@ -123,37 +126,32 @@ impl PointersAndEnumsExercise {
             .boxed()
     }
     pub fn test(&self) {
-        let mut ctx = WasiCtx::new();
-        let mut host_memory = HostMemory::new();
-        let mut guest_memory = host_memory.guest_memory();
+        let ctx = WasiCtx::new();
+        let host_memory = HostMemory::new();
 
-        *guest_memory
-            .ptr_mut(self.input2_loc.ptr)
-            .expect("input2 ptr")
-            .as_ref_mut()
-            .expect("input2 ref_mut") = self.input2;
+        host_memory
+            .ptr(self.input2_loc.ptr)
+            .write(self.input2)
+            .expect("input2 ref_mut");
 
-        *guest_memory
-            .ptr_mut(self.input3_loc.ptr)
-            .expect("input3 ptr")
-            .as_ref_mut()
-            .expect("input3 ref_mut") = self.input3;
+        host_memory
+            .ptr(self.input3_loc.ptr)
+            .write(self.input3)
+            .expect("input3 ref_mut");
 
-        *guest_memory
-            .ptr_mut(self.input4_loc.ptr)
-            .expect("input4 ptr")
-            .as_ref_mut()
-            .expect("input4 ref_mut") = self.input4;
+        host_memory
+            .ptr(self.input4_loc.ptr)
+            .write(self.input4)
+            .expect("input4 ref_mut");
 
-        *guest_memory
-            .ptr_mut(self.input4_ptr_loc.ptr)
-            .expect("input4 ptr ptr")
-            .as_ref_mut()
-            .expect("input4 ptr ref_mut") = self.input4_loc.ptr;
+        host_memory
+            .ptr(self.input4_ptr_loc.ptr)
+            .write(self.input4_loc.ptr)
+            .expect("input4 ptr ref_mut");
 
         let e = pointers::pointers_and_enums(
-            &mut ctx,
-            &mut guest_memory,
+            &ctx,
+            &host_memory,
             self.input1.into(),
             self.input2_loc.ptr as i32,
             self.input3_loc.ptr as i32,
@@ -162,10 +160,9 @@ impl PointersAndEnumsExercise {
         assert_eq!(e, types::Errno::Ok.into(), "errno");
 
         // Implementation of pointers_and_enums writes input3 to the input2_loc:
-        let written_to_input2_loc: i32 = *guest_memory
+        let written_to_input2_loc: i32 = host_memory
             .ptr(self.input2_loc.ptr)
-            .expect("input2 ptr")
-            .as_ref()
+            .read()
             .expect("input2 ref");
 
         assert_eq!(
@@ -175,10 +172,9 @@ impl PointersAndEnumsExercise {
         );
 
         // Implementation of pointers_and_enums writes input2_loc to input4_ptr_loc:
-        let written_to_input4_ptr: u32 = *guest_memory
+        let written_to_input4_ptr: u32 = host_memory
             .ptr(self.input4_ptr_loc.ptr)
-            .expect("input4_ptr_loc ptr")
-            .as_ref()
+            .read()
             .expect("input4_ptr_loc ref");
 
         assert_eq!(
