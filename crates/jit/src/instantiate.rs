@@ -44,7 +44,11 @@ pub enum SetupError {
     DebugInfo(#[from] anyhow::Error),
 }
 
+// A thread-safe wrapper for function pointers.
 struct FinishedFunctions(BoxedSlice<DefinedFuncIndex, *const [VMFunctionBody]>);
+
+// This is safe because the pointers are not modified and are only returned
+// through a reference bound to RawCompiledModule instance
 unsafe impl Send for FinishedFunctions {}
 unsafe impl Sync for FinishedFunctions {}
 
