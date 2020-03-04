@@ -16,7 +16,9 @@ mod translate_sections;
 mod benches;
 
 pub use crate::backend::CodeGenSession;
-pub use crate::function_body::translate_wasm as translate_function;
+pub use crate::function_body::{
+    translate_wasm as translate_function, NullOffsetSink, OffsetSink, Sinks,
+};
 pub use crate::module::{
     translate, ExecutableModule, ExecutionError, ModuleContext, Signature, TranslatedModule,
 };

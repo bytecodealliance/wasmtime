@@ -333,6 +333,7 @@ pub trait ModuleContext {
     type Signature: Signature;
     type GlobalType: SigType;
 
+    fn vmctx_builtin_function(&self, index: u32) -> u32;
     fn vmctx_vmglobal_definition(&self, index: u32) -> u32;
     fn vmctx_vmglobal_import_from(&self, index: u32) -> u32;
     fn vmctx_vmmemory_import_from(&self, memory_index: u32) -> u32;
@@ -423,6 +424,10 @@ impl ModuleContext for SimpleContext {
 
     fn defined_table_index(&self, index: u32) -> Option<u32> {
         Some(index)
+    }
+
+    fn vmctx_builtin_function(&self, index: u32) -> u32 {
+        unimplemented!()
     }
 
     fn vmctx_vmfunction_import_body(&self, _func_index: u32) -> u32 {
