@@ -232,4 +232,3 @@ impl Error {
 pub(crate) trait FromRawOsError {
     fn from_raw_os_error(code: i32) -> Self;
 }
-
