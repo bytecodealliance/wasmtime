@@ -1,12 +1,9 @@
 use crate::hostcalls_impl::PathGet;
 use crate::{Error, Result};
-use std::os::unix::prelude::AsRawFd;
+use std::{io, os::unix::prelude::AsRawFd};
 
 pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
-    use yanix::{
-        file::{unlinkat, AtFlag},
-        Errno, YanixError,
-    };
+    use yanix::file::{unlinkat, AtFlag};
     unsafe {
         unlinkat(
             resolved.dirfd().as_raw_fd(),
@@ -15,52 +12,50 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
         )
     }
     .map_err(|err| {
-        if let YanixError::Errno(mut errno) = err {
-            // Non-Linux implementations may return EPERM when attempting to remove a
-            // directory without REMOVEDIR. While that's what POSIX specifies, it's
-            // less useful. Adjust this to EISDIR. It doesn't matter that this is not
-            // atomic with the unlinkat, because if the file is removed and a directory
-            // is created before fstatat sees it, we're racing with that change anyway
-            // and unlinkat could have legitimately seen the directory if the race had
-            // turned out differently.
-            use yanix::file::{fstatat, FileType};
+        if let yanix::Error::Io(ref errno) = err {
+            if let Some(raw_errno) = errno.raw_os_error() {
+                // Non-Linux implementations may return EPERM when attempting to remove a
+                // directory without REMOVEDIR. While that's what POSIX specifies, it's
+                // less useful. Adjust this to EISDIR. It doesn't matter that this is not
+                // atomic with the unlinkat, because if the file is removed and a directory
+                // is created before fstatat sees it, we're racing with that change anyway
+                // and unlinkat could have legitimately seen the directory if the race had
+                // turned out differently.
+                use yanix::file::{fstatat, FileType};
 
-            if errno == Errno::EPERM {
-                if let Ok(stat) = unsafe {
-                    fstatat(
-                        resolved.dirfd().as_raw_fd(),
-                        resolved.path(),
-                        AtFlag::SYMLINK_NOFOLLOW,
-                    )
-                } {
-                    if FileType::from_stat_st_mode(stat.st_mode) == FileType::Directory {
-                        errno = Errno::EISDIR;
+                if raw_errno == libc::EPERM {
+                    if let Ok(stat) = unsafe {
+                        fstatat(
+                            resolved.dirfd().as_raw_fd(),
+                            resolved.path(),
+                            AtFlag::SYMLINK_NOFOLLOW,
+                        )
+                    } {
+                        if FileType::from_stat_st_mode(stat.st_mode) == FileType::Directory {
+                            return io::Error::from_raw_os_error(libc::EISDIR).into();
+                        }
+                    } else {
+                        return io::Error::last_os_error().into();
                     }
-                } else {
-                    errno = Errno::last();
                 }
             }
-            errno.into()
-        } else {
-            err
         }
+
+        err
     })
     .map_err(Into::into)
 }
 
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
-    use yanix::{
-        file::{fstatat, symlinkat, AtFlag},
-        Errno, YanixError,
-    };
+    use yanix::file::{fstatat, symlinkat, AtFlag};
 
     log::debug!("path_symlink old_path = {:?}", old_path);
     log::debug!("path_symlink resolved = {:?}", resolved);
 
     unsafe { symlinkat(old_path, resolved.dirfd().as_raw_fd(), resolved.path()) }.or_else(|err| {
-        if let YanixError::Errno(errno) = err {
-            match errno {
-                Errno::ENOTDIR => {
+        if let yanix::Error::Io(ref errno) = err {
+            if let Some(raw_errno) = errno.raw_os_error() {
+                if raw_errno == libc::ENOTDIR {
                     // On BSD, symlinkat returns ENOTDIR when it should in fact
                     // return a EEXIST. It seems that it gets confused with by
                     // the trailing slash in the target path. Thus, we strip
@@ -74,24 +69,20 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
                             AtFlag::SYMLINK_NOFOLLOW,
                         )
                     } {
-                        Err(Error::EEXIST)
+                        return Err(Error::EEXIST);
                     } else {
-                        Err(Error::ENOTDIR)
+                        return Err(Error::ENOTDIR);
                     }
                 }
-                x => Err(x.into()),
             }
-        } else {
-            Err(err.into())
         }
+
+        Err(err.into())
     })
 }
 
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
-    use yanix::{
-        file::{fstatat, renameat, AtFlag},
-        Errno, YanixError,
-    };
+    use yanix::file::{fstatat, renameat, AtFlag};
     unsafe {
         renameat(
             resolved_old.dirfd().as_raw_fd(),
@@ -110,9 +101,9 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
         //
         // TODO
         // Verify on other BSD-based OSes.
-        if let YanixError::Errno(errno) = err {
-            match errno {
-                Errno::ENOENT => {
+        if let yanix::Error::Io(ref errno) = err {
+            if let Some(raw_errno) = errno.raw_os_error() {
+                if raw_errno == libc::ENOENT {
                     // check if the source path exists
                     if let Ok(_) = unsafe {
                         fstatat(
@@ -123,19 +114,18 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
                     } {
                         // check if destination contains a trailing slash
                         if resolved_new.path().contains('/') {
-                            Err(Error::ENOTDIR)
+                            return Err(Error::ENOTDIR);
                         } else {
-                            Err(Error::ENOENT)
+                            return Err(Error::ENOENT);
                         }
                     } else {
-                        Err(Error::ENOENT)
+                        return Err(Error::ENOENT);
                     }
                 }
-                x => Err(x.into()),
             }
-        } else {
-            Err(err.into())
         }
+
+        Err(err.into())
     })
 }
 
