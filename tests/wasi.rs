@@ -23,11 +23,7 @@ impl GuestErrorType for types::Errno {
 }
 
 impl crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
-    fn args_get(
-        &self,
-        _argv: GuestPtr<GuestPtr<u8>>,
-        _argv_buf: GuestPtr<u8>,
-    ) -> Result<()> {
+    fn args_get(&self, _argv: GuestPtr<GuestPtr<u8>>, _argv_buf: GuestPtr<u8>) -> Result<()> {
         unimplemented!("args_get")
     }
 

@@ -22,12 +22,9 @@ pub fn define_datatype(names: &Names, namedtype: &witx::NamedType) -> TokenStrea
             witx::Type::Union(u) => union::define_union(names, &namedtype.name, &u),
             witx::Type::Handle(h) => handle::define_handle(names, &namedtype.name, &h),
             witx::Type::Builtin(b) => define_builtin(names, &namedtype.name, *b),
-            witx::Type::Pointer(p) => define_witx_pointer(
-                names,
-                &namedtype.name,
-                quote!(wiggle_runtime::GuestPtr),
-                p,
-            ),
+            witx::Type::Pointer(p) => {
+                define_witx_pointer(names, &namedtype.name, quote!(wiggle_runtime::GuestPtr), p)
+            }
             witx::Type::ConstPointer(p) => {
                 define_witx_pointer(names, &namedtype.name, quote!(wiggle_runtime::GuestPtr), p)
             }

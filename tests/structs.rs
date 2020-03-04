@@ -402,9 +402,11 @@ impl ReturnPairPtrsExercise {
 
         assert_eq!(res, types::Errno::Ok.into(), "return pair of ptrs errno");
 
-        let ptr_pair_int_ptrs: types::PairIntPtrs<'_> =
-            host_memory.ptr(self.return_loc.ptr).read().expect("failed to read return location");
-        let ret_first_ptr  = ptr_pair_int_ptrs.first;
+        let ptr_pair_int_ptrs: types::PairIntPtrs<'_> = host_memory
+            .ptr(self.return_loc.ptr)
+            .read()
+            .expect("failed to read return location");
+        let ret_first_ptr = ptr_pair_int_ptrs.first;
         let ret_second_ptr = ptr_pair_int_ptrs.second;
         assert_eq!(
             self.input_first,

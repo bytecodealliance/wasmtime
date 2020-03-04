@@ -1,8 +1,8 @@
 use std::cell::Cell;
+use std::fmt;
+use std::marker;
 use std::slice;
 use std::str;
-use std::marker;
-use std::fmt;
 
 mod error;
 mod guest_type;
@@ -110,9 +110,11 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
     }
 
     pub fn add(&self, amt: u32) -> Result<GuestPtr<'a, T>, GuestError>
-        where T: GuestType<'a> + Pointee<Pointer = u32>,
+    where
+        T: GuestType<'a> + Pointee<Pointer = u32>,
     {
-        let offset = amt.checked_mul(T::guest_size())
+        let offset = amt
+            .checked_mul(T::guest_size())
             .and_then(|o| self.pointer.checked_add(o));
         let offset = match offset {
             Some(o) => o,
@@ -131,7 +133,9 @@ impl<'a, T> GuestPtr<'a, [T]> {
         self.pointer.1
     }
 
-    pub fn iter<'b>(&'b self) -> impl ExactSizeIterator<Item = Result<GuestPtr<'a, T>, GuestError>> + 'b
+    pub fn iter<'b>(
+        &'b self,
+    ) -> impl ExactSizeIterator<Item = Result<GuestPtr<'a, T>, GuestError>> + 'b
     where
         T: GuestType<'a>,
     {
@@ -154,14 +158,16 @@ impl<'a> GuestPtr<'a, str> {
     }
 
     pub fn as_raw(&self) -> Result<*mut str, GuestError> {
-        let ptr = self.mem.validate_size_align(self.pointer.0, 1, self.pointer.1)?;
+        let ptr = self
+            .mem
+            .validate_size_align(self.pointer.0, 1, self.pointer.1)?;
 
         // TODO: doc unsafety here
         unsafe {
             let s = slice::from_raw_parts_mut(ptr, self.pointer.1 as usize);
             match str::from_utf8_mut(s) {
                 Ok(s) => Ok(s),
-                Err(e) => Err(GuestError::InvalidUtf8(e))
+                Err(e) => Err(GuestError::InvalidUtf8(e)),
             }
         }
     }

@@ -8,7 +8,9 @@ pub struct HostMemory {
 }
 impl HostMemory {
     pub fn new() -> Self {
-        HostMemory { buffer: UnsafeCell::new([0; 4096]) }
+        HostMemory {
+            buffer: UnsafeCell::new([0; 4096]),
+        }
     }
 
     pub fn mem_area_strat(align: u32) -> BoxedStrategy<MemArea> {
