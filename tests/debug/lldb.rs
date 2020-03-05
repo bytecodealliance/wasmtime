@@ -4,10 +4,16 @@ use anyhow::{bail, format_err, Result};
 use filecheck::{CheckerBuilder, NO_VARIABLES};
 use std::env;
 use std::io::Write;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use tempfile::NamedTempFile;
 
-fn lldb_with_script(wasmtime_path: &str, args: &[&str], script: &str) -> Result<String> {
+fn lldb_with_script(args: &[&str], script: &str) -> Result<String> {
+    let mut me = std::env::current_exe().expect("current_exe specified");
+    me.pop(); // chop off the file name
+    me.pop(); // chop off `deps`
+    me.push("wasmtime");
+    let wasmtime_path = me.to_str().unwrap();
+
     let lldb_path = env::var("LLDB").unwrap_or("lldb".to_string());
     let mut script_file = NamedTempFile::new()?;
     script_file.write(script.as_bytes())?;
@@ -45,31 +51,6 @@ fn check_lldb_output(output: &str, directives: &str) -> Result<()> {
     Ok(())
 }
 
-fn build_wasmtime() -> Result<String> {
-    let cargo = env::var("CARGO").unwrap_or("cargo".to_string());
-    let pkg_dir = env!("CARGO_MANIFEST_DIR");
-    let success = Command::new(cargo)
-        .current_dir(pkg_dir)
-        .stdout(Stdio::null())
-        .args(if cfg!(debug_assertions) {
-            ["build"].iter()
-        } else {
-            ["build", "--release"].iter()
-        })
-        .args(&["--bin", "wasmtime"])
-        .status()?
-        .success();
-    if !success {
-        bail!("Failed to build wasmtime");
-    }
-    Ok(if cfg!(debug_assertions) {
-        "target/debug/wasmtime"
-    } else {
-        "target/release/wasmtime"
-    }
-    .to_string())
-}
-
 #[test]
 #[ignore]
 #[cfg(all(
@@ -77,9 +58,7 @@ fn build_wasmtime() -> Result<String> {
     target_pointer_width = "64"
 ))]
 pub fn test_debug_dwarf_lldb() -> Result<()> {
-    let wasmtime_path = build_wasmtime()?;
     let output = lldb_with_script(
-        &wasmtime_path,
         &[
             "-g",
             "tests/debug/testsuite/fib-wasm.wasm",
