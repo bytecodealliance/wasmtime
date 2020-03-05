@@ -7,10 +7,36 @@ pub trait GuestErrorType {
     fn from_error(e: GuestError, ctx: &Self::Context) -> Self;
 }
 
+/// A trait for types that are intended to be pointees in `GuestPtr<T>`.
+///
+/// This trait abstracts how to read/write information from the guest memory, as
+/// well as how to offset elements in an array of guest memory. This layer of
+/// abstraction allows the guest representation of a type to be different from
+/// the host representation of a type, if necessary. It also allows for
+/// validation when reading/writing.
 pub trait GuestType<'a>: Sized {
+    /// Returns the size, in bytes, of this type in the guest memory.
     fn guest_size() -> u32;
+
+    /// Returns the required alignment of this type, in bytes, for both guest
+    /// and host memory.
     fn guest_align() -> usize;
+
+    /// Reads this value from the provided `ptr`.
+    ///
+    /// Must internally perform any safety checks necessary and is allowed to
+    /// fail if the bytes pointed to are also invalid.
+    ///
+    /// Typically if you're implementing this by hand you'll want to delegate to
+    /// other safe implementations of this trait (e.g. for primitive types like
+    /// `u32`) rather than writing lots of raw code yourself.
     fn read(ptr: &GuestPtr<'a, Self>) -> Result<Self, GuestError>;
+
+    /// Writes a value to `ptr` after verifying that `ptr` is indeed valid to
+    /// store `val`.
+    ///
+    /// Similar to `read`, you'll probably want to implement this in terms of
+    /// other primitives.
     fn write(ptr: &GuestPtr<'_, Self>, val: Self) -> Result<(), GuestError>;
 }
 
@@ -20,14 +46,14 @@ macro_rules! primitives {
             fn guest_size() -> u32 { mem::size_of::<Self>() as u32 }
             fn guest_align() -> usize { mem::align_of::<Self>() }
 
+            #[inline]
             fn read(ptr: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
-
                 // Any bit pattern for any primitive implemented with this
-                // macro is safe, so our `as_raw` method will guarantee that if
-                // we are given a pointer it's valid for the size of our type
-                // as well as properly aligned. Consequently we should be able
-                // to safely ready the pointer just after we validated it,
-                // returning it along here.
+                // macro is safe, so our `validate_size_align` method will
+                // guarantee that if we are given a pointer it's valid for the
+                // size of our type as well as properly aligned. Consequently we
+                // should be able to safely ready the pointer just after we
+                // validated it, returning it along here.
                 let host_ptr = ptr.mem().validate_size_align(
                     ptr.offset(),
                     Self::guest_align(),
@@ -36,6 +62,7 @@ macro_rules! primitives {
                 Ok(unsafe { *host_ptr.cast::<Self>() })
             }
 
+            #[inline]
             fn write(ptr: &GuestPtr<'_, Self>, val: Self) -> Result<(), GuestError> {
                 let host_ptr = ptr.mem().validate_size_align(
                     ptr.offset(),
@@ -55,8 +82,11 @@ macro_rules! primitives {
 }
 
 primitives! {
+    // signed
     i8 i16 i32 i64 i128 isize
+    // unsigned
     u8 u16 u32 u64 u128 usize
+    // floats
     f32 f64
 }
 
@@ -65,6 +95,7 @@ impl<'a, T> GuestType<'a> for GuestPtr<'a, T> {
     fn guest_size() -> u32 {
         u32::guest_size()
     }
+
     fn guest_align() -> usize {
         u32::guest_align()
     }
