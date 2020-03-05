@@ -482,6 +482,82 @@ fn define_control_flow(
 }
 
 #[inline(never)]
+fn define_simd_lane_access(
+    ig: &mut InstructionGroupBuilder,
+    formats: &Formats,
+    imm: &Immediates,
+    _: &EntityRefs,
+) {
+    let TxN = &TypeVar::new(
+        "TxN",
+        "A SIMD vector type",
+        TypeSetBuilder::new()
+            .ints(Interval::All)
+            .floats(Interval::All)
+            .bools(Interval::All)
+            .simd_lanes(Interval::All)
+            .includes_scalars(false)
+            .build(),
+    );
+
+    let x = &Operand::new("x", &TxN.lane_of()).with_doc("Value to splat to all lanes");
+    let a = &Operand::new("a", TxN);
+
+    ig.push(
+        Inst::new(
+            "splat",
+            r#"
+        Vector splat.
+
+        Return a vector whose lanes are all ``x``.
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
+    let x = &Operand::new("x", TxN).with_doc("SIMD vector to modify");
+    let y = &Operand::new("y", &TxN.lane_of()).with_doc("New lane value");
+    let Idx = &Operand::new("Idx", &imm.uimm8).with_doc("Lane index");
+
+    ig.push(
+        Inst::new(
+            "insertlane",
+            r#"
+        Insert ``y`` as lane ``Idx`` in x.
+
+        The lane index, ``Idx``, is an immediate value, not an SSA value. It
+        must indicate a valid lane index for the type of ``x``.
+        "#,
+            &formats.insert_lane,
+        )
+        .operands_in(vec![x, Idx, y])
+        .operands_out(vec![a]),
+    );
+
+    let x = &Operand::new("x", TxN);
+    let a = &Operand::new("a", &TxN.lane_of());
+
+    ig.push(
+        Inst::new(
+            "extractlane",
+            r#"
+        Extract lane ``Idx`` from ``x``.
+
+        The lane index, ``Idx``, is an immediate value, not an SSA value. It
+        must indicate a valid lane index for the type of ``x``. Note that the upper bits of ``a``
+        may or may not be zeroed depending on the ISA but the type system should prevent using
+        ``a`` as anything other than the extracted value.
+        "#,
+            &formats.extract_lane,
+        )
+        .operands_in(vec![x, Idx])
+        .operands_out(vec![a]),
+    );
+}
+
+#[inline(never)]
 fn define_simd_arithmetic(
     ig: &mut InstructionGroupBuilder,
     formats: &Formats,
@@ -586,6 +662,7 @@ pub(crate) fn define(
     let mut ig = InstructionGroupBuilder::new(all_instructions);
 
     define_control_flow(&mut ig, formats, imm, entities);
+    define_simd_lane_access(&mut ig, formats, imm, entities);
     define_simd_arithmetic(&mut ig, formats, imm, entities);
 
     // Operand kind shorthands.
@@ -1802,61 +1879,6 @@ pub(crate) fn define(
         )
         .operands_in(vec![a])
         .operands_out(vec![s]),
-    );
-
-    let x = &Operand::new("x", &TxN.lane_of());
-
-    ig.push(
-        Inst::new(
-            "splat",
-            r#"
-        Vector splat.
-
-        Return a vector whose lanes are all ``x``.
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![x])
-        .operands_out(vec![a]),
-    );
-
-    let x = &Operand::new("x", TxN).with_doc("SIMD vector to modify");
-    let y = &Operand::new("y", &TxN.lane_of()).with_doc("New lane value");
-    let Idx = &Operand::new("Idx", &imm.uimm8).with_doc("Lane index");
-
-    ig.push(
-        Inst::new(
-            "insertlane",
-            r#"
-        Insert ``y`` as lane ``Idx`` in x.
-
-        The lane index, ``Idx``, is an immediate value, not an SSA value. It
-        must indicate a valid lane index for the type of ``x``.
-        "#,
-            &formats.insert_lane,
-        )
-        .operands_in(vec![x, Idx, y])
-        .operands_out(vec![a]),
-    );
-
-    let x = &Operand::new("x", TxN);
-    let a = &Operand::new("a", &TxN.lane_of());
-
-    ig.push(
-        Inst::new(
-            "extractlane",
-            r#"
-        Extract lane ``Idx`` from ``x``.
-
-        The lane index, ``Idx``, is an immediate value, not an SSA value. It
-        must indicate a valid lane index for the type of ``x``. Note that the upper bits of ``a``
-        may or may not be zeroed depending on the ISA but the type system should prevent using
-        ``a`` as anything other than the extracted value.
-        "#,
-            &formats.extract_lane,
-        )
-        .operands_in(vec![x, Idx])
-        .operands_out(vec![a]),
     );
 
     let a = &Operand::new("a", &Int.as_bool());
