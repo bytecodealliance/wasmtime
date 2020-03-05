@@ -16,14 +16,131 @@ use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody};
 /// * A user-defined function used to satisfy an import.
 ///
 /// These types of callable items are all wrapped up in this `Func` and can be
-/// used to both instantiate an [`Instance`](crate::Instance) as well as be
-/// extracted from an [`Instance`](crate::Instance).
+/// used to both instantiate an [`Instance`] as well as be extracted from an
+/// [`Instance`].
+///
+/// [`Instance`]: crate::Instance
 ///
 /// # `Func` and `Clone`
 ///
 /// Functions are internally reference counted so you can `clone` a `Func`. The
 /// cloning process only performs a shallow clone, so two cloned `Func`
 /// instances are equivalent in their functionality.
+///
+/// # Examples
+///
+/// One way to get a `Func` is from an [`Instance`] after you've instantiated
+/// it:
+///
+/// ```
+/// # use wasmtime::*;
+/// # fn main() -> anyhow::Result<()> {
+/// let store = Store::default();
+/// let module = Module::new(&store, r#"(module (func (export "foo")))"#)?;
+/// let instance = Instance::new(&module, &[])?;
+/// let foo = instance.exports()[0].func().expect("export wasn't a function");
+///
+/// // Work with `foo` as a `Func` at this point, such as calling it
+/// // dynamically...
+/// match foo.call(&[]) {
+///     Ok(result) => { /* ... */ }
+///     Err(trap) => {
+///         panic!("execution of `foo` resulted in a wasm trap: {}", trap);
+///     }
+/// }
+/// foo.call(&[])?;
+///
+/// // ... or we can make a static assertion about its signature and call it.
+/// // Our first call here can fail if the signatures don't match, and then the
+/// // second call can fail if the function traps (like the `match` above).
+/// let foo = foo.get0::<()>()?;
+/// foo()?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// You can also use the [`wrap*` family of functions](Func::wrap1) to create a
+/// `Func`
+///
+/// ```
+/// # use wasmtime::*;
+/// # fn main() -> anyhow::Result<()> {
+/// let store = Store::default();
+///
+/// // Create a custom `Func` which can execute arbitrary code inside of the
+/// // closure.
+/// let add = Func::wrap2(&store, |a: i32, b: i32| -> i32 { a + b });
+///
+/// // Next we can hook that up to a wasm module which uses it.
+/// let module = Module::new(
+///     &store,
+///     r#"
+///         (module
+///             (import "" "" (func $add (param i32 i32) (result i32)))
+///             (func (export "call_add_twice") (result i32)
+///                 i32.const 1
+///                 i32.const 2
+///                 call $add
+///                 i32.const 3
+///                 i32.const 4
+///                 call $add
+///                 i32.add))
+///     "#,
+/// )?;
+/// let instance = Instance::new(&module, &[add.into()])?;
+/// let call_add_twice = instance.exports()[0].func().expect("export wasn't a function");
+/// let call_add_twice = call_add_twice.get0::<i32>()?;
+///
+/// assert_eq!(call_add_twice()?, 10);
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Or you could also create an entirely dynamic `Func`!
+///
+/// ```
+/// # use wasmtime::*;
+/// use std::rc::Rc;
+///
+/// struct Double;
+///
+/// impl Callable for Double {
+///     fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
+///         let mut value = params[0].unwrap_i32();
+///         value *= 2;
+///         results[0] = value.into();
+///         Ok(())
+///     }
+/// }
+///
+/// # fn main() -> anyhow::Result<()> {
+/// let store = Store::default();
+///
+/// // Here we need to define the type signature of our `Double` function and
+/// // then wrap it up in a `Func`
+/// let double_type = wasmtime::FuncType::new(
+///     Box::new([wasmtime::ValType::I32]),
+///     Box::new([wasmtime::ValType::I32])
+/// );
+/// let double = Func::new(&store, double_type, Rc::new(Double));
+///
+/// let module = Module::new(
+///     &store,
+///     r#"
+///         (module
+///             (import "" "" (func $double (param i32) (result i32)))
+///             (func $start
+///                 i32.const 1
+///                 call $double
+///                 drop)
+///             (start $start))
+///     "#,
+/// )?;
+/// let instance = Instance::new(&module, &[double.into()])?;
+/// // .. work with `instance` if necessary
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Clone)]
 pub struct Func {
     _store: Store,
@@ -186,7 +303,6 @@ impl Func {
         /// function being called is known statically so the type signature can
         /// be inferred. Rust types will map to WebAssembly types as follows:
         ///
-        ///
         /// | Rust Argument Type | WebAssembly Type |
         /// |--------------------|------------------|
         /// | `i32`              | `i32`            |
@@ -209,6 +325,98 @@ impl Func {
         /// possible for when WebAssembly calls the function provided. With
         /// sufficient inlining and optimization the WebAssembly will call
         /// straight into `func` provided, with no extra fluff entailed.
+        ///
+        /// # Examples
+        ///
+        /// First up we can see how simple wasm imports can be implemented, such
+        /// as a function that adds its two arguments and returns the result.
+        ///
+        /// ```
+        /// # use wasmtime::*;
+        /// # fn main() -> anyhow::Result<()> {
+        /// # let store = Store::default();
+        /// let add = Func::wrap2(&store, |a: i32, b: i32| a + b);
+        /// let module = Module::new(
+        ///     &store,
+        ///     r#"
+        ///         (module
+        ///             (import "" "" (func $add (param i32 i32) (result i32)))
+        ///             (func (export "foo") (param i32 i32) (result i32)
+        ///                 local.get 0
+        ///                 local.get 1
+        ///                 call $add))
+        ///     "#,
+        /// )?;
+        /// let instance = Instance::new(&module, &[add.into()])?;
+        /// let foo = instance.exports()[0].func().unwrap().get2::<i32, i32, i32>()?;
+        /// assert_eq!(foo(1, 2)?, 3);
+        /// # Ok(())
+        /// # }
+        /// ```
+        ///
+        /// We can also do the same thing, but generate a trap if the addition
+        /// overflows:
+        ///
+        /// ```
+        /// # use wasmtime::*;
+        /// # fn main() -> anyhow::Result<()> {
+        /// # let store = Store::default();
+        /// let add = Func::wrap2(&store, |a: i32, b: i32| {
+        ///     match a.checked_add(b) {
+        ///         Some(i) => Ok(i),
+        ///         None => Err(Trap::new("overflow")),
+        ///     }
+        /// });
+        /// let module = Module::new(
+        ///     &store,
+        ///     r#"
+        ///         (module
+        ///             (import "" "" (func $add (param i32 i32) (result i32)))
+        ///             (func (export "foo") (param i32 i32) (result i32)
+        ///                 local.get 0
+        ///                 local.get 1
+        ///                 call $add))
+        ///     "#,
+        /// )?;
+        /// let instance = Instance::new(&module, &[add.into()])?;
+        /// let foo = instance.exports()[0].func().unwrap().get2::<i32, i32, i32>()?;
+        /// assert_eq!(foo(1, 2)?, 3);
+        /// assert!(foo(i32::max_value(), 1).is_err());
+        /// # Ok(())
+        /// # }
+        /// ```
+        ///
+        /// And don't forget all the wasm types are supported!
+        ///
+        /// ```
+        /// # use wasmtime::*;
+        /// # fn main() -> anyhow::Result<()> {
+        /// # let store = Store::default();
+        /// let debug = Func::wrap4(&store, |a: i32, b: f32, c: i64, d: f64| {
+        ///     println!("a={}", a);
+        ///     println!("b={}", b);
+        ///     println!("c={}", c);
+        ///     println!("d={}", d);
+        /// });
+        /// let module = Module::new(
+        ///     &store,
+        ///     r#"
+        ///         (module
+        ///             (import "" "" (func $debug (param i32 f32 i64 f64)))
+        ///             (func (export "foo")
+        ///                 i32.const 1
+        ///                 f32.const 2
+        ///                 i64.const 3
+        ///                 f64.const 4
+        ///                 call $debug))
+        ///     "#,
+        /// )?;
+        /// let instance = Instance::new(&module, &[debug.into()])?;
+        /// let foo = instance.exports()[0].func().unwrap().get0::<()>()?;
+        /// foo()?;
+        /// # Ok(())
+        /// # }
+        /// ```
         (wrap1, A1)
 
         /// Creates a new `Func` from the given Rust closure, which takes 2
