@@ -107,19 +107,10 @@ pub fn code(
     _code: CodeSectionReader,
     _translation_ctx: &SimpleContext,
 ) -> Result<TranslatedCodeSection, Error> {
+    // TODO: Remove the Lightbeam harness entirely, this is just to make this compile.
+    //       We do all our testing through Wasmtime now, there's no reason to duplicate
+    //       writing a WebAssembly environment in Lightbeam too.
     unimplemented!("Incomplete migration to wasm-reader");
-    // let func_count = code.get_count();
-    // let mut relocs = binemit::NullRelocSink {};
-    // let mut traps = binemit::NullTrapSink {};
-
-    // let mut session = CodeGenSession::new(func_count, translation_ctx);
-
-    // for (idx, body) in code.into_iter().enumerate() {
-    //     let body = body?;
-    //     function_body::translate_wasm(&mut session, &mut relocs, &mut traps, idx as u32, &body)?;
-    // }
-
-    // Ok(session.into_translated_code_section()?)
 }
 
 /// Parses the Data section of the wasm module.

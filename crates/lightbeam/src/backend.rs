@@ -5647,9 +5647,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         I: IntoIterator<Item = GPR>,
         I::IntoIter: Clone,
     {
-        // TODO: We can filter out any unused registers
-        // let regs = self.block_state.regs.clone();
-        let to_save = to_save.into_iter(); //.filter(|&r| !regs.is_free(r));
+        // TODO: We can filter out registers that are already marked free, but just to ensure
+        //       that this doesn't fail when confronted with the `memory_grow`/`memory_size`
+        //       weirdness.
+        let to_save = to_save.into_iter();
         if to_save.clone().count() == 0 {
             return Ok(());
         }
@@ -5676,10 +5677,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         mem::replace(&mut self.block_state.stack, stack);
 
-        // for reg in to_save {
-        // assert!(self.block_state.regs.is_free(reg));
-        // }
-
         Ok(())
     }
 
@@ -5689,7 +5686,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         &mut self,
         out_locs: &(impl ExactSizeIterator<Item = CCLoc> + DoubleEndedIterator + Clone),
     ) -> Result<(), Error> {
-        // TODO: Do alignment here
         let total_stack_space = out_locs
             .clone()
             .flat_map(|l| {
@@ -5731,7 +5727,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                                 pending.push((src, dst));
                                 continue;
                             }
-    
+
                             self.block_state.regs.mark_used(*r);
                         }
                         CCLoc::Stack(offset) => {
@@ -6067,8 +6063,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn ret(&mut self) {
-        // let label = self.label(LabelValue::Ret);
-        // self.define_label(label);
         dynasm!(self.asm
             ; ret
         );
