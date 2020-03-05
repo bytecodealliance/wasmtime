@@ -244,6 +244,6 @@ pub unsafe fn fionread(fd: RawFd) -> Result<u32> {
 /// This function is unsafe because it operates on a raw file descriptor.
 /// It's provided, because std::io::Seek requires a mutable borrow.
 pub unsafe fn tell(fd: RawFd) -> Result<u64> {
-    let offset: i64 = Error::from_result(libc::lseek(fd, 0, libc::SEEK_CUR))?;
+    let offset: i64 = Error::from_result(libc::lseek(fd, 0, libc::SEEK_CUR))?.into();
     Ok(offset.try_into()?)
 }
