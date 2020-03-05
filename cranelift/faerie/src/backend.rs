@@ -152,10 +152,11 @@ impl Backend for FaerieBackend {
         ctx: &cranelift_codegen::Context,
         namespace: &ModuleNamespace<Self>,
         total_size: u32,
-    ) -> ModuleResult<FaerieCompiledFunction> {
+    ) -> ModuleResult<(FaerieCompiledFunction, &[TrapSite])> {
         let mut code: Vec<u8> = vec![0; total_size as usize];
         // TODO: Replace this with FaerieStackmapSink once it is implemented.
         let mut stackmap_sink = NullStackmapSink {};
+        let mut traps: &[TrapSite] = &[];
 
         // Non-lexical lifetimes would obviate the braces here.
         {
@@ -178,7 +179,7 @@ impl Backend for FaerieBackend {
                         &mut stackmap_sink,
                     )
                 };
-                trap_manifest.add_sink(trap_sink);
+                traps = trap_manifest.add_sink(trap_sink);
             } else {
                 let mut trap_sink = NullTrapSink {};
                 unsafe {
@@ -200,7 +201,7 @@ impl Backend for FaerieBackend {
             .define(name, code)
             .expect("inconsistent declaration");
 
-        Ok(FaerieCompiledFunction { code_length })
+        Ok((FaerieCompiledFunction { code_length }, traps))
     }
 
     fn define_function_bytes(
@@ -210,22 +211,23 @@ impl Backend for FaerieBackend {
         bytes: &[u8],
         _namespace: &ModuleNamespace<Self>,
         traps: Vec<TrapSite>,
-    ) -> ModuleResult<FaerieCompiledFunction> {
+    ) -> ModuleResult<(FaerieCompiledFunction, &[TrapSite])> {
         let code_length: u32 = match bytes.len().try_into() {
             Ok(code_length) => code_length,
             _ => Err(ModuleError::FunctionTooLarge(name.to_string()))?,
         };
+        let mut ret_traps: &[TrapSite] = &[];
 
         if let Some(ref mut trap_manifest) = self.trap_manifest {
             let trap_sink = FaerieTrapSink::new_with_sites(name, code_length, traps);
-            trap_manifest.add_sink(trap_sink);
+            ret_traps = trap_manifest.add_sink(trap_sink);
         }
 
         self.artifact
             .define(name, bytes.to_vec())
             .expect("inconsistent declaration");
 
-        Ok(FaerieCompiledFunction { code_length })
+        Ok((FaerieCompiledFunction { code_length }, ret_traps))
     }
 
     fn define_data(

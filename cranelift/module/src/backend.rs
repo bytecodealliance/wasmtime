@@ -86,7 +86,7 @@ where
         ctx: &Context,
         namespace: &ModuleNamespace<Self>,
         code_size: u32,
-    ) -> ModuleResult<Self::CompiledFunction>;
+    ) -> ModuleResult<(Self::CompiledFunction, &[TrapSite])>;
 
     /// Define a function, taking the function body from the given `bytes`.
     ///
@@ -98,7 +98,7 @@ where
         bytes: &[u8],
         namespace: &ModuleNamespace<Self>,
         traps: Vec<TrapSite>,
-    ) -> ModuleResult<Self::CompiledFunction>;
+    ) -> ModuleResult<(Self::CompiledFunction, &[TrapSite])>;
 
     /// Define a zero-initialized data object of the given size.
     ///
