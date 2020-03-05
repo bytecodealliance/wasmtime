@@ -38,7 +38,11 @@ impl Block {
 const DISASSEMBLE: bool = false;
 
 pub trait OffsetSink {
-    fn offset(&mut self, offset_in_wasm_function: ir::SourceLoc, offset_in_compiled_function: usize);
+    fn offset(
+        &mut self,
+        offset_in_wasm_function: ir::SourceLoc,
+        offset_in_compiled_function: usize,
+    );
 }
 
 pub struct NullOffsetSink;
@@ -394,12 +398,14 @@ where
                     }
                 }
                 Operator::BrIf { then, else_ } => {
-                    let (then_target, mut then_block) = blocks.remove_entry(&then.target).ok_or_else(|| {
-                        Error::Microwasm("Programmer error: block does not exist".into())
-                    })?;
-                    let (else_target, mut else_block) = blocks.remove_entry(&else_.target).ok_or_else(|| {
-                        Error::Microwasm("Programmer error: block does not exist".into())
-                    })?;
+                    let (then_target, mut then_block) =
+                        blocks.remove_entry(&then.target).ok_or_else(|| {
+                            Error::Microwasm("Programmer error: block does not exist".into())
+                        })?;
+                    let (else_target, mut else_block) =
+                        blocks.remove_entry(&else_.target).ok_or_else(|| {
+                            Error::Microwasm("Programmer error: block does not exist".into())
+                        })?;
 
                     // TODO: If actual_num_callers == num_callers then we can remove this block from the hashmap.
                     //       This frees memory and acts as a kind of verification that `num_callers` is set
@@ -442,10 +448,10 @@ where
                                 } else {
                                     None
                                 };
-    
+
                                 let cc = if then_block_should_serialize_args
                                     || else_block_should_serialize_args { let a = ctx.serialize_args(max_params)? ; Some(a) } else { None };
-    
+
                                 **then_cc = if then_block_should_serialize_args {
                                     let mut cc = cc.clone().unwrap();
                                     if let Some(to_drop) = then_to_drop.clone() {
@@ -872,11 +878,11 @@ where
                                 callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
                             )?;
                         } else {
-                           ctx.call_direct(
-                               function_index,
-                               callee_ty.params().iter().map(|t| t.to_microwasm_type()),
-                               callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
-                           )?;
+                            ctx.call_direct(
+                                function_index,
+                                callee_ty.params().iter().map(|t| t.to_microwasm_type()),
+                                callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
+                            )?;
                         }
                     } else {
                         ctx.call_direct_imported(
