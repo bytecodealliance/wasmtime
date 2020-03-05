@@ -189,7 +189,7 @@ impl Backend for ObjectBackend {
         ctx: &cranelift_codegen::Context,
         _namespace: &ModuleNamespace<Self>,
         code_size: u32,
-    ) -> ModuleResult<(ObjectCompiledFunction, Option<&Vec<TrapSite>>)> {
+    ) -> ModuleResult<(ObjectCompiledFunction, &[TrapSite])> {
         let mut code: Vec<u8> = vec![0; code_size as usize];
         let mut reloc_sink = ObjectRelocSink::new(self.object.format());
         let mut trap_sink = ObjectTrapSink::default();
@@ -232,7 +232,7 @@ impl Backend for ObjectBackend {
         }
         let trapref = self.traps.index_mut(func_id);
         *trapref = trap_sink.sites;
-        Ok((ObjectCompiledFunction, Some(trapref)))
+        Ok((ObjectCompiledFunction, trapref))
     }
 
     fn define_function_bytes(
@@ -242,7 +242,7 @@ impl Backend for ObjectBackend {
         bytes: &[u8],
         _namespace: &ModuleNamespace<Self>,
         traps: Vec<TrapSite>,
-    ) -> ModuleResult<(ObjectCompiledFunction, Option<&Vec<TrapSite>>)> {
+    ) -> ModuleResult<(ObjectCompiledFunction, &[TrapSite])> {
         let symbol = self.functions[func_id].unwrap();
         let section = self.object.section_id(StandardSection::Text);
         let _offset = self
@@ -250,7 +250,7 @@ impl Backend for ObjectBackend {
             .add_symbol_data(symbol, section, bytes, self.function_alignment);
         let trapref = self.traps.index_mut(func_id);
         *trapref = traps;
-        Ok((ObjectCompiledFunction, Some(trapref)))
+        Ok((ObjectCompiledFunction, trapref))
     }
 
     fn define_data(

@@ -354,7 +354,7 @@ where
 
 pub struct ModuleCompiledFunction<'a> {
     pub size: binemit::CodeOffset,
-    pub traps: Option<&'a Vec<TrapSite>>,
+    pub traps: &'a [TrapSite],
 }
 
 impl<B> Module<B>

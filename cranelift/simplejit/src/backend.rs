@@ -278,7 +278,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         ctx: &cranelift_codegen::Context,
         _namespace: &ModuleNamespace<Self>,
         code_size: u32,
-    ) -> ModuleResult<(Self::CompiledFunction, Option<&Vec<TrapSite>>)> {
+    ) -> ModuleResult<(Self::CompiledFunction, &[TrapSite])> {
         let size = code_size as usize;
         let ptr = self
             .memory
@@ -309,7 +309,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                 size,
                 relocs: reloc_sink.relocs,
             },
-            None,
+            &[],
         ))
     }
 
@@ -320,7 +320,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         bytes: &[u8],
         _namespace: &ModuleNamespace<Self>,
         _traps: Vec<TrapSite>,
-    ) -> ModuleResult<(Self::CompiledFunction, Option<&Vec<TrapSite>>)> {
+    ) -> ModuleResult<(Self::CompiledFunction, &[TrapSite])> {
         let size = bytes.len();
         let ptr = self
             .memory
@@ -340,7 +340,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                 size,
                 relocs: vec![],
             },
-            None,
+            &[],
         ))
     }
 
