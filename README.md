@@ -65,7 +65,7 @@ Hello, world!
   with your needs. It fits on tiny chips as well as makes use of huge servers.
   Wasmtime can be embedded into almost any application too.
 
-* **Fast**. Wasmtime is built on the optimizing Cranelift code generator to
+* **Fast**. Wasmtime is built on the optimizing [Cranelift] code generator to
   quickly generate high-quality machine code at runtime.
 
 * **Configurable**. Whether you need to precompile your wasm ahead of time,
@@ -81,6 +81,8 @@ Hello, world!
   [future proposals to WebAssembly](https://github.com/WebAssembly/proposals) as
   well. Wasmtime developers are intimately engaged with the WebAssembly
   standards process all along the way too.
+
+[Cranelift]: https://github.com/bytecodealliance/wasmtime/blob/master/cranelift/README.md
 
 ## Documentation
 

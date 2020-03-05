@@ -5,4 +5,4 @@ If you're looking for a complete WebAssembly implementation that uses this
 library, see [Wasmtime].
 
 [Wasmtime]: https://github.com/bytecodealliance/wasmtime
-[Cranelift IR]: https://cranelift.readthedocs.io/en/latest/ir.html
+[Cranelift IR]: https://github.com/bytecodealliance/wasmtime/blob/master/cranelift/docs/ir.md
