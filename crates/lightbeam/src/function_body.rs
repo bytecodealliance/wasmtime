@@ -865,7 +865,7 @@ where
                     let callee_ty = module_context.func_type(function_index);
 
                     if let Some(defined_index) = module_context.defined_func_index(function_index) {
-                        if function_index == func_idx {
+                        if defined_index == func_idx {
                             ctx.call_direct_self(
                                 defined_index,
                                 callee_ty.params().iter().map(|t| t.to_microwasm_type()),
@@ -873,7 +873,7 @@ where
                             )?;
                         } else {
                            ctx.call_direct(
-                               defined_index,
+                               function_index,
                                callee_ty.params().iter().map(|t| t.to_microwasm_type()),
                                callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
                            )?;
@@ -895,8 +895,6 @@ where
                     }
 
                     let callee_ty = module_context.signature(type_index);
-
-                    // TODO: this implementation assumes that this function is locally defined.
 
                     ctx.call_indirect(
                         type_index,

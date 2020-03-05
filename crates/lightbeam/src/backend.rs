@@ -107,7 +107,7 @@ impl GPR {
     }
 }
 
-pub fn arg_locs<I: IntoIterator<Item = SignlessType>>(
+fn arg_locs<I: IntoIterator<Item = SignlessType>>(
     types: I,
 ) -> impl ExactSizeIterator<Item = CCLoc> + DoubleEndedIterator + Clone
 where
@@ -118,20 +118,26 @@ where
     let mut float_gpr_iter = FLOAT_ARGS_IN_GPRS.iter();
     let mut stack_idx = 0;
 
-    types.into_iter().map(move |ty| match ty {
-        I32 | I64 => int_gpr_iter
-            .next()
-            .map(|&r| CCLoc::Reg(r))
-            .unwrap_or_else(|| {
-                let out = CCLoc::Stack(stack_idx);
-                stack_idx += 1;
-                out
-            }),
-        F32 | F64 => match float_gpr_iter.next() {
-            None => unimplemented!(),
-            Some(val) => CCLoc::Reg(*val),
-        },
-    })
+    types
+        .into_iter()
+        .map(move |ty| match ty {
+            I32 | I64 => int_gpr_iter
+                .next()
+                .map(|&r| CCLoc::Reg(r))
+                .unwrap_or_else(|| {
+                    let out = CCLoc::Stack(stack_idx);
+                    stack_idx += 1;
+                    out
+                }),
+            F32 | F64 => match float_gpr_iter.next() {
+                None => unimplemented!(),
+                Some(val) => CCLoc::Reg(*val),
+            },
+        })
+        // Since we only advance the iterators based on the values in `types`,
+        // we can't do this truly lazily.
+        .collect::<Vec<_>>()
+        .into_iter()
 }
 
 fn arg_locs_skip_caller_vmctx<I: IntoIterator<Item = SignlessType>>(
@@ -177,15 +183,11 @@ where
 
     impl<I> ExactSizeIterator for WithInt<I> where I: ExactSizeIterator<Item = SignlessType> {}
 
-    let mut out = arg_locs(WithInt {
+    arg_locs(WithInt {
         caller_vmctx_ty: Some(I32),
         iter: types.into_iter(),
-    });
-
-    // Skip the first element
-    let _ = out.next();
-
-    out
+    })
+    .skip(1)
 }
 
 pub fn ret_locs(types: impl IntoIterator<Item = SignlessType>) -> Result<Vec<CCLoc>, Error> {
@@ -590,8 +592,8 @@ const FLOAT_ARGS_IN_GPRS: &[GPR] = &[XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, X
 const FLOAT_RETURN_GPRS: &[GPR] = &[XMM0, XMM1];
 // List of scratch registers taken from https://wiki.osdev.org/System_V_ABI
 const SCRATCH_REGS: &[GPR] = &[
-    RSI, RDX, RCX, R8, R9, RAX, R10, R11, XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7, XMM8,
-    XMM9, XMM10, XMM11, XMM12, XMM13, XMM14, XMM15,
+    RDX, RCX, R8, R9, RAX, R10, R11, XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7, XMM8, XMM9,
+    XMM10, XMM11, XMM12, XMM13, XMM14, XMM15,
 ];
 const VMCTX: RegId = rq::RDI;
 const CALLER_VMCTX: RegId = rq::RSI;
@@ -2257,14 +2259,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     /// Create a new undefined label.
     pub fn create_label(&mut self) -> Label {
         Label(self.asm.new_dynamic_label())
-    }
-
-    pub fn define_host_fn(&mut self, host_fn: *const u8) {
-        dynasm!(self.asm
-            ; mov rax, QWORD host_fn as i64
-            ; call rax
-            ; ret
-        );
     }
 
     fn adjusted_offset(&self, offset: i32) -> i32 {
@@ -5494,14 +5488,18 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     {
         let locs = arg_locs_skip_caller_vmctx(args);
 
-        self.save_volatile()?;
-
-        if func_def_loc == FunctionDefLocation::PossiblyExternal {
+        let saved_vmctx = if func_def_loc == FunctionDefLocation::PossiblyExternal {
             dynasm!(self.asm
                 ; mov Rq(CALLER_VMCTX), Rq(VMCTX)
             );
             self.block_state.regs.mark_used(GPR::Rq(CALLER_VMCTX));
-        }
+            self.block_state.regs.mark_used(GPR::Rq(VMCTX));
+            Some(self.push_physical(ValueLocation::Reg(GPR::Rq(VMCTX)))?)
+        } else {
+            None
+        };
+
+        self.save_volatile()?;
 
         self.pass_outgoing_args(&locs)?;
 
@@ -5525,15 +5523,18 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         );
         self.block_state.regs.release(temp)?;
 
-        if func_def_loc == FunctionDefLocation::PossiblyExternal {
-            self.block_state.regs.release(GPR::Rq(CALLER_VMCTX))?;
-        }
-
         for i in locs {
             self.free_value(i.into())?;
         }
 
         self.push_function_returns(rets)?;
+
+        if func_def_loc == FunctionDefLocation::PossiblyExternal {
+            let saved_vmctx = saved_vmctx.unwrap();
+            self.block_state.regs.release(GPR::Rq(CALLER_VMCTX))?;
+            self.copy_value(saved_vmctx, CCLoc::Reg(GPR::Rq(VMCTX)))?;
+            self.free_value(saved_vmctx)?;
+        }
 
         Ok(())
     }
@@ -5553,8 +5554,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     {
         let locs = arg_locs(args);
 
+        dynasm!(self.asm
+            ; push Rq(VMCTX)
+        );
+        self.block_state.depth.reserve(1);
+        let depth = self.block_state.depth;
+
         self.save_volatile()?;
 
+        self.block_state.regs.release(GPR::Rq(CALLER_VMCTX))?;
         self.pass_outgoing_args(&locs)?;
 
         let temp = self.take_reg(I64).unwrap();
@@ -5570,8 +5578,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         for i in locs {
             self.free_value(i.into())?;
         }
+        self.block_state.regs.mark_used(GPR::Rq(CALLER_VMCTX));
 
         self.push_function_returns(rets)?;
+
+        self.set_stack_depth(depth)?;
+        dynasm!(self.asm
+            ; pop Rq(VMCTX)
+        );
+        self.block_state.depth.free(1);
 
         Ok(())
     }
@@ -5708,15 +5723,20 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         while !pending.is_empty() {
             let start_len = pending.len();
 
-            for (src, dst) in mem::replace(&mut pending, vec![]) {
+            for (src, mut dst) in mem::replace(&mut pending, vec![]) {
                 if src != ValueLocation::from(dst) {
-                    if let CCLoc::Reg(r) = dst {
-                        if !self.block_state.regs.is_free(r) {
-                            pending.push((src, dst));
-                            continue;
+                    match &mut dst {
+                        CCLoc::Reg(r) => {
+                            if !self.block_state.regs.is_free(*r) {
+                                pending.push((src, dst));
+                                continue;
+                            }
+    
+                            self.block_state.regs.mark_used(*r);
                         }
-
-                        self.block_state.regs.mark_used(r);
+                        CCLoc::Stack(offset) => {
+                            *offset += self.block_state.depth.0 as i32;
+                        }
                     }
 
                     self.copy_value(src, dst)?;
@@ -5792,6 +5812,12 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
         R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
     {
+        dynasm!(self.asm
+            ; push Rq(VMCTX)
+        );
+        self.block_state.depth.reserve(1);
+        let depth = self.block_state.depth;
+
         let locs = arg_locs_skip_caller_vmctx(arg_types);
 
         for loc in locs.clone() {
@@ -5807,11 +5833,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         self.save_volatile()?;
 
-        dynasm!(self.asm
-            ; mov Rq(CALLER_VMCTX), Rq(VMCTX)
-        );
-        self.block_state.regs.mark_used(GPR::Rq(CALLER_VMCTX));
-
         for loc in locs.clone() {
             if let CCLoc::Reg(r) = loc {
                 self.block_state.regs.release(r)?;
@@ -5819,6 +5840,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         }
 
         self.pass_outgoing_args(&locs)?;
+
+        dynasm!(self.asm
+            ; mov Rq(CALLER_VMCTX), Rq(VMCTX)
+        );
+        self.block_state.regs.mark_used(GPR::Rq(CALLER_VMCTX));
 
         let table_index = 0;
         let reg_offset = self
@@ -5881,9 +5907,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     self.module_context.vmcaller_checked_anyfunc_type_index() as i32
             ], Rd(temp1.rq().unwrap())
             ;; self.trap_if(cc::NOT_EQUAL, TrapCode::BadSignature)
-        );
-
-        dynasm!(self.asm
             ; mov Rq(VMCTX), [
                 Rq(temp0.rq().unwrap()) +
                     Rq(callee_reg.rq().unwrap()) +
@@ -5906,6 +5929,12 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         }
 
         self.push_function_returns(return_types)?;
+
+        self.set_stack_depth(depth)?;
+        dynasm!(self.asm
+            ; pop Rq(VMCTX)
+        );
+        self.block_state.depth.free(1);
 
         Ok(())
     }
@@ -5985,10 +6014,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let locs = arg_locs_skip_caller_vmctx(arg_types);
 
         dynasm!(self.asm
-            ; push Rq(VMCTX)
+            ; mov Rq(CALLER_VMCTX), Rq(VMCTX)
         );
-        self.block_state.depth.reserve(1);
-        let depth = self.block_state.depth;
+        self.block_state.regs.mark_used(GPR::Rq(CALLER_VMCTX));
+        self.block_state.regs.mark_used(GPR::Rq(VMCTX));
+        let saved_vmctx = self.push_physical(ValueLocation::Reg(GPR::Rq(VMCTX)))?;
 
         self.save_volatile()?;
         self.pass_outgoing_args(&locs)?;
@@ -6013,11 +6043,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         self.push_function_returns(return_types)?;
 
-        self.set_stack_depth(depth)?;
-        dynasm!(self.asm
-            ; pop Rq(VMCTX)
-        );
-        self.block_state.depth.free(1);
+        self.block_state.regs.release(GPR::Rq(CALLER_VMCTX))?;
+        self.copy_value(saved_vmctx, CCLoc::Reg(GPR::Rq(VMCTX)))?;
+        self.free_value(saved_vmctx)?;
+
         Ok(())
     }
 
