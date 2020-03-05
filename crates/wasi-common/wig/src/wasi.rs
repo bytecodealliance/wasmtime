@@ -187,15 +187,18 @@ pub fn define_struct(args: TokenStream) -> TokenStream {
                 let my_cx = cx.clone();
                 let #name_ident = wasmtime::Func::#wrap(
                     store,
-                    move |mem: crate::WasiCallerMemory #(,#shim_arg_decls)*| -> #ret_ty {
+                    move |mem: Option<wasmtime::Memory> #(,#shim_arg_decls)*| -> #ret_ty {
                         log::trace!(
                             #format_str,
                             #(#format_args),*
                         );
                         unsafe {
-                            let memory = match mem.get() {
-                                Ok(e) => e,
-                                Err(e) => #handle_early_error,
+                            let memory = match mem.as_ref() {
+                                Some(e) => unsafe { e.data_unchecked_mut() },
+                                None => {
+                                    let e = wasi_common::wasi::__WASI_ERRNO_INVAL;
+                                    #handle_early_error
+                                }
                             };
                             hostcalls::#name_ident(
                                 &mut my_cx.borrow_mut(),

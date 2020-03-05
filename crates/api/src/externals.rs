@@ -100,7 +100,7 @@ impl Extern {
                 Extern::Func(Func::from_wasmtime_function(export, store, instance_handle))
             }
             wasmtime_runtime::Export::Memory { .. } => {
-                Extern::Memory(Memory::from_wasmtime_memory(export, store, instance_handle))
+                Extern::Memory(Memory::from_wasmtime_memory(export, instance_handle))
             }
             wasmtime_runtime::Export::Global { .. } => {
                 Extern::Global(Global::from_wasmtime_global(export, store, instance_handle))
@@ -488,7 +488,6 @@ impl Table {
 /// implemented though!
 #[derive(Clone)]
 pub struct Memory {
-    _store: Store,
     ty: MemoryType,
     wasmtime_handle: InstanceHandle,
     wasmtime_export: wasmtime_runtime::Export,
@@ -504,7 +503,6 @@ impl Memory {
         let (wasmtime_handle, wasmtime_export) =
             generate_memory_export(store, &ty).expect("generated memory");
         Memory {
-            _store: store.clone(),
             ty,
             wasmtime_handle,
             wasmtime_export,
@@ -624,7 +622,6 @@ impl Memory {
 
     pub(crate) fn from_wasmtime_memory(
         export: wasmtime_runtime::Export,
-        store: &Store,
         instance_handle: wasmtime_runtime::InstanceHandle,
     ) -> Memory {
         let memory = if let wasmtime_runtime::Export::Memory { ref memory, .. } = export {
@@ -634,7 +631,6 @@ impl Memory {
         };
         let ty = MemoryType::from_wasmtime_memory(&memory.memory);
         Memory {
-            _store: store.clone(),
             ty: ty,
             wasmtime_handle: instance_handle,
             wasmtime_export: export,

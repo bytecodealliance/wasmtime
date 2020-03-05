@@ -1,11 +1,12 @@
 use crate::callable::{NativeCallable, WasmtimeFn, WrappedCallable};
-use crate::{Callable, FuncType, Store, Trap, Val, ValType};
+use crate::{Callable, FuncType, Memory, Store, Trap, Val, ValType};
 use anyhow::{ensure, Context as _};
 use std::fmt;
 use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::rc::Rc;
+use wasmtime_environ::entity::EntityRef;
 use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody};
 
 /// A WebAssembly function which can be called.
@@ -320,6 +321,23 @@ impl Func {
         /// | `()`              | nothing                 | no return value   |
         /// | `Result<T, Trap>` | `T`                     | function may trap |
         ///
+        /// And finally there are some special types which can be inserted into
+        /// the arguments of a Rust function which don't correspond to wasm
+        /// arguments but rather information about the environment:
+        ///
+        /// | Rust Argument Type  | Meaning                                  |
+        /// |---------------------|------------------------------------------|
+        /// | `Option<Memory>`    | Handle to the caller's `Memory` object   |
+        ///
+        /// Note that these types refer to the *caller's* object of an API.
+        /// Given how wasm functions can be moved around and inserted in tables
+        /// in such, this is not guaranteed to be the original `Instance` you
+        /// pass a `Func` into. Additionally these types are optional because
+        /// they're not always available. For example the caller could be Rust
+        /// if a `Func` is called with the `Func::call` method, or in the case
+        /// of `Memory` the calling instance may not have a single defined
+        /// memory.
+        ///
         /// Note that when using this API (and the related `wrap*` family of
         /// functions), the intention is to create as thin of a layer as
         /// possible for when WebAssembly calls the function provided. With
@@ -412,6 +430,62 @@ impl Func {
         ///     "#,
         /// )?;
         /// let instance = Instance::new(&module, &[debug.into()])?;
+        /// let foo = instance.exports()[0].func().unwrap().get0::<()>()?;
+        /// foo()?;
+        /// # Ok(())
+        /// # }
+        /// ```
+        ///
+        /// Finally if you want to get really fancy you can also implement
+        /// imports that read/write wasm module's memory
+        ///
+        /// ```
+        /// use std::str;
+        ///
+        /// # use wasmtime::*;
+        /// # fn main() -> anyhow::Result<()> {
+        /// # let store = Store::default();
+        /// let log_str = Func::wrap3(&store, |mem: Option<Memory>, ptr: i32, len: i32| {
+        ///     let mem = match mem {
+        ///         Some(mem) => mem,
+        ///         None => return Err(Trap::new("failed to find host memory")),
+        ///     };
+        ///
+        ///     // We're reading raw wasm memory here so we need `unsafe`. Note
+        ///     // though that this should be safe because we don't reenter wasm
+        ///     // while we're reading wasm memory, nor should we clash with
+        ///     // any other memory accessors (assuming they're well-behaved
+        ///     // too).
+        ///     unsafe {
+        ///         let data = mem.data_unchecked()
+        ///             .get(ptr as u32 as usize..)
+        ///             .and_then(|arr| arr.get(..len as u32 as usize));
+        ///         let string = match data {
+        ///             Some(data) => match str::from_utf8(data) {
+        ///                 Ok(s) => s,
+        ///                 Err(_) => return Err(Trap::new("invalid utf-8")),
+        ///             },
+        ///             None => return Err(Trap::new("pointer/length out of bounds")),
+        ///         };
+        ///         assert_eq!(string, "Hello, world!");
+        ///         println!("{}", string);
+        ///     }
+        ///     Ok(())
+        /// });
+        /// let module = Module::new(
+        ///     &store,
+        ///     r#"
+        ///         (module
+        ///             (import "" "" (func $log_str (param i32 i32)))
+        ///             (func (export "foo")
+        ///                 i32.const 4   ;; ptr
+        ///                 i32.const 13  ;; len
+        ///                 call $log_str)
+        ///             (memory 1)
+        ///             (data (i32.const 4) "Hello, world!"))
+        ///     "#,
+        /// )?;
+        /// let instance = Instance::new(&module, &[log_str.into()])?;
         /// let foo = instance.exports()[0].func().unwrap().get0::<()>()?;
         /// foo()?;
         /// # Ok(())
@@ -886,4 +960,48 @@ impl<T: WasmTy> WasmRet for Result<T, Trap> {
             unsafe { wasmtime_runtime::raise_user_trap(Box::new(trap)) }
         }
     }
+}
+
+impl WasmTy for Option<Memory> {
+    type Abi = ();
+
+    fn push(_dst: &mut Vec<ValType>) {}
+
+    fn matches(_tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn from_abi(vmctx: *mut VMContext, _abi: ()) -> Self {
+        // First handle a null caller which means that the `Func` was called via
+        // `.call()` or something similar where the caller wasn't available.
+        if vmctx.is_null() {
+            return None;
+        }
+        unsafe {
+            let handle = wasmtime_runtime::InstanceHandle::from_vmctx(vmctx);
+
+            // Handle when the module has 0 memories or more than one memory. In
+            // the former there's nothing to return and in the latter case we
+            // don't know what to return, so we return `None` in both situations
+            // for now.
+            //
+            // We can perhaps refine this in the future with more types other
+            // than `Option<Memory>`.
+            if handle.module().local.memory_plans.len() != 1 {
+                return None;
+            }
+
+            // handle when the calling module has no defined memories
+            let index = wasmtime_environ::wasm::MemoryIndex::new(0);
+            let export =
+                match handle.lookup_by_declaration(&wasmtime_environ::Export::Memory(index)) {
+                    e @ wasmtime_runtime::Export::Memory { .. } => e,
+                    _ => return None,
+                };
+
+            Some(Memory::from_wasmtime_memory(export, handle))
+        }
+    }
+
+    fn into_abi(self) {}
 }
