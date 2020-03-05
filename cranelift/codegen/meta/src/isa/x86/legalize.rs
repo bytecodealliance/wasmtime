@@ -21,71 +21,35 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     // List of instructions.
     let insts = &shared.instructions;
     let band = insts.by_name("band");
-    let band_not = insts.by_name("band_not");
-    let bitcast = insts.by_name("bitcast");
-    let bitselect = insts.by_name("bitselect");
     let bor = insts.by_name("bor");
-    let bnot = insts.by_name("bnot");
-    let bxor = insts.by_name("bxor");
     let clz = insts.by_name("clz");
     let ctz = insts.by_name("ctz");
-    let extractlane = insts.by_name("extractlane");
     let fcmp = insts.by_name("fcmp");
     let fcvt_from_uint = insts.by_name("fcvt_from_uint");
     let fcvt_to_sint = insts.by_name("fcvt_to_sint");
     let fcvt_to_uint = insts.by_name("fcvt_to_uint");
     let fcvt_to_sint_sat = insts.by_name("fcvt_to_sint_sat");
     let fcvt_to_uint_sat = insts.by_name("fcvt_to_uint_sat");
-    let fabs = insts.by_name("fabs");
     let fmax = insts.by_name("fmax");
     let fmin = insts.by_name("fmin");
-    let fneg = insts.by_name("fneg");
     let iadd = insts.by_name("iadd");
-    let icmp = insts.by_name("icmp");
     let iconst = insts.by_name("iconst");
-    let imax = insts.by_name("imax");
-    let imin = insts.by_name("imin");
     let imul = insts.by_name("imul");
     let ineg = insts.by_name("ineg");
-    let insertlane = insts.by_name("insertlane");
-    let ishl = insts.by_name("ishl");
-    let ishl_imm = insts.by_name("ishl_imm");
     let isub = insts.by_name("isub");
     let popcnt = insts.by_name("popcnt");
-    let raw_bitcast = insts.by_name("raw_bitcast");
-    let scalar_to_vector = insts.by_name("scalar_to_vector");
     let sdiv = insts.by_name("sdiv");
     let selectif = insts.by_name("selectif");
     let smulhi = insts.by_name("smulhi");
-    let splat = insts.by_name("splat");
-    let shuffle = insts.by_name("shuffle");
     let srem = insts.by_name("srem");
-    let sshr = insts.by_name("sshr");
     let tls_value = insts.by_name("tls_value");
-    let trueif = insts.by_name("trueif");
     let udiv = insts.by_name("udiv");
-    let umax = insts.by_name("umax");
-    let umin = insts.by_name("umin");
     let umulhi = insts.by_name("umulhi");
     let ushr_imm = insts.by_name("ushr_imm");
     let urem = insts.by_name("urem");
-    let ushr = insts.by_name("ushr");
-    let vconst = insts.by_name("vconst");
-    let vall_true = insts.by_name("vall_true");
-    let vany_true = insts.by_name("vany_true");
 
     let x86_bsf = x86_instructions.by_name("x86_bsf");
     let x86_bsr = x86_instructions.by_name("x86_bsr");
-    let x86_pmaxs = x86_instructions.by_name("x86_pmaxs");
-    let x86_pmaxu = x86_instructions.by_name("x86_pmaxu");
-    let x86_pmins = x86_instructions.by_name("x86_pmins");
-    let x86_pminu = x86_instructions.by_name("x86_pminu");
-    let x86_pshufb = x86_instructions.by_name("x86_pshufb");
-    let x86_pshufd = x86_instructions.by_name("x86_pshufd");
-    let x86_psll = x86_instructions.by_name("x86_psll");
-    let x86_psra = x86_instructions.by_name("x86_psra");
-    let x86_psrl = x86_instructions.by_name("x86_psrl");
-    let x86_ptest = x86_instructions.by_name("x86_ptest");
     let x86_umulx = x86_instructions.by_name("x86_umulx");
     let x86_smulx = x86_instructions.by_name("x86_smulx");
 
@@ -331,6 +295,71 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
 
     group.build_and_add_to(&mut shared.transform_groups);
 
+    let mut widen = TransformGroupBuilder::new(
+        "x86_widen",
+        r#"
+    Legalize instructions by widening.
+
+    Use x86-specific instructions if needed."#,
+    )
+    .isa("x86")
+    .chain_with(shared.transform_groups.by_name("widen").id);
+
+    widen.custom_legalize(ineg, "convert_ineg");
+    widen.build_and_add_to(&mut shared.transform_groups);
+
+    // To reduce compilation times, separate out large blocks of legalizations by
+    // theme.
+    define_simd(shared, x86_instructions);
+}
+
+fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGroup) {
+    let insts = &shared.instructions;
+    let band = insts.by_name("band");
+    let band_not = insts.by_name("band_not");
+    let bitcast = insts.by_name("bitcast");
+    let bitselect = insts.by_name("bitselect");
+    let bor = insts.by_name("bor");
+    let bnot = insts.by_name("bnot");
+    let bxor = insts.by_name("bxor");
+    let extractlane = insts.by_name("extractlane");
+    let fcmp = insts.by_name("fcmp");
+    let fabs = insts.by_name("fabs");
+    let fneg = insts.by_name("fneg");
+    let icmp = insts.by_name("icmp");
+    let imax = insts.by_name("imax");
+    let imin = insts.by_name("imin");
+    let ineg = insts.by_name("ineg");
+    let insertlane = insts.by_name("insertlane");
+    let ishl = insts.by_name("ishl");
+    let ishl_imm = insts.by_name("ishl_imm");
+    let raw_bitcast = insts.by_name("raw_bitcast");
+    let scalar_to_vector = insts.by_name("scalar_to_vector");
+    let splat = insts.by_name("splat");
+    let shuffle = insts.by_name("shuffle");
+    let sshr = insts.by_name("sshr");
+    let trueif = insts.by_name("trueif");
+    let umax = insts.by_name("umax");
+    let umin = insts.by_name("umin");
+    let ushr_imm = insts.by_name("ushr_imm");
+    let ushr = insts.by_name("ushr");
+    let vconst = insts.by_name("vconst");
+    let vall_true = insts.by_name("vall_true");
+    let vany_true = insts.by_name("vany_true");
+
+    let x86_pmaxs = x86_instructions.by_name("x86_pmaxs");
+    let x86_pmaxu = x86_instructions.by_name("x86_pmaxu");
+    let x86_pmins = x86_instructions.by_name("x86_pmins");
+    let x86_pminu = x86_instructions.by_name("x86_pminu");
+    let x86_pshufb = x86_instructions.by_name("x86_pshufb");
+    let x86_pshufd = x86_instructions.by_name("x86_pshufd");
+    let x86_psll = x86_instructions.by_name("x86_psll");
+    let x86_psra = x86_instructions.by_name("x86_psra");
+    let x86_psrl = x86_instructions.by_name("x86_psrl");
+    let x86_ptest = x86_instructions.by_name("x86_ptest");
+
+    let imm = &shared.imm;
+
     let mut narrow = TransformGroupBuilder::new(
         "x86_narrow",
         r#"
@@ -341,17 +370,21 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     .isa("x86")
     .chain_with(shared.transform_groups.by_name("narrow_flags").id);
 
-    // SIMD
+    // Set up variables and immediates.
     let uimm8_zero = Literal::constant(&imm.uimm8, 0x00);
     let uimm8_one = Literal::constant(&imm.uimm8, 0x01);
     let u128_zeroes = constant(vec![0x00; 16]);
     let u128_ones = constant(vec![0xff; 16]);
+    let a = var("a");
     let b = var("b");
     let c = var("c");
     let d = var("d");
     let e = var("e");
+    let x = var("x");
+    let y = var("y");
 
-    // SIMD vector size: eventually multiple vector sizes may be supported but for now only SSE-sized vectors are available
+    // Limit the SIMD vector size: eventually multiple vector sizes may be supported
+    // but for now only SSE-sized vectors are available.
     let sse_vector_size: u64 = 128;
     let allowed_simd_type = |t: &LaneType| t.lane_bits() >= 8 && t.lane_bits() < 128;
 
@@ -361,11 +394,13 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         narrow.legalize(
             def!(y = splat_any8x16(x)),
             vec![
-                def!(a = scalar_to_vector(x)), // move into the lowest 8 bits of an XMM register
-                def!(b = vconst(u128_zeroes)), // zero out a different XMM register; the shuffle mask
-                // for moving the lowest byte to all other byte lanes is 0x0
-                def!(y = x86_pshufb(a, b)), // PSHUFB takes two XMM operands, one of which is a
-                                            // shuffle mask (i.e. b)
+                // Move into the lowest 8 bits of an XMM register.
+                def!(a = scalar_to_vector(x)),
+                // Zero out a different XMM register; the shuffle mask for moving the lowest byte
+                // to all other byte lanes is 0x0.
+                def!(b = vconst(u128_zeroes)),
+                // PSHUFB takes two XMM operands, one of which is a shuffle mask (i.e. b).
+                def!(y = x86_pshufb(a, b)),
             ],
         );
     }
@@ -382,11 +417,16 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         narrow.legalize(
             def!(y = splat_x16x8(x)),
             vec![
-                def!(a = scalar_to_vector(x)), // move into the lowest 16 bits of an XMM register
-                def!(b = insertlane(a, uimm8_one, x)), // insert the value again but in the next lowest 16 bits
-                def!(c = raw_bitcast_any16x8_to_i32x4(b)), // no instruction emitted; pretend this is an I32x4 so we can use PSHUFD
-                def!(d = x86_pshufd(c, uimm8_zero)), // broadcast the bytes in the XMM register with PSHUFD
-                def!(y = raw_bitcast_i32x4_to_any16x8(d)), // no instruction emitted; pretend this is an X16x8 again
+                // Move into the lowest 16 bits of an XMM register.
+                def!(a = scalar_to_vector(x)),
+                // Insert the value again but in the next lowest 16 bits.
+                def!(b = insertlane(a, uimm8_one, x)),
+                // No instruction emitted; pretend this is an I32x4 so we can use PSHUFD.
+                def!(c = raw_bitcast_any16x8_to_i32x4(b)),
+                // Broadcast the bytes in the XMM register with PSHUFD.
+                def!(d = x86_pshufd(c, uimm8_zero)),
+                // No instruction emitted; pretend this is an X16x8 again.
+                def!(y = raw_bitcast_i32x4_to_any16x8(d)),
             ],
         );
     }
@@ -397,8 +437,10 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         narrow.legalize(
             def!(y = splat_any32x4(x)),
             vec![
-                def!(a = scalar_to_vector(x)), // translate to an x86 MOV to get the value in an XMM register
-                def!(y = x86_pshufd(a, uimm8_zero)), // broadcast the bytes in the XMM register with PSHUF
+                // Translate to an x86 MOV to get the value in an XMM register.
+                def!(a = scalar_to_vector(x)),
+                // Broadcast the bytes in the XMM register with PSHUFD.
+                def!(y = x86_pshufd(a, uimm8_zero)),
             ],
         );
     }
@@ -409,8 +451,10 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         narrow.legalize(
             def!(y = splat_any64x2(x)),
             vec![
-                def!(a = scalar_to_vector(x)), // move into the lowest 64 bits of an XMM register
-                def!(y = insertlane(a, uimm8_one, x)), // move into the highest 64 bits of the same XMM register
+                // Move into the lowest 64 bits of an XMM register.
+                def!(a = scalar_to_vector(x)),
+                // Move into the highest 64 bits of the same XMM register.
+                def!(y = insertlane(a, uimm8_one, x)),
             ],
         );
     }
@@ -482,7 +526,8 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         let vall_true = vall_true.bind(vector(ty, sse_vector_size));
         if ty.is_int() {
-            // In the common case (Wasm's integer-only all_true), we do not require a bitcast.
+            // In the common case (Wasm's integer-only all_true), we do not require a
+            // bitcast.
             narrow.legalize(
                 def!(y = vall_true(x)),
                 vec![
@@ -493,8 +538,8 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
                 ],
             );
         } else {
-            // However, to support other types we must bitcast them to an integer vector to use
-            // icmp.
+            // However, to support other types we must bitcast them to an integer vector to
+            // use icmp.
             let lane_type_as_int = LaneType::int_from_bits(ty.lane_bits() as u16);
             let raw_bitcast_to_int = raw_bitcast.bind(vector(lane_type_as_int, sse_vector_size));
             narrow.legalize(
@@ -634,17 +679,4 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     narrow.custom_legalize(ineg, "convert_ineg");
 
     narrow.build_and_add_to(&mut shared.transform_groups);
-
-    let mut widen = TransformGroupBuilder::new(
-        "x86_widen",
-        r#"
-    Legalize instructions by widening.
-
-    Use x86-specific instructions if needed."#,
-    )
-    .isa("x86")
-    .chain_with(shared.transform_groups.by_name("widen").id);
-
-    widen.custom_legalize(ineg, "convert_ineg");
-    widen.build_and_add_to(&mut shared.transform_groups);
 }
