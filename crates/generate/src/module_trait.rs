@@ -11,7 +11,12 @@ pub fn define_module_trait(names: &Names, m: &Module) -> TokenStream {
         // Check if we're returning an entity anotated with a lifetime,
         // in which case, we'll need to annotate the function itself, and
         // hence will need an explicit lifetime (rather than anonymous)
-        let (lifetime, is_anonymous) = if f.results.iter().any(|ret| ret.tref.needs_lifetime()) {
+        let (lifetime, is_anonymous) = if f
+            .params
+            .iter()
+            .chain(&f.results)
+            .any(|ret| ret.tref.needs_lifetime())
+        {
             (quote!('a), false)
         } else {
             (anon_lifetime(), true)

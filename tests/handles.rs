@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle_runtime::{GuestError, GuestType};
+use wiggle_runtime::{GuestError, GuestMemory, GuestType};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 const FD_VAL: u32 = 123;
@@ -32,27 +32,25 @@ struct HandleExercise {
 
 impl HandleExercise {
     pub fn test(&self) {
-        let mut ctx = WasiCtx::new();
-        let mut host_memory = HostMemory::new();
-        let mut guest_memory = host_memory.guest_memory();
+        let ctx = WasiCtx::new();
+        let host_memory = HostMemory::new();
 
-        let e = handle_examples::fd_create(&mut ctx, &mut guest_memory, self.return_loc.ptr as i32);
+        let e = handle_examples::fd_create(&ctx, &host_memory, self.return_loc.ptr as i32);
 
         assert_eq!(e, types::Errno::Ok.into(), "fd_create error");
 
-        let h_got: u32 = *guest_memory
+        let h_got: u32 = host_memory
             .ptr(self.return_loc.ptr)
-            .expect("return ptr")
-            .as_ref()
+            .read()
             .expect("return ref_mut");
 
         assert_eq!(h_got, 123, "fd_create return val");
 
-        let e = handle_examples::fd_consume(&mut ctx, &mut guest_memory, h_got as i32);
+        let e = handle_examples::fd_consume(&ctx, &host_memory, h_got as i32);
 
         assert_eq!(e, types::Errno::Ok.into(), "fd_consume error");
 
-        let e = handle_examples::fd_consume(&mut ctx, &mut guest_memory, h_got as i32 + 1);
+        let e = handle_examples::fd_consume(&ctx, &host_memory, h_got as i32 + 1);
 
         assert_eq!(
             e,
@@ -62,7 +60,7 @@ impl HandleExercise {
     }
 
     pub fn strat() -> BoxedStrategy<Self> {
-        (HostMemory::mem_area_strat(types::Fd::size()))
+        (HostMemory::mem_area_strat(types::Fd::guest_size()))
             .prop_map(|return_loc| HandleExercise { return_loc })
             .boxed()
     }

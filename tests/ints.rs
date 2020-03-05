@@ -1,6 +1,6 @@
 use proptest::prelude::*;
 use std::convert::TryFrom;
-use wiggle_runtime::GuestError;
+use wiggle_runtime::{GuestError, GuestMemory};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
@@ -44,22 +44,20 @@ impl CookieCutterExercise {
     }
 
     pub fn test(&self) {
-        let mut ctx = WasiCtx::new();
-        let mut host_memory = HostMemory::new();
-        let mut guest_memory = host_memory.guest_memory();
+        let ctx = WasiCtx::new();
+        let host_memory = HostMemory::new();
 
         let res = ints::cookie_cutter(
-            &mut ctx,
-            &mut guest_memory,
+            &ctx,
+            &host_memory,
             self.cookie.into(),
             self.return_ptr_loc.ptr as i32,
         );
         assert_eq!(res, types::Errno::Ok.into(), "cookie cutter errno");
 
-        let is_cookie_start = *guest_memory
+        let is_cookie_start = host_memory
             .ptr::<types::Bool>(self.return_ptr_loc.ptr)
-            .expect("ptr to returned Bool")
-            .as_ref()
+            .read()
             .expect("deref to Bool value");
 
         assert_eq!(

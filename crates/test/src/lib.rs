@@ -1,17 +1,16 @@
 use proptest::prelude::*;
+use std::cell::UnsafeCell;
 use wiggle_runtime::GuestMemory;
 
 #[repr(align(4096))]
 pub struct HostMemory {
-    buffer: [u8; 4096],
+    buffer: UnsafeCell<[u8; 4096]>,
 }
 impl HostMemory {
     pub fn new() -> Self {
-        HostMemory { buffer: [0; 4096] }
-    }
-
-    pub fn guest_memory<'a>(&'a mut self) -> GuestMemory<'a> {
-        GuestMemory::new(self.buffer.as_mut_ptr(), self.buffer.len() as u32)
+        HostMemory {
+            buffer: UnsafeCell::new([0; 4096]),
+        }
     }
 
     pub fn mem_area_strat(align: u32) -> BoxedStrategy<MemArea> {
@@ -26,6 +25,15 @@ impl HostMemory {
                 }
             })
             .boxed()
+    }
+}
+
+unsafe impl GuestMemory for HostMemory {
+    fn base(&self) -> (*mut u8, u32) {
+        unsafe {
+            let ptr = self.buffer.get();
+            ((*ptr).as_mut_ptr(), (*ptr).len() as u32)
+        }
     }
 }
 
@@ -84,10 +92,10 @@ mod test {
     use super::*;
     #[test]
     fn hostmemory_is_aligned() {
-        let mut h = HostMemory::new();
-        assert_eq!(h.buffer.as_mut_ptr() as usize % 4096, 0);
-        let mut h = Box::new(HostMemory::new());
-        assert_eq!(h.buffer.as_mut_ptr() as usize % 4096, 0);
+        let h = HostMemory::new();
+        assert_eq!(h.base().0 as usize % 4096, 0);
+        let h = Box::new(h);
+        assert_eq!(h.base().0 as usize % 4096, 0);
     }
 }
 

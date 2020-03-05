@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use crate::lifetimes::{anon_lifetime, LifetimeExt};
+use crate::lifetimes::anon_lifetime;
 use crate::names::Names;
 
 pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
@@ -30,7 +30,7 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
     });
 
     let abi_args = quote!(
-            ctx: &mut #ctx_type, memory: &mut wiggle_runtime::GuestMemory,
+            ctx: &#ctx_type, memory: &dyn wiggle_runtime::GuestMemory,
             #(#params),*
     );
     let abi_ret = if let Some(ret) = &coretype.ret {
@@ -158,13 +158,8 @@ fn marshal_arg(
         let arg_name = names.func_ptr_binding(&param.name);
         let name = names.func_param(&param.name);
         quote! {
-            let #name = match memory.ptr::<#pointee_type>(#arg_name as u32) {
-                Ok(p) => match p.read() {
-                    Ok(r) => r,
-                    Err(e) => {
-                        #error_handling
-                    }
-                },
+            let #name = match wiggle_runtime::GuestPtr::<#pointee_type>::new(memory, #arg_name as u32).read() {
+                Ok(r) => r,
                 Err(e) => {
                     #error_handling
                 }
@@ -209,102 +204,25 @@ fn marshal_arg(
                 let len_name = names.func_len_binding(&param.name);
                 let name = names.func_param(&param.name);
                 quote! {
-                    let num_elems = match memory.ptr::<u32>(#len_name as u32) {
-                        Ok(p) => match p.as_ref() {
-                            Ok(r) => r,
-                            Err(e) => {
-                                #error_handling
-                            }
-                        }
-                        Err(e) => {
-                            #error_handling
-                        }
-                    };
-                    let #name: wiggle_runtime::GuestString<#lifetime> = match memory.ptr::<u8>(#ptr_name as u32) {
-                        Ok(p) => match p.array(*num_elems) {
-                            Ok(s) => s.into(),
-                            Err(e) => {
-                                #error_handling
-                            }
-                        }
-                        Err(e) => {
-                            #error_handling
-                        }
-                    };
+                    let #name = wiggle_runtime::GuestPtr::<#lifetime, str>::new(memory, (#ptr_name as u32, #len_name as u32));
                 }
             }
         },
-        witx::Type::Pointer(pointee) => {
+        witx::Type::Pointer(pointee) | witx::Type::ConstPointer(pointee) => {
             let pointee_type = names.type_ref(pointee, anon_lifetime());
             let name = names.func_param(&param.name);
             quote! {
-                let #name = match memory.ptr_mut::<#pointee_type>(#name as u32) {
-                    Ok(p) => p,
-                    Err(e) => {
-                        #error_handling
-                    }
-                };
+                let #name = wiggle_runtime::GuestPtr::<#pointee_type>::new(memory, #name as u32);
             }
         }
-        witx::Type::ConstPointer(pointee) => {
-            let pointee_type = names.type_ref(pointee, anon_lifetime());
-            let name = names.func_param(&param.name);
-            quote! {
-                let #name = match memory.ptr::<#pointee_type>(#name as u32) {
-                    Ok(p) => p,
-                    Err(e) => {
-                        #error_handling
-                    }
-                };
-            }
-        }
-        witx::Type::Struct(s) if !s.needs_lifetime() => {
-            let pointee_type = names.type_ref(tref, anon_lifetime());
-            let arg_name = names.func_ptr_binding(&param.name);
-            let name = names.func_param(&param.name);
-            quote! {
-                let #name = match memory.ptr::<#pointee_type>(#arg_name as u32) {
-                    Ok(p) => match p.as_ref() {
-                        Ok(r) => r,
-                        Err(e) => {
-                            #error_handling
-                        }
-                    },
-                    Err(e) => {
-                        #error_handling
-                    }
-                };
-            }
-        }
-        witx::Type::Struct(s) if s.needs_lifetime() => read_conversion,
+        witx::Type::Struct(_) => read_conversion,
         witx::Type::Array(arr) => {
             let pointee_type = names.type_ref(arr, anon_lifetime());
             let ptr_name = names.func_ptr_binding(&param.name);
             let len_name = names.func_len_binding(&param.name);
             let name = names.func_param(&param.name);
             quote! {
-                let num_elems = match memory.ptr::<u32>(#len_name as u32) {
-                    Ok(p) => match p.as_ref() {
-                        Ok(r) => r,
-                        Err(e) => {
-                            #error_handling
-                        }
-                    }
-                    Err(e) => {
-                        #error_handling
-                    }
-                };
-                let #name = match memory.ptr::<#pointee_type>(#ptr_name as u32) {
-                    Ok(p) => match p.array(*num_elems) {
-                        Ok(s) => s,
-                        Err(e) => {
-                            #error_handling
-                        }
-                    }
-                    Err(e) => {
-                        #error_handling
-                    }
-                };
+                let #name = wiggle_runtime::GuestPtr::<[#pointee_type]>::new(memory, (#ptr_name as u32, #len_name as u32));
             }
         }
         witx::Type::Union(_u) => read_conversion,
@@ -313,7 +231,6 @@ fn marshal_arg(
             let handle_type = names.type_ref(tref, anon_lifetime());
             quote!( let #name = #handle_type::from(#name); )
         }
-        _ => unimplemented!("argument type marshalling"),
     }
 }
 
@@ -333,17 +250,14 @@ where
         let ptr_name = names.func_ptr_binding(&result.name);
         let ptr_err_handling = error_handling(&format!("{}:result_ptr_mut", result.name.as_str()));
         let pre = quote! {
-            let mut #ptr_name = match memory.ptr_mut::<#pointee_type>(#ptr_name as u32) {
-                Ok(p) => p,
-                Err(e) => {
-                    #ptr_err_handling
-                }
-            };
+            let #ptr_name = wiggle_runtime::GuestPtr::<#pointee_type>::new(memory, #ptr_name as u32);
         };
         // trait binding returns func_param name.
         let val_name = names.func_param(&result.name);
         let post = quote! {
-            #ptr_name.write(&#val_name);
+            if let Err(e) = #ptr_name.write(#val_name) {
+                #ptr_err_handling
+            }
         };
         (pre, post)
     };

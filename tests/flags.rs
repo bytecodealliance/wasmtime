@@ -1,6 +1,6 @@
 use proptest::prelude::*;
 use std::convert::TryFrom;
-use wiggle_runtime::{GuestError, GuestPtr};
+use wiggle_runtime::{GuestError, GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
@@ -16,7 +16,7 @@ impl flags::Flags for WasiCtx {
         old_config: types::CarConfig,
         other_config_ptr: GuestPtr<types::CarConfig>,
     ) -> Result<types::CarConfig, types::Errno> {
-        let other_config = *other_config_ptr.as_ref().map_err(|e| {
+        let other_config = other_config_ptr.read().map_err(|e| {
             eprintln!("old_config_ptr error: {}", e);
             types::Errno::InvalidArg
         })?;
@@ -63,30 +63,27 @@ impl ConfigureCarExercise {
     }
 
     pub fn test(&self) {
-        let mut ctx = WasiCtx::new();
-        let mut host_memory = HostMemory::new();
-        let mut guest_memory = host_memory.guest_memory();
+        let ctx = WasiCtx::new();
+        let host_memory = HostMemory::new();
 
         // Populate input ptr
-        *guest_memory
-            .ptr_mut(self.other_config_by_ptr.ptr)
-            .expect("ptr mut to CarConfig")
-            .as_ref_mut()
-            .expect("deref ptr mut to CarConfig") = self.other_config;
+        host_memory
+            .ptr(self.other_config_by_ptr.ptr)
+            .write(self.other_config)
+            .expect("deref ptr mut to CarConfig");
 
         let res = flags::configure_car(
-            &mut ctx,
-            &mut guest_memory,
+            &ctx,
+            &host_memory,
             self.old_config.into(),
             self.other_config_by_ptr.ptr as i32,
             self.return_ptr_loc.ptr as i32,
         );
         assert_eq!(res, types::Errno::Ok.into(), "configure car errno");
 
-        let res_config = *guest_memory
+        let res_config = host_memory
             .ptr::<types::CarConfig>(self.return_ptr_loc.ptr)
-            .expect("ptr to returned CarConfig")
-            .as_ref()
+            .read()
             .expect("deref to CarConfig value");
 
         assert_eq!(

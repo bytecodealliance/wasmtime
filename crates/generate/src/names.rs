@@ -24,7 +24,7 @@ impl Names {
     }
     pub fn builtin_type(&self, b: BuiltinType, lifetime: TokenStream) -> TokenStream {
         match b {
-            BuiltinType::String => quote!(wiggle_runtime::GuestString<#lifetime>),
+            BuiltinType::String => quote!(wiggle_runtime::GuestPtr<#lifetime, str>),
             BuiltinType::U8 => quote!(u8),
             BuiltinType::U16 => quote!(u16),
             BuiltinType::U32 => quote!(u32),
@@ -60,11 +60,7 @@ impl Names {
             }
             TypeRef::Value(ty) => match &**ty {
                 witx::Type::Builtin(builtin) => self.builtin_type(*builtin, lifetime.clone()),
-                witx::Type::Pointer(pointee) => {
-                    let pointee_type = self.type_ref(&pointee, lifetime.clone());
-                    quote!(wiggle_runtime::GuestPtrMut<#lifetime, #pointee_type>)
-                }
-                witx::Type::ConstPointer(pointee) => {
+                witx::Type::Pointer(pointee) | witx::Type::ConstPointer(pointee) => {
                     let pointee_type = self.type_ref(&pointee, lifetime.clone());
                     quote!(wiggle_runtime::GuestPtr<#lifetime, #pointee_type>)
                 }

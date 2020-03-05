@@ -1,4 +1,4 @@
-use wiggle_runtime::{GuestError, GuestErrorType, GuestPtr, GuestPtrMut, GuestString};
+use wiggle_runtime::{GuestError, GuestErrorType, GuestPtr};
 use wiggle_test::WasiCtx;
 
 wiggle::from_witx!({
@@ -23,11 +23,7 @@ impl GuestErrorType for types::Errno {
 }
 
 impl crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
-    fn args_get(
-        &self,
-        _argv: GuestPtrMut<GuestPtrMut<u8>>,
-        _argv_buf: GuestPtrMut<u8>,
-    ) -> Result<()> {
+    fn args_get(&self, _argv: GuestPtr<GuestPtr<u8>>, _argv_buf: GuestPtr<u8>) -> Result<()> {
         unimplemented!("args_get")
     }
 
@@ -37,8 +33,8 @@ impl crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     fn environ_get(
         &self,
-        _environ: GuestPtrMut<GuestPtrMut<u8>>,
-        _environ_buf: GuestPtrMut<u8>,
+        _environ: GuestPtr<GuestPtr<u8>>,
+        _environ_buf: GuestPtr<u8>,
     ) -> Result<()> {
         unimplemented!("environ_get")
     }
@@ -137,7 +133,7 @@ impl crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     fn fd_prestat_dir_name(
         &self,
         _fd: types::Fd,
-        _path: GuestPtrMut<u8>,
+        _path: GuestPtr<u8>,
         _path_len: types::Size,
     ) -> Result<()> {
         unimplemented!("fd_prestat_dir_name")
@@ -159,7 +155,7 @@ impl crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     fn fd_readdir(
         &self,
         _fd: types::Fd,
-        _buf: GuestPtrMut<u8>,
+        _buf: GuestPtr<u8>,
         _buf_len: types::Size,
         _cookie: types::Dircookie,
     ) -> Result<types::Size> {
@@ -191,7 +187,7 @@ impl crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         unimplemented!("fd_write")
     }
 
-    fn path_create_directory(&self, _fd: types::Fd, _path: &GuestString<'_>) -> Result<()> {
+    fn path_create_directory(&self, _fd: types::Fd, _path: &GuestPtr<'_, str>) -> Result<()> {
         unimplemented!("path_create_directory")
     }
 
@@ -199,7 +195,7 @@ impl crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         &self,
         _fd: types::Fd,
         _flags: types::Lookupflags,
-        _path: &GuestString<'_>,
+        _path: &GuestPtr<'_, str>,
     ) -> Result<types::Filestat> {
         unimplemented!("path_filestat_get")
     }
@@ -208,7 +204,7 @@ impl crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         &self,
         _fd: types::Fd,
         _flags: types::Lookupflags,
-        _path: &GuestString<'_>,
+        _path: &GuestPtr<'_, str>,
         _atim: types::Timestamp,
         _mtim: types::Timestamp,
         _fst_flags: types::Fstflags,
@@ -220,9 +216,9 @@ impl crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         &self,
         _old_fd: types::Fd,
         _old_flags: types::Lookupflags,
-        _old_path: &GuestString<'_>,
+        _old_path: &GuestPtr<'_, str>,
         _new_fd: types::Fd,
-        _new_path: &GuestString<'_>,
+        _new_path: &GuestPtr<'_, str>,
     ) -> Result<()> {
         unimplemented!("path_link")
     }
@@ -231,7 +227,7 @@ impl crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         &self,
         _fd: types::Fd,
         _dirflags: types::Lookupflags,
-        _path: &GuestString<'_>,
+        _path: &GuestPtr<'_, str>,
         _oflags: types::Oflags,
         _fs_rights_base: types::Rights,
         _fs_rights_inherting: types::Rights,
@@ -243,44 +239,44 @@ impl crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     fn path_readlink(
         &self,
         _fd: types::Fd,
-        _path: &GuestString<'_>,
-        _buf: GuestPtrMut<u8>,
+        _path: &GuestPtr<'_, str>,
+        _buf: GuestPtr<u8>,
         _buf_len: types::Size,
     ) -> Result<types::Size> {
         unimplemented!("path_readlink")
     }
 
-    fn path_remove_directory(&self, _fd: types::Fd, _path: &GuestString<'_>) -> Result<()> {
+    fn path_remove_directory(&self, _fd: types::Fd, _path: &GuestPtr<'_, str>) -> Result<()> {
         unimplemented!("path_remove_directory")
     }
 
     fn path_rename(
         &self,
         _fd: types::Fd,
-        _old_path: &GuestString<'_>,
+        _old_path: &GuestPtr<'_, str>,
         _new_fd: types::Fd,
-        _new_path: &GuestString<'_>,
+        _new_path: &GuestPtr<'_, str>,
     ) -> Result<()> {
         unimplemented!("path_rename")
     }
 
     fn path_symlink(
         &self,
-        _old_path: &GuestString<'_>,
+        _old_path: &GuestPtr<'_, str>,
         _fd: types::Fd,
-        _new_path: &GuestString<'_>,
+        _new_path: &GuestPtr<'_, str>,
     ) -> Result<()> {
         unimplemented!("path_symlink")
     }
 
-    fn path_unlink_file(&self, _fd: types::Fd, _path: &GuestString<'_>) -> Result<()> {
+    fn path_unlink_file(&self, _fd: types::Fd, _path: &GuestPtr<'_, str>) -> Result<()> {
         unimplemented!("path_unlink_file")
     }
 
     fn poll_oneoff(
         &self,
         _in_: GuestPtr<types::Subscription>,
-        _out: GuestPtrMut<types::Event>,
+        _out: GuestPtr<types::Event>,
         _nsubscriptions: types::Size,
     ) -> Result<types::Size> {
         unimplemented!("poll_oneoff")
@@ -298,7 +294,7 @@ impl crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         unimplemented!("sched_yield")
     }
 
-    fn random_get(&self, _buf: GuestPtrMut<u8>, _buf_len: types::Size) -> Result<()> {
+    fn random_get(&self, _buf: GuestPtr<u8>, _buf_len: types::Size) -> Result<()> {
         unimplemented!("random_get")
     }
 

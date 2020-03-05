@@ -77,37 +77,25 @@ pub(super) fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype
         }
 
         impl<'a> wiggle_runtime::GuestType<'a> for #ident {
-            fn size() -> u32 {
-                ::std::mem::size_of::<#repr>() as u32
+            fn guest_size() -> u32 {
+                #repr::guest_size()
             }
 
-            fn align() -> u32 {
-                ::std::mem::align_of::<#repr>() as u32
-            }
-
-            fn name() -> String {
-                stringify!(#ident).to_owned()
-            }
-
-            fn validate(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<(), wiggle_runtime::GuestError> {
-                use ::std::convert::TryFrom;
-                let raw: #repr = unsafe { (location.as_raw() as *const #repr).read() };
-                let _ = #ident::try_from(raw)?;
-                Ok(())
+            fn guest_align() -> usize {
+                #repr::guest_align()
             }
 
             fn read(location: &wiggle_runtime::GuestPtr<#ident>) -> Result<#ident, wiggle_runtime::GuestError> {
-                // Perform validation as part of as_ref:
-                let r = location.as_ref()?;
-                Ok(*r)
+                use std::convert::TryFrom;
+                let val = #repr::read(&location.cast())?;
+                #ident::try_from(val)
             }
 
-            fn write(&self, location: &wiggle_runtime::GuestPtrMut<#ident>) {
-                let val: #repr = #repr::from(*self);
-                unsafe { (location.as_raw() as *mut #repr).write(val) };
+            fn write(location: &wiggle_runtime::GuestPtr<'_, #ident>, val: Self)
+                -> Result<(), wiggle_runtime::GuestError>
+            {
+                #repr::write(&location.cast(), #repr::from(val))
             }
         }
-
-        impl<'a> wiggle_runtime::GuestTypeTransparent<'a> for #ident {}
     }
 }
