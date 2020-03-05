@@ -93,10 +93,7 @@ pub(crate) fn path_open(
     oflags: wasi::__wasi_oflags_t,
     fs_flags: wasi::__wasi_fdflags_t,
 ) -> Result<File> {
-    use yanix::{
-        file::{fstatat, openat, AtFlag, FileType, Mode, OFlag},
-        Errno,
-    };
+    use yanix::file::{fstatat, openat, AtFlag, FileType, Mode, OFlag};
 
     let mut nix_all_oflags = if read && write {
         OFlag::RDWR
@@ -132,54 +129,59 @@ pub(crate) fn path_open(
     } {
         Ok(fd) => fd,
         Err(e) => {
-            if let yanix::YanixError::Errno(errno) = e {
-                match errno {
+            if let yanix::Error::Io(ref err) = e {
+                match err.raw_os_error().unwrap() {
                     // Linux returns ENXIO instead of EOPNOTSUPP when opening a socket
-                    Errno::ENXIO => {
-                        if let Ok(stat) = unsafe {
+                    libc::ENXIO => {
+                        match unsafe {
                             fstatat(
                                 resolved.dirfd().as_raw_fd(),
                                 resolved.path(),
                                 AtFlag::SYMLINK_NOFOLLOW,
                             )
                         } {
-                            if FileType::from_stat_st_mode(stat.st_mode) == FileType::Socket {
-                                return Err(Error::ENOTSUP);
-                            } else {
-                                return Err(Error::ENXIO);
+                            Ok(stat) => {
+                                if FileType::from_stat_st_mode(stat.st_mode) == FileType::Socket {
+                                    return Err(Error::ENOTSUP);
+                                }
                             }
-                        } else {
-                            return Err(Error::ENXIO);
+                            Err(err) => {
+                                log::debug!("path_open fstatat error: {:?}", err);
+                            }
                         }
                     }
                     // Linux returns ENOTDIR instead of ELOOP when using O_NOFOLLOW|O_DIRECTORY
                     // on a symlink.
-                    Errno::ENOTDIR
+                    libc::ENOTDIR
                         if !(nix_all_oflags & (OFlag::NOFOLLOW | OFlag::DIRECTORY)).is_empty() =>
                     {
-                        if let Ok(stat) = unsafe {
+                        match unsafe {
                             fstatat(
                                 resolved.dirfd().as_raw_fd(),
                                 resolved.path(),
                                 AtFlag::SYMLINK_NOFOLLOW,
                             )
                         } {
-                            if FileType::from_stat_st_mode(stat.st_mode) == FileType::Symlink {
-                                return Err(Error::ELOOP);
+                            Ok(stat) => {
+                                if FileType::from_stat_st_mode(stat.st_mode) == FileType::Symlink {
+                                    return Err(Error::ELOOP);
+                                }
+                            }
+                            Err(err) => {
+                                log::debug!("path_open fstatat error: {:?}", err);
                             }
                         }
-                        return Err(Error::ENOTDIR);
                     }
                     // FreeBSD returns EMLINK instead of ELOOP when using O_NOFOLLOW on
                     // a symlink.
-                    Errno::EMLINK if !(nix_all_oflags & OFlag::NOFOLLOW).is_empty() => {
+                    libc::EMLINK if !(nix_all_oflags & OFlag::NOFOLLOW).is_empty() => {
                         return Err(Error::ELOOP);
                     }
-                    errno => return Err(errno.into()),
+                    _ => {}
                 }
-            } else {
-                return Err(e.into());
             }
+
+            return Err(e.into());
         }
     };
 

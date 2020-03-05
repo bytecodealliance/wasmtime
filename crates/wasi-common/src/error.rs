@@ -101,9 +101,6 @@ pub enum Error {
     Wasi(#[from] WasiError),
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    #[cfg(unix)]
-    #[error("Yanix error: {0}")]
-    Yanix(#[from] yanix::YanixError),
 }
 
 impl From<TryFromIntError> for Error {
@@ -147,16 +144,6 @@ impl Error {
                         log::debug!("Inconvertible OS error: {}", err);
                         Self::EIO
                     }
-                };
-                err.as_wasi_error()
-            }
-            #[cfg(unix)]
-            Self::Yanix(err) => {
-                use yanix::YanixError::*;
-                let err: Self = match err {
-                    Errno(errno) => (*errno).into(),
-                    NulError(err) => err.into(),
-                    TryFromIntError(err) => (*err).into(),
                 };
                 err.as_wasi_error()
             }

@@ -2,6 +2,7 @@
 #![allow(unused_unsafe)]
 use crate::hostcalls_impl::{ClockEventData, FdEventData};
 use crate::{wasi, Error, Result};
+use std::io;
 use yanix::clock::{clock_getres, clock_gettime, ClockId};
 
 fn wasi_clock_id_to_unix(clock_id: wasi::__wasi_clockid_t) -> Result<ClockId> {
@@ -54,10 +55,7 @@ pub(crate) fn poll_oneoff(
     events: &mut Vec<wasi::__wasi_event_t>,
 ) -> Result<()> {
     use std::{convert::TryInto, os::unix::prelude::AsRawFd};
-    use yanix::{
-        poll::{poll, PollFd, PollFlags},
-        Errno,
-    };
+    use yanix::poll::{poll, PollFd, PollFlags};
 
     if fd_events.is_empty() && timeout.is_none() {
         return Ok(());
@@ -88,10 +86,11 @@ pub(crate) fn poll_oneoff(
     let ready = loop {
         match poll(&mut poll_fds, poll_timeout) {
             Err(_) => {
-                if Errno::last() == Errno::EINTR {
+                let last_err = io::Error::last_os_error();
+                if last_err.raw_os_error().unwrap() == libc::EINTR {
                     continue;
                 }
-                return Err(Errno::last().into());
+                return Err(last_err.into());
             }
             Ok(ready) => break ready,
         }

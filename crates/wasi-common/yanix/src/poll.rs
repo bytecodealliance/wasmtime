@@ -1,4 +1,4 @@
-use crate::{Errno, Result};
+use crate::{Error, Result};
 use bitflags::bitflags;
 use std::{convert::TryInto, os::unix::prelude::*};
 
@@ -36,7 +36,7 @@ impl PollFd {
 }
 
 pub fn poll(fds: &mut [PollFd], timeout: libc::c_int) -> Result<usize> {
-    Errno::from_result(unsafe {
+    Error::from_result(unsafe {
         libc::poll(
             fds.as_mut_ptr() as *mut libc::pollfd,
             fds.len() as libc::nfds_t,
