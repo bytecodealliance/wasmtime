@@ -190,6 +190,12 @@ jobs:
         RUST_BACKTRACE: 1
         RUSTFLAGS: "-D warnings"
 
+    # Test debug (DWARF) related functionality.
+    - run: cargo test test_debug_dwarf_ -- --ignored --nocapture --test-threads 1
+      env:
+        RUST_BACKTRACE: 1
+        RUSTFLAGS: "-D warnings"
+
     # Build and test lightbeam if we're using the nightly toolchain. Note that
     # Lightbeam tests fail right now, but we don't want to block on that.
     - run: cargo build --package lightbeam
@@ -346,7 +352,7 @@ jobs:
     - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
       shell: bash
     # Test what we just built
-    - run: $CENTOS cargo test --features test_programs --release --all --exclude lightbeam --exclude wasmtime --exclude wasmtime-c-api --exclude wasmtime-fuzzing -- --skip test_debug_dwarf_
+    - run: $CENTOS cargo test --features test_programs --release --all --exclude lightbeam --exclude wasmtime --exclude wasmtime-c-api --exclude wasmtime-fuzzing
       shell: bash
       env:
         RUST_BACKTRACE: 1
