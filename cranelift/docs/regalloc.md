@@ -1,9 +1,4 @@
-********************************
-Register Allocation in Cranelift
-********************************
-
-.. default-domain:: clif
-.. highlight:: clif
+# Register Allocation in Cranelift
 
 Cranelift uses a *decoupled, SSA-based* register allocator. Decoupled means that
 register allocation is split into two primary phases: *spilling* and
@@ -12,17 +7,16 @@ register allocator, and in fact is still in SSA form after register allocation.
 
 Before the register allocator is run, all instructions in the function must be
 *legalized*, which means that every instruction has an entry in the
-``encodings`` table. The encoding entries also provide register class
+`encodings` table. The encoding entries also provide register class
 constraints on the instruction's operands that the register allocator must
 satisfy.
 
-After the register allocator has run, the ``locations`` table provides a
+After the register allocator has run, the `locations` table provides a
 register or stack slot location for all SSA values used by the function. The
-register allocator may have inserted :inst:`spill`, :inst:`fill`, and
-:inst:`copy` instructions to make that possible.
+register allocator may have inserted `spill`, `fill`, and
+`copy` instructions to make that possible.
 
-SSA-based register allocation
-=============================
+## SSA-based register allocation
 
 The phases of the SSA-based register allocator are:
 
@@ -37,14 +31,14 @@ Coalescing
 Spilling
     The process of deciding which SSA values go in a stack slot and which
     values go in a register. The spilling phase can also split live ranges by
-    inserting :inst:`copy` instructions, or transform the code in other ways to
+    inserting `copy` instructions, or transform the code in other ways to
     reduce the number of values kept in registers.
 
     After spilling, the number of live register values never exceeds the number
     of available registers.
 
 Reload
-    Insert :inst:`spill` and :inst:`fill` instructions as necessary such that
+    Insert `spill` and `fill` instructions as necessary such that
     instructions that expect their operands in registers won't see values that
     live on the stack and vice versa.
 
@@ -62,8 +56,7 @@ The contract between the spilling and coloring phases is that the number of
 values in registers never exceeds the number of available registers. This
 sounds simple enough in theory, but in practice there are some complications.
 
-Real-world complications to SSA coloring
-----------------------------------------
+### Real-world complications to SSA coloring
 
 In practice, instruction set architectures don't have "K interchangeable
 registers", and register pressure can't be measured with a single number. There
@@ -104,7 +97,7 @@ ABI boundaries
     Win64 callees only save the low 128 bits of AVX registers.
 
     ABI boundaries also affect the location of arguments to the entry block and
-    return values passed to the :inst:`return` instruction.
+    return values passed to the `return` instruction.
 
 Aliasing registers
     Different registers sometimes share the same bits in the register bank.
@@ -121,8 +114,7 @@ Early clobbers
     assembly and in some other special cases.
 
 
-Liveness Analysis
-=================
+## Liveness Analysis
 
 All the register allocator passes need to know exactly where SSA values are
 live. The liveness analysis computes this information.
@@ -159,11 +151,11 @@ this can often be represented with coalesced live-in intervals covering many
 EBBs. It is important that the live range data structure doesn't have to grow
 linearly with the number of EBBs covered by a live range.
 
-This representation is very similar to LLVM's ``LiveInterval`` data structure
+This representation is very similar to LLVM's `LiveInterval` data structure
 with a few important differences:
 
-- The Cranelift ``LiveRange`` only covers a single SSA value, while LLVM's
-  ``LiveInterval`` represents the union of multiple related SSA values in a
+- The Cranelift `LiveRange` only covers a single SSA value, while LLVM's
+  `LiveInterval` represents the union of multiple related SSA values in a
   virtual register. This makes Cranelift's representation smaller because
   individual segments don't have to annotated with a value number.
 - Cranelift stores the def-interval separately from a list of coalesced live-in
@@ -176,8 +168,8 @@ with a few important differences:
   is not necessary to check for overlap between the two sets of live-in
   intervals. This makes the overlap check logarithmic in the number of live-in
   intervals instead of linear.
-- LLVM represents a program point as ``SlotIndex`` which holds a pointer to a
-  32-byte ``IndexListEntry`` struct. The entries are organized in a double
+- LLVM represents a program point as `SlotIndex` which holds a pointer to a
+  32-byte `IndexListEntry` struct. The entries are organized in a double
   linked list that mirrors the ordering of instructions in a basic block. This
   allows 'tombstone' program points corresponding to instructions that have
   been deleted.
@@ -190,12 +182,12 @@ with a few important differences:
 A consequence of Cranelift's more compact representation is that two program
 points can't be compared without the context of a function layout.
 
-Coalescing algorithm
-====================
+## Coalescing algorithm
 
 Unconstrained SSA form is not well suited to register allocation because of the problems
-that can arise around EBB parameters and arguments. Consider this simple example::
+that can arise around EBB parameters and arguments. Consider this simple example:
 
+```
     function %interference(i32, i32) -> i32 {
     ebb0(v0: i32, v1: i32):
         brz v0, ebb1(v1)
@@ -205,15 +197,17 @@ that can arise around EBB parameters and arguments. Consider this simple example
         v3 = iadd v1, v2
         return v3
     }
+```
 
-Here, the value ``v1`` is both passed as an argument to ``ebb1`` *and* it is
-live in to the EBB because it is used by the  :inst:`iadd` instruction. Since
-EBB arguments on the :inst:`brz` instruction need to be in the same register as
-the corresponding EBB parameter ``v2``, there is going to be interference
-between ``v1`` and ``v2`` in the ``ebb1`` block.
+Here, the value `v1` is both passed as an argument to `ebb1` *and* it is
+live in to the EBB because it is used by the  `iadd` instruction. Since
+EBB arguments on the `brz` instruction need to be in the same register as
+the corresponding EBB parameter `v2`, there is going to be interference
+between `v1` and `v2` in the `ebb1` block.
 
-The interference can be resolved by isolating the SSA values passed as EBB arguments::
+The interference can be resolved by isolating the SSA values passed as EBB arguments:
 
+```
     function %coalesced(i32, i32) -> i32 {
     ebb0(v0: i32, v1: i32):
         v5 = copy v1
@@ -225,8 +219,9 @@ The interference can be resolved by isolating the SSA values passed as EBB argum
         v3 = iadd.i32 v1, v2
         return v3
     }
+```
 
-Now the EBB argument is ``v5`` which is *not* itself live into ``ebb1``,
+Now the EBB argument is `v5` which is *not* itself live into `ebb1`,
 resolving the interference.
 
 The coalescing pass groups the SSA values into sets called *virtual registers*
@@ -239,7 +234,7 @@ and inserts copies such that:
    interfere, i.e. they don't overlap anywhere.
 
 Most virtual registers contains only a single isolated SSA value because most
-SSA values are never passed as EBB arguments. The ``VirtRegs`` data structure
+SSA values are never passed as EBB arguments. The `VirtRegs` data structure
 doesn't store any information about these singleton virtual registers, it only
 tracks larger virtual registers and assumes that any value it doesn't know about
 is its own singleton virtual register
@@ -254,8 +249,7 @@ Conventional SSA form and the virtual registers are maintained through all the
 register allocator passes.
 
 
-Spilling algorithm
-==================
+## Spilling algorithm
 
 The spilling pass is responsible for lowering the register pressure enough that
 the coloring pass is guaranteed to be able to find a coloring solution. It does
@@ -287,8 +281,7 @@ spill slots if the spilled value gets used a lot. The idea is to minimize stack
 *write* traffic with the spilling heuristic and to minimize stack *read* traffic
 with the reload pass.
 
-Coloring algorithm
-==================
+## Coloring algorithm
 
 The SSA coloring algorithm is based on a single observation: If two SSA values
 interfere, one of the values must be live where the other value is defined.

@@ -4,19 +4,16 @@ Cranelift Code Generator
 **A [Bytecode Alliance][BA] project**
 
 Cranelift is a low-level retargetable code generator. It translates a
-[target-independent intermediate
-representation](https://cranelift.readthedocs.io/en/latest/ir.html)
+[target-independent intermediate representation](docs/ir.md)
 into executable machine code.
 
 [BA]: https://bytecodealliance.org/
-[![Documentation Status](https://readthedocs.org/projects/cranelift/badge/?version=latest)](https://cranelift.readthedocs.io/en/latest/?badge=latest)
 [![Build Status](https://github.com/bytecodealliance/cranelift/workflows/CI/badge.svg)](https://github.com/bytecodealliance/cranelift/actions)
 [![Fuzzit Status](https://app.fuzzit.dev/badge?org_id=bytecodealliance)](https://app.fuzzit.dev/orgs/bytecodealliance/dashboard)
 [![Chat](https://img.shields.io/badge/chat-zulip-brightgreen.svg)](https://bytecodealliance.zulipchat.com/#narrow/stream/217117-cranelift/topic/general)
 ![Minimum rustc 1.37](https://img.shields.io/badge/rustc-1.37+-green.svg)
 
-For more information, see [the
-documentation](https://cranelift.readthedocs.io/en/latest/?badge=latest).
+For more information, see [the documentation](docs/index.md).
 
 For an example of how to use the JIT, see the [SimpleJIT Demo], which
 implements a toy language.
@@ -158,21 +155,6 @@ the level of logging to `warn` messages and above in release mode:
 ...
 features = ["release_max_level_warn"]
 ```
-</details>
-
-<details>
-<summary>Building the documentation</summary>
-
-Cranelift's documentation is [published online](https://cranelift.readthedocs.io/).
-
-To build the documentation locally, you need the [Sphinx documentation
-generator](http://www.sphinx-doc.org/) as well as Python 3::
-
-    $ pip install sphinx sphinx-autobuild sphinx_rtd_theme
-    $ cd cranelift/docs
-    $ make html
-    $ open _build/html/index.html
-
 </details>
 
 Editor Support

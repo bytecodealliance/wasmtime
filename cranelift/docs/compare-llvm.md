@@ -1,19 +1,17 @@
-**************************
-Cranelift compared to LLVM
-**************************
+# Cranelift compared to LLVM
 
-`LLVM <https://llvm.org>`_ is a collection of compiler components implemented as
+[LLVM](https://llvm.org) is a collection of compiler components implemented as
 a set of C++ libraries. It can be used to build both JIT compilers and static
-compilers like `Clang <https://clang.llvm.org>`_, and it is deservedly very
-popular. `Chris Lattner's chapter about LLVM
-<https://www.aosabook.org/en/llvm.html>`_ in the `Architecture of Open Source
-Applications <https://aosabook.org/en/index.html>`_ book gives an excellent
+compilers like [Clang](https://clang.llvm.org), and it is deservedly very
+popular. [Chris Lattner's chapter about LLVM]
+(https://www.aosabook.org/en/llvm.html) in the [Architecture of Open Source
+Applications](https://aosabook.org/en/index.html>) book gives an excellent
 overview of the architecture and design of LLVM.
 
 Cranelift and LLVM are superficially similar projects, so it is worth
 highlighting some of the differences and similarities. Both projects:
 
-- Use an ISA-agnostic input language in order to mostly abstract away the
+- Use a mostly-ISA-agnostic input language in order to mostly abstract away the
   differences between target instruction set architectures.
 - Depend extensively on SSA form.
 - Have both textual and in-memory forms of their primary intermediate
@@ -23,13 +21,12 @@ highlighting some of the differences and similarities. Both projects:
 
 However, there are also some major differences, described in the following sections.
 
-Intermediate representations
-============================
+## Intermediate representations
 
 LLVM uses multiple intermediate representations as it translates a program to
 binary machine code:
 
-`LLVM IR <https://llvm.org/docs/LangRef.html>`_
+[LLVM IR](https://llvm.org/docs/LangRef.html):
     This is the primary intermediate representation which has textual, binary, and
     in-memory forms. It serves two main purposes:
 
@@ -38,7 +35,7 @@ binary machine code:
     - Intermediate representation for common mid-level optimizations. A large
       library of code analysis and transformation passes operate on LLVM IR.
 
-`SelectionDAG <https://llvm.org/docs/CodeGenerator.html#instruction-selection-section>`_
+[SelectionDAG](https://llvm.org/docs/CodeGenerator.html#instruction-selection-section):
     A graph-based representation of the code in a single basic block is used by
     the instruction selector. It has both ISA-agnostic and ISA-specific
     opcodes. These main passes are run on the SelectionDAG representation:
@@ -54,7 +51,7 @@ binary machine code:
     The SelectionDAG representation automatically eliminates common
     subexpressions and dead code.
 
-`MachineInstr <https://llvm.org/docs/CodeGenerator.html#machine-code-representation>`_
+[MachineInstr](https://llvm.org/docs/CodeGenerator.html#machine-code-representation):
     A linear representation of ISA-specific instructions that initially is in
     SSA form, but it can also represent non-SSA form during and after register
     allocation. Many low-level optimizations run on MI code. The most important
@@ -63,7 +60,7 @@ binary machine code:
     - Scheduling.
     - Register allocation.
 
-`MC <https://llvm.org/docs/CodeGenerator.html#the-mc-layer>`_
+[MC](https://llvm.org/docs/CodeGenerator.html#the-mc-layer)
     MC serves as the output abstraction layer and is the basis for LLVM's
     integrated assembler. It is used for:
 
@@ -78,7 +75,7 @@ representation. Some target ISAs have a fast instruction selector that can
 translate simple code directly to MachineInstrs, bypassing SelectionDAG when
 possible.
 
-:doc:`Cranelift <ir>` uses a single intermediate representation to cover
+[Cranelift IR](ir.md) uses a single intermediate representation to cover
 these levels of abstraction. This is possible in part because of Cranelift's
 smaller scope.
 
@@ -109,22 +106,21 @@ low-level optimizations are sufficient.
 
 And, it removes some constraints in the mid-level optimize IR design space,
 making it more feasible to consider ideas such as using a
-`VSDG-based IR <https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-705.pdf>`_.
+[VSDG-based IR](https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-705.pdf).
 
-Program structure
------------------
+### Program structure
 
 In LLVM IR, the largest representable unit is the *module* which corresponds
 more or less to a C translation unit. It is a collection of functions and
 global variables that may contain references to external symbols too.
 
-In `Cranelift's IR <https://cranelift.readthedocs.io/en/latest/ir.html>`_,
-used by the `cranelift-codegen <https://docs.rs/cranelift-codegen/>`_ crate,
+In [Cranelift's IR](ir.md)
+used by the [cranelift-codegen](https://docs.rs/cranelift-codegen/) crate,
 functions are self-contained, allowing them to be compiled independently. At
 this level, there is no explicit module that contains the functions.
 
 Module functionality in Cranelift is provided as an optional library layer, in
-the `cranelift-module <https://docs.rs/cranelift-module/>`_ crate. It provides
+the [cranelift-module](https://docs.rs/cranelift-module/) crate. It provides
 facilities for working with modules, which can contain multiple functions as
 well as data objects, and it links them together.
 
@@ -136,8 +132,8 @@ only has a single target and falls through to the next instruction when its
 condition is false. The Cranelift representation is closer to how machine code
 works; LLVM's representation is more abstract.
 
-LLVM uses `phi instructions
-<https://llvm.org/docs/LangRef.html#phi-instruction>`_ in its SSA
+LLVM uses [phi instructions]
+(https://llvm.org/docs/LangRef.html#phi-instruction) in its SSA
 representation. Cranelift passes arguments to EBBs instead. The two
 representations are equivalent, but the EBB arguments are better suited to
 handle EBBs that may contain multiple branches to the same destination block
@@ -145,16 +141,15 @@ with different arguments. Passing arguments to an EBB looks a lot like passing
 arguments to a function call, and the register allocator treats them very
 similarly. Arguments are assigned to registers or stack locations.
 
-Value types
------------
+### Value types
 
-:ref:`Cranelift's type system <value-types>` is mostly a subset of LLVM's type
+[Cranelift's type system](ir.md#value-types) is mostly a subset of LLVM's type
 system. It is less abstract and closer to the types that common ISA registers
 can hold.
 
-- Integer types are limited to powers of two from :clif:type:`i8` to
-  :clif:type:`i64`. LLVM can represent integer types of arbitrary bit width.
-- Floating point types are limited to :clif:type:`f32` and :clif:type:`f64`
+- Integer types are limited to powers of two from `i8` to
+  `i64`. LLVM can represent integer types of arbitrary bit width.
+- Floating point types are limited to `f32` and `f64`
   which is what WebAssembly provides. It is possible that 16-bit and 128-bit
   types will be added in the future.
 - Addresses are represented as integers---There are no Cranelift pointer types.
@@ -167,14 +162,13 @@ can hold.
   well as array types.
 
 Cranelift has multiple boolean types, whereas LLVM simply uses `i1`. The sized
-Cranelift boolean types are used to represent SIMD vector masks like ``b32x4``
+Cranelift boolean types are used to represent SIMD vector masks like `b32x4`
 where each lane is either all 0 or all 1 bits.
 
 Cranelift instructions and function calls can return multiple result values. LLVM
 instead models this by returning a single value of an aggregate type.
 
-Instruction set
----------------
+### Instruction set
 
 LLVM has a small well-defined basic instruction set and a large number of
 intrinsics, some of which are ISA-specific. Cranelift has a larger instruction
@@ -183,28 +177,7 @@ set and no intrinsics. Some Cranelift instructions are ISA-specific.
 Since Cranelift instructions are used all the way until the binary machine code
 is emitted, there are opcodes for every native instruction that can be
 generated. There is a lot of overlap between different ISAs, so for example the
-:clif:inst:`iadd_imm` instruction is used by every ISA that can add an
+`iadd_imm` instruction is used by every ISA that can add an
 immediate integer to a register. A simple RISC ISA like RISC-V can be defined
 with only shared instructions, while x86 needs a number of specific
 instructions to model addressing modes.
-
-Undefined behavior
-==================
-
-Cranelift does not generally exploit undefined behavior in its optimizations.
-LLVM's mid-level optimizations do, but it should be noted that LLVM's low-level code
-generator rarely needs to make use of undefined behavior either.
-
-LLVM provides ``nsw`` and ``nuw`` flags for its arithmetic that invoke
-undefined behavior on overflow. Cranelift does not provide this functionality.
-Its arithmetic instructions either produce a value or a trap.
-
-LLVM has an ``unreachable`` instruction which is used to indicate impossible
-code paths. Cranelift only has an explicit :clif:inst:`trap` instruction.
-
-Cranelift does make assumptions about aliasing. For example, it assumes that it
-has full control of the stack objects in a function, and that they can only be
-modified by function calls if their address have escaped. It is quite likely
-that Cranelift will admit more detailed aliasing annotations on load/store
-instructions in the future. When these annotations are incorrect, undefined
-behavior ensues.
