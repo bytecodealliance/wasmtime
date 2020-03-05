@@ -53,10 +53,7 @@ fn check_lldb_output(output: &str, directives: &str) -> Result<()> {
 
 #[test]
 #[ignore]
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64"
-))]
+#[cfg(all(target_os = "linux", target_pointer_width = "64"))]
 pub fn test_debug_dwarf_lldb() -> Result<()> {
     let output = lldb_with_script(
         &[
