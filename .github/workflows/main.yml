@@ -88,26 +88,36 @@ jobs:
             | shuf \
             | head -n 3000 \
             | xargs cargo fuzz run compile --release --debug-assertions
+      env:
+        RUST_BACKTRACE: 1
     - run: |
         find fuzz/corpus/instantiate -type f \
             | shuf \
             | head -n 2000 \
             | xargs cargo fuzz run instantiate --release --debug-assertions
+      env:
+        RUST_BACKTRACE: 1
     - run: |
         find fuzz/corpus/instantiate_translated -type f \
             | shuf \
             | head -n 1000 \
             | xargs cargo fuzz run instantiate_translated --release --debug-assertions
+      env:
+        RUST_BACKTRACE: 1
     - run: |
         find fuzz/corpus/api_calls -type f \
             | shuf \
             | head -n 100 \
             | xargs cargo fuzz run api_calls --release --debug-assertions
+      env:
+        RUST_BACKTRACE: 1
     - run: |
         find fuzz/corpus/differential -type f \
             | shuf \
             | head -n 100 \
             | xargs cargo fuzz run differential --release --debug-assertions
+      env:
+        RUST_BACKTRACE: 1
 
   # Install wasm32-unknown-emscripten target, and ensure `crates/wasi-common`
   # compiles to Emscripten.
