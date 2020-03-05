@@ -3,6 +3,8 @@ set opt_level=speed_and_size
 set enable_simd
 target x86_64
 
+;; These scalar_to_vector tests avoid the use of REX prefixes with the speed_and_size optimization flag.
+
 function %test_scalar_to_vector_b8() {
 block0:
 [-, %rax]   v0 = bconst.b8 true

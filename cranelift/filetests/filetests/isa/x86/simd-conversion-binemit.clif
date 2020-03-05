@@ -1,6 +1,7 @@
 test binemit
 target x86_64
 
+; Ensure raw_bitcast emits no instructions.
 function %test_raw_bitcast_i16x8_to_b32x4() {
 block0:
 [-, %rbx]   v0 = bconst.b16 true
