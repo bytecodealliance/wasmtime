@@ -517,7 +517,36 @@ fn define_simd_lane_access(
         .operands_out(vec![a]),
     );
 
-    let x = &Operand::new("x", TxN).with_doc("SIMD vector to modify");
+    let I8x16 = &TypeVar::new(
+        "I8x16",
+        "A SIMD vector type consisting of 16 lanes of 8-bit integers",
+        TypeSetBuilder::new()
+            .ints(8..8)
+            .simd_lanes(16..16)
+            .includes_scalars(false)
+            .build(),
+    );
+    let x = &Operand::new("x", I8x16).with_doc("Vector to modify by re-arranging lanes");
+    let y = &Operand::new("y", I8x16).with_doc("Mask for re-arranging lanes");
+
+    ig.push(
+        Inst::new(
+            "swizzle",
+            r#"
+        Vector swizzle.
+
+        Returns a new vector with byte-width lanes selected from the lanes of the first input 
+        vector ``x`` specified in the second input vector ``s``. The indices ``i`` in range 
+        ``[0, 15]`` select the ``i``-th element of ``x``. For indices outside of the range the 
+        resulting lane is 0. Note that this operates on byte-width lanes.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    let x = &Operand::new("x", TxN).with_doc("The vector to modify");
     let y = &Operand::new("y", &TxN.lane_of()).with_doc("New lane value");
     let Idx = &Operand::new("Idx", &imm.uimm8).with_doc("Lane index");
 
