@@ -338,7 +338,9 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
     let splat = insts.by_name("splat");
     let shuffle = insts.by_name("shuffle");
     let sshr = insts.by_name("sshr");
+    let swizzle = insts.by_name("swizzle");
     let trueif = insts.by_name("trueif");
+    let uadd_sat = insts.by_name("uadd_sat");
     let umax = insts.by_name("umax");
     let umin = insts.by_name("umin");
     let ushr_imm = insts.by_name("ushr_imm");
@@ -375,6 +377,7 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
     let uimm8_one = Literal::constant(&imm.uimm8, 0x01);
     let u128_zeroes = constant(vec![0x00; 16]);
     let u128_ones = constant(vec![0xff; 16]);
+    let u128_seventies = constant(vec![0x70; 16]);
     let a = var("a");
     let b = var("b");
     let c = var("c");
@@ -455,6 +458,21 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
                 def!(a = scalar_to_vector(x)),
                 // Move into the highest 64 bits of the same XMM register.
                 def!(y = insertlane(a, uimm8_one, x)),
+            ],
+        );
+    }
+
+    // SIMD swizzle; the following inefficient implementation is due to the Wasm SIMD spec requiring
+    // mask indexes greater than 15 to have the same semantics as a 0 index. For the spec discussion,
+    // see https://github.com/WebAssembly/simd/issues/93.
+    {
+        let swizzle = swizzle.bind(vector(I8, sse_vector_size));
+        narrow.legalize(
+            def!(a = swizzle(x, y)),
+            vec![
+                def!(b = vconst(u128_seventies)),
+                def!(c = uadd_sat(y, b)),
+                def!(a = x86_pshufb(x, c)),
             ],
         );
     }
