@@ -134,6 +134,8 @@ pub(crate) struct InstructionContent {
     pub other_side_effects: bool,
     /// Does this instruction write to CPU flags?
     pub writes_cpu_flags: bool,
+    /// Should this opcode be considered to clobber all live registers, during regalloc?
+    pub clobbers_all_regs: bool,
 }
 
 impl InstructionContent {
@@ -214,6 +216,7 @@ pub(crate) struct InstructionBuilder {
     can_store: bool,
     can_trap: bool,
     other_side_effects: bool,
+    clobbers_all_regs: bool,
 }
 
 impl InstructionBuilder {
@@ -236,6 +239,7 @@ impl InstructionBuilder {
             can_store: false,
             can_trap: false,
             other_side_effects: false,
+            clobbers_all_regs: false,
         }
     }
 
@@ -313,6 +317,11 @@ impl InstructionBuilder {
         self
     }
 
+    pub fn clobbers_all_regs(mut self, val: bool) -> Self {
+        self.clobbers_all_regs = val;
+        self
+    }
+
     fn build(self, opcode_number: OpcodeNumber) -> Instruction {
         let operands_in = self.operands_in.unwrap_or_else(Vec::new);
         let operands_out = self.operands_out.unwrap_or_else(Vec::new);
@@ -369,6 +378,7 @@ impl InstructionBuilder {
             can_trap: self.can_trap,
             other_side_effects: self.other_side_effects,
             writes_cpu_flags,
+            clobbers_all_regs: self.clobbers_all_regs,
         })
     }
 }

@@ -523,6 +523,13 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
             "Does this instruction write to CPU flags?",
             fmt,
         );
+        gen_bool_accessor(
+            all_inst,
+            |inst| inst.clobbers_all_regs,
+            "clobbers_all_regs",
+            "Should this opcode be considered to clobber all the registers, during regalloc?",
+            fmt,
+        );
     });
     fmt.line("}");
     fmt.empty_line();
