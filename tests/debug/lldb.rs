@@ -8,30 +8,32 @@ use std::process::Command;
 use tempfile::NamedTempFile;
 
 fn lldb_with_script(args: &[&str], script: &str) -> Result<String> {
+    let lldb_path = env::var("LLDB").unwrap_or("lldb".to_string());
+    let mut cmd = Command::new(&lldb_path);
+
+    cmd.arg("--batch");
+    if cfg!(target_os = "macos") {
+        cmd.args(&["-o", "settings set plugin.jit-loader.gdb.enable on"]);
+    }
+    let mut script_file = NamedTempFile::new()?;
+    script_file.write(script.as_bytes())?;
+    let script_path = script_file.path().to_str().unwrap();
+    cmd.args(&["-s", &script_path]);
+
     let mut me = std::env::current_exe().expect("current_exe specified");
     me.pop(); // chop off the file name
     me.pop(); // chop off `deps`
     me.push("wasmtime");
-    let wasmtime_path = me.to_str().unwrap();
+    cmd.arg(me);
 
-    let lldb_path = env::var("LLDB").unwrap_or("lldb".to_string());
-    let mut script_file = NamedTempFile::new()?;
-    script_file.write(script.as_bytes())?;
-    let script_path = script_file.path().to_str().unwrap();
-    let mut lldb_args = vec!["--batch"];
-    if cfg!(target_os = "macos") {
-        lldb_args.extend_from_slice(&["-o", "settings set plugin.jit-loader.gdb.enable on"]);
-    }
-    lldb_args.extend_from_slice(&["-s", &script_path, wasmtime_path, "--"]);
-    lldb_args.extend_from_slice(args);
-    let output = Command::new(&lldb_path)
-        .args(&lldb_args)
-        .output()
-        .expect("success");
+    cmd.arg("--");
+    cmd.args(args);
+
+    let output = cmd.output().expect("success");
     if !output.status.success() {
         bail!(
-            "failed to execute {}: {}",
-            lldb_path,
+            "failed to execute {:?}: {}",
+            cmd,
             String::from_utf8_lossy(&output.stderr),
         );
     }
