@@ -562,6 +562,10 @@ pub(crate) fn define(
             "#,
             &formats.unary_global_value,
         )
+        // This is a bit overly broad to mark as clobbering *all* the registers, because it should
+        // only preserve caller-saved registers. There's no way to indicate this to register
+        // allocation yet, though, so mark as clobbering all registers instead.
+        .clobbers_all_regs(true)
         .operands_in(vec![GV])
         .operands_out(vec![addr]),
     );
@@ -574,6 +578,8 @@ pub(crate) fn define(
             "#,
             &formats.unary_global_value,
         )
+        // See above comment for x86_elf_tls_get_addr.
+        .clobbers_all_regs(true)
         .operands_in(vec![GV])
         .operands_out(vec![addr]),
     );
