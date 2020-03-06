@@ -4,7 +4,7 @@ target x86_64 skylake
 
 ;; shuffle
 
-function %test_shuffle_different_ssa_values() -> i8x16 {
+function %shuffle_different_ssa_values() -> i8x16 {
 block0:
     v0 = vconst.i8x16 0x00
     v1 = vconst.i8x16 0x01
@@ -18,7 +18,7 @@ block0:
 ; nextln: v6 = x86_pshufb v1, v5
 ; nextln: v2 = bor v4, v6
 
-function %test_shuffle_same_ssa_value() -> i8x16 {
+function %shuffle_same_ssa_value() -> i8x16 {
 block0:
     v1 = vconst.i8x16 0x01
     v2 = shuffle v1, v1, 0x13000000000000000000000000000000     ; pick the fourth lane of v1 and the rest from the first lane of v1
@@ -30,7 +30,7 @@ block0:
 
 ;; splat
 
-function %test_splat_i32() -> i32x4 {
+function %splat_i32() -> i32x4 {
 block0:
     v0 = iconst.i32 42
     v1 = splat.i32x4 v0
@@ -43,7 +43,7 @@ block0:
 ; nextln:     return v1
 ; nextln: }
 
-function %test_splat_i64() -> i64x2 {
+function %splat_i64() -> i64x2 {
 block0:
     v0 = iconst.i64 42
     v1 = splat.i64x2 v0
@@ -55,7 +55,7 @@ block0:
 ; nextln:     v1 = x86_pinsr v2, 1, v0
 ; nextln:     return v1
 
-function %test_splat_b16() -> b16x8 {
+function %splat_b16() -> b16x8 {
 block0:
     v0 = bconst.b16 true
     v1 = splat.b16x8 v0
@@ -70,7 +70,7 @@ block0:
 ; nextln:     v1 = raw_bitcast.b16x8 v5
 ; nextln:     return v1
 
-function %test_splat_i8() -> i8x16 {
+function %splat_i8() -> i8x16 {
 block0:
     v0 = iconst.i8 42
     v1 = splat.i8x16 v0
