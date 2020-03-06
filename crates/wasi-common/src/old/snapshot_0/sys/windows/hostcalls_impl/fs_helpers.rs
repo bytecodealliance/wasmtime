@@ -5,6 +5,7 @@ use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
+use winapi::shared::winerror;
 
 pub(crate) trait PathGetExt {
     fn concatenate(&self) -> Result<PathBuf>;
@@ -49,23 +50,23 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
     use std::fs::OpenOptions;
     use std::os::windows::fs::OpenOptionsExt;
     use winx::file::Flags;
-    use winx::winerror::WinError;
 
     let path = concatenate(dirfd, Path::new(path))?;
     OpenOptions::new()
         .read(true)
         .custom_flags(Flags::FILE_FLAG_BACKUP_SEMANTICS.bits())
         .open(&path)
-        .map_err(|e| match e.raw_os_error() {
-            Some(e) => {
-                log::debug!("openat error={:?}", e);
-                match WinError::from_u32(e as u32) {
-                    WinError::ERROR_INVALID_NAME => Error::ENOTDIR,
-                    e => e.into(),
+        .map_err(|err| match err.raw_os_error() {
+            Some(code) => {
+                log::debug!("openat error={:?}", code);
+                if code as u32 == winerror::ERROR_INVALID_NAME {
+                    Error::ENOTDIR
+                } else {
+                    err.into()
                 }
             }
             None => {
-                log::debug!("Inconvertible OS error: {}", e);
+                log::debug!("Inconvertible OS error: {}", err);
                 Error::EIO
             }
         })
@@ -73,7 +74,6 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
 
 pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
     use winx::file::get_file_path;
-    use winx::winerror::WinError;
 
     let path = concatenate(dirfd, Path::new(s_path))?;
     match path.read_link() {
@@ -89,28 +89,23 @@ pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
                 .map_err(|_| Error::ENOTCAPABLE)
                 .and_then(|path| path.to_str().map(String::from).ok_or(Error::EILSEQ))
         }
-        Err(e) => match e.raw_os_error() {
-            Some(e) => {
-                log::debug!("readlinkat error={:?}", e);
-                match WinError::from_u32(e as u32) {
-                    WinError::ERROR_INVALID_NAME => {
-                        if s_path.ends_with('/') {
-                            // strip "/" and check if exists
-                            let path = concatenate(dirfd, Path::new(s_path.trim_end_matches('/')))?;
-                            if path.exists() && !path.is_dir() {
-                                Err(Error::ENOTDIR)
-                            } else {
-                                Err(Error::ENOENT)
-                            }
-                        } else {
-                            Err(Error::ENOENT)
+        Err(err) => match err.raw_os_error() {
+            Some(code) => {
+                log::debug!("readlinkat error={:?}", code);
+                if code as u32 == winerror::ERROR_INVALID_NAME {
+                    if s_path.ends_with('/') {
+                        // strip "/" and check if exists
+                        let path = concatenate(dirfd, Path::new(s_path.trim_end_matches('/')))?;
+                        if path.exists() && !path.is_dir() {
+                            return Err(Error::ENOTDIR);
                         }
                     }
-                    e => Err(e.into()),
                 }
+
+                return Err(err.into());
             }
             None => {
-                log::debug!("Inconvertible OS error: {}", e);
+                log::debug!("Inconvertible OS error: {}", err);
                 Err(Error::EIO)
             }
         },

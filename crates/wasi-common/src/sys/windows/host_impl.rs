@@ -7,42 +7,35 @@ use std::fs::{self, File};
 use std::io;
 use std::os::windows::ffi::OsStrExt;
 use std::time::{SystemTime, UNIX_EPOCH};
-use winx::winerror::WinError;
+use winapi::shared::winerror;
 
 impl FromRawOsError for Error {
     fn from_raw_os_error(code: i32) -> Self {
-        Self::from(WinError::from_u32(code as u32))
-    }
-}
-
-impl From<WinError> for Error {
-    fn from(err: WinError) -> Self {
         // TODO: implement error mapping between Windows and WASI
-        use winx::winerror::WinError::*;
-        match err {
-            ERROR_SUCCESS => Self::ESUCCESS,
-            ERROR_BAD_ENVIRONMENT => Self::E2BIG,
-            ERROR_FILE_NOT_FOUND => Self::ENOENT,
-            ERROR_PATH_NOT_FOUND => Self::ENOENT,
-            ERROR_TOO_MANY_OPEN_FILES => Self::ENFILE,
-            ERROR_ACCESS_DENIED => Self::EACCES,
-            ERROR_SHARING_VIOLATION => Self::EACCES,
-            ERROR_PRIVILEGE_NOT_HELD => Self::ENOTCAPABLE, // TODO is this the correct mapping?
-            ERROR_INVALID_HANDLE => Self::EBADF,
-            ERROR_INVALID_NAME => Self::ENOENT,
-            ERROR_NOT_ENOUGH_MEMORY => Self::ENOMEM,
-            ERROR_OUTOFMEMORY => Self::ENOMEM,
-            ERROR_DIR_NOT_EMPTY => Self::ENOTEMPTY,
-            ERROR_NOT_READY => Self::EBUSY,
-            ERROR_BUSY => Self::EBUSY,
-            ERROR_NOT_SUPPORTED => Self::ENOTSUP,
-            ERROR_FILE_EXISTS => Self::EEXIST,
-            ERROR_BROKEN_PIPE => Self::EPIPE,
-            ERROR_BUFFER_OVERFLOW => Self::ENAMETOOLONG,
-            ERROR_NOT_A_REPARSE_POINT => Self::EINVAL,
-            ERROR_NEGATIVE_SEEK => Self::EINVAL,
-            ERROR_DIRECTORY => Self::ENOTDIR,
-            ERROR_ALREADY_EXISTS => Self::EEXIST,
+        match code as u32 {
+            winerror::ERROR_SUCCESS => Self::ESUCCESS,
+            winerror::ERROR_BAD_ENVIRONMENT => Self::E2BIG,
+            winerror::ERROR_FILE_NOT_FOUND => Self::ENOENT,
+            winerror::ERROR_PATH_NOT_FOUND => Self::ENOENT,
+            winerror::ERROR_TOO_MANY_OPEN_FILES => Self::ENFILE,
+            winerror::ERROR_ACCESS_DENIED => Self::EACCES,
+            winerror::ERROR_SHARING_VIOLATION => Self::EACCES,
+            winerror::ERROR_PRIVILEGE_NOT_HELD => Self::ENOTCAPABLE, // TODO is this the correct mapping?
+            winerror::ERROR_INVALID_HANDLE => Self::EBADF,
+            winerror::ERROR_INVALID_NAME => Self::ENOENT,
+            winerror::ERROR_NOT_ENOUGH_MEMORY => Self::ENOMEM,
+            winerror::ERROR_OUTOFMEMORY => Self::ENOMEM,
+            winerror::ERROR_DIR_NOT_EMPTY => Self::ENOTEMPTY,
+            winerror::ERROR_NOT_READY => Self::EBUSY,
+            winerror::ERROR_BUSY => Self::EBUSY,
+            winerror::ERROR_NOT_SUPPORTED => Self::ENOTSUP,
+            winerror::ERROR_FILE_EXISTS => Self::EEXIST,
+            winerror::ERROR_BROKEN_PIPE => Self::EPIPE,
+            winerror::ERROR_BUFFER_OVERFLOW => Self::ENAMETOOLONG,
+            winerror::ERROR_NOT_A_REPARSE_POINT => Self::EINVAL,
+            winerror::ERROR_NEGATIVE_SEEK => Self::EINVAL,
+            winerror::ERROR_DIRECTORY => Self::ENOTDIR,
+            winerror::ERROR_ALREADY_EXISTS => Self::EEXIST,
             _ => Self::ENOTSUP,
         }
     }

@@ -16,6 +16,7 @@ use std::io::{self, Seek, SeekFrom};
 use std::os::windows::fs::{FileExt, OpenOptionsExt};
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle};
 use std::path::{Path, PathBuf};
+use winapi::shared::winerror;
 use winx::file::{AccessMode, CreationDisposition, FileModeInformation, Flags};
 
 fn read_at(mut file: &File, buf: &mut [u8], offset: u64) -> io::Result<usize> {
@@ -149,20 +150,18 @@ pub(crate) fn path_open(
                 return Err(Error::ENOTDIR);
             }
         }
-        Err(e) => match e.raw_os_error() {
-            Some(e) => {
-                use winx::winerror::WinError;
-                log::debug!("path_open at symlink_metadata error code={:?}", e);
-                let e = WinError::from_u32(e as u32);
+        Err(err) => match err.raw_os_error() {
+            Some(code) => {
+                log::debug!("path_open at symlink_metadata error code={:?}", code);
 
-                if e != WinError::ERROR_FILE_NOT_FOUND {
-                    return Err(e.into());
+                if code as u32 != winerror::ERROR_FILE_NOT_FOUND {
+                    return Err(err.into());
                 }
                 // file not found, let it proceed to actually
                 // trying to open it
             }
             None => {
-                log::debug!("Inconvertible OS error: {}", e);
+                log::debug!("Inconvertible OS error: {}", err);
                 return Err(Error::EIO);
             }
         },
@@ -389,43 +388,46 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
 
     // TODO handle symlinks
 
-    fs::rename(&old_path, &new_path).or_else(|e| match e.raw_os_error() {
-        Some(e) => {
-            use winx::winerror::WinError;
-
-            log::debug!("path_rename at rename error code={:?}", e);
-            match WinError::from_u32(e as u32) {
-                WinError::ERROR_ACCESS_DENIED => {
-                    // So most likely dealing with new_path == dir.
-                    // Eliminate case old_path == file first.
-                    if old_path.is_file() {
-                        Err(Error::EISDIR)
-                    } else {
-                        // Ok, let's try removing an empty dir at new_path if it exists
-                        // and is a nonempty dir.
-                        fs::remove_dir(&new_path)
-                            .and_then(|()| fs::rename(old_path, new_path))
-                            .map_err(Into::into)
-                    }
-                }
-                WinError::ERROR_INVALID_NAME => {
-                    // If source contains trailing slashes, check if we are dealing with
-                    // a file instead of a dir, and if so, throw ENOTDIR.
-                    if let Some(path) = strip_trailing_slashes_and_concatenate(&resolved_old)? {
-                        if path.is_file() {
-                            return Err(Error::ENOTDIR);
+    if let Err(err) = fs::rename(&old_path, &new_path) {
+        match err.raw_os_error() {
+            Some(code) => {
+                log::debug!("path_rename at rename error code={:?}", code);
+                match code as u32 {
+                    winerror::ERROR_ACCESS_DENIED => {
+                        // So most likely dealing with new_path == dir.
+                        // Eliminate case old_path == file first.
+                        if old_path.is_file() {
+                            return Err(Error::EISDIR);
+                        } else {
+                            // Ok, let's try removing an empty dir at new_path if it exists
+                            // and is a nonempty dir.
+                            return fs::remove_dir(&new_path)
+                                .and_then(|()| fs::rename(old_path, new_path))
+                                .map_err(Into::into);
                         }
                     }
-                    Err(WinError::ERROR_INVALID_NAME.into())
+                    winerror::ERROR_INVALID_NAME => {
+                        // If source contains trailing slashes, check if we are dealing with
+                        // a file instead of a dir, and if so, throw ENOTDIR.
+                        if let Some(path) = strip_trailing_slashes_and_concatenate(&resolved_old)? {
+                            if path.is_file() {
+                                return Err(Error::ENOTDIR);
+                            }
+                        }
+                    }
+                    _ => {}
                 }
-                e => Err(e.into()),
+
+                return Err(err.into());
+            }
+            None => {
+                log::debug!("Inconvertible OS error: {}", err);
+                return Err(Error::EIO);
             }
         }
-        None => {
-            log::debug!("Inconvertible OS error: {}", e);
-            Err(Error::EIO)
-        }
-    })
+    }
+
+    Ok(())
 }
 
 pub(crate) fn fd_filestat_get(file: &std::fs::File) -> Result<wasi::__wasi_filestat_t> {
@@ -458,52 +460,51 @@ pub(crate) fn path_filestat_set_times(
 
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
     use std::os::windows::fs::{symlink_dir, symlink_file};
-    use winx::winerror::WinError;
 
     let old_path = concatenate(resolved.dirfd(), Path::new(old_path))?;
     let new_path = resolved.concatenate()?;
 
     // try creating a file symlink
-    symlink_file(&old_path, &new_path).or_else(|e| {
-        match e.raw_os_error() {
-            Some(e) => {
-                log::debug!("path_symlink at symlink_file error code={:?}", e);
-                match WinError::from_u32(e as u32) {
-                    WinError::ERROR_NOT_A_REPARSE_POINT => {
+    if let Err(err) = symlink_file(&old_path, &new_path) {
+        match err.raw_os_error() {
+            Some(code) => {
+                log::debug!("path_symlink at symlink_file error code={:?}", code);
+                match code as u32 {
+                    winerror::ERROR_NOT_A_REPARSE_POINT => {
                         // try creating a dir symlink instead
-                        symlink_dir(old_path, new_path).map_err(Into::into)
+                        return symlink_dir(old_path, new_path).map_err(Into::into);
                     }
-                    WinError::ERROR_ACCESS_DENIED => {
+                    winerror::ERROR_ACCESS_DENIED => {
                         // does the target exist?
                         if new_path.exists() {
-                            Err(Error::EEXIST)
-                        } else {
-                            Err(WinError::ERROR_ACCESS_DENIED.into())
+                            return Err(Error::EEXIST);
                         }
                     }
-                    WinError::ERROR_INVALID_NAME => {
+                    winerror::ERROR_INVALID_NAME => {
                         // does the target without trailing slashes exist?
                         if let Some(path) = strip_trailing_slashes_and_concatenate(&resolved)? {
                             if path.exists() {
                                 return Err(Error::EEXIST);
                             }
                         }
-                        Err(WinError::ERROR_INVALID_NAME.into())
                     }
-                    e => Err(e.into()),
+                    _ => {}
                 }
+
+                return Err(err.into());
             }
             None => {
-                log::debug!("Inconvertible OS error: {}", e);
-                Err(Error::EIO)
+                log::debug!("Inconvertible OS error: {}", err);
+                return Err(Error::EIO);
             }
         }
-    })
+    }
+
+    Ok(())
 }
 
 pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     use std::fs;
-    use winx::winerror::WinError;
 
     let path = resolved.concatenate()?;
     let file_type = path
@@ -516,24 +517,25 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     //
     // [std::os::windows::fs::FileTypeExt]: https://doc.rust-lang.org/std/os/windows/fs/trait.FileTypeExt.html
     if file_type.is_symlink() {
-        fs::remove_file(&path).or_else(|e| {
-            match e.raw_os_error() {
-                Some(e) => {
-                    log::debug!("path_unlink_file at symlink_file error code={:?}", e);
-                    match WinError::from_u32(e as u32) {
-                        WinError::ERROR_ACCESS_DENIED => {
-                            // try unlinking a dir symlink instead
-                            fs::remove_dir(path).map_err(Into::into)
-                        }
-                        e => Err(e.into()),
+        if let Err(err) = fs::remove_file(&path) {
+            match err.raw_os_error() {
+                Some(code) => {
+                    log::debug!("path_unlink_file at symlink_file error code={:?}", code);
+                    if code as u32 == winerror::ERROR_ACCESS_DENIED {
+                        // try unlinking a dir symlink instead
+                        return fs::remove_dir(path).map_err(Into::into);
                     }
+
+                    return Err(err.into());
                 }
                 None => {
-                    log::debug!("Inconvertible OS error: {}", e);
-                    Err(Error::EIO)
+                    log::debug!("Inconvertible OS error: {}", err);
+                    return Err(Error::EIO);
                 }
             }
-        })
+        }
+
+        Ok(())
     } else if file_type.is_dir() {
         Err(Error::EISDIR)
     } else if file_type.is_file() {
