@@ -234,6 +234,17 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
+    # Perform various builds of Cranelift under different configurations:
+    # - only x86 backend support,
+    # - only arm64 backend support,
+    # - no debug_assertions.
+    - run: cargo build --manifest-path=./cranelift/Cargo.toml --bin clif-util --no-default-features --features=cranelift-codegen/arm64
+      shell: bash
+    - run: cargo build --manifest-path=./cranelift/Cargo.toml --bin clif-util --no-default-features --features=cranelift-codegen/x86
+      shell: bash
+    - run: cargo rustc --manifest-path=./cranelift/Cargo.toml --bin clif-util -- -C debug_assertions=off
+      shell: bash
+
   # Verify that cranelift's code generation is deterministic
   meta_determinist_check:
     name: Meta deterministic check
