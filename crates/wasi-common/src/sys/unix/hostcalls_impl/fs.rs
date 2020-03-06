@@ -61,7 +61,7 @@ pub(crate) fn fd_advise(
     unsafe { posix_fadvise(file.as_raw_fd(), offset, len, host_advice) }.map_err(Into::into)
 }
 
-pub(crate) fn path_create_directory<'a>(base: &File, path: &str) -> Result<()> {
+pub(crate) fn path_create_directory(base: &File, path: &str) -> Result<()> {
     use yanix::file::{mkdirat, Mode};
     unsafe { mkdirat(base.as_raw_fd(), path, Mode::from_bits_truncate(0o777)) }.map_err(Into::into)
 }
@@ -88,7 +88,7 @@ pub(crate) fn path_open(
     fs_flags: wasi::__wasi_fdflags_t,
 ) -> Result<Descriptor> {
     use yanix::file::{fstatat, openat, AtFlag, FileType, Mode, OFlag};
-  
+
     let mut nix_all_oflags = if read && write {
         OFlag::RDWR
     } else if write {
