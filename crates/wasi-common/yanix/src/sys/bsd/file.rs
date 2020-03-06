@@ -1,5 +1,7 @@
-use crate::Result;
-use std::{io, os::unix::prelude::*};
+use std::{
+    io::{Error, Result},
+    os::unix::prelude::*,
+};
 
 pub unsafe fn isatty(fd: RawFd) -> Result<bool> {
     let res = libc::isatty(fd);
@@ -8,15 +10,11 @@ pub unsafe fn isatty(fd: RawFd) -> Result<bool> {
         Ok(true)
     } else {
         // ... otherwise 0 is returned, and errno is set to indicate the error.
-        let errno = io::Error::last_os_error();
-        if let Some(raw_errno) = errno.raw_os_error() {
-            if raw_errno == libc::ENOTTY {
-                Ok(false)
-            } else {
-                Err(errno.into())
-            }
+        let errno = Error::last_os_error();
+        if errno.raw_os_error().unwrap() == libc::ENOTTY {
+            Ok(false)
         } else {
-            Err(errno.into())
+            Err(errno)
         }
     }
 }

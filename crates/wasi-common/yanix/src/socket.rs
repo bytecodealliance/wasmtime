@@ -1,4 +1,5 @@
-use crate::{Error, Result};
+use crate::from_success_code;
+use std::io::Result;
 use std::os::unix::prelude::*;
 
 #[derive(Debug, Clone, Copy)]
@@ -15,7 +16,7 @@ pub unsafe fn get_socket_type(fd: RawFd) -> Result<SockType> {
     use std::mem::{self, MaybeUninit};
     let mut buffer = MaybeUninit::<SockType>::zeroed().assume_init();
     let mut out_len = mem::size_of::<SockType>() as libc::socklen_t;
-    Error::from_success_code(libc::getsockopt(
+    from_success_code(libc::getsockopt(
         fd,
         libc::SOL_SOCKET,
         libc::SO_TYPE,

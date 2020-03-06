@@ -1,8 +1,8 @@
 use crate::{
     file::FileType,
     sys::dir::{iter_impl, EntryImpl},
-    Result,
 };
+use std::io::Result;
 use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 use std::{ffi::CStr, io, ops::Deref, ptr};
 

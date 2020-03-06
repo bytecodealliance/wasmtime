@@ -1,5 +1,6 @@
-use crate::{dir::SeekLoc, Result};
+use crate::dir::SeekLoc;
 use cfg_if::cfg_if;
+use std::io::Result;
 
 cfg_if! {
     if #[cfg(any(target_os = "linux",
