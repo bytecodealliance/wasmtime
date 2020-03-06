@@ -61,31 +61,28 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
     use winx::file::Flags;
 
     let path = concatenate(dirfd, Path::new(path))?;
-    OpenOptions::new()
+    let err = match OpenOptions::new()
         .read(true)
         .custom_flags(Flags::FILE_FLAG_BACKUP_SEMANTICS.bits())
         .open(&path)
-        .map_err(|err| match err.raw_os_error() {
-            Some(code) => {
-                log::debug!("openat error={:?}", code);
-                if code as u32 == winerror::ERROR_INVALID_NAME {
-                    Error::ENOTDIR
-                } else {
-                    err.into()
-                }
-            }
-            None => {
-                log::debug!("Inconvertible OS error: {}", err);
-                Error::EIO
-            }
-        })
+    {
+        Ok(file) => return Ok(file),
+        Err(e) => e,
+    };
+    if let Some(code) = err.raw_os_error() {
+        log::debug!("openat error={:?}", code);
+        if code as u32 == winerror::ERROR_INVALID_NAME {
+            return Err(Error::ENOTDIR);
+        }
+    }
+    Err(err.into())
 }
 
 pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
     use winx::file::get_file_path;
 
     let path = concatenate(dirfd, Path::new(s_path))?;
-    match path.read_link() {
+    let err = match path.read_link() {
         Ok(target_path) => {
             // since on Windows we are effectively emulating 'at' syscalls
             // we need to strip the prefix from the absolute path
@@ -93,32 +90,27 @@ pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
             // of dealing with absolute paths
             let dir_path = get_file_path(dirfd)?;
             let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
-            target_path
+            let target_path = target_path
                 .strip_prefix(dir_path)
-                .map_err(|_| Error::ENOTCAPABLE)
-                .and_then(|path| path.to_str().map(String::from).ok_or(Error::EILSEQ))
+                .map_err(|_| Error::ENOTCAPABLE)?;
+            let target_path = target_path.to_str().ok_or(Error::EILSEQ)?;
+            return Ok(target_path.to_owned());
         }
-        Err(err) => match err.raw_os_error() {
-            Some(code) => {
-                log::debug!("readlinkat error={:?}", code);
-                if code as u32 == winerror::ERROR_INVALID_NAME {
-                    if s_path.ends_with('/') {
-                        // strip "/" and check if exists
-                        let path = concatenate(dirfd, Path::new(s_path.trim_end_matches('/')))?;
-                        if path.exists() && !path.is_dir() {
-                            return Err(Error::ENOTDIR);
-                        }
-                    }
+        Err(e) => e,
+    };
+    if let Some(code) = err.raw_os_error() {
+        log::debug!("readlinkat error={:?}", code);
+        if code as u32 == winerror::ERROR_INVALID_NAME {
+            if s_path.ends_with('/') {
+                // strip "/" and check if exists
+                let path = concatenate(dirfd, Path::new(s_path.trim_end_matches('/')))?;
+                if path.exists() && !path.is_dir() {
+                    return Err(Error::ENOTDIR);
                 }
-
-                return Err(err.into());
             }
-            None => {
-                log::debug!("Inconvertible OS error: {}", err);
-                Err(Error::EIO)
-            }
-        },
+        }
     }
+    Err(err.into())
 }
 
 pub(crate) fn strip_extended_prefix<P: AsRef<OsStr>>(path: P) -> OsString {
