@@ -27,7 +27,7 @@
   </Target>
 
   <ItemGroup>
-    <None Update="Modules/*.wasm" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Modules/*.wat" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

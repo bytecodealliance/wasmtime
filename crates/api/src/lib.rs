@@ -6,7 +6,7 @@
 //! and there to implement Rust idioms. This crate also defines the actual C API
 //! itself for consumption from other languages.
 
-#![deny(missing_docs)]
+#![deny(missing_docs, intra_doc_link_resolution_failure)]
 
 mod callable;
 mod externals;

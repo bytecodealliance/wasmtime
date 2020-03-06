@@ -234,7 +234,7 @@ impl Module {
     /// indicate what should be valid and what shouldn't be.
     ///
     /// Validation automatically happens as part of [`Module::new`], but is a
-    /// requirement for [`Module::new_unchecked`] to be safe.
+    /// requirement for [`Module::from_binary_unchecked`] to be safe.
     ///
     /// # Errors
     ///

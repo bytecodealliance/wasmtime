@@ -52,7 +52,8 @@ jobs:
     - uses: ./.github/actions/install-rust
       with:
         toolchain: nightly
-    - run: cargo doc --no-deps --all --exclude wasmtime-cli --exclude test-programs
+    - run: cargo doc --no-deps --all --exclude wasmtime-cli --exclude test-programs --exclude cranelift-codegen-meta
+    - run: cargo doc --package cranelift-codegen-meta --document-private-items
     - uses: actions/upload-artifact@v1
       with:
         name: doc-api
@@ -87,26 +88,36 @@ jobs:
             | shuf \
             | head -n 3000 \
             | xargs cargo fuzz run compile --release --debug-assertions
+      env:
+        RUST_BACKTRACE: 1
     - run: |
         find fuzz/corpus/instantiate -type f \
             | shuf \
             | head -n 2000 \
             | xargs cargo fuzz run instantiate --release --debug-assertions
+      env:
+        RUST_BACKTRACE: 1
     - run: |
         find fuzz/corpus/instantiate_translated -type f \
             | shuf \
             | head -n 1000 \
             | xargs cargo fuzz run instantiate_translated --release --debug-assertions
+      env:
+        RUST_BACKTRACE: 1
     - run: |
         find fuzz/corpus/api_calls -type f \
             | shuf \
             | head -n 100 \
             | xargs cargo fuzz run api_calls --release --debug-assertions
+      env:
+        RUST_BACKTRACE: 1
     - run: |
         find fuzz/corpus/differential -type f \
             | shuf \
             | head -n 100 \
             | xargs cargo fuzz run differential --release --debug-assertions
+      env:
+        RUST_BACKTRACE: 1
 
   # Install wasm32-unknown-emscripten target, and ensure `crates/wasi-common`
   # compiles to Emscripten.
@@ -189,6 +200,12 @@ jobs:
         RUST_BACKTRACE: 1
         RUSTFLAGS: "-D warnings"
 
+    # Test debug (DWARF) related functionality.
+    - run: cargo test test_debug_dwarf_ -- --ignored --nocapture --test-threads 1
+      env:
+        RUST_BACKTRACE: 1
+        RUSTFLAGS: "-D warnings"
+
     # Build and test lightbeam if we're using the nightly toolchain. Note that
     # Lightbeam tests fail right now, but we don't want to block on that.
     - run: cargo build --package lightbeam
@@ -208,6 +225,19 @@ jobs:
       continue-on-error: true
       env:
         RUST_BACKTRACE: 1
+
+  # Verify that cranelift's code generation is deterministic
+  meta_determinist_check:
+    name: Meta deterministic check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        submodules: true
+    - name: Install Rust
+      run: rustup update stable && rustup default stable
+    - run: cd cranelift/codegen && cargo build --features all-arch
+    - run: ci/ensure_deterministic_build.sh
 
   # Builds a Python wheel (package) for Windows/Mac/Linux. Note that we're
   # careful to create binary-compatible releases here to old releases of
@@ -332,7 +362,7 @@ jobs:
     - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
       shell: bash
     # Test what we just built
-    - run: $CENTOS cargo test --features test_programs --release --all --exclude lightbeam --exclude wasmtime --exclude wasmtime-c-api --exclude wasmtime-fuzzing -- --skip test_debug_dwarf_
+    - run: $CENTOS cargo test --features test_programs --release --all --exclude lightbeam --exclude wasmtime --exclude wasmtime-c-api --exclude wasmtime-fuzzing
       shell: bash
       env:
         RUST_BACKTRACE: 1

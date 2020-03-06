@@ -1,4 +1,4 @@
-use crate::{Errno, Result};
+use crate::{Error, Result};
 use std::mem::MaybeUninit;
 
 #[derive(Debug, Copy, Clone)]
@@ -22,7 +22,7 @@ impl ClockId {
 
 pub fn clock_getres(clock_id: ClockId) -> Result<libc::timespec> {
     let mut timespec = MaybeUninit::<libc::timespec>::uninit();
-    Errno::from_success_code(unsafe {
+    Error::from_success_code(unsafe {
         libc::clock_getres(clock_id.as_raw(), timespec.as_mut_ptr())
     })?;
     Ok(unsafe { timespec.assume_init() })
@@ -30,7 +30,7 @@ pub fn clock_getres(clock_id: ClockId) -> Result<libc::timespec> {
 
 pub fn clock_gettime(clock_id: ClockId) -> Result<libc::timespec> {
     let mut timespec = MaybeUninit::<libc::timespec>::uninit();
-    Errno::from_success_code(unsafe {
+    Error::from_success_code(unsafe {
         libc::clock_gettime(clock_id.as_raw(), timespec.as_mut_ptr())
     })?;
     Ok(unsafe { timespec.assume_init() })

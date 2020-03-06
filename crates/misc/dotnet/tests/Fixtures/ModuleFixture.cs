@@ -13,7 +13,9 @@ namespace Wasmtime.Tests
                 .WithReferenceTypes(true)
                 .Build();
             Store = Engine.CreateStore();
-            Module = Store.CreateModule(Path.Combine("Modules", ModuleFileName));
+            var wat = Path.Combine("Modules", ModuleFileName);
+            var wasm = Engine.WatToWasm(File.ReadAllText(wat));
+            Module = Store.CreateModule(wat, wasm);
         }
 
         public void Dispose()

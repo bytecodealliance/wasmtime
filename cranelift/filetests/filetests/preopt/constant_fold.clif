@@ -1,0 +1,19 @@
+test preopt
+target x86_64
+
+function %constant_fold(f64) -> f64 {
+block0(v0: f64):
+    v1 = f64const 0x1.0000000000000p0
+    v2 = f64const 0x1.0000000000000p1
+    v3 = fadd v1, v2
+    v4 = fadd v3, v0
+    return v4
+}
+; sameln: function %constant_fold(f64) -> f64 fast {
+; nextln: block0(v0: f64):
+; nextln:     v1 = f64const 0x1.0000000000000p0
+; nextln:     v2 = f64const 0x1.0000000000000p1
+; nextln:     v3 = f64const 0x1.8000000000000p1
+; nextln:     v4 = fadd v3, v0
+; nextln:     return v4
+; nextln: }

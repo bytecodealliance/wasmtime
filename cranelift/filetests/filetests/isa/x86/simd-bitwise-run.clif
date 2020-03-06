@@ -1,0 +1,165 @@
+test run
+set enable_simd
+target x86_64 skylake
+
+; TODO: once available, replace all lane extraction with `icmp + all_ones`
+
+function %ishl_i32x4() -> b1 {
+block0:
+    v0 = iconst.i32 1
+    v1 = vconst.i32x4 [1 2 4 8]
+    v2 = ishl v1, v0
+
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 2
+
+    v5 = extractlane v2, 3
+    v6 = icmp_imm eq v5, 16
+
+    v7 = band v4, v6
+    return v7
+}
+; run
+
+function %ishl_too_large_i16x8() -> b1 {
+block0:
+    v0 = iconst.i32 17 ; note that this will shift off the end of each lane
+    v1 = vconst.i16x8 [1 2 4 8 16 32 64 128]
+    v2 = ishl v1, v0
+
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 0
+
+    v5 = extractlane v2, 3
+    v6 = icmp_imm eq v5, 0
+
+    v7 = band v4, v6
+    return v7
+}
+; run
+
+function %ushr_i64x2() -> b1 {
+block0:
+    v0 = iconst.i32 1
+    v1 = vconst.i64x2 [1 2]
+    v2 = ushr v1, v0
+
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 0
+
+    v5 = extractlane v2, 1
+    v6 = icmp_imm eq v5, 1
+
+    v7 = band v4, v6
+    return v7
+}
+; run
+
+function %ushr_too_large_i32x4() -> b1 {
+block0:
+    v0 = iconst.i32 33 ; note that this will shift off the end of each lane
+    v1 = vconst.i32x4 [1 2 4 8]
+    v2 = ushr v1, v0
+
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 0
+
+    v5 = extractlane v2, 3
+    v6 = icmp_imm eq v5, 0
+
+    v7 = band v4, v6
+    return v7
+}
+; run
+
+function %sshr_i16x8() -> b1 {
+block0:
+    v0 = iconst.i32 1
+    v1 = vconst.i16x8 [-1 2 4 8 -16 32 64 128]
+    v2 = sshr v1, v0
+
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 0xffff ; because of the shifted-in sign-bit, this remains 0xffff == -1
+
+    v5 = extractlane v2, 4
+    v6 = icmp_imm eq v5, 0xfff8 ; -16 has been shifted to -8 == 0xfff8
+
+    v7 = band v4, v6
+    return v7
+}
+; run
+
+function %sshr_too_large_i32x4() -> b1 {
+block0:
+    v0 = iconst.i32 33 ; note that this will shift off the end of each lane
+    v1 = vconst.i32x4 [1 2 4 -8]
+    v2 = sshr v1, v0
+
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 0
+
+    v5 = extractlane v2, 3
+    v6 = icmp_imm eq v5, 0xffff_ffff ; shifting in the sign-bit repeatedly fills the result with 1s
+
+    v7 = band v4, v6
+    return v7
+}
+; run
+
+function %bitselect_i8x16() -> b1 {
+block0:
+    v0 = vconst.i8x16 [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 255]  ; the selector vector
+    v1 = vconst.i8x16 [127 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42] ; for each 1-bit in v0 the bit of v1 is selected
+    v2 = vconst.i8x16 [42 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127] ; for each 0-bit in v0 the bit of v2 is selected
+    v3 = bitselect v0, v1, v2
+
+    v4 = extractlane v3, 0
+    v5 = icmp_imm eq v4, 42
+
+    v6 = extractlane v3, 1
+    v7 = icmp_imm eq v6, 0
+
+    v8 = extractlane v3, 15
+    v9 = icmp_imm eq v8, 42
+
+    v10 = band v5, v7
+    v11 = band v10, v9
+    return v11
+}
+; run
+
+function %sshr_imm_i32x4() -> b1 {
+block0:
+    v1 = vconst.i32x4 [1 2 4 -8]
+    v2 = sshr_imm v1, 1
+
+    v3 = vconst.i32x4 [0 1 2 -4]
+    v4 = icmp eq v2, v3
+    v5 = vall_true v4
+    return v5
+}
+; run
+
+function %sshr_imm_i16x8() -> b1 {
+block0:
+    v1 = vconst.i16x8 [1 2 4 -8 0 0 0 0]
+    v2 = ushr_imm v1, 1
+
+    v3 = vconst.i16x8 [0 1 2 32764 0 0 0 0] ; -4 with MSB unset == 32764
+    v4 = icmp eq v2, v3
+    v5 = vall_true v4
+    return v5
+}
+; run
+
+function %ishl_imm_i64x2() -> b1 {
+block0:
+    v1 = vconst.i64x2 [1 0]
+    v2 = ishl_imm v1, 1
+
+    v3 = vconst.i64x2 [2 0]
+    v4 = icmp eq v2, v3
+    v5 = vall_true v4
+    return v5
+}
+; run

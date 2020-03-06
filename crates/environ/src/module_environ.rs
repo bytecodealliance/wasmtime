@@ -6,8 +6,8 @@ use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
-    self, translate_module, DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
-    ModuleTranslationState, PassiveDataIndex, PassiveElemIndex, SignatureIndex, Table, TableIndex,
+    self, translate_module, DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex,
+    Memory, MemoryIndex, ModuleTranslationState, SignatureIndex, Table, TableIndex,
     TargetEnvironment, WasmError, WasmResult,
 };
 use std::convert::TryFrom;
@@ -336,7 +336,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
 
     fn declare_passive_element(
         &mut self,
-        elem_index: PassiveElemIndex,
+        elem_index: ElemIndex,
         segments: Box<[FuncIndex]>,
     ) -> WasmResult<()> {
         let old = self
@@ -397,7 +397,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
 
     fn declare_passive_data(
         &mut self,
-        _data_index: PassiveDataIndex,
+        _data_index: DataIndex,
         _data: &'data [u8],
     ) -> WasmResult<()> {
         Err(WasmError::Unsupported(

@@ -29,8 +29,8 @@ use std::{mem, ptr, slice};
 use thiserror::Error;
 use wasmtime_environ::entity::{packed_option::ReservedValue, BoxedSlice, EntityRef, PrimaryMap};
 use wasmtime_environ::wasm::{
-    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
-    GlobalIndex, GlobalInit, MemoryIndex, PassiveElemIndex, SignatureIndex, TableIndex,
+    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex,
+    FuncIndex, GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
 use wasmtime_environ::{ir, DataInitializer, Module, TableElements, VMOffsets};
 
@@ -90,7 +90,7 @@ pub(crate) struct Instance {
     /// Passive elements in this instantiation. As `elem.drop`s happen, these
     /// entries get removed. A missing entry is considered equivalent to an
     /// empty slice.
-    passive_elements: RefCell<HashMap<PassiveElemIndex, Box<[VMCallerCheckedAnyfunc]>>>,
+    passive_elements: RefCell<HashMap<ElemIndex, Box<[VMCallerCheckedAnyfunc]>>>,
 
     /// Pointers to functions in executable memory.
     finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
@@ -587,7 +587,7 @@ impl Instance {
     pub(crate) fn table_init(
         &self,
         table_index: TableIndex,
-        elem_index: PassiveElemIndex,
+        elem_index: ElemIndex,
         dst: u32,
         src: u32,
         len: u32,
@@ -621,7 +621,7 @@ impl Instance {
     }
 
     /// Drop an element.
-    pub(crate) fn elem_drop(&self, elem_index: PassiveElemIndex) {
+    pub(crate) fn elem_drop(&self, elem_index: ElemIndex) {
         // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-elem-drop
 
         let mut passive_elements = self.passive_elements.borrow_mut();

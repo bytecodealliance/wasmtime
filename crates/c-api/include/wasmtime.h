@@ -38,6 +38,26 @@ WASMTIME_CONFIG_PROP(cranelift_opt_level, wasmtime_opt_level_t)
 
 ///////////////////////////////////////////////////////////////////////////////
 
+// Converts from the text format of WebAssembly to to the binary format.
+//
+// * `engine` - a previously created engine which will drive allocations and
+//   such
+// * `wat` - this it the input buffer with the WebAssembly Text Format inside of
+//   it. This will be parsed and converted to the binary format.
+// * `ret` - if the conversion is successful, this byte vector is filled in with
+//   the WebAssembly binary format.
+// * `error_message` - if the conversion fails, this is filled in with a
+//   descriptive error message of why parsing failed. This parameter is
+//   optional.
+//
+// Returns `true` if conversion succeeded, or `false` if it failed.
+bool wasmtime_wat2wasm(
+    wasm_engine_t *engine,
+    const wasm_byte_vec_t *wat,
+    own wasm_byte_vec_t *ret,
+    own wasm_byte_vec_t *error_message,
+);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

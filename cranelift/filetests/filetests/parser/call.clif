@@ -1,0 +1,94 @@
+; Parser tests for call and return syntax.
+test cat
+
+function %mini() {
+block1:
+    return
+}
+; sameln: function %mini() fast {
+; nextln: block1:
+; nextln:     return
+; nextln: }
+
+function %r1() -> i32, f32 baldrdash_system_v {
+block1:
+    v1 = iconst.i32 3
+    v2 = f32const 0.0
+    return v1, v2
+}
+; sameln: function %r1() -> i32, f32 baldrdash_system_v {
+; nextln: block1:
+; nextln:     v1 = iconst.i32 3
+; nextln:     v2 = f32const 0.0
+; nextln:     return v1, v2
+; nextln: }
+
+function %signatures() {
+    sig10 = ()
+    sig11 = (i32, f64) -> i32, b1 baldrdash_system_v
+    fn5 = %foo sig11
+    fn8 = %bar(i32) -> b1
+}
+; sameln: function %signatures() fast {
+; check:      sig10 = () fast
+; check:      sig11 = (i32, f64) -> i32, b1 baldrdash_system_v
+; check:      sig12 = (i32) -> b1 fast
+; not:        fn0
+; check:      fn5 = %foo sig11
+; check:      fn8 = %bar sig12
+; check:  }
+
+function %direct() {
+    fn0 = %none()
+    fn1 = %one() -> i32
+    fn2 = %two() -> i32, f32
+
+block0:
+    call fn0()
+    v1 = call fn1()
+    v2, v3 = call fn2()
+    return
+}
+; check: call fn0()
+; check: v1 = call fn1()
+; check: v2, v3 = call fn2()
+; check: return
+
+function %indirect(i64) {
+    sig0 = (i64)
+    sig1 = () -> i32
+    sig2 = () -> i32, f32
+
+block0(v0: i64):
+    v1 = call_indirect sig1, v0()
+    call_indirect sig0, v1(v0)
+    v3, v4 = call_indirect sig2, v1()
+    return
+}
+; check: v1 = call_indirect sig1, v0()
+; check: call_indirect sig0, v1(v0)
+; check: v3, v4 = call_indirect sig2, v1()
+; check: return
+
+function %long_call() {
+    sig0 = ()
+    fn0 = %none sig0
+
+block0:
+    v0 = func_addr.i32 fn0
+    call_indirect sig0, v0()
+    return
+}
+; check: v0 = func_addr.i32 fn0
+; check: call_indirect sig0, v0()
+; check: return
+
+; Special purpose function arguments
+function %special1(i32 sret, i32 fp, i32 csr, i32 link) -> i32 link, i32 fp, i32 csr, i32 sret {
+block0(v1: i32, v2: i32, v3: i32, v4: i32):
+    return v4, v2, v3, v1
+}
+; check: function %special1(i32 sret, i32 fp, i32 csr, i32 link) -> i32 link, i32 fp, i32 csr, i32 sret fast {
+; check: block0(v1: i32, v2: i32, v3: i32, v4: i32):
+; check:     return v4, v2, v3, v1
+; check: }

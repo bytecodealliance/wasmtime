@@ -1,0 +1,44 @@
+test simple-gvn
+
+function %simple_redundancy(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = iadd v0, v1
+    v4 = imul v2, v3
+; check: v4 = imul v2, v2
+    return v4
+}
+
+function %cascading_redundancy(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = iadd v0, v1
+    v4 = imul v2, v3
+    v5 = imul v2, v2
+    v6 = iadd v4, v5
+; check: v6 = iadd v4, v4
+    return v6
+}
+
+function %redundancies_on_some_paths(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = iadd v0, v1
+    brz v3, block1
+    jump block3
+
+block3:
+    v4 = iadd v0, v1
+    jump block2(v4)
+; check: jump block2(v3)
+
+block1:
+    v5 = iadd v0, v1
+    jump block2(v5)
+; check: jump block2(v3)
+
+block2(v6: i32):
+    v7 = iadd v0, v1
+    v8 = iadd v6, v7
+; check: v8 = iadd v6, v3
+    return v8
+}

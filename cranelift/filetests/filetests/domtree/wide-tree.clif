@@ -1,0 +1,73 @@
+test domtree
+
+function %test(i32) {
+    block0(v0: i32):
+        brz v0, block13   ; dominates: block13
+        jump block1       ; dominates: block1
+    block1:
+        brz v0, block2    ; dominates: block2 block7
+        jump block20      ; dominates: block20
+    block20:
+        brnz v0, block3   ; dominates: block3
+        jump block21      ; dominates: block21
+    block21:
+        brz v0, block4    ; dominates: block4
+        jump block22      ; dominates: block22
+    block22:
+        brnz v0, block5   ; dominates: block5
+        jump block6       ; dominates: block6
+    block2:
+        jump block7
+    block3:
+        jump block7
+    block4:
+        jump block7
+    block5:
+        jump block7
+    block6:
+        jump block7
+    block7:
+        brnz v0, block8   ; dominates: block8 block12
+        jump block23      ; dominates: block23
+    block23:
+        brz v0, block9    ; dominates: block9
+        jump block24      ; dominates: block24
+    block24:
+        brnz v0, block10  ; dominates: block10
+        jump block11      ; dominates: block11
+    block8:
+        jump block12
+    block9:
+        jump block12
+    block10:
+        brz v0, block13
+        jump block12
+    block11:
+        jump block13
+    block12:
+        return
+    block13:
+        return
+}
+
+; check: domtree_preorder {
+; nextln: block0: block13 block1
+; nextln: block13:
+; nextln: block1: block2 block20 block7
+; nextln: block2:
+; nextln: block20: block3 block21
+; nextln: block3:
+; nextln: block21: block4 block22
+; nextln: block4:
+; nextln: block22: block5 block6
+; nextln: block5:
+; nextln: block6:
+; nextln: block7: block8 block23 block12
+; nextln: block8:
+; nextln: block23: block9 block24
+; nextln: block9:
+; nextln: block24: block10 block11
+; nextln: block10:
+; nextln: block11:
+; nextln: block12:
+; nextln: }

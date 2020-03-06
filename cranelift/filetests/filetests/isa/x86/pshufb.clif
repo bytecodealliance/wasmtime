@@ -1,0 +1,13 @@
+test binemit
+set enable_simd
+target x86_64 has_ssse3=true
+
+function %test_pshufb() {
+block0:
+[-, %rax]   v0 = iconst.i8 42
+[-, %xmm0]  v1 = scalar_to_vector.i8x16 v0   ; bin: 66 40 0f 6e c0
+[-, %rbx]   v2 = iconst.i8 43
+[-, %xmm4]  v3 = scalar_to_vector.i8x16 v2   ; bin: 66 40 0f 6e e3
+[-, %xmm0]  v4 = x86_pshufb v1, v3               ; bin: 66 0f 38 00 c4
+            return
+}

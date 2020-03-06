@@ -25,6 +25,7 @@ fn check_wasm(wasm_path: &str, directives: &str) -> Result<()> {
 }
 
 #[test]
+#[ignore]
 #[cfg(all(
     any(target_os = "linux", target_os = "macos"),
     target_pointer_width = "64"

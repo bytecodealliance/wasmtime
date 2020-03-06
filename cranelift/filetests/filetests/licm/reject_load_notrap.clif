@@ -1,0 +1,55 @@
+test licm
+
+target x86_64
+
+;; Nontrapping possibly-not-readonly load from address that is not
+;; loop-dependent should *not* be hoisted out of loop, though the
+;; address computation can be.
+
+function %hoist_load(i32, i64 vmctx) -> i32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned readonly gv0
+    heap0 = static gv1, min 0x1_0000, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i32
+
+block0(v0: i32, v1: i64):
+    v4 = iconst.i32 1
+    v5 = heap_addr.i64 heap0, v4, 1
+    jump block1(v0, v1)
+
+block1(v2: i32, v3: i64):
+    v6 = load.i32 notrap aligned v5
+    v7 = iadd v2, v6
+    brz v2, block3(v2)
+    jump block2
+
+block2:
+    v8 = isub v2, v4
+    jump block1(v8, v3)
+
+block3(v9: i32):
+    return v9
+}
+
+; sameln: function %hoist_load(i32, i64 vmctx) -> i32 fast {
+; nextln:    gv0 = vmctx
+; nextln:    gv1 = load.i64 notrap aligned readonly gv0
+; nextln:    heap0 = static gv1, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000, index_type i32
+; nextln: 
+; nextln: block0(v0: i32, v1: i64):
+; nextln:    v4 = iconst.i32 1
+; nextln:    v5 = heap_addr.i64 heap0, v4, 1
+; nextln:    jump block1(v0, v1)
+; nextln: 
+; nextln: block1(v2: i32, v3: i64):
+; nextln:    v6 = load.i32 notrap aligned v5
+; nextln:    v7 = iadd v2, v6
+; nextln:    brz v2, block3(v2)
+; nextln:    jump block2
+; nextln: 
+; nextln: block2:
+; nextln:    v8 = isub.i32 v2, v4
+; nextln:    jump block1(v8, v3)
+; nextln: 
+; nextln: block3(v9: i32):
+; nextln:    return v9
+; nextln: }

@@ -1,0 +1,19 @@
+test verifier
+
+function %br_invalid_default(i64) {
+    jt0 = jump_table [block1, block1]
+
+block0(v0: i64):
+    br_table.i64 v0, block2, jt0 ; error: invalid block reference block2
+block1:
+    return
+}
+
+function %br(i64) {
+    jt0 = jump_table [block1, block2] ; error: invalid block reference block2
+
+block0(v0: i64):
+    br_table.i64 v0, block1, jt0
+block1:
+    return
+}

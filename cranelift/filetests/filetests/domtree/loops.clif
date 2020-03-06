@@ -1,0 +1,118 @@
+test domtree
+
+function %test(i32) {
+    block0(v0: i32):
+        brz v0, block1  ; dominates: block1 block3 block4 block5
+        jump block2     ; dominates: block2
+    block1:
+        jump block3
+    block2:
+        brz v0, block4
+        jump block5
+    block3:
+        jump block4
+    block4:
+        brz v0, block3
+        jump block5
+    block5:
+        brz v0, block4
+        jump block6     ; dominates: block6
+    block6:
+        return
+}
+; Fall-through-first, prune-at-source DFT:
+;
+; block0 {
+;     block0:brz v0, block1 {
+;         block0:jump block2 {
+;             block2 {
+;                 block2:brz v2, block2 -
+;                 block2:brz v3, block1 -
+;                 block2:brz v4, block4 {
+;                     block2: jump block5 {
+;                         block5: jump block6 {
+;                             block6 {}
+;                         }
+;                     }
+;                     block4 {}
+;                 }
+;             } block2
+;         }
+;         block1 {
+;             block1:jump block3 {
+;                 block3 {}
+;             }
+;         } block1
+;     }
+; } block0
+;
+; check: cfg_postorder:
+; sameln: block6
+; sameln: block5
+; sameln: block3
+; sameln: block4
+; sameln: block2
+; sameln: block1
+; sameln: block0
+
+; check: domtree_preorder {
+; nextln: block0: block1 block2 block4 block3 block5
+; nextln: block1:
+; nextln: block2:
+; nextln: block4:
+; nextln: block3:
+; nextln: block5: block6
+; nextln: block6:
+; nextln: }
+
+function %loop2(i32) system_v {
+    block0(v0: i32):
+        brz v0, block1    ; dominates: block1 block3 block4 block5
+        jump block2       ; dominates: block2
+    block1:
+        jump block3
+    block2:
+        brz v0, block4
+        jump block5
+    block3:
+        jump block4
+    block4:
+        brz v0, block3
+        jump block8       ; dominates: block8
+    block8:
+        brnz v0, block5
+        jump block6       ; dominates: block6
+    block5:
+        brz v0, block4
+        jump block9       ; dominates: block9
+    block9:
+        trap user0
+    block6:
+        jump block7       ; dominates: block7
+    block7:
+        return
+}
+; check: cfg_postorder:
+; sameln: block9
+; sameln: block5
+; sameln: block7
+; sameln: block6
+; sameln: block8
+; sameln: block3
+; sameln: block4
+; sameln: block2
+; sameln: block1
+; sameln: block0
+
+; check: domtree_preorder {
+; nextln: block0: block1 block2 block4 block3 block5
+; nextln: block1:
+; nextln: block2:
+; nextln: block4: block8
+; nextln: block8: block6
+; nextln: block6: block7
+; nextln: block7:
+; nextln: block3:
+; nextln: block5: block9
+; nextln: block9:
+; nextln: }

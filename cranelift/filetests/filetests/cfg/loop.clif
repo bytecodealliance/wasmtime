@@ -1,0 +1,56 @@
+; For testing cfg generation. This code is nonsense.
+test print-cfg
+test verifier
+
+function %nonsense(i32, i32) -> f32 {
+; regex: I=\binst\d+\b
+; check: digraph "%nonsense" {
+; check:     block0 [shape=record, label="{block0(v1: i32, v2: i32):
+; check: | <$(BRZ=$I)>brz v2, block2
+; nextln: | <$(JUMP0=$I)>jump block3
+; nextln: }"]
+; nextln:     block3 [shape=record, label="{block3:
+; check: | <$(JUMP3=$I)>jump block1(v4)
+; nextln: }"]
+; nextln:     block1 [shape=record, label="{block1(v5: i32):
+; check:  | <$(BRNZ1=$I)>brnz v13, block1(v12)
+; nextln: | <$(JUMP1=$I)>jump block4
+; nextln: }"]
+; nextln:    block4 [shape=record, label="{block4:
+; check:  | <$I>return v17
+; nextln: }"]
+; nextln:    block2 [shape=record, label="{block2:
+; check:  | <$I>return v100
+; check:}"]
+block0(v1: i32, v2: i32):
+    v3 = f64const 0x0.0
+    brz v2, block2            ; unordered: block0:$BRZ -> block2
+    jump block3               ; unordered: block0:$JUMP0 -> block3
+
+block3:
+    v4 = iconst.i32 0
+    jump block1(v4)           ; unordered: block3:$JUMP3 -> block1
+
+block1(v5: i32):
+    v6 = imul_imm v5, 4
+    v7 = iadd v1, v6
+    v8 = f32const 0.0
+    v9 = f32const 0.0
+    v10 = f32const 0.0
+    v11 = fadd v9, v10
+    v12 = iadd_imm v5, 1
+    v13 = icmp ult v12, v2
+    brnz v13, block1(v12)     ; unordered: block1:$BRNZ1 -> block1
+    jump block4               ; unordered: block1:$JUMP1 -> block4
+
+block4:
+    v14 = f64const 0.0
+    v15 = f64const 0.0
+    v16 = fdiv v14, v15
+    v17 = f32const 0.0
+    return v17
+
+block2:
+    v100 = f32const 0.0
+    return v100
+}

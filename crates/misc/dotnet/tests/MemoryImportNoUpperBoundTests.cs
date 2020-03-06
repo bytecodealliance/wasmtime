@@ -6,7 +6,7 @@ namespace Wasmtime.Tests
 {
     public class MemoryImportNoUpperBoundFixture : ModuleFixture
     {
-        protected override string ModuleFileName => "MemoryImportNoUpperBound.wasm";
+        protected override string ModuleFileName => "MemoryImportNoUpperBound.wat";
     }
 
     public class MemoryImportNoUpperBoundTests : IClassFixture<MemoryImportNoUpperBoundFixture>

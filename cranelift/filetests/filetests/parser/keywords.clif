@@ -1,0 +1,5 @@
+test cat
+
+; 'function' is not a keyword, and can be used as the name of a function too.
+function %function() {}
+; check: function %function() fast

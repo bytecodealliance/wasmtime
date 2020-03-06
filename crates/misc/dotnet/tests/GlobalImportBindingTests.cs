@@ -6,7 +6,7 @@ namespace Wasmtime.Tests
 {
     public class GlobalImportBindingFixture : ModuleFixture
     {
-        protected override string ModuleFileName => "GlobalImportBindings.wasm";
+        protected override string ModuleFileName => "GlobalImportBindings.wat";
     }
 
     public class GlobalImportBindingTests : IClassFixture<GlobalImportBindingFixture>

@@ -9,7 +9,7 @@ namespace Wasmtime.Tests
 {
     public class WasiFixture : ModuleFixture
     {
-        protected override string ModuleFileName => "Wasi.wasm";
+        protected override string ModuleFileName => "Wasi.wat";
     }
 
     public class WasiTests : IClassFixture<WasiFixture>

@@ -1,0 +1,26 @@
+[package]
+name = "cranelift-serde"
+version = "0.59.0"
+authors = ["The Cranelift Project Developers"]
+description = "Serializer/Deserializer for Cranelift IR"
+repository = "https://github.com/bytecodealliance/cranelift"
+license = "Apache-2.0 WITH LLVM-exception"
+readme = "README.md"
+keywords = ["webassembly", "serde"]
+edition = "2018"
+
+[[bin]]
+name = "clif-json"
+path = "src/clif-json.rs"
+
+[dependencies]
+clap = "2.32.0"
+serde = "1.0.8"
+serde_derive = "1.0.75"
+serde_json = "1.0.26"
+cranelift-codegen = { path = "../codegen", version = "0.59.0" }
+cranelift-reader = { path = "../reader", version = "0.59.0" }
+
+[badges]
+maintenance = { status = "experimental" }
+travis-ci = { repository = "bytecodealliance/cranelift" }

@@ -9,10 +9,13 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
-arbitrary = "0.2.0"
-wasmtime-fuzzing = { path = "../crates/fuzzing" }
+cranelift-codegen = { path = "../cranelift/codegen" }
+cranelift-reader = { path = "../cranelift/reader" }
+cranelift-wasm = { path = "../cranelift/wasm" }
+libfuzzer-sys = "0.3.1"
+target-lexicon = "0.10"
 wasmtime = { path = "../crates/api" }
-libfuzzer-sys = "0.2.1"
+wasmtime-fuzzing = { path = "../crates/fuzzing" }
 
 [[bin]]
 name = "compile"

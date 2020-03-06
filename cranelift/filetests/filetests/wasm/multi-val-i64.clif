@@ -1,0 +1,44 @@
+test compile
+target x86_64 haswell
+
+;; Returning many i64s
+
+function %return_2_i64s() -> i64, i64 {
+block0:
+    v0 = iconst.i64 0
+    v1 = iconst.i64 1
+    return v0, v1
+}
+
+function %return_3_i64s() -> i64, i64, i64 {
+block0:
+    v0 = iconst.i64 0
+    v1 = iconst.i64 1
+    v2 = iconst.i64 2
+    return v0, v1, v2
+}
+
+function %return_4_i64s() -> i64, i64, i64, i64 {
+block0:
+    v0 = iconst.i64 0
+    v1 = iconst.i64 1
+    v2 = iconst.i64 2
+    v3 = iconst.i64 3
+    return v0, v1, v2, v3
+}
+
+;; Calling functions that return many i64s
+
+function %call() -> i64 {
+    fn0 = %a() -> i64, i64
+    fn1 = %b(i64, i64) -> i64, i64, i64
+    fn2 = %c(i64, i64, i64) -> i64, i64, i64, i64
+block0:
+    v0, v1 = call fn0()
+    v2, v3, v4 = call fn1(v0, v1)
+    v5, v6, v7, v8 = call fn2(v2, v3, v4)
+    v9 = iadd v5, v6
+    v10 = iadd v7, v8
+    v11 = iadd v9, v10
+    return v11
+}

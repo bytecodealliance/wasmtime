@@ -899,7 +899,7 @@ namespace Wasmtime
         public static extern bool wasi_config_set_stdin_file(
             WasiConfigHandle config,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string path
-        ); 
+        );
 
         [DllImport(LibraryName)]
         public static extern void wasi_config_inherit_stdin(WasiConfigHandle config);
@@ -909,7 +909,7 @@ namespace Wasmtime
         public static extern bool wasi_config_set_stdout_file(
             WasiConfigHandle config,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string path
-        ); 
+        );
 
         [DllImport(LibraryName)]
         public static extern void wasi_config_inherit_stdout(WasiConfigHandle config);
@@ -919,7 +919,7 @@ namespace Wasmtime
         public static extern bool wasi_config_set_stderr_file(
             WasiConfigHandle config,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string path
-        ); 
+        );
 
         [DllImport(LibraryName)]
         public static extern void wasi_config_inherit_stderr(WasiConfigHandle config);
@@ -974,5 +974,14 @@ namespace Wasmtime
 
         [DllImport(LibraryName)]
         public static extern void wasmtime_config_cranelift_opt_level_set(WasmConfigHandle config, wasmtime_opt_level_t level);
+
+        [DllImport(LibraryName, CharSet=CharSet.Ansi)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        public static extern bool wasmtime_wat2wasm(
+            EngineHandle engine,
+            ref wasm_byte_vec_t wat,
+            out wasm_byte_vec_t vec,
+            out wasm_byte_vec_t error_message
+        );
    }
 }

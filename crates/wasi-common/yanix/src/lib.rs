@@ -16,25 +16,12 @@ pub mod file;
 pub mod poll;
 pub mod socket;
 
-mod errno;
+mod error;
 mod sys;
 
 pub mod fadvise {
     pub use super::sys::fadvise::*;
 }
 
-pub use errno::Errno;
-use std::{ffi, num};
-use thiserror::Error;
-
-pub type Result<T> = std::result::Result<T, YanixError>;
-
-#[derive(Debug, Error)]
-pub enum YanixError {
-    #[error("raw os error {0}")]
-    Errno(#[from] Errno),
-    #[error("a nul byte was not found in the expected position")]
-    NulError(#[from] ffi::NulError),
-    #[error("integral type conversion failed")]
-    TryFromIntError(#[from] num::TryFromIntError),
-}
+pub use error::Error;
+pub type Result<T> = std::result::Result<T, Error>;

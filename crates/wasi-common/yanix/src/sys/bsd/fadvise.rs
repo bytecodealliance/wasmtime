@@ -1,4 +1,4 @@
-use crate::{Errno, Result};
+use crate::{Error, Result};
 use std::{convert::TryInto, os::unix::prelude::*};
 
 #[cfg(not(any(target_os = "freebsd", target_os = "netbsd")))]
@@ -48,7 +48,7 @@ pub unsafe fn posix_fadvise(
         ra_offset: offset,
         ra_count: len.try_into()?,
     };
-    Errno::from_success_code(libc::fcntl(fd, libc::F_RDADVISE, &advisory))
+    Error::from_success_code(libc::fcntl(fd, libc::F_RDADVISE, &advisory))
 }
 
 #[cfg(any(target_os = "freebsd", target_os = "netbsd"))]
@@ -58,7 +58,7 @@ pub unsafe fn posix_fadvise(
     len: libc::off_t,
     advice: PosixFadviseAdvice,
 ) -> Result<()> {
-    Errno::from_success_code(libc::posix_fadvise(fd, offset, len, advice as libc::c_int))
+    Error::from_success_code(libc::posix_fadvise(fd, offset, len, advice as libc::c_int))
 }
 
 // On BSDs without support we leave it as no-op

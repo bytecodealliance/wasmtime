@@ -303,10 +303,10 @@ impl<'a> Iterator for TransformRangeEndIter<'a> {
         while let Some((first, tail)) = self.indicies.split_first() {
             let range_index = *first;
             let range = &self.ranges[range_index];
+            self.indicies = tail;
             if range.wasm_start >= self.addr {
                 continue;
             }
-            self.indicies = tail;
             let address = match range
                 .positions
                 .binary_search_by(|a| a.wasm_pos.cmp(&self.addr))

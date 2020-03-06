@@ -1,0 +1,82 @@
+test cat
+test verifier
+
+function %vmglobal(i64 vmctx) -> i32 {
+    gv3 = vmctx
+    ; check: gv3 = vmctx
+block0(v0: i64):
+    v1 = global_value.i32 gv3
+    ; check: v1 = global_value.i32 gv3
+    return v1
+}
+
+function %load_and_add_imm(i64 vmctx) -> i32 {
+    gv2 = vmctx
+    gv3 = load.i32 notrap aligned gv2-72
+    gv4 = iadd_imm.i32 gv3, -32
+    ; check: gv2 = vmctx
+    ; check: gv3 = load.i32 notrap aligned gv2-72
+    ; check: gv4 = iadd_imm.i32 gv3, -32
+block0(v0: i64):
+    v1 = global_value.i32 gv4
+    ; check: v1 = global_value.i32 gv4
+    return v1
+}
+
+; Refer to a global value before it's been declared.
+function %backref(i64 vmctx) -> i32 {
+    gv0 = iadd_imm.i32 gv1, -32
+    ; check: gv0 = iadd_imm.i32 gv1, -32
+    gv1 = load.i32 notrap aligned gv2
+    ; check: gv1 = load.i32 notrap aligned gv2
+    gv2 = vmctx
+    ; check: gv2 = vmctx
+block0(v0: i64):
+    v1 = global_value.i32 gv1
+    return v1
+}
+
+function %symbol() -> i32 {
+    gv0 = symbol %something
+    ; check: gv0 = symbol %something
+    gv1 = symbol u8:9
+    ; check: gv1 = symbol u8:9
+block0:
+    v0 = global_value.i32 gv0
+    ; check: v0 = global_value.i32 gv0
+    v1 = global_value.i32 gv1
+    ; check: v1 = global_value.i32 gv1
+    v2 = bxor v0, v1
+    return v2
+}
+
+; Declare static heaps.
+function %sheap(i32, i64 vmctx) -> i64 {
+    heap1 = static gv5, min 0x1_0000, bound 0x1_0000_0000, offset_guard 0x8000_0000
+    heap2 = static gv5, offset_guard 0x1000, bound 0x1_0000
+    gv4 = vmctx
+    gv5 = iadd_imm.i64 gv4, 64
+
+    ; check: heap1 = static gv5, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
+    ; check: heap2 = static gv5, min 0, bound 0x0001_0000, offset_guard 4096
+block0(v1: i32, v2: i64):
+    v3 = heap_addr.i64 heap1, v1, 0
+    ; check: v3 = heap_addr.i64 heap1, v1, 0
+    return v3
+}
+
+; Declare dynamic heaps.
+function %dheap(i32, i64 vmctx) -> i64 {
+    heap1 = dynamic gv5, min 0x1_0000, bound gv6, offset_guard 0x8000_0000
+    heap2 = dynamic gv5, bound gv6, offset_guard 0x1000
+    gv4 = vmctx
+    gv5 = iadd_imm.i64 gv4, 64
+    gv6 = iadd_imm.i64 gv4, 72
+
+    ; check: heap1 = dynamic gv5, min 0x0001_0000, bound gv6, offset_guard 0x8000_0000
+    ; check: heap2 = dynamic gv5, min 0, bound gv6, offset_guard 4096
+block0(v1: i32, v2: i64):
+    v3 = heap_addr.i64 heap2, v1, 0
+    ; check: v3 = heap_addr.i64 heap2, v1, 0
+    return v3
+}

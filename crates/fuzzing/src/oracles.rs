@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
 fn fuzz_default_config(strategy: Strategy) -> Config {
-    drop(env_logger::try_init());
+    crate::init_fuzzing();
     let mut config = Config::new();
     config
         .cranelift_debug_verifier(true)
@@ -61,6 +61,8 @@ pub fn instantiate(wasm: &[u8], strategy: Strategy) {
 ///
 /// See also `instantiate` functions.
 pub fn instantiate_with_config(wasm: &[u8], config: Config) {
+    crate::init_fuzzing();
+
     let engine = Engine::new(&config);
     let store = Store::new(&engine);
 
@@ -94,6 +96,8 @@ pub fn instantiate_with_config(wasm: &[u8], config: Config) {
 ///
 /// You can control which compiler is used via passing a `Strategy`.
 pub fn compile(wasm: &[u8], strategy: Strategy) {
+    crate::init_fuzzing();
+
     let engine = Engine::new(&fuzz_default_config(strategy));
     let store = Store::new(&engine);
     log_wasm(wasm);
@@ -108,7 +112,8 @@ pub fn differential_execution(
     ttf: &crate::generators::WasmOptTtf,
     configs: &[crate::generators::DifferentialConfig],
 ) {
-    drop(env_logger::try_init());
+    crate::init_fuzzing();
+
     // We need at least two configs.
     if configs.len() < 2
         // And all the configs should be unique.
@@ -280,7 +285,7 @@ fn assert_same_export_func_result(
 pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
     use crate::generators::api::ApiCall;
 
-    drop(env_logger::try_init());
+    crate::init_fuzzing();
 
     let mut config: Option<Config> = None;
     let mut engine: Option<Engine> = None;

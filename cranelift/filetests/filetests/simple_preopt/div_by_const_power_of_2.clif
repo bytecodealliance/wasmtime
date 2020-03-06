@@ -1,0 +1,292 @@
+test simple_preopt
+target i686 baseline
+
+; -------- U32 --------
+
+; ignored
+function %t_udiv32_p0(i32) -> i32 {
+block0(v0: i32):
+    v1 = udiv_imm v0, 0
+    ; check: udiv_imm v0, 0
+    return v1
+}
+
+; converted to a nop
+function %t_udiv32_p1(i32) -> i32 {
+block0(v0: i32):
+    v1 = udiv_imm v0, 1
+    ; check: nop
+    return v1
+}
+
+; shift
+function %t_udiv32_p2(i32) -> i32 {
+block0(v0: i32):
+    v1 = udiv_imm v0, 2
+    ; check: ushr_imm v0, 1
+    return v1
+}
+
+; shift
+function %t_udiv32_p2p31(i32) -> i32 {
+block0(v0: i32):
+    v1 = udiv_imm v0, 0x8000_0000
+    ; check: ushr_imm v0, 31
+    return v1
+}
+
+
+; -------- U64 --------
+
+; ignored
+function %t_udiv64_p0(i64) -> i64 {
+block0(v0: i64):
+    v1 = udiv_imm v0, 0
+    ; check: udiv_imm v0, 0
+    return v1
+}
+
+; converted to a nop
+function %t_udiv64_p1(i64) -> i64 {
+block0(v0: i64):
+    v1 = udiv_imm v0, 1
+    ; check: nop
+    return v1
+}
+
+; shift
+function %t_udiv64_p2(i64) -> i64 {
+block0(v0: i64):
+    v1 = udiv_imm v0, 2
+    ; check: ushr_imm v0, 1
+    return v1
+}
+
+; shift
+function %t_udiv64_p2p63(i64) -> i64 {
+block0(v0: i64):
+    v1 = udiv_imm v0, 0x8000_0000_0000_0000
+    ; check: ushr_imm v0, 63
+    return v1
+}
+
+
+; -------- S32 --------
+
+; ignored
+function %t_sdiv32_p0(i32) -> i32 {
+block0(v0: i32):
+    v1 = sdiv_imm v0, 0
+    ; check: sdiv_imm v0, 0
+    return v1
+}
+
+; converted to a nop
+function %t_sdiv32_p1(i32) -> i32 {
+block0(v0: i32):
+    v1 = sdiv_imm v0, 1
+    ; check: nop
+    return v1
+}
+
+; ignored
+function %t_sdiv32_n1(i32) -> i32 {
+block0(v0: i32):
+    v1 = sdiv_imm v0, -1
+    ; check: sdiv_imm v0, -1
+    return v1
+}
+
+; shift
+function %t_sdiv32_p2(i32) -> i32 {
+block0(v0: i32):
+    v1 = sdiv_imm v0, 2
+    ; check: ushr_imm v0, 31
+    ; check: iadd v0, v2
+    ; check: sshr_imm v3, 1
+    ; check: v1 -> v4
+    return v1
+}
+
+; shift
+function %t_sdiv32_n2(i32) -> i32 {
+block0(v0: i32):
+    v1 = sdiv_imm v0, -2
+    ; check: ushr_imm v0, 31
+    ; check: iadd v0, v2
+    ; check: sshr_imm v3, 1
+    ; check: irsub_imm v4, 0
+    return v1
+}
+
+; shift
+function %t_sdiv32_p4(i32) -> i32 {
+block0(v0: i32):
+    v1 = sdiv_imm v0, 4
+    ; check: v2 = sshr_imm v0, 1
+    ; check: ushr_imm v2, 30
+    ; check: iadd v0, v3
+    ; check: v5 = sshr_imm v4, 2
+    ; check: v1 -> v5
+
+    return v1
+}
+
+; shift
+function %t_sdiv32_n4(i32) -> i32 {
+block0(v0: i32):
+    v1 = sdiv_imm v0, -4
+    ; check: sshr_imm v0, 1
+    ; check: ushr_imm v2, 30
+    ; check: iadd v0, v3
+    ; check: sshr_imm v4, 2
+    ; check: irsub_imm v5, 0
+    return v1
+}
+
+; shift
+function %t_sdiv32_p2p30(i32) -> i32 {
+block0(v0: i32):
+    v1 = sdiv_imm v0, 0x4000_0000
+    ; check: sshr_imm v0, 29
+    ; check: ushr_imm v2, 2
+    ; check: iadd v0, v3
+    ; check: v5 = sshr_imm v4, 30
+    ; check: v1 -> v5
+    return v1
+}
+
+; shift
+function %t_sdiv32_n2p30(i32) -> i32 {
+block0(v0: i32):
+    v1 = sdiv_imm v0, -0x4000_0000
+    ; check: sshr_imm v0, 29
+    ; check: ushr_imm v2, 2
+    ; check: iadd v0, v3
+    ; check: sshr_imm v4, 30
+    ; check: irsub_imm v5, 0
+    return v1
+}
+
+; there's no positive version of this, since -(-0x8000_0000) isn't
+; representable.
+function %t_sdiv32_n2p31(i32) -> i32 {
+block0(v0: i32):
+    v1 = sdiv_imm v0, -0x8000_0000
+    ; check: sshr_imm v0, 30
+    ; check: ushr_imm v2, 1
+    ; check: iadd v0, v3
+    ; check: sshr_imm v4, 31
+    ; check: irsub_imm v5, 0
+    return v1
+}
+
+
+; -------- S64 --------
+
+; ignored
+function %t_sdiv64_p0(i64) -> i64 {
+block0(v0: i64):
+    v1 = sdiv_imm v0, 0
+    ; check: sdiv_imm v0, 0
+    return v1
+}
+
+; converted to a nop
+function %t_sdiv64_p1(i64) -> i64 {
+block0(v0: i64):
+    v1 = sdiv_imm v0, 1
+    ; check: nop
+    return v1
+}
+
+; ignored
+function %t_sdiv64_n1(i64) -> i64 {
+block0(v0: i64):
+    v1 = sdiv_imm v0, -1
+    ; check: sdiv_imm v0, -1
+    return v1
+}
+
+; shift
+function %t_sdiv64_p2(i64) -> i64 {
+block0(v0: i64):
+    v1 = sdiv_imm v0, 2
+    ; check: ushr_imm v0, 63
+    ; check: iadd v0, v2
+    ; check: v4 = sshr_imm v3, 1
+    ; check: v1 -> v4
+    return v1
+}
+
+; shift
+function %t_sdiv64_n2(i64) -> i64 {
+block0(v0: i64):
+    v1 = sdiv_imm v0, -2
+    ; check: ushr_imm v0, 63
+    ; check: iadd v0, v2
+    ; check: sshr_imm v3, 1
+    ; check: irsub_imm v4, 0
+    return v1
+}
+
+; shift
+function %t_sdiv64_p4(i64) -> i64 {
+block0(v0: i64):
+    v1 = sdiv_imm v0, 4
+    ; check: sshr_imm v0, 1
+    ; check: ushr_imm v2, 62
+    ; check: iadd v0, v3
+    ; check: v5 = sshr_imm v4, 2
+    ; check: v1 -> v5
+    return v1
+}
+
+; shift
+function %t_sdiv64_n4(i64) -> i64 {
+block0(v0: i64):
+    v1 = sdiv_imm v0, -4
+    ; check: sshr_imm v0, 1
+    ; check: ushr_imm v2, 62
+    ; check: iadd v0, v3
+    ; check: sshr_imm v4, 2
+    ; check: irsub_imm v5, 0
+    return v1
+}
+
+; shift
+function %t_sdiv64_p2p62(i64) -> i64 {
+block0(v0: i64):
+    v1 = sdiv_imm v0, 0x4000_0000_0000_0000
+    ; check: sshr_imm v0, 61
+    ; check: ushr_imm v2, 2
+    ; check: iadd v0, v3
+    ; check: v5 = sshr_imm v4, 62
+    ; check: v1 -> v5
+    return v1
+}
+
+; shift
+function %t_sdiv64_n2p62(i64) -> i64 {
+block0(v0: i64):
+    v1 = sdiv_imm v0, -0x4000_0000_0000_0000
+    ; check: sshr_imm v0, 61
+    ; check: ushr_imm v2, 2
+    ; check: iadd v0, v3
+    ; check: sshr_imm v4, 62
+    ; check: irsub_imm v5, 0
+    return v1
+}
+
+; there's no positive version of this, since -(-0x8000_0000_0000_0000) isn't
+; representable.
+function %t_sdiv64_n2p63(i64) -> i64 {
+block0(v0: i64):
+    v1 = sdiv_imm v0, -0x8000_0000_0000_0000
+    ; check: sshr_imm v0, 62
+    ; check: ushr_imm v2, 1
+    ; check: iadd v0, v3
+    ; check: sshr_imm v4, 63
+    ; check: irsub_imm v5, 0
+    return v1
+}

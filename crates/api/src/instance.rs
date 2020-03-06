@@ -109,6 +109,7 @@ impl Instance {
     ///
     /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
+    /// [`ExternType`]: crate::ExternType
     pub fn new(module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
         let store = module.store();
         let config = store.engine().config();
@@ -158,7 +159,7 @@ impl Instance {
     /// they're simply the values that are exported. To learn the value of each
     /// export you'll need to consult [`Module::exports`]. The list returned
     /// here maps 1:1 with the list that [`Module::exports`] returns, and
-    /// [`ExportType`] contains the name of each export.
+    /// [`ExportType`](crate::ExportType) contains the name of each export.
     pub fn exports(&self) -> &[Extern] {
         &self.exports
     }

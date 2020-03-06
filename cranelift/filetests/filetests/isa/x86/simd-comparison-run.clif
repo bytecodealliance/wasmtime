@@ -1,0 +1,247 @@
+test run
+set enable_simd
+target x86_64 skylake
+
+function %icmp_eq_i8x16() -> b8 {
+block0:
+    v0 = vconst.i8x16 0x00
+    v1 = vconst.i8x16 0x00
+    v2 = icmp eq v0, v1
+    v3 = extractlane v2, 0
+    return v3
+}
+; run
+
+function %icmp_eq_i64x2() -> b64 {
+block0:
+    v0 = vconst.i64x2 0xffffffffffffffffffffffffffffffff
+    v1 = vconst.i64x2 0xffffffffffffffffffffffffffffffff
+    v2 = icmp eq v0, v1
+    v3 = extractlane v2, 1
+    return v3
+}
+; run
+
+function %icmp_ne_i32x4() -> b1 {
+block0:
+    v0 = vconst.i32x4 [0 1 2 3]
+    v1 = vconst.i32x4 [7 7 7 7]
+    v2 = icmp ne v0, v1
+    v3 = vall_true v2
+    return v3
+}
+; run
+
+function %icmp_ne_i16x8() -> b1 {
+block0:
+    v0 = vconst.i16x8 [0 1 2 3 4 5 6 7]
+    v1 = vconst.i16x8 [0 1 2 3 4 5 6 7]
+    v2 = icmp ne v0, v1
+    v3 = vall_true v2
+    v4 = bint.i32 v3
+    v5 = icmp_imm eq v4, 0
+    return v5
+}
+; run
+
+function %icmp_sgt_i8x16() -> b1 {
+block0:
+    v0 = vconst.i8x16 [0 1 2 0 0 0 0 0 0 0 0 0 0 0 0 0]
+    v1 = vconst.i8x16 [1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0xff]
+    v2 = icmp sgt v0, v1
+    v3 = raw_bitcast.i8x16 v2
+    v4 = vconst.i8x16 [0 0 0xff 0 0 0 0 0 0 0 0 0 0 0 0 0xff]
+    v7 = icmp eq v3, v4
+    v8 = vall_true v7
+    return v8
+}
+; run
+
+function %icmp_sgt_i64x2() -> b1 {
+block0:
+    v0 = vconst.i64x2 [0 -42]
+    v1 = vconst.i64x2 [-1 -43]
+    v2 = icmp sgt v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %maxs_i8x16() -> b1 {
+block0:
+    v0 = vconst.i8x16 [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1] ; 1 will be greater than -1 == 0xff with
+    ; signed max
+    v1 = vconst.i8x16 [0xff 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+    v2 = x86_pmaxs v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %maxu_i16x8() -> b1 {
+block0:
+    v0 = vconst.i16x8 [0 1 1 1 1 1 1 1]
+    v1 = vconst.i16x8 [-1 1 1 1 1 1 1 1] ; -1 == 0xff will be greater with unsigned max
+    v2 = x86_pmaxu v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %mins_i32x4() -> b1 {
+block0:
+    v0 = vconst.i32x4 [0 1 1 1]
+    v1 = vconst.i32x4 [-1 1 1 1] ; -1 == 0xff will be less with signed min
+    v2 = x86_pmins v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %minu_i8x16() -> b1 {
+block0:
+    v0 = vconst.i8x16 [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1] ; 1 < 2 with unsiged min
+    v1 = vconst.i8x16 [2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2]
+    v2 = x86_pminu v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %icmp_ugt_i8x16() -> b1 {
+block0:
+    v0 = vconst.i8x16 [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]
+    v1 = vconst.i8x16 [0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+    v2 = icmp ugt v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %icmp_sge_i16x8() -> b1 {
+block0:
+    v0 = vconst.i16x8 [-1 1 2 3 4 5 6 7]
+    v1 = vconst.i16x8 [-1 1 1 1 1 1 1 1]
+    v2 = icmp sge v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %icmp_uge_i32x4() -> b1 {
+block0:
+    v0 = vconst.i32x4 [1 2 3 4]
+    v1 = vconst.i32x4 [1 1 1 1]
+    v2 = icmp uge v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %icmp_slt_i32x4() -> b1 {
+block0:
+    v0 = vconst.i32x4 [-1 1 1 1]
+    v1 = vconst.i32x4 [1 2 3 4]
+    v2 = icmp slt v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %icmp_ult_i32x4() -> b1 {
+block0:
+    v0 = vconst.i32x4 [1 1 1 1]
+    v1 = vconst.i32x4 [-1 2 3 4] ; -1 = 0xffff... will be greater than 1 when unsigned
+    v2 = icmp ult v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+
+function %icmp_ult_i16x8() -> b1 {
+block0:
+    v0 = vconst.i16x8 [-1 -1 -1 -1 -1 -1 -1 -1]
+    v1 = vconst.i16x8 [-1 -1 -1 -1 -1 -1 -1 -1]
+    v2 = icmp ult v0, v1
+    v3 = vconst.i16x8 0x00
+    v4 = raw_bitcast.i16x8 v2
+    v5 = icmp eq v3, v4
+    v8 = vall_true v5
+    return v8
+}
+; run
+
+function %icmp_sle_i16x8() -> b1 {
+block0:
+    v0 = vconst.i16x8 [-1 -1 0 0 0 0 0 0]
+    v1 = vconst.i16x8 [-1  0 0 0 0 0 0 0]
+    v2 = icmp sle v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %icmp_ule_i16x8() -> b1 {
+block0:
+    v0 = vconst.i16x8 [-1  0 0 0 0 0 0 0]
+    v1 = vconst.i16x8 [-1 -1 0 0 0 0 0 0]
+    v2 = icmp ule v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %fcmp_eq_f32x4() -> b1 {
+block0:
+    v0 = vconst.f32x4 [0.0 -0x4.2 0x0.33333 -0.0]
+    v1 = vconst.f32x4 [0.0 -0x4.2 0x0.33333 -0.0]
+    v2 = fcmp eq v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %fcmp_lt_f32x4() -> b1 {
+block0:
+    v0 = vconst.f32x4 [0.0      -0x4.2  0x0.0       -0.0]
+    v1 = vconst.f32x4 [0x0.001  0x4.2   0x0.33333   0x1.0]
+    v2 = fcmp lt v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %fcmp_ge_f64x2() -> b1 {
+block0:
+    v0 = vconst.f64x2 [0x0.0  0x4.2]
+    v1 = vconst.f64x2 [0.0    0x4.1]
+    v2 = fcmp ge v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %fcmp_uno_f64x2() -> b1 {
+block0:
+    v0 = vconst.f64x2 [0.0  NaN]
+    v1 = vconst.f64x2 [NaN  0x4.1]
+    v2 = fcmp uno v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %fcmp_gt_nans_f32x4() -> b1 {
+block0:
+    v0 = vconst.f32x4 [NaN 0x42.0 -NaN NaN]
+    v1 = vconst.f32x4 [NaN NaN 0x42.0 Inf]
+    v2 = fcmp gt v0, v1
+    ; now check that the result v2 is all zeroes
+    v3 = vconst.i32x4 0x00
+    v4 = raw_bitcast.i32x4 v2
+    v5 = icmp eq v3, v4
+    v8 = vall_true v5
+    return v8
+}
+; run

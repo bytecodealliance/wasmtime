@@ -1,0 +1,36 @@
+test preopt
+target x86_64
+
+function %iadd_fold() -> i32 {
+block0:
+    v0 = iconst.i32 37
+    v1 = iconst.i32 5
+    v2 = iadd v0, v1
+    v3 = iconst.i32 8
+    v4 = iadd v2, v3
+    return v4
+}
+; sameln: function %iadd_fold
+; nextln: block0:
+; nextln:     v0 = iconst.i32 37
+; nextln:     v1 = iconst.i32 5
+; nextln:     v2 = iconst.i32 42
+; nextln:     v3 = iconst.i32 8
+; nextln:     v4 = iconst.i32 50
+; nextln:     return v4
+; nextln: }
+
+function %isub_fold() -> i32 {
+block0:
+    v0 = iconst.i32 42
+    v1 = iconst.i32 1
+    v2 = isub v0, v1
+    return v2
+}
+; sameln: function %isub_fold
+; nextln: block0:
+; nextln:     v0 = iconst.i32 42
+; nextln:     v1 = iconst.i32 1
+; nextln:     v2 = iconst.i32 41
+; nextln:     return v2
+; nextln: }

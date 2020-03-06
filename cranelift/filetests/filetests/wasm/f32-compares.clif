@@ -1,0 +1,48 @@
+; Test code generation for WebAssembly f32 comparison operators.
+test compile
+
+target i686 haswell
+
+target x86_64 haswell
+
+function %f32_eq(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp eq v0, v1
+    v3 = bint.i32 v2
+    return v3
+}
+
+function %f32_ne(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp ne v0, v1
+    v3 = bint.i32 v2
+    return v3
+}
+
+function %f32_lt(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp lt v0, v1
+    v3 = bint.i32 v2
+    return v3
+}
+
+function %f32_gt(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp gt v0, v1
+    v3 = bint.i32 v2
+    return v3
+}
+
+function %f32_le(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp le v0, v1
+    v3 = bint.i32 v2
+    return v3
+}
+
+function %f32_ge(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp ge v0, v1
+    v3 = bint.i32 v2
+    return v3
+}

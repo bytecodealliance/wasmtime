@@ -1,10 +1,10 @@
 use crate::{
     file::FileType,
     sys::dir::{iter_impl, EntryImpl},
-    Errno, Result,
+    Result,
 };
 use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
-use std::{ffi::CStr, ops::Deref, ptr};
+use std::{ffi::CStr, io, ops::Deref, ptr};
 
 pub use crate::sys::EntryExt;
 
@@ -25,7 +25,7 @@ impl Dir {
         if let Some(d) = ptr::NonNull::new(d) {
             Ok(Self(d))
         } else {
-            let e = Errno::last();
+            let e = io::Error::last_os_error();
             libc::close(fd);
             Err(e.into())
         }

@@ -10,7 +10,7 @@ namespace Wasmtime.Tests
 {
     public class GlobalExportsFixture : ModuleFixture
     {
-        protected override string ModuleFileName => "GlobalExports.wasm";
+        protected override string ModuleFileName => "GlobalExports.wat";
     }
 
     public class GlobalExportsTests : IClassFixture<GlobalExportsFixture>

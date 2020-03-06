@@ -1,0 +1,12 @@
+test legalizer
+target i686
+
+function %foo() -> i64 {
+block0:
+    v1 = iconst.i64 0x6400000042
+    return v1
+}
+
+; check: v2 = iconst.i32 66
+; check: v3 = iconst.i32 100
+; check: v1 = iconcat v2, v3

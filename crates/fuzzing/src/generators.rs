@@ -32,6 +32,7 @@ impl fmt::Debug for WasmOptTtf {
 
 impl Arbitrary for WasmOptTtf {
     fn arbitrary(input: &mut Unstructured) -> arbitrary::Result<Self> {
+        crate::init_fuzzing();
         let seed: Vec<u8> = Arbitrary::arbitrary(input)?;
         let module = binaryen::tools::translate_to_fuzz_mvp(&seed);
         let wasm = module.write();
@@ -39,10 +40,15 @@ impl Arbitrary for WasmOptTtf {
     }
 
     fn arbitrary_take_rest(input: Unstructured) -> arbitrary::Result<Self> {
+        crate::init_fuzzing();
         let seed: Vec<u8> = Arbitrary::arbitrary_take_rest(input)?;
         let module = binaryen::tools::translate_to_fuzz_mvp(&seed);
         let wasm = module.write();
         Ok(WasmOptTtf { wasm })
+    }
+
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        <Vec<u8> as Arbitrary>::size_hint(depth)
     }
 }
 
