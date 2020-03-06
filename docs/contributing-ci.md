@@ -45,8 +45,8 @@ run on CI looks like this:
 * Fuzz regression tests - we take a random sampling of the [fuzz
   corpus](https://github.com/bytecodealliance/wasmtime-libfuzzer-corpus) and run
   it through the fuzzers. This is mostly intended to be a pretty quick
-  regression test, most of our fuzzing happens on
-  [oss-fuzz](https://oss-fuzz.com).
+  regression test and testing the fuzzers still build, most of our fuzzing
+  happens on [oss-fuzz](https://oss-fuzz.com).
 
 While we do run more tests here and there, this is the general shape of what you
 can be expected to get tested on CI for all commits and all PRs. You can of
