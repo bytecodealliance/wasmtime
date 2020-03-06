@@ -9,4 +9,5 @@ if (process.platform == 'darwin') {
 // On Linux pointing to specific version
 if (process.platform == 'linux') {
   console.log("::set-env name=DWARFDUMP::/usr/bin/llvm-dwarfdump-9");
+  console.log("::set-env name=LLDB::/usr/bin/lldb-9");
 }
