@@ -1264,6 +1264,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // to WASM using the less specific v128 type for certain operations and more specific
             // types (e.g. i8x16) for others.
         }
+        Operator::V8x16Swizzle => {
+            let (a, b) = pop2_with_bitcast(state, I8X16, builder);
+            state.push1(builder.ins().swizzle(I8X16, a, b))
+        }
         Operator::I8x16Add | Operator::I16x8Add | Operator::I32x4Add | Operator::I64x2Add => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().iadd(a, b))
@@ -1489,7 +1493,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I32x4WidenHighI16x8S { .. }
         | Operator::I32x4WidenLowI16x8U { .. }
         | Operator::I32x4WidenHighI16x8U { .. }
-        | Operator::V8x16Swizzle
         | Operator::I16x8Load8x8S { .. }
         | Operator::I16x8Load8x8U { .. }
         | Operator::I32x4Load16x4S { .. }
