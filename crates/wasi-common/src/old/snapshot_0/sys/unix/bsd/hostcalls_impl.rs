@@ -1,6 +1,6 @@
 use crate::old::snapshot_0::hostcalls_impl::PathGet;
 use crate::old::snapshot_0::{Error, Result};
-use std::{io, os::unix::prelude::AsRawFd};
+use std::os::unix::prelude::AsRawFd;
 
 pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     use yanix::file::{unlinkat, AtFlag};
@@ -12,33 +12,31 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
         )
     } {
         Err(err) => {
-            if let yanix::Error::Io(ref errno) = err {
-                let raw_errno = errno.raw_os_error().unwrap();
-                // Non-Linux implementations may return EPERM when attempting to remove a
-                // directory without REMOVEDIR. While that's what POSIX specifies, it's
-                // less useful. Adjust this to EISDIR. It doesn't matter that this is not
-                // atomic with the unlinkat, because if the file is removed and a directory
-                // is created before fstatat sees it, we're racing with that change anyway
-                // and unlinkat could have legitimately seen the directory if the race had
-                // turned out differently.
-                use yanix::file::{fstatat, FileType};
+            let raw_errno = err.raw_os_error().unwrap();
+            // Non-Linux implementations may return EPERM when attempting to remove a
+            // directory without REMOVEDIR. While that's what POSIX specifies, it's
+            // less useful. Adjust this to EISDIR. It doesn't matter that this is not
+            // atomic with the unlinkat, because if the file is removed and a directory
+            // is created before fstatat sees it, we're racing with that change anyway
+            // and unlinkat could have legitimately seen the directory if the race had
+            // turned out differently.
+            use yanix::file::{fstatat, FileType};
 
-                if raw_errno == libc::EPERM {
-                    match unsafe {
-                        fstatat(
-                            resolved.dirfd().as_raw_fd(),
-                            resolved.path(),
-                            AtFlag::SYMLINK_NOFOLLOW,
-                        )
-                    } {
-                        Ok(stat) => {
-                            if FileType::from_stat_st_mode(stat.st_mode) == FileType::Directory {
-                                return Err(io::Error::from_raw_os_error(libc::EISDIR).into());
-                            }
+            if raw_errno == libc::EPERM {
+                match unsafe {
+                    fstatat(
+                        resolved.dirfd().as_raw_fd(),
+                        resolved.path(),
+                        AtFlag::SYMLINK_NOFOLLOW,
+                    )
+                } {
+                    Ok(stat) => {
+                        if FileType::from_stat_st_mode(stat.st_mode) == FileType::Directory {
+                            return Err(Error::EISDIR);
                         }
-                        Err(err) => {
-                            log::debug!("path_unlink_file fstatat error: {:?}", err);
-                        }
+                    }
+                    Err(err) => {
+                        log::debug!("path_unlink_file fstatat error: {:?}", err);
                     }
                 }
             }
@@ -57,25 +55,23 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
 
     match unsafe { symlinkat(old_path, resolved.dirfd().as_raw_fd(), resolved.path()) } {
         Err(err) => {
-            if let yanix::Error::Io(ref errno) = err {
-                if errno.raw_os_error().unwrap() == libc::ENOTDIR {
-                    // On BSD, symlinkat returns ENOTDIR when it should in fact
-                    // return a EEXIST. It seems that it gets confused with by
-                    // the trailing slash in the target path. Thus, we strip
-                    // the trailing slash and check if the path exists, and
-                    // adjust the error code appropriately.
-                    let new_path = resolved.path().trim_end_matches('/');
-                    match unsafe {
-                        fstatat(
-                            resolved.dirfd().as_raw_fd(),
-                            new_path,
-                            AtFlag::SYMLINK_NOFOLLOW,
-                        )
-                    } {
-                        Ok(_) => return Err(Error::EEXIST),
-                        Err(err) => {
-                            log::debug!("path_symlink fstatat error: {:?}", err);
-                        }
+            if err.raw_os_error().unwrap() == libc::ENOTDIR {
+                // On BSD, symlinkat returns ENOTDIR when it should in fact
+                // return a EEXIST. It seems that it gets confused with by
+                // the trailing slash in the target path. Thus, we strip
+                // the trailing slash and check if the path exists, and
+                // adjust the error code appropriately.
+                let new_path = resolved.path().trim_end_matches('/');
+                match unsafe {
+                    fstatat(
+                        resolved.dirfd().as_raw_fd(),
+                        new_path,
+                        AtFlag::SYMLINK_NOFOLLOW,
+                    )
+                } {
+                    Ok(_) => return Err(Error::EEXIST),
+                    Err(err) => {
+                        log::debug!("path_symlink fstatat error: {:?}", err);
                     }
                 }
             }
@@ -105,27 +101,25 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
             //
             // TODO
             // Verify on other BSD-based OSes.
-            if let yanix::Error::Io(ref errno) = err {
-                if errno.raw_os_error().unwrap() == libc::ENOENT {
-                    // check if the source path exists
-                    match unsafe {
-                        fstatat(
-                            resolved_old.dirfd().as_raw_fd(),
-                            resolved_old.path(),
-                            AtFlag::SYMLINK_NOFOLLOW,
-                        )
-                    } {
-                        Ok(_) => {
-                            // check if destination contains a trailing slash
-                            if resolved_new.path().contains('/') {
-                                return Err(Error::ENOTDIR);
-                            } else {
-                                return Err(Error::ENOENT);
-                            }
+            if err.raw_os_error().unwrap() == libc::ENOENT {
+                // check if the source path exists
+                match unsafe {
+                    fstatat(
+                        resolved_old.dirfd().as_raw_fd(),
+                        resolved_old.path(),
+                        AtFlag::SYMLINK_NOFOLLOW,
+                    )
+                } {
+                    Ok(_) => {
+                        // check if destination contains a trailing slash
+                        if resolved_new.path().contains('/') {
+                            return Err(Error::ENOTDIR);
+                        } else {
+                            return Err(Error::ENOENT);
                         }
-                        Err(err) => {
-                            log::debug!("path_rename fstatat error: {:?}", err);
-                        }
+                    }
+                    Err(err) => {
+                        log::debug!("path_rename fstatat error: {:?}", err);
                     }
                 }
             }

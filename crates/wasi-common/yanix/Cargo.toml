@@ -10,7 +10,6 @@ edition = "2018"
 [dependencies]
 log = "0.4"
 libc = { version = "0.2", features = ["extra_traits"] }
-thiserror = "1.0"
 bitflags = "1.2"
 cfg-if = "0.1.9"
 

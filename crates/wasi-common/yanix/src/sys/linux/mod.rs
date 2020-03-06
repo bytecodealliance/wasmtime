@@ -2,7 +2,8 @@ pub(crate) mod dir;
 pub(crate) mod fadvise;
 pub(crate) mod file;
 
-use crate::{dir::SeekLoc, Result};
+use crate::dir::SeekLoc;
+use std::io::Result;
 
 impl SeekLoc {
     pub unsafe fn from_raw(loc: i64) -> Result<Self> {

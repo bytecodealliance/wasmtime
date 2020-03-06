@@ -1,5 +1,5 @@
-use crate::{Error, Result};
-use std::{convert::TryInto, os::unix::prelude::*};
+use crate::from_success_code;
+use std::{convert::TryInto, io::Result, os::unix::prelude::*};
 
 #[cfg(not(any(target_os = "freebsd", target_os = "netbsd")))]
 #[derive(Debug, Copy, Clone)]
@@ -44,11 +44,22 @@ pub unsafe fn posix_fadvise(
     //      off_t   ra_offset;  /* offset into the file */
     //      int     ra_count;   /* size of the read     */
     // };
+    let ra_count = match len.try_into() {
+        Ok(ra_count) => ra_count,
+        Err(_) => {
+            // This conversion can fail, because it's converting into int. But in that case, the user
+            // is providing a dubiously large hint. This is not confirmed (no helpful info in the man
+            // pages), but offhand, a 2+ GiB advisory read async seems unlikely to help with any kind
+            // of performance, so we log and exit early with a no-op.
+            log::warn!("`len` too big to fit in the host's command. Returning early with no-op!");
+            return Ok(());
+        }
+    };
     let advisory = libc::radvisory {
         ra_offset: offset,
-        ra_count: len.try_into()?,
+        ra_count,
     };
-    Error::from_success_code(libc::fcntl(fd, libc::F_RDADVISE, &advisory))
+    from_success_code(libc::fcntl(fd, libc::F_RDADVISE, &advisory))
 }
 
 #[cfg(any(target_os = "freebsd", target_os = "netbsd"))]
@@ -58,7 +69,7 @@ pub unsafe fn posix_fadvise(
     len: libc::off_t,
     advice: PosixFadviseAdvice,
 ) -> Result<()> {
-    Error::from_success_code(libc::posix_fadvise(fd, offset, len, advice as libc::c_int))
+    from_success_code(libc::posix_fadvise(fd, offset, len, advice as libc::c_int))
 }
 
 // On BSDs without support we leave it as no-op

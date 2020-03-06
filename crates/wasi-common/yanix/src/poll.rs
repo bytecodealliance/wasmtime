@@ -1,6 +1,6 @@
-use crate::{Error, Result};
+use crate::from_result;
 use bitflags::bitflags;
-use std::{convert::TryInto, os::unix::prelude::*};
+use std::{convert::TryInto, io::Result, os::unix::prelude::*};
 
 bitflags! {
     pub struct PollFlags: libc::c_short {
@@ -36,12 +36,14 @@ impl PollFd {
 }
 
 pub fn poll(fds: &mut [PollFd], timeout: libc::c_int) -> Result<usize> {
-    Error::from_result(unsafe {
+    let nready = from_result(unsafe {
         libc::poll(
             fds.as_mut_ptr() as *mut libc::pollfd,
             fds.len() as libc::nfds_t,
             timeout,
         )
-    })
-    .and_then(|nready| nready.try_into().map_err(Into::into))
+    })?;
+    // When poll doesn't fail, its return value is a non-negative int, which will
+    // always be convertable to usize, so we can unwrap() here.
+    Ok(nready.try_into().unwrap())
 }

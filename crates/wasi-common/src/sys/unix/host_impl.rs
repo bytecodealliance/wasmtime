@@ -10,17 +10,6 @@ use yanix::file::OFlag;
 
 pub(crate) use sys_impl::host_impl::*;
 
-impl From<yanix::Error> for Error {
-    fn from(err: yanix::Error) -> Self {
-        use yanix::Error::*;
-        match err {
-            Io(err) => err.into(),
-            Nul(err) => err.into(),
-            IntConversion(err) => err.into(),
-        }
-    }
-}
-
 impl FromRawOsError for Error {
     fn from_raw_os_error(code: i32) -> Self {
         match code {

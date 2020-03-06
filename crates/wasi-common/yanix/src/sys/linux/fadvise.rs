@@ -1,4 +1,5 @@
-use crate::{Error, Result};
+use crate::from_success_code;
+use std::io::Result;
 use std::os::unix::prelude::*;
 
 #[derive(Debug, Copy, Clone)]
@@ -18,5 +19,5 @@ pub unsafe fn posix_fadvise(
     len: libc::off_t,
     advice: PosixFadviseAdvice,
 ) -> Result<()> {
-    Error::from_success_code(libc::posix_fadvise(fd, offset, len, advice as libc::c_int))
+    from_success_code(libc::posix_fadvise(fd, offset, len, advice as libc::c_int))
 }

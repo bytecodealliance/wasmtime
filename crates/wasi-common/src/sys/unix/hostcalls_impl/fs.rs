@@ -124,56 +124,54 @@ pub(crate) fn path_open(
     let new_fd = match fd_no {
         Ok(fd) => fd,
         Err(e) => {
-            if let yanix::Error::Io(ref err) = e {
-                match err.raw_os_error().unwrap() {
-                    // Linux returns ENXIO instead of EOPNOTSUPP when opening a socket
-                    libc::ENXIO => {
-                        match unsafe {
-                            fstatat(
-                                resolved.dirfd().as_raw_fd(),
-                                resolved.path(),
-                                AtFlag::SYMLINK_NOFOLLOW,
-                            )
-                        } {
-                            Ok(stat) => {
-                                if FileType::from_stat_st_mode(stat.st_mode) == FileType::Socket {
-                                    return Err(Error::ENOTSUP);
-                                }
-                            }
-                            Err(err) => {
-                                log::debug!("path_open fstatat error: {:?}", err);
+            match e.raw_os_error().unwrap() {
+                // Linux returns ENXIO instead of EOPNOTSUPP when opening a socket
+                libc::ENXIO => {
+                    match unsafe {
+                        fstatat(
+                            resolved.dirfd().as_raw_fd(),
+                            resolved.path(),
+                            AtFlag::SYMLINK_NOFOLLOW,
+                        )
+                    } {
+                        Ok(stat) => {
+                            if FileType::from_stat_st_mode(stat.st_mode) == FileType::Socket {
+                                return Err(Error::ENOTSUP);
                             }
                         }
-                    }
-                    // Linux returns ENOTDIR instead of ELOOP when using O_NOFOLLOW|O_DIRECTORY
-                    // on a symlink.
-                    libc::ENOTDIR
-                        if !(nix_all_oflags & (OFlag::NOFOLLOW | OFlag::DIRECTORY)).is_empty() =>
-                    {
-                        match unsafe {
-                            fstatat(
-                                resolved.dirfd().as_raw_fd(),
-                                resolved.path(),
-                                AtFlag::SYMLINK_NOFOLLOW,
-                            )
-                        } {
-                            Ok(stat) => {
-                                if FileType::from_stat_st_mode(stat.st_mode) == FileType::Symlink {
-                                    return Err(Error::ELOOP);
-                                }
-                            }
-                            Err(err) => {
-                                log::debug!("path_open fstatat error: {:?}", err);
-                            }
+                        Err(err) => {
+                            log::debug!("path_open fstatat error: {:?}", err);
                         }
                     }
-                    // FreeBSD returns EMLINK instead of ELOOP when using O_NOFOLLOW on
-                    // a symlink.
-                    libc::EMLINK if !(nix_all_oflags & OFlag::NOFOLLOW).is_empty() => {
-                        return Err(Error::ELOOP);
-                    }
-                    _ => {}
                 }
+                // Linux returns ENOTDIR instead of ELOOP when using O_NOFOLLOW|O_DIRECTORY
+                // on a symlink.
+                libc::ENOTDIR
+                    if !(nix_all_oflags & (OFlag::NOFOLLOW | OFlag::DIRECTORY)).is_empty() =>
+                {
+                    match unsafe {
+                        fstatat(
+                            resolved.dirfd().as_raw_fd(),
+                            resolved.path(),
+                            AtFlag::SYMLINK_NOFOLLOW,
+                        )
+                    } {
+                        Ok(stat) => {
+                            if FileType::from_stat_st_mode(stat.st_mode) == FileType::Symlink {
+                                return Err(Error::ELOOP);
+                            }
+                        }
+                        Err(err) => {
+                            log::debug!("path_open fstatat error: {:?}", err);
+                        }
+                    }
+                }
+                // FreeBSD returns EMLINK instead of ELOOP when using O_NOFOLLOW on
+                // a symlink.
+                libc::EMLINK if !(nix_all_oflags & OFlag::NOFOLLOW).is_empty() => {
+                    return Err(Error::ELOOP);
+                }
+                _ => {}
             }
 
             return Err(e.into());
