@@ -118,6 +118,41 @@ block0:
 ; nextln:     ],
 ; nextln: }
 
+function %fpr_with_function_call(i64, i64) windows_fastcall {
+    fn0 = %foo(f64, f64, i64, i64, i64) windows_fastcall;
+block0(v0: i64, v1: i64):
+    v2 = load.f64 v0+0
+    v3 = load.f64 v0+8
+    v4 = load.i64 v0+16
+    v15 = load.f64 v0+104
+    v16 = load.f64 v0+112
+    v17 = load.f64 v0+120
+    v18 = load.f64 v0+128
+    v19 = load.f64 v0+136
+    v20 = load.f64 v0+144
+    v21 = load.f64 v0+152
+    v22 = load.f64 v0+160
+    v23 = load.f64 v0+168
+    call fn0(v2, v3, v4, v1, v1)
+    store.f64 v15, v1+104
+    store.f64 v16, v1+112
+    store.f64 v17, v1+120
+    store.f64 v18, v1+128
+    store.f64 v19, v1+136
+    store.f64 v20, v1+144
+    store.f64 v21, v1+152
+    store.f64 v22, v1+160
+    store.f64 v23, v1+168
+    return
+}
+; sameln: UnwindInfo {
+; nextln:     version: 1,
+; nextln:     flags: 0,
+; nextln:     prologue_size: 17,
+; nextln:     unwind_code_count_raw: 5,
+; nextln:     frame_register: 5,
+; nextln:     frame_register_offset: 0,
+
 ; check a function that has CSRs
 function %lots_of_registers(i64, i64) windows_fastcall {
 block0(v0: i64, v1: i64):
