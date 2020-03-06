@@ -53,7 +53,7 @@ of browsers and outside of JS VMs.
 
 It's been obvious since WebAssembly was just getting started that it'd eventually
 want some kind of "system call"-like API, which could be standardized, and
-implemented in any general-purpose WebAssembly VM. 
+implemented in any general-purpose WebAssembly VM.
 
 And while there are many existing systems we could model this after, [POSIX]
 stands out, as being a vendor-neutral standard with considerable momentum. Many

@@ -60,7 +60,7 @@ $ wasmtime wast foo.wast
 
 ## `config`
 
-This subcomand is used to control and edit local Wasmtime configuration
+This subcommand is used to control and edit local Wasmtime configuration
 settings. The primary purpose of this currently is to configure [how Wasmtime's
 code caching works](./cli-cache.md). You can create a new configuration file for
 you to edit with:

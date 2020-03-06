@@ -42,7 +42,7 @@ We expect these to be implemented when network access is standardised.
 We also currently do not support the `proc_raise` hostcall, as it is expected to
 be dropped entirely from WASI.
 
-[WASI API]: https://github.com/bytecodealliance/wasmtime/blob/master/docs/WASI-api.md
+[WASI API]: https://github.com/WebAssembly/WASI/blob/master/phases/snapshot/docs.md
 
 ### Windows
 In our Windows implementation, we currently support the minimal subset of [WASI API]
