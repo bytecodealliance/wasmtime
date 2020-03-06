@@ -2607,7 +2607,6 @@ dependencies = [
  "cfg-if",
  "libc",
  "log",
- "thiserror",
 ]
 
 [[package]]
