@@ -4,7 +4,7 @@ use cfg_if::cfg_if;
 use std::{
     convert::TryInto,
     ffi::{CString, OsStr, OsString},
-    io::{Error, Result},
+    io::Result,
     os::unix::prelude::*,
 };
 
@@ -155,9 +155,10 @@ pub unsafe fn readlinkat<P: AsRef<OsStr>>(dirfd: RawFd, path: P) -> Result<OsStr
         buffer.as_mut_ptr() as *mut _,
         buffer.len(),
     ))?;
-    let nread = nread
-        .try_into()
-        .map_err(|_| Error::from_raw_os_error(libc::EOVERFLOW))?;
+    // We can just unwrap() this, because readlinkat returns an ssize_t which is either -1
+    // (handled above) or non-negative and will fit in a size_t/usize, which is what we're
+    // converting it to here.
+    let nread = nread.try_into().unwrap();
     let link = OsStr::from_bytes(&buffer[0..nread]);
     Ok(link.into())
 }
@@ -240,16 +241,18 @@ pub unsafe fn fstat(fd: RawFd) -> Result<libc::stat> {
 pub unsafe fn fionread(fd: RawFd) -> Result<u32> {
     let mut nread: libc::c_int = 0;
     from_result(libc::ioctl(fd, libc::FIONREAD, &mut nread as *mut _))?;
-    nread
-        .try_into()
-        .map_err(|_| Error::from_raw_os_error(libc::EOVERFLOW))
+    // FIONREAD returns a non-negative int if it doesn't fail, or it'll fit in a u32 if it does.
+    //
+    // For the future, if we want to be super cautious and avoid assuming int is 32-bit, we could
+    // widen fionread's return type here, since the one place that calls it wants a u64 anyway.
+    Ok(nread.try_into().unwrap())
 }
 
 /// This function is unsafe because it operates on a raw file descriptor.
 /// It's provided, because std::io::Seek requires a mutable borrow.
 pub unsafe fn tell(fd: RawFd) -> Result<u64> {
     let offset: i64 = from_result(libc::lseek(fd, 0, libc::SEEK_CUR))?;
-    offset
-        .try_into()
-        .map_err(|_| Error::from_raw_os_error(libc::EOVERFLOW))
+    // lseek returns an off_t, which we can assume is a non-negative i64 if it doesn't fail.
+    // So we can unwrap() this conversion.
+    Ok(offset.try_into().unwrap())
 }
