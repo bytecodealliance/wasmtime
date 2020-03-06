@@ -2,9 +2,7 @@ test run
 set enable_simd
 target x86_64
 
-; TODO move to vconst-run.clif
-
-function %test_vconst_zeroes() -> b1 {
+function %vconst_zeroes() -> b1 {
 block0:
     v0 = vconst.i8x16 0x00
     v1 = extractlane v0, 4
@@ -13,7 +11,7 @@ block0:
 }
 ; run
 
-function %test_vconst_ones() -> b1 {
+function %vconst_ones() -> b1 {
 block0:
     v0 = vconst.i8x16 0xffffffffffffffffffffffffffffffff
     v1 = extractlane v0, 2

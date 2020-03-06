@@ -3,7 +3,7 @@ set opt_level=speed_and_size
 set enable_simd
 target x86_64
 
-function %test_vconst_b8() {
+function %vconst_b8() {
 block0:
 [-, %xmm2]  v0 = vconst.b8x16 0x01  ; bin: 0f 10 15 00000008 PCRelRodata4(15)
 [-, %xmm3]  v1 = vconst.b8x16 0x02  ; bin: 0f 10 1d 00000011 PCRelRodata4(31)

@@ -4,7 +4,7 @@ set enable_probestack=false
 target x86_64 haswell
 
 ; use baldrdash calling convention here for simplicity (avoids prologue, epilogue)
-function %test_vconst_i32() -> i32x4 baldrdash_system_v {
+function %vconst_i32() -> i32x4 baldrdash_system_v {
 block0:
     v0 = vconst.i32x4 0x1234
     return v0

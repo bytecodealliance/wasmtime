@@ -1,7 +1,7 @@
 test run
 set enable_simd
 
-function %test_vconst_syntax() -> b1 {
+function %vconst_syntax() -> b1 {
 block0:
     v0 = vconst.i32x4 0x00000004_00000003_00000002_00000001     ; build constant using hexadecimal syntax
     v1 = vconst.i32x4 [1 2 3 4]                                 ; build constant using literal list syntax

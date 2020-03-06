@@ -5,7 +5,7 @@ target x86_64 haswell
 ; for insertlane, floats are legalized differently than integers and booleans; integers and
 ; booleans use x86_pinsr which is manually placed in the IR so that it can be binemit-tested
 
-function %test_insertlane_b8() {
+function %insertlane_b8() {
 block0:
 [-, %rax]   v0 = bconst.b8 true
 [-, %rbx]   v1 = bconst.b8 false
@@ -14,7 +14,7 @@ block0:
             return
 }
 
-function %test_insertlane_i16() {
+function %insertlane_i16() {
 block0:
 [-, %rax]   v0 = iconst.i16 4
 [-, %rbx]   v1 = iconst.i16 5
@@ -23,7 +23,7 @@ block0:
             return
 }
 
-function %test_insertlane_i32() {
+function %insertlane_i32() {
 block0:
 [-, %rax]   v0 = iconst.i32 42
 [-, %rbx]   v1 = iconst.i32 99
@@ -32,7 +32,7 @@ block0:
             return
 }
 
-function %test_insertlane_b64() {
+function %insertlane_b64() {
 block0:
 [-, %rax]   v0 = bconst.b64 true
 [-, %rbx]   v1 = bconst.b64 false
@@ -44,7 +44,7 @@ block0:
 ; for extractlane, floats are legalized differently than integers and booleans; integers and
 ; booleans use x86_pextr which is manually placed in the IR so that it can be binemit-tested
 
-function %test_extractlane_b8() {
+function %extractlane_b8() {
 block0:
 [-, %rax]   v0 = bconst.b8 true
 [-, %xmm0]  v1 = splat.b8x16 v0
@@ -52,7 +52,7 @@ block0:
             return
 }
 
-function %test_extractlane_i16() {
+function %extractlane_i16() {
 block0:
 [-, %rax]   v0 = iconst.i16 4
 [-, %xmm1]  v1 = splat.i16x8 v0
@@ -60,7 +60,7 @@ block0:
             return
 }
 
-function %test_extractlane_i32() {
+function %extractlane_i32() {
 block0:
 [-, %rax]   v0 = iconst.i32 42
 [-, %xmm4]  v1 = splat.i32x4 v0
@@ -68,7 +68,7 @@ block0:
             return
 }
 
-function %test_extractlane_b64() {
+function %extractlane_b64() {
 block0:
 [-, %rax]   v0 = bconst.b64 false
 [-, %xmm2]  v1 = splat.b64x2 v0
@@ -78,7 +78,7 @@ block0:
 
 ;; shuffle
 
-function %test_pshufd() {
+function %pshufd() {
 block0:
 [-, %rax]   v0 = iconst.i32 42
 [-, %xmm0]  v1 = scalar_to_vector.i32x4 v0  ; bin: 66 40 0f 6e c0
@@ -86,7 +86,7 @@ block0:
             return
 }
 
-function %test_pshufb() {
+function %pshufb() {
 block0:
 [-, %rax]   v0 = iconst.i8 42
 [-, %xmm0]  v1 = scalar_to_vector.i8x16 v0   ; bin: 66 40 0f 6e c0

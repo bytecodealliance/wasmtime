@@ -1,7 +1,7 @@
 test run
 set enable_simd
 
-function %test_shuffle_different_ssa_values() -> b1 {
+function %shuffle_different_ssa_values() -> b1 {
 block0:
     v0 = vconst.i8x16 0x00
     v1 = vconst.i8x16 [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42]
@@ -13,7 +13,7 @@ block0:
 }
 ; run
 
-function %test_shuffle_same_ssa_value() -> b1 {
+function %shuffle_same_ssa_value() -> b1 {
 block0:
     v0 = vconst.i8x16 0x01000000_00000000_00000000_00000000     ; note where lane 15 is when written with hexadecimal syntax
     v1 = shuffle v0, v0, 0x0f0f0f0f_0f0f0f0f_0f0f0f0f_0f0f0f0f  ; use the last lane of v0 to fill all lanes
@@ -56,7 +56,7 @@ block0:
 
 ; TODO once SIMD vector comparison is implemented, remove use of extractlane below
 
-function %test_insertlane_b8() -> b8 {
+function %insertlane_b8() -> b8 {
 block0:
     v1 = bconst.b8 true
     v2 = vconst.b8x16 [false false false false false false false false false false false false false
@@ -67,7 +67,7 @@ block0:
 }
 ; run
 
-function %test_insertlane_f32() -> b1 {
+function %insertlane_f32() -> b1 {
 block0:
     v0 = f32const 0x42.42
     v1 = vconst.f32x4 0x00
@@ -78,7 +78,7 @@ block0:
 }
 ; run
 
-function %test_insertlane_f64_lane1() -> b1 {
+function %insertlane_f64_lane1() -> b1 {
 block0:
     v0 = f64const 0x42.42
     v1 = vconst.f64x2 0x00
@@ -89,7 +89,7 @@ block0:
 }
 ; run
 
-function %test_insertlane_f64_lane0() -> b1 {
+function %insertlane_f64_lane0() -> b1 {
 block0:
     v0 = f64const 0x42.42
     v1 = vconst.f64x2 0x00
@@ -100,7 +100,7 @@ block0:
 }
 ; run
 
-function %test_extractlane_b8() -> b8 {
+function %extractlane_b8() -> b8 {
 block0:
     v1 = vconst.b8x16 [false false false false false false false false false false true false false
     false false false]
@@ -109,7 +109,7 @@ block0:
 }
 ; run
 
-function %test_extractlane_i16() -> b1 {
+function %extractlane_i16() -> b1 {
 block0:
     v0 = vconst.i16x8 0x00080007000600050004000300020001
     v1 = extractlane v0, 1
@@ -118,7 +118,7 @@ block0:
 }
 ; run
 
-function %test_extractlane_f32() -> b1 {
+function %extractlane_f32() -> b1 {
 block0:
     v0 = f32const 0x42.42
     v1 = vconst.f32x4 [0x00.00 0x00.00 0x00.00 0x42.42]
@@ -128,7 +128,7 @@ block0:
 }
 ; run
 
-function %test_extractlane_i32_with_vector_reuse() -> b1 {
+function %extractlane_i32_with_vector_reuse() -> b1 {
 block0:
     v0 = iconst.i32 42
     v1 = iconst.i32 99
@@ -147,7 +147,7 @@ block0:
 }
 ; run
 
-function %test_extractlane_f32_with_vector_reuse() -> b1 {
+function %extractlane_f32_with_vector_reuse() -> b1 {
 block0:
     v0 = f32const 0x42.42
     v1 = f32const 0x99.99
