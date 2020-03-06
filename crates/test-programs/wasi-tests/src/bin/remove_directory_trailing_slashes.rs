@@ -11,14 +11,14 @@ unsafe fn test_remove_directory_trailing_slashes(dir_fd: wasi::Fd) {
 
     wasi::path_create_directory(dir_fd, "dir").expect("creating a directory");
 
-    // Test that removing it with a trailing flash succeeds.
+    // Test that removing it with a trailing slash succeeds.
     wasi::path_remove_directory(dir_fd, "dir/")
         .expect("remove_directory with a trailing slash on a directory should succeed");
 
     // Create a temporary file.
     create_file(dir_fd, "file");
 
-    // Test that removing it with no trailing flash fails.
+    // Test that removing it with no trailing slash fails.
     assert_eq!(
         wasi::path_remove_directory(dir_fd, "file")
             .expect_err("remove_directory without a trailing slash on a file should fail")
@@ -27,7 +27,7 @@ unsafe fn test_remove_directory_trailing_slashes(dir_fd: wasi::Fd) {
         "errno should be ERRNO_NOTDIR"
     );
 
-    // Test that removing it with a trailing flash fails.
+    // Test that removing it with a trailing slash fails.
     assert_eq!(
         wasi::path_remove_directory(dir_fd, "file/")
             .expect_err("remove_directory with a trailing slash on a file should fail")

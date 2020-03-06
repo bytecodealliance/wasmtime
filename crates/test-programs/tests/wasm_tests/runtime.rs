@@ -1,30 +1,44 @@
 use anyhow::{bail, Context};
 use std::fs::File;
 use std::path::Path;
+use wasi_common::VirtualDirEntry;
 use wasmtime::{Instance, Module, Store};
 
-pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
+#[derive(Clone, Copy, Debug)]
+pub enum PreopenType {
+    /// Preopens should be satisfied with real OS files.
+    OS,
+    /// Preopens should be satisfied with virtual files.
+    Virtual,
+}
+
+pub fn instantiate(
+    data: &[u8],
+    bin_name: &str,
+    workspace: Option<&Path>,
+    preopen_type: PreopenType,
+) -> anyhow::Result<()> {
     let store = Store::default();
 
-    let get_preopens = |workspace: Option<&Path>| -> anyhow::Result<Vec<_>> {
-        if let Some(workspace) = workspace {
-            let preopen_dir = wasi_common::preopen_dir(workspace)
-                .context(format!("error while preopening {:?}", workspace))?;
-
-            Ok(vec![(".".to_owned(), preopen_dir)])
-        } else {
-            Ok(vec![])
-        }
-    };
-
     // Create our wasi context with pretty standard arguments/inheritance/etc.
-    // Additionally register andy preopened directories if we have them.
+    // Additionally register any preopened directories if we have them.
     let mut builder = wasi_common::WasiCtxBuilder::new();
 
     builder.arg(bin_name).arg(".").inherit_stdio();
 
-    for (dir, file) in get_preopens(workspace)? {
-        builder.preopened_dir(file, dir);
+    if let Some(workspace) = workspace {
+        match preopen_type {
+            PreopenType::OS => {
+                let preopen_dir = wasi_common::preopen_dir(workspace)
+                    .context(format!("error while preopening {:?}", workspace))?;
+                builder.preopened_dir(preopen_dir, ".");
+            }
+            PreopenType::Virtual => {
+                // we can ignore the workspace path for virtual preopens because virtual preopens
+                // don't exist in the filesystem anyway - no name conflict concerns.
+                builder.preopened_virt(VirtualDirEntry::empty_directory(), ".");
+            }
+        }
     }
 
     // The nonstandard thing we do with `WasiCtxBuilder` is to ensure that

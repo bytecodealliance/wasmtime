@@ -222,6 +222,9 @@ fn handle_rw_event(event: FdEventData, out_events: &mut Vec<wasi::__wasi_event_t
         Descriptor::Stdin => Ok(1),
         // On Unix, ioctl(FIONREAD) will return 0 for stdout/stderr. Emulate the same behavior on Windows.
         Descriptor::Stdout | Descriptor::Stderr => Ok(0),
+        Descriptor::VirtualFile(_) => {
+            panic!("virtual files do not get rw events");
+        }
     };
 
     let new_event = make_rw_event(&event, size);
@@ -294,6 +297,9 @@ pub(crate) fn poll_oneoff(
                 } else {
                     unreachable!();
                 }
+            }
+            Descriptor::VirtualFile(_) => {
+                panic!("virtual files do not get rw events");
             }
         }
     }

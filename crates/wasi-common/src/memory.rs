@@ -207,7 +207,7 @@ pub(crate) fn dec_ciovec_slice(
         .iter()
         .map(|raw_iov| {
             let len = dec_usize(PrimInt::from_le(raw_iov.buf_len));
-            let buf = PrimInt::from_le(raw_iov.buf);
+            let buf: u32 = PrimInt::from_le(raw_iov.buf);
             Ok(host::__wasi_ciovec_t {
                 buf: dec_ptr(memory, buf, len)? as *const u8,
                 buf_len: len,

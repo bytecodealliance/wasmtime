@@ -1,5 +1,6 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
+use crate::fdentry::Descriptor;
 use crate::host::Dirent;
 use crate::hostcalls_impl::PathGet;
 use crate::sys::{fdentry_impl::OsHandle, host_impl, unix::sys_impl};
@@ -60,16 +61,9 @@ pub(crate) fn fd_advise(
     unsafe { posix_fadvise(file.as_raw_fd(), offset, len, host_advice) }.map_err(Into::into)
 }
 
-pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
+pub(crate) fn path_create_directory(base: &File, path: &str) -> Result<()> {
     use yanix::file::{mkdirat, Mode};
-    unsafe {
-        mkdirat(
-            resolved.dirfd().as_raw_fd(),
-            resolved.path(),
-            Mode::from_bits_truncate(0o777),
-        )
-    }
-    .map_err(Into::into)
+    unsafe { mkdirat(base.as_raw_fd(), path, Mode::from_bits_truncate(0o777)) }.map_err(Into::into)
 }
 
 pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
@@ -92,7 +86,7 @@ pub(crate) fn path_open(
     write: bool,
     oflags: wasi::__wasi_oflags_t,
     fs_flags: wasi::__wasi_fdflags_t,
-) -> Result<File> {
+) -> Result<Descriptor> {
     use yanix::file::{fstatat, openat, AtFlag, FileType, Mode, OFlag};
 
     let mut nix_all_oflags = if read && write {
@@ -119,14 +113,15 @@ pub(crate) fn path_open(
     log::debug!("path_open resolved = {:?}", resolved);
     log::debug!("path_open oflags = {:?}", nix_all_oflags);
 
-    let new_fd = match unsafe {
+    let fd_no = unsafe {
         openat(
             resolved.dirfd().as_raw_fd(),
             resolved.path(),
             nix_all_oflags,
             Mode::from_bits_truncate(0o666),
         )
-    } {
+    };
+    let new_fd = match fd_no {
         Ok(fd) => fd,
         Err(e) => {
             if let yanix::Error::Io(ref err) = e {
@@ -188,7 +183,7 @@ pub(crate) fn path_open(
     log::debug!("path_open (host) new_fd = {:?}", new_fd);
 
     // Determine the type of the new file descriptor and which rights contradict with this type
-    Ok(unsafe { File::from_raw_fd(new_fd) })
+    Ok(OsHandle::from(unsafe { File::from_raw_fd(new_fd) }).into())
 }
 
 pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
@@ -263,7 +258,7 @@ pub(crate) fn path_filestat_set_times(
     };
 
     utimensat(
-        resolved.dirfd(),
+        &resolved.dirfd().as_os_handle(),
         resolved.path(),
         atim,
         mtim,
@@ -274,6 +269,7 @@ pub(crate) fn path_filestat_set_times(
 
 pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
     use yanix::file::{unlinkat, AtFlag};
+
     unsafe {
         unlinkat(
             resolved.dirfd().as_raw_fd(),

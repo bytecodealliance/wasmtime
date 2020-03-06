@@ -11,6 +11,7 @@ impl AsRawFd for Descriptor {
     fn as_raw_fd(&self) -> RawFd {
         match self {
             Self::OsHandle(file) => file.as_raw_fd(),
+            Self::VirtualFile(_) => panic!("virtual files do not have a raw fd"),
             Self::Stdin => io::stdin().as_raw_fd(),
             Self::Stdout => io::stdout().as_raw_fd(),
             Self::Stderr => io::stderr().as_raw_fd(),

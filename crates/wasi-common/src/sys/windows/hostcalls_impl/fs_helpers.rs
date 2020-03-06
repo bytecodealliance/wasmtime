@@ -1,4 +1,5 @@
 #![allow(non_camel_case_types)]
+use crate::fdentry::Descriptor;
 use crate::hostcalls_impl::PathGet;
 use crate::{wasi, Error, Result};
 use std::ffi::{OsStr, OsString};
@@ -12,7 +13,15 @@ pub(crate) trait PathGetExt {
 
 impl PathGetExt for PathGet {
     fn concatenate(&self) -> Result<PathBuf> {
-        concatenate(self.dirfd(), Path::new(self.path()))
+        match self.dirfd() {
+            Descriptor::OsHandle(file) => concatenate(file, Path::new(self.path())),
+            Descriptor::VirtualFile(_virt) => {
+                panic!("concatenate on a virtual base");
+            }
+            Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
+                unreachable!("streams do not have paths and should not be accessible via PathGet");
+            }
+        }
     }
 }
 
@@ -126,7 +135,7 @@ pub(crate) fn strip_extended_prefix<P: AsRef<OsStr>>(path: P) -> OsString {
     }
 }
 
-pub(crate) fn concatenate<P: AsRef<Path>>(dirfd: &File, path: P) -> Result<PathBuf> {
+pub(crate) fn concatenate<P: AsRef<Path>>(file: &File, path: P) -> Result<PathBuf> {
     use winx::file::get_file_path;
 
     // WASI is not able to deal with absolute paths
@@ -135,7 +144,7 @@ pub(crate) fn concatenate<P: AsRef<Path>>(dirfd: &File, path: P) -> Result<PathB
         return Err(Error::ENOTCAPABLE);
     }
 
-    let dir_path = get_file_path(dirfd)?;
+    let dir_path = get_file_path(file)?;
     // concatenate paths
     let mut out_path = PathBuf::from(dir_path);
     out_path.push(path.as_ref());

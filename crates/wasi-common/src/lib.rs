@@ -32,6 +32,8 @@ mod memory;
 pub mod old;
 mod sandboxed_tty_writer;
 mod sys;
+mod virtfs;
+pub use virtfs::{FileContents, VirtualDirEntry};
 pub mod wasi;
 pub mod wasi32;
 

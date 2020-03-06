@@ -39,6 +39,9 @@ impl AsRawHandle for Descriptor {
     fn as_raw_handle(&self) -> RawHandle {
         match self {
             Self::OsHandle(file) => file.as_raw_handle(),
+            Self::VirtualFile(_file) => {
+                unimplemented!("virtual as_raw_handle");
+            }
             Self::Stdin => io::stdin().as_raw_handle(),
             Self::Stdout => io::stdout().as_raw_handle(),
             Self::Stderr => io::stderr().as_raw_handle(),

@@ -1,23 +1,99 @@
 #![allow(non_camel_case_types)]
+use crate::sys::fdentry_impl::OsHandle;
 use crate::sys::host_impl;
 use crate::sys::hostcalls_impl::fs_helpers::*;
-use crate::{error::WasiError, fdentry::FdEntry, wasi, Error, Result};
-use std::fs::File;
+use crate::{error::WasiError, fdentry::Descriptor, fdentry::FdEntry, wasi, Error, Result};
 use std::path::{Component, Path};
 
 #[derive(Debug)]
 pub(crate) struct PathGet {
-    dirfd: File,
+    dirfd: Descriptor,
     path: String,
 }
 
 impl PathGet {
-    pub(crate) fn dirfd(&self) -> &File {
+    pub(crate) fn dirfd(&self) -> &Descriptor {
         &self.dirfd
     }
 
     pub(crate) fn path(&self) -> &str {
         &self.path
+    }
+
+    pub(crate) fn path_create_directory(self) -> Result<()> {
+        match &self.dirfd {
+            Descriptor::OsHandle(file) => {
+                crate::sys::hostcalls_impl::path_create_directory(&file, &self.path)
+            }
+            Descriptor::VirtualFile(virt) => virt.create_directory(&Path::new(&self.path)),
+            other => {
+                panic!("invalid descriptor to create directory: {:?}", other);
+            }
+        }
+    }
+
+    pub(crate) fn open_with(
+        self,
+        read: bool,
+        write: bool,
+        oflags: u16,
+        fs_flags: u16,
+    ) -> Result<Descriptor> {
+        match &self.dirfd {
+            Descriptor::OsHandle(_) => {
+                crate::sys::hostcalls_impl::path_open(self, read, write, oflags, fs_flags)
+                    .map_err(Into::into)
+            }
+            Descriptor::VirtualFile(virt) => virt
+                .openat(Path::new(&self.path), read, write, oflags, fs_flags)
+                .map(|file| Descriptor::VirtualFile(file)),
+            other => {
+                panic!("invalid descriptor to path_open: {:?}", other);
+            }
+        }
+    }
+}
+
+struct PathRef<'a, 'b> {
+    dirfd: &'a Descriptor,
+    path: &'b str,
+}
+
+impl<'a, 'b> PathRef<'a, 'b> {
+    fn new(dirfd: &'a Descriptor, path: &'b str) -> Self {
+        PathRef { dirfd, path }
+    }
+
+    fn open(&self) -> Result<Descriptor> {
+        match self.dirfd {
+            Descriptor::OsHandle(file) => Ok(Descriptor::OsHandle(OsHandle::from(openat(
+                &file, &self.path,
+            )?))),
+            Descriptor::VirtualFile(virt) => virt
+                .openat(
+                    Path::new(&self.path),
+                    false,
+                    false,
+                    wasi::__WASI_OFLAGS_DIRECTORY,
+                    0,
+                )
+                .map(|file| Descriptor::VirtualFile(file)),
+            other => {
+                panic!("invalid descriptor for open: {:?}", other);
+            }
+        }
+    }
+
+    fn readlink(&self) -> Result<String> {
+        match self.dirfd {
+            Descriptor::OsHandle(file) => readlinkat(file, self.path),
+            Descriptor::VirtualFile(virt) => {
+                virt.readlinkat(Path::new(self.path)).map_err(Into::into)
+            }
+            other => {
+                panic!("invalid descriptor for readlink: {:?}", other);
+            }
+        }
     }
 }
 
@@ -112,7 +188,9 @@ pub(crate) fn path_get(
                         }
 
                         if !path_stack.is_empty() || (ends_with_slash && !needs_final_component) {
-                            match openat(dir_stack.last().ok_or(Error::ENOTCAPABLE)?, &head) {
+                            match PathRef::new(dir_stack.last().ok_or(Error::ENOTCAPABLE)?, &head)
+                                .open()
+                            {
                                 Ok(new_dir) => {
                                     dir_stack.push(new_dir);
                                 }
@@ -125,10 +203,11 @@ pub(crate) fn path_get(
                                         // this with ENOTDIR because of the O_DIRECTORY flag.
                                         {
                                             // attempt symlink expansion
-                                            let mut link_path = readlinkat(
+                                            let mut link_path = PathRef::new(
                                                 dir_stack.last().ok_or(Error::ENOTCAPABLE)?,
                                                 &head,
-                                            )?;
+                                            )
+                                            .readlink()?;
 
                                             symlink_expansions += 1;
                                             if symlink_expansions > MAX_SYMLINK_EXPANSIONS {
@@ -159,7 +238,9 @@ pub(crate) fn path_get(
                         {
                             // if there's a trailing slash, or if `LOOKUP_SYMLINK_FOLLOW` is set, attempt
                             // symlink expansion
-                            match readlinkat(dir_stack.last().ok_or(Error::ENOTCAPABLE)?, &head) {
+                            match PathRef::new(dir_stack.last().ok_or(Error::ENOTCAPABLE)?, &head)
+                                .readlink()
+                            {
                                 Ok(mut link_path) => {
                                     symlink_expansions += 1;
                                     if symlink_expansions > MAX_SYMLINK_EXPANSIONS {

@@ -2,7 +2,7 @@
 #![allow(unused)]
 use super::fs_helpers::*;
 use crate::ctx::WasiCtx;
-use crate::fdentry::FdEntry;
+use crate::fdentry::{Descriptor, FdEntry};
 use crate::host::{Dirent, FileType};
 use crate::hostcalls_impl::{fd_filestat_set_times_impl, PathGet};
 use crate::sys::fdentry_impl::{determine_type_rights, OsHandle};
@@ -119,8 +119,8 @@ pub(crate) fn fd_advise(
     Ok(())
 }
 
-pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
-    let path = resolved.concatenate()?;
+pub(crate) fn path_create_directory(file: &File, path: &str) -> Result<()> {
+    let path = concatenate(file, path)?;
     std::fs::create_dir(&path).map_err(Into::into)
 }
 
@@ -134,7 +134,7 @@ pub(crate) fn path_open(
     write: bool,
     oflags: wasi::__wasi_oflags_t,
     fdflags: wasi::__wasi_fdflags_t,
-) -> Result<File> {
+) -> Result<Descriptor> {
     use winx::file::{AccessMode, CreationDisposition, Flags};
 
     let is_trunc = oflags & wasi::__WASI_OFLAGS_TRUNC != 0;
@@ -207,6 +207,7 @@ pub(crate) fn path_open(
     opts.access_mode(access_mode.bits())
         .custom_flags(file_flags_from_fdflags(fdflags).bits())
         .open(&path)
+        .map(|f| OsHandle::from(f).into())
         .map_err(Into::into)
 }
 
@@ -371,7 +372,7 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
     // we need to strip the prefix from the absolute path
     // as otherwise we will error out since WASI is not capable
     // of dealing with absolute paths
-    let dir_path = get_file_path(resolved.dirfd())?;
+    let dir_path = get_file_path(&resolved.dirfd().as_os_handle())?;
     let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
     let target_path = target_path
         .strip_prefix(dir_path)
@@ -401,7 +402,7 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
 fn strip_trailing_slashes_and_concatenate(resolved: &PathGet) -> Result<Option<PathBuf>> {
     if resolved.path().ends_with('/') {
         let suffix = resolved.path().trim_end_matches('/');
-        concatenate(resolved.dirfd(), Path::new(suffix)).map(Some)
+        concatenate(&resolved.dirfd().as_os_handle(), Path::new(suffix)).map(Some)
     } else {
         Ok(None)
     }
@@ -492,14 +493,15 @@ pub(crate) fn path_filestat_set_times(
     let file = OpenOptions::new()
         .access_mode(AccessMode::FILE_WRITE_ATTRIBUTES.bits())
         .open(path)?;
-    fd_filestat_set_times_impl(&file, st_atim, st_mtim, fst_flags)
+    let modifiable_fd = Descriptor::OsHandle(OsHandle::from(file));
+    fd_filestat_set_times_impl(&modifiable_fd, st_atim, st_mtim, fst_flags)
 }
 
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
     use std::os::windows::fs::{symlink_dir, symlink_file};
     use winx::winerror::WinError;
 
-    let old_path = concatenate(resolved.dirfd(), Path::new(old_path))?;
+    let old_path = concatenate(&resolved.dirfd().as_os_handle(), Path::new(old_path))?;
     let new_path = resolved.concatenate()?;
 
     // try creating a file symlink

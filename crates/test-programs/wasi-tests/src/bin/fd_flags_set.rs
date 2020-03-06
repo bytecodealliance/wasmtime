@@ -50,7 +50,7 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasi::Fd) {
         )
         .expect("reading file"),
         buffer.len(),
-        "shoudl read {} bytes",
+        "should read {} bytes",
         buffer.len()
     );
 
@@ -87,7 +87,7 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasi::Fd) {
         )
         .expect("reading file"),
         buffer.len(),
-        "shoudl read {} bytes",
+        "should read {} bytes",
         buffer.len()
     );
 
@@ -126,7 +126,7 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasi::Fd) {
         )
         .expect("reading file"),
         buffer.len(),
-        "shoudl read {} bytes",
+        "should read {} bytes",
         buffer.len()
     );
 

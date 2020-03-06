@@ -1,4 +1,6 @@
-use crate::fdentry::FdEntry;
+use crate::fdentry::{Descriptor, FdEntry};
+use crate::sys::fdentry_impl::OsHandle;
+use crate::virtfs::{VirtualDir, VirtualDirEntry};
 use crate::{wasi, Error, Result};
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -61,7 +63,7 @@ impl PendingCString {
 /// A builder allowing customizable construction of `WasiCtx` instances.
 pub struct WasiCtxBuilder {
     fds: Option<HashMap<wasi::__wasi_fd_t, PendingFdEntry>>,
-    preopens: Option<Vec<(PathBuf, File)>>,
+    preopens: Option<Vec<(PathBuf, Descriptor)>>,
     args: Option<Vec<PendingCString>>,
     env: Option<HashMap<PendingCString, PendingCString>>,
 }
@@ -222,10 +224,46 @@ impl WasiCtxBuilder {
 
     /// Add a preopened directory.
     pub fn preopened_dir<P: AsRef<Path>>(&mut self, dir: File, guest_path: P) -> &mut Self {
+        self.preopens.as_mut().unwrap().push((
+            guest_path.as_ref().to_owned(),
+            Descriptor::OsHandle(OsHandle::from(dir)),
+        ));
+        self
+    }
+
+    /// Add a preopened virtual directory.
+    pub fn preopened_virt<P: AsRef<Path>>(
+        &mut self,
+        dir: VirtualDirEntry,
+        guest_path: P,
+    ) -> &mut Self {
+        fn populate_directory(virtentry: HashMap<String, VirtualDirEntry>, dir: &mut VirtualDir) {
+            for (path, entry) in virtentry.into_iter() {
+                match entry {
+                    VirtualDirEntry::Directory(dir_entries) => {
+                        let mut subdir = VirtualDir::new(true);
+                        populate_directory(dir_entries, &mut subdir);
+                        dir.add_dir(subdir, path);
+                    }
+                    VirtualDirEntry::File(content) => {
+                        dir.add_file(content, path);
+                    }
+                }
+            }
+        }
+
+        let dir = if let VirtualDirEntry::Directory(entries) = dir {
+            let mut dir = VirtualDir::new(true);
+            populate_directory(entries, &mut dir);
+            Box::new(dir)
+        } else {
+            panic!("the root of a VirtualDirEntry tree must be a VirtualDirEntry::Directory");
+        };
+
         self.preopens
             .as_mut()
             .unwrap()
-            .push((guest_path.as_ref().to_owned(), dir));
+            .push((guest_path.as_ref().to_owned(), Descriptor::VirtualFile(dir)));
         self
     }
 
@@ -271,7 +309,7 @@ impl WasiCtxBuilder {
                     fds.insert(fd, f()?);
                 }
                 PendingFdEntry::File(f) => {
-                    fds.insert(fd, FdEntry::from(f)?);
+                    fds.insert(fd, FdEntry::from(Descriptor::OsHandle(OsHandle::from(f)))?);
                 }
             }
         }
@@ -284,8 +322,20 @@ impl WasiCtxBuilder {
             // unnecessarily if we have exactly the maximum number of file descriptors.
             preopen_fd = preopen_fd.checked_add(1).ok_or(Error::ENFILE)?;
 
-            if !dir.metadata()?.is_dir() {
-                return Err(Error::EBADF);
+            match &dir {
+                Descriptor::OsHandle(handle) => {
+                    if !handle.metadata()?.is_dir() {
+                        return Err(Error::EBADF);
+                    }
+                }
+                Descriptor::VirtualFile(virt) => {
+                    if virt.get_file_type() != wasi::__WASI_FILETYPE_DIRECTORY {
+                        return Err(Error::EBADF);
+                    }
+                }
+                Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
+                    panic!("implementation error, stdin/stdout/stderr shouldn't be in the list of preopens");
+                }
             }
 
             // We don't currently allow setting file descriptors other than 0-2, but this will avoid
