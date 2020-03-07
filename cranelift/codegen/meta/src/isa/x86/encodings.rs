@@ -1568,6 +1568,7 @@ fn define_simd(
     let copy_nop = shared.by_name("copy_nop");
     let fadd = shared.by_name("fadd");
     let fcmp = shared.by_name("fcmp");
+    let fcvt_from_sint = shared.by_name("fcvt_from_sint");
     let fdiv = shared.by_name("fdiv");
     let fill = shared.by_name("fill");
     let fill_nop = shared.by_name("fill_nop");
@@ -1788,6 +1789,14 @@ fn define_simd(
                 0,
             );
         }
+    }
+
+    // SIMD conversions
+    {
+        let fcvt_from_sint_32 = fcvt_from_sint
+            .bind(vector(F32, sse_vector_size))
+            .bind(vector(I32, sse_vector_size));
+        e.enc_both(fcvt_from_sint_32, rec_furm.opcodes(&CVTDQ2PS));
     }
 
     // SIMD vconst for special cases (all zeroes, all ones)
