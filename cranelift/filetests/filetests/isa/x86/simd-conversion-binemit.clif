@@ -9,3 +9,9 @@ block0:
 [-, %xmm2]  v2 = raw_bitcast.i32x4 v1       ; bin:
             return
 }
+
+function %fcvt_32(i32x4) {
+block0(v0: i32x4 [%xmm6]):
+[-, %xmm2]  v1 = fcvt_from_sint.f32x4 v0    ; bin: 40 0f 5b d6
+            return
+}

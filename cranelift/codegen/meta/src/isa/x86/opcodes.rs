@@ -77,6 +77,10 @@ pub static CMPPD: [u8; 3] = [0x66, 0x0f, 0xc2];
 /// imm8 as comparison predicate (SSE).
 pub static CMPPS: [u8; 2] = [0x0f, 0xc2];
 
+/// Convert four packed signed doubleword integers from xmm2/mem to four packed single-precision
+/// floating-point values in xmm1 (SSE2).
+pub static CVTDQ2PS: [u8; 2] = [0x0f, 0x5b];
+
 /// Convert scalar double-precision floating-point value to scalar single-precision
 /// floating-point value.
 pub static CVTSD2SS: [u8; 3] = [0xf2, 0x0f, 0x5a];
