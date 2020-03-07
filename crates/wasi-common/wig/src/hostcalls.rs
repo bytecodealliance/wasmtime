@@ -92,8 +92,7 @@ fn generate_wrappers(func: &witx::InterfaceFunc, old: bool) -> TokenStream {
         quote! {
             let ret = #call
                 .err()
-                .unwrap_or(super::Error::ESUCCESS)
-                .as_wasi_error();
+                .unwrap_or(super::wasi::WasiError::ESUCCESS);
             log::trace!("     | errno={}", ret);
             ret.as_raw_errno()
         }
