@@ -67,9 +67,9 @@ impl ReduceExcusesExcercise {
                 },
             )
             .prop_filter("non-overlapping pointers", |e| {
-                let mut all = vec![&e.array_ptr_loc, &e.return_ptr_loc];
+                let mut all = vec![e.array_ptr_loc, e.return_ptr_loc];
                 all.extend(e.excuse_ptr_locs.iter());
-                MemArea::non_overlapping_set(&all)
+                MemArea::non_overlapping_set(all)
             })
             .boxed()
     }
@@ -155,9 +155,9 @@ impl PopulateExcusesExcercise {
                 elements,
             })
             .prop_filter("non-overlapping pointers", |e| {
-                let mut all = vec![&e.array_ptr_loc];
+                let mut all = vec![e.array_ptr_loc];
                 all.extend(e.elements.iter());
-                MemArea::non_overlapping_set(&all)
+                MemArea::non_overlapping_set(all)
             })
             .boxed()
     }

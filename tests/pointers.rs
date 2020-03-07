@@ -117,10 +117,10 @@ impl PointersAndEnumsExercise {
             )
             .prop_filter("non-overlapping pointers", |e| {
                 MemArea::non_overlapping_set(&[
-                    &e.input2_loc,
-                    &e.input3_loc,
-                    &e.input4_loc,
-                    &e.input4_ptr_loc,
+                    e.input2_loc,
+                    e.input3_loc,
+                    e.input4_loc,
+                    e.input4_ptr_loc,
                 ])
             })
             .boxed()

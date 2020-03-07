@@ -99,7 +99,7 @@ impl GetTagExercise {
                 return_loc,
             })
             .prop_filter("non-overlapping pointers", |e| {
-                MemArea::non_overlapping_set(&[&e.input_loc, &e.return_loc])
+                MemArea::non_overlapping_set(&[e.input_loc, e.return_loc])
             })
             .boxed()
     }
@@ -176,7 +176,7 @@ impl ReasonMultExercise {
                 },
             )
             .prop_filter("non-overlapping pointers", |e| {
-                MemArea::non_overlapping_set(&[&e.input_loc, &e.input_pointee_loc])
+                MemArea::non_overlapping_set(&[e.input_loc, e.input_pointee_loc])
             })
             .boxed()
     }

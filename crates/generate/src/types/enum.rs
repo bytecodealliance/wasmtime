@@ -87,14 +87,26 @@ pub(super) fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype
 
             fn read(location: &wiggle_runtime::GuestPtr<#ident>) -> Result<#ident, wiggle_runtime::GuestError> {
                 use std::convert::TryFrom;
-                let val = #repr::read(&location.cast())?;
-                #ident::try_from(val)
+                let reprval = #repr::read(&location.cast())?;
+                let value = #ident::try_from(reprval)?;
+                Ok(value)
             }
 
             fn write(location: &wiggle_runtime::GuestPtr<'_, #ident>, val: Self)
                 -> Result<(), wiggle_runtime::GuestError>
             {
                 #repr::write(&location.cast(), #repr::from(val))
+            }
+        }
+
+        unsafe impl <'a> wiggle_runtime::GuestTypeTransparent<'a> for #ident {
+            #[inline]
+            fn validate(location: *mut #ident) -> Result<(), wiggle_runtime::GuestError> {
+                use std::convert::TryFrom;
+                // Validate value in memory using #ident::try_from(reprval)
+                let reprval = unsafe { (location as *mut #repr).read() };
+                let _val = #ident::try_from(reprval)?;
+                Ok(())
             }
         }
     }

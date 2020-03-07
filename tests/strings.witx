@@ -5,4 +5,12 @@
     (result $error $errno)
     (result $total_bytes u32)
   )
+
+  (@interface func (export "multi_string")
+    (param $a string)
+    (param $b string)
+    (param $c string)
+    (result $error $errno)
+    (result $total_bytes u32)
+  )
 )

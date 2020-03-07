@@ -40,6 +40,22 @@ pub trait GuestType<'a>: Sized {
     fn write(ptr: &GuestPtr<'_, Self>, val: Self) -> Result<(), GuestError>;
 }
 
+/// A trait for `GuestType`s that have the same representation in guest memory
+/// as in Rust. These types can be used with the `GuestPtr::as_raw` method to
+/// view as a slice.
+///
+/// Unsafe trait because a correct GuestTypeTransparent implemengation ensures that the
+/// GuestPtr::as_raw methods are safe. This trait should only ever be implemented
+/// by wiggle_generate-produced code.
+pub unsafe trait GuestTypeTransparent<'a>: GuestType<'a> {
+    /// Checks that the memory at `ptr` is a valid representation of `Self`.
+    ///
+    /// Assumes that memory safety checks have already been performed: `ptr`
+    /// has been checked to be aligned correctly and reside in memory using
+    /// `GuestMemory::validate_size_align`
+    fn validate(ptr: *mut Self) -> Result<(), GuestError>;
+}
+
 macro_rules! primitives {
     ($($i:ident)*) => ($(
         impl<'a> GuestType<'a> for $i {
@@ -78,6 +94,15 @@ macro_rules! primitives {
                 Ok(())
             }
         }
+
+        unsafe impl<'a> GuestTypeTransparent<'a> for $i {
+            #[inline]
+            fn validate(_ptr: *mut $i) -> Result<(), GuestError> {
+                // All bit patterns are safe, nothing to do here
+                Ok(())
+            }
+        }
+
     )*)
 }
 

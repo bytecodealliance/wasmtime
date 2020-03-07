@@ -57,7 +57,7 @@ impl ConfigureCarExercise {
                 },
             )
             .prop_filter("non-overlapping ptrs", |e| {
-                MemArea::non_overlapping_set(&[&e.other_config_by_ptr, &e.return_ptr_loc])
+                MemArea::non_overlapping_set(&[e.other_config_by_ptr, e.return_ptr_loc])
             })
             .boxed()
     }

@@ -73,11 +73,21 @@ pub(super) fn define_int(names: &Names, name: &witx::Id, i: &witx::IntDatatype) 
 
             fn read(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<#ident, wiggle_runtime::GuestError> {
                 Ok(#ident(#repr::read(&location.cast())?))
+
             }
 
             fn write(location: &wiggle_runtime::GuestPtr<'_, #ident>, val: Self) -> Result<(), wiggle_runtime::GuestError> {
                 #repr::write(&location.cast(), val.0)
             }
         }
+
+        unsafe impl<'a> wiggle_runtime::GuestTypeTransparent<'a> for #ident {
+            #[inline]
+            fn validate(_location: *mut #ident) -> Result<(), wiggle_runtime::GuestError> {
+                // All bit patterns accepted
+                Ok(())
+            }
+        }
+
     }
 }

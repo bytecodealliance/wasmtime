@@ -13,6 +13,7 @@ pub(super) fn define_handle(
     let size = h.mem_size_align().size as u32;
     let align = h.mem_size_align().align as usize;
     quote! {
+        #[repr(transparent)]
         #[derive(Copy, Clone, Debug, ::std::hash::Hash, Eq, PartialEq)]
         pub struct #ident(u32);
 
@@ -62,5 +63,15 @@ pub(super) fn define_handle(
                 u32::write(&location.cast(), val.0)
             }
         }
+
+        unsafe impl<'a> wiggle_runtime::GuestTypeTransparent<'a> for #ident {
+            #[inline]
+            fn validate(_location: *mut #ident) -> Result<(), wiggle_runtime::GuestError> {
+                // All bit patterns accepted
+                Ok(())
+            }
+        }
+
+
     }
 }

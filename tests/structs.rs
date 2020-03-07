@@ -72,7 +72,7 @@ impl SumOfPairExercise {
                 return_loc,
             })
             .prop_filter("non-overlapping pointers", |e| {
-                MemArea::non_overlapping_set(&[&e.input_loc, &e.return_loc])
+                MemArea::non_overlapping_set(&[e.input_loc, e.return_loc])
             })
             .boxed()
     }
@@ -157,10 +157,10 @@ impl SumPairPtrsExercise {
             )
             .prop_filter("non-overlapping pointers", |e| {
                 MemArea::non_overlapping_set(&[
-                    &e.input_first_loc,
-                    &e.input_second_loc,
-                    &e.input_struct_loc,
-                    &e.return_loc,
+                    e.input_first_loc,
+                    e.input_second_loc,
+                    e.input_struct_loc,
+                    e.return_loc,
                 ])
             })
             .boxed()
@@ -245,11 +245,7 @@ impl SumIntAndPtrExercise {
                 },
             )
             .prop_filter("non-overlapping pointers", |e| {
-                MemArea::non_overlapping_set(&[
-                    &e.input_first_loc,
-                    &e.input_struct_loc,
-                    &e.return_loc,
-                ])
+                MemArea::non_overlapping_set(&[e.input_first_loc, e.input_struct_loc, e.return_loc])
             })
             .boxed()
     }
@@ -371,11 +367,7 @@ impl ReturnPairPtrsExercise {
                 },
             )
             .prop_filter("non-overlapping pointers", |e| {
-                MemArea::non_overlapping_set(&[
-                    &e.input_first_loc,
-                    &e.input_second_loc,
-                    &e.return_loc,
-                ])
+                MemArea::non_overlapping_set(&[e.input_first_loc, e.input_second_loc, e.return_loc])
             })
             .boxed()
     }

@@ -134,10 +134,11 @@ pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDataty
                 #repr::guest_align()
             }
 
-            fn read(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<#ident, wiggle_runtime::GuestError> {
+            fn read(location: &wiggle_runtime::GuestPtr<#ident>) -> Result<#ident, wiggle_runtime::GuestError> {
                 use std::convert::TryFrom;
-                let bits = #repr::read(&location.cast())?;
-                #ident::try_from(bits)
+                let reprval = #repr::read(&location.cast())?;
+                let value = #ident::try_from(reprval)?;
+                Ok(value)
             }
 
             fn write(location: &wiggle_runtime::GuestPtr<'_, #ident>, val: Self) -> Result<(), wiggle_runtime::GuestError> {
@@ -145,5 +146,16 @@ pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDataty
                 #repr::write(&location.cast(), val)
             }
         }
+        unsafe impl <'a> wiggle_runtime::GuestTypeTransparent<'a> for #ident {
+            #[inline]
+            fn validate(location: *mut #ident) -> Result<(), wiggle_runtime::GuestError> {
+                use std::convert::TryFrom;
+                // Validate value in memory using #ident::try_from(reprval)
+                let reprval = unsafe { (location as *mut #repr).read() };
+                let _val = #ident::try_from(reprval)?;
+                Ok(())
+            }
+        }
+
     }
 }

@@ -6,11 +6,14 @@ use std::slice;
 use std::str;
 use std::sync::Arc;
 
+mod borrow;
 mod error;
 mod guest_type;
 mod region;
+
+pub use borrow::GuestBorrows;
 pub use error::GuestError;
-pub use guest_type::{GuestErrorType, GuestType};
+pub use guest_type::{GuestErrorType, GuestType, GuestTypeTransparent};
 pub use region::Region;
 
 /// A trait which abstracts how to get at the region of host memory taht
@@ -119,12 +122,12 @@ pub unsafe trait GuestMemory {
         // Figure out our pointer to the start of memory
         let start = match (base_ptr as usize).checked_add(offset as usize) {
             Some(ptr) => ptr,
-            None => return Err(GuestError::PtrOutOfBounds(region)),
+            None => return Err(GuestError::PtrOverflow),
         };
         // and use that to figure out the end pointer
         let end = match start.checked_add(len as usize) {
             Some(ptr) => ptr,
-            None => return Err(GuestError::PtrOutOfBounds(region)),
+            None => return Err(GuestError::PtrOverflow),
         };
         // and then verify that our end doesn't reach past the end of our memory
         if end > (base_ptr as usize) + (base_len as usize) {
@@ -335,7 +338,7 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
             .and_then(|o| self.pointer.checked_add(o));
         let offset = match offset {
             Some(o) => o,
-            None => return Err(GuestError::InvalidFlagValue("")),
+            None => return Err(GuestError::PtrOverflow),
         };
         Ok(GuestPtr::new(self.mem, offset))
     }
@@ -369,6 +372,54 @@ impl<'a, T> GuestPtr<'a, [T]> {
         (0..self.len()).map(move |i| base.add(i))
     }
 
+    /// Attempts to read a raw `*mut [T]` pointer from this pointer, performing
+    /// bounds checks and type validation.
+    /// The resulting `*mut [T]` can be used as a `&mut [t]` as long as the
+    /// reference is dropped before any Wasm code is re-entered.
+    ///
+    /// This function will return a raw pointer into host memory if all checks
+    /// succeed (valid utf-8, valid pointers, etc). If any checks fail then
+    /// `GuestError` will be returned.
+    ///
+    /// Note that the `*mut [T]` pointer is still unsafe to use in general, but
+    /// there are specific situations that it is safe to use. For more
+    /// information about using the raw pointer, consult the [`GuestMemory`]
+    /// trait documentation.
+    ///
+    /// For safety against overlapping mutable borrows, the user must use the
+    /// same `GuestBorrows` to create all *mut str or *mut [T] that are alive
+    /// at the same time.
+    pub fn as_raw(&self, bc: &mut GuestBorrows) -> Result<*mut [T], GuestError>
+    where
+        T: GuestTypeTransparent<'a>,
+    {
+        let len = match self.pointer.1.checked_mul(T::guest_size()) {
+            Some(l) => l,
+            None => return Err(GuestError::PtrOverflow),
+        };
+        let ptr =
+            self.mem
+                .validate_size_align(self.pointer.0, T::guest_align(), len)? as *mut T;
+
+        bc.borrow(Region {
+            start: self.pointer.0,
+            len,
+        })?;
+
+        // Validate all elements in slice.
+        // SAFETY: ptr has been validated by self.mem.validate_size_align
+        for offs in 0..self.pointer.1 {
+            T::validate(unsafe { ptr.add(offs as usize) })?;
+        }
+
+        // SAFETY: iff there are no overlapping borrows (all uses of as_raw use this same
+        // GuestBorrows), its valid to construct a *mut [T]
+        unsafe {
+            let s = slice::from_raw_parts_mut(ptr, self.pointer.1 as usize);
+            Ok(s as *mut [T])
+        }
+    }
+
     /// Returns a `GuestPtr` pointing to the base of the array for the interior
     /// type `T`.
     pub fn as_ptr(&self) -> GuestPtr<'a, T> {
@@ -396,6 +447,8 @@ impl<'a> GuestPtr<'a, str> {
 
     /// Attempts to read a raw `*mut str` pointer from this pointer, performing
     /// bounds checks and utf-8 checks.
+    /// The resulting `*mut str` can be used as a `&mut str` as long as the
+    /// reference is dropped before any Wasm code is re-entered.
     ///
     /// This function will return a raw pointer into host memory if all checks
     /// succeed (valid utf-8, valid pointers, etc). If any checks fail then
@@ -405,12 +458,22 @@ impl<'a> GuestPtr<'a, str> {
     /// there are specific situations that it is safe to use. For more
     /// information about using the raw pointer, consult the [`GuestMemory`]
     /// trait documentation.
-    pub fn as_raw(&self) -> Result<*mut str, GuestError> {
+    ///
+    /// For safety against overlapping mutable borrows, the user must use the
+    /// same `GuestBorrows` to create all *mut str or *mut [T] that are alive
+    /// at the same time.
+    pub fn as_raw(&self, bc: &mut GuestBorrows) -> Result<*mut str, GuestError> {
         let ptr = self
             .mem
             .validate_size_align(self.pointer.0, 1, self.pointer.1)?;
 
-        // TODO: doc unsafety here
+        bc.borrow(Region {
+            start: self.pointer.0,
+            len: self.pointer.1,
+        })?;
+
+        // SAFETY: iff there are no overlapping borrows (all uses of as_raw use this same
+        // GuestBorrows), its valid to construct a *mut str
         unsafe {
             let s = slice::from_raw_parts_mut(ptr, self.pointer.1 as usize);
             match str::from_utf8_mut(s) {
