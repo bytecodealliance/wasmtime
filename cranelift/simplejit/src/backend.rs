@@ -64,7 +64,6 @@ impl SimpleJITBuilder {
         isa: Box<dyn TargetIsa>,
         libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     ) -> Self {
-        debug_assert!(!isa.flags().is_pic(), "SimpleJIT requires non-PIC code");
         let symbols = HashMap::new();
         Self {
             isa,
