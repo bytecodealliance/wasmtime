@@ -1,6 +1,10 @@
 ---
-name: "Improvement"
-about: "A feature request or code improvement."
+name: Improvement
+about: A feature request or code improvement.
+title: ''
+labels: ''
+assignees: ''
+
 ---
 
 <!-- Please try to describe precisely what you would like to do in
