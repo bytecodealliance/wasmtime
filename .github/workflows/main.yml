@@ -170,7 +170,7 @@ jobs:
       # Note: libclang is pre-installed on the macOS and linux images.
       if: matrix.os == 'windows-latest'
       run: |
-        Invoke-WebRequest http://releases.llvm.org/9.0.0/LLVM-9.0.0-win64.exe -OutFile llvm-installer.exe
+        Invoke-WebRequest https://releases.llvm.org/9.0.0/LLVM-9.0.0-win64.exe -OutFile llvm-installer.exe
         7z x llvm-installer.exe -oC:\llvm-binary
         Write-Host ::set-env name=LIBCLANG_PATH::C:\llvm-binary\bin\libclang.dll
         Write-Host ::add-path::C:\llvm-binary\bin
