@@ -82,4 +82,3 @@ fn get_times(
 
     Ok((atime, mtime))
 }
-
