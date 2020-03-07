@@ -1,4 +1,3 @@
-pub(crate) mod filetime;
 #[path = "../linux/host_impl.rs"]
 pub(crate) mod host_impl;
 #[path = "../linux/hostcalls_impl.rs"]

@@ -2,8 +2,6 @@ pub(crate) mod fdentry_impl;
 pub(crate) mod host_impl;
 pub(crate) mod hostcalls_impl;
 
-mod filetime;
-
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
         mod linux;

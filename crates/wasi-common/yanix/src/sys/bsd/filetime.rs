@@ -1,10 +1,11 @@
-//! This internal module consists of helper types and functions for dealing
+//! This module consists of helper types and functions for dealing
 //! with setting the file times specific to BSD-style *nixes.
-use crate::{sys::unix::filetime::FileTime, Result};
+use crate::filetime::FileTime;
+use crate::from_success_code;
 use cfg_if::cfg_if;
 use std::ffi::CStr;
 use std::fs::File;
-use std::io;
+use std::io::Result;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
 cfg_if! {
@@ -35,14 +36,14 @@ cfg_if! {
 /// The original implementation can be found here: [filetime::unix::macos::set_times]
 ///
 /// [filetime::unix::macos::set_times]: https://github.com/alexcrichton/filetime/blob/master/src/unix/macos.rs#L49
-pub(crate) fn utimensat(
+pub fn utimensat(
     dirfd: &File,
     path: &str,
     atime: FileTime,
     mtime: FileTime,
     symlink_nofollow: bool,
 ) -> Result<()> {
-    use crate::sys::unix::filetime::to_timespec;
+    use crate::filetime::to_timespec;
     use std::ffi::CString;
     use std::os::unix::prelude::*;
 
@@ -57,12 +58,9 @@ pub(crate) fn utimensat(
 
         let p = CString::new(path.as_bytes())?;
         let times = [to_timespec(&atime)?, to_timespec(&mtime)?];
-        let rc = unsafe { func(dirfd.as_raw_fd(), p.as_ptr(), times.as_ptr(), flags) };
-        if rc == 0 {
-            return Ok(());
-        } else {
-            return Err(io::Error::last_os_error().into());
-        }
+        return from_success_code(unsafe {
+            func(dirfd.as_raw_fd(), p.as_ptr(), times.as_ptr(), flags)
+        });
     }
 
     super::utimesat::utimesat(dirfd, path, atime, mtime, symlink_nofollow)
