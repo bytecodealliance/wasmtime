@@ -1,8 +1,8 @@
 use crate::hostcalls_impl::PathGet;
-use crate::{Error, Result};
+use crate::wasi::{WasiError, WasiResult};
 use std::os::unix::prelude::AsRawFd;
 
-pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
+pub(crate) fn path_unlink_file(resolved: PathGet) -> WasiResult<()> {
     use yanix::file::{unlinkat, AtFlag};
     match unsafe {
         unlinkat(
@@ -32,7 +32,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
                 } {
                     Ok(stat) => {
                         if FileType::from_stat_st_mode(stat.st_mode) == FileType::Directory {
-                            return Err(Error::EISDIR);
+                            return Err(WasiError::EISDIR);
                         }
                     }
                     Err(err) => {
@@ -47,7 +47,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     }
 }
 
-pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
+pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> WasiResult<()> {
     use yanix::file::{fstatat, symlinkat, AtFlag};
 
     log::debug!("path_symlink old_path = {:?}", old_path);
@@ -69,7 +69,7 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
                         AtFlag::SYMLINK_NOFOLLOW,
                     )
                 } {
-                    Ok(_) => return Err(Error::EEXIST),
+                    Ok(_) => return Err(WasiError::EEXIST),
                     Err(err) => {
                         log::debug!("path_symlink fstatat error: {:?}", err);
                     }
@@ -81,7 +81,7 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
     }
 }
 
-pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
+pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> WasiResult<()> {
     use yanix::file::{fstatat, renameat, AtFlag};
     match unsafe {
         renameat(
@@ -113,9 +113,9 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
                     Ok(_) => {
                         // check if destination contains a trailing slash
                         if resolved_new.path().contains('/') {
-                            return Err(Error::ENOTDIR);
+                            return Err(WasiError::ENOTDIR);
                         } else {
-                            return Err(Error::ENOENT);
+                            return Err(WasiError::ENOENT);
                         }
                     }
                     Err(err) => {
@@ -132,13 +132,13 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
 
 pub(crate) mod fd_readdir_impl {
     use crate::sys::fdentry_impl::OsHandle;
-    use crate::Result;
+    use crate::wasi::WasiResult;
     use std::sync::{Mutex, MutexGuard};
     use yanix::dir::Dir;
 
     pub(crate) fn get_dir_from_os_handle<'a>(
         os_handle: &'a mut OsHandle,
-    ) -> Result<MutexGuard<'a, Dir>> {
+    ) -> WasiResult<MutexGuard<'a, Dir>> {
         let dir = match os_handle.dir {
             Some(ref mut dir) => dir,
             None => {

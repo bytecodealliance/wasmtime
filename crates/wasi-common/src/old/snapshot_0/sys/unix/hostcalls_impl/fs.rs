@@ -3,7 +3,7 @@
 use crate::old::snapshot_0::host::Dirent;
 use crate::old::snapshot_0::hostcalls_impl::PathGet;
 use crate::old::snapshot_0::sys::{fdentry_impl::OsHandle, host_impl, unix::sys_impl};
-use crate::old::snapshot_0::{wasi, Error, Result};
+use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
 use std::convert::TryInto;
 use std::fs::File;
 use std::os::unix::fs::FileExt;
@@ -15,21 +15,25 @@ pub(crate) fn fd_pread(
     file: &File,
     buf: &mut [u8],
     offset: wasi::__wasi_filesize_t,
-) -> Result<usize> {
+) -> WasiResult<usize> {
     file.read_at(buf, offset).map_err(Into::into)
 }
 
-pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: wasi::__wasi_filesize_t) -> Result<usize> {
+pub(crate) fn fd_pwrite(
+    file: &File,
+    buf: &[u8],
+    offset: wasi::__wasi_filesize_t,
+) -> WasiResult<usize> {
     file.write_at(buf, offset).map_err(Into::into)
 }
 
-pub(crate) fn fd_fdstat_get(fd: &File) -> Result<wasi::__wasi_fdflags_t> {
+pub(crate) fn fd_fdstat_get(fd: &File) -> WasiResult<wasi::__wasi_fdflags_t> {
     unsafe { yanix::fcntl::get_status_flags(fd.as_raw_fd()) }
         .map(host_impl::fdflags_from_nix)
         .map_err(Into::into)
 }
 
-pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: wasi::__wasi_fdflags_t) -> Result<()> {
+pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: wasi::__wasi_fdflags_t) -> WasiResult<()> {
     let nix_flags = host_impl::nix_from_fdflags(fdflags);
     unsafe { yanix::fcntl::set_status_flags(fd.as_raw_fd(), nix_flags) }.map_err(Into::into)
 }
@@ -39,7 +43,7 @@ pub(crate) fn fd_advise(
     advice: wasi::__wasi_advice_t,
     offset: wasi::__wasi_filesize_t,
     len: wasi::__wasi_filesize_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     use yanix::fadvise::{posix_fadvise, PosixFadviseAdvice};
     let offset = offset.try_into()?;
     let len = len.try_into()?;
@@ -50,12 +54,12 @@ pub(crate) fn fd_advise(
         wasi::__WASI_ADVICE_NOREUSE => PosixFadviseAdvice::NoReuse,
         wasi::__WASI_ADVICE_RANDOM => PosixFadviseAdvice::Random,
         wasi::__WASI_ADVICE_NORMAL => PosixFadviseAdvice::Normal,
-        _ => return Err(Error::EINVAL),
+        _ => return Err(WasiError::EINVAL),
     };
     unsafe { posix_fadvise(file.as_raw_fd(), offset, len, host_advice) }.map_err(Into::into)
 }
 
-pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
+pub(crate) fn path_create_directory(resolved: PathGet) -> WasiResult<()> {
     use yanix::file::{mkdirat, Mode};
     unsafe {
         mkdirat(
@@ -67,7 +71,7 @@ pub(crate) fn path_create_directory(resolved: PathGet) -> Result<()> {
     .map_err(Into::into)
 }
 
-pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
+pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> WasiResult<()> {
     use yanix::file::{linkat, AtFlag};
     unsafe {
         linkat(
@@ -87,7 +91,7 @@ pub(crate) fn path_open(
     write: bool,
     oflags: wasi::__wasi_oflags_t,
     fs_flags: wasi::__wasi_fdflags_t,
-) -> Result<File> {
+) -> WasiResult<File> {
     use yanix::file::{fstatat, openat, AtFlag, FileType, Mode, OFlag};
 
     let mut nix_all_oflags = if read && write {
@@ -136,7 +140,7 @@ pub(crate) fn path_open(
                     } {
                         Ok(stat) => {
                             if FileType::from_stat_st_mode(stat.st_mode) == FileType::Socket {
-                                return Err(Error::ENOTSUP);
+                                return Err(WasiError::ENOTSUP);
                             }
                         }
                         Err(err) => {
@@ -158,7 +162,7 @@ pub(crate) fn path_open(
                     } {
                         Ok(stat) => {
                             if FileType::from_stat_st_mode(stat.st_mode) == FileType::Symlink {
-                                return Err(Error::ELOOP);
+                                return Err(WasiError::ELOOP);
                             }
                         }
                         Err(err) => {
@@ -169,7 +173,7 @@ pub(crate) fn path_open(
                 // FreeBSD returns EMLINK instead of ELOOP when using O_NOFOLLOW on
                 // a symlink.
                 libc::EMLINK if !(nix_all_oflags & OFlag::NOFOLLOW).is_empty() => {
-                    return Err(Error::ELOOP);
+                    return Err(WasiError::ELOOP);
                 }
                 _ => {}
             }
@@ -184,7 +188,7 @@ pub(crate) fn path_open(
     Ok(unsafe { File::from_raw_fd(new_fd) })
 }
 
-pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
+pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> WasiResult<usize> {
     use std::cmp::min;
     use yanix::file::readlinkat;
     let read_link = unsafe { readlinkat(resolved.dirfd().as_raw_fd(), resolved.path()) }
@@ -197,7 +201,7 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
     Ok(copy_len)
 }
 
-pub(crate) fn fd_filestat_get(file: &std::fs::File) -> Result<wasi::__wasi_filestat_t> {
+pub(crate) fn fd_filestat_get(file: &std::fs::File) -> WasiResult<wasi::__wasi_filestat_t> {
     use yanix::file::fstat;
     unsafe { fstat(file.as_raw_fd()) }
         .map_err(Into::into)
@@ -207,7 +211,7 @@ pub(crate) fn fd_filestat_get(file: &std::fs::File) -> Result<wasi::__wasi_files
 pub(crate) fn path_filestat_get(
     resolved: PathGet,
     dirflags: wasi::__wasi_lookupflags_t,
-) -> Result<wasi::__wasi_filestat_t> {
+) -> WasiResult<wasi::__wasi_filestat_t> {
     use yanix::file::{fstatat, AtFlag};
     let atflags = match dirflags {
         0 => AtFlag::empty(),
@@ -224,7 +228,7 @@ pub(crate) fn path_filestat_set_times(
     st_atim: wasi::__wasi_timestamp_t,
     st_mtim: wasi::__wasi_timestamp_t,
     fst_flags: wasi::__wasi_fstflags_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     use std::time::{Duration, UNIX_EPOCH};
     use yanix::filetime::*;
 
@@ -234,7 +238,7 @@ pub(crate) fn path_filestat_set_times(
     let set_mtim_now = fst_flags & wasi::__WASI_FSTFLAGS_MTIM_NOW != 0;
 
     if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
-        return Err(Error::EINVAL);
+        return Err(WasiError::EINVAL);
     }
 
     let symlink_nofollow = wasi::__WASI_LOOKUPFLAGS_SYMLINK_FOLLOW != dirflags;
@@ -265,7 +269,7 @@ pub(crate) fn path_filestat_set_times(
     .map_err(Into::into)
 }
 
-pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
+pub(crate) fn path_remove_directory(resolved: PathGet) -> WasiResult<()> {
     use yanix::file::{unlinkat, AtFlag};
     unsafe {
         unlinkat(
@@ -280,7 +284,7 @@ pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
 pub(crate) fn fd_readdir<'a>(
     os_handle: &'a mut OsHandle,
     cookie: wasi::__wasi_dircookie_t,
-) -> Result<impl Iterator<Item = Result<Dirent>> + 'a> {
+) -> WasiResult<impl Iterator<Item = WasiResult<Dirent>> + 'a> {
     use yanix::dir::{DirIter, Entry, EntryExt, SeekLoc};
 
     // Get an instance of `Dir`; this is host-specific due to intricasies

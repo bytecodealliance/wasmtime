@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 use crate::fdentry::Descriptor;
 use crate::hostcalls_impl::PathGet;
-use crate::{wasi, Error, Result};
+use crate::wasi::{self, WasiError, WasiResult};
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
@@ -9,11 +9,11 @@ use std::path::{Path, PathBuf};
 use winapi::shared::winerror;
 
 pub(crate) trait PathGetExt {
-    fn concatenate(&self) -> Result<PathBuf>;
+    fn concatenate(&self) -> WasiResult<PathBuf>;
 }
 
 impl PathGetExt for PathGet {
-    fn concatenate(&self) -> Result<PathBuf> {
+    fn concatenate(&self) -> WasiResult<PathBuf> {
         match self.dirfd() {
             Descriptor::OsHandle(file) => concatenate(file, Path::new(self.path())),
             Descriptor::VirtualFile(_virt) => {
@@ -55,7 +55,7 @@ pub(crate) fn path_open_rights(
     (needed_base, needed_inheriting)
 }
 
-pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
+pub(crate) fn openat(dirfd: &File, path: &str) -> WasiResult<File> {
     use std::fs::OpenOptions;
     use std::os::windows::fs::OpenOptionsExt;
     use winx::file::Flags;
@@ -72,13 +72,13 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
     if let Some(code) = err.raw_os_error() {
         log::debug!("openat error={:?}", code);
         if code as u32 == winerror::ERROR_INVALID_NAME {
-            return Err(Error::ENOTDIR);
+            return Err(WasiError::ENOTDIR);
         }
     }
     Err(err.into())
 }
 
-pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
+pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> WasiResult<String> {
     use winx::file::get_file_path;
 
     let path = concatenate(dirfd, Path::new(s_path))?;
@@ -92,8 +92,8 @@ pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
             let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
             let target_path = target_path
                 .strip_prefix(dir_path)
-                .map_err(|_| Error::ENOTCAPABLE)?;
-            let target_path = target_path.to_str().ok_or(Error::EILSEQ)?;
+                .map_err(|_| WasiError::ENOTCAPABLE)?;
+            let target_path = target_path.to_str().ok_or(WasiError::EILSEQ)?;
             return Ok(target_path.to_owned());
         }
         Err(e) => e,
@@ -105,7 +105,7 @@ pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
                 // strip "/" and check if exists
                 let path = concatenate(dirfd, Path::new(s_path.trim_end_matches('/')))?;
                 if path.exists() && !path.is_dir() {
-                    return Err(Error::ENOTDIR);
+                    return Err(WasiError::ENOTDIR);
                 }
             }
         }
@@ -122,13 +122,13 @@ pub(crate) fn strip_extended_prefix<P: AsRef<OsStr>>(path: P) -> OsString {
     }
 }
 
-pub(crate) fn concatenate<P: AsRef<Path>>(file: &File, path: P) -> Result<PathBuf> {
+pub(crate) fn concatenate<P: AsRef<Path>>(file: &File, path: P) -> WasiResult<PathBuf> {
     use winx::file::get_file_path;
 
     // WASI is not able to deal with absolute paths
     // so error out if absolute
     if path.as_ref().is_absolute() {
-        return Err(Error::ENOTCAPABLE);
+        return Err(WasiError::ENOTCAPABLE);
     }
 
     let dir_path = get_file_path(file)?;

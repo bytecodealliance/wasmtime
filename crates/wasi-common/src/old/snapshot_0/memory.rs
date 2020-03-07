@@ -8,38 +8,39 @@
 //! are not held for long durations.
 
 #![allow(unused)]
-use crate::old::snapshot_0::{host, wasi, wasi32, Error, Result};
+use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
+use crate::old::snapshot_0::{host, wasi32};
 use num::PrimInt;
 use std::convert::TryFrom;
 use std::mem::{align_of, size_of};
 use std::{ptr, slice};
 
-fn dec_ptr(memory: &[u8], ptr: wasi32::uintptr_t, len: usize) -> Result<*const u8> {
+fn dec_ptr(memory: &[u8], ptr: wasi32::uintptr_t, len: usize) -> WasiResult<*const u8> {
     // check for overflow
-    let checked_len = (ptr as usize).checked_add(len).ok_or(Error::EFAULT)?;
+    let checked_len = (ptr as usize).checked_add(len).ok_or(WasiError::EFAULT)?;
 
     // translate the pointer
     memory
         .get(ptr as usize..checked_len)
-        .ok_or(Error::EFAULT)
+        .ok_or(WasiError::EFAULT)
         .map(|mem| mem.as_ptr())
 }
 
-fn dec_ptr_mut(memory: &mut [u8], ptr: wasi32::uintptr_t, len: usize) -> Result<*mut u8> {
+fn dec_ptr_mut(memory: &mut [u8], ptr: wasi32::uintptr_t, len: usize) -> WasiResult<*mut u8> {
     // check for overflow
-    let checked_len = (ptr as usize).checked_add(len).ok_or(Error::EFAULT)?;
+    let checked_len = (ptr as usize).checked_add(len).ok_or(WasiError::EFAULT)?;
 
     // translate the pointer
     memory
         .get_mut(ptr as usize..checked_len)
-        .ok_or(Error::EFAULT)
+        .ok_or(WasiError::EFAULT)
         .map(|mem| mem.as_mut_ptr())
 }
 
-fn dec_ptr_to<'memory, T>(memory: &'memory [u8], ptr: wasi32::uintptr_t) -> Result<&'memory T> {
+fn dec_ptr_to<'memory, T>(memory: &'memory [u8], ptr: wasi32::uintptr_t) -> WasiResult<&'memory T> {
     // check that the ptr is aligned
     if ptr as usize % align_of::<T>() != 0 {
-        return Err(Error::EINVAL);
+        return Err(WasiError::EINVAL);
     }
 
     dec_ptr(memory, ptr, size_of::<T>()).map(|p| unsafe { &*(p as *const T) })
@@ -48,49 +49,49 @@ fn dec_ptr_to<'memory, T>(memory: &'memory [u8], ptr: wasi32::uintptr_t) -> Resu
 fn dec_ptr_to_mut<'memory, T>(
     memory: &'memory mut [u8],
     ptr: wasi32::uintptr_t,
-) -> Result<&'memory mut T> {
+) -> WasiResult<&'memory mut T> {
     // check that the ptr is aligned
     if ptr as usize % align_of::<T>() != 0 {
-        return Err(Error::EINVAL);
+        return Err(WasiError::EINVAL);
     }
 
     dec_ptr_mut(memory, ptr, size_of::<T>()).map(|p| unsafe { &mut *(p as *mut T) })
 }
 
 /// This function does not perform endianness conversions!
-fn dec_raw_byref<T>(memory: &[u8], ptr: wasi32::uintptr_t) -> Result<T> {
+fn dec_raw_byref<T>(memory: &[u8], ptr: wasi32::uintptr_t) -> WasiResult<T> {
     dec_ptr_to::<T>(memory, ptr).map(|p| unsafe { ptr::read(p) })
 }
 
 /// This function does not perform endianness conversions!
-fn enc_raw_byref<T>(memory: &mut [u8], ptr: wasi32::uintptr_t, t: T) -> Result<()> {
+fn enc_raw_byref<T>(memory: &mut [u8], ptr: wasi32::uintptr_t, t: T) -> WasiResult<()> {
     dec_ptr_to_mut::<T>(memory, ptr).map(|p| unsafe { ptr::write(p, t) })
 }
 
-pub(crate) fn dec_int_byref<T>(memory: &[u8], ptr: wasi32::uintptr_t) -> Result<T>
+pub(crate) fn dec_int_byref<T>(memory: &[u8], ptr: wasi32::uintptr_t) -> WasiResult<T>
 where
     T: PrimInt,
 {
     dec_raw_byref::<T>(memory, ptr).map(|i| PrimInt::from_le(i))
 }
 
-pub(crate) fn enc_int_byref<T>(memory: &mut [u8], ptr: wasi32::uintptr_t, t: T) -> Result<()>
+pub(crate) fn enc_int_byref<T>(memory: &mut [u8], ptr: wasi32::uintptr_t, t: T) -> WasiResult<()>
 where
     T: PrimInt,
 {
     enc_raw_byref::<T>(memory, ptr, PrimInt::to_le(t))
 }
 
-fn check_slice_of<T>(ptr: wasi32::uintptr_t, len: wasi32::size_t) -> Result<(usize, usize)> {
+fn check_slice_of<T>(ptr: wasi32::uintptr_t, len: wasi32::size_t) -> WasiResult<(usize, usize)> {
     // check alignment, and that length doesn't overflow
     if ptr as usize % align_of::<T>() != 0 {
-        return Err(Error::EINVAL);
+        return Err(WasiError::EINVAL);
     }
     let len = dec_usize(len);
     let len_bytes = if let Some(len) = size_of::<T>().checked_mul(len) {
         len
     } else {
-        return Err(Error::EOVERFLOW);
+        return Err(WasiError::EOVERFLOW);
     };
 
     Ok((len, len_bytes))
@@ -100,7 +101,7 @@ fn dec_raw_slice_of<'memory, T>(
     memory: &'memory [u8],
     ptr: wasi32::uintptr_t,
     len: wasi32::size_t,
-) -> Result<&'memory [T]> {
+) -> WasiResult<&'memory [T]> {
     let (len, len_bytes) = check_slice_of::<T>(ptr, len)?;
     let ptr = dec_ptr(memory, ptr, len_bytes)? as *const T;
     Ok(unsafe { slice::from_raw_parts(ptr, len) })
@@ -110,7 +111,7 @@ fn dec_raw_slice_of_mut<'memory, T>(
     memory: &'memory mut [u8],
     ptr: wasi32::uintptr_t,
     len: wasi32::size_t,
-) -> Result<&'memory mut [T]> {
+) -> WasiResult<&'memory mut [T]> {
     let (len, len_bytes) = check_slice_of::<T>(ptr, len)?;
     let ptr = dec_ptr_mut(memory, ptr, len_bytes)? as *mut T;
     Ok(unsafe { slice::from_raw_parts_mut(ptr, len) })
@@ -120,16 +121,16 @@ fn raw_slice_for_enc<'memory, T>(
     memory: &'memory mut [u8],
     slice: &[T],
     ptr: wasi32::uintptr_t,
-) -> Result<&'memory mut [T]> {
+) -> WasiResult<&'memory mut [T]> {
     // check alignment
     if ptr as usize % align_of::<T>() != 0 {
-        return Err(Error::EINVAL);
+        return Err(WasiError::EINVAL);
     }
     // check that length doesn't overflow
     let len_bytes = if let Some(len) = size_of::<T>().checked_mul(slice.len()) {
         len
     } else {
-        return Err(Error::EOVERFLOW);
+        return Err(WasiError::EOVERFLOW);
     };
 
     // get the pointer into guest memory
@@ -142,7 +143,7 @@ pub(crate) fn dec_slice_of_u8<'memory>(
     memory: &'memory [u8],
     ptr: wasi32::uintptr_t,
     len: wasi32::size_t,
-) -> Result<&'memory [u8]> {
+) -> WasiResult<&'memory [u8]> {
     dec_raw_slice_of::<u8>(memory, ptr, len)
 }
 
@@ -150,7 +151,7 @@ pub(crate) fn dec_slice_of_mut_u8<'memory>(
     memory: &'memory mut [u8],
     ptr: wasi32::uintptr_t,
     len: wasi32::size_t,
-) -> Result<&'memory mut [u8]> {
+) -> WasiResult<&'memory mut [u8]> {
     dec_raw_slice_of_mut::<u8>(memory, ptr, len)
 }
 
@@ -158,7 +159,7 @@ pub(crate) fn enc_slice_of_u8(
     memory: &mut [u8],
     slice: &[u8],
     ptr: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     let output = raw_slice_for_enc::<u8>(memory, slice, ptr)?;
 
     output.copy_from_slice(slice);
@@ -170,7 +171,7 @@ pub(crate) fn enc_slice_of_wasi32_uintptr(
     memory: &mut [u8],
     slice: &[wasi32::uintptr_t],
     ptr: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     let mut output_iter = raw_slice_for_enc::<wasi32::uintptr_t>(memory, slice, ptr)?.into_iter();
 
     for p in slice {
@@ -182,7 +183,10 @@ pub(crate) fn enc_slice_of_wasi32_uintptr(
 
 macro_rules! dec_enc_scalar {
     ($ty:ident, $dec_byref:ident, $enc_byref:ident) => {
-        pub(crate) fn $dec_byref(memory: &mut [u8], ptr: wasi32::uintptr_t) -> Result<wasi::$ty> {
+        pub(crate) fn $dec_byref(
+            memory: &mut [u8],
+            ptr: wasi32::uintptr_t,
+        ) -> WasiResult<wasi::$ty> {
             dec_int_byref::<wasi::$ty>(memory, ptr)
         }
 
@@ -190,7 +194,7 @@ macro_rules! dec_enc_scalar {
             memory: &mut [u8],
             ptr: wasi32::uintptr_t,
             x: wasi::$ty,
-        ) -> Result<()> {
+        ) -> WasiResult<()> {
             enc_int_byref::<wasi::$ty>(memory, ptr, x)
         }
     };
@@ -200,7 +204,7 @@ pub(crate) fn dec_ciovec_slice(
     memory: &[u8],
     ptr: wasi32::uintptr_t,
     len: wasi32::size_t,
-) -> Result<Vec<host::__wasi_ciovec_t>> {
+) -> WasiResult<Vec<host::__wasi_ciovec_t>> {
     let raw_slice = dec_raw_slice_of::<wasi32::__wasi_ciovec_t>(memory, ptr, len)?;
 
     raw_slice
@@ -220,7 +224,7 @@ pub(crate) fn dec_iovec_slice(
     memory: &[u8],
     ptr: wasi32::uintptr_t,
     len: wasi32::size_t,
-) -> Result<Vec<host::__wasi_iovec_t>> {
+) -> WasiResult<Vec<host::__wasi_iovec_t>> {
     let raw_slice = dec_raw_slice_of::<wasi32::__wasi_iovec_t>(memory, ptr, len)?;
 
     raw_slice
@@ -248,7 +252,7 @@ dec_enc_scalar!(__wasi_linkcount_t, dev_linkcount_byref, enc_linkcount_byref);
 pub(crate) fn dec_filestat_byref(
     memory: &mut [u8],
     filestat_ptr: wasi32::uintptr_t,
-) -> Result<wasi::__wasi_filestat_t> {
+) -> WasiResult<wasi::__wasi_filestat_t> {
     let raw = dec_raw_byref::<wasi::__wasi_filestat_t>(memory, filestat_ptr)?;
 
     Ok(wasi::__wasi_filestat_t {
@@ -267,7 +271,7 @@ pub(crate) fn enc_filestat_byref(
     memory: &mut [u8],
     filestat_ptr: wasi32::uintptr_t,
     filestat: wasi::__wasi_filestat_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     let raw = wasi::__wasi_filestat_t {
         dev: PrimInt::to_le(filestat.dev),
         ino: PrimInt::to_le(filestat.ino),
@@ -285,7 +289,7 @@ pub(crate) fn enc_filestat_byref(
 pub(crate) fn dec_fdstat_byref(
     memory: &mut [u8],
     fdstat_ptr: wasi32::uintptr_t,
-) -> Result<wasi::__wasi_fdstat_t> {
+) -> WasiResult<wasi::__wasi_fdstat_t> {
     let raw = dec_raw_byref::<wasi::__wasi_fdstat_t>(memory, fdstat_ptr)?;
 
     Ok(wasi::__wasi_fdstat_t {
@@ -300,7 +304,7 @@ pub(crate) fn enc_fdstat_byref(
     memory: &mut [u8],
     fdstat_ptr: wasi32::uintptr_t,
     fdstat: wasi::__wasi_fdstat_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     let raw = wasi::__wasi_fdstat_t {
         fs_filetype: PrimInt::to_le(fdstat.fs_filetype),
         fs_flags: PrimInt::to_le(fdstat.fs_flags),
@@ -326,7 +330,7 @@ dec_enc_scalar!(__wasi_oflags_t, dec_oflags_byref, enc_oflags_byref);
 pub(crate) fn dec_prestat_byref(
     memory: &mut [u8],
     prestat_ptr: wasi32::uintptr_t,
-) -> Result<host::__wasi_prestat_t> {
+) -> WasiResult<host::__wasi_prestat_t> {
     let raw = dec_raw_byref::<wasi32::__wasi_prestat_t>(memory, prestat_ptr)?;
 
     match PrimInt::from_le(raw.tag) {
@@ -338,7 +342,7 @@ pub(crate) fn dec_prestat_byref(
                 },
             },
         }),
-        _ => Err(Error::EINVAL),
+        _ => Err(WasiError::EINVAL),
     }
 }
 
@@ -346,7 +350,7 @@ pub(crate) fn enc_prestat_byref(
     memory: &mut [u8],
     prestat_ptr: wasi32::uintptr_t,
     prestat: host::__wasi_prestat_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     let raw = match prestat.tag {
         wasi::__WASI_PREOPENTYPE_DIR => Ok(wasi32::__wasi_prestat_t {
             tag: PrimInt::to_le(wasi::__WASI_PREOPENTYPE_DIR),
@@ -356,7 +360,7 @@ pub(crate) fn enc_prestat_byref(
                 },
             },
         }),
-        _ => Err(Error::EINVAL),
+        _ => Err(WasiError::EINVAL),
     }?;
 
     enc_raw_byref::<wasi32::__wasi_prestat_t>(memory, prestat_ptr, raw)
@@ -377,7 +381,7 @@ pub(crate) fn enc_usize_byref(
     memory: &mut [u8],
     usize_ptr: wasi32::uintptr_t,
     host_usize: usize,
-) -> Result<()> {
+) -> WasiResult<()> {
     enc_int_byref::<wasi32::size_t>(memory, usize_ptr, enc_usize(host_usize))
 }
 
@@ -402,7 +406,7 @@ pub(crate) fn dec_subscriptions(
     memory: &mut [u8],
     input: wasi32::uintptr_t,
     nsubscriptions: wasi32::size_t,
-) -> Result<Vec<wasi::__wasi_subscription_t>> {
+) -> WasiResult<Vec<wasi::__wasi_subscription_t>> {
     let raw_input_slice =
         dec_raw_slice_of::<wasi::__wasi_subscription_t>(memory, input, nsubscriptions)?;
 
@@ -436,14 +440,14 @@ pub(crate) fn dec_subscriptions(
                         }),
                     },
                 },
-                _ => return Err(Error::EINVAL),
+                _ => return Err(WasiError::EINVAL),
             };
             Ok(wasi::__wasi_subscription_t {
                 userdata,
                 u: wasi::__wasi_subscription_u_t { tag, u },
             })
         })
-        .collect::<Result<Vec<_>>>()
+        .collect::<WasiResult<Vec<_>>>()
 }
 
 pub(crate) fn enc_events(
@@ -451,7 +455,7 @@ pub(crate) fn enc_events(
     output: wasi32::uintptr_t,
     nsubscriptions: wasi32::size_t,
     events: Vec<wasi::__wasi_event_t>,
-) -> Result<()> {
+) -> WasiResult<()> {
     let mut raw_output_iter =
         dec_raw_slice_of_mut::<wasi::__wasi_event_t>(memory, output, nsubscriptions)?.into_iter();
 

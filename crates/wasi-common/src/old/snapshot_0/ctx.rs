@@ -1,6 +1,5 @@
 use crate::old::snapshot_0::fdentry::FdEntry;
-use crate::old::snapshot_0::wasi;
-use crate::old::snapshot_0::{Error, Result};
+use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::ffi::{CString, OsString};
@@ -331,30 +330,30 @@ impl WasiCtx {
     }
 
     /// Get an immutable `FdEntry` corresponding to the specified raw WASI `fd`.
-    pub(crate) unsafe fn get_fd_entry(&self, fd: wasi::__wasi_fd_t) -> Result<&FdEntry> {
-        self.fds.get(&fd).ok_or(Error::EBADF)
+    pub(crate) unsafe fn get_fd_entry(&self, fd: wasi::__wasi_fd_t) -> WasiResult<&FdEntry> {
+        self.fds.get(&fd).ok_or(WasiError::EBADF)
     }
 
     /// Get a mutable `FdEntry` corresponding to the specified raw WASI `fd`.
     pub(crate) unsafe fn get_fd_entry_mut(
         &mut self,
         fd: wasi::__wasi_fd_t,
-    ) -> Result<&mut FdEntry> {
-        self.fds.get_mut(&fd).ok_or(Error::EBADF)
+    ) -> WasiResult<&mut FdEntry> {
+        self.fds.get_mut(&fd).ok_or(WasiError::EBADF)
     }
 
     /// Insert the specified `FdEntry` into the `WasiCtx` object.
     ///
     /// The `FdEntry` will automatically get another free raw WASI `fd` assigned. Note that
     /// the two subsequent free raw WASI `fd`s do not have to be stored contiguously.
-    pub(crate) fn insert_fd_entry(&mut self, fe: FdEntry) -> Result<wasi::__wasi_fd_t> {
+    pub(crate) fn insert_fd_entry(&mut self, fe: FdEntry) -> WasiResult<wasi::__wasi_fd_t> {
         // Never insert where stdio handles are expected to be.
         let mut fd = 3;
         while self.fds.contains_key(&fd) {
             if let Some(next_fd) = fd.checked_add(1) {
                 fd = next_fd;
             } else {
-                return Err(Error::EMFILE);
+                return Err(WasiError::EMFILE);
             }
         }
         self.fds.insert(fd, fe);
@@ -372,7 +371,7 @@ impl WasiCtx {
     }
 
     /// Remove `FdEntry` corresponding to the specified raw WASI `fd` from the `WasiCtx` object.
-    pub(crate) fn remove_fd_entry(&mut self, fd: wasi::__wasi_fd_t) -> Result<FdEntry> {
-        self.fds.remove(&fd).ok_or(Error::EBADF)
+    pub(crate) fn remove_fd_entry(&mut self, fd: wasi::__wasi_fd_t) -> WasiResult<FdEntry> {
+        self.fds.remove(&fd).ok_or(WasiError::EBADF)
     }
 }

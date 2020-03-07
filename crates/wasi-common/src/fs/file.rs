@@ -1,5 +1,6 @@
 use crate::fs::Metadata;
-use crate::{host, hostcalls, hostcalls_impl, wasi, Result, WasiCtx};
+use crate::wasi::{self, WasiResult};
+use crate::{host, hostcalls, hostcalls_impl, WasiCtx};
 use std::io;
 
 /// A reference to an open file on the filesystem.
@@ -34,7 +35,7 @@ impl<'ctx> File<'ctx> {
     /// This corresponds to [`std::fs::File::sync_all`].
     ///
     /// [`std::fs::File::sync_all`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.sync_all
-    pub fn sync_all(&self) -> Result<()> {
+    pub fn sync_all(&self) -> WasiResult<()> {
         unsafe {
             hostcalls_impl::fd_sync(self.ctx, &mut [], self.fd)?;
         }
@@ -47,7 +48,7 @@ impl<'ctx> File<'ctx> {
     /// This corresponds to [`std::fs::File::sync_data`].
     ///
     /// [`std::fs::File::sync_data`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.sync_data
-    pub fn sync_data(&self) -> Result<()> {
+    pub fn sync_data(&self) -> WasiResult<()> {
         unsafe {
             hostcalls_impl::fd_datasync(self.ctx, &mut [], self.fd)?;
         }
@@ -60,7 +61,7 @@ impl<'ctx> File<'ctx> {
     /// This corresponds to [`std::fs::File::set_len`].
     ///
     /// [`std::fs::File::set_len`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.set_len
-    pub fn set_len(&self, size: u64) -> Result<()> {
+    pub fn set_len(&self, size: u64) -> WasiResult<()> {
         unsafe {
             hostcalls_impl::fd_filestat_set_size(self.ctx, &mut [], self.fd, size)?;
         }
@@ -72,7 +73,7 @@ impl<'ctx> File<'ctx> {
     /// This corresponds to [`std::fs::File::metadata`].
     ///
     /// [`std::fs::File::metadata`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.metadata
-    pub fn metadata(&self) -> Result<Metadata> {
+    pub fn metadata(&self) -> WasiResult<Metadata> {
         Ok(Metadata {})
     }
 }

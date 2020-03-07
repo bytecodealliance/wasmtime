@@ -4,7 +4,8 @@
 use crate::old::snapshot_0::hostcalls_impl::{ClockEventData, FdEventData};
 use crate::old::snapshot_0::memory::*;
 use crate::old::snapshot_0::sys::host_impl;
-use crate::old::snapshot_0::{wasi, wasi32, Error, Result};
+use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
+use crate::old::snapshot_0::wasi32;
 use cpu_time::{ProcessTime, ThreadTime};
 use lazy_static::lazy_static;
 use std::convert::TryInto;
@@ -17,7 +18,9 @@ lazy_static! {
 
 // Timer resolution on Windows is really hard. We may consider exposing the resolution of the respective
 // timers as an associated function in the future.
-pub(crate) fn clock_res_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__wasi_timestamp_t> {
+pub(crate) fn clock_res_get(
+    clock_id: wasi::__wasi_clockid_t,
+) -> WasiResult<wasi::__wasi_timestamp_t> {
     Ok(match clock_id {
         // This is the best that we can do with std::time::SystemTime.
         // Rust uses GetSystemTimeAsFileTime, which is said to have the resolution of
@@ -61,17 +64,19 @@ pub(crate) fn clock_res_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__
         // The best we can do is to hardcode the value from the docs.
         // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getthreadtimes
         wasi::__WASI_CLOCKID_THREAD_CPUTIME_ID => 100,
-        _ => return Err(Error::EINVAL),
+        _ => return Err(WasiError::EINVAL),
     })
 }
 
-pub(crate) fn clock_time_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__wasi_timestamp_t> {
+pub(crate) fn clock_time_get(
+    clock_id: wasi::__wasi_clockid_t,
+) -> WasiResult<wasi::__wasi_timestamp_t> {
     let duration = match clock_id {
         wasi::__WASI_CLOCKID_REALTIME => get_monotonic_time(),
         wasi::__WASI_CLOCKID_MONOTONIC => get_realtime_time()?,
         wasi::__WASI_CLOCKID_PROCESS_CPUTIME_ID => get_proc_cputime()?,
         wasi::__WASI_CLOCKID_THREAD_CPUTIME_ID => get_thread_cputime()?,
-        _ => return Err(Error::EINVAL),
+        _ => return Err(WasiError::EINVAL),
     };
     duration.as_nanos().try_into().map_err(Into::into)
 }
@@ -80,7 +85,7 @@ pub(crate) fn poll_oneoff(
     timeout: Option<ClockEventData>,
     fd_events: Vec<FdEventData>,
     events: &mut Vec<wasi::__wasi_event_t>,
-) -> Result<Vec<wasi::__wasi_event_t>> {
+) -> WasiResult<Vec<wasi::__wasi_event_t>> {
     unimplemented!("poll_oneoff")
 }
 
@@ -94,17 +99,17 @@ fn get_monotonic_time() -> Duration {
     START_MONOTONIC.elapsed()
 }
 
-fn get_realtime_time() -> Result<Duration> {
+fn get_realtime_time() -> WasiResult<Duration> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|_| Error::EFAULT)
+        .map_err(|_| WasiError::EFAULT)
 }
 
-fn get_proc_cputime() -> Result<Duration> {
+fn get_proc_cputime() -> WasiResult<Duration> {
     Ok(ProcessTime::try_now()?.as_duration())
 }
 
-fn get_thread_cputime() -> Result<Duration> {
+fn get_thread_cputime() -> WasiResult<Duration> {
     Ok(ThreadTime::try_now()?.as_duration())
 }
 

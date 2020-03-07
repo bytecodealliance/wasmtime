@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
 use crate::sys::host_impl;
-use crate::{wasi, Result};
+use crate::wasi::{self, WasiResult};
 use std::fs::File;
 use yanix::file::OFlag;
 
@@ -36,7 +36,7 @@ pub(crate) fn path_open_rights(
     (needed_base, needed_inheriting)
 }
 
-pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
+pub(crate) fn openat(dirfd: &File, path: &str) -> WasiResult<File> {
     use std::os::unix::prelude::{AsRawFd, FromRawFd};
     use yanix::file::{openat, Mode};
 
@@ -54,7 +54,7 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
     .map_err(Into::into)
 }
 
-pub(crate) fn readlinkat(dirfd: &File, path: &str) -> Result<String> {
+pub(crate) fn readlinkat(dirfd: &File, path: &str) -> WasiResult<String> {
     use std::os::unix::prelude::AsRawFd;
     use yanix::file::readlinkat;
 

@@ -2,7 +2,7 @@ use crate::old::snapshot_0::sys::dev_null;
 use crate::old::snapshot_0::sys::fdentry_impl::{
     descriptor_as_oshandle, determine_type_and_access_rights, OsHandle,
 };
-use crate::old::snapshot_0::{wasi, Error, Result};
+use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
@@ -21,18 +21,18 @@ impl Descriptor {
     /// Return a reference to the `OsHandle` treating it as an actual file/dir, and
     /// allowing operations which require an actual file and not just a stream or
     /// socket file descriptor.
-    pub(crate) fn as_file(&self) -> Result<&OsHandle> {
+    pub(crate) fn as_file(&self) -> WasiResult<&OsHandle> {
         match self {
             Self::OsHandle(file) => Ok(file),
-            _ => Err(Error::EBADF),
+            _ => Err(WasiError::EBADF),
         }
     }
 
     /// Like `as_file`, but return a mutable reference.
-    pub(crate) fn as_file_mut(&mut self) -> Result<&mut OsHandle> {
+    pub(crate) fn as_file_mut(&mut self) -> WasiResult<&mut OsHandle> {
         match self {
             Self::OsHandle(file) => Ok(file),
-            _ => Err(Error::EBADF),
+            _ => Err(WasiError::EBADF),
         }
     }
 
@@ -127,7 +127,7 @@ impl FdEntry {
         &self,
         rights_base: wasi::__wasi_rights_t,
         rights_inheriting: wasi::__wasi_rights_t,
-    ) -> Result<&Descriptor> {
+    ) -> WasiResult<&Descriptor> {
         self.validate_rights(rights_base, rights_inheriting)?;
         Ok(&self.descriptor)
     }
@@ -143,7 +143,7 @@ impl FdEntry {
         &mut self,
         rights_base: wasi::__wasi_rights_t,
         rights_inheriting: wasi::__wasi_rights_t,
-    ) -> Result<&mut Descriptor> {
+    ) -> WasiResult<&mut Descriptor> {
         self.validate_rights(rights_base, rights_inheriting)?;
         Ok(&mut self.descriptor)
     }
@@ -157,10 +157,10 @@ impl FdEntry {
         &self,
         rights_base: wasi::__wasi_rights_t,
         rights_inheriting: wasi::__wasi_rights_t,
-    ) -> Result<()> {
+    ) -> WasiResult<()> {
         if !self.rights_base & rights_base != 0 || !self.rights_inheriting & rights_inheriting != 0
         {
-            Err(Error::ENOTCAPABLE)
+            Err(WasiError::ENOTCAPABLE)
         } else {
             Ok(())
         }

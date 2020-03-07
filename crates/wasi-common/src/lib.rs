@@ -22,7 +22,6 @@
 )]
 
 mod ctx;
-mod error;
 mod fdentry;
 pub mod fs;
 mod helpers;
@@ -43,6 +42,3 @@ pub mod hostcalls {
 
 pub use ctx::{WasiCtx, WasiCtxBuilder};
 pub use sys::preopen_dir;
-
-pub use error::Error;
-pub(crate) use error::Result;

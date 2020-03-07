@@ -1,9 +1,9 @@
 use crate::fdentry::Descriptor;
 use crate::hostcalls_impl::PathGet;
-use crate::Result;
+use crate::wasi::WasiResult;
 use std::os::unix::prelude::AsRawFd;
 
-pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
+pub(crate) fn path_unlink_file(resolved: PathGet) -> WasiResult<()> {
     use yanix::file::{unlinkat, AtFlag};
     unsafe {
         unlinkat(
@@ -15,7 +15,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
     .map_err(Into::into)
 }
 
-pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
+pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> WasiResult<()> {
     use yanix::file::symlinkat;
 
     log::debug!("path_symlink old_path = {:?}", old_path);
@@ -25,7 +25,7 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
         .map_err(Into::into)
 }
 
-pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
+pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> WasiResult<()> {
     use yanix::file::renameat;
     match (resolved_old.dirfd(), resolved_new.dirfd()) {
         (Descriptor::OsHandle(resolved_old_file), Descriptor::OsHandle(resolved_new_file)) => {
@@ -47,10 +47,10 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
 
 pub(crate) mod fd_readdir_impl {
     use crate::sys::fdentry_impl::OsHandle;
-    use crate::Result;
+    use crate::wasi::WasiResult;
     use yanix::dir::Dir;
 
-    pub(crate) fn get_dir_from_os_handle(os_handle: &mut OsHandle) -> Result<Box<Dir>> {
+    pub(crate) fn get_dir_from_os_handle(os_handle: &mut OsHandle) -> WasiResult<Box<Dir>> {
         // We need to duplicate the fd, because `opendir(3)`:
         //     After a successful call to fdopendir(), fd is used internally by the implementation,
         //     and should not otherwise be used by the application.
