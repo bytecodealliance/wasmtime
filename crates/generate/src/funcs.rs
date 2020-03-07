@@ -11,22 +11,10 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
     let ctx_type = names.ctx_type();
     let coretype = func.core_type();
 
-    let params = coretype.args.iter().map(|arg| match arg.signifies {
-        witx::CoreParamSignifies::Value(atom) => {
-            let atom = names.atom_type(atom);
-            let name = names.func_param(&arg.param.name);
-            quote!(#name : #atom)
-        }
-        witx::CoreParamSignifies::PointerTo => {
-            let atom = names.atom_type(witx::AtomType::I32);
-            let name = names.func_ptr_binding(&arg.param.name);
-            quote!(#name: #atom)
-        }
-        witx::CoreParamSignifies::LengthOf => {
-            let atom = names.atom_type(witx::AtomType::I32);
-            let name = names.func_len_binding(&arg.param.name);
-            quote!(#name: #atom)
-        }
+    let params = coretype.args.iter().map(|arg| {
+        let name = names.func_core_arg(arg);
+        let atom = names.atom_type(arg.repr());
+        quote!(#name : #atom)
     });
 
     let abi_args = quote!(

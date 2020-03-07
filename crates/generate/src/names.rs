@@ -12,8 +12,10 @@ pub struct Names {
 }
 
 impl Names {
-    pub fn new(config: Config) -> Names {
-        Names { config }
+    pub fn new(config: &Config) -> Names {
+        Names {
+            config: config.clone(),
+        }
     }
     pub fn ctx_type(&self) -> Ident {
         self.config.ctx.name.clone()
@@ -115,6 +117,14 @@ impl Names {
             format_ident!("in_")
         } else {
             format_ident!("{}", id.as_str().to_snake_case())
+        }
+    }
+
+    pub fn func_core_arg(&self, arg: &witx::CoreParamType) -> Ident {
+        match arg.signifies {
+            witx::CoreParamSignifies::Value { .. } => self.func_param(&arg.param.name),
+            witx::CoreParamSignifies::PointerTo => self.func_ptr_binding(&arg.param.name),
+            witx::CoreParamSignifies::LengthOf => self.func_len_binding(&arg.param.name),
         }
     }
 

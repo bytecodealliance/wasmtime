@@ -14,9 +14,7 @@ pub use module_trait::define_module_trait;
 pub use names::Names;
 pub use types::define_datatype;
 
-pub fn generate(config: Config) -> TokenStream {
-    let doc = witx::load(&config.witx.paths).expect("loading witx");
-
+pub fn generate(doc: &witx::Document, config: &Config) -> TokenStream {
     let names = Names::new(config); // TODO parse the names from the invocation of the macro, or from a file?
 
     let types = doc.typenames().map(|t| define_datatype(&names, &t));
