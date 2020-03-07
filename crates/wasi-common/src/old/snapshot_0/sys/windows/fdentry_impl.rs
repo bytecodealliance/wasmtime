@@ -1,5 +1,5 @@
 use crate::old::snapshot_0::fdentry::{Descriptor, OsHandleRef};
-use crate::old::snapshot_0::{wasi, Error, Result};
+use crate::old::snapshot_0::wasi;
 use std::fs::File;
 use std::io;
 use std::mem::ManuallyDrop;
@@ -57,7 +57,7 @@ pub(crate) fn descriptor_as_oshandle<'lifetime>(
 /// This function is unsafe because it operates on a raw file handle.
 pub(crate) unsafe fn determine_type_and_access_rights<Handle: AsRawHandle>(
     handle: &Handle,
-) -> Result<(
+) -> io::Result<(
     wasi::__wasi_filetype_t,
     wasi::__wasi_rights_t,
     wasi::__wasi_rights_t,
@@ -88,7 +88,7 @@ pub(crate) unsafe fn determine_type_and_access_rights<Handle: AsRawHandle>(
 /// This function is unsafe because it operates on a raw file handle.
 pub(crate) unsafe fn determine_type_rights<Handle: AsRawHandle>(
     handle: &Handle,
-) -> Result<(
+) -> io::Result<(
     wasi::__wasi_filetype_t,
     wasi::__wasi_rights_t,
     wasi::__wasi_rights_t,
@@ -106,7 +106,7 @@ pub(crate) unsafe fn determine_type_rights<Handle: AsRawHandle>(
         } else if file_type.is_disk() {
             // disk file: file, dir or disk device
             let file = std::mem::ManuallyDrop::new(File::from_raw_handle(handle.as_raw_handle()));
-            let meta = file.metadata().map_err(|_| Error::EINVAL)?;
+            let meta = file.metadata()?;
             if meta.is_dir() {
                 (
                     wasi::__WASI_FILETYPE_DIRECTORY,
@@ -120,7 +120,7 @@ pub(crate) unsafe fn determine_type_rights<Handle: AsRawHandle>(
                     wasi::RIGHTS_REGULAR_FILE_INHERITING,
                 )
             } else {
-                return Err(Error::EINVAL);
+                return Err(io::Error::from_raw_os_error(libc::EINVAL));
             }
         } else if file_type.is_pipe() {
             // pipe object: socket, named pipe or anonymous pipe
@@ -131,7 +131,7 @@ pub(crate) unsafe fn determine_type_rights<Handle: AsRawHandle>(
                 wasi::RIGHTS_SOCKET_INHERITING,
             )
         } else {
-            return Err(Error::EINVAL);
+            return Err(io::Error::from_raw_os_error(libc::EINVAL));
         }
     };
     Ok((file_type, rights_base, rights_inheriting))

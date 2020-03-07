@@ -100,7 +100,7 @@ pub(crate) struct FdEntry {
 }
 
 impl FdEntry {
-    pub(crate) fn from(file: Descriptor) -> Result<Self> {
+    pub(crate) fn from(file: Descriptor) -> io::Result<Self> {
         match file {
             Descriptor::OsHandle(handle) => unsafe { determine_type_and_access_rights(&handle) }
                 .map(|(file_type, rights_base, rights_inheriting)| Self {
@@ -129,7 +129,7 @@ impl FdEntry {
         }
     }
 
-    pub(crate) fn duplicate_stdin() -> Result<Self> {
+    pub(crate) fn duplicate_stdin() -> io::Result<Self> {
         unsafe { determine_type_and_access_rights(&io::stdin()) }.map(
             |(file_type, rights_base, rights_inheriting)| Self {
                 file_type,
@@ -141,7 +141,7 @@ impl FdEntry {
         )
     }
 
-    pub(crate) fn duplicate_stdout() -> Result<Self> {
+    pub(crate) fn duplicate_stdout() -> io::Result<Self> {
         unsafe { determine_type_and_access_rights(&io::stdout()) }.map(
             |(file_type, rights_base, rights_inheriting)| Self {
                 file_type,
@@ -153,7 +153,7 @@ impl FdEntry {
         )
     }
 
-    pub(crate) fn duplicate_stderr() -> Result<Self> {
+    pub(crate) fn duplicate_stderr() -> io::Result<Self> {
         unsafe { determine_type_and_access_rights(&io::stderr()) }.map(
             |(file_type, rights_base, rights_inheriting)| Self {
                 file_type,
@@ -165,7 +165,7 @@ impl FdEntry {
         )
     }
 
-    pub(crate) fn null() -> Result<Self> {
+    pub(crate) fn null() -> io::Result<Self> {
         Self::from(OsHandle::from(dev_null()?).into())
     }
 
