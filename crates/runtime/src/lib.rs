@@ -306,7 +306,7 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
         T::read(self)
     }
 
-    /// Safely write a valud to this pointer.
+    /// Safely write a value to this pointer.
     ///
     /// This method, like [`GuestPtr::read`], is pretty crucial for the safe
     /// operation of this crate. All the same reasons apply though for why this
@@ -341,6 +341,15 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
             None => return Err(GuestError::PtrOverflow),
         };
         Ok(GuestPtr::new(self.mem, offset))
+    }
+
+    /// Returns a `GuestPtr` for an array of `T`s using this pointer as the
+    /// base.
+    pub fn as_array(&self, elems: u32) -> GuestPtr<'a, [T]>
+    where
+        T: GuestType<'a> + Pointee<Pointer = u32>,
+    {
+        GuestPtr::new(self.mem, (self.pointer, elems))
     }
 }
 

@@ -1,4 +1,4 @@
-use wiggle_runtime::{GuestError, GuestErrorType, GuestPtr};
+use wiggle_runtime::{GuestBorrows, GuestError, GuestErrorType, GuestPtr};
 use wiggle_test::WasiCtx;
 
 wiggle::from_witx!({
@@ -120,9 +120,27 @@ impl crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     fn fd_pread(
         &self,
         _fd: types::Fd,
-        _iovs: &types::IovecArray<'_>,
+        iovs: &types::IovecArray<'_>,
         _offset: types::Filesize,
     ) -> Result<types::Size> {
+        // This is not functional code, but the type annotations demonstrate
+        // that we can use the wiggle API to create the datastructures we want
+        // for efficient implementation of this function elsewhere.
+
+        let mut bc = GuestBorrows::new();
+        let mut slices: Vec<&'_ mut [u8]> = Vec::new();
+        for iov_ptr in iovs.iter() {
+            let iov: types::Iovec = iov_ptr
+                .expect("iovec element pointer is valid")
+                .read()
+                .expect("read iovec element");
+            let base: GuestPtr<u8> = iov.buf;
+            let len: u32 = iov.buf_len;
+            let buf: GuestPtr<[u8]> = base.as_array(len);
+            let slice = buf.as_raw(&mut bc).expect("borrow slice from iovec");
+            slices.push(unsafe { &mut *slice });
+        }
+        println!("iovec slices: {:?}", slices);
         unimplemented!("fd_pread")
     }
 
