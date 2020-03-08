@@ -16,9 +16,7 @@ cfg_if::cfg_if! {
             Ok(
                 libc::timespec {
                     tv_sec: ft.seconds(),
-                    // `as` cast is fine here since `libc::timespec::tv_nsec` is `i64`
-                    // and `ft.nanoseconds()` is `u32` so no possibility for an overflow
-                    tv_nsec: ft.nanoseconds() as _,
+                    tv_nsec: i64::from(ft.nanoseconds()),
                 }
             )
         }
