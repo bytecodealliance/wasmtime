@@ -3,7 +3,7 @@ name = "cranelift-native"
 version = "0.59.0"
 authors = ["The Cranelift Project Developers"]
 description = "Support for targeting the host with Cranelift"
-repository = "https://github.com/bytecodealliance/cranelift"
+repository = "https://github.com/bytecodealliance/wasmtime"
 categories = ["no-std"]
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
@@ -26,4 +26,3 @@ core = ["cranelift-codegen/core", "raw-cpuid/nightly"]
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "bytecodealliance/cranelift" }

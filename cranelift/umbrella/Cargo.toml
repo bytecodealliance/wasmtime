@@ -5,7 +5,7 @@ version = "0.59.0"
 description = "Umbrella for commonly-used cranelift crates"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift"
-repository = "https://github.com/bytecodealliance/cranelift"
+repository = "https://github.com/bytecodealliance/wasmtime"
 categories = ["no-std"]
 readme = "README.md"
 keywords = ["compile", "compiler", "jit"]
@@ -22,4 +22,3 @@ core = ["cranelift-codegen/core", "cranelift-frontend/core"]
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "bytecodealliance/cranelift" }

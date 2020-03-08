@@ -57,14 +57,14 @@ though not necessarily Cranelift-specific or even compiler-specific
 experience. [E-compiler-easy] marks issues good for beginners who have
 some familiarity with compilers, or are interested in gaining some :-).
 
-See also the [full list of labels].
+See also the [full list of Cranelift labels].
 
 Also, we encourage people to just look around and find things they're
 interested in. This a good time to get involved, as there aren't a lot of
 things set in stone yet.
 
 [Rust's issue tags]: https://github.com/rust-lang/rust/blob/master/CONTRIBUTING.md#issue-triage
-[E-easy]: https://github.com/bytecodealliance/cranelift/labels/E-easy
-[E-rust]: https://github.com/bytecodealliance/cranelift/labels/E-rust
-[E-compiler-easy]: https://github.com/bytecodealliance/cranelift/labels/E-compiler-easy
-[full list of labels]: https://github.com/bytecodealliance/cranelift/labels
+[E-easy]: https://github.com/bytecodealliance/wasmtime/labels/cranelift%3AE-easy
+[E-rust]: https://github.com/bytecodealliance/wasmtime/labels/cranelift%3AE-rust
+[E-compiler-easy]: https://github.com/bytecodealliance/wasmtime/labels/cranelift%3AE-compiler-easy
+[full list of Cranelift labels]: https://github.com/bytecodealliance/wasmtime/labels?q=cranelift

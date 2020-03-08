@@ -5,7 +5,7 @@ version = "0.59.0"
 description = "Binaries for testing the Cranelift libraries"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://github.com/bytecodealliance/wasmtime/blob/master/cranelift/docs/index.md"
-repository = "https://github.com/bytecodealliance/cranelift"
+repository = "https://github.com/bytecodealliance/wasmtime"
 publish = false
 edition = "2018"
 

@@ -28,7 +28,7 @@ fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
         .strategy(strategy)?
         .cranelift_debug_verifier(true);
 
-    // FIXME: https://github.com/bytecodealliance/cranelift/issues/1409
+    // FIXME: https://github.com/bytecodealliance/wasmtime/issues/1186
     if simd {
         cfg.cranelift_opt_level(OptLevel::None);
     }

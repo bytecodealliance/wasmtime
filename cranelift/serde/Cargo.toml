@@ -3,7 +3,7 @@ name = "cranelift-serde"
 version = "0.59.0"
 authors = ["The Cranelift Project Developers"]
 description = "Serializer/Deserializer for Cranelift IR"
-repository = "https://github.com/bytecodealliance/cranelift"
+repository = "https://github.com/bytecodealliance/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 keywords = ["webassembly", "serde"]
@@ -23,4 +23,3 @@ cranelift-reader = { path = "../reader", version = "0.59.0" }
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "bytecodealliance/cranelift" }

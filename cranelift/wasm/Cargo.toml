@@ -3,7 +3,7 @@ name = "cranelift-wasm"
 version = "0.59.0"
 authors = ["The Cranelift Project Developers"]
 description = "Translator from WebAssembly to Cranelift IR"
-repository = "https://github.com/bytecodealliance/cranelift"
+repository = "https://github.com/bytecodealliance/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 categories = ["no-std", "wasm"]
 readme = "README.md"
@@ -32,4 +32,3 @@ enable-serde = ["serde"]
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "bytecodealliance/cranelift" }
