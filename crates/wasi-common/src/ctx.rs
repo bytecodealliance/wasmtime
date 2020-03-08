@@ -4,7 +4,7 @@ use crate::virtfs::{VirtualDir, VirtualDirEntry};
 use crate::wasi::{self, WasiError, WasiResult};
 use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::ffi::{CString, OsString};
+use std::ffi::{self, CString, OsString};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::{env, io, string};
@@ -24,15 +24,15 @@ pub enum WasiCtxBuilderError {
     /// This error is expected to only occur on Windows hosts.
     #[error("provided sequence is not valid UTF-16: {0}")]
     InvalidUtf16(#[from] string::FromUtf16Error),
+    /// Provided sequence of bytes contained an unexpected NUL byte.
+    #[error("provided sequence contained an unexpected NUL byte")]
+    UnexpectedNul(#[from] ffi::NulError),
     /// Provided `File` is not a directory.
-    #[error("provided file is not a directory")]
-    NotADirectory,
+    #[error("preopened directory path {} is not a directory", .0.display())]
+    NotADirectory(PathBuf),
     /// `WasiCtx` has too many opened files.
     #[error("context object has too many opened files")]
     TooManyFilesOpen,
-    /// There were insufficient capabilities to perform the operation.
-    #[error("insufficient capabilities to perform operation")]
-    InsufficientCapabilities,
 }
 
 type WasiCtxBuilderResult<T> = std::result::Result<T, WasiCtxBuilderError>;
@@ -95,7 +95,7 @@ impl PendingCString {
     /// Create a `CString` containing valid UTF-8.
     fn into_utf8_cstring(self) -> WasiCtxBuilderResult<CString> {
         let s = self.into_string()?;
-        let s = CString::new(s).map_err(io::Error::from)?;
+        let s = CString::new(s)?;
         Ok(s)
     }
 }
@@ -331,7 +331,7 @@ impl WasiCtxBuilder {
                         pair.push_str(v.as_str());
                         // We have valid UTF-8, but the keys and values have not yet been checked
                         // for NULs, so we do a final check here.
-                        let s = CString::new(pair).map_err(io::Error::from)?;
+                        let s = CString::new(pair)?;
                         Ok(s)
                     })
                 })
@@ -365,12 +365,12 @@ impl WasiCtxBuilder {
             match &dir {
                 Descriptor::OsHandle(handle) => {
                     if !handle.metadata()?.is_dir() {
-                        return Err(WasiCtxBuilderError::NotADirectory);
+                        return Err(WasiCtxBuilderError::NotADirectory(guest_path));
                     }
                 }
                 Descriptor::VirtualFile(virt) => {
                     if virt.get_file_type() != wasi::__WASI_FILETYPE_DIRECTORY {
-                        return Err(WasiCtxBuilderError::NotADirectory);
+                        return Err(WasiCtxBuilderError::NotADirectory(guest_path));
                     }
                 }
                 Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
