@@ -3,7 +3,7 @@ name = "cranelift-simplejit"
 version = "0.59.0"
 authors = ["The Cranelift Project Developers"]
 description = "A simple JIT library backed by Cranelift"
-repository = "https://github.com/bytecodealliance/cranelift"
+repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/cranelift-simplejit"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
@@ -38,4 +38,3 @@ cranelift-entity = { path = "../entity", version = "0.59.0" }
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "bytecodealliance/cranelift" }

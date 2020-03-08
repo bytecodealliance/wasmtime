@@ -5,7 +5,7 @@ version = "0.59.0"
 description = "A forest of B+-trees"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-bforest"
-repository = "https://github.com/bytecodealliance/cranelift"
+repository = "https://github.com/bytecodealliance/wasmtime"
 categories = ["no-std"]
 readme = "README.md"
 keywords = ["btree", "forest", "set", "map"]
@@ -16,4 +16,3 @@ cranelift-entity = { path = "../entity", version = "0.59.0", default-features = 
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "bytecodealliance/cranelift" }

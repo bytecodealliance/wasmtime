@@ -1206,7 +1206,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         } => {
             // TODO: For spec compliance, this is initially implemented as a combination of `load +
             // splat` but could be implemented eventually as a single instruction (`load_splat`).
-            // See https://github.com/bytecodealliance/cranelift/issues/1348.
+            // See https://github.com/bytecodealliance/wasmtime/issues/1175.
             translate_load(
                 *offset,
                 ir::Opcode::Load,

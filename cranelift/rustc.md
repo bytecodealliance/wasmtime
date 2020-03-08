@@ -22,7 +22,7 @@ There's plenty of work to do to achieve these goals, and if we achieve
 them, we'll have enabled a Rust compiler written entirely in Rust, and
 enabled faster Rust compile times for important use cases.
 
-See [issues tagged "rustc"](https://github.com/bytecodealliance/cranelift/labels/goal%3Arustc)
+See [issues tagged "rustc"](https://github.com/bytecodealliance/wasmtime/labels/cranelift%3Agoal%3Arustc)
 for a list of some of the things that will be needed.
 
 With all that said, there is a potential goal beyond that, which is to

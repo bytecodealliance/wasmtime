@@ -3,7 +3,7 @@ name = "cranelift-faerie"
 version = "0.59.0"
 authors = ["The Cranelift Project Developers"]
 description = "Emit Cranelift output to native object files with Faerie"
-repository = "https://github.com/bytecodealliance/cranelift"
+repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/cranelift-faerie"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
@@ -24,4 +24,3 @@ features = ["std"]
 
 [badges]
 maintenance = { status = "experimental" }
-travis-ci = { repository = "bytecodealliance/cranelift" }
