@@ -6,7 +6,7 @@ to build WebAssembly-targeted versions of the library parts, and it can
 be tricky to get all the CMake invocations lined up properly.
 
 To make things easier, we provide
-[prebuilt packages](https://github.com/CraneStation/wasi-sdk/releases)
+[prebuilt packages](https://github.com/WebAssembly/wasi-sdk/releases)
 that provide builds of Clang and sysroot libraries.
 
 WASI doesn't yet support `setjmp`/`longjmp` or C++ exceptions, as it is

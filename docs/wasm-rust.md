@@ -191,14 +191,14 @@ and we have our new wasm binary!
 We can then test out support for this with the CLI:
 
 ```sh
-$ wasmtime --invoke greet ./target/wasm32-wasi/release/hello_world.wasm "wasmtime CLI"
+$ wasmtime --invoke greet ./target/wasm32-wasi/release/hello_world.wasm "Wasmtime CLI"
 warning: using `--invoke` with a function that takes arguments is experimental and may break in the future
 warning: using `--invoke` with a function that returns values is experimental and may break in the future
-Hello, wasmtime CLI!
+Hello, Wasmtime CLI!
 ```
 
 Here we can see some experimental warnings, but we got our error message printed
-out! The first CLI parameter, `"wasmtime CLI"`, was passed as the first argument
+out! The first CLI parameter, `"Wasmtime CLI"`, was passed as the first argument
 of the `greet` function. The resulting string was then printed out to the
 console.
 

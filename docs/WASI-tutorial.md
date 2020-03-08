@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
 
 We'll put this source in a file called `demo.c`.
 
-The [wasi-sdk](https://github.com/CraneStation/wasi-sdk/releases) provides a clang
+The [wasi-sdk](https://github.com/WebAssembly/wasi-sdk/releases) provides a clang
 which is configured to target WASI and use the WASI sysroot by default if you put the extracted tree into `/`, so we can
 compile our program like so:
 

@@ -134,7 +134,7 @@ new tests.
 
 ### Adding WASI Integration Tests
 
-When you have a WASI-specific test program that you'd like to include as a 
+When you have a WASI-specific test program that you'd like to include as a
 test case to run against our WASI implementation, you can add it to our
 `test-programs` crate. In particular, you should drop a main-style Rust source
 file into `crates/test-programs/wasi-tests/src/bin/some_new_test.rs` with a
