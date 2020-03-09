@@ -1027,6 +1027,7 @@ impl CallAdapter {
                 let val = pop(stack, ValType::I32).unwrap_i32();
                 stack.push(Val::S8(val as i8));
             }
+
             I32ToS8X => {
                 let val = pop(stack, ValType::I32).unwrap_i32();
                 match val.try_into() {
@@ -1034,10 +1035,12 @@ impl CallAdapter {
                     Err(_) => return Err(Trap::new("integer overflow")),
                 }
             }
+
             I32ToU8 => {
                 let val = pop(stack, ValType::I32).unwrap_i32();
                 stack.push(Val::U8(val as u8));
             }
+
             i => return Err(Trap::new(format!("unimplemented instruction {:?}", i))),
         }
 
