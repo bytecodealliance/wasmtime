@@ -459,6 +459,11 @@ pub unsafe extern "C" fn wasm_engine_delete(engine: *mut wasm_engine_t) {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn wasm_config_delete(config: *mut wasm_config_t) {
+    let _ = Box::from_raw(config);
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn wasm_config_new() -> *mut wasm_config_t {
     let config = Box::new(wasm_config_t {
         config: Config::default(),
@@ -481,6 +486,11 @@ pub unsafe extern "C" fn wasm_engine_new_with_config(c: *mut wasm_config_t) -> *
         engine: HostRef::new(Engine::new(&config)),
     });
     Box::into_raw(engine)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_extern_delete(e: *mut wasm_extern_t) {
+    let _ = Box::from_raw(e);
 }
 
 #[no_mangle]
@@ -1058,6 +1068,11 @@ pub unsafe extern "C" fn wasm_trap_trace(_trap: *const wasm_trap_t, out: *mut wa
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn wasm_importtype_delete(ty: *mut wasm_importtype_t) {
+    let _ = Box::from_raw(ty);
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn wasm_importtype_module(
     it: *const wasm_importtype_t,
 ) -> *const wasm_name_t {
@@ -1094,6 +1109,11 @@ pub unsafe extern "C" fn wasm_importtype_type(
 #[no_mangle]
 pub unsafe extern "C" fn wasm_importtype_vec_delete(vec: *mut wasm_importtype_vec_t) {
     (*vec).uninitialize();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_exporttype_delete(ty: *mut wasm_exporttype_t) {
+    let _ = Box::from_raw(ty);
 }
 
 #[no_mangle]
