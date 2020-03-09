@@ -20,5 +20,5 @@ $ wasmtime --invoke _start foo.wasm
 ```
 
 For more information be sure to check out [how to install the
-CLI](cli-install.md) as well as [the list of options you can
-pass](cli-options.md).
+CLI](cli-install.md), [the list of options you can
+pass](cli-options.md), and [how to enable logging](cli-logging.md).
