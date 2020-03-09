@@ -225,8 +225,8 @@ pub(crate) fn path_filestat_set_times(
     st_mtim: wasi::__wasi_timestamp_t,
     fst_flags: wasi::__wasi_fstflags_t,
 ) -> Result<()> {
-    use super::super::filetime::*;
     use std::time::{Duration, UNIX_EPOCH};
+    use yanix::filetime::*;
 
     let set_atim = fst_flags & wasi::__WASI_FSTFLAGS_ATIM != 0;
     let set_atim_now = fst_flags & wasi::__WASI_FSTFLAGS_ATIM_NOW != 0;

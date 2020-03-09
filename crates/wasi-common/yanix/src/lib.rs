@@ -13,6 +13,7 @@ pub mod clock;
 pub mod dir;
 pub mod fcntl;
 pub mod file;
+pub mod filetime;
 pub mod poll;
 pub mod socket;
 

@@ -1,8 +1,9 @@
-//! This internal module consists of helper types and functions for dealing
+//! This module consists of helper types and functions for dealing
 //! with setting the file times specific to Linux.
-use crate::{sys::unix::filetime::FileTime, Result};
+use crate::filetime::FileTime;
+use crate::from_success_code;
 use std::fs::File;
-use std::io;
+use std::io::Result;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
 pub(crate) const UTIME_NOW: i64 = 1_073_741_823;
@@ -14,14 +15,14 @@ pub(crate) const UTIME_OMIT: i64 = 1_073_741_822;
 /// The original implementation can be found here: [filetime::unix::linux::set_times]
 ///
 /// [filetime::unix::linux::set_times]: https://github.com/alexcrichton/filetime/blob/master/src/unix/linux.rs#L64
-pub(crate) fn utimensat(
+pub fn utimensat(
     dirfd: &File,
     path: &str,
     atime: FileTime,
     mtime: FileTime,
     symlink_nofollow: bool,
 ) -> Result<()> {
-    use crate::sys::unix::filetime::to_timespec;
+    use crate::filetime::to_timespec;
     use std::ffi::CString;
     use std::os::unix::prelude::*;
 
@@ -37,7 +38,7 @@ pub(crate) fn utimensat(
     if !INVALID.load(Relaxed) {
         let p = CString::new(path.as_bytes())?;
         let times = [to_timespec(&atime)?, to_timespec(&mtime)?];
-        let rc = unsafe {
+        let res = from_success_code(unsafe {
             libc::syscall(
                 libc::SYS_utimensat,
                 dirfd.as_raw_fd(),
@@ -45,16 +46,15 @@ pub(crate) fn utimensat(
                 times.as_ptr(),
                 flags,
             )
+        });
+        let err = match res {
+            Ok(()) => return Ok(()),
+            Err(e) => e,
         };
-        if rc == 0 {
-            return Ok(());
-        }
-        let err = io::Error::last_os_error();
-        if err.raw_os_error() == Some(libc::ENOSYS) {
+        if err.raw_os_error().unwrap() == libc::ENOSYS {
             INVALID.store(true, Relaxed);
-        } else {
-            return Err(err.into());
         }
+        return Err(err);
     }
 
     super::utimesat::utimesat(dirfd, path, atime, mtime, symlink_nofollow)

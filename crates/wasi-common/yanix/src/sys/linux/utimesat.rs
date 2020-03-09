@@ -1,12 +1,13 @@
-use crate::old::snapshot_0::sys::unix::filetime::FileTime;
-use crate::old::snapshot_0::Result;
-use std::{fs, io};
+use crate::filetime::FileTime;
+use crate::from_success_code;
+use std::fs;
+use std::io::Result;
 
 /// Combines `openat` with `utimes` to emulate `utimensat` on platforms where it is
 /// not available. The logic for setting file times is based on [filetime::unix::set_file_handles_times].
 ///
 /// [filetime::unix::set_file_handles_times]: https://github.com/alexcrichton/filetime/blob/master/src/unix/utimes.rs#L24
-pub(crate) fn utimesat(
+pub fn utimesat(
     dirfd: &fs::File,
     path: &str,
     atime: FileTime,
@@ -26,12 +27,7 @@ pub(crate) fn utimesat(
     let f = unsafe { fs::File::from_raw_fd(fd) };
     let (atime, mtime) = get_times(atime, mtime, || f.metadata().map_err(Into::into))?;
     let times = [to_timeval(atime), to_timeval(mtime)];
-    let rc = unsafe { libc::futimes(f.as_raw_fd(), times.as_ptr()) };
-    if rc == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error().into())
-    }
+    from_success_code(unsafe { libc::futimes(f.as_raw_fd(), times.as_ptr()) })
 }
 
 /// Converts `filetime::FileTime` to `libc::timeval`. This function was taken directly from

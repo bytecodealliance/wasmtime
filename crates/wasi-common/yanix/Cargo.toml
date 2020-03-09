@@ -12,6 +12,7 @@ log = "0.4"
 libc = { version = "0.2", features = ["extra_traits"] }
 bitflags = "1.2"
 cfg-if = "0.1.9"
+filetime = "0.2.7"
 
 [badges]
 maintenance = { status = "actively-developed" }

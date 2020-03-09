@@ -4,6 +4,7 @@ pub(crate) mod dir;
 pub(crate) mod fadvise;
 #[path = "../linux/file.rs"]
 pub(crate) mod file;
+pub(crate) mod filetime;
 
 use crate::dir::SeekLoc;
 use std::convert::TryInto;
