@@ -5,8 +5,9 @@ use crate::WASM_MAX_PAGES;
 use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{
-    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex,
-    FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
+    DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
+    ElemIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table,
+    TableIndex,
 };
 use indexmap::IndexMap;
 use more_asserts::assert_ge;
@@ -168,6 +169,9 @@ pub struct Module {
     /// WebAssembly passive elements.
     pub passive_elements: HashMap<ElemIndex, Box<[FuncIndex]>>,
 
+    /// WebAssembly passive data segments.
+    pub passive_data: HashMap<DataIndex, Box<[u8]>>,
+
     /// WebAssembly table initializers.
     pub func_names: HashMap<FuncIndex, String>,
 }
@@ -223,6 +227,7 @@ impl Module {
             start_func: None,
             table_elements: Vec::new(),
             passive_elements: HashMap::new(),
+            passive_data: HashMap::new(),
             func_names: HashMap::new(),
             local: ModuleLocal {
                 num_imported_funcs: 0,

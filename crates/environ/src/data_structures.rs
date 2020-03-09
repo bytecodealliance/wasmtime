@@ -22,7 +22,7 @@ pub mod entity {
 
 pub mod wasm {
     pub use cranelift_wasm::{
-        get_vmctx_value_label, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex,
+        get_vmctx_value_label, DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex,
         DefinedTableIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory,
         MemoryIndex, SignatureIndex, Table, TableElementType, TableIndex,
     };

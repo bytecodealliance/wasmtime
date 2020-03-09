@@ -29,8 +29,8 @@ use std::{mem, ptr, slice};
 use thiserror::Error;
 use wasmtime_environ::entity::{packed_option::ReservedValue, BoxedSlice, EntityRef, PrimaryMap};
 use wasmtime_environ::wasm::{
-    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex,
-    FuncIndex, GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
+    DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
+    ElemIndex, FuncIndex, GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
 use wasmtime_environ::{ir, DataInitializer, Module, TableElements, VMOffsets};
 
@@ -745,6 +745,52 @@ impl Instance {
             let foreign_index = foreign_instance.memory_index(foreign_memory);
             foreign_instance.defined_memory_fill(foreign_index, dst, val, len, source_loc)
         }
+    }
+
+    /// Performs the `memory.init` operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `Trap` error if the destination range is out of this module's
+    /// memory's bounds or if the source range is outside the data segment's
+    /// bounds.
+    pub(crate) fn memory_init(
+        &self,
+        memory_index: MemoryIndex,
+        data_index: DataIndex,
+        dst: u32,
+        src: u32,
+        len: u32,
+        source_loc: ir::SourceLoc,
+    ) -> Result<(), Trap> {
+        // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-memory-init
+
+        let memory = self.get_memory(memory_index);
+        let data = self
+            .module
+            .passive_data
+            .get(&data_index)
+            .map_or(&[][..], |data| &**data);
+
+        if src
+            .checked_add(len)
+            .map_or(true, |n| n as usize > data.len())
+            || dst
+                .checked_add(len)
+                .map_or(true, |m| m as usize > memory.current_length)
+        {
+            return Err(Trap::wasm(source_loc, ir::TrapCode::HeapOutOfBounds));
+        }
+
+        let src_slice = &data[src as usize..(src + len) as usize];
+
+        unsafe {
+            let dst_start = memory.base.add(dst as usize);
+            let dst_slice = slice::from_raw_parts_mut(dst_start, len as usize);
+            dst_slice.copy_from_slice(src_slice);
+        }
+
+        Ok(())
     }
 
     /// Get a table by index regardless of whether it is locally-defined or an
