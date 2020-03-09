@@ -1582,6 +1582,7 @@ fn define_simd(
     let imul = shared.by_name("imul");
     let ishl_imm = shared.by_name("ishl_imm");
     let load = shared.by_name("load");
+    let load_complex = shared.by_name("load_complex");
     let raw_bitcast = shared.by_name("raw_bitcast");
     let regfill = shared.by_name("regfill");
     let regmove = shared.by_name("regmove");
@@ -1625,6 +1626,9 @@ fn define_simd(
     let rec_fld = r.template("fld");
     let rec_fldDisp32 = r.template("fldDisp32");
     let rec_fldDisp8 = r.template("fldDisp8");
+    let rec_fldWithIndex = r.template("fldWithIndex");
+    let rec_fldWithIndexDisp32 = r.template("fldWithIndexDisp32");
+    let rec_fldWithIndexDisp8 = r.template("fldWithIndexDisp8");
     let rec_fregfill32 = r.template("fregfill32");
     let rec_fregspill32 = r.template("fregspill32");
     let rec_frmov = r.template("frmov");
@@ -1855,6 +1859,21 @@ fn define_simd(
         );
         e.enc_32_64(bound_load.clone(), rec_fldDisp8.opcodes(&MOVUPS_LOAD));
         e.enc_32_64(bound_load, rec_fldDisp32.opcodes(&MOVUPS_LOAD));
+
+        // Load complex
+        let bound_load_complex = load_complex.bind(vector(ty, sse_vector_size));
+        e.enc_32_64(
+            bound_load_complex.clone(),
+            rec_fldWithIndex.opcodes(&MOVUPS_LOAD),
+        );
+        e.enc_32_64(
+            bound_load_complex.clone(),
+            rec_fldWithIndexDisp8.opcodes(&MOVUPS_LOAD),
+        );
+        e.enc_32_64(
+            bound_load_complex,
+            rec_fldWithIndexDisp32.opcodes(&MOVUPS_LOAD),
+        );
 
         // Spill
         let bound_spill = spill.bind(vector(ty, sse_vector_size));
