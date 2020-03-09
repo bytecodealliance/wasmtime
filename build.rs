@@ -196,9 +196,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("reference_types", "table_copy_on_imported_tables") => return false,
             ("reference_types", _) => return true,
 
-            // Still working on implementing these. See #928
-            ("bulk_memory_operations", "bulk") => return true,
-
             _ => {}
         },
         _ => panic!("unrecognized strategy"),
