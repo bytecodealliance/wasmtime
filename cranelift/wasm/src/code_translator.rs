@@ -864,15 +864,15 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().iadd(arg1, arg2));
         }
-        Operator::I32And | Operator::I64And | Operator::V128And => {
+        Operator::I32And | Operator::I64And => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().band(arg1, arg2));
         }
-        Operator::I32Or | Operator::I64Or | Operator::V128Or => {
+        Operator::I32Or | Operator::I64Or => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().bor(arg1, arg2));
         }
-        Operator::I32Xor | Operator::I64Xor | Operator::V128Xor => {
+        Operator::I32Xor | Operator::I64Xor => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().bxor(arg1, arg2));
         }
@@ -1330,6 +1330,18 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I16x8Mul | Operator::I32x4Mul => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().imul(a, b))
+        }
+        Operator::V128Or => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().bor(a, b))
+        }
+        Operator::V128Xor => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().bxor(a, b))
+        }
+        Operator::V128And => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().band(a, b))
         }
         Operator::V128AndNot => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
