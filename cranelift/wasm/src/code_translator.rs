@@ -1249,23 +1249,20 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let vector = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().extractlane(vector, lane.clone()))
         }
-        Operator::I8x16ReplaceLane { lane }
-        | Operator::I16x8ReplaceLane { lane }
-        | Operator::I32x4ReplaceLane { lane }
+        Operator::I8x16ReplaceLane { lane } | Operator::I16x8ReplaceLane { lane } => {
+            let (vector, replacement) = state.pop2();
+            let ty = type_of(op);
+            let reduced = builder.ins().ireduce(ty.lane_type(), replacement);
+            let vector = optionally_bitcast_vector(vector, ty, builder);
+            state.push1(builder.ins().insertlane(vector, *lane, reduced))
+        }
+        Operator::I32x4ReplaceLane { lane }
         | Operator::I64x2ReplaceLane { lane }
         | Operator::F32x4ReplaceLane { lane }
         | Operator::F64x2ReplaceLane { lane } => {
-            let (vector, replacement_value) = state.pop2();
-            let original_vector_type = builder.func.dfg.value_type(vector);
+            let (vector, replacement) = state.pop2();
             let vector = optionally_bitcast_vector(vector, type_of(op), builder);
-            let replaced_vector = builder
-                .ins()
-                .insertlane(vector, lane.clone(), replacement_value);
-            state.push1(optionally_bitcast_vector(
-                replaced_vector,
-                original_vector_type,
-                builder,
-            ))
+            state.push1(builder.ins().insertlane(vector, *lane, replacement))
         }
         Operator::V8x16Shuffle { lanes, .. } => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
