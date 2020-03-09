@@ -164,7 +164,7 @@ jobs:
     - uses: ./.github/actions/install-rust
       with:
         toolchain: ${{ matrix.rust }}
-    - uses: ./.github/actions/define-dwarfdump-env
+    - uses: ./.github/actions/define-llvm-env
 
     - name: Install libclang
       # Note: libclang is pre-installed on the macOS and linux images.
@@ -202,6 +202,7 @@ jobs:
 
     # Test debug (DWARF) related functionality.
     - run: cargo test test_debug_dwarf_ -- --ignored --nocapture --test-threads 1
+      if: matrix.os == 'ubuntu-latest' 
       env:
         RUST_BACKTRACE: 1
         RUSTFLAGS: "-D warnings"
