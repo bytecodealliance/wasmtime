@@ -6,7 +6,7 @@ use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs, UnitRefsMap};
 use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_info};
 use super::{DebugInputContext, Reader, TransformError};
-use anyhow::Error;
+use anyhow::{Context, Error};
 use gimli::write;
 use gimli::{AttributeValue, DebuggingInformationEntry, Unit};
 use std::collections::HashSet;
@@ -356,7 +356,7 @@ where
                 vmctx_die_id,
                 addr_tr,
                 current_value_range.top(),
-                current_scope_ranges.top().expect("range"),
+                current_scope_ranges.top().context("range")?,
                 out_strings,
                 isa,
             )?;

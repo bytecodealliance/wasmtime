@@ -1,5 +1,5 @@
 use super::address_transform::AddressTransform;
-use anyhow::Error;
+use anyhow::{bail, Context, Error, Result};
 use gimli::{self, write, Expression, Operation, Reader, ReaderOffset, Register, X86_64};
 use more_asserts::{assert_le, assert_lt};
 use std::collections::{HashMap, HashSet};
@@ -70,7 +70,7 @@ impl<'a> CompiledExpression<'a> {
     }
 }
 
-fn map_reg(isa: &dyn TargetIsa, reg: RegUnit) -> Register {
+fn map_reg(isa: &dyn TargetIsa, reg: RegUnit) -> Result<Register> {
     // TODO avoid duplication with fde.rs
     assert!(isa.name() == "x86" && isa.pointer_bits() == 64);
     // Mapping from https://github.com/bytecodealliance/cranelift/pull/902 by @iximeow
@@ -116,11 +116,11 @@ fn map_reg(isa: &dyn TargetIsa, reg: RegUnit) -> Register {
         "IntRegs" => {
             // x86 GP registers have a weird mapping to DWARF registers, so we use a
             // lookup table.
-            X86_GP_REG_MAP[(reg - bank.first_unit) as usize]
+            Ok(X86_GP_REG_MAP[(reg - bank.first_unit) as usize])
         }
-        "FloatRegs" => X86_XMM_REG_MAP[(reg - bank.first_unit) as usize],
-        _ => {
-            panic!("unsupported register bank: {}", bank.name);
+        "FloatRegs" => Ok(X86_XMM_REG_MAP[(reg - bank.first_unit) as usize]),
+        bank_name => {
+            bail!("unsupported register bank: {}", bank_name);
         }
     }
 }
@@ -129,22 +129,18 @@ fn translate_loc(
     loc: ValueLoc,
     frame_info: Option<&FunctionFrameInfo>,
     isa: &dyn TargetIsa,
-) -> Option<Vec<u8>> {
+) -> Result<Option<Vec<u8>>> {
     use gimli::write::Writer;
-    match loc {
+    Ok(match loc {
         ValueLoc::Reg(reg) => {
-            let machine_reg = map_reg(isa, reg).0 as u8;
+            let machine_reg = map_reg(isa, reg)?.0 as u8;
             Some(if machine_reg < 32 {
                 vec![gimli::constants::DW_OP_reg0.0 + machine_reg]
             } else {
                 let endian = gimli::RunTimeEndian::Little;
                 let mut writer = write::EndianVec::new(endian);
-                writer
-                    .write_u8(gimli::constants::DW_OP_regx.0 as u8)
-                    .expect("regx");
-                writer
-                    .write_uleb128(machine_reg.into())
-                    .expect("machine_reg");
+                writer.write_u8(gimli::constants::DW_OP_regx.0 as u8)?;
+                writer.write_uleb128(machine_reg.into())?;
                 writer.into_vec()
             })
         }
@@ -153,21 +149,17 @@ fn translate_loc(
                 if let Some(ss_offset) = frame_info.stack_slots[ss].offset {
                     let endian = gimli::RunTimeEndian::Little;
                     let mut writer = write::EndianVec::new(endian);
-                    writer
-                        .write_u8(gimli::constants::DW_OP_breg0.0 + X86_64::RBP.0 as u8)
-                        .expect("bp wr");
-                    writer.write_sleb128(ss_offset as i64 + 16).expect("ss wr");
-                    writer
-                        .write_u8(gimli::constants::DW_OP_deref.0 as u8)
-                        .expect("bp wr");
+                    writer.write_u8(gimli::constants::DW_OP_breg0.0 + X86_64::RBP.0 as u8)?;
+                    writer.write_sleb128(ss_offset as i64 + 16)?;
+                    writer.write_u8(gimli::constants::DW_OP_deref.0 as u8)?;
                     let buf = writer.into_vec();
-                    return Some(buf);
+                    return Ok(Some(buf));
                 }
             }
             None
         }
         _ => None,
-    }
+    })
 }
 
 fn append_memory_deref(
@@ -176,13 +168,13 @@ fn append_memory_deref(
     vmctx_loc: ValueLoc,
     endian: gimli::RunTimeEndian,
     isa: &dyn TargetIsa,
-) -> write::Result<bool> {
+) -> Result<bool> {
     use gimli::write::Writer;
     let mut writer = write::EndianVec::new(endian);
     // FIXME for imported memory
     match vmctx_loc {
         ValueLoc::Reg(vmctx_reg) => {
-            let reg = map_reg(isa, vmctx_reg);
+            let reg = map_reg(isa, vmctx_reg)?;
             writer.write_u8(gimli::constants::DW_OP_breg0.0 + reg.0 as u8)?;
             let memory_offset = match frame_info.vmctx_memory_offset() {
                 Some(offset) => offset,
@@ -248,9 +240,9 @@ impl<'a> CompiledExpression<'a> {
         addr_tr: &AddressTransform,
         frame_info: Option<&FunctionFrameInfo>,
         endian: gimli::RunTimeEndian,
-    ) -> Vec<(write::Address, u64, write::Expression)> {
+    ) -> Result<Vec<(write::Address, u64, write::Expression)>> {
         if scope.is_empty() {
-            return vec![];
+            return Ok(vec![]);
         }
 
         if let [CompiledExpressionPart::Code(code)] = self.parts.as_slice() {
@@ -260,7 +252,7 @@ impl<'a> CompiledExpression<'a> {
                     result_scope.push((addr, len, write::Expression(code.to_vec())));
                 }
             }
-            return result_scope;
+            return Ok(result_scope);
         }
 
         let vmctx_label = get_vmctx_value_label();
@@ -295,8 +287,8 @@ impl<'a> CompiledExpression<'a> {
                 match part {
                     CompiledExpressionPart::Code(c) => code_buf.extend_from_slice(c.as_slice()),
                     CompiledExpressionPart::Local(label) => {
-                        let loc = *label_location.get(&label).expect("loc");
-                        if let Some(expr) = translate_loc(loc, frame_info, self.isa) {
+                        let loc = *label_location.get(&label).context("label_location")?;
+                        if let Some(expr) = translate_loc(loc, frame_info, self.isa)? {
                             code_buf.extend_from_slice(&expr)
                         } else {
                             continue 'range;
@@ -312,9 +304,7 @@ impl<'a> CompiledExpression<'a> {
                                 *vmctx_loc,
                                 endian,
                                 self.isa,
-                            )
-                            .expect("append_memory_deref")
-                            {
+                            )? {
                                 continue 'range;
                             }
                         } else {
@@ -327,9 +317,13 @@ impl<'a> CompiledExpression<'a> {
                 if let (Some(vmctx_loc), Some(frame_info)) =
                     (label_location.get(&vmctx_label), frame_info)
                 {
-                    if !append_memory_deref(&mut code_buf, frame_info, *vmctx_loc, endian, self.isa)
-                        .expect("append_memory_deref")
-                    {
+                    if !append_memory_deref(
+                        &mut code_buf,
+                        frame_info,
+                        *vmctx_loc,
+                        endian,
+                        self.isa,
+                    )? {
                         continue 'range;
                     }
                 } else {
@@ -346,7 +340,7 @@ impl<'a> CompiledExpression<'a> {
             ));
         }
 
-        result
+        Ok(result)
     }
 }
 

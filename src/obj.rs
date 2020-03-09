@@ -136,7 +136,7 @@ pub fn compile_to_obj(
     .context("failed to emit module")?;
 
     if debug_info {
-        let debug_data = read_debuginfo(wasm);
+        let debug_data = read_debuginfo(wasm).context("failed to emit DWARF")?;
         emit_debugsections(
             &mut obj,
             &module_vmctx_info,

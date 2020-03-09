@@ -1,7 +1,7 @@
 use super::address_transform::AddressTransform;
 use super::attr::clone_attr_string;
 use super::{Reader, TransformError};
-use anyhow::Error;
+use anyhow::{Context, Error};
 use gimli::{
     write, DebugLine, DebugLineOffset, DebugStr, DebuggingInformationEntry, LineEncoding, Unit,
 };
@@ -56,13 +56,13 @@ where
     let comp_dir = root.attr_value(gimli::DW_AT_comp_dir)?;
     let comp_name = root.attr_value(gimli::DW_AT_name)?;
     let out_comp_dir = clone_attr_string(
-        comp_dir.as_ref().expect("comp_dir"),
+        comp_dir.as_ref().context("comp_dir")?,
         gimli::DW_FORM_strp,
         debug_str,
         out_strings,
     )?;
     let out_comp_name = clone_attr_string(
-        comp_name.as_ref().expect("comp_name"),
+        comp_name.as_ref().context("comp_name")?,
         gimli::DW_FORM_strp,
         debug_str,
         out_strings,

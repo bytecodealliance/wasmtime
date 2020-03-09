@@ -2,7 +2,7 @@ use super::expression::{CompiledExpression, FunctionFrameInfo};
 use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_info};
 use super::AddressTransform;
 use crate::read_debuginfo::WasmFileInfo;
-use anyhow::Error;
+use anyhow::{Context, Error};
 use gimli::write;
 use gimli::{self, LineEncoding};
 use std::collections::{HashMap, HashSet};
@@ -177,7 +177,7 @@ fn generate_vars(
     locals_names: Option<&HashMap<u32, String>>,
     out_strings: &mut write::StringTable,
     isa: &dyn TargetIsa,
-) {
+) -> Result<(), Error> {
     let vmctx_label = get_vmctx_value_label();
 
     // Normalize order of ValueLabelsRanges keys to have reproducable results.
@@ -195,8 +195,7 @@ fn generate_vars(
                 scope_ranges,
                 out_strings,
                 isa,
-            )
-            .expect("append_vmctx_info success");
+            )?;
         } else {
             let var_index = label.index();
             let (type_die_id, is_param) =
@@ -213,7 +212,7 @@ fn generate_vars(
                 let expr = CompiledExpression::from_label(*label, isa);
                 let mut locs = Vec::new();
                 for (begin, length, data) in
-                    expr.build_with_locals(scope_ranges, addr_tr, Some(frame_info), endian)
+                    expr.build_with_locals(scope_ranges, addr_tr, Some(frame_info), endian)?
                 {
                     locs.push(write::Location::StartLength {
                         begin,
@@ -250,6 +249,7 @@ fn generate_vars(
             );
         }
     }
+    Ok(())
 }
 
 pub fn generate_simulated_dwarf(
@@ -279,8 +279,17 @@ pub fn generate_simulated_dwarf(
     };
 
     let (unit, root_id, name_id) = {
-        let comp_dir_id = out_strings.add(path.parent().expect("path dir").to_str().unwrap());
-        let name = path.file_name().expect("path name").to_str().unwrap();
+        let comp_dir_id = out_strings.add(
+            path.parent()
+                .context("path dir")?
+                .to_str()
+                .context("path dir encoding")?,
+        );
+        let name = path
+            .file_name()
+            .context("path name")?
+            .to_str()
+            .context("path name encoding")?;
         let name_id = out_strings.add(name);
 
         let out_program = generate_line_info(
@@ -370,7 +379,7 @@ pub fn generate_simulated_dwarf(
                 locals_names.and_then(|m| m.get(&(index as u32))),
                 out_strings,
                 isa,
-            );
+            )?;
         }
     }
 
