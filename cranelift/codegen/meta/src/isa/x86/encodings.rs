@@ -1566,6 +1566,7 @@ fn define_simd(
     let bxor = shared.by_name("bxor");
     let copy = shared.by_name("copy");
     let copy_nop = shared.by_name("copy_nop");
+    let copy_to_ssa = shared.by_name("copy_to_ssa");
     let fadd = shared.by_name("fadd");
     let fcmp = shared.by_name("fcmp");
     let fcvt_from_sint = shared.by_name("fcvt_from_sint");
@@ -1633,6 +1634,7 @@ fn define_simd(
     let rec_fstDisp32 = r.template("fstDisp32");
     let rec_fstDisp8 = r.template("fstDisp8");
     let rec_furm = r.template("furm");
+    let rec_furm_reg_to_ssa = r.template("furm_reg_to_ssa");
     let rec_icscc_fpr = r.template("icscc_fpr");
     let rec_null_fpr = r.recipe("null_fpr");
     let rec_pfcmp = r.template("pfcmp");
@@ -1875,6 +1877,8 @@ fn define_simd(
         // Copy
         let bound_copy = copy.bind(vector(ty, sse_vector_size));
         e.enc_32_64(bound_copy, rec_furm.opcodes(&MOVAPS_LOAD));
+        let bound_copy_to_ssa = copy_to_ssa.bind(vector(ty, sse_vector_size));
+        e.enc_32_64(bound_copy_to_ssa, rec_furm_reg_to_ssa.opcodes(&MOVAPS_LOAD));
         let bound_copy_nop = copy_nop.bind(vector(ty, sse_vector_size));
         e.enc_32_64_rec(bound_copy_nop, rec_stacknull, 0);
     }
