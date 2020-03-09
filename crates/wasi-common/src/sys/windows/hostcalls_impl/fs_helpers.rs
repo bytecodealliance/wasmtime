@@ -6,6 +6,7 @@ use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
+use winapi::shared::winerror;
 
 pub(crate) trait PathGetExt {
     fn concatenate(&self) -> Result<PathBuf>;
@@ -58,34 +59,30 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
     use std::fs::OpenOptions;
     use std::os::windows::fs::OpenOptionsExt;
     use winx::file::Flags;
-    use winx::winerror::WinError;
 
     let path = concatenate(dirfd, Path::new(path))?;
-    OpenOptions::new()
+    let err = match OpenOptions::new()
         .read(true)
         .custom_flags(Flags::FILE_FLAG_BACKUP_SEMANTICS.bits())
         .open(&path)
-        .map_err(|e| match e.raw_os_error() {
-            Some(e) => {
-                log::debug!("openat error={:?}", e);
-                match WinError::from_u32(e as u32) {
-                    WinError::ERROR_INVALID_NAME => Error::ENOTDIR,
-                    e => e.into(),
-                }
-            }
-            None => {
-                log::debug!("Inconvertible OS error: {}", e);
-                Error::EIO
-            }
-        })
+    {
+        Ok(file) => return Ok(file),
+        Err(e) => e,
+    };
+    if let Some(code) = err.raw_os_error() {
+        log::debug!("openat error={:?}", code);
+        if code as u32 == winerror::ERROR_INVALID_NAME {
+            return Err(Error::ENOTDIR);
+        }
+    }
+    Err(err.into())
 }
 
 pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
     use winx::file::get_file_path;
-    use winx::winerror::WinError;
 
     let path = concatenate(dirfd, Path::new(s_path))?;
-    match path.read_link() {
+    let err = match path.read_link() {
         Ok(target_path) => {
             // since on Windows we are effectively emulating 'at' syscalls
             // we need to strip the prefix from the absolute path
@@ -93,37 +90,27 @@ pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> Result<String> {
             // of dealing with absolute paths
             let dir_path = get_file_path(dirfd)?;
             let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
-            target_path
+            let target_path = target_path
                 .strip_prefix(dir_path)
-                .map_err(|_| Error::ENOTCAPABLE)
-                .and_then(|path| path.to_str().map(String::from).ok_or(Error::EILSEQ))
+                .map_err(|_| Error::ENOTCAPABLE)?;
+            let target_path = target_path.to_str().ok_or(Error::EILSEQ)?;
+            return Ok(target_path.to_owned());
         }
-        Err(e) => match e.raw_os_error() {
-            Some(e) => {
-                log::debug!("readlinkat error={:?}", e);
-                match WinError::from_u32(e as u32) {
-                    WinError::ERROR_INVALID_NAME => {
-                        if s_path.ends_with('/') {
-                            // strip "/" and check if exists
-                            let path = concatenate(dirfd, Path::new(s_path.trim_end_matches('/')))?;
-                            if path.exists() && !path.is_dir() {
-                                Err(Error::ENOTDIR)
-                            } else {
-                                Err(Error::ENOENT)
-                            }
-                        } else {
-                            Err(Error::ENOENT)
-                        }
-                    }
-                    e => Err(e.into()),
+        Err(e) => e,
+    };
+    if let Some(code) = err.raw_os_error() {
+        log::debug!("readlinkat error={:?}", code);
+        if code as u32 == winerror::ERROR_INVALID_NAME {
+            if s_path.ends_with('/') {
+                // strip "/" and check if exists
+                let path = concatenate(dirfd, Path::new(s_path.trim_end_matches('/')))?;
+                if path.exists() && !path.is_dir() {
+                    return Err(Error::ENOTDIR);
                 }
             }
-            None => {
-                log::debug!("Inconvertible OS error: {}", e);
-                Err(Error::EIO)
-            }
-        },
+        }
     }
+    Err(err.into())
 }
 
 pub(crate) fn strip_extended_prefix<P: AsRef<OsStr>>(path: P) -> OsString {

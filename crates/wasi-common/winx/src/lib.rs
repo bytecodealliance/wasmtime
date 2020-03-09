@@ -24,8 +24,3 @@
 pub mod file;
 mod ntdll;
 pub mod time;
-pub mod winerror;
-
-use winerror::WinError;
-
-pub type Result<T> = std::result::Result<T, WinError>;

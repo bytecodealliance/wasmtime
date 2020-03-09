@@ -4,16 +4,15 @@ use crate::ntdll::{
     NtQueryInformationFile, RtlNtStatusToDosError, FILE_ACCESS_INFORMATION, FILE_INFORMATION_CLASS,
     FILE_MODE_INFORMATION, IO_STATUS_BLOCK,
 };
-use crate::{winerror, Result};
 use bitflags::bitflags;
 use cvt::cvt;
 use std::ffi::{c_void, OsString};
 use std::fs::File;
-use std::io;
+use std::io::{Error, Result};
 use std::os::windows::prelude::{AsRawHandle, OsStringExt, RawHandle};
 use winapi::shared::{
     minwindef::{self, DWORD},
-    ntstatus,
+    ntstatus, winerror,
 };
 use winapi::um::{fileapi, fileapi::GetFileType, minwinbase, winbase, winnt};
 
@@ -57,8 +56,8 @@ impl FileType {
 
 pub unsafe fn get_file_type(handle: RawHandle) -> Result<FileType> {
     let file_type = FileType(GetFileType(handle));
-    let err = winerror::WinError::last();
-    if file_type.is_unknown() && err != winerror::WinError::ERROR_SUCCESS {
+    let err = Error::last_os_error();
+    if file_type.is_unknown() && err.raw_os_error().unwrap() as u32 != winerror::ERROR_SUCCESS {
         Err(err)
     } else {
         Ok(file_type)
@@ -341,23 +340,20 @@ pub fn get_file_path(file: &File) -> Result<OsString> {
 
     let handle = file.as_raw_handle();
     let read_len =
-        unsafe { GetFinalPathNameByHandleW(handle, raw_path.as_mut_ptr(), WIDE_MAX_PATH, 0) };
-
-    if read_len == 0 {
-        // failed to read
-        return Err(winerror::WinError::last());
-    }
+        cvt(unsafe { GetFinalPathNameByHandleW(handle, raw_path.as_mut_ptr(), WIDE_MAX_PATH, 0) })?;
 
     // obtain a slice containing the written bytes, and check for it being too long
     // (practically probably impossible)
     let written_bytes = raw_path
         .get(..read_len as usize)
-        .ok_or(winerror::WinError::ERROR_BUFFER_OVERFLOW)?;
+        .ok_or(Error::from_raw_os_error(
+            winerror::ERROR_BUFFER_OVERFLOW as i32,
+        ))?;
 
     Ok(OsString::from_wide(written_bytes))
 }
 
-pub fn get_fileinfo(file: &File) -> io::Result<fileapi::BY_HANDLE_FILE_INFORMATION> {
+pub fn get_fileinfo(file: &File) -> Result<fileapi::BY_HANDLE_FILE_INFORMATION> {
     use fileapi::{GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION};
     use std::mem;
 
@@ -371,7 +367,7 @@ pub fn get_fileinfo(file: &File) -> io::Result<fileapi::BY_HANDLE_FILE_INFORMATI
     Ok(info)
 }
 
-pub fn change_time(file: &File) -> io::Result<i64> {
+pub fn change_time(file: &File) -> Result<i64> {
     use fileapi::FILE_BASIC_INFO;
     use minwinbase::FileBasicInfo;
     use std::mem;
@@ -407,7 +403,9 @@ pub fn query_access_information(handle: RawHandle) -> Result<AccessMode> {
         );
 
         if status != ntstatus::STATUS_SUCCESS {
-            return Err(winerror::WinError::from_u32(RtlNtStatusToDosError(status)));
+            return Err(Error::from_raw_os_error(
+                RtlNtStatusToDosError(status) as i32
+            ));
         }
     }
 
@@ -428,7 +426,9 @@ pub fn query_mode_information(handle: RawHandle) -> Result<FileModeInformation> 
         );
 
         if status != ntstatus::STATUS_SUCCESS {
-            return Err(winerror::WinError::from_u32(RtlNtStatusToDosError(status)));
+            return Err(Error::from_raw_os_error(
+                RtlNtStatusToDosError(status) as i32
+            ));
         }
     }
 
@@ -448,7 +448,7 @@ pub fn reopen_file(handle: RawHandle, access_mode: AccessMode, flags: Flags) -> 
     };
 
     if new_handle == winapi::um::handleapi::INVALID_HANDLE_VALUE {
-        return Err(winerror::WinError::last());
+        return Err(Error::last_os_error());
     }
 
     Ok(new_handle)
