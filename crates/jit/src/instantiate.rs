@@ -71,7 +71,9 @@ impl<'data> RawCompiledModule<'data> {
             .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
 
         let debug_data = if debug_info {
-            Some(read_debuginfo(&data))
+            // TODO Do we want to ignore invalid DWARF data?
+            let debug_data = read_debuginfo(&data)?;
+            Some(debug_data)
         } else {
             None
         };

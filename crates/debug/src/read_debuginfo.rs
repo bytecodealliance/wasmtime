@@ -1,3 +1,4 @@
+use anyhow::{bail, Result};
 use gimli::{
     DebugAbbrev, DebugAddr, DebugInfo, DebugLine, DebugLineStr, DebugLoc, DebugLocLists,
     DebugRanges, DebugRngLists, DebugStr, DebugStrOffsets, DebugTypes, EndianSlice, LittleEndian,
@@ -42,7 +43,7 @@ pub struct DebugInfoData<'a> {
     pub wasm_file: WasmFileInfo,
 }
 
-fn convert_sections<'a>(sections: HashMap<&str, &'a [u8]>) -> Dwarf<'a> {
+fn convert_sections<'a>(sections: HashMap<&str, &'a [u8]>) -> Result<Dwarf<'a>> {
     const EMPTY_SECTION: &[u8] = &[];
 
     let endian = LittleEndian;
@@ -61,20 +62,20 @@ fn convert_sections<'a>(sections: HashMap<&str, &'a [u8]>) -> Dwarf<'a> {
     );
 
     if sections.contains_key(".debug_addr") {
-        panic!("Unexpected .debug_addr");
+        bail!("Unexpected .debug_addr");
     }
 
     let debug_addr = DebugAddr::from(EndianSlice::new(EMPTY_SECTION, endian));
 
     if sections.contains_key(".debug_line_str") {
-        panic!("Unexpected .debug_line_str");
+        bail!("Unexpected .debug_line_str");
     }
 
     let debug_line_str = DebugLineStr::from(EndianSlice::new(EMPTY_SECTION, endian));
     let debug_str_sup = DebugStr::from(EndianSlice::new(EMPTY_SECTION, endian));
 
     if sections.contains_key(".debug_rnglists") {
-        panic!("Unexpected .debug_rnglists");
+        bail!("Unexpected .debug_rnglists");
     }
 
     let debug_ranges = match sections.get(".debug_ranges") {
@@ -85,7 +86,7 @@ fn convert_sections<'a>(sections: HashMap<&str, &'a [u8]>) -> Dwarf<'a> {
     let ranges = RangeLists::new(debug_ranges, debug_rnglists);
 
     if sections.contains_key(".debug_loclists") {
-        panic!("Unexpected .debug_loclists");
+        bail!("Unexpected .debug_loclists");
     }
 
     let debug_loc = match sections.get(".debug_loc") {
@@ -96,18 +97,18 @@ fn convert_sections<'a>(sections: HashMap<&str, &'a [u8]>) -> Dwarf<'a> {
     let locations = LocationLists::new(debug_loc, debug_loclists);
 
     if sections.contains_key(".debug_str_offsets") {
-        panic!("Unexpected .debug_str_offsets");
+        bail!("Unexpected .debug_str_offsets");
     }
 
     let debug_str_offsets = DebugStrOffsets::from(EndianSlice::new(EMPTY_SECTION, endian));
 
     if sections.contains_key(".debug_types") {
-        panic!("Unexpected .debug_types");
+        bail!("Unexpected .debug_types");
     }
 
     let debug_types = DebugTypes::from(EndianSlice::new(EMPTY_SECTION, endian));
 
-    Dwarf {
+    Ok(Dwarf {
         debug_abbrev,
         debug_addr,
         debug_info,
@@ -119,7 +120,7 @@ fn convert_sections<'a>(sections: HashMap<&str, &'a [u8]>) -> Dwarf<'a> {
         debug_types,
         locations,
         ranges,
-    }
+    })
 }
 
 fn read_name_section(reader: wasmparser::NameSectionReader) -> wasmparser::Result<NameSection> {
@@ -158,8 +159,8 @@ fn read_name_section(reader: wasmparser::NameSectionReader) -> wasmparser::Resul
     Ok(result)
 }
 
-pub fn read_debuginfo(data: &[u8]) -> DebugInfoData {
-    let mut reader = ModuleReader::new(data).expect("reader");
+pub fn read_debuginfo(data: &[u8]) -> Result<DebugInfoData> {
+    let mut reader = ModuleReader::new(data)?;
     let mut sections = HashMap::new();
     let mut name_section = None;
     let mut code_section_offset = 0;
@@ -169,13 +170,13 @@ pub fn read_debuginfo(data: &[u8]) -> DebugInfoData {
     let mut func_locals: Vec<Box<[(u32, WasmType)]>> = Vec::new();
 
     while !reader.eof() {
-        let section = reader.read().expect("section");
+        let section = reader.read()?;
         match section.code {
             SectionCode::Custom { name, .. } => {
                 if name.starts_with(".debug_") {
                     let mut reader = section.get_binary_reader();
                     let len = reader.bytes_remaining();
-                    sections.insert(name, reader.read_bytes(len).expect("bytes"));
+                    sections.insert(name, reader.read_bytes(len)?);
                 }
                 if name == "name" {
                     if let Ok(reader) = section.get_name_section_reader() {
@@ -187,38 +188,31 @@ pub fn read_debuginfo(data: &[u8]) -> DebugInfoData {
             }
             SectionCode::Type => {
                 signatures_params = section
-                    .get_type_section_reader()
-                    .expect("type section")
+                    .get_type_section_reader()?
                     .into_iter()
-                    .map(|ft| ft.expect("type").params)
-                    .collect::<Vec<_>>();
+                    .map(|ft| Ok(ft?.params))
+                    .collect::<Result<Vec<_>>>()?;
             }
             SectionCode::Function => {
                 func_params_refs = section
-                    .get_function_section_reader()
-                    .expect("function section")
+                    .get_function_section_reader()?
                     .into_iter()
-                    .map(|index| index.expect("func index") as usize)
-                    .collect::<Vec<_>>();
+                    .map(|index| Ok(index? as usize))
+                    .collect::<Result<Vec<_>>>()?;
             }
             SectionCode::Code => {
                 code_section_offset = section.range().start as u64;
                 func_locals = section
-                    .get_code_section_reader()
-                    .expect("code section")
+                    .get_code_section_reader()?
                     .into_iter()
                     .map(|body| {
-                        let locals = body
-                            .expect("body")
-                            .get_locals_reader()
-                            .expect("locals reader");
-                        locals
+                        let locals = body?.get_locals_reader()?;
+                        Ok(locals
                             .into_iter()
-                            .collect::<Result<Vec<_>, _>>()
-                            .expect("locals data")
-                            .into_boxed_slice()
+                            .collect::<Result<Vec<_>, _>>()?
+                            .into_boxed_slice())
                     })
-                    .collect::<Vec<_>>();
+                    .collect::<Result<Vec<_>>>()?;
             }
             _ => (),
         }
@@ -233,13 +227,14 @@ pub fn read_debuginfo(data: &[u8]) -> DebugInfoData {
         })
         .collect::<Vec<_>>();
 
-    DebugInfoData {
-        dwarf: convert_sections(sections),
+    let dwarf = convert_sections(sections)?;
+    Ok(DebugInfoData {
+        dwarf,
         name_section,
         wasm_file: WasmFileInfo {
             path: None,
             code_section_offset,
             funcs: func_meta.into_boxed_slice(),
         },
-    }
+    })
 }

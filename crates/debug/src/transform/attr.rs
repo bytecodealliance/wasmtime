@@ -3,7 +3,7 @@ use super::expression::{compile_expression, CompiledExpression, FunctionFrameInf
 use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs};
 use super::{DebugInputContext, Reader, TransformError};
-use anyhow::Error;
+use anyhow::{bail, Error};
 use gimli::{write, AttributeValue, DebugLineOffset, DebugStr, DebuggingInformationEntry};
 use wasmtime_environ::isa::TargetIsa;
 
@@ -143,7 +143,7 @@ where
                             addr_tr,
                             frame_info,
                             endian,
-                        ) {
+                        )? {
                             if len == 0 {
                                 // Ignore empty range
                                 continue;
@@ -183,7 +183,7 @@ where
                         // Conversion to loclist is required.
                         if let Some(scope_ranges) = scope_ranges {
                             let exprs =
-                                expr.build_with_locals(scope_ranges, addr_tr, frame_info, endian);
+                                expr.build_with_locals(scope_ranges, addr_tr, frame_info, endian)?;
                             if exprs.is_empty() {
                                 continue;
                             }
@@ -252,7 +252,7 @@ where
                 pending_di_refs.insert(current_scope_id, attr.name(), offset);
                 continue;
             }
-            _ => panic!(), //write::AttributeValue::StringRef(out_strings.add("_")),
+            a => bail!("Unexpected attribute: {:?}", a),
         };
         let current_scope = out_unit.get_mut(current_scope_id);
         current_scope.set(attr.name(), attr_value);
@@ -265,7 +265,7 @@ pub(crate) fn clone_attr_string<R>(
     form: gimli::DwForm,
     debug_str: &DebugStr<R>,
     out_strings: &mut write::StringTable,
-) -> Result<write::LineString, gimli::Error>
+) -> Result<write::LineString, Error>
 where
     R: Reader,
 {
@@ -274,7 +274,7 @@ where
             debug_str.get_str(*str_offset)?.to_slice()?.to_vec()
         }
         AttributeValue::String(b) => b.to_slice()?.to_vec(),
-        _ => panic!("Unexpected attribute value"),
+        v => bail!("Unexpected attribute value: {:?}", v),
     };
     Ok(match form {
         gimli::DW_FORM_strp => {
@@ -282,6 +282,6 @@ where
             write::LineString::StringRef(id)
         }
         gimli::DW_FORM_string => write::LineString::String(content),
-        _ => panic!("DW_FORM_line_strp or other not supported"),
+        _ => bail!("DW_FORM_line_strp or other not supported"),
     })
 }
