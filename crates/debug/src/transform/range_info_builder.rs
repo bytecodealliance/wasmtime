@@ -131,13 +131,7 @@ impl RangeInfoBuilder {
             RangeInfoBuilder::Ranges(ranges) => {
                 let mut result = Vec::new();
                 for (begin, end) in ranges {
-                    for tr in addr_tr.translate_ranges(*begin, *end) {
-                        if tr.1 == 0 {
-                            // Ignore empty range
-                            continue;
-                        }
-                        result.push(tr);
-                    }
+                    result.extend(addr_tr.translate_ranges(*begin, *end));
                 }
                 if result.len() != 1 {
                     let range_list = result
@@ -200,16 +194,12 @@ impl RangeInfoBuilder {
             let mut range_list = Vec::new();
             for (begin, end) in ranges {
                 assert_lt!(begin, end);
-                for tr in addr_tr.translate_ranges(*begin, *end) {
-                    if tr.1 == 0 {
-                        // Ignore empty range
-                        continue;
-                    }
-                    range_list.push(write::Range::StartLength {
+                range_list.extend(addr_tr.translate_ranges(*begin, *end).map(|tr| {
+                    write::Range::StartLength {
                         begin: tr.0,
                         length: tr.1,
-                    });
-                }
+                    }
+                }));
             }
             out_range_lists.add(write::RangeList(range_list))
         } else {

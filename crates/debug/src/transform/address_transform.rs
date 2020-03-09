@@ -364,55 +364,62 @@ impl<'a> TransformRangeIter<'a> {
 impl<'a> Iterator for TransformRangeIter<'a> {
     type Item = (GeneratedAddress, GeneratedAddress);
     fn next(&mut self) -> Option<Self::Item> {
-        // Merge TransformRangeStartIter and TransformRangeEndIter data using
-        // FuncLookup index's field propery to be sorted by RangeIndex.
-        let (start, end, range_index): (Option<usize>, Option<usize>, RangeIndex) = {
-            match (self.last_start.as_ref(), self.last_end.as_ref()) {
-                (Some((s, sri)), Some((e, eri))) => {
-                    if sri == eri {
-                        // Start and end RangeIndex matched.
-                        (Some(*s), Some(*e), *sri)
-                    } else if sri < eri {
-                        (Some(*s), None, *sri)
-                    } else {
-                        (None, Some(*e), *eri)
+        loop {
+            // Merge TransformRangeStartIter and TransformRangeEndIter data using
+            // FuncLookup index's field propery to be sorted by RangeIndex.
+            let (start, end, range_index): (Option<usize>, Option<usize>, RangeIndex) = {
+                match (self.last_start.as_ref(), self.last_end.as_ref()) {
+                    (Some((s, sri)), Some((e, eri))) => {
+                        if sri == eri {
+                            // Start and end RangeIndex matched.
+                            (Some(*s), Some(*e), *sri)
+                        } else if sri < eri {
+                            (Some(*s), None, *sri)
+                        } else {
+                            (None, Some(*e), *eri)
+                        }
+                    }
+                    (Some((s, sri)), None) => (Some(*s), None, *sri),
+                    (None, Some((e, eri))) => (None, Some(*e), *eri),
+                    (None, None) => {
+                        // Reached ends for start and end iterators.
+                        return None;
                     }
                 }
-                (Some((s, sri)), None) => (Some(*s), None, *sri),
-                (None, Some((e, eri))) => (None, Some(*e), *eri),
-                (None, None) => {
-                    // Reached ends for start and end iterators.
-                    return None;
+            };
+            let range_start = match start {
+                Some(range_start) => {
+                    // Consume start iterator.
+                    self.last_start = self.start_it.next();
+                    debug_assert!(
+                        self.last_start.is_none() || range_start < self.last_start.unwrap().0
+                    );
+                    range_start
                 }
+                None => {
+                    let range = &self.func.lookup.ranges[range_index];
+                    range.gen_start
+                }
+            };
+            let range_end = match end {
+                Some(range_end) => {
+                    // Consume end iterator.
+                    self.last_end = self.end_it.next();
+                    debug_assert!(self.last_end.is_none() || range_end < self.last_end.unwrap().0);
+                    range_end
+                }
+                None => {
+                    let range = &self.func.lookup.ranges[range_index];
+                    range.gen_end
+                }
+            };
+
+            if range_start < range_end {
+                return Some((range_start, range_end));
             }
-        };
-        let range_start = match start {
-            Some(range_start) => {
-                // Consume start iterator.
-                self.last_start = self.start_it.next();
-                debug_assert!(
-                    self.last_start.is_none() || range_start < self.last_start.unwrap().0
-                );
-                range_start
-            }
-            None => {
-                let range = &self.func.lookup.ranges[range_index];
-                range.gen_start
-            }
-        };
-        let range_end = match end {
-            Some(range_end) => {
-                // Consume end iterator.
-                self.last_end = self.end_it.next();
-                debug_assert!(self.last_end.is_none() || range_end < self.last_end.unwrap().0);
-                range_end
-            }
-            None => {
-                let range = &self.func.lookup.ranges[range_index];
-                range.gen_end
-            }
-        };
-        Some((range_start, range_end))
+            // Throw away empty ranges.
+            debug_assert!(range_start == range_end);
+        }
     }
 }
 
@@ -511,21 +518,47 @@ impl AddressTransform {
         None
     }
 
-    pub fn translate_ranges(&self, start: u64, end: u64) -> Vec<(write::Address, u64)> {
-        self.translate_ranges_raw(start, end)
-            .map_or(vec![], |(func_index, ranges)| {
-                ranges
-                    .map(|(start, end)| {
-                        (
-                            write::Address::Symbol {
-                                symbol: func_index.index(),
-                                addend: start as i64,
-                            },
-                            (end - start) as u64,
-                        )
-                    })
-                    .collect::<Vec<_>>()
-            })
+    pub fn translate_ranges<'a>(
+        &'a self,
+        start: u64,
+        end: u64,
+    ) -> impl Iterator<Item = (write::Address, u64)> + 'a {
+        enum TranslateRangesResult<'a> {
+            Empty,
+            Raw {
+                symbol: usize,
+                it: Box<dyn Iterator<Item = (usize, usize)> + 'a>,
+            },
+        }
+        impl<'a> Iterator for TranslateRangesResult<'a> {
+            type Item = (write::Address, u64);
+            fn next(&mut self) -> Option<Self::Item> {
+                match self {
+                    TranslateRangesResult::Empty => None,
+                    TranslateRangesResult::Raw { symbol, it } => match it.next() {
+                        Some((start, end)) => {
+                            debug_assert!(start < end);
+                            Some((
+                                write::Address::Symbol {
+                                    symbol: *symbol,
+                                    addend: start as i64,
+                                },
+                                (end - start) as u64,
+                            ))
+                        }
+                        None => None,
+                    },
+                }
+            }
+        }
+
+        match self.translate_ranges_raw(start, end) {
+            Some((func_index, ranges)) => TranslateRangesResult::Raw {
+                symbol: func_index.index(),
+                it: Box::new(ranges),
+            },
+            None => TranslateRangesResult::Empty,
+        }
     }
 
     pub fn map(&self) -> &PrimaryMap<DefinedFuncIndex, FunctionMap> {
