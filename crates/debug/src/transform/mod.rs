@@ -14,6 +14,7 @@ use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
 
 pub use address_transform::AddressTransform;
+pub(crate) use expression::map_reg;
 
 mod address_transform;
 mod attr;

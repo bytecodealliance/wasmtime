@@ -110,33 +110,40 @@ impl Compiler {
         ),
         SetupError,
     > {
-        let (compilation, relocations, address_transform, value_ranges, stack_slots, traps) =
-            match self.strategy {
-                // For now, interpret `Auto` as `Cranelift` since that's the most stable
-                // implementation.
-                CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
-                    wasmtime_environ::cranelift::Cranelift::compile_module(
-                        module,
-                        module_translation,
-                        function_body_inputs,
-                        &*self.isa,
-                        debug_data.is_some(),
-                        &self.cache_config,
-                    )
-                }
-                #[cfg(feature = "lightbeam")]
-                CompilationStrategy::Lightbeam => {
-                    wasmtime_environ::lightbeam::Lightbeam::compile_module(
-                        module,
-                        module_translation,
-                        function_body_inputs,
-                        &*self.isa,
-                        debug_data.is_some(),
-                        &self.cache_config,
-                    )
-                }
+        let (
+            compilation,
+            relocations,
+            address_transform,
+            value_ranges,
+            stack_slots,
+            traps,
+            frame_layouts,
+        ) = match self.strategy {
+            // For now, interpret `Auto` as `Cranelift` since that's the most stable
+            // implementation.
+            CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
+                wasmtime_environ::cranelift::Cranelift::compile_module(
+                    module,
+                    module_translation,
+                    function_body_inputs,
+                    &*self.isa,
+                    debug_data.is_some(),
+                    &self.cache_config,
+                )
             }
-            .map_err(SetupError::Compile)?;
+            #[cfg(feature = "lightbeam")]
+            CompilationStrategy::Lightbeam => {
+                wasmtime_environ::lightbeam::Lightbeam::compile_module(
+                    module,
+                    module_translation,
+                    function_body_inputs,
+                    &*self.isa,
+                    debug_data.is_some(),
+                    &self.cache_config,
+                )
+            }
+        }
+        .map_err(SetupError::Compile)?;
 
         let allocated_functions =
             allocate_functions(&mut self.code_memory, &compilation).map_err(|message| {
@@ -179,6 +186,7 @@ impl Compiler {
                 &module_vmctx_info,
                 &address_transform,
                 &value_ranges,
+                &frame_layouts,
                 &funcs,
             )
             .map_err(SetupError::DebugInfo)?;

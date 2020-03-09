@@ -70,7 +70,7 @@ impl<'a> CompiledExpression<'a> {
     }
 }
 
-fn map_reg(isa: &dyn TargetIsa, reg: RegUnit) -> Result<Register> {
+pub(crate) fn map_reg(isa: &dyn TargetIsa, reg: RegUnit) -> Result<Register> {
     // TODO avoid duplication with fde.rs
     assert!(isa.name() == "x86" && isa.pointer_bits() == 64);
     // Mapping from https://github.com/bytecodealliance/cranelift/pull/902 by @iximeow

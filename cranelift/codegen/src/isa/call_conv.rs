@@ -4,8 +4,12 @@ use core::fmt;
 use core::str;
 use target_lexicon::{CallingConvention, Triple};
 
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
 /// Calling convention identifiers.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum CallConv {
     /// Best performance, not ABI-stable
     Fast,
