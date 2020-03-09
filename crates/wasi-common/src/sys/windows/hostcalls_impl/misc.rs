@@ -5,7 +5,8 @@ use crate::fdentry::Descriptor;
 use crate::hostcalls_impl::{ClockEventData, FdEventData};
 use crate::memory::*;
 use crate::sys::host_impl;
-use crate::{error::WasiError, wasi, wasi32, Error, Result};
+use crate::wasi::{self, WasiError, WasiResult};
+use crate::wasi32;
 use cpu_time::{ProcessTime, ThreadTime};
 use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
@@ -24,9 +25,9 @@ struct StdinPoll {
 
 enum PollState {
     Ready,
-    NotReady,         // it's not ready, but we didn't wait
-    TimedOut,         // it's not ready and a timeout has occurred
-    Error(WasiError), // not using the top-lever Error because it's not Clone
+    NotReady, // it's not ready, but we didn't wait
+    TimedOut, // it's not ready and a timeout has occurred
+    Error(WasiError),
 }
 
 enum WaitMode {
@@ -82,7 +83,7 @@ impl StdinPoll {
             // Linux returns `POLLIN` in both cases, and we imitate this behavior.
             let resp = match std::io::stdin().lock().fill_buf() {
                 Ok(_) => PollState::Ready,
-                Err(e) => PollState::Error(Error::from(e).as_wasi_error()),
+                Err(e) => PollState::Error(WasiError::from(e)),
             };
 
             // Notify the requestor about data in stdin. They may have already timed out,
@@ -108,7 +109,9 @@ lazy_static! {
 
 // Timer resolution on Windows is really hard. We may consider exposing the resolution of the respective
 // timers as an associated function in the future.
-pub(crate) fn clock_res_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__wasi_timestamp_t> {
+pub(crate) fn clock_res_get(
+    clock_id: wasi::__wasi_clockid_t,
+) -> WasiResult<wasi::__wasi_timestamp_t> {
     Ok(match clock_id {
         // This is the best that we can do with std::time::SystemTime.
         // Rust uses GetSystemTimeAsFileTime, which is said to have the resolution of
@@ -152,25 +155,28 @@ pub(crate) fn clock_res_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__
         // The best we can do is to hardcode the value from the docs.
         // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getthreadtimes
         wasi::__WASI_CLOCKID_THREAD_CPUTIME_ID => 100,
-        _ => return Err(Error::EINVAL),
+        _ => return Err(WasiError::EINVAL),
     })
 }
 
-pub(crate) fn clock_time_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__wasi_timestamp_t> {
+pub(crate) fn clock_time_get(
+    clock_id: wasi::__wasi_clockid_t,
+) -> WasiResult<wasi::__wasi_timestamp_t> {
     let duration = match clock_id {
         wasi::__WASI_CLOCKID_REALTIME => get_monotonic_time(),
         wasi::__WASI_CLOCKID_MONOTONIC => get_realtime_time()?,
         wasi::__WASI_CLOCKID_PROCESS_CPUTIME_ID => get_proc_cputime()?,
         wasi::__WASI_CLOCKID_THREAD_CPUTIME_ID => get_thread_cputime()?,
-        _ => return Err(Error::EINVAL),
+        _ => return Err(WasiError::EINVAL),
     };
     duration.as_nanos().try_into().map_err(Into::into)
 }
 
-fn make_rw_event(event: &FdEventData, nbytes: Result<u64>) -> wasi::__wasi_event_t {
-    use crate::error::AsWasiError;
-    let error = nbytes.as_wasi_error();
-    let nbytes = nbytes.unwrap_or_default();
+fn make_rw_event(event: &FdEventData, nbytes: WasiResult<u64>) -> wasi::__wasi_event_t {
+    let (nbytes, error) = match nbytes {
+        Ok(nbytes) => (nbytes, WasiError::ESUCCESS),
+        Err(e) => (u64::default(), e),
+    };
     wasi::__wasi_event_t {
         userdata: event.userdata,
         r#type: event.r#type,
@@ -233,7 +239,7 @@ fn handle_rw_event(event: FdEventData, out_events: &mut Vec<wasi::__wasi_event_t
 
 fn handle_error_event(
     event: FdEventData,
-    error: Error,
+    error: WasiError,
     out_events: &mut Vec<wasi::__wasi_event_t>,
 ) {
     let new_event = make_rw_event(&event, Err(error));
@@ -244,7 +250,7 @@ pub(crate) fn poll_oneoff(
     timeout: Option<ClockEventData>,
     fd_events: Vec<FdEventData>,
     events: &mut Vec<wasi::__wasi_event_t>,
-) -> Result<()> {
+) -> WasiResult<()> {
     use std::fs::Metadata;
     use std::thread;
 
@@ -289,7 +295,7 @@ pub(crate) fn poll_oneoff(
                 let ftype = unsafe { winx::file::get_file_type(os_handle.as_raw_handle()) }?;
                 if ftype.is_unknown() || ftype.is_char() {
                     debug!("poll_oneoff: unsupported file type: {:?}", ftype);
-                    handle_error_event(event, Error::ENOTSUP, events);
+                    handle_error_event(event, WasiError::ENOTSUP, events);
                 } else if ftype.is_disk() {
                     immediate_events.push(event);
                 } else if ftype.is_pipe() {
@@ -349,7 +355,7 @@ pub(crate) fn poll_oneoff(
                 PollState::Ready => handle_rw_event(event, events),
                 PollState::NotReady => {} // not immediately available, so just ignore
                 PollState::TimedOut => handle_timeout_event(timeout.unwrap().0, events),
-                PollState::Error(e) => handle_error_event(event, Error::Wasi(e), events),
+                PollState::Error(e) => handle_error_event(event, e, events),
             }
         }
     }
@@ -365,7 +371,7 @@ pub(crate) fn poll_oneoff(
             }
             None => {
                 error!("Polling only pipes with no timeout not supported on Windows.");
-                return Err(Error::ENOTSUP);
+                return Err(WasiError::ENOTSUP);
             }
         }
     }
@@ -383,17 +389,17 @@ fn get_monotonic_time() -> Duration {
     START_MONOTONIC.elapsed()
 }
 
-fn get_realtime_time() -> Result<Duration> {
+fn get_realtime_time() -> WasiResult<Duration> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|_| Error::EFAULT)
+        .map_err(|_| WasiError::EFAULT)
 }
 
-fn get_proc_cputime() -> Result<Duration> {
+fn get_proc_cputime() -> WasiResult<Duration> {
     Ok(ProcessTime::try_now()?.as_duration())
 }
 
-fn get_thread_cputime() -> Result<Duration> {
+fn get_thread_cputime() -> WasiResult<Duration> {
     Ok(ThreadTime::try_now()?.as_duration())
 }
 

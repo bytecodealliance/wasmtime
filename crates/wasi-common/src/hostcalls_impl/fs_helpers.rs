@@ -2,7 +2,8 @@
 use crate::sys::fdentry_impl::OsHandle;
 use crate::sys::host_impl;
 use crate::sys::hostcalls_impl::fs_helpers::*;
-use crate::{error::WasiError, fdentry::Descriptor, fdentry::FdEntry, wasi, Error, Result};
+use crate::wasi::{self, WasiError, WasiResult};
+use crate::{fdentry::Descriptor, fdentry::FdEntry};
 use std::path::{Component, Path};
 
 #[derive(Debug)]
@@ -20,7 +21,7 @@ impl PathGet {
         &self.path
     }
 
-    pub(crate) fn path_create_directory(self) -> Result<()> {
+    pub(crate) fn path_create_directory(self) -> WasiResult<()> {
         match &self.dirfd {
             Descriptor::OsHandle(file) => {
                 crate::sys::hostcalls_impl::path_create_directory(&file, &self.path)
@@ -38,7 +39,7 @@ impl PathGet {
         write: bool,
         oflags: u16,
         fs_flags: u16,
-    ) -> Result<Descriptor> {
+    ) -> WasiResult<Descriptor> {
         match &self.dirfd {
             Descriptor::OsHandle(_) => {
                 crate::sys::hostcalls_impl::path_open(self, read, write, oflags, fs_flags)
@@ -64,7 +65,7 @@ impl<'a, 'b> PathRef<'a, 'b> {
         PathRef { dirfd, path }
     }
 
-    fn open(&self) -> Result<Descriptor> {
+    fn open(&self) -> WasiResult<Descriptor> {
         match self.dirfd {
             Descriptor::OsHandle(file) => Ok(Descriptor::OsHandle(OsHandle::from(openat(
                 &file, &self.path,
@@ -84,7 +85,7 @@ impl<'a, 'b> PathRef<'a, 'b> {
         }
     }
 
-    fn readlink(&self) -> Result<String> {
+    fn readlink(&self) -> WasiResult<String> {
         match self.dirfd {
             Descriptor::OsHandle(file) => readlinkat(file, self.path),
             Descriptor::VirtualFile(virt) => {
@@ -107,17 +108,17 @@ pub(crate) fn path_get(
     dirflags: wasi::__wasi_lookupflags_t,
     path: &str,
     needs_final_component: bool,
-) -> Result<PathGet> {
+) -> WasiResult<PathGet> {
     const MAX_SYMLINK_EXPANSIONS: usize = 128;
 
     if path.contains('\0') {
         // if contains NUL, return EILSEQ
-        return Err(Error::EILSEQ);
+        return Err(WasiError::EILSEQ);
     }
 
     if fe.file_type != wasi::__WASI_FILETYPE_DIRECTORY {
         // if `dirfd` doesn't refer to a directory, return `ENOTDIR`.
-        return Err(Error::ENOTDIR);
+        return Err(WasiError::ENOTDIR);
     }
 
     let dirfd = fe
@@ -148,7 +149,7 @@ pub(crate) fn path_get(
                 let ends_with_slash = cur_path.ends_with('/');
                 let mut components = Path::new(&cur_path).components();
                 let head = match components.next() {
-                    None => return Err(Error::ENOENT),
+                    None => return Err(WasiError::ENOENT),
                     Some(p) => p,
                 };
                 let tail = components.as_path();
@@ -166,18 +167,18 @@ pub(crate) fn path_get(
                 match head {
                     Component::Prefix(_) | Component::RootDir => {
                         // path is absolute!
-                        return Err(Error::ENOTCAPABLE);
+                        return Err(WasiError::ENOTCAPABLE);
                     }
                     Component::CurDir => {
                         // "." so skip
                     }
                     Component::ParentDir => {
                         // ".." so pop a dir
-                        let _ = dir_stack.pop().ok_or(Error::ENOTCAPABLE)?;
+                        let _ = dir_stack.pop().ok_or(WasiError::ENOTCAPABLE)?;
 
                         // we're not allowed to pop past the original directory
                         if dir_stack.is_empty() {
-                            return Err(Error::ENOTCAPABLE);
+                            return Err(WasiError::ENOTCAPABLE);
                         }
                     }
                     Component::Normal(head) => {
@@ -188,14 +189,17 @@ pub(crate) fn path_get(
                         }
 
                         if !path_stack.is_empty() || (ends_with_slash && !needs_final_component) {
-                            match PathRef::new(dir_stack.last().ok_or(Error::ENOTCAPABLE)?, &head)
-                                .open()
+                            match PathRef::new(
+                                dir_stack.last().ok_or(WasiError::ENOTCAPABLE)?,
+                                &head,
+                            )
+                            .open()
                             {
                                 Ok(new_dir) => {
                                     dir_stack.push(new_dir);
                                 }
                                 Err(e) => {
-                                    match e.as_wasi_error() {
+                                    match e {
                                         WasiError::ELOOP
                                         | WasiError::EMLINK
                                         | WasiError::ENOTDIR =>
@@ -204,14 +208,14 @@ pub(crate) fn path_get(
                                         {
                                             // attempt symlink expansion
                                             let mut link_path = PathRef::new(
-                                                dir_stack.last().ok_or(Error::ENOTCAPABLE)?,
+                                                dir_stack.last().ok_or(WasiError::ENOTCAPABLE)?,
                                                 &head,
                                             )
                                             .readlink()?;
 
                                             symlink_expansions += 1;
                                             if symlink_expansions > MAX_SYMLINK_EXPANSIONS {
-                                                return Err(Error::ELOOP);
+                                                return Err(WasiError::ELOOP);
                                             }
 
                                             if head.ends_with('/') {
@@ -238,13 +242,16 @@ pub(crate) fn path_get(
                         {
                             // if there's a trailing slash, or if `LOOKUP_SYMLINK_FOLLOW` is set, attempt
                             // symlink expansion
-                            match PathRef::new(dir_stack.last().ok_or(Error::ENOTCAPABLE)?, &head)
-                                .readlink()
+                            match PathRef::new(
+                                dir_stack.last().ok_or(WasiError::ENOTCAPABLE)?,
+                                &head,
+                            )
+                            .readlink()
                             {
                                 Ok(mut link_path) => {
                                     symlink_expansions += 1;
                                     if symlink_expansions > MAX_SYMLINK_EXPANSIONS {
-                                        return Err(Error::ELOOP);
+                                        return Err(WasiError::ELOOP);
                                     }
 
                                     if head.ends_with('/') {
@@ -260,12 +267,12 @@ pub(crate) fn path_get(
                                     continue;
                                 }
                                 Err(e) => {
-                                    if e.as_wasi_error() != WasiError::EINVAL
-                                        && e.as_wasi_error() != WasiError::ENOENT
+                                    if e != WasiError::EINVAL
+                                        && e != WasiError::ENOENT
                                         // this handles the cases when trying to link to
                                         // a destination that already exists, and the target
                                         // path contains a slash
-                                        && e.as_wasi_error() != WasiError::ENOTDIR
+                                        && e != WasiError::ENOTDIR
                                     {
                                         return Err(e);
                                     }
@@ -275,7 +282,7 @@ pub(crate) fn path_get(
 
                         // not a symlink, so we're done;
                         return Ok(PathGet {
-                            dirfd: dir_stack.pop().ok_or(Error::ENOTCAPABLE)?,
+                            dirfd: dir_stack.pop().ok_or(WasiError::ENOTCAPABLE)?,
                             path: head,
                         });
                     }
@@ -285,7 +292,7 @@ pub(crate) fn path_get(
                 // no further components to process. means we've hit a case like "." or "a/..", or if the
                 // input path has trailing slashes and `needs_final_component` is not set
                 return Ok(PathGet {
-                    dirfd: dir_stack.pop().ok_or(Error::ENOTCAPABLE)?,
+                    dirfd: dir_stack.pop().ok_or(WasiError::ENOTCAPABLE)?,
                     path: String::from("."),
                 });
             }

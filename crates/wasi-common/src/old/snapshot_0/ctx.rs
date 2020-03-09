@@ -1,14 +1,42 @@
 use crate::old::snapshot_0::fdentry::FdEntry;
-use crate::old::snapshot_0::{wasi, Error, Result};
+use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
 use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::env;
-use std::ffi::{CString, OsString};
+use std::ffi::{self, CString, OsString};
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use std::{env, io, string};
+
+/// Possible errors when `WasiCtxBuilder` fails building
+/// `WasiCtx`.
+#[derive(Debug, thiserror::Error)]
+pub enum WasiCtxBuilderError {
+    /// General I/O error was encountered.
+    #[error("general I/O error encountered: {0}")]
+    Io(#[from] io::Error),
+    /// Provided sequence of bytes was not a valid UTF-8.
+    #[error("provided sequence is not valid UTF-8: {0}")]
+    InvalidUtf8(#[from] string::FromUtf8Error),
+    /// Provided sequence of bytes was not a valid UTF-16.
+    ///
+    /// This error is expected to only occur on Windows hosts.
+    #[error("provided sequence is not valid UTF-16: {0}")]
+    InvalidUtf16(#[from] string::FromUtf16Error),
+    /// Provided sequence of bytes contained an unexpected NUL byte.
+    #[error("provided sequence contained an unexpected NUL byte")]
+    UnexpectedNul(#[from] ffi::NulError),
+    /// Provided `File` is not a directory.
+    #[error("preopened directory path {} is not a directory", .0.display())]
+    NotADirectory(PathBuf),
+    /// `WasiCtx` has too many opened files.
+    #[error("context object has too many opened files")]
+    TooManyFilesOpen,
+}
+
+type WasiCtxBuilderResult<T> = std::result::Result<T, WasiCtxBuilderError>;
 
 enum PendingFdEntry {
-    Thunk(fn() -> Result<FdEntry>),
+    Thunk(fn() -> io::Result<FdEntry>),
     File(File),
 }
 
@@ -18,7 +46,7 @@ impl std::fmt::Debug for PendingFdEntry {
             Self::Thunk(f) => write!(
                 fmt,
                 "PendingFdEntry::Thunk({:p})",
-                f as *const fn() -> Result<FdEntry>
+                f as *const fn() -> io::Result<FdEntry>
             ),
             Self::File(f) => write!(fmt, "PendingFdEntry::File({:?})", f),
         }
@@ -44,17 +72,29 @@ impl From<OsString> for PendingCString {
 }
 
 impl PendingCString {
-    fn into_string(self) -> Result<String> {
-        match self {
-            Self::Bytes(v) => String::from_utf8(v).map_err(|_| Error::EILSEQ),
-            Self::OsString(s) => s.into_string().map_err(|_| Error::EILSEQ),
-        }
+    fn into_string(self) -> WasiCtxBuilderResult<String> {
+        let res = match self {
+            Self::Bytes(v) => String::from_utf8(v)?,
+            #[cfg(unix)]
+            Self::OsString(s) => {
+                use std::os::unix::ffi::OsStringExt;
+                String::from_utf8(s.into_vec())?
+            }
+            #[cfg(windows)]
+            Self::OsString(s) => {
+                use std::os::windows::ffi::OsStrExt;
+                let bytes: Vec<u16> = s.encode_wide().collect();
+                String::from_utf16(&bytes)?
+            }
+        };
+        Ok(res)
     }
 
-    /// Create a `CString` containing valid UTF-8, or fail with `Error::EILSEQ`.
-    fn into_utf8_cstring(self) -> Result<CString> {
-        self.into_string()
-            .and_then(|s| CString::new(s).map_err(|_| Error::EILSEQ))
+    /// Create a `CString` containing valid UTF-8, or fail.
+    fn into_utf8_cstring(self) -> WasiCtxBuilderResult<CString> {
+        let s = self.into_string()?;
+        let s = CString::new(s)?;
+        Ok(s)
     }
 }
 
@@ -85,8 +125,7 @@ impl WasiCtxBuilder {
 
     /// Add arguments to the command-line arguments list.
     ///
-    /// Arguments must be valid UTF-8 with no NUL bytes, or else `WasiCtxBuilder::build()` will fail
-    /// with `Error::EILSEQ`.
+    /// Arguments must be valid UTF-8 with no NUL bytes, or else `WasiCtxBuilder::build()` will fail.
     pub fn args<S: AsRef<[u8]>>(mut self, args: impl IntoIterator<Item = S>) -> Self {
         self.args = args
             .into_iter()
@@ -97,8 +136,7 @@ impl WasiCtxBuilder {
 
     /// Add an argument to the command-line arguments list.
     ///
-    /// Arguments must be valid UTF-8 with no NUL bytes, or else `WasiCtxBuilder::build()` will fail
-    /// with `Error::EILSEQ`.
+    /// Arguments must be valid UTF-8 with no NUL bytes, or else `WasiCtxBuilder::build()` will fail.
     pub fn arg<S: AsRef<[u8]>>(mut self, arg: S) -> Self {
         self.args.push(arg.as_ref().to_vec().into());
         self
@@ -107,7 +145,7 @@ impl WasiCtxBuilder {
     /// Inherit the command-line arguments from the host process.
     ///
     /// If any arguments from the host process contain invalid UTF-8, `WasiCtxBuilder::build()` will
-    /// fail with `Error::EILSEQ`.
+    /// fail.
     pub fn inherit_args(mut self) -> Self {
         self.args = env::args_os().map(PendingCString::OsString).collect();
         self
@@ -127,8 +165,7 @@ impl WasiCtxBuilder {
     /// Inherit the environment variables from the host process.
     ///
     /// If any environment variables from the host process contain invalid Unicode (UTF-16 for
-    /// Windows, UTF-8 for other platforms), `WasiCtxBuilder::build()` will fail with
-    /// `Error::EILSEQ`.
+    /// Windows, UTF-8 for other platforms), `WasiCtxBuilder::build()` will fail.
     pub fn inherit_env(mut self) -> Self {
         self.env = std::env::vars_os()
             .map(|(k, v)| (k.into(), v.into()))
@@ -139,7 +176,7 @@ impl WasiCtxBuilder {
     /// Add an entry to the environment.
     ///
     /// Environment variable keys and values must be valid UTF-8 with no NUL bytes, or else
-    /// `WasiCtxBuilder::build()` will fail with `Error::EILSEQ`.
+    /// `WasiCtxBuilder::build()` will fail.
     pub fn env<S: AsRef<[u8]>>(mut self, k: S, v: S) -> Self {
         self.env
             .insert(k.as_ref().to_vec().into(), v.as_ref().to_vec().into());
@@ -149,7 +186,7 @@ impl WasiCtxBuilder {
     /// Add entries to the environment.
     ///
     /// Environment variable keys and values must be valid UTF-8 with no NUL bytes, or else
-    /// `WasiCtxBuilder::build()` will fail with `Error::EILSEQ`.
+    /// `WasiCtxBuilder::build()` will fail.
     pub fn envs<S: AsRef<[u8]>, T: Borrow<(S, S)>>(
         mut self,
         envs: impl IntoIterator<Item = T>,
@@ -191,15 +228,15 @@ impl WasiCtxBuilder {
     /// Build a `WasiCtx`, consuming this `WasiCtxBuilder`.
     ///
     /// If any of the arguments or environment variables in this builder cannot be converted into
-    /// `CString`s, either due to NUL bytes or Unicode conversions, this returns `Error::EILSEQ`.
-    pub fn build(self) -> Result<WasiCtx> {
+    /// `CString`s, either due to NUL bytes or Unicode conversions, this returns an error.
+    pub fn build(self) -> WasiCtxBuilderResult<WasiCtx> {
         // Process arguments and environment variables into `CString`s, failing quickly if they
         // contain any NUL bytes, or if conversion from `OsString` fails.
         let args = self
             .args
             .into_iter()
             .map(|arg| arg.into_utf8_cstring())
-            .collect::<Result<Vec<CString>>>()?;
+            .collect::<WasiCtxBuilderResult<Vec<CString>>>()?;
 
         let env = self
             .env
@@ -211,11 +248,12 @@ impl WasiCtxBuilder {
                         pair.push_str(v.as_str());
                         // We have valid UTF-8, but the keys and values have not yet been checked
                         // for NULs, so we do a final check here.
-                        CString::new(pair).map_err(|_| Error::EILSEQ)
+                        let s = CString::new(pair)?;
+                        Ok(s)
                     })
                 })
             })
-            .collect::<Result<Vec<CString>>>()?;
+            .collect::<WasiCtxBuilderResult<Vec<CString>>>()?;
 
         let mut fds: HashMap<wasi::__wasi_fd_t, FdEntry> = HashMap::new();
         // Populate the non-preopen fds.
@@ -237,16 +275,20 @@ impl WasiCtxBuilder {
         for (guest_path, dir) in self.preopens {
             // We do the increment at the beginning of the loop body, so that we don't overflow
             // unnecessarily if we have exactly the maximum number of file descriptors.
-            preopen_fd = preopen_fd.checked_add(1).ok_or(Error::ENFILE)?;
+            preopen_fd = preopen_fd
+                .checked_add(1)
+                .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
 
             if !dir.metadata()?.is_dir() {
-                return Err(Error::EBADF);
+                return Err(WasiCtxBuilderError::NotADirectory(guest_path));
             }
 
             // We don't currently allow setting file descriptors other than 0-2, but this will avoid
             // collisions if we restore that functionality in the future.
             while fds.contains_key(&preopen_fd) {
-                preopen_fd = preopen_fd.checked_add(1).ok_or(Error::ENFILE)?;
+                preopen_fd = preopen_fd
+                    .checked_add(1)
+                    .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
             }
             let mut fe = FdEntry::from(dir)?;
             fe.preopen_path = Some(guest_path);
@@ -274,7 +316,7 @@ impl WasiCtx {
     /// - Environment variables are inherited from the host process.
     ///
     /// To override these behaviors, use `WasiCtxBuilder`.
-    pub fn new<S: AsRef<[u8]>>(args: impl IntoIterator<Item = S>) -> Result<Self> {
+    pub fn new<S: AsRef<[u8]>>(args: impl IntoIterator<Item = S>) -> WasiCtxBuilderResult<Self> {
         WasiCtxBuilder::new()
             .args(args)
             .inherit_stdio()
@@ -288,30 +330,30 @@ impl WasiCtx {
     }
 
     /// Get an immutable `FdEntry` corresponding to the specified raw WASI `fd`.
-    pub(crate) unsafe fn get_fd_entry(&self, fd: wasi::__wasi_fd_t) -> Result<&FdEntry> {
-        self.fds.get(&fd).ok_or(Error::EBADF)
+    pub(crate) unsafe fn get_fd_entry(&self, fd: wasi::__wasi_fd_t) -> WasiResult<&FdEntry> {
+        self.fds.get(&fd).ok_or(WasiError::EBADF)
     }
 
     /// Get a mutable `FdEntry` corresponding to the specified raw WASI `fd`.
     pub(crate) unsafe fn get_fd_entry_mut(
         &mut self,
         fd: wasi::__wasi_fd_t,
-    ) -> Result<&mut FdEntry> {
-        self.fds.get_mut(&fd).ok_or(Error::EBADF)
+    ) -> WasiResult<&mut FdEntry> {
+        self.fds.get_mut(&fd).ok_or(WasiError::EBADF)
     }
 
     /// Insert the specified `FdEntry` into the `WasiCtx` object.
     ///
     /// The `FdEntry` will automatically get another free raw WASI `fd` assigned. Note that
     /// the two subsequent free raw WASI `fd`s do not have to be stored contiguously.
-    pub(crate) fn insert_fd_entry(&mut self, fe: FdEntry) -> Result<wasi::__wasi_fd_t> {
+    pub(crate) fn insert_fd_entry(&mut self, fe: FdEntry) -> WasiResult<wasi::__wasi_fd_t> {
         // Never insert where stdio handles are expected to be.
         let mut fd = 3;
         while self.fds.contains_key(&fd) {
             if let Some(next_fd) = fd.checked_add(1) {
                 fd = next_fd;
             } else {
-                return Err(Error::EMFILE);
+                return Err(WasiError::EMFILE);
             }
         }
         self.fds.insert(fd, fe);
@@ -329,7 +371,7 @@ impl WasiCtx {
     }
 
     /// Remove `FdEntry` corresponding to the specified raw WASI `fd` from the `WasiCtx` object.
-    pub(crate) fn remove_fd_entry(&mut self, fd: wasi::__wasi_fd_t) -> Result<FdEntry> {
-        self.fds.remove(&fd).ok_or(Error::EBADF)
+    pub(crate) fn remove_fd_entry(&mut self, fd: wasi::__wasi_fd_t) -> WasiResult<FdEntry> {
+        self.fds.remove(&fd).ok_or(WasiError::EBADF)
     }
 }

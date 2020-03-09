@@ -8,7 +8,7 @@ use crate::hostcalls_impl::{fd_filestat_set_times_impl, PathGet};
 use crate::sys::fdentry_impl::{determine_type_rights, OsHandle};
 use crate::sys::host_impl::{self, path_from_host};
 use crate::sys::hostcalls_impl::fs_helpers::PathGetExt;
-use crate::{wasi, Error, Result};
+use crate::wasi::{self, WasiError, WasiResult};
 use log::{debug, trace};
 use std::convert::TryInto;
 use std::fs::{File, Metadata, OpenOptions};
@@ -44,16 +44,20 @@ pub(crate) fn fd_pread(
     file: &File,
     buf: &mut [u8],
     offset: wasi::__wasi_filesize_t,
-) -> Result<usize> {
+) -> WasiResult<usize> {
     read_at(file, buf, offset).map_err(Into::into)
 }
 
 // TODO refactor common code with unix
-pub(crate) fn fd_pwrite(file: &File, buf: &[u8], offset: wasi::__wasi_filesize_t) -> Result<usize> {
+pub(crate) fn fd_pwrite(
+    file: &File,
+    buf: &[u8],
+    offset: wasi::__wasi_filesize_t,
+) -> WasiResult<usize> {
     write_at(file, buf, offset).map_err(Into::into)
 }
 
-pub(crate) fn fd_fdstat_get(fd: &File) -> Result<wasi::__wasi_fdflags_t> {
+pub(crate) fn fd_fdstat_get(fd: &File) -> WasiResult<wasi::__wasi_fdflags_t> {
     let mut fdflags = 0;
 
     let handle = unsafe { fd.as_raw_handle() };
@@ -82,7 +86,7 @@ pub(crate) fn fd_fdstat_get(fd: &File) -> Result<wasi::__wasi_fdflags_t> {
 pub(crate) fn fd_fdstat_set_flags(
     fd: &File,
     fdflags: wasi::__wasi_fdflags_t,
-) -> Result<Option<OsHandle>> {
+) -> WasiResult<Option<OsHandle>> {
     let handle = unsafe { fd.as_raw_handle() };
 
     let access_mode = winx::file::query_access_information(handle)?;
@@ -106,7 +110,7 @@ pub(crate) fn fd_advise(
     advice: wasi::__wasi_advice_t,
     _offset: wasi::__wasi_filesize_t,
     _len: wasi::__wasi_filesize_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     match advice {
         wasi::__WASI_ADVICE_DONTNEED
         | wasi::__WASI_ADVICE_SEQUENTIAL
@@ -114,18 +118,18 @@ pub(crate) fn fd_advise(
         | wasi::__WASI_ADVICE_NOREUSE
         | wasi::__WASI_ADVICE_RANDOM
         | wasi::__WASI_ADVICE_NORMAL => {}
-        _ => return Err(Error::EINVAL),
+        _ => return Err(WasiError::EINVAL),
     }
 
     Ok(())
 }
 
-pub(crate) fn path_create_directory(file: &File, path: &str) -> Result<()> {
+pub(crate) fn path_create_directory(file: &File, path: &str) -> WasiResult<()> {
     let path = concatenate(file, path)?;
     std::fs::create_dir(&path).map_err(Into::into)
 }
 
-pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
+pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> WasiResult<()> {
     unimplemented!("path_link")
 }
 
@@ -135,7 +139,7 @@ pub(crate) fn path_open(
     write: bool,
     oflags: wasi::__wasi_oflags_t,
     fdflags: wasi::__wasi_fdflags_t,
-) -> Result<Descriptor> {
+) -> WasiResult<Descriptor> {
     use winx::file::{AccessMode, CreationDisposition, Flags};
 
     let is_trunc = oflags & wasi::__WASI_OFLAGS_TRUNC != 0;
@@ -145,7 +149,7 @@ pub(crate) fn path_open(
         // This is because truncation requires `GENERIC_WRITE` access, which will override the removal
         // of the `FILE_WRITE_DATA` permission.
         if fdflags & wasi::__WASI_FDFLAGS_APPEND != 0 {
-            return Err(Error::ENOTSUP);
+            return Err(WasiError::ENOTSUP);
         }
     }
 
@@ -172,11 +176,11 @@ pub(crate) fn path_open(
         Ok(file_type) => {
             // check if we are trying to open a symlink
             if file_type.is_symlink() {
-                return Err(Error::ELOOP);
+                return Err(WasiError::ELOOP);
             }
             // check if we are trying to open a file as a dir
             if file_type.is_file() && oflags & wasi::__WASI_OFLAGS_DIRECTORY != 0 {
-                return Err(Error::ENOTDIR);
+                return Err(WasiError::ENOTDIR);
             }
         }
         Err(err) => match err.raw_os_error() {
@@ -191,7 +195,7 @@ pub(crate) fn path_open(
             }
             None => {
                 log::debug!("Inconvertible OS error: {}", err);
-                return Err(Error::EIO);
+                return Err(WasiError::EIO);
             }
         },
     }
@@ -276,7 +280,7 @@ fn dirent_from_path<P: AsRef<Path>>(
     path: P,
     name: &str,
     cookie: wasi::__wasi_dircookie_t,
-) -> Result<Dirent> {
+) -> WasiResult<Dirent> {
     let path = path.as_ref();
     trace!("dirent_from_path: opening {}", path.to_string_lossy());
 
@@ -325,7 +329,7 @@ fn dirent_from_path<P: AsRef<Path>>(
 pub(crate) fn fd_readdir(
     fd: &File,
     cookie: wasi::__wasi_dircookie_t,
-) -> Result<impl Iterator<Item = Result<Dirent>>> {
+) -> WasiResult<impl Iterator<Item = WasiResult<Dirent>>> {
     use winx::file::get_file_path;
 
     let cookie = cookie.try_into()?;
@@ -361,7 +365,7 @@ pub(crate) fn fd_readdir(
     Ok(iter.skip(cookie))
 }
 
-pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
+pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> WasiResult<usize> {
     use winx::file::get_file_path;
 
     let path = resolved.concatenate()?;
@@ -375,8 +379,8 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
     let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
     let target_path = target_path
         .strip_prefix(dir_path)
-        .map_err(|_| Error::ENOTCAPABLE)
-        .and_then(|path| path.to_str().map(String::from).ok_or(Error::EILSEQ))?;
+        .map_err(|_| WasiError::ENOTCAPABLE)
+        .and_then(|path| path.to_str().map(String::from).ok_or(WasiError::EILSEQ))?;
 
     if buf.len() > 0 {
         let mut chars = target_path.chars();
@@ -398,7 +402,7 @@ pub(crate) fn path_readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> 
     }
 }
 
-fn strip_trailing_slashes_and_concatenate(resolved: &PathGet) -> Result<Option<PathBuf>> {
+fn strip_trailing_slashes_and_concatenate(resolved: &PathGet) -> WasiResult<Option<PathBuf>> {
     if resolved.path().ends_with('/') {
         let suffix = resolved.path().trim_end_matches('/');
         concatenate(&resolved.dirfd().as_os_handle(), Path::new(suffix)).map(Some)
@@ -407,7 +411,7 @@ fn strip_trailing_slashes_and_concatenate(resolved: &PathGet) -> Result<Option<P
     }
 }
 
-pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
+pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> WasiResult<()> {
     use std::fs;
 
     let old_path = resolved_old.concatenate()?;
@@ -418,12 +422,12 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
     //
     // [std::fs::rename]: https://doc.rust-lang.org/std/fs/fn.rename.html
     if old_path.is_dir() && new_path.is_file() {
-        return Err(Error::ENOTDIR);
+        return Err(WasiError::ENOTDIR);
     }
     // Second sanity check: check we're not trying to rename a file into a path
     // ending in a trailing slash.
     if old_path.is_file() && resolved_new.path().ends_with('/') {
-        return Err(Error::ENOTDIR);
+        return Err(WasiError::ENOTDIR);
     }
 
     // TODO handle symlinks
@@ -439,7 +443,7 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
                     // So most likely dealing with new_path == dir.
                     // Eliminate case old_path == file first.
                     if old_path.is_file() {
-                        return Err(Error::EISDIR);
+                        return Err(WasiError::EISDIR);
                     } else {
                         // Ok, let's try removing an empty dir at new_path if it exists
                         // and is a nonempty dir.
@@ -453,7 +457,7 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
                     // a file instead of a dir, and if so, throw ENOTDIR.
                     if let Some(path) = strip_trailing_slashes_and_concatenate(&resolved_old)? {
                         if path.is_file() {
-                            return Err(Error::ENOTDIR);
+                            return Err(WasiError::ENOTDIR);
                         }
                     }
                 }
@@ -464,19 +468,19 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> Resul
         }
         None => {
             log::debug!("Inconvertible OS error: {}", err);
-            Err(Error::EIO)
+            Err(WasiError::EIO)
         }
     }
 }
 
-pub(crate) fn fd_filestat_get(file: &std::fs::File) -> Result<wasi::__wasi_filestat_t> {
+pub(crate) fn fd_filestat_get(file: &std::fs::File) -> WasiResult<wasi::__wasi_filestat_t> {
     host_impl::filestat_from_win(file)
 }
 
 pub(crate) fn path_filestat_get(
     resolved: PathGet,
     dirflags: wasi::__wasi_lookupflags_t,
-) -> Result<wasi::__wasi_filestat_t> {
+) -> WasiResult<wasi::__wasi_filestat_t> {
     let path = resolved.concatenate()?;
     let file = File::open(path)?;
     host_impl::filestat_from_win(&file)
@@ -488,7 +492,7 @@ pub(crate) fn path_filestat_set_times(
     st_atim: wasi::__wasi_timestamp_t,
     mut st_mtim: wasi::__wasi_timestamp_t,
     fst_flags: wasi::__wasi_fstflags_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     use winx::file::AccessMode;
     let path = resolved.concatenate()?;
     let file = OpenOptions::new()
@@ -498,7 +502,7 @@ pub(crate) fn path_filestat_set_times(
     fd_filestat_set_times_impl(&modifiable_fd, st_atim, st_mtim, fst_flags)
 }
 
-pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
+pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> WasiResult<()> {
     use std::os::windows::fs::{symlink_dir, symlink_file};
 
     let old_path = concatenate(&resolved.dirfd().as_os_handle(), Path::new(old_path))?;
@@ -520,14 +524,14 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
                 winerror::ERROR_ACCESS_DENIED => {
                     // does the target exist?
                     if new_path.exists() {
-                        return Err(Error::EEXIST);
+                        return Err(WasiError::EEXIST);
                     }
                 }
                 winerror::ERROR_INVALID_NAME => {
                     // does the target without trailing slashes exist?
                     if let Some(path) = strip_trailing_slashes_and_concatenate(&resolved)? {
                         if path.exists() {
-                            return Err(Error::EEXIST);
+                            return Err(WasiError::EEXIST);
                         }
                     }
                 }
@@ -538,12 +542,12 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> Result<()> {
         }
         None => {
             log::debug!("Inconvertible OS error: {}", err);
-            Err(Error::EIO)
+            Err(WasiError::EIO)
         }
     }
 }
 
-pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
+pub(crate) fn path_unlink_file(resolved: PathGet) -> WasiResult<()> {
     use std::fs;
 
     let path = resolved.concatenate()?;
@@ -573,19 +577,19 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> Result<()> {
             }
             None => {
                 log::debug!("Inconvertible OS error: {}", err);
-                Err(Error::EIO)
+                Err(WasiError::EIO)
             }
         }
     } else if file_type.is_dir() {
-        Err(Error::EISDIR)
+        Err(WasiError::EISDIR)
     } else if file_type.is_file() {
         fs::remove_file(path).map_err(Into::into)
     } else {
-        Err(Error::EINVAL)
+        Err(WasiError::EINVAL)
     }
 }
 
-pub(crate) fn path_remove_directory(resolved: PathGet) -> Result<()> {
+pub(crate) fn path_remove_directory(resolved: PathGet) -> WasiResult<()> {
     let path = resolved.concatenate()?;
     std::fs::remove_dir(&path).map_err(Into::into)
 }

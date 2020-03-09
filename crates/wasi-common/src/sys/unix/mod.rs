@@ -20,18 +20,14 @@ cfg_if::cfg_if! {
     }
 }
 
-use crate::Result;
 use std::fs::{File, OpenOptions};
+use std::io::Result;
 use std::path::Path;
 
 pub(crate) fn dev_null() -> Result<File> {
-    OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open("/dev/null")
-        .map_err(Into::into)
+    OpenOptions::new().read(true).write(true).open("/dev/null")
 }
 
 pub fn preopen_dir<P: AsRef<Path>>(path: P) -> Result<File> {
-    File::open(path).map_err(Into::into)
+    File::open(path)
 }

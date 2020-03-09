@@ -1,4 +1,5 @@
-use crate::old::snapshot_0::{wasi, wasi32, Result, WasiCtx};
+use crate::old::snapshot_0::wasi::{self, WasiResult};
+use crate::old::snapshot_0::{wasi32, WasiCtx};
 
 pub fn sock_recv(
     _wasi_ctx: &WasiCtx,
@@ -9,7 +10,7 @@ pub fn sock_recv(
     _ri_flags: wasi::__wasi_riflags_t,
     _ro_datalen: wasi32::uintptr_t,
     _ro_flags: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     unimplemented!("sock_recv")
 }
 
@@ -21,7 +22,7 @@ pub fn sock_send(
     _si_data_len: wasi32::size_t,
     _si_flags: wasi::__wasi_siflags_t,
     _so_datalen: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     unimplemented!("sock_send")
 }
 
@@ -30,6 +31,6 @@ pub fn sock_shutdown(
     _memory: &mut [u8],
     _sock: wasi::__wasi_fd_t,
     _how: wasi::__wasi_sdflags_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     unimplemented!("sock_shutdown")
 }

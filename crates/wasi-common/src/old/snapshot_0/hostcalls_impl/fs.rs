@@ -7,7 +7,8 @@ use crate::old::snapshot_0::memory::*;
 use crate::old::snapshot_0::sys::fdentry_impl::determine_type_rights;
 use crate::old::snapshot_0::sys::hostcalls_impl::fs_helpers::path_open_rights;
 use crate::old::snapshot_0::sys::{host_impl, hostcalls_impl};
-use crate::old::snapshot_0::{helpers, host, wasi, wasi32, Error, Result};
+use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
+use crate::old::snapshot_0::{helpers, host, wasi32};
 use crate::sandboxed_tty_writer::SandboxedTTYWriter;
 use filetime::{set_file_handle_times, FileTime};
 use log::trace;
@@ -20,13 +21,13 @@ pub(crate) unsafe fn fd_close(
     wasi_ctx: &mut WasiCtx,
     _mem: &mut [u8],
     fd: wasi::__wasi_fd_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!("fd_close(fd={:?})", fd);
 
     if let Ok(fe) = wasi_ctx.get_fd_entry(fd) {
         // can't close preopened files
         if fe.preopen_path.is_some() {
-            return Err(Error::ENOTSUP);
+            return Err(WasiError::ENOTSUP);
         }
     }
 
@@ -38,7 +39,7 @@ pub(crate) unsafe fn fd_datasync(
     wasi_ctx: &WasiCtx,
     _mem: &mut [u8],
     fd: wasi::__wasi_fd_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!("fd_datasync(fd={:?})", fd);
 
     let fd = wasi_ctx
@@ -57,7 +58,7 @@ pub(crate) unsafe fn fd_pread(
     iovs_len: wasi32::size_t,
     offset: wasi::__wasi_filesize_t,
     nread: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "fd_pread(fd={:?}, iovs_ptr={:#x?}, iovs_len={:?}, offset={}, nread={:#x?})",
         fd,
@@ -75,7 +76,7 @@ pub(crate) unsafe fn fd_pread(
     let iovs = dec_iovec_slice(memory, iovs_ptr, iovs_len)?;
 
     if offset > i64::max_value() as u64 {
-        return Err(Error::EIO);
+        return Err(WasiError::EIO);
     }
     let buf_size = iovs.iter().map(|v| v.buf_len).sum();
     let mut buf = vec![0; buf_size];
@@ -106,7 +107,7 @@ pub(crate) unsafe fn fd_pwrite(
     iovs_len: wasi32::size_t,
     offset: wasi::__wasi_filesize_t,
     nwritten: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "fd_pwrite(fd={:?}, iovs_ptr={:#x?}, iovs_len={:?}, offset={}, nwritten={:#x?})",
         fd,
@@ -126,7 +127,7 @@ pub(crate) unsafe fn fd_pwrite(
     let iovs = dec_ciovec_slice(memory, iovs_ptr, iovs_len)?;
 
     if offset > i64::max_value() as u64 {
-        return Err(Error::EIO);
+        return Err(WasiError::EIO);
     }
     let buf_size = iovs.iter().map(|v| v.buf_len).sum();
     let mut buf = Vec::with_capacity(buf_size);
@@ -150,7 +151,7 @@ pub(crate) unsafe fn fd_read(
     iovs_ptr: wasi32::uintptr_t,
     iovs_len: wasi32::size_t,
     nread: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "fd_read(fd={:?}, iovs_ptr={:#x?}, iovs_len={:?}, nread={:#x?})",
         fd,
@@ -171,7 +172,7 @@ pub(crate) unsafe fn fd_read(
     {
         Descriptor::OsHandle(file) => file.read_vectored(&mut iovs),
         Descriptor::Stdin => io::stdin().read_vectored(&mut iovs),
-        _ => return Err(Error::EBADF),
+        _ => return Err(WasiError::EBADF),
     };
 
     let host_nread = maybe_host_nread?;
@@ -186,11 +187,11 @@ pub(crate) unsafe fn fd_renumber(
     _mem: &mut [u8],
     from: wasi::__wasi_fd_t,
     to: wasi::__wasi_fd_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!("fd_renumber(from={:?}, to={:?})", from, to);
 
     if !wasi_ctx.contains_fd_entry(from) {
-        return Err(Error::EBADF);
+        return Err(WasiError::EBADF);
     }
 
     // Don't allow renumbering over a pre-opened resource.
@@ -198,11 +199,11 @@ pub(crate) unsafe fn fd_renumber(
     // userspace is capable of removing entries from its tables as well.
     let from_fe = wasi_ctx.get_fd_entry(from)?;
     if from_fe.preopen_path.is_some() {
-        return Err(Error::ENOTSUP);
+        return Err(WasiError::ENOTSUP);
     }
     if let Ok(to_fe) = wasi_ctx.get_fd_entry(to) {
         if to_fe.preopen_path.is_some() {
-            return Err(Error::ENOTSUP);
+            return Err(WasiError::ENOTSUP);
         }
     }
 
@@ -219,7 +220,7 @@ pub(crate) unsafe fn fd_seek(
     offset: wasi::__wasi_filedelta_t,
     whence: wasi::__wasi_whence_t,
     newoffset: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "fd_seek(fd={:?}, offset={:?}, whence={}, newoffset={:#x?})",
         fd,
@@ -242,7 +243,7 @@ pub(crate) unsafe fn fd_seek(
         wasi::__WASI_WHENCE_CUR => SeekFrom::Current(offset),
         wasi::__WASI_WHENCE_END => SeekFrom::End(offset),
         wasi::__WASI_WHENCE_SET => SeekFrom::Start(offset as u64),
-        _ => return Err(Error::EINVAL),
+        _ => return Err(WasiError::EINVAL),
     };
     let host_newoffset = fd.seek(pos)?;
 
@@ -256,7 +257,7 @@ pub(crate) unsafe fn fd_tell(
     memory: &mut [u8],
     fd: wasi::__wasi_fd_t,
     newoffset: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!("fd_tell(fd={:?}, newoffset={:#x?})", fd, newoffset);
 
     let fd = wasi_ctx
@@ -276,7 +277,7 @@ pub(crate) unsafe fn fd_fdstat_get(
     memory: &mut [u8],
     fd: wasi::__wasi_fd_t,
     fdstat_ptr: wasi32::uintptr_t, // *mut wasi::__wasi_fdstat_t
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!("fd_fdstat_get(fd={:?}, fdstat_ptr={:#x?})", fd, fdstat_ptr);
 
     let mut fdstat = dec_fdstat_byref(memory, fdstat_ptr)?;
@@ -303,7 +304,7 @@ pub(crate) unsafe fn fd_fdstat_set_flags(
     _mem: &mut [u8],
     fd: wasi::__wasi_fd_t,
     fdflags: wasi::__wasi_fdflags_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!("fd_fdstat_set_flags(fd={:?}, fdflags={:#x?})", fd, fdflags);
 
     let fd = wasi_ctx
@@ -320,7 +321,7 @@ pub(crate) unsafe fn fd_fdstat_set_rights(
     fd: wasi::__wasi_fd_t,
     fs_rights_base: wasi::__wasi_rights_t,
     fs_rights_inheriting: wasi::__wasi_rights_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "fd_fdstat_set_rights(fd={:?}, fs_rights_base={:#x?}, fs_rights_inheriting={:#x?})",
         fd,
@@ -332,7 +333,7 @@ pub(crate) unsafe fn fd_fdstat_set_rights(
     if fe.rights_base & fs_rights_base != fs_rights_base
         || fe.rights_inheriting & fs_rights_inheriting != fs_rights_inheriting
     {
-        return Err(Error::ENOTCAPABLE);
+        return Err(WasiError::ENOTCAPABLE);
     }
     fe.rights_base = fs_rights_base;
     fe.rights_inheriting = fs_rights_inheriting;
@@ -344,7 +345,7 @@ pub(crate) unsafe fn fd_sync(
     wasi_ctx: &WasiCtx,
     _mem: &mut [u8],
     fd: wasi::__wasi_fd_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!("fd_sync(fd={:?})", fd);
 
     let fd = wasi_ctx
@@ -361,7 +362,7 @@ pub(crate) unsafe fn fd_write(
     iovs_ptr: wasi32::uintptr_t,
     iovs_len: wasi32::size_t,
     nwritten: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "fd_write(fd={:?}, iovs_ptr={:#x?}, iovs_len={:?}, nwritten={:#x?})",
         fd,
@@ -385,7 +386,7 @@ pub(crate) unsafe fn fd_write(
                 file.write_vectored(&iovs)?
             }
         }
-        Descriptor::Stdin => return Err(Error::EBADF),
+        Descriptor::Stdin => return Err(WasiError::EBADF),
         Descriptor::Stdout => {
             // lock for the duration of the scope
             let stdout = io::stdout();
@@ -417,7 +418,7 @@ pub(crate) unsafe fn fd_advise(
     offset: wasi::__wasi_filesize_t,
     len: wasi::__wasi_filesize_t,
     advice: wasi::__wasi_advice_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "fd_advise(fd={:?}, offset={}, len={}, advice={:?})",
         fd,
@@ -440,7 +441,7 @@ pub(crate) unsafe fn fd_allocate(
     fd: wasi::__wasi_fd_t,
     offset: wasi::__wasi_filesize_t,
     len: wasi::__wasi_filesize_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!("fd_allocate(fd={:?}, offset={}, len={})", fd, offset, len);
 
     let fd = wasi_ctx
@@ -451,10 +452,10 @@ pub(crate) unsafe fn fd_allocate(
     let metadata = fd.metadata()?;
 
     let current_size = metadata.len();
-    let wanted_size = offset.checked_add(len).ok_or(Error::E2BIG)?;
+    let wanted_size = offset.checked_add(len).ok_or(WasiError::E2BIG)?;
     // This check will be unnecessary when rust-lang/rust#63326 is fixed
     if wanted_size > i64::max_value() as u64 {
-        return Err(Error::E2BIG);
+        return Err(WasiError::E2BIG);
     }
 
     if wanted_size > current_size {
@@ -470,7 +471,7 @@ pub(crate) unsafe fn path_create_directory(
     dirfd: wasi::__wasi_fd_t,
     path_ptr: wasi32::uintptr_t,
     path_len: wasi32::size_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "path_create_directory(dirfd={:?}, path_ptr={:#x?}, path_len={})",
         dirfd,
@@ -499,7 +500,7 @@ pub(crate) unsafe fn path_link(
     new_dirfd: wasi::__wasi_fd_t,
     new_path_ptr: wasi32::uintptr_t,
     new_path_len: wasi32::size_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "path_link(old_dirfd={:?}, old_flags={:?}, old_path_ptr={:#x?}, old_path_len={}, new_dirfd={:?}, new_path_ptr={:#x?}, new_path_len={})",
         old_dirfd,
@@ -551,7 +552,7 @@ pub(crate) unsafe fn path_open(
     fs_rights_inheriting: wasi::__wasi_rights_t,
     fs_flags: wasi::__wasi_fdflags_t,
     fd_out_ptr: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "path_open(dirfd={:?}, dirflags={:?}, path_ptr={:#x?}, path_len={:?}, oflags={:#x?}, fs_rights_base={:#x?}, fs_rights_inheriting={:#x?}, fs_flags={:#x?}, fd_out_ptr={:#x?})",
         dirfd,
@@ -616,7 +617,7 @@ pub(crate) unsafe fn path_readlink(
     buf_ptr: wasi32::uintptr_t,
     buf_len: wasi32::size_t,
     buf_used: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "path_readlink(dirfd={:?}, path_ptr={:#x?}, path_len={:?}, buf_ptr={:#x?}, buf_len={}, buf_used={:#x?})",
         dirfd,
@@ -655,7 +656,7 @@ pub(crate) unsafe fn path_rename(
     new_dirfd: wasi::__wasi_fd_t,
     new_path_ptr: wasi32::uintptr_t,
     new_path_len: wasi32::size_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "path_rename(old_dirfd={:?}, old_path_ptr={:#x?}, old_path_len={:?}, new_dirfd={:?}, new_path_ptr={:#x?}, new_path_len={:?})",
         old_dirfd,
@@ -702,7 +703,7 @@ pub(crate) unsafe fn fd_filestat_get(
     memory: &mut [u8],
     fd: wasi::__wasi_fd_t,
     filestat_ptr: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "fd_filestat_get(fd={:?}, filestat_ptr={:#x?})",
         fd,
@@ -724,7 +725,7 @@ pub(crate) unsafe fn fd_filestat_set_times(
     st_atim: wasi::__wasi_timestamp_t,
     st_mtim: wasi::__wasi_timestamp_t,
     fst_flags: wasi::__wasi_fstflags_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "fd_filestat_set_times(fd={:?}, st_atim={}, st_mtim={}, fst_flags={:#x?})",
         fd,
@@ -746,14 +747,14 @@ pub(crate) fn fd_filestat_set_times_impl(
     st_atim: wasi::__wasi_timestamp_t,
     st_mtim: wasi::__wasi_timestamp_t,
     fst_flags: wasi::__wasi_fstflags_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     let set_atim = fst_flags & wasi::__WASI_FSTFLAGS_ATIM != 0;
     let set_atim_now = fst_flags & wasi::__WASI_FSTFLAGS_ATIM_NOW != 0;
     let set_mtim = fst_flags & wasi::__WASI_FSTFLAGS_MTIM != 0;
     let set_mtim_now = fst_flags & wasi::__WASI_FSTFLAGS_MTIM_NOW != 0;
 
     if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
-        return Err(Error::EINVAL);
+        return Err(WasiError::EINVAL);
     }
     let atim = if set_atim {
         let time = UNIX_EPOCH + Duration::from_nanos(st_atim);
@@ -782,7 +783,7 @@ pub(crate) unsafe fn fd_filestat_set_size(
     _mem: &mut [u8],
     fd: wasi::__wasi_fd_t,
     st_size: wasi::__wasi_filesize_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!("fd_filestat_set_size(fd={:?}, st_size={})", fd, st_size);
 
     let fd = wasi_ctx
@@ -792,7 +793,7 @@ pub(crate) unsafe fn fd_filestat_set_size(
 
     // This check will be unnecessary when rust-lang/rust#63326 is fixed
     if st_size > i64::max_value() as u64 {
-        return Err(Error::E2BIG);
+        return Err(WasiError::E2BIG);
     }
     fd.set_len(st_size).map_err(Into::into)
 }
@@ -805,7 +806,7 @@ pub(crate) unsafe fn path_filestat_get(
     path_ptr: wasi32::uintptr_t,
     path_len: wasi32::size_t,
     filestat_ptr: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "path_filestat_get(dirfd={:?}, dirflags={:?}, path_ptr={:#x?}, path_len={}, filestat_ptr={:#x?})",
         dirfd,
@@ -845,7 +846,7 @@ pub(crate) unsafe fn path_filestat_set_times(
     st_atim: wasi::__wasi_timestamp_t,
     st_mtim: wasi::__wasi_timestamp_t,
     fst_flags: wasi::__wasi_fstflags_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "path_filestat_set_times(dirfd={:?}, dirflags={:?}, path_ptr={:#x?}, path_len={}, st_atim={}, st_mtim={}, fst_flags={:#x?})",
         dirfd,
@@ -881,7 +882,7 @@ pub(crate) unsafe fn path_symlink(
     dirfd: wasi::__wasi_fd_t,
     new_path_ptr: wasi32::uintptr_t,
     new_path_len: wasi32::size_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "path_symlink(old_path_ptr={:#x?}, old_path_len={}, dirfd={:?}, new_path_ptr={:#x?}, new_path_len={})",
         old_path_ptr,
@@ -909,7 +910,7 @@ pub(crate) unsafe fn path_unlink_file(
     dirfd: wasi::__wasi_fd_t,
     path_ptr: wasi32::uintptr_t,
     path_len: wasi32::size_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "path_unlink_file(dirfd={:?}, path_ptr={:#x?}, path_len={})",
         dirfd,
@@ -933,7 +934,7 @@ pub(crate) unsafe fn path_remove_directory(
     dirfd: wasi::__wasi_fd_t,
     path_ptr: wasi32::uintptr_t,
     path_len: wasi32::size_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "path_remove_directory(dirfd={:?}, path_ptr={:#x?}, path_len={})",
         dirfd,
@@ -965,7 +966,7 @@ pub(crate) unsafe fn fd_prestat_get(
     memory: &mut [u8],
     fd: wasi::__wasi_fd_t,
     prestat_ptr: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "fd_prestat_get(fd={:?}, prestat_ptr={:#x?})",
         fd,
@@ -974,9 +975,9 @@ pub(crate) unsafe fn fd_prestat_get(
 
     // TODO: should we validate any rights here?
     let fe = wasi_ctx.get_fd_entry(fd)?;
-    let po_path = fe.preopen_path.as_ref().ok_or(Error::ENOTSUP)?;
+    let po_path = fe.preopen_path.as_ref().ok_or(WasiError::ENOTSUP)?;
     if fe.file_type != wasi::__WASI_FILETYPE_DIRECTORY {
-        return Err(Error::ENOTDIR);
+        return Err(WasiError::ENOTDIR);
     }
 
     let path = host_impl::path_from_host(po_path.as_os_str())?;
@@ -1001,7 +1002,7 @@ pub(crate) unsafe fn fd_prestat_dir_name(
     fd: wasi::__wasi_fd_t,
     path_ptr: wasi32::uintptr_t,
     path_len: wasi32::size_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "fd_prestat_dir_name(fd={:?}, path_ptr={:#x?}, path_len={})",
         fd,
@@ -1011,15 +1012,15 @@ pub(crate) unsafe fn fd_prestat_dir_name(
 
     // TODO: should we validate any rights here?
     let fe = wasi_ctx.get_fd_entry(fd)?;
-    let po_path = fe.preopen_path.as_ref().ok_or(Error::ENOTSUP)?;
+    let po_path = fe.preopen_path.as_ref().ok_or(WasiError::ENOTSUP)?;
     if fe.file_type != wasi::__WASI_FILETYPE_DIRECTORY {
-        return Err(Error::ENOTDIR);
+        return Err(WasiError::ENOTDIR);
     }
 
     let path = host_impl::path_from_host(po_path.as_os_str())?;
 
     if path.len() > dec_usize(path_len) {
-        return Err(Error::ENAMETOOLONG);
+        return Err(WasiError::ENAMETOOLONG);
     }
 
     trace!("     | (path_ptr,path_len)='{}'", path);
@@ -1035,7 +1036,7 @@ pub(crate) unsafe fn fd_readdir(
     buf_len: wasi32::size_t,
     cookie: wasi::__wasi_dircookie_t,
     buf_used: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "fd_readdir(fd={:?}, buf={:#x?}, buf_len={}, cookie={:#x?}, buf_used={:#x?})",
         fd,

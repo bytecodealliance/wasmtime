@@ -3,7 +3,8 @@ use crate::ctx::WasiCtx;
 use crate::fdentry::Descriptor;
 use crate::memory::*;
 use crate::sys::hostcalls_impl;
-use crate::{wasi, wasi32, Error, Result};
+use crate::wasi::{self, WasiError, WasiResult};
+use crate::wasi32;
 use log::{error, trace};
 use std::convert::TryFrom;
 
@@ -12,7 +13,7 @@ pub(crate) fn args_get(
     memory: &mut [u8],
     argv_ptr: wasi32::uintptr_t,
     argv_buf: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "args_get(argv_ptr={:#x?}, argv_buf={:#x?})",
         argv_ptr,
@@ -31,7 +32,9 @@ pub(crate) fn args_get(
         argv.push(arg_ptr);
 
         let len = wasi32::uintptr_t::try_from(arg_bytes.len())?;
-        argv_buf_offset = argv_buf_offset.checked_add(len).ok_or(Error::EOVERFLOW)?;
+        argv_buf_offset = argv_buf_offset
+            .checked_add(len)
+            .ok_or(WasiError::EOVERFLOW)?;
     }
 
     enc_slice_of_wasi32_uintptr(memory, argv.as_slice(), argv_ptr)
@@ -42,7 +45,7 @@ pub(crate) fn args_sizes_get(
     memory: &mut [u8],
     argc_ptr: wasi32::uintptr_t,
     argv_buf_size_ptr: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "args_sizes_get(argc_ptr={:#x?}, argv_buf_size_ptr={:#x?})",
         argc_ptr,
@@ -70,7 +73,7 @@ pub(crate) fn environ_get(
     memory: &mut [u8],
     environ_ptr: wasi32::uintptr_t,
     environ_buf: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "environ_get(environ_ptr={:#x?}, environ_buf={:#x?})",
         environ_ptr,
@@ -91,7 +94,7 @@ pub(crate) fn environ_get(
         let len = wasi32::uintptr_t::try_from(env_bytes.len())?;
         environ_buf_offset = environ_buf_offset
             .checked_add(len)
-            .ok_or(Error::EOVERFLOW)?;
+            .ok_or(WasiError::EOVERFLOW)?;
     }
 
     enc_slice_of_wasi32_uintptr(memory, environ.as_slice(), environ_ptr)
@@ -102,7 +105,7 @@ pub(crate) fn environ_sizes_get(
     memory: &mut [u8],
     environ_count_ptr: wasi32::uintptr_t,
     environ_size_ptr: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "environ_sizes_get(environ_count_ptr={:#x?}, environ_size_ptr={:#x?})",
         environ_count_ptr,
@@ -116,7 +119,7 @@ pub(crate) fn environ_sizes_get(
         .try_fold(0, |acc: u32, pair| {
             acc.checked_add(pair.as_bytes_with_nul().len() as u32)
         })
-        .ok_or(Error::EOVERFLOW)?;
+        .ok_or(WasiError::EOVERFLOW)?;
 
     trace!("     | *environ_count_ptr={:?}", environ_count);
 
@@ -132,14 +135,14 @@ pub(crate) fn random_get(
     memory: &mut [u8],
     buf_ptr: wasi32::uintptr_t,
     buf_len: wasi32::size_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!("random_get(buf_ptr={:#x?}, buf_len={:?})", buf_ptr, buf_len);
 
     let buf = dec_slice_of_mut_u8(memory, buf_ptr, buf_len)?;
 
     getrandom::getrandom(buf).map_err(|err| {
         error!("getrandom failure: {:?}", err);
-        Error::EIO
+        WasiError::EIO
     })
 }
 
@@ -148,7 +151,7 @@ pub(crate) fn clock_res_get(
     memory: &mut [u8],
     clock_id: wasi::__wasi_clockid_t,
     resolution_ptr: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "clock_res_get(clock_id={:?}, resolution_ptr={:#x?})",
         clock_id,
@@ -168,7 +171,7 @@ pub(crate) fn clock_time_get(
     clock_id: wasi::__wasi_clockid_t,
     precision: wasi::__wasi_timestamp_t,
     time_ptr: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "clock_time_get(clock_id={:?}, precision={:?}, time_ptr={:#x?})",
         clock_id,
@@ -183,7 +186,7 @@ pub(crate) fn clock_time_get(
     enc_timestamp_byref(memory, time_ptr, time)
 }
 
-pub(crate) fn sched_yield(_wasi_ctx: &WasiCtx, _memory: &mut [u8]) -> Result<()> {
+pub(crate) fn sched_yield(_wasi_ctx: &WasiCtx, _memory: &mut [u8]) -> WasiResult<()> {
     trace!("sched_yield()");
 
     std::thread::yield_now();
@@ -198,7 +201,7 @@ pub(crate) fn poll_oneoff(
     output: wasi32::uintptr_t,
     nsubscriptions: wasi32::size_t,
     nevents: wasi32::uintptr_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     trace!(
         "poll_oneoff(input={:#x?}, output={:#x?}, nsubscriptions={}, nevents={:#x?})",
         input,
@@ -208,7 +211,7 @@ pub(crate) fn poll_oneoff(
     );
 
     if u64::from(nsubscriptions) > wasi::__wasi_filesize_t::max_value() {
-        return Err(Error::EINVAL);
+        return Err(WasiError::EINVAL);
     }
 
     enc_int_byref(memory, nevents, 0)?;
@@ -222,7 +225,7 @@ pub(crate) fn poll_oneoff(
     // As mandated by the WASI spec:
     // > If `nsubscriptions` is 0, returns `errno::inval`.
     if subscriptions.is_empty() {
-        return Err(Error::EINVAL);
+        return Err(WasiError::EINVAL);
     }
     for subscription in subscriptions {
         match subscription.u.tag {
@@ -258,7 +261,7 @@ pub(crate) fn poll_oneoff(
                     Err(err) => {
                         let event = wasi::__wasi_event_t {
                             userdata: subscription.userdata,
-                            error: err.as_wasi_error().as_raw_errno(),
+                            error: err.as_raw_errno(),
                             r#type: wasi::__WASI_EVENTTYPE_FD_READ,
                             fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
                                 nbytes: 0,
@@ -286,7 +289,7 @@ pub(crate) fn poll_oneoff(
                     Err(err) => {
                         let event = wasi::__wasi_event_t {
                             userdata: subscription.userdata,
-                            error: err.as_wasi_error().as_raw_errno(),
+                            error: err.as_raw_errno(),
                             r#type: wasi::__WASI_EVENTTYPE_FD_WRITE,
                             fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
                                 nbytes: 0,
@@ -310,7 +313,7 @@ pub(crate) fn poll_oneoff(
     // events have been filtered out as errors in the code above.
     hostcalls_impl::poll_oneoff(timeout, fd_events, &mut events)?;
 
-    let events_count = u32::try_from(events.len()).map_err(|_| Error::EOVERFLOW)?;
+    let events_count = u32::try_from(events.len()).map_err(|_| WasiError::EOVERFLOW)?;
 
     enc_events(memory, output, nsubscriptions, events)?;
 
@@ -319,7 +322,9 @@ pub(crate) fn poll_oneoff(
     enc_int_byref(memory, nevents, events_count)
 }
 
-fn wasi_clock_to_relative_ns_delay(wasi_clock: wasi::__wasi_subscription_clock_t) -> Result<u128> {
+fn wasi_clock_to_relative_ns_delay(
+    wasi_clock: wasi::__wasi_subscription_clock_t,
+) -> WasiResult<u128> {
     use std::time::SystemTime;
 
     if wasi_clock.flags != wasi::__WASI_SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME {
@@ -327,7 +332,7 @@ fn wasi_clock_to_relative_ns_delay(wasi_clock: wasi::__wasi_subscription_clock_t
     }
     let now: u128 = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
-        .map_err(|_| Error::ENOTCAPABLE)?
+        .map_err(|_| WasiError::ENOTCAPABLE)?
         .as_nanos();
     let deadline = u128::from(wasi_clock.timeout);
     Ok(deadline.saturating_sub(now))
@@ -357,6 +362,6 @@ pub(crate) fn proc_raise(
     _wasi_ctx: &WasiCtx,
     _memory: &mut [u8],
     _sig: wasi::__wasi_signal_t,
-) -> Result<()> {
+) -> WasiResult<()> {
     unimplemented!("proc_raise")
 }

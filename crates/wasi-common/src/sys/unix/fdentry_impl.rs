@@ -1,5 +1,5 @@
 use crate::fdentry::{Descriptor, OsHandleRef};
-use crate::{sys::unix::sys_impl, wasi, Error, Result};
+use crate::{sys::unix::sys_impl, wasi};
 use std::fs::File;
 use std::io;
 use std::mem::ManuallyDrop;
@@ -33,7 +33,7 @@ pub(crate) fn descriptor_as_oshandle<'lifetime>(
 /// This function is unsafe because it operates on a raw file descriptor.
 pub(crate) unsafe fn determine_type_and_access_rights<Fd: AsRawFd>(
     fd: &Fd,
-) -> Result<(
+) -> io::Result<(
     wasi::__wasi_filetype_t,
     wasi::__wasi_rights_t,
     wasi::__wasi_rights_t,
@@ -57,7 +57,7 @@ pub(crate) unsafe fn determine_type_and_access_rights<Fd: AsRawFd>(
 /// This function is unsafe because it operates on a raw file descriptor.
 pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
     fd: &Fd,
-) -> Result<(
+) -> io::Result<(
     wasi::__wasi_filetype_t,
     wasi::__wasi_rights_t,
     wasi::__wasi_rights_t,
@@ -117,7 +117,7 @@ pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
                     wasi::RIGHTS_SOCKET_BASE,
                     wasi::RIGHTS_SOCKET_INHERITING,
                 ),
-                _ => return Err(Error::EINVAL),
+                _ => return Err(io::Error::from_raw_os_error(libc::EINVAL)),
             }
         } else if ft.is_fifo() {
             log::debug!("Host fd {:?} is a fifo", fd.as_raw_fd());
@@ -128,7 +128,7 @@ pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
             )
         } else {
             log::debug!("Host fd {:?} is unknown", fd.as_raw_fd());
-            return Err(Error::EINVAL);
+            return Err(io::Error::from_raw_os_error(libc::EINVAL));
         }
     };
 

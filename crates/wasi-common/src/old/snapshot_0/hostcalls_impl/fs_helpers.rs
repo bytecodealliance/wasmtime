@@ -1,7 +1,8 @@
 #![allow(non_camel_case_types)]
+use crate::old::snapshot_0::fdentry::FdEntry;
 use crate::old::snapshot_0::sys::host_impl;
 use crate::old::snapshot_0::sys::hostcalls_impl::fs_helpers::*;
-use crate::old::snapshot_0::{error::WasiError, fdentry::FdEntry, wasi, Error, Result};
+use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
 use std::fs::File;
 use std::path::{Component, Path};
 
@@ -31,17 +32,17 @@ pub(crate) fn path_get(
     dirflags: wasi::__wasi_lookupflags_t,
     path: &str,
     needs_final_component: bool,
-) -> Result<PathGet> {
+) -> WasiResult<PathGet> {
     const MAX_SYMLINK_EXPANSIONS: usize = 128;
 
     if path.contains('\0') {
         // if contains NUL, return EILSEQ
-        return Err(Error::EILSEQ);
+        return Err(WasiError::EILSEQ);
     }
 
     if fe.file_type != wasi::__WASI_FILETYPE_DIRECTORY {
         // if `dirfd` doesn't refer to a directory, return `ENOTDIR`.
-        return Err(Error::ENOTDIR);
+        return Err(WasiError::ENOTDIR);
     }
 
     let dirfd = fe
@@ -72,7 +73,7 @@ pub(crate) fn path_get(
                 let ends_with_slash = cur_path.ends_with('/');
                 let mut components = Path::new(&cur_path).components();
                 let head = match components.next() {
-                    None => return Err(Error::ENOENT),
+                    None => return Err(WasiError::ENOENT),
                     Some(p) => p,
                 };
                 let tail = components.as_path();
@@ -90,18 +91,18 @@ pub(crate) fn path_get(
                 match head {
                     Component::Prefix(_) | Component::RootDir => {
                         // path is absolute!
-                        return Err(Error::ENOTCAPABLE);
+                        return Err(WasiError::ENOTCAPABLE);
                     }
                     Component::CurDir => {
                         // "." so skip
                     }
                     Component::ParentDir => {
                         // ".." so pop a dir
-                        let _ = dir_stack.pop().ok_or(Error::ENOTCAPABLE)?;
+                        let _ = dir_stack.pop().ok_or(WasiError::ENOTCAPABLE)?;
 
                         // we're not allowed to pop past the original directory
                         if dir_stack.is_empty() {
-                            return Err(Error::ENOTCAPABLE);
+                            return Err(WasiError::ENOTCAPABLE);
                         }
                     }
                     Component::Normal(head) => {
@@ -112,12 +113,12 @@ pub(crate) fn path_get(
                         }
 
                         if !path_stack.is_empty() || (ends_with_slash && !needs_final_component) {
-                            match openat(dir_stack.last().ok_or(Error::ENOTCAPABLE)?, &head) {
+                            match openat(dir_stack.last().ok_or(WasiError::ENOTCAPABLE)?, &head) {
                                 Ok(new_dir) => {
                                     dir_stack.push(new_dir);
                                 }
                                 Err(e) => {
-                                    match e.as_wasi_error() {
+                                    match e {
                                         WasiError::ELOOP
                                         | WasiError::EMLINK
                                         | WasiError::ENOTDIR =>
@@ -126,13 +127,13 @@ pub(crate) fn path_get(
                                         {
                                             // attempt symlink expansion
                                             let mut link_path = readlinkat(
-                                                dir_stack.last().ok_or(Error::ENOTCAPABLE)?,
+                                                dir_stack.last().ok_or(WasiError::ENOTCAPABLE)?,
                                                 &head,
                                             )?;
 
                                             symlink_expansions += 1;
                                             if symlink_expansions > MAX_SYMLINK_EXPANSIONS {
-                                                return Err(Error::ELOOP);
+                                                return Err(WasiError::ELOOP);
                                             }
 
                                             if head.ends_with('/') {
@@ -159,11 +160,12 @@ pub(crate) fn path_get(
                         {
                             // if there's a trailing slash, or if `LOOKUP_SYMLINK_FOLLOW` is set, attempt
                             // symlink expansion
-                            match readlinkat(dir_stack.last().ok_or(Error::ENOTCAPABLE)?, &head) {
+                            match readlinkat(dir_stack.last().ok_or(WasiError::ENOTCAPABLE)?, &head)
+                            {
                                 Ok(mut link_path) => {
                                     symlink_expansions += 1;
                                     if symlink_expansions > MAX_SYMLINK_EXPANSIONS {
-                                        return Err(Error::ELOOP);
+                                        return Err(WasiError::ELOOP);
                                     }
 
                                     if head.ends_with('/') {
@@ -179,12 +181,12 @@ pub(crate) fn path_get(
                                     continue;
                                 }
                                 Err(e) => {
-                                    if e.as_wasi_error() != WasiError::EINVAL
-                                        && e.as_wasi_error() != WasiError::ENOENT
+                                    if e != WasiError::EINVAL
+                                        && e != WasiError::ENOENT
                                         // this handles the cases when trying to link to
                                         // a destination that already exists, and the target
                                         // path contains a slash
-                                        && e.as_wasi_error() != WasiError::ENOTDIR
+                                        && e != WasiError::ENOTDIR
                                     {
                                         return Err(e);
                                     }
@@ -194,7 +196,7 @@ pub(crate) fn path_get(
 
                         // not a symlink, so we're done;
                         return Ok(PathGet {
-                            dirfd: dir_stack.pop().ok_or(Error::ENOTCAPABLE)?,
+                            dirfd: dir_stack.pop().ok_or(WasiError::ENOTCAPABLE)?,
                             path: head,
                         });
                     }
@@ -204,7 +206,7 @@ pub(crate) fn path_get(
                 // no further components to process. means we've hit a case like "." or "a/..", or if the
                 // input path has trailing slashes and `needs_final_component` is not set
                 return Ok(PathGet {
-                    dirfd: dir_stack.pop().ok_or(Error::ENOTCAPABLE)?,
+                    dirfd: dir_stack.pop().ok_or(WasiError::ENOTCAPABLE)?,
                     path: String::from("."),
                 });
             }
