@@ -7,6 +7,16 @@ This section describes everything required to build and run Wasmtime.
 Before we can actually build Wasmtime, we'll need to make sure these things are
 installed first.
 
+### Git Submodules
+
+The Wasmtime repository contains a number of git submodules. To build Wasmtime
+and most other crates in the repository, you have to ensure that those are
+initialized with this command:
+
+```shell
+git submodule init && git submodule update
+```
+
 ### The Rust Toolchain
 
 [Install the Rust toolchain here.](https://www.rust-lang.org/tools/install) This
