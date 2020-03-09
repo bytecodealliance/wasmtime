@@ -3,7 +3,8 @@
 use crate::fdentry::Descriptor;
 use crate::host::Dirent;
 use crate::hostcalls_impl::PathGet;
-use crate::sys::{fdentry_impl::OsHandle, host_impl, unix::sys_impl};
+use crate::sys::fdentry_impl::OsHandle;
+use crate::sys::{host_impl, unix::sys_impl};
 use crate::wasi::{self, WasiError, WasiResult};
 use std::convert::TryInto;
 use std::fs::File;
