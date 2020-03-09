@@ -1594,6 +1594,7 @@ fn define_simd(
     let sshr_imm = shared.by_name("sshr_imm");
     let ssub_sat = shared.by_name("ssub_sat");
     let store = shared.by_name("store");
+    let store_complex = shared.by_name("store_complex");
     let uadd_sat = shared.by_name("uadd_sat");
     let ushr_imm = shared.by_name("ushr_imm");
     let usub_sat = shared.by_name("usub_sat");
@@ -1637,6 +1638,9 @@ fn define_simd(
     let rec_fst = r.template("fst");
     let rec_fstDisp32 = r.template("fstDisp32");
     let rec_fstDisp8 = r.template("fstDisp8");
+    let rec_fstWithIndex = r.template("fstWithIndex");
+    let rec_fstWithIndexDisp32 = r.template("fstWithIndexDisp32");
+    let rec_fstWithIndexDisp8 = r.template("fstWithIndexDisp8");
     let rec_furm = r.template("furm");
     let rec_furm_reg_to_ssa = r.template("furm_reg_to_ssa");
     let rec_icscc_fpr = r.template("icscc_fpr");
@@ -1850,6 +1854,21 @@ fn define_simd(
         );
         e.enc_32_64(bound_store.clone(), rec_fstDisp8.opcodes(&MOVUPS_STORE));
         e.enc_32_64(bound_store, rec_fstDisp32.opcodes(&MOVUPS_STORE));
+
+        // Store complex
+        let bound_store_complex = store_complex.bind(vector(ty, sse_vector_size));
+        e.enc_32_64(
+            bound_store_complex.clone(),
+            rec_fstWithIndex.opcodes(&MOVUPS_STORE),
+        );
+        e.enc_32_64(
+            bound_store_complex.clone(),
+            rec_fstWithIndexDisp8.opcodes(&MOVUPS_STORE),
+        );
+        e.enc_32_64(
+            bound_store_complex,
+            rec_fstWithIndexDisp32.opcodes(&MOVUPS_STORE),
+        );
 
         // Load
         let bound_load = load.bind(vector(ty, sse_vector_size)).bind(Any);
