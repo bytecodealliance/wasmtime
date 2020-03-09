@@ -76,9 +76,13 @@ impl BuiltinFunctionIndex {
     pub const fn get_memory_init_index() -> Self {
         Self(11)
     }
+    /// Returns an index for wasm's `data.drop` instruction.
+    pub const fn get_data_drop_index() -> Self {
+        Self(12)
+    }
     /// Returns the total number of builtin functions.
     pub const fn builtin_functions_total_number() -> u32 {
-        12
+        13
     }
 
     /// Return the index as an u32 number.
@@ -127,6 +131,9 @@ pub struct FuncEnvironment<'module_environment> {
     /// The external function signature for implementing wasm's `memory.init`.
     memory_init_sig: Option<ir::SigRef>,
 
+    /// The external function signature for implementing wasm's `data.drop`.
+    data_drop_sig: Option<ir::SigRef>,
+
     /// Offsets to struct fields accessed by JIT code.
     offsets: VMOffsets,
 }
@@ -148,6 +155,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             memory_copy_sig: None,
             memory_fill_sig: None,
             memory_init_sig: None,
+            data_drop_sig: None,
             offsets: VMOffsets::new(target_config.pointer_bytes(), module),
         }
     }
@@ -460,6 +468,27 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     fn get_memory_init_func(&mut self, func: &mut Function) -> (ir::SigRef, BuiltinFunctionIndex) {
         let sig = self.get_memory_init_sig(func);
         (sig, BuiltinFunctionIndex::get_memory_init_index())
+    }
+
+    fn get_data_drop_sig(&mut self, func: &mut Function) -> ir::SigRef {
+        let sig = self.data_drop_sig.unwrap_or_else(|| {
+            func.import_signature(Signature {
+                params: vec![
+                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                    // Data index.
+                    AbiParam::new(I32),
+                ],
+                returns: vec![],
+                call_conv: self.target_config.default_call_conv,
+            })
+        });
+        self.data_drop_sig = Some(sig);
+        sig
+    }
+
+    fn get_data_drop_func(&mut self, func: &mut Function) -> (ir::SigRef, BuiltinFunctionIndex) {
+        let sig = self.get_data_drop_sig(func);
+        (sig, BuiltinFunctionIndex::get_data_drop_index())
     }
 
     /// Translates load of builtin function and returns a pair of values `vmctx`
@@ -1149,10 +1178,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(())
     }
 
-    fn translate_data_drop(&mut self, _pos: FuncCursor, _seg_index: u32) -> WasmResult<()> {
-        Err(WasmError::Unsupported(
-            "bulk memory: `data.drop`".to_string(),
-        ))
+    fn translate_data_drop(&mut self, mut pos: FuncCursor, seg_index: u32) -> WasmResult<()> {
+        let (func_sig, func_idx) = self.get_data_drop_func(&mut pos.func);
+        let seg_index_arg = pos.ins().iconst(I32, seg_index as i64);
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+        pos.ins()
+            .call_indirect(func_sig, func_addr, &[vmctx, seg_index_arg]);
+        Ok(())
     }
 
     fn translate_table_size(

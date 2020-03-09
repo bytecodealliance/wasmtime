@@ -321,3 +321,10 @@ pub unsafe extern "C" fn wasmtime_memory_init(
         raise_lib_trap(trap);
     }
 }
+
+/// Implementation of `data.drop`.
+pub unsafe extern "C" fn wasmtime_data_drop(vmctx: *mut VMContext, data_index: u32) {
+    let data_index = DataIndex::from_u32(data_index);
+    let instance = (&mut *vmctx).instance();
+    instance.data_drop(data_index)
+}

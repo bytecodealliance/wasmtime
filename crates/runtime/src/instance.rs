@@ -92,6 +92,10 @@ pub(crate) struct Instance {
     /// empty slice.
     passive_elements: RefCell<HashMap<ElemIndex, Box<[VMCallerCheckedAnyfunc]>>>,
 
+    /// Passive data segments from our module. As `data.drop`s happen, entries
+    /// get removed. A missing entry is considered equivalent to an empty slice.
+    passive_data: RefCell<HashMap<DataIndex, Arc<[u8]>>>,
+
     /// Pointers to functions in executable memory.
     finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
 
@@ -766,9 +770,8 @@ impl Instance {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-memory-init
 
         let memory = self.get_memory(memory_index);
-        let data = self
-            .module
-            .passive_data
+        let passive_data = self.passive_data.borrow();
+        let data = passive_data
             .get(&data_index)
             .map_or(&[][..], |data| &**data);
 
@@ -791,6 +794,12 @@ impl Instance {
         }
 
         Ok(())
+    }
+
+    /// Drop the given data segment, truncating its length to zero.
+    pub(crate) fn data_drop(&self, data_index: DataIndex) {
+        let mut passive_data = self.passive_data.borrow_mut();
+        passive_data.remove(&data_index);
     }
 
     /// Get a table by index regardless of whether it is locally-defined or an
@@ -870,6 +879,8 @@ impl InstanceHandle {
 
         let offsets = VMOffsets::new(mem::size_of::<*const u8>() as u8, &module.local);
 
+        let passive_data = RefCell::new(module.passive_data.clone());
+
         let handle = {
             let instance = Instance {
                 refcount: Cell::new(1),
@@ -879,6 +890,7 @@ impl InstanceHandle {
                 memories,
                 tables,
                 passive_elements: Default::default(),
+                passive_data,
                 finished_functions,
                 dbg_jit_registration,
                 host_state,

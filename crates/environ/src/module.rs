@@ -12,7 +12,10 @@ use cranelift_wasm::{
 use indexmap::IndexMap;
 use more_asserts::assert_ge;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering::SeqCst},
+    Arc,
+};
 
 /// A WebAssembly table initializer.
 #[derive(Clone, Debug, Hash)]
@@ -170,7 +173,7 @@ pub struct Module {
     pub passive_elements: HashMap<ElemIndex, Box<[FuncIndex]>>,
 
     /// WebAssembly passive data segments.
-    pub passive_data: HashMap<DataIndex, Box<[u8]>>,
+    pub passive_data: HashMap<DataIndex, Arc<[u8]>>,
 
     /// WebAssembly table initializers.
     pub func_names: HashMap<FuncIndex, String>,

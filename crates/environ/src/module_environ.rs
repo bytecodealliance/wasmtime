@@ -11,6 +11,7 @@ use cranelift_wasm::{
     TargetEnvironment, WasmResult,
 };
 use std::convert::TryFrom;
+use std::sync::Arc;
 
 /// Contains function data: byte code and its offset in the module.
 #[derive(Hash)]
@@ -400,7 +401,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             .result
             .module
             .passive_data
-            .insert(data_index, data.to_vec().into_boxed_slice());
+            .insert(data_index, Arc::from(data));
         debug_assert!(
             old.is_none(),
             "a module can't have duplicate indices, this would be a cranelift-wasm bug"

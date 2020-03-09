@@ -567,6 +567,8 @@ impl VMBuiltinFunctionsArray {
             wasmtime_imported_memory_fill as usize;
         ptrs[BuiltinFunctionIndex::get_memory_init_index().index() as usize] =
             wasmtime_memory_init as usize;
+        ptrs[BuiltinFunctionIndex::get_data_drop_index().index() as usize] =
+            wasmtime_data_drop as usize;
 
         debug_assert!(ptrs.iter().cloned().all(|p| p != 0));
 

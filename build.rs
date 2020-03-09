@@ -197,9 +197,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("reference_types", _) => return true,
 
             // Still working on implementing these. See #928
-            ("bulk_memory_operations", "bulk")
-            | ("bulk_memory_operations", "data")
-            | ("bulk_memory_operations", "memory_init") => return true,
+            ("bulk_memory_operations", "bulk") => return true,
 
             _ => {}
         },
