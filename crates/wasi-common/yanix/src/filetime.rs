@@ -10,40 +10,55 @@ use std::io::Result;
 
 pub use super::sys::filetime::*;
 
-cfg_if::cfg_if! {
-    if #[cfg(not(target_os = "emscripten"))] {
-        fn filetime_to_timespec(ft: &filetime::FileTime) -> Result<libc::timespec> {
-            Ok(
-                libc::timespec {
-                    tv_sec: ft.seconds(),
-                    tv_nsec: i64::from(ft.nanoseconds()),
-                }
-            )
-        }
-    } else {
-        fn filetime_to_timespec(ft: &filetime::FileTime) -> Result<libc::timespec> {
-            use std::convert::TryInto;
-            use std::io::Error;
-            // Emscripten expects both `tv_sec` and `tv_nsec` fields to be `i32`.
-            // Here however `ft.seconds() -> i64` and `ft.nanoseconds() -> u32` so
-            // a simple `as` cast may be insufficient. So, perform a checked conversion,
-            // log error if any, and convert to libc::EOVERFLOW.
-            let tv_sec = match ft.seconds().try_into() {
-                Ok(sec) => sec,
-                Err(_) => {
-                    log::debug!("filetime_to_timespec failed converting seconds to required width");
-                    return Err(Error::from_raw_os_error(libc::EOVERFLOW));
-                }
-            };
-            let tv_nsec = match ft.nanoseconds().try_into() {
-                Ok(nsec) => nsec,
-                Err(_) => {
-                    log::debug!("filetime_to_timespec failed converting nanoseconds to required width");
-                    return Err(Error::from_raw_os_error(libc::EOVERFLOW));
-                }
-            };
-            Ok(libc::timespec { tv_sec, tv_nsec })
-        }
+pub(crate) trait FileTimeExt {
+    #[cfg(target_pointer_width = "32")]
+    fn seconds_checked(&self) -> Result<i32>;
+    #[cfg(target_pointer_width = "32")]
+    fn nanoseconds_checked(&self) -> Result<i32>;
+    #[cfg(target_pointer_width = "64")]
+    fn seconds_checked(&self) -> Result<i64>;
+    #[cfg(target_pointer_width = "64")]
+    fn nanoseconds_checked(&self) -> Result<i64>;
+}
+
+impl FileTimeExt for filetime::FileTime {
+    #[cfg(target_pointer_width = "32")]
+    fn seconds_checked(&self) -> Result<i32> {
+        use std::convert::TryInto;
+        use std::io::Error;
+        // 32bit OS expects `tv_sec` field to be `i32`.
+        // Perform a checked conversion, log error if any, and convert to libc::EOVERFLOW.
+        let sec = match self.seconds().try_into() {
+            Ok(sec) => sec,
+            Err(_) => {
+                log::debug!("filetime_to_timespec failed converting seconds to required width");
+                return Err(Error::from_raw_os_error(libc::EOVERFLOW));
+            }
+        };
+        Ok(sec)
+    }
+    #[cfg(target_pointer_width = "32")]
+    fn nanoseconds_checked(&self) -> Result<i32> {
+        use std::convert::TryInto;
+        use std::io::Error;
+        // 32bit OS expects `tv_nsec` field to be `i32`.
+        // Perform a checked conversion, log error if any, and convert to libc::EOVERFLOW.
+        let nsec = match self.nanoseconds().try_into() {
+            Ok(nsec) => nsec,
+            Err(_) => {
+                log::debug!("filetime_to_timespec failed converting nanoseconds to required width");
+                return Err(Error::from_raw_os_error(libc::EOVERFLOW));
+            }
+        };
+        Ok(nsec)
+    }
+    #[cfg(target_pointer_width = "64")]
+    fn seconds_checked(&self) -> Result<i64> {
+        Ok(self.seconds())
+    }
+    #[cfg(target_pointer_width = "64")]
+    fn nanoseconds_checked(&self) -> Result<i64> {
+        Ok(i64::from(self.nanoseconds()))
     }
 }
 
@@ -75,7 +90,10 @@ pub(crate) fn to_timespec(ft: &FileTime) -> Result<libc::timespec> {
             tv_sec: 0,
             tv_nsec: UTIME_OMIT,
         },
-        FileTime::FileTime(ft) => filetime_to_timespec(ft)?,
+        FileTime::FileTime(ft) => libc::timespec {
+            tv_sec: ft.seconds_checked()?,
+            tv_nsec: ft.nanoseconds_checked()?,
+        },
     };
     Ok(ts)
 }
