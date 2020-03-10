@@ -1,6 +1,7 @@
+use crate::transform::map_reg;
 use std::collections::HashMap;
 use wasmtime_environ::entity::EntityRef;
-use wasmtime_environ::isa::{CallConv, RegUnit, TargetIsa};
+use wasmtime_environ::isa::{CallConv, TargetIsa};
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::{FrameLayoutChange, FrameLayouts};
 
@@ -10,10 +11,6 @@ use gimli::write::{
 };
 use gimli::{Encoding, Format, Register, X86_64};
 
-fn map_reg(isa: &dyn TargetIsa, reg: RegUnit) -> Register {
-    crate::transform::map_reg(isa, reg).unwrap()
-}
-
 fn to_cfi(
     isa: &dyn TargetIsa,
     change: &FrameLayoutChange,
@@ -22,7 +19,10 @@ fn to_cfi(
 ) -> Option<CallFrameInstruction> {
     Some(match change {
         FrameLayoutChange::CallFrameAddressAt { reg, offset } => {
-            let mapped = map_reg(isa, *reg);
+            let mapped = match map_reg(isa, *reg) {
+                Ok(r) => r,
+                Err(_) => return None,
+            };
             let offset = (*offset) as i32;
             if mapped != *cfa_def_reg && offset != *cfa_def_offset {
                 *cfa_def_reg = mapped;
@@ -41,7 +41,10 @@ fn to_cfi(
         FrameLayoutChange::RegAt { reg, cfa_offset } => {
             assert!(cfa_offset % -8 == 0);
             let cfa_offset = *cfa_offset as i32;
-            let mapped = map_reg(isa, *reg);
+            let mapped = match map_reg(isa, *reg) {
+                Ok(r) => r,
+                Err(_) => return None,
+            };
             CallFrameInstruction::Offset(mapped, cfa_offset)
         }
         FrameLayoutChange::ReturnAddressAt { cfa_offset } => {
