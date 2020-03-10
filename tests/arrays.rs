@@ -9,7 +9,7 @@ wiggle::from_witx!({
 
 impl_errno!(types::Errno);
 
-impl arrays::Arrays for WasiCtx {
+impl<'a> arrays::Arrays for WasiCtx<'a> {
     fn reduce_excuses(
         &self,
         excuses: &types::ConstExcuseArray,

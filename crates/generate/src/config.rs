@@ -14,25 +14,32 @@ pub struct Config {
     pub ctx: CtxConf,
 }
 
-enum ConfigField {
+#[derive(Debug, Clone)]
+pub enum ConfigField {
     Witx(WitxConf),
     Ctx(CtxConf),
+}
+
+impl ConfigField {
+    pub fn parse_pair(ident: &str, value: ParseStream, err_loc: Span) -> Result<Self> {
+        match ident {
+            "witx" => Ok(ConfigField::Witx(value.parse()?)),
+            "ctx" => Ok(ConfigField::Ctx(value.parse()?)),
+            _ => Err(Error::new(err_loc, "expected `witx` or `ctx`")),
+        }
+    }
 }
 
 impl Parse for ConfigField {
     fn parse(input: ParseStream) -> Result<Self> {
         let id: Ident = input.parse()?;
         let _colon: Token![:] = input.parse()?;
-        match id.to_string().as_ref() {
-            "witx" => Ok(ConfigField::Witx(input.parse()?)),
-            "ctx" => Ok(ConfigField::Ctx(input.parse()?)),
-            _ => Err(Error::new(id.span(), "expected `witx` or `ctx`")),
-        }
+        Self::parse_pair(id.to_string().as_ref(), input, id.span())
     }
 }
 
 impl Config {
-    fn build(fields: impl Iterator<Item = ConfigField>, err_loc: Span) -> Result<Self> {
+    pub fn build(fields: impl Iterator<Item = ConfigField>, err_loc: Span) -> Result<Self> {
         let mut witx = None;
         let mut ctx = None;
         for f in fields {

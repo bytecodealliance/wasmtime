@@ -8,21 +8,21 @@ wiggle::from_witx!({
 
 type Result<T> = std::result::Result<T, types::Errno>;
 
-impl GuestErrorType for types::Errno {
-    type Context = WasiCtx;
+impl<'a> GuestErrorType<'a> for types::Errno {
+    type Context = WasiCtx<'a>;
 
     fn success() -> types::Errno {
         types::Errno::Success
     }
 
-    fn from_error(e: GuestError, ctx: &WasiCtx) -> types::Errno {
+    fn from_error(e: GuestError, ctx: &Self::Context) -> types::Errno {
         eprintln!("GUEST ERROR: {:?}", e);
         ctx.guest_errors.borrow_mut().push(e);
         types::Errno::Io
     }
 }
 
-impl crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
+impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
     fn args_get(&self, _argv: GuestPtr<GuestPtr<u8>>, _argv_buf: GuestPtr<u8>) -> Result<()> {
         unimplemented!("args_get")
     }

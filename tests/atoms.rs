@@ -9,7 +9,7 @@ wiggle::from_witx!({
 
 impl_errno!(types::Errno);
 
-impl atoms::Atoms for WasiCtx {
+impl<'a> atoms::Atoms for WasiCtx<'a> {
     fn int_float_args(&self, an_int: u32, an_float: f32) -> Result<(), types::Errno> {
         println!("INT FLOAT ARGS: {} {}", an_int, an_float);
         Ok(())

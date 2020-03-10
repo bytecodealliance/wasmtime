@@ -1,7 +1,7 @@
 use crate::{GuestError, GuestPtr};
 use std::mem;
 
-pub trait GuestErrorType {
+pub trait GuestErrorType<'a> {
     type Context;
     fn success() -> Self;
     fn from_error(e: GuestError, ctx: &Self::Context) -> Self;

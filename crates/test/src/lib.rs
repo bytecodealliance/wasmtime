@@ -1,5 +1,6 @@
 use proptest::prelude::*;
 use std::cell::UnsafeCell;
+use std::marker;
 use wiggle_runtime::GuestMemory;
 
 #[derive(Debug, Clone)]
@@ -290,14 +291,18 @@ mod test {
 use std::cell::RefCell;
 use wiggle_runtime::GuestError;
 
-pub struct WasiCtx {
+// In lucet, our Ctx struct needs a lifetime, so we're using one
+// on the test as well.
+pub struct WasiCtx<'a> {
     pub guest_errors: RefCell<Vec<GuestError>>,
+    lifetime: marker::PhantomData<&'a ()>,
 }
 
-impl WasiCtx {
+impl<'a> WasiCtx<'a> {
     pub fn new() -> Self {
         Self {
             guest_errors: RefCell::new(vec![]),
+            lifetime: marker::PhantomData,
         }
     }
 }
@@ -309,8 +314,8 @@ impl WasiCtx {
 #[macro_export]
 macro_rules! impl_errno {
     ( $errno:ty ) => {
-        impl wiggle_runtime::GuestErrorType for $errno {
-            type Context = WasiCtx;
+        impl<'a> wiggle_runtime::GuestErrorType<'a> for $errno {
+            type Context = WasiCtx<'a>;
             fn success() -> $errno {
                 <$errno>::Ok
             }

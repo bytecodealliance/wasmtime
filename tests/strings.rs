@@ -9,7 +9,7 @@ wiggle::from_witx!({
 
 impl_errno!(types::Errno);
 
-impl strings::Strings for WasiCtx {
+impl<'a> strings::Strings for WasiCtx<'a> {
     fn hello_string(&self, a_string: &GuestPtr<str>) -> Result<u32, types::Errno> {
         let mut bc = GuestBorrows::new();
         let s = a_string.as_raw(&mut bc).expect("should be valid string");

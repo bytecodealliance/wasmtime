@@ -9,7 +9,7 @@ wiggle::from_witx!({
 
 impl_errno!(types::Errno);
 
-impl structs::Structs for WasiCtx {
+impl<'a> structs::Structs for WasiCtx<'a> {
     fn sum_of_pair(&self, an_pair: &types::PairInts) -> Result<i64, types::Errno> {
         Ok(an_pair.first as i64 + an_pair.second as i64)
     }
@@ -42,11 +42,11 @@ impl structs::Structs for WasiCtx {
         })
     }
 
-    fn return_pair_of_ptrs<'a>(
+    fn return_pair_of_ptrs<'b>(
         &self,
-        first: GuestPtr<'a, i32>,
-        second: GuestPtr<'a, i32>,
-    ) -> Result<types::PairIntPtrs<'a>, types::Errno> {
+        first: GuestPtr<'b, i32>,
+        second: GuestPtr<'b, i32>,
+    ) -> Result<types::PairIntPtrs<'b>, types::Errno> {
         Ok(types::PairIntPtrs { first, second })
     }
 }

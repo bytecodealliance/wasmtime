@@ -31,7 +31,7 @@ fn mult_zero_nan(a: f32, b: u32) -> f32 {
     }
 }
 
-impl union_example::UnionExample for WasiCtx {
+impl<'a> union_example::UnionExample for WasiCtx<'a> {
     fn get_tag(&self, u: &types::Reason) -> Result<types::Excuse, types::Errno> {
         println!("GET TAG: {:?}", u);
         match u {
