@@ -59,9 +59,6 @@ struct Scope {
     /// The rough predicted maximum RSS of executing all of our generated API
     /// calls thus far.
     predicted_rss: usize,
-
-    /// The number of calls of an exported function from an instance.
-    num_export_calls: usize,
 }
 
 impl Scope {
@@ -93,12 +90,15 @@ impl Arbitrary for ApiCalls {
         let mut scope = Scope::default();
         let max_rss = 1 << 30; // 1GB
 
-        // Calling an exported function of a `wasm-opt -ttf` module tends to
-        // take about 20ms. Limit their number to 100, or ~2s, so that we don't
-        // get too close to our 3s timeout.
-        let max_export_calls = 100;
+        // Total limit on number of API calls we'll generate. This exists to
+        // avoid libFuzzer timeouts.
+        let max_calls = 100;
 
         for _ in 0..input.arbitrary_len::<ApiCall>()? {
+            if calls.len() > max_calls {
+                break;
+            }
+
             let mut choices: Vec<fn(_, &mut Scope) -> arbitrary::Result<ApiCall>> = vec![];
 
             if swarm.module_new {
@@ -137,12 +137,8 @@ impl Arbitrary for ApiCalls {
                     Ok(InstanceDrop { id })
                 });
             }
-            if swarm.call_exported_func
-                && scope.num_export_calls < max_export_calls
-                && !scope.instances.is_empty()
-            {
+            if swarm.call_exported_func && !scope.instances.is_empty() {
                 choices.push(|input, scope| {
-                    scope.num_export_calls += 1;
                     let instances: Vec<_> = scope.instances.keys().collect();
                     let instance = **input.choose(&instances)?;
                     let nth = usize::arbitrary(input)?;
