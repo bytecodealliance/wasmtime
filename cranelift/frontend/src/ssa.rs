@@ -10,15 +10,13 @@
 use crate::Variable;
 use alloc::vec::Vec;
 use core::mem;
-use core::u32;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
-use cranelift_codegen::entity::{EntityRef, PrimaryMap, SecondaryMap};
+use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::instructions::BranchInfo;
 use cranelift_codegen::ir::types::{F32, F64};
 use cranelift_codegen::ir::{Block, Function, Inst, InstBuilder, InstructionData, Type, Value};
 use cranelift_codegen::packed_option::PackedOption;
-use cranelift_codegen::packed_option::ReservedValue;
 use smallvec::SmallVec;
 
 /// Structure containing the data relevant the construction of SSA for a given function.
@@ -40,14 +38,11 @@ pub struct SSABuilder {
     // TODO: Consider a sparse representation rather than SecondaryMap-of-SecondaryMap.
     /// Records for every variable and for every relevant block, the last definition of
     /// the variable in the block.
-    variables: SecondaryMap<Variable, SecondaryMap<SSABlock, PackedOption<Value>>>,
+    variables: SecondaryMap<Variable, SecondaryMap<Block, PackedOption<Value>>>,
 
     /// Records the position of the basic blocks and the list of values used but not defined in the
     /// block.
-    ssa_blocks: PrimaryMap<SSABlock, SSABlockData>,
-
-    /// Records the basic blocks at the beginning of the `Block`s.
-    block_headers: SecondaryMap<Block, PackedOption<SSABlock>>,
+    ssa_blocks: SecondaryMap<Block, SSABlockData>,
 
     /// Call stack for use in the `use_var`/`predecessors_lookup` state machine.
     calls: Vec<Call>,
@@ -83,83 +78,43 @@ impl SideEffects {
     }
 }
 
-/// Describes the current position of a basic block in the control flow graph.
-enum SSABlockData {
-    /// A block at the top of a `Block`.
-    BlockHeader(BlockHeaderSSABlockData),
-    /// A block inside a `Block` with an unique other block as its predecessor.
-    /// The block is implicitly sealed at creation.
-    BlockBody { ssa_pred: SSABlock },
-}
-
-impl SSABlockData {
-    fn add_predecessor(&mut self, ssa_pred: SSABlock, inst: Inst) {
-        match *self {
-            Self::BlockBody { .. } => panic!("you can't add a predecessor to a body block"),
-            Self::BlockHeader(ref mut data) => {
-                debug_assert!(!data.sealed, "sealed blocks cannot accept new predecessors");
-                data.predecessors.push(PredBlock::new(ssa_pred, inst));
-            }
-        }
-    }
-    fn remove_predecessor(&mut self, inst: Inst) -> SSABlock {
-        match *self {
-            Self::BlockBody { .. } => panic!("should not happen"),
-            Self::BlockHeader(ref mut data) => {
-                // This a linear complexity operation but the number of predecessors is low
-                // in all non-pathological cases
-                let pred: usize = data
-                    .predecessors
-                    .iter()
-                    .position(|&PredBlock { branch, .. }| branch == inst)
-                    .expect("the predecessor you are trying to remove is not declared");
-                data.predecessors.swap_remove(pred).ssa_block
-            }
-        }
-    }
-}
-
+#[derive(Clone)]
 struct PredBlock {
-    ssa_block: SSABlock,
+    block: Block,
     branch: Inst,
 }
 
 impl PredBlock {
-    fn new(ssa_block: SSABlock, branch: Inst) -> Self {
-        Self { ssa_block, branch }
+    fn new(block: Block, branch: Inst) -> Self {
+        Self { block, branch }
     }
 }
 
 type PredBlockSmallVec = SmallVec<[PredBlock; 4]>;
 
-struct BlockHeaderSSABlockData {
+#[derive(Clone, Default)]
+struct SSABlockData {
     // The predecessors of the Block header block, with the block and branch instruction.
     predecessors: PredBlockSmallVec,
     // A block header block is sealed if all of its predecessors have been declared.
     sealed: bool,
-    // The block which this block is part of.
-    block: Block,
     // List of current Block arguments for which an earlier def has not been found yet.
     undef_variables: Vec<(Variable, Value)>,
 }
 
-/// A opaque reference to a basic block.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct SSABlock(u32);
-impl EntityRef for SSABlock {
-    fn new(index: usize) -> Self {
-        debug_assert!(index < (u32::MAX as usize));
-        Self(index as u32)
+impl SSABlockData {
+    fn add_predecessor(&mut self, pred: Block, inst: Inst) {
+        debug_assert!(!self.sealed, "sealed blocks cannot accept new predecessors");
+        self.predecessors.push(PredBlock::new(pred, inst));
     }
 
-    fn index(self) -> usize {
-        self.0 as usize
-    }
-}
-
-impl ReservedValue for SSABlock {
-    fn reserved_value() -> Self {
-        Self(u32::MAX)
+    fn remove_predecessor(&mut self, inst: Inst) -> Block {
+        let pred = self
+            .predecessors
+            .iter()
+            .position(|&PredBlock { branch, .. }| branch == inst)
+            .expect("the predecessor you are trying to remove is not declared");
+        self.predecessors.swap_remove(pred).block
     }
 }
 
@@ -168,8 +123,7 @@ impl SSABuilder {
     pub fn new() -> Self {
         Self {
             variables: SecondaryMap::with_default(SecondaryMap::new()),
-            ssa_blocks: PrimaryMap::new(),
-            block_headers: SecondaryMap::new(),
+            ssa_blocks: SecondaryMap::new(),
             calls: Vec::new(),
             results: Vec::new(),
             side_effects: SideEffects::new(),
@@ -181,7 +135,6 @@ impl SSABuilder {
     pub fn clear(&mut self) {
         self.variables.clear();
         self.ssa_blocks.clear();
-        self.block_headers.clear();
         debug_assert!(self.calls.is_empty());
         debug_assert!(self.results.is_empty());
         debug_assert!(self.side_effects.is_empty());
@@ -191,7 +144,6 @@ impl SSABuilder {
     pub fn is_empty(&self) -> bool {
         self.variables.is_empty()
             && self.ssa_blocks.is_empty()
-            && self.block_headers.is_empty()
             && self.calls.is_empty()
             && self.results.is_empty()
             && self.side_effects.is_empty()
@@ -210,14 +162,14 @@ enum ZeroOneOrMore<T> {
 #[derive(Debug)]
 enum UseVarCases {
     Unsealed(Value),
-    SealedOnePredecessor(SSABlock),
+    SealedOnePredecessor(Block),
     SealedMultiplePredecessors(Value, Block),
 }
 
 /// States for the `use_var`/`predecessors_lookup` state machine.
 enum Call {
-    UseVar(SSABlock),
-    FinishSealedOnePredecessor(SSABlock),
+    UseVar(Block),
+    FinishSealedOnePredecessor(Block),
     FinishPredecessorsLookup(Value, Block),
 }
 
@@ -278,8 +230,8 @@ impl SSABuilder {
     /// Declares a new definition of a variable in a given basic block.
     /// The SSA value is passed as an argument because it should be created with
     /// `ir::DataFlowGraph::append_result`.
-    pub fn def_var(&mut self, var: Variable, val: Value, ssa_block: SSABlock) {
-        self.variables[var][ssa_block] = PackedOption::from(val);
+    pub fn def_var(&mut self, var: Variable, val: Value, block: Block) {
+        self.variables[var][block] = PackedOption::from(val);
     }
 
     /// Declares a use of a variable in a given basic block. Returns the SSA value corresponding
@@ -294,12 +246,12 @@ impl SSABuilder {
         func: &mut Function,
         var: Variable,
         ty: Type,
-        ssa_block: SSABlock,
+        block: Block,
     ) -> (Value, SideEffects) {
         // First, try Local Value Numbering (Algorithm 1 in the paper).
         // If the variable already has a known Value in this block, use that.
         if let Some(var_defs) = self.variables.get(var) {
-            if let Some(val) = var_defs[ssa_block].expand() {
+            if let Some(val) = var_defs[block].expand() {
                 return (val, SideEffects::new());
             }
         }
@@ -311,7 +263,7 @@ impl SSABuilder {
         debug_assert!(self.side_effects.is_empty());
 
         // Prepare the 'calls' and 'results' stacks for the state machine.
-        self.use_var_nonlocal(func, var, ty, ssa_block);
+        self.use_var_nonlocal(func, var, ty, block);
 
         let value = self.run_state_machine(func, var, ty);
         let side_effects = mem::replace(&mut self.side_effects, SideEffects::new());
@@ -322,54 +274,44 @@ impl SSABuilder {
     /// Resolve the minimal SSA Value of `var` in `block` by traversing predecessors.
     ///
     /// This function sets up state for `run_state_machine()` but does not execute it.
-    fn use_var_nonlocal(
-        &mut self,
-        func: &mut Function,
-        var: Variable,
-        ty: Type,
-        ssa_block: SSABlock,
-    ) {
+    fn use_var_nonlocal(&mut self, func: &mut Function, var: Variable, ty: Type, block: Block) {
         // This function is split into two parts to appease the borrow checker.
         // Part 1: With a mutable borrow of self, update the DataFlowGraph if necessary.
-        let case = match self.ssa_blocks[ssa_block] {
-            SSABlockData::BlockHeader(ref mut data) => {
-                // The block has multiple predecessors so we append a Block parameter that
-                // will serve as a value.
-                if data.sealed {
-                    if data.predecessors.len() == 1 {
-                        // Optimize the common case of one predecessor: no param needed.
-                        UseVarCases::SealedOnePredecessor(data.predecessors[0].ssa_block)
-                    } else {
-                        // Break potential cycles by eagerly adding an operandless param.
-                        let val = func.dfg.append_block_param(data.block, ty);
-                        UseVarCases::SealedMultiplePredecessors(val, data.block)
-                    }
-                } else {
-                    let val = func.dfg.append_block_param(data.block, ty);
-                    data.undef_variables.push((var, val));
-                    UseVarCases::Unsealed(val)
-                }
+        let data = &mut self.ssa_blocks[block];
+        let case = if data.sealed {
+            // The block has multiple predecessors so we append a Block parameter that
+            // will serve as a value.
+            if data.predecessors.len() == 1 {
+                // Optimize the common case of one predecessor: no param needed.
+                UseVarCases::SealedOnePredecessor(data.predecessors[0].block)
+            } else {
+                // Break potential cycles by eagerly adding an operandless param.
+                let val = func.dfg.append_block_param(block, ty);
+                UseVarCases::SealedMultiplePredecessors(val, block)
             }
-            SSABlockData::BlockBody { ssa_pred } => UseVarCases::SealedOnePredecessor(ssa_pred),
+        } else {
+            let val = func.dfg.append_block_param(block, ty);
+            data.undef_variables.push((var, val));
+            UseVarCases::Unsealed(val)
         };
 
         // Part 2: Prepare SSABuilder state for run_state_machine().
         match case {
             UseVarCases::SealedOnePredecessor(pred) => {
                 // Get the Value directly from the single predecessor.
-                self.calls.push(Call::FinishSealedOnePredecessor(ssa_block));
+                self.calls.push(Call::FinishSealedOnePredecessor(block));
                 self.calls.push(Call::UseVar(pred));
             }
             UseVarCases::Unsealed(val) => {
                 // Define the operandless param added above to prevent lookup cycles.
-                self.def_var(var, val, ssa_block);
+                self.def_var(var, val, block);
 
                 // Nothing more can be known at this point.
                 self.results.push(val);
             }
             UseVarCases::SealedMultiplePredecessors(val, block) => {
                 // Define the operandless param added above to prevent lookup cycles.
-                self.def_var(var, val, ssa_block);
+                self.def_var(var, val, block);
 
                 // Look up a use_var for each precessor.
                 self.begin_predecessors_lookup(val, block);
@@ -379,43 +321,20 @@ impl SSABuilder {
 
     /// For blocks with a single predecessor, once we've determined the value,
     /// record a local def for it for future queries to find.
-    fn finish_sealed_one_predecessor(&mut self, var: Variable, ssa_block: SSABlock) {
+    fn finish_sealed_one_predecessor(&mut self, var: Variable, block: Block) {
         let val = *self.results.last().unwrap();
-        self.def_var(var, val, ssa_block);
-    }
-
-    /// Declares a new basic block belonging to the body of a certain `Block` and having `pred`
-    /// as a predecessor. `pred` is the only predecessor of the block and the block is sealed
-    /// at creation.
-    ///
-    /// To declare a `Block` header block, see `declare_block_header_block`.
-    pub fn declare_block_body_block(&mut self, ssa_pred: SSABlock) -> SSABlock {
-        self.ssa_blocks.push(SSABlockData::BlockBody { ssa_pred })
+        self.def_var(var, val, block);
     }
 
     /// Declares a new basic block at the beginning of a `Block`. No predecessors are declared
     /// here and the block is not sealed.
     /// Predecessors have to be added with `declare_block_predecessor`.
-    pub fn declare_block_header_block(&mut self, block: Block) -> SSABlock {
-        let ssa_block = self
-            .ssa_blocks
-            .push(SSABlockData::BlockHeader(BlockHeaderSSABlockData {
-                predecessors: PredBlockSmallVec::new(),
-                sealed: false,
-                block,
-                undef_variables: Vec::new(),
-            }));
-        self.block_headers[block] = ssa_block.into();
-        ssa_block
-    }
-    /// Gets the header block corresponding to a Block, panics if the Block or the header block
-    /// isn't declared.
-    pub fn header_block(&self, block: Block) -> SSABlock {
-        self.block_headers
-            .get(block)
-            .expect("the block has not been declared")
-            .expand()
-            .expect("the header block has not been defined")
+    pub fn declare_block(&mut self, block: Block) {
+        self.ssa_blocks[block] = SSABlockData {
+            predecessors: PredBlockSmallVec::new(),
+            sealed: false,
+            undef_variables: Vec::new(),
+        };
     }
 
     /// Declares a new predecessor for a `Block` header block and record the branch instruction
@@ -427,20 +346,18 @@ impl SSABuilder {
     ///
     /// Callers are expected to avoid adding the same predecessor more than once in the case
     /// of a jump table.
-    pub fn declare_block_predecessor(&mut self, block: Block, ssa_pred: SSABlock, inst: Inst) {
+    pub fn declare_block_predecessor(&mut self, block: Block, pred: Block, inst: Inst) {
         debug_assert!(!self.is_sealed(block));
-        let header_block = self.header_block(block);
-        self.ssa_blocks[header_block].add_predecessor(ssa_pred, inst)
+        self.ssa_blocks[block].add_predecessor(pred, inst)
     }
 
     /// Remove a previously declared Block predecessor by giving a reference to the jump
     /// instruction. Returns the basic block containing the instruction.
     ///
     /// Note: use only when you know what you are doing, this might break the SSA building problem
-    pub fn remove_block_predecessor(&mut self, block: Block, inst: Inst) -> SSABlock {
+    pub fn remove_block_predecessor(&mut self, block: Block, inst: Inst) -> Block {
         debug_assert!(!self.is_sealed(block));
-        let header_block = self.header_block(block);
-        self.ssa_blocks[header_block].remove_predecessor(inst)
+        self.ssa_blocks[block].remove_predecessor(inst)
     }
 
     /// Completes the global value numbering for a `Block`, all of its predecessors having been
@@ -450,8 +367,8 @@ impl SSABuilder {
     /// take into account the Phi function placed by the SSA algorithm.
     ///
     /// Returns the list of newly created blocks for critical edge splitting.
-    pub fn seal_block_header_block(&mut self, block: Block, func: &mut Function) -> SideEffects {
-        self.seal_one_block_header_block(block, func);
+    pub fn seal_block(&mut self, block: Block, func: &mut Function) -> SideEffects {
+        self.seal_one_block(block, func);
         mem::replace(&mut self.side_effects, SideEffects::new())
     }
 
@@ -461,35 +378,29 @@ impl SSABuilder {
     /// translation, but for frontends where this is impractical to do, this
     /// function can be used at the end of translating all blocks to ensure
     /// that everything is sealed.
-    pub fn seal_all_block_header_blocks(&mut self, func: &mut Function) -> SideEffects {
+    pub fn seal_all_blocks(&mut self, func: &mut Function) -> SideEffects {
         // Seal all `Block`s currently in the function. This can entail splitting
         // and creation of new blocks, however such new blocks are sealed on
         // the fly, so we don't need to account for them here.
-        for block in self.block_headers.keys() {
-            self.seal_one_block_header_block(block, func);
+        for block in self.ssa_blocks.keys() {
+            self.seal_one_block(block, func);
         }
         mem::replace(&mut self.side_effects, SideEffects::new())
     }
 
-    /// Helper function for `seal_block_header_block` and
-    /// `seal_all_block_header_blocks`.
-    fn seal_one_block_header_block(&mut self, block: Block, func: &mut Function) {
-        let ssa_block = self.header_block(block);
+    /// Helper function for `seal_block` and
+    /// `seal_all_blocks`.
+    fn seal_one_block(&mut self, block: Block, func: &mut Function) {
+        let block_data = &mut self.ssa_blocks[block];
+        debug_assert!(
+            !block_data.sealed,
+            "Attempting to seal {} which is already sealed.",
+            block
+        );
 
-        let undef_vars = match self.ssa_blocks[ssa_block] {
-            SSABlockData::BlockBody { .. } => panic!("this should not happen"),
-            SSABlockData::BlockHeader(ref mut data) => {
-                debug_assert!(
-                    !data.sealed,
-                    "Attempting to seal {} which is already sealed.",
-                    block
-                );
-                debug_assert_eq!(block, data.block);
-                // Extract the undef_variables data from the block so that we
-                // can iterate over it without borrowing the whole builder.
-                mem::replace(&mut data.undef_variables, Vec::new())
-            }
-        };
+        // Extract the undef_variables data from the block so that we
+        // can iterate over it without borrowing the whole builder.
+        let undef_vars = mem::replace(&mut block_data.undef_variables, Vec::new());
 
         // For each undef var we look up values in the predecessors and create a block parameter
         // only if necessary.
@@ -497,23 +408,20 @@ impl SSABuilder {
             let ty = func.dfg.value_type(val);
             self.predecessors_lookup(func, val, var, ty, block);
         }
-        self.mark_block_header_block_sealed(ssa_block);
+        self.mark_block_sealed(block);
     }
 
     /// Set the `sealed` flag for `block`.
-    fn mark_block_header_block_sealed(&mut self, ssa_block: SSABlock) {
+    fn mark_block_sealed(&mut self, block: Block) {
         // Then we mark the block as sealed.
-        match self.ssa_blocks[ssa_block] {
-            SSABlockData::BlockBody { .. } => panic!("this should not happen"),
-            SSABlockData::BlockHeader(ref mut data) => {
-                debug_assert!(!data.sealed);
-                debug_assert!(data.undef_variables.is_empty());
-                data.sealed = true;
-                // We could call data.predecessors.shrink_to_fit() here, if
-                // important, because no further predecessors will be added
-                // to this block.
-            }
-        }
+        let block_data = &mut self.ssa_blocks[block];
+        debug_assert!(!block_data.sealed);
+        debug_assert!(block_data.undef_variables.is_empty());
+        block_data.sealed = true;
+
+        // We could call data.predecessors.shrink_to_fit() here, if
+        // important, because no further predecessors will be added
+        // to this block.
     }
 
     /// Given the local SSA Value of a Variable in a Block, perform a recursive lookup on
@@ -559,11 +467,12 @@ impl SSABuilder {
             .push(Call::FinishPredecessorsLookup(sentinel, dest_block));
         // Iterate over the predecessors.
         let mut calls = mem::replace(&mut self.calls, Vec::new());
-        calls.extend(self.predecessors(dest_block).iter().rev().map(
-            |&PredBlock {
-                 ssa_block: pred, ..
-             }| Call::UseVar(pred),
-        ));
+        calls.extend(
+            self.predecessors(dest_block)
+                .iter()
+                .rev()
+                .map(|&PredBlock { block: pred, .. }| Call::UseVar(pred)),
+        );
         self.calls = calls;
     }
 
@@ -647,23 +556,23 @@ impl SSABuilder {
                 let mut preds =
                     mem::replace(self.predecessors_mut(dest_block), PredBlockSmallVec::new());
                 for &mut PredBlock {
-                    ssa_block: ref mut pred_ssa_block,
+                    block: ref mut pred_block,
                     branch: ref mut last_inst,
                 } in &mut preds
                 {
                     // We already did a full `use_var` above, so we can do just the fast path.
                     let ssa_block_map = self.variables.get(var).unwrap();
-                    let pred_val = ssa_block_map.get(*pred_ssa_block).unwrap().unwrap();
+                    let pred_val = ssa_block_map.get(*pred_block).unwrap().unwrap();
                     let jump_arg = self.append_jump_argument(
                         func,
                         *last_inst,
-                        *pred_ssa_block,
+                        *pred_block,
                         dest_block,
                         pred_val,
                         var,
                     );
-                    if let Some((middle_block, middle_ssa_block, middle_jump_inst)) = jump_arg {
-                        *pred_ssa_block = middle_ssa_block;
+                    if let Some((middle_block, middle_jump_inst)) = jump_arg {
+                        *pred_block = middle_block;
                         *last_inst = middle_jump_inst;
                         self.side_effects.split_blocks_created.push(middle_block);
                     }
@@ -685,11 +594,11 @@ impl SSABuilder {
         &mut self,
         func: &mut Function,
         jump_inst: Inst,
-        jump_inst_ssa_block: SSABlock,
+        jump_inst_block: Block,
         dest_block: Block,
         val: Value,
         var: Variable,
-    ) -> Option<(Block, SSABlock, Inst)> {
+    ) -> Option<(Block, Inst)> {
         match func.dfg.analyze_branch(jump_inst) {
             BranchInfo::NotABranch => {
                 panic!("you have declared a non-branch instruction as a predecessor to a block");
@@ -706,9 +615,9 @@ impl SSABuilder {
                 // We have to split the critical edge
                 let middle_block = func.dfg.make_block();
                 func.layout.append_block(middle_block);
-                let middle_ssa_block = self.declare_block_header_block(middle_block);
-                self.ssa_blocks[middle_ssa_block].add_predecessor(jump_inst_ssa_block, jump_inst);
-                self.mark_block_header_block_sealed(middle_ssa_block);
+                self.declare_block(middle_block);
+                self.ssa_blocks[middle_block].add_predecessor(jump_inst_block, jump_inst);
+                self.mark_block_sealed(middle_block);
 
                 if let Some(default_block) = default_block {
                     if dest_block == default_block {
@@ -731,19 +640,15 @@ impl SSABuilder {
                 }
                 let mut cur = FuncCursor::new(func).at_bottom(middle_block);
                 let middle_jump_inst = cur.ins().jump(dest_block, &[val]);
-                self.def_var(var, val, middle_ssa_block);
-                Some((middle_block, middle_ssa_block, middle_jump_inst))
+                self.def_var(var, val, middle_block);
+                Some((middle_block, middle_jump_inst))
             }
         }
     }
 
     /// Returns the list of `Block`s that have been declared as predecessors of the argument.
     fn predecessors(&self, block: Block) -> &[PredBlock] {
-        let ssa_block = self.header_block(block);
-        match self.ssa_blocks[ssa_block] {
-            SSABlockData::BlockBody { .. } => panic!("should not happen"),
-            SSABlockData::BlockHeader(ref data) => &data.predecessors,
-        }
+        &self.ssa_blocks[block].predecessors
     }
 
     /// Returns whether the given Block has any predecessor or not.
@@ -753,19 +658,12 @@ impl SSABuilder {
 
     /// Same as predecessors, but for &mut.
     fn predecessors_mut(&mut self, block: Block) -> &mut PredBlockSmallVec {
-        let ssa_block = self.header_block(block);
-        match self.ssa_blocks[ssa_block] {
-            SSABlockData::BlockBody { .. } => panic!("should not happen"),
-            SSABlockData::BlockHeader(ref mut data) => &mut data.predecessors,
-        }
+        &mut self.ssa_blocks[block].predecessors
     }
 
     /// Returns `true` if and only if `seal_block_header_block` has been called on the argument.
     pub fn is_sealed(&self, block: Block) -> bool {
-        match self.ssa_blocks[self.header_block(block)] {
-            SSABlockData::BlockBody { .. } => panic!("should not happen"),
-            SSABlockData::BlockHeader(ref data) => data.sealed,
-        }
+        self.ssa_blocks[block].sealed
     }
 
     /// The main algorithm is naturally recursive: when there's a `use_var` in a
