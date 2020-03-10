@@ -1023,11 +1023,30 @@ impl CallAdapter {
                 }
             }
 
+            i @ End => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+
+            i @ MemoryToString(_) => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+
+            i @ StringToMemory(_) => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+
+            i @ CallAdapter(_) => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+
+            i @ DeferCallCore(_) => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+
             I32ToS8 => {
                 let val = pop(stack, ValType::I32).unwrap_i32();
                 stack.push(Val::S8(val as i8));
             }
-
             I32ToS8X => {
                 let val = pop(stack, ValType::I32).unwrap_i32();
                 match val.try_into() {
@@ -1035,13 +1054,121 @@ impl CallAdapter {
                     Err(_) => return Err(Trap::new("integer overflow")),
                 }
             }
-
             I32ToU8 => {
                 let val = pop(stack, ValType::I32).unwrap_i32();
                 stack.push(Val::U8(val as u8));
             }
+            i @ I32ToS16 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ I32ToS16X => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ I32ToU16 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ I32ToS32 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ I32ToU32 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ I32ToS64 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ I32ToU64 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
 
-            i => return Err(Trap::new(format!("unimplemented instruction {:?}", i))),
+            i @ I64ToS8 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ I64ToS8X => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ I64ToU8 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ I64ToS16 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ I64ToS16X => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ I64ToU16 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ I64ToS32 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ I64ToS32X => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ I64ToU32 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ I64ToS64 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ I64ToU64 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+
+            i @ S8ToI32 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ U8ToI32 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ S16ToI32 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ U16ToI32 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ S32ToI32 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ U32ToI32 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ S64ToI32 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ S64ToI32X => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ U64ToI32 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ U64ToI32X => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+
+            i @ S8ToI64 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ U8ToI64 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ S16ToI64 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ U16ToI64 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ S32ToI64 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ U32ToI64 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ S64ToI64 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
+            i @ U64ToI64 => {
+                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            }
         }
 
         Ok(())
