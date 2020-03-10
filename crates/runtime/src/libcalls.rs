@@ -36,7 +36,7 @@ use crate::table::Table;
 use crate::traphandlers::raise_lib_trap;
 use crate::vmcontext::VMContext;
 use wasmtime_environ::ir;
-use wasmtime_environ::wasm::{DefinedMemoryIndex, ElemIndex, MemoryIndex, TableIndex};
+use wasmtime_environ::wasm::{DataIndex, DefinedMemoryIndex, ElemIndex, MemoryIndex, TableIndex};
 
 /// Implementation of f32.ceil
 pub extern "C" fn wasmtime_f32_ceil(x: f32) -> f32 {
@@ -298,4 +298,33 @@ pub unsafe extern "C" fn wasmtime_imported_memory_fill(
     if let Err(trap) = result {
         raise_lib_trap(trap);
     }
+}
+
+/// Implementation of `memory.init`.
+pub unsafe extern "C" fn wasmtime_memory_init(
+    vmctx: *mut VMContext,
+    memory_index: u32,
+    data_index: u32,
+    dst: u32,
+    src: u32,
+    len: u32,
+    source_loc: u32,
+) {
+    let result = {
+        let memory_index = MemoryIndex::from_u32(memory_index);
+        let data_index = DataIndex::from_u32(data_index);
+        let source_loc = ir::SourceLoc::new(source_loc);
+        let instance = (&mut *vmctx).instance();
+        instance.memory_init(memory_index, data_index, dst, src, len, source_loc)
+    };
+    if let Err(trap) = result {
+        raise_lib_trap(trap);
+    }
+}
+
+/// Implementation of `data.drop`.
+pub unsafe extern "C" fn wasmtime_data_drop(vmctx: *mut VMContext, data_index: u32) {
+    let data_index = DataIndex::from_u32(data_index);
+    let instance = (&mut *vmctx).instance();
+    instance.data_drop(data_index)
 }

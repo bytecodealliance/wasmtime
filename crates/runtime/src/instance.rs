@@ -29,8 +29,8 @@ use std::{mem, ptr, slice};
 use thiserror::Error;
 use wasmtime_environ::entity::{packed_option::ReservedValue, BoxedSlice, EntityRef, PrimaryMap};
 use wasmtime_environ::wasm::{
-    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex,
-    FuncIndex, GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
+    DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
+    ElemIndex, FuncIndex, GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
 use wasmtime_environ::{ir, DataInitializer, Module, TableElements, VMOffsets};
 
@@ -91,6 +91,10 @@ pub(crate) struct Instance {
     /// entries get removed. A missing entry is considered equivalent to an
     /// empty slice.
     passive_elements: RefCell<HashMap<ElemIndex, Box<[VMCallerCheckedAnyfunc]>>>,
+
+    /// Passive data segments from our module. As `data.drop`s happen, entries
+    /// get removed. A missing entry is considered equivalent to an empty slice.
+    passive_data: RefCell<HashMap<DataIndex, Arc<[u8]>>>,
 
     /// Pointers to functions in executable memory.
     finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
@@ -747,6 +751,57 @@ impl Instance {
         }
     }
 
+    /// Performs the `memory.init` operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `Trap` error if the destination range is out of this module's
+    /// memory's bounds or if the source range is outside the data segment's
+    /// bounds.
+    pub(crate) fn memory_init(
+        &self,
+        memory_index: MemoryIndex,
+        data_index: DataIndex,
+        dst: u32,
+        src: u32,
+        len: u32,
+        source_loc: ir::SourceLoc,
+    ) -> Result<(), Trap> {
+        // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-memory-init
+
+        let memory = self.get_memory(memory_index);
+        let passive_data = self.passive_data.borrow();
+        let data = passive_data
+            .get(&data_index)
+            .map_or(&[][..], |data| &**data);
+
+        if src
+            .checked_add(len)
+            .map_or(true, |n| n as usize > data.len())
+            || dst
+                .checked_add(len)
+                .map_or(true, |m| m as usize > memory.current_length)
+        {
+            return Err(Trap::wasm(source_loc, ir::TrapCode::HeapOutOfBounds));
+        }
+
+        let src_slice = &data[src as usize..(src + len) as usize];
+
+        unsafe {
+            let dst_start = memory.base.add(dst as usize);
+            let dst_slice = slice::from_raw_parts_mut(dst_start, len as usize);
+            dst_slice.copy_from_slice(src_slice);
+        }
+
+        Ok(())
+    }
+
+    /// Drop the given data segment, truncating its length to zero.
+    pub(crate) fn data_drop(&self, data_index: DataIndex) {
+        let mut passive_data = self.passive_data.borrow_mut();
+        passive_data.remove(&data_index);
+    }
+
     /// Get a table by index regardless of whether it is locally-defined or an
     /// imported, foreign table.
     pub(crate) fn get_table(&self, table_index: TableIndex) -> &Table {
@@ -824,6 +879,8 @@ impl InstanceHandle {
 
         let offsets = VMOffsets::new(mem::size_of::<*const u8>() as u8, &module.local);
 
+        let passive_data = RefCell::new(module.passive_data.clone());
+
         let handle = {
             let instance = Instance {
                 refcount: Cell::new(1),
@@ -833,6 +890,7 @@ impl InstanceHandle {
                 memories,
                 tables,
                 passive_elements: Default::default(),
+                passive_data,
                 finished_functions,
                 dbg_jit_registration,
                 host_state,

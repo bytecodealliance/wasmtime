@@ -8,9 +8,10 @@ use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
     self, translate_module, DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex,
     Memory, MemoryIndex, ModuleTranslationState, SignatureIndex, Table, TableIndex,
-    TargetEnvironment, WasmError, WasmResult,
+    TargetEnvironment, WasmResult,
 };
 use std::convert::TryFrom;
+use std::sync::Arc;
 
 /// Contains function data: byte code and its offset in the module.
 #[derive(Hash)]
@@ -391,18 +392,21 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn reserve_passive_data(&mut self, count: u32) -> WasmResult<()> {
-        self.result.module.passive_elements.reserve(count as usize);
+        self.result.module.passive_data.reserve(count as usize);
         Ok(())
     }
 
-    fn declare_passive_data(
-        &mut self,
-        _data_index: DataIndex,
-        _data: &'data [u8],
-    ) -> WasmResult<()> {
-        Err(WasmError::Unsupported(
-            "bulk memory: passive data".to_string(),
-        ))
+    fn declare_passive_data(&mut self, data_index: DataIndex, data: &'data [u8]) -> WasmResult<()> {
+        let old = self
+            .result
+            .module
+            .passive_data
+            .insert(data_index, Arc::from(data));
+        debug_assert!(
+            old.is_none(),
+            "a module can't have duplicate indices, this would be a cranelift-wasm bug"
+        );
+        Ok(())
     }
 
     fn declare_func_name(&mut self, func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
