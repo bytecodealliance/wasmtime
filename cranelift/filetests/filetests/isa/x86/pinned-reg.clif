@@ -59,8 +59,8 @@ block0:
 ; When the pinned register is used as the heap base, the final load instruction
 ; must use the %r15 register, since x86 implements the complex addressing mode.
 function u0:1(i64 vmctx) -> i64 system_v {
-    gv0 = vmctx
-    heap0 = static gv0, min 0x000a_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000, index_type i32
+    template0 = vmctx
+    heap0 = static template0, min 0x000a_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000, index_type i32
 
 block0(v42: i64):
     v5 = iconst.i32 42

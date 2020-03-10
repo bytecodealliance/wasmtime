@@ -550,7 +550,7 @@ pub(crate) fn define(
         TypeSetBuilder::new().ints(64..64).build(),
     );
 
-    let GV = &Operand::new("GV", &entities.global_value);
+    let TEMPLATE = &Operand::new("TEMPLATE", &entities.template);
     let addr = &Operand::new("addr", i64_t);
 
     ig.push(
@@ -560,9 +560,9 @@ pub(crate) fn define(
         Elf tls get addr -- This implements the GD TLS model for ELF. The clobber output should
         not be used.
             "#,
-            &formats.unary_global_value,
+            &formats.unary_template,
         )
-        .operands_in(vec![GV])
+        .operands_in(vec![TEMPLATE])
         .operands_out(vec![addr]),
     );
     ig.push(
@@ -572,9 +572,9 @@ pub(crate) fn define(
         Mach-O tls get addr -- This implements TLS access for Mach-O. The clobber output should
         not be used.
             "#,
-            &formats.unary_global_value,
+            &formats.unary_template,
         )
-        .operands_in(vec![GV])
+        .operands_in(vec![TEMPLATE])
         .operands_out(vec![addr]),
     );
 

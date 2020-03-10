@@ -24,9 +24,9 @@ pub enum SerInstData {
         opcode: String,
         imm: bool,
     },
-    UnaryGlobalValue {
+    UnaryTemplate {
         opcode: String,
-        global_value: String,
+        template: String,
     },
     Binary {
         opcode: String,
@@ -278,12 +278,9 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             opcode: opcode.to_string(),
             imm,
         },
-        InstructionData::UnaryGlobalValue {
-            opcode,
-            global_value,
-        } => SerInstData::UnaryGlobalValue {
+        InstructionData::UnaryTemplate { opcode, template } => SerInstData::UnaryTemplate {
             opcode: opcode.to_string(),
-            global_value: global_value.to_string(),
+            template: template.to_string(),
         },
         InstructionData::Binary { opcode, args } => {
             let hold_args = [args[0].to_string(), args[1].to_string()];
@@ -857,27 +854,27 @@ impl SerSignature {
     }
 }
 
-/// Serializable Function type, including name, signature, global values, and data flow graph.
+/// Serializable Function type, including name, signature, templates, and data flow graph.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SerFunction {
     pub name: String,
     pub signature: SerSignature,
-    pub globals: Vec<String>,
+    pub templates: Vec<String>,
     pub dfg: SerDataFlowGraph,
 }
 
 impl SerFunction {
-    /// Creates serializable global values, as well as the functions signature, name, and data flow
+    /// Creates serializable templates, as well as the functions signature, name, and data flow
     /// graph.
     fn create_new(func: &Function) -> Self {
-        let mut global_vec: Vec<String> = Vec::new();
-        for (glob_name, _) in func.global_values.iter() {
-            global_vec.push(glob_name.to_string());
+        let mut template_vec: Vec<String> = Vec::new();
+        for (template_name, _) in func.templates.iter() {
+            template_vec.push(template_name.to_string());
         }
         Self {
             name: func.name.to_string(),
             signature: SerSignature::new(&func),
-            globals: global_vec,
+            templates: template_vec,
             dfg: SerDataFlowGraph::new(&func),
         }
     }

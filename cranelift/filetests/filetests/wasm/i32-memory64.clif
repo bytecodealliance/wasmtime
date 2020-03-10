@@ -6,8 +6,8 @@ test compile
 target x86_64 haswell
 
 function %i32_load(i32, i64 vmctx) -> i32 {
-    gv0 = vmctx
-    heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
+    template0 = vmctx
+    heap0 = static template0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
 block0(v0: i32, v1: i64):
     v2 = heap_addr.i64 heap0, v0, 1
@@ -16,8 +16,8 @@ block0(v0: i32, v1: i64):
 }
 
 function %i32_store(i32, i32, i64 vmctx) {
-    gv0 = vmctx
-    heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
+    template0 = vmctx
+    heap0 = static template0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
 block0(v0: i32, v1: i32, v2: i64):
     v3 = heap_addr.i64 heap0, v1, 1
@@ -26,8 +26,8 @@ block0(v0: i32, v1: i32, v2: i64):
 }
 
 function %i32_load8_s(i32, i64 vmctx) -> i32 {
-    gv0 = vmctx
-    heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
+    template0 = vmctx
+    heap0 = static template0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
 block0(v0: i32, v1: i64):
     v2 = heap_addr.i64 heap0, v0, 1
@@ -36,8 +36,8 @@ block0(v0: i32, v1: i64):
 }
 
 function %i32_load8_u(i32, i64 vmctx) -> i32 {
-    gv0 = vmctx
-    heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
+    template0 = vmctx
+    heap0 = static template0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
 block0(v0: i32, v1: i64):
     v2 = heap_addr.i64 heap0, v0, 1
@@ -46,8 +46,8 @@ block0(v0: i32, v1: i64):
 }
 
 function %i32_store8(i32, i32, i64 vmctx) {
-    gv0 = vmctx
-    heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
+    template0 = vmctx
+    heap0 = static template0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
 block0(v0: i32, v1: i32, v2: i64):
     v3 = heap_addr.i64 heap0, v1, 1
@@ -56,8 +56,8 @@ block0(v0: i32, v1: i32, v2: i64):
 }
 
 function %i32_load16_s(i32, i64 vmctx) -> i32 {
-    gv0 = vmctx
-    heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
+    template0 = vmctx
+    heap0 = static template0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
 block0(v0: i32, v1: i64):
     v2 = heap_addr.i64 heap0, v0, 1
@@ -66,8 +66,8 @@ block0(v0: i32, v1: i64):
 }
 
 function %i32_load16_u(i32, i64 vmctx) -> i32 {
-    gv0 = vmctx
-    heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
+    template0 = vmctx
+    heap0 = static template0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
 block0(v0: i32, v1: i64):
     v2 = heap_addr.i64 heap0, v0, 1
@@ -76,8 +76,8 @@ block0(v0: i32, v1: i64):
 }
 
 function %i32_store16(i32, i32, i64 vmctx) {
-    gv0 = vmctx
-    heap0 = static gv0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
+    template0 = vmctx
+    heap0 = static template0, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000
 
 block0(v0: i32, v1: i32, v2: i64):
     v3 = heap_addr.i64 heap0, v1, 1

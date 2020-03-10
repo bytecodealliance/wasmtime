@@ -1358,13 +1358,13 @@ pub(crate) fn define<'shared>(
 
     // XX+rd id with Abs4 globalsym relocation.
     recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("gvaddr4", &formats.unary_global_value, 4)
+        EncodingRecipeBuilder::new("gvaddr4", &formats.unary_template, 4)
             .operands_out(vec![gpr])
             .emit(
                 r#"
                     {{PUT_OP}}(bits | (out_reg0 & 7), rex1(out_reg0), sink);
                     sink.reloc_external(Reloc::Abs4,
-                                        &func.global_values[global_value].symbol_name(),
+                                        &func.templates[template].symbol_name(),
                                         0);
                     sink.put4(0);
                 "#,
@@ -1373,13 +1373,13 @@ pub(crate) fn define<'shared>(
 
     // XX+rd iq with Abs8 globalsym relocation.
     recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("gvaddr8", &formats.unary_global_value, 8)
+        EncodingRecipeBuilder::new("gvaddr8", &formats.unary_template, 8)
             .operands_out(vec![gpr])
             .emit(
                 r#"
                     {{PUT_OP}}(bits | (out_reg0 & 7), rex1(out_reg0), sink);
                     sink.reloc_external(Reloc::Abs8,
-                                        &func.global_values[global_value].symbol_name(),
+                                        &func.templates[template].symbol_name(),
                                         0);
                     sink.put8(0);
                 "#,
@@ -1388,7 +1388,7 @@ pub(crate) fn define<'shared>(
 
     // XX+rd iq with PCRel4 globalsym relocation.
     recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("pcrel_gvaddr8", &formats.unary_global_value, 5)
+        EncodingRecipeBuilder::new("pcrel_gvaddr8", &formats.unary_template, 5)
             .operands_out(vec![gpr])
             .emit(
                 r#"
@@ -1397,7 +1397,7 @@ pub(crate) fn define<'shared>(
                     // The addend adjusts for the difference between the end of the
                     // instruction and the beginning of the immediate field.
                     sink.reloc_external(Reloc::X86PCRel4,
-                                        &func.global_values[global_value].symbol_name(),
+                                        &func.templates[template].symbol_name(),
                                         -4);
                     sink.put4(0);
                 "#,
@@ -1406,7 +1406,7 @@ pub(crate) fn define<'shared>(
 
     // XX+rd iq with Abs8 globalsym relocation.
     recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("got_gvaddr8", &formats.unary_global_value, 5)
+        EncodingRecipeBuilder::new("got_gvaddr8", &formats.unary_template, 5)
             .operands_out(vec![gpr])
             .emit(
                 r#"
@@ -1415,7 +1415,7 @@ pub(crate) fn define<'shared>(
                     // The addend adjusts for the difference between the end of the
                     // instruction and the beginning of the immediate field.
                     sink.reloc_external(Reloc::X86GOTPCRel4,
-                                        &func.global_values[global_value].symbol_name(),
+                                        &func.templates[template].symbol_name(),
                                         -4);
                     sink.put4(0);
                 "#,
@@ -3302,7 +3302,7 @@ pub(crate) fn define<'shared>(
     // This is currently special cased in `regalloc/spilling.rs` in the `visit_inst` function.
 
     recipes.add_recipe(
-        EncodingRecipeBuilder::new("elf_tls_get_addr", &formats.unary_global_value, 16)
+        EncodingRecipeBuilder::new("elf_tls_get_addr", &formats.unary_template, 16)
             // FIXME Correct encoding for non rax registers
             .operands_out(vec![reg_rax])
             .emit(
@@ -3319,7 +3319,7 @@ pub(crate) fn define<'shared>(
                     sink.put1(LEA); // lea
                     modrm_riprel(0b111/*out_reg0*/, sink); // 0x3d
                     sink.reloc_external(Reloc::ElfX86_64TlsGd,
-                                        &func.global_values[global_value].symbol_name(),
+                                        &func.templates[template].symbol_name(),
                                         -4);
                     sink.put4(0);
 
@@ -3337,7 +3337,7 @@ pub(crate) fn define<'shared>(
     );
 
     recipes.add_recipe(
-        EncodingRecipeBuilder::new("macho_tls_get_addr", &formats.unary_global_value, 9)
+        EncodingRecipeBuilder::new("macho_tls_get_addr", &formats.unary_template, 9)
             // FIXME Correct encoding for non rax registers
             .operands_out(vec![reg_rax])
             .emit(
@@ -3350,7 +3350,7 @@ pub(crate) fn define<'shared>(
                     sink.put1(0x8b); // mov
                     modrm_riprel(0b111/*out_reg0*/, sink); // 0x3d
                     sink.reloc_external(Reloc::MachOX86_64Tlv,
-                                        &func.global_values[global_value].symbol_name(),
+                                        &func.templates[template].symbol_name(),
                                         -4);
                     sink.put4(0);
 

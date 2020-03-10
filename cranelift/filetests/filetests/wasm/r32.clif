@@ -16,10 +16,10 @@ block1(v3: r32):
 }
 
 function %table_set(i32, r32, i32 vmctx) {
-    gv0 = vmctx
-    gv1 = load.i32 notrap aligned gv0
-    gv2 = load.i32 notrap aligned gv0 +4
-    table0 = dynamic gv1, element_size 1, bound gv2, index_type i32
+    template0 = vmctx
+    template1 = load.i32 notrap aligned template0
+    template2 = load.i32 notrap aligned template0 +4
+    table0 = dynamic template1, element_size 1, bound template2, index_type i32
 
 block0(v0: i32, v1: r32, v2: i32):
     v3 = table_addr.i32 table0, v0, +0;
@@ -28,10 +28,10 @@ block0(v0: i32, v1: r32, v2: i32):
 }
 
 function %table_get(i32, i32 vmctx) -> r32 {
-    gv0 = vmctx
-    gv1 = load.i32 notrap aligned gv0
-    gv2 = load.i32 notrap aligned gv0 +4
-    table0 = dynamic gv1, element_size 1, bound gv2, index_type i32
+    template0 = vmctx
+    template1 = load.i32 notrap aligned template0
+    template2 = load.i32 notrap aligned template0 +4
+    table0 = dynamic template1, element_size 1, bound template2, index_type i32
 
 block0(v0: i32, v1: i32):
     v2 = table_addr.i32 table0, v0, +0;

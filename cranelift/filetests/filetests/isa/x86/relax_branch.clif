@@ -12,10 +12,10 @@ target x86_64 haswell
 
 function u0:2691(i32 [%rdi], i32 [%rsi], i64 vmctx [%r14]) -> i64 uext [%rax] baldrdash_system_v {
     ss0 = incoming_arg 24, offset -24
-    gv0 = vmctx
-    gv1 = iadd_imm.i64 gv0, 48
-    gv2 = load.i64 notrap aligned readonly gv0
-    heap0 = static gv2, min 0xd839_6000, bound 0x0001_0000_0000, offset_guard 0x8000_0000, index_type i32
+    template0 = vmctx
+    template1 = iadd_imm template0, 48
+    template2 = load.i64 notrap aligned readonly template0
+    heap0 = static template2, min 0xd839_6000, bound 0x0001_0000_0000, offset_guard 0x8000_0000, index_type i32
 
                                 block0(v0: i32 [%rdi], v1: i32 [%rsi], v2: i64 [%r14]):
 @0005 [-]                           fallthrough block3(v0, v1)

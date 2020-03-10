@@ -29,7 +29,7 @@ pub(crate) fn define() -> SettingGroup {
 
     // Note that Cranelift doesn't currently need an is_pie flag, because PIE is
     // just PIC where symbols can't be pre-empted, which can be expressed with the
-    // `colocated` flag on external functions and global values.
+    // `colocated` flag on external functions and templates.
     settings.add_bool(
         "is_pic",
         "Enable Position-Independent Code generation",
@@ -102,7 +102,7 @@ pub(crate) fn define() -> SettingGroup {
 
         Enabling this requires the enable_pinned_reg setting to be set to true. It enables a custom
         legalization of the `heap_addr` instruction so it will use the pinned register as the heap
-        base, instead of fetching it from a global value.
+        base, instead of computing it with a template.
 
         Warning! Enabling this means that the pinned register *must* be maintained to contain the
         heap base address at all times, during the lifetime of a function. Using the pinned

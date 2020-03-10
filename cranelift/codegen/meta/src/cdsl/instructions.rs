@@ -1152,10 +1152,10 @@ impl InstructionPredicate {
     }
 
     pub fn new_is_colocated_data(formats: &Formats) -> InstructionPredicateNode {
-        let format = &formats.unary_global_value;
+        let format = &formats.unary_template;
         InstructionPredicateNode::FormatPredicate(FormatPredicateNode::new(
             &*format,
-            "global_value",
+            "template",
             FormatPredicateKind::IsColocatedData,
         ))
     }

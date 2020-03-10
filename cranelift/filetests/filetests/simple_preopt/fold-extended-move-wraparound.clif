@@ -2,8 +2,8 @@ test simple_preopt
 target x86_64
 
 function %wraparound(i64 vmctx) -> f32 system_v {
-    gv0 = vmctx
-    gv1 = iadd_imm.i64 gv0, 48
+    template0 = vmctx
+    template1 = iadd_imm template0, 48
 
 block35(v0: i64):
     v88 = iconst.i64 0

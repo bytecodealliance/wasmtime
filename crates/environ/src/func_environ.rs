@@ -91,8 +91,8 @@ pub struct FuncEnvironment<'module_environment> {
     /// The module-level environment which this function-level environment belongs to.
     module: &'module_environment ModuleLocal,
 
-    /// The Cranelift global holding the vmctx address.
-    vmctx: Option<ir::GlobalValue>,
+    /// The Cranelift template computing the vmctx address.
+    vmctx: Option<ir::Template>,
 
     /// The external function signature for implementing wasm's `memory.size`
     /// for locally-defined 32-bit memories.
@@ -148,9 +148,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.target_config.pointer_type()
     }
 
-    fn vmctx(&mut self, func: &mut Function) -> ir::GlobalValue {
+    fn vmctx(&mut self, func: &mut Function) -> ir::Template {
         self.vmctx.unwrap_or_else(|| {
-            let vmctx = func.create_global_value(ir::GlobalValueData::VMContext);
+            let vmctx = func.create_template(ir::TemplateData::VMContext);
             self.vmctx = Some(vmctx);
             vmctx
         })
@@ -433,7 +433,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // We use an indirect call so that we don't have to patch the code at runtime.
         let pointer_type = self.pointer_type();
         let vmctx = self.vmctx(&mut pos.func);
-        let base = pos.ins().global_value(pointer_type, vmctx);
+        let base = pos.ins().template(pointer_type, vmctx);
 
         let mut mem_flags = ir::MemFlags::trusted();
         mem_flags.set_readonly();
@@ -608,10 +608,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 (vmctx, base_offset, current_elements_offset)
             } else {
                 let from_offset = self.offsets.vmctx_vmtable_import_from(index);
-                let table = func.create_global_value(ir::GlobalValueData::Load {
+                let table = func.create_template(ir::TemplateData::Load {
                     base: vmctx,
                     offset: Offset32::new(i32::try_from(from_offset).unwrap()),
-                    global_type: pointer_type,
+                    result_type: pointer_type,
                     readonly: true,
                 });
                 let base_offset = i32::from(self.offsets.vmtable_definition_base());
@@ -621,16 +621,16 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             }
         };
 
-        let base_gv = func.create_global_value(ir::GlobalValueData::Load {
+        let base_template = func.create_template(ir::TemplateData::Load {
             base: ptr,
             offset: Offset32::new(base_offset),
-            global_type: pointer_type,
+            result_type: pointer_type,
             readonly: false,
         });
-        let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
+        let bound_template = func.create_template(ir::TemplateData::Load {
             base: ptr,
             offset: Offset32::new(current_elements_offset),
-            global_type: self.offsets.type_of_vmtable_definition_current_elements(),
+            result_type: self.offsets.type_of_vmtable_definition_current_elements(),
             readonly: false,
         });
 
@@ -641,9 +641,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         };
 
         Ok(func.create_table(ir::TableData {
-            base_gv,
+            base_template,
             min_size: Uimm64::new(0),
-            bound_gv,
+            bound_template,
             element_size: Uimm64::new(element_size),
             index_type: I32,
         }))
@@ -740,10 +740,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 (vmctx, base_offset, current_length_offset)
             } else {
                 let from_offset = self.offsets.vmctx_vmmemory_import_from(index);
-                let memory = func.create_global_value(ir::GlobalValueData::Load {
+                let memory = func.create_template(ir::TemplateData::Load {
                     base: vmctx,
                     offset: Offset32::new(i32::try_from(from_offset).unwrap()),
-                    global_type: pointer_type,
+                    result_type: pointer_type,
                     readonly: true,
                 });
                 let base_offset = i32::from(self.offsets.vmmemory_definition_base());
@@ -761,16 +761,16 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 offset_guard_size,
                 memory: _,
             } => {
-                let heap_bound = func.create_global_value(ir::GlobalValueData::Load {
+                let heap_bound = func.create_template(ir::TemplateData::Load {
                     base: ptr,
                     offset: Offset32::new(current_length_offset),
-                    global_type: self.offsets.type_of_vmmemory_definition_current_length(),
+                    result_type: self.offsets.type_of_vmmemory_definition_current_length(),
                     readonly: false,
                 });
                 (
                     Uimm64::new(offset_guard_size),
                     ir::HeapStyle::Dynamic {
-                        bound_gv: heap_bound,
+                        bound_template: heap_bound,
                     },
                     false,
                 )
@@ -788,10 +788,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             ),
         };
 
-        let heap_base = func.create_global_value(ir::GlobalValueData::Load {
+        let heap_base = func.create_template(ir::TemplateData::Load {
             base: ptr,
             offset: Offset32::new(base_offset),
-            global_type: pointer_type,
+            result_type: pointer_type,
             readonly: readonly_base,
         });
         Ok(func.create_heap(ir::HeapData {
@@ -818,10 +818,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 (vmctx, offset)
             } else {
                 let from_offset = self.offsets.vmctx_vmglobal_import_from(index);
-                let global = func.create_global_value(ir::GlobalValueData::Load {
+                let global = func.create_template(ir::TemplateData::Load {
                     base: vmctx,
                     offset: Offset32::new(i32::try_from(from_offset).unwrap()),
-                    global_type: pointer_type,
+                    result_type: pointer_type,
                     readonly: true,
                 });
                 (global, 0)
@@ -829,7 +829,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         };
 
         Ok(GlobalVariable::Memory {
-            gv: ptr,
+            template: ptr,
             offset: offset.into(),
             ty: self.module.globals[index].ty,
         })
@@ -892,7 +892,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let sig_id_size = self.offsets.size_of_vmshared_signature_index();
                 let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
                 let vmctx = self.vmctx(pos.func);
-                let base = pos.ins().global_value(pointer_type, vmctx);
+                let base = pos.ins().template(pointer_type, vmctx);
                 let offset =
                     i32::try_from(self.offsets.vmctx_vmshared_signature_id(sig_index)).unwrap();
 
@@ -965,7 +965,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let pointer_type = self.pointer_type();
         let sig_ref = pos.func.dfg.ext_funcs[callee].signature;
         let vmctx = self.vmctx(&mut pos.func);
-        let base = pos.ins().global_value(pointer_type, vmctx);
+        let base = pos.ins().template(pointer_type, vmctx);
 
         let mem_flags = ir::MemFlags::trusted();
 

@@ -129,7 +129,7 @@ where
         &mut self,
         data: &mut Self::CompiledData,
         offset: usize,
-        what: ir::GlobalValue,
+        what: ir::Template,
         addend: binemit::Addend,
     );
 

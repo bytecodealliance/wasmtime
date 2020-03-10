@@ -15,7 +15,7 @@ use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentLoc, Block, ConstantData, ExtFuncData, ExternalName,
-    FuncRef, Function, GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle, JumpTable,
+    FuncRef, Function, Template, TemplateData, Heap, HeapData, HeapStyle, JumpTable,
     JumpTableData, MemFlags, Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind,
     Table, TableData, Type, Value, ValueLoc,
 };
@@ -196,25 +196,30 @@ impl<'a> Context<'a> {
         }
     }
 
-    // Allocate a global value slot.
-    fn add_gv(&mut self, gv: GlobalValue, data: GlobalValueData, loc: Location) -> ParseResult<()> {
-        self.map.def_gv(gv, loc)?;
-        while self.function.global_values.next_key().index() <= gv.index() {
-            self.function.create_global_value(GlobalValueData::Symbol {
+    // Allocate a template slot.
+    fn add_template(
+        &mut self,
+        template: Template,
+        data: TemplateData,
+        loc: Location,
+    ) -> ParseResult<()> {
+        self.map.def_template(template, loc)?;
+        while self.function.templates.next_key().index() <= template.index() {
+            self.function.create_template(TemplateData::Symbol {
                 name: ExternalName::testcase(""),
                 offset: Imm64::new(0),
                 colocated: false,
                 tls: false,
             });
         }
-        self.function.global_values[gv] = data;
+        self.function.templates[template] = data;
         Ok(())
     }
 
-    // Resolve a reference to a global value.
-    fn check_gv(&self, gv: GlobalValue, loc: Location) -> ParseResult<()> {
-        if !self.map.contains_gv(gv) {
-            err!(loc, "undefined global value {}", gv)
+    // Resolve a reference to a template.
+    fn check_template(&self, template: Template, loc: Location) -> ParseResult<()> {
+        if !self.map.contains_template(template) {
+            err!(loc, "undefined template {}", template)
         } else {
             Ok(())
         }
@@ -225,7 +230,7 @@ impl<'a> Context<'a> {
         self.map.def_heap(heap, loc)?;
         while self.function.heaps.next_key().index() <= heap.index() {
             self.function.create_heap(HeapData {
-                base: GlobalValue::reserved_value(),
+                base: Template::reserved_value(),
                 min_size: Uimm64::new(0),
                 offset_guard_size: Uimm64::new(0),
                 style: HeapStyle::Static {
@@ -251,9 +256,9 @@ impl<'a> Context<'a> {
     fn add_table(&mut self, table: Table, data: TableData, loc: Location) -> ParseResult<()> {
         while self.function.tables.next_key().index() <= table.index() {
             self.function.create_table(TableData {
-                base_gv: GlobalValue::reserved_value(),
+                base_template: Template::reserved_value(),
                 min_size: Uimm64::new(0),
-                bound_gv: GlobalValue::reserved_value(),
+                bound_template: Template::reserved_value(),
                 element_size: Uimm64::new(0),
                 index_type: INVALID,
             });
@@ -492,12 +497,12 @@ impl<'a> Parser<'a> {
         err!(self.loc, err_msg)
     }
 
-    // Match and consume a global value reference.
-    fn match_gv(&mut self, err_msg: &str) -> ParseResult<GlobalValue> {
-        if let Some(Token::GlobalValue(gv)) = self.token() {
+    // Match and consume a template reference.
+    fn match_template(&mut self, err_msg: &str) -> ParseResult<Template> {
+        if let Some(Token::Template(template)) = self.token() {
             self.consume();
-            if let Some(gv) = GlobalValue::with_number(gv) {
-                return Ok(gv);
+            if let Some(template) = Template::with_number(template) {
+                return Ok(template);
             }
         }
         err!(self.loc, err_msg)
@@ -1361,10 +1366,10 @@ impl<'a> Parser<'a> {
                     self.parse_stack_slot_decl()
                         .and_then(|(ss, dat)| ctx.add_ss(ss, dat, loc))
                 }
-                Some(Token::GlobalValue(..)) => {
+                Some(Token::Template(..)) => {
                     self.start_gathering_comments();
-                    self.parse_global_value_decl()
-                        .and_then(|(gv, dat)| ctx.add_gv(gv, dat, self.loc))
+                    self.parse_template_decl()
+                        .and_then(|(template, dat)| ctx.add_template(template, dat, self.loc))
                 }
                 Some(Token::Heap(..)) => {
                     self.start_gathering_comments();
@@ -1439,79 +1444,70 @@ impl<'a> Parser<'a> {
         Ok((ss, data))
     }
 
-    // Parse a global value decl.
+    // Parse a template decl.
     //
-    // global-val-decl ::= * GlobalValue(gv) "=" global-val-desc
-    // global-val-desc ::= "vmctx"
-    //                   | "load" "." type "notrap" "aligned" GlobalValue(base) [offset]
-    //                   | "iadd_imm" "(" GlobalValue(base) ")" imm64
-    //                   | "symbol" ["colocated"] name + imm64
+    // template-decl ::= * Template(template) "=" template-desc
+    // template-desc ::= "vmctx"
+    //                 | "load" "." type "notrap" "aligned" Template(base) [offset]
+    //                 | "iadd_imm" Template(base) "," imm64
+    //                 | "symbol" ["colocated"] name + imm64
     //
-    fn parse_global_value_decl(&mut self) -> ParseResult<(GlobalValue, GlobalValueData)> {
-        let gv = self.match_gv("expected global value number: gv«n»")?;
+    fn parse_template_decl(&mut self) -> ParseResult<(Template, TemplateData)> {
+        let template = self.match_template("expected template reference: template«n»")?;
 
-        self.match_token(Token::Equal, "expected '=' in global value declaration")?;
+        self.match_token(Token::Equal, "expected '=' in template declaration")?;
 
-        let data = match self.match_any_identifier("expected global value kind")? {
-            "vmctx" => GlobalValueData::VMContext,
+        let data = match self.match_any_identifier("expected template kind")? {
+            "vmctx" => TemplateData::VMContext,
             "load" => {
                 self.match_token(
                     Token::Dot,
-                    "expected '.' followed by type in load global value decl",
+                    "expected '.' followed by type in load template decl",
                 )?;
-                let global_type = self.match_type("expected load type")?;
+                let result_type = self.match_type("expected load type")?;
                 let flags = self.optional_memflags();
-                let base = self.match_gv("expected global value: gv«n»")?;
+                let base = self.match_template("expected template reference: template«n»")?;
                 let offset = self.optional_offset32()?;
 
                 if !(flags.notrap() && flags.aligned()) {
-                    return err!(self.loc, "global-value load must be notrap and aligned");
+                    return err!(self.loc, "template load must be notrap and aligned");
                 }
-                GlobalValueData::Load {
+                TemplateData::Load {
                     base,
                     offset,
-                    global_type,
+                    result_type,
                     readonly: flags.readonly(),
                 }
             }
             "iadd_imm" => {
-                self.match_token(
-                    Token::Dot,
-                    "expected '.' followed by type in iadd_imm global value decl",
-                )?;
-                let global_type = self.match_type("expected iadd type")?;
-                let base = self.match_gv("expected global value: gv«n»")?;
+                let base = self.match_template("expected template reference: template«n»")?;
                 self.match_token(
                     Token::Comma,
-                    "expected ',' followed by rhs in iadd_imm global value decl",
+                    "expected ',' followed by rhs in iadd_imm template decl",
                 )?;
                 let offset = self.match_imm64("expected iadd_imm immediate")?;
-                GlobalValueData::IAddImm {
-                    base,
-                    offset,
-                    global_type,
-                }
+                TemplateData::IAddImm { base, offset }
             }
             "symbol" => {
                 let colocated = self.optional(Token::Identifier("colocated"));
                 let tls = self.optional(Token::Identifier("tls"));
                 let name = self.parse_external_name()?;
                 let offset = self.optional_offset_imm64()?;
-                GlobalValueData::Symbol {
+                TemplateData::Symbol {
                     name,
                     offset,
                     colocated,
                     tls,
                 }
             }
-            other => return err!(self.loc, "Unknown global value kind '{}'", other),
+            other => return err!(self.loc, "Unknown template kind '{}'", other),
         };
 
         // Collect any trailing comments.
         self.token();
-        self.claim_gathered_comments(gv);
+        self.claim_gathered_comments(template);
 
-        Ok((gv, data))
+        Ok((template, data))
     }
 
     // Parse a heap decl.
@@ -1519,7 +1515,7 @@ impl<'a> Parser<'a> {
     // heap-decl ::= * Heap(heap) "=" heap-desc
     // heap-desc ::= heap-style heap-base { "," heap-attr }
     // heap-style ::= "static" | "dynamic"
-    // heap-base ::= GlobalValue(base)
+    // heap-base ::= Template(base)
     // heap-attr ::= "min" Imm64(bytes)
     //             | "bound" Imm64(bytes)
     //             | "offset_guard" Imm64(bytes)
@@ -1532,11 +1528,11 @@ impl<'a> Parser<'a> {
         let style_name = self.match_any_identifier("expected 'static' or 'dynamic'")?;
 
         // heap-desc ::= heap-style * heap-base { "," heap-attr }
-        // heap-base ::= * GlobalValue(base)
+        // heap-base ::= * Template(base)
         let base = match self.token() {
-            Some(Token::GlobalValue(base_num)) => match GlobalValue::with_number(base_num) {
-                Some(gv) => gv,
-                None => return err!(self.loc, "invalid global value number for heap base"),
+            Some(Token::Template(base_num)) => match Template::with_number(base_num) {
+                Some(template) => template,
+                None => return err!(self.loc, "invalid template reference for heap base"),
             },
             _ => return err!(self.loc, "expected heap base"),
         };
@@ -1559,7 +1555,7 @@ impl<'a> Parser<'a> {
                 "bound" => {
                     data.style = match style_name {
                         "dynamic" => HeapStyle::Dynamic {
-                            bound_gv: self.match_gv("expected gv bound")?,
+                            bound_template: self.match_template("expected template bound")?,
                         },
                         "static" => HeapStyle::Static {
                             bound: self.match_uimm64("expected integer bound")?,
@@ -1590,7 +1586,7 @@ impl<'a> Parser<'a> {
     // table-decl ::= * Table(table) "=" table-desc
     // table-desc ::= table-style table-base { "," table-attr }
     // table-style ::= "dynamic"
-    // table-base ::= GlobalValue(base)
+    // table-base ::= Template(base)
     // table-attr ::= "min" Imm64(bytes)
     //              | "bound" Imm64(bytes)
     //              | "element_size" Imm64(bytes)
@@ -1603,20 +1599,20 @@ impl<'a> Parser<'a> {
         let style_name = self.match_any_identifier("expected 'static' or 'dynamic'")?;
 
         // table-desc ::= table-style * table-base { "," table-attr }
-        // table-base ::= * GlobalValue(base)
+        // table-base ::= * Template(base)
         let base = match self.token() {
-            Some(Token::GlobalValue(base_num)) => match GlobalValue::with_number(base_num) {
-                Some(gv) => gv,
-                None => return err!(self.loc, "invalid global value number for table base"),
+            Some(Token::Template(base_num)) => match Template::with_number(base_num) {
+                Some(template) => template,
+                None => return err!(self.loc, "invalid template reference for table base"),
             },
             _ => return err!(self.loc, "expected table base"),
         };
         self.consume();
 
         let mut data = TableData {
-            base_gv: base,
+            base_template: base,
             min_size: 0.into(),
-            bound_gv: GlobalValue::reserved_value(),
+            bound_template: Template::reserved_value(),
             element_size: 0.into(),
             index_type: ir::types::I32,
         };
@@ -1628,8 +1624,8 @@ impl<'a> Parser<'a> {
                     data.min_size = self.match_uimm64("expected integer min size")?;
                 }
                 "bound" => {
-                    data.bound_gv = match style_name {
-                        "dynamic" => self.match_gv("expected gv bound")?,
+                    data.bound_template = match style_name {
+                        "dynamic" => self.match_template("expected template bound")?,
                         t => return err!(self.loc, "unknown table style '{}'", t),
                     };
                 }
@@ -2368,13 +2364,10 @@ impl<'a> Parser<'a> {
                 opcode,
                 imm: self.match_bool("expected immediate boolean operand")?,
             },
-            InstructionFormat::UnaryGlobalValue => {
-                let gv = self.match_gv("expected global value")?;
-                ctx.check_gv(gv, self.loc)?;
-                InstructionData::UnaryGlobalValue {
-                    opcode,
-                    global_value: gv,
-                }
+            InstructionFormat::UnaryTemplate => {
+                let template = self.match_template("expected template")?;
+                ctx.check_template(template, self.loc)?;
+                InstructionData::UnaryTemplate { opcode, template }
             }
             InstructionFormat::Binary => {
                 let lhs = self.match_value("expected SSA value first operand")?;
@@ -3096,21 +3089,21 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_gv() {
+    fn duplicate_template() {
         let ParseError {
             location,
             message,
             is_warning,
         } = Parser::new(
             "function %blocks() system_v {
-                gv0 = vmctx
-                gv0 = vmctx",
+                template0 = vmctx
+                template0 = vmctx",
         )
         .parse_function(None)
         .unwrap_err();
 
         assert_eq!(location.line_number, 3);
-        assert_eq!(message, "duplicate entity: gv0");
+        assert_eq!(message, "duplicate entity: template0");
         assert!(!is_warning);
     }
 
@@ -3122,8 +3115,8 @@ mod tests {
             is_warning,
         } = Parser::new(
             "function %blocks() system_v {
-                heap0 = static gv0, min 0x1000, bound 0x10_0000, offset_guard 0x1000
-                heap0 = static gv0, min 0x1000, bound 0x10_0000, offset_guard 0x1000",
+                heap0 = static template0, min 0x1000, bound 0x10_0000, offset_guard 0x1000
+                heap0 = static template0, min 0x1000, bound 0x10_0000, offset_guard 0x1000",
         )
         .parse_function(None)
         .unwrap_err();

@@ -7,8 +7,8 @@ use crate::binemit::CodeOffset;
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir;
 use crate::ir::{
-    Block, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, Inst, JumpTable,
-    JumpTableData, Opcode, SigRef, StackSlot, StackSlotData, Table, TableData,
+    Block, ExtFuncData, FuncRef, Template, TemplateData, Heap, HeapData, Inst, JumpTable,
+    JumpTableData, Opcode, SigRef, StackSlot, StackSlotData, Table, TableData, Type,
 };
 use crate::ir::{BlockOffsets, FrameLayout, InstEncodings, SourceLocs, StackSlots, ValueLocations};
 use crate::ir::{DataFlowGraph, ExternalName, Layout, Signature};
@@ -38,8 +38,8 @@ pub struct Function {
     /// Stack slots allocated in this function.
     pub stack_slots: StackSlots,
 
-    /// Global values referenced.
-    pub global_values: PrimaryMap<ir::GlobalValue, ir::GlobalValueData>,
+    /// Templates defined within the function.
+    pub templates: PrimaryMap<ir::Template, ir::TemplateData>,
 
     /// Heaps referenced.
     pub heaps: PrimaryMap<ir::Heap, ir::HeapData>,
@@ -106,7 +106,7 @@ impl Function {
             signature: sig,
             old_signature: None,
             stack_slots: StackSlots::new(),
-            global_values: PrimaryMap::new(),
+            templates: PrimaryMap::new(),
             heaps: PrimaryMap::new(),
             tables: PrimaryMap::new(),
             jump_tables: PrimaryMap::new(),
@@ -127,7 +127,7 @@ impl Function {
     pub fn clear(&mut self) {
         self.signature.clear(CallConv::Fast);
         self.stack_slots.clear();
-        self.global_values.clear();
+        self.templates.clear();
         self.heaps.clear();
         self.tables.clear();
         self.jump_tables.clear();
@@ -169,9 +169,9 @@ impl Function {
         self.dfg.ext_funcs.push(data)
     }
 
-    /// Declares a global value accessible to the function.
-    pub fn create_global_value(&mut self, data: GlobalValueData) -> GlobalValue {
-        self.global_values.push(data)
+    /// Declares a template within the function.
+    pub fn create_template(&mut self, data: TemplateData) -> Template {
+        self.templates.push(data)
     }
 
     /// Declares a heap accessible to the function.
@@ -297,6 +297,11 @@ impl Function {
         // Conservative result: if there's at least one function signature referenced in this
         // function, assume it is not a leaf.
         self.dfg.signatures.is_empty()
+    }
+
+    /// Return the result type of the given template.
+    pub fn template_result_type(&self, template: Template, isa: &dyn TargetIsa) -> Type {
+        self.templates[template].result_type(isa, &self.templates)
     }
 }
 

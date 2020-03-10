@@ -2,7 +2,7 @@
 
 // TODO: Should `ir::Function` really have a `name`?
 
-// TODO: Factor out `ir::Function`'s `ext_funcs` and `global_values` into a struct
+// TODO: Factor out `ir::Function`'s `ext_funcs` and `templates` into a struct
 // shared with `DataContext`?
 
 use super::HashMap;
@@ -532,10 +532,10 @@ where
     /// Use this when you're building the IR of a function to reference a data object.
     ///
     /// TODO: Same as above.
-    pub fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalValue {
+    pub fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::Template {
         let decl = &self.contents.data_objects[data].decl;
         let colocated = decl.linkage.is_final();
-        func.create_global_value(ir::GlobalValueData::Symbol {
+        func.create_template(ir::TemplateData::Symbol {
             name: ir::ExternalName::user(1, data.as_u32()),
             offset: ir::immediates::Imm64::new(0),
             colocated,
@@ -549,8 +549,8 @@ where
     }
 
     /// TODO: Same as above.
-    pub fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalValue {
-        ctx.import_global_value(ir::ExternalName::user(1, data.as_u32()))
+    pub fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::Template {
+        ctx.import_global_variable(ir::ExternalName::user(1, data.as_u32()))
     }
 
     /// Define a function, producing the function body from the given `Context`.
@@ -691,7 +691,7 @@ where
         &mut self,
         data: DataId,
         offset: usize,
-        what: ir::GlobalValue,
+        what: ir::Template,
         addend: binemit::Addend,
     ) {
         let info = &mut self.contents.data_objects[data];

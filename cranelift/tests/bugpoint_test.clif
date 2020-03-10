@@ -43,81 +43,81 @@ function u0:0(i64, i64, i64) system_v {
     ss142 = explicit_slot 16
     ss143 = explicit_slot 16
     ss144 = explicit_slot 4
-    gv0 = symbol colocated u1:22
-    gv1 = symbol colocated u1:23
-    gv2 = symbol colocated u1:24
-    gv3 = symbol colocated u1:23
-    gv4 = symbol colocated u1:25
-    gv5 = symbol colocated u1:23
-    gv6 = symbol colocated u1:26
-    gv7 = symbol colocated u1:23
-    gv8 = symbol colocated u1:27
-    gv9 = symbol colocated u1:23
-    gv10 = symbol colocated u1:28
-    gv11 = symbol colocated u1:23
-    gv12 = symbol colocated u1:29
-    gv13 = symbol colocated u1:30
-    gv14 = symbol colocated u1:31
-    gv15 = symbol colocated u1:23
-    gv16 = symbol colocated u1:29
-    gv17 = symbol colocated u1:32
-    gv18 = symbol colocated u1:32
-    gv19 = symbol colocated u1:32
-    gv20 = symbol colocated u1:32
-    gv21 = symbol colocated u1:32
-    gv22 = symbol colocated u1:33
-    gv23 = symbol colocated u1:34
-    gv24 = symbol colocated u1:23
-    gv25 = symbol colocated u1:35
-    gv26 = symbol colocated u1:36
-    gv27 = symbol colocated u1:23
-    gv28 = symbol colocated u1:29
-    gv29 = symbol colocated u1:32
-    gv30 = symbol colocated u1:37
-    gv31 = symbol colocated u1:38
-    gv32 = symbol colocated u1:30
-    gv33 = symbol colocated u1:32
-    gv34 = symbol colocated u1:32
-    gv35 = symbol colocated u1:29
-    gv36 = symbol colocated u1:32
-    gv37 = symbol colocated u1:30
-    gv38 = symbol colocated u1:32
-    gv39 = symbol colocated u1:39
-    gv40 = symbol colocated u1:40
-    gv41 = symbol colocated u1:41
-    gv42 = symbol colocated u1:23
-    gv43 = symbol colocated u1:29
-    gv44 = symbol colocated u1:42
-    gv45 = symbol colocated u1:29
-    gv46 = symbol colocated u1:30
-    gv47 = symbol colocated u1:29
-    gv48 = symbol colocated u1:30
-    gv49 = symbol colocated u1:32
-    gv50 = symbol colocated u1:43
-    gv51 = symbol colocated u1:44
-    gv52 = symbol colocated u1:45
-    gv53 = symbol colocated u1:23
-    gv54 = symbol colocated u1:46
-    gv55 = symbol colocated u1:47
-    gv56 = symbol colocated u1:48
-    gv57 = symbol colocated u1:23
-    gv58 = symbol colocated u1:32
-    gv59 = symbol colocated u1:39
-    gv60 = symbol colocated u1:49
-    gv61 = symbol colocated u1:49
-    gv62 = symbol colocated u1:49
-    gv63 = symbol colocated u1:38
-    gv64 = symbol colocated u1:30
-    gv65 = symbol colocated u1:32
-    gv66 = symbol colocated u1:50
-    gv67 = symbol colocated u1:23
-    gv68 = symbol colocated u1:29
-    gv69 = symbol colocated u1:51
-    gv70 = symbol colocated u1:29
-    gv71 = symbol colocated u1:30
-    gv72 = symbol colocated u1:32
-    gv73 = symbol colocated u1:49
-    gv74 = symbol colocated u1:32
+    template0 = symbol colocated u1:22
+    template1 = symbol colocated u1:23
+    template2 = symbol colocated u1:24
+    template3 = symbol colocated u1:23
+    template4 = symbol colocated u1:25
+    template5 = symbol colocated u1:23
+    template6 = symbol colocated u1:26
+    template7 = symbol colocated u1:23
+    template8 = symbol colocated u1:27
+    template9 = symbol colocated u1:23
+    template10 = symbol colocated u1:28
+    template11 = symbol colocated u1:23
+    template12 = symbol colocated u1:29
+    template13 = symbol colocated u1:30
+    template14 = symbol colocated u1:31
+    template15 = symbol colocated u1:23
+    template16 = symbol colocated u1:29
+    template17 = symbol colocated u1:32
+    template18 = symbol colocated u1:32
+    template19 = symbol colocated u1:32
+    template20 = symbol colocated u1:32
+    template21 = symbol colocated u1:32
+    template22 = symbol colocated u1:33
+    template23 = symbol colocated u1:34
+    template24 = symbol colocated u1:23
+    template25 = symbol colocated u1:35
+    template26 = symbol colocated u1:36
+    template27 = symbol colocated u1:23
+    template28 = symbol colocated u1:29
+    template29 = symbol colocated u1:32
+    template30 = symbol colocated u1:37
+    template31 = symbol colocated u1:38
+    template32 = symbol colocated u1:30
+    template33 = symbol colocated u1:32
+    template34 = symbol colocated u1:32
+    template35 = symbol colocated u1:29
+    template36 = symbol colocated u1:32
+    template37 = symbol colocated u1:30
+    template38 = symbol colocated u1:32
+    template39 = symbol colocated u1:39
+    template40 = symbol colocated u1:40
+    template41 = symbol colocated u1:41
+    template42 = symbol colocated u1:23
+    template43 = symbol colocated u1:29
+    template44 = symbol colocated u1:42
+    template45 = symbol colocated u1:29
+    template46 = symbol colocated u1:30
+    template47 = symbol colocated u1:29
+    template48 = symbol colocated u1:30
+    template49 = symbol colocated u1:32
+    template50 = symbol colocated u1:43
+    template51 = symbol colocated u1:44
+    template52 = symbol colocated u1:45
+    template53 = symbol colocated u1:23
+    template54 = symbol colocated u1:46
+    template55 = symbol colocated u1:47
+    template56 = symbol colocated u1:48
+    template57 = symbol colocated u1:23
+    template58 = symbol colocated u1:32
+    template59 = symbol colocated u1:39
+    template60 = symbol colocated u1:49
+    template61 = symbol colocated u1:49
+    template62 = symbol colocated u1:49
+    template63 = symbol colocated u1:38
+    template64 = symbol colocated u1:30
+    template65 = symbol colocated u1:32
+    template66 = symbol colocated u1:50
+    template67 = symbol colocated u1:23
+    template68 = symbol colocated u1:29
+    template69 = symbol colocated u1:51
+    template70 = symbol colocated u1:29
+    template71 = symbol colocated u1:30
+    template72 = symbol colocated u1:32
+    template73 = symbol colocated u1:49
+    template74 = symbol colocated u1:32
     sig0 = (i64) system_v
     sig1 = (i64) system_v
     sig2 = (i64) system_v
@@ -426,8 +426,8 @@ block1:
     jump block2
 
 block2:
-    v122 = global_value.i64 gv0
-    v123 = global_value.i64 gv1
+    v122 = template.i64 template0
+    v123 = template.i64 template1
     trap user65535
 
 block3:
@@ -444,8 +444,8 @@ block3:
     jump block4
 
 block4:
-    v134 = global_value.i64 gv2
-    v135 = global_value.i64 gv3
+    v134 = template.i64 template2
+    v135 = template.i64 template3
     trap user65535
 
 block5:
@@ -462,8 +462,8 @@ block5:
     jump block6
 
 block6:
-    v146 = global_value.i64 gv4
-    v147 = global_value.i64 gv5
+    v146 = template.i64 template4
+    v147 = template.i64 template5
     trap user65535
 
 block7:
@@ -487,8 +487,8 @@ block9:
     jump block10
 
 block10:
-    v158 = global_value.i64 gv6
-    v159 = global_value.i64 gv7
+    v158 = template.i64 template6
+    v159 = template.i64 template7
     trap user65535
 
 block11:
@@ -512,8 +512,8 @@ block13:
     jump block14
 
 block14:
-    v170 = global_value.i64 gv8
-    v171 = global_value.i64 gv9
+    v170 = template.i64 template8
+    v171 = template.i64 template9
     trap user65535
 
 block15:
@@ -535,8 +535,8 @@ block16:
     jump block17
 
 block17:
-    v183 = global_value.i64 gv10
-    v184 = global_value.i64 gv11
+    v183 = template.i64 template10
+    v184 = template.i64 template11
     trap user65535
 
 block18:
@@ -556,7 +556,7 @@ block18:
     jump block164
 
 block164:
-    v198 = global_value.i64 gv12
+    v198 = template.i64 template12
     trap user0
 
 block19:
@@ -577,7 +577,7 @@ block19:
     jump block163
 
 block163:
-    v211 = global_value.i64 gv13
+    v211 = template.i64 template13
     trap user0
 
 block20:
@@ -592,8 +592,8 @@ block20:
     jump block21
 
 block21:
-    v220 = global_value.i64 gv14
-    v221 = global_value.i64 gv15
+    v220 = template.i64 template14
+    v221 = template.i64 template15
     trap user65535
 
 block22:
@@ -613,7 +613,7 @@ block22:
     jump block162
 
 block162:
-    v235 = global_value.i64 gv16
+    v235 = template.i64 template16
     trap user0
 
 block23:
@@ -641,7 +641,7 @@ block24:
     jump block161
 
 block161:
-    v254 = global_value.i64 gv17
+    v254 = template.i64 template17
     trap user0
 
 block25:
@@ -680,7 +680,7 @@ block27:
     jump block160
 
 block160:
-    v280 = global_value.i64 gv18
+    v280 = template.i64 template18
     trap user0
 
 block28:
@@ -698,7 +698,7 @@ block28:
     jump block159
 
 block159:
-    v291 = global_value.i64 gv19
+    v291 = template.i64 template19
     trap user0
 
 block29:
@@ -719,7 +719,7 @@ block29:
     jump block158
 
 block158:
-    v304 = global_value.i64 gv20
+    v304 = template.i64 template20
     trap user0
 
 block30:
@@ -737,7 +737,7 @@ block30:
     jump block157
 
 block157:
-    v315 = global_value.i64 gv21
+    v315 = template.i64 template21
     trap user0
 
 block31:
@@ -789,7 +789,7 @@ block36:
     jump block37
 
 block37:
-    v338 = global_value.i64 gv22
+    v338 = template.i64 template22
     v339 = iconst.i64 3
     v342 = iadd_imm.i64 v36, 8
     v343 = load.i64 v36
@@ -824,9 +824,9 @@ block40:
     jump block41
 
 block41:
-    v360 = global_value.i64 gv23
+    v360 = template.i64 template23
     call fn39(v32, v360)
-    v361 = global_value.i64 gv24
+    v361 = template.i64 template24
     trap user65535
 
 block42:
@@ -856,7 +856,7 @@ block43:
     jump block44
 
 block44:
-    v378 = global_value.i64 gv25
+    v378 = template.i64 template25
     v379 = iconst.i64 3
     v382 = iadd_imm.i64 v46, 8
     v383 = load.i64 v46
@@ -891,9 +891,9 @@ block47:
     jump block48
 
 block48:
-    v400 = global_value.i64 gv26
+    v400 = template.i64 template26
     call fn46(v42, v400)
-    v401 = global_value.i64 gv27
+    v401 = template.i64 template27
     trap user65535
 
 block49(v1006: i16):
@@ -913,7 +913,7 @@ block49(v1006: i16):
     jump block156
 
 block156:
-    v413 = global_value.i64 gv28
+    v413 = template.i64 template28
     trap user0
 
 block50:
@@ -937,7 +937,7 @@ block50:
     jump block155
 
 block155:
-    v426 = global_value.i64 gv29
+    v426 = template.i64 template29
     trap user0
 
 block51:
@@ -954,7 +954,7 @@ block51:
     jump block154
 
 block154:
-    v434 = global_value.i64 gv30
+    v434 = template.i64 template30
     trap user0
 
 block52:
@@ -976,7 +976,7 @@ block52:
     jump block153
 
 block153:
-    v449 = global_value.i64 gv31
+    v449 = template.i64 template31
     trap user0
 
 block53:
@@ -998,7 +998,7 @@ block53:
     jump block152
 
 block152:
-    v464 = global_value.i64 gv32
+    v464 = template.i64 template32
     trap user0
 
 block54:
@@ -1017,7 +1017,7 @@ block54:
     jump block151
 
 block151:
-    v476 = global_value.i64 gv33
+    v476 = template.i64 template33
     trap user0
 
 block55:
@@ -1046,7 +1046,7 @@ block56:
     jump block150
 
 block150:
-    v495 = global_value.i64 gv34
+    v495 = template.i64 template34
     trap user0
 
 block57:
@@ -1064,7 +1064,7 @@ block57:
     jump block149
 
 block149:
-    v506 = global_value.i64 gv35
+    v506 = template.i64 template35
     trap user0
 
 block58:
@@ -1082,7 +1082,7 @@ block58:
     jump block148
 
 block148:
-    v519 = global_value.i64 gv36
+    v519 = template.i64 template36
     trap user0
 
 block59:
@@ -1102,7 +1102,7 @@ block59:
     jump block147
 
 block147:
-    v532 = global_value.i64 gv37
+    v532 = template.i64 template37
     trap user0
 
 block60:
@@ -1121,7 +1121,7 @@ block60:
     jump block146
 
 block146:
-    v544 = global_value.i64 gv38
+    v544 = template.i64 template38
     trap user0
 
 block61:
@@ -1177,7 +1177,7 @@ block62(v552: i32, v1009: i64, v1013: i64, v1016: i64, v1019: i64, v1022: i16, v
     jump block145
 
 block145:
-    v558 = global_value.i64 gv39
+    v558 = template.i64 template39
     trap user0
 
 block63:
@@ -1193,7 +1193,7 @@ block63:
     jump block144
 
 block144:
-    v568 = global_value.i64 gv40
+    v568 = template.i64 template40
     trap user0
 
 block64:
@@ -1218,8 +1218,8 @@ block65:
     jump block66
 
 block66:
-    v582 = global_value.i64 gv41
-    v583 = global_value.i64 gv42
+    v582 = template.i64 template41
+    v583 = template.i64 template42
     trap user65535
 
 block67:
@@ -1240,7 +1240,7 @@ block68(v584: i32):
     jump block143
 
 block143:
-    v595 = global_value.i64 gv43
+    v595 = template.i64 template43
     trap user0
 
 block69:
@@ -1253,7 +1253,7 @@ block69:
     jump block142
 
 block142:
-    v602 = global_value.i64 gv44
+    v602 = template.i64 template44
     trap user0
 
 block70:
@@ -1276,7 +1276,7 @@ block70:
     jump block141
 
 block141:
-    v620 = global_value.i64 gv45
+    v620 = template.i64 template45
     trap user0
 
 block71:
@@ -1299,7 +1299,7 @@ block71:
     jump block140
 
 block140:
-    v634 = global_value.i64 gv46
+    v634 = template.i64 template46
     trap user0
 
 block72:
@@ -1317,7 +1317,7 @@ block72:
     jump block139
 
 block139:
-    v646 = global_value.i64 gv47
+    v646 = template.i64 template47
     trap user0
 
 block73:
@@ -1346,7 +1346,7 @@ block74:
     jump block138
 
 block138:
-    v664 = global_value.i64 gv48
+    v664 = template.i64 template48
     trap user0
 
 block75:
@@ -1377,7 +1377,7 @@ block76:
     jump block137
 
 block137:
-    v688 = global_value.i64 gv49
+    v688 = template.i64 template49
     trap user0
 
 block77:
@@ -1407,7 +1407,7 @@ block81:
     jump block82
 
 block82:
-    v703 = global_value.i64 gv50
+    v703 = template.i64 template50
     v704 = iadd_imm.i64 v75, 8
     v705 = load.i64 v75
         v718 -> v705
@@ -1426,7 +1426,7 @@ block82:
     jump block83
 
 block83:
-    v716 = global_value.i64 gv51
+    v716 = template.i64 template51
     v717 = iconst.i64 3
     v720 = iadd_imm.i64 v80, 8
     v721 = load.i64 v80
@@ -1461,9 +1461,9 @@ block86:
     jump block87
 
 block87:
-    v738 = global_value.i64 gv52
+    v738 = template.i64 template52
     call fn78(v76, v738)
-    v739 = global_value.i64 gv53
+    v739 = template.i64 template53
     trap user65535
 
 block88:
@@ -1473,7 +1473,7 @@ block88:
     jump block89
 
 block89:
-    v742 = global_value.i64 gv54
+    v742 = template.i64 template54
     v743 = iadd_imm.i64 v85, 8
     v744 = load.i64 v85
         v757 -> v744
@@ -1492,7 +1492,7 @@ block89:
     jump block90
 
 block90:
-    v755 = global_value.i64 gv55
+    v755 = template.i64 template55
     v756 = iconst.i64 3
     v759 = iadd_imm.i64 v90, 8
     v760 = load.i64 v90
@@ -1527,9 +1527,9 @@ block93:
     jump block94
 
 block94:
-    v777 = global_value.i64 gv56
+    v777 = template.i64 template56
     call fn85(v86, v777)
-    v778 = global_value.i64 gv57
+    v778 = template.i64 template57
     trap user65535
 
 block95(v779: i64, v780: i64, v1040: i64, v1045: i64, v1053: i16, v1058: i64):
@@ -1551,7 +1551,7 @@ block96:
     jump block136
 
 block136:
-    v792 = global_value.i64 gv58
+    v792 = template.i64 template58
     trap user0
 
 block97:
@@ -1565,7 +1565,7 @@ block97:
     jump block135
 
 block135:
-    v799 = global_value.i64 gv59
+    v799 = template.i64 template59
     trap user0
 
 block98:
@@ -1607,7 +1607,7 @@ block99(v804: i64, v1035: i64, v1037: i64, v1039: i64, v1044: i64, v1052: i16, v
     jump block134
 
 block134:
-    v815 = global_value.i64 gv60
+    v815 = template.i64 template60
     trap user0
 
 block100:
@@ -1629,7 +1629,7 @@ block100:
     jump block133
 
 block133:
-    v828 = global_value.i64 gv61
+    v828 = template.i64 template61
     trap user0
 
 block101:
@@ -1653,7 +1653,7 @@ block101:
     jump block132
 
 block132:
-    v841 = global_value.i64 gv62
+    v841 = template.i64 template62
     trap user0
 
 block102:
@@ -1675,7 +1675,7 @@ block102:
     jump block131
 
 block131:
-    v854 = global_value.i64 gv63
+    v854 = template.i64 template63
     trap user0
 
 block103:
@@ -1695,7 +1695,7 @@ block103:
     jump block130
 
 block130:
-    v868 = global_value.i64 gv64
+    v868 = template.i64 template64
     trap user0
 
 block104:
@@ -1714,7 +1714,7 @@ block104:
     jump block129
 
 block129:
-    v880 = global_value.i64 gv65
+    v880 = template.i64 template65
     trap user0
 
 block105:
@@ -1742,8 +1742,8 @@ block106:
     jump block107
 
 block107:
-    v894 = global_value.i64 gv66
-    v895 = global_value.i64 gv67
+    v894 = template.i64 template66
+    v895 = template.i64 template67
     trap user65535
 
 block108:
@@ -1764,7 +1764,7 @@ block109(v896: i64):
     jump block128
 
 block128:
-    v907 = global_value.i64 gv68
+    v907 = template.i64 template68
     trap user0
 
 block110:
@@ -1777,7 +1777,7 @@ block110:
     jump block127
 
 block127:
-    v914 = global_value.i64 gv69
+    v914 = template.i64 template69
     trap user0
 
 block111:
@@ -1800,7 +1800,7 @@ block111:
     jump block126
 
 block126:
-    v932 = global_value.i64 gv70
+    v932 = template.i64 template70
     trap user0
 
 block112:
@@ -1828,7 +1828,7 @@ block113:
     jump block125
 
 block125:
-    v950 = global_value.i64 gv71
+    v950 = template.i64 template71
     trap user0
 
 block114:
@@ -1859,7 +1859,7 @@ block115:
     jump block123
 
 block123:
-    v974 = global_value.i64 gv72
+    v974 = template.i64 template72
     trap user0
 
 block116:
@@ -1877,7 +1877,7 @@ block116:
     jump block122
 
 block122:
-    v986 = global_value.i64 gv73
+    v986 = template.i64 template73
     trap user0
 
 block117:
@@ -1903,7 +1903,7 @@ block119:
     jump block121
 
 block121:
-    v1003 = global_value.i64 gv74
+    v1003 = template.i64 template74
     trap user0
 
 block120:

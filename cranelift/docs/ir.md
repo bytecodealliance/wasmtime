@@ -546,58 +546,56 @@ instructions before instruction selection:
 When Cranelift code is running in a sandbox, it can also be necessary to include
 stack overflow checks in the prologue.
 
-### Global values
+### Templates
 
-A *global value* is an object whose value is not known at compile time. The
-value is computed at runtime by `global_value`, possibly using
-information provided by the linker via relocations. There are multiple
-kinds of global values using different methods for determining their value.
-Cranelift does not track the type of a global value, for they are just
-values stored in non-stack memory.
+A *template* is an expression which can be expanded into code. A template
++expansion can be used to compute a value at runtime with the `template`
++instruction, which possibly involves information provided by the linker via
++relocations. There are multiple kinds of templates.
 
-When Cranelift is generating code for a virtual machine environment, globals can
+When Cranelift is generating code for a virtual machine environment, templates can
 be used to access data structures in the VM's runtime. This requires functions
 to have access to a *VM context pointer* which is used as the base address.
 Typically, the VM context pointer is passed as a hidden function argument to
 Cranelift functions.
 
-Chains of global value expressions are possible, but cycles are not allowed.
+Chains of template expressions are possible, but cycles are not allowed.
 They will be caught by the IR verifier.
 
-GV = vmctx
-    Declare a global value of the address of the VM context struct.
+TEMPLATE = vmctx
+    Declare a template of the address of the VM context struct.
 
-    This declares a global value which is the VM context pointer which may
+    This declares a template which is the VM context pointer which may
     be passed as a hidden argument to functions JIT-compiled for a VM.
 
     Typically, the VM context is a `#[repr(C, packed)]` struct.
 
-    :result GV: Global value.
+    :result TEMPLATE: Template.
 
-A global value can also be derived by treating another global variable as a
+A template can also be derived by treating another template as a
 struct pointer and loading from one of its fields. This makes it possible to
 chase pointers into VM runtime data structures.
 
-GV = load.Type BaseGV [Offset]
-    Declare a global value pointed to by BaseGV plus Offset, with type Type.
+TEMPLATE = load.Type BaseTEMPLATE [Offset]
+    Declare a template pointed to by BaseTEMPLATE plus Offset, with type Type.
 
-    It is assumed the BaseGV plus Offset resides in accessible memory with the
+    It is assumed the BaseTEMPLATE plus Offset resides in accessible memory with the
     appropriate alignment for storing a value with type Type.
 
-    :arg BaseGV: Global value providing the base pointer.
+    :arg BaseTEMPLATE: Template computing the base pointer.
     :arg Offset: Offset added to the base before loading.
-    :result GV: Global value.
+    :result TEMPLATE: Template.
 
-GV = iadd_imm BaseGV, Offset
-    Declare a global value which has the value of BaseGV offset by Offset.
+TEMPLATE = iadd_imm BaseTEMPLATE, Offset
+    Declare a template which has the value of BaseTEMPLATE offset by Offset.
 
-    :arg BaseGV: Global value providing the base value.
+    :arg BaseTEMPLATE: Template computing the base value.
     :arg Offset: Offset added to the base value.
 
-GV = [colocated] symbol Name
-    Declare a symbolic address global value.
+TEMPLATE = [colocated] symbol Name
+    Declare a symbolic address template.
 
-    The value of GV is symbolic and will be assigned a relocation, so that
+    The value of TEMPLATE is symbolic and will be assigned a relocation, so that
     it can be resolved by a later linking phase.
 
     If the colocated keyword is present, the symbol's definition will be
@@ -605,7 +603,7 @@ GV = [colocated] symbol Name
     efficient addressing.
 
     :arg Name: External name.
-    :result GV: Global value.
+    :result TEMPLATE: A template.
 
 ### Heaps
 
@@ -664,7 +662,7 @@ generate a trap when accessed.
 H = static Base, min MinBytes, bound BoundBytes, offset_guard OffsetGuardBytes
     Declare a static heap in the preamble.
 
-    :arg Base: Global value holding the heap's base address.
+    :arg Base: Template computing the heap's base address.
     :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
             size will never trap.
     :arg BoundBytes: Fixed heap bound in bytes. This defines the amount of
@@ -676,15 +674,15 @@ H = static Base, min MinBytes, bound BoundBytes, offset_guard OffsetGuardBytes
 
 A *dynamic heap* can be relocated to a different base address when it is
 resized, and its bound can move dynamically. The offset-guard pages move when
-the heap is resized. The bound of a dynamic heap is stored in a global value.
+the heap is resized. The bound of a dynamic heap is computed from a template.
 
-H = dynamic Base, min MinBytes, bound BoundGV, offset_guard OffsetGuardBytes
+H = dynamic Base, min MinBytes, bound BoundTEMPLATE, offset_guard OffsetGuardBytes
     Declare a dynamic heap in the preamble.
 
-    :arg Base: Global value holding the heap's base address.
+    :arg Base: Template computing the heap's base address.
     :arg MinBytes: Guaranteed minimum heap size in bytes. Accesses below this
             size will never trap.
-    :arg BoundGV: Global value containing the current heap bound in bytes.
+    :arg BoundTEMPLATE: Template computing the current heap bound in bytes.
     :arg OffsetGuardBytes: Size of the offset-guard pages in bytes.
 
 #### Heap examples
@@ -698,9 +696,9 @@ generated for bounds checks at all:
 test verifier
 
 function %add_members(i32, i64 vmctx) -> f32 baldrdash_system_v {
-    gv0 = vmctx
-    gv1 = load.i64 notrap aligned gv0+64
-    heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0x8000_0000
+    template0 = vmctx
+    template1 = load.i64 notrap aligned template0+64
+    heap0 = static template1, min 0x1000, bound 0x1_0000_0000, offset_guard 0x8000_0000
 
 block0(v0: i32, v5: i64):
     v1 = heap_addr.i64 heap0, v0, 1
@@ -719,9 +717,9 @@ KB offset-guard page still has opportunities for sharing bounds checking code:
 test verifier
 
 function %add_members(i32, i32 vmctx) -> f32 baldrdash_system_v {
-    gv0 = vmctx
-    gv1 = load.i32 notrap aligned gv0+64
-    heap0 = static gv1, min 0x1000, bound 0x10_0000, offset_guard 0x1000
+    template0 = vmctx
+    template1 = load.i32 notrap aligned template0+64
+    heap0 = static template1, min 0x1000, bound 0x10_0000, offset_guard 0x1000
 
 block0(v0: i32, v5: i32):
     v1 = heap_addr.i32 heap0, v0, 1
@@ -743,10 +741,10 @@ full bounds checking is required for each access:
 test verifier
 
 function %add_members(i32, i64 vmctx) -> f32 baldrdash_system_v {
-    gv0 = vmctx
-    gv1 = load.i64 notrap aligned gv0+64
-    gv2 = load.i32 notrap aligned gv0+72
-    heap0 = dynamic gv1, min 0x1000, bound gv2, offset_guard 0
+    template0 = vmctx
+    template1 = load.i64 notrap aligned template0+64
+    template2 = load.i32 notrap aligned template0+72
+    heap0 = dynamic template1, min 0x1000, bound template2, offset_guard 0
 
 block0(v0: i32, v6: i64):
     v1 = heap_addr.i64 heap0, v0, 20
@@ -777,15 +775,15 @@ The *table bound* is the number of elements currently in the table. This is
 the bound that `table_addr` checks against.
 
 A table can be relocated to a different base address when it is resized, and
-its bound can move dynamically. The bound of a table is stored in a global
-value.
+its bound can move dynamically. The bound of a table is computed from a
+template.
 
-T = dynamic Base, min MinElements, bound BoundGV, element_size ElementSize
+T = dynamic Base, min MinElements, bound BoundTEMPLATE, element_size ElementSize
     Declare a table in the preamble.
 
-    :arg Base: Global value holding the table's base address.
+    :arg Base: Template computing the table's base address.
     :arg MinElements: Guaranteed minimum table size in elements.
-    :arg BoundGV: Global value containing the current heap bound in elements.
+    :arg BoundTEMPLATE: Template computing the current heap bound in elements.
     :arg ElementSize: Size of each element.
 
 ### Constant materialization
@@ -956,7 +954,7 @@ Size of function call arguments on the stack
     accessible
         [Addressable] memory in which loads and stores always succeed
         without [trapping], except where specified otherwise (eg. with the
-        `aligned` flag). Heaps, globals, tables, and the stack may contain
+        `aligned` flag). Heaps, templates, tables, and the stack may contain
         accessible, merely addressable, and outright unaddressable regions.
         There may also be additional regions of addressable and/or accessible
         memory not explicitly declared.

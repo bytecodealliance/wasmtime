@@ -1,15 +1,15 @@
 test verifier
 
 function %cycle() {
-    gv0 = load.i32 notrap aligned gv1 ; error: global value cycle: [gv0, gv1]
-    gv1 = load.i32 notrap aligned gv0-32
+    template0 = load.i32 notrap aligned template1 ; error: template cycle: [template0, template1]
+    template1 = load.i32 notrap aligned template0-32
 
 block1:
     return
 }
 
 function %self_cycle() {
-    gv0 = load.i32 notrap aligned gv0 ; error: global value cycle: [gv0]
+    template0 = load.i32 notrap aligned template0 ; error: template cycle: [template0]
 
 block1:
     return

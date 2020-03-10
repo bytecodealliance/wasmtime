@@ -26,17 +26,17 @@ use alloc::vec::Vec;
 
 mod boundary;
 mod call;
-mod globalvalue;
 mod heap;
 mod libcall;
 mod split;
 mod table;
+mod template;
 
 use self::call::expand_call;
-use self::globalvalue::expand_global_value;
 use self::heap::expand_heap_addr;
 use self::libcall::expand_as_libcall;
 use self::table::expand_table_addr;
+use self::template::expand_template;
 
 enum LegalizeInstResult {
     Done,

@@ -64,9 +64,9 @@ pub trait FuncWriter {
             self.write_entity_definition(w, func, ss.into(), slot)?;
         }
 
-        for (gv, gv_data) in &func.global_values {
+        for (template, template_data) in &func.templates {
             any = true;
-            self.write_entity_definition(w, func, gv.into(), gv_data)?;
+            self.write_entity_definition(w, func, template.into(), template_data)?;
         }
 
         for (heap, heap_data) in &func.heaps {
@@ -493,7 +493,7 @@ pub fn write_operands(
         UnaryIeee32 { imm, .. } => write!(w, " {}", imm),
         UnaryIeee64 { imm, .. } => write!(w, " {}", imm),
         UnaryBool { imm, .. } => write!(w, " {}", imm),
-        UnaryGlobalValue { global_value, .. } => write!(w, " {}", global_value),
+        UnaryTemplate { template, .. } => write!(w, " {}", template),
         Binary { args, .. } => write!(w, " {}, {}", args[0], args[1]),
         BinaryImm { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
         Ternary { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),

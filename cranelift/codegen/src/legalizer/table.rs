@@ -42,14 +42,14 @@ fn dynamic_addr(
     element_offset: Offset32,
     func: &mut ir::Function,
 ) {
-    let bound_gv = func.tables[table].bound_gv;
+    let bound_template = func.tables[table].bound_template;
     let index_ty = func.dfg.value_type(index);
     let addr_ty = func.dfg.value_type(func.dfg.first_result(inst));
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
     // Start with the bounds check. Trap if `index + 1 > bound`.
-    let bound = pos.ins().global_value(index_ty, bound_gv);
+    let bound = pos.ins().template(index_ty, bound_template);
 
     // `index > bound - 1` is the same as `index >= bound`.
     let oob = pos
@@ -87,8 +87,8 @@ fn compute_addr(
     }
 
     // Add the table base address base
-    let base_gv = pos.func.tables[table].base_gv;
-    let base = pos.ins().global_value(addr_ty, base_gv);
+    let base_template = pos.func.tables[table].base_template;
+    let base = pos.ins().template(addr_ty, base_template);
 
     let element_size = pos.func.tables[table].element_size;
     let mut offset;

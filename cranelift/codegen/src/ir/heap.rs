@@ -1,14 +1,14 @@
 //! Heaps.
 
 use crate::ir::immediates::Uimm64;
-use crate::ir::{GlobalValue, Type};
+use crate::ir::{Template, Type};
 use core::fmt;
 
 /// Information about a heap declaration.
 #[derive(Clone)]
 pub struct HeapData {
     /// The address of the start of the heap's storage.
-    pub base: GlobalValue,
+    pub base: Template,
 
     /// Guaranteed minimum heap size in bytes. Heap accesses before `min_size` don't need bounds
     /// checking.
@@ -29,8 +29,8 @@ pub struct HeapData {
 pub enum HeapStyle {
     /// A dynamic heap can be relocated to a different base address when it is grown.
     Dynamic {
-        /// Global value providing the current bound of the heap in bytes.
-        bound_gv: GlobalValue,
+        /// Template computing the current bound of the heap in bytes.
+        bound_template: Template,
     },
 
     /// A static heap has a fixed base address and a number of not-yet-allocated pages before the
@@ -50,7 +50,7 @@ impl fmt::Display for HeapData {
 
         write!(f, " {}, min {}", self.base, self.min_size)?;
         match self.style {
-            HeapStyle::Dynamic { bound_gv } => write!(f, ", bound {}", bound_gv)?,
+            HeapStyle::Dynamic { bound_template } => write!(f, ", bound {}", bound_template)?,
             HeapStyle::Static { bound } => write!(f, ", bound {}", bound)?,
         }
         write!(

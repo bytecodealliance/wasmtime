@@ -132,31 +132,31 @@ impl StackSlot {
     }
 }
 
-/// An opaque reference to a global value.
+/// An opaque reference to a template.
 ///
-/// A `GlobalValue` is a [`Value`](Value) that will be live across the entire
-/// function lifetime. It can be preloaded from other global values.
+/// A `Template` is an expression that can be expanded into code or interpreted
+/// directly.
 ///
-/// You can create a `GlobalValue` in the following ways:
+/// You can create a `Template` in the following ways:
 ///
 /// - When compiling to WASM, you can use it to load values from a
-/// [`VmContext`](super::GlobalValueData::VMContext) using
-/// [`FuncEnvironment::make_global`](https://docs.rs/cranelift-wasm/*/cranelift_wasm/trait.FuncEnvironment.html#tymethod.make_global).
+/// [`VmContext`](super::TemplateData::VMContext) using
+/// [`FuncEnvironment::make_template`](https://docs.rs/cranelift-wasm/*/cranelift_wasm/trait.FuncEnvironment.html#tymethod.make_template).
 /// - When compiling to native code, you can use it for objects in static memory with
 /// [`Module::declare_data_in_func`](https://docs.rs/cranelift-module/*/cranelift_module/struct.Module.html#method.declare_data_in_func).
 /// - For any compilation target, it can be registered with
-/// [`FunctionBuilder::create_global_value`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_global_value).
+/// [`FunctionBuilder::create_template`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_template).
 ///
-/// `GlobalValue`s can be retrieved with
-/// [`InstBuilder:global_value`](super::InstBuilder::global_value).
+/// `Template`s can be retrieved with
+/// [`InstBuilder:template`](super::InstBuilder::template).
 ///
 /// While the order is stable, it is arbitrary.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct GlobalValue(u32);
-entity_impl!(GlobalValue, "gv");
+pub struct Template(u32);
+entity_impl!(Template, "template");
 
-impl GlobalValue {
-    /// Create a new global value reference from its number.
+impl Template {
+    /// Create a new template reference from its number.
     ///
     /// This method is for use by the parser.
     pub fn with_number(n: u32) -> Option<Self> {
@@ -378,8 +378,8 @@ pub enum AnyEntity {
     Value(Value),
     /// A stack slot.
     StackSlot(StackSlot),
-    /// A Global value.
-    GlobalValue(GlobalValue),
+    /// A template.
+    Template(Template),
     /// A jump table.
     JumpTable(JumpTable),
     /// An external function.
@@ -400,7 +400,7 @@ impl fmt::Display for AnyEntity {
             Self::Inst(r) => r.fmt(f),
             Self::Value(r) => r.fmt(f),
             Self::StackSlot(r) => r.fmt(f),
-            Self::GlobalValue(r) => r.fmt(f),
+            Self::Template(r) => r.fmt(f),
             Self::JumpTable(r) => r.fmt(f),
             Self::FuncRef(r) => r.fmt(f),
             Self::SigRef(r) => r.fmt(f),
@@ -440,9 +440,9 @@ impl From<StackSlot> for AnyEntity {
     }
 }
 
-impl From<GlobalValue> for AnyEntity {
-    fn from(r: GlobalValue) -> Self {
-        Self::GlobalValue(r)
+impl From<Template> for AnyEntity {
+    fn from(r: Template) -> Self {
+        Self::Template(r)
     }
 }
 

@@ -13,8 +13,8 @@ pub(crate) struct EntityRefs {
     /// A reference to a stack slot declared in the function preamble.
     pub(crate) stack_slot: OperandKind,
 
-    /// A reference to a global value.
-    pub(crate) global_value: OperandKind,
+    /// A reference to a template.
+    pub(crate) template: OperandKind,
 
     /// A reference to a function signature declared in the function preamble.
     /// This is used to provide the call signature in a call_indirect instruction.
@@ -47,7 +47,7 @@ impl EntityRefs {
             ),
             stack_slot: new("stack_slot", "ir::StackSlot", "A stack slot"),
 
-            global_value: new("global_value", "ir::GlobalValue", "A global value."),
+            template: new("template", "ir::Template", "A template."),
 
             sig_ref: new("sig_ref", "ir::SigRef", "A function signature."),
 

@@ -1303,9 +1303,9 @@ fn expand_tls_value(
         isa.triple(),
     );
 
-    if let ir::InstructionData::UnaryGlobalValue {
+    if let ir::InstructionData::UnaryTemplate {
         opcode: ir::Opcode::TlsValue,
-        global_value,
+        template,
     } = func.dfg[inst]
     {
         let ctrl_typevar = func.dfg.ctrl_typevar(inst);
@@ -1314,10 +1314,10 @@ fn expand_tls_value(
         match isa.flags().tls_model() {
             TlsModel::None => panic!("tls_model flag is not set."),
             TlsModel::ElfGd => {
-                func.dfg.replace(inst).x86_elf_tls_get_addr(global_value);
+                func.dfg.replace(inst).x86_elf_tls_get_addr(template);
             }
             TlsModel::Macho => {
-                func.dfg.replace(inst).x86_macho_tls_get_addr(global_value);
+                func.dfg.replace(inst).x86_macho_tls_get_addr(template);
             }
             model => unimplemented!("tls_value for tls model {:?}", model),
         }

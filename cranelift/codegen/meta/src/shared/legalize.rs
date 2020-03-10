@@ -126,7 +126,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let trapz = insts.by_name("trapz");
 
     // Custom expansions for memory objects.
-    expand.custom_legalize(insts.by_name("global_value"), "expand_global_value");
+    expand.custom_legalize(insts.by_name("template"), "expand_template");
     expand.custom_legalize(insts.by_name("heap_addr"), "expand_heap_addr");
     expand.custom_legalize(insts.by_name("table_addr"), "expand_table_addr");
 

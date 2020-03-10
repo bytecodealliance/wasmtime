@@ -1,21 +1,21 @@
 //! Tables.
 
 use crate::ir::immediates::Uimm64;
-use crate::ir::{GlobalValue, Type};
+use crate::ir::{Template, Type};
 use core::fmt;
 
 /// Information about a table declaration.
 #[derive(Clone)]
 pub struct TableData {
-    /// Global value giving the address of the start of the table.
-    pub base_gv: GlobalValue,
+    /// Template computing the address of the start of the table.
+    pub base_template: Template,
 
     /// Guaranteed minimum table size in elements. Table accesses before `min_size` don't need
     /// bounds checking.
     pub min_size: Uimm64,
 
-    /// Global value giving the current bound of the table, in elements.
-    pub bound_gv: GlobalValue,
+    /// Template computing the current bound of the table, in elements.
+    pub bound_template: Template,
 
     /// The size of a table element, in bytes.
     pub element_size: Uimm64,
@@ -30,7 +30,11 @@ impl fmt::Display for TableData {
         write!(
             f,
             " {}, min {}, bound {}, element_size {}, index_type {}",
-            self.base_gv, self.min_size, self.bound_gv, self.element_size, self.index_type
+            self.base_template,
+            self.min_size,
+            self.bound_template,
+            self.element_size,
+            self.index_type
         )
     }
 }

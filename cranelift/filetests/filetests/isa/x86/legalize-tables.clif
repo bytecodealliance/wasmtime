@@ -5,20 +5,20 @@ target x86_64
 ; regex: BB=block\d+
 
 function %table_addrs(i32, i64, i64 vmctx) {
-    gv4 = vmctx
-    gv0 = iadd_imm.i64 gv4, 72
-    gv1 = iadd_imm.i64 gv4, 80
-    gv2 = load.i32 notrap aligned gv4+88
+    template4 = vmctx
+    template0 = iadd_imm template4, 72
+    template1 = iadd_imm template4, 80
+    template2 = load.i32 notrap aligned template4+88
 
-    table0 = dynamic gv0, min 0x1_0000, bound gv2, element_size 1, index_type i32
-    table1 = dynamic gv0, bound gv2, element_size 16, index_type i32
-    table2 = dynamic gv0, min 0x1_0000, bound gv1, element_size 1, index_type i64
-    table3 = dynamic gv0, bound gv1, element_size 16, index_type i64
+    table0 = dynamic template0, min 0x1_0000, bound template2, element_size 1, index_type i32
+    table1 = dynamic template0, bound template2, element_size 16, index_type i32
+    table2 = dynamic template0, min 0x1_0000, bound template1, element_size 1, index_type i64
+    table3 = dynamic template0, bound template1, element_size 16, index_type i64
 
-    ; check: table0 = dynamic gv0, min 0x0001_0000, bound gv2, element_size 1, index_type i32
-    ; check: table1 = dynamic gv0, min 0, bound gv2, element_size 16, index_type i32
-    ; check: table2 = dynamic gv0, min 0x0001_0000, bound gv1, element_size 1, index_type i64
-    ; check: table3 = dynamic gv0, min 0, bound gv1, element_size 16, index_type i64
+    ; check: table0 = dynamic template0, min 0x0001_0000, bound template2, element_size 1, index_type i32
+    ; check: table1 = dynamic template0, min 0, bound template2, element_size 16, index_type i32
+    ; check: table2 = dynamic template0, min 0x0001_0000, bound template1, element_size 1, index_type i64
+    ; check: table3 = dynamic template0, min 0, bound template1, element_size 16, index_type i64
 
 block0(v0: i32, v1: i64, v3: i64):
     v4 = table_addr.i64 table0, v0, +0

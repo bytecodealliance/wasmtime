@@ -41,10 +41,10 @@
 //! - All return instructions must have return value operands matching the current
 //!   function signature.
 //!
-//! Global values
+//! Templates
 //!
-//! - Detect cycles in global values.
-//! - Detect use of 'vmctx' global value when no corresponding parameter is defined.
+//! - Detect cycles in templates.
+//! - Detect use of 'vmctx' template when no corresponding parameter is defined.
 //!
 //! TODO:
 //! Ad hoc checking
@@ -65,7 +65,7 @@ use crate::ir;
 use crate::ir::entities::AnyEntity;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{
-    types, ArgumentLoc, Block, FuncRef, Function, GlobalValue, Inst, InstructionData, JumpTable,
+    types, ArgumentLoc, Block, FuncRef, Function, Template, Inst, InstructionData, JumpTable,
     Opcode, SigRef, StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc,
 };
 use crate::isa::TargetIsa;
@@ -319,31 +319,31 @@ impl<'a> Verifier<'a> {
     }
 
     // Check for:
-    //  - cycles in the global value declarations.
+    //  - cycles in the template declarations.
     //  - use of 'vmctx' when no special parameter declares it.
-    fn verify_global_values(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+    fn verify_templates(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         let mut cycle_seen = false;
         let mut seen = SparseSet::new();
 
-        'gvs: for gv in self.func.global_values.keys() {
+        'templates: for template in self.func.templates.keys() {
             seen.clear();
-            seen.insert(gv);
+            seen.insert(template);
 
-            let mut cur = gv;
+            let mut cur = template;
             loop {
-                match self.func.global_values[cur] {
-                    ir::GlobalValueData::Load { base, .. }
-                    | ir::GlobalValueData::IAddImm { base, .. } => {
+                match self.func.templates[cur] {
+                    ir::TemplateData::Load { base, .. }
+                    | ir::TemplateData::IAddImm { base, .. } => {
                         if seen.insert(base).is_some() {
                             if !cycle_seen {
                                 errors.report((
-                                    gv,
-                                    format!("global value cycle: {}", DisplayList(seen.as_slice())),
+                                    template,
+                                    format!("template cycle: {}", DisplayList(seen.as_slice())),
                                 ));
                                 // ensures we don't report the cycle multiple times
                                 cycle_seen = true;
                             }
-                            continue 'gvs;
+                            continue 'templates;
                         }
 
                         cur = base;
@@ -352,44 +352,35 @@ impl<'a> Verifier<'a> {
                 }
             }
 
-            match self.func.global_values[gv] {
-                ir::GlobalValueData::VMContext { .. } => {
+            match self.func.templates[template] {
+                ir::TemplateData::VMContext { .. } => {
                     if self
                         .func
                         .special_param(ir::ArgumentPurpose::VMContext)
                         .is_none()
                     {
-                        errors.report((gv, format!("undeclared vmctx reference {}", gv)));
+                        errors
+                            .report((template, format!("undeclared vmctx reference {}", template)));
                     }
                 }
-                ir::GlobalValueData::IAddImm {
-                    base, global_type, ..
-                } => {
-                    if !global_type.is_int() {
-                        errors.report((
-                            gv,
-                            format!("iadd_imm global value with non-int type {}", global_type),
-                        ));
-                    } else if let Some(isa) = self.isa {
-                        let base_type = self.func.global_values[base].global_type(isa);
-                        if global_type != base_type {
+                ir::TemplateData::IAddImm { base, .. } => {
+                    if let Some(isa) = self.isa {
+                        let base_type = self.func.template_result_type(base, isa);
+                        if !base_type.is_int() {
                             errors.report((
-                                gv,
-                                format!(
-                                    "iadd_imm type {} differs from operand type {}",
-                                    global_type, base_type
-                                ),
+                                template,
+                                format!("iadd_imm template with non-int type {}", base_type),
                             ));
                         }
                     }
                 }
-                ir::GlobalValueData::Load { base, .. } => {
+                ir::TemplateData::Load { base, .. } => {
                     if let Some(isa) = self.isa {
-                        let base_type = self.func.global_values[base].global_type(isa);
+                        let base_type = self.func.template_result_type(base, isa);
                         let pointer_type = isa.pointer_type();
                         if base_type != pointer_type {
                             errors.report((
-                                gv,
+                                template,
                                 format!(
                                     "base {} has type {}, which is not the pointer type {}",
                                     base, base_type, pointer_type
@@ -402,7 +393,7 @@ impl<'a> Verifier<'a> {
             }
         }
 
-        // Invalid global values shouldn't stop us from verifying the rest of the function
+        // Invalid templates shouldn't stop us from verifying the rest of the function
         Ok(())
     }
 
@@ -410,12 +401,12 @@ impl<'a> Verifier<'a> {
         if let Some(isa) = self.isa {
             for (heap, heap_data) in &self.func.heaps {
                 let base = heap_data.base;
-                if !self.func.global_values.is_valid(base) {
-                    return errors.nonfatal((heap, format!("invalid base global value {}", base)));
+                if !self.func.templates.is_valid(base) {
+                    return errors.nonfatal((heap, format!("invalid base {}", base)));
                 }
 
                 let pointer_type = isa.pointer_type();
-                let base_type = self.func.global_values[base].global_type(isa);
+                let base_type = self.func.template_result_type(base, isa);
                 if base_type != pointer_type {
                     errors.report((
                         heap,
@@ -426,14 +417,14 @@ impl<'a> Verifier<'a> {
                     ));
                 }
 
-                if let ir::HeapStyle::Dynamic { bound_gv, .. } = heap_data.style {
-                    if !self.func.global_values.is_valid(bound_gv) {
+                if let ir::HeapStyle::Dynamic { bound_template, .. } = heap_data.style {
+                    if !self.func.templates.is_valid(bound_template) {
                         return errors
-                            .nonfatal((heap, format!("invalid bound global value {}", bound_gv)));
+                            .nonfatal((heap, format!("invalid bound {}", bound_template)));
                     }
 
                     let index_type = heap_data.index_type;
-                    let bound_type = self.func.global_values[bound_gv].global_type(isa);
+                    let bound_type = self.func.template_result_type(bound_template, isa);
                     if index_type != bound_type {
                         errors.report((
                             heap,
@@ -453,13 +444,13 @@ impl<'a> Verifier<'a> {
     fn verify_tables(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         if let Some(isa) = self.isa {
             for (table, table_data) in &self.func.tables {
-                let base = table_data.base_gv;
-                if !self.func.global_values.is_valid(base) {
-                    return errors.nonfatal((table, format!("invalid base global value {}", base)));
+                let base = table_data.base_template;
+                if !self.func.templates.is_valid(base) {
+                    return errors.nonfatal((table, format!("invalid base {}", base)));
                 }
 
                 let pointer_type = isa.pointer_type();
-                let base_type = self.func.global_values[base].global_type(isa);
+                let base_type = self.func.template_result_type(base, isa);
                 if base_type != pointer_type {
                     errors.report((
                         table,
@@ -470,14 +461,13 @@ impl<'a> Verifier<'a> {
                     ));
                 }
 
-                let bound_gv = table_data.bound_gv;
-                if !self.func.global_values.is_valid(bound_gv) {
-                    return errors
-                        .nonfatal((table, format!("invalid bound global value {}", bound_gv)));
+                let bound_template = table_data.bound_template;
+                if !self.func.templates.is_valid(bound_template) {
+                    return errors.nonfatal((table, format!("invalid bound {}", bound_template)));
                 }
 
                 let index_type = table_data.index_type;
-                let bound_type = self.func.global_values[bound_gv].global_type(isa);
+                let bound_type = self.func.template_result_type(bound_template, isa);
                 if index_type != bound_type {
                     errors.report((
                         table,
@@ -688,8 +678,8 @@ impl<'a> Verifier<'a> {
             StackLoad { stack_slot, .. } | StackStore { stack_slot, .. } => {
                 self.verify_stack_slot(inst, stack_slot, errors)?;
             }
-            UnaryGlobalValue { global_value, .. } => {
-                self.verify_global_value(inst, global_value, errors)?;
+            UnaryTemplate { template, .. } => {
+                self.verify_template(inst, template, errors)?;
             }
             HeapAddr { heap, .. } => {
                 self.verify_heap(inst, heap, errors)?;
@@ -843,17 +833,17 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    fn verify_global_value(
+    fn verify_template(
         &self,
         inst: Inst,
-        gv: GlobalValue,
+        template: Template,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult<()> {
-        if !self.func.global_values.is_valid(gv) {
+        if !self.func.templates.is_valid(template) {
             errors.nonfatal((
                 inst,
                 self.context(inst),
-                format!("invalid global value {}", gv),
+                format!("invalid template {}", template),
             ))
         } else {
             Ok(())
@@ -1587,16 +1577,16 @@ impl<'a> Verifier<'a> {
                     ));
                 }
             }
-            ir::InstructionData::UnaryGlobalValue { global_value, .. } => {
+            ir::InstructionData::UnaryTemplate { template, .. } => {
                 if let Some(isa) = self.isa {
                     let inst_type = self.func.dfg.value_type(self.func.dfg.first_result(inst));
-                    let global_type = self.func.global_values[global_value].global_type(isa);
-                    if inst_type != global_type {
+                    let result_type = self.func.template_result_type(template, isa);
+                    if inst_type != result_type {
                         return errors.nonfatal((
                             inst, self.context(inst),
                             format!(
-                                "global_value instruction with type {} references global value with type {}",
-                                inst_type, global_type
+                                "template instruction with type {} references template with type {}",
+                                inst_type, result_type
                             )),
                         );
                     }
@@ -1966,7 +1956,7 @@ impl<'a> Verifier<'a> {
     }
 
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        self.verify_global_values(errors)?;
+        self.verify_templates(errors)?;
         self.verify_heaps(errors)?;
         self.verify_tables(errors)?;
         self.verify_jump_tables(errors)?;

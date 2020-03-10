@@ -433,7 +433,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         &mut self,
         _data: &mut Self::CompiledData,
         _offset: usize,
-        _what: ir::GlobalValue,
+        _what: ir::Template,
         _usize: Addend,
     ) {
         unimplemented!();

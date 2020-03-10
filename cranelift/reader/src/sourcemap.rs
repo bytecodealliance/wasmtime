@@ -10,7 +10,7 @@ use crate::error::{Location, ParseResult};
 use crate::lexer::split_entity_name;
 use cranelift_codegen::ir::entities::AnyEntity;
 use cranelift_codegen::ir::{
-    Block, FuncRef, GlobalValue, Heap, JumpTable, SigRef, StackSlot, Table, Value,
+    Block, FuncRef, Template, Heap, JumpTable, SigRef, StackSlot, Table, Value,
 };
 use std::collections::HashMap;
 
@@ -38,9 +38,9 @@ impl SourceMap {
         self.locations.contains_key(&ss.into())
     }
 
-    /// Look up a global value entity.
-    pub fn contains_gv(&self, gv: GlobalValue) -> bool {
-        self.locations.contains_key(&gv.into())
+    /// Look up a template entity.
+    pub fn contains_template(&self, template: Template) -> bool {
+        self.locations.contains_key(&template.into())
     }
 
     /// Look up a heap entity.
@@ -93,11 +93,11 @@ impl SourceMap {
                     Some(ss.into())
                 }
             }),
-            "gv" => GlobalValue::with_number(num).and_then(|gv| {
-                if !self.contains_gv(gv) {
+            "template" => Template::with_number(num).and_then(|template| {
+                if !self.contains_template(template) {
                     None
                 } else {
-                    Some(gv.into())
+                    Some(template.into())
                 }
             }),
             "heap" => Heap::with_number(num).and_then(|heap| {
@@ -168,8 +168,8 @@ impl SourceMap {
         self.def_entity(entity.into(), loc)
     }
 
-    /// Define the global value `entity`.
-    pub fn def_gv(&mut self, entity: GlobalValue, loc: Location) -> ParseResult<()> {
+    /// Define the template `entity`.
+    pub fn def_template(&mut self, entity: Template, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 

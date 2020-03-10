@@ -2,43 +2,43 @@ test verifier
 target x86_64
 
 function %table_base_type(i64 vmctx) {
-    gv0 = vmctx
-    gv1 = load.i32 notrap aligned gv0
-    table0 = dynamic gv1, element_size 1, bound gv1, index_type i32 ; error: table base has type i32, which is not the pointer type i64
+    template0 = vmctx
+    template1 = load.i32 notrap aligned template0
+    table0 = dynamic template1, element_size 1, bound template1, index_type i32 ; error: table base has type i32, which is not the pointer type i64
 
 block0(v0: i64):
     return
 }
 
 function %invalid_base(i64 vmctx) {
-    gv0 = vmctx
-    table0 = dynamic gv1, bound gv0, element_size 1, index_type i64 ; error: invalid base global value gv1
+    template0 = vmctx
+    table0 = dynamic template1, bound template0, element_size 1, index_type i64 ; error: invalid base template1
 
 block0(v0: i64):
     return
 }
 
 function %invalid_bound(i64 vmctx) {
-    gv0 = vmctx
-    table0 = dynamic gv0, bound gv1, element_size 1, index_type i64 ; error: invalid bound global value gv1
+    template0 = vmctx
+    table0 = dynamic template0, bound template1, element_size 1, index_type i64 ; error: invalid bound template1
 
 block0(v0: i64):
     return
 }
 
 function %table_bound_type(i64 vmctx) {
-    gv0 = vmctx
-    gv1 = load.i16 notrap aligned gv0
-    table0 = dynamic gv0, bound gv1, element_size 1, index_type i32 ; error: table index type i32 differs from the type of its bound, i16
+    template0 = vmctx
+    template1 = load.i16 notrap aligned template0
+    table0 = dynamic template0, bound template1, element_size 1, index_type i32 ; error: table index type i32 differs from the type of its bound, i16
 
 block0(v0: i64):
     return
 }
 
 function %table_addr_index_type(i64 vmctx, i64) {
-    gv0 = vmctx
-    gv1 = load.i32 notrap aligned gv0
-    table0 = dynamic gv0, element_size 1, bound gv1, index_type i32
+    template0 = vmctx
+    template1 = load.i32 notrap aligned template0
+    table0 = dynamic template0, element_size 1, bound template1, index_type i32
 
 block0(v0: i64, v1: i64):
     v2 = table_addr.i64 table0, v1, +0; error: index type i64 differs from table index type i32

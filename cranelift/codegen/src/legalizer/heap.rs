@@ -31,8 +31,8 @@ pub fn expand_heap_addr(
     };
 
     match func.heaps[heap].style {
-        ir::HeapStyle::Dynamic { bound_gv } => {
-            dynamic_addr(isa, inst, heap, offset, access_size, bound_gv, func)
+        ir::HeapStyle::Dynamic { bound_template } => {
+            dynamic_addr(isa, inst, heap, offset, access_size, bound_template, func)
         }
         ir::HeapStyle::Static { bound } => static_addr(
             isa,
@@ -54,7 +54,7 @@ fn dynamic_addr(
     heap: ir::Heap,
     offset: ir::Value,
     access_size: u32,
-    bound_gv: ir::GlobalValue,
+    bound_template: ir::Template,
     func: &mut ir::Function,
 ) {
     let access_size = u64::from(access_size);
@@ -65,7 +65,7 @@ fn dynamic_addr(
     pos.use_srcloc(inst);
 
     // Start with the bounds check. Trap if `offset + access_size > bound`.
-    let bound = pos.ins().global_value(offset_ty, bound_gv);
+    let bound = pos.ins().template(offset_ty, bound_template);
     let oob;
     if access_size == 1 {
         // `offset > bound - 1` is the same as `offset >= bound`.
@@ -182,8 +182,8 @@ fn compute_addr(
     let base = if isa.flags().enable_pinned_reg() && isa.flags().use_pinned_reg_as_heap_base() {
         pos.ins().get_pinned_reg(isa.pointer_type())
     } else {
-        let base_gv = pos.func.heaps[heap].base;
-        pos.ins().global_value(addr_ty, base_gv)
+        let base_template = pos.func.heaps[heap].base;
+        pos.ins().template(addr_ty, base_template)
     };
 
     pos.func.dfg.replace(inst).iadd(base, offset);

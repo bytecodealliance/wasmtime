@@ -212,9 +212,9 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     ) -> WasmResult<GlobalVariable> {
         // Just create a dummy `vmctx` global.
         let offset = i32::try_from((index.index() * 8) + 8).unwrap().into();
-        let vmctx = func.create_global_value(ir::GlobalValueData::VMContext {});
+        let vmctx = func.create_template(ir::TemplateData::VMContext {});
         Ok(GlobalVariable::Memory {
-            gv: vmctx,
+            template: vmctx,
             offset,
             ty: self.mod_info.globals[index].entity.ty,
         })
@@ -222,16 +222,16 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 
     fn make_heap(&mut self, func: &mut ir::Function, _index: MemoryIndex) -> WasmResult<ir::Heap> {
         // Create a static heap whose base address is stored at `vmctx+0`.
-        let addr = func.create_global_value(ir::GlobalValueData::VMContext);
-        let gv = func.create_global_value(ir::GlobalValueData::Load {
+        let addr = func.create_template(ir::TemplateData::VMContext);
+        let template = func.create_template(ir::TemplateData::Load {
             base: addr,
             offset: Offset32::new(0),
-            global_type: self.pointer_type(),
+            result_type: self.pointer_type(),
             readonly: true,
         });
 
         Ok(func.create_heap(ir::HeapData {
-            base: gv,
+            base: template,
             min_size: 0.into(),
             offset_guard_size: 0x8000_0000.into(),
             style: ir::HeapStyle::Static {
@@ -243,24 +243,24 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
 
     fn make_table(&mut self, func: &mut ir::Function, _index: TableIndex) -> WasmResult<ir::Table> {
         // Create a table whose base address is stored at `vmctx+0`.
-        let vmctx = func.create_global_value(ir::GlobalValueData::VMContext);
-        let base_gv = func.create_global_value(ir::GlobalValueData::Load {
+        let vmctx = func.create_template(ir::TemplateData::VMContext);
+        let base_template = func.create_template(ir::TemplateData::Load {
             base: vmctx,
             offset: Offset32::new(0),
-            global_type: self.pointer_type(),
+            result_type: self.pointer_type(),
             readonly: true, // when tables in wasm become "growable", revisit whether this can be readonly or not.
         });
-        let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
+        let bound_template = func.create_template(ir::TemplateData::Load {
             base: vmctx,
             offset: Offset32::new(0),
-            global_type: I32,
+            result_type: I32,
             readonly: true,
         });
 
         Ok(func.create_table(ir::TableData {
-            base_gv,
+            base_template,
             min_size: Uimm64::new(0),
-            bound_gv,
+            bound_template,
             element_size: Uimm64::from(u64::from(self.pointer_bytes()) * 2),
             index_type: I32,
         }))

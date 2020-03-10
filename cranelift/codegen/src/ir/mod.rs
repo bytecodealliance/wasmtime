@@ -8,7 +8,6 @@ mod extfunc;
 mod extname;
 mod framelayout;
 pub mod function;
-mod globalvalue;
 mod heap;
 pub mod immediates;
 pub mod instructions;
@@ -20,6 +19,7 @@ mod progpoint;
 mod sourceloc;
 pub mod stackslot;
 mod table;
+mod template;
 mod trapcode;
 pub mod types;
 mod valueloc;
@@ -33,7 +33,7 @@ pub use crate::ir::builder::{
 pub use crate::ir::constant::{ConstantData, ConstantOffset, ConstantPool};
 pub use crate::ir::dfg::{DataFlowGraph, ValueDef};
 pub use crate::ir::entities::{
-    Block, Constant, FuncRef, GlobalValue, Heap, Immediate, Inst, JumpTable, SigRef, StackSlot,
+    Block, Constant, FuncRef, Template, Heap, Immediate, Inst, JumpTable, SigRef, StackSlot,
     Table, Value,
 };
 pub use crate::ir::extfunc::{
@@ -42,7 +42,6 @@ pub use crate::ir::extfunc::{
 pub use crate::ir::extname::ExternalName;
 pub use crate::ir::framelayout::{FrameLayout, FrameLayoutChange, FrameLayoutChanges};
 pub use crate::ir::function::{DisplayFunctionAnnotations, Function};
-pub use crate::ir::globalvalue::GlobalValueData;
 pub use crate::ir::heap::{HeapData, HeapStyle};
 pub use crate::ir::instructions::{
     InstructionData, Opcode, ValueList, ValueListPool, VariableArgs,
@@ -55,6 +54,7 @@ pub use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder, ProgramPoint}
 pub use crate::ir::sourceloc::SourceLoc;
 pub use crate::ir::stackslot::{StackLayoutInfo, StackSlotData, StackSlotKind, StackSlots};
 pub use crate::ir::table::TableData;
+pub use crate::ir::template::TemplateData;
 pub use crate::ir::trapcode::TrapCode;
 pub use crate::ir::types::Type;
 pub use crate::ir::valueloc::{ArgumentLoc, ValueLoc};

@@ -6,7 +6,7 @@ use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::flowgraph::ControlFlowGraph;
 use cranelift_codegen::ir::types::{F32, F64};
 use cranelift_codegen::ir::{
-    self, Block, FuncRef, Function, GlobalValueData, Inst, InstBuilder, InstructionData,
+    self, Block, FuncRef, Function, TemplateData, Inst, InstBuilder, InstructionData,
     StackSlots, TrapCode,
 };
 use cranelift_codegen::isa::TargetIsa;
@@ -493,43 +493,44 @@ impl Mutator for RemoveUnusedEntities {
                 "Remove unused stack slots"
             }
             3 => {
-                let mut global_value_usage_map = HashMap::new();
+                let mut template_usage_map = HashMap::new();
                 for block in func.layout.blocks() {
                     for inst in func.layout.block_insts(block) {
-                        // Add new cases when there are new instruction formats taking a `GlobalValue`.
-                        if let InstructionData::UnaryGlobalValue { global_value, .. } =
+                        // Add new cases when there are new instruction formats taking a `Template`.
+                        if let InstructionData::UnaryTemplate { template, .. } =
                             func.dfg[inst]
                         {
-                            global_value_usage_map
-                                .entry(global_value)
+                            template_usage_map
+                                .entry(template)
                                 .or_insert_with(Vec::new)
                                 .push(inst);
                         }
                     }
                 }
 
-                for (_global_value, global_value_data) in func.global_values.iter() {
-                    match *global_value_data {
-                        GlobalValueData::VMContext | GlobalValueData::Symbol { .. } => {}
+                for (_template, template_data) in func.templates.iter() {
+                    match *template_data {
+                        TemplateData::VMContext | TemplateData::Symbol { .. } => {}
                         // These can create cyclic references, which cause complications. Just skip
-                        // the global value removal for now.
+                        // the template removal for now.
                         // FIXME Handle them in a better way.
-                        GlobalValueData::Load { .. } | GlobalValueData::IAddImm { .. } => {
-                            return None
-                        }
+                        TemplateData::Load { .. }
+                        | TemplateData::IAddImm { .. }
+                        | TemplateData::Call { .. }
+                        | TemplateData::IfElse { .. } => return None,
                     }
                 }
 
-                let mut global_values = PrimaryMap::new();
+                let mut templates = PrimaryMap::new();
 
-                for (global_value, global_value_data) in func.global_values.clone().into_iter() {
-                    if let Some(global_value_usage) = global_value_usage_map.get(&global_value) {
-                        let new_global_value = global_values.push(global_value_data.clone());
-                        for &inst in global_value_usage {
+                for (template, template_data) in func.templates.clone().into_iter() {
+                    if let Some(template_usage) = template_usage_map.get(&template) {
+                        let new_template = templates.push(template_data.clone());
+                        for &inst in template_usage {
                             match &mut func.dfg[inst] {
                                 // Keep in sync with the above match.
-                                InstructionData::UnaryGlobalValue { global_value, .. } => {
-                                    *global_value = new_global_value;
+                                InstructionData::UnaryTemplate { template, .. } => {
+                                    *template = new_template;
                                 }
                                 _ => unreachable!(),
                             }
@@ -537,9 +538,9 @@ impl Mutator for RemoveUnusedEntities {
                     }
                 }
 
-                func.global_values = global_values;
+                func.templates = templates;
 
-                "Remove unused global values"
+                "Remove unused templates"
             }
             _ => return None,
         };
