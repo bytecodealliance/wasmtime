@@ -11,23 +11,17 @@ use std::io::Result;
 pub use super::sys::filetime::*;
 
 pub(crate) trait FileTimeExt {
-    #[cfg(target_pointer_width = "32")]
-    fn seconds_checked(&self) -> Result<i32>;
+    fn seconds_checked(&self) -> Result<libc::time_t>;
     #[cfg(target_pointer_width = "32")]
     fn nanoseconds_checked(&self) -> Result<i32>;
-    #[cfg(target_pointer_width = "64")]
-    fn seconds_checked(&self) -> Result<i64>;
     #[cfg(target_pointer_width = "64")]
     fn nanoseconds_checked(&self) -> Result<i64>;
 }
 
 impl FileTimeExt for filetime::FileTime {
-    #[cfg(target_pointer_width = "32")]
-    fn seconds_checked(&self) -> Result<i32> {
+    fn seconds_checked(&self) -> Result<libc::time_t> {
         use std::convert::TryInto;
         use std::io::Error;
-        // 32bit OS expects `tv_sec` field to be `i32`.
-        // Perform a checked conversion, log error if any, and convert to libc::EOVERFLOW.
         let sec = match self.seconds().try_into() {
             Ok(sec) => sec,
             Err(_) => {
@@ -40,21 +34,11 @@ impl FileTimeExt for filetime::FileTime {
     #[cfg(target_pointer_width = "32")]
     fn nanoseconds_checked(&self) -> Result<i32> {
         use std::convert::TryInto;
-        use std::io::Error;
-        // 32bit OS expects `tv_nsec` field to be `i32`.
-        // Perform a checked conversion, log error if any, and convert to libc::EOVERFLOW.
-        let nsec = match self.nanoseconds().try_into() {
-            Ok(nsec) => nsec,
-            Err(_) => {
-                log::debug!("filetime_to_timespec failed converting nanoseconds to required width");
-                return Err(Error::from_raw_os_error(libc::EOVERFLOW));
-            }
-        };
-        Ok(nsec)
-    }
-    #[cfg(target_pointer_width = "64")]
-    fn seconds_checked(&self) -> Result<i64> {
-        Ok(self.seconds())
+        // According to [filetime] docs, since the nanoseconds value is always less than 1 billion,
+        // any value should be convertible to `i32`, hence we can `unwrap` outright.
+        //
+        // [filetime]: https://docs.rs/filetime/0.2.8/filetime/struct.FileTime.html#method.nanoseconds
+        Ok(self.nanoseconds().try_into().unwrap())
     }
     #[cfg(target_pointer_width = "64")]
     fn nanoseconds_checked(&self) -> Result<i64> {
@@ -84,11 +68,11 @@ pub(crate) fn to_timespec(ft: &FileTime) -> Result<libc::timespec> {
     let ts = match ft {
         FileTime::Now => libc::timespec {
             tv_sec: 0,
-            tv_nsec: UTIME_NOW,
+            tv_nsec: libc::UTIME_NOW,
         },
         FileTime::Omit => libc::timespec {
             tv_sec: 0,
-            tv_nsec: UTIME_OMIT,
+            tv_nsec: libc::UTIME_OMIT,
         },
         FileTime::FileTime(ft) => libc::timespec {
             tv_sec: ft.seconds_checked()?,
