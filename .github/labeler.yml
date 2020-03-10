@@ -37,3 +37,6 @@ wasi:
 
 "wasmtime:api":
   - crates/api/*
+
+"wasmtime:c-api":
+  - crates/c-api/*
