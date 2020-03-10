@@ -10,16 +10,16 @@ use std::io::Result;
 
 pub use super::sys::filetime::*;
 
+/// Internal trait which specialises `filetime::FileTime`'s
+/// `seconds` and `nanoseconds` accessors for different
+/// pointer widths (32 and 64bit currently).
 pub(crate) trait FileTimeExt {
-    fn seconds_checked(&self) -> Result<libc::time_t>;
-    #[cfg(target_pointer_width = "32")]
-    fn nanoseconds_checked(&self) -> Result<i32>;
-    #[cfg(target_pointer_width = "64")]
-    fn nanoseconds_checked(&self) -> Result<i64>;
+    fn seconds_(&self) -> Result<libc::time_t>;
+    fn nanoseconds_(&self) -> libc::c_long;
 }
 
 impl FileTimeExt for filetime::FileTime {
-    fn seconds_checked(&self) -> Result<libc::time_t> {
+    fn seconds_(&self) -> Result<libc::time_t> {
         use std::convert::TryInto;
         use std::io::Error;
         let sec = match self.seconds().try_into() {
@@ -31,18 +31,13 @@ impl FileTimeExt for filetime::FileTime {
         };
         Ok(sec)
     }
-    #[cfg(target_pointer_width = "32")]
-    fn nanoseconds_checked(&self) -> Result<i32> {
+    fn nanoseconds_(&self) -> libc::c_long {
         use std::convert::TryInto;
         // According to [filetime] docs, since the nanoseconds value is always less than 1 billion,
-        // any value should be convertible to `i32`, hence we can `unwrap` outright.
+        // any value should be convertible to `libc::c_long`, hence we can `unwrap` outright.
         //
         // [filetime]: https://docs.rs/filetime/0.2.8/filetime/struct.FileTime.html#method.nanoseconds
-        Ok(self.nanoseconds().try_into().unwrap())
-    }
-    #[cfg(target_pointer_width = "64")]
-    fn nanoseconds_checked(&self) -> Result<i64> {
-        Ok(i64::from(self.nanoseconds()))
+        self.nanoseconds().try_into().unwrap()
     }
 }
 
@@ -75,8 +70,8 @@ pub(crate) fn to_timespec(ft: &FileTime) -> Result<libc::timespec> {
             tv_nsec: libc::UTIME_OMIT,
         },
         FileTime::FileTime(ft) => libc::timespec {
-            tv_sec: ft.seconds_checked()?,
-            tv_nsec: ft.nanoseconds_checked()?,
+            tv_sec: ft.seconds_()?,
+            tv_nsec: ft.nanoseconds_(),
         },
     };
     Ok(ts)

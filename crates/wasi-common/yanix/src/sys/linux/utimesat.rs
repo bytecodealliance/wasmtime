@@ -34,8 +34,8 @@ pub fn utimesat(
 /// Converts `filetime::FileTime` to `libc::timeval`.
 fn to_timeval(ft: filetime::FileTime) -> Result<libc::timeval> {
     Ok(libc::timeval {
-        tv_sec: ft.seconds_checked()?,
-        tv_usec: (ft.nanoseconds_checked()? / 1000) as libc::suseconds_t,
+        tv_sec: ft.seconds_()?,
+        tv_usec: (ft.nanoseconds_() / 1000) as libc::suseconds_t,
     })
 }
 
