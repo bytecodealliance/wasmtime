@@ -1,0 +1,42 @@
+# This file configures which paths automatically get which label on new pull
+# requests.
+#
+# It generally has the syntax:
+#
+#     <label 0>:
+#       - <glob-path 0>
+#       - ...
+#       - <glob-path n>
+#     ...
+#     <label n>:
+#       - <glob-path 0>
+#       - ...
+#       - <glob-path n>
+#
+# See https://github.com/actions/labeler for details.
+#
+# Note that we keep the labels in alphabetical order below.
+
+cranelift:
+  - cranelift/*
+
+"cranelift:docs":
+  - cranelift/docs/*
+
+"cranelift:meta":
+  - cranelift/codegen/meta/*
+
+lightbeam:
+  - crates/lightbeam/*
+
+fuzzing:
+  - crates/fuzzing/*
+
+wasi:
+  - crates/wasi/*
+
+"wasmtime:api":
+  - crates/api/*
+
+"wasmtime:c-api":
+  - crates/c-api/*
