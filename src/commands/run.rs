@@ -123,9 +123,8 @@ impl RunCommand {
                 // If the program exited because of a trap, return an error code
                 // to the outside environment indicating a more severe problem
                 // than a simple failure.
-                let mut err = e.source();
-                while let Some(source) = err {
-                    if source.is::<Trap>() {
+                for cause in e.chain() {
+                    if cause.is::<Trap>() {
                         // Print the error message in the usual way.
                         eprintln!("Error: {:?}", e);
 
@@ -138,7 +137,6 @@ impl RunCommand {
                         #[cfg(windows)]
                         process::exit(3);
                     }
-                    err = source.source();
                 }
                 return Err(e);
             }
