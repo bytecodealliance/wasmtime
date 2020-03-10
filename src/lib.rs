@@ -88,9 +88,9 @@ struct CommonOptions {
     #[structopt(long, conflicts_with = "lightbeam")]
     cranelift: bool,
 
-    /// Enable debug output
-    #[structopt(short, long)]
-    debug: bool,
+    /// Log to per-thread log files instead of stderr.
+    #[structopt(long)]
+    log_to_files: bool,
 
     /// Generate debug information
     #[structopt(short = "g")]

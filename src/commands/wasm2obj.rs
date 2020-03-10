@@ -54,11 +54,11 @@ impl WasmToObjCommand {
     }
 
     fn handle_module(&self) -> Result<()> {
-        if self.common.debug {
-            pretty_env_logger::init();
-        } else {
+        if self.common.log_to_files {
             let prefix = "wasm2obj.dbg.";
             init_file_per_thread_logger(prefix);
+        } else {
+            pretty_env_logger::init();
         }
 
         let cache_config = if self.common.disable_cache {

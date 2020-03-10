@@ -26,11 +26,11 @@ pub struct WastCommand {
 impl WastCommand {
     /// Executes the command.
     pub fn execute(&self) -> Result<()> {
-        if self.common.debug {
-            pretty_env_logger::init();
-        } else {
+        if self.common.log_to_files {
             let prefix = "wast.dbg.";
             init_file_per_thread_logger(prefix);
+        } else {
+            pretty_env_logger::init();
         }
 
         let config = self.common.config()?;
