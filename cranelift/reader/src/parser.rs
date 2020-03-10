@@ -15,9 +15,9 @@ use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentLoc, Block, ConstantData, ExtFuncData, ExternalName,
-    FuncRef, Function, Template, TemplateData, Heap, HeapData, HeapStyle, JumpTable,
-    JumpTableData, MemFlags, Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind,
-    Table, TableData, Type, Value, ValueLoc,
+    FuncRef, Function, Heap, HeapData, HeapStyle, JumpTable, JumpTableData, MemFlags, Opcode,
+    SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, Template,
+    TemplateData, Type, Value, ValueLoc,
 };
 use cranelift_codegen::isa::{self, CallConv, Encoding, RegUnit, TargetIsa};
 use cranelift_codegen::packed_option::ReservedValue;

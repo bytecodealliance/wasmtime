@@ -10,7 +10,7 @@ use crate::error::{Location, ParseResult};
 use crate::lexer::split_entity_name;
 use cranelift_codegen::ir::entities::AnyEntity;
 use cranelift_codegen::ir::{
-    Block, FuncRef, Template, Heap, JumpTable, SigRef, StackSlot, Table, Value,
+    Block, FuncRef, Heap, JumpTable, SigRef, StackSlot, Table, Template, Value,
 };
 use std::collections::HashMap;
 

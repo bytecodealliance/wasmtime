@@ -7,8 +7,8 @@ use crate::binemit::CodeOffset;
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir;
 use crate::ir::{
-    Block, ExtFuncData, FuncRef, Template, TemplateData, Heap, HeapData, Inst, JumpTable,
-    JumpTableData, Opcode, SigRef, StackSlot, StackSlotData, Table, TableData, Type,
+    Block, ExtFuncData, FuncRef, Heap, HeapData, Inst, JumpTable, JumpTableData, Opcode, SigRef,
+    StackSlot, StackSlotData, Table, TableData, Template, TemplateData, Type,
 };
 use crate::ir::{BlockOffsets, FrameLayout, InstEncodings, SourceLocs, StackSlots, ValueLocations};
 use crate::ir::{DataFlowGraph, ExternalName, Layout, Signature};

@@ -6,10 +6,10 @@ use cranelift_codegen::entity::{EntitySet, SecondaryMap};
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::function::DisplayFunction;
 use cranelift_codegen::ir::{
-    types, AbiParam, Block, DataFlowGraph, ExtFuncData, ExternalName, FuncRef, Function,
-    Template, TemplateData, Heap, HeapData, Inst, InstBuilder, InstBuilderBase,
-    InstructionData, JumpTable, JumpTableData, LibCall, MemFlags, SigRef, Signature, StackSlot,
-    StackSlotData, Type, Value, ValueLabel, ValueLabelAssignments, ValueLabelStart,
+    types, AbiParam, Block, DataFlowGraph, ExtFuncData, ExternalName, FuncRef, Function, Heap,
+    HeapData, Inst, InstBuilder, InstBuilderBase, InstructionData, JumpTable, JumpTableData,
+    LibCall, MemFlags, SigRef, Signature, StackSlot, StackSlotData, Template, TemplateData, Type,
+    Value, ValueLabel, ValueLabelAssignments, ValueLabelStart,
 };
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_codegen::packed_option::PackedOption;

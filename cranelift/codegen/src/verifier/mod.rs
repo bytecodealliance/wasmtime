@@ -65,8 +65,8 @@ use crate::ir;
 use crate::ir::entities::AnyEntity;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{
-    types, ArgumentLoc, Block, FuncRef, Function, Template, Inst, InstructionData, JumpTable,
-    Opcode, SigRef, StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList, ValueLoc,
+    types, ArgumentLoc, Block, FuncRef, Function, Inst, InstructionData, JumpTable, Opcode, SigRef,
+    StackSlot, StackSlotKind, Template, Type, Value, ValueDef, ValueList, ValueLoc,
 };
 use crate::isa::TargetIsa;
 use crate::iterators::IteratorExtras;

@@ -6,8 +6,8 @@ use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::flowgraph::ControlFlowGraph;
 use cranelift_codegen::ir::types::{F32, F64};
 use cranelift_codegen::ir::{
-    self, Block, FuncRef, Function, TemplateData, Inst, InstBuilder, InstructionData,
-    StackSlots, TrapCode,
+    self, Block, FuncRef, Function, Inst, InstBuilder, InstructionData, StackSlots, TemplateData,
+    TrapCode,
 };
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
@@ -497,9 +497,7 @@ impl Mutator for RemoveUnusedEntities {
                 for block in func.layout.blocks() {
                     for inst in func.layout.block_insts(block) {
                         // Add new cases when there are new instruction formats taking a `Template`.
-                        if let InstructionData::UnaryTemplate { template, .. } =
-                            func.dfg[inst]
-                        {
+                        if let InstructionData::UnaryTemplate { template, .. } = func.dfg[inst] {
                             template_usage_map
                                 .entry(template)
                                 .or_insert_with(Vec::new)

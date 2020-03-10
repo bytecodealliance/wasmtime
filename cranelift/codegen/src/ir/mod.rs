@@ -33,8 +33,8 @@ pub use crate::ir::builder::{
 pub use crate::ir::constant::{ConstantData, ConstantOffset, ConstantPool};
 pub use crate::ir::dfg::{DataFlowGraph, ValueDef};
 pub use crate::ir::entities::{
-    Block, Constant, FuncRef, Template, Heap, Immediate, Inst, JumpTable, SigRef, StackSlot,
-    Table, Value,
+    Block, Constant, FuncRef, Heap, Immediate, Inst, JumpTable, SigRef, StackSlot, Table, Template,
+    Value,
 };
 pub use crate::ir::extfunc::{
     AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData, Signature,
