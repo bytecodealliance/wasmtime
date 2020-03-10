@@ -207,6 +207,8 @@ impl UnwindInfo {
 
             let unwind_offset = (offset + size) as u8;
 
+            println!("inst offset {}: {}", offset, func.dfg.display_inst(inst, isa));
+
             match func.dfg[inst] {
                 InstructionData::Unary { opcode, arg } => {
                     match opcode {
@@ -336,10 +338,15 @@ impl UnwindInfo {
         if static_frame_allocation_size > 240 && saved_fpr {
             panic!("stack frame is too large to use with Windows x64 SEH when preserving FPRs");
         }
-        assert!(
-            static_frame_allocation_size % 16 == 0,
-            "static frame allocation must be a multiple of 16"
-        );
+        if static_frame_allocation_size % 16 != 0 {
+            eprintln!("static frame allocation size: {}", static_frame_allocation_size);
+            panic!("bad frame size");
+        } else {
+            assert!(
+                static_frame_allocation_size % 16 == 0,
+                "static frame allocation must be a multiple of 16"
+            );
+        }
 
         // Hack to avoid panicking unnecessarily. Because Cranelift generates prologues with RBP at
         // one end of the call frame, and RSP at the other, required offsets are arbitrarily large.
