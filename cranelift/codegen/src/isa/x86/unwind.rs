@@ -281,10 +281,16 @@ impl UnwindInfo {
                         callee_save_region_reg = Some(frame_reg);
 
                         // Figure out the offset in the call frame that `frame_reg` will have.
-                        let frame_size = func.stack_slots.layout_info.expect("func's stack slots have layout info if stack operations exist").frame_size;
+                        let frame_size = func
+                            .stack_slots
+                            .layout_info
+                            .expect("func's stack slots have layout info if stack operations exist")
+                            .frame_size;
                         // Because we're well after the prologue has been constructed, stack slots
                         // must have been laid out...
-                        let slot_offset = func.stack_slots[stack_slot].offset.expect("callee-save slot has an offset computed");
+                        let slot_offset = func.stack_slots[stack_slot]
+                            .offset
+                            .expect("callee-save slot has an offset computed");
                         let frame_offset = frame_size as i32 + slot_offset;
 
                         callee_save_offset = Some(frame_offset as u32);
@@ -330,7 +336,10 @@ impl UnwindInfo {
         if static_frame_allocation_size > 240 && saved_fpr {
             panic!("stack frame is too large to use with Windows x64 SEH when preserving FPRs");
         }
-        assert!(static_frame_allocation_size % 16 == 0, "static frame allocation must be a multiple of 16");
+        assert!(
+            static_frame_allocation_size % 16 == 0,
+            "static frame allocation must be a multiple of 16"
+        );
 
         // Hack to avoid panicking unnecessarily. Because Cranelift generates prologues with RBP at
         // one end of the call frame, and RSP at the other, required offsets are arbitrarily large.
