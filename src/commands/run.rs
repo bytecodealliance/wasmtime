@@ -123,22 +123,22 @@ impl RunCommand {
                 // If the program exited because of a trap, return an error code
                 // to the outside environment indicating a more severe problem
                 // than a simple failure.
-                if let Some(source) = e.source() {
-                    if let Some(source) = source.source() {
-                        if source.is::<Trap>() {
-                            // Print the error message in the usual way.
-                            eprintln!("Error: {:?}", e);
+                let mut err = e.source();
+                while let Some(source) = err {
+                    if source.is::<Trap>() {
+                        // Print the error message in the usual way.
+                        eprintln!("Error: {:?}", e);
 
-                            // On Unix, return the error code of an abort.
-                            #[cfg(unix)]
-                            process::exit(128 + libc::SIGABRT);
+                        // On Unix, return the error code of an abort.
+                        #[cfg(unix)]
+                        process::exit(128 + libc::SIGABRT);
 
-                            // On Windows, return 3.
-                            // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019
-                            #[cfg(windows)]
-                            process::exit(3);
-                        }
+                        // On Windows, return 3.
+                        // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019
+                        #[cfg(windows)]
+                        process::exit(3);
                     }
+                    err = source.source();
                 }
                 return Err(e);
             }
