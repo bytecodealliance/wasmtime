@@ -1058,26 +1058,36 @@ impl CallAdapter {
                 let val = pop(stack, ValType::I32).unwrap_i32();
                 stack.push(Val::U8(val as u8));
             }
-            i @ I32ToS16 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            I32ToS16 => {
+                let val = pop(stack, ValType::I32).unwrap_i32();
+                stack.push(Val::S16(val as i16));
             }
-            i @ I32ToS16X => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            I32ToS16X => {
+                let val = pop(stack, ValType::I32).unwrap_i32();
+                match val.try_into() {
+                    Ok(v) => stack.push(Val::S16(v)),
+                    Err(_) => return Err(Trap::new("integer overflow")),
+                }
             }
-            i @ I32ToU16 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            I32ToU16 => {
+                let val = pop(stack, ValType::I32).unwrap_i32();
+                stack.push(Val::U16(val as u16));
             }
-            i @ I32ToS32 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            I32ToS32 => {
+                let val = pop(stack, ValType::I32).unwrap_i32();
+                stack.push(Val::S32(val as i32));
             }
-            i @ I32ToU32 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            I32ToU32 => {
+                let val = pop(stack, ValType::I32).unwrap_i32();
+                stack.push(Val::U32(val as u32));
             }
-            i @ I32ToS64 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            I32ToS64 => {
+                let val = pop(stack, ValType::I32).unwrap_i32();
+                stack.push(Val::S64(val as i64));
             }
-            i @ I32ToU64 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            I32ToU64 => {
+                let val = pop(stack, ValType::I32).unwrap_i32();
+                stack.push(Val::U64(val as u64));
             }
 
             i @ I64ToS8 => {
