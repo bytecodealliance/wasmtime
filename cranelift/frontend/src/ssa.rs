@@ -24,9 +24,7 @@ use smallvec::SmallVec;
 /// The parameter struct `Variable` corresponds to the way variables are represented in the
 /// non-SSA language you're translating from.
 ///
-/// The SSA building relies on information about the variables used and defined, as well as
-/// their position relative to basic blocks which are stricter tha basic blocks since
-/// they don't allow branching in the middle of them.
+/// The SSA building relies on information about the variables used and defined.
 ///
 /// This SSA building module allows you to def and use variables on the fly while you are
 /// constructing the CFG, no need for a separate SSA pass after the CFG is completed.
@@ -53,7 +51,7 @@ pub struct SSABuilder {
     side_effects: SideEffects,
 }
 
-/// Side effects of a `use_var` or a `seal_block_header_block` method call.
+/// Side effects of a `use_var` or a `seal_block` method call.
 pub struct SideEffects {
     /// When we want to append jump arguments to a `br_table` instruction, the critical edge is
     /// splitted and the newly created `Block`s are signaled here.
@@ -94,9 +92,9 @@ type PredBlockSmallVec = SmallVec<[PredBlock; 4]>;
 
 #[derive(Clone, Default)]
 struct SSABlockData {
-    // The predecessors of the Block header block, with the block and branch instruction.
+    // The predecessors of the Block with the block and branch instruction.
     predecessors: PredBlockSmallVec,
-    // A block header block is sealed if all of its predecessors have been declared.
+    // A block is sealed if all of its predecessors have been declared.
     sealed: bool,
     // List of current Block arguments for which an earlier def has not been found yet.
     undef_variables: Vec<(Variable, Value)>,
@@ -208,9 +206,7 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
 /// The following methods are the API of the SSA builder. Here is how it should be used when
 /// translating to Cranelift IR:
 ///
-/// - for each sequence of contiguous instructions (with no branches), create a corresponding
-///   basic block with `declare_block_body_block` or `declare_block_header_block` depending on the
-///   position of the basic block;
+/// - for each basic block, create a corresponding data for SSA construction with `declare_block`;
 ///
 /// - while traversing a basic block and translating instruction, use `def_var` and `use_var`
 ///   to record definitions and uses of variables, these methods will give you the corresponding
@@ -219,11 +215,11 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
 /// - when all the instructions in a basic block have translated, the block is said _filled_ and
 ///   only then you can add it as a predecessor to other blocks with `declare_block_predecessor`;
 ///
-/// - when you have constructed all the predecessor to a basic block at the beginning of a `Block`,
-///   call `seal_block_header_block` on it with the `Function` that you are building.
+/// - when you have constructed all the predecessor to a basic block,
+///   call `seal_block` on it with the `Function` that you are building.
 ///
 /// This API will give you the correct SSA values to use as arguments of your instructions,
-/// as well as modify the jump instruction and `Block` headers parameters to account for the SSA
+/// as well as modify the jump instruction and `Block` parameters to account for the SSA
 /// Phi functions.
 ///
 impl SSABuilder {
@@ -326,8 +322,8 @@ impl SSABuilder {
         self.def_var(var, val, block);
     }
 
-    /// Declares a new basic block at the beginning of a `Block`. No predecessors are declared
-    /// here and the block is not sealed.
+    /// Declares a new basic block to construct corresponding data for SSA construction.
+    /// No predecessors are declared here and the block is not sealed.
     /// Predecessors have to be added with `declare_block_predecessor`.
     pub fn declare_block(&mut self, block: Block) {
         self.ssa_blocks[block] = SSABlockData {
@@ -337,11 +333,11 @@ impl SSABuilder {
         };
     }
 
-    /// Declares a new predecessor for a `Block` header block and record the branch instruction
+    /// Declares a new predecessor for a `Block` and record the branch instruction
     /// of the predecessor that leads to it.
     ///
-    /// Note that the predecessor is a `SSABlock` and not a `Block`. This `SSABlock` must be filled
-    /// before added as predecessor. Note that you must provide no jump arguments to the branch
+    /// The precedent `Block` must be filled before added as predecessor.
+    /// Note that you must provide no jump arguments to the branch
     /// instruction when you create it since `SSABuilder` will fill them for you.
     ///
     /// Callers are expected to avoid adding the same predecessor more than once in the case
@@ -661,7 +657,7 @@ impl SSABuilder {
         &mut self.ssa_blocks[block].predecessors
     }
 
-    /// Returns `true` if and only if `seal_block_header_block` has been called on the argument.
+    /// Returns `true` if and only if `seal_block` has been called on the argument.
     pub fn is_sealed(&self, block: Block) -> bool {
         self.ssa_blocks[block].sealed
     }
