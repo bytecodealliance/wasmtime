@@ -128,14 +128,17 @@ impl RunCommand {
                         // Print the error message in the usual way.
                         eprintln!("Error: {:?}", e);
 
-                        // On Unix, return the error code of an abort.
-                        #[cfg(unix)]
-                        process::exit(128 + libc::SIGABRT);
-
-                        // On Windows, return 3.
-                        // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019
-                        #[cfg(windows)]
-                        process::exit(3);
+                        if cfg!(unix) {
+                            // On Unix, return the error code of an abort.
+                            process::exit(128 + libc::SIGABRT);
+                        } else if cfg!(windows) {
+                            // On Windows, return 3.
+                            // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019
+                            process::exit(3);
+                        } else {
+                            // Otherwise just exit with a normal error.
+                            break;
+                        }
                     }
                 }
                 return Err(e);
