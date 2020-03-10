@@ -80,19 +80,20 @@ impl UnwindCode {
                 stack_offset,
             } => {
                 write_u8(sink, *offset);
-                if *stack_offset <= core::u16::MAX as u32 {
+                let stack_offset = stack_offset / 16;
+                if stack_offset <= core::u16::MAX as u32 {
                     write_u8(
                         sink,
                         (FPR.index_of(*reg) << 4) as u8 | (UnwindOperation::SaveXmm128 as u8),
                     );
-                    write_u16::<LittleEndian>(sink, *stack_offset as u16);
+                    write_u16::<LittleEndian>(sink, stack_offset as u16);
                 } else {
                     write_u8(
                         sink,
                         (FPR.index_of(*reg) << 4) as u8 | (UnwindOperation::SaveXmm128Far as u8),
                     );
-                    write_u16::<LittleEndian>(sink, *stack_offset as u16);
-                    write_u16::<LittleEndian>(sink, (*stack_offset >> 16) as u16);
+                    write_u16::<LittleEndian>(sink, stack_offset as u16);
+                    write_u16::<LittleEndian>(sink, (stack_offset >> 16) as u16);
                 }
             }
             Self::StackAlloc { offset, size } => {
@@ -180,9 +181,9 @@ impl UnwindInfo {
         let mut unwind_codes = Vec::new();
         let mut found_end = false;
 
-        // At this point we no longer have the stack slot that callee-save registers are placed
-        // into, so we must re-infer the offset from prologue instructions.
-        let mut min_callee_save_offset = None;
+        // Have we saved at least one FPR? if so, we might have to check additional constraints.
+        let mut saved_fpr = false;
+
         // In addition to the min offset for a callee-save, we need to know the offset from the
         // frame base to the stack pointer, so that we can record an unwind offset that spans only
         // to the end of callee-save space.
@@ -191,9 +192,10 @@ impl UnwindInfo {
         // For the time being, FPR preservation is split into a stack_addr and later store/load.
         // Store the register used for stack store and ensure it is the same register with no
         // intervening changes to the frame size.
-        let mut frame_start_reg = None;
-
-        let mut preserved_fprs = Vec::new();
+        let mut callee_save_region_reg = None;
+        // Also record the callee-save region's offset from RSP, because it must be added to FPR
+        // save offsets to compute an offset from the frame base.
+        let mut callee_save_offset = None;
 
         for (offset, inst, size) in func.inst_offsets(entry_block, &isa.encoding_info()) {
             // x64 ABI prologues cannot exceed 255 bytes in length
@@ -204,8 +206,6 @@ impl UnwindInfo {
             prologue_size += size;
 
             let unwind_offset = (offset + size) as u8;
-
-            println!("offset {}: {:?}", offset, func.dfg[inst]);
 
             match func.dfg[inst] {
                 InstructionData::Unary { opcode, arg } => {
@@ -273,31 +273,43 @@ impl UnwindInfo {
                 }
                 InstructionData::StackLoad {
                     opcode: Opcode::StackAddr,
-                    stack_slot: _,
+                    stack_slot,
                     offset: _,
                 } => {
                     let result = func.dfg.inst_results(inst).get(0).unwrap();
                     if let ValueLoc::Reg(frame_reg) = func.locations[*result] {
-                        frame_start_reg = Some(frame_reg);
+                        callee_save_region_reg = Some(frame_reg);
+
+                        // Figure out the offset in the call frame that `frame_reg` will have.
+                        let frame_size = func.stack_slots.layout_info.expect("func's stack slots have layout info if stack operations exist").frame_size;
+                        // Because we're well after the prologue has been constructed, stack slots
+                        // must have been laid out...
+                        let slot_offset = func.stack_slots[stack_slot].offset.expect("callee-save slot has an offset computed");
+                        let frame_offset = frame_size as i32 + slot_offset;
+
+                        callee_save_offset = Some(frame_offset as u32);
                     }
-                },
+                }
                 InstructionData::Store {
                     opcode: Opcode::Store,
                     args: [arg1, arg2],
                     flags: _flags,
                     offset,
                 } => {
-                    if let (ValueLoc::Reg(ru), ValueLoc::Reg(base_ru)) = (func.locations[arg1], func.locations[arg2]) {
-                        if Some(base_ru) == frame_start_reg {
+                    if let (ValueLoc::Reg(ru), ValueLoc::Reg(base_ru)) =
+                        (func.locations[arg1], func.locations[arg2])
+                    {
+                        if Some(base_ru) == callee_save_region_reg {
                             let offset_int: i32 = offset.into();
                             assert!(offset_int >= 0, "negative fpr offset would store outside the stack frame, and is almost certainly an error");
+                            let offset_int: u32 = offset_int as u32 + callee_save_offset.expect("FPR presevation requires an FPR save region, which has some stack offset");
                             if FPR.contains(ru) {
-                                if let Some(prev_min) = min_callee_save_offset {
-                                    min_callee_save_offset = Some(std::cmp::min(prev_min, offset_int as u32));
-                                } else {
-                                    min_callee_save_offset = Some(offset_int as u32);
-                                }
-                                preserved_fprs.push((unwind_offset, ru, offset_int as u32));
+                                saved_fpr = true;
+                                unwind_codes.push(UnwindCode::SaveXmm {
+                                    offset: unwind_offset,
+                                    reg: ru,
+                                    stack_offset: offset_int,
+                                });
                             }
                         }
                     }
@@ -315,29 +327,29 @@ impl UnwindInfo {
             return None;
         }
 
-        println!("HEY THE OFFSET IS {:?}", min_callee_save_offset);
-        println!("static frame allocation size: {:#x}", static_frame_allocation_size);
-        if let Some(min_frame_offset) = min_callee_save_offset {
-            // So we've found the min callee-save offset, and we've found the size of the static
-            // allocation. Pick a frame register offset so the callee-save region starts at zero
-            // (eg, is the min offset), then correct the actual offsets to be with respect to the
-            // selected frame offset.
-            for (unwind_offset, ru, reg_offset) in preserved_fprs.into_iter() {
-                unwind_codes.push(UnwindCode::SaveXmm {
-                    offset: unwind_offset,
-                    reg: ru,
-                    stack_offset: reg_offset - min_frame_offset,
-                });
-            }
-        } else {
-            assert!(preserved_fprs.len() == 0, "if there is no recorded offset for FPR preservation, there must be no FPRs to preserve");
+        if static_frame_allocation_size > 240 && saved_fpr {
+            panic!("stack frame is too large to use with Windows x64 SEH when preserving FPRs");
         }
+        assert!(static_frame_allocation_size % 16 == 0, "static frame allocation must be a multiple of 16");
+
+        // Hack to avoid panicking unnecessarily. Because Cranelift generates prologues with RBP at
+        // one end of the call frame, and RSP at the other, required offsets are arbitrarily large.
+        // Windows x64 SEH only allows this offset be up to 240 bytes, however, meaning large
+        // frames are inexpressible, and we cannot actually compile the function. In case there are
+        // no preserved FPRs, we can lie without error and claim the offset to RBP is 0 - nothing
+        // will actually check it. This, then, avoids panics when compiling functions with large
+        // call frames.
+        let reported_frame_offset = if saved_fpr {
+            (static_frame_allocation_size / 16) as u8
+        } else {
+            0
+        };
 
         Some(Self {
             flags: 0, // this assumes cranelift functions have no SEH handlers
             prologue_size: prologue_size as u8,
             frame_register,
-            frame_register_offset: (min_callee_save_offset.map(|callee_save| static_frame_allocation_size - callee_save).unwrap_or(0) / 16) as u8,
+            frame_register_offset: reported_frame_offset,
             unwind_codes,
         })
     }
