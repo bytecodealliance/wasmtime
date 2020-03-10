@@ -110,6 +110,16 @@ impl Extern {
             }
         }
     }
+
+    pub(crate) fn comes_from_same_store(&self, store: &Store) -> bool {
+        let my_store = match self {
+            Extern::Func(f) => f.store(),
+            Extern::Global(g) => &g.store,
+            Extern::Memory(m) => &m.store,
+            Extern::Table(t) => &t.store,
+        };
+        Store::same(my_store, store)
+    }
 }
 
 impl From<Func> for Extern {
@@ -153,7 +163,7 @@ impl From<Table> for Extern {
 /// instances are equivalent in their functionality.
 #[derive(Clone)]
 pub struct Global {
-    _store: Store,
+    store: Store,
     ty: GlobalType,
     wasmtime_export: wasmtime_runtime::Export,
     wasmtime_handle: InstanceHandle,
@@ -172,12 +182,15 @@ impl Global {
     /// Returns an error if the `ty` provided does not match the type of the
     /// value `val`.
     pub fn new(store: &Store, ty: GlobalType, val: Val) -> Result<Global> {
+        if !val.comes_from_same_store(store) {
+            bail!("cross-`Store` globals are not supported");
+        }
         if val.ty() != *ty.content() {
             bail!("value provided does not match the type of this global");
         }
         let (wasmtime_handle, wasmtime_export) = generate_global_export(store, &ty, val)?;
         Ok(Global {
-            _store: store.clone(),
+            store: store.clone(),
             ty,
             wasmtime_export,
             wasmtime_handle,
@@ -227,6 +240,9 @@ impl Global {
                 val.ty()
             );
         }
+        if !val.comes_from_same_store(&self.store) {
+            bail!("cross-`Store` values are not supported");
+        }
         let definition = unsafe { &mut *self.wasmtime_global_definition() };
         unsafe {
             match val {
@@ -259,7 +275,7 @@ impl Global {
         let ty = GlobalType::from_wasmtime_global(&global)
             .expect("core wasm global type should be supported");
         Global {
-            _store: store.clone(),
+            store: store.clone(),
             ty: ty,
             wasmtime_export: export,
             wasmtime_handle,
@@ -421,6 +437,10 @@ impl Table {
         src_index: u32,
         len: u32,
     ) -> Result<()> {
+        if !Store::same(&dst_table.store, &src_table.store) {
+            bail!("cross-`Store` table copies are not supported");
+        }
+
         // NB: We must use the `dst_table`'s `wasmtime_handle` for the
         // `dst_table_index` and vice versa for `src_table` since each table can
         // come from different modules.
@@ -488,7 +508,7 @@ impl Table {
 /// implemented though!
 #[derive(Clone)]
 pub struct Memory {
-    _store: Store,
+    store: Store,
     ty: MemoryType,
     wasmtime_handle: InstanceHandle,
     wasmtime_export: wasmtime_runtime::Export,
@@ -504,7 +524,7 @@ impl Memory {
         let (wasmtime_handle, wasmtime_export) =
             generate_memory_export(store, &ty).expect("generated memory");
         Memory {
-            _store: store.clone(),
+            store: store.clone(),
             ty,
             wasmtime_handle,
             wasmtime_export,
@@ -634,7 +654,7 @@ impl Memory {
         };
         let ty = MemoryType::from_wasmtime_memory(&memory.memory);
         Memory {
-            _store: store.clone(),
+            store: store.clone(),
             ty: ty,
             wasmtime_handle: instance_handle,
             wasmtime_export: export,

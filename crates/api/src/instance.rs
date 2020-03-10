@@ -2,7 +2,7 @@ use crate::externals::Extern;
 use crate::module::Module;
 use crate::runtime::{Config, Store};
 use crate::trap::Trap;
-use anyhow::{Error, Result};
+use anyhow::{bail, Error, Result};
 use wasmtime_jit::{CompiledModule, Resolver};
 use wasmtime_runtime::{Export, InstanceHandle, InstantiationError};
 
@@ -112,6 +112,15 @@ impl Instance {
     /// [`ExternType`]: crate::ExternType
     pub fn new(module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
         let store = module.store();
+
+        // For now we have a restriction that the `Store` that we're working
+        // with is the same for everything involved here.
+        for import in imports {
+            if !import.comes_from_same_store(store) {
+                bail!("cross-`Store` instantiation is not currently supported");
+            }
+        }
+
         let config = store.engine().config();
         let instance_handle = instantiate(config, module.compiled_module(), imports)?;
 

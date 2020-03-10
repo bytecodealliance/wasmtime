@@ -133,6 +133,22 @@ impl Val {
     pub fn unwrap_anyref(&self) -> AnyRef {
         self.anyref().expect("expected anyref")
     }
+
+    pub(crate) fn comes_from_same_store(&self, store: &Store) -> bool {
+        match self {
+            Val::FuncRef(f) => Store::same(store, f.store()),
+
+            // TODO: need to implement this once we actually finalize what
+            // `anyref` will look like and it's actually implemented to pass it
+            // to compiled wasm as well.
+            Val::AnyRef(AnyRef::Ref(_)) | Val::AnyRef(AnyRef::Other(_)) => false,
+            Val::AnyRef(AnyRef::Null) => true,
+
+            // Integers have no association with any particular store, so
+            // they're always considered as "yes I came from that store",
+            Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) | Val::V128(_) => true,
+        }
+    }
 }
 
 impl From<i32> for Val {
@@ -175,6 +191,9 @@ pub(crate) fn into_checked_anyfunc(
     val: Val,
     store: &Store,
 ) -> Result<wasmtime_runtime::VMCallerCheckedAnyfunc> {
+    if !val.comes_from_same_store(store) {
+        bail!("cross-`Store` values are not supported");
+    }
     Ok(match val {
         Val::AnyRef(AnyRef::Null) => wasmtime_runtime::VMCallerCheckedAnyfunc {
             func_ptr: ptr::null(),
@@ -206,7 +225,7 @@ pub(crate) fn from_checked_anyfunc(
     store: &Store,
 ) -> Val {
     if item.type_index == wasmtime_runtime::VMSharedSignatureIndex::default() {
-        return Val::AnyRef(AnyRef::Null);
+        Val::AnyRef(AnyRef::Null);
     }
     let signature = store
         .compiler()
