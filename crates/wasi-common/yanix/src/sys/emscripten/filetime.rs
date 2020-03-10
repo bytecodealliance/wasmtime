@@ -5,9 +5,6 @@ use crate::from_success_code;
 use std::fs::File;
 use std::io::Result;
 
-pub(crate) const UTIME_NOW: i32 = 1_073_741_823;
-pub(crate) const UTIME_OMIT: i32 = 1_073_741_822;
-
 /// Wrapper for `utimensat` syscall. In Emscripten, there is no point in dynamically resolving
 /// if `utimensat` is available as it always was and will be.
 pub fn utimensat(

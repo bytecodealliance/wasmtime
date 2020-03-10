@@ -1,4 +1,5 @@
 use crate::filetime::FileTime;
+use crate::filetime::FileTimeExt;
 use crate::from_success_code;
 use std::fs;
 use std::io::Result;
@@ -26,19 +27,16 @@ pub fn utimesat(
     let fd = unsafe { libc::openat(dirfd.as_raw_fd(), p.as_ptr(), flags) };
     let f = unsafe { fs::File::from_raw_fd(fd) };
     let (atime, mtime) = get_times(atime, mtime, || f.metadata().map_err(Into::into))?;
-    let times = [to_timeval(atime), to_timeval(mtime)];
+    let times = [to_timeval(atime)?, to_timeval(mtime)?];
     from_success_code(unsafe { libc::futimes(f.as_raw_fd(), times.as_ptr()) })
 }
 
-/// Converts `filetime::FileTime` to `libc::timeval`. This function was taken directly from
-/// [filetime] crate.
-///
-/// [filetime]: https://github.com/alexcrichton/filetime/blob/master/src/unix/utimes.rs#L93
-fn to_timeval(ft: filetime::FileTime) -> libc::timeval {
-    libc::timeval {
-        tv_sec: ft.seconds(),
-        tv_usec: (ft.nanoseconds() / 1000) as libc::suseconds_t,
-    }
+/// Converts `filetime::FileTime` to `libc::timeval`.
+fn to_timeval(ft: filetime::FileTime) -> Result<libc::timeval> {
+    Ok(libc::timeval {
+        tv_sec: ft.seconds_()?,
+        tv_usec: (ft.nanoseconds_() / 1000) as libc::suseconds_t,
+    })
 }
 
 /// For a provided pair of access and modified `FileTime`s, converts the input to

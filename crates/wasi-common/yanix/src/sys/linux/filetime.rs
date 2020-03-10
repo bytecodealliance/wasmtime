@@ -6,9 +6,6 @@ use std::fs::File;
 use std::io::Result;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
-pub(crate) const UTIME_NOW: i64 = 1_073_741_823;
-pub(crate) const UTIME_OMIT: i64 = 1_073_741_822;
-
 /// Wrapper for `utimensat` syscall, however, with an added twist such that `utimensat` symbol
 /// is firstly resolved (i.e., we check whether it exists on the host), and only used if that is
 /// the case. Otherwise, the syscall resorts to a less accurate `utimesat` emulated syscall.

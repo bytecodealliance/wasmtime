@@ -10,40 +10,34 @@ use std::io::Result;
 
 pub use super::sys::filetime::*;
 
-cfg_if::cfg_if! {
-    if #[cfg(not(target_os = "emscripten"))] {
-        fn filetime_to_timespec(ft: &filetime::FileTime) -> Result<libc::timespec> {
-            Ok(
-                libc::timespec {
-                    tv_sec: ft.seconds(),
-                    tv_nsec: i64::from(ft.nanoseconds()),
-                }
-            )
-        }
-    } else {
-        fn filetime_to_timespec(ft: &filetime::FileTime) -> Result<libc::timespec> {
-            use std::convert::TryInto;
-            use std::io::Error;
-            // Emscripten expects both `tv_sec` and `tv_nsec` fields to be `i32`.
-            // Here however `ft.seconds() -> i64` and `ft.nanoseconds() -> u32` so
-            // a simple `as` cast may be insufficient. So, perform a checked conversion,
-            // log error if any, and convert to libc::EOVERFLOW.
-            let tv_sec = match ft.seconds().try_into() {
-                Ok(sec) => sec,
-                Err(_) => {
-                    log::debug!("filetime_to_timespec failed converting seconds to required width");
-                    return Err(Error::from_raw_os_error(libc::EOVERFLOW));
-                }
-            };
-            let tv_nsec = match ft.nanoseconds().try_into() {
-                Ok(nsec) => nsec,
-                Err(_) => {
-                    log::debug!("filetime_to_timespec failed converting nanoseconds to required width");
-                    return Err(Error::from_raw_os_error(libc::EOVERFLOW));
-                }
-            };
-            Ok(libc::timespec { tv_sec, tv_nsec })
-        }
+/// Internal trait which specialises `filetime::FileTime`'s
+/// `seconds` and `nanoseconds` accessors for different
+/// pointer widths (32 and 64bit currently).
+pub(crate) trait FileTimeExt {
+    fn seconds_(&self) -> Result<libc::time_t>;
+    fn nanoseconds_(&self) -> libc::c_long;
+}
+
+impl FileTimeExt for filetime::FileTime {
+    fn seconds_(&self) -> Result<libc::time_t> {
+        use std::convert::TryInto;
+        use std::io::Error;
+        let sec = match self.seconds().try_into() {
+            Ok(sec) => sec,
+            Err(_) => {
+                log::debug!("filetime_to_timespec failed converting seconds to required width");
+                return Err(Error::from_raw_os_error(libc::EOVERFLOW));
+            }
+        };
+        Ok(sec)
+    }
+    fn nanoseconds_(&self) -> libc::c_long {
+        use std::convert::TryInto;
+        // According to [filetime] docs, since the nanoseconds value is always less than 1 billion,
+        // any value should be convertible to `libc::c_long`, hence we can `unwrap` outright.
+        //
+        // [filetime]: https://docs.rs/filetime/0.2.8/filetime/struct.FileTime.html#method.nanoseconds
+        self.nanoseconds().try_into().unwrap()
     }
 }
 
@@ -69,13 +63,16 @@ pub(crate) fn to_timespec(ft: &FileTime) -> Result<libc::timespec> {
     let ts = match ft {
         FileTime::Now => libc::timespec {
             tv_sec: 0,
-            tv_nsec: UTIME_NOW,
+            tv_nsec: libc::UTIME_NOW,
         },
         FileTime::Omit => libc::timespec {
             tv_sec: 0,
-            tv_nsec: UTIME_OMIT,
+            tv_nsec: libc::UTIME_OMIT,
         },
-        FileTime::FileTime(ft) => filetime_to_timespec(ft)?,
+        FileTime::FileTime(ft) => libc::timespec {
+            tv_sec: ft.seconds_()?,
+            tv_nsec: ft.nanoseconds_(),
+        },
     };
     Ok(ts)
 }
