@@ -17,27 +17,27 @@ An excellent example of C API usage can be found at https://github.com/WebAssemb
 
 ### C code
 
-The wasmtime engine and its storage has to be initialized, before the WebAssembly modules can be loaded:
+The Wasmtime engine and its storage has to be initialized, before the WebAssembly modules can be loaded:
 
 ```C
   wasm_engine_t* engine = wasm_engine_new();
   wasm_store_t* store = wasm_store_new(engine);
 ```
 
-The WebAssembly module bytecode can be loaded into memory and has to be provided as `wasm_byte_vec_t` to be compiled:
+The WebAssembly module bytecode can be loaded into memory and has to be provided as `wasm_byte_vec_t` to be compiled. The `wasm_byte_vec_t` structure contains the data and its size.
 
 ```C
-  own wasm_module_t* module = wasm_module_new(store, &binary);
+  wasm_module_t* module = wasm_module_new(store, &binary);
   if (!module) {
     printf("> Error compiling module!\n");
     return 1;
   }
 ```
 
-This WebAssembly module requires the external import, provided by host, see `(func $hello (import "" "hello"))` code in the WAT file.
+The WebAssembly module has an import, "hello", which we'll provide for it though the embedding API.
 
 ```C
-own wasm_trap_t* hello_callback(
+wasm_trap_t* hello_callback(
   const wasm_val_t args[], wasm_val_t results[]
 ) {
   printf("Calling back...\n");
@@ -47,8 +47,8 @@ own wasm_trap_t* hello_callback(
 ```
 
 ```C
-  own wasm_functype_t* hello_type = wasm_functype_new_0_0();
-  own wasm_func_t* hello_func =
+  wasm_functype_t* hello_type = wasm_functype_new_0_0();
+  wasm_func_t* hello_func =
     wasm_func_new(store, hello_type, hello_callback);
 ```
 
@@ -56,7 +56,7 @@ The WebAssembly instance can be created now.
 
 ```C
   const wasm_extern_t* imports[] = { wasm_func_as_extern(hello_func) };
-  own wasm_instance_t* instance =
+  wasm_instance_t* instance =
     wasm_instance_new(store, module, imports, NULL);
   if (!instance) {
     printf("> Error instantiating module!\n");
@@ -69,7 +69,7 @@ Notice that the host function was provided during `wasm_instance_new`, and numbe
 The WebAssembly module exports a function: `(func (export "run") ...`. The export can be call looked up via the `instance` exports.
 
 ```C
-  own wasm_extern_vec_t exports;
+  wasm_extern_vec_t exports;
   wasm_instance_exports(instance, &exports);
   const wasm_func_t* run_func = wasm_extern_as_func(exports.data[0]);
 ```
@@ -94,18 +94,17 @@ The example uses Clang for Linux, though GCC or other OS may work too.
 # Create folder
 mkdir hello_c && cd hello_c
 
-# Get and untar wasmtime C API library
-wget https://github.com/bytecodealliance/wasmtime/releases/download/v0.12.0/wasmtime-v0.12.0-x86_64-linux-c-api.tar.xz
-tar xvf wasmtime-v0.12.0-x86_64-linux-c-api.tar.xz
-export WASMTIME=wasmtime-v0.12.0-x86_64-linux-c-api
+# Get and untar Wasmtime C API library into the wasmtime-c-api directory
+mkdir wasmtime-c-api
+curl -L https://github.com/bytecodealliance/wasmtime/releases/download/v0.12.0/wasmtime-v0.12.0-x86_64-linux-c-api.tar.xz | tar -xf - --strip-components=1 -C wasmtime-c-api/
 
 # Get hello.wasm and hello.c from https://github.com/WebAssembly/wasm-c-api
-wget https://github.com/WebAssembly/wasm-c-api/raw/master/example/hello.wasm
-wget https://github.com/WebAssembly/wasm-c-api/raw/master/example/hello.c
+curl -L https://github.com/WebAssembly/wasm-c-api/raw/master/example/hello.wasm -o hello.wasm
+curl -L https://github.com/WebAssembly/wasm-c-api/raw/master/example/hello.c -o hello.c
 cat hello.c
 
 # Build hello example
-clang hello.c -o hello $WASMTIME/lib/libwasmtime.a -I$WASMTIME/include/
+clang hello.c -o hello ./wasmtime-c-api/lib/libwasmtime.a -I./wasmtime-c-api/include/
   
 # Run
 ./hello
