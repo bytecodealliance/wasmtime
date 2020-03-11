@@ -31,6 +31,7 @@
  (@interface func (export "i32-to-u64") (param i32) (result u64)
    arg.get 0
    i32-to-u64)
+
  (@interface func (export "i64-to-s8") (param i64) (result s8)
    arg.get 0
    i64-to-s8)
@@ -129,6 +130,8 @@
 (assert_return (invoke "i32-to-u64" (i32.const 0x80000000)) (u64.const 0xffffffff80000000))
 (assert_return (invoke "i32-to-u64" (i32.const 0x80000021)) (u64.const 0xffffffff80000021))
 (assert_return (invoke "i32-to-u64" (i32.const -1)) (u64.const 0xffffffffffffffff))
+
+
 
 (assert_return (invoke "i64-to-s8" (i64.const 0)) (s8.const 0))
 (assert_return (invoke "i64-to-s8" (i64.const 8)) (s8.const 8))
