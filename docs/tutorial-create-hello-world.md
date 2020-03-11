@@ -18,8 +18,8 @@ $ cargo new hello-world
 
 After that, the hello-world folder should look like this.
 
-```
-hello-world
+```text
+hello-world/
 ├── Cargo.lock
 ├── Cargo.toml
 └── src
@@ -43,8 +43,8 @@ $ cargo build --target wasm32-wasi
 
 Now, in the `target` folder, there's a `hello-world.wasm` binary. You can find it here:
 
-```
-hello-world
+```text
+hello-world/
 ├── Cargo.lock
 ├── Cargo.toml
 ├── src
