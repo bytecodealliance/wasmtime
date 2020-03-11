@@ -129,7 +129,11 @@ pub(crate) fn path_create_directory(file: &File, path: &str) -> WasiResult<()> {
     std::fs::create_dir(&path).map_err(Into::into)
 }
 
-pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> WasiResult<()> {
+pub(crate) fn path_link(
+    resolved_old: PathGet,
+    resolved_new: PathGet,
+    follow_symlinks: bool,
+) -> WasiResult<()> {
     unimplemented!("path_link")
 }
 

@@ -650,7 +650,9 @@ pub(crate) unsafe fn path_link(
         false,
     )?;
 
-    hostcalls_impl::path_link(resolved_old, resolved_new)
+    let follow_symlinks = old_flags & wasi::__WASI_LOOKUPFLAGS_SYMLINK_FOLLOW != 0;
+
+    hostcalls_impl::path_link(resolved_old, resolved_new, follow_symlinks)
 }
 
 pub(crate) unsafe fn path_open(

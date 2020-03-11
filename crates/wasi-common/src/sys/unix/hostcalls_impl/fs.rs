@@ -71,15 +71,24 @@ pub(crate) fn path_create_directory(base: &File, path: &str) -> WasiResult<()> {
     unsafe { mkdirat(base.as_raw_fd(), path, Mode::from_bits_truncate(0o777)) }.map_err(Into::into)
 }
 
-pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> WasiResult<()> {
+pub(crate) fn path_link(
+    resolved_old: PathGet,
+    resolved_new: PathGet,
+    follow_symlinks: bool,
+) -> WasiResult<()> {
     use yanix::file::{linkat, AtFlag};
+    let flags = if follow_symlinks {
+        AtFlag::SYMLINK_FOLLOW
+    } else {
+        AtFlag::empty()
+    };
     unsafe {
         linkat(
             resolved_old.dirfd().as_raw_fd(),
             resolved_old.path(),
             resolved_new.dirfd().as_raw_fd(),
             resolved_new.path(),
-            AtFlag::SYMLINK_FOLLOW,
+            flags,
         )
     }
     .map_err(Into::into)
