@@ -1,0 +1,11 @@
+[package]
+name = "example-fib-debug-wasm"
+version = "0.1.0"
+authors = ["The Wasmtime Project Developers"]
+edition = "2018"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+path = "fib.rs"
+name = "fib"

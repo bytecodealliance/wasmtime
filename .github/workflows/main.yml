@@ -197,6 +197,9 @@ jobs:
     - run: cargo build --manifest-path crates/api/Cargo.toml --features lightbeam
       if: matrix.rust == 'nightly'
 
+    # Ensure all our examples build and execute
+    - run: cargo run -p run-examples
+
     # Build and test all features except for lightbeam
     - run: cargo test --features test_programs --all --exclude lightbeam --exclude wasmtime-c-api -- --nocapture
       env:
@@ -205,7 +208,7 @@ jobs:
 
     # Test debug (DWARF) related functionality.
     - run: cargo test test_debug_dwarf_ -- --ignored --nocapture --test-threads 1
-      if: matrix.os == 'ubuntu-latest' 
+      if: matrix.os == 'ubuntu-latest'
       env:
         RUST_BACKTRACE: 1
         RUSTFLAGS: "-D warnings"

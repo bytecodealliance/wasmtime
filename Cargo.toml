@@ -63,12 +63,14 @@ opt-level = 0
 [workspace]
 members = [
   "cranelift",
-  "crates/fuzzing",
-  "crates/misc/rust",
-  "crates/misc/py",
   "crates/c-api",
-  "fuzz",
+  "crates/fuzzing",
+  "crates/misc/py",
+  "crates/misc/run-examples",
+  "crates/misc/rust",
   "crates/wiggle",
+  "examples/fib-debug/wasm",
+  "fuzz",
 ]
 
 [features]

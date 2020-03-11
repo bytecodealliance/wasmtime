@@ -1,6 +1,13 @@
-//! Translation of multi example
+//! This is an example of working with mulit-value modules and dealing with
+//! multi-value functions.
+//!
+//! Note that the `Func::wrap*` interfaces cannot be used to return multiple
+//! values just yet, so we need to use the more dynamic `Func::new` and
+//! `Func::call` methods.
 
-use anyhow::{ensure, format_err, Context as _, Result};
+// You can execute this example with `cargo run --example multi`
+
+use anyhow::{format_err, Result};
 use std::rc::Rc;
 use wasmtime::*;
 
@@ -17,40 +24,16 @@ impl Callable for Callback {
     }
 }
 
-const WAT: &str = r#"
-(module
-  (func $f (import "" "f") (param i32 i64) (result i64 i32))
-
-  (func $g (export "g") (param i32 i64) (result i64 i32)
-    (call $f (local.get 0) (local.get 1))
-  )
-
-  (func $round_trip_many
-        (export "round_trip_many")
-        (param i64 i64 i64 i64 i64 i64 i64 i64 i64 i64)
-        (result i64 i64 i64 i64 i64 i64 i64 i64 i64 i64)
-    local.get 0
-    local.get 1
-    local.get 2
-    local.get 3
-    local.get 4
-    local.get 5
-    local.get 6
-    local.get 7
-    local.get 8
-    local.get 9)
-)
-"#;
-
 fn main() -> Result<()> {
-    // Initialize.
+    // Configure our `Store`, but be sure to use a `Config` that enables the
+    // wasm multi-value feature since it's not stable yet.
     println!("Initializing...");
     let engine = Engine::new(Config::new().wasm_multi_value(true));
     let store = Store::new(&engine);
 
     // Compile.
     println!("Compiling module...");
-    let module = Module::new(&store, WAT).context("Error compiling module!")?;
+    let module = Module::from_file(&store, "examples/multi.wat")?;
 
     // Create external print functions.
     println!("Creating callback...");
@@ -62,34 +45,31 @@ fn main() -> Result<()> {
 
     // Instantiate.
     println!("Instantiating module...");
-    let imports = vec![callback_func.into()];
-    let instance =
-        Instance::new(&module, imports.as_slice()).context("Error instantiating module!")?;
+    let instance = Instance::new(&module, &[callback_func.into()])?;
 
     // Extract exports.
     println!("Extracting export...");
-    let exports = instance.exports();
-    ensure!(!exports.is_empty(), "Error accessing exports!");
-    let g = exports[0].func().context("> Error accessing export $g!")?;
-    let round_trip_many = exports[1]
-        .func()
-        .context("> Error accessing export $round_trip_many")?;
+    let g = instance
+        .get_export("g")
+        .and_then(|e| e.func())
+        .ok_or(format_err!("failed to find export `g`"))?;
 
     // Call `$g`.
     println!("Calling export \"g\"...");
-    let args = vec![Val::I32(1), Val::I64(3)];
-    let results = g
-        .call(&args)
-        .map_err(|e| format_err!("> Error calling g! {:?}", e))?;
+    let results = g.call(&[Val::I32(1), Val::I64(3)])?;
 
     println!("Printing result...");
     println!("> {} {}", results[0].unwrap_i64(), results[1].unwrap_i32());
 
-    debug_assert_eq!(results[0].unwrap_i64(), 4);
-    debug_assert_eq!(results[1].unwrap_i32(), 2);
+    assert_eq!(results[0].unwrap_i64(), 4);
+    assert_eq!(results[1].unwrap_i32(), 2);
 
     // Call `$round_trip_many`.
     println!("Calling export \"round_trip_many\"...");
+    let round_trip_many = instance
+        .get_export("round_trip_many")
+        .and_then(|e| e.func())
+        .ok_or(format_err!("failed to find export `round_trip_many`"))?;
     let args = vec![
         Val::I64(0),
         Val::I64(1),
@@ -102,9 +82,7 @@ fn main() -> Result<()> {
         Val::I64(8),
         Val::I64(9),
     ];
-    let results = round_trip_many
-        .call(&args)
-        .map_err(|e| format_err!("> Error calling round_trip_many! {:?}", e))?;
+    let results = round_trip_many.call(&args)?;
 
     println!("Printing result...");
     print!(">");
@@ -113,17 +91,11 @@ fn main() -> Result<()> {
     }
     println!();
 
-    debug_assert_eq!(results.len(), 10);
-    debug_assert!(args
+    assert_eq!(results.len(), 10);
+    assert!(args
         .iter()
         .zip(results.iter())
         .all(|(a, r)| a.i64() == r.i64()));
 
-    // Shut down.
-    println!("Shutting down...");
-    drop(store);
-
-    // All done.
-    println!("Done.");
     Ok(())
 }
