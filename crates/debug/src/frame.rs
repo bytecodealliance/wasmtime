@@ -81,7 +81,7 @@ pub fn get_debug_frame_bytes(
     for (i, f) in funcs.into_iter().enumerate() {
         let layout = &layouts[DefinedFuncIndex::new(i)];
 
-        // FIXME Can process only functions with SystemV-like prologue.
+        // FIXME Can only process functions with SystemV-like prologue.
         if layout.call_conv != CallConv::Fast
             && layout.call_conv != CallConv::Cold
             && layout.call_conv != CallConv::SystemV
