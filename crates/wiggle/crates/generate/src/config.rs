@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use proc_macro2::Span;
 use syn::{
@@ -78,24 +78,24 @@ pub struct WitxConf {
     pub paths: Vec<PathBuf>,
 }
 
+impl WitxConf {
+    pub fn make_paths_relative_to<P: AsRef<Path>>(&mut self, root: P) {
+        self.paths.iter_mut().for_each(|p| {
+            if !p.is_absolute() {
+                *p = PathBuf::from(root.as_ref()).join(p.clone());
+            }
+        });
+    }
+}
+
 impl Parse for WitxConf {
     fn parse(input: ParseStream) -> Result<Self> {
         let content;
         let _ = bracketed!(content in input);
         let path_lits: Punctuated<LitStr, Token![,]> = content.parse_terminated(Parse::parse)?;
-        let paths: Vec<PathBuf> = path_lits
+        let paths = path_lits
             .iter()
-            .map(|lit| {
-                let p = PathBuf::from(lit.value());
-                if p.is_absolute() {
-                    p
-                } else {
-                    let mut root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-                    root.pop();
-                    root.pop();
-                    root.join(p)
-                }
-            })
+            .map(|lit| PathBuf::from(lit.value()))
             .collect();
         Ok(WitxConf { paths })
     }
