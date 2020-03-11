@@ -1,5 +1,7 @@
 use crate::fs::{File, OpenOptions, ReadDir};
-use crate::{host, hostcalls, wasi, WasiCtx};
+use crate::wasi::types;
+use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
+use crate::WasiCtx;
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 use std::{io, path::Path};
@@ -15,13 +17,13 @@ use std::{io, path::Path};
 /// Unlike `std::fs`, this API has no `canonicalize`, because absolute paths
 /// don't interoperate well with the capability-oriented security model.
 pub struct Dir<'ctx> {
-    ctx: &'ctx mut WasiCtx,
-    fd: wasi::__wasi_fd_t,
+    ctx: &'ctx WasiCtx,
+    fd: types::Fd,
 }
 
 impl<'ctx> Dir<'ctx> {
     /// Constructs a new instance of `Self` from the given raw WASI file descriptor.
-    pub unsafe fn from_raw_wasi_fd(ctx: &'ctx mut WasiCtx, fd: wasi::__wasi_fd_t) -> Self {
+    pub unsafe fn from_raw_wasi_fd(ctx: &'ctx WasiCtx, fd: types::Fd) -> Self {
         Self { ctx, fd }
     }
 
@@ -37,7 +39,7 @@ impl<'ctx> Dir<'ctx> {
     /// [`std::fs::File::open`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.open
     pub fn open_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<File> {
         let path = path.as_ref();
-        let mut fd = 0;
+        let mut fd = types::Fd::from(0);
 
         // TODO: Refactor the hostcalls functions to split out the encoding/decoding
         // parts from the underlying functionality, so that we can call into the
@@ -90,7 +92,7 @@ impl<'ctx> Dir<'ctx> {
     /// TODO: Not yet implemented. See the comment in `open_file`.
     pub fn open_dir<P: AsRef<Path>>(&mut self, path: P) -> io::Result<Self> {
         let path = path.as_ref();
-        let mut fd = 0;
+        let mut fd = types::Fd::from(0);
 
         // TODO: See the comment in `open_file`.
         unimplemented!("Dir::open_dir");
@@ -122,7 +124,7 @@ impl<'ctx> Dir<'ctx> {
     /// [`std::fs::File::create`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.create
     pub fn create_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<File> {
         let path = path.as_ref();
-        let mut fd = 0;
+        let mut fd = types::Fd::from(0);
 
         // TODO: See the comments in `open_file`.
         //
@@ -199,7 +201,7 @@ impl<'ctx> Drop for Dir<'ctx> {
         // the file descriptor was closed or not, and if we retried (for
         // something like EINTR), we might close another valid file descriptor
         // opened after we closed ours.
-        let _ = unsafe { hostcalls::fd_close(self.ctx, &mut [], self.fd) };
+        let _ = self.ctx.fd_close(self.fd);
     }
 }
 

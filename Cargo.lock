@@ -2354,6 +2354,8 @@ dependencies = [
  "num",
  "thiserror",
  "wig",
+ "wiggle",
+ "wiggle-runtime",
  "winapi",
  "winx",
  "yanix",
@@ -2627,6 +2629,7 @@ dependencies = [
  "wasmtime",
  "wasmtime-runtime",
  "wig",
+ "wiggle-runtime",
 ]
 
 [[package]]
