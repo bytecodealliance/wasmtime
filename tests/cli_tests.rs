@@ -1,15 +1,22 @@
 use anyhow::{bail, Result};
 use std::io::Write;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Output};
 use tempfile::NamedTempFile;
 
-fn run_wasmtime(args: &[&str]) -> Result<String> {
+// Run the wasmtime CLI with the provided args and return the `Output`.
+fn run_wasmtime_for_output(args: &[&str]) -> Result<Output> {
     let mut me = std::env::current_exe()?;
     me.pop(); // chop off the file name
     me.pop(); // chop off `deps`
     me.push("wasmtime");
-    let output = Command::new(&me).args(args).output()?;
+    Command::new(&me).args(args).output().map_err(Into::into)
+}
+
+// Run the wasmtime CLI with the provided args and, if it succeeds, return
+// the standard output in a `String`.
+fn run_wasmtime(args: &[&str]) -> Result<String> {
+    let output = run_wasmtime_for_output(args)?;
     if !output.status.success() {
         bail!(
             "Failed to execute wasmtime with: {:?}\n{}",
@@ -72,5 +79,29 @@ fn run_wasmtime_simple_wat() -> Result<()> {
         "--disable-cache",
         "4",
     ])?;
+    Ok(())
+}
+
+// Running a wat that traps.
+#[test]
+fn run_wasmtime_unreachable_wat() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/unreachable.wat")?;
+    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+
+    assert_ne!(output.stderr, b"");
+    assert_eq!(output.stdout, b"");
+    assert!(!output.status.success());
+
+    let code = output
+        .status
+        .code()
+        .expect("wasmtime process should exit normally");
+
+    // Test for the specific error code Wasmtime uses to indicate a trap return.
+    #[cfg(unix)]
+    assert_eq!(code, 128 + libc::SIGABRT);
+    #[cfg(windows)]
+    assert_eq!(code, 3);
+
     Ok(())
 }

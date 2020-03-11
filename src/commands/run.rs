@@ -6,10 +6,11 @@ use std::{
     ffi::{OsStr, OsString},
     fs::File,
     path::{Component, Path, PathBuf},
+    process,
 };
 use structopt::{clap::AppSettings, StructOpt};
 use wasi_common::preopen_dir;
-use wasmtime::{Engine, Instance, Module, Store};
+use wasmtime::{Engine, Instance, Module, Store, Trap};
 use wasmtime_interface_types::ModuleData;
 use wasmtime_wasi::{old::snapshot_0::Wasi as WasiSnapshot0, Wasi};
 
@@ -113,8 +114,31 @@ impl RunCommand {
         }
 
         // Load the main wasm module.
-        self.handle_module(&store, &module_registry)
-            .with_context(|| format!("failed to run main module `{}`", self.module.display()))?;
+        match self
+            .handle_module(&store, &module_registry)
+            .with_context(|| format!("failed to run main module `{}`", self.module.display()))
+        {
+            Ok(()) => (),
+            Err(e) => {
+                // If the program exited because of a trap, return an error code
+                // to the outside environment indicating a more severe problem
+                // than a simple failure.
+                if e.is::<Trap>() {
+                    // Print the error message in the usual way.
+                    eprintln!("Error: {:?}", e);
+
+                    if cfg!(unix) {
+                        // On Unix, return the error code of an abort.
+                        process::exit(128 + libc::SIGABRT);
+                    } else if cfg!(windows) {
+                        // On Windows, return 3.
+                        // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019
+                        process::exit(3);
+                    }
+                }
+                return Err(e);
+            }
+        }
 
         Ok(())
     }
