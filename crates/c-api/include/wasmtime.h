@@ -9,6 +9,8 @@
 extern "C" {
 #endif
 
+#define own
+
 typedef uint8_t wasmtime_strategy_t;
 enum wasmtime_strategy_enum { // Strategy
   WASMTIME_STRATEGY_AUTO,
@@ -51,12 +53,14 @@ WASMTIME_CONFIG_PROP(cranelift_opt_level, wasmtime_opt_level_t)
 //   optional.
 //
 // Returns `true` if conversion succeeded, or `false` if it failed.
-bool wasmtime_wat2wasm(
+WASM_API_EXTERN bool wasmtime_wat2wasm(
     wasm_engine_t *engine,
     const wasm_byte_vec_t *wat,
     own wasm_byte_vec_t *ret,
-    own wasm_byte_vec_t *error_message,
+    own wasm_byte_vec_t *error_message
 );
+
+#undef own
 
 #ifdef __cplusplus
 }  // extern "C"

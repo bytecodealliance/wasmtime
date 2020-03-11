@@ -1,6 +1,9 @@
-//! Translation of hello example
+//! Small example of how to instantiate a wasm module that imports one function,
+//! showing how you can fill in host functionality for a wasm module.
 
-use anyhow::{ensure, Context as _, Result};
+// You can execute this example with `cargo run --example hello`
+
+use anyhow::Result;
 use wasmtime::*;
 
 fn main() -> Result<()> {
@@ -12,13 +15,7 @@ fn main() -> Result<()> {
 
     // Compile the wasm binary into an in-memory instance of a `Module`.
     println!("Compiling module...");
-    let wat = r#"
-        (module
-          (func $hello (import "" "hello"))
-          (func (export "run") (call $hello))
-        )
-    "#;
-    let module = Module::new(&store, wat).context("> Error compiling module!")?;
+    let module = Module::from_file(&store, "examples/hello.wat")?;
 
     // Here we handle the imports of the module, which in this case is our
     // `HelloCallback` type and its associated implementation of `Callback.
@@ -32,18 +29,20 @@ fn main() -> Result<()> {
     // phase, pairing together a compiled module as well as a set of imports.
     // Note that this is where the wasm `start` function, if any, would run.
     println!("Instantiating module...");
-    let imports = vec![hello_func.into()];
-    let instance = Instance::new(&module, &imports).context("> Error instantiating module!")?;
+    let imports = [hello_func.into()];
+    let instance = Instance::new(&module, &imports)?;
 
     // Next we poke around a bit to extract the `run` function from the module.
     println!("Extracting export...");
-    let exports = instance.exports();
-    ensure!(!exports.is_empty(), "> Error accessing exports!");
-    let run_func = exports[0].func().context("> Error accessing exports!")?;
+    let run = instance
+        .get_export("run")
+        .and_then(|e| e.func())
+        .ok_or(anyhow::format_err!("failed to find `run` function export"))?
+        .get0::<()>()?;
 
     // And last but not least we can call it!
     println!("Calling export...");
-    run_func.call(&[])?;
+    run()?;
 
     println!("Done.");
     Ok(())

@@ -48,7 +48,7 @@ mkdir tmp/$api_pkgname/lib
 mkdir tmp/$api_pkgname/include
 cp LICENSE README.md tmp/$api_pkgname
 mv bins-$src/* tmp/$api_pkgname/lib
-cp crates/c-api/examples/wasm-c-api/include/wasm.h tmp/$api_pkgname/include
+cp crates/c-api/wasm-c-api/include/wasm.h tmp/$api_pkgname/include
 cp crates/c-api/include/{wasmtime,wasi}.h tmp/$api_pkgname/include
 mktarball $api_pkgname
 

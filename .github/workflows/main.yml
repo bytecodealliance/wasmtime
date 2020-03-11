@@ -184,9 +184,10 @@ jobs:
         Get-Command clang.exe
         clang.exe --version
 
-    # Install wasm32-wasi target in order to build wasi-common's integration
-    # tests
+    # Install wasm32 targets in order to build various tests throughout the
+    # repo
     - run: rustup target add wasm32-wasi
+    - run: rustup target add wasm32-unknown-unknown
 
     - run: cargo fetch --locked
     - run: cargo fetch --locked --manifest-path crates/test-programs/wasi-tests/Cargo.toml
@@ -197,6 +198,9 @@ jobs:
     - run: cargo build --manifest-path crates/api/Cargo.toml --features lightbeam
       if: matrix.rust == 'nightly'
 
+    # Ensure all our examples build and execute
+    - run: cargo run -p run-examples
+
     # Build and test all features except for lightbeam
     - run: cargo test --features test_programs --all --exclude lightbeam --exclude wasmtime-c-api -- --nocapture
       env:
@@ -205,7 +209,7 @@ jobs:
 
     # Test debug (DWARF) related functionality.
     - run: cargo test test_debug_dwarf_ -- --ignored --nocapture --test-threads 1
-      if: matrix.os == 'ubuntu-latest' 
+      if: matrix.os == 'ubuntu-latest'
       env:
         RUST_BACKTRACE: 1
         RUSTFLAGS: "-D warnings"

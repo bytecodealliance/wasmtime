@@ -22,9 +22,9 @@ int main(int argc, const char* argv[]) {
 
   // Load binary.
   printf("Loading binary...\n");
-  FILE* file = fopen("fib-wasm.wasm", "r");
+  FILE* file = fopen("target/wasm32-unknown-unknown/debug/fib.wasm", "rb");
   if (!file) {
-    printf("> Error loading module!\n");
+    printf("> Error opening module!\n");
     return 1;
   }
   fseek(file, 0L, SEEK_END);
@@ -33,7 +33,7 @@ int main(int argc, const char* argv[]) {
   wasm_byte_vec_t binary;
   wasm_byte_vec_new_uninitialized(&binary, file_size);
   if (fread(binary.data, file_size, 1, file) != 1) {
-    printf("> Error loading module!\n");
+    printf("> Error reading module!\n");
     return 1;
   }
   fclose(file);
@@ -45,8 +45,26 @@ int main(int argc, const char* argv[]) {
     printf("> Error compiling module!\n");
     return 1;
   }
-
   wasm_byte_vec_delete(&binary);
+
+  // Figure out which export is the `fib` export
+  wasm_exporttype_vec_t module_exports;
+  wasm_module_exports(module, &module_exports);
+  int fib_idx = -1;
+  for (int i = 0; i < module_exports.size; i++) {
+    const wasm_name_t *name = wasm_exporttype_name(module_exports.data[i]);
+    if (name->size != 3)
+      continue;
+    if (strncmp("fib", name->data, 3) != 0)
+      continue;
+    fib_idx = i;
+    break;
+  }
+  wasm_exporttype_vec_delete(&module_exports);
+  if (fib_idx == -1) {
+    printf("> Error finding `fib` export!\n");
+    return 1;
+  }
 
   // Instantiate.
   printf("Instantiating module...\n");
@@ -66,7 +84,7 @@ int main(int argc, const char* argv[]) {
     return 1;
   }
   // Getting second export (first is memory).
-  const wasm_func_t* run_func = wasm_extern_as_func(exports.data[1]);
+  const wasm_func_t* run_func = wasm_extern_as_func(exports.data[fib_idx]);
   if (run_func == NULL) {
     printf("> Error accessing export!\n");
     return 1;
@@ -97,3 +115,4 @@ int main(int argc, const char* argv[]) {
   printf("Done.\n");
   return 0;
 }
+

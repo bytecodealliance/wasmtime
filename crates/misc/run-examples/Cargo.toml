@@ -1,0 +1,9 @@
+[package]
+name = "run-examples"
+version = "0.1.0"
+authors = ["The Wasmtime Project Developers"]
+edition = "2018"
+publish = false
+
+[dependencies]
+cc = "1.0"
