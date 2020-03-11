@@ -1,0 +1,11 @@
+(use "errno.witx")
+(use "excuse.witx")
+
+(module $pointers
+  (@interface func (export "pointers_and_enums")
+    (param $an_excuse $excuse)
+    (param $an_excuse_by_reference (@witx pointer $excuse))
+    (param $a_lamer_excuse (@witx const_pointer $excuse))
+    (param $two_layers_of_excuses (@witx pointer (@witx const_pointer $excuse)))
+    (result $error $errno))
+)
