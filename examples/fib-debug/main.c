@@ -22,9 +22,9 @@ int main(int argc, const char* argv[]) {
 
   // Load binary.
   printf("Loading binary...\n");
-  FILE* file = fopen("target/wasm32-unknown-unknown/debug/fib.wasm", "r");
+  FILE* file = fopen("target/wasm32-unknown-unknown/debug/fib.wasm", "rb");
   if (!file) {
-    printf("> Error loading module!\n");
+    printf("> Error opening module!\n");
     return 1;
   }
   fseek(file, 0L, SEEK_END);
@@ -33,7 +33,7 @@ int main(int argc, const char* argv[]) {
   wasm_byte_vec_t binary;
   wasm_byte_vec_new_uninitialized(&binary, file_size);
   if (fread(binary.data, file_size, 1, file) != 1) {
-    printf("> Error loading module!\n");
+    printf("> Error reading module!\n");
     return 1;
   }
   fclose(file);

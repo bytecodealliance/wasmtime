@@ -43,6 +43,7 @@ fn main() {
             .include("crates/c-api/include")
             .include("crates/c-api/wasm-c-api/include")
             .define("WASM_API_EXTERN", Some("")) // static linkage, not dynamic
+            .warnings(false)
             .get_compiler()
             .to_command();
         if is_dir {
@@ -50,18 +51,25 @@ fn main() {
         } else {
             cmd.arg(format!("examples/{}.c", example));
         }
-        if cfg!(windows) {
-            cmd.arg("target/release/wasmtime.lib");
+        let exe = if cfg!(windows) {
+            cmd.arg("target/release/wasmtime.lib")
+                .arg("ws2_32.lib")
+                .arg("advapi32.lib")
+                .arg("userenv.lib")
+                .arg("ntdll.lib")
+                .arg("shell32.lib")
+                .arg("ole32.lib");
+            "./main.exe"
         } else {
-            cmd.arg("target/release/libwasmtime.a");
-        }
+            cmd.arg("target/release/libwasmtime.a").arg("-o").arg("foo");
+            "./foo"
+        };
         if cfg!(target_os = "linux") {
             cmd.arg("-lpthread").arg("-ldl").arg("-lm");
         }
-        cmd.arg("-o").arg("foo");
         run(&mut cmd);
 
-        run(&mut Command::new("./foo"));
+        run(&mut Command::new(exe));
     }
 }
 
