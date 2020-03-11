@@ -23,6 +23,7 @@ fn fuzz_default_config(strategy: Strategy) -> Config {
     config
         .cranelift_debug_verifier(true)
         .wasm_multi_value(true)
+        .wasm_bulk_memory(true)
         .strategy(strategy)
         .expect("failed to enable lightbeam");
     return config;
