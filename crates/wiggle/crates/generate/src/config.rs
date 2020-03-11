@@ -85,7 +85,17 @@ impl Parse for WitxConf {
         let path_lits: Punctuated<LitStr, Token![,]> = content.parse_terminated(Parse::parse)?;
         let paths: Vec<PathBuf> = path_lits
             .iter()
-            .map(|lit| PathBuf::from(lit.value()))
+            .map(|lit| {
+                let p = PathBuf::from(lit.value());
+                if p.is_absolute() {
+                    p
+                } else {
+                    let mut root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+                    root.pop();
+                    root.pop();
+                    root.join(p)
+                }
+            })
             .collect();
         Ok(WitxConf { paths })
     }

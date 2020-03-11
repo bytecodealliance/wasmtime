@@ -68,6 +68,7 @@ members = [
   "crates/misc/py",
   "crates/c-api",
   "fuzz",
+  "crates/wiggle",
 ]
 
 [features]

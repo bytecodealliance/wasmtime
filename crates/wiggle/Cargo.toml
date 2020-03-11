@@ -16,11 +16,3 @@ syn = { version = "1.0", features = ["full"] }
 wiggle-runtime = { path = "crates/runtime" }
 wiggle-test = { path = "crates/test" }
 proptest = "0.9"
-
-[workspace]
-members = [
-  "crates/generate",
-  "crates/runtime",
-  "crates/test",
-]
-exclude = ["crates/WASI"]
