@@ -88,8 +88,8 @@ fn run_wasmtime_unreachable_wat() -> Result<()> {
     let wasm = build_wasm("tests/wasm/unreachable.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
 
-    assert!(output.stdout.is_empty());
-    assert!(!output.stderr.is_empty());
+    assert_ne!(output.stderr, b"");
+    assert_eq!(output.stdout, b"");
     assert!(!output.status.success());
 
     let code = output
