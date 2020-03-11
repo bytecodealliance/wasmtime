@@ -1,8 +1,13 @@
 # Creating `hello-world.wasm`
 
-First, you'll need the standard rust toolchain.
+There are a number of ways to create `.wasm` files but for the purposes of this
+tutorial, we'll be using the Rust toolchain. You can find more information on
+creating `.wasm` files from other languages in the
+[Writing WebAssembly section](https://bytecodealliance.github.io/wasmtime/wasm.html).
 
-[follow these instructions to install `rustc`, `rustup` and `cargo`]: https://www.rust-lang.org/tools/install
+To build WebAssembly binaries with Rust, you'll need the standard Rust toolchain.
+
+[Follow these instructions to install `rustc`, `rustup` and `cargo`](https://www.rust-lang.org/tools/install)
 
 Next, you should add WebAssembly as a build target for cargo like so:
 
@@ -10,7 +15,7 @@ Next, you should add WebAssembly as a build target for cargo like so:
 $ rustup target add wasm32-wasi
 ```
 
-Finally, create a new Rust project called 'hello world'. You can do this by running:
+Finally, create a new Rust project called 'hello-world'. You can do this by running:
 
 ```sh
 $ cargo new hello-world
@@ -35,13 +40,13 @@ fn main() {
 
 ```
 
-Now, we can tell `cargo` to build a WebAssembly binary:
+Now, we can tell `cargo` to build a WebAssembly file:
 
 ```sh
 $ cargo build --target wasm32-wasi
 ```
 
-Now, in the `target` folder, there's a `hello-world.wasm` binary. You can find it here:
+Now, in the `target` folder, there's a `hello-world.wasm` file. You can find it here:
 
 ```text
 hello-world/
