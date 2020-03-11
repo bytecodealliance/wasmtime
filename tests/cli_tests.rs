@@ -101,7 +101,7 @@ fn run_wasmtime_unreachable_wat() -> Result<()> {
     #[cfg(unix)]
     assert_eq!(code, 128 + libc::SIGABRT);
     #[cfg(windows)]
-    assert_eq!(code, 4);
+    assert_eq!(code, 3);
 
     Ok(())
 }
