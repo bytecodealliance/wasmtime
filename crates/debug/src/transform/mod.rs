@@ -14,11 +14,13 @@ use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
 
 pub use address_transform::AddressTransform;
+pub(crate) use map_reg::map_reg;
 
 mod address_transform;
 mod attr;
 mod expression;
 mod line_program;
+mod map_reg;
 mod range_info_builder;
 mod refs;
 mod simulate;

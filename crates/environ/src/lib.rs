@@ -27,6 +27,7 @@
 mod address_map;
 mod compilation;
 mod data_structures;
+mod frame_layout;
 mod func_environ;
 mod module;
 mod module_environ;
@@ -52,6 +53,7 @@ pub use crate::compilation::{
 };
 pub use crate::cranelift::Cranelift;
 pub use crate::data_structures::*;
+pub use crate::frame_layout::{FrameLayout, FrameLayoutChange, FrameLayouts};
 pub use crate::func_environ::BuiltinFunctionIndex;
 #[cfg(feature = "lightbeam")]
 pub use crate::lightbeam::Lightbeam;

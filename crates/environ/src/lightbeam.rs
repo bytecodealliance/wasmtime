@@ -70,6 +70,7 @@ impl crate::compilation::Compiler for Lightbeam {
             ValueLabelsRanges::new(),
             PrimaryMap::new(),
             Traps::new(),
+            PrimaryMap::new(),
         ))
     }
 }

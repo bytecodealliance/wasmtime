@@ -6,6 +6,7 @@ use crate::compilation::{
     Compilation, CompileError, CompiledFunction, CompiledFunctionUnwindInfo, Relocation,
     RelocationTarget, TrapInformation,
 };
+use crate::frame_layout::FrameLayout;
 use crate::func_environ::{get_func_name, FuncEnvironment};
 use crate::module::{Module, ModuleLocal};
 use crate::module_environ::FunctionBodyData;
@@ -154,6 +155,38 @@ fn get_function_address_map<'data>(
     }
 }
 
+fn get_frame_layout(
+    context: &Context,
+    isa: &dyn isa::TargetIsa,
+) -> (
+    Box<[ir::FrameLayoutChange]>,
+    Box<[(usize, ir::FrameLayoutChange)]>,
+) {
+    let func = &context.func;
+    assert!(func.frame_layout.is_some(), "expected func.frame_layout");
+
+    let mut blocks = func.layout.blocks().collect::<Vec<_>>();
+    blocks.sort_by_key(|b| func.offsets[*b]); // Ensure inst offsets always increase
+
+    let encinfo = isa.encoding_info();
+    let mut last_offset = 0;
+    let mut commands = Vec::new();
+    for b in blocks {
+        for (offset, inst, size) in func.inst_offsets(b, &encinfo) {
+            if let Some(cmds) = func.frame_layout.as_ref().unwrap().instructions.get(&inst) {
+                let address_offset = (offset + size) as usize;
+                assert!(last_offset < address_offset);
+                for cmd in cmds.iter() {
+                    commands.push((address_offset, cmd.clone()));
+                }
+                last_offset = address_offset;
+            }
+        }
+    }
+    let initial = func.frame_layout.as_ref().unwrap().initial.clone();
+    (initial, commands.into_boxed_slice())
+}
+
 /// A compiler that compiles a WebAssembly module with Cranelift, translating the Wasm to Cranelift IR,
 /// optimizing it and then translating to assembly.
 pub struct Cranelift;
@@ -206,6 +239,7 @@ fn compile(
     let mut value_ranges = PrimaryMap::with_capacity(function_body_inputs.len());
     let mut stack_slots = PrimaryMap::with_capacity(function_body_inputs.len());
     let mut traps = PrimaryMap::with_capacity(function_body_inputs.len());
+    let mut frame_layouts = PrimaryMap::with_capacity(function_body_inputs.len());
 
     function_body_inputs
         .into_iter()
@@ -254,6 +288,17 @@ fn compile(
                 None
             };
 
+            let frame_layout = if generate_debug_info {
+                let (initial_commands, commands) = get_frame_layout(&context, isa);
+                Some(FrameLayout {
+                    call_conv: context.func.signature.call_conv,
+                    initial_commands,
+                    commands,
+                })
+            } else {
+                None
+            };
+
             let ranges = if generate_debug_info {
                 let ranges = context.build_value_labels_ranges(isa).map_err(|error| {
                     CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
@@ -268,6 +313,7 @@ fn compile(
                 context.func.jt_offsets,
                 reloc_sink.func_relocs,
                 address_transform,
+                frame_layout,
                 ranges,
                 context.func.stack_slots,
                 trap_sink.traps,
@@ -282,6 +328,7 @@ fn compile(
                 func_jt_offsets,
                 relocs,
                 address_transform,
+                frame_layout,
                 ranges,
                 sss,
                 function_traps,
@@ -299,6 +346,9 @@ fn compile(
                 value_ranges.push(ranges.unwrap_or_default());
                 stack_slots.push(sss);
                 traps.push(function_traps);
+                if let Some(frame_layout) = frame_layout {
+                    frame_layouts.push(frame_layout);
+                }
             },
         );
 
@@ -311,6 +361,7 @@ fn compile(
         value_ranges,
         stack_slots,
         traps,
+        frame_layouts,
     ))
 }
 

@@ -6,8 +6,12 @@ use std::boxed::Box;
 
 use crate::HashMap;
 
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
 /// Change in the frame layout information.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum FrameLayoutChange {
     /// Base CallFrameAddress (CFA) pointer moved to different register/offset.
     CallFrameAddressAt {
