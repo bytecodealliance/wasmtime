@@ -1,4 +1,4 @@
-# Fuzzing Infrastructure for Wasmtime
+# Fuzzing Infrastructure for Wasmtime!
 
 This crate provides test case generators and oracles for use with fuzzing.
 
