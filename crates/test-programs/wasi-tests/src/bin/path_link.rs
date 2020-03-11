@@ -152,26 +152,19 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
     // Create a link to a dangling symlink
     wasi::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
 
-    assert_eq!(
-        wasi::path_link(dir_fd, 0, "symlink", dir_fd, "link")
-            .expect_err("creating a link to a dangling symlink should fail")
-            .raw_error(),
-        wasi::ERRNO_NOENT,
-        "errno should be ERRNO_NOENT"
-    );
+    // This should succeed, because we're not following symlinks
+    wasi::path_link(dir_fd, 0, "symlink", dir_fd, "link")
+        .expect("creating a link to a dangling symlink should succeed");
     wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
+    wasi::path_unlink_file(dir_fd, "link").expect("removing a hardlink");
 
     // Create a link to a symlink loop
     wasi::path_symlink("symlink", dir_fd, "symlink").expect("creating a symlink loop");
 
-    assert_eq!(
-        wasi::path_link(dir_fd, 0, "symlink", dir_fd, "link")
-            .expect_err("creating a link to a symlink loop")
-            .raw_error(),
-        wasi::ERRNO_LOOP,
-        "errno should be ERRNO_LOOP"
-    );
+    wasi::path_link(dir_fd, 0, "symlink", dir_fd, "link")
+        .expect("creating a link to a symlink loop should succeed");
     wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
+    wasi::path_unlink_file(dir_fd, "link").expect("removing a hardlink");
 
     // Create a link where target is a dangling symlink
     wasi::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
@@ -203,6 +196,7 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
     // Create a link where target is a dangling symlink following symlinks
     wasi::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
 
+    // If we do follow symlinks, this should fail
     assert_eq!(
         wasi::path_link(
             dir_fd,
@@ -211,7 +205,7 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
             dir_fd,
             "link",
         )
-        .expect_err("creating a link where target is a dangling symlink following symlinks")
+        .expect_err("creating a link to a dangling symlink following symlinks should fail")
         .raw_error(),
         wasi::ERRNO_NOENT,
         "errno should be ERRNO_NOENT"
