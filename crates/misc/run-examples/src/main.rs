@@ -49,7 +49,11 @@ fn main() {
         } else {
             cmd.arg(format!("examples/{}.c", example));
         }
-        cmd.arg("target/release/libwasmtime.a");
+        if cfg!(windows) {
+            cmd.arg("target/release/wasmtime.lib");
+        } else {
+            cmd.arg("target/release/libwasmtime.a");
+        }
         if cfg!(target_os = "linux") {
             cmd.arg("-lpthread").arg("-ldl").arg("-lm");
         }
