@@ -20,6 +20,12 @@
 cranelift:
   - cranelift/*
 
+"cranelift:module":
+  - cranelift/cranelift-module/*
+  - cranelift/cranelift-object/*
+  - cranelift/cranelift-faerie/*
+  - cranelift/cranelift-simplejit/*
+
 "cranelift:docs":
   - cranelift/docs/*
 
