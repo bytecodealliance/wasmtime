@@ -1002,7 +1002,7 @@ impl CallAdapter {
         match instr {
             ArgGet(arg) => stack.push(args[*arg as usize].clone()),
 
-            // Create a `FuncIndex` from the functin that we're calling and
+            // Create a `FuncIndex` from the function that we're calling and
             // then run through our other infrastructure to call into this
             // function.
             CallCore(f) => {
