@@ -41,6 +41,7 @@ fuzzing:
 wasi:
   - crates/wasi/*
   - crates/wasi-common/*
+  - crates/wiggle/*
 
 "wasmtime:api":
   - crates/api/*
