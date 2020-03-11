@@ -18,33 +18,33 @@
 # Note that we keep the labels in alphabetical order below.
 
 cranelift:
-  - cranelift/*
+  - cranelift/**
 
 "cranelift:module":
-  - cranelift/cranelift-module/*
-  - cranelift/cranelift-object/*
-  - cranelift/cranelift-faerie/*
-  - cranelift/cranelift-simplejit/*
+  - cranelift/cranelift-module/**
+  - cranelift/cranelift-object/**
+  - cranelift/cranelift-faerie/**
+  - cranelift/cranelift-simplejit/**
 
 "cranelift:docs":
-  - cranelift/docs/*
+  - cranelift/docs/**
 
 "cranelift:meta":
-  - cranelift/codegen/meta/*
+  - cranelift/codegen/meta/**
 
 lightbeam:
-  - crates/lightbeam/*
+  - crates/lightbeam/**
 
 fuzzing:
-  - crates/fuzzing/*
+  - crates/fuzzing/**
 
 wasi:
-  - crates/wasi/*
-  - crates/wasi-common/*
-  - crates/wiggle/*
+  - crates/wasi/**
+  - crates/wasi-common/**
+  - crates/wiggle/**
 
 "wasmtime:api":
-  - crates/api/*
+  - crates/api/**
 
 "wasmtime:c-api":
-  - crates/c-api/*
+  - crates/c-api/**
