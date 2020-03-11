@@ -1,0 +1,12 @@
+(use "errno.witx")
+
+(typename $fd (handle))
+
+(module $handle_examples
+  (@interface func (export "fd_create")
+    (result $error $errno)
+    (result $fd $fd))
+  (@interface func (export "fd_consume")
+    (param $fd $fd)
+    (result $error $errno))
+)

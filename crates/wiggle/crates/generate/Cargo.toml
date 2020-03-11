@@ -1,0 +1,16 @@
+[package]
+name = "wiggle-generate"
+version = "0.1.0"
+authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>"]
+edition = "2018"
+
+[lib]
+
+[dependencies]
+wiggle-runtime = { path = "../runtime" }
+witx = "0.8.3"
+quote = "1.0"
+proc-macro2 = "1.0"
+heck = "0.3"
+anyhow = "1"
+syn = { version = "1.0", features = ["full"] }

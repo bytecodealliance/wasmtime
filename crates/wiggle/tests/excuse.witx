@@ -1,0 +1,6 @@
+(typename $excuse
+  (enum u8
+     $dog_ate
+     $traffic
+     $sleeping))
+

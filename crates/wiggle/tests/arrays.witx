@@ -1,0 +1,17 @@
+(use "errno.witx")
+(use "excuse.witx")
+
+(typename $const_excuse_array (array (@witx const_pointer $excuse)))
+(typename $excuse_array (array (@witx pointer $excuse)))
+
+(module $arrays
+  (@interface func (export "reduce_excuses")
+    (param $excuses $const_excuse_array)
+    (result $error $errno)
+    (result $reduced $excuse)
+  )
+  (@interface func (export "populate_excuses")
+    (param $excuses $excuse_array)
+    (result $error $errno)
+  )
+)
