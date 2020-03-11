@@ -1,11 +1,13 @@
 name: "Pull Request Labeler"
 on:
-- pull_request
+  schedule:
+    # Run every 5 minutes.
+    - cron: '*/5 * * * *'
 
 jobs:
   triage:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/labeler@v2
+    - uses: bytecodealliance/labeler@schedule-fork
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
