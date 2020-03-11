@@ -53,7 +53,7 @@ WASMTIME_CONFIG_PROP(cranelift_opt_level, wasmtime_opt_level_t)
 //   optional.
 //
 // Returns `true` if conversion succeeded, or `false` if it failed.
-bool wasmtime_wat2wasm(
+WASM_API_EXTERN bool wasmtime_wat2wasm(
     wasm_engine_t *engine,
     const wasm_byte_vec_t *wat,
     own wasm_byte_vec_t *ret,

@@ -42,6 +42,7 @@ fn main() {
             .host(env!("TARGET"))
             .include("crates/c-api/include")
             .include("crates/c-api/wasm-c-api/include")
+            .define("WASM_API_EXTERN", Some("")) // static linkage, not dynamic
             .get_compiler()
             .to_command();
         if is_dir {
