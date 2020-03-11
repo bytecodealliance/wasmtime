@@ -207,7 +207,11 @@ impl UnwindInfo {
 
             let unwind_offset = (offset + size) as u8;
 
-            println!("inst offset {}: {}", offset, func.dfg.display_inst(inst, isa));
+            println!(
+                "inst offset {}: {}",
+                offset,
+                func.dfg.display_inst(inst, isa)
+            );
 
             match func.dfg[inst] {
                 InstructionData::Unary { opcode, arg } => {
@@ -221,12 +225,15 @@ impl UnwindInfo {
                             });
                         }
                         Opcode::AdjustSpDown => {
+                            let stack_size =
+                                stack_size.expect("expected a previous stack size instruction");
+                            static_frame_allocation_size += stack_size;
+
                             // This is used when calling a stack check function
                             // We need to track the assignment to RAX which has the size of the stack
                             unwind_codes.push(UnwindCode::StackAlloc {
                                 offset: unwind_offset,
-                                size: stack_size
-                                    .expect("expected a previous stack size instruction"),
+                                size: stack_size,
                             });
                         }
                         _ => {}
@@ -335,13 +342,13 @@ impl UnwindInfo {
             return None;
         }
 
-        if static_frame_allocation_size > 240 && saved_fpr {
-            panic!("stack frame is too large to use with Windows x64 SEH when preserving FPRs");
-        }
-        if static_frame_allocation_size % 16 != 0 {
-            eprintln!("static frame allocation size: {}", static_frame_allocation_size);
-            panic!("bad frame size");
-        } else {
+        if saved_fpr {
+            if static_frame_allocation_size > 240 && saved_fpr {
+                panic!("stack frame is too large to use with Windows x64 SEH when preserving FPRs");
+            }
+            // Only test static frame size is 16-byte aligned when an FPR is saved to avoid
+            // panicking when alignment is elided because no FPRs are saved and no child calls are
+            // made.
             assert!(
                 static_frame_allocation_size % 16 == 0,
                 "static frame allocation must be a multiple of 16"
