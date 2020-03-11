@@ -52,7 +52,7 @@ fn main() {
             cmd.arg(format!("examples/{}.c", example));
         }
         let exe = if cfg!(windows) {
-            cmd.arg("target/release/wasmtime.lib")
+            cmd.arg("target/debug/wasmtime.lib")
                 .arg("ws2_32.lib")
                 .arg("advapi32.lib")
                 .arg("userenv.lib")
@@ -61,7 +61,7 @@ fn main() {
                 .arg("ole32.lib");
             "./main.exe"
         } else {
-            cmd.arg("target/release/libwasmtime.a").arg("-o").arg("foo");
+            cmd.arg("target/debug/libwasmtime.a").arg("-o").arg("foo");
             "./foo"
         };
         if cfg!(target_os = "linux") {
