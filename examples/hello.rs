@@ -20,7 +20,7 @@ fn main() -> Result<()> {
     // Here we handle the imports of the module, which in this case is our
     // `HelloCallback` type and its associated implementation of `Callback.
     println!("Creating callback...");
-    let hello_func = Func::wrap0(&store, || {
+    let hello_func = Func::wrap(&store, || {
         println!("Calling back...");
         println!("> Hello World!");
     });

@@ -182,24 +182,26 @@ pub fn define_struct(args: TokenStream) -> TokenStream {
             }
 
             let format_str = format!("{}({})", name, formats.join(", "));
-            let wrap = format_ident!("wrap{}", shim_arg_decls.len() + 1);
             ctor_externs.push(quote! {
                 let my_cx = cx.clone();
-                let #name_ident = wasmtime::Func::#wrap(
+                let #name_ident = wasmtime::Func::wrap(
                     store,
-                    move |mem: crate::WasiCallerMemory #(,#shim_arg_decls)*| -> #ret_ty {
+                    move |caller: wasmtime::Caller<'_> #(,#shim_arg_decls)*| -> #ret_ty {
                         log::trace!(
                             #format_str,
                             #(#format_args),*
                         );
                         unsafe {
-                            let memory = match mem.get() {
-                                Ok(e) => e,
-                                Err(e) => #handle_early_error,
+                            let memory = match caller.get_export("memory") {
+                                Some(wasmtime::Extern::Memory(m)) => m,
+                                _ => {
+                                    let e = wasi_common::wasi::__WASI_ERRNO_INVAL;
+                                    #handle_early_error
+                                }
                             };
                             hostcalls::#name_ident(
                                 &mut my_cx.borrow_mut(),
-                                memory,
+                                memory.data_unchecked_mut(),
                                 #(#hostcall_args),*
                             ) #cvt_ret
                         }
