@@ -1075,7 +1075,7 @@ impl CallAdapter {
             }
             I32ToS32 => {
                 let val = pop(stack, ValType::I32).unwrap_i32();
-                stack.push(Val::S32(val as i32));
+                stack.push(Val::S32(val));
             }
             I32ToU32 => {
                 let val = pop(stack, ValType::I32).unwrap_i32();
@@ -1137,7 +1137,7 @@ impl CallAdapter {
             }
             I64ToS64 => {
                 let val = pop(stack, ValType::I64).unwrap_i64();
-                stack.push(Val::S64(val as i64));
+                stack.push(Val::S64(val));
             }
             I64ToU64 => {
                 let val = pop(stack, ValType::I64).unwrap_i64();
