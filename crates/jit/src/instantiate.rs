@@ -56,7 +56,6 @@ struct RawCompiledModule<'data> {
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<GdbJitImageRegistration>,
     trap_registration: TrapRegistration,
-    sig_registry: Arc<SignatureRegistry>,
 }
 
 impl<'data> RawCompiledModule<'data> {
@@ -149,7 +148,6 @@ impl<'data> RawCompiledModule<'data> {
             signatures: signatures.into_boxed_slice(),
             dbg_jit_registration,
             trap_registration,
-            sig_registry: compiler.signatures().clone(),
         })
     }
 }
@@ -163,7 +161,6 @@ pub struct CompiledModule {
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
     trap_registration: TrapRegistration,
-    sig_registry: Arc<SignatureRegistry>,
 }
 
 impl CompiledModule {
@@ -188,7 +185,6 @@ impl CompiledModule {
             raw.signatures.clone(),
             raw.dbg_jit_registration,
             raw.trap_registration,
-            raw.sig_registry,
         ))
     }
 
@@ -201,7 +197,6 @@ impl CompiledModule {
         signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         dbg_jit_registration: Option<GdbJitImageRegistration>,
         trap_registration: TrapRegistration,
-        sig_registry: Arc<SignatureRegistry>,
     ) -> Self {
         Self {
             module: Arc::new(module),
@@ -211,7 +206,6 @@ impl CompiledModule {
             signatures,
             dbg_jit_registration: dbg_jit_registration.map(Rc::new),
             trap_registration,
-            sig_registry,
         }
     }
 
@@ -228,6 +222,7 @@ impl CompiledModule {
         &self,
         is_bulk_memory: bool,
         resolver: &mut dyn Resolver,
+        sig_registry: &SignatureRegistry,
     ) -> Result<InstanceHandle, InstantiationError> {
         let data_initializers = self
             .data_initializers
@@ -237,7 +232,7 @@ impl CompiledModule {
                 data: &*init.data,
             })
             .collect::<Vec<_>>();
-        let imports = resolve_imports(&self.module, &self.sig_registry, resolver)?;
+        let imports = resolve_imports(&self.module, &sig_registry, resolver)?;
         InstanceHandle::new(
             Arc::clone(&self.module),
             self.trap_registration.clone(),
@@ -304,7 +299,10 @@ pub unsafe fn instantiate(
     is_bulk_memory: bool,
     profiler: Option<&Arc<Mutex<Box<dyn ProfilingAgent + Send>>>>,
 ) -> Result<InstanceHandle, SetupError> {
-    let instance = CompiledModule::new(compiler, data, debug_info, profiler)?
-        .instantiate(is_bulk_memory, resolver)?;
+    let instance = CompiledModule::new(compiler, data, debug_info, profiler)?.instantiate(
+        is_bulk_memory,
+        resolver,
+        compiler.signatures(),
+    )?;
     Ok(instance)
 }

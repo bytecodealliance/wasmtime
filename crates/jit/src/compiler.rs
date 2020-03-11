@@ -11,7 +11,6 @@ use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_wasm::ModuleTranslationState;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::sync::Arc;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
@@ -54,7 +53,7 @@ pub struct Compiler {
 
     code_memory: CodeMemory,
     trap_registry: TrapRegistry,
-    signatures: Arc<SignatureRegistry>,
+    signatures: SignatureRegistry,
     strategy: CompilationStrategy,
     cache_config: CacheConfig,
 }
@@ -69,7 +68,7 @@ impl Compiler {
         Self {
             isa,
             code_memory: CodeMemory::new(),
-            signatures: Arc::new(SignatureRegistry::new()),
+            signatures: SignatureRegistry::new(),
             strategy,
             trap_registry: TrapRegistry::default(),
             cache_config,
@@ -258,7 +257,7 @@ impl Compiler {
     }
 
     /// Shared signature registry.
-    pub fn signatures(&self) -> &Arc<SignatureRegistry> {
+    pub fn signatures(&self) -> &SignatureRegistry {
         &self.signatures
     }
 
