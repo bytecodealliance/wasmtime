@@ -32,7 +32,7 @@ originally
 wasm_trap_t* callback(
   const wasm_val_t args[], wasm_val_t results[]
 ) {
-  printf("Calling back...\n> ");
+  printf("Calling back...\n");
   printf("> %"PRIu32" %"PRIu64"\n", args[0].of.i32, args[1].of.i64);
   printf("\n");
 
@@ -162,8 +162,10 @@ int main(int argc, const char* argv[]) {
   printf("> %"PRIu64" %"PRIu32"\n",
     results[0].of.i64, results[1].of.i32);
 
-  assert(results[0].of.i32 == 2);
-  assert(results[1].of.i64 == 1);
+  assert(results[0].kind == WASM_I64);
+  assert(results[0].of.i64 == 2);
+  assert(results[1].kind == WASM_I32);
+  assert(results[1].of.i32 == 1);
 
   // Shut down.
   printf("Shutting down...\n");
