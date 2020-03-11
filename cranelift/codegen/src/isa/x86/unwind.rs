@@ -197,6 +197,8 @@ impl UnwindInfo {
         // save offsets to compute an offset from the frame base.
         let mut callee_save_offset = None;
 
+        let mut prologue_text = alloc::string::String::new();
+
         for (offset, inst, size) in func.inst_offsets(entry_block, &isa.encoding_info()) {
             // x64 ABI prologues cannot exceed 255 bytes in length
             if (offset + size) > 255 {
@@ -207,11 +209,11 @@ impl UnwindInfo {
 
             let unwind_offset = (offset + size) as u8;
 
-            println!(
-                "inst offset {}: {}",
+            prologue_text.push_str(&format!(
+                "offset {}: {} ; ",
                 offset,
                 func.dfg.display_inst(inst, isa)
-            );
+            ));
 
             match func.dfg[inst] {
                 InstructionData::Unary { opcode, arg } => {
@@ -344,7 +346,7 @@ impl UnwindInfo {
 
         if saved_fpr {
             if static_frame_allocation_size > 240 && saved_fpr {
-                panic!("stack frame is too large to use with Windows x64 SEH when preserving FPRs");
+                panic!("stack frame is too large to use with Windows x64 SEH when preserving FPRs. size is {}, prologue is {}", static_frame_allocation_size, prologue_text);
             }
             // Only test static frame size is 16-byte aligned when an FPR is saved to avoid
             // panicking when alignment is elided because no FPRs are saved and no child calls are
