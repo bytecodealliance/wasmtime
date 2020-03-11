@@ -77,7 +77,7 @@
 (assert_return (invoke "i32-to-s8x" (i32.const 8)) (s8.const 8))
 (assert_return (invoke "i32-to-s8x" (i32.const -1)) (s8.const -1))
 (assert_trap (invoke "i32-to-s8x" (i32.const 0x100)) "overflow")
-(assert_trap (invoke "i32-to-s8x" (i32.const -129)) "overflow")
+(assert_trap (invoke "i32-to-s8x" (i32.const -0x81)) "overflow")
 
 (assert_return (invoke "i32-to-u8" (i32.const 0)) (u8.const 0))
 (assert_return (invoke "i32-to-u8" (i32.const 8)) (u8.const 8))
@@ -97,7 +97,7 @@
 (assert_return (invoke "i32-to-s16x" (i32.const 8)) (s16.const 8))
 (assert_return (invoke "i32-to-s16x" (i32.const -1)) (s16.const -1))
 (assert_trap (invoke "i32-to-s16x" (i32.const 0x10000)) "overflow")
-(assert_trap (invoke "i32-to-s16x" (i32.const -32769)) "overflow")
+(assert_trap (invoke "i32-to-s16x" (i32.const -0x8001)) "overflow")
 
 (assert_return (invoke "i32-to-u16" (i32.const 0)) (u16.const 0))
 (assert_return (invoke "i32-to-u16" (i32.const 8)) (u16.const 8))
@@ -141,7 +141,7 @@
 (assert_return (invoke "i64-to-s8x" (i64.const 8)) (s8.const 8))
 (assert_return (invoke "i64-to-s8x" (i64.const -1)) (s8.const -1))
 (assert_trap (invoke "i64-to-s8x" (i64.const 0x100)) "overflow")
-(assert_trap (invoke "i64-to-s8x" (i64.const -129)) "overflow")
+(assert_trap (invoke "i64-to-s8x" (i64.const -0x81)) "overflow")
 
 (assert_return (invoke "i64-to-u8" (i64.const 0)) (u8.const 0))
 (assert_return (invoke "i64-to-u8" (i64.const 8)) (u8.const 8))
@@ -161,7 +161,7 @@
 (assert_return (invoke "i64-to-s16x" (i64.const 8)) (s16.const 8))
 (assert_return (invoke "i64-to-s16x" (i64.const -1)) (s16.const -1))
 (assert_trap (invoke "i64-to-s16x" (i64.const 0x10000)) "overflow")
-(assert_trap (invoke "i64-to-s16x" (i64.const -32769)) "overflow")
+(assert_trap (invoke "i64-to-s16x" (i64.const -0x8001)) "overflow")
 
 (assert_return (invoke "i64-to-u16" (i64.const 0)) (u16.const 0))
 (assert_return (invoke "i64-to-u16" (i64.const 8)) (u16.const 8))
@@ -181,7 +181,7 @@
 (assert_return (invoke "i64-to-s32x" (i64.const 8)) (s32.const 8))
 (assert_return (invoke "i64-to-s32x" (i64.const -1)) (s32.const -1))
 (assert_trap (invoke "i64-to-s32x" (i64.const 0x100000000)) "overflow")
-(assert_trap (invoke "i64-to-s32x" (i64.const -2147483649)) "overflow")
+(assert_trap (invoke "i64-to-s32x" (i64.const -0x80000001)) "overflow")
 
 (assert_return (invoke "i64-to-s64" (i64.const 0)) (s64.const 0))
 (assert_return (invoke "i64-to-s64" (i64.const 8)) (s64.const 8))
