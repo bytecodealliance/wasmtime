@@ -107,6 +107,7 @@ fn into_table_type(tt: wasmparser::TableType) -> TableType {
 /// # use wasmtime::*;
 /// # fn main() -> anyhow::Result<()> {
 /// let store = Store::default();
+/// // Now we're using the WebAssembly text extension: `.wat`!
 /// let module = Module::from_file(&store, "path/to/foo.wat")?;
 /// # Ok(())
 /// # }
@@ -122,7 +123,7 @@ fn into_table_type(tt: wasmparser::TableType) -> TableType {
 /// # let wasm_bytes: Vec<u8> = Vec::new();
 /// let module = Module::new(&store, &wasm_bytes)?;
 ///
-/// // also works with the text format!
+/// // It also works with the text format!
 /// let module = Module::new(&store, "(module (func))")?;
 /// # Ok(())
 /// # }
@@ -209,7 +210,7 @@ impl Module {
     /// # }
     /// ```
     ///
-    /// or you could also pass in a string to be parsed as the wasm text
+    /// Or you can also pass in a string to be parsed as the wasm text
     /// format:
     ///
     /// ```
@@ -255,7 +256,7 @@ impl Module {
     /// # }
     /// ```
     ///
-    /// and note that the text format is also supported:
+    /// The `.wat` text format is also supported:
     ///
     /// ```no_run
     /// # use wasmtime::*;
@@ -294,7 +295,7 @@ impl Module {
     /// # }
     /// ```
     ///
-    /// and note that the text format is not accepted by this function
+    /// Note that the text format is **not** accepted by this function:
     ///
     /// ```
     /// # use wasmtime::*;
@@ -496,12 +497,12 @@ impl Module {
     /// # fn main() -> anyhow::Result<()> {
     /// # let store = Store::default();
     /// let module = Module::new(&store, "(module)")?;
-    /// assert_eq!(module.exports().len(), 0);
+    /// assert!(module.exports().is_empty());
     /// # Ok(())
     /// # }
     /// ```
     ///
-    /// or otherwise you can take a look at various exports:
+    /// When the exports are not empty, you can inspect each export:
     ///
     /// ```
     /// # use wasmtime::*;
