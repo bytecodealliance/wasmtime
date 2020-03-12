@@ -91,7 +91,18 @@ impl ValType {
     /// `I64`, `F32`, `F64`).
     pub fn is_num(&self) -> bool {
         match self {
-            ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64 => true,
+            ValType::I32
+            | ValType::I64
+            | ValType::F32
+            | ValType::F64
+            | ValType::S8
+            | ValType::S16
+            | ValType::S32
+            | ValType::S64
+            | ValType::U8
+            | ValType::U16
+            | ValType::U32
+            | ValType::U64 => true,
             _ => false,
         }
     }
