@@ -2,7 +2,6 @@ name: "Subscribe to Label"
 on:
   issues:
     types: ["labeled"]
-on:
   schedule:
     # Run pull request triage every 5 minutes. Ideally, this would be on
     # "labeled" types of pull request events, but that doesn't work if the pull
