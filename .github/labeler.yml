@@ -49,3 +49,7 @@ wasi:
 
 "wasmtime:c-api":
   - crates/c-api/**
+
+"wasmtime:docs":
+  - *.md
+  - docs/**
