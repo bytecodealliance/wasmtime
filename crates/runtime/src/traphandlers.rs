@@ -87,6 +87,19 @@ pub unsafe fn raise_lib_trap(trap: Trap) -> ! {
     tls::with(|info| info.unwrap().unwind_with(UnwindReason::LibTrap(trap)))
 }
 
+/// Raises an out-of-memory trap immediately.
+///
+/// # Safety
+///
+/// Only safe to call when wasm code is on the stack, aka `wasmtime_call` or
+/// `wasmtime_call_trampoline` must have been previously called.
+pub unsafe fn raise_oom_trap() -> ! {
+    tls::with(|info| {
+        info.unwrap()
+            .unwind_with(UnwindReason::LibTrap(Trap::oom()))
+    })
+}
+
 /// Carries a Rust panic across wasm code and resumes the panic on the other
 /// side.
 ///
@@ -127,6 +140,12 @@ pub enum Trap {
         /// Native stack backtrace at the time the trap occurred
         backtrace: Backtrace,
     },
+
+    /// A trap indicating that the runtime was unable to allocate sufficient memory.
+    OOM {
+        /// Native stack backtrace at the time the OOM occurred
+        backtrace: Backtrace,
+    },
 }
 
 impl fmt::Display for Trap {
@@ -134,6 +153,7 @@ impl fmt::Display for Trap {
         match self {
             Trap::User(user) => user.fmt(f),
             Trap::Wasm { desc, .. } => desc.fmt(f),
+            Trap::OOM { .. } => write!(f, "Out of memory"),
         }
     }
 }
@@ -151,6 +171,14 @@ impl Trap {
         };
         let backtrace = Backtrace::new();
         Trap::Wasm { desc, backtrace }
+    }
+
+    /// Construct a new OOM trap with the given source location and trap code.
+    ///
+    /// Internally saves a backtrace when constructed.
+    pub fn oom() -> Self {
+        let backtrace = Backtrace::new();
+        Trap::OOM { backtrace }
     }
 }
 
@@ -191,6 +219,10 @@ where
     F: FnMut(),
 {
     return CallThreadState::new(vmctx).with(|cx| {
+        // Ensure that we have our sigaltstack installed.
+        #[cfg(unix)]
+        unix_sigaltstack::TLS.with(|_| ());
+
         RegisterSetjmp(
             cx.jmp_buf.as_ptr(),
             call_closure::<F>,
@@ -395,5 +427,122 @@ mod tls {
             let p = ptr.get();
             unsafe { closure(if p.is_null() { None } else { Some(&*p) }) }
         })
+    }
+}
+
+/// A module for registering a custom alternate signal stack (sigaltstack).
+///
+/// Rust's libstd installs an alternate stack with size `SIGSTKSZ`, which is not always
+/// large enough for our signal handling code, and which as of this writing does not
+/// have a guard page. Override it by creating and registering our own alternate stack
+/// that is large enough and has a guard page.
+#[cfg(unix)]
+mod unix_sigaltstack {
+    use std::cell::RefCell;
+    use std::convert::TryInto;
+    use std::ptr::null_mut;
+
+    thread_local! {
+        /// Thread-local state is lazy-initialized on the first time it's used, and dropped
+        /// when the thread exits.
+        pub(crate) static TLS: RefCell<Tls> = RefCell::new(unsafe { Tls::new() });
+    }
+
+    /// The size of the sigaltstack (not including the guard, which will be added).
+    /// Make this large enough to run our signal handlers.
+    static STACK_SIZE: usize = libc::SIGSTKSZ * 4;
+
+    /// A utility to register a new sigaltstack.
+    pub(crate) struct Tls {
+        guard_size: usize,
+        sigaltstack_alloc_size: usize,
+        new_stack: libc::stack_t,
+    }
+
+    impl Tls {
+        unsafe fn new() -> Self {
+            let page_size: usize = libc::sysconf(libc::_SC_PAGESIZE).try_into().unwrap();
+            let guard_size = page_size;
+
+            let mut me = Self {
+                guard_size,
+                sigaltstack_alloc_size: guard_size + STACK_SIZE,
+                new_stack: libc::stack_t {
+                    ss_sp: null_mut(),
+                    ss_flags: 0,
+                    ss_size: 0,
+                },
+            };
+
+            // Allocate memory.
+            let ptr = libc::mmap(
+                null_mut(),
+                me.sigaltstack_alloc_size,
+                libc::PROT_NONE,
+                libc::MAP_PRIVATE | libc::MAP_ANON,
+                -1,
+                0,
+            );
+            if ptr == libc::MAP_FAILED {
+                super::raise_oom_trap()
+            }
+
+            // Prepare the stack, register it, and sanity check the old stack.
+            let stack_ptr = (ptr as usize + me.guard_size) as *mut libc::c_void;
+            me.new_stack = libc::stack_t {
+                ss_sp: stack_ptr,
+                ss_flags: 0,
+                ss_size: STACK_SIZE,
+            };
+            let r = libc::mprotect(stack_ptr, STACK_SIZE, libc::PROT_READ | libc::PROT_WRITE);
+            assert_eq!(r, 0, "mprotect to configure memory for sigaltstack failed");
+
+            // Register the new alternate stack (and record the old one, so we can sanity-check it).
+            let mut old_stack = libc::stack_t {
+                ss_sp: null_mut(),
+                ss_flags: 0,
+                ss_size: 0,
+            };
+            let r = libc::sigaltstack(&mut me.new_stack, &mut old_stack);
+            assert_eq!(r, 0, "registering new sigaltstack failed");
+
+            // Sanity-check the old stack.
+            assert_eq!(
+                old_stack.ss_flags, 0,
+                "old sigaltstack had unexpected flags set"
+            );
+            assert!(
+                old_stack.ss_size <= STACK_SIZE,
+                "old sigaltstack had a larger stack"
+            );
+
+            me
+        }
+    }
+
+    impl Drop for Tls {
+        fn drop(&mut self) {
+            unsafe {
+                // We expect Rust's libstd to have unregistered our sigaltstack by this point.
+                // Confirm that it has.
+                let mut old_stack = libc::stack_t {
+                    ss_sp: null_mut(),
+                    ss_flags: 0,
+                    ss_size: 0,
+                };
+                let r = libc::sigaltstack(null_mut(), &mut old_stack);
+                assert_eq!(r, 0, "querying for our sigaltstack failed");
+                assert_ne!(
+                    old_stack.ss_sp, self.new_stack.ss_sp,
+                    "Rust's runtime didn't unregister our sigaltstack"
+                );
+
+                // Deallocate the stack memory.
+                let alloc_ptr =
+                    (self.new_stack.ss_sp as usize - self.guard_size) as *mut libc::c_void;
+                let r = libc::munmap(alloc_ptr, self.sigaltstack_alloc_size);
+                assert_eq!(r, 0, "munmap failed during thread shutdown");
+            }
+        }
     }
 }
