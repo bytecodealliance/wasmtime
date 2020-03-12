@@ -34,6 +34,7 @@ winapi = { version = "0.3.7", features = ["winnt", "impl-default"] }
 
 [features]
 lightbeam = ["wasmtime-environ/lightbeam"]
+jitdump = ["wasmtime-profiling/jitdump"]
 
 [badges]
 maintenance = { status = "actively-developed" }

@@ -2433,7 +2433,6 @@ dependencies = [
  "wasmtime-environ",
  "wasmtime-jit",
  "wasmtime-obj",
- "wasmtime-profiling",
  "wasmtime-runtime",
  "wasmtime-wasi",
  "wasmtime-wast",
@@ -2555,6 +2554,8 @@ dependencies = [
 name = "wasmtime-profiling"
 version = "0.12.0"
 dependencies = [
+ "anyhow",
+ "cfg-if",
  "gimli",
  "goblin",
  "lazy_static",
@@ -2563,6 +2564,8 @@ dependencies = [
  "scroll",
  "serde",
  "target-lexicon",
+ "wasmtime-environ",
+ "wasmtime-runtime",
 ]
 
 [[package]]
@@ -2592,7 +2595,6 @@ dependencies = [
  "region",
  "thiserror",
  "wasmtime-environ",
- "wasmtime-profiling",
  "winapi",
 ]
 

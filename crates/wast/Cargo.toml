@@ -12,11 +12,11 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.19"
-wasmtime = { path = "../api", version = "0.12.0" }
+wasmtime = { path = "../api", version = "0.12.0", default-features = false }
 wast = "11.0.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
 
 [features]
-lightbeam = []
+lightbeam = ["wasmtime/lightbeam"]

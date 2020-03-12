@@ -25,6 +25,12 @@ enum wasmtime_opt_level_enum { // OptLevel
   WASMTIME_OPT_LEVEL_SPEED_AND_SIZE,
 };
 
+typedef uint8_t wasmtime_profiling_strategy_t;
+enum wasmtime_profiling_strategy_t { // ProfilingStrategy
+  WASMTIME_PROFILING_STRATEGY_NONE,
+  WASMTIME_PROFILING_STRATEGY_JITDUMP,
+};
+
 #define WASMTIME_CONFIG_PROP(name, ty) \
     WASM_API_EXTERN void wasmtime_config_##name##_set(wasm_config_t*, ty);
 
@@ -37,6 +43,7 @@ WASMTIME_CONFIG_PROP(wasm_multi_value, bool)
 WASMTIME_CONFIG_PROP(strategy, wasmtime_strategy_t)
 WASMTIME_CONFIG_PROP(cranelift_debug_verifier, bool)
 WASMTIME_CONFIG_PROP(cranelift_opt_level, wasmtime_opt_level_t)
+WASMTIME_CONFIG_PROP(profiler, wasmtime_profiling_strategy_t)
 
 ///////////////////////////////////////////////////////////////////////////////
 

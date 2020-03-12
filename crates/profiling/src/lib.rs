@@ -1,40 +1,36 @@
 use std::error::Error;
 use std::fmt;
+use wasmtime_environ::entity::{EntityRef, PrimaryMap};
+use wasmtime_environ::wasm::DefinedFuncIndex;
+use wasmtime_environ::Module;
+use wasmtime_runtime::VMFunctionBody;
 
-#[cfg(feature = "jitdump")]
-mod jitdump;
-
-#[cfg(feature = "jitdump")]
-pub use crate::jitdump::JitDumpAgent;
-
-#[cfg(not(feature = "jitdump"))]
-pub type JitDumpAgent = NullProfilerAgent;
-
-/// Select which profiling technique to use
-#[derive(Debug, Clone, Copy)]
-pub enum ProfilingStrategy {
-    /// No profiler support
-    NullProfiler,
-
-    /// Collect profile for jitdump file format
-    JitDumpProfiler,
+cfg_if::cfg_if! {
+    if #[cfg(all(feature = "jitdump", target_os = "linux"))] {
+        #[path = "jitdump_linux.rs"]
+        mod jitdump;
+    } else {
+        #[path = "jitdump_disabled.rs"]
+        mod jitdump;
+    }
 }
 
+pub use crate::jitdump::JitDumpAgent;
+
 /// Common interface for profiling tools.
-pub trait ProfilingAgent {
+pub trait ProfilingAgent: Send + Sync + 'static {
     /// Notify the profiler of a new module loaded into memory
     fn module_load(
-        &mut self,
-        module_name: &str,
-        addr: *const u8,
-        len: usize,
+        &self,
+        module: &Module,
+        functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
         dbg_image: Option<&[u8]>,
     ) -> ();
 }
 
 /// Default agent for unsupported profiling build.
 #[derive(Debug, Default, Clone, Copy)]
-pub struct NullProfilerAgent {}
+pub struct NullProfilerAgent;
 
 #[derive(Debug)]
 struct NullProfilerAgentError;
@@ -55,11 +51,19 @@ impl Error for NullProfilerAgentError {
 
 impl ProfilingAgent for NullProfilerAgent {
     fn module_load(
-        &mut self,
-        _module_name: &str,
-        _addr: *const u8,
-        _len: usize,
+        &self,
+        _module: &Module,
+        _functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
         _dbg_image: Option<&[u8]>,
     ) -> () {
+    }
+}
+
+#[allow(dead_code)]
+fn debug_name(module: &Module, index: DefinedFuncIndex) -> String {
+    let index = module.local.func_index(index);
+    match module.func_names.get(&index) {
+        Some(s) => s.clone(),
+        None => format!("wasm::wasm-function[{}]", index.index()),
     }
 }
