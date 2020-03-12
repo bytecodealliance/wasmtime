@@ -27,10 +27,10 @@ cranelift:
   - cranelift/codegen/meta/**
 
 "cranelift:module":
-  - cranelift/cranelift-faerie/**
-  - cranelift/cranelift-module/**
-  - cranelift/cranelift-object/**
-  - cranelift/cranelift-simplejit/**
+  - cranelift/faerie/**
+  - cranelift/module/**
+  - cranelift/object/**
+  - cranelift/simplejit/**
 
 "cranelift:wasm":
   - cranelift/wasm/**
