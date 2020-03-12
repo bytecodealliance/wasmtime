@@ -96,6 +96,31 @@
  (@interface func (export "u64-to-i32x") (param u64) (result i32)
    arg.get 0
    u64-to-i32x)
+
+ (@interface func (export "s8-to-i64") (param s8) (result i64)
+   arg.get 0
+   s8-to-i64)
+ (@interface func (export "u8-to-i64") (param u8) (result i64)
+   arg.get 0
+   u8-to-i64)
+ (@interface func (export "s16-to-i64") (param s16) (result i64)
+   arg.get 0
+   s16-to-i64)
+ (@interface func (export "u16-to-i64") (param u16) (result i64)
+   arg.get 0
+   u16-to-i64)
+ (@interface func (export "s32-to-i64") (param s32) (result i64)
+   arg.get 0
+   s32-to-i64)
+ (@interface func (export "u32-to-i64") (param u32) (result i64)
+   arg.get 0
+   u32-to-i64)
+ (@interface func (export "s64-to-i64") (param s64) (result i64)
+   arg.get 0
+   s64-to-i64)
+ (@interface func (export "u64-to-i64") (param u64) (result i64)
+   arg.get 0
+   u64-to-i64)
 )
 
 (assert_return (invoke "i32-to-s8"   (i32.const -0x00000080)) (s8.const   0x80))
@@ -371,3 +396,53 @@
 (assert_return (invoke "u64-to-i32x" (u64.const  0x0000000000000001)) (i32.const  0x00000001))
 (assert_trap   (invoke "u64-to-i32x" (u64.const  0x0000000100000000)) "overflow")
 (assert_trap   (invoke "u64-to-i32x" (u64.const  0x0000000100000001)) "overflow")
+
+
+
+(assert_return (invoke "s8-to-i64"  (s8.const 0x80)) (i64.const -0x0000000000000080))
+(assert_return (invoke "s8-to-i64"  (s8.const 0xff)) (i64.const  0xffffffffffffffff))
+(assert_return (invoke "s8-to-i64"  (s8.const 0x00)) (i64.const  0x0000000000000000))
+(assert_return (invoke "s8-to-i64"  (s8.const 0x01)) (i64.const  0x0000000000000001))
+(assert_return (invoke "s8-to-i64"  (s8.const 0x7f)) (i64.const  0x000000000000007f))
+
+(assert_return (invoke "u8-to-i64"  (u8.const 0x80)) (i64.const  0x0000000000000080))
+(assert_return (invoke "u8-to-i64"  (u8.const 0xff)) (i64.const  0x00000000000000ff))
+(assert_return (invoke "u8-to-i64"  (u8.const 0x00)) (i64.const  0x0000000000000000))
+(assert_return (invoke "u8-to-i64"  (u8.const 0x01)) (i64.const  0x0000000000000001))
+(assert_return (invoke "u8-to-i64"  (u8.const 0x7f)) (i64.const  0x000000000000007f))
+
+(assert_return (invoke "s16-to-i64" (s16.const 0x8000)) (i64.const -0x0000000000008000))
+(assert_return (invoke "s16-to-i64" (s16.const 0xffff)) (i64.const  0xffffffffffffffff))
+(assert_return (invoke "s16-to-i64" (s16.const 0x0000)) (i64.const  0x0000000000000000))
+(assert_return (invoke "s16-to-i64" (s16.const 0x0001)) (i64.const  0x0000000000000001))
+(assert_return (invoke "s16-to-i64" (s16.const 0x7fff)) (i64.const  0x0000000000007fff))
+
+(assert_return (invoke "u16-to-i64" (u16.const 0x8000)) (i64.const  0x0000000000008000))
+(assert_return (invoke "u16-to-i64" (u16.const 0xffff)) (i64.const  0x000000000000ffff))
+(assert_return (invoke "u16-to-i64" (u16.const 0x0000)) (i64.const  0x0000000000000000))
+(assert_return (invoke "u16-to-i64" (u16.const 0x0001)) (i64.const  0x0000000000000001))
+(assert_return (invoke "u16-to-i64" (u16.const 0x7fff)) (i64.const  0x0000000000007fff))
+
+(assert_return (invoke "s32-to-i64" (s32.const 0x80000000)) (i64.const -0x0000000080000000))
+(assert_return (invoke "s32-to-i64" (s32.const 0xffffffff)) (i64.const  0xffffffffffffffff))
+(assert_return (invoke "s32-to-i64" (s32.const 0x00000000)) (i64.const  0x0000000000000000))
+(assert_return (invoke "s32-to-i64" (s32.const 0x00000001)) (i64.const  0x0000000000000001))
+(assert_return (invoke "s32-to-i64" (s32.const 0x7fffffff)) (i64.const  0x000000007fffffff))
+
+(assert_return (invoke "u32-to-i64" (u32.const 0x80000000)) (i64.const  0x0000000080000000))
+(assert_return (invoke "u32-to-i64" (u32.const 0xffffffff)) (i64.const  0x00000000ffffffff))
+(assert_return (invoke "u32-to-i64" (u32.const 0x00000000)) (i64.const  0x0000000000000000))
+(assert_return (invoke "u32-to-i64" (u32.const 0x00000001)) (i64.const  0x0000000000000001))
+(assert_return (invoke "u32-to-i64" (u32.const 0x7fffffff)) (i64.const  0x000000007fffffff))
+
+(assert_return (invoke "s64-to-i64" (s64.const 0x8000000000000000)) (i64.const -0x8000000000000000))
+(assert_return (invoke "s64-to-i64" (s64.const 0xffffffffffffffff)) (i64.const  0xffffffffffffffff))
+(assert_return (invoke "s64-to-i64" (s64.const 0x0000000000000000)) (i64.const  0x0000000000000000))
+(assert_return (invoke "s64-to-i64" (s64.const 0x0000000000000001)) (i64.const  0x0000000000000001))
+(assert_return (invoke "s64-to-i64" (s64.const 0x7fffffffffffffff)) (i64.const  0x7fffffffffffffff))
+
+(assert_return (invoke "u64-to-i64" (u64.const 0x8000000000000000)) (i64.const  0x8000000000000000))
+(assert_return (invoke "u64-to-i64" (u64.const 0xffffffffffffffff)) (i64.const  0xffffffffffffffff))
+(assert_return (invoke "u64-to-i64" (u64.const 0x0000000000000000)) (i64.const  0x0000000000000000))
+(assert_return (invoke "u64-to-i64" (u64.const 0x0000000000000001)) (i64.const  0x0000000000000001))
+(assert_return (invoke "u64-to-i64" (u64.const 0x7fffffffffffffff)) (i64.const  0x7fffffffffffffff))
