@@ -1,7 +1,8 @@
 [package]
 name = "wiggle"
 version = "0.1.0"
-authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkonk@jakubkonka.com>"]
+authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkonk@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
+license = "Apache-2.0 WITH LLVM-exception"
 edition = "2018"
 
 [lib]
