@@ -5,25 +5,16 @@ use pyo3::exceptions::Exception;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict, PyTuple};
 use std::rc::Rc;
-use wasmtime_interface_types::ModuleData;
 
 // TODO support non-export functions
 #[pyclass]
 pub struct Function {
-    pub instance: wasmtime::Instance,
-    pub export_name: String,
-    pub args_types: Vec<wasmtime::ValType>,
-    pub data: Rc<ModuleData>,
+    pub func: wasmtime::Func,
 }
 
 impl Function {
     pub fn func(&self) -> wasmtime::Func {
-        let e = self
-            .instance
-            .get_export(&self.export_name)
-            .expect("named export")
-            .clone();
-        e.func().expect("function export").clone()
+        self.func.clone()
     }
 }
 
@@ -37,11 +28,11 @@ impl Function {
             runtime_args.push(pyobj_to_value(py, item)?);
         }
         let results = self
-            .data
-            .invoke_export(&self.instance, self.export_name.as_str(), &runtime_args)
-            .map_err(crate::err2py)?;
+            .func
+            .call(&runtime_args)
+            .map_err(|e| crate::err2py(e.into()))?;
         let mut py_results = Vec::new();
-        for result in results {
+        for result in results.into_vec() {
             py_results.push(value_to_pyobj(py, result)?);
         }
         if py_results.len() == 1 {

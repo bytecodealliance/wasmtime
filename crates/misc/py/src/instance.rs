@@ -4,13 +4,10 @@ use crate::function::Function;
 use crate::memory::Memory;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use std::rc::Rc;
-use wasmtime_interface_types::ModuleData;
 
 #[pyclass]
 pub struct Instance {
     pub instance: wasmtime::Instance,
-    pub data: Rc<ModuleData>,
 }
 
 #[pymethods]
@@ -31,10 +28,7 @@ impl Instance {
                     let f = Py::new(
                         py,
                         Function {
-                            instance: self.instance.clone(),
-                            data: self.data.clone(),
-                            export_name: e.name().to_string(),
-                            args_types,
+                            func: self.instance.exports()[i].func().unwrap().clone(),
                         },
                     )?;
                     exports.set_item(e.name().to_string(), f)?;
