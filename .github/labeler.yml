@@ -37,6 +37,7 @@ lightbeam:
 
 fuzzing:
   - crates/fuzzing/**
+  - fuzz/**
 
 wasi:
   - crates/wasi/**
