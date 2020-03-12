@@ -122,6 +122,14 @@ impl ValType {
             ValType::F32 => Some(ir::types::F32),
             ValType::F64 => Some(ir::types::F64),
             ValType::V128 => Some(ir::types::I8X16),
+            ValType::S8 => Some(ir::types::I8),
+            ValType::S16 => Some(ir::types::I16),
+            ValType::S32 => Some(ir::types::I32),
+            ValType::S64 => Some(ir::types::I64),
+            ValType::U8 => Some(ir::types::I8),
+            ValType::U16 => Some(ir::types::I16),
+            ValType::U32 => Some(ir::types::I32),
+            ValType::U64 => Some(ir::types::I64),
             _ => None,
         }
     }
