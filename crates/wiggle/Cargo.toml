@@ -4,16 +4,22 @@ version = "0.1.0"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkonk@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 license = "Apache-2.0 WITH LLVM-exception"
 edition = "2018"
+description = "Wiggle code generator"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+include = ["src/**/*", "LICENSE"]
 
 [lib]
 proc-macro = true
 
 [dependencies]
-wiggle-generate = { path = "crates/generate" }
+wiggle-generate = { path = "crates/generate", version = "0.1.0" }
 witx = "0.8.3"
 syn = { version = "1.0", features = ["full"] }
 
 [dev-dependencies]
-wiggle-runtime = { path = "crates/runtime" }
-wiggle-test = { path = "crates/test" }
+wiggle-runtime = { path = "crates/runtime", version = "0.1.0" }
+wiggle-test = { path = "crates/test", version = "0.1.0" }
 proptest = "0.9"
