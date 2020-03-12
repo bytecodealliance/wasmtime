@@ -25,7 +25,7 @@ impl<'a> flags::Flags for WasiCtx<'a> {
 }
 
 fn car_config_strat() -> impl Strategy<Value = types::CarConfig> {
-    (1u8..=types::CarConfig::ALL_FLAGS.into())
+    (1u8..=types::CarConfig::all().into())
         .prop_map(|v| {
             types::CarConfig::try_from(v).expect("invalid value for types::CarConfig flag")
         })
