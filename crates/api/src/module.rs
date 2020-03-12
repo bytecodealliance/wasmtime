@@ -1191,29 +1191,37 @@ impl CallAdapter {
                 }
             }
 
-            i @ S8ToI64 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            S8ToI64 => {
+                let val = pop(stack, ValType::S8).unwrap_s8();
+                stack.push(Val::I64(val as i64));
             }
-            i @ U8ToI64 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            U8ToI64 => {
+                let val = pop(stack, ValType::U8).unwrap_u8();
+                stack.push(Val::I64(val as i64));
             }
-            i @ S16ToI64 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            S16ToI64 => {
+                let val = pop(stack, ValType::S16).unwrap_s16();
+                stack.push(Val::I64(val as i64));
             }
-            i @ U16ToI64 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            U16ToI64 => {
+                let val = pop(stack, ValType::U16).unwrap_u16();
+                stack.push(Val::I64(val as i64));
             }
-            i @ S32ToI64 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            S32ToI64 => {
+                let val = pop(stack, ValType::S32).unwrap_s32();
+                stack.push(Val::I64(val as i64));
             }
-            i @ U32ToI64 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            U32ToI64 => {
+                let val = pop(stack, ValType::U32).unwrap_u32();
+                stack.push(Val::I64(val as i64));
             }
-            i @ S64ToI64 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            S64ToI64 => {
+                let val = pop(stack, ValType::S64).unwrap_s64();
+                stack.push(Val::I64(val));
             }
-            i @ U64ToI64 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            U64ToI64 => {
+                let val = pop(stack, ValType::U64).unwrap_u64();
+                stack.push(Val::I64(val as i64));
             }
         }
 
