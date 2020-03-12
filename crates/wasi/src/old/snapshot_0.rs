@@ -1,5 +1,5 @@
 use wasi_common::old::snapshot_0::hostcalls;
-use wasi_common::old::snapshot_0::WasiCtx;
+pub use wasi_common::old::snapshot_0::{WasiCtx, WasiCtxBuilder};
 
 // Defines a `struct Wasi` with member fields and appropriate APIs for dealing
 // with all the various WASI exports.

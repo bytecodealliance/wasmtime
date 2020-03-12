@@ -6,8 +6,6 @@ use pyo3::exceptions::Exception;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes, PyDict, PySet};
 use pyo3::wrap_pyfunction;
-use std::rc::Rc;
-use wasmtime_interface_types::ModuleData;
 
 mod function;
 mod instance;
@@ -84,36 +82,35 @@ pub fn instantiate(
 
     let module = wasmtime::Module::new(&store, wasm_data).map_err(err2py)?;
 
-    let data = Rc::new(ModuleData::new(wasm_data).map_err(err2py)?);
-
     // If this module expects to be able to use wasi then go ahead and hook
     // that up into the imported crates.
-    let wasi = if let Some(module_name) = data.find_wasi_module_name() {
-        let cx = wasmtime_wasi::WasiCtxBuilder::new()
-            .build()
-            .map_err(|e| err2py(e.into()))?;
-        let wasi = wasmtime_wasi::Wasi::new(&store, cx);
-        Some((module_name, wasi))
-    } else {
-        None
-    };
+    let cx = wasmtime_wasi::WasiCtxBuilder::new()
+        .build()
+        .map_err(|e| err2py(e.into()))?;
+    let wasi_snapshot_preview1 = wasmtime_wasi::Wasi::new(&store, cx);
+    let cx = wasmtime_wasi::old::snapshot_0::WasiCtxBuilder::new()
+        .build()
+        .map_err(|e| err2py(e.into()))?;
+    let wasi_snapshot = wasmtime_wasi::old::snapshot_0::Wasi::new(&store, cx);
 
     let mut imports: Vec<wasmtime::Extern> = Vec::new();
     for i in module.imports() {
+        if i.module() == "wasi_snapshot" {
+            if let Some(func) = wasi_snapshot.get_export(i.name()) {
+                imports.push(func.clone().into());
+                continue;
+            }
+        }
+        if i.module() == "wasi_snapshot_preview1" {
+            if let Some(func) = wasi_snapshot_preview1.get_export(i.name()) {
+                imports.push(func.clone().into());
+                continue;
+            }
+        }
         let module_name = i.module();
         if let Some(m) = import_obj.get_item(module_name) {
             let e = find_export_in(m, &store, i.name())?;
             imports.push(e);
-        } else if wasi.is_some() && module_name == wasi.as_ref().unwrap().0 {
-            let e = wasi
-                .as_ref()
-                .unwrap()
-                .1
-                .get_export(i.name())
-                .ok_or_else(|| {
-                    PyErr::new::<Exception, _>(format!("wasi export {} is not found", i.name(),))
-                })?;
-            imports.push(e.clone().into());
         } else {
             return Err(PyErr::new::<Exception, _>(format!(
                 "imported module {} is not found",
@@ -127,7 +124,7 @@ pub fn instantiate(
 
     let module = Py::new(py, Module { module })?;
 
-    let instance = Py::new(py, Instance { instance, data })?;
+    let instance = Py::new(py, Instance { instance })?;
 
     Py::new(py, InstantiateResultObject { instance, module })
 }

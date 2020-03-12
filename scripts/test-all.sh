@@ -59,7 +59,6 @@ RUST_BACKTRACE=1 cargo test \
   --package wasmtime-environ \
   --package wasmtime-runtime \
   --package wasmtime-jit \
-  --package wasmtime-interface-types \
   --package wasmtime-obj \
   --package wiggle \
   --package wiggle-generate \

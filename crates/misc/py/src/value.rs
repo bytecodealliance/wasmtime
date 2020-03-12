@@ -3,36 +3,30 @@
 use pyo3::exceptions::Exception;
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
-use wasmtime_interface_types::Value;
+use wasmtime::Val;
 
-pub fn pyobj_to_value(_: Python, p: &PyAny) -> PyResult<Value> {
+pub fn pyobj_to_value(_: Python, p: &PyAny) -> PyResult<Val> {
     if let Ok(n) = p.extract() {
-        Ok(Value::I32(n))
+        Ok(Val::I32(n))
     } else if let Ok(n) = p.extract() {
-        Ok(Value::U32(n))
+        Ok(Val::I64(n))
     } else if let Ok(n) = p.extract() {
-        Ok(Value::I64(n))
+        Ok(Val::F64(n))
     } else if let Ok(n) = p.extract() {
-        Ok(Value::U64(n))
-    } else if let Ok(n) = p.extract() {
-        Ok(Value::F64(n))
-    } else if let Ok(n) = p.extract() {
-        Ok(Value::F32(n))
-    } else if let Ok(s) = p.extract() {
-        Ok(Value::String(s))
+        Ok(Val::F32(n))
     } else {
         Err(PyErr::new::<Exception, _>("unsupported value type"))
     }
 }
 
-pub fn value_to_pyobj(py: Python, value: Value) -> PyResult<PyObject> {
+pub fn value_to_pyobj(py: Python, value: Val) -> PyResult<PyObject> {
     Ok(match value {
-        Value::I32(i) => i.into_py(py),
-        Value::U32(i) => i.into_py(py),
-        Value::I64(i) => i.into_py(py),
-        Value::U64(i) => i.into_py(py),
-        Value::F32(i) => i.into_py(py),
-        Value::F64(i) => i.into_py(py),
-        Value::String(i) => i.into_py(py),
+        Val::I32(i) => i.into_py(py),
+        Val::I64(i) => i.into_py(py),
+        Val::F32(i) => i.into_py(py),
+        Val::F64(i) => i.into_py(py),
+        Val::AnyRef(_) | Val::FuncRef(_) | Val::V128(_) => {
+            return Err(PyErr::new::<Exception, _>("unsupported value type"))
+        }
     })
 }

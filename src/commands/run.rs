@@ -10,8 +10,7 @@ use std::{
 };
 use structopt::{clap::AppSettings, StructOpt};
 use wasi_common::preopen_dir;
-use wasmtime::{Engine, Instance, Module, Store, Trap};
-use wasmtime_interface_types::ModuleData;
+use wasmtime::{Engine, Instance, Module, Store, Trap, Val, ValType};
 use wasmtime_wasi::{old::snapshot_0::Wasi as WasiSnapshot0, Wasi};
 
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
@@ -191,7 +190,7 @@ impl RunCommand {
         store: &Store,
         module_registry: &ModuleRegistry,
         path: &Path,
-    ) -> Result<(Instance, Module, Vec<u8>)> {
+    ) -> Result<(Instance, Module)> {
         // Read the wasm module binary either as `*.wat` or a raw binary
         let data = wat::parse_file(path)?;
 
@@ -223,47 +222,46 @@ impl RunCommand {
         let instance = Instance::new(&module, &imports)
             .context(format!("failed to instantiate {:?}", path))?;
 
-        Ok((instance, module, data))
+        Ok((instance, module))
     }
 
     fn handle_module(&self, store: &Store, module_registry: &ModuleRegistry) -> Result<()> {
-        let (instance, module, data) =
-            Self::instantiate_module(store, module_registry, &self.module)?;
+        let (instance, module) = Self::instantiate_module(store, module_registry, &self.module)?;
 
         // If a function to invoke was given, invoke it.
         if let Some(name) = self.invoke.as_ref() {
-            let data = ModuleData::new(&data)?;
-            self.invoke_export(instance, &data, name)?;
+            self.invoke_export(instance, name)?;
         } else if module
             .exports()
             .iter()
             .any(|export| export.name().is_empty())
         {
             // Launch the default command export.
-            let data = ModuleData::new(&data)?;
-            self.invoke_export(instance, &data, "")?;
+            self.invoke_export(instance, "")?;
         } else {
             // If the module doesn't have a default command export, launch the
             // _start function if one is present, as a compatibility measure.
-            let data = ModuleData::new(&data)?;
-            self.invoke_export(instance, &data, "_start")?;
+            self.invoke_export(instance, "_start")?;
         }
 
         Ok(())
     }
 
-    fn invoke_export(&self, instance: Instance, data: &ModuleData, name: &str) -> Result<()> {
-        use wasm_webidl_bindings::ast;
-        use wasmtime_interface_types::Value;
-
-        let mut handle = instance.handle().clone();
-
-        // Use the binding information in `ModuleData` to figure out what arguments
-        // need to be passed to the function that we're invoking. Currently we take
-        // the CLI parameters and attempt to parse them into function arguments for
-        // the function we'll invoke.
-        let binding = data.binding_for_export(&mut handle, name)?;
-        if !binding.param_types()?.is_empty() {
+    fn invoke_export(&self, instance: Instance, name: &str) -> Result<()> {
+        let pos = instance
+            .module()
+            .exports()
+            .iter()
+            .enumerate()
+            .find(|(_, e)| e.name() == name);
+        let (ty, export) = match pos {
+            Some((i, ty)) => match (ty.ty(), &instance.exports()[i]) {
+                (wasmtime::ExternType::Func(ty), wasmtime::Extern::Func(f)) => (ty, f),
+                _ => bail!("export of `{}` wasn't a function", name),
+            },
+            None => bail!("failed to find export of `{}` in module", name),
+        };
+        if ty.params().len() > 0 {
             eprintln!(
                 "warning: using `--invoke` with a function that takes arguments \
                  is experimental and may break in the future"
@@ -271,7 +269,7 @@ impl RunCommand {
         }
         let mut args = self.module_args.iter();
         let mut values = Vec::new();
-        for ty in binding.param_types()? {
+        for ty in ty.params() {
             let val = match args.next() {
                 Some(s) => s,
                 None => bail!("not enough arguments for `{}`", name),
@@ -280,26 +278,18 @@ impl RunCommand {
                 // TODO: integer parsing here should handle hexadecimal notation
                 // like `0x0...`, but the Rust standard library currently only
                 // parses base-10 representations.
-                ast::WebidlScalarType::Long => Value::I32(val.parse()?),
-                ast::WebidlScalarType::LongLong => Value::I64(val.parse()?),
-                ast::WebidlScalarType::UnsignedLong => Value::U32(val.parse()?),
-                ast::WebidlScalarType::UnsignedLongLong => Value::U64(val.parse()?),
-
-                ast::WebidlScalarType::Float | ast::WebidlScalarType::UnrestrictedFloat => {
-                    Value::F32(val.parse()?)
-                }
-                ast::WebidlScalarType::Double | ast::WebidlScalarType::UnrestrictedDouble => {
-                    Value::F64(val.parse()?)
-                }
-                ast::WebidlScalarType::DomString => Value::String(val.to_string()),
+                ValType::I32 => Val::I32(val.parse()?),
+                ValType::I64 => Val::I64(val.parse()?),
+                ValType::F32 => Val::F32(val.parse()?),
+                ValType::F64 => Val::F64(val.parse()?),
                 t => bail!("unsupported argument type {:?}", t),
             });
         }
 
         // Invoke the function and then afterwards print all the results that came
         // out, if there are any.
-        let results = data
-            .invoke_export(&instance, name, &values)
+        let results = export
+            .call(&values)
             .with_context(|| format!("failed to invoke `{}`", name))?;
         if !results.is_empty() {
             eprintln!(
@@ -307,8 +297,17 @@ impl RunCommand {
                  is experimental and may break in the future"
             );
         }
-        for result in results {
-            println!("{}", result);
+
+        for result in results.into_vec() {
+            match result {
+                Val::I32(i) => println!("{}", i),
+                Val::I64(i) => println!("{}", i),
+                Val::F32(f) => println!("{}", f),
+                Val::F64(f) => println!("{}", f),
+                Val::AnyRef(_) => println!("<anyref>"),
+                Val::FuncRef(_) => println!("<anyref>"),
+                Val::V128(i) => println!("{}", i),
+            }
         }
 
         Ok(())

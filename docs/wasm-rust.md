@@ -133,6 +133,11 @@ interface types.
 
 ## WebAssembly Interface Types
 
+> **Note**: support for interface types has temporarily removed from Wasmtime.
+> This documentation is somewhat up to date but will no longer work with recent
+> versions of Wasmtime. For more information see
+> https://github.com/bytecodealliance/wasmtime/issues/677
+
 Working with WebAssembly modules at the bare-bones level means that you're only
 dealing with integers and floats. Many APIs, however, want to work with things
 like byte arrays, strings, structures, etc. To facilitate these interactions the
