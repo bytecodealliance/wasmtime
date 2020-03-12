@@ -1144,35 +1144,51 @@ impl CallAdapter {
                 stack.push(Val::U64(val as u64));
             }
 
-            i @ S8ToI32 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            S8ToI32 => {
+                let val = pop(stack, ValType::S8).unwrap_s8();
+                stack.push(Val::I32(val as i32));
             }
-            i @ U8ToI32 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            U8ToI32 => {
+                let val = pop(stack, ValType::U8).unwrap_u8();
+                stack.push(Val::I32(val as i32));
             }
-            i @ S16ToI32 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            S16ToI32 => {
+                let val = pop(stack, ValType::S16).unwrap_s16();
+                stack.push(Val::I32(val as i32));
             }
-            i @ U16ToI32 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            U16ToI32 => {
+                let val = pop(stack, ValType::U16).unwrap_u16();
+                stack.push(Val::I32(val as i32));
             }
-            i @ S32ToI32 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            S32ToI32 => {
+                let val = pop(stack, ValType::S32).unwrap_s32();
+                stack.push(Val::I32(val as i32));
             }
-            i @ U32ToI32 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            U32ToI32 => {
+                let val = pop(stack, ValType::U32).unwrap_u32();
+                stack.push(Val::I32(val as i32));
             }
-            i @ S64ToI32 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            S64ToI32 => {
+                let val = pop(stack, ValType::S64).unwrap_s64();
+                stack.push(Val::I32(val as i32));
             }
-            i @ S64ToI32X => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            S64ToI32X => {
+                let val = pop(stack, ValType::S64).unwrap_s64();
+                match val.try_into() {
+                    Ok(v) => stack.push(Val::I32(v)),
+                    Err(_) => return Err(Trap::new("integer overflow")),
+                }
             }
-            i @ U64ToI32 => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            U64ToI32 => {
+                let val = pop(stack, ValType::U64).unwrap_u64();
+                stack.push(Val::I32(val as i32));
             }
-            i @ U64ToI32X => {
-                return Err(Trap::new(format!("unimplemented instruction {:?}", i)));
+            U64ToI32X => {
+                let val = pop(stack, ValType::U64).unwrap_u64();
+                match val.try_into() {
+                    Ok(v) => stack.push(Val::I32(v)),
+                    Err(_) => return Err(Trap::new("integer overflow")),
+                }
             }
 
             i @ S8ToI64 => {
