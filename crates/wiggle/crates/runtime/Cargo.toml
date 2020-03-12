@@ -1,8 +1,17 @@
 [package]
 name = "wiggle-runtime"
 version = "0.1.0"
-authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>"]
+authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 edition = "2018"
+license = "Apache-2.0 WITH LLVM-exception"
+description = "Runtime components of wiggle code generator"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+repository = "https://github.com/bytecodealliance/wasmtime"
+include = ["src/**/*", "LICENSE"]
 
 [dependencies]
 thiserror = "1"
+
+[badges]
+maintenance = { status = "actively-developed" }

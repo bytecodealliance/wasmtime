@@ -1,6 +1,7 @@
 # wiggle
 
-An experimental implementation of `bytecodealliance/wig` crate which
-generates Rust bindings from `*.witx` that are meant to be more idiomatic
-and hopefully allowing for easier polyfilling between different WASI
-snapshot versions in the future.
+Wiggle is a code generator for the host side of a `witx` interface. It is
+invoked as a Rust procedural macro.
+
+Wiggle is not specialized to any particular WebAssembly runtime. It is usable
+in at least Wasmtime and Lucet.
