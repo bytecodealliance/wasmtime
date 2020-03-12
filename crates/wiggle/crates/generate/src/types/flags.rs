@@ -45,9 +45,24 @@ pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDataty
 
         impl ::std::fmt::Display for #ident {
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-                write!(f, "{}({:#b})", #ident_str, self.0)
+                write!(f, "{}({})", #ident_str, self.0)
             }
         }
+
+        macro_rules! impl_fmts {
+            ($fmt_trait:ident) => (
+                impl ::std::fmt::$fmt_trait for #ident {
+                    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                        f.write_fmt(format_args!("{}(", #ident_str))?;
+                        ::std::fmt::$fmt_trait::fmt(&self.0, f)?;
+                        f.write_str(")")
+                    }
+                }
+            );
+            ($($fmt_trait:ident)*) => ($(impl_fmts!($fmt_trait);)*)
+        }
+
+        impl_fmts!(Binary Octal LowerHex UpperHex);
 
         impl ::std::ops::BitAnd for #ident {
             type Output = Self;
