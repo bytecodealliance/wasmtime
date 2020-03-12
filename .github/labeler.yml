@@ -20,24 +20,24 @@
 cranelift:
   - cranelift/**
 
-"cranelift:module":
-  - cranelift/cranelift-module/**
-  - cranelift/cranelift-object/**
-  - cranelift/cranelift-faerie/**
-  - cranelift/cranelift-simplejit/**
-
 "cranelift:docs":
   - cranelift/docs/**
 
 "cranelift:meta":
   - cranelift/codegen/meta/**
 
-lightbeam:
-  - crates/lightbeam/**
+"cranelift:module":
+  - cranelift/cranelift-faerie/**
+  - cranelift/cranelift-module/**
+  - cranelift/cranelift-object/**
+  - cranelift/cranelift-simplejit/**
 
 fuzzing:
   - crates/fuzzing/**
   - fuzz/**
+
+lightbeam:
+  - crates/lightbeam/**
 
 wasi:
   - crates/wasi/**
