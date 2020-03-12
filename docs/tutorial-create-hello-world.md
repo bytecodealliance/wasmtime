@@ -3,7 +3,7 @@
 There are a number of ways to create `.wasm` files but for the purposes of this
 tutorial, we'll be using the Rust toolchain. You can find more information on
 creating `.wasm` files from other languages in the
-[Writing WebAssembly section](https://bytecodealliance.github.io/wasmtime/wasm.html).
+[Writing WebAssembly section](./wasm.md).
 
 To build WebAssembly binaries with Rust, you'll need the standard Rust toolchain.
 
