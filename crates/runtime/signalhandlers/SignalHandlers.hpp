@@ -34,6 +34,9 @@ void Unwind(void*);
 int
 EnsureEagerSignalHandlers(void);
 
+/// Report a fatal dynamic memory allocation failure.
+void RaiseOOMTrap(void) __attribute__((noreturn));
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

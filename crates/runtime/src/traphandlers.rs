@@ -58,6 +58,11 @@ cfg_if::cfg_if! {
     }
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn RaiseOOMTrap() -> ! {
+    raise_oom_trap()
+}
+
 /// Raises a user-defined trap immediately.
 ///
 /// This function performs as-if a wasm trap was just executed, only the trap
@@ -85,6 +90,19 @@ pub unsafe fn raise_user_trap(data: Box<dyn Error + Send + Sync>) -> ! {
 /// `wasmtime_call_trampoline` must have been previously called.
 pub unsafe fn raise_lib_trap(trap: Trap) -> ! {
     tls::with(|info| info.unwrap().unwind_with(UnwindReason::LibTrap(trap)))
+}
+
+/// Raises an out-of-memory trap immediately.
+///
+/// # Safety
+///
+/// Only safe to call when wasm code is on the stack, aka `wasmtime_call` or
+/// `wasmtime_call_trampoline` must have been previously called.
+pub unsafe fn raise_oom_trap() -> ! {
+    tls::with(|info| {
+        info.unwrap()
+            .unwind_with(UnwindReason::LibTrap(Trap::oom()))
+    })
 }
 
 /// Carries a Rust panic across wasm code and resumes the panic on the other
@@ -127,6 +145,12 @@ pub enum Trap {
         /// Native stack backtrace at the time the trap occurred
         backtrace: Backtrace,
     },
+
+    /// A trap indicating that the runtime was unable to allocate sufficient memory.
+    OOM {
+        /// Native stack backtrace at the time the OOM occurred
+        backtrace: Backtrace,
+    },
 }
 
 impl fmt::Display for Trap {
@@ -134,6 +158,7 @@ impl fmt::Display for Trap {
         match self {
             Trap::User(user) => user.fmt(f),
             Trap::Wasm { desc, .. } => desc.fmt(f),
+            Trap::OOM { .. } => write!(f, "Out of memory"),
         }
     }
 }
@@ -151,6 +176,14 @@ impl Trap {
         };
         let backtrace = Backtrace::new();
         Trap::Wasm { desc, backtrace }
+    }
+
+    /// Construct a new OOM trap with the given source location and trap code.
+    ///
+    /// Internally saves a backtrace when constructed.
+    pub fn oom() -> Self {
+        let backtrace = Backtrace::new();
+        Trap::OOM { backtrace }
     }
 }
 
