@@ -32,6 +32,10 @@ cranelift:
   - cranelift/cranelift-object/**
   - cranelift/cranelift-simplejit/**
 
+"cranelift:wasm":
+  - cranelift/wasm/**
+  - cranelift/wasmtests/**
+
 fuzzing:
   - crates/fuzzing/**
   - fuzz/**
