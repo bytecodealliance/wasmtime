@@ -1,3 +1,4 @@
 {
+  "fitzgen": ["fuzzing"],
   "peterhuene": ["wasmtime:api", "wasmtime:c-api"]
 }
