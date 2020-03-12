@@ -45,13 +45,9 @@ impl wasmtime::WasmTy for WasiCallerMemory {
     fn from_abi(vmctx: *mut wasmtime_runtime::VMContext, _abi: ()) -> Self {
         unsafe {
             match wasmtime_runtime::InstanceHandle::from_vmctx(vmctx).lookup("memory") {
-                Some(wasmtime_runtime::Export::Memory {
-                    definition,
-                    vmctx: _,
-                    memory: _,
-                }) => WasiCallerMemory {
-                    base: (*definition).base,
-                    len: (*definition).current_length,
+                Some(wasmtime_runtime::Export::Memory(m)) => WasiCallerMemory {
+                    base: (*m.definition).base,
+                    len: (*m.definition).current_length,
                 },
                 _ => WasiCallerMemory {
                     base: std::ptr::null_mut(),
@@ -62,6 +58,8 @@ impl wasmtime::WasmTy for WasiCallerMemory {
     }
 
     fn into_abi(self) {}
+    unsafe fn load(_ptr: &mut *const u128) {}
+    unsafe fn store(_abi: Self::Abi, _ptr: *mut u128) {}
 }
 
 impl WasiCallerMemory {

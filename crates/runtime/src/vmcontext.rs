@@ -645,3 +645,11 @@ impl VMContext {
         self.instance().host_state()
     }
 }
+
+///
+pub type VMTrampoline = unsafe extern "C" fn(
+    *mut VMContext,        // callee vmctx
+    *mut VMContext,        // caller vmctx
+    *const VMFunctionBody, // function we're actually calling
+    *mut u128,             // space for arguments and return values
+);

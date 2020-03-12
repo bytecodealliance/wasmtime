@@ -289,3 +289,41 @@ fn get_from_module() -> anyhow::Result<()> {
     assert!(f2.get1::<i32, f32>().is_err());
     Ok(())
 }
+
+#[test]
+fn call_wrapped_func() -> Result<()> {
+    let store = Store::default();
+    let f = Func::wrap4(&store, |a: i32, b: i64, c: f32, d: f64| {
+        assert_eq!(a, 1);
+        assert_eq!(b, 2);
+        assert_eq!(c, 3.0);
+        assert_eq!(d, 4.0);
+    });
+    f.call(&[Val::I32(1), Val::I64(2), 3.0f32.into(), 4.0f64.into()])?;
+    f.get4::<i32, i64, f32, f64, ()>()?(1, 2, 3.0, 4.0)?;
+
+    let f = Func::wrap0(&store, || 1i32);
+    let results = f.call(&[])?;
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].unwrap_i32(), 1);
+    assert_eq!(f.get0::<i32>()?()?, 1);
+
+    let f = Func::wrap0(&store, || 2i64);
+    let results = f.call(&[])?;
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].unwrap_i64(), 2);
+    assert_eq!(f.get0::<i64>()?()?, 2);
+
+    let f = Func::wrap0(&store, || 3.0f32);
+    let results = f.call(&[])?;
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].unwrap_f32(), 3.0);
+    assert_eq!(f.get0::<f32>()?()?, 3.0);
+
+    let f = Func::wrap0(&store, || 4.0f64);
+    let results = f.call(&[])?;
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].unwrap_f64(), 4.0);
+    assert_eq!(f.get0::<f64>()?()?, 4.0);
+    Ok(())
+}

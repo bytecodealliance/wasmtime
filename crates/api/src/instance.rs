@@ -4,7 +4,7 @@ use crate::runtime::{Config, Store};
 use crate::trap::Trap;
 use anyhow::{bail, Error, Result};
 use wasmtime_jit::{CompiledModule, Resolver};
-use wasmtime_runtime::{Export, InstanceHandle, InstantiationError};
+use wasmtime_runtime::{Export, InstanceHandle, InstantiationError, SignatureRegistry};
 
 struct SimpleResolver<'a> {
     imports: &'a [Extern],
@@ -22,6 +22,7 @@ fn instantiate(
     config: &Config,
     compiled_module: &CompiledModule,
     imports: &[Extern],
+    sig_registry: &SignatureRegistry,
 ) -> Result<InstanceHandle, Error> {
     let mut resolver = SimpleResolver { imports };
     unsafe {
@@ -29,6 +30,7 @@ fn instantiate(
             .instantiate(
                 config.validating_config.operator_config.enable_bulk_memory,
                 &mut resolver,
+                sig_registry,
             )
             .map_err(|e| -> Error {
                 match e {
@@ -122,26 +124,28 @@ impl Instance {
         }
 
         let config = store.engine().config();
-        let instance_handle = instantiate(config, module.compiled_module(), imports)?;
+        let instance_handle = instantiate(
+            config,
+            module.compiled_module(),
+            imports,
+            store.compiler().signatures(),
+        )?;
 
-        let exports = {
-            let mut exports = Vec::with_capacity(module.exports().len());
-            for export in module.exports() {
-                let name = export.name().to_string();
-                let export = instance_handle.lookup(&name).expect("export");
-                exports.push(Extern::from_wasmtime_export(
-                    store,
-                    instance_handle.clone(),
-                    export,
-                ));
-            }
-            exports.into_boxed_slice()
-        };
+        let mut exports = Vec::with_capacity(module.exports().len());
+        for export in module.exports() {
+            let name = export.name().to_string();
+            let export = instance_handle.lookup(&name).expect("export");
+            exports.push(Extern::from_wasmtime_export(
+                store,
+                instance_handle.clone(),
+                export,
+            ));
+        }
         module.register_frame_info();
         Ok(Instance {
             instance_handle,
             module: module.clone(),
-            exports,
+            exports: exports.into_boxed_slice(),
         })
     }
 

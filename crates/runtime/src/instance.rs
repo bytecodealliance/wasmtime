@@ -12,16 +12,16 @@ use crate::traphandlers::{catch_traps, Trap};
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport,
     VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
-    VMTableDefinition, VMTableImport,
+    VMTableDefinition, VMTableImport, VMTrampoline,
 };
 use crate::TrapRegistration;
+use crate::{ExportFunction, ExportGlobal, ExportMemory, ExportTable};
 use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::alloc::{self, Layout};
 use std::any::Any;
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -98,6 +98,9 @@ pub(crate) struct Instance {
 
     /// Pointers to functions in executable memory.
     finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
+
+    /// Pointers to trampoline functions used to enter particular signatures
+    trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
 
     /// Hosts can store arbitrary per-instance information here.
     host_state: Box<dyn Any>,
@@ -301,8 +304,7 @@ impl Instance {
     pub fn lookup_by_declaration(&self, export: &wasmtime_environ::Export) -> Export {
         match export {
             wasmtime_environ::Export::Function(index) => {
-                let signature =
-                    self.module.local.signatures[self.module.local.functions[*index]].clone();
+                let signature = self.signature_id(self.module.local.functions[*index]);
                 let (address, vmctx) =
                     if let Some(def_index) = self.module.local.defined_func_index(*index) {
                         (
@@ -313,11 +315,12 @@ impl Instance {
                         let import = self.imported_function(*index);
                         (import.body, import.vmctx)
                     };
-                Export::Function {
+                ExportFunction {
                     address,
                     signature,
                     vmctx,
                 }
+                .into()
             }
             wasmtime_environ::Export::Table(index) => {
                 let (definition, vmctx) =
@@ -327,11 +330,12 @@ impl Instance {
                         let import = self.imported_table(*index);
                         (import.from, import.vmctx)
                     };
-                Export::Table {
+                ExportTable {
                     definition,
                     vmctx,
                     table: self.module.local.table_plans[*index].clone(),
                 }
+                .into()
             }
             wasmtime_environ::Export::Memory(index) => {
                 let (definition, vmctx) =
@@ -341,13 +345,14 @@ impl Instance {
                         let import = self.imported_memory(*index);
                         (import.from, import.vmctx)
                     };
-                Export::Memory {
+                ExportMemory {
                     definition,
                     vmctx,
                     memory: self.module.local.memory_plans[*index].clone(),
                 }
+                .into()
             }
-            wasmtime_environ::Export::Global(index) => Export::Global {
+            wasmtime_environ::Export::Global(index) => ExportGlobal {
                 definition: if let Some(def_index) = self.module.local.defined_global_index(*index)
                 {
                     self.global_ptr(def_index)
@@ -356,7 +361,8 @@ impl Instance {
                 },
                 vmctx: self.vmctx_ptr(),
                 global: self.module.local.globals[*index],
-            },
+            }
+            .into(),
         }
     }
 
@@ -853,6 +859,7 @@ impl InstanceHandle {
         module: Arc<Module>,
         trap_registration: TrapRegistration,
         finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
+        trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
         imports: Imports,
         data_initializers: &[DataInitializer<'_>],
         vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
@@ -892,6 +899,7 @@ impl InstanceHandle {
                 passive_elements: Default::default(),
                 passive_data,
                 finished_functions,
+                trampolines,
                 dbg_jit_registration,
                 host_state,
                 signal_handler: Cell::new(None),
@@ -1091,6 +1099,11 @@ impl InstanceHandle {
     /// Get a table defined locally within this module.
     pub fn get_defined_table(&self, index: DefinedTableIndex) -> &Table {
         self.instance().get_defined_table(index)
+    }
+
+    /// Gets the trampoline pre-registered for a particular signature
+    pub fn trampoline(&self, sig: VMSharedSignatureIndex) -> Option<VMTrampoline> {
+        self.instance().trampolines.get(&sig).cloned()
     }
 
     /// Return a reference to the contained `Instance`.

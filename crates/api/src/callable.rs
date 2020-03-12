@@ -3,10 +3,10 @@ use crate::trampoline::generate_func_export;
 use crate::trap::Trap;
 use crate::types::FuncType;
 use crate::values::Val;
+use std::cmp::max;
 use std::ptr;
 use std::rc::Rc;
-use wasmtime_environ::ir;
-use wasmtime_runtime::{Export, InstanceHandle};
+use wasmtime_runtime::{ExportFunction, InstanceHandle, VMTrampoline};
 
 /// A trait representing a function that can be imported and called from inside
 /// WebAssembly.
@@ -87,45 +87,42 @@ pub trait Callable {
 
 pub(crate) trait WrappedCallable {
     fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap>;
-    fn signature(&self) -> &ir::Signature {
-        match self.wasmtime_export() {
-            Export::Function { signature, .. } => signature,
-            _ => panic!("unexpected export type in Callable"),
-        }
-    }
     fn wasmtime_handle(&self) -> &InstanceHandle;
-    fn wasmtime_export(&self) -> &Export;
+    fn wasmtime_function(&self) -> &ExportFunction;
 }
 
 pub(crate) struct WasmtimeFn {
     store: Store,
     instance: InstanceHandle,
-    export: Export,
+    export: ExportFunction,
+    trampoline: VMTrampoline,
 }
 
 impl WasmtimeFn {
-    pub fn new(store: &Store, instance: InstanceHandle, export: Export) -> WasmtimeFn {
+    pub fn new(
+        store: &Store,
+        instance: InstanceHandle,
+        export: ExportFunction,
+        trampoline: VMTrampoline,
+    ) -> WasmtimeFn {
         WasmtimeFn {
             store: store.clone(),
             instance,
             export,
+            trampoline,
         }
     }
 }
 
 impl WrappedCallable for WasmtimeFn {
     fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
-        use std::cmp::max;
-        use std::mem;
-
-        let (vmctx, body, signature) = match self.wasmtime_export() {
-            Export::Function {
-                vmctx,
-                address,
-                signature,
-            } => (*vmctx, *address, signature.clone()),
-            _ => panic!("unexpected export type in Callable"),
-        };
+        let f = self.wasmtime_function();
+        let signature = self
+            .store
+            .compiler()
+            .signatures()
+            .lookup(f.signature)
+            .expect("missing signature");
         if signature.params.len() - 2 != params.len() {
             return Err(Trap::new(format!(
                 "expected {} arguments, got {}",
@@ -141,7 +138,6 @@ impl WrappedCallable for WasmtimeFn {
             )));
         }
 
-        let value_size = mem::size_of::<u128>();
         let mut values_vec = vec![0; max(params.len(), results.len())];
 
         // Store the argument values into `values_vec`.
@@ -155,20 +151,13 @@ impl WrappedCallable for WasmtimeFn {
             }
         }
 
-        // Get the trampoline to call for this function.
-        let exec_code_buf = self
-            .store
-            .compiler_mut()
-            .get_published_trampoline(&signature, value_size)
-            .map_err(|e| Trap::new(format!("trampoline error: {:?}", e)))?;
-
         // Call the trampoline.
         if let Err(error) = unsafe {
             wasmtime_runtime::wasmtime_call_trampoline(
-                vmctx,
+                f.vmctx,
                 ptr::null_mut(),
-                exec_code_buf,
-                body,
+                self.trampoline,
+                f.address,
                 values_vec.as_mut_ptr() as *mut u8,
             )
         } {
@@ -189,7 +178,7 @@ impl WrappedCallable for WasmtimeFn {
     fn wasmtime_handle(&self) -> &InstanceHandle {
         &self.instance
     }
-    fn wasmtime_export(&self) -> &Export {
+    fn wasmtime_function(&self) -> &ExportFunction {
         &self.export
     }
 }
@@ -197,7 +186,7 @@ impl WrappedCallable for WasmtimeFn {
 pub struct NativeCallable {
     callable: Rc<dyn Callable + 'static>,
     instance: InstanceHandle,
-    export: Export,
+    export: ExportFunction,
 }
 
 impl NativeCallable {
@@ -219,7 +208,7 @@ impl WrappedCallable for NativeCallable {
     fn wasmtime_handle(&self) -> &InstanceHandle {
         &self.instance
     }
-    fn wasmtime_export(&self) -> &Export {
+    fn wasmtime_function(&self) -> &ExportFunction {
         &self.export
     }
 }

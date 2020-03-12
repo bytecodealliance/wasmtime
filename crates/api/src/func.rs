@@ -184,23 +184,53 @@ macro_rules! wrappers {
                 }
             }
 
+            #[allow(non_snake_case)]
+            unsafe extern "C" fn trampoline<F, $($args,)* R>(
+                callee_vmctx: *mut VMContext,
+                caller_vmctx: *mut VMContext,
+                ptr: *const VMFunctionBody,
+                args: *mut u128,
+            )
+            where
+                F: Fn($($args),*) -> R + 'static,
+                $($args: WasmTy,)*
+                R: WasmRet,
+            {
+                let ptr = mem::transmute::<
+                    *const VMFunctionBody,
+                    unsafe extern "C" fn(
+                        *mut VMContext,
+                        *mut VMContext,
+                        $($args::Abi,)*
+                    ) -> R::Abi,
+                >(ptr);
+
+                let mut _next = args as *const u128;
+                $(let $args = $args::load(&mut _next);)*
+
+                let ret = ptr(callee_vmctx, caller_vmctx, $($args),*);
+                R::store(ret, args);
+            }
+
             let mut _args = Vec::new();
             $($args::push(&mut _args);)*
             let mut ret = Vec::new();
             R::push(&mut ret);
             let ty = FuncType::new(_args.into(), ret.into());
             unsafe {
+                let trampoline = trampoline::<F, $($args,)* R>;
                 let (instance, export) = crate::trampoline::generate_raw_func_export(
                     &ty,
                     std::slice::from_raw_parts_mut(
                         shim::<F, $($args,)* R> as *mut _,
                         0,
                     ),
+                    trampoline,
                     store,
                     Box::new(func),
                 )
                 .expect("failed to generate export");
-                let callable = Rc::new(WasmtimeFn::new(store, instance, export));
+                let callable = Rc::new(WasmtimeFn::new(store, instance, export, trampoline));
                 Func::from_wrapped(store, ty, callable)
             }
         }
@@ -214,8 +244,8 @@ macro_rules! getters {
     )*) => ($(
         $(#[$doc])*
         #[allow(non_snake_case)]
-        pub fn $name<$($args,)* R>(&self)
-            -> anyhow::Result<impl Fn($($args,)*) -> Result<R, Trap>>
+        pub fn $name<'a, $($args,)* R>(&'a self)
+            -> anyhow::Result<impl Fn($($args,)*) -> Result<R, Trap> + 'a>
         where
             $($args: WasmTy,)*
             R: WasmTy,
@@ -239,28 +269,23 @@ macro_rules! getters {
 
             // ... and then once we've passed the typechecks we can hand out our
             // object since our `transmute` below should be safe!
-            let (address, vmctx) = match self.wasmtime_export() {
-                wasmtime_runtime::Export::Function { address, vmctx, signature: _} => {
-                    (*address, *vmctx)
-                }
-                _ => panic!("expected function export"),
-            };
+            let f = self.wasmtime_function();
             Ok(move |$($args: $args),*| -> Result<R, Trap> {
                 unsafe {
-                    let f = mem::transmute::<
+                    let fnptr = mem::transmute::<
                         *const VMFunctionBody,
                         unsafe extern "C" fn(
                             *mut VMContext,
                             *mut VMContext,
                             $($args::Abi,)*
                         ) -> R::Abi,
-                    >(address);
+                    >(f.address);
                     let mut ret = None;
                     $(let $args = $args.into_abi();)*
-                    wasmtime_runtime::catch_traps(vmctx, || {
-                        ret = Some(f(vmctx, ptr::null_mut(), $($args,)*));
+                    wasmtime_runtime::catch_traps(f.vmctx, || {
+                        ret = Some(fnptr(f.vmctx, ptr::null_mut(), $($args,)*));
                     }).map_err(Trap::from_jit)?;
-                    Ok(R::from_abi(vmctx, ret.unwrap()))
+                    Ok(R::from_abi(f.vmctx, ret.unwrap()))
                 }
             })
         }
@@ -553,25 +578,37 @@ impl Func {
         Ok(results.into_boxed_slice())
     }
 
-    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::Export {
-        self.callable.wasmtime_export()
+    pub(crate) fn wasmtime_function(&self) -> &wasmtime_runtime::ExportFunction {
+        self.callable.wasmtime_function()
     }
 
     pub(crate) fn from_wasmtime_function(
-        export: wasmtime_runtime::Export,
+        export: wasmtime_runtime::ExportFunction,
         store: &Store,
         instance_handle: InstanceHandle,
     ) -> Self {
+        // Signatures should always be registered in the store's registry of
+        // shared signatures, so we should be able to unwrap safely here.
+        let sig = store
+            .compiler()
+            .signatures()
+            .lookup(export.signature)
+            .expect("failed to lookup signature");
+
         // This is only called with `Export::Function`, and since it's coming
         // from wasmtime_runtime itself we should support all the types coming
         // out of it, so assert such here.
-        let ty = if let wasmtime_runtime::Export::Function { signature, .. } = &export {
-            FuncType::from_wasmtime_signature(signature.clone())
-                .expect("core wasm signature should be supported")
-        } else {
-            panic!("expected function export")
-        };
-        let callable = WasmtimeFn::new(store, instance_handle, export);
+        let ty = FuncType::from_wasmtime_signature(sig)
+            .expect("core wasm signature should be supported");
+
+        // Each function signature in a module should have a trampoline stored
+        // on that module as well, so unwrap the result here since otherwise
+        // it's a bug in wasmtime.
+        let trampoline = instance_handle
+            .trampoline(export.signature)
+            .expect("failed to retrieve trampoline from module");
+
+        let callable = WasmtimeFn::new(store, instance_handle, export, trampoline);
         Func::from_wrapped(store, ty, Rc::new(callable))
     }
 
@@ -727,6 +764,10 @@ pub trait WasmTy {
     fn from_abi(vmctx: *mut VMContext, abi: Self::Abi) -> Self;
     #[doc(hidden)]
     fn into_abi(self) -> Self::Abi;
+    #[doc(hidden)]
+    unsafe fn load(ptr: &mut *const u128) -> Self::Abi;
+    #[doc(hidden)]
+    unsafe fn store(abi: Self::Abi, ptr: *mut u128);
 }
 
 impl WasmTy for () {
@@ -743,6 +784,10 @@ impl WasmTy for () {
     fn into_abi(self) -> Self::Abi {
         self
     }
+    #[inline]
+    unsafe fn load(_ptr: &mut *const u128) -> Self::Abi {}
+    #[inline]
+    unsafe fn store(_abi: Self::Abi, _ptr: *mut u128) {}
 }
 
 impl WasmTy for i32 {
@@ -766,6 +811,16 @@ impl WasmTy for i32 {
     #[inline]
     fn into_abi(self) -> Self::Abi {
         self
+    }
+    #[inline]
+    unsafe fn load(ptr: &mut *const u128) -> Self::Abi {
+        let ret = **ptr as Self;
+        *ptr = (*ptr).add(1);
+        return ret;
+    }
+    #[inline]
+    unsafe fn store(abi: Self::Abi, ptr: *mut u128) {
+        *ptr = abi as u128;
     }
 }
 
@@ -791,6 +846,16 @@ impl WasmTy for i64 {
     fn into_abi(self) -> Self::Abi {
         self
     }
+    #[inline]
+    unsafe fn load(ptr: &mut *const u128) -> Self::Abi {
+        let ret = **ptr as Self;
+        *ptr = (*ptr).add(1);
+        return ret;
+    }
+    #[inline]
+    unsafe fn store(abi: Self::Abi, ptr: *mut u128) {
+        *ptr = abi as u128;
+    }
 }
 
 impl WasmTy for f32 {
@@ -814,6 +879,16 @@ impl WasmTy for f32 {
     #[inline]
     fn into_abi(self) -> Self::Abi {
         self
+    }
+    #[inline]
+    unsafe fn load(ptr: &mut *const u128) -> Self::Abi {
+        let ret = f32::from_bits(**ptr as u32);
+        *ptr = (*ptr).add(1);
+        return ret;
+    }
+    #[inline]
+    unsafe fn store(abi: Self::Abi, ptr: *mut u128) {
+        *ptr = abi.to_bits() as u128;
     }
 }
 
@@ -839,6 +914,16 @@ impl WasmTy for f64 {
     fn into_abi(self) -> Self::Abi {
         self
     }
+    #[inline]
+    unsafe fn load(ptr: &mut *const u128) -> Self::Abi {
+        let ret = f64::from_bits(**ptr as u64);
+        *ptr = (*ptr).add(1);
+        return ret;
+    }
+    #[inline]
+    unsafe fn store(abi: Self::Abi, ptr: *mut u128) {
+        *ptr = abi.to_bits() as u128;
+    }
 }
 
 /// A trait implemented for types which can be returned from closures passed to
@@ -858,6 +943,8 @@ pub trait WasmRet {
     fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()>;
     #[doc(hidden)]
     fn into_abi(self) -> Self::Abi;
+    #[doc(hidden)]
+    unsafe fn store(abi: Self::Abi, ptr: *mut u128);
 }
 
 impl<T: WasmTy> WasmRet for T {
@@ -874,6 +961,11 @@ impl<T: WasmTy> WasmRet for T {
     fn into_abi(self) -> Self::Abi {
         T::into_abi(self)
     }
+
+    #[inline]
+    unsafe fn store(abi: Self::Abi, ptr: *mut u128) {
+        T::store(abi, ptr);
+    }
 }
 
 impl<T: WasmTy> WasmRet for Result<T, Trap> {
@@ -889,12 +981,17 @@ impl<T: WasmTy> WasmRet for Result<T, Trap> {
     #[inline]
     fn into_abi(self) -> Self::Abi {
         match self {
-            Ok(val) => return val.into_abi(),
+            Ok(val) => return T::into_abi(val),
             Err(trap) => handle_trap(trap),
         }
 
         fn handle_trap(trap: Trap) -> ! {
             unsafe { wasmtime_runtime::raise_user_trap(Box::new(trap)) }
         }
+    }
+
+    #[inline]
+    unsafe fn store(abi: Self::Abi, ptr: *mut u128) {
+        T::store(abi, ptr);
     }
 }

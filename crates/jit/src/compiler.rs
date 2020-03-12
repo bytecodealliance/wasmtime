@@ -23,7 +23,7 @@ use wasmtime_environ::{
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{
     InstantiationError, SignatureRegistry, TrapRegistration, TrapRegistry, VMFunctionBody,
-    VMSharedSignatureIndex,
+    VMSharedSignatureIndex, VMTrampoline,
 };
 
 /// Select which kind of compilation to use.
@@ -53,13 +53,9 @@ pub struct Compiler {
 
     code_memory: CodeMemory,
     trap_registry: TrapRegistry,
-    trampoline_park: HashMap<VMSharedSignatureIndex, *const VMFunctionBody>,
     signatures: SignatureRegistry,
     strategy: CompilationStrategy,
     cache_config: CacheConfig,
-
-    /// The `FunctionBuilderContext`, shared between trampline function compilations.
-    fn_builder_ctx: FunctionBuilderContext,
 }
 
 impl Compiler {
@@ -72,9 +68,7 @@ impl Compiler {
         Self {
             isa,
             code_memory: CodeMemory::new(),
-            trampoline_park: HashMap::new(),
             signatures: SignatureRegistry::new(),
-            fn_builder_ctx: FunctionBuilderContext::new(),
             strategy,
             trap_registry: TrapRegistry::default(),
             cache_config,
@@ -103,6 +97,7 @@ impl Compiler {
     ) -> Result<
         (
             PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+            HashMap<VMSharedSignatureIndex, VMTrampoline>,
             PrimaryMap<DefinedFuncIndex, ir::JumpTableOffsets>,
             Relocations,
             Option<Vec<u8>>,
@@ -145,6 +140,8 @@ impl Compiler {
         }
         .map_err(SetupError::Compile)?;
 
+        // Allocate all of the compiled functions into executable memory,
+        // copying over their contents.
         let allocated_functions =
             allocate_functions(&mut self.code_memory, &compilation).map_err(|message| {
                 SetupError::Instantiate(InstantiationError::Resource(format!(
@@ -153,7 +150,44 @@ impl Compiler {
                 )))
             })?;
 
+        // Create a registration value for all traps in our allocated
+        // functions. This registration will allow us to map a trapping PC
+        // value to what the trap actually means if it came from JIT code.
         let trap_registration = register_traps(&allocated_functions, &traps, &self.trap_registry);
+
+        // Eagerly generate a entry trampoline for every type signature in the
+        // module. This should be "relatively lightweight" for most modules and
+        // guarantees that all functions (including indirect ones through
+        // tables) have a trampoline when invoked through the wasmtime API.
+        let mut cx = FunctionBuilderContext::new();
+        let mut trampolines = HashMap::new();
+        for sig in module.local.signatures.values() {
+            let index = self.signatures.register(sig);
+            if trampolines.contains_key(&index) {
+                continue;
+            }
+            // FIXME(#1303) we should be generating a trampoline for all
+            // functions in a module, not just those with less than 40
+            // arguments. Currently though cranelift dies in spec tests when one
+            // function has 100 arguments. This looks to be a cranelift bug, so
+            // let's work around it for now by skipping generating a trampoline
+            // for that massive function. The trampoline isn't actually needed
+            // at this time, and we'll hopefully get the cranelift bug fixed
+            // soon enough to remove this condition.
+            if sig.params.len() > 40 {
+                continue;
+            }
+            trampolines.insert(
+                index,
+                make_trampoline(
+                    &*self.isa,
+                    &mut self.code_memory,
+                    &mut cx,
+                    sig,
+                    std::mem::size_of::<u128>(),
+                )?,
+            );
+        }
 
         // Translate debug info (DWARF) only if at least one function is present.
         let dbg = if debug_data.is_some() && !allocated_functions.is_empty() {
@@ -199,43 +233,12 @@ impl Compiler {
 
         Ok((
             allocated_functions,
+            trampolines,
             jt_offsets,
             relocations,
             dbg,
             trap_registration,
         ))
-    }
-
-    /// Create a trampoline for invoking a function.
-    pub(crate) fn get_trampoline(
-        &mut self,
-        signature: &ir::Signature,
-        value_size: usize,
-    ) -> Result<*const VMFunctionBody, SetupError> {
-        let index = self.signatures.register(signature);
-        if let Some(trampoline) = self.trampoline_park.get(&index) {
-            return Ok(*trampoline);
-        }
-        let body = make_trampoline(
-            &*self.isa,
-            &mut self.code_memory,
-            &mut self.fn_builder_ctx,
-            signature,
-            value_size,
-        )?;
-        self.trampoline_park.insert(index, body);
-        return Ok(body);
-    }
-
-    /// Create and publish a trampoline for invoking a function.
-    pub fn get_published_trampoline(
-        &mut self,
-        signature: &ir::Signature,
-        value_size: usize,
-    ) -> Result<*const VMFunctionBody, SetupError> {
-        let result = self.get_trampoline(signature, value_size)?;
-        self.publish_compiled_code();
-        Ok(result)
     }
 
     /// Make memory containing compiled code executable.
@@ -265,13 +268,13 @@ impl Compiler {
 }
 
 /// Create a trampoline for invoking a function.
-fn make_trampoline(
+pub fn make_trampoline(
     isa: &dyn TargetIsa,
     code_memory: &mut CodeMemory,
     fn_builder_ctx: &mut FunctionBuilderContext,
     signature: &ir::Signature,
     value_size: usize,
-) -> Result<*const VMFunctionBody, SetupError> {
+) -> Result<VMTrampoline, SetupError> {
     let pointer_type = isa.pointer_type();
     let mut wrapper_sig = ir::Signature::new(isa.frontend_config().default_call_conv);
 
@@ -373,14 +376,15 @@ fn make_trampoline(
 
     let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context);
 
-    Ok(code_memory
+    let ptr = code_memory
         .allocate_for_function(&CompiledFunction {
             body: code_buf,
             jt_offsets: context.func.jt_offsets,
             unwind_info,
         })
         .map_err(|message| SetupError::Instantiate(InstantiationError::Resource(message)))?
-        .as_ptr())
+        .as_ptr();
+    Ok(unsafe { std::mem::transmute::<*const VMFunctionBody, VMTrampoline>(ptr) })
 }
 
 fn allocate_functions(

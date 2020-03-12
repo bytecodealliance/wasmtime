@@ -83,10 +83,10 @@ impl Extern {
 
     pub(crate) fn get_wasmtime_export(&self) -> wasmtime_runtime::Export {
         match self {
-            Extern::Func(f) => f.wasmtime_export().clone(),
-            Extern::Global(g) => g.wasmtime_export().clone(),
-            Extern::Memory(m) => m.wasmtime_export().clone(),
-            Extern::Table(t) => t.wasmtime_export().clone(),
+            Extern::Func(f) => f.wasmtime_function().clone().into(),
+            Extern::Global(g) => g.wasmtime_export.clone().into(),
+            Extern::Memory(m) => m.wasmtime_export.clone().into(),
+            Extern::Table(t) => t.wasmtime_export.clone().into(),
         }
     }
 
@@ -96,17 +96,17 @@ impl Extern {
         export: wasmtime_runtime::Export,
     ) -> Extern {
         match export {
-            wasmtime_runtime::Export::Function { .. } => {
-                Extern::Func(Func::from_wasmtime_function(export, store, instance_handle))
+            wasmtime_runtime::Export::Function(f) => {
+                Extern::Func(Func::from_wasmtime_function(f, store, instance_handle))
             }
-            wasmtime_runtime::Export::Memory { .. } => {
-                Extern::Memory(Memory::from_wasmtime_memory(export, store, instance_handle))
+            wasmtime_runtime::Export::Memory(m) => {
+                Extern::Memory(Memory::from_wasmtime_memory(m, store, instance_handle))
             }
-            wasmtime_runtime::Export::Global { .. } => {
-                Extern::Global(Global::from_wasmtime_global(export, store, instance_handle))
+            wasmtime_runtime::Export::Global(g) => {
+                Extern::Global(Global::from_wasmtime_global(g, store, instance_handle))
             }
-            wasmtime_runtime::Export::Table { .. } => {
-                Extern::Table(Table::from_wasmtime_table(export, store, instance_handle))
+            wasmtime_runtime::Export::Table(t) => {
+                Extern::Table(Table::from_wasmtime_table(t, store, instance_handle))
             }
         }
     }
@@ -165,7 +165,7 @@ impl From<Table> for Extern {
 pub struct Global {
     store: Store,
     ty: GlobalType,
-    wasmtime_export: wasmtime_runtime::Export,
+    wasmtime_export: wasmtime_runtime::ExportGlobal,
     wasmtime_handle: InstanceHandle,
 }
 
@@ -202,17 +202,10 @@ impl Global {
         &self.ty
     }
 
-    fn wasmtime_global_definition(&self) -> *mut wasmtime_runtime::VMGlobalDefinition {
-        match self.wasmtime_export {
-            wasmtime_runtime::Export::Global { definition, .. } => definition,
-            _ => panic!("global definition not found"),
-        }
-    }
-
     /// Returns the current [`Val`] of this global.
     pub fn get(&self) -> Val {
-        let definition = unsafe { &mut *self.wasmtime_global_definition() };
         unsafe {
+            let definition = &mut *self.wasmtime_export.definition;
             match self.ty().content() {
                 ValType::I32 => Val::from(*definition.as_i32()),
                 ValType::I64 => Val::from(*definition.as_i64()),
@@ -243,8 +236,8 @@ impl Global {
         if !val.comes_from_same_store(&self.store) {
             bail!("cross-`Store` values are not supported");
         }
-        let definition = unsafe { &mut *self.wasmtime_global_definition() };
         unsafe {
+            let definition = &mut *self.wasmtime_export.definition;
             match val {
                 Val::I32(i) => *definition.as_i32_mut() = i,
                 Val::I64(i) => *definition.as_i64_mut() = i,
@@ -256,28 +249,19 @@ impl Global {
         Ok(())
     }
 
-    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::Export {
-        &self.wasmtime_export
-    }
-
     pub(crate) fn from_wasmtime_global(
-        export: wasmtime_runtime::Export,
+        wasmtime_export: wasmtime_runtime::ExportGlobal,
         store: &Store,
         wasmtime_handle: InstanceHandle,
     ) -> Global {
-        let global = if let wasmtime_runtime::Export::Global { ref global, .. } = export {
-            global
-        } else {
-            panic!("wasmtime export is not global")
-        };
         // The original export is coming from wasmtime_runtime itself we should
         // support all the types coming out of it, so assert such here.
-        let ty = GlobalType::from_wasmtime_global(&global)
+        let ty = GlobalType::from_wasmtime_global(&wasmtime_export.global)
             .expect("core wasm global type should be supported");
         Global {
             store: store.clone(),
             ty: ty,
-            wasmtime_export: export,
+            wasmtime_export,
             wasmtime_handle,
         }
     }
@@ -303,11 +287,11 @@ pub struct Table {
     store: Store,
     ty: TableType,
     wasmtime_handle: InstanceHandle,
-    wasmtime_export: wasmtime_runtime::Export,
+    wasmtime_export: wasmtime_runtime::ExportTable,
 }
 
 fn set_table_item(
-    handle: &mut InstanceHandle,
+    handle: &InstanceHandle,
     table_index: wasm::DefinedTableIndex,
     item_index: u32,
     item: wasmtime_runtime::VMCallerCheckedAnyfunc,
@@ -331,18 +315,13 @@ impl Table {
     /// Returns an error if `init` does not match the element type of the table.
     pub fn new(store: &Store, ty: TableType, init: Val) -> Result<Table> {
         let item = into_checked_anyfunc(init, store)?;
-        let (mut wasmtime_handle, wasmtime_export) = generate_table_export(store, &ty)?;
+        let (wasmtime_handle, wasmtime_export) = generate_table_export(store, &ty)?;
 
         // Initialize entries with the init value.
-        match wasmtime_export {
-            wasmtime_runtime::Export::Table { definition, .. } => {
-                let index = wasmtime_handle.table_index(unsafe { &*definition });
-                let len = unsafe { (*definition).current_elements };
-                for i in 0..len {
-                    set_table_item(&mut wasmtime_handle, index, i, item.clone())?;
-                }
-            }
-            _ => unreachable!("export should be a table"),
+        let definition = unsafe { &*wasmtime_export.definition };
+        let index = wasmtime_handle.table_index(definition);
+        for i in 0..definition.current_elements {
+            set_table_item(&wasmtime_handle, index, i, item.clone())?;
         }
 
         Ok(Table {
@@ -360,11 +339,9 @@ impl Table {
     }
 
     fn wasmtime_table_index(&self) -> wasm::DefinedTableIndex {
-        match self.wasmtime_export {
-            wasmtime_runtime::Export::Table { definition, .. } => {
-                self.wasmtime_handle.table_index(unsafe { &*definition })
-            }
-            _ => panic!("global definition not found"),
+        unsafe {
+            self.wasmtime_handle
+                .table_index(&*self.wasmtime_export.definition)
         }
     }
 
@@ -385,19 +362,13 @@ impl Table {
     /// the right type to be stored in this table.
     pub fn set(&self, index: u32, val: Val) -> Result<()> {
         let table_index = self.wasmtime_table_index();
-        let mut wasmtime_handle = self.wasmtime_handle.clone();
         let item = into_checked_anyfunc(val, &self.store)?;
-        set_table_item(&mut wasmtime_handle, table_index, index, item)
+        set_table_item(&self.wasmtime_handle, table_index, index, item)
     }
 
     /// Returns the current size of this table.
     pub fn size(&self) -> u32 {
-        match self.wasmtime_export {
-            wasmtime_runtime::Export::Table { definition, .. } => unsafe {
-                (*definition).current_elements
-            },
-            _ => panic!("global definition not found"),
-        }
+        unsafe { (&*self.wasmtime_export.definition).current_elements }
     }
 
     /// Grows the size of this table by `delta` more elements, initialization
@@ -462,26 +433,17 @@ impl Table {
         Ok(())
     }
 
-    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::Export {
-        &self.wasmtime_export
-    }
-
     pub(crate) fn from_wasmtime_table(
-        export: wasmtime_runtime::Export,
+        wasmtime_export: wasmtime_runtime::ExportTable,
         store: &Store,
-        instance_handle: wasmtime_runtime::InstanceHandle,
+        wasmtime_handle: wasmtime_runtime::InstanceHandle,
     ) -> Table {
-        let table = if let wasmtime_runtime::Export::Table { ref table, .. } = export {
-            table
-        } else {
-            panic!("wasmtime export is not table")
-        };
-        let ty = TableType::from_wasmtime_table(&table.table);
+        let ty = TableType::from_wasmtime_table(&wasmtime_export.table.table);
         Table {
             store: store.clone(),
-            ty: ty,
-            wasmtime_handle: instance_handle,
-            wasmtime_export: export,
+            ty,
+            wasmtime_handle,
+            wasmtime_export,
         }
     }
 }
@@ -511,7 +473,7 @@ pub struct Memory {
     store: Store,
     ty: MemoryType,
     wasmtime_handle: InstanceHandle,
-    wasmtime_export: wasmtime_runtime::Export,
+    wasmtime_export: wasmtime_runtime::ExportMemory,
 }
 
 impl Memory {
@@ -534,13 +496,6 @@ impl Memory {
     /// Returns the underlying type of this memory.
     pub fn ty(&self) -> &MemoryType {
         &self.ty
-    }
-
-    fn wasmtime_memory_definition(&self) -> *mut wasmtime_runtime::VMMemoryDefinition {
-        match self.wasmtime_export {
-            wasmtime_runtime::Export::Memory { definition, .. } => definition,
-            _ => panic!("memory definition not found"),
-        }
     }
 
     /// Returns this memory as a slice view that can be read natively in Rust.
@@ -584,7 +539,7 @@ impl Memory {
     /// and in general you probably want to result to unsafe accessors and the
     /// `data` methods below.
     pub unsafe fn data_unchecked_mut(&self) -> &mut [u8] {
-        let definition = &*self.wasmtime_memory_definition();
+        let definition = &*self.wasmtime_export.definition;
         slice::from_raw_parts_mut(definition.base, definition.current_length)
     }
 
@@ -595,14 +550,14 @@ impl Memory {
     /// of [`Memory::data_unchecked`] to make sure that you can safely
     /// read/write the memory.
     pub fn data_ptr(&self) -> *mut u8 {
-        unsafe { (*self.wasmtime_memory_definition()).base }
+        unsafe { (*self.wasmtime_export.definition).base }
     }
 
     /// Returns the byte length of this memory.
     ///
     /// The returned value will be a multiple of the wasm page size, 64k.
     pub fn data_size(&self) -> usize {
-        unsafe { (*self.wasmtime_memory_definition()).current_length }
+        unsafe { (*self.wasmtime_export.definition).current_length }
     }
 
     /// Returns the size, in pages, of this wasm memory.
@@ -625,39 +580,26 @@ impl Memory {
     /// Returns an error if memory could not be grown, for example if it exceeds
     /// the maximum limits of this memory.
     pub fn grow(&self, delta: u32) -> Result<u32> {
-        match self.wasmtime_export {
-            wasmtime_runtime::Export::Memory { definition, .. } => {
-                let definition = unsafe { &(*definition) };
-                let index = self.wasmtime_handle.memory_index(definition);
-                self.wasmtime_handle
-                    .clone()
-                    .memory_grow(index, delta)
-                    .ok_or_else(|| anyhow!("failed to grow memory"))
-            }
-            _ => panic!("memory definition not found"),
-        }
-    }
-
-    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::Export {
-        &self.wasmtime_export
+        let index = self
+            .wasmtime_handle
+            .memory_index(unsafe { &*self.wasmtime_export.definition });
+        self.wasmtime_handle
+            .clone()
+            .memory_grow(index, delta)
+            .ok_or_else(|| anyhow!("failed to grow memory"))
     }
 
     pub(crate) fn from_wasmtime_memory(
-        export: wasmtime_runtime::Export,
+        wasmtime_export: wasmtime_runtime::ExportMemory,
         store: &Store,
-        instance_handle: wasmtime_runtime::InstanceHandle,
+        wasmtime_handle: wasmtime_runtime::InstanceHandle,
     ) -> Memory {
-        let memory = if let wasmtime_runtime::Export::Memory { ref memory, .. } = export {
-            memory
-        } else {
-            panic!("wasmtime export is not memory")
-        };
-        let ty = MemoryType::from_wasmtime_memory(&memory.memory);
+        let ty = MemoryType::from_wasmtime_memory(&wasmtime_export.memory.memory);
         Memory {
             store: store.clone(),
             ty: ty,
-            wasmtime_handle: instance_handle,
-            wasmtime_export: export,
+            wasmtime_handle,
+            wasmtime_export,
         }
     }
 }

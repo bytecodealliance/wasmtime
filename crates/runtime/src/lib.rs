@@ -36,7 +36,7 @@ mod vmcontext;
 
 pub mod libcalls;
 
-pub use crate::export::Export;
+pub use crate::export::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{InstanceHandle, InstantiationError, LinkError};
 pub use crate::jit_int::GdbJitImageRegistration;
@@ -51,7 +51,7 @@ pub use crate::traphandlers::{
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
     VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
-    VMTableDefinition, VMTableImport,
+    VMTableDefinition, VMTableImport, VMTrampoline,
 };
 
 /// Version number of this crate.
