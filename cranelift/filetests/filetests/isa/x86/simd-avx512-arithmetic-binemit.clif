@@ -6,12 +6,12 @@ function %imul_i64x2() {
 block0:
     [-, %xmm1]    v0 = vconst.i64x2 [1 2]
     [-, %xmm2]    v1 = vconst.i64x2 [2 2]
-    [-, %xmm19]   v2 = imul v0, v1 ; bin: 62 e2 f5 08 40 da
+    [-, %xmm14]   v2 = imul v0, v1 ; bin: 62 72 f5 08 40 f2
     ; 62, mandatory EVEX prefix
-    ; e2 = 1110 0010, R, X, B are unset (inverted) while R' is set (MSB in %xmm19); mm is set to 0F38
+    ; 72 = 0111 0010, R is set (MSB in %xmm14) while X, B, and R' are unset (note these are all inverted); mm is set to 0F38
     ; f5 = 1111 0101, W is set (64-bit op), vvvv set to 1 (inverted), bit 2 always set, pp set to 01
     ; 08 = 0000 1000, everything, LL' indicates 128-bit, V' is unset (inverted, %xmm1 has MSB of 0)
     ; 40, opcode (correct)
-    ; da = 1100 1010, ModR/M byte using 0b011 from %xmm19 in reg and 0b010 from %xmm2 in r/m
+    ; f2 = 1111 0010, ModR/M byte using 0b110 from %xmm14 in reg and 0b010 from %xmm2 in r/m
     return
 }

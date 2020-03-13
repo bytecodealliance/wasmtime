@@ -166,14 +166,11 @@ impl Compiler {
             if trampolines.contains_key(&index) {
                 continue;
             }
-            // FIXME(#1303) we should be generating a trampoline for all
+            // FIXME(#1322) we should be generating a trampoline for all
             // functions in a module, not just those with less than 40
-            // arguments. Currently though cranelift dies in spec tests when one
-            // function has 100 arguments. This looks to be a cranelift bug, so
-            // let's work around it for now by skipping generating a trampoline
-            // for that massive function. The trampoline isn't actually needed
-            // at this time, and we'll hopefully get the cranelift bug fixed
-            // soon enough to remove this condition.
+            // arguments. Currently there is no relocation support for
+            // trampoline compilation; when that is added this check can
+            // go away.
             if sig.params.len() > 40 {
                 continue;
             }

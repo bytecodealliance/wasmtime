@@ -143,19 +143,18 @@ fn replace_nonrex_constraints(
 }
 
 fn replace_evex_constraints(
-    regs: &IsaRegs,
+    _: &IsaRegs,
     constraints: Vec<OperandConstraint>,
 ) -> Vec<OperandConstraint> {
     constraints
         .into_iter()
         .map(|constraint| match constraint {
             OperandConstraint::RegClass(rc_index) => {
-                let new_rc_index = if rc_index == regs.class_by_name("FPR") {
-                    regs.class_by_name("FPR32")
-                } else {
-                    rc_index
-                };
-                OperandConstraint::RegClass(new_rc_index)
+                // FIXME(#1306) this should be able to upgrade the register class to FPR32 as in
+                // `replace_nonrex_constraints` above, e.g. When FPR32 is re-added, add back in the
+                // rc_index conversion to FPR32. In the meantime, this is effectively a no-op
+                // conversion--the register class stays the same.
+                OperandConstraint::RegClass(rc_index)
             }
             _ => constraint,
         })
@@ -419,7 +418,6 @@ pub(crate) fn define<'shared>(
     let abcd = regs.class_by_name("ABCD");
     let gpr = regs.class_by_name("GPR");
     let fpr = regs.class_by_name("FPR");
-    let fpr32 = regs.class_by_name("FPR32");
     let flag = regs.class_by_name("FLAG");
 
     // Operand constraints shorthands.
@@ -3364,8 +3362,8 @@ pub(crate) fn define<'shared>(
     recipes.add_template(
         Template::new(
         EncodingRecipeBuilder::new("evex_reg_vvvv_rm_128", &formats.binary, 1)
-            .operands_in(vec![fpr32, fpr32])
-            .operands_out(vec![fpr32])
+            .operands_in(vec![fpr, fpr])
+            .operands_out(vec![fpr])
             .emit(
                 r#"
                 // instruction encoding operands: reg (op1, w), vvvv (op2, r), rm (op3, r)
