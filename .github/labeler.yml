@@ -17,43 +17,43 @@
 #
 # Note that we keep the labels in alphabetical order below.
 
-cranelift:
-  - cranelift/**
+"cranelift":
+  - "cranelift/**"
 
 "cranelift:docs":
-  - cranelift/docs/**
+  - "cranelift/docs/**"
 
 "cranelift:meta":
-  - cranelift/codegen/meta/**
+  - "cranelift/codegen/meta/**"
 
 "cranelift:module":
-  - cranelift/faerie/**
-  - cranelift/module/**
-  - cranelift/object/**
-  - cranelift/simplejit/**
+  - "cranelift/faerie/**"
+  - "cranelift/module/**"
+  - "cranelift/object/**"
+  - "cranelift/simplejit/**"
 
 "cranelift:wasm":
-  - cranelift/wasm/**
-  - cranelift/wasmtests/**
+  - "cranelift/wasm/**"
+  - "cranelift/wasmtests/**"
 
-fuzzing:
-  - crates/fuzzing/**
-  - fuzz/**
+"fuzzing":
+  - "crates/fuzzing/**"
+  - "fuzz/**"
 
-lightbeam:
-  - crates/lightbeam/**
+"lightbeam":
+  - "crates/lightbeam/**"
 
-wasi:
-  - crates/wasi/**
-  - crates/wasi-common/**
-  - crates/wiggle/**
+"wasi":
+  - "crates/wasi/**"
+  - "crates/wasi-common/**"
+  - "crates/wiggle/**"
 
 "wasmtime:api":
-  - crates/api/**
+  - "crates/api/**"
 
 "wasmtime:c-api":
-  - crates/c-api/**
+  - "crates/c-api/**"
 
 "wasmtime:docs":
-  - *.md
-  - docs/**
+  - "*.md"
+  - "docs/**"
