@@ -11,14 +11,11 @@ keywords = ["webassembly", "wasm", "compile", "compiler", "jit"]
 edition = "2018"
 
 [dependencies]
-auto_enums = "0.7"
 capstone = "0.6.0"
-chain-one = "0.1"
 cranelift-codegen = { path = "../../cranelift/codegen", version = "0.61.0" }
 derive_more = "0.99"
 dynasm = "0.5.2"
 dynasmrt = "0.5.2"
-hashers = "1.0"
 iter-enum = "0.2"
 itertools = "0.8.2"
 memoffset = "0.5.3"
