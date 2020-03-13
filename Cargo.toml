@@ -41,7 +41,6 @@ file-per-thread-logger = "0.1.1"
 wat = "1.0.10"
 libc = "0.2.60"
 rayon = "1.2.1"
-wasm-webidl-bindings = "0.8"
 
 [dev-dependencies]
 wasmtime-runtime = { path = "crates/runtime" }
