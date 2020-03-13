@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
-use wasmtime_environ::Module;
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::wasm::FuncIndex;
+use wasmtime_environ::Module;
 use wasmtime_jit::CompiledModule;
 
 lazy_static::lazy_static! {
@@ -49,10 +49,7 @@ impl GlobalFrameInfo {
     /// compiled functions within `module`. If the `module` has no functions
     /// then `None` will be returned. Otherwise the returned object, when
     /// dropped, will be used to unregister all name information from this map.
-    pub fn register(
-        &self,
-        module: &CompiledModule,
-    ) -> Option<GlobalFrameInfoRegistration> {
+    pub fn register(&self, module: &CompiledModule) -> Option<GlobalFrameInfoRegistration> {
         let mut min = usize::max_value();
         let mut max = 0;
         let mut functions = BTreeMap::new();
