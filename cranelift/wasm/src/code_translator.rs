@@ -73,13 +73,27 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             builder.set_val_label(val, label);
         }
         Operator::LocalSet { local_index } => {
-            let val = state.pop1();
+            let mut val = state.pop1();
+
+            // Ensure SIMD values are cast to their default Cranelift type, I8x16.
+            let ty = builder.func.dfg.value_type(val);
+            if ty.is_vector() {
+                val = optionally_bitcast_vector(val, I8X16, builder);
+            }
+
             builder.def_var(Variable::with_u32(*local_index), val);
             let label = ValueLabel::from_u32(*local_index);
             builder.set_val_label(val, label);
         }
         Operator::LocalTee { local_index } => {
-            let val = state.peek1();
+            let mut val = state.peek1();
+
+            // Ensure SIMD values are cast to their default Cranelift type, I8x16.
+            let ty = builder.func.dfg.value_type(val);
+            if ty.is_vector() {
+                val = optionally_bitcast_vector(val, I8X16, builder);
+            }
+
             builder.def_var(Variable::with_u32(*local_index), val);
             let label = ValueLabel::from_u32(*local_index);
             builder.set_val_label(val, label);
