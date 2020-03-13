@@ -141,6 +141,9 @@ pub struct Module {
     /// A unique identifier (within this process) for this module.
     pub id: usize,
 
+    /// The name of this wasm module, often found in the wasm file.
+    pub name: Option<String>,
+
     /// Local information about a module which is the bare minimum necessary to
     /// translate a function body. This is derived as `Hash` whereas this module
     /// isn't, since it contains too much information needed to translate a
@@ -222,6 +225,7 @@ impl Module {
 
         Self {
             id: NEXT_ID.fetch_add(1, SeqCst),
+            name: None,
             imported_funcs: PrimaryMap::new(),
             imported_tables: PrimaryMap::new(),
             imported_memories: PrimaryMap::new(),

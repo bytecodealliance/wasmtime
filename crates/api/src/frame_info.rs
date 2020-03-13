@@ -1,6 +1,6 @@
-use crate::module::Names;
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
+use wasmtime_environ::Module;
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::wasm::FuncIndex;
 use wasmtime_jit::CompiledModule;
@@ -39,7 +39,7 @@ pub struct GlobalFrameInfoRegistration {
 struct ModuleFrameInfo {
     start: usize,
     functions: BTreeMap<usize, (usize, FuncIndex)>,
-    names: Arc<Names>,
+    module: Arc<Module>,
 }
 
 impl GlobalFrameInfo {
@@ -51,7 +51,6 @@ impl GlobalFrameInfo {
     /// dropped, will be used to unregister all name information from this map.
     pub fn register(
         &self,
-        names: &Arc<Names>,
         module: &CompiledModule,
     ) -> Option<GlobalFrameInfoRegistration> {
         let mut min = usize::max_value();
@@ -92,7 +91,7 @@ impl GlobalFrameInfo {
             ModuleFrameInfo {
                 start: min,
                 functions,
-                names: names.clone(),
+                module: module.module().clone(),
             },
         );
         assert!(prev.is_none());
@@ -114,9 +113,9 @@ impl GlobalFrameInfo {
             return None;
         }
         Some(FrameInfo {
-            module_name: info.names.module_name.clone(),
+            module_name: info.module.name.clone(),
             func_index: func_index.index() as u32,
-            func_name: info.names.module.func_names.get(func_index).cloned(),
+            func_name: info.module.func_names.get(func_index).cloned(),
         })
     }
 }

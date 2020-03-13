@@ -128,6 +128,9 @@ pub struct DummyEnvironment {
     /// Instructs to collect debug data during translation.
     debug_info: bool,
 
+    /// Name of the module from the wasm file.
+    pub module_name: Option<String>,
+
     /// Function names.
     function_names: SecondaryMap<FuncIndex, String>,
 }
@@ -141,6 +144,7 @@ impl DummyEnvironment {
             func_bytecode_sizes: Vec::new(),
             return_mode,
             debug_info,
+            module_name: None,
             function_names: SecondaryMap::new(),
         }
     }
@@ -723,6 +727,11 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         };
         self.func_bytecode_sizes.push(body_bytes.len());
         self.info.function_bodies.push(func);
+        Ok(())
+    }
+
+    fn declare_module_name(&mut self, name: &'data str) -> WasmResult<()> {
+        self.module_name = Some(String::from(name));
         Ok(())
     }
 

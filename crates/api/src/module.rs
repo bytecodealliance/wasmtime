@@ -7,10 +7,7 @@ use crate::types::{
 use anyhow::{bail, Error, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use wasmparser::{
-    validate, CustomSectionKind, ExternalKind, ImportSectionEntryType, ModuleReader, Name,
-    SectionCode,
-};
+use wasmparser::{validate, ExternalKind, ImportSectionEntryType, ModuleReader, SectionCode};
 use wasmtime_jit::CompiledModule;
 
 fn into_memory_type(mt: wasmparser::MemoryType) -> Result<MemoryType> {
@@ -141,12 +138,6 @@ struct ModuleInner {
     exports: Box<[ExportType]>,
     compiled: CompiledModule,
     frame_info_registration: Mutex<Option<Option<GlobalFrameInfoRegistration>>>,
-    names: Arc<Names>,
-}
-
-pub struct Names {
-    pub module: Arc<wasmtime_environ::Module>,
-    pub module_name: Option<String>,
 }
 
 impl Module {
@@ -234,7 +225,7 @@ impl Module {
     pub fn new_with_name(store: &Store, bytes: impl AsRef<[u8]>, name: &str) -> Result<Module> {
         let mut module = Module::new(store, bytes.as_ref())?;
         let inner = Arc::get_mut(&mut module.inner).unwrap();
-        Arc::get_mut(&mut inner.names).unwrap().module_name = Some(name.to_string());
+        Arc::get_mut(inner.compiled.module_mut()).unwrap().name = Some(name.to_string());
         Ok(module)
     }
 
@@ -379,16 +370,11 @@ impl Module {
             store.engine().config().profiler.as_ref(),
         )?;
 
-        let names = Arc::new(Names {
-            module_name: None,
-            module: compiled.module().clone(),
-        });
         Ok(Module {
             inner: Arc::new(ModuleInner {
                 store: store.clone(),
                 imports: Box::new([]),
                 exports: Box::new([]),
-                names,
                 compiled,
                 frame_info_registration: Mutex::new(None),
             }),
@@ -424,7 +410,7 @@ impl Module {
     /// # }
     /// ```
     pub fn name(&self) -> Option<&str> {
-        self.inner.names.module_name.as_deref()
+        self.inner.compiled.module().name.as_deref()
     }
 
     /// Returns the list of imports that this [`Module`] has and must be
@@ -645,23 +631,6 @@ impl Module {
                     }
                 }
                 SectionCode::Custom {
-                    kind: CustomSectionKind::Name,
-                    ..
-                } => {
-                    // Read name section. Per spec, ignore invalid custom section.
-                    if let Ok(mut reader) = section.get_name_section_reader() {
-                        while let Ok(entry) = reader.read() {
-                            if let Name::Module(name) = entry {
-                                if let Ok(name) = name.get_name() {
-                                    Arc::get_mut(&mut inner.names).unwrap().module_name =
-                                        Some(name.to_string());
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-                SectionCode::Custom {
                     name: "webidl-bindings",
                     ..
                 }
@@ -702,6 +671,6 @@ and for re-adding support for interface types you can see this issue:
         if info.is_some() {
             return;
         }
-        *info = Some(FRAME_INFO.register(&self.inner.names, &self.inner.compiled));
+        *info = Some(FRAME_INFO.register(&self.inner.compiled));
     }
 }

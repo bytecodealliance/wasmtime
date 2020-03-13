@@ -648,6 +648,14 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         data: &'data [u8],
     ) -> WasmResult<()>;
 
+    /// Declares the name of a module to the environment.
+    ///
+    /// By default this does nothing, but implementations can use this to read
+    /// the module name subsection of the custom name section if desired.
+    fn declare_module_name(&mut self, _name: &'data str) -> WasmResult<()> {
+        Ok(())
+    }
+
     /// Declares the name of a function to the environment.
     ///
     /// By default this does nothing, but implementations can use this to read
