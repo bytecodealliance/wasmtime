@@ -573,7 +573,7 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     // Only create an FPR stack slot if we're going to save FPRs.
     let fpr_slot = if num_fprs > 0 {
         Some(func.create_stack_slot(ir::StackSlotData {
-            kind: ir::StackSlotKind::SpillSlot,
+            kind: ir::StackSlotKind::ExplicitSlot,
             size: (num_fprs * types::F64X2.bytes() as usize) as u32,
             offset: None,
         }))
