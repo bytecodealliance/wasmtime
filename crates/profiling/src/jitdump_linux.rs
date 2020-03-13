@@ -16,7 +16,6 @@ use anyhow::Result;
 use object::Object;
 use scroll::{IOwrite, SizeWith, NATIVE};
 use serde::{Deserialize, Serialize};
-use wasmtime_environ::Module;
 use std::fmt::Debug;
 use std::fs::{File, OpenOptions};
 use std::io;
@@ -28,6 +27,7 @@ use std::{borrow, mem, process};
 use target_lexicon::Architecture;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::DefinedFuncIndex;
+use wasmtime_environ::Module;
 use wasmtime_runtime::VMFunctionBody;
 
 #[cfg(target_pointer_width = "64")]
@@ -315,8 +315,7 @@ impl State {
         for (idx, func) in functions.iter() {
             let (addr, len) = unsafe { ((**func).as_ptr() as *const u8, (**func).len()) };
             if let Some(img) = &dbg_image {
-                if let Err(err) = self.dump_from_debug_image(img, "wasm", addr, len, pid, tid)
-                {
+                if let Err(err) = self.dump_from_debug_image(img, "wasm", addr, len, pid, tid) {
                     println!(
                         "Jitdump: module_load failed dumping from debug image: {:?}\n",
                         err

@@ -30,7 +30,7 @@ mod obj;
 use anyhow::{bail, Result};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use wasmtime::{Config, Strategy, ProfilingStrategy};
+use wasmtime::{Config, ProfilingStrategy, Strategy};
 
 pub use obj::compile_to_obj;
 

@@ -3,7 +3,7 @@
 
 use crate::{wasm_byte_vec_t, wasm_config_t, wasm_engine_t};
 use std::str;
-use wasmtime::{OptLevel, Strategy, ProfilingStrategy};
+use wasmtime::{OptLevel, ProfilingStrategy, Strategy};
 
 #[repr(u8)]
 #[derive(Clone)]
