@@ -145,6 +145,11 @@ block0(v0: i64, v1: i64):
     store.f64 v23, v1+168
     return
 }
+; Only check the first unwind code here because this test specifically looks to
+; see that in a function that is not a leaf, a callee-save FPR is stored in an
+; area that does not overlap either the callee's shadow space or stack argument
+; space.
+;
 ; sameln: UnwindInfo {
 ; nextln:     version: 1,
 ; nextln:     flags: 0,
