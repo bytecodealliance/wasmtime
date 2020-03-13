@@ -149,7 +149,7 @@ pub enum ModuleError {
     Compilation(#[from] CodegenError),
     /// Wraps a generic error from a backend
     #[error("Backend error: {0}")]
-    Backend(String),
+    Backend(#[source] anyhow::Error),
 }
 
 /// A convenient alias for a `Result` that uses `ModuleError` as the error type.
