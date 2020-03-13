@@ -71,7 +71,7 @@ members = [
 ]
 
 [features]
-default = ["jitdump"]
+default = ["jitdump", "wat"]
 lightbeam = [
     "wasmtime-environ/lightbeam",
     "wasmtime-jit/lightbeam",
@@ -79,6 +79,7 @@ lightbeam = [
     "wasmtime/lightbeam",
 ]
 jitdump = ["wasmtime/jitdump"]
+wat = ["wasmtime/wat"]
 test_programs = ["test-programs/test_programs"]
 
 [badges]
