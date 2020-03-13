@@ -13,20 +13,17 @@ pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDataty
         witx::IntRepr::U64 => witx::AtomType::I64,
     });
 
-    let mut flag_constructors = vec![];
-    let mut all_values = 0;
+    let mut names_ = vec![];
+    let mut values_ = vec![];
     for (i, f) in f.flags.iter().enumerate() {
         let name = names.flag_member(&f.name);
         let value = 1u128
             .checked_shl(u32::try_from(i).expect("flag value overflow"))
             .expect("flag value overflow");
         let value_token = Literal::u128_unsuffixed(value);
-        flag_constructors.push(quote!(pub const #name: #ident = #ident(#value_token)));
-        all_values += value;
+        names_.push(name);
+        values_.push(value_token);
     }
-    let all_values_token = Literal::u128_unsuffixed(all_values);
-
-    let ident_str = ident.to_string();
 
     quote! {
         #[repr(transparent)]
@@ -34,18 +31,41 @@ pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDataty
         pub struct #ident(#repr);
 
         impl #ident {
-            #(#flag_constructors);*;
-            pub const EMPTY_FLAGS: #ident = #ident(0 as #repr);
-            pub const ALL_FLAGS: #ident = #ident(#all_values_token);
+            #(pub const #names_: #ident = #ident(#values_);)*
 
+            #[inline]
+            pub const fn empty() -> Self {
+                #ident(0)
+            }
+
+            #[inline]
+            pub const fn all() -> Self {
+                #ident(#(#values_)|*)
+            }
+
+            #[inline]
             pub fn contains(&self, other: &#ident) -> bool {
-                !*self & *other == Self::EMPTY_FLAGS
+                !*self & *other == Self::empty()
             }
         }
 
         impl ::std::fmt::Display for #ident {
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-                write!(f, "{}({:#b})", #ident_str, self.0)
+                let mut first = true;
+                #(
+                    if self.0 & #values_ == #values_ {
+                        if !first {
+                            f.write_str("|")?;
+                        }
+                        first = false;
+                        f.write_fmt(format_args!("{}", stringify!(#names_).to_lowercase()))?;
+                    }
+                )*
+                if first {
+                    f.write_str("empty")?;
+                }
+                f.write_fmt(format_args!(" ({:#x})", self.0))?;
+                Ok(())
             }
         }
 
@@ -98,7 +118,7 @@ pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDataty
         impl ::std::convert::TryFrom<#repr> for #ident {
             type Error = wiggle_runtime::GuestError;
             fn try_from(value: #repr) -> Result<Self, wiggle_runtime::GuestError> {
-                if #repr::from(!#ident::ALL_FLAGS) & value != 0 {
+                if #repr::from(!#ident::all()) & value != 0 {
                     Err(wiggle_runtime::GuestError::InvalidFlagValue(stringify!(#ident)))
                 } else {
                     Ok(#ident(value))
