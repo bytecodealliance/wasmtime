@@ -4,7 +4,7 @@ pub(crate) fn define() -> IsaRegs {
     let mut regs = IsaRegsBuilder::new();
 
     let builder = RegBankBuilder::new("FloatRegs", "xmm")
-        .units(32)
+        .units(16)
         .track_pressure(true);
     let float_regs = regs.add_bank(builder);
 
@@ -24,10 +24,7 @@ pub(crate) fn define() -> IsaRegs {
     let builder = RegClassBuilder::new_toplevel("GPR", int_regs);
     let gpr = regs.add_class(builder);
 
-    let builder = RegClassBuilder::new_toplevel("FPR32", float_regs);
-    let fpr32 = regs.add_class(builder);
-
-    let builder = RegClassBuilder::subclass_of("FPR", fpr32, 0, 16);
+    let builder = RegClassBuilder::new_toplevel("FPR", float_regs);
     let fpr = regs.add_class(builder);
 
     let builder = RegClassBuilder::new_toplevel("FLAG", flag_reg);
