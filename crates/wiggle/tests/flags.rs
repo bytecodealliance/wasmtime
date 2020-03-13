@@ -99,3 +99,15 @@ proptest! {
         e.test()
     }
 }
+
+#[test]
+fn flags_fmt() {
+    let empty = format!("{}", types::CarConfig::empty());
+    assert_eq!(empty, "empty (0x0)");
+    let one_flag = format!("{}", types::CarConfig::AWD);
+    assert_eq!(one_flag, "awd (0x2)");
+    let two_flags = format!("{}", types::CarConfig::AUTOMATIC | types::CarConfig::SUV);
+    assert_eq!(two_flags, "automatic|suv (0x5)");
+    let all = format!("{}", types::CarConfig::all());
+    assert_eq!(all, "automatic|awd|suv (0x7)");
+}
