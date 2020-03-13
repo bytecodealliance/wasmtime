@@ -1679,7 +1679,16 @@ where
         }
 
         fn iter(vals: impl IntoIterator<Item = OperatorFromWasm>) -> Output {
-            vec(StaticVec::from_iter(vals))
+            let mut vals = vals.into_iter();
+            let v = StaticVec::from_iter(vals.by_ref());
+            if let Some(next) = vals.next() {
+                let mut v = Vec::from_iter(v);
+                v.push(next);
+                v.extend(vals);
+                Output::VariableLength(v.into_iter())
+            } else {
+                vec(v)
+            }
         }
 
         fn none() -> Output {
@@ -1694,6 +1703,7 @@ where
         enum Output {
             Consts(Consts),
             FixedLength(StaticVecIntoIter<OperatorFromWasm, 5>),
+            VariableLength(std::vec::IntoIter<OperatorFromWasm>),
             None(std::iter::Empty<OperatorFromWasm>),
             One(std::iter::Once<OperatorFromWasm>),
         }
