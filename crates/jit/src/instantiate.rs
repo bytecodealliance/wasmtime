@@ -252,6 +252,11 @@ impl CompiledModule {
         &self.module
     }
 
+    /// Return a reference-counting pointer to a module.
+    pub fn module_mut(&mut self) -> &mut Arc<Module> {
+        &mut self.module
+    }
+
     /// Return a reference to a module.
     pub fn module_ref(&self) -> &Module {
         &self.module

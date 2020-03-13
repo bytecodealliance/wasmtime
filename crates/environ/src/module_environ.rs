@@ -409,6 +409,11 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         Ok(())
     }
 
+    fn declare_module_name(&mut self, name: &'data str) -> WasmResult<()> {
+        self.result.module.name = Some(name.to_string());
+        Ok(())
+    }
+
     fn declare_func_name(&mut self, func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
         self.result
             .module
