@@ -426,7 +426,7 @@ impl ModuleContext for SimpleContext {
         Some(index)
     }
 
-    fn vmctx_builtin_function(&self, index: u32) -> u32 {
+    fn vmctx_builtin_function(&self, _index: u32) -> u32 {
         unimplemented!()
     }
 

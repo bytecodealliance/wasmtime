@@ -15,7 +15,7 @@ use cranelift_codegen::{ir, isa};
 use cranelift_entity::{PrimaryMap, SecondaryMap};
 use cranelift_wasm::{DefinedFuncIndex, ModuleTranslationState};
 use lightbeam::{CodeGenSession, OffsetSink, Sinks};
-use std::mem;
+use std::{convert::TryFrom, mem};
 
 /// A compiler that compiles a WebAssembly module with Lightbeam, directly translating the Wasm file.
 pub struct Lightbeam;
@@ -43,11 +43,17 @@ impl crate::compilation::Compiler for Lightbeam {
         }
 
         impl WasmtimeOffsetSink {
-            fn new(offset: usize, address_map: FunctionAddressMap) -> Self {
+            fn new(offset: usize, start_srcloc: ir::SourceLoc, end_srcloc: ir::SourceLoc) -> Self {
                 WasmtimeOffsetSink {
                     offset,
                     last: None,
-                    address_map,
+                    address_map: FunctionAddressMap {
+                        instructions: vec![],
+                        start_srcloc,
+                        end_srcloc,
+                        body_offset: 0,
+                        body_len: 0,
+                    },
                 }
             }
 
@@ -56,11 +62,15 @@ impl crate::compilation::Compiler for Lightbeam {
                     self.address_map.instructions.push(InstructionAddressMap {
                         srcloc,
                         code_offset,
-                        code_len: body_len - code_offset,
+                        code_len: body_len
+                            .checked_sub(code_offset)
+                            .expect("Code offset exceeds size of body"),
                     });
                 }
 
-                self.address_map.body_len = body_len - self.address_map.body_offset;
+                self.address_map.body_len = body_len
+                    .checked_sub(self.address_map.body_offset)
+                    .expect("Code offset exceeds size of body");
 
                 self.address_map
             }
@@ -76,7 +86,9 @@ impl crate::compilation::Compiler for Lightbeam {
                     return;
                 }
 
-                let offset_in_compiled_function = offset_in_compiled_function - self.offset;
+                let offset_in_compiled_function = offset_in_compiled_function
+                    .checked_sub(self.offset)
+                    .expect("Code offset exceeds size of body");
 
                 let last = mem::replace(
                     &mut self.last,
@@ -87,7 +99,9 @@ impl crate::compilation::Compiler for Lightbeam {
                     self.address_map.instructions.push(InstructionAddressMap {
                         srcloc,
                         code_offset,
-                        code_len: offset_in_compiled_function - code_offset,
+                        code_len: offset_in_compiled_function
+                            .checked_sub(code_offset)
+                            .expect("Code offset exceeds size of body"),
                     })
                 }
             }
@@ -111,17 +125,16 @@ impl crate::compilation::Compiler for Lightbeam {
 
             let mut reloc_sink = RelocSink::new(func_index);
             let mut trap_sink = TrapSink::new();
-            let mut offsetsink = WasmtimeOffsetSink::new(
+            let mut offset_sink = WasmtimeOffsetSink::new(
                 start_offset,
-                FunctionAddressMap {
-                    instructions: vec![],
-                    start_srcloc: ir::SourceLoc::new(function_body.module_offset as u32),
-                    end_srcloc: ir::SourceLoc::new(
-                        (function_body.module_offset + function_body.data.len()) as u32,
-                    ),
-                    body_offset: 0,
-                    body_len: 0,
-                },
+                ir::SourceLoc::new(
+                    u32::try_from(function_body.module_offset)
+                        .expect("Size of module exceeded u32"),
+                ),
+                ir::SourceLoc::new(
+                    u32::try_from(function_body.module_offset + function_body.data.len())
+                        .expect("Size of module exceeded u32"),
+                ),
             );
 
             lightbeam::translate_function(
@@ -129,7 +142,7 @@ impl crate::compilation::Compiler for Lightbeam {
                 Sinks {
                     relocs: &mut reloc_sink,
                     traps: &mut trap_sink,
-                    offsets: &mut offsetsink,
+                    offsets: &mut offset_sink,
                 },
                 i.as_u32(),
                 std::io::Cursor::new(function_body.data),
@@ -138,7 +151,7 @@ impl crate::compilation::Compiler for Lightbeam {
 
             relocations.push(reloc_sink.func_relocs);
             traps.push(trap_sink.traps);
-            module_addresses.push(offsetsink.finalize(codegen_session.offset() - start_offset));
+            module_addresses.push(offset_sink.finalize(codegen_session.offset() - start_offset));
         }
 
         let code_section = codegen_session

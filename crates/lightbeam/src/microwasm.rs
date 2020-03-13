@@ -3,7 +3,6 @@ use crate::{
     module::{ModuleContext, SigType, Signature},
     StrErr,
 };
-use chain_one::WithChainOne;
 use cranelift_codegen::ir::SourceLoc;
 use itertools::Either;
 use smallvec::SmallVec;
@@ -1830,10 +1829,11 @@ where
             WasmOperator::Block { ty } => {
                 let id = self.next_id();
                 let (_, returns) = self.type_or_func_type_to_sig(ty)?;
+                let returns = returns.collect();
                 self.control_frames.push(ControlFrame {
                     id,
                     arguments: self.stack.len() as u32,
-                    returns: returns.collect(),
+                    returns,
                     kind: ControlFrameKind::Block {
                         needs_end_label: false,
                     },
@@ -1849,10 +1849,11 @@ where
             WasmOperator::Loop { ty } => {
                 let id = self.next_id();
                 let (_, returns) = self.type_or_func_type_to_sig(ty)?;
+                let returns = returns.collect();
                 self.control_frames.push(ControlFrame {
                     id,
                     arguments: self.stack.len() as u32,
-                    returns: returns.collect(),
+                    returns,
                     kind: ControlFrameKind::Loop,
                 });
 
@@ -1871,10 +1872,11 @@ where
             WasmOperator::If { ty } => {
                 let id = self.next_id();
                 let (_, returns) = self.type_or_func_type_to_sig(ty)?;
+                let returns = returns.collect();
                 self.control_frames.push(ControlFrame {
                     id,
                     arguments: self.stack.len() as u32,
-                    returns: returns.collect(),
+                    returns,
                     kind: ControlFrameKind::If { has_else: false },
                 });
                 let block_param_type_wasm = self.block_params_with_wasm_type(ty)?;
@@ -1977,9 +1979,9 @@ where
                     to_drop
                         .into_iter()
                         .map(Operator::Drop)
-                        .chain_one(Operator::Br {
+                        .chain(iter::once(Operator::Br {
                             target: block.br_target(),
-                        }),
+                        })),
                 )
             }
             WasmOperator::BrIf { relative_depth } => {
@@ -2044,9 +2046,9 @@ where
                     to_drop
                         .into_iter()
                         .map(Operator::Drop)
-                        .chain_one(Operator::Br {
+                        .chain(iter::once(Operator::Br {
                             target: block.br_target(),
-                        }),
+                        })),
                 )
             }
             WasmOperator::Call { function_index } => one(Operator::Call { function_index }),

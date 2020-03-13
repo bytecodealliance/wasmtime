@@ -35,8 +35,6 @@ impl Block {
     }
 }
 
-const DISASSEMBLE: bool = false;
-
 pub trait OffsetSink {
     fn offset(
         &mut self,
@@ -88,7 +86,7 @@ where
 
 pub fn translate<M, I, L: Send + Sync + 'static>(
     session: &mut CodeGenSession<M>,
-    mut sinks: Sinks<'_>,
+    sinks: Sinks<'_>,
     func_idx: u32,
     body: I,
 ) -> Result<(), Error>
