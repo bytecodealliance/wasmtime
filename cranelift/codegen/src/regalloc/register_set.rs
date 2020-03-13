@@ -46,11 +46,6 @@ impl RegisterSet {
         Self { avail: [0; 3] }
     }
 
-    /// Returns `true` if all registers in this set are available.
-    pub fn is_empty(&self) -> bool {
-        self.avail == [0; 3]
-    }
-
     /// Returns `true` if the specified register is available.
     pub fn is_avail(&self, rc: RegClass, reg: RegUnit) -> bool {
         let (idx, bits) = bitmask(rc, reg);
