@@ -461,7 +461,7 @@ dependencies = [
  "anyhow",
  "cranelift-codegen",
  "cranelift-module",
- "faerie 0.15.0",
+ "faerie",
  "goblin",
  "target-lexicon",
 ]
@@ -841,22 +841,6 @@ dependencies = [
 [[package]]
 name = "example-fib-debug-wasm"
 version = "0.1.0"
-
-[[package]]
-name = "faerie"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74b9ed6159e4a6212c61d9c6a86bee01876b192a64accecf58d5b5ae3b667b52"
-dependencies = [
- "anyhow",
- "goblin",
- "indexmap",
- "log",
- "scroll",
- "string-interner",
- "target-lexicon",
- "thiserror",
-]
 
 [[package]]
 name = "faerie"
@@ -2440,7 +2424,7 @@ name = "wasmtime-cli"
 version = "0.12.0"
 dependencies = [
  "anyhow",
- "faerie 0.14.0",
+ "faerie",
  "file-per-thread-logger",
  "filecheck",
  "libc",
@@ -2469,7 +2453,7 @@ name = "wasmtime-debug"
 version = "0.12.0"
 dependencies = [
  "anyhow",
- "faerie 0.14.0",
+ "faerie",
  "gimli",
  "more-asserts",
  "target-lexicon",
@@ -2569,7 +2553,7 @@ name = "wasmtime-obj"
 version = "0.12.0"
 dependencies = [
  "anyhow",
- "faerie 0.14.0",
+ "faerie",
  "more-asserts",
  "wasmtime-environ",
 ]
