@@ -1,7 +1,5 @@
 use crate::sys::dev_null;
-use crate::sys::fdentry_impl::{
-    descriptor_as_oshandle, determine_type_and_access_rights, OsHandle,
-};
+use crate::sys::entry_impl::{descriptor_as_oshandle, determine_type_and_access_rights, OsHandle};
 use crate::virtfs::VirtualFile;
 use crate::wasi::{self, WasiError, WasiResult};
 use std::marker::PhantomData;
@@ -87,10 +85,10 @@ impl Descriptor {
 ///
 /// Here, the `descriptor` field stores the host `Descriptor` object (such as a file descriptor, or
 /// stdin handle), and accessing it can only be done via the provided `FdEntry::as_descriptor` and
-/// `FdEntry::as_descriptor_mut` methods which require a set of base and inheriting rights to be
+/// `Entry::as_descriptor_mut` methods which require a set of base and inheriting rights to be
 /// specified, verifying whether the stored `Descriptor` object is valid for the rights specified.
 #[derive(Debug)]
-pub(crate) struct FdEntry {
+pub(crate) struct Entry {
     pub(crate) file_type: wasi::__wasi_filetype_t,
     descriptor: Descriptor,
     pub(crate) rights_base: wasi::__wasi_rights_t,
@@ -99,7 +97,7 @@ pub(crate) struct FdEntry {
     // TODO: directories
 }
 
-impl FdEntry {
+impl Entry {
     pub(crate) fn from(file: Descriptor) -> io::Result<Self> {
         match file {
             Descriptor::OsHandle(handle) => unsafe { determine_type_and_access_rights(&handle) }

@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_unsafe)]
 #![allow(unused)]
-use crate::fdentry::Descriptor;
+use crate::entry::Descriptor;
 use crate::hostcalls_impl::{ClockEventData, FdEventData};
 use crate::memory::*;
 use crate::sys::host_impl;

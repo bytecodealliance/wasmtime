@@ -22,7 +22,7 @@
 )]
 
 mod ctx;
-mod fdentry;
+mod entry;
 pub mod fs;
 mod helpers;
 mod host;

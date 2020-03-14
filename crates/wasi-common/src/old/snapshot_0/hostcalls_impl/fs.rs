@@ -1,10 +1,10 @@
 #![allow(non_camel_case_types)]
 use super::fs_helpers::path_get;
 use crate::old::snapshot_0::ctx::WasiCtx;
-use crate::old::snapshot_0::fdentry::{Descriptor, FdEntry};
+use crate::old::snapshot_0::entry::{Descriptor, Entry};
 use crate::old::snapshot_0::helpers::*;
 use crate::old::snapshot_0::memory::*;
-use crate::old::snapshot_0::sys::fdentry_impl::determine_type_rights;
+use crate::old::snapshot_0::sys::entry_impl::determine_type_rights;
 use crate::old::snapshot_0::sys::hostcalls_impl::fs_helpers::path_open_rights;
 use crate::old::snapshot_0::sys::{host_impl, hostcalls_impl};
 use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
@@ -24,14 +24,14 @@ pub(crate) unsafe fn fd_close(
 ) -> WasiResult<()> {
     trace!("fd_close(fd={:?})", fd);
 
-    if let Ok(fe) = wasi_ctx.get_fd_entry(fd) {
+    if let Ok(fe) = wasi_ctx.get_entry(fd) {
         // can't close preopened files
         if fe.preopen_path.is_some() {
             return Err(WasiError::ENOTSUP);
         }
     }
 
-    wasi_ctx.remove_fd_entry(fd)?;
+    wasi_ctx.remove_entry(fd)?;
     Ok(())
 }
 
@@ -43,7 +43,7 @@ pub(crate) unsafe fn fd_datasync(
     trace!("fd_datasync(fd={:?})", fd);
 
     let fd = wasi_ctx
-        .get_fd_entry(fd)?
+        .get_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_DATASYNC, 0)?
         .as_file()?;
 
@@ -69,7 +69,7 @@ pub(crate) unsafe fn fd_pread(
     );
 
     let fd = wasi_ctx
-        .get_fd_entry(fd)?
+        .get_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_READ | wasi::__WASI_RIGHTS_FD_SEEK, 0)?
         .as_file()?;
 
@@ -118,7 +118,7 @@ pub(crate) unsafe fn fd_pwrite(
     );
 
     let fd = wasi_ctx
-        .get_fd_entry(fd)?
+        .get_entry(fd)?
         .as_descriptor(
             wasi::__WASI_RIGHTS_FD_WRITE | wasi::__WASI_RIGHTS_FD_SEEK,
             0,
@@ -167,7 +167,7 @@ pub(crate) unsafe fn fd_read(
         .collect();
 
     let maybe_host_nread = match wasi_ctx
-        .get_fd_entry_mut(fd)?
+        .get_entry_mut(fd)?
         .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_READ, 0)?
     {
         Descriptor::OsHandle(file) => file.read_vectored(&mut iovs),
@@ -190,25 +190,25 @@ pub(crate) unsafe fn fd_renumber(
 ) -> WasiResult<()> {
     trace!("fd_renumber(from={:?}, to={:?})", from, to);
 
-    if !wasi_ctx.contains_fd_entry(from) {
+    if !wasi_ctx.contains_entry(from) {
         return Err(WasiError::EBADF);
     }
 
     // Don't allow renumbering over a pre-opened resource.
     // TODO: Eventually, we do want to permit this, once libpreopen in
     // userspace is capable of removing entries from its tables as well.
-    let from_fe = wasi_ctx.get_fd_entry(from)?;
+    let from_fe = wasi_ctx.get_entry(from)?;
     if from_fe.preopen_path.is_some() {
         return Err(WasiError::ENOTSUP);
     }
-    if let Ok(to_fe) = wasi_ctx.get_fd_entry(to) {
+    if let Ok(to_fe) = wasi_ctx.get_entry(to) {
         if to_fe.preopen_path.is_some() {
             return Err(WasiError::ENOTSUP);
         }
     }
 
-    let fe = wasi_ctx.remove_fd_entry(from)?;
-    wasi_ctx.insert_fd_entry_at(to, fe);
+    let fe = wasi_ctx.remove_entry(from)?;
+    wasi_ctx.insert_entry_at(to, fe);
 
     Ok(())
 }
@@ -235,7 +235,7 @@ pub(crate) unsafe fn fd_seek(
         wasi::__WASI_RIGHTS_FD_SEEK | wasi::__WASI_RIGHTS_FD_TELL
     };
     let fd = wasi_ctx
-        .get_fd_entry_mut(fd)?
+        .get_entry_mut(fd)?
         .as_descriptor_mut(rights, 0)?
         .as_file_mut()?;
 
@@ -261,7 +261,7 @@ pub(crate) unsafe fn fd_tell(
     trace!("fd_tell(fd={:?}, newoffset={:#x?})", fd, newoffset);
 
     let fd = wasi_ctx
-        .get_fd_entry_mut(fd)?
+        .get_entry_mut(fd)?
         .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_TELL, 0)?
         .as_file_mut()?;
 
@@ -281,14 +281,11 @@ pub(crate) unsafe fn fd_fdstat_get(
     trace!("fd_fdstat_get(fd={:?}, fdstat_ptr={:#x?})", fd, fdstat_ptr);
 
     let mut fdstat = dec_fdstat_byref(memory, fdstat_ptr)?;
-    let host_fd = wasi_ctx
-        .get_fd_entry(fd)?
-        .as_descriptor(0, 0)?
-        .as_os_handle();
+    let host_fd = wasi_ctx.get_entry(fd)?.as_descriptor(0, 0)?.as_os_handle();
 
     let fs_flags = hostcalls_impl::fd_fdstat_get(&host_fd)?;
 
-    let fe = wasi_ctx.get_fd_entry(fd)?;
+    let fe = wasi_ctx.get_entry(fd)?;
     fdstat.fs_filetype = fe.file_type;
     fdstat.fs_rights_base = fe.rights_base;
     fdstat.fs_rights_inheriting = fe.rights_inheriting;
@@ -307,10 +304,7 @@ pub(crate) unsafe fn fd_fdstat_set_flags(
 ) -> WasiResult<()> {
     trace!("fd_fdstat_set_flags(fd={:?}, fdflags={:#x?})", fd, fdflags);
 
-    let fd = wasi_ctx
-        .get_fd_entry(fd)?
-        .as_descriptor(0, 0)?
-        .as_os_handle();
+    let fd = wasi_ctx.get_entry(fd)?.as_descriptor(0, 0)?.as_os_handle();
 
     hostcalls_impl::fd_fdstat_set_flags(&fd, fdflags)
 }
@@ -329,7 +323,7 @@ pub(crate) unsafe fn fd_fdstat_set_rights(
         fs_rights_inheriting
     );
 
-    let fe = wasi_ctx.get_fd_entry_mut(fd)?;
+    let fe = wasi_ctx.get_entry_mut(fd)?;
     if fe.rights_base & fs_rights_base != fs_rights_base
         || fe.rights_inheriting & fs_rights_inheriting != fs_rights_inheriting
     {
@@ -349,7 +343,7 @@ pub(crate) unsafe fn fd_sync(
     trace!("fd_sync(fd={:?})", fd);
 
     let fd = wasi_ctx
-        .get_fd_entry(fd)?
+        .get_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_SYNC, 0)?
         .as_file()?;
     fd.sync_all().map_err(Into::into)
@@ -375,7 +369,7 @@ pub(crate) unsafe fn fd_write(
     let iovs: Vec<io::IoSlice> = iovs.iter().map(|vec| host::ciovec_to_host(vec)).collect();
 
     // perform unbuffered writes
-    let entry = wasi_ctx.get_fd_entry_mut(fd)?;
+    let entry = wasi_ctx.get_entry_mut(fd)?;
     let isatty = entry.isatty();
     let desc = entry.as_descriptor_mut(wasi::__WASI_RIGHTS_FD_WRITE, 0)?;
     let host_nwritten = match desc {
@@ -428,7 +422,7 @@ pub(crate) unsafe fn fd_advise(
     );
 
     let fd = wasi_ctx
-        .get_fd_entry(fd)?
+        .get_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_ADVISE, 0)?
         .as_file()?;
 
@@ -445,7 +439,7 @@ pub(crate) unsafe fn fd_allocate(
     trace!("fd_allocate(fd={:?}, offset={}, len={})", fd, offset, len);
 
     let fd = wasi_ctx
-        .get_fd_entry(fd)?
+        .get_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_ALLOCATE, 0)?
         .as_file()?;
 
@@ -484,7 +478,7 @@ pub(crate) unsafe fn path_create_directory(
     trace!("     | (path_ptr,path_len)='{}'", path);
 
     let rights = wasi::__WASI_RIGHTS_PATH_OPEN | wasi::__WASI_RIGHTS_PATH_CREATE_DIRECTORY;
-    let fe = wasi_ctx.get_fd_entry(dirfd)?;
+    let fe = wasi_ctx.get_entry(dirfd)?;
     let resolved = path_get(fe, rights, 0, 0, path, false)?;
 
     hostcalls_impl::path_create_directory(resolved)
@@ -518,8 +512,8 @@ pub(crate) unsafe fn path_link(
     trace!("     | (old_path_ptr,old_path_len)='{}'", old_path);
     trace!("     | (new_path_ptr,new_path_len)='{}'", new_path);
 
-    let old_fe = wasi_ctx.get_fd_entry(old_dirfd)?;
-    let new_fe = wasi_ctx.get_fd_entry(new_dirfd)?;
+    let old_fe = wasi_ctx.get_entry(old_dirfd)?;
+    let new_fe = wasi_ctx.get_entry(new_dirfd)?;
     let resolved_old = path_get(
         old_fe,
         wasi::__WASI_RIGHTS_PATH_LINK_SOURCE,
@@ -575,7 +569,7 @@ pub(crate) unsafe fn path_open(
 
     let (needed_base, needed_inheriting) =
         path_open_rights(fs_rights_base, fs_rights_inheriting, oflags, fs_flags);
-    let fe = wasi_ctx.get_fd_entry(dirfd)?;
+    let fe = wasi_ctx.get_entry(dirfd)?;
     let resolved = path_get(
         fe,
         needed_base,
@@ -598,10 +592,10 @@ pub(crate) unsafe fn path_open(
 
     // Determine the type of the new file descriptor and which rights contradict with this type
     let (_ty, max_base, max_inheriting) = determine_type_rights(&fd)?;
-    let mut fe = FdEntry::from(fd)?;
+    let mut fe = Entry::from(fd)?;
     fe.rights_base &= max_base;
     fe.rights_inheriting &= max_inheriting;
-    let guest_fd = wasi_ctx.insert_fd_entry(fe)?;
+    let guest_fd = wasi_ctx.insert_entry(fe)?;
 
     trace!("     | *fd={:?}", guest_fd);
 
@@ -634,7 +628,7 @@ pub(crate) unsafe fn path_readlink(
 
     trace!("     | (path_ptr,path_len)='{}'", &path);
 
-    let fe = wasi_ctx.get_fd_entry(dirfd)?;
+    let fe = wasi_ctx.get_entry(dirfd)?;
     let resolved = path_get(fe, wasi::__WASI_RIGHTS_PATH_READLINK, 0, 0, &path, false)?;
 
     let mut buf = dec_slice_of_mut_u8(memory, buf_ptr, buf_len)?;
@@ -673,8 +667,8 @@ pub(crate) unsafe fn path_rename(
     trace!("     | (old_path_ptr,old_path_len)='{}'", old_path);
     trace!("     | (new_path_ptr,new_path_len)='{}'", new_path);
 
-    let old_fe = wasi_ctx.get_fd_entry(old_dirfd)?;
-    let new_fe = wasi_ctx.get_fd_entry(new_dirfd)?;
+    let old_fe = wasi_ctx.get_entry(old_dirfd)?;
+    let new_fe = wasi_ctx.get_entry(new_dirfd)?;
     let resolved_old = path_get(
         old_fe,
         wasi::__WASI_RIGHTS_PATH_RENAME_SOURCE,
@@ -710,7 +704,7 @@ pub(crate) unsafe fn fd_filestat_get(
         filestat_ptr
     );
 
-    let fd = wasi_ctx.get_fd_entry(fd)?.as_descriptor(0, 0)?.as_file()?;
+    let fd = wasi_ctx.get_entry(fd)?.as_descriptor(0, 0)?.as_file()?;
     let host_filestat = hostcalls_impl::fd_filestat_get(fd)?;
 
     trace!("     | *filestat_ptr={:?}", host_filestat);
@@ -735,7 +729,7 @@ pub(crate) unsafe fn fd_filestat_set_times(
     );
 
     let fd = wasi_ctx
-        .get_fd_entry(fd)?
+        .get_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_FILESTAT_SET_TIMES, 0)?
         .as_file()?;
 
@@ -787,7 +781,7 @@ pub(crate) unsafe fn fd_filestat_set_size(
     trace!("fd_filestat_set_size(fd={:?}, st_size={})", fd, st_size);
 
     let fd = wasi_ctx
-        .get_fd_entry(fd)?
+        .get_entry(fd)?
         .as_descriptor(wasi::__WASI_RIGHTS_FD_FILESTAT_SET_SIZE, 0)?
         .as_file()?;
 
@@ -820,7 +814,7 @@ pub(crate) unsafe fn path_filestat_get(
 
     trace!("     | (path_ptr,path_len)='{}'", path);
 
-    let fe = wasi_ctx.get_fd_entry(dirfd)?;
+    let fe = wasi_ctx.get_entry(dirfd)?;
     let resolved = path_get(
         fe,
         wasi::__WASI_RIGHTS_PATH_FILESTAT_GET,
@@ -861,7 +855,7 @@ pub(crate) unsafe fn path_filestat_set_times(
 
     trace!("     | (path_ptr,path_len)='{}'", path);
 
-    let fe = wasi_ctx.get_fd_entry(dirfd)?;
+    let fe = wasi_ctx.get_entry(dirfd)?;
     let resolved = path_get(
         fe,
         wasi::__WASI_RIGHTS_PATH_FILESTAT_SET_TIMES,
@@ -898,7 +892,7 @@ pub(crate) unsafe fn path_symlink(
     trace!("     | (old_path_ptr,old_path_len)='{}'", old_path);
     trace!("     | (new_path_ptr,new_path_len)='{}'", new_path);
 
-    let fe = wasi_ctx.get_fd_entry(dirfd)?;
+    let fe = wasi_ctx.get_entry(dirfd)?;
     let resolved_new = path_get(fe, wasi::__WASI_RIGHTS_PATH_SYMLINK, 0, 0, new_path, true)?;
 
     hostcalls_impl::path_symlink(old_path, resolved_new)
@@ -922,7 +916,7 @@ pub(crate) unsafe fn path_unlink_file(
 
     trace!("     | (path_ptr,path_len)='{}'", path);
 
-    let fe = wasi_ctx.get_fd_entry(dirfd)?;
+    let fe = wasi_ctx.get_entry(dirfd)?;
     let resolved = path_get(fe, wasi::__WASI_RIGHTS_PATH_UNLINK_FILE, 0, 0, path, false)?;
 
     hostcalls_impl::path_unlink_file(resolved)
@@ -946,7 +940,7 @@ pub(crate) unsafe fn path_remove_directory(
 
     trace!("     | (path_ptr,path_len)='{}'", path);
 
-    let fe = wasi_ctx.get_fd_entry(dirfd)?;
+    let fe = wasi_ctx.get_entry(dirfd)?;
     let resolved = path_get(
         fe,
         wasi::__WASI_RIGHTS_PATH_REMOVE_DIRECTORY,
@@ -974,7 +968,7 @@ pub(crate) unsafe fn fd_prestat_get(
     );
 
     // TODO: should we validate any rights here?
-    let fe = wasi_ctx.get_fd_entry(fd)?;
+    let fe = wasi_ctx.get_entry(fd)?;
     let po_path = fe.preopen_path.as_ref().ok_or(WasiError::ENOTSUP)?;
     if fe.file_type != wasi::__WASI_FILETYPE_DIRECTORY {
         return Err(WasiError::ENOTDIR);
@@ -1011,7 +1005,7 @@ pub(crate) unsafe fn fd_prestat_dir_name(
     );
 
     // TODO: should we validate any rights here?
-    let fe = wasi_ctx.get_fd_entry(fd)?;
+    let fe = wasi_ctx.get_entry(fd)?;
     let po_path = fe.preopen_path.as_ref().ok_or(WasiError::ENOTSUP)?;
     if fe.file_type != wasi::__WASI_FILETYPE_DIRECTORY {
         return Err(WasiError::ENOTDIR);
@@ -1049,7 +1043,7 @@ pub(crate) unsafe fn fd_readdir(
     enc_usize_byref(memory, buf_used, 0)?;
 
     let file = wasi_ctx
-        .get_fd_entry_mut(fd)?
+        .get_entry_mut(fd)?
         .as_descriptor_mut(wasi::__WASI_RIGHTS_FD_READDIR, 0)?
         .as_file_mut()?;
     let mut host_buf = dec_slice_of_mut_u8(memory, buf, buf_len)?;

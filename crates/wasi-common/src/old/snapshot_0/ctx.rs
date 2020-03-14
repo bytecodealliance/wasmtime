@@ -1,4 +1,4 @@
-use crate::old::snapshot_0::fdentry::FdEntry;
+use crate::old::snapshot_0::entry::Entry;
 use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -35,20 +35,20 @@ pub enum WasiCtxBuilderError {
 
 type WasiCtxBuilderResult<T> = std::result::Result<T, WasiCtxBuilderError>;
 
-enum PendingFdEntry {
-    Thunk(fn() -> io::Result<FdEntry>),
+enum PendingEntry {
+    Thunk(fn() -> io::Result<Entry>),
     File(File),
 }
 
-impl std::fmt::Debug for PendingFdEntry {
+impl std::fmt::Debug for PendingEntry {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Thunk(f) => write!(
                 fmt,
-                "PendingFdEntry::Thunk({:p})",
-                f as *const fn() -> io::Result<FdEntry>
+                "PendingEntry::Thunk({:p})",
+                f as *const fn() -> io::Result<Entry>
             ),
-            Self::File(f) => write!(fmt, "PendingFdEntry::File({:?})", f),
+            Self::File(f) => write!(fmt, "PendingEntry::File({:?})", f),
         }
     }
 }
@@ -100,7 +100,7 @@ impl PendingCString {
 
 /// A builder allowing customizable construction of `WasiCtx` instances.
 pub struct WasiCtxBuilder {
-    fds: HashMap<wasi::__wasi_fd_t, PendingFdEntry>,
+    fds: HashMap<wasi::__wasi_fd_t, PendingEntry>,
     preopens: Vec<(PathBuf, File)>,
     args: Vec<PendingCString>,
     env: HashMap<PendingCString, PendingCString>,
@@ -116,9 +116,9 @@ impl WasiCtxBuilder {
             env: HashMap::new(),
         };
 
-        builder.fds.insert(0, PendingFdEntry::Thunk(FdEntry::null));
-        builder.fds.insert(1, PendingFdEntry::Thunk(FdEntry::null));
-        builder.fds.insert(2, PendingFdEntry::Thunk(FdEntry::null));
+        builder.fds.insert(0, PendingEntry::Thunk(Entry::null));
+        builder.fds.insert(1, PendingEntry::Thunk(Entry::null));
+        builder.fds.insert(2, PendingEntry::Thunk(Entry::null));
 
         builder
     }
@@ -154,11 +154,11 @@ impl WasiCtxBuilder {
     /// Inherit the stdin, stdout, and stderr streams from the host process.
     pub fn inherit_stdio(mut self) -> Self {
         self.fds
-            .insert(0, PendingFdEntry::Thunk(FdEntry::duplicate_stdin));
+            .insert(0, PendingEntry::Thunk(Entry::duplicate_stdin));
         self.fds
-            .insert(1, PendingFdEntry::Thunk(FdEntry::duplicate_stdout));
+            .insert(1, PendingEntry::Thunk(Entry::duplicate_stdout));
         self.fds
-            .insert(2, PendingFdEntry::Thunk(FdEntry::duplicate_stderr));
+            .insert(2, PendingEntry::Thunk(Entry::duplicate_stderr));
         self
     }
 
@@ -203,19 +203,19 @@ impl WasiCtxBuilder {
 
     /// Provide a File to use as stdin
     pub fn stdin(mut self, file: File) -> Self {
-        self.fds.insert(0, PendingFdEntry::File(file));
+        self.fds.insert(0, PendingEntry::File(file));
         self
     }
 
     /// Provide a File to use as stdout
     pub fn stdout(mut self, file: File) -> Self {
-        self.fds.insert(1, PendingFdEntry::File(file));
+        self.fds.insert(1, PendingEntry::File(file));
         self
     }
 
     /// Provide a File to use as stderr
     pub fn stderr(mut self, file: File) -> Self {
-        self.fds.insert(2, PendingFdEntry::File(file));
+        self.fds.insert(2, PendingEntry::File(file));
         self
     }
 
@@ -255,16 +255,16 @@ impl WasiCtxBuilder {
             })
             .collect::<WasiCtxBuilderResult<Vec<CString>>>()?;
 
-        let mut fds: HashMap<wasi::__wasi_fd_t, FdEntry> = HashMap::new();
+        let mut fds: HashMap<wasi::__wasi_fd_t, Entry> = HashMap::new();
         // Populate the non-preopen fds.
         for (fd, pending) in self.fds {
             log::debug!("WasiCtx inserting ({:?}, {:?})", fd, pending);
             match pending {
-                PendingFdEntry::Thunk(f) => {
+                PendingEntry::Thunk(f) => {
                     fds.insert(fd, f()?);
                 }
-                PendingFdEntry::File(f) => {
-                    fds.insert(fd, FdEntry::from(f)?);
+                PendingEntry::File(f) => {
+                    fds.insert(fd, Entry::from(f)?);
                 }
             }
         }
@@ -290,7 +290,7 @@ impl WasiCtxBuilder {
                     .checked_add(1)
                     .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
             }
-            let mut fe = FdEntry::from(dir)?;
+            let mut fe = Entry::from(dir)?;
             fe.preopen_path = Some(guest_path);
             log::debug!("WasiCtx inserting ({:?}, {:?})", preopen_fd, fe);
             fds.insert(preopen_fd, fe);
@@ -303,7 +303,7 @@ impl WasiCtxBuilder {
 
 #[derive(Debug)]
 pub struct WasiCtx {
-    fds: HashMap<wasi::__wasi_fd_t, FdEntry>,
+    fds: HashMap<wasi::__wasi_fd_t, Entry>,
     pub(crate) args: Vec<CString>,
     pub(crate) env: Vec<CString>,
 }
@@ -325,28 +325,25 @@ impl WasiCtx {
     }
 
     /// Check if `WasiCtx` contains the specified raw WASI `fd`.
-    pub(crate) unsafe fn contains_fd_entry(&self, fd: wasi::__wasi_fd_t) -> bool {
+    pub(crate) unsafe fn contains_entry(&self, fd: wasi::__wasi_fd_t) -> bool {
         self.fds.contains_key(&fd)
     }
 
-    /// Get an immutable `FdEntry` corresponding to the specified raw WASI `fd`.
-    pub(crate) unsafe fn get_fd_entry(&self, fd: wasi::__wasi_fd_t) -> WasiResult<&FdEntry> {
+    /// Get an immutable `Entry` corresponding to the specified raw WASI `fd`.
+    pub(crate) unsafe fn get_entry(&self, fd: wasi::__wasi_fd_t) -> WasiResult<&Entry> {
         self.fds.get(&fd).ok_or(WasiError::EBADF)
     }
 
-    /// Get a mutable `FdEntry` corresponding to the specified raw WASI `fd`.
-    pub(crate) unsafe fn get_fd_entry_mut(
-        &mut self,
-        fd: wasi::__wasi_fd_t,
-    ) -> WasiResult<&mut FdEntry> {
+    /// Get a mutable `Entry` corresponding to the specified raw WASI `fd`.
+    pub(crate) unsafe fn get_entry_mut(&mut self, fd: wasi::__wasi_fd_t) -> WasiResult<&mut Entry> {
         self.fds.get_mut(&fd).ok_or(WasiError::EBADF)
     }
 
-    /// Insert the specified `FdEntry` into the `WasiCtx` object.
+    /// Insert the specified `Entry` into the `WasiCtx` object.
     ///
-    /// The `FdEntry` will automatically get another free raw WASI `fd` assigned. Note that
+    /// The `Entry` will automatically get another free raw WASI `fd` assigned. Note that
     /// the two subsequent free raw WASI `fd`s do not have to be stored contiguously.
-    pub(crate) fn insert_fd_entry(&mut self, fe: FdEntry) -> WasiResult<wasi::__wasi_fd_t> {
+    pub(crate) fn insert_entry(&mut self, fe: Entry) -> WasiResult<wasi::__wasi_fd_t> {
         // Never insert where stdio handles are expected to be.
         let mut fd = 3;
         while self.fds.contains_key(&fd) {
@@ -360,18 +357,14 @@ impl WasiCtx {
         Ok(fd)
     }
 
-    /// Insert the specified `FdEntry` with the specified raw WASI `fd` key into the `WasiCtx`
+    /// Insert the specified `Entry` with the specified raw WASI `fd` key into the `WasiCtx`
     /// object.
-    pub(crate) fn insert_fd_entry_at(
-        &mut self,
-        fd: wasi::__wasi_fd_t,
-        fe: FdEntry,
-    ) -> Option<FdEntry> {
+    pub(crate) fn insert_entry_at(&mut self, fd: wasi::__wasi_fd_t, fe: Entry) -> Option<Entry> {
         self.fds.insert(fd, fe)
     }
 
-    /// Remove `FdEntry` corresponding to the specified raw WASI `fd` from the `WasiCtx` object.
-    pub(crate) fn remove_fd_entry(&mut self, fd: wasi::__wasi_fd_t) -> WasiResult<FdEntry> {
+    /// Remove `Entry` corresponding to the specified raw WASI `fd` from the `WasiCtx` object.
+    pub(crate) fn remove_entry(&mut self, fd: wasi::__wasi_fd_t) -> WasiResult<Entry> {
         self.fds.remove(&fd).ok_or(WasiError::EBADF)
     }
 }

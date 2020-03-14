@@ -1,4 +1,4 @@
-use crate::fdentry::Descriptor;
+use crate::entry::Descriptor;
 use crate::hostcalls_impl::PathGet;
 use crate::wasi::WasiResult;
 use std::os::unix::prelude::AsRawFd;

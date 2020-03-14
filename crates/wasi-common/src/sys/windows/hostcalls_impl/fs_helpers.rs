@@ -1,5 +1,5 @@
 #![allow(non_camel_case_types)]
-use crate::fdentry::Descriptor;
+use crate::entry::Descriptor;
 use crate::hostcalls_impl::PathGet;
 use crate::wasi::{self, WasiError, WasiResult};
 use std::ffi::{OsStr, OsString};

@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types)]
 use crate::old::snapshot_0::ctx::WasiCtx;
-use crate::old::snapshot_0::fdentry::Descriptor;
+use crate::old::snapshot_0::entry::Descriptor;
 use crate::old::snapshot_0::memory::*;
 use crate::old::snapshot_0::sys::hostcalls_impl;
 use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
@@ -245,7 +245,7 @@ pub(crate) fn poll_oneoff(
                 let rights = wasi::__WASI_RIGHTS_FD_READ | wasi::__WASI_RIGHTS_POLL_FD_READWRITE;
                 match unsafe {
                     wasi_ctx
-                        .get_fd_entry(wasi_fd)
+                        .get_entry(wasi_fd)
                         .and_then(|fe| fe.as_descriptor(rights, 0))
                 } {
                     Ok(descriptor) => fd_events.push(FdEventData {
@@ -273,7 +273,7 @@ pub(crate) fn poll_oneoff(
                 let rights = wasi::__WASI_RIGHTS_FD_WRITE | wasi::__WASI_RIGHTS_POLL_FD_READWRITE;
                 match unsafe {
                     wasi_ctx
-                        .get_fd_entry(wasi_fd)
+                        .get_entry(wasi_fd)
                         .and_then(|fe| fe.as_descriptor(rights, 0))
                 } {
                     Ok(descriptor) => fd_events.push(FdEventData {

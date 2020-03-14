@@ -2,7 +2,7 @@
 #![allow(unused)]
 use super::fs_helpers::*;
 use crate::ctx::WasiCtx;
-use crate::fdentry::{Descriptor, FdEntry};
+use crate::entry::{Descriptor, FdEntry};
 use crate::host::{Dirent, FileType};
 use crate::hostcalls_impl::{fd_filestat_set_times_impl, PathGet};
 use crate::sys::fdentry_impl::{determine_type_rights, OsHandle};
