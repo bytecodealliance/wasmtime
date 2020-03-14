@@ -200,7 +200,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 // See https://github.com/bytecodealliance/wasmtime/pull/1216.
                 #[cfg(windows)]
                 return true;
-            },
+            }
 
             _ => {}
         },
