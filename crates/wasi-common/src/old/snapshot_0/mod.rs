@@ -1,5 +1,6 @@
 mod ctx;
 mod entry;
+mod fdset;
 mod helpers;
 mod host;
 mod hostcalls_impl;

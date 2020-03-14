@@ -1,4 +1,5 @@
 use crate::entry::{Descriptor, Entry};
+use crate::fdset::FdSet;
 use crate::sys::entry_impl::OsHandle;
 use crate::virtfs::{VirtualDir, VirtualDirEntry};
 use crate::wasi::{self, WasiError, WasiResult};
@@ -102,7 +103,9 @@ impl PendingCString {
 
 /// A builder allowing customizable construction of `WasiCtx` instances.
 pub struct WasiCtxBuilder {
-    entries: Option<HashMap<wasi::__wasi_fd_t, PendingEntry>>,
+    stdin: Option<PendingEntry>,
+    stdout: Option<PendingEntry>,
+    stderr: Option<PendingEntry>,
     preopens: Option<Vec<(PathBuf, Descriptor)>>,
     args: Option<Vec<PendingCString>>,
     env: Option<HashMap<PendingCString, PendingCString>>,
@@ -111,14 +114,14 @@ pub struct WasiCtxBuilder {
 impl WasiCtxBuilder {
     /// Builder for a new `WasiCtx`.
     pub fn new() -> Self {
-        let mut entries = HashMap::new();
-
-        entries.insert(0, PendingEntry::Thunk(Entry::null));
-        entries.insert(1, PendingEntry::Thunk(Entry::null));
-        entries.insert(2, PendingEntry::Thunk(Entry::null));
+        let stdin = Some(PendingEntry::Thunk(Entry::null));
+        let stdout = Some(PendingEntry::Thunk(Entry::null));
+        let stderr = Some(PendingEntry::Thunk(Entry::null));
 
         Self {
-            entries: Some(entries),
+            stdin,
+            stdout,
+            stderr,
             preopens: Some(Vec::new()),
             args: Some(Vec::new()),
             env: Some(HashMap::new()),
@@ -160,37 +163,33 @@ impl WasiCtxBuilder {
 
     /// Inherit stdin from the host process.
     pub fn inherit_stdin(&mut self) -> &mut Self {
-        self.entries
-            .as_mut()
-            .unwrap()
-            .insert(0, PendingEntry::Thunk(Entry::duplicate_stdin));
+        self.stdin
+            .replace(PendingEntry::Thunk(Entry::duplicate_stdin));
         self
     }
 
     /// Inherit stdout from the host process.
     pub fn inherit_stdout(&mut self) -> &mut Self {
-        self.entries
-            .as_mut()
-            .unwrap()
-            .insert(1, PendingEntry::Thunk(Entry::duplicate_stdout));
+        self.stdout
+            .replace(PendingEntry::Thunk(Entry::duplicate_stdout));
         self
     }
 
     /// Inherit stdout from the host process.
     pub fn inherit_stderr(&mut self) -> &mut Self {
-        self.entries
-            .as_mut()
-            .unwrap()
-            .insert(2, PendingEntry::Thunk(Entry::duplicate_stderr));
+        self.stderr
+            .replace(PendingEntry::Thunk(Entry::duplicate_stderr));
         self
     }
 
     /// Inherit the stdin, stdout, and stderr streams from the host process.
     pub fn inherit_stdio(&mut self) -> &mut Self {
-        let entries = self.entries.as_mut().unwrap();
-        entries.insert(0, PendingEntry::Thunk(Entry::duplicate_stdin));
-        entries.insert(1, PendingEntry::Thunk(Entry::duplicate_stdout));
-        entries.insert(2, PendingEntry::Thunk(Entry::duplicate_stderr));
+        self.stdin
+            .replace(PendingEntry::Thunk(Entry::duplicate_stdin));
+        self.stdout
+            .replace(PendingEntry::Thunk(Entry::duplicate_stdout));
+        self.stderr
+            .replace(PendingEntry::Thunk(Entry::duplicate_stderr));
         self
     }
 
@@ -234,28 +233,19 @@ impl WasiCtxBuilder {
 
     /// Provide a File to use as stdin
     pub fn stdin(&mut self, file: File) -> &mut Self {
-        self.entries
-            .as_mut()
-            .unwrap()
-            .insert(0, PendingEntry::File(file));
+        self.stdin.replace(PendingEntry::File(file));
         self
     }
 
     /// Provide a File to use as stdout
     pub fn stdout(&mut self, file: File) -> &mut Self {
-        self.entries
-            .as_mut()
-            .unwrap()
-            .insert(1, PendingEntry::File(file));
+        self.stdout.replace(PendingEntry::File(file));
         self
     }
 
     /// Provide a File to use as stderr
     pub fn stderr(&mut self, file: File) -> &mut Self {
-        self.entries
-            .as_mut()
-            .unwrap()
-            .insert(2, PendingEntry::File(file));
+        self.stderr.replace(PendingEntry::File(file));
         self
     }
 
@@ -338,9 +328,17 @@ impl WasiCtxBuilder {
             })
             .collect::<WasiCtxBuilderResult<Vec<CString>>>()?;
 
+        let mut fds = FdSet::new();
         let mut entries: HashMap<wasi::__wasi_fd_t, Entry> = HashMap::new();
         // Populate the non-preopen entries.
-        for (fd, pending) in self.entries.take().unwrap() {
+        for pending in vec![
+            self.stdin.take().unwrap(),
+            self.stdout.take().unwrap(),
+            self.stderr.take().unwrap(),
+        ] {
+            let fd = fds
+                .allocate()
+                .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
             log::debug!("WasiCtx inserting ({:?}, {:?})", fd, pending);
             match pending {
                 PendingEntry::Thunk(f) => {
@@ -351,15 +349,12 @@ impl WasiCtxBuilder {
                 }
             }
         }
-        // Then add the preopen entries. Startup code in the guest starts looking at fd 3 for preopens,
-        // so we start from there. This variable is initially 2, though, because the loop
-        // immediately does the increment and check for overflow.
-        let mut preopen_fd: wasi::__wasi_fd_t = 2;
+        // Then add the preopen entries.
         for (guest_path, dir) in self.preopens.take().unwrap() {
             // We do the increment at the beginning of the loop body, so that we don't overflow
             // unnecessarily if we have exactly the maximum number of file descriptors.
-            preopen_fd = preopen_fd
-                .checked_add(1)
+            let preopen_fd = fds
+                .allocate()
                 .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
 
             match &dir {
@@ -378,13 +373,6 @@ impl WasiCtxBuilder {
                 }
             }
 
-            // We don't currently allow setting file descriptors other than 0-2, but this will avoid
-            // collisions if we restore that functionality in the future.
-            while entries.contains_key(&preopen_fd) {
-                preopen_fd = preopen_fd
-                    .checked_add(1)
-                    .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
-            }
             let mut fe = Entry::from(dir)?;
             fe.preopen_path = Some(guest_path);
             log::debug!("WasiCtx inserting ({:?}, {:?})", preopen_fd, fe);
@@ -392,12 +380,18 @@ impl WasiCtxBuilder {
             log::debug!("WasiCtx entries = {:?}", entries);
         }
 
-        Ok(WasiCtx { args, env, entries })
+        Ok(WasiCtx {
+            args,
+            env,
+            entries,
+            fds,
+        })
     }
 }
 
 #[derive(Debug)]
 pub struct WasiCtx {
+    fds: FdSet<wasi::__wasi_fd_t>,
     entries: HashMap<wasi::__wasi_fd_t, Entry>,
     pub(crate) args: Vec<CString>,
     pub(crate) env: Vec<CString>,
@@ -439,15 +433,7 @@ impl WasiCtx {
     /// The `FdEntry` will automatically get another free raw WASI `fd` assigned. Note that
     /// the two subsequent free raw WASI `fd`s do not have to be stored contiguously.
     pub(crate) fn insert_entry(&mut self, fe: Entry) -> WasiResult<wasi::__wasi_fd_t> {
-        // Never insert where stdio handles are expected to be.
-        let mut fd = 3;
-        while self.entries.contains_key(&fd) {
-            if let Some(next_fd) = fd.checked_add(1) {
-                fd = next_fd;
-            } else {
-                return Err(WasiError::EMFILE);
-            }
-        }
+        let fd = self.fds.allocate().ok_or(WasiError::EMFILE)?;
         self.entries.insert(fd, fe);
         Ok(fd)
     }
@@ -460,6 +446,11 @@ impl WasiCtx {
 
     /// Remove `Entry` corresponding to the specified raw WASI `fd` from the `WasiCtx` object.
     pub(crate) fn remove_entry(&mut self, fd: wasi::__wasi_fd_t) -> WasiResult<Entry> {
+        // First, deallocate the `fd`.
+        if !self.fds.deallocate(fd) {
+            return Err(WasiError::EBADF);
+        }
+        // Next, remove from valid entries.
         self.entries.remove(&fd).ok_or(WasiError::EBADF)
     }
 }
