@@ -73,7 +73,7 @@ bakes in in understandings about what processes are and what communication
 between them looks like.
 
 Pipes, Unix-domain sockets, POSIX shared memory, signals, files with `fcntl`
-`F_SETLK`/`F_GETLK`-style locking (which is process-associated), are are tied
+`F_SETLK`/`F_GETLK`-style locking (which is process-associated), are tied
 to processes. But what *is* a process, when we're talking about WebAssembly?
 
 ## Stick a fork in it
