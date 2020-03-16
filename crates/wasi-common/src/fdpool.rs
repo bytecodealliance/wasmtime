@@ -94,44 +94,39 @@ mod test {
 
     #[test]
     fn basics() {
-        let mut FdPool: FdPool<u8> = FdPool::new();
-        let fd = FdPool.allocate().expect("success allocating 0");
+        let mut fdpool: FdPool<u8> = FdPool::new();
+        let fd = fdpool.allocate().expect("success allocating 0");
         assert_eq!(fd, 0);
-        println!("{:?}", FdPool);
-        let fd = FdPool.allocate().expect("success allocating 1");
+        let fd = fdpool.allocate().expect("success allocating 1");
         assert_eq!(fd, 1);
-        println!("{:?}", FdPool);
-        let fd = FdPool.allocate().expect("success allocating 2");
+        let fd = fdpool.allocate().expect("success allocating 2");
         assert_eq!(fd, 2);
-        println!("{:?}", FdPool);
-        FdPool.deallocate(1);
-        println!("{:?}", FdPool);
-        FdPool.deallocate(0);
-        println!("{:?}", FdPool);
-        let fd = FdPool.allocate().expect("success reallocating 0");
+        fdpool.deallocate(1);
+        fdpool.deallocate(0);
+        let fd = fdpool.allocate().expect("success reallocating 0");
         assert_eq!(fd, 0);
-        let fd = FdPool.allocate().expect("success reallocating 1");
+        let fd = fdpool.allocate().expect("success reallocating 1");
         assert_eq!(fd, 1);
-        let fd = FdPool.allocate().expect("success allocating 3");
+        let fd = fdpool.allocate().expect("success allocating 3");
         assert_eq!(fd, 3);
     }
 
     #[test]
     fn deallocate_nonexistent() {
-        let mut FdPool: FdPool<u8> = FdPool::new();
-        assert!(!FdPool.deallocate(0));
+        let mut fdpool: FdPool<u8> = FdPool::new();
+        assert!(!fdpool.deallocate(0));
     }
 
     #[test]
     fn max_allocation() {
-        let mut FdPool: FdPool<u8> = FdPool::new();
+        let mut fdpool: FdPool<u8> = FdPool::new();
         for _ in 0..=std::u8::MAX {
-            FdPool.allocate().expect("success allocating");
+            fdpool.allocate().expect("success allocating");
         }
-        assert!(FdPool.allocate().is_none());
-        assert!(FdPool.allocate().is_none());
+        assert!(fdpool.allocate().is_none());
+        assert!(fdpool.allocate().is_none());
         for i in 0..=std::u8::MAX {
-            assert!(FdPool.deallocate(i));
+            assert!(fdpool.deallocate(i));
         }
     }
 }
