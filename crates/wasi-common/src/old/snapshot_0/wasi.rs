@@ -227,7 +227,7 @@ pub fn whence_to_str(whence: __wasi_whence_t) -> &'static str {
 
 pub const __WASI_DIRCOOKIE_START: __wasi_dircookie_t = 0;
 
-impl crate::old::snapshot_0::fdset::Fd for __wasi_fd_t {
+impl crate::old::snapshot_0::fdpool::Fd for __wasi_fd_t {
     fn next(&self) -> Option<Self> {
         self.checked_add(1)
     }

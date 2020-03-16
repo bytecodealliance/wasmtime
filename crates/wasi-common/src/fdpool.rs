@@ -6,21 +6,21 @@ pub(crate) trait Fd: Copy + Clone + Hash + PartialEq + Eq + Default {
     fn next(&self) -> Option<Self>;
 }
 
-pub(crate) struct FdSet<T: Fd> {
+pub(crate) struct FdPool<T: Fd> {
     available: VecDeque<T>,
     claimed: HashSet<T>,
 }
 
-impl<T: Fd + fmt::Debug> fmt::Debug for FdSet<T> {
+impl<T: Fd + fmt::Debug> fmt::Debug for FdPool<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("FdSet")
+        f.debug_struct("FdPool")
             .field("available", &self.available)
             .field("claimed", &self.claimed)
             .finish()
     }
 }
 
-impl<T: Fd> FdSet<T> {
+impl<T: Fd> FdPool<T> {
     const BATCH_SIZE: usize = 64;
 
     pub fn new() -> Self {
@@ -84,7 +84,7 @@ impl<T: Fd> FdSet<T> {
 
 #[cfg(test)]
 mod test {
-    use super::{Fd, FdSet};
+    use super::{Fd, FdPool};
 
     impl Fd for u8 {
         fn next(&self) -> Option<Self> {
@@ -94,44 +94,44 @@ mod test {
 
     #[test]
     fn basics() {
-        let mut fdset: FdSet<u8> = FdSet::new();
-        let fd = fdset.allocate().expect("success allocating 0");
+        let mut FdPool: FdPool<u8> = FdPool::new();
+        let fd = FdPool.allocate().expect("success allocating 0");
         assert_eq!(fd, 0);
-        println!("{:?}", fdset);
-        let fd = fdset.allocate().expect("success allocating 1");
+        println!("{:?}", FdPool);
+        let fd = FdPool.allocate().expect("success allocating 1");
         assert_eq!(fd, 1);
-        println!("{:?}", fdset);
-        let fd = fdset.allocate().expect("success allocating 2");
+        println!("{:?}", FdPool);
+        let fd = FdPool.allocate().expect("success allocating 2");
         assert_eq!(fd, 2);
-        println!("{:?}", fdset);
-        fdset.deallocate(1);
-        println!("{:?}", fdset);
-        fdset.deallocate(0);
-        println!("{:?}", fdset);
-        let fd = fdset.allocate().expect("success reallocating 0");
+        println!("{:?}", FdPool);
+        FdPool.deallocate(1);
+        println!("{:?}", FdPool);
+        FdPool.deallocate(0);
+        println!("{:?}", FdPool);
+        let fd = FdPool.allocate().expect("success reallocating 0");
         assert_eq!(fd, 0);
-        let fd = fdset.allocate().expect("success reallocating 1");
+        let fd = FdPool.allocate().expect("success reallocating 1");
         assert_eq!(fd, 1);
-        let fd = fdset.allocate().expect("success allocating 3");
+        let fd = FdPool.allocate().expect("success allocating 3");
         assert_eq!(fd, 3);
     }
 
     #[test]
     fn deallocate_nonexistent() {
-        let mut fdset: FdSet<u8> = FdSet::new();
-        assert!(!fdset.deallocate(0));
+        let mut FdPool: FdPool<u8> = FdPool::new();
+        assert!(!FdPool.deallocate(0));
     }
 
     #[test]
     fn max_allocation() {
-        let mut fdset: FdSet<u8> = FdSet::new();
+        let mut FdPool: FdPool<u8> = FdPool::new();
         for _ in 0..=std::u8::MAX {
-            fdset.allocate().expect("success allocating");
+            FdPool.allocate().expect("success allocating");
         }
-        assert!(fdset.allocate().is_none());
-        assert!(fdset.allocate().is_none());
+        assert!(FdPool.allocate().is_none());
+        assert!(FdPool.allocate().is_none());
         for i in 0..=std::u8::MAX {
-            assert!(fdset.deallocate(i));
+            assert!(FdPool.deallocate(i));
         }
     }
 }

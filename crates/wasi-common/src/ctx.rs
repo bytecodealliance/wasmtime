@@ -1,5 +1,5 @@
 use crate::entry::{Descriptor, Entry};
-use crate::fdset::FdSet;
+use crate::fdpool::FdPool;
 use crate::sys::entry_impl::OsHandle;
 use crate::virtfs::{VirtualDir, VirtualDirEntry};
 use crate::wasi::{self, WasiError, WasiResult};
@@ -328,7 +328,7 @@ impl WasiCtxBuilder {
             })
             .collect::<WasiCtxBuilderResult<Vec<CString>>>()?;
 
-        let mut fds = FdSet::new();
+        let mut fds = FdPool::new();
         let mut entries: HashMap<wasi::__wasi_fd_t, Entry> = HashMap::new();
         // Populate the non-preopen entries.
         for pending in vec![
@@ -391,7 +391,7 @@ impl WasiCtxBuilder {
 
 #[derive(Debug)]
 pub struct WasiCtx {
-    fds: FdSet<wasi::__wasi_fd_t>,
+    fds: FdPool<wasi::__wasi_fd_t>,
     entries: HashMap<wasi::__wasi_fd_t, Entry>,
     pub(crate) args: Vec<CString>,
     pub(crate) env: Vec<CString>,

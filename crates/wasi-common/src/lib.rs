@@ -23,7 +23,7 @@
 
 mod ctx;
 mod entry;
-mod fdset;
+mod fdpool;
 pub mod fs;
 mod helpers;
 mod host;
