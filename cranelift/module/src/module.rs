@@ -58,6 +58,11 @@ pub enum Linkage {
     Local,
     /// Defined inside the module, visible outside it, and may be preempted.
     Preemptible,
+    /// Defined inside the module, visible inside the current static linkage unit, but not outside.
+    ///
+    /// A static linkage unit is the combination of all object files passed to a linker to create
+    /// an executable or dynamic library.
+    Hidden,
     /// Defined inside the module, and visible outside it.
     Export,
 }
@@ -66,14 +71,20 @@ impl Linkage {
     fn merge(a: Self, b: Self) -> Self {
         match a {
             Self::Export => Self::Export,
+            Self::Hidden => match b {
+                Self::Export => Self::Export,
+                Self::Preemptible => Self::Preemptible,
+                _ => Self::Hidden,
+            },
             Self::Preemptible => match b {
                 Self::Export => Self::Export,
                 _ => Self::Preemptible,
             },
             Self::Local => match b {
                 Self::Export => Self::Export,
+                Self::Hidden => Self::Hidden,
                 Self::Preemptible => Self::Preemptible,
-                _ => Self::Local,
+                Self::Local | Self::Import => Self::Local,
             },
             Self::Import => b,
         }
@@ -83,7 +94,7 @@ impl Linkage {
     pub fn is_definable(self) -> bool {
         match self {
             Self::Import => false,
-            Self::Local | Self::Preemptible | Self::Export => true,
+            Self::Local | Self::Preemptible | Self::Hidden | Self::Export => true,
         }
     }
 
@@ -91,7 +102,7 @@ impl Linkage {
     pub fn is_final(self) -> bool {
         match self {
             Self::Import | Self::Preemptible => false,
-            Self::Local | Self::Export => true,
+            Self::Local | Self::Hidden | Self::Export => true,
         }
     }
 }
