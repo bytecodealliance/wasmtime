@@ -80,26 +80,14 @@ impl<'data> RawCompiledModule<'data> {
             None
         };
 
-        let (
-            finished_functions,
-            trampolines,
-            jt_offsets,
-            relocations,
-            dbg_image,
-            trap_registration,
-        ) = compiler.compile(
+        let compilation = compiler.compile(
             &translation.module,
             translation.module_translation.as_ref().unwrap(),
             translation.function_body_inputs,
             debug_data,
         )?;
 
-        link_module(
-            &translation.module,
-            &finished_functions,
-            &jt_offsets,
-            relocations,
-        );
+        link_module(&translation.module, &compilation);
 
         // Compute indices into the shared signature table.
         let signatures = {
@@ -121,7 +109,7 @@ impl<'data> RawCompiledModule<'data> {
             Some(_) => {
                 let region_name = String::from("wasm_module");
                 let mut profiler = profiler.unwrap().lock().unwrap();
-                match &dbg_image {
+                match &compilation.dbg_image {
                     Some(dbg) => {
                         compiler.profiler_module_load(&mut profiler, &region_name, Some(&dbg))
                     }
@@ -131,7 +119,7 @@ impl<'data> RawCompiledModule<'data> {
             _ => (),
         };
 
-        let dbg_jit_registration = if let Some(img) = dbg_image {
+        let dbg_jit_registration = if let Some(img) = compilation.dbg_image {
             let mut bytes = Vec::new();
             bytes.write_all(&img).expect("all written");
             let reg = GdbJitImageRegistration::register(bytes);
@@ -142,12 +130,12 @@ impl<'data> RawCompiledModule<'data> {
 
         Ok(Self {
             module: translation.module,
-            finished_functions: finished_functions.into_boxed_slice(),
-            trampolines,
+            finished_functions: compilation.finished_functions.into_boxed_slice(),
+            trampolines: compilation.trampolines,
             data_initializers: translation.data_initializers.into_boxed_slice(),
             signatures: signatures.into_boxed_slice(),
             dbg_jit_registration,
-            trap_registration,
+            trap_registration: compilation.trap_registration,
         })
     }
 }
