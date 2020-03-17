@@ -383,8 +383,9 @@ fn translate_function_linkage(linkage: Linkage) -> faerie::Decl {
     match linkage {
         Linkage::Import => faerie::Decl::function_import().into(),
         Linkage::Local => faerie::Decl::function().into(),
-        Linkage::Export => faerie::Decl::function().global().into(),
         Linkage::Preemptible => faerie::Decl::function().weak().into(),
+        Linkage::Hidden => faerie::Decl::function().global().hidden().into(),
+        Linkage::Export => faerie::Decl::function().global().into(),
     }
 }
 
@@ -396,13 +397,19 @@ fn translate_data_linkage(linkage: Linkage, writable: bool, align: Option<u8>) -
             .with_writable(writable)
             .with_align(align)
             .into(),
-        Linkage::Export => faerie::Decl::data()
-            .global()
+        Linkage::Preemptible => faerie::Decl::data()
+            .weak()
             .with_writable(writable)
             .with_align(align)
             .into(),
-        Linkage::Preemptible => faerie::Decl::data()
-            .weak()
+        Linkage::Hidden => faerie::Decl::data()
+            .global()
+            .hidden()
+            .with_writable(writable)
+            .with_align(align)
+            .into(),
+        Linkage::Export => faerie::Decl::data()
+            .global()
             .with_writable(writable)
             .with_align(align)
             .into(),
