@@ -9,5 +9,5 @@ fuzz_target!(|data: (
     generators::WasmOptTtf
 )| {
     let (lhs, rhs, wasm) = data;
-    oracles::differential_execution(&wasm.wasm, &[lhs, rhs]);
+    oracles::differential_execution(&wasm, &[lhs, rhs]);
 });

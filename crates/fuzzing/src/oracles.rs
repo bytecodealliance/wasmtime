@@ -109,7 +109,11 @@ pub fn compile(wasm: &[u8], strategy: Strategy) {
 /// exports. Modulo OOM, non-canonical NaNs, and usage of Wasm features that are
 /// or aren't enabled for different configs, we should get the same results when
 /// we call the exported functions for all of our different configs.
-pub fn differential_execution(wasm: &[u8], configs: &[crate::generators::DifferentialConfig]) {
+#[cfg(feature = "binaryen")]
+pub fn differential_execution(
+    ttf: &crate::generators::WasmOptTtf,
+    configs: &[crate::generators::DifferentialConfig],
+) {
     crate::init_fuzzing();
 
     // We need at least two configs.
@@ -128,13 +132,13 @@ pub fn differential_execution(wasm: &[u8], configs: &[crate::generators::Differe
     };
 
     let mut export_func_results: HashMap<String, Result<Box<[Val]>, Trap>> = Default::default();
-    log_wasm(wasm);
+    log_wasm(&ttf.wasm);
 
     for config in &configs {
         let engine = Engine::new(config);
         let store = Store::new(&engine);
 
-        let module = match Module::new(&store, wasm) {
+        let module = match Module::new(&store, &ttf.wasm) {
             Ok(module) => module,
             // The module might rely on some feature that our config didn't
             // enable or something like that.
