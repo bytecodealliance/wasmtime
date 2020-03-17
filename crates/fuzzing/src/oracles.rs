@@ -109,10 +109,7 @@ pub fn compile(wasm: &[u8], strategy: Strategy) {
 /// exports. Modulo OOM, non-canonical NaNs, and usage of Wasm features that are
 /// or aren't enabled for different configs, we should get the same results when
 /// we call the exported functions for all of our different configs.
-pub fn differential_execution(
-    wasm: &[u8],
-    configs: &[crate::generators::DifferentialConfig],
-) {
+pub fn differential_execution(wasm: &[u8], configs: &[crate::generators::DifferentialConfig]) {
     crate::init_fuzzing();
 
     // We need at least two configs.
