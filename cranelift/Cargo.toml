@@ -29,7 +29,7 @@ cranelift-object = { path = "object", version = "0.60.0" }
 cranelift-simplejit = { path = "simplejit", version = "0.60.0" }
 cranelift-preopt = { path = "preopt", version = "0.60.0" }
 cranelift = { path = "umbrella", version = "0.60.0" }
-filecheck = "0.4.0"
+filecheck = "0.5.0"
 clap = "2.32.0"
 serde = "1.0.8"
 term = "0.6.1"
