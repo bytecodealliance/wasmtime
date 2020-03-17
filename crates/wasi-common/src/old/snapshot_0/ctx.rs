@@ -1,5 +1,5 @@
+use crate::fdpool::FdPool;
 use crate::old::snapshot_0::entry::Entry;
-use crate::old::snapshot_0::fdpool::FdPool;
 use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
 use std::borrow::Borrow;
 use std::collections::HashMap;
