@@ -96,10 +96,10 @@ execution can never fall through to the next EBB without an explicit branch.
 A `.clif` file consists of a sequence of independent function definitions:
 
 ```
- function_list : { function }
- function      : "function" function_name signature "{" preamble function_body "}"
- preamble      : { preamble_decl }
- function_body : { extended_basic_block }
+function_list : { function }
+function      : "function" function_name signature "{" preamble function_body "}"
+preamble      : { preamble_decl }
+function_body : { extended_basic_block }
 ```
 
 ### Static single assignment form
@@ -399,13 +399,13 @@ how to call the function, including parameters, return values, and the calling
 convention:
 
 ```
- signature    : "(" [paramlist] ")" ["->" retlist] [call_conv]
- paramlist    : param { "," param }
- retlist      : paramlist
- param        : type [paramext] [paramspecial]
- paramext     : "uext" | "sext"
- paramspecial : "sret" | "link" | "fp" | "csr" | "vmctx" | "sigid" | "stack_limit"
- callconv     : "fast" | "cold" | "system_v" | "fastcall" | "baldrdash_system_v" | "baldrdash_windows"
+signature    : "(" [paramlist] ")" ["->" retlist] [call_conv]
+paramlist    : param { "," param }
+retlist      : paramlist
+param        : type [paramext] [paramspecial]
+paramext     : "uext" | "sext"
+paramspecial : "sret" | "link" | "fp" | "csr" | "vmctx" | "sigid" | "stack_limit"
+callconv     : "fast" | "cold" | "system_v" | "fastcall" | "baldrdash_system_v" | "baldrdash_windows"
 ```
 
 A function's calling convention determines exactly how arguments and return
