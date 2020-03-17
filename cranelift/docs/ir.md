@@ -116,11 +116,11 @@ arguments to the entry EBB's parameters.
 Instructions define zero, one, or more result values. All SSA values are either
 EBB parameters or instruction results.
 
-In the example above, the loop induction variable `i` is represented as three
-SSA values: In the entry block, `v4` is the initial value. In the loop block
-`ebb2`, the EBB parameter `v5` represents the value of the induction
-variable during each iteration. Finally, `v12` is computed as the induction
-variable value for the next iteration.
+In the example above, the loop induction variable `i` is represented
+as three SSA values: In `block2`, `v3` is the initial value. In the
+loop block `block3`, the EBB parameter `v4` represents the value of the
+induction variable during each iteration. Finally, `v11` is computed
+as the induction variable value for the next iteration.
 
 The `cranelift_frontend` crate contains utilities for translating from programs
 containing multiple assignments to the same variables into SSA form for
