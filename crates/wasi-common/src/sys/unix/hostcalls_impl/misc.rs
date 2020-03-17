@@ -127,7 +127,7 @@ fn poll_oneoff_handle_fd_event<'a>(
     ready_events: impl Iterator<Item = (FdEventData<'a>, yanix::poll::PollFd)>,
     events: &mut Vec<wasi::__wasi_event_t>,
 ) -> WasiResult<()> {
-    use crate::fdentry::Descriptor;
+    use crate::entry::Descriptor;
     use std::{convert::TryInto, os::unix::prelude::AsRawFd};
     use yanix::{file::fionread, poll::PollFlags};
 

@@ -1,5 +1,5 @@
-use crate::old::snapshot_0::fdentry::{Descriptor, OsHandleRef};
-use crate::old::snapshot_0::{sys::unix::sys_impl, wasi};
+use crate::entry::{Descriptor, OsHandleRef};
+use crate::{sys::unix::sys_impl, wasi};
 use std::fs::File;
 use std::io;
 use std::mem::ManuallyDrop;
@@ -11,6 +11,7 @@ impl AsRawFd for Descriptor {
     fn as_raw_fd(&self) -> RawFd {
         match self {
             Self::OsHandle(file) => file.as_raw_fd(),
+            Self::VirtualFile(_) => panic!("virtual files do not have a raw fd"),
             Self::Stdin => io::stdin().as_raw_fd(),
             Self::Stdout => io::stdout().as_raw_fd(),
             Self::Stderr => io::stderr().as_raw_fd(),
@@ -26,6 +27,9 @@ pub(crate) fn descriptor_as_oshandle<'lifetime>(
     })))
 }
 
+/// Returns the set of all possible rights that are both relevant for the file
+/// type and consistent with the open mode.
+///
 /// This function is unsafe because it operates on a raw file descriptor.
 pub(crate) unsafe fn determine_type_and_access_rights<Fd: AsRawFd>(
     fd: &Fd,
@@ -48,6 +52,8 @@ pub(crate) unsafe fn determine_type_and_access_rights<Fd: AsRawFd>(
     Ok((file_type, rights_base, rights_inheriting))
 }
 
+/// Returns the set of all possible rights that are relevant for file type.
+///
 /// This function is unsafe because it operates on a raw file descriptor.
 pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
     fd: &Fd,

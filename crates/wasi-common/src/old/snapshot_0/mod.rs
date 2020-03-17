@@ -1,5 +1,5 @@
 mod ctx;
-mod fdentry;
+mod entry;
 mod helpers;
 mod host;
 mod hostcalls_impl;

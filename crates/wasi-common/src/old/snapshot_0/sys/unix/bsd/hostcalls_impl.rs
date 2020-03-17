@@ -131,7 +131,7 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> WasiR
 }
 
 pub(crate) mod fd_readdir_impl {
-    use crate::old::snapshot_0::sys::fdentry_impl::OsHandle;
+    use crate::old::snapshot_0::sys::entry_impl::OsHandle;
     use crate::old::snapshot_0::wasi::WasiResult;
     use std::sync::{Mutex, MutexGuard};
     use yanix::dir::Dir;

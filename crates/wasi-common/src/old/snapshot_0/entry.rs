@@ -1,5 +1,5 @@
 use crate::old::snapshot_0::sys::dev_null;
-use crate::old::snapshot_0::sys::fdentry_impl::{
+use crate::old::snapshot_0::sys::entry_impl::{
     descriptor_as_oshandle, determine_type_and_access_rights, OsHandle,
 };
 use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
@@ -51,7 +51,7 @@ impl Descriptor {
 /// `FdEntry::as_descriptor_mut` methods which require a set of base and inheriting rights to be
 /// specified, verifying whether the stored `Descriptor` object is valid for the rights specified.
 #[derive(Debug)]
-pub(crate) struct FdEntry {
+pub(crate) struct Entry {
     pub(crate) file_type: wasi::__wasi_filetype_t,
     descriptor: Descriptor,
     pub(crate) rights_base: wasi::__wasi_rights_t,
@@ -60,7 +60,7 @@ pub(crate) struct FdEntry {
     // TODO: directories
 }
 
-impl FdEntry {
+impl Entry {
     /// Create an FdEntry with *maximal* possible rights from a given `File`.
     /// If this is not desired, the rights of the resulting `FdEntry` should
     /// be manually restricted.

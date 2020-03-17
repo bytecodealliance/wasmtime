@@ -1,4 +1,4 @@
-use crate::fdentry::Descriptor;
+use crate::entry::Descriptor;
 use crate::hostcalls_impl::PathGet;
 use crate::wasi::WasiResult;
 use std::os::unix::prelude::AsRawFd;
@@ -46,7 +46,7 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> WasiR
 }
 
 pub(crate) mod fd_readdir_impl {
-    use crate::sys::fdentry_impl::OsHandle;
+    use crate::sys::entry_impl::OsHandle;
     use crate::wasi::WasiResult;
     use yanix::dir::Dir;
 

@@ -1,9 +1,9 @@
 #![allow(non_camel_case_types)]
-use crate::sys::fdentry_impl::OsHandle;
+use crate::sys::entry_impl::OsHandle;
 use crate::sys::host_impl;
 use crate::sys::hostcalls_impl::fs_helpers::*;
 use crate::wasi::{self, WasiError, WasiResult};
-use crate::{fdentry::Descriptor, fdentry::FdEntry};
+use crate::{entry::Descriptor, entry::Entry};
 use std::path::{Component, Path};
 
 #[derive(Debug)]
@@ -102,7 +102,7 @@ impl<'a, 'b> PathRef<'a, 'b> {
 ///
 /// This is a workaround for not having Capsicum support in the OS.
 pub(crate) fn path_get(
-    fe: &FdEntry,
+    fe: &Entry,
     rights_base: wasi::__wasi_rights_t,
     rights_inheriting: wasi::__wasi_rights_t,
     dirflags: wasi::__wasi_lookupflags_t,

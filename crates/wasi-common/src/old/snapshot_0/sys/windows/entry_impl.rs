@@ -1,4 +1,4 @@
-use crate::old::snapshot_0::fdentry::{Descriptor, OsHandleRef};
+use crate::old::snapshot_0::entry::{Descriptor, OsHandleRef};
 use crate::old::snapshot_0::wasi;
 use std::fs::File;
 use std::io;
