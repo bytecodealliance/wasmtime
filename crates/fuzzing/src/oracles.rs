@@ -12,8 +12,7 @@
 
 pub mod dummy;
 
-use dummy::{dummy_imports, dummy_values};
-use std::collections::{HashMap, HashSet};
+use dummy::dummy_imports;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
@@ -109,10 +108,13 @@ pub fn compile(wasm: &[u8], strategy: Strategy) {
 /// exports. Modulo OOM, non-canonical NaNs, and usage of Wasm features that are
 /// or aren't enabled for different configs, we should get the same results when
 /// we call the exported functions for all of our different configs.
+#[cfg(feature = "binaryen")]
 pub fn differential_execution(
     ttf: &crate::generators::WasmOptTtf,
     configs: &[crate::generators::DifferentialConfig],
 ) {
+    use std::collections::{HashMap, HashSet};
+
     crate::init_fuzzing();
 
     // We need at least two configs.
@@ -204,7 +206,7 @@ pub fn differential_execution(
             };
 
             let ty = f.ty();
-            let params = match dummy_values(ty.params()) {
+            let params = match dummy::dummy_values(ty.params()) {
                 Ok(p) => p,
                 Err(_) => continue,
             };
@@ -216,75 +218,77 @@ pub fn differential_execution(
             assert_same_export_func_result(&existing_result, &this_result, name);
         }
     }
-}
 
-fn init_hang_limit(instance: &Instance) {
-    match instance.get_export("hangLimitInitializer") {
-        None => return,
-        Some(Extern::Func(f)) => {
-            f.call(&[])
-                .expect("initializing the hang limit should not fail");
-        }
-        Some(_) => panic!("unexpected hangLimitInitializer export"),
-    }
-}
-
-fn assert_same_export_func_result(
-    lhs: &Result<Box<[Val]>, Trap>,
-    rhs: &Result<Box<[Val]>, Trap>,
-    func_name: &str,
-) {
-    let fail = || {
-        panic!(
-            "differential fuzzing failed: exported func {} returned two \
-             different results: {:?} != {:?}",
-            func_name, lhs, rhs
-        )
-    };
-
-    match (lhs, rhs) {
-        (Err(_), Err(_)) => {}
-        (Ok(lhs), Ok(rhs)) => {
-            if lhs.len() != rhs.len() {
-                fail();
+    fn init_hang_limit(instance: &Instance) {
+        match instance.get_export("hangLimitInitializer") {
+            None => return,
+            Some(Extern::Func(f)) => {
+                f.call(&[])
+                    .expect("initializing the hang limit should not fail");
             }
-            for (lhs, rhs) in lhs.iter().zip(rhs.iter()) {
-                match (lhs, rhs) {
-                    (Val::I32(lhs), Val::I32(rhs)) if lhs == rhs => continue,
-                    (Val::I64(lhs), Val::I64(rhs)) if lhs == rhs => continue,
-                    (Val::V128(lhs), Val::V128(rhs)) if lhs == rhs => continue,
-                    (Val::F32(lhs), Val::F32(rhs)) => {
-                        let lhs = f32::from_bits(*lhs);
-                        let rhs = f32::from_bits(*rhs);
-                        if lhs == rhs || (lhs.is_nan() && rhs.is_nan()) {
-                            continue;
-                        } else {
-                            fail()
+            Some(_) => panic!("unexpected hangLimitInitializer export"),
+        }
+    }
+
+    fn assert_same_export_func_result(
+        lhs: &Result<Box<[Val]>, Trap>,
+        rhs: &Result<Box<[Val]>, Trap>,
+        func_name: &str,
+    ) {
+        let fail = || {
+            panic!(
+                "differential fuzzing failed: exported func {} returned two \
+                 different results: {:?} != {:?}",
+                func_name, lhs, rhs
+            )
+        };
+
+        match (lhs, rhs) {
+            (Err(_), Err(_)) => {}
+            (Ok(lhs), Ok(rhs)) => {
+                if lhs.len() != rhs.len() {
+                    fail();
+                }
+                for (lhs, rhs) in lhs.iter().zip(rhs.iter()) {
+                    match (lhs, rhs) {
+                        (Val::I32(lhs), Val::I32(rhs)) if lhs == rhs => continue,
+                        (Val::I64(lhs), Val::I64(rhs)) if lhs == rhs => continue,
+                        (Val::V128(lhs), Val::V128(rhs)) if lhs == rhs => continue,
+                        (Val::F32(lhs), Val::F32(rhs)) => {
+                            let lhs = f32::from_bits(*lhs);
+                            let rhs = f32::from_bits(*rhs);
+                            if lhs == rhs || (lhs.is_nan() && rhs.is_nan()) {
+                                continue;
+                            } else {
+                                fail()
+                            }
                         }
-                    }
-                    (Val::F64(lhs), Val::F64(rhs)) => {
-                        let lhs = f64::from_bits(*lhs);
-                        let rhs = f64::from_bits(*rhs);
-                        if lhs == rhs || (lhs.is_nan() && rhs.is_nan()) {
-                            continue;
-                        } else {
-                            fail()
+                        (Val::F64(lhs), Val::F64(rhs)) => {
+                            let lhs = f64::from_bits(*lhs);
+                            let rhs = f64::from_bits(*rhs);
+                            if lhs == rhs || (lhs.is_nan() && rhs.is_nan()) {
+                                continue;
+                            } else {
+                                fail()
+                            }
                         }
+                        (Val::AnyRef(_), Val::AnyRef(_)) | (Val::FuncRef(_), Val::FuncRef(_)) => {
+                            continue
+                        }
+                        _ => fail(),
                     }
-                    (Val::AnyRef(_), Val::AnyRef(_)) | (Val::FuncRef(_), Val::FuncRef(_)) => {
-                        continue
-                    }
-                    _ => fail(),
                 }
             }
+            _ => fail(),
         }
-        _ => fail(),
     }
 }
 
 /// Invoke the given API calls.
+#[cfg(feature = "binaryen")]
 pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
     use crate::generators::api::ApiCall;
+    use std::collections::HashMap;
 
     crate::init_fuzzing();
 
@@ -399,7 +403,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 let nth = nth % funcs.len();
                 let f = &funcs[nth];
                 let ty = f.ty();
-                let params = match dummy_values(ty.params()) {
+                let params = match dummy::dummy_values(ty.params()) {
                     Ok(p) => p,
                     Err(_) => continue,
                 };
