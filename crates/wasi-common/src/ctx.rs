@@ -440,11 +440,10 @@ impl WasiCtx {
 
     /// Remove `Entry` corresponding to the specified raw WASI `fd` from the `WasiCtx` object.
     pub(crate) fn remove_entry(&mut self, fd: wasi::__wasi_fd_t) -> WasiResult<Entry> {
-        // First, deallocate the `fd`.
-        if !self.fds.deallocate(fd) {
-            return Err(WasiError::EBADF);
-        }
-        // Next, remove from valid entries.
-        self.entries.remove(&fd).ok_or(WasiError::EBADF)
+        // Remove the `fd` from valid entries.
+        let entry = self.entries.remove(&fd).ok_or(WasiError::EBADF)?;
+        // Next, deallocate the `fd`.
+        self.fds.deallocate(fd);
+        Ok(entry)
     }
 }
