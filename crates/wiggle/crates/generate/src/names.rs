@@ -38,7 +38,7 @@ impl Names {
             BuiltinType::F32 => quote!(f32),
             BuiltinType::F64 => quote!(f64),
             BuiltinType::Char8 => quote!(u8),
-            BuiltinType::USize => quote!(usize),
+            BuiltinType::USize => quote!(u32),
         }
     }
     pub fn atom_type(&self, atom: AtomType) -> TokenStream {
