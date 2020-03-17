@@ -42,10 +42,7 @@ impl<T: Fd> FdPool<T> {
         // allocating an additional one into the pool. If we've
         // reached our max number of handles, we will fail with None
         // instead.
-        let fd = match self.next_alloc.take() {
-            None => return None,
-            Some(fd) => fd,
-        };
+        let fd = self.next_alloc.take()?;
         // It's OK to not unpack the result of `fd.next()` here which
         // can fail since we check for `None` in the snippet above.
         self.next_alloc = fd.next();
