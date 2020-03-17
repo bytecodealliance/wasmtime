@@ -30,9 +30,5 @@ winx = { path = "winx", version = "0.12.0" }
 winapi = "0.3"
 cpu-time = "1.0"
 
-[lib]
-name = "wasi_common"
-crate-type = ["rlib", "staticlib", "cdylib"]
-
 [badges]
 maintenance = { status = "actively-developed" }
