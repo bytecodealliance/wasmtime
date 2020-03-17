@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::fmt;
 use std::hash::Hash;
 
@@ -7,13 +7,15 @@ pub(crate) trait Fd: Copy + Clone + Hash + PartialEq + Eq + Default {
 }
 
 pub(crate) struct FdPool<T: Fd> {
-    available: VecDeque<T>,
+    next_alloc: Option<T>,
+    available: Vec<T>,
     claimed: HashSet<T>,
 }
 
 impl<T: Fd + fmt::Debug> fmt::Debug for FdPool<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("FdPool")
+            .field("next_alloc", &self.next_alloc)
             .field("available", &self.available)
             .field("claimed", &self.claimed)
             .finish()
@@ -21,64 +23,42 @@ impl<T: Fd + fmt::Debug> fmt::Debug for FdPool<T> {
 }
 
 impl<T: Fd> FdPool<T> {
-    const BATCH_SIZE: usize = 64;
-
     pub fn new() -> Self {
-        // Try preallocating `BATCH_SIZE` worth of fds. If we're
-        // unable to do so, preallocated as many as we can.
-        let mut available = VecDeque::with_capacity(Self::BATCH_SIZE);
-        Self::preallocate(T::default(), &mut available);
-
         Self {
-            available,
+            next_alloc: Some(T::default()),
+            available: Vec::new(),
             claimed: HashSet::new(),
         }
     }
 
     pub fn allocate(&mut self) -> Option<T> {
-        // When popping from the stack, we always pop from the back
-        // so that the "largest" fd value stays at the bottom.
-        let fd = match self.available.pop_back() {
+        if let Some(fd) = self.available.pop() {
+            // Since we've had free, unclaimed handle in the pool,
+            // simply claim it and return.
+            self.claimed.insert(fd);
+            return Some(fd);
+        }
+        // There are no free handles available in the pool, so try
+        // allocating an additional one into the pool. If we've
+        // reached our max number of handles, we will fail with None
+        // instead.
+        let fd = match self.next_alloc.take() {
             None => return None,
             Some(fd) => fd,
         };
-        // Before popping from the stack, check if available pool is nonempty.
-        // If so, try preallocating another `BATCH_SIZE` worth of fds.
-        // If that fails, then we have reached our max number of
-        // allocations and will fail at next attempt, unless
-        // some values are freed first.
-        if self.available.is_empty() {
-            self.available.reserve(Self::BATCH_SIZE);
-            if let Some(fd) = fd.next() {
-                Self::preallocate(fd, &mut self.available);
-            }
-        }
-        // Afterwards, claim the popped value.
+        // It's OK to not unpack the result of `fd.next()` here which
+        // can fail since we check for `None` in the snippet above.
+        self.next_alloc = fd.next();
         self.claimed.insert(fd);
         Some(fd)
     }
 
     pub fn deallocate(&mut self, fd: T) -> bool {
         if self.claimed.remove(&fd) {
-            self.available.push_back(fd);
+            self.available.push(fd);
             return true;
         }
         false
-    }
-
-    fn preallocate(mut val: T, vals: &mut VecDeque<T>) {
-        // When preallocating, we always push front so that we
-        // always end up with the "largest" possible fd value at the
-        // bottom of the stack.
-        //
-        // Note that this may end up not allocating a single value.
-        for _ in 0..Self::BATCH_SIZE {
-            vals.push_front(val);
-            match val.next() {
-                Some(v) => val = v,
-                None => break,
-            };
-        }
     }
 }
 
