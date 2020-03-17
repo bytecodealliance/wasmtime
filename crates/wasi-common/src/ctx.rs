@@ -163,33 +163,27 @@ impl WasiCtxBuilder {
 
     /// Inherit stdin from the host process.
     pub fn inherit_stdin(&mut self) -> &mut Self {
-        self.stdin
-            .replace(PendingEntry::Thunk(Entry::duplicate_stdin));
+        self.stdin = Some(PendingEntry::Thunk(Entry::duplicate_stdin));
         self
     }
 
     /// Inherit stdout from the host process.
     pub fn inherit_stdout(&mut self) -> &mut Self {
-        self.stdout
-            .replace(PendingEntry::Thunk(Entry::duplicate_stdout));
+        self.stdout = Some(PendingEntry::Thunk(Entry::duplicate_stdout));
         self
     }
 
     /// Inherit stdout from the host process.
     pub fn inherit_stderr(&mut self) -> &mut Self {
-        self.stderr
-            .replace(PendingEntry::Thunk(Entry::duplicate_stderr));
+        self.stderr = Some(PendingEntry::Thunk(Entry::duplicate_stderr));
         self
     }
 
     /// Inherit the stdin, stdout, and stderr streams from the host process.
     pub fn inherit_stdio(&mut self) -> &mut Self {
-        self.stdin
-            .replace(PendingEntry::Thunk(Entry::duplicate_stdin));
-        self.stdout
-            .replace(PendingEntry::Thunk(Entry::duplicate_stdout));
-        self.stderr
-            .replace(PendingEntry::Thunk(Entry::duplicate_stderr));
+        self.stdin = Some(PendingEntry::Thunk(Entry::duplicate_stdin));
+        self.stdout = Some(PendingEntry::Thunk(Entry::duplicate_stdout));
+        self.stderr = Some(PendingEntry::Thunk(Entry::duplicate_stderr));
         self
     }
 
@@ -233,19 +227,19 @@ impl WasiCtxBuilder {
 
     /// Provide a File to use as stdin
     pub fn stdin(&mut self, file: File) -> &mut Self {
-        self.stdin.replace(PendingEntry::File(file));
+        self.stdin = Some(PendingEntry::File(file));
         self
     }
 
     /// Provide a File to use as stdout
     pub fn stdout(&mut self, file: File) -> &mut Self {
-        self.stdout.replace(PendingEntry::File(file));
+        self.stdout = Some(PendingEntry::File(file));
         self
     }
 
     /// Provide a File to use as stderr
     pub fn stderr(&mut self, file: File) -> &mut Self {
-        self.stderr.replace(PendingEntry::File(file));
+        self.stderr = Some(PendingEntry::File(file));
         self
     }
 
