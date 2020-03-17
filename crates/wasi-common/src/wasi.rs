@@ -228,7 +228,10 @@ pub fn whence_to_str(whence: __wasi_whence_t) -> &'static str {
 pub const __WASI_DIRCOOKIE_START: __wasi_dircookie_t = 0;
 
 impl crate::fdpool::Fd for __wasi_fd_t {
-    fn next(&self) -> Option<Self> {
-        self.checked_add(1)
+    fn as_raw(&self) -> u32 {
+        *self
+    }
+    fn from_raw(raw_fd: u32) -> Self {
+        raw_fd
     }
 }

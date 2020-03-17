@@ -322,7 +322,7 @@ impl WasiCtxBuilder {
             })
             .collect::<WasiCtxBuilderResult<Vec<CString>>>()?;
 
-        let mut fds = FdPool::new();
+        let mut fd_pool = FdPool::new();
         let mut entries: HashMap<wasi::__wasi_fd_t, Entry> = HashMap::new();
         // Populate the non-preopen entries.
         for pending in vec![
@@ -330,7 +330,7 @@ impl WasiCtxBuilder {
             self.stdout.take().unwrap(),
             self.stderr.take().unwrap(),
         ] {
-            let fd = fds
+            let fd = fd_pool
                 .allocate()
                 .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
             log::debug!("WasiCtx inserting ({:?}, {:?})", fd, pending);
@@ -347,7 +347,7 @@ impl WasiCtxBuilder {
         for (guest_path, dir) in self.preopens.take().unwrap() {
             // We do the increment at the beginning of the loop body, so that we don't overflow
             // unnecessarily if we have exactly the maximum number of file descriptors.
-            let preopen_fd = fds
+            let preopen_fd = fd_pool
                 .allocate()
                 .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
 
@@ -378,14 +378,14 @@ impl WasiCtxBuilder {
             args,
             env,
             entries,
-            fds,
+            fd_pool,
         })
     }
 }
 
 #[derive(Debug)]
 pub struct WasiCtx {
-    fds: FdPool<wasi::__wasi_fd_t>,
+    fd_pool: FdPool,
     entries: HashMap<wasi::__wasi_fd_t, Entry>,
     pub(crate) args: Vec<CString>,
     pub(crate) env: Vec<CString>,
@@ -427,7 +427,7 @@ impl WasiCtx {
     /// The `FdEntry` will automatically get another free raw WASI `fd` assigned. Note that
     /// the two subsequent free raw WASI `fd`s do not have to be stored contiguously.
     pub(crate) fn insert_entry(&mut self, fe: Entry) -> WasiResult<wasi::__wasi_fd_t> {
-        let fd = self.fds.allocate().ok_or(WasiError::EMFILE)?;
+        let fd = self.fd_pool.allocate().ok_or(WasiError::EMFILE)?;
         self.entries.insert(fd, fe);
         Ok(fd)
     }
@@ -443,7 +443,7 @@ impl WasiCtx {
         // Remove the `fd` from valid entries.
         let entry = self.entries.remove(&fd).ok_or(WasiError::EBADF)?;
         // Next, deallocate the `fd`.
-        self.fds.deallocate(fd);
+        self.fd_pool.deallocate(fd);
         Ok(entry)
     }
 }
