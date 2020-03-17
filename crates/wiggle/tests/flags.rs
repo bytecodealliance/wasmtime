@@ -14,7 +14,7 @@ impl<'a> flags::Flags for WasiCtx<'a> {
     fn configure_car(
         &self,
         old_config: types::CarConfig,
-        other_config_ptr: GuestPtr<types::CarConfig>,
+        other_config_ptr: &GuestPtr<types::CarConfig>,
     ) -> Result<types::CarConfig, types::Errno> {
         let other_config = other_config_ptr.read().map_err(|e| {
             eprintln!("old_config_ptr error: {}", e);

@@ -23,7 +23,7 @@ impl<'a> GuestErrorType<'a> for types::Errno {
 }
 
 impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
-    fn args_get(&self, _argv: GuestPtr<GuestPtr<u8>>, _argv_buf: GuestPtr<u8>) -> Result<()> {
+    fn args_get(&self, _argv: &GuestPtr<GuestPtr<u8>>, _argv_buf: &GuestPtr<u8>) -> Result<()> {
         unimplemented!("args_get")
     }
 
@@ -33,8 +33,8 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
 
     fn environ_get(
         &self,
-        _environ: GuestPtr<GuestPtr<u8>>,
-        _environ_buf: GuestPtr<u8>,
+        _environ: &GuestPtr<GuestPtr<u8>>,
+        _environ_buf: &GuestPtr<u8>,
     ) -> Result<()> {
         unimplemented!("environ_get")
     }
@@ -153,7 +153,7 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
     fn fd_prestat_dir_name(
         &self,
         _fd: types::Fd,
-        _path: GuestPtr<u8>,
+        _path: &GuestPtr<u8>,
         _path_len: types::Size,
     ) -> Result<()> {
         unimplemented!("fd_prestat_dir_name")
@@ -175,7 +175,7 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
     fn fd_readdir(
         &self,
         _fd: types::Fd,
-        _buf: GuestPtr<u8>,
+        _buf: &GuestPtr<u8>,
         _buf_len: types::Size,
         _cookie: types::Dircookie,
     ) -> Result<types::Size> {
@@ -260,7 +260,7 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
         &self,
         _fd: types::Fd,
         _path: &GuestPtr<'_, str>,
-        _buf: GuestPtr<u8>,
+        _buf: &GuestPtr<u8>,
         _buf_len: types::Size,
     ) -> Result<types::Size> {
         unimplemented!("path_readlink")
@@ -295,8 +295,8 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
 
     fn poll_oneoff(
         &self,
-        _in_: GuestPtr<types::Subscription>,
-        _out: GuestPtr<types::Event>,
+        _in_: &GuestPtr<types::Subscription>,
+        _out: &GuestPtr<types::Event>,
         _nsubscriptions: types::Size,
     ) -> Result<types::Size> {
         unimplemented!("poll_oneoff")
@@ -314,7 +314,7 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
         unimplemented!("sched_yield")
     }
 
-    fn random_get(&self, _buf: GuestPtr<u8>, _buf_len: types::Size) -> Result<()> {
+    fn random_get(&self, _buf: &GuestPtr<u8>, _buf_len: types::Size) -> Result<()> {
         unimplemented!("random_get")
     }
 
