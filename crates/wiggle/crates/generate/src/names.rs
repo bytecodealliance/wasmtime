@@ -66,7 +66,11 @@ impl Names {
                     let pointee_type = self.type_ref(&pointee, lifetime.clone());
                     quote!(wiggle_runtime::GuestPtr<#lifetime, #pointee_type>)
                 }
-                _ => unimplemented!("anonymous type ref"),
+                witx::Type::Array(pointee) => {
+                    let pointee_type = self.type_ref(&pointee, lifetime.clone());
+                    quote!(wiggle_runtime::GuestPtr<#lifetime, [#pointee_type]>)
+                }
+                _ => unimplemented!("anonymous type ref {:?}", tref),
             },
         }
     }
