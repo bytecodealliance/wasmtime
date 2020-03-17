@@ -50,7 +50,7 @@ more-asserts = "0.2.1"
 # `cargo test --features test-programs`.
 test-programs = { path = "crates/test-programs" }
 tempfile = "3.1.0"
-filecheck = "0.4.0"
+filecheck = "0.5.0"
 
 [build-dependencies]
 anyhow = "1.0.19"
