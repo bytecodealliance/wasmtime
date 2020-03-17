@@ -79,7 +79,7 @@ jobs:
     - run: cargo install cargo-fuzz --vers "^0.7"
     - run: cargo fetch
       working-directory: ./fuzz
-    - run: cargo fuzz build --release --debug-assertions
+    - run: cargo fuzz build --release --debug-assertions --features binaryen
     # Our corpora are too large to run in full on every pull request, they just
     # take too long. Instead, we sample some of them and make sure that running
     # our fuzzers over the sampled inputs still works OK.

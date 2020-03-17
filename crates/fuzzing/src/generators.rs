@@ -8,20 +8,22 @@
 //! wrapper over an external tool, such that the wrapper implements the
 //! `Arbitrary` trait for the wrapped external tool.
 
+#[cfg(feature = "binaryen")]
 pub mod api;
 
-use arbitrary::{Arbitrary, Unstructured};
-use std::fmt;
+use arbitrary::Arbitrary;
 
 /// A Wasm test case generator that is powered by Binaryen's `wasm-opt -ttf`.
 #[derive(Clone)]
+#[cfg(feature = "binaryen")]
 pub struct WasmOptTtf {
     /// The raw, encoded Wasm bytes.
     pub wasm: Vec<u8>,
 }
 
-impl fmt::Debug for WasmOptTtf {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+#[cfg(feature = "binaryen")]
+impl std::fmt::Debug for WasmOptTtf {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
             "WasmOptTtf {{ wasm: wat::parse_str(r###\"\n{}\n\"###).unwrap() }}",
@@ -30,8 +32,9 @@ impl fmt::Debug for WasmOptTtf {
     }
 }
 
+#[cfg(feature = "binaryen")]
 impl Arbitrary for WasmOptTtf {
-    fn arbitrary(input: &mut Unstructured) -> arbitrary::Result<Self> {
+    fn arbitrary(input: &mut arbitrary::Unstructured) -> arbitrary::Result<Self> {
         crate::init_fuzzing();
         let seed: Vec<u8> = Arbitrary::arbitrary(input)?;
         let module = binaryen::tools::translate_to_fuzz_mvp(&seed);
@@ -39,7 +42,7 @@ impl Arbitrary for WasmOptTtf {
         Ok(WasmOptTtf { wasm })
     }
 
-    fn arbitrary_take_rest(input: Unstructured) -> arbitrary::Result<Self> {
+    fn arbitrary_take_rest(input: arbitrary::Unstructured) -> arbitrary::Result<Self> {
         crate::init_fuzzing();
         let seed: Vec<u8> = Arbitrary::arbitrary_take_rest(input)?;
         let module = binaryen::tools::translate_to_fuzz_mvp(&seed);

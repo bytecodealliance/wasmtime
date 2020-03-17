@@ -34,15 +34,21 @@ name = "instantiate_translated"
 path = "fuzz_targets/instantiate_translated.rs"
 test = false
 doc = false
+required-features = ['binaryen']
 
 [[bin]]
 name = "api_calls"
 path = "fuzz_targets/api_calls.rs"
 test = false
 doc = false
+required-features = ['binaryen']
 
 [[bin]]
 name = "differential"
 path = "fuzz_targets/differential.rs"
 test = false
 doc = false
+required-features = ['binaryen']
+
+[features]
+binaryen = ['wasmtime-fuzzing/binaryen']

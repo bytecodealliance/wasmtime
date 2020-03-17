@@ -110,7 +110,7 @@ pub fn compile(wasm: &[u8], strategy: Strategy) {
 /// or aren't enabled for different configs, we should get the same results when
 /// we call the exported functions for all of our different configs.
 pub fn differential_execution(
-    ttf: &crate::generators::WasmOptTtf,
+    wasm: &[u8],
     configs: &[crate::generators::DifferentialConfig],
 ) {
     crate::init_fuzzing();
@@ -131,13 +131,13 @@ pub fn differential_execution(
     };
 
     let mut export_func_results: HashMap<String, Result<Box<[Val]>, Trap>> = Default::default();
-    log_wasm(&ttf.wasm);
+    log_wasm(wasm);
 
     for config in &configs {
         let engine = Engine::new(config);
         let store = Store::new(&engine);
 
-        let module = match Module::new(&store, &ttf.wasm) {
+        let module = match Module::new(&store, wasm) {
             Ok(module) => module,
             // The module might rely on some feature that our config didn't
             // enable or something like that.
@@ -283,6 +283,7 @@ fn assert_same_export_func_result(
 }
 
 /// Invoke the given API calls.
+#[cfg(feature = "binaryen")]
 pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
     use crate::generators::api::ApiCall;
 
