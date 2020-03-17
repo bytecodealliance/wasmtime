@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-object"
-version = "0.59.0"
+version = "0.60.0"
 authors = ["The Cranelift Project Developers"]
 description = "Emit Cranelift output to native object files with `object`"
 repository = "https://github.com/bytecodealliance/wasmtime"
@@ -10,14 +10,14 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-module = { path = "../module", version = "0.59.0" }
+cranelift-module = { path = "../module", version = "0.60.0" }
 object = { version = "0.17", default-features = false, features = ["write"] }
 target-lexicon = "0.10"
 goblin = "0.1.0"
 
 [dependencies.cranelift-codegen]
 path = "../codegen"
-version = "0.59.0"
+version = "0.60.0"
 default-features = false
 features = ["std"]
 

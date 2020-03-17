@@ -404,7 +404,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-frontend",
@@ -412,14 +412,14 @@ dependencies = [
 
 [[package]]
 name = "cranelift-bforest"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "cranelift-entity",
 ]
 
 [[package]]
 name = "cranelift-codegen"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "byteorder",
  "cranelift-bforest",
@@ -437,7 +437,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-meta"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "cranelift-codegen-shared",
  "cranelift-entity",
@@ -445,18 +445,18 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-shared"
-version = "0.59.0"
+version = "0.60.0"
 
 [[package]]
 name = "cranelift-entity"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "cranelift-faerie"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -468,7 +468,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-filetests"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "byteorder",
  "cranelift-codegen",
@@ -486,7 +486,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-frontend"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "cranelift-codegen",
  "hashbrown",
@@ -497,7 +497,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-module"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -509,7 +509,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-native"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "cranelift-codegen",
  "raw-cpuid",
@@ -518,7 +518,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-object"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-module",
@@ -529,7 +529,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-preopt"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -537,7 +537,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-reader"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "cranelift-codegen",
  "target-lexicon",
@@ -545,7 +545,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-serde"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "clap",
  "cranelift-codegen",
@@ -557,7 +557,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-simplejit"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "cranelift",
  "cranelift-codegen",
@@ -575,7 +575,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-tools"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "capstone",
  "cfg-if",
@@ -607,7 +607,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-wasm"
-version = "0.59.0"
+version = "0.60.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
