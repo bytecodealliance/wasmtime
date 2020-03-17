@@ -2,11 +2,16 @@
 set -euo pipefail
 
 # This is a convenience script for maintainers publishing a new version of
-# Wasmtime to crates.io. To use, bump the version number below, run the
-# script, and then run the commands that the script prints.
+# Wasmtime to crates.io. To use, first bump the Wasmtime versions with
+# `scripts/bump-wasmtime-version.sh` and Cranelift versions with
+# `scripts/bump-cranelift-version.sh`, then run this script, and run the
+# commands that it prints.
 
 topdir=$(dirname "$0")/..
 cd "$topdir"
+
+# Publishing Wasmtime requires publishing any local Cranelift changes.
+./publish-cranelift.sh
 
 # Commands needed to publish.
 #
@@ -43,3 +48,5 @@ for cargo_toml in \
     # https://internals.rust-lang.org/t/changes-to-how-crates-io-handles-index-updates/9608
     echo sleep 10
 done
+
+echo echo git tag v$(grep "version =" Cargo.toml | head -n 1 | cut -d '"' -f 2)

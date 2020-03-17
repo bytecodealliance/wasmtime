@@ -22,6 +22,6 @@ be executed to make the release:
 1. Push the tag to the repository
   * This will trigger the release CI which will create all release artifacts and
     publish them to GitHub releases.
-1. Run `scripts/publish-all.sh` to publish all crates to crates.io
+1. Run `scripts/publish-wasmtime.sh` to publish all crates to crates.io
 
 And that's it, then you've done a Wasmtime release.
