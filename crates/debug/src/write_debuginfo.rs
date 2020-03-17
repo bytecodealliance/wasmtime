@@ -35,7 +35,8 @@ pub fn emit_dwarf(
             id.name(),
             Decl::section(SectionKind::Debug),
             s.writer.take(),
-        )
+        )?;
+        Ok(())
     })?;
     sections.for_each_mut(|id, s| -> anyhow::Result<()> {
         for reloc in &s.relocs {

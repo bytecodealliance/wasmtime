@@ -13,7 +13,7 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0"
 wasmtime-environ = { path = "../environ", version = "0.12.0" }
-faerie = "0.14.0"
+faerie = "0.15.0"
 more-asserts = "0.2.1"
 
 [badges]

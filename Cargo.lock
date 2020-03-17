@@ -499,6 +499,7 @@ dependencies = [
 name = "cranelift-module"
 version = "0.59.0"
 dependencies = [
+ "anyhow",
  "cranelift-codegen",
  "cranelift-entity",
  "hashbrown",
@@ -843,11 +844,10 @@ version = "0.1.0"
 
 [[package]]
 name = "faerie"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74b9ed6159e4a6212c61d9c6a86bee01876b192a64accecf58d5b5ae3b667b52"
+checksum = "dfef65b0e94693295c5d2fe2506f0ee6f43465342d4b5331659936aee8b16084"
 dependencies = [
- "anyhow",
  "goblin",
  "indexmap",
  "log",
