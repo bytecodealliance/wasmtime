@@ -178,7 +178,12 @@ impl Compiler {
                 std::mem::size_of::<u128>(),
             )?;
             trampolines.insert(index, trampoline);
+
+            // Typically trampolines do not have relocations, so if one does
+            // show up be sure to log it in case anyone's listening and there's
+            // an accidental bug.
             if relocations.len() > 0 {
+                log::info!("relocations found in trampoline for {:?}", sig);
                 trampoline_relocations.insert(index, relocations);
             }
         }
