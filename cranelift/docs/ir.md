@@ -622,16 +622,7 @@ returns a pointer that is guaranteed to trap. Heap addresses can be smaller than
 the native pointer size, for example unsigned `i32` offsets on a 64-bit
 architecture.
 
-.. digraph:: static
-    :align: center
-    :caption: Heap address space layout
-
-    node [
-        shape=record,
-        fontsize=10,
-        fontname="Vera Sans, DejaVu Sans, Liberation Sans, Arial, Helvetica, sans"
-    ]
-    "static" [label="mapped\npages|unmapped\npages|offset_guard\npages"]
+![Heap address space layout](./heap.svg)
 
 A heap appears as three consecutive ranges of address space:
 
