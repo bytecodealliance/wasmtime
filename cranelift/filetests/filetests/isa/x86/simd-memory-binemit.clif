@@ -8,8 +8,8 @@ block0(v0: i64 [%rax]):
 [-]           store v10, v0         ; bin: heap_oob 0f 11 00
 
               ; use displacement
-[-, %xmm0]    v11 = load.f32x4 v0+42 ; bin: heap_oob 0f 10 40 2a
-[-]           store v11, v0+42       ; bin: heap_oob 0f 11 40 2a
+[-, %xmm0]    v11 = load.f32x4 v0+42 ; bin: heap_oob 40 0f 10 40 2a
+[-]           store v11, v0+42       ; bin: heap_oob 40 0f 11 40 2a
 
               ; use REX prefix
 [-, %xmm8]    v12 = load.i8x16 v0   ; bin: heap_oob 44 0f 10 00
@@ -22,16 +22,17 @@ function %load_store_complex(i64, i64) {
 block0(v0: i64 [%rax], v1: i64 [%rbx]):
               ; %xmm1 corresponds to ModR/M 0x04; the 0b100 in the R/M slot indicates a SIB byte follows
               ; %rax and %rbx form the SIB 0x18
-[-, %xmm1]    v10 = load_complex.f64x2 v0+v1   ; bin: heap_oob 0f 10 0c 18
+[-, %xmm1]    v10 = load_complex.f64x2 v0+v1   ; bin: heap_oob 40 0f 10 0c 18
               ; enabling bit 6 of the ModR/M byte indicates a disp8 follows
-[-]           store_complex v10, v0+v1+5       ; bin: heap_oob 0f 11 4c 18 05
+[-]           store_complex v10, v0+v1+5       ; bin: heap_oob 40 0f 11 4c 18 05
 
     return
 }
 
 function %copy_to_ssa() {
 block0:
-[-, %xmm1]    v0 = copy_to_ssa.i64x2 %xmm3  ; bin: 0f 28 cb
+[-, %xmm1]    v0 = copy_to_ssa.i64x2 %xmm3  ; bin: 40 0f 28 cb
+[-, %xmm2]    v1 = copy_to_ssa.i64x2 %xmm15 ; bin: 41 0f 28 d7
 
     return
 }

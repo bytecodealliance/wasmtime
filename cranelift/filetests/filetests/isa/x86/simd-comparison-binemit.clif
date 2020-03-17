@@ -87,26 +87,52 @@ block0(v0: i32x4 [%xmm2], v1: i32x4 [%xmm4]):
 
 function %fcmp_f32x4(f32x4, f32x4) {
 block0(v0: f32x4 [%xmm2], v1: f32x4 [%xmm4]):
-[-, %xmm2]  v2 = fcmp eq v0, v1     ; bin: 40 0f c2 d4 00
-[-, %xmm2]  v3 = fcmp lt v0, v1     ; bin: 40 0f c2 d4 01
-[-, %xmm2]  v4 = fcmp le v0, v1     ; bin: 40 0f c2 d4 02
-[-, %xmm2]  v5 = fcmp uno v0, v1    ; bin: 40 0f c2 d4 03
-[-, %xmm2]  v6 = fcmp ne v0, v1     ; bin: 40 0f c2 d4 04
-[-, %xmm2]  v7 = fcmp uge v0, v1    ; bin: 40 0f c2 d4 05
-[-, %xmm2]  v8 = fcmp ugt v0, v1    ; bin: 40 0f c2 d4 06
-[-, %xmm2]  v9 = fcmp ord v0, v1    ; bin: 40 0f c2 d4 07
+[-, %xmm2]  v2 = fcmp eq v0, v1     ; bin: 0f c2 d4 00
+[-, %xmm2]  v3 = fcmp lt v0, v1     ; bin: 0f c2 d4 01
+[-, %xmm2]  v4 = fcmp le v0, v1     ; bin: 0f c2 d4 02
+[-, %xmm2]  v5 = fcmp uno v0, v1    ; bin: 0f c2 d4 03
+[-, %xmm2]  v6 = fcmp ne v0, v1     ; bin: 0f c2 d4 04
+[-, %xmm2]  v7 = fcmp uge v0, v1    ; bin: 0f c2 d4 05
+[-, %xmm2]  v8 = fcmp ugt v0, v1    ; bin: 0f c2 d4 06
+[-, %xmm2]  v9 = fcmp ord v0, v1    ; bin: 0f c2 d4 07
+            return
+}
+
+function %fcmp_f32x4_rex(f32x4, f32x4) {
+block0(v0: f32x4 [%xmm8], v1: f32x4 [%xmm8]):
+[-, %xmm8]  v2 = fcmp eq v0, v1     ; bin: 45 0f c2 c0 00
+[-, %xmm8]  v3 = fcmp lt v0, v1     ; bin: 45 0f c2 c0 01
+[-, %xmm8]  v4 = fcmp le v0, v1     ; bin: 45 0f c2 c0 02
+[-, %xmm8]  v5 = fcmp uno v0, v1    ; bin: 45 0f c2 c0 03
+[-, %xmm8]  v6 = fcmp ne v0, v1     ; bin: 45 0f c2 c0 04
+[-, %xmm8]  v7 = fcmp uge v0, v1    ; bin: 45 0f c2 c0 05
+[-, %xmm8]  v8 = fcmp ugt v0, v1    ; bin: 45 0f c2 c0 06
+[-, %xmm8]  v9 = fcmp ord v0, v1    ; bin: 45 0f c2 c0 07
             return
 }
 
 function %fcmp_f64x2(f64x2, f64x2) {
 block0(v0: f64x2 [%xmm2], v1: f64x2 [%xmm0]):
-[-, %xmm2]  v2 = fcmp eq v0, v1     ; bin: 66 40 0f c2 d0 00
-[-, %xmm2]  v3 = fcmp lt v0, v1     ; bin: 66 40 0f c2 d0 01
-[-, %xmm2]  v4 = fcmp le v0, v1     ; bin: 66 40 0f c2 d0 02
-[-, %xmm2]  v5 = fcmp uno v0, v1    ; bin: 66 40 0f c2 d0 03
-[-, %xmm2]  v6 = fcmp ne v0, v1     ; bin: 66 40 0f c2 d0 04
-[-, %xmm2]  v7 = fcmp uge v0, v1    ; bin: 66 40 0f c2 d0 05
-[-, %xmm2]  v8 = fcmp ugt v0, v1    ; bin: 66 40 0f c2 d0 06
-[-, %xmm2]  v9 = fcmp ord v0, v1    ; bin: 66 40 0f c2 d0 07
+[-, %xmm2]  v2 = fcmp eq v0, v1     ; bin: 66 0f c2 d0 00
+[-, %xmm2]  v3 = fcmp lt v0, v1     ; bin: 66 0f c2 d0 01
+[-, %xmm2]  v4 = fcmp le v0, v1     ; bin: 66 0f c2 d0 02
+[-, %xmm2]  v5 = fcmp uno v0, v1    ; bin: 66 0f c2 d0 03
+[-, %xmm2]  v6 = fcmp ne v0, v1     ; bin: 66 0f c2 d0 04
+[-, %xmm2]  v7 = fcmp uge v0, v1    ; bin: 66 0f c2 d0 05
+[-, %xmm2]  v8 = fcmp ugt v0, v1    ; bin: 66 0f c2 d0 06
+[-, %xmm2]  v9 = fcmp ord v0, v1    ; bin: 66 0f c2 d0 07
+            return
+}
+
+function %fcmp_f64x2_rex(f64x2, f64x2) {
+block0(v0: f64x2 [%xmm9], v1: f64x2 [%xmm11]):
+[-, %xmm9]  v2 = fcmp eq v0, v1     ; bin: 66 45 0f c2 cb 00
+[-, %xmm9]  v3 = fcmp lt v0, v1     ; bin: 66 45 0f c2 cb 01
+[-, %xmm9]  v4 = fcmp le v0, v1     ; bin: 66 45 0f c2 cb 02
+[-, %xmm9]  v5 = fcmp uno v0, v1    ; bin: 66 45 0f c2 cb 03
+[-, %xmm9]  v6 = fcmp ne v0, v1     ; bin: 66 45 0f c2 cb 04
+[-, %xmm9]  v7 = fcmp uge v0, v1    ; bin: 66 45 0f c2 cb 05
+[-, %xmm9]  v8 = fcmp ugt v0, v1    ; bin: 66 45 0f c2 cb 06
+[-, %xmm9]  v9 = fcmp ord v0, v1    ; bin: 66 45 0f c2 cb 07
             return
 }
