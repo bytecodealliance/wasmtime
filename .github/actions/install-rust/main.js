@@ -11,3 +11,5 @@ if (process.platform === 'darwin') {
 child_process.execFileSync('rustup', ['set', 'profile', 'minimal']);
 child_process.execFileSync('rustup', ['update', toolchain, '--no-self-update']);
 child_process.execFileSync('rustup', ['default', toolchain]);
+
+console.log(`::set-env name=CARGO_INCREMENTAL::0`);
