@@ -289,13 +289,14 @@ pub fn create_handle_with_function(
     // ... and then we also need a trampoline with the standard "trampoline ABI"
     // which enters into the ABI specified by `ft`. Note that this is only used
     // if `Func::call` is called on an object created by `Func::new`.
-    let trampoline = wasmtime_jit::make_trampoline(
+    let (trampoline, relocations) = wasmtime_jit::make_trampoline(
         &*isa,
         &mut code_memory,
         &mut fn_builder_ctx,
         &sig,
         mem::size_of::<u128>(),
     )?;
+    assert!(relocations.is_empty());
     let sig_id = store.compiler().signatures().register(&sig);
     trampolines.insert(sig_id, trampoline);
 

@@ -3,6 +3,7 @@
 use crate::code_memory::CodeMemory;
 use crate::instantiate::SetupError;
 use crate::target_tunables::target_tunables;
+use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::ir::InstBuilder;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
@@ -15,10 +16,11 @@ use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
 use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex};
+use wasmtime_environ::RelocationTarget;
 use wasmtime_environ::{
-    CacheConfig, Compilation, CompileError, CompiledFunction, CompiledFunctionUnwindInfo,
-    Compiler as _C, FunctionBodyData, Module, ModuleMemoryOffset, ModuleVmctxInfo, Relocations,
-    Traps, Tunables, VMOffsets,
+    CacheConfig, CompileError, CompiledFunction, CompiledFunctionUnwindInfo, Compiler as _C,
+    FunctionBodyData, Module, ModuleMemoryOffset, ModuleVmctxInfo, Relocation, Relocations, Traps,
+    Tunables, VMOffsets,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{
@@ -76,6 +78,17 @@ impl Compiler {
     }
 }
 
+#[allow(missing_docs)]
+pub struct Compilation {
+    pub finished_functions: PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    pub relocations: Relocations,
+    pub trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
+    pub trampoline_relocations: HashMap<VMSharedSignatureIndex, Vec<Relocation>>,
+    pub jt_offsets: PrimaryMap<DefinedFuncIndex, ir::JumpTableOffsets>,
+    pub dbg_image: Option<Vec<u8>>,
+    pub trap_registration: TrapRegistration,
+}
+
 impl Compiler {
     /// Return the target's frontend configuration settings.
     pub fn frontend_config(&self) -> TargetFrontendConfig {
@@ -94,17 +107,7 @@ impl Compiler {
         module_translation: &ModuleTranslationState,
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         debug_data: Option<DebugInfoData>,
-    ) -> Result<
-        (
-            PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-            HashMap<VMSharedSignatureIndex, VMTrampoline>,
-            PrimaryMap<DefinedFuncIndex, ir::JumpTableOffsets>,
-            Relocations,
-            Option<Vec<u8>>,
-            TrapRegistration,
-        ),
-        SetupError,
-    > {
+    ) -> Result<Compilation, SetupError> {
         let (
             compilation,
             relocations,
@@ -142,7 +145,7 @@ impl Compiler {
 
         // Allocate all of the compiled functions into executable memory,
         // copying over their contents.
-        let allocated_functions =
+        let finished_functions =
             allocate_functions(&mut self.code_memory, &compilation).map_err(|message| {
                 SetupError::Instantiate(InstantiationError::Resource(format!(
                     "failed to allocate memory for functions: {}",
@@ -153,7 +156,7 @@ impl Compiler {
         // Create a registration value for all traps in our allocated
         // functions. This registration will allow us to map a trapping PC
         // value to what the trap actually means if it came from JIT code.
-        let trap_registration = register_traps(&allocated_functions, &traps, &self.trap_registry);
+        let trap_registration = register_traps(&finished_functions, &traps, &self.trap_registry);
 
         // Eagerly generate a entry trampoline for every type signature in the
         // module. This should be "relatively lightweight" for most modules and
@@ -161,38 +164,37 @@ impl Compiler {
         // tables) have a trampoline when invoked through the wasmtime API.
         let mut cx = FunctionBuilderContext::new();
         let mut trampolines = HashMap::new();
+        let mut trampoline_relocations = HashMap::new();
         for sig in module.local.signatures.values() {
             let index = self.signatures.register(sig);
             if trampolines.contains_key(&index) {
                 continue;
             }
-            // FIXME(#1322) we should be generating a trampoline for all
-            // functions in a module, not just those with less than 40
-            // arguments. Currently there is no relocation support for
-            // trampoline compilation; when that is added this check can
-            // go away.
-            if sig.params.len() > 40 {
-                continue;
+            let (trampoline, relocations) = make_trampoline(
+                &*self.isa,
+                &mut self.code_memory,
+                &mut cx,
+                sig,
+                std::mem::size_of::<u128>(),
+            )?;
+            trampolines.insert(index, trampoline);
+
+            // Typically trampolines do not have relocations, so if one does
+            // show up be sure to log it in case anyone's listening and there's
+            // an accidental bug.
+            if relocations.len() > 0 {
+                log::info!("relocations found in trampoline for {:?}", sig);
+                trampoline_relocations.insert(index, relocations);
             }
-            trampolines.insert(
-                index,
-                make_trampoline(
-                    &*self.isa,
-                    &mut self.code_memory,
-                    &mut cx,
-                    sig,
-                    std::mem::size_of::<u128>(),
-                )?,
-            );
         }
 
         // Translate debug info (DWARF) only if at least one function is present.
-        let dbg = if debug_data.is_some() && !allocated_functions.is_empty() {
+        let dbg_image = if debug_data.is_some() && !finished_functions.is_empty() {
             let target_config = self.isa.frontend_config();
             let ofs = VMOffsets::new(target_config.pointer_bytes(), &module.local);
 
             let mut funcs = Vec::new();
-            for (i, allocated) in allocated_functions.into_iter() {
+            for (i, allocated) in finished_functions.into_iter() {
                 let ptr = (*allocated) as *const u8;
                 let body_len = compilation.get(i).body.len();
                 funcs.push((ptr, body_len));
@@ -228,14 +230,15 @@ impl Compiler {
 
         let jt_offsets = compilation.get_jt_offsets();
 
-        Ok((
-            allocated_functions,
-            trampolines,
-            jt_offsets,
+        Ok(Compilation {
+            finished_functions,
             relocations,
-            dbg,
+            trampolines,
+            trampoline_relocations,
+            jt_offsets,
+            dbg_image,
             trap_registration,
-        ))
+        })
     }
 
     /// Make memory containing compiled code executable.
@@ -271,7 +274,7 @@ pub fn make_trampoline(
     fn_builder_ctx: &mut FunctionBuilderContext,
     signature: &ir::Signature,
     value_size: usize,
-) -> Result<VMTrampoline, SetupError> {
+) -> Result<(VMTrampoline, Vec<Relocation>), SetupError> {
     let pointer_type = isa.pointer_type();
     let mut wrapper_sig = ir::Signature::new(isa.frontend_config().default_call_conv);
 
@@ -352,7 +355,7 @@ pub fn make_trampoline(
     }
 
     let mut code_buf = Vec::new();
-    let mut reloc_sink = RelocSink {};
+    let mut reloc_sink = RelocSink::default();
     let mut trap_sink = binemit::NullTrapSink {};
     let mut stackmap_sink = binemit::NullStackmapSink {};
     context
@@ -381,12 +384,15 @@ pub fn make_trampoline(
         })
         .map_err(|message| SetupError::Instantiate(InstantiationError::Resource(message)))?
         .as_ptr();
-    Ok(unsafe { std::mem::transmute::<*const VMFunctionBody, VMTrampoline>(ptr) })
+    Ok((
+        unsafe { std::mem::transmute::<*const VMFunctionBody, VMTrampoline>(ptr) },
+        reloc_sink.relocs,
+    ))
 }
 
 fn allocate_functions(
     code_memory: &mut CodeMemory,
-    compilation: &Compilation,
+    compilation: &wasmtime_environ::Compilation,
 ) -> Result<PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>, String> {
     let fat_ptrs = code_memory.allocate_for_compilation(compilation)?;
 
@@ -419,9 +425,13 @@ fn register_traps(
     registry.register_traps(traps)
 }
 
-/// We don't expect trampoline compilation to produce any relocations, so
-/// this `RelocSink` just asserts that it doesn't recieve any.
-struct RelocSink {}
+/// We don't expect trampoline compilation to produce many relocations, so
+/// this `RelocSink` just asserts that it doesn't recieve most of them, but
+/// handles libcall ones.
+#[derive(Default)]
+struct RelocSink {
+    relocs: Vec<Relocation>,
+}
 
 impl binemit::RelocSink for RelocSink {
     fn reloc_block(
@@ -434,12 +444,22 @@ impl binemit::RelocSink for RelocSink {
     }
     fn reloc_external(
         &mut self,
-        _offset: binemit::CodeOffset,
-        _reloc: binemit::Reloc,
-        _name: &ir::ExternalName,
-        _addend: binemit::Addend,
+        offset: binemit::CodeOffset,
+        reloc: binemit::Reloc,
+        name: &ir::ExternalName,
+        addend: binemit::Addend,
     ) {
-        panic!("trampoline compilation should not produce external symbol relocs");
+        let reloc_target = if let ExternalName::LibCall(libcall) = *name {
+            RelocationTarget::LibCall(libcall)
+        } else {
+            panic!("unrecognized external name")
+        };
+        self.relocs.push(Relocation {
+            reloc,
+            reloc_target,
+            offset,
+            addend,
+        });
     }
     fn reloc_constant(
         &mut self,
