@@ -13,7 +13,9 @@ fn main() {
         .collect::<BTreeSet<_>>();
 
     println!("======== Building libwasmtime.a ===========");
-    run(Command::new("cargo").args(&["build", "-p", "wasmtime-c-api"]));
+    run(Command::new("cargo")
+        .args(&["build"])
+        .current_dir("crates/c-api"));
 
     for (example, is_dir) in examples {
         if example == "README" {
