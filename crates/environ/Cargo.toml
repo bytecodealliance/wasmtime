@@ -23,7 +23,7 @@ rayon = "1.2.1"
 thiserror = "1.0.4"
 directories = "2.0.1"
 sha2 = "0.8.0"
-base64 = "0.11.0"
+base64 = "0.12.0"
 serde = { version = "1.0.94", features = ["derive"] }
 bincode = "1.1.4"
 log = { version = "0.4.8", default-features = false }
@@ -42,7 +42,7 @@ errno = "0.2.4"
 [dev-dependencies]
 tempfile = "3"
 target-lexicon = { version = "0.10.0", default-features = false }
-pretty_env_logger = "0.3.0"
+pretty_env_logger = "0.4.0"
 rand = { version = "0.7.0", default-features = false, features = ["small_rng"] }
 cranelift-codegen = { path = "../../cranelift/codegen", version = "0.60.0", features = ["enable-serde", "all-arch"] }
 filetime = "0.2.7"

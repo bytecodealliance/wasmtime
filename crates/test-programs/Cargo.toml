@@ -14,7 +14,7 @@ wasi-common = { path = "../wasi-common", version = "0.12.0" }
 wasmtime-wasi = { path = "../wasi", version = "0.12.0" }
 wasmtime = { path = "../api", version = "0.12.0" }
 target-lexicon = "0.10.0"
-pretty_env_logger = "0.3.0"
+pretty_env_logger = "0.4.0"
 tempfile = "3.1.0"
 os_pipe = "0.9"
 anyhow = "1.0.19"
