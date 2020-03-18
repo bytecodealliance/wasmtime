@@ -32,10 +32,10 @@ environment:
    are hidden from applications. And all accesses within linear memory are
    checked to ensure they stay in bounds.
 
- - All control transfers -- direct and indirect branches, direct and indirect
-   calls, are to known and type-checked destinations, so it's not possible to
-   accidentally call into the middle of a function or branch outside of a
-   function.
+ - All control transfers—direct and indirect branches, as well as direct and
+   indirect calls—are to known and type-checked destinations, so it's not
+   possible to accidentally call into the middle of a function or branch
+   outside of a function.
 
  - All interaction with the outside world is done through imports and exports.
    There is no raw access to system calls or other forms of I/O; the only
@@ -69,7 +69,7 @@ streams when they are connected to a terminal to translate escape sequences into
 inert replacement sequences.
 
 Some applications need ANSI-style escape sequences, such as terminal-based
-editors, and programs that use colors, so we are also developing a proposal for
+editors and programs that use colors, so we are also developing a proposal for
 the WASI Subgroup for safe and portable ANSI-style escape sequence support, which
 we hope to post more about soon.
 
