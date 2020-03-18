@@ -58,7 +58,7 @@ libraries, and tooling development, all along the way too.
 
 ## Terminal Output
 
-If untrusted is allowed to print text which is displayed to a terminal, it may
+If untrusted code is allowed to print text which is displayed to a terminal, it may
 emit ANSI-style escape sequences and other control sequences which, depending on
 the terminal the user is using and how it is configured, can have side effects
 including writing to files, executing commands, injecting text into the stream
