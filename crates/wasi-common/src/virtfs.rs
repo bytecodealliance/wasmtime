@@ -20,7 +20,7 @@ pub enum VirtualDirEntry {
 
 impl VirtualDirEntry {
     pub fn empty_directory() -> Self {
-        VirtualDirEntry::Directory(HashMap::new())
+        Self::Directory(HashMap::new())
     }
 }
 
@@ -313,7 +313,7 @@ impl VirtualFile for InMemoryFile {
     }
 
     fn try_clone(&self) -> io::Result<Box<dyn VirtualFile>> {
-        Ok(Box::new(InMemoryFile {
+        Ok(Box::new(Self {
             cursor: 0,
             fd_flags: self.fd_flags,
             parent: Rc::clone(&self.parent),
@@ -550,7 +550,7 @@ pub struct VirtualDir {
 
 impl VirtualDir {
     pub fn new(writable: bool) -> Self {
-        VirtualDir {
+        Self {
             writable,
             parent: Rc::new(RefCell::new(None)),
             entries: Rc::new(RefCell::new(HashMap::new())),
@@ -558,13 +558,13 @@ impl VirtualDir {
     }
 
     #[allow(dead_code)]
-    pub fn with_dir<P: AsRef<Path>>(mut self, dir: VirtualDir, path: P) -> Self {
+    pub fn with_dir<P: AsRef<Path>>(mut self, dir: Self, path: P) -> Self {
         self.add_dir(dir, path);
         self
     }
 
     #[allow(dead_code)]
-    pub fn add_dir<P: AsRef<Path>>(&mut self, dir: VirtualDir, path: P) {
+    pub fn add_dir<P: AsRef<Path>>(&mut self, dir: Self, path: P) {
         let entry = Box::new(dir);
         entry.set_parent(Some(self.try_clone().expect("can clone self")));
         self.entries
@@ -603,7 +603,7 @@ const RESERVED_ENTRY_COUNT: u32 = 2;
 
 impl VirtualFile for VirtualDir {
     fn try_clone(&self) -> io::Result<Box<dyn VirtualFile>> {
-        Ok(Box::new(VirtualDir {
+        Ok(Box::new(Self {
             writable: self.writable,
             parent: Rc::clone(&self.parent),
             entries: Rc::clone(&self.entries),
@@ -773,7 +773,7 @@ impl VirtualFile for VirtualDir {
             Entry::Occupied(_) => Err(WasiError::EEXIST),
             Entry::Vacant(v) => {
                 if self.writable {
-                    let new_dir = Box::new(VirtualDir::new(true));
+                    let new_dir = Box::new(Self::new(true));
                     new_dir.set_parent(Some(self.try_clone()?));
                     v.insert(new_dir);
                     Ok(())

@@ -18,43 +18,43 @@ pub(crate) enum Descriptor {
 
 impl From<OsHandle> for Descriptor {
     fn from(handle: OsHandle) -> Self {
-        Descriptor::OsHandle(handle)
+        Self::OsHandle(handle)
     }
 }
 
 impl From<Box<dyn VirtualFile>> for Descriptor {
     fn from(virt: Box<dyn VirtualFile>) -> Self {
-        Descriptor::VirtualFile(virt)
+        Self::VirtualFile(virt)
     }
 }
 
 impl fmt::Debug for Descriptor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Descriptor::OsHandle(handle) => write!(f, "{:?}", handle),
-            Descriptor::VirtualFile(_) => write!(f, "VirtualFile"),
-            Descriptor::Stdin => write!(f, "Stdin"),
-            Descriptor::Stdout => write!(f, "Stdout"),
-            Descriptor::Stderr => write!(f, "Stderr"),
+            Self::OsHandle(handle) => write!(f, "{:?}", handle),
+            Self::VirtualFile(_) => write!(f, "VirtualFile"),
+            Self::Stdin => write!(f, "Stdin"),
+            Self::Stdout => write!(f, "Stdout"),
+            Self::Stderr => write!(f, "Stderr"),
         }
     }
 }
 
 impl Descriptor {
-    pub(crate) fn try_clone(&self) -> io::Result<Descriptor> {
+    pub(crate) fn try_clone(&self) -> io::Result<Self> {
         match self {
-            Descriptor::OsHandle(file) => file.try_clone().map(|f| OsHandle::from(f).into()),
-            Descriptor::VirtualFile(virt) => virt.try_clone().map(Descriptor::VirtualFile),
-            Descriptor::Stdin => Ok(Descriptor::Stdin),
-            Descriptor::Stdout => Ok(Descriptor::Stdout),
-            Descriptor::Stderr => Ok(Descriptor::Stderr),
+            Self::OsHandle(file) => file.try_clone().map(|f| OsHandle::from(f).into()),
+            Self::VirtualFile(virt) => virt.try_clone().map(Self::VirtualFile),
+            Self::Stdin => Ok(Self::Stdin),
+            Self::Stdout => Ok(Self::Stdout),
+            Self::Stderr => Ok(Self::Stderr),
         }
     }
 
     /// Return a reference to the `OsHandle` or `VirtualFile` treating it as an
     /// actual file/dir, and allowing operations which require an actual file and
     /// not just a stream or socket file descriptor.
-    pub(crate) fn as_file<'descriptor>(&'descriptor self) -> WasiResult<&'descriptor Descriptor> {
+    pub(crate) fn as_file<'descriptor>(&'descriptor self) -> WasiResult<&'descriptor Self> {
         match self {
             Self::OsHandle(_) => Ok(self),
             Self::VirtualFile(_) => Ok(self),
@@ -65,7 +65,7 @@ impl Descriptor {
     /// Like `as_file`, but return a mutable reference.
     pub(crate) fn as_file_mut<'descriptor>(
         &'descriptor mut self,
-    ) -> WasiResult<&'descriptor mut Descriptor> {
+    ) -> WasiResult<&'descriptor mut Self> {
         match self {
             Self::OsHandle(_) => Ok(self),
             Self::VirtualFile(_) => Ok(self),
