@@ -846,6 +846,10 @@ pub trait IntoFunc<Params, Results> {
 /// This structure can be taken as the first parameter of a closure passed to
 /// [`Func::wrap`], and it can be used to learn information about the caller of
 /// the function, such as the calling module's memory, exports, etc.
+///
+/// Note that this is intended to be a pretty temporary mechanism for accessing
+/// the caller's memory until interface types has been fully standardized and
+/// implemented.
 pub struct Caller<'a> {
     store: &'a Store,
     caller_vmctx: *mut VMContext,
