@@ -10,11 +10,11 @@ block0:
             return
 }
 
-function %icmp_i16x8() {
+function %icmp_i16x8_rex() {
 block0:
 [-, %xmm0]  v0 = vconst.i16x8 0x00
-[-, %xmm7]  v1 = vconst.i16x8 0xffffffffffffffffffffffffffffffff
-[-, %xmm0]  v2 = icmp eq v0, v1                                     ; bin: 66 0f 75 c7
+[-, %xmm15] v1 = vconst.i16x8 0xffffffffffffffffffffffffffffffff
+[-, %xmm0]  v2 = icmp eq v0, v1                                     ; bin: 66 41 0f 75 c7
             return
 }
 
@@ -26,11 +26,11 @@ block0:
             return
 }
 
-function %icmp_i64x2() {
+function %icmp_i64x2_rex() {
 block0:
-[-, %xmm0]  v0 = vconst.i64x2 0x00
+[-, %xmm8]  v0 = vconst.i64x2 0x00
 [-, %xmm1]  v1 = vconst.i64x2 0xffffffffffffffffffffffffffffffff
-[-, %xmm0]  v2 = icmp eq v0, v1                                     ; bin: 66 0f 38 29 c1
+[-, %xmm8]  v2 = icmp eq v0, v1                                     ; bin: 66 44 0f 38 29 c1
             return
 }
 

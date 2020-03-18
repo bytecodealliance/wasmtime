@@ -34,10 +34,10 @@ block0:
 }
 ; run
 
-function %isub_i32x4() -> b1 {
+function %isub_i32x4_rex() -> b1 {
 block0:
-    v0 = vconst.i32x4 [1 1 1 1]
-    v1 = vconst.i32x4 [1 2 3 4]
+[-,%xmm10]    v0 = vconst.i32x4 [1 1 1 1]
+[-,%xmm15]    v1 = vconst.i32x4 [1 2 3 4]
     v2 = isub v0, v1
 
     v3 = extractlane v2, 0
