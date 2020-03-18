@@ -5,7 +5,7 @@ use wasmtime_environ::settings::Configurable;
 use wasmtime_environ::CacheConfig;
 use wasmtime_jit::{instantiate, native, CompilationStrategy, Compiler, NullResolver};
 
-const PATH_MODULE_RS2WASM_ADD_FUNC: &str = r"tests/wat/rs2wasm-add-func.wat";
+const PATH_MODULE_RS2WASM_ADD_FUNC: &str = r"tests/wasm/rs2wasm-add-func.wat";
 
 /// Simple test reading a wasm-file and translating to binary representation.
 #[test]
