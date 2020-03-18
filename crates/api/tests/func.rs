@@ -1,25 +1,25 @@
 use anyhow::Result;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
-use wasmtime::{Callable, Func, FuncType, Instance, Module, Store, Trap, Val, ValType};
+use wasmtime::*;
 
 #[test]
 fn func_constructors() {
     let store = Store::default();
-    Func::wrap0(&store, || {});
-    Func::wrap1(&store, |_: i32| {});
-    Func::wrap2(&store, |_: i32, _: i64| {});
-    Func::wrap2(&store, |_: f32, _: f64| {});
-    Func::wrap0(&store, || -> i32 { 0 });
-    Func::wrap0(&store, || -> i64 { 0 });
-    Func::wrap0(&store, || -> f32 { 0.0 });
-    Func::wrap0(&store, || -> f64 { 0.0 });
+    Func::wrap(&store, || {});
+    Func::wrap(&store, |_: i32| {});
+    Func::wrap(&store, |_: i32, _: i64| {});
+    Func::wrap(&store, |_: f32, _: f64| {});
+    Func::wrap(&store, || -> i32 { 0 });
+    Func::wrap(&store, || -> i64 { 0 });
+    Func::wrap(&store, || -> f32 { 0.0 });
+    Func::wrap(&store, || -> f64 { 0.0 });
 
-    Func::wrap0(&store, || -> Result<(), Trap> { loop {} });
-    Func::wrap0(&store, || -> Result<i32, Trap> { loop {} });
-    Func::wrap0(&store, || -> Result<i64, Trap> { loop {} });
-    Func::wrap0(&store, || -> Result<f32, Trap> { loop {} });
-    Func::wrap0(&store, || -> Result<f64, Trap> { loop {} });
+    Func::wrap(&store, || -> Result<(), Trap> { loop {} });
+    Func::wrap(&store, || -> Result<i32, Trap> { loop {} });
+    Func::wrap(&store, || -> Result<i64, Trap> { loop {} });
+    Func::wrap(&store, || -> Result<f32, Trap> { loop {} });
+    Func::wrap(&store, || -> Result<f64, Trap> { loop {} });
 }
 
 #[test]
@@ -37,7 +37,7 @@ fn dtor_runs() {
     let store = Store::default();
     let a = A;
     assert_eq!(HITS.load(SeqCst), 0);
-    Func::wrap0(&store, move || {
+    Func::wrap(&store, move || {
         drop(&a);
     });
     assert_eq!(HITS.load(SeqCst), 1);
@@ -57,7 +57,7 @@ fn dtor_delayed() -> Result<()> {
 
     let store = Store::default();
     let a = A;
-    let func = Func::wrap0(&store, move || drop(&a));
+    let func = Func::wrap(&store, move || drop(&a));
 
     assert_eq!(HITS.load(SeqCst), 0);
     let wasm = wat::parse_str(r#"(import "" "" (func))"#)?;
@@ -73,27 +73,27 @@ fn dtor_delayed() -> Result<()> {
 fn signatures_match() {
     let store = Store::default();
 
-    let f = Func::wrap0(&store, || {});
+    let f = Func::wrap(&store, || {});
     assert_eq!(f.ty().params(), &[]);
     assert_eq!(f.ty().results(), &[]);
 
-    let f = Func::wrap0(&store, || -> i32 { loop {} });
+    let f = Func::wrap(&store, || -> i32 { loop {} });
     assert_eq!(f.ty().params(), &[]);
     assert_eq!(f.ty().results(), &[ValType::I32]);
 
-    let f = Func::wrap0(&store, || -> i64 { loop {} });
+    let f = Func::wrap(&store, || -> i64 { loop {} });
     assert_eq!(f.ty().params(), &[]);
     assert_eq!(f.ty().results(), &[ValType::I64]);
 
-    let f = Func::wrap0(&store, || -> f32 { loop {} });
+    let f = Func::wrap(&store, || -> f32 { loop {} });
     assert_eq!(f.ty().params(), &[]);
     assert_eq!(f.ty().results(), &[ValType::F32]);
 
-    let f = Func::wrap0(&store, || -> f64 { loop {} });
+    let f = Func::wrap(&store, || -> f64 { loop {} });
     assert_eq!(f.ty().params(), &[]);
     assert_eq!(f.ty().results(), &[ValType::F64]);
 
-    let f = Func::wrap5(&store, |_: f32, _: f64, _: i32, _: i64, _: i32| -> f64 {
+    let f = Func::wrap(&store, |_: f32, _: f64, _: i32, _: i64, _: i32| -> f64 {
         loop {}
     });
     assert_eq!(
@@ -144,23 +144,23 @@ fn import_works() -> Result<()> {
     Instance::new(
         &module,
         &[
-            Func::wrap0(&store, || {
+            Func::wrap(&store, || {
                 assert_eq!(HITS.fetch_add(1, SeqCst), 0);
             })
             .into(),
-            Func::wrap1(&store, |x: i32| -> i32 {
+            Func::wrap(&store, |x: i32| -> i32 {
                 assert_eq!(x, 0);
                 assert_eq!(HITS.fetch_add(1, SeqCst), 1);
                 1
             })
             .into(),
-            Func::wrap2(&store, |x: i32, y: i64| {
+            Func::wrap(&store, |x: i32, y: i64| {
                 assert_eq!(x, 2);
                 assert_eq!(y, 3);
                 assert_eq!(HITS.fetch_add(1, SeqCst), 2);
             })
             .into(),
-            Func::wrap5(&store, |a: i32, b: i64, c: i32, d: f32, e: f64| {
+            Func::wrap(&store, |a: i32, b: i64, c: i32, d: f32, e: f64| {
                 assert_eq!(a, 100);
                 assert_eq!(b, 200);
                 assert_eq!(c, 300);
@@ -177,7 +177,7 @@ fn import_works() -> Result<()> {
 #[test]
 fn trap_smoke() {
     let store = Store::default();
-    let f = Func::wrap0(&store, || -> Result<(), Trap> { Err(Trap::new("test")) });
+    let f = Func::wrap(&store, || -> Result<(), Trap> { Err(Trap::new("test")) });
     let err = f.call(&[]).unwrap_err();
     assert_eq!(err.message(), "test");
 }
@@ -194,7 +194,7 @@ fn trap_import() -> Result<()> {
     let module = Module::new(&store, &wasm)?;
     let trap = Instance::new(
         &module,
-        &[Func::wrap0(&store, || -> Result<(), Trap> { Err(Trap::new("foo")) }).into()],
+        &[Func::wrap(&store, || -> Result<(), Trap> { Err(Trap::new("foo")) }).into()],
     )
     .err()
     .unwrap()
@@ -206,7 +206,7 @@ fn trap_import() -> Result<()> {
 #[test]
 fn get_from_wrapper() {
     let store = Store::default();
-    let f = Func::wrap0(&store, || {});
+    let f = Func::wrap(&store, || {});
     assert!(f.get0::<()>().is_ok());
     assert!(f.get0::<i32>().is_err());
     assert!(f.get1::<(), ()>().is_ok());
@@ -216,23 +216,23 @@ fn get_from_wrapper() {
     assert!(f.get2::<i32, i32, ()>().is_err());
     assert!(f.get2::<i32, i32, i32>().is_err());
 
-    let f = Func::wrap0(&store, || -> i32 { loop {} });
+    let f = Func::wrap(&store, || -> i32 { loop {} });
     assert!(f.get0::<i32>().is_ok());
-    let f = Func::wrap0(&store, || -> f32 { loop {} });
+    let f = Func::wrap(&store, || -> f32 { loop {} });
     assert!(f.get0::<f32>().is_ok());
-    let f = Func::wrap0(&store, || -> f64 { loop {} });
+    let f = Func::wrap(&store, || -> f64 { loop {} });
     assert!(f.get0::<f64>().is_ok());
 
-    let f = Func::wrap1(&store, |_: i32| {});
+    let f = Func::wrap(&store, |_: i32| {});
     assert!(f.get1::<i32, ()>().is_ok());
     assert!(f.get1::<i64, ()>().is_err());
     assert!(f.get1::<f32, ()>().is_err());
     assert!(f.get1::<f64, ()>().is_err());
-    let f = Func::wrap1(&store, |_: i64| {});
+    let f = Func::wrap(&store, |_: i64| {});
     assert!(f.get1::<i64, ()>().is_ok());
-    let f = Func::wrap1(&store, |_: f32| {});
+    let f = Func::wrap(&store, |_: f32| {});
     assert!(f.get1::<f32, ()>().is_ok());
-    let f = Func::wrap1(&store, |_: f64| {});
+    let f = Func::wrap(&store, |_: f64| {});
     assert!(f.get1::<f64, ()>().is_ok());
 }
 
@@ -293,7 +293,7 @@ fn get_from_module() -> anyhow::Result<()> {
 #[test]
 fn call_wrapped_func() -> Result<()> {
     let store = Store::default();
-    let f = Func::wrap4(&store, |a: i32, b: i64, c: f32, d: f64| {
+    let f = Func::wrap(&store, |a: i32, b: i64, c: f32, d: f64| {
         assert_eq!(a, 1);
         assert_eq!(b, 2);
         assert_eq!(c, 3.0);
@@ -302,28 +302,93 @@ fn call_wrapped_func() -> Result<()> {
     f.call(&[Val::I32(1), Val::I64(2), 3.0f32.into(), 4.0f64.into()])?;
     f.get4::<i32, i64, f32, f64, ()>()?(1, 2, 3.0, 4.0)?;
 
-    let f = Func::wrap0(&store, || 1i32);
+    let f = Func::wrap(&store, || 1i32);
     let results = f.call(&[])?;
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].unwrap_i32(), 1);
     assert_eq!(f.get0::<i32>()?()?, 1);
 
-    let f = Func::wrap0(&store, || 2i64);
+    let f = Func::wrap(&store, || 2i64);
     let results = f.call(&[])?;
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].unwrap_i64(), 2);
     assert_eq!(f.get0::<i64>()?()?, 2);
 
-    let f = Func::wrap0(&store, || 3.0f32);
+    let f = Func::wrap(&store, || 3.0f32);
     let results = f.call(&[])?;
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].unwrap_f32(), 3.0);
     assert_eq!(f.get0::<f32>()?()?, 3.0);
 
-    let f = Func::wrap0(&store, || 4.0f64);
+    let f = Func::wrap(&store, || 4.0f64);
     let results = f.call(&[])?;
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].unwrap_f64(), 4.0);
     assert_eq!(f.get0::<f64>()?()?, 4.0);
+    Ok(())
+}
+
+#[test]
+fn caller_memory() -> anyhow::Result<()> {
+    let store = Store::default();
+    let f = Func::wrap(&store, |c: Caller<'_>| {
+        assert!(c.get_export("x").is_none());
+        assert!(c.get_export("y").is_none());
+        assert!(c.get_export("z").is_none());
+    });
+    f.call(&[])?;
+
+    let f = Func::wrap(&store, |c: Caller<'_>| {
+        assert!(c.get_export("x").is_none());
+    });
+    let module = Module::new(
+        &store,
+        r#"
+            (module
+                (import "" "" (func $f))
+                (start $f)
+            )
+
+        "#,
+    )?;
+    Instance::new(&module, &[f.into()])?;
+
+    let f = Func::wrap(&store, |c: Caller<'_>| {
+        assert!(c.get_export("memory").is_some());
+    });
+    let module = Module::new(
+        &store,
+        r#"
+            (module
+                (import "" "" (func $f))
+                (memory (export "memory") 1)
+                (start $f)
+            )
+
+        "#,
+    )?;
+    Instance::new(&module, &[f.into()])?;
+
+    let f = Func::wrap(&store, |c: Caller<'_>| {
+        assert!(c.get_export("m").is_some());
+        assert!(c.get_export("f").is_none());
+        assert!(c.get_export("g").is_none());
+        assert!(c.get_export("t").is_none());
+    });
+    let module = Module::new(
+        &store,
+        r#"
+            (module
+                (import "" "" (func $f))
+                (memory (export "m") 1)
+                (func (export "f"))
+                (global (export "g") i32 (i32.const 0))
+                (table (export "t") 1 funcref)
+                (start $f)
+            )
+
+        "#,
+    )?;
+    Instance::new(&module, &[f.into()])?;
     Ok(())
 }
