@@ -2655,7 +2655,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "witx 0.8.3",
+ "witx",
 ]
 
 [[package]]
@@ -2667,7 +2667,7 @@ dependencies = [
  "wiggle-generate",
  "wiggle-runtime",
  "wiggle-test",
- "witx 0.8.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "witx",
 ]
 
 [[package]]
@@ -2680,7 +2680,7 @@ dependencies = [
  "quote",
  "syn",
  "wiggle-runtime",
- "witx 0.8.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "witx",
 ]
 
 [[package]]
@@ -2740,24 +2740,10 @@ dependencies = [
 
 [[package]]
 name = "witx"
-version = "0.8.3"
+version = "0.8.4"
 dependencies = [
  "anyhow",
  "diff",
- "log",
- "pretty_env_logger",
- "structopt",
- "thiserror",
- "wast",
-]
-
-[[package]]
-name = "witx"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f30f6e46362ed8a64e6b4ff8b7a63006462933a8100c19df39caa333e35ed95"
-dependencies = [
- "anyhow",
  "log",
  "pretty_env_logger",
  "structopt",
