@@ -847,6 +847,11 @@ pub trait IntoFunc<Params, Results> {
 /// [`Func::wrap`], and it can be used to learn information about the caller of
 /// the function, such as the calling module's memory, exports, etc.
 ///
+/// The primary purpose of this structure is to provide access to the
+/// caller's information, such as it's exported memory. This allows
+/// functions which take pointers as arguments to easily read the memory the
+/// pointers point into.
+///
 /// Note that this is intended to be a pretty temporary mechanism for accessing
 /// the caller's memory until interface types has been fully standardized and
 /// implemented.
@@ -857,11 +862,6 @@ pub struct Caller<'a> {
 
 impl Caller<'_> {
     /// Looks up an export from the caller's module by the `name` given.
-    ///
-    /// The primary purpose of this structure is to provide access to the
-    /// caller's information, such as it's exported memory. This allows
-    /// functions which take pointers as arguments to easily read the memory the
-    /// pointers point into.
     ///
     /// Note that this function is only implemented for the `Extern::Memory`
     /// type currently. No other exported structure can be acquired through this
