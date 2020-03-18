@@ -24,7 +24,7 @@ environment:
  - The callstack is inaccessible. Unlike most native execution environments,
    return addresses from calls and spilled registers are not stored in memory
    accessible to applications. They are stored in memory that only the
-   implementation access to, which makes traditional stack-smashing attacks
+   implementation has access to, which makes traditional stack-smashing attacks
    targeting return addresses impossible.
 
  - Pointers, in source languages which have them, are compiled to offsets
