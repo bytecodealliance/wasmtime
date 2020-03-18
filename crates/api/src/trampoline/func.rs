@@ -251,7 +251,7 @@ pub fn create_handle_with_function(
     ft: &FuncType,
     func: &Rc<dyn Callable + 'static>,
     store: &Store,
-) -> Result<InstanceHandle> {
+) -> Result<(InstanceHandle, VMTrampoline)> {
     let isa = {
         let isa_builder = native::builder();
         let flag_builder = settings::builder();
@@ -312,6 +312,7 @@ pub fn create_handle_with_function(
         trampolines,
         Box::new(trampoline_state),
     )
+    .map(|instance| (instance, trampoline))
 }
 
 pub unsafe fn create_handle_with_raw_function(

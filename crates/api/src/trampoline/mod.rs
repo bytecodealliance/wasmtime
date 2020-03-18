@@ -23,10 +23,11 @@ pub fn generate_func_export(
 ) -> Result<(
     wasmtime_runtime::InstanceHandle,
     wasmtime_runtime::ExportFunction,
+    VMTrampoline,
 )> {
-    let instance = create_handle_with_function(ft, func, store)?;
+    let (instance, trampoline) = create_handle_with_function(ft, func, store)?;
     match instance.lookup("trampoline").expect("trampoline export") {
-        wasmtime_runtime::Export::Function(f) => Ok((instance, f)),
+        wasmtime_runtime::Export::Function(f) => Ok((instance, f, trampoline)),
         _ => unreachable!(),
     }
 }
