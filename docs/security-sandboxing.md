@@ -62,7 +62,9 @@ If untrusted code is allowed to print text which is displayed to a terminal, it 
 emit ANSI-style escape sequences and other control sequences which, depending on
 the terminal the user is using and how it is configured, can have side effects
 including writing to files, executing commands, injecting text into the stream
-as if the user had typed it, or reading the output of previous commands.
+as if the user had typed it, or reading the output of previous commands. ANSI-style
+escape sequences can also confuse or mislead users, making other vulnerabilities
+easier to exploit.
 
 Our first priority is to protect users, so Wasmtime now filters writes to output
 streams when they are connected to a terminal to translate escape sequences into
