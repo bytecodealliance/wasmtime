@@ -30,7 +30,7 @@ winapi = "0.3.7"
 [dev-dependencies]
 # for wasmtime.rs
 wasi-common = { path = "../wasi-common", version = "0.12.0" }
-pretty_env_logger = "0.3.0"
+pretty_env_logger = "0.4.0"
 rayon = "1.2.1"
 file-per-thread-logger = "0.1.1"
 wat = "1.0.10"
