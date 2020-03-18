@@ -27,7 +27,7 @@ environment:
    implementation access to, which makes traditional stack-smashing attacks
    targeting return addresses impossible.
 
- - Pointers, in source langauges which have them, are compiled to offsets
+ - Pointers, in source languages which have them, are compiled to offsets
    into linear memory, so implementations details such as virtual addresses
    are hidden from applications. And all accesses within linear memory are
    checked to ensure they stay in bounds.
