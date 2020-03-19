@@ -80,7 +80,7 @@ impl Val {
         }
     }
 
-    pub(crate) unsafe fn write_value_to(&self, p: *mut i128) {
+    pub(crate) unsafe fn write_value_to(&self, p: *mut u128) {
         match self {
             Val::I32(i) => ptr::write(p as *mut i32, *i),
             Val::I64(i) => ptr::write(p as *mut i64, *i),
@@ -91,7 +91,7 @@ impl Val {
         }
     }
 
-    pub(crate) unsafe fn read_value_from(p: *const i128, ty: &ValType) -> Val {
+    pub(crate) unsafe fn read_value_from(p: *const u128, ty: &ValType) -> Val {
         match ty {
             ValType::I32 => Val::I32(ptr::read(p as *const i32)),
             ValType::I64 => Val::I64(ptr::read(p as *const i64)),

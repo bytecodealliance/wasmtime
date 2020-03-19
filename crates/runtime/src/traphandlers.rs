@@ -9,7 +9,6 @@ use std::any::Any;
 use std::cell::Cell;
 use std::error::Error;
 use std::fmt;
-use std::mem;
 use std::ptr;
 use wasmtime_environ::ir;
 
@@ -172,13 +171,10 @@ pub unsafe fn wasmtime_call_trampoline(
     caller_vmctx: *mut VMContext,
     trampoline: VMTrampoline,
     callee: *const VMFunctionBody,
-    values_vec: *mut u8,
+    values_vec: *mut u128,
 ) -> Result<(), Trap> {
     catch_traps(vmctx, || {
-        mem::transmute::<
-            _,
-            extern "C" fn(*mut VMContext, *mut VMContext, *const VMFunctionBody, *mut u8),
-        >(trampoline)(vmctx, caller_vmctx, callee, values_vec)
+        trampoline(vmctx, caller_vmctx, callee, values_vec)
     })
 }
 

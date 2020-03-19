@@ -23,7 +23,7 @@ use wasmtime_jit::{native, CodeMemory};
 use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody, VMTrampoline};
 
 struct TrampolineState {
-    func: Box<dyn Fn(*mut VMContext, *mut i128) -> Result<(), Trap>>,
+    func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
     #[allow(dead_code)]
     code_memory: CodeMemory,
 }
@@ -31,7 +31,7 @@ struct TrampolineState {
 unsafe extern "C" fn stub_fn(
     vmctx: *mut VMContext,
     caller_vmctx: *mut VMContext,
-    values_vec: *mut i128,
+    values_vec: *mut u128,
 ) {
     // Here we are careful to use `catch_unwind` to ensure Rust panics don't
     // unwind past us. The primary reason for this is that Rust considers it UB
@@ -69,7 +69,7 @@ unsafe extern "C" fn stub_fn(
     unsafe fn call_stub(
         vmctx: *mut VMContext,
         caller_vmctx: *mut VMContext,
-        values_vec: *mut i128,
+        values_vec: *mut u128,
     ) -> Result<(), Trap> {
         let instance = InstanceHandle::from_vmctx(vmctx);
         let state = &instance
@@ -201,7 +201,7 @@ fn make_trampoline(
 
 pub fn create_handle_with_function(
     ft: &FuncType,
-    func: Box<dyn Fn(*mut VMContext, *mut i128) -> Result<(), Trap>>,
+    func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
     store: &Store,
 ) -> Result<(InstanceHandle, VMTrampoline)> {
     let isa = {

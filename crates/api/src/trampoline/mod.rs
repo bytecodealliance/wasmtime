@@ -17,7 +17,7 @@ use wasmtime_runtime::{VMContext, VMFunctionBody, VMTrampoline};
 
 pub fn generate_func_export(
     ft: &FuncType,
-    func: Box<dyn Fn(*mut VMContext, *mut i128) -> Result<(), Trap>>,
+    func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
     store: &Store,
 ) -> Result<(
     wasmtime_runtime::InstanceHandle,

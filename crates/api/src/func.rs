@@ -232,14 +232,14 @@ impl Func {
         // Create our actual trampoline function which translates from a bunch
         // of bit patterns on the stack to actual instances of `Val` being
         // passed to the given function.
-        let func = Box::new(move |caller_vmctx, values_vec: *mut i128| {
+        let func = Box::new(move |caller_vmctx, values_vec: *mut u128| {
             // We have a dynamic guarantee that `values_vec` has the right
             // number of arguments and the right types of arguments. As a result
             // we should be able to safely run through them all and read them.
             let mut args = Vec::with_capacity(ty_clone.params().len());
             for (i, ty) in ty_clone.params().iter().enumerate() {
                 unsafe {
-                    args.push(Val::read_value_from(values_vec.offset(i as isize), ty));
+                    args.push(Val::read_value_from(values_vec.add(i), ty));
                 }
             }
             let mut returns = vec![Val::null(); ty_clone.results().len()];
@@ -532,7 +532,7 @@ impl Func {
                 ptr::null_mut(),
                 self.trampoline,
                 self.export.address,
-                values_vec.as_mut_ptr() as *mut u8,
+                values_vec.as_mut_ptr(),
             )
         } {
             return Err(Trap::from_jit(error));
