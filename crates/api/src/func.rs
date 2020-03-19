@@ -527,13 +527,14 @@ impl Func {
 
         // Call the trampoline.
         if let Err(error) = unsafe {
-            wasmtime_runtime::wasmtime_call_trampoline(
-                self.export.vmctx,
-                ptr::null_mut(),
-                self.trampoline,
-                self.export.address,
-                values_vec.as_mut_ptr(),
-            )
+            wasmtime_runtime::catch_traps(self.export.vmctx, || {
+                (self.trampoline)(
+                    self.export.vmctx,
+                    ptr::null_mut(),
+                    self.export.address,
+                    values_vec.as_mut_ptr(),
+                )
+            })
         } {
             return Err(Trap::from_jit(error));
         }
