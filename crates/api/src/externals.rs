@@ -628,7 +628,7 @@ impl Table {
 /// affects memory safety and what was previously just discussed as well.
 ///
 /// Once threads are added into the mix, all of the above rules still apply.
-/// There's an additional, rule, however, that all modifications and reads can
+/// There's an additional, rule, however, that all reads and writes can
 /// happen *concurrently*. This effectively means that long-lived borrows into
 /// wasm memory are virtually never safe to have.
 ///
@@ -638,6 +638,12 @@ impl Table {
 /// pointer. Additionally even shared pointers are largely unsafe because their
 /// underlying contents may change, so unless `UnsafeCell` in one form or
 /// another is used everywhere there's no safety.
+///
+/// One important point about concurrency is that `Memory::grow` can indeed
+/// happen concurrently. This, however, will never relocate the base pointer.
+/// Shared memories must always have a maximum size and they will be
+/// preallocated such that growth will never relocate the base pointer. The
+/// maximum length of the memory, however, will change over time.
 ///
 /// Overall the general rule of thumb for shared memories is that you must
 /// atomically read and write everything. Nothing can be borrowed and everything
