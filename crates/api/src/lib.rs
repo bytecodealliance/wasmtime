@@ -8,7 +8,6 @@
 
 #![deny(missing_docs, intra_doc_link_resolution_failure)]
 
-mod callable;
 mod externals;
 mod frame_info;
 mod func;
@@ -21,7 +20,6 @@ mod trap;
 mod types;
 mod values;
 
-pub use crate::callable::Callable;
 pub use crate::externals::*;
 pub use crate::frame_info::FrameInfo;
 pub use crate::func::*;
