@@ -480,7 +480,7 @@ impl Table {
 /// safe when working with `Memory`.
 ///
 /// For safety purposes you can think of a `Memory` as a glorified
-/// `Rc<UnsafeCell<Vec<u8>>>`. There's a few consequences of this
+/// `Rc<UnsafeCell<Vec<u8>>>`. There are a few consequences of this
 /// interpretation:
 ///
 /// * At any time someone else may have access to the memory (hence the `Rc`).
@@ -514,7 +514,7 @@ impl Table {
 ///     // good to go.
 ///     let byte = unsafe { mem.data_unchecked()[0x123] };
 ///
-///     // Short-lived borrows of memory are safe, but they most be scoped and
+///     // Short-lived borrows of memory are safe, but they must be scoped and
 ///     // not have code which modifies/etc `Memory` while the borrow is active.
 ///     // For example if you want to read a string from memory it is safe to do
 ///     // so:
@@ -581,7 +581,7 @@ impl Table {
 ///     // to be careful that any mutation of `Memory` doesn't happen while
 ///     // you're holding an active borrow.
 ///     let slice: &[u8] = &mem.data_unchecked()[0x100..0x102];
-///     some_other_function(mem); // may invalidate `slice`!
+///     some_other_function(); // may invalidate `slice` through another `mem` reference
 ///     // println!("{:?}", slice); // FATAL: maybe a use-after-free
 ///
 ///     // An especially subtle aspect of accessing a wasm instance's memory is
@@ -593,18 +593,20 @@ impl Table {
 ///     // *ref2 = *ref1; // FATAL: violates Rust's aliasing rules
 ///
 ///     // Note that aliasing applies to strings as well, for example this is
-///     // not valid because the slices overlap
+///     // not valid because the slices overlap.
 ///     let slice1: &mut [u8] = &mut mem.data_unchecked_mut()[0x100..][..3];
 ///     let slice2: &mut [u8] = &mut mem.data_unchecked_mut()[0x102..][..4];
 ///     // println!("{:?} {:?}", slice1, slice2); // FATAL: aliasing mutable pointers
 /// }
-/// # fn some_other_function(_mem: &Memory) {}
+/// # fn some_other_function() {}
 /// ```
 ///
 /// Overall there's some general rules of thumb when working with `Memory` and
 /// getting raw pointers inside of it:
 ///
-/// * If you never have a "long lived" pointer into memory, you're good.
+/// * If you never have a "long lived" pointer into memory, you're likely in the
+///   clear. Care still needs to be taken in threaded scenarios or when/where
+///   data is read, but you'll be shielded from many classes of issues.
 /// * Long-lived pointers must always respect Rust'a aliasing rules. It's ok for
 ///   shared borrows to overlap with each other, but mutable borrows must
 ///   overlap with nothing.
@@ -618,6 +620,34 @@ impl Table {
 /// Additionally over time we're still working out the best idioms to expose in
 /// `wasmtime`, so if you've got ideas or questions please feel free to [open an
 /// issue]!
+///
+/// ## `Memory` Safety and Threads
+///
+/// Currently the `wasmtime` crate does not implement the wasm threads proposal,
+/// but it is planned to do so. It's additionally worthwhile discussing how this
+/// affects memory safety and what was previously just discussed as well.
+///
+/// Once threads are added into the mix, all of the above rules still apply.
+/// There's an additional, rule, however, that all reads and writes can
+/// happen *concurrently*. This effectively means that long-lived borrows into
+/// wasm memory are virtually never safe to have.
+///
+/// Mutable pointers are fundamentally unsafe to have in a concurrent scenario
+/// in the face of arbitrary wasm code. Only if you dynamically know for sure
+/// that wasm won't access a region would it be safe to construct a mutable
+/// pointer. Additionally even shared pointers are largely unsafe because their
+/// underlying contents may change, so unless `UnsafeCell` in one form or
+/// another is used everywhere there's no safety.
+///
+/// One important point about concurrency is that `Memory::grow` can indeed
+/// happen concurrently. This, however, will never relocate the base pointer.
+/// Shared memories must always have a maximum size and they will be
+/// preallocated such that growth will never relocate the base pointer. The
+/// maximum length of the memory, however, will change over time.
+///
+/// Overall the general rule of thumb for shared memories is that you must
+/// atomically read and write everything. Nothing can be borrowed and everything
+/// must be eagerly copied out.
 ///
 /// [interface types]: https://github.com/webassembly/interface-types
 /// [open an issue]: https://github.com/bytecodealliance/wasmtime/issues/new
