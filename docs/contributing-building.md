@@ -14,7 +14,7 @@ and most other crates in the repository, you have to ensure that those are
 initialized with this command:
 
 ```shell
-git submodule init && git submodule update
+git submodule update --init
 ```
 
 ### The Rust Toolchain
