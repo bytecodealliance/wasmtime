@@ -9,9 +9,38 @@ use std::cell::RefCell;
 use std::convert::TryFrom;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
+/// A memory allocator
+pub trait Allocator: Send + Sync {
+    /// Create new LinearMemory
+    fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn LinearMemory>, String>;
+}
+
+/// A default memory allocator used by Wasmtime
+pub struct DefaultAllocator;
+
+impl Allocator for DefaultAllocator {
+    /// Create new MmapMemory
+    fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn LinearMemory>, String> {
+        Ok(Box::new(MmapMemory::new(plan)?) as Box<dyn LinearMemory>)
+    }
+}
+
+/// A linear memory
+pub trait LinearMemory {
+    /// Returns the number of allocated wasm pages.
+    fn size(&self) -> u32;
+    /// Grow memory by the specified amount of wasm pages.
+    ///
+    /// Returns `None` if memory can't be grown by the specified amount
+    /// of wasm pages.
+    fn grow(&self, delta: u32) -> Option<u32>;
+    /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
+    fn vmmemory(&self) -> VMMemoryDefinition;
+}
+
 /// A linear memory instance.
 #[derive(Debug)]
-pub struct LinearMemory {
+pub struct MmapMemory {
     // The underlying allocation.
     mmap: RefCell<WasmMmap>,
 
@@ -35,7 +64,7 @@ struct WasmMmap {
     size: u32,
 }
 
-impl LinearMemory {
+impl MmapMemory {
     /// Create a new linear memory instance with specified minimum and maximum number of wasm pages.
     pub fn new(plan: &MemoryPlan) -> Result<Self, String> {
         // `maximum` cannot be set to more than `65536` pages.
@@ -77,9 +106,11 @@ impl LinearMemory {
             needs_signal_handlers,
         })
     }
+}
 
+impl LinearMemory for MmapMemory {
     /// Returns the number of allocated wasm pages.
-    pub fn size(&self) -> u32 {
+    fn size(&self) -> u32 {
         self.mmap.borrow().size
     }
 
@@ -87,7 +118,7 @@ impl LinearMemory {
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of wasm pages.
-    pub fn grow(&self, delta: u32) -> Option<u32> {
+    fn grow(&self, delta: u32) -> Option<u32> {
         // Optimization of memory.grow 0 calls.
         let mut mmap = self.mmap.borrow_mut();
         if delta == 0 {
@@ -143,7 +174,7 @@ impl LinearMemory {
     }
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
-    pub fn vmmemory(&self) -> VMMemoryDefinition {
+    fn vmmemory(&self) -> VMMemoryDefinition {
         let mut mmap = self.mmap.borrow_mut();
         VMMemoryDefinition {
             base: mmap.alloc.as_mut_ptr(),

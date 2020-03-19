@@ -9,6 +9,7 @@ use wasmtime_environ::settings::{self, Configurable};
 use wasmtime_environ::CacheConfig;
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent};
+use wasmtime_runtime::Allocator;
 
 // Runtime Environment
 
@@ -27,6 +28,7 @@ pub struct Config {
     pub(crate) strategy: CompilationStrategy,
     pub(crate) cache_config: CacheConfig,
     pub(crate) profiler: Arc<dyn ProfilingAgent>,
+    pub(crate) allocator: Option<Arc<dyn Allocator>>,
 }
 
 impl Config {
@@ -66,6 +68,7 @@ impl Config {
             strategy: CompilationStrategy::Auto,
             cache_config: CacheConfig::new_cache_disabled(),
             profiler: Arc::new(NullProfilerAgent),
+            allocator: None,
         }
     }
 
@@ -309,6 +312,12 @@ impl Config {
         self.cache_config = wasmtime_environ::CacheConfig::from_file(None)?;
         Ok(self)
     }
+
+    /// Sets a custom memory allocator
+    pub fn with_host_memory(&mut self, allocator: Arc<dyn Allocator>) -> &mut Self {
+        self.allocator = Some(allocator);
+        self
+    }
 }
 
 impl Default for Config {
@@ -484,6 +493,11 @@ impl Store {
     /// Returns the [`Engine`] that this store is associated with.
     pub fn engine(&self) -> &Engine {
         &self.inner.engine
+    }
+
+    /// Returns an optional reference to a memory ['Allocator']
+    pub(crate) fn allocator(&self) -> Option<&dyn Allocator> {
+        self.engine().config.allocator.as_ref().map(|a| &**a)
     }
 
     pub(crate) fn compiler(&self) -> std::cell::Ref<'_, Compiler> {
