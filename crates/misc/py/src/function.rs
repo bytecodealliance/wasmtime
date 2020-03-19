@@ -4,7 +4,6 @@ use crate::value::{pyobj_to_value, value_to_pyobj};
 use pyo3::exceptions::Exception;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict, PyTuple};
-use std::rc::Rc;
 
 // TODO support non-export functions
 #[pyclass]
@@ -52,69 +51,6 @@ fn parse_annotation_type(s: &str) -> wasmtime::ValType {
         _ => panic!("unknown type in annotations"),
     }
 }
-
-struct WrappedFn {
-    func: PyObject,
-    returns_types: Vec<wasmtime::ValType>,
-}
-
-impl WrappedFn {
-    pub fn new(func: PyObject, returns_types: Vec<wasmtime::ValType>) -> Self {
-        WrappedFn {
-            func,
-            returns_types,
-        }
-    }
-}
-
-impl wasmtime::Callable for WrappedFn {
-    fn call(
-        &self,
-        params: &[wasmtime::Val],
-        returns: &mut [wasmtime::Val],
-    ) -> Result<(), wasmtime::Trap> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-
-        let params = params
-            .iter()
-            .map(|p| match p {
-                wasmtime::Val::I32(i) => i.clone().into_py(py),
-                wasmtime::Val::I64(i) => i.clone().into_py(py),
-                _ => {
-                    panic!();
-                }
-            })
-            .collect::<Vec<PyObject>>();
-
-        let result = self
-            .func
-            .call(py, PyTuple::new(py, params), None)
-            .expect("TODO: convert result to trap");
-
-        let result = if let Ok(t) = result.cast_as::<PyTuple>(py) {
-            t
-        } else {
-            if result.is_none() {
-                PyTuple::empty(py)
-            } else {
-                PyTuple::new(py, &[result])
-            }
-        };
-        for (i, ty) in self.returns_types.iter().enumerate() {
-            let result_item = result.get_item(i);
-            returns[i] = match ty {
-                wasmtime::ValType::I32 => wasmtime::Val::I32(result_item.extract::<i32>().unwrap()),
-                wasmtime::ValType::I64 => wasmtime::Val::I64(result_item.extract::<i64>().unwrap()),
-                _ => {
-                    panic!();
-                }
-            };
-        }
-        Ok(())
-    }
-}
-
 pub fn wrap_into_pyfunction(store: &wasmtime::Store, callable: &PyAny) -> PyResult<wasmtime::Func> {
     if !callable.hasattr("__annotations__")? {
         // TODO support calls without annotations?
@@ -140,6 +76,45 @@ pub fn wrap_into_pyfunction(store: &wasmtime::Store, callable: &PyAny) -> PyResu
     );
 
     let gil = Python::acquire_gil();
-    let wrapped = WrappedFn::new(callable.to_object(gil.python()), returns);
-    Ok(wasmtime::Func::new(store, ft, Rc::new(wrapped)))
+    let func = callable.to_object(gil.python());
+    Ok(wasmtime::Func::new(store, ft, move |_, params, results| {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+
+        let params = params
+            .iter()
+            .map(|p| match p {
+                wasmtime::Val::I32(i) => i.clone().into_py(py),
+                wasmtime::Val::I64(i) => i.clone().into_py(py),
+                wasmtime::Val::F32(i) => i.clone().into_py(py),
+                wasmtime::Val::F64(i) => i.clone().into_py(py),
+                _ => panic!(),
+            })
+            .collect::<Vec<PyObject>>();
+
+        let result = func
+            .call(py, PyTuple::new(py, params), None)
+            .expect("TODO: convert result to trap");
+
+        let result = if let Ok(t) = result.cast_as::<PyTuple>(py) {
+            t
+        } else {
+            if result.is_none() {
+                PyTuple::empty(py)
+            } else {
+                PyTuple::new(py, &[result])
+            }
+        };
+        for (i, ty) in returns.iter().enumerate() {
+            let result_item = result.get_item(i);
+            results[i] = match ty {
+                wasmtime::ValType::I32 => wasmtime::Val::I32(result_item.extract::<i32>().unwrap()),
+                wasmtime::ValType::I64 => wasmtime::Val::I64(result_item.extract::<i64>().unwrap()),
+                _ => {
+                    panic!();
+                }
+            };
+        }
+        Ok(())
+    }))
 }

@@ -80,7 +80,7 @@ unsafe extern "C" fn stub_fn(
     }
 }
 
-/// Create a trampoline for invoking a Callable.
+/// Create a trampoline for invoking a function.
 fn make_trampoline(
     isa: &dyn TargetIsa,
     code_memory: &mut CodeMemory,
