@@ -14,9 +14,7 @@ fn test_trap_return() -> Result<()> {
 
     let module = Module::new(&store, wat)?;
     let hello_type = FuncType::new(Box::new([]), Box::new([]));
-    let hello_func = Func::new(&store, hello_type, |_, _, _| {
-        Err(Trap::new("test 123"))
-    });
+    let hello_func = Func::new(&store, hello_type, |_, _, _| Err(Trap::new("test 123")));
 
     let instance = Instance::new(&module, &[hello_func.into()])?;
     let run_func = instance.exports()[0]
