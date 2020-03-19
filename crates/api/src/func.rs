@@ -224,7 +224,7 @@ impl Func {
     pub fn new(
         store: &Store,
         ty: FuncType,
-        func: impl Fn(&Caller<'_>, &[Val], &mut [Val]) -> Result<(), Trap> + 'static,
+        func: impl Fn(Caller<'_>, &[Val], &mut [Val]) -> Result<(), Trap> + 'static,
     ) -> Self {
         let store_clone = store.clone();
         let ty_clone = ty.clone();
@@ -244,7 +244,7 @@ impl Func {
             }
             let mut returns = vec![Val::null(); ty_clone.results().len()];
             func(
-                &Caller {
+                Caller {
                     store: &store_clone,
                     caller_vmctx,
                 },
