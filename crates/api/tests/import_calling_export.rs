@@ -15,33 +15,24 @@ fn test_import_calling_export() {
     )
     "#;
 
-    struct Callback {
-        pub other: RefCell<Option<Func>>,
-    }
+    let store = Store::default();
+    let module = Module::new(&store, WAT).expect("failed to create module");
 
-    impl Callable for Callback {
-        fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
-            self.other
+    let other = Rc::new(RefCell::new(None::<Func>));
+    let other2 = other.clone();
+
+    let callback_func = Func::new(
+        &store,
+        FuncType::new(Box::new([]), Box::new([])),
+        move |_, _, _| {
+            other2
                 .borrow()
                 .as_ref()
                 .expect("expected a function ref")
                 .call(&[])
                 .expect("expected function not to trap");
             Ok(())
-        }
-    }
-
-    let store = Store::default();
-    let module = Module::new(&store, WAT).expect("failed to create module");
-
-    let callback = Rc::new(Callback {
-        other: RefCell::new(None),
-    });
-
-    let callback_func = Func::new(
-        &store,
-        FuncType::new(Box::new([]), Box::new([])),
-        callback.clone(),
+        },
     );
 
     let imports = vec![callback_func.into()];
@@ -55,7 +46,7 @@ fn test_import_calling_export() {
         .func()
         .expect("expected a run func in the module");
 
-    *callback.other.borrow_mut() = Some(
+    *other.borrow_mut() = Some(
         exports[1]
             .func()
             .expect("expected an other func in the module")
@@ -76,25 +67,17 @@ fn test_returns_incorrect_type() {
     )
     "#;
 
-    struct EvilCallback;
-
-    impl Callable for EvilCallback {
-        fn call(&self, _params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
-            // Evil! Returns I64 here instead of promised in the signature I32.
-            results[0] = Val::I64(228);
-            Ok(())
-        }
-    }
-
     let store = Store::default();
     let module = Module::new(&store, WAT).expect("failed to create module");
-
-    let callback = Rc::new(EvilCallback);
 
     let callback_func = Func::new(
         &store,
         FuncType::new(Box::new([]), Box::new([ValType::I32])),
-        callback.clone(),
+        |_, _, results| {
+            // Evil! Returns I64 here instead of promised in the signature I32.
+            results[0] = Val::I64(228);
+            Ok(())
+        },
     );
 
     let imports = vec![callback_func.into()];
@@ -111,6 +94,6 @@ fn test_returns_incorrect_type() {
     let trap = run_func.call(&[]).expect_err("the execution should fail");
     assert_eq!(
         trap.message(),
-        "`Callable` attempted to return an incompatible value"
+        "function attempted to return an incompatible value"
     );
 }

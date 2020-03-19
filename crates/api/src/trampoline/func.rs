@@ -1,18 +1,15 @@
 //! Support for a calling of an imported function.
 
 use super::create_handle::create_handle;
-use crate::{Callable, FuncType, Store, Trap, Val};
+use crate::{FuncType, Store, Trap};
 use anyhow::{bail, Result};
 use std::any::Any;
 use std::cmp;
 use std::collections::HashMap;
 use std::mem;
 use std::panic::{self, AssertUnwindSafe};
-use std::rc::Rc;
-use wasmtime_environ::entity::{EntityRef, PrimaryMap};
-use wasmtime_environ::ir::types;
+use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::isa::TargetIsa;
-use wasmtime_environ::wasm::FuncIndex;
 use wasmtime_environ::{
     ir, settings, CompiledFunction, CompiledFunctionUnwindInfo, Export, Module,
 };
@@ -26,22 +23,15 @@ use wasmtime_jit::{native, CodeMemory};
 use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody, VMTrampoline};
 
 struct TrampolineState {
-    func: Rc<dyn Callable + 'static>,
+    func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
     #[allow(dead_code)]
     code_memory: CodeMemory,
 }
 
-impl TrampolineState {
-    fn new(func: Rc<dyn Callable + 'static>, code_memory: CodeMemory) -> Self {
-        TrampolineState { func, code_memory }
-    }
-}
-
 unsafe extern "C" fn stub_fn(
     vmctx: *mut VMContext,
-    _caller_vmctx: *mut VMContext,
-    call_id: u32,
-    values_vec: *mut i128,
+    caller_vmctx: *mut VMContext,
+    values_vec: *mut u128,
 ) {
     // Here we are careful to use `catch_unwind` to ensure Rust panics don't
     // unwind past us. The primary reason for this is that Rust considers it UB
@@ -56,7 +46,9 @@ unsafe extern "C" fn stub_fn(
     // below will trigger a longjmp, which won't run local destructors if we
     // have any. To prevent leaks we avoid having any local destructors by
     // avoiding local variables.
-    let result = panic::catch_unwind(AssertUnwindSafe(|| call_stub(vmctx, call_id, values_vec)));
+    let result = panic::catch_unwind(AssertUnwindSafe(|| {
+        call_stub(vmctx, caller_vmctx, values_vec)
+    }));
 
     match result {
         Ok(Ok(())) => {}
@@ -76,54 +68,23 @@ unsafe extern "C" fn stub_fn(
 
     unsafe fn call_stub(
         vmctx: *mut VMContext,
-        call_id: u32,
-        values_vec: *mut i128,
+        caller_vmctx: *mut VMContext,
+        values_vec: *mut u128,
     ) -> Result<(), Trap> {
         let instance = InstanceHandle::from_vmctx(vmctx);
-
-        let (args, returns_len) = {
-            let module = instance.module_ref();
-            let signature =
-                &module.local.signatures[module.local.functions[FuncIndex::new(call_id as usize)]];
-
-            let mut args = Vec::new();
-            for i in 2..signature.params.len() {
-                args.push(Val::read_value_from(
-                    values_vec.offset(i as isize - 2),
-                    signature.params[i].value_type,
-                ))
-            }
-            (args, signature.returns.len())
-        };
-
-        let mut returns = vec![Val::null(); returns_len];
         let state = &instance
             .host_state()
             .downcast_ref::<TrampolineState>()
             .expect("state");
-        state.func.call(&args, &mut returns)?;
-
-        let module = instance.module_ref();
-        let signature =
-            &module.local.signatures[module.local.functions[FuncIndex::new(call_id as usize)]];
-        for (i, ret) in returns.iter_mut().enumerate() {
-            if ret.ty().get_wasmtime_type() != Some(signature.returns[i].value_type) {
-                return Err(Trap::new(
-                    "`Callable` attempted to return an incompatible value",
-                ));
-            }
-            ret.write_value_to(values_vec.add(i));
-        }
-        Ok(())
+        (state.func)(caller_vmctx, values_vec)
     }
 }
 
-/// Create a trampoline for invoking a Callable.
+/// Create a trampoline for invoking a function.
 fn make_trampoline(
     isa: &dyn TargetIsa,
     code_memory: &mut CodeMemory,
     fn_builder_ctx: &mut FunctionBuilderContext,
-    call_id: u32,
     signature: &ir::Signature,
 ) -> *mut [VMFunctionBody] {
     // Mostly reverse copy of the similar method from wasmtime's
@@ -139,9 +100,6 @@ fn make_trampoline(
 
     // Add the caller `vmctx` parameter.
     stub_sig.params.push(ir::AbiParam::new(pointer_type));
-
-    // Add the `call_id` parameter.
-    stub_sig.params.push(ir::AbiParam::new(types::I32));
 
     // Add the `values_vec` parameter.
     stub_sig.params.push(ir::AbiParam::new(pointer_type));
@@ -188,14 +146,8 @@ fn make_trampoline(
         let block_params = builder.func.dfg.block_params(block0);
         let vmctx_ptr_val = block_params[0];
         let caller_vmctx_ptr_val = block_params[1];
-        let call_id_val = builder.ins().iconst(types::I32, call_id as i64);
 
-        let callee_args = vec![
-            vmctx_ptr_val,
-            caller_vmctx_ptr_val,
-            call_id_val,
-            values_vec_ptr_val,
-        ];
+        let callee_args = vec![vmctx_ptr_val, caller_vmctx_ptr_val, values_vec_ptr_val];
 
         let new_sig = builder.import_signature(stub_sig);
 
@@ -249,9 +201,9 @@ fn make_trampoline(
 
 pub fn create_handle_with_function(
     ft: &FuncType,
-    func: &Rc<dyn Callable + 'static>,
+    func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
     store: &Store,
-) -> Result<InstanceHandle> {
+) -> Result<(InstanceHandle, VMTrampoline)> {
     let isa = {
         let isa_builder = native::builder();
         let flag_builder = settings::builder();
@@ -277,13 +229,7 @@ pub fn create_handle_with_function(
     module
         .exports
         .insert("trampoline".to_string(), Export::Function(func_id));
-    let trampoline = make_trampoline(
-        isa.as_ref(),
-        &mut code_memory,
-        &mut fn_builder_ctx,
-        func_id.index() as u32,
-        &sig,
-    );
+    let trampoline = make_trampoline(isa.as_ref(), &mut code_memory, &mut fn_builder_ctx, &sig);
     finished_functions.push(trampoline);
 
     // ... and then we also need a trampoline with the standard "trampoline ABI"
@@ -304,7 +250,7 @@ pub fn create_handle_with_function(
     // code memory (makes it executable) and ensuring all our various bits of
     // state make it into the instance constructors.
     code_memory.publish();
-    let trampoline_state = TrampolineState::new(func.clone(), code_memory);
+    let trampoline_state = TrampolineState { func, code_memory };
     create_handle(
         module,
         store,
@@ -312,6 +258,7 @@ pub fn create_handle_with_function(
         trampolines,
         Box::new(trampoline_state),
     )
+    .map(|instance| (instance, trampoline))
 }
 
 pub unsafe fn create_handle_with_raw_function(

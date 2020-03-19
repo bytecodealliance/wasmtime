@@ -1,12 +1,12 @@
-use crate::callable::{NativeCallable, WasmtimeFn, WrappedCallable};
-use crate::{Callable, Extern, FuncType, Memory, Store, Trap, Val, ValType};
+use crate::{Extern, FuncType, Memory, Store, Trap, Val, ValType};
 use anyhow::{ensure, Context as _};
+use std::cmp::max;
 use std::fmt;
 use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
-use std::rc::Rc;
 use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
+use wasmtime_runtime::{ExportFunction, VMTrampoline};
 
 /// A WebAssembly function which can be called.
 ///
@@ -100,19 +100,6 @@ use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
 ///
 /// ```
 /// # use wasmtime::*;
-/// use std::rc::Rc;
-///
-/// struct Double;
-///
-/// impl Callable for Double {
-///     fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
-///         let mut value = params[0].unwrap_i32();
-///         value *= 2;
-///         results[0] = value.into();
-///         Ok(())
-///     }
-/// }
-///
 /// # fn main() -> anyhow::Result<()> {
 /// let store = Store::default();
 ///
@@ -122,7 +109,12 @@ use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
 ///     Box::new([wasmtime::ValType::I32]),
 ///     Box::new([wasmtime::ValType::I32])
 /// );
-/// let double = Func::new(&store, double_type, Rc::new(Double));
+/// let double = Func::new(&store, double_type, |_, params, results| {
+///     let mut value = params[0].unwrap_i32();
+///     value *= 2;
+///     results[0] = value.into();
+///     Ok(())
+/// });
 ///
 /// let module = Module::new(
 ///     &store,
@@ -144,8 +136,10 @@ use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
 #[derive(Clone)]
 pub struct Func {
     store: Store,
-    callable: Rc<dyn WrappedCallable + 'static>,
+    instance: InstanceHandle,
+    export: ExportFunction,
     ty: FuncType,
+    trampoline: VMTrampoline,
 }
 
 macro_rules! getters {
@@ -213,15 +207,76 @@ impl Func {
     /// * `ty` - the signature of this function, used to indicate what the
     ///   inputs and outputs are, which must be WebAssembly types.
     ///
-    /// * `callable` - a type implementing the [`Callable`] trait which
-    ///   is the implementation of this `Func` value.
+    /// * `func` - the native code invoked whenever this `Func` will be called.
+    ///   This closure is provided a [`Caller`] as its first argument to learn
+    ///   information about the caller, and then it's passed a list of
+    ///   parameters as a slice along with a mutable slice of where to write
+    ///   results.
     ///
-    /// Note that the implementation of `callable` must adhere to the `ty`
+    /// Note that the implementation of `func` must adhere to the `ty`
     /// signature given, error or traps may occur if it does not respect the
     /// `ty` signature.
-    pub fn new(store: &Store, ty: FuncType, callable: Rc<dyn Callable + 'static>) -> Self {
-        let callable = Rc::new(NativeCallable::new(callable, &ty, &store));
-        Func::from_wrapped(store, ty, callable)
+    ///
+    /// Additionally note that this is quite a dynamic function since signatures
+    /// are not statically known. For a more performant `Func` it's recommended
+    /// to use [`Func::wrap`] if you can because with statically known
+    /// signatures the engine can optimize the implementation much more.
+    pub fn new(
+        store: &Store,
+        ty: FuncType,
+        func: impl Fn(Caller<'_>, &[Val], &mut [Val]) -> Result<(), Trap> + 'static,
+    ) -> Self {
+        let store_clone = store.clone();
+        let ty_clone = ty.clone();
+
+        // Create our actual trampoline function which translates from a bunch
+        // of bit patterns on the stack to actual instances of `Val` being
+        // passed to the given function.
+        let func = Box::new(move |caller_vmctx, values_vec: *mut u128| {
+            // We have a dynamic guarantee that `values_vec` has the right
+            // number of arguments and the right types of arguments. As a result
+            // we should be able to safely run through them all and read them.
+            let mut args = Vec::with_capacity(ty_clone.params().len());
+            for (i, ty) in ty_clone.params().iter().enumerate() {
+                unsafe {
+                    args.push(Val::read_value_from(values_vec.add(i), ty));
+                }
+            }
+            let mut returns = vec![Val::null(); ty_clone.results().len()];
+            func(
+                Caller {
+                    store: &store_clone,
+                    caller_vmctx,
+                },
+                &args,
+                &mut returns,
+            )?;
+
+            // Unlike our arguments we need to dynamically check that the return
+            // values produced are correct. There could be a bug in `func` that
+            // produces the wrong number or wrong types of values, and we need
+            // to catch that here.
+            for (i, (ret, ty)) in returns.iter_mut().zip(ty_clone.results()).enumerate() {
+                if ret.ty() != *ty {
+                    return Err(Trap::new(
+                        "function attempted to return an incompatible value",
+                    ));
+                }
+                unsafe {
+                    ret.write_value_to(values_vec.add(i));
+                }
+            }
+            Ok(())
+        });
+        let (instance, export, trampoline) =
+            crate::trampoline::generate_func_export(&ty, func, store).expect("generated func");
+        Func {
+            store: store.clone(),
+            ty,
+            instance,
+            export,
+            trampoline,
+        }
     }
 
     /// Creates a new `Func` from the given Rust closure.
@@ -414,18 +469,6 @@ impl Func {
         func.into_func(store)
     }
 
-    fn from_wrapped(
-        store: &Store,
-        ty: FuncType,
-        callable: Rc<dyn WrappedCallable + 'static>,
-    ) -> Func {
-        Func {
-            store: store.clone(),
-            callable,
-            ty,
-        }
-    }
-
     /// Returns the underlying wasm type that this `Func` has.
     pub fn ty(&self) -> &FuncType {
         &self.ty
@@ -451,26 +494,71 @@ impl Func {
     /// This function should not panic unless the underlying function itself
     /// initiates a panic.
     pub fn call(&self, params: &[Val]) -> Result<Box<[Val]>, Trap> {
-        for param in params {
-            if !param.comes_from_same_store(&self.store) {
+        // We need to perform a dynamic check that the arguments given to us
+        // match the signature of this function and are appropriate to pass to
+        // this function. This involves checking to make sure we have the right
+        // number and types of arguments as well as making sure everything is
+        // from the same `Store`.
+        if self.ty.params().len() != params.len() {
+            return Err(Trap::new(format!(
+                "expected {} arguments, got {}",
+                self.ty.params().len(),
+                params.len()
+            )));
+        }
+
+        let mut values_vec = vec![0; max(params.len(), self.ty.results().len())];
+
+        // Store the argument values into `values_vec`.
+        let param_tys = self.ty.params().iter();
+        for ((arg, slot), ty) in params.iter().zip(&mut values_vec).zip(param_tys) {
+            if arg.ty() != *ty {
+                return Err(Trap::new("argument type mismatch"));
+            }
+            if !arg.comes_from_same_store(&self.store) {
                 return Err(Trap::new(
                     "cross-`Store` values are not currently supported",
                 ));
             }
+            unsafe {
+                arg.write_value_to(slot);
+            }
         }
-        let mut results = vec![Val::null(); self.result_arity()];
-        self.callable.call(params, &mut results)?;
-        Ok(results.into_boxed_slice())
+
+        // Call the trampoline.
+        if let Err(error) = unsafe {
+            wasmtime_runtime::catch_traps(self.export.vmctx, || {
+                (self.trampoline)(
+                    self.export.vmctx,
+                    ptr::null_mut(),
+                    self.export.address,
+                    values_vec.as_mut_ptr(),
+                )
+            })
+        } {
+            return Err(Trap::from_jit(error));
+        }
+
+        // Load the return values out of `values_vec`.
+        let mut results = Vec::with_capacity(self.ty.results().len());
+        for (index, ty) in self.ty.results().iter().enumerate() {
+            unsafe {
+                let ptr = values_vec.as_ptr().add(index);
+                results.push(Val::read_value_from(ptr, ty));
+            }
+        }
+
+        Ok(results.into())
     }
 
     pub(crate) fn wasmtime_function(&self) -> &wasmtime_runtime::ExportFunction {
-        self.callable.wasmtime_function()
+        &self.export
     }
 
     pub(crate) fn from_wasmtime_function(
         export: wasmtime_runtime::ExportFunction,
         store: &Store,
-        instance_handle: InstanceHandle,
+        instance: InstanceHandle,
     ) -> Self {
         // Signatures should always be registered in the store's registry of
         // shared signatures, so we should be able to unwrap safely here.
@@ -489,12 +577,17 @@ impl Func {
         // Each function signature in a module should have a trampoline stored
         // on that module as well, so unwrap the result here since otherwise
         // it's a bug in wasmtime.
-        let trampoline = instance_handle
+        let trampoline = instance
             .trampoline(export.signature)
             .expect("failed to retrieve trampoline from module");
 
-        let callable = WasmtimeFn::new(store, instance_handle, export, trampoline);
-        Func::from_wrapped(store, ty, Rc::new(callable))
+        Func {
+            instance,
+            export,
+            trampoline,
+            ty,
+            store: store.clone(),
+        }
     }
 
     getters! {
@@ -998,8 +1091,13 @@ macro_rules! impl_into_func {
                         Box::new((self, store_clone)),
                     )
                     .expect("failed to generate export");
-                    let callable = Rc::new(WasmtimeFn::new(store, instance, export, trampoline));
-                    Func::from_wrapped(store, ty, callable)
+                    Func {
+                        store: store.clone(),
+                        ty,
+                        instance,
+                        export,
+                        trampoline,
+                    }
                 }
             }
         }

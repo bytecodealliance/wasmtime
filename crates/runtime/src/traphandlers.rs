@@ -3,13 +3,12 @@
 
 use crate::instance::{InstanceHandle, SignalHandler};
 use crate::trap_registry::TrapDescription;
-use crate::vmcontext::{VMContext, VMFunctionBody, VMTrampoline};
+use crate::vmcontext::VMContext;
 use backtrace::Backtrace;
 use std::any::Any;
 use std::cell::Cell;
 use std::error::Error;
 use std::fmt;
-use std::mem;
 use std::ptr;
 use wasmtime_environ::ir;
 
@@ -62,13 +61,13 @@ cfg_if::cfg_if! {
 ///
 /// This function performs as-if a wasm trap was just executed, only the trap
 /// has a dynamic payload associated with it which is user-provided. This trap
-/// payload is then returned from `wasmtime_call` an `wasmtime_call_trampoline`
-/// below.
+/// payload is then returned from `catch_traps` below.
 ///
 /// # Safety
 ///
-/// Only safe to call when wasm code is on the stack, aka `wasmtime_call` or
-/// `wasmtime_call_trampoline` must have been previously called.
+/// Only safe to call when wasm code is on the stack, aka `catch_traps` must
+/// have been previously called. Additionally no Rust destructors can be on the
+/// stack. They will be skipped and not executed.
 pub unsafe fn raise_user_trap(data: Box<dyn Error + Send + Sync>) -> ! {
     tls::with(|info| info.unwrap().unwind_with(UnwindReason::UserTrap(data)))
 }
@@ -76,13 +75,13 @@ pub unsafe fn raise_user_trap(data: Box<dyn Error + Send + Sync>) -> ! {
 /// Raises a trap from inside library code immediately.
 ///
 /// This function performs as-if a wasm trap was just executed. This trap
-/// payload is then returned from `wasmtime_call` and `wasmtime_call_trampoline`
-/// below.
+/// payload is then returned from `catch_traps` below.
 ///
 /// # Safety
 ///
-/// Only safe to call when wasm code is on the stack, aka `wasmtime_call` or
-/// `wasmtime_call_trampoline` must have been previously called.
+/// Only safe to call when wasm code is on the stack, aka `catch_traps` must
+/// have been previously called. Additionally no Rust destructors can be on the
+/// stack. They will be skipped and not executed.
 pub unsafe fn raise_lib_trap(trap: Trap) -> ! {
     tls::with(|info| info.unwrap().unwind_with(UnwindReason::LibTrap(trap)))
 }
@@ -92,8 +91,9 @@ pub unsafe fn raise_lib_trap(trap: Trap) -> ! {
 ///
 /// # Safety
 ///
-/// Only safe to call when wasm code is on the stack, aka `wasmtime_call` or
-/// `wasmtime_call_trampoline` must have been previously called.
+/// Only safe to call when wasm code is on the stack, aka `catch_traps` must
+/// have been previously called. Additionally no Rust destructors can be on the
+/// stack. They will be skipped and not executed.
 pub unsafe fn resume_panic(payload: Box<dyn Any + Send>) -> ! {
     tls::with(|info| info.unwrap().unwind_with(UnwindReason::Panic(payload)))
 }
@@ -152,34 +152,6 @@ impl Trap {
         let backtrace = Backtrace::new();
         Trap::Wasm { desc, backtrace }
     }
-}
-
-/// Call the wasm function pointed to by `callee`.
-///
-/// * `vmctx` - the callee vmctx argument
-/// * `caller_vmctx` - the caller vmctx argument
-/// * `trampoline` - the jit-generated trampoline whose ABI takes 4 values, the
-///   callee vmctx, the caller vmctx, the `callee` argument below, and then the
-///   `values_vec` argument.
-/// * `callee` - the third argument to the `trampoline` function
-/// * `values_vec` - points to a buffer which holds the incoming arguments, and to
-///   which the outgoing return values will be written.
-///
-/// Wildly unsafe because it calls raw function pointers and reads/writes raw
-/// function pointers.
-pub unsafe fn wasmtime_call_trampoline(
-    vmctx: *mut VMContext,
-    caller_vmctx: *mut VMContext,
-    trampoline: VMTrampoline,
-    callee: *const VMFunctionBody,
-    values_vec: *mut u8,
-) -> Result<(), Trap> {
-    catch_traps(vmctx, || {
-        mem::transmute::<
-            _,
-            extern "C" fn(*mut VMContext, *mut VMContext, *const VMFunctionBody, *mut u8),
-        >(trampoline)(vmctx, caller_vmctx, callee, values_vec)
-    })
 }
 
 /// Catches any wasm traps that happen within the execution of `closure`,

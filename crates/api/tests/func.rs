@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
@@ -238,21 +237,15 @@ fn get_from_wrapper() {
 
 #[test]
 fn get_from_signature() {
-    struct Foo;
-    impl Callable for Foo {
-        fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
-            panic!()
-        }
-    }
     let store = Store::default();
     let ty = FuncType::new(Box::new([]), Box::new([]));
-    let f = Func::new(&store, ty, Rc::new(Foo));
+    let f = Func::new(&store, ty, |_, _, _| panic!());
     assert!(f.get0::<()>().is_ok());
     assert!(f.get0::<i32>().is_err());
     assert!(f.get1::<i32, ()>().is_err());
 
     let ty = FuncType::new(Box::new([ValType::I32]), Box::new([ValType::F64]));
-    let f = Func::new(&store, ty, Rc::new(Foo));
+    let f = Func::new(&store, ty, |_, _, _| panic!());
     assert!(f.get0::<()>().is_err());
     assert!(f.get0::<i32>().is_err());
     assert!(f.get1::<i32, ()>().is_err());
@@ -390,5 +383,18 @@ fn caller_memory() -> anyhow::Result<()> {
         "#,
     )?;
     Instance::new(&module, &[f.into()])?;
+    Ok(())
+}
+
+#[test]
+fn func_write_nothing() -> anyhow::Result<()> {
+    let store = Store::default();
+    let ty = FuncType::new(Box::new([]), Box::new([ValType::I32]));
+    let f = Func::new(&store, ty, |_, _, _| Ok(()));
+    let err = f.call(&[]).unwrap_err();
+    assert_eq!(
+        err.message(),
+        "function attempted to return an incompatible value"
+    );
     Ok(())
 }

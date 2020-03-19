@@ -8,21 +8,7 @@
 // You can execute this example with `cargo run --example multi`
 
 use anyhow::{format_err, Result};
-use std::rc::Rc;
 use wasmtime::*;
-
-struct Callback;
-
-impl Callable for Callback {
-    fn call(&self, args: &[Val], results: &mut [Val]) -> Result<(), Trap> {
-        println!("Calling back...");
-        println!("> {} {}", args[0].unwrap_i32(), args[1].unwrap_i64());
-
-        results[0] = Val::I64(args[1].unwrap_i64() + 1);
-        results[1] = Val::I32(args[0].unwrap_i32() + 1);
-        Ok(())
-    }
-}
 
 fn main() -> Result<()> {
     // Configure our `Store`, but be sure to use a `Config` that enables the
@@ -41,7 +27,14 @@ fn main() -> Result<()> {
         Box::new([ValType::I32, ValType::I64]),
         Box::new([ValType::I64, ValType::I32]),
     );
-    let callback_func = Func::new(&store, callback_type, Rc::new(Callback));
+    let callback_func = Func::new(&store, callback_type, |_, args, results| {
+        println!("Calling back...");
+        println!("> {} {}", args[0].unwrap_i32(), args[1].unwrap_i64());
+
+        results[0] = Val::I64(args[1].unwrap_i64() + 1);
+        results[1] = Val::I32(args[0].unwrap_i32() + 1);
+        Ok(())
+    });
 
     // Instantiate.
     println!("Instantiating module...");
