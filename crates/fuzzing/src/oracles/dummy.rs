@@ -1,8 +1,8 @@
 //! Dummy implementations of things that a Wasm module can import.
 
 use wasmtime::{
-    Extern, ExternType, Func, FuncType, Global, GlobalType, ImportType, Memory,
-    MemoryType, Store, Table, TableType, Trap, Val, ValType,
+    Extern, ExternType, Func, FuncType, Global, GlobalType, ImportType, Memory, MemoryType, Store,
+    Table, TableType, Trap, Val, ValType,
 };
 
 /// Create a set of dummy functions/globals/etc for the given imports.
