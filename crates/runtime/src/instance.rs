@@ -6,8 +6,8 @@ use crate::export::Export;
 use crate::imports::Imports;
 use crate::jit_int::GdbJitImageRegistration;
 use crate::memory::LinearMemory;
-use crate::signalhandlers;
 use crate::table::Table;
+use crate::traphandlers;
 use crate::traphandlers::{catch_traps, Trap};
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport,
@@ -980,7 +980,7 @@ impl InstanceHandle {
 
         // Ensure that our signal handlers are ready for action.
         // TODO: Move these calls out of `InstanceHandle`.
-        signalhandlers::init();
+        traphandlers::init();
 
         // The WebAssembly spec specifies that the start function is
         // invoked automatically at instantiation time.

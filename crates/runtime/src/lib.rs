@@ -28,7 +28,6 @@ mod jit_int;
 mod memory;
 mod mmap;
 mod sig_registry;
-mod signalhandlers;
 mod table;
 mod trap_registry;
 mod traphandlers;
