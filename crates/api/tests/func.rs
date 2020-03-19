@@ -385,3 +385,13 @@ fn caller_memory() -> anyhow::Result<()> {
     Instance::new(&module, &[f.into()])?;
     Ok(())
 }
+
+#[test]
+fn func_write_nothing() -> anyhow::Result<()> {
+    let store = Store::default();
+    let ty = FuncType::new(Box::new([]), Box::new([ValType::I32]));
+    let f = Func::new(&store, ty, |_, _, _| Ok(()));
+    let err = f.call(&[]).unwrap_err();
+    assert_eq!(err.message(), "function attempted to return an incompatible value");
+    Ok(())
+}
