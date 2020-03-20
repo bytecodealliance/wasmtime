@@ -576,10 +576,12 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             cookie,
         );
 
-        let mut bc = GuestBorrows::new();
-        let as_arr = buf.as_array(buf_len);
-        let as_raw = as_arr.as_raw(&mut bc)?;
-        let host_buf = unsafe { &mut *as_raw };
+        let host_buf = unsafe {
+            let mut bc = GuestBorrows::new();
+            let buf = buf.as_array(buf_len);
+            let raw = buf.as_raw(&mut bc)?;
+            &mut *raw
+        };
 
         trace!("     | (buf,buf_len)={:?}", host_buf);
 
