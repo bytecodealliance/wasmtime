@@ -1288,7 +1288,6 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         // TODO: Rather than call std::process::exit here, we should trigger a
         // stack unwind similar to a trap.
         std::process::exit(rval as i32);
-        Ok(())
     }
 
     fn proc_raise(&self, _sig: types::Signal) -> Result<()> {
