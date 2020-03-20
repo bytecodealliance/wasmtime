@@ -19,15 +19,13 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<()> {
         trace!("args_get(argv_ptr={:?}, argv_buf={:?})", argv, argv_buf);
 
-        let mut argv_buf_offset: types::Size = 0;
         for arg in &self.args {
             let arg_bytes = arg.as_bytes_with_nul();
             let elems = arg_bytes.len().try_into()?;
             argv_buf.as_array(elems).copy_from_slice(arg_bytes)?;
             argv.write(argv_buf)?;
             argv = argv.add(1)?;
-            argv_buf_offset = argv_buf_offset.checked_add(elems).ok_or(Errno::Overflow)?;
-            argv_buf = argv_buf.add(argv_buf_offset)?;
+            argv_buf = argv_buf.add(elems)?;
         }
 
         Ok(())
@@ -60,17 +58,13 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             environ_buf
         );
 
-        let mut environ_buf_offset: types::Size = 0;
         for e in &self.env {
             let environ_bytes = e.as_bytes_with_nul();
             let elems = environ_bytes.len().try_into()?;
             environ_buf.as_array(elems).copy_from_slice(environ_bytes)?;
             environ.write(environ_buf)?;
             environ = environ.add(1)?;
-            environ_buf_offset = environ_buf_offset
-                .checked_add(elems)
-                .ok_or(Errno::Overflow)?;
-            environ_buf = environ_buf.add(environ_buf_offset)?;
+            environ_buf = environ_buf.add(elems)?;
         }
 
         Ok(())
