@@ -63,7 +63,7 @@ Hello, world!
 
 * **Lightweight**. Wasmtime is a standalone runtime for WebAssembly that scales
   with your needs. It fits on tiny chips as well as makes use of huge servers.
-  Wasmtime can be embedded into almost any application too.
+  Wasmtime can be [embedded] into almost any application too.
 
 * **Fast**. Wasmtime is built on the optimizing [Cranelift] code generator to
   quickly generate high-quality machine code at runtime.
@@ -83,6 +83,7 @@ Hello, world!
   standards process all along the way too.
 
 [Cranelift]: https://github.com/bytecodealliance/wasmtime/blob/master/cranelift/README.md
+[embedded]: https://bytecodealliance.github.io/wasmtime/embed.html
 
 ## Documentation
 

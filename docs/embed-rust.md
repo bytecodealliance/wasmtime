@@ -7,7 +7,7 @@ crate][wasmtime] has to offer and the [book examples for
 Rust](./examples-rust-embed.md) for more information.
 
 [apidoc]: https://bytecodealliance.github.io/wasmtime/api/wasmtime/
-[wasmtime]: https://crates.io/crates/wasmtime
+[crate]: https://crates.io/crates/wasmtime
 
 ## Creating the WebAssembly to execute
 
