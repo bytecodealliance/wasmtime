@@ -20,19 +20,11 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         trace!("args_get(argv_ptr={:?}, argv_buf={:?})", argv, argv_buf);
 
         let mut argv_buf_offset: types::Size = 0;
-        let mut bc = GuestBorrows::new();
-
         for arg in &self.args {
             let arg_bytes = arg.as_bytes_with_nul();
             let elems = arg_bytes.len().try_into()?;
-            unsafe {
-                let argv_buf = argv_buf.as_array(elems);
-                let raw = argv_buf.as_raw(&mut bc)?;
-                (&mut *raw).copy_from_slice(arg_bytes);
-            }
-
+            argv_buf.as_array(elems).copy_from_slice(arg_bytes)?;
             argv.write(argv_buf)?;
-
             argv = argv.add(1)?;
             argv_buf_offset = argv_buf_offset.checked_add(elems).ok_or(Errno::Overflow)?;
             argv_buf = argv_buf.add(argv_buf_offset)?;
@@ -69,19 +61,11 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         );
 
         let mut environ_buf_offset: types::Size = 0;
-        let mut bc = GuestBorrows::new();
-
         for e in &self.env {
             let environ_bytes = e.as_bytes_with_nul();
             let elems = environ_bytes.len().try_into()?;
-            unsafe {
-                let environ_buf = environ_buf.as_array(elems);
-                let raw = environ_buf.as_raw(&mut bc)?;
-                (&mut *raw).copy_from_slice(environ_bytes);
-            }
-
+            environ_buf.as_array(elems).copy_from_slice(environ_bytes)?;
             environ.write(environ_buf)?;
-
             environ = environ.add(1)?;
             environ_buf_offset = environ_buf_offset
                 .checked_add(elems)
@@ -457,12 +441,8 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
         trace!("     | (path_ptr,path_len)='{}'", host_path);
 
-        unsafe {
-            let mut bc = GuestBorrows::new();
-            let path = path.as_array(host_path_len);
-            let raw = path.as_raw(&mut bc)?;
-            (&mut *raw).copy_from_slice(host_path.as_bytes());
-        }
+        path.as_array(host_path_len)
+            .copy_from_slice(host_path.as_bytes())?;
 
         Ok(())
     }

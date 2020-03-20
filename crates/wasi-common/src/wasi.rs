@@ -39,6 +39,7 @@ impl From<wiggle_runtime::GuestError> for Errno {
             TryFromIntError { .. } => Self::Overflow,
             InFunc { .. } => Self::Inval,
             InDataField { .. } => Self::Inval,
+            SliceLengthsDiffer { .. } => Self::Fault,
         }
     }
 }
