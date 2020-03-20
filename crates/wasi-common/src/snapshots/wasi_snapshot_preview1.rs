@@ -889,7 +889,11 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             new_path,
             false,
         )?;
-        path::link(resolved_old, resolved_new)
+        path::link(
+            resolved_old,
+            resolved_new,
+            old_flags.contains(&types::Lookupflags::SYMLINK_FOLLOW),
+        )
     }
 
     fn path_open(

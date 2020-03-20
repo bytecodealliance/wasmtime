@@ -87,15 +87,24 @@ pub(crate) fn create_directory(base: &File, path: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn link(resolved_old: PathGet, resolved_new: PathGet) -> Result<()> {
+pub(crate) fn link(
+    resolved_old: PathGet,
+    resolved_new: PathGet,
+    follow_symlinks: bool,
+) -> Result<()> {
     use yanix::file::{linkat, AtFlag};
+    let flags = if follow_symlinks {
+        AtFlag::SYMLINK_FOLLOW
+    } else {
+        AtFlag::empty()
+    };
     unsafe {
         linkat(
             resolved_old.dirfd().as_raw_fd(),
             resolved_old.path(),
             resolved_new.dirfd().as_raw_fd(),
             resolved_new.path(),
-            AtFlag::SYMLINK_FOLLOW,
+            flags,
         )?
     };
     Ok(())

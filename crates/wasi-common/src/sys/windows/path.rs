@@ -164,7 +164,11 @@ pub(crate) fn create_directory(file: &File, path: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn link(_resolved_old: PathGet, _resolved_new: PathGet) -> Result<()> {
+pub(crate) fn link(
+    _resolved_old: PathGet,
+    _resolved_new: PathGet,
+    _follow_symlinks: bool,
+) -> Result<()> {
     unimplemented!("path_link")
 }
 
