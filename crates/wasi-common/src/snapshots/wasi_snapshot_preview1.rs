@@ -391,9 +391,11 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
         let host_nread = match file {
             Descriptor::OsHandle(fd) => {
-                let pos = SeekFrom::Start(offset);
-                fd.seek(pos)?;
-                fd.read_vectored(&mut buf)?
+                let cur_pos = fd.seek(SeekFrom::Current(0))?;
+                fd.seek(SeekFrom::Start(offset))?;
+                let nread = fd.read_vectored(&mut buf)?;
+                fd.seek(SeekFrom::Start(cur_pos))?;
+                nread
             }
             Descriptor::VirtualFile(virt) => virt.preadv(&mut buf, offset)?,
             _ => {
@@ -506,9 +508,11 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
         let host_nwritten = match file {
             Descriptor::OsHandle(fd) => {
-                let pos = SeekFrom::Start(offset);
-                fd.seek(pos)?;
-                fd.write_vectored(&buf)?
+                let cur_pos = fd.seek(SeekFrom::Current(0))?;
+                fd.seek(SeekFrom::Start(offset))?;
+                let nwritten = fd.write_vectored(&buf)?;
+                fd.seek(SeekFrom::Start(cur_pos))?;
+                nwritten
             }
             Descriptor::VirtualFile(virt) => virt.pwritev(&buf, offset)?,
             _ => {
