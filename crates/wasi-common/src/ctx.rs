@@ -351,7 +351,7 @@ impl WasiCtxBuilder {
                     }
                 }
                 Descriptor::VirtualFile(virt) => {
-                    if virt.get_file_type() != types::Filetype::Directory {
+                    if !virt.is_directory() {
                         return Err(WasiCtxBuilderError::NotADirectory(guest_path));
                     }
                 }
