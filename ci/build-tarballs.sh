@@ -33,8 +33,8 @@ mktarball() {
 bin_pkgname=wasmtime-$TAG-$platform
 mkdir tmp/$bin_pkgname
 cp LICENSE README.md tmp/$bin_pkgname
-mv bins-$src/{wasmtime,wasm2obj}$exe tmp/$bin_pkgname
-chmod +x tmp/$bin_pkgname/{wasmtime,wasm2obj}$exe
+mv bins-$src/wasmtime$exe tmp/$bin_pkgname
+chmod +x tmp/$bin_pkgname/wasmtime$exe
 mktarball $bin_pkgname
 
 if [ "$exe" = ".exe" ]; then
