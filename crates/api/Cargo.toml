@@ -40,12 +40,15 @@ tempfile = "3.1"
 maintenance = { status = "actively-developed" }
 
 [features]
-default = ['wat']
+default = ['wat', 'jitdump']
 
 # Enables experimental support for the lightbeam codegen backend, an alternative
 # to cranelift. Requires Nightly Rust currently, and this is not enabled by
 # default.
 lightbeam = ["wasmtime-jit/lightbeam"]
+
+# Enables support for the `perf` jitdump profiler
+jitdump = ["wasmtime-jit/jitdump"]
 
 [[test]]
 name = "host-segfault"

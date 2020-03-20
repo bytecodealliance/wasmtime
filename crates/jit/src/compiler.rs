@@ -22,7 +22,6 @@ use wasmtime_environ::{
     FunctionBodyData, Module, ModuleMemoryOffset, ModuleVmctxInfo, Relocation, Relocations, Traps,
     Tunables, VMOffsets,
 };
-use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{
     InstantiationError, SignatureRegistry, TrapRegistration, TrapRegistry, VMFunctionBody,
     VMSharedSignatureIndex, VMTrampoline,
@@ -244,16 +243,6 @@ impl Compiler {
     /// Make memory containing compiled code executable.
     pub(crate) fn publish_compiled_code(&mut self) {
         self.code_memory.publish();
-    }
-
-    pub(crate) fn profiler_module_load(
-        &mut self,
-        profiler: &mut Box<dyn ProfilingAgent + Send>,
-        module_name: &str,
-        dbg_image: Option<&[u8]>,
-    ) -> () {
-        self.code_memory
-            .profiler_module_load(profiler, module_name, dbg_image);
     }
 
     /// Shared signature registry.

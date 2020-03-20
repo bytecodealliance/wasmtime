@@ -10,7 +10,7 @@ use crate::resolver::Resolver;
 use std::collections::HashMap;
 use std::io::Write;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_debug::read_debuginfo;
 use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
@@ -64,7 +64,7 @@ impl<'data> RawCompiledModule<'data> {
         compiler: &mut Compiler,
         data: &'data [u8],
         debug_info: bool,
-        profiler: Option<&Arc<Mutex<Box<dyn ProfilingAgent + Send>>>>,
+        profiler: &dyn ProfilingAgent,
     ) -> Result<Self, SetupError> {
         let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
 
@@ -105,19 +105,11 @@ impl<'data> RawCompiledModule<'data> {
         compiler.publish_compiled_code();
 
         // Initialize profiler and load the wasm module
-        match profiler {
-            Some(_) => {
-                let region_name = String::from("wasm_module");
-                let mut profiler = profiler.unwrap().lock().unwrap();
-                match &compilation.dbg_image {
-                    Some(dbg) => {
-                        compiler.profiler_module_load(&mut profiler, &region_name, Some(&dbg))
-                    }
-                    _ => compiler.profiler_module_load(&mut profiler, &region_name, None),
-                };
-            }
-            _ => (),
-        };
+        profiler.module_load(
+            &translation.module,
+            &compilation.finished_functions,
+            compilation.dbg_image.as_deref(),
+        );
 
         let dbg_jit_registration = if let Some(img) = compilation.dbg_image {
             let mut bytes = Vec::new();
@@ -157,7 +149,7 @@ impl CompiledModule {
         compiler: &mut Compiler,
         data: &'data [u8],
         debug_info: bool,
-        profiler: Option<&Arc<Mutex<Box<dyn ProfilingAgent + Send>>>>,
+        profiler: &dyn ProfilingAgent,
     ) -> Result<Self, SetupError> {
         let raw = RawCompiledModule::<'data>::new(compiler, data, debug_info, profiler)?;
 
@@ -290,7 +282,7 @@ pub unsafe fn instantiate(
     resolver: &mut dyn Resolver,
     debug_info: bool,
     is_bulk_memory: bool,
-    profiler: Option<&Arc<Mutex<Box<dyn ProfilingAgent + Send>>>>,
+    profiler: &dyn ProfilingAgent,
 ) -> Result<InstanceHandle, SetupError> {
     let instance = CompiledModule::new(compiler, data, debug_info, profiler)?.instantiate(
         is_bulk_memory,

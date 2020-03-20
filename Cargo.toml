@@ -23,12 +23,11 @@ doc = false
 
 [dependencies]
 # Enable all supported architectures by default.
-wasmtime = { path = "crates/api" }
+wasmtime = { path = "crates/api", default-features = false }
 wasmtime-debug = { path = "crates/debug" }
 wasmtime-environ = { path = "crates/environ" }
 wasmtime-jit = { path = "crates/jit" }
 wasmtime-obj = { path = "crates/obj" }
-wasmtime-profiling = { path = "crates/profiling" }
 wasmtime-wast = { path = "crates/wast" }
 wasmtime-wasi = { path = "crates/wasi" }
 wasi-common = { path = "crates/wasi-common" }
@@ -72,13 +71,14 @@ members = [
 ]
 
 [features]
+default = ["jitdump", "wasmtime/wat"]
 lightbeam = [
     "wasmtime-environ/lightbeam",
     "wasmtime-jit/lightbeam",
     "wasmtime-wast/lightbeam",
     "wasmtime/lightbeam",
 ]
-jitdump = ["wasmtime-profiling/jitdump"]
+jitdump = ["wasmtime/jitdump"]
 test_programs = ["test-programs/test_programs"]
 
 [badges]

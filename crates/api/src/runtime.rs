@@ -3,12 +3,12 @@ use std::cell::RefCell;
 use std::fmt;
 use std::path::Path;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use wasmparser::{OperatorValidatorConfig, ValidatingParserConfig};
 use wasmtime_environ::settings::{self, Configurable};
 use wasmtime_environ::CacheConfig;
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
-use wasmtime_profiling::{JitDumpAgent, ProfilingAgent, ProfilingStrategy};
+use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent};
 
 // Runtime Environment
 
@@ -26,7 +26,7 @@ pub struct Config {
     pub(crate) debug_info: bool,
     pub(crate) strategy: CompilationStrategy,
     pub(crate) cache_config: CacheConfig,
-    pub(crate) profiler: Option<Arc<Mutex<Box<dyn ProfilingAgent + Send>>>>,
+    pub(crate) profiler: Arc<dyn ProfilingAgent>,
 }
 
 impl Config {
@@ -65,7 +65,7 @@ impl Config {
             flags,
             strategy: CompilationStrategy::Auto,
             cache_config: CacheConfig::new_cache_disabled(),
-            profiler: None,
+            profiler: Arc::new(NullProfilerAgent),
         }
     }
 
@@ -225,11 +225,9 @@ impl Config {
     /// Profiler creation calls the type's default initializer where the purpose is
     /// really just to put in place the type used for profiling.
     pub fn profiler(&mut self, profile: ProfilingStrategy) -> Result<&mut Self> {
-        match profile {
-            ProfilingStrategy::JitDumpProfiler => {
-                self.profiler = { Some(Arc::new(Mutex::new(Box::new(JitDumpAgent::default())))) }
-            }
-            _ => self.profiler = { None },
+        self.profiler = match profile {
+            ProfilingStrategy::JitDump => Arc::new(JitDumpAgent::new()?) as Arc<dyn ProfilingAgent>,
+            ProfilingStrategy::None => Arc::new(NullProfilerAgent),
         };
         Ok(self)
     }
@@ -379,6 +377,17 @@ pub enum OptLevel {
     /// Similar to `speed`, but also performs transformations aimed at reducing
     /// code size.
     SpeedAndSize,
+}
+
+/// Select which profiling technique to support.
+#[derive(Debug, Clone, Copy)]
+pub enum ProfilingStrategy {
+    /// No profiler support.
+    None,
+
+    /// Collect profiling info for "jitdump" file format, used with `perf` on
+    /// Linux.
+    JitDump,
 }
 
 // Engine

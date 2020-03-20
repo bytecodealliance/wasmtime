@@ -10,22 +10,25 @@
 //!     Report
 //!         sudo perf report -i perf.jit.data -F+period,srcline
 //! Note: For descriptive results, the WASM file being executed should contain dwarf debug data
-use libc::c_int;
-#[cfg(not(target_os = "windows"))]
-use libc::{c_void, clock_gettime, mmap, open, sysconf};
+
+use crate::ProfilingAgent;
+use anyhow::Result;
 use object::Object;
 use scroll::{IOwrite, SizeWith, NATIVE};
 use serde::{Deserialize, Serialize};
-use std::error::Error;
-#[cfg(not(target_os = "windows"))]
-use std::ffi::CString;
 use std::fmt::Debug;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
+use std::io;
 use std::io::Write;
-#[cfg(not(target_os = "windows"))]
-use std::os::unix::io::FromRawFd;
+use std::os::unix::prelude::*;
+use std::ptr;
+use std::sync::Mutex;
 use std::{borrow, mem, process};
 use target_lexicon::Architecture;
+use wasmtime_environ::entity::PrimaryMap;
+use wasmtime_environ::wasm::DefinedFuncIndex;
+use wasmtime_environ::Module;
+use wasmtime_runtime::VMFunctionBody;
 
 #[cfg(target_pointer_width = "64")]
 use goblin::elf64 as elf;
@@ -133,71 +136,110 @@ pub struct FileHeader {
 }
 
 /// Interface for driving the creation of jitdump files
-#[derive(Debug, Default)]
 pub struct JitDumpAgent {
+    // Note that we use a mutex internally to serialize writing out to our
+    // `jitdump_file` within this process, since multiple threads may be sharing
+    // this jit agent.
+    state: Mutex<State>,
+}
+
+struct State {
     /// File instance for the jit dump file
-    pub jitdump_file: Option<File>,
+    jitdump_file: File,
+
+    map_addr: usize,
+
     /// Unique identifier for jitted code
-    pub code_index: u64,
+    code_index: u64,
+
     /// Flag for experimenting with dumping code load record
     /// after each function (true) or after each module. This
     /// flag is currently set to true.
-    pub dump_funcs: bool,
+    dump_funcs: bool,
 }
 
 impl JitDumpAgent {
     /// Intialize a JitDumpAgent and write out the header
-    pub fn init(&mut self) -> Result<(), Box<dyn Error>> {
-        #[cfg(target_os = "windows")]
-        return Err("Target OS not supported.");
-        #[cfg(not(target_os = "windows"))]
-        {
-            let filename = format!("./jit-{}.dump", process::id());
-            let mut jitdump_file;
-            unsafe {
-                let filename_c = CString::new(filename)?;
-                let fd = open(
-                    filename_c.as_ptr(),
-                    libc::O_CREAT | libc::O_TRUNC | libc::O_RDWR,
-                    0666,
-                );
-                let pgsz = sysconf(libc::_SC_PAGESIZE) as usize;
-                mmap(
-                    0 as *mut c_void,
-                    pgsz,
-                    libc::PROT_EXEC | libc::PROT_READ,
-                    libc::MAP_PRIVATE,
-                    fd,
-                    0,
-                );
-                jitdump_file = File::from_raw_fd(fd);
-            }
-            JitDumpAgent::write_file_header(&mut jitdump_file)?;
-            self.jitdump_file = Some(jitdump_file);
-            self.code_index = 0;
-            self.dump_funcs = true;
-            Ok(())
-        }
-    }
+    pub fn new() -> Result<Self> {
+        let filename = format!("./jit-{}.dump", process::id());
+        let jitdump_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&filename)?;
 
-    /// Returns timestamp from a single source
-    #[allow(unused_variables)]
-    fn get_time_stamp(timestamp: &mut u64) -> c_int {
-        #[cfg(not(target_os = "windows"))]
-        {
-            unsafe {
-                let mut ts = mem::MaybeUninit::zeroed().assume_init();
-                clock_gettime(libc::CLOCK_MONOTONIC, &mut ts);
-                // TODO: What does it mean for either sec or nsec to be negative?
-                *timestamp = (ts.tv_sec * 1000000000 + ts.tv_nsec) as u64;
+        // After we make our `*.dump` file we execute an `mmap` syscall,
+        // specifically with executable permissions, to map it into our address
+        // space. This is required so `perf inject` will work later. The `perf
+        // inject` command will see that an mmap syscall happened, and it'll see
+        // the filename we mapped, and that'll trigger it to actually read and
+        // parse the file.
+        //
+        // To match what some perf examples are doing we keep this `mmap` alive
+        // until this agent goes away.
+        let map_addr = unsafe {
+            let ptr = libc::mmap(
+                ptr::null_mut(),
+                libc::sysconf(libc::_SC_PAGESIZE) as usize,
+                libc::PROT_EXEC | libc::PROT_READ,
+                libc::MAP_PRIVATE,
+                jitdump_file.as_raw_fd(),
+                0,
+            );
+            if ptr == libc::MAP_FAILED {
+                return Err(io::Error::last_os_error().into());
             }
+            ptr as usize
+        };
+        let mut state = State {
+            jitdump_file,
+            map_addr,
+            code_index: 0,
+            dump_funcs: true,
+        };
+        state.write_file_header()?;
+        Ok(JitDumpAgent {
+            state: Mutex::new(state),
+        })
+    }
+}
+
+impl ProfilingAgent for JitDumpAgent {
+    fn module_load(
+        &self,
+        module: &Module,
+        functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+        dbg_image: Option<&[u8]>,
+    ) {
+        self.state
+            .lock()
+            .unwrap()
+            .module_load(module, functions, dbg_image);
+    }
+}
+
+impl State {
+    /// Returns timestamp from a single source
+    fn get_time_stamp(&self) -> u64 {
+        // We need to use `CLOCK_MONOTONIC` on Linux which is what `Instant`
+        // conveniently also uses, but `Instant` doesn't allow us to get access
+        // to nanoseconds as an internal detail, so we calculate the nanoseconds
+        // ourselves here.
+        unsafe {
+            let mut ts = mem::MaybeUninit::zeroed();
+            assert_eq!(
+                libc::clock_gettime(libc::CLOCK_MONOTONIC, ts.as_mut_ptr()),
+                0
+            );
+            let ts = ts.assume_init();
+            // TODO: What does it mean for either sec or nsec to be negative?
+            (ts.tv_sec * 1_000_000_000 + ts.tv_nsec) as u64
         }
-        return 0;
     }
 
     /// Returns the ELF machine architecture.
-    #[allow(dead_code)]
-    fn get_e_machine() -> u32 {
+    fn get_e_machine(&self) -> u32 {
         match target_lexicon::HOST.architecture {
             Architecture::X86_64 => elf::header::EM_X86_64 as u32,
             Architecture::I686 => elf::header::EM_386 as u32,
@@ -207,30 +249,23 @@ impl JitDumpAgent {
         }
     }
 
-    #[allow(dead_code)]
-    fn write_file_header(file: &mut File) -> Result<(), JitDumpError> {
-        let mut header: FileHeader = Default::default();
-        let mut timestamp: u64 = 0;
-        JitDumpAgent::get_time_stamp(&mut timestamp);
-        header.timestamp = timestamp;
+    fn write_file_header(&mut self) -> Result<()> {
+        let header = FileHeader {
+            timestamp: self.get_time_stamp(),
+            e_machine: self.get_e_machine(),
+            magic: if cfg!(target_endian = "little") {
+                0x4A695444
+            } else {
+                0x4454694a
+            },
+            version: 1,
+            size: mem::size_of::<FileHeader>() as u32,
+            pad1: 0,
+            pid: process::id(),
+            flags: 0,
+        };
 
-        let e_machine = JitDumpAgent::get_e_machine();
-        if e_machine != elf::header::EM_NONE as u32 {
-            header.e_machine = e_machine;
-        }
-
-        if cfg!(target_endian = "little") {
-            header.magic = 0x4A695444
-        } else {
-            header.magic = 0x4454694a
-        }
-        header.version = 1;
-        header.size = mem::size_of::<FileHeader>() as u32;
-        header.pad1 = 0;
-        header.pid = process::id();
-        header.flags = 0;
-
-        file.iowrite_with(header, NATIVE)?;
+        self.jitdump_file.iowrite_with(header, NATIVE)?;
         Ok(())
     }
 
@@ -239,38 +274,31 @@ impl JitDumpAgent {
         record_name: &str,
         cl_record: CodeLoadRecord,
         code_buffer: &[u8],
-    ) -> Result<(), JitDumpError> {
-        let mut jitdump_file = self.jitdump_file.as_ref().unwrap();
-        jitdump_file.iowrite_with(cl_record, NATIVE)?;
-        jitdump_file.write_all(record_name.as_bytes())?;
-        jitdump_file.write_all(b"\0")?;
-        jitdump_file.write_all(code_buffer)?;
+    ) -> Result<()> {
+        self.jitdump_file.iowrite_with(cl_record, NATIVE)?;
+        self.jitdump_file.write_all(record_name.as_bytes())?;
+        self.jitdump_file.write_all(b"\0")?;
+        self.jitdump_file.write_all(code_buffer)?;
         Ok(())
     }
 
     /// Write DebugInfoRecord to open jit dump file.
     /// Must be written before the corresponding CodeLoadRecord.
-    fn write_debug_info_record(&mut self, dir_record: DebugInfoRecord) -> Result<(), JitDumpError> {
-        self.jitdump_file
-            .as_ref()
-            .unwrap()
-            .iowrite_with(dir_record, NATIVE)?;
+    fn write_debug_info_record(&mut self, dir_record: DebugInfoRecord) -> Result<()> {
+        self.jitdump_file.iowrite_with(dir_record, NATIVE)?;
         Ok(())
     }
 
     /// Write DebugInfoRecord to open jit dump file.
     /// Must be written before the corresponding CodeLoadRecord.
-    fn write_debug_info_entries(
-        &mut self,
-        die_entries: Vec<DebugEntry>,
-    ) -> Result<(), JitDumpError> {
+    fn write_debug_info_entries(&mut self, die_entries: Vec<DebugEntry>) -> Result<()> {
         for entry in die_entries.iter() {
-            let mut jitdump_file = self.jitdump_file.as_ref().unwrap();
-            jitdump_file.iowrite_with(entry.address, NATIVE)?;
-            jitdump_file.iowrite_with(entry.line, NATIVE)?;
-            jitdump_file.iowrite_with(entry.discriminator, NATIVE)?;
-            jitdump_file.write_all(entry.filename.as_bytes())?;
-            jitdump_file.write_all(b"\0")?;
+            self.jitdump_file.iowrite_with(entry.address, NATIVE)?;
+            self.jitdump_file.iowrite_with(entry.line, NATIVE)?;
+            self.jitdump_file
+                .iowrite_with(entry.discriminator, NATIVE)?;
+            self.jitdump_file.write_all(entry.filename.as_bytes())?;
+            self.jitdump_file.write_all(b"\0")?;
         }
         Ok(())
     }
@@ -278,25 +306,27 @@ impl JitDumpAgent {
     /// Sent when a method is compiled and loaded into memory by the VM.
     pub fn module_load(
         &mut self,
-        module_name: &str,
-        addr: *const u8,
-        len: usize,
+        module: &Module,
+        functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
         dbg_image: Option<&[u8]>,
     ) -> () {
         let pid = process::id();
         let tid = pid; // ThreadId does appear to track underlying thread. Using PID.
 
-        if let Some(img) = &dbg_image {
-            if let Err(err) = self.dump_from_debug_image(img, module_name, addr, len, pid, tid) {
-                println!(
-                    "Jitdump: module_load failed dumping from debug image: {:?}\n",
-                    err
-                );
+        for (idx, func) in functions.iter() {
+            let (addr, len) = unsafe { ((**func).as_ptr() as *const u8, (**func).len()) };
+            if let Some(img) = &dbg_image {
+                if let Err(err) = self.dump_from_debug_image(img, "wasm", addr, len, pid, tid) {
+                    println!(
+                        "Jitdump: module_load failed dumping from debug image: {:?}\n",
+                        err
+                    );
+                }
+            } else {
+                let timestamp = self.get_time_stamp();
+                let name = super::debug_name(module, idx);
+                self.dump_code_load_record(&name, addr, len, timestamp, pid, tid);
             }
-        } else {
-            let mut timestamp: u64 = 0;
-            JitDumpAgent::get_time_stamp(&mut timestamp);
-            self.dump_code_load_record(module_name, addr, len, timestamp, pid, tid);
         }
     }
 
@@ -347,7 +377,7 @@ impl JitDumpAgent {
         len: usize,
         pid: u32,
         tid: u32,
-    ) -> Result<(), JitDumpError> {
+    ) -> Result<()> {
         let file = object::File::parse(&dbg_image).unwrap();
         let endian = if file.is_little_endian() {
             gimli::RunTimeEndian::Little
@@ -355,7 +385,7 @@ impl JitDumpAgent {
             gimli::RunTimeEndian::Big
         };
 
-        let load_section = |id: gimli::SectionId| -> Result<borrow::Cow<[u8]>, JitDumpError> {
+        let load_section = |id: gimli::SectionId| -> Result<borrow::Cow<[u8]>> {
             Ok(file
                 .section_data_by_name(id.name())
                 .unwrap_or(borrow::Cow::Borrowed(&[][..])))
@@ -385,8 +415,7 @@ impl JitDumpAgent {
             break;
         }
         if !self.dump_funcs {
-            let mut timestamp: u64 = 0;
-            JitDumpAgent::get_time_stamp(&mut timestamp);
+            let timestamp = self.get_time_stamp();
             self.dump_code_load_record(module_name, addr, len, timestamp, pid, tid);
         }
         Ok(())
@@ -401,7 +430,7 @@ impl JitDumpAgent {
         len: usize,
         pid: u32,
         tid: u32,
-    ) -> Result<(), JitDumpError> {
+    ) -> Result<()> {
         let mut depth = 0;
         let mut entries = unit.entries();
         while let Some((delta_depth, entry)) = entries.next_dfs()? {
@@ -486,9 +515,7 @@ impl JitDumpAgent {
                     self.code_index += 1;
                     self.dump_debug_info(&unit, &dwarf, clr.address, clr.size, None)?;
 
-                    let mut timestamp: u64 = 0;
-                    JitDumpAgent::get_time_stamp(&mut timestamp);
-                    clr.header.timestamp = timestamp;
+                    clr.header.timestamp = self.get_time_stamp();
 
                     unsafe {
                         let code_buffer: &[u8] =
@@ -570,9 +597,8 @@ impl JitDumpAgent {
         address: u64,
         size: u64,
         file_suffix: Option<&str>,
-    ) -> Result<(), JitDumpError> {
-        let mut timestamp: u64 = 0;
-        JitDumpAgent::get_time_stamp(&mut timestamp);
+    ) -> Result<()> {
+        let timestamp = self.get_time_stamp();
         if let Some(program) = unit.line_program.clone() {
             let mut debug_info_record = DebugInfoRecord {
                 header: RecordHeader {
@@ -636,57 +662,14 @@ impl JitDumpAgent {
     }
 }
 
-use crate::ProfilingAgent;
-impl ProfilingAgent for JitDumpAgent {
-    fn module_load(
-        &mut self,
-        module_name: &str,
-        addr: *const u8,
-        len: usize,
-        dbg_image: Option<&[u8]>,
-    ) -> () {
-        if self.jitdump_file.is_none() {
-            if JitDumpAgent::init(self).ok().is_some() {
-                JitDumpAgent::module_load(self, module_name, addr, len, dbg_image);
-            } else {
-                println!("Jitdump: Failed to initialize JitDumpAgent\n");
-            }
-        } else {
-            JitDumpAgent::module_load(self, module_name, addr, len, dbg_image);
+impl Drop for State {
+    fn drop(&mut self) {
+        unsafe {
+            libc::munmap(
+                self.map_addr as *mut _,
+                libc::sysconf(libc::_SC_PAGESIZE) as usize,
+            );
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum JitDumpError {
-    GimliError(gimli::Error),
-    IOError,
-}
-
-impl Error for JitDumpError {
-    fn description(&self) -> &str {
-        match *self {
-            JitDumpError::GimliError(ref err) => err.description(),
-            JitDumpError::IOError => "An I/O error occurred.",
-        }
-    }
-}
-
-impl std::fmt::Display for JitDumpError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
-        Debug::fmt(self, f)
-    }
-}
-
-impl From<gimli::Error> for JitDumpError {
-    fn from(err: gimli::Error) -> Self {
-        JitDumpError::GimliError(err)
-    }
-}
-
-impl From<std::io::Error> for JitDumpError {
-    fn from(_err: std::io::Error) -> Self {
-        JitDumpError::IOError
     }
 }
 

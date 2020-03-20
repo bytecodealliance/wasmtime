@@ -6,6 +6,7 @@
   - [Running `hello-world.wasm`](./tutorial-run-hello-world.md)
 - [Examples](./examples.md)
   - [Markdown parser](./examples-markdown.md)
+  - [Profiling WebAssembly](./examples-profiling.md)
 - [Using WebAssembly from your lanugage](./lang.md)
   - [Python](./lang-python.md)
   - [.NET](./lang-dotnet.md)
