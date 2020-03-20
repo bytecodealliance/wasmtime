@@ -53,7 +53,7 @@ cfg_if::cfg_if! {
                 libc::sigemptyset(&mut handler.sa_mask);
                 if libc::sigaction(signal, &handler, slot.as_mut_ptr()) != 0 {
                     panic!(
-                        "unable to install SIGSEGV handler: {}",
+                        "unable to install signal handler: {}",
                         io::Error::last_os_error(),
                     );
                 }
@@ -109,7 +109,6 @@ cfg_if::cfg_if! {
                     false,
                     |handler| handler(signum, siginfo, context),
                 );
-                info.handling_trap.set(false);
 
                 // Figure out what to do based on the result of this handling of
                 // the trap. Note that our sentinel value of 1 means that the
