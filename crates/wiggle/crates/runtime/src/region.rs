@@ -7,12 +7,16 @@ pub struct Region {
 
 impl Region {
     pub fn new(start: u32, len: u32) -> Self {
-        assert!(len > 0, "Region cannot have 0 length");
         Self { start, len }
     }
 
     /// Checks if this `Region` overlaps with `rhs` `Region`.
     pub fn overlaps(&self, rhs: Region) -> bool {
+        // Zero-length regions can never overlap!
+        if self.len == 0 || rhs.len == 0 {
+            return false;
+        }
+
         let self_start = self.start as u64;
         let self_end = self_start + (self.len - 1) as u64;
 
@@ -38,6 +42,17 @@ impl Region {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn zero_length() {
+        let r1 = Region::new(0, 0);
+        let r2 = Region::new(0, 1);
+        assert!(!r1.overlaps(r2));
+
+        let r1 = Region::new(0, 1);
+        let r2 = Region::new(0, 0);
+        assert!(!r1.overlaps(r2));
+    }
 
     #[test]
     fn nonoverlapping() {
