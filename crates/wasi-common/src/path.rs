@@ -4,6 +4,7 @@ use crate::wasi::{types, Errno, Result};
 use crate::{entry::Descriptor, entry::Entry};
 use std::path::{Component, Path};
 use std::str;
+use wiggle_runtime::{GuestBorrows, GuestPtr};
 
 pub(crate) use sys::path::*;
 
@@ -104,10 +105,19 @@ pub(crate) fn get(
     rights_base: types::Rights,
     rights_inheriting: types::Rights,
     dirflags: types::Lookupflags,
-    path: &str,
+    path: &GuestPtr<'_, str>,
     needs_final_component: bool,
 ) -> Result<PathGet> {
     const MAX_SYMLINK_EXPANSIONS: usize = 128;
+
+    // Extract path as &str from guest's memory.
+    let path = unsafe {
+        let mut bc = GuestBorrows::new();
+        let raw = path.as_raw(&mut bc)?;
+        &*raw
+    };
+
+    log::trace!("     | (path_ptr,path_len)='{}'", path);
 
     if path.contains('\0') {
         // if contains NUL, return Ilseq

@@ -801,12 +801,6 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn path_create_directory(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
         trace!("path_create_directory(dirfd={:?}, path={:?})", dirfd, path);
 
-        let mut bc = GuestBorrows::new();
-        let as_str = path.as_raw(&mut bc)?;
-        let path = unsafe { &*as_str };
-
-        trace!("     | (path_ptr,path_len)='{}'", path);
-
         let rights = types::Rights::PATH_OPEN | types::Rights::PATH_CREATE_DIRECTORY;
         let entry = unsafe { self.get_entry(dirfd)? };
         let resolved = path::get(
@@ -832,12 +826,6 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             flags,
             path,
         );
-
-        let mut bc = GuestBorrows::new();
-        let as_str = path.as_raw(&mut bc)?;
-        let path = unsafe { &*as_str };
-
-        trace!("     | (path_ptr,path_len)='{}'", path);
 
         let entry = unsafe { self.get_entry(dirfd)? };
         let resolved = path::get(
@@ -885,12 +873,6 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             fst_flags,
         );
 
-        let mut bc = GuestBorrows::new();
-        let as_str = path.as_raw(&mut bc)?;
-        let path = unsafe { &*as_str };
-
-        trace!("     | (path_ptr,path_len)='{}'", path);
-
         let entry = unsafe { self.get_entry(dirfd)? };
         let resolved = path::get(
             &entry,
@@ -925,44 +907,24 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             new_path,
         );
 
-        // FIXME
-        // Much like in the case with `path_symlink`, we need to account for the
-        // fact where both `old_path` and `new_path` point the same memory location.
-        // Hence, separate scopes and `GuestBorrows` instances.
-        let resolved_old = {
-            let mut bc = GuestBorrows::new();
-            let old_as_str = old_path.as_raw(&mut bc)?;
-            let old_path = unsafe { &*old_as_str };
-
-            trace!("     | (old_path_ptr,old_path_len)='{}'", old_path);
-
-            let old_entry = unsafe { self.get_entry(old_fd)? };
-            path::get(
-                &old_entry,
-                types::Rights::PATH_LINK_SOURCE,
-                types::Rights::empty(),
-                types::Lookupflags::empty(),
-                old_path,
-                false,
-            )?
-        };
-        let resolved_new = {
-            let mut bc = GuestBorrows::new();
-            let new_as_str = new_path.as_raw(&mut bc)?;
-            let new_path = unsafe { &*new_as_str };
-
-            trace!("     | (new_path_ptr,new_path_len)='{}'", new_path);
-
-            let new_entry = unsafe { self.get_entry(new_fd)? };
-            path::get(
-                &new_entry,
-                types::Rights::PATH_LINK_TARGET,
-                types::Rights::empty(),
-                types::Lookupflags::empty(),
-                new_path,
-                false,
-            )?
-        };
+        let old_entry = unsafe { self.get_entry(old_fd)? };
+        let resolved_old = path::get(
+            &old_entry,
+            types::Rights::PATH_LINK_SOURCE,
+            types::Rights::empty(),
+            types::Lookupflags::empty(),
+            old_path,
+            false,
+        )?;
+        let new_entry = unsafe { self.get_entry(new_fd)? };
+        let resolved_new = path::get(
+            &new_entry,
+            types::Rights::PATH_LINK_TARGET,
+            types::Rights::empty(),
+            types::Lookupflags::empty(),
+            new_path,
+            false,
+        )?;
         path::link(resolved_old, resolved_new)
     }
 
@@ -986,12 +948,6 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             fs_rights_inheriting,
             fdflags,
         );
-
-        // Extract path as &str.
-        let mut bc = GuestBorrows::new();
-        let path = unsafe { &*path.as_raw(&mut bc)? };
-
-        trace!("     | path='{}'", path);
 
         let (needed_base, needed_inheriting) =
             path::open_rights(fs_rights_base, fs_rights_inheriting, oflags, fdflags);
@@ -1058,12 +1014,6 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             buf_len,
         );
 
-        let mut bc = GuestBorrows::new();
-        let as_str = path.as_raw(&mut bc)?;
-        let path = unsafe { &*as_str };
-
-        trace!("     | (path_ptr,path_len)='{}'", path);
-
         let entry = unsafe { self.get_entry(dirfd)? };
         let resolved = path::get(
             &entry,
@@ -1079,6 +1029,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         // buffer. This is a valid POSIX call hence we need to accommodate.
         let slice = if buf_len > 0 {
             unsafe {
+                let mut bc = GuestBorrows::new();
                 let buf = buf.as_array(buf_len);
                 let raw = buf.as_raw(&mut bc)?;
                 &mut *raw
@@ -1103,12 +1054,6 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn path_remove_directory(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
         trace!("path_remove_directory(dirfd={:?}, path={:?})", dirfd, path);
-
-        let mut bc = GuestBorrows::new();
-        let as_str = path.as_raw(&mut bc)?;
-        let path = unsafe { &*as_str };
-
-        trace!("     | (path_ptr,path_len)='{}'", path);
 
         let entry = unsafe { self.get_entry(dirfd)? };
         let resolved = path::get(
@@ -1143,37 +1088,24 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             new_path,
         );
 
-        let mut bc = GuestBorrows::new();
-        let old_as_str = old_path.as_raw(&mut bc)?;
-        let old_path = unsafe { &*old_as_str };
-        let new_as_str = new_path.as_raw(&mut bc)?;
-        let new_path = unsafe { &*new_as_str };
-
-        trace!("     | (old_path_ptr,old_path_len)='{}'", old_path);
-        trace!("     | (new_path_ptr,new_path_len)='{}'", new_path);
-
-        let resolved_old = {
-            let entry = unsafe { self.get_entry(old_fd)? };
-            path::get(
-                &entry,
-                types::Rights::PATH_RENAME_SOURCE,
-                types::Rights::empty(),
-                types::Lookupflags::empty(),
-                old_path,
-                true,
-            )?
-        };
-        let resolved_new = {
-            let entry = unsafe { self.get_entry(new_fd)? };
-            path::get(
-                &entry,
-                types::Rights::PATH_RENAME_TARGET,
-                types::Rights::empty(),
-                types::Lookupflags::empty(),
-                new_path,
-                true,
-            )?
-        };
+        let entry = unsafe { self.get_entry(old_fd)? };
+        let resolved_old = path::get(
+            &entry,
+            types::Rights::PATH_RENAME_SOURCE,
+            types::Rights::empty(),
+            types::Lookupflags::empty(),
+            old_path,
+            true,
+        )?;
+        let entry = unsafe { self.get_entry(new_fd)? };
+        let resolved_new = path::get(
+            &entry,
+            types::Rights::PATH_RENAME_TARGET,
+            types::Rights::empty(),
+            types::Lookupflags::empty(),
+            new_path,
+            true,
+        )?;
 
         log::debug!("path_rename resolved_old={:?}", resolved_old);
         log::debug!("path_rename resolved_new={:?}", resolved_new);
@@ -1202,33 +1134,21 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             new_path,
         );
 
-        let resolved_new = {
-            // FIXME
-            // We need to enclose ops on `new_path` in a separate scope with separate
-            // `GuestBorrows` instance to account for the case when `old_path` and `new_path`
-            // might point to the same memory location. This is possible when creating symlink
-            // loops for instance. If we don't do it this way, we will trigger a borrow error
-            // and we don't want that.
+        let entry = unsafe { self.get_entry(dirfd)? };
+        let resolved_new = path::get(
+            &entry,
+            types::Rights::PATH_SYMLINK,
+            types::Rights::empty(),
+            types::Lookupflags::empty(),
+            new_path,
+            true,
+        )?;
+
+        let old_path = unsafe {
             let mut bc = GuestBorrows::new();
-            let new_as_str = new_path.as_raw(&mut bc)?;
-            let new_path = unsafe { &*new_as_str };
-
-            trace!("     | (new_path_ptr,new_path_len)='{}'", new_path);
-
-            let entry = unsafe { self.get_entry(dirfd)? };
-            path::get(
-                &entry,
-                types::Rights::PATH_SYMLINK,
-                types::Rights::empty(),
-                types::Lookupflags::empty(),
-                new_path,
-                true,
-            )?
+            let raw = old_path.as_raw(&mut bc)?;
+            &*raw
         };
-
-        let mut bc = GuestBorrows::new();
-        let old_as_str = old_path.as_raw(&mut bc)?;
-        let old_path = unsafe { &*old_as_str };
 
         trace!("     | (old_path_ptr,old_path_len)='{}'", old_path);
 
@@ -1242,12 +1162,6 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn path_unlink_file(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
         trace!("path_unlink_file(dirfd={:?}, path={:?})", dirfd, path);
-
-        let mut bc = GuestBorrows::new();
-        let as_str = path.as_raw(&mut bc)?;
-        let path = unsafe { &*as_str };
-
-        trace!("     | (path_ptr,path_len)='{}'", path);
 
         let entry = unsafe { self.get_entry(dirfd)? };
         let resolved = path::get(
