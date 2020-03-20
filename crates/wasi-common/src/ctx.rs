@@ -50,10 +50,10 @@ impl std::fmt::Debug for PendingEntry {
         match self {
             Self::Thunk(f) => write!(
                 fmt,
-                "PendingFdEntry::Thunk({:p})",
+                "PendingEntry::Thunk({:p})",
                 f as *const fn() -> io::Result<Entry>
             ),
-            Self::File(f) => write!(fmt, "PendingFdEntry::File({:?})", f),
+            Self::File(f) => write!(fmt, "PendingEntry::File({:?})", f),
         }
     }
 }

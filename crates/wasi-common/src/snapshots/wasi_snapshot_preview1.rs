@@ -983,7 +983,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let fd = resolved.open_with(read, write, oflags, fdflags)?;
         let mut fe = Entry::from(fd)?;
         // We need to manually deny the rights which are not explicitly requested
-        // because FdEntry::from will assign maximal consistent rights.
+        // because Entry::from will assign maximal consistent rights.
         fe.rights_base &= fs_rights_base;
         fe.rights_inheriting &= fs_rights_inheriting;
         let guest_fd = self.insert_entry(fe)?;
