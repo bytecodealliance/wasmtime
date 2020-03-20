@@ -465,10 +465,12 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
         trace!("     | (path_ptr,path_len)='{}'", host_path);
 
-        let mut bc = GuestBorrows::new();
-        let path_arr = path.as_array(host_path_len);
-        let slice = path_arr.as_raw(&mut bc)?;
-        unsafe { &mut *slice }.copy_from_slice(host_path.as_bytes());
+        unsafe {
+            let mut bc = GuestBorrows::new();
+            let path = path.as_array(host_path_len);
+            let raw = path.as_raw(&mut bc)?;
+            (&mut *raw).copy_from_slice(host_path.as_bytes());
+        }
 
         Ok(())
     }
@@ -486,19 +488,18 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             offset,
         );
 
-        let mut slices = Vec::new();
-        let mut total_len: types::Size = 0;
+        let mut buf = Vec::new();
         let mut bc = GuestBorrows::new();
         bc.borrow_slice(ciovs)?;
         for ciov_ptr in ciovs.iter() {
             let ciov_ptr = ciov_ptr?;
             let ciov: types::Ciovec = ciov_ptr.read()?;
-            let buf = ciov.buf;
-            let buf_len = ciov.buf_len;
-            total_len = total_len.checked_add(buf_len).ok_or(Errno::Inval)?;
-            let as_arr = buf.as_array(buf_len);
-            let as_raw = as_arr.as_raw(&mut bc)?;
-            slices.push(unsafe { &*as_raw });
+            let slice = unsafe {
+                let buf = ciov.buf.as_array(ciov.buf_len);
+                let raw = buf.as_raw(&mut bc)?;
+                &*raw
+            };
+            buf.extend_from_slice(slice);
         }
 
         let entry = unsafe { self.get_entry(fd)? };
@@ -513,10 +514,6 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             return Err(Errno::Io);
         }
 
-        let mut buf = Vec::with_capacity(total_len as usize);
-        for slice in &slices {
-            buf.extend_from_slice(slice);
-        }
         let host_nwritten = match file {
             Descriptor::OsHandle(fd) => fd::pwrite(&fd, &buf, offset)?,
             Descriptor::VirtualFile(virt) => virt.pwrite(buf.as_mut(), offset)?,
