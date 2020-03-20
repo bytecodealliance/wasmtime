@@ -336,13 +336,12 @@ impl ModuleRegistry {
 
         let cx1 = cx1.build()?;
 
-        let mut cx2 = wasi_common::old::snapshot_0::WasiCtxBuilder::new()
-            .inherit_stdio()
-            .args(argv)
-            .envs(vars);
+        let mut cx2 = wasi_common::old::snapshot_0::WasiCtxBuilder::new();
+
+        cx2.inherit_stdio().args(argv).envs(vars);
 
         for (name, file) in preopen_dirs {
-            cx2 = cx2.preopened_dir(file.try_clone()?, name);
+            cx2.preopened_dir(file.try_clone()?, name);
         }
 
         let cx2 = cx2.build()?;
