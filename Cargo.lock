@@ -849,6 +849,10 @@ name = "example-fib-debug-wasm"
 version = "0.1.0"
 
 [[package]]
+name = "example-wasi-wasm"
+version = "0.1.0"
+
+[[package]]
 name = "faerie"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
