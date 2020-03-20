@@ -17,6 +17,6 @@ numbers.
 
 ## `gcd.c`
 
-```rust
+```c
 {{#include ../examples/gcd.c}}
 ```
