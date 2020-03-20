@@ -134,7 +134,7 @@ example to see that 99% of our runtime (as expected) is spent in our `fib`
 function. Note that the symbol has been demangled to `fib::fib` which is what
 the Rust symbol is:
 
-```
+```sh
 $ perf report --input perf.jit-data
 ```
 
@@ -143,7 +143,7 @@ $ perf report --input perf.jit-data
 Alternatively we could also use `perf annotate` to take a look at the
 disassembly of the `fib` function, seeing what the JIT generated:
 
-```
+```sh
 $ perf annotate --input perf.jit-data
 ```
 
