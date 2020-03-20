@@ -95,7 +95,7 @@ impl AsBytes for types::Dirent {
         let mut bytes: Vec<u8> = Vec::with_capacity(offset);
         bytes.resize(offset, 0);
         let ptr = bytes.as_mut_ptr() as *mut Self;
-        unsafe { ptr.write_unaligned(*self) };
+        unsafe { ptr.write_unaligned(self.clone()) };
         Ok(bytes)
     }
 }
