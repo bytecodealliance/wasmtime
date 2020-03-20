@@ -35,6 +35,8 @@ pub(crate) trait MovableFile {
 ///
 /// Default implementations of functions here fail in ways that are intended to mimic a file-like
 /// object with no permissions, no content, and that cannot be used in any way.
+// TODO This trait should potentially be made unsafe since we need to assert that we don't
+// reenter wasm or try to reborrow/read/etc. from wasm memory.
 pub(crate) trait VirtualFile: MovableFile {
     fn fdstat_get(&self) -> types::Fdflags {
         types::Fdflags::empty()
