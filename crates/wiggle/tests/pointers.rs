@@ -13,9 +13,9 @@ impl<'a> pointers::Pointers for WasiCtx<'a> {
     fn pointers_and_enums<'b>(
         &self,
         input1: types::Excuse,
-        input2_ptr: GuestPtr<'b, types::Excuse>,
-        input3_ptr: GuestPtr<'b, types::Excuse>,
-        input4_ptr_ptr: GuestPtr<'b, GuestPtr<'b, types::Excuse>>,
+        input2_ptr: &GuestPtr<'b, types::Excuse>,
+        input3_ptr: &GuestPtr<'b, types::Excuse>,
+        input4_ptr_ptr: &GuestPtr<'b, GuestPtr<'b, types::Excuse>>,
     ) -> Result<(), types::Errno> {
         println!("BAZ input1 {:?}", input1);
         let input2: types::Excuse = input2_ptr.read().map_err(|e| {
@@ -52,7 +52,7 @@ impl<'a> pointers::Pointers for WasiCtx<'a> {
         println!("input4 {:?}", input4);
 
         // Write ptr value to mutable ptr:
-        input4_ptr_ptr.write(input2_ptr).map_err(|e| {
+        input4_ptr_ptr.write(*input2_ptr).map_err(|e| {
             eprintln!("input4_ptr_ptr error: {}", e);
             types::Errno::InvalidArg
         })?;

@@ -2,6 +2,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 use crate::lifetimes::anon_lifetime;
+use crate::module_trait::passed_by_reference;
 use crate::names::Names;
 
 pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
@@ -67,10 +68,10 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
         .map(|p| marshal_arg(names, p, error_handling(p.name.as_str())));
     let trait_args = func.params.iter().map(|param| {
         let name = names.func_param(&param.name);
-        match param.tref.type_().passed_by() {
-            witx::TypePassedBy::Value { .. } => quote!(#name),
-            witx::TypePassedBy::Pointer { .. } => quote!(&#name),
-            witx::TypePassedBy::PointerLengthPair { .. } => quote!(&#name),
+        if passed_by_reference(&*param.tref.type_()) {
+            quote!(&#name)
+        } else {
+            quote!(#name)
         }
     });
 

@@ -38,7 +38,7 @@ impl Names {
             BuiltinType::F32 => quote!(f32),
             BuiltinType::F64 => quote!(f64),
             BuiltinType::Char8 => quote!(u8),
-            BuiltinType::USize => quote!(usize),
+            BuiltinType::USize => quote!(u32),
         }
     }
     pub fn atom_type(&self, atom: AtomType) -> TokenStream {
@@ -66,7 +66,11 @@ impl Names {
                     let pointee_type = self.type_ref(&pointee, lifetime.clone());
                     quote!(wiggle_runtime::GuestPtr<#lifetime, #pointee_type>)
                 }
-                _ => unimplemented!("anonymous type ref"),
+                witx::Type::Array(pointee) => {
+                    let pointee_type = self.type_ref(&pointee, lifetime.clone());
+                    quote!(wiggle_runtime::GuestPtr<#lifetime, [#pointee_type]>)
+                }
+                _ => unimplemented!("anonymous type ref {:?}", tref),
             },
         }
     }
