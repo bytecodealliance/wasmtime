@@ -10,7 +10,7 @@ use crate::error::{Location, ParseResult};
 use crate::lexer::split_entity_name;
 use cranelift_codegen::ir::entities::AnyEntity;
 use cranelift_codegen::ir::{
-    Block, FuncRef, GlobalValue, Heap, JumpTable, SigRef, StackSlot, Table, Value,
+    Block, Constant, FuncRef, GlobalValue, Heap, JumpTable, SigRef, StackSlot, Table, Value,
 };
 use std::collections::HashMap;
 
@@ -66,6 +66,11 @@ impl SourceMap {
     /// Look up a jump table entity.
     pub fn contains_jt(&self, jt: JumpTable) -> bool {
         self.locations.contains_key(&jt.into())
+    }
+
+    /// Look up a constant entity.
+    pub fn contains_constant(&self, c: Constant) -> bool {
+        self.locations.contains_key(&c.into())
     }
 
     /// Look up an entity by source name.
@@ -195,6 +200,11 @@ impl SourceMap {
 
     /// Define the jump table `entity`.
     pub fn def_jt(&mut self, entity: JumpTable, loc: Location) -> ParseResult<()> {
+        self.def_entity(entity.into(), loc)
+    }
+
+    /// Define the jump table `entity`.
+    pub fn def_constant(&mut self, entity: Constant, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 

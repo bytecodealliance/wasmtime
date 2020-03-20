@@ -9,8 +9,8 @@ block0:
     v0 = vconst.i32x4 0x1234
     return v0
 }
-
+; check:   const0 = 0x00000000000000000000000000001234
 ; check:   block0:
-; nextln:     v0 = vconst.i32x4 0x1234
+; nextln:     v0 = vconst.i32x4 const0
 ; nextln:     return v0
 ; nextln: }
