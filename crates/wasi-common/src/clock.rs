@@ -5,7 +5,7 @@ use std::time::SystemTime;
 
 pub(crate) use sys::clock::*;
 
-pub(crate) fn to_relative_ns_delay(clock: SubscriptionClock) -> Result<u128> {
+pub(crate) fn to_relative_ns_delay(clock: &SubscriptionClock) -> Result<u128> {
     if clock.flags != Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME {
         return Ok(u128::from(clock.timeout));
     }

@@ -74,7 +74,7 @@ pub(super) fn define_struct(
     let (struct_lifetime, extra_derive) = if s.needs_lifetime() {
         (quote!(<'a>), quote!())
     } else {
-        (quote!(), quote!(, Copy, PartialEq))
+        (quote!(), quote!(, PartialEq))
     };
 
     let transparent = if s.is_transparent() {

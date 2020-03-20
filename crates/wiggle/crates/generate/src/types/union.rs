@@ -68,7 +68,7 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
     let (enum_lifetime, extra_derive) = if u.needs_lifetime() {
         (quote!(<'a>), quote!())
     } else {
-        (quote!(), quote!(, Copy, PartialEq))
+        (quote!(), quote!(, PartialEq))
     };
 
     quote! {
