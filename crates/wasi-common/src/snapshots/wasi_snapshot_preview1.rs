@@ -1018,20 +1018,12 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             false,
         )?;
 
-        // FIXME Remove this check once #1366 lands.
-        // This is to account for `path_readlink` call with zero-length
-        // buffer. This is a valid POSIX call hence we need to accommodate.
-        let slice = if buf_len > 0 {
-            unsafe {
-                let mut bc = GuestBorrows::new();
-                let buf = buf.as_array(buf_len);
-                let raw = buf.as_raw(&mut bc)?;
-                &mut *raw
-            }
-        } else {
-            &mut []
+        let slice = unsafe {
+            let mut bc = GuestBorrows::new();
+            let buf = buf.as_array(buf_len);
+            let raw = buf.as_raw(&mut bc)?;
+            &mut *raw
         };
-
         let host_bufused = match resolved.dirfd() {
             Descriptor::VirtualFile(_virt) => {
                 unimplemented!("virtual readlink");
