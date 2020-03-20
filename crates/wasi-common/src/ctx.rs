@@ -445,12 +445,12 @@ impl WasiCtx {
     }
 
     /// Check if `WasiCtx` contains the specified raw WASI `fd`.
-    pub(crate) unsafe fn contains_entry(&self, fd: types::Fd) -> bool {
+    pub(crate) fn contains_entry(&self, fd: types::Fd) -> bool {
         self.entries.borrow().contains(&fd)
     }
 
     /// Get an immutable `Entry` corresponding to the specified raw WASI `fd`.
-    pub(crate) unsafe fn get_entry(&self, fd: types::Fd) -> Result<Ref<Entry>> {
+    pub(crate) fn get_entry(&self, fd: types::Fd) -> Result<Ref<Entry>> {
         if !self.contains_entry(fd) {
             return Err(Errno::Badf);
         }
@@ -461,7 +461,7 @@ impl WasiCtx {
 
     /// Get a mutable `Entry` corresponding to the specified raw WASI `fd`.
     // TODO This runs the risk of a potential difficult-to-predict panic down-the-line.
-    pub(crate) unsafe fn get_entry_mut(&self, fd: types::Fd) -> Result<RefMut<Entry>> {
+    pub(crate) fn get_entry_mut(&self, fd: types::Fd) -> Result<RefMut<Entry>> {
         if !self.contains_entry(fd) {
             return Err(Errno::Badf);
         }

@@ -124,7 +124,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             len,
             advice
         );
-        let mut entry = unsafe { self.get_entry_mut(fd)? };
+        let mut entry = self.get_entry_mut(fd)?;
         let file = entry
             .as_descriptor_mut(types::Rights::FD_ADVISE, types::Rights::empty())?
             .as_file_mut()?;
@@ -147,7 +147,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<()> {
         trace!("fd_allocate(fd={:?}, offset={}, len={})", fd, offset, len);
 
-        let entry = unsafe { self.get_entry(fd)? };
+        let entry = self.get_entry(fd)?;
         let file = entry
             .as_descriptor(types::Rights::FD_ALLOCATE, types::Rights::empty())?
             .as_file()?;
@@ -177,7 +177,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_close(&self, fd: types::Fd) -> Result<()> {
         trace!("fd_close(fd={:?})", fd);
 
-        if let Ok(fe) = unsafe { self.get_entry(fd) } {
+        if let Ok(fe) = self.get_entry(fd) {
             // can't close preopened files
             if fe.preopen_path.is_some() {
                 return Err(Errno::Notsup);
@@ -191,7 +191,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_datasync(&self, fd: types::Fd) -> Result<()> {
         trace!("fd_datasync(fd={:?})", fd);
 
-        let entry = unsafe { self.get_entry(fd)? };
+        let entry = self.get_entry(fd)?;
         let file = entry.as_descriptor(types::Rights::FD_DATASYNC, types::Rights::empty())?;
         match file {
             Descriptor::OsHandle(fd) => fd.sync_data()?,
@@ -204,7 +204,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_fdstat_get(&self, fd: types::Fd) -> Result<types::Fdstat> {
         trace!("fd_fdstat_get(fd={:?})", fd);
 
-        let fe = unsafe { self.get_entry(fd)? };
+        let fe = self.get_entry(fd)?;
         let wasi_file = fe.as_descriptor(types::Rights::empty(), types::Rights::empty())?;
         let fs_flags = match wasi_file {
             Descriptor::OsHandle(wasi_fd) => fd::fdstat_get(&wasi_fd)?,
@@ -226,7 +226,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_fdstat_set_flags(&self, fd: types::Fd, flags: types::Fdflags) -> Result<()> {
         trace!("fd_fdstat_set_flags(fd={:?}, fdflags={})", fd, flags);
 
-        let mut entry = unsafe { self.get_entry_mut(fd)? };
+        let mut entry = self.get_entry_mut(fd)?;
         let descriptor =
             entry.as_descriptor_mut(types::Rights::FD_FDSTAT_SET_FLAGS, types::Rights::empty())?;
         match descriptor {
@@ -262,7 +262,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             fs_rights_base,
             fs_rights_inheriting
         );
-        let mut entry = unsafe { self.get_entry_mut(fd)? };
+        let mut entry = self.get_entry_mut(fd)?;
         if entry.rights_base & fs_rights_base != fs_rights_base
             || entry.rights_inheriting & fs_rights_inheriting != fs_rights_inheriting
         {
@@ -276,7 +276,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_filestat_get(&self, fd: types::Fd) -> Result<types::Filestat> {
         trace!("fd_filestat_get(fd={:?})", fd);
 
-        let entry = unsafe { self.get_entry(fd)? };
+        let entry = self.get_entry(fd)?;
         let fd = entry
             .as_descriptor(types::Rights::FD_FILESTAT_GET, types::Rights::empty())?
             .as_file()?;
@@ -298,7 +298,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_filestat_set_size(&self, fd: types::Fd, size: types::Filesize) -> Result<()> {
         trace!("fd_filestat_set_size(fd={:?}, size={})", fd, size);
 
-        let entry = unsafe { self.get_entry(fd)? };
+        let entry = self.get_entry(fd)?;
         let file = entry
             .as_descriptor(types::Rights::FD_FILESTAT_SET_SIZE, types::Rights::empty())?
             .as_file()?;
@@ -332,7 +332,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             mtim,
             fst_flags
         );
-        let entry = unsafe { self.get_entry(fd)? };
+        let entry = self.get_entry(fd)?;
         let fd = entry
             .as_descriptor(types::Rights::FD_FILESTAT_SET_TIMES, types::Rights::empty())?
             .as_file()?;
@@ -361,7 +361,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             buf.push(io::IoSliceMut::new(slice));
         }
 
-        let mut entry = unsafe { self.get_entry_mut(fd)? };
+        let mut entry = self.get_entry_mut(fd)?;
         let file = entry
             .as_descriptor_mut(
                 types::Rights::FD_READ | types::Rights::FD_SEEK,
@@ -399,7 +399,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         trace!("fd_prestat_get(fd={:?})", fd);
 
         // TODO: should we validate any rights here?
-        let fe = unsafe { self.get_entry(fd)? };
+        let fe = self.get_entry(fd)?;
         let po_path = fe.preopen_path.as_ref().ok_or(Errno::Notsup)?;
         if fe.file_type != types::Filetype::Directory {
             return Err(Errno::Notdir);
@@ -426,7 +426,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         );
 
         // TODO: should we validate any rights here?
-        let fe = unsafe { self.get_entry(fd)? };
+        let fe = self.get_entry(fd)?;
         let po_path = fe.preopen_path.as_ref().ok_or(Errno::Notsup)?;
         if fe.file_type != types::Filetype::Directory {
             return Err(Errno::Notdir);
@@ -474,7 +474,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             buf.push(io::IoSlice::new(slice));
         }
 
-        let mut entry = unsafe { self.get_entry_mut(fd)? };
+        let mut entry = self.get_entry_mut(fd)?;
         let file = entry
             .as_descriptor_mut(
                 types::Rights::FD_WRITE | types::Rights::FD_SEEK,
@@ -524,7 +524,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             slices.push(io::IoSliceMut::new(slice));
         }
 
-        let mut entry = unsafe { self.get_entry_mut(fd)? };
+        let mut entry = self.get_entry_mut(fd)?;
         let host_nread =
             match entry.as_descriptor_mut(types::Rights::FD_READ, types::Rights::empty())? {
                 Descriptor::OsHandle(file) => file.read_vectored(&mut slices)?,
@@ -554,7 +554,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             cookie,
         );
 
-        let mut entry = unsafe { self.get_entry_mut(fd)? };
+        let mut entry = self.get_entry_mut(fd)?;
         let file = entry
             .as_descriptor_mut(types::Rights::FD_READDIR, types::Rights::empty())?
             .as_file_mut()?;
@@ -602,19 +602,19 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_renumber(&self, from: types::Fd, to: types::Fd) -> Result<()> {
         trace!("fd_renumber(from={:?}, to={:?})", from, to);
 
-        if unsafe { !self.contains_entry(from) } {
+        if !self.contains_entry(from) {
             return Err(Errno::Badf);
         }
 
         // Don't allow renumbering over a pre-opened resource.
         // TODO: Eventually, we do want to permit this, once libpreopen in
         // userspace is capable of removing entries from its tables as well.
-        if let Ok(from_fe) = unsafe { self.get_entry(from) } {
+        if let Ok(from_fe) = self.get_entry(from) {
             if from_fe.preopen_path.is_some() {
                 return Err(Errno::Notsup);
             }
         }
-        if let Ok(to_fe) = unsafe { self.get_entry(to) } {
+        if let Ok(to_fe) = self.get_entry(to) {
             if to_fe.preopen_path.is_some() {
                 return Err(Errno::Notsup);
             }
@@ -642,7 +642,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         } else {
             types::Rights::FD_SEEK | types::Rights::FD_TELL
         };
-        let mut entry = unsafe { self.get_entry_mut(fd)? };
+        let mut entry = self.get_entry_mut(fd)?;
         let file = entry
             .as_descriptor_mut(rights, types::Rights::empty())?
             .as_file_mut()?;
@@ -669,7 +669,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_sync(&self, fd: types::Fd) -> Result<()> {
         trace!("fd_sync(fd={:?})", fd);
 
-        let entry = unsafe { self.get_entry(fd)? };
+        let entry = self.get_entry(fd)?;
         let file = entry
             .as_descriptor(types::Rights::FD_SYNC, types::Rights::empty())?
             .as_file()?;
@@ -688,7 +688,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_tell(&self, fd: types::Fd) -> Result<types::Filesize> {
         trace!("fd_tell(fd={:?})", fd);
 
-        let mut entry = unsafe { self.get_entry_mut(fd)? };
+        let mut entry = self.get_entry_mut(fd)?;
         let file = entry
             .as_descriptor_mut(types::Rights::FD_TELL, types::Rights::empty())?
             .as_file_mut()?;
@@ -725,7 +725,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         }
 
         // perform unbuffered writes
-        let mut entry = unsafe { self.get_entry_mut(fd)? };
+        let mut entry = self.get_entry_mut(fd)?;
         let isatty = entry.isatty();
         let desc = entry.as_descriptor_mut(types::Rights::FD_WRITE, types::Rights::empty())?;
         let host_nwritten = match desc {
@@ -772,7 +772,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         trace!("path_create_directory(dirfd={:?}, path={:?})", dirfd, path);
 
         let rights = types::Rights::PATH_OPEN | types::Rights::PATH_CREATE_DIRECTORY;
-        let entry = unsafe { self.get_entry(dirfd)? };
+        let entry = self.get_entry(dirfd)?;
         let resolved = path::get(
             &entry,
             rights,
@@ -797,7 +797,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             path,
         );
 
-        let entry = unsafe { self.get_entry(dirfd)? };
+        let entry = self.get_entry(dirfd)?;
         let resolved = path::get(
             &entry,
             types::Rights::PATH_FILESTAT_GET,
@@ -843,7 +843,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             fst_flags,
         );
 
-        let entry = unsafe { self.get_entry(dirfd)? };
+        let entry = self.get_entry(dirfd)?;
         let resolved = path::get(
             &entry,
             types::Rights::PATH_FILESTAT_SET_TIMES,
@@ -877,7 +877,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             new_path,
         );
 
-        let old_entry = unsafe { self.get_entry(old_fd)? };
+        let old_entry = self.get_entry(old_fd)?;
         let resolved_old = path::get(
             &old_entry,
             types::Rights::PATH_LINK_SOURCE,
@@ -886,7 +886,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             old_path,
             false,
         )?;
-        let new_entry = unsafe { self.get_entry(new_fd)? };
+        let new_entry = self.get_entry(new_fd)?;
         let resolved_new = path::get(
             &new_entry,
             types::Rights::PATH_LINK_TARGET,
@@ -929,7 +929,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         );
 
         let resolved = {
-            let entry = unsafe { self.get_entry(dirfd)? };
+            let entry = self.get_entry(dirfd)?;
             path::get(
                 &entry,
                 needed_base,
@@ -984,7 +984,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             buf_len,
         );
 
-        let entry = unsafe { self.get_entry(dirfd)? };
+        let entry = self.get_entry(dirfd)?;
         let resolved = path::get(
             &entry,
             types::Rights::PATH_READLINK,
@@ -1017,7 +1017,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn path_remove_directory(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
         trace!("path_remove_directory(dirfd={:?}, path={:?})", dirfd, path);
 
-        let entry = unsafe { self.get_entry(dirfd)? };
+        let entry = self.get_entry(dirfd)?;
         let resolved = path::get(
             &entry,
             types::Rights::PATH_REMOVE_DIRECTORY,
@@ -1050,7 +1050,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             new_path,
         );
 
-        let entry = unsafe { self.get_entry(old_fd)? };
+        let entry = self.get_entry(old_fd)?;
         let resolved_old = path::get(
             &entry,
             types::Rights::PATH_RENAME_SOURCE,
@@ -1059,7 +1059,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             old_path,
             true,
         )?;
-        let entry = unsafe { self.get_entry(new_fd)? };
+        let entry = self.get_entry(new_fd)?;
         let resolved_new = path::get(
             &entry,
             types::Rights::PATH_RENAME_TARGET,
@@ -1096,7 +1096,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             new_path,
         );
 
-        let entry = unsafe { self.get_entry(dirfd)? };
+        let entry = self.get_entry(dirfd)?;
         let resolved_new = path::get(
             &entry,
             types::Rights::PATH_SYMLINK,
@@ -1125,7 +1125,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn path_unlink_file(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
         trace!("path_unlink_file(dirfd={:?}, path={:?})", dirfd, path);
 
-        let entry = unsafe { self.get_entry(dirfd)? };
+        let entry = self.get_entry(dirfd)?;
         let resolved = path::get(
             &entry,
             types::Rights::PATH_UNLINK_FILE,
@@ -1195,7 +1195,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                 types::SubscriptionU::FdRead(fd_read) => {
                     let fd = fd_read.file_descriptor;
                     let rights = types::Rights::FD_READ | types::Rights::POLL_FD_READWRITE;
-                    let entry = match unsafe { self.get_entry(fd) } {
+                    let entry = match self.get_entry(fd) {
                         Ok(entry) => entry,
                         Err(error) => {
                             events.push(types::Event {
@@ -1225,7 +1225,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                 types::SubscriptionU::FdWrite(fd_write) => {
                     let fd = fd_write.file_descriptor;
                     let rights = types::Rights::FD_WRITE | types::Rights::POLL_FD_READWRITE;
-                    let entry = match unsafe { self.get_entry(fd) } {
+                    let entry = match self.get_entry(fd) {
                         Ok(entry) => entry,
                         Err(error) => {
                             events.push(types::Event {
