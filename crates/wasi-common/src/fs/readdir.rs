@@ -8,19 +8,19 @@ use crate::wasi::types;
 /// TODO: Not yet implemented.
 ///
 /// [`std::fs::ReadDir`]: https://doc.rust-lang.org/std/fs/struct.ReadDir.html
-pub struct ReadDir {
-    fd: types::Fd,
+pub struct ReadDir<'ctx> {
+    fd: &'ctx types::Fd,
 }
 
-impl ReadDir {
+impl<'ctx> ReadDir<'ctx> {
     /// Constructs a new instance of `Self` from the given raw WASI file descriptor.
-    pub unsafe fn from_raw_wasi_fd(fd: types::Fd) -> Self {
+    pub unsafe fn from_raw_wasi_fd(fd: &'ctx types::Fd) -> Self {
         Self { fd }
     }
 }
 
 /// TODO: Not yet implemented.
-impl Iterator for ReadDir {
+impl<'ctx> Iterator for ReadDir<'ctx> {
     type Item = DirEntry;
 
     /// TODO: Not yet implemented.

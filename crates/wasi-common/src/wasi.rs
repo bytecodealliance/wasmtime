@@ -206,12 +206,3 @@ impl RightsExt for types::Rights {
     }
 }
 pub(crate) const DIRCOOKIE_START: types::Dircookie = 0;
-
-impl crate::fdpool::Fd for types::Fd {
-    fn as_raw(&self) -> u32 {
-        (*self).into()
-    }
-    fn from_raw(raw_fd: u32) -> Self {
-        Self::from(raw_fd)
-    }
-}

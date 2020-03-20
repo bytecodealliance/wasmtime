@@ -112,7 +112,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_advise(
         &self,
-        fd: types::Fd,
+        fd: &types::Fd,
         offset: types::Filesize,
         len: types::Filesize,
         advice: types::Advice,
@@ -141,7 +141,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_allocate(
         &self,
-        fd: types::Fd,
+        fd: &types::Fd,
         offset: types::Filesize,
         len: types::Filesize,
     ) -> Result<()> {
@@ -174,7 +174,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         }
     }
 
-    fn fd_close(&self, fd: types::Fd) -> Result<()> {
+    fn fd_close(&self, fd: &types::Fd) -> Result<()> {
         trace!("fd_close(fd={:?})", fd);
 
         if let Ok(fe) = self.get_entry(fd) {
@@ -188,7 +188,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(())
     }
 
-    fn fd_datasync(&self, fd: types::Fd) -> Result<()> {
+    fn fd_datasync(&self, fd: &types::Fd) -> Result<()> {
         trace!("fd_datasync(fd={:?})", fd);
 
         let entry = self.get_entry(fd)?;
@@ -201,7 +201,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(())
     }
 
-    fn fd_fdstat_get(&self, fd: types::Fd) -> Result<types::Fdstat> {
+    fn fd_fdstat_get(&self, fd: &types::Fd) -> Result<types::Fdstat> {
         trace!("fd_fdstat_get(fd={:?})", fd);
 
         let fe = self.get_entry(fd)?;
@@ -223,7 +223,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(fdstat)
     }
 
-    fn fd_fdstat_set_flags(&self, fd: types::Fd, flags: types::Fdflags) -> Result<()> {
+    fn fd_fdstat_set_flags(&self, fd: &types::Fd, flags: types::Fdflags) -> Result<()> {
         trace!("fd_fdstat_set_flags(fd={:?}, fdflags={})", fd, flags);
 
         let mut entry = self.get_entry_mut(fd)?;
@@ -252,7 +252,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_fdstat_set_rights(
         &self,
-        fd: types::Fd,
+        fd: &types::Fd,
         fs_rights_base: types::Rights,
         fs_rights_inheriting: types::Rights,
     ) -> Result<()> {
@@ -273,7 +273,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(())
     }
 
-    fn fd_filestat_get(&self, fd: types::Fd) -> Result<types::Filestat> {
+    fn fd_filestat_get(&self, fd: &types::Fd) -> Result<types::Filestat> {
         trace!("fd_filestat_get(fd={:?})", fd);
 
         let entry = self.get_entry(fd)?;
@@ -295,7 +295,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(host_filestat)
     }
 
-    fn fd_filestat_set_size(&self, fd: types::Fd, size: types::Filesize) -> Result<()> {
+    fn fd_filestat_set_size(&self, fd: &types::Fd, size: types::Filesize) -> Result<()> {
         trace!("fd_filestat_set_size(fd={:?}, size={})", fd, size);
 
         let entry = self.get_entry(fd)?;
@@ -320,7 +320,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_filestat_set_times(
         &self,
-        fd: types::Fd,
+        fd: &types::Fd,
         atim: types::Timestamp,
         mtim: types::Timestamp,
         fst_flags: types::Fstflags,
@@ -341,7 +341,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_pread(
         &self,
-        fd: types::Fd,
+        fd: &types::Fd,
         iovs: &types::IovecArray<'_>,
         offset: types::Filesize,
     ) -> Result<types::Size> {
@@ -395,7 +395,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(host_nread)
     }
 
-    fn fd_prestat_get(&self, fd: types::Fd) -> Result<types::Prestat> {
+    fn fd_prestat_get(&self, fd: &types::Fd) -> Result<types::Prestat> {
         trace!("fd_prestat_get(fd={:?})", fd);
 
         // TODO: should we validate any rights here?
@@ -414,7 +414,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_prestat_dir_name(
         &self,
-        fd: types::Fd,
+        fd: &types::Fd,
         path: &GuestPtr<u8>,
         path_len: types::Size,
     ) -> Result<()> {
@@ -449,7 +449,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_pwrite(
         &self,
-        fd: types::Fd,
+        fd: &types::Fd,
         ciovs: &types::CiovecArray<'_>,
         offset: types::Filesize,
     ) -> Result<types::Size> {
@@ -507,7 +507,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(host_nwritten)
     }
 
-    fn fd_read(&self, fd: types::Fd, iovs: &types::IovecArray<'_>) -> Result<types::Size> {
+    fn fd_read(&self, fd: &types::Fd, iovs: &types::IovecArray<'_>) -> Result<types::Size> {
         trace!("fd_read(fd={:?}, iovs={:?})", fd, iovs);
 
         let mut bc = GuestBorrows::new();
@@ -541,7 +541,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_readdir(
         &self,
-        fd: types::Fd,
+        fd: &types::Fd,
         buf: &GuestPtr<u8>,
         buf_len: types::Size,
         cookie: types::Dircookie,
@@ -600,7 +600,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(bufused)
     }
 
-    fn fd_renumber(&self, from: types::Fd, to: types::Fd) -> Result<()> {
+    fn fd_renumber(&self, from: &types::Fd, to: &types::Fd) -> Result<()> {
         trace!("fd_renumber(from={:?}, to={:?})", from, to);
 
         if !self.contains_entry(from) {
@@ -627,7 +627,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_seek(
         &self,
-        fd: types::Fd,
+        fd: &types::Fd,
         offset: types::Filedelta,
         whence: types::Whence,
     ) -> Result<types::Filesize> {
@@ -667,7 +667,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(host_newoffset)
     }
 
-    fn fd_sync(&self, fd: types::Fd) -> Result<()> {
+    fn fd_sync(&self, fd: &types::Fd) -> Result<()> {
         trace!("fd_sync(fd={:?})", fd);
 
         let entry = self.get_entry(fd)?;
@@ -686,7 +686,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(())
     }
 
-    fn fd_tell(&self, fd: types::Fd) -> Result<types::Filesize> {
+    fn fd_tell(&self, fd: &types::Fd) -> Result<types::Filesize> {
         trace!("fd_tell(fd={:?})", fd);
 
         let mut entry = self.get_entry_mut(fd)?;
@@ -708,7 +708,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(host_offset)
     }
 
-    fn fd_write(&self, fd: types::Fd, ciovs: &types::CiovecArray<'_>) -> Result<types::Size> {
+    fn fd_write(&self, fd: &types::Fd, ciovs: &types::CiovecArray<'_>) -> Result<types::Size> {
         trace!("fd_write(fd={:?}, ciovs={:#x?})", fd, ciovs);
 
         let mut bc = GuestBorrows::new();
@@ -769,7 +769,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(host_nwritten.try_into()?)
     }
 
-    fn path_create_directory(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
+    fn path_create_directory(&self, dirfd: &types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
         trace!("path_create_directory(dirfd={:?}, path={:?})", dirfd, path);
 
         let rights = types::Rights::PATH_OPEN | types::Rights::PATH_CREATE_DIRECTORY;
@@ -787,7 +787,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn path_filestat_get(
         &self,
-        dirfd: types::Fd,
+        dirfd: &types::Fd,
         flags: types::Lookupflags,
         path: &GuestPtr<'_, str>,
     ) -> Result<types::Filestat> {
@@ -827,7 +827,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn path_filestat_set_times(
         &self,
-        dirfd: types::Fd,
+        dirfd: &types::Fd,
         flags: types::Lookupflags,
         path: &GuestPtr<'_, str>,
         atim: types::Timestamp,
@@ -863,10 +863,10 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn path_link(
         &self,
-        old_fd: types::Fd,
+        old_fd: &types::Fd,
         old_flags: types::Lookupflags,
         old_path: &GuestPtr<'_, str>,
-        new_fd: types::Fd,
+        new_fd: &types::Fd,
         new_path: &GuestPtr<'_, str>,
     ) -> Result<()> {
         trace!(
@@ -905,7 +905,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn path_open(
         &self,
-        dirfd: types::Fd,
+        dirfd: &types::Fd,
         dirflags: types::Lookupflags,
         path: &GuestPtr<'_, str>,
         oflags: types::Oflags,
@@ -976,7 +976,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn path_readlink(
         &self,
-        dirfd: types::Fd,
+        dirfd: &types::Fd,
         path: &GuestPtr<'_, str>,
         buf: &GuestPtr<u8>,
         buf_len: types::Size,
@@ -1019,7 +1019,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(host_bufused)
     }
 
-    fn path_remove_directory(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
+    fn path_remove_directory(&self, dirfd: &types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
         trace!("path_remove_directory(dirfd={:?}, path={:?})", dirfd, path);
 
         let entry = self.get_entry(dirfd)?;
@@ -1042,9 +1042,9 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn path_rename(
         &self,
-        old_fd: types::Fd,
+        old_fd: &types::Fd,
         old_path: &GuestPtr<'_, str>,
-        new_fd: types::Fd,
+        new_fd: &types::Fd,
         new_path: &GuestPtr<'_, str>,
     ) -> Result<()> {
         trace!(
@@ -1091,7 +1091,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn path_symlink(
         &self,
         old_path: &GuestPtr<'_, str>,
-        dirfd: types::Fd,
+        dirfd: &types::Fd,
         new_path: &GuestPtr<'_, str>,
     ) -> Result<()> {
         trace!(
@@ -1127,7 +1127,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         }
     }
 
-    fn path_unlink_file(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
+    fn path_unlink_file(&self, dirfd: &types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
         trace!("path_unlink_file(dirfd={:?}, path={:?})", dirfd, path);
 
         let entry = self.get_entry(dirfd)?;
@@ -1198,9 +1198,9 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                     }
                 }
                 types::SubscriptionU::FdRead(fd_read) => {
-                    let fd = fd_read.file_descriptor;
+                    let fd = unsafe { types::Fd::from_raw(fd_read.file_descriptor) };
                     let rights = types::Rights::FD_READ | types::Rights::POLL_FD_READWRITE;
-                    let entry = match self.get_entry(fd) {
+                    let entry = match self.get_entry(&fd) {
                         Ok(entry) => entry,
                         Err(error) => {
                             events.push(types::Event {
@@ -1227,10 +1227,10 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                         userdata: subscription.userdata,
                     });
                 }
-                types::SubscriptionU::FdWrite(fd_write) => {
-                    let fd = fd_write.file_descriptor;
+                types::SubscriptionU::FdWrite(ref fd_write) => {
+                    let fd = unsafe { types::Fd::from_raw(fd_write.file_descriptor) };
                     let rights = types::Rights::FD_WRITE | types::Rights::POLL_FD_READWRITE;
-                    let entry = match self.get_entry(fd) {
+                    let entry = match self.get_entry(&fd) {
                         Ok(entry) => entry,
                         Err(error) => {
                             events.push(types::Event {
@@ -1317,7 +1317,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn sock_recv(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _ri_data: &types::IovecArray<'_>,
         _ri_flags: types::Riflags,
     ) -> Result<(types::Size, types::Roflags)> {
@@ -1326,14 +1326,14 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn sock_send(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _si_data: &types::CiovecArray<'_>,
         _si_flags: types::Siflags,
     ) -> Result<types::Size> {
         unimplemented!("sock_send")
     }
 
-    fn sock_shutdown(&self, _fd: types::Fd, _how: types::Sdflags) -> Result<()> {
+    fn sock_shutdown(&self, _fd: &types::Fd, _how: types::Sdflags) -> Result<()> {
         unimplemented!("sock_shutdown")
     }
 }

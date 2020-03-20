@@ -18,7 +18,7 @@ use std::io;
 /// [`Dir::create_file`]: struct.Dir.html#method.create_file
 pub struct File<'ctx> {
     ctx: &'ctx WasiCtx,
-    fd: types::Fd,
+    fd: &'ctx types::Fd,
 }
 
 impl<'ctx> File<'ctx> {
@@ -27,7 +27,7 @@ impl<'ctx> File<'ctx> {
     /// This corresponds to [`std::fs::File::from_raw_fd`].
     ///
     /// [`std::fs::File::from_raw_fd`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.from_raw_fd
-    pub unsafe fn from_raw_wasi_fd(ctx: &'ctx WasiCtx, fd: types::Fd) -> Self {
+    pub unsafe fn from_raw_wasi_fd(ctx: &'ctx WasiCtx, fd: &'ctx types::Fd) -> Self {
         Self { ctx, fd }
     }
 

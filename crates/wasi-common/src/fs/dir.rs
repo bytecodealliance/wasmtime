@@ -18,12 +18,12 @@ use std::{io, path::Path};
 /// don't interoperate well with the capability-oriented security model.
 pub struct Dir<'ctx> {
     ctx: &'ctx WasiCtx,
-    fd: types::Fd,
+    fd: &'ctx types::Fd,
 }
 
 impl<'ctx> Dir<'ctx> {
     /// Constructs a new instance of `Self` from the given raw WASI file descriptor.
-    pub unsafe fn from_raw_wasi_fd(ctx: &'ctx WasiCtx, fd: types::Fd) -> Self {
+    pub unsafe fn from_raw_wasi_fd(ctx: &'ctx WasiCtx, fd: &'ctx types::Fd) -> Self {
         Self { ctx, fd }
     }
 
@@ -38,9 +38,6 @@ impl<'ctx> Dir<'ctx> {
     ///
     /// [`std::fs::File::open`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.open
     pub fn open_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<File> {
-        let path = path.as_ref();
-        let mut fd = types::Fd::from(0);
-
         // TODO: Refactor the hostcalls functions to split out the encoding/decoding
         // parts from the underlying functionality, so that we can call into the
         // underlying functionality directly.
@@ -51,6 +48,9 @@ impl<'ctx> Dir<'ctx> {
         // on `OsStrExt`.
         unimplemented!("Dir::open_file");
         /*
+        let path = path.as_ref();
+        let mut fd = types::Fd { raw: types::RawFd::from(0) };
+
         wasi_errno_to_io_error(hostcalls::path_open(
             self.ctx,
             self.fd,
@@ -63,10 +63,10 @@ impl<'ctx> Dir<'ctx> {
             0,
             &mut fd,
         ))?;
-        */
 
         let ctx = self.ctx;
         Ok(unsafe { File::from_raw_wasi_fd(ctx, fd) })
+        */
     }
 
     /// Opens a file at `path` with the options specified by `self`.
@@ -91,12 +91,12 @@ impl<'ctx> Dir<'ctx> {
     ///
     /// TODO: Not yet implemented. See the comment in `open_file`.
     pub fn open_dir<P: AsRef<Path>>(&mut self, path: P) -> io::Result<Self> {
-        let path = path.as_ref();
-        let mut fd = types::Fd::from(0);
-
         // TODO: See the comment in `open_file`.
         unimplemented!("Dir::open_dir");
         /*
+        let path = path.as_ref();
+        let mut fd = types::Fd { raw: types::RawFd::from(0) };
+
         wasi_errno_to_io_error(hostcalls::path_open(
             self.ctx,
             self.fd,
@@ -108,10 +108,10 @@ impl<'ctx> Dir<'ctx> {
             0,
             &mut fd,
         ))?;
-        */
 
         let ctx = self.ctx;
         Ok(unsafe { Dir::from_raw_wasi_fd(ctx, fd) })
+        */
     }
 
     /// Opens a file in write-only mode.
@@ -123,14 +123,14 @@ impl<'ctx> Dir<'ctx> {
     ///
     /// [`std::fs::File::create`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.create
     pub fn create_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<File> {
-        let path = path.as_ref();
-        let mut fd = types::Fd::from(0);
-
         // TODO: See the comments in `open_file`.
         //
         // TODO: Set the requested rights to be read+write.
         unimplemented!("Dir::create_file");
         /*
+        let path = path.as_ref();
+        let mut fd = types::Fd { raw: types::RawFd::from(0) };
+
         wasi_errno_to_io_error(hostcalls::path_open(
             self.ctx,
             self.fd,
@@ -143,10 +143,10 @@ impl<'ctx> Dir<'ctx> {
             0,
             &mut fd,
         ))?;
-        */
 
         let ctx = self.ctx;
         Ok(unsafe { File::from_raw_wasi_fd(ctx, fd) })
+        */
     }
 
     /// Returns an iterator over the entries within a directory.
@@ -159,13 +159,13 @@ impl<'ctx> Dir<'ctx> {
     /// now, use `into_read` instead.
     ///
     /// [`std::fs::read_dir`]: https://doc.rust-lang.org/std/fs/fn.read_dir.html
-    pub fn read(&mut self) -> io::Result<ReadDir> {
+    pub fn read(&mut self) -> io::Result<ReadDir<'ctx>> {
         unimplemented!("Dir::read")
     }
 
     /// Consumes self and returns an iterator over the entries within a directory
     /// in the manner of `read`.
-    pub fn into_read(self) -> ReadDir {
+    pub fn into_read(self) -> ReadDir<'ctx> {
         unsafe { ReadDir::from_raw_wasi_fd(self.fd) }
     }
 
@@ -189,7 +189,7 @@ impl<'ctx> Dir<'ctx> {
     /// relative to and within `self`.
     ///
     /// [`std::fs::read_dir`]: https://doc.rust-lang.org/std/fs/fn.read_dir.html
-    pub fn read_dir<P: AsRef<Path>>(&mut self, path: P) -> io::Result<ReadDir> {
+    pub fn read_dir<P: AsRef<Path>>(&mut self, path: P) -> io::Result<ReadDir<'ctx>> {
         self.open_dir(path)?.read()
     }
 }

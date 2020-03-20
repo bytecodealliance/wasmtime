@@ -381,7 +381,7 @@ impl WasiCtxBuilder {
 #[derive(Debug)]
 struct EntryTable {
     fd_pool: FdPool,
-    entries: HashMap<types::Fd, Entry>,
+    entries: HashMap<u32, Entry>,
 }
 
 impl EntryTable {
@@ -393,30 +393,30 @@ impl EntryTable {
     }
 
     fn contains(&self, fd: &types::Fd) -> bool {
-        self.entries.contains_key(fd)
+        self.entries.contains_key(&fd.as_raw())
     }
 
     fn insert(&mut self, entry: Entry) -> Option<types::Fd> {
         let fd = self.fd_pool.allocate()?;
         self.entries.insert(fd, entry);
-        Some(fd)
+        Some(unsafe { types::Fd::from_raw(fd) })
     }
 
     fn insert_at(&mut self, fd: &types::Fd, entry: Entry) {
-        self.entries.insert(*fd, entry);
+        self.entries.insert(fd.as_raw(), entry);
     }
 
     fn get(&self, fd: &types::Fd) -> Option<&Entry> {
-        self.entries.get(fd)
+        self.entries.get(&fd.as_raw())
     }
 
     fn get_mut(&mut self, fd: &types::Fd) -> Option<&mut Entry> {
-        self.entries.get_mut(fd)
+        self.entries.get_mut(&fd.as_raw())
     }
 
-    fn remove(&mut self, fd: types::Fd) -> Option<Entry> {
-        let entry = self.entries.remove(&fd)?;
-        self.fd_pool.deallocate(fd);
+    fn remove(&mut self, fd: &types::Fd) -> Option<Entry> {
+        let entry = self.entries.remove(&fd.as_raw())?;
+        self.fd_pool.deallocate(fd.as_raw());
         Some(entry)
     }
 }
@@ -444,13 +444,13 @@ impl WasiCtx {
             .build()
     }
 
-    /// Check if `WasiCtx` contains the specified raw WASI `fd`.
-    pub(crate) fn contains_entry(&self, fd: types::Fd) -> bool {
+    /// Check if `WasiCtx` contains the specified WASI `Fd`.
+    pub(crate) fn contains_entry(&self, fd: &types::Fd) -> bool {
         self.entries.borrow().contains(&fd)
     }
 
-    /// Get an immutable `Entry` corresponding to the specified raw WASI `fd`.
-    pub(crate) fn get_entry(&self, fd: types::Fd) -> Result<Ref<Entry>> {
+    /// Get an immutable `Entry` corresponding to the specified WASI `Fd`.
+    pub(crate) fn get_entry(&self, fd: &types::Fd) -> Result<Ref<Entry>> {
         if !self.contains_entry(fd) {
             return Err(Errno::Badf);
         }
@@ -459,9 +459,9 @@ impl WasiCtx {
         }))
     }
 
-    /// Get a mutable `Entry` corresponding to the specified raw WASI `fd`.
+    /// Get a mutable `Entry` corresponding to the specified WASI `Fd`.
     // TODO This runs the risk of a potential difficult-to-predict panic down-the-line.
-    pub(crate) fn get_entry_mut(&self, fd: types::Fd) -> Result<RefMut<Entry>> {
+    pub(crate) fn get_entry_mut(&self, fd: &types::Fd) -> Result<RefMut<Entry>> {
         if !self.contains_entry(fd) {
             return Err(Errno::Badf);
         }
@@ -472,20 +472,20 @@ impl WasiCtx {
 
     /// Insert the specified `Entry` into the `WasiCtx` object.
     ///
-    /// The `Entry` will automatically get another free raw WASI `fd` assigned. Note that
-    /// the two subsequent free raw WASI `fd`s do not have to be stored contiguously.
+    /// The `Entry` will automatically get another free WASI `Fd` assigned. Note that
+    /// the two subsequent free WASI `Fd`s do not have to be stored contiguously.
     pub(crate) fn insert_entry(&self, entry: Entry) -> Result<types::Fd> {
         self.entries.borrow_mut().insert(entry).ok_or(Errno::Mfile)
     }
 
-    /// Insert the specified `Entry` with the specified raw WASI `fd` key into the `WasiCtx`
+    /// Insert the specified `Entry` with the specified WASI `Fd` key into the `WasiCtx`
     /// object.
-    pub(crate) fn insert_entry_at(&self, fd: types::Fd, entry: Entry) {
+    pub(crate) fn insert_entry_at(&self, fd: &types::Fd, entry: Entry) {
         self.entries.borrow_mut().insert_at(&fd, entry)
     }
 
-    /// Remove `Entry` corresponding to the specified raw WASI `fd` from the `WasiCtx` object.
-    pub(crate) fn remove_entry(&self, fd: types::Fd) -> Result<Entry> {
+    /// Remove `Entry` corresponding to the specified WASI `Fd` from the `WasiCtx` object.
+    pub(crate) fn remove_entry(&self, fd: &types::Fd) -> Result<Entry> {
         self.entries.borrow_mut().remove(fd).ok_or(Errno::Badf)
     }
 }
