@@ -14,10 +14,13 @@ use wiggle_runtime::{GuestBorrows, GuestPtr};
 impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn args_get<'b>(
         &self,
-        mut argv: GuestPtr<'b, GuestPtr<'b, u8>>,
-        mut argv_buf: GuestPtr<'b, u8>,
+        argv: &GuestPtr<'b, GuestPtr<'b, u8>>,
+        argv_buf: &GuestPtr<'b, u8>,
     ) -> Result<()> {
         trace!("args_get(argv_ptr={:?}, argv_buf={:?})", argv, argv_buf);
+
+        let mut argv = argv.clone();
+        let mut argv_buf = argv_buf.clone();
 
         for arg in &self.args {
             let arg_bytes = arg.as_bytes_with_nul();
@@ -49,14 +52,17 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn environ_get<'b>(
         &self,
-        mut environ: GuestPtr<'b, GuestPtr<'b, u8>>,
-        mut environ_buf: GuestPtr<'b, u8>,
+        environ: &GuestPtr<'b, GuestPtr<'b, u8>>,
+        environ_buf: &GuestPtr<'b, u8>,
     ) -> Result<()> {
         trace!(
             "environ_get(environ={:?}, environ_buf={:?})",
             environ,
             environ_buf
         );
+
+        let mut environ = environ.clone();
+        let mut environ_buf = environ_buf.clone();
 
         for e in &self.env {
             let environ_bytes = e.as_bytes_with_nul();
@@ -409,7 +415,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_prestat_dir_name(
         &self,
         fd: types::Fd,
-        path: GuestPtr<u8>,
+        path: &GuestPtr<u8>,
         path_len: types::Size,
     ) -> Result<()> {
         trace!(
@@ -536,7 +542,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_readdir(
         &self,
         fd: types::Fd,
-        buf: GuestPtr<u8>,
+        buf: &GuestPtr<u8>,
         buf_len: types::Size,
         cookie: types::Dircookie,
     ) -> Result<types::Size> {
@@ -555,10 +561,11 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
         fn copy_entities<T: Iterator<Item = Result<(types::Dirent, String)>>>(
             iter: T,
-            mut buf: GuestPtr<u8>,
+            buf: &GuestPtr<u8>,
             buf_len: types::Size,
         ) -> Result<types::Size> {
             let mut bufused = 0;
+            let mut buf = buf.clone();
             for pair in iter {
                 let (dirent, name) = pair?;
                 let dirent_raw = dirent.as_bytes()?;
@@ -971,7 +978,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         &self,
         dirfd: types::Fd,
         path: &GuestPtr<'_, str>,
-        buf: GuestPtr<u8>,
+        buf: &GuestPtr<u8>,
         buf_len: types::Size,
     ) -> Result<types::Size> {
         trace!(
@@ -1140,8 +1147,8 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn poll_oneoff(
         &self,
-        in_: GuestPtr<types::Subscription>,
-        out: GuestPtr<types::Event>,
+        in_: &GuestPtr<types::Subscription>,
+        out: &GuestPtr<types::Event>,
         nsubscriptions: types::Size,
     ) -> Result<types::Size> {
         trace!(
@@ -1294,7 +1301,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(())
     }
 
-    fn random_get(&self, buf: GuestPtr<u8>, buf_len: types::Size) -> Result<()> {
+    fn random_get(&self, buf: &GuestPtr<u8>, buf_len: types::Size) -> Result<()> {
         trace!("random_get(buf={:?}, buf_len={:?})", buf, buf_len);
 
         let slice = unsafe {
