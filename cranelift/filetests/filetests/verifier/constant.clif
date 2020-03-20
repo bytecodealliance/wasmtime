@@ -1,0 +1,9 @@
+test verifier
+set enable_simd
+
+function %incorrect_constant_size() {
+const13 = [1 2 3 4 5]  ; this constant has 5 bytes
+block0:
+    v0 = vconst.i32x4 const13 ; error: The instruction expects const13 to have a size of 16 bytes but it has 5
+    return
+}
