@@ -554,15 +554,6 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             cookie,
         );
 
-        let host_buf = unsafe {
-            let mut bc = GuestBorrows::new();
-            let buf = buf.as_array(buf_len);
-            let raw = buf.as_raw(&mut bc)?;
-            &mut *raw
-        };
-
-        trace!("     | (buf,buf_len)={:?}", host_buf);
-
         let mut entry = unsafe { self.get_entry_mut(fd)? };
         let file = entry
             .as_descriptor_mut(types::Rights::FD_READDIR, types::Rights::empty())?
@@ -570,41 +561,42 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
         fn copy_entities<T: Iterator<Item = Result<(types::Dirent, String)>>>(
             iter: T,
-            mut host_buf: &mut [u8],
-        ) -> Result<usize> {
-            let mut host_bufused = 0;
+            mut buf: GuestPtr<u8>,
+            buf_len: types::Size,
+        ) -> Result<types::Size> {
+            let mut bufused = 0;
             for pair in iter {
                 let (dirent, name) = pair?;
                 let dirent_raw = dirent.as_bytes()?;
-                let offset = dirent_raw
-                    .len()
-                    .checked_add(name.len())
-                    .ok_or(Errno::Overflow)?;
-                if host_buf.len() < offset {
+                let dirent_len: types::Size = dirent_raw.len().try_into()?;
+                let name_raw = name.as_bytes();
+                let name_len = name_raw.len().try_into()?;
+                let offset = dirent_len.checked_add(name_len).ok_or(Errno::Overflow)?;
+                if (buf_len - bufused) < offset {
                     break;
                 } else {
-                    host_buf[0..dirent_raw.len()].copy_from_slice(&dirent_raw);
-                    host_buf[dirent_raw.len()..offset].copy_from_slice(name.as_bytes());
-                    host_bufused += offset;
-                    host_buf = &mut host_buf[offset..];
+                    buf.as_array(dirent_len).copy_from_slice(&dirent_raw)?;
+                    buf = buf.add(dirent_len)?;
+                    buf.as_array(name_len).copy_from_slice(name_raw)?;
+                    buf = buf.add(name_len)?;
+                    bufused += offset;
                 }
             }
-            Ok(host_bufused)
+            Ok(bufused)
         }
-        let host_bufused = match file {
-            Descriptor::OsHandle(file) => copy_entities(fd::readdir(file, cookie)?, host_buf)?,
-            Descriptor::VirtualFile(virt) => copy_entities(virt.readdir(cookie)?, host_buf)?,
+        let bufused = match file {
+            Descriptor::OsHandle(file) => copy_entities(fd::readdir(file, cookie)?, buf, buf_len)?,
+            Descriptor::VirtualFile(virt) => copy_entities(virt.readdir(cookie)?, buf, buf_len)?,
             _ => {
                 unreachable!(
                     "implementation error: fd should have been checked to not be a stream already"
                 );
             }
         };
-        let host_bufused = host_bufused.try_into()?;
 
-        trace!("     | *buf_used={:?}", host_bufused);
+        trace!("     | *buf_used={:?}", bufused);
 
-        Ok(host_bufused)
+        Ok(bufused)
     }
 
     fn fd_renumber(&self, from: types::Fd, to: types::Fd) -> Result<()> {
