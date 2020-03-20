@@ -39,6 +39,7 @@ pub enum Token<'a> {
     Heap(u32),            // heap2
     Table(u32),           // table2
     JumpTable(u32),       // jt2
+    Constant(u32),        // const2
     FuncRef(u32),         // fn2
     SigRef(u32),          // sig2
     UserRef(u32),         // u345
@@ -345,6 +346,7 @@ impl<'a> Lexer<'a> {
             "heap" => Some(Token::Heap(number)),
             "table" => Some(Token::Table(number)),
             "jt" => Some(Token::JumpTable(number)),
+            "const" => Some(Token::Constant(number)),
             "fn" => Some(Token::FuncRef(number)),
             "sig" => Some(Token::SigRef(number)),
             "u" => Some(Token::UserRef(number)),
@@ -656,7 +658,7 @@ mod tests {
 
     #[test]
     fn lex_names() {
-        let mut lex = Lexer::new("%0 %x3 %function %123_abc %ss0 %v3 %block11 %_");
+        let mut lex = Lexer::new("%0 %x3 %function %123_abc %ss0 %v3 %block11 %const42 %_");
 
         assert_eq!(lex.next(), token(Token::Name("0"), 1));
         assert_eq!(lex.next(), token(Token::Name("x3"), 1));
@@ -665,6 +667,7 @@ mod tests {
         assert_eq!(lex.next(), token(Token::Name("ss0"), 1));
         assert_eq!(lex.next(), token(Token::Name("v3"), 1));
         assert_eq!(lex.next(), token(Token::Name("block11"), 1));
+        assert_eq!(lex.next(), token(Token::Name("const42"), 1));
         assert_eq!(lex.next(), token(Token::Name("_"), 1));
     }
 

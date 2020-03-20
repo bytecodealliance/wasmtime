@@ -102,6 +102,11 @@ pub trait FuncWriter {
             self.write_entity_definition(w, func, jt.into(), jt_data)?;
         }
 
+        for (&cref, cval) in func.dfg.constants.iter() {
+            any = true;
+            self.write_entity_definition(w, func, cref.into(), cval)?;
+        }
+
         Ok(any)
     }
 
@@ -494,6 +499,9 @@ pub fn write_operands(
         UnaryIeee64 { imm, .. } => write!(w, " {}", imm),
         UnaryBool { imm, .. } => write!(w, " {}", imm),
         UnaryGlobalValue { global_value, .. } => write!(w, " {}", global_value),
+        UnaryConst {
+            constant_handle, ..
+        } => write!(w, " {}", constant_handle),
         Binary { args, .. } => write!(w, " {}, {}", args[0], args[1]),
         BinaryImm { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
         Ternary { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
@@ -507,12 +515,6 @@ pub fn write_operands(
         NullAry { .. } => write!(w, " "),
         InsertLane { lane, args, .. } => write!(w, " {}, {}, {}", args[0], lane, args[1]),
         ExtractLane { lane, arg, .. } => write!(w, " {}, {}", arg, lane),
-        UnaryConst {
-            constant_handle, ..
-        } => {
-            let constant_data = dfg.constants.get(constant_handle);
-            write!(w, " {}", constant_data)
-        }
         Shuffle { mask, args, .. } => {
             let data = dfg.immediates.get(mask).expect(
                 "Expected the shuffle mask to already be inserted into the immediates table",
