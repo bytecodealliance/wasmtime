@@ -67,6 +67,7 @@ members = [
   "crates/misc/rust",
   "crates/wiggle",
   "examples/fib-debug/wasm",
+  "examples/wasi/wasm",
   "fuzz",
 ]
 

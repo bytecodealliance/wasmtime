@@ -2,13 +2,18 @@ use std::collections::BTreeSet;
 use std::process::Command;
 
 fn main() {
+    let example_to_run = std::env::args().nth(1);
     let examples = std::fs::read_dir("examples").unwrap();
     let examples = examples
-        .map(|e| {
+        .filter_map(|e| {
             let e = e.unwrap();
             let path = e.path();
             let dir = e.metadata().unwrap().is_dir();
-            (path.file_stem().unwrap().to_str().unwrap().to_owned(), dir)
+            if let Some("wat") = path.extension().and_then(|s| s.to_str()) {
+                return None;
+            }
+
+            Some((path.file_stem().unwrap().to_str().unwrap().to_owned(), dir))
         })
         .collect::<BTreeSet<_>>();
 
@@ -21,14 +26,24 @@ fn main() {
         if example == "README" {
             continue;
         }
+        if let Some(example_to_run) = &example_to_run {
+            if !example.contains(&example_to_run[..]) {
+                continue;
+            }
+        }
         if is_dir {
             println!("======== Rust wasm file `{}` ============", example);
+            let target = if example == "fib-debug" {
+                "wasm32-unknown-unknown"
+            } else {
+                "wasm32-wasi"
+            };
             run(Command::new("cargo")
                 .arg("build")
                 .arg("-p")
                 .arg(format!("example-{}-wasm", example))
                 .arg("--target")
-                .arg("wasm32-unknown-unknown"));
+                .arg(target));
         }
         println!("======== Rust example `{}` ============", example);
         run(Command::new("cargo")
