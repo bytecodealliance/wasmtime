@@ -324,35 +324,26 @@ impl WasiCtxBuilder {
             })
             .collect::<WasiCtxBuilderResult<Vec<CString>>>()?;
 
-        let mut fd_pool = FdPool::new();
-        let mut entries: HashMap<types::Fd, Entry> = HashMap::new();
+        let mut entries = EntryTable::new();
         // Populate the non-preopen entries.
         for pending in vec![
             self.stdin.take().unwrap(),
             self.stdout.take().unwrap(),
             self.stderr.take().unwrap(),
         ] {
-            let fd = fd_pool
-                .allocate()
-                .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
-            log::debug!("WasiCtx inserting ({:?}, {:?})", fd, pending);
-            match pending {
-                PendingEntry::Thunk(f) => {
-                    entries.insert(fd, f()?);
-                }
-                PendingEntry::File(f) => {
-                    entries.insert(fd, Entry::from(Descriptor::OsHandle(OsHandle::from(f)))?);
-                }
-            }
+            log::debug!("WasiCtx inserting entry {:?}", pending);
+            let fd = match pending {
+                PendingEntry::Thunk(f) => entries
+                    .insert(f()?)
+                    .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?,
+                PendingEntry::File(f) => entries
+                    .insert(Entry::from(Descriptor::OsHandle(OsHandle::from(f)))?)
+                    .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?,
+            };
+            log::debug!("WasiCtx inserted at {:?}", fd);
         }
         // Then add the preopen entries.
         for (guest_path, dir) in self.preopens.take().unwrap() {
-            // We do the increment at the beginning of the loop body, so that we don't overflow
-            // unnecessarily if we have exactly the maximum number of file descriptors.
-            let preopen_fd = fd_pool
-                .allocate()
-                .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
-
             match &dir {
                 Descriptor::OsHandle(handle) => {
                     if !handle.metadata()?.is_dir() {
@@ -369,10 +360,13 @@ impl WasiCtxBuilder {
                 }
             }
 
-            let mut fe = Entry::from(dir)?;
-            fe.preopen_path = Some(guest_path);
-            log::debug!("WasiCtx inserting ({:?}, {:?})", preopen_fd, fe);
-            entries.insert(preopen_fd, fe);
+            let mut entry = Entry::from(dir)?;
+            entry.preopen_path = Some(guest_path);
+            log::debug!("WasiCtx inserting {:?}", entry);
+            let fd = entries
+                .insert(entry)
+                .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
+            log::debug!("WasiCtx inserted at {:?}", fd);
             log::debug!("WasiCtx entries = {:?}", entries);
         }
 
@@ -380,15 +374,56 @@ impl WasiCtxBuilder {
             args,
             env,
             entries: RefCell::new(entries),
-            fd_pool: RefCell::new(fd_pool),
         })
     }
 }
 
 #[derive(Debug)]
+struct EntryTable {
+    fd_pool: FdPool,
+    entries: HashMap<types::Fd, Entry>,
+}
+
+impl EntryTable {
+    fn new() -> Self {
+        Self {
+            fd_pool: FdPool::new(),
+            entries: HashMap::new(),
+        }
+    }
+
+    fn contains(&self, fd: &types::Fd) -> bool {
+        self.entries.contains_key(fd)
+    }
+
+    fn insert(&mut self, entry: Entry) -> Option<types::Fd> {
+        let fd = self.fd_pool.allocate()?;
+        self.entries.insert(fd, entry);
+        Some(fd)
+    }
+
+    fn insert_at(&mut self, fd: &types::Fd, entry: Entry) {
+        self.entries.insert(*fd, entry);
+    }
+
+    fn get(&self, fd: &types::Fd) -> Option<&Entry> {
+        self.entries.get(fd)
+    }
+
+    fn get_mut(&mut self, fd: &types::Fd) -> Option<&mut Entry> {
+        self.entries.get_mut(fd)
+    }
+
+    fn remove(&mut self, fd: types::Fd) -> Option<Entry> {
+        let entry = self.entries.remove(&fd)?;
+        self.fd_pool.deallocate(fd);
+        Some(entry)
+    }
+}
+
+#[derive(Debug)]
 pub struct WasiCtx {
-    fd_pool: RefCell<FdPool>,
-    entries: RefCell<HashMap<types::Fd, Entry>>,
+    entries: RefCell<EntryTable>,
     pub(crate) args: Vec<CString>,
     pub(crate) env: Vec<CString>,
 }
@@ -411,7 +446,7 @@ impl WasiCtx {
 
     /// Check if `WasiCtx` contains the specified raw WASI `fd`.
     pub(crate) unsafe fn contains_entry(&self, fd: types::Fd) -> bool {
-        self.entries.borrow().contains_key(&fd)
+        self.entries.borrow().contains(&fd)
     }
 
     /// Get an immutable `Entry` corresponding to the specified raw WASI `fd`.
@@ -439,24 +474,18 @@ impl WasiCtx {
     ///
     /// The `Entry` will automatically get another free raw WASI `fd` assigned. Note that
     /// the two subsequent free raw WASI `fd`s do not have to be stored contiguously.
-    pub(crate) fn insert_entry(&self, fe: Entry) -> Result<types::Fd> {
-        let fd = self.fd_pool.borrow_mut().allocate().ok_or(Errno::Mfile)?;
-        self.entries.borrow_mut().insert(fd, fe);
-        Ok(fd)
+    pub(crate) fn insert_entry(&self, entry: Entry) -> Result<types::Fd> {
+        self.entries.borrow_mut().insert(entry).ok_or(Errno::Mfile)
     }
 
     /// Insert the specified `Entry` with the specified raw WASI `fd` key into the `WasiCtx`
     /// object.
-    pub(crate) fn insert_entry_at(&self, fd: types::Fd, fe: Entry) -> Option<Entry> {
-        self.entries.borrow_mut().insert(fd, fe)
+    pub(crate) fn insert_entry_at(&self, fd: types::Fd, entry: Entry) {
+        self.entries.borrow_mut().insert_at(&fd, entry)
     }
 
     /// Remove `Entry` corresponding to the specified raw WASI `fd` from the `WasiCtx` object.
     pub(crate) fn remove_entry(&self, fd: types::Fd) -> Result<Entry> {
-        // Remove the `fd` from valid entries.
-        let entry = self.entries.borrow_mut().remove(&fd).ok_or(Errno::Badf)?;
-        // Next, deallocate the `fd`.
-        self.fd_pool.borrow_mut().deallocate(fd);
-        Ok(entry)
+        self.entries.borrow_mut().remove(fd).ok_or(Errno::Badf)
     }
 }
