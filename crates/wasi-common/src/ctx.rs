@@ -425,6 +425,7 @@ impl WasiCtx {
     }
 
     /// Get a mutable `Entry` corresponding to the specified raw WASI `fd`.
+    // TODO This runs the risk of a potential difficult-to-predict panic down-the-line.
     pub(crate) unsafe fn get_entry_mut(&self, fd: types::Fd) -> Result<RefMut<Entry>> {
         if !self.contains_entry(fd) {
             return Err(Errno::Badf);

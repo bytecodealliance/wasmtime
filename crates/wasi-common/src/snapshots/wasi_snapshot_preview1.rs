@@ -25,9 +25,11 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         for arg in &self.args {
             let arg_bytes = arg.as_bytes_with_nul();
             let elems = arg_bytes.len().try_into()?;
-            let as_arr = argv_buf.as_array(elems);
-            let raw_ptr = as_arr.as_raw(&mut bc)?;
-            unsafe { &mut *raw_ptr }.copy_from_slice(arg_bytes);
+            unsafe {
+                let argv_buf = argv_buf.as_array(elems);
+                let raw = argv_buf.as_raw(&mut bc)?;
+                (&mut *raw).copy_from_slice(arg_bytes);
+            }
 
             argv.write(argv_buf)?;
 
@@ -72,9 +74,11 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         for e in &self.env {
             let environ_bytes = e.as_bytes_with_nul();
             let elems = environ_bytes.len().try_into()?;
-            let as_arr = environ_buf.as_array(elems);
-            let raw_ptr = as_arr.as_raw(&mut bc)?;
-            unsafe { &mut *raw_ptr }.copy_from_slice(environ_bytes);
+            unsafe {
+                let environ_buf = environ_buf.as_array(elems);
+                let raw = environ_buf.as_raw(&mut bc)?;
+                (&mut *raw).copy_from_slice(environ_bytes);
+            }
 
             environ.write(environ_buf)?;
 
