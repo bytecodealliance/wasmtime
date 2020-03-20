@@ -1393,6 +1393,9 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(nevents)
     }
 
+    // This is just a temporary to ignore the warning which becomes a hard error
+    // in the CI. Once we figure out non-returns in `wiggle`, this should be gone.
+    #[allow(unreachable_code)]
     fn proc_exit(&self, rval: types::Exitcode) -> std::result::Result<(), ()> {
         trace!("proc_exit(rval={:?})", rval);
         // TODO: Rather than call std::process::exit here, we should trigger a
