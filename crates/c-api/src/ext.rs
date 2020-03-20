@@ -185,7 +185,7 @@ pub unsafe extern "C" fn wasmtime_linker_define_wasi(
     instance: *const wasi_instance_t,
 ) -> bool {
     let linker = &mut (*linker).linker;
-    (*instance).wasi.add_to_linker(linker).is_ok()
+    (*instance).add_to_linker(linker).is_ok()
 }
 
 #[no_mangle]

@@ -12,9 +12,21 @@ namespace Wasmtime
         /// <summary>
         /// Constructs a new <see cref="WasiBuilder" />.
         /// </summary>
-        public WasiBuilder()
+        public WasiBuilder(string name)
         {
+            if (string.IsNullOrEmpty(name))
+            {
+                throw new ArgumentException("Name cannot be null or empty.", nameof(name));
+            }
+
+            Name = name;
         }
+
+        /// <summary>
+        /// Gets the name of the WASI module being built.
+        /// </summary>
+        /// <value>The name of the WASI module.</value>
+        public string Name { get; private set; }
 
         /// <summary>
         /// Adds a command line argument to the builder.
@@ -271,7 +283,7 @@ namespace Wasmtime
             SetStandardError(config);
             SetPreopenDirectories(config);
             
-            return new Wasi(store.Handle, config);
+            return new Wasi(store.Handle, config, Name);
         }
 
         private unsafe void SetConfigArgs(Interop.WasiConfigHandle config)

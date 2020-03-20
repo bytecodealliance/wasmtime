@@ -9,18 +9,26 @@ namespace Wasmtime
         /// <summary>
         /// Creates a default <see cref="Wasi"/> instance.
         /// </summary>
-        public Wasi(Store store) :
+        /// <param name="store">The store to use for the new WASI instance.</param>
+        /// <param name="name">The name of the WASI module to create.</param>
+        public Wasi(Store store, string name) :
             this(
                 (store ?? throw new ArgumentNullException(nameof(store))).Handle,
-                Interop.wasi_config_new()
+                Interop.wasi_config_new(),
+                name
             )
         {
         }
 
-        internal Wasi(Interop.StoreHandle store, Interop.WasiConfigHandle config)
+        internal Wasi(Interop.StoreHandle store, Interop.WasiConfigHandle config, string name)
         {
+            if (string.IsNullOrEmpty(name))
+            {
+                throw new ArgumentException("Name cannot be null or empty.", nameof(name));
+            }
+
             IntPtr trap;
-            Handle = Interop.wasi_instance_new(store, config, out trap);
+            Handle = Interop.wasi_instance_new(store, name, config, out trap);
             config.SetHandleAsInvalid();
 
             if (trap != IntPtr.Zero)

@@ -936,6 +936,7 @@ namespace Wasmtime
         [DllImport(LibraryName)]
         public static extern WasiInstanceHandle wasi_instance_new(
             StoreHandle store,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string name,
             WasiConfigHandle config,
             out IntPtr trap
         );
