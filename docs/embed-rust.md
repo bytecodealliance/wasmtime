@@ -3,7 +3,7 @@
 This document shows an example of how to embed Wasmtime using the [Rust
 API][apidoc] to execute a simple wasm program. Be sure to also check out the
 [full API documentation][apidoc] for a full listing of what the [`wasmtime`
-crate][crate] has to offer.
+crate][wasmtime] has to offer.
 
 [apidoc]: https://bytecodealliance.github.io/wasmtime/api/wasmtime/
 [wasmtime]: https://crates.io/crates/wasmtime
