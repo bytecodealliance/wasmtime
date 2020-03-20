@@ -364,7 +364,7 @@ jobs:
     - run: rustup target add wasm32-wasi
 
     # Build `wasmtime` and executables
-    - run: $CENTOS cargo build --release --bin wasmtime --bin wasm2obj
+    - run: $CENTOS cargo build --release --bin wasmtime
       shell: bash
     # Build `libwasmtime.so`
     - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
@@ -388,9 +388,9 @@ jobs:
       shell: bash
 
     # Move binaries to dist folder
-    - run: cp target/release/{wasmtime,wasm2obj} dist
+    - run: cp target/release/wasmtime dist
       if: matrix.os != 'windows-latest'
-    - run: cp target/release/{wasmtime,wasm2obj}.exe dist
+    - run: cp target/release/wasmtime.exe dist
       shell: bash
       if: matrix.os == 'windows-latest'
 
