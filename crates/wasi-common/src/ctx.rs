@@ -1,9 +1,11 @@
 use crate::entry::{Descriptor, Entry};
 use crate::fdpool::FdPool;
-use crate::sys::entry_impl::OsHandle;
+use crate::sys::entry::OsHandle;
 use crate::virtfs::{VirtualDir, VirtualDirEntry};
-use crate::wasi::{self, WasiError, WasiResult};
+use crate::wasi::types;
+use crate::wasi::{Errno, Result};
 use std::borrow::Borrow;
+use std::cell::{Ref, RefCell, RefMut};
 use std::collections::HashMap;
 use std::ffi::{self, CString, OsString};
 use std::fs::File;
@@ -48,10 +50,10 @@ impl std::fmt::Debug for PendingEntry {
         match self {
             Self::Thunk(f) => write!(
                 fmt,
-                "PendingFdEntry::Thunk({:p})",
+                "PendingEntry::Thunk({:p})",
                 f as *const fn() -> io::Result<Entry>
             ),
-            Self::File(f) => write!(fmt, "PendingFdEntry::File({:?})", f),
+            Self::File(f) => write!(fmt, "PendingEntry::File({:?})", f),
         }
     }
 }
@@ -322,35 +324,26 @@ impl WasiCtxBuilder {
             })
             .collect::<WasiCtxBuilderResult<Vec<CString>>>()?;
 
-        let mut fd_pool = FdPool::new();
-        let mut entries: HashMap<wasi::__wasi_fd_t, Entry> = HashMap::new();
+        let mut entries = EntryTable::new();
         // Populate the non-preopen entries.
         for pending in vec![
             self.stdin.take().unwrap(),
             self.stdout.take().unwrap(),
             self.stderr.take().unwrap(),
         ] {
-            let fd = fd_pool
-                .allocate()
-                .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
-            log::debug!("WasiCtx inserting ({:?}, {:?})", fd, pending);
-            match pending {
-                PendingEntry::Thunk(f) => {
-                    entries.insert(fd, f()?);
-                }
-                PendingEntry::File(f) => {
-                    entries.insert(fd, Entry::from(Descriptor::OsHandle(OsHandle::from(f)))?);
-                }
-            }
+            log::debug!("WasiCtx inserting entry {:?}", pending);
+            let fd = match pending {
+                PendingEntry::Thunk(f) => entries
+                    .insert(f()?)
+                    .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?,
+                PendingEntry::File(f) => entries
+                    .insert(Entry::from(Descriptor::OsHandle(OsHandle::from(f)))?)
+                    .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?,
+            };
+            log::debug!("WasiCtx inserted at {:?}", fd);
         }
         // Then add the preopen entries.
         for (guest_path, dir) in self.preopens.take().unwrap() {
-            // We do the increment at the beginning of the loop body, so that we don't overflow
-            // unnecessarily if we have exactly the maximum number of file descriptors.
-            let preopen_fd = fd_pool
-                .allocate()
-                .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
-
             match &dir {
                 Descriptor::OsHandle(handle) => {
                     if !handle.metadata()?.is_dir() {
@@ -358,7 +351,7 @@ impl WasiCtxBuilder {
                     }
                 }
                 Descriptor::VirtualFile(virt) => {
-                    if virt.get_file_type() != wasi::__WASI_FILETYPE_DIRECTORY {
+                    if virt.get_file_type() != types::Filetype::Directory {
                         return Err(WasiCtxBuilderError::NotADirectory(guest_path));
                     }
                 }
@@ -367,26 +360,70 @@ impl WasiCtxBuilder {
                 }
             }
 
-            let mut fe = Entry::from(dir)?;
-            fe.preopen_path = Some(guest_path);
-            log::debug!("WasiCtx inserting ({:?}, {:?})", preopen_fd, fe);
-            entries.insert(preopen_fd, fe);
+            let mut entry = Entry::from(dir)?;
+            entry.preopen_path = Some(guest_path);
+            log::debug!("WasiCtx inserting {:?}", entry);
+            let fd = entries
+                .insert(entry)
+                .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
+            log::debug!("WasiCtx inserted at {:?}", fd);
             log::debug!("WasiCtx entries = {:?}", entries);
         }
 
         Ok(WasiCtx {
             args,
             env,
-            entries,
-            fd_pool,
+            entries: RefCell::new(entries),
         })
     }
 }
 
 #[derive(Debug)]
-pub struct WasiCtx {
+struct EntryTable {
     fd_pool: FdPool,
-    entries: HashMap<wasi::__wasi_fd_t, Entry>,
+    entries: HashMap<types::Fd, Entry>,
+}
+
+impl EntryTable {
+    fn new() -> Self {
+        Self {
+            fd_pool: FdPool::new(),
+            entries: HashMap::new(),
+        }
+    }
+
+    fn contains(&self, fd: &types::Fd) -> bool {
+        self.entries.contains_key(fd)
+    }
+
+    fn insert(&mut self, entry: Entry) -> Option<types::Fd> {
+        let fd = self.fd_pool.allocate()?;
+        self.entries.insert(fd, entry);
+        Some(fd)
+    }
+
+    fn insert_at(&mut self, fd: &types::Fd, entry: Entry) {
+        self.entries.insert(*fd, entry);
+    }
+
+    fn get(&self, fd: &types::Fd) -> Option<&Entry> {
+        self.entries.get(fd)
+    }
+
+    fn get_mut(&mut self, fd: &types::Fd) -> Option<&mut Entry> {
+        self.entries.get_mut(fd)
+    }
+
+    fn remove(&mut self, fd: types::Fd) -> Option<Entry> {
+        let entry = self.entries.remove(&fd)?;
+        self.fd_pool.deallocate(fd);
+        Some(entry)
+    }
+}
+
+#[derive(Debug)]
+pub struct WasiCtx {
+    entries: RefCell<EntryTable>,
     pub(crate) args: Vec<CString>,
     pub(crate) env: Vec<CString>,
 }
@@ -408,42 +445,47 @@ impl WasiCtx {
     }
 
     /// Check if `WasiCtx` contains the specified raw WASI `fd`.
-    pub(crate) unsafe fn contains_entry(&self, fd: wasi::__wasi_fd_t) -> bool {
-        self.entries.contains_key(&fd)
+    pub(crate) fn contains_entry(&self, fd: types::Fd) -> bool {
+        self.entries.borrow().contains(&fd)
     }
 
     /// Get an immutable `Entry` corresponding to the specified raw WASI `fd`.
-    pub(crate) unsafe fn get_entry(&self, fd: wasi::__wasi_fd_t) -> WasiResult<&Entry> {
-        self.entries.get(&fd).ok_or(WasiError::EBADF)
+    pub(crate) fn get_entry(&self, fd: types::Fd) -> Result<Ref<Entry>> {
+        if !self.contains_entry(fd) {
+            return Err(Errno::Badf);
+        }
+        Ok(Ref::map(self.entries.borrow(), |entries| {
+            entries.get(&fd).unwrap()
+        }))
     }
 
     /// Get a mutable `Entry` corresponding to the specified raw WASI `fd`.
-    pub(crate) unsafe fn get_entry_mut(&mut self, fd: wasi::__wasi_fd_t) -> WasiResult<&mut Entry> {
-        self.entries.get_mut(&fd).ok_or(WasiError::EBADF)
+    // TODO This runs the risk of a potential difficult-to-predict panic down-the-line.
+    pub(crate) fn get_entry_mut(&self, fd: types::Fd) -> Result<RefMut<Entry>> {
+        if !self.contains_entry(fd) {
+            return Err(Errno::Badf);
+        }
+        Ok(RefMut::map(self.entries.borrow_mut(), |entries| {
+            entries.get_mut(&fd).unwrap()
+        }))
     }
 
     /// Insert the specified `Entry` into the `WasiCtx` object.
     ///
-    /// The `FdEntry` will automatically get another free raw WASI `fd` assigned. Note that
+    /// The `Entry` will automatically get another free raw WASI `fd` assigned. Note that
     /// the two subsequent free raw WASI `fd`s do not have to be stored contiguously.
-    pub(crate) fn insert_entry(&mut self, fe: Entry) -> WasiResult<wasi::__wasi_fd_t> {
-        let fd = self.fd_pool.allocate().ok_or(WasiError::EMFILE)?;
-        self.entries.insert(fd, fe);
-        Ok(fd)
+    pub(crate) fn insert_entry(&self, entry: Entry) -> Result<types::Fd> {
+        self.entries.borrow_mut().insert(entry).ok_or(Errno::Mfile)
     }
 
     /// Insert the specified `Entry` with the specified raw WASI `fd` key into the `WasiCtx`
     /// object.
-    pub(crate) fn insert_entry_at(&mut self, fd: wasi::__wasi_fd_t, fe: Entry) -> Option<Entry> {
-        self.entries.insert(fd, fe)
+    pub(crate) fn insert_entry_at(&self, fd: types::Fd, entry: Entry) {
+        self.entries.borrow_mut().insert_at(&fd, entry)
     }
 
     /// Remove `Entry` corresponding to the specified raw WASI `fd` from the `WasiCtx` object.
-    pub(crate) fn remove_entry(&mut self, fd: wasi::__wasi_fd_t) -> WasiResult<Entry> {
-        // Remove the `fd` from valid entries.
-        let entry = self.entries.remove(&fd).ok_or(WasiError::EBADF)?;
-        // Next, deallocate the `fd`.
-        self.fd_pool.deallocate(fd);
-        Ok(entry)
+    pub(crate) fn remove_entry(&self, fd: types::Fd) -> Result<Entry> {
+        self.entries.borrow_mut().remove(fd).ok_or(Errno::Badf)
     }
 }

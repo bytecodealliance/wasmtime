@@ -47,8 +47,8 @@ impl Descriptor {
 /// accessed correctly.
 ///
 /// Here, the `descriptor` field stores the host `Descriptor` object (such as a file descriptor, or
-/// stdin handle), and accessing it can only be done via the provided `FdEntry::as_descriptor` and
-/// `FdEntry::as_descriptor_mut` methods which require a set of base and inheriting rights to be
+/// stdin handle), and accessing it can only be done via the provided `Entry::as_descriptor` and
+/// `Entry::as_descriptor_mut` methods which require a set of base and inheriting rights to be
 /// specified, verifying whether the stored `Descriptor` object is valid for the rights specified.
 #[derive(Debug)]
 pub(crate) struct Entry {
@@ -61,8 +61,8 @@ pub(crate) struct Entry {
 }
 
 impl Entry {
-    /// Create an FdEntry with *maximal* possible rights from a given `File`.
-    /// If this is not desired, the rights of the resulting `FdEntry` should
+    /// Create an Entry with *maximal* possible rights from a given `File`.
+    /// If this is not desired, the rights of the resulting `Entry` should
     /// be manually restricted.
     pub(crate) fn from(file: fs::File) -> io::Result<Self> {
         unsafe { determine_type_and_access_rights(&file) }.map(
@@ -116,13 +116,13 @@ impl Entry {
         Self::from(dev_null()?)
     }
 
-    /// Convert this `FdEntry` into a host `Descriptor` object provided the specified
-    /// `rights_base` and `rights_inheriting` rights are set on this `FdEntry` object.
+    /// Convert this `Entry` into a host `Descriptor` object provided the specified
+    /// `rights_base` and `rights_inheriting` rights are set on this `Entry` object.
     ///
-    /// The `FdEntry` can only be converted into a valid `Descriptor` object if
+    /// The `Entry` can only be converted into a valid `Descriptor` object if
     /// the specified set of base rights `rights_base`, and inheriting rights `rights_inheriting`
-    /// is a subset of rights attached to this `FdEntry`. The check is performed using
-    /// `FdEntry::validate_rights` method. If the check fails, `Error::ENOTCAPABLE` is returned.
+    /// is a subset of rights attached to this `Entry`. The check is performed using
+    /// `Entry::validate_rights` method. If the check fails, `Error::ENOTCAPABLE` is returned.
     pub(crate) fn as_descriptor(
         &self,
         rights_base: wasi::__wasi_rights_t,
@@ -132,13 +132,13 @@ impl Entry {
         Ok(&self.descriptor)
     }
 
-    /// Convert this `FdEntry` into a mutable host `Descriptor` object provided the specified
-    /// `rights_base` and `rights_inheriting` rights are set on this `FdEntry` object.
+    /// Convert this `Entry` into a mutable host `Descriptor` object provided the specified
+    /// `rights_base` and `rights_inheriting` rights are set on this `Entry` object.
     ///
-    /// The `FdEntry` can only be converted into a valid `Descriptor` object if
+    /// The `Entry` can only be converted into a valid `Descriptor` object if
     /// the specified set of base rights `rights_base`, and inheriting rights `rights_inheriting`
-    /// is a subset of rights attached to this `FdEntry`. The check is performed using
-    /// `FdEntry::validate_rights` method. If the check fails, `Error::ENOTCAPABLE` is returned.
+    /// is a subset of rights attached to this `Entry`. The check is performed using
+    /// `Entry::validate_rights` method. If the check fails, `Error::ENOTCAPABLE` is returned.
     pub(crate) fn as_descriptor_mut(
         &mut self,
         rights_base: wasi::__wasi_rights_t,
@@ -148,8 +148,8 @@ impl Entry {
         Ok(&mut self.descriptor)
     }
 
-    /// Check if this `FdEntry` object satisfies the specified base rights `rights_base`, and
-    /// inheriting rights `rights_inheriting`; i.e., if rights attached to this `FdEntry` object
+    /// Check if this `Entry` object satisfies the specified base rights `rights_base`, and
+    /// inheriting rights `rights_inheriting`; i.e., if rights attached to this `Entry` object
     /// are a superset.
     ///
     /// Upon unsuccessful check, `Error::ENOTCAPABLE` is returned.

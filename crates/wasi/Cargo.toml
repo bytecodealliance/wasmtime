@@ -17,6 +17,7 @@ wasi-common = { path = "../wasi-common", version = "0.12.0" }
 wasmtime = { path = "../api", version = "0.12.0", default-features = false }
 wasmtime-runtime = { path = "../runtime", version = "0.12.0" }
 wig = { path = "../wasi-common/wig", version = "0.12.0" }
+wiggle-runtime = { path = "../wiggle/crates/runtime" }
 
 [badges]
 maintenance = { status = "actively-developed" }

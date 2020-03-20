@@ -1,7 +1,4 @@
-use crate::host::Dirent;
-use crate::host::FileType;
-use crate::wasi::{self, WasiError, WasiResult};
-use crate::wasi32;
+use crate::wasi::{self, types, Errno, Result, RightsExt};
 use filetime::FileTime;
 use log::trace;
 use std::cell::RefCell;
@@ -38,15 +35,17 @@ pub(crate) trait MovableFile {
 ///
 /// Default implementations of functions here fail in ways that are intended to mimic a file-like
 /// object with no permissions, no content, and that cannot be used in any way.
+// TODO This trait should potentially be made unsafe since we need to assert that we don't
+// reenter wasm or try to reborrow/read/etc. from wasm memory.
 pub(crate) trait VirtualFile: MovableFile {
-    fn fdstat_get(&self) -> wasi::__wasi_fdflags_t {
-        0
+    fn fdstat_get(&self) -> types::Fdflags {
+        types::Fdflags::empty()
     }
 
     fn try_clone(&self) -> io::Result<Box<dyn VirtualFile>>;
 
-    fn readlinkat(&self, _path: &Path) -> WasiResult<String> {
-        Err(WasiError::EACCES)
+    fn readlinkat(&self, _path: &Path) -> Result<String> {
+        Err(Errno::Acces)
     }
 
     fn openat(
@@ -54,160 +53,140 @@ pub(crate) trait VirtualFile: MovableFile {
         _path: &Path,
         _read: bool,
         _write: bool,
-        _oflags: wasi::__wasi_oflags_t,
-        _fd_flags: wasi::__wasi_fdflags_t,
-    ) -> WasiResult<Box<dyn VirtualFile>> {
-        Err(WasiError::EACCES)
+        _oflags: types::Oflags,
+        _fd_flags: types::Fdflags,
+    ) -> Result<Box<dyn VirtualFile>> {
+        Err(Errno::Acces)
     }
 
-    fn remove_directory(&self, _path: &str) -> WasiResult<()> {
-        Err(WasiError::EACCES)
+    fn remove_directory(&self, _path: &str) -> Result<()> {
+        Err(Errno::Acces)
     }
 
-    fn unlink_file(&self, _path: &str) -> WasiResult<()> {
-        Err(WasiError::EACCES)
+    fn unlink_file(&self, _path: &str) -> Result<()> {
+        Err(Errno::Acces)
     }
 
-    fn datasync(&self) -> WasiResult<()> {
-        Err(WasiError::EINVAL)
+    fn datasync(&self) -> Result<()> {
+        Err(Errno::Inval)
     }
 
-    fn sync(&self) -> WasiResult<()> {
+    fn sync(&self) -> Result<()> {
         Ok(())
     }
 
-    fn create_directory(&self, _path: &Path) -> WasiResult<()> {
-        Err(WasiError::EACCES)
+    fn create_directory(&self, _path: &Path) -> Result<()> {
+        Err(Errno::Acces)
     }
 
     fn readdir(
         &self,
-        _cookie: wasi::__wasi_dircookie_t,
-    ) -> WasiResult<Box<dyn Iterator<Item = WasiResult<Dirent>>>> {
-        Err(WasiError::EBADF)
+        _cookie: types::Dircookie,
+    ) -> Result<Box<dyn Iterator<Item = Result<(types::Dirent, String)>>>> {
+        Err(Errno::Badf)
     }
 
-    fn write_vectored(&mut self, _iovs: &[io::IoSlice]) -> WasiResult<usize> {
-        Err(WasiError::EBADF)
+    fn write_vectored(&mut self, _iovs: &[io::IoSlice]) -> Result<usize> {
+        Err(Errno::Badf)
     }
 
-    fn pread(&self, _buf: &mut [u8], _offset: u64) -> WasiResult<usize> {
-        Err(WasiError::EBADF)
+    fn preadv(&self, _buf: &mut [io::IoSliceMut], _offset: u64) -> Result<usize> {
+        Err(Errno::Badf)
     }
 
-    fn pwrite(&self, _buf: &mut [u8], _offset: u64) -> WasiResult<usize> {
-        Err(WasiError::EBADF)
+    fn pwritev(&self, _buf: &[io::IoSlice], _offset: u64) -> Result<usize> {
+        Err(Errno::Badf)
     }
 
-    fn seek(&mut self, _offset: SeekFrom) -> WasiResult<u64> {
-        Err(WasiError::EBADF)
+    fn seek(&mut self, _offset: SeekFrom) -> Result<u64> {
+        Err(Errno::Badf)
     }
 
     fn advise(
         &self,
-        _advice: wasi::__wasi_advice_t,
-        _offset: wasi::__wasi_filesize_t,
-        _len: wasi::__wasi_filesize_t,
-    ) -> WasiResult<()> {
-        Err(WasiError::EBADF)
+        _advice: types::Advice,
+        _offset: types::Filesize,
+        _len: types::Filesize,
+    ) -> Result<()> {
+        Err(Errno::Badf)
     }
 
-    fn allocate(
-        &self,
-        _offset: wasi::__wasi_filesize_t,
-        _len: wasi::__wasi_filesize_t,
-    ) -> WasiResult<()> {
-        Err(WasiError::EBADF)
+    fn allocate(&self, _offset: types::Filesize, _len: types::Filesize) -> Result<()> {
+        Err(Errno::Badf)
     }
 
-    fn filestat_get(&self) -> WasiResult<wasi::__wasi_filestat_t> {
-        Err(WasiError::EBADF)
+    fn filestat_get(&self) -> Result<types::Filestat> {
+        Err(Errno::Badf)
     }
 
-    fn filestat_set_times(
-        &self,
-        _atim: Option<FileTime>,
-        _mtim: Option<FileTime>,
-    ) -> WasiResult<()> {
-        Err(WasiError::EBADF)
+    fn filestat_set_times(&self, _atim: Option<FileTime>, _mtim: Option<FileTime>) -> Result<()> {
+        Err(Errno::Badf)
     }
 
-    fn filestat_set_size(&self, _st_size: wasi::__wasi_filesize_t) -> WasiResult<()> {
-        Err(WasiError::EBADF)
+    fn filestat_set_size(&self, _st_size: types::Filesize) -> Result<()> {
+        Err(Errno::Badf)
     }
 
-    fn fdstat_set_flags(&mut self, _fdflags: wasi::__wasi_fdflags_t) -> WasiResult<()> {
-        Err(WasiError::EBADF)
+    fn fdstat_set_flags(&mut self, _fdflags: types::Fdflags) -> Result<()> {
+        Err(Errno::Badf)
     }
 
-    fn read_vectored(&mut self, _iovs: &mut [io::IoSliceMut]) -> WasiResult<usize> {
-        Err(WasiError::EBADF)
+    fn read_vectored(&mut self, _iovs: &mut [io::IoSliceMut]) -> Result<usize> {
+        Err(Errno::Badf)
     }
 
-    fn get_file_type(&self) -> wasi::__wasi_filetype_t;
+    fn get_file_type(&self) -> types::Filetype;
 
-    fn get_rights_base(&self) -> wasi::__wasi_rights_t {
-        0
+    fn get_rights_base(&self) -> types::Rights {
+        types::Rights::empty()
     }
 
-    fn get_rights_inheriting(&self) -> wasi::__wasi_rights_t {
-        0
+    fn get_rights_inheriting(&self) -> types::Rights {
+        types::Rights::empty()
     }
 }
 
 pub trait FileContents {
     /// The implementation-defined maximum size of the store corresponding to a `FileContents`
     /// implementation.
-    fn max_size(&self) -> wasi::__wasi_filesize_t;
+    fn max_size(&self) -> types::Filesize;
     /// The current number of bytes this `FileContents` describes.
-    fn size(&self) -> wasi::__wasi_filesize_t;
+    fn size(&self) -> types::Filesize;
     /// Resize to hold `new_size` number of bytes, or error if this is not possible.
-    fn resize(&mut self, new_size: wasi::__wasi_filesize_t) -> WasiResult<()>;
+    fn resize(&mut self, new_size: types::Filesize) -> Result<()>;
     /// Write a list of `IoSlice` starting at `offset`. `offset` plus the total size of all `iovs`
     /// is guaranteed to not exceed `max_size`. Implementations must not indicate more bytes have
     /// been written than can be held by `iovs`.
-    fn pwritev(
-        &mut self,
-        iovs: &[io::IoSlice],
-        offset: wasi::__wasi_filesize_t,
-    ) -> WasiResult<usize>;
+    fn pwritev(&mut self, iovs: &[io::IoSlice], offset: types::Filesize) -> Result<usize>;
     /// Read from the file from `offset`, filling a list of `IoSlice`. The returend size must not
     /// be more than the capactiy of `iovs`, and must not exceed the limit reported by
     /// `self.max_size()`.
-    fn preadv(
-        &self,
-        iovs: &mut [io::IoSliceMut],
-        offset: wasi::__wasi_filesize_t,
-    ) -> WasiResult<usize>;
+    fn preadv(&self, iovs: &mut [io::IoSliceMut], offset: types::Filesize) -> Result<usize>;
     /// Write contents from `buf` to this file starting at `offset`. `offset` plus the length of
     /// `buf` is guaranteed to not exceed `max_size`. Implementations must not indicate more bytes
     /// have been written than the size of `buf`.
-    fn pwrite(&mut self, buf: &[u8], offset: wasi::__wasi_filesize_t) -> WasiResult<usize>;
+    fn pwrite(&mut self, buf: &[u8], offset: types::Filesize) -> Result<usize>;
     /// Read from the file at `offset`, filling `buf`. The returned size must not be more than the
     /// capacity of `buf`, and `offset` plus the returned size must not exceed `self.max_size()`.
-    fn pread(&self, buf: &mut [u8], offset: wasi::__wasi_filesize_t) -> WasiResult<usize>;
+    fn pread(&self, buf: &mut [u8], offset: types::Filesize) -> Result<usize>;
 }
 
 impl FileContents for VecFileContents {
-    fn max_size(&self) -> wasi::__wasi_filesize_t {
-        std::usize::MAX as wasi::__wasi_filesize_t
+    fn max_size(&self) -> types::Filesize {
+        std::usize::MAX as types::Filesize
     }
 
-    fn size(&self) -> wasi::__wasi_filesize_t {
-        self.content.len() as wasi::__wasi_filesize_t
+    fn size(&self) -> types::Filesize {
+        self.content.len() as types::Filesize
     }
 
-    fn resize(&mut self, new_size: wasi::__wasi_filesize_t) -> WasiResult<()> {
-        let new_size: usize = new_size.try_into().map_err(|_| WasiError::EINVAL)?;
+    fn resize(&mut self, new_size: types::Filesize) -> Result<()> {
+        let new_size: usize = new_size.try_into().map_err(|_| Errno::Inval)?;
         self.content.resize(new_size, 0);
         Ok(())
     }
 
-    fn preadv(
-        &self,
-        iovs: &mut [io::IoSliceMut],
-        offset: wasi::__wasi_filesize_t,
-    ) -> WasiResult<usize> {
+    fn preadv(&self, iovs: &mut [io::IoSliceMut], offset: types::Filesize) -> Result<usize> {
         let mut read_total = 0usize;
         for iov in iovs.iter_mut() {
             let read = self.pread(iov, offset)?;
@@ -216,11 +195,7 @@ impl FileContents for VecFileContents {
         Ok(read_total)
     }
 
-    fn pwritev(
-        &mut self,
-        iovs: &[io::IoSlice],
-        offset: wasi::__wasi_filesize_t,
-    ) -> WasiResult<usize> {
+    fn pwritev(&mut self, iovs: &[io::IoSlice], offset: types::Filesize) -> Result<usize> {
         let mut write_total = 0usize;
         for iov in iovs.iter() {
             let written = self.pwrite(iov, offset)?;
@@ -229,9 +204,9 @@ impl FileContents for VecFileContents {
         Ok(write_total)
     }
 
-    fn pread(&self, buf: &mut [u8], offset: wasi::__wasi_filesize_t) -> WasiResult<usize> {
+    fn pread(&self, buf: &mut [u8], offset: types::Filesize) -> Result<usize> {
         trace!("     | pread(buf.len={}, offset={})", buf.len(), offset);
-        let offset: usize = offset.try_into().map_err(|_| WasiError::EINVAL)?;
+        let offset: usize = offset.try_into().map_err(|_| Errno::Inval)?;
 
         let data_remaining = self.content.len().saturating_sub(offset);
 
@@ -244,10 +219,10 @@ impl FileContents for VecFileContents {
         res
     }
 
-    fn pwrite(&mut self, buf: &[u8], offset: wasi::__wasi_filesize_t) -> WasiResult<usize> {
-        let offset: usize = offset.try_into().map_err(|_| WasiError::EINVAL)?;
+    fn pwrite(&mut self, buf: &[u8], offset: types::Filesize) -> Result<usize> {
+        let offset: usize = offset.try_into().map_err(|_| Errno::Inval)?;
 
-        let write_end = offset.checked_add(buf.len()).ok_or(WasiError::EFBIG)?;
+        let write_end = offset.checked_add(buf.len()).ok_or(Errno::Fbig)?;
 
         if write_end > self.content.len() {
             self.content.resize(write_end, 0);
@@ -275,9 +250,9 @@ impl VecFileContents {
 /// a filesystem wherein a file descriptor is one view into a possibly-shared underlying collection
 /// of data and permissions on a filesystem.
 pub struct InMemoryFile {
-    cursor: wasi::__wasi_filesize_t,
+    cursor: types::Filesize,
     parent: Rc<RefCell<Option<Box<dyn VirtualFile>>>>,
-    fd_flags: wasi::__wasi_fdflags_t,
+    fd_flags: types::Fdflags,
     data: Rc<RefCell<Box<dyn FileContents>>>,
 }
 
@@ -286,7 +261,7 @@ impl InMemoryFile {
         Self {
             cursor: 0,
             parent: Rc::new(RefCell::new(None)),
-            fd_flags: 0,
+            fd_flags: types::Fdflags::empty(),
             data: Rc::new(RefCell::new(Box::new(VecFileContents::new()))),
         }
     }
@@ -294,7 +269,7 @@ impl InMemoryFile {
     pub fn new(contents: Box<dyn FileContents>) -> Self {
         Self {
             cursor: 0,
-            fd_flags: 0,
+            fd_flags: types::Fdflags::empty(),
             parent: Rc::new(RefCell::new(None)),
             data: Rc::new(RefCell::new(contents)),
         }
@@ -308,7 +283,7 @@ impl MovableFile for InMemoryFile {
 }
 
 impl VirtualFile for InMemoryFile {
-    fn fdstat_get(&self) -> wasi::__wasi_fdflags_t {
+    fn fdstat_get(&self) -> types::Fdflags {
         self.fd_flags
     }
 
@@ -321,9 +296,9 @@ impl VirtualFile for InMemoryFile {
         }))
     }
 
-    fn readlinkat(&self, _path: &Path) -> WasiResult<String> {
+    fn readlinkat(&self, _path: &Path) -> Result<String> {
         // no symlink support, so always say it's invalid.
-        Err(WasiError::ENOTDIR)
+        Err(Errno::Notdir)
     }
 
     fn openat(
@@ -331,9 +306,9 @@ impl VirtualFile for InMemoryFile {
         path: &Path,
         read: bool,
         write: bool,
-        oflags: wasi::__wasi_oflags_t,
-        fd_flags: wasi::__wasi_fdflags_t,
-    ) -> WasiResult<Box<dyn VirtualFile>> {
+        oflags: types::Oflags,
+        fd_flags: types::Fdflags,
+    ) -> Result<Box<dyn VirtualFile>> {
         log::trace!(
             "InMemoryFile::openat(path={:?}, read={:?}, write={:?}, oflags={:?}, fd_flags={:?}",
             path,
@@ -343,13 +318,13 @@ impl VirtualFile for InMemoryFile {
             fd_flags
         );
 
-        if oflags & wasi::__WASI_OFLAGS_DIRECTORY != 0 {
+        if oflags.contains(&types::Oflags::DIRECTORY) {
             log::trace!(
                 "InMemoryFile::openat was passed oflags DIRECTORY, but {:?} is a file.",
                 path
             );
-            log::trace!("  return ENOTDIR");
-            return Err(WasiError::ENOTDIR);
+            log::trace!("  return Notdir");
+            return Err(Errno::Notdir);
         }
 
         if path == Path::new(".") {
@@ -360,29 +335,29 @@ impl VirtualFile for InMemoryFile {
                 None => self.try_clone().map_err(Into::into),
             }
         } else {
-            Err(WasiError::EACCES)
+            Err(Errno::Acces)
         }
     }
 
-    fn remove_directory(&self, _path: &str) -> WasiResult<()> {
-        Err(WasiError::ENOTDIR)
+    fn remove_directory(&self, _path: &str) -> Result<()> {
+        Err(Errno::Notdir)
     }
 
-    fn unlink_file(&self, _path: &str) -> WasiResult<()> {
-        Err(WasiError::ENOTDIR)
+    fn unlink_file(&self, _path: &str) -> Result<()> {
+        Err(Errno::Notdir)
     }
 
-    fn fdstat_set_flags(&mut self, fdflags: wasi::__wasi_fdflags_t) -> WasiResult<()> {
+    fn fdstat_set_flags(&mut self, fdflags: types::Fdflags) -> Result<()> {
         self.fd_flags = fdflags;
         Ok(())
     }
 
-    fn write_vectored(&mut self, iovs: &[io::IoSlice]) -> WasiResult<usize> {
+    fn write_vectored(&mut self, iovs: &[io::IoSlice]) -> Result<usize> {
         trace!("write_vectored(iovs={:?})", iovs);
         let mut data = self.data.borrow_mut();
 
-        let append_mode = self.fd_flags & wasi::__WASI_FDFLAGS_APPEND != 0;
-        trace!("     | fd_flags={:o}", self.fd_flags);
+        let append_mode = self.fd_flags.contains(&types::Fdflags::APPEND);
+        trace!("     | fd_flags={}", self.fd_flags);
 
         // If this file is in append mode, we write to the end.
         let write_start = if append_mode {
@@ -394,7 +369,7 @@ impl VirtualFile for InMemoryFile {
         let max_size = iovs
             .iter()
             .map(|iov| {
-                let cast_iovlen: wasi32::size_t = iov
+                let cast_iovlen: types::Size = iov
                     .len()
                     .try_into()
                     .expect("iovec are bounded by wasi max sizes");
@@ -403,12 +378,12 @@ impl VirtualFile for InMemoryFile {
             .fold(Some(0u32), |len, iov| len.and_then(|x| x.checked_add(iov)))
             .expect("write_vectored will not be called with invalid iovs");
 
-        if let Some(end) = write_start.checked_add(max_size as wasi::__wasi_filesize_t) {
+        if let Some(end) = write_start.checked_add(max_size as types::Filesize) {
             if end > data.max_size() {
-                return Err(WasiError::EFBIG);
+                return Err(Errno::Fbig);
             }
         } else {
-            return Err(WasiError::EFBIG);
+            return Err(Errno::Fbig);
         }
 
         trace!("     | *write_start={:?}", write_start);
@@ -423,43 +398,41 @@ impl VirtualFile for InMemoryFile {
         Ok(written)
     }
 
-    fn read_vectored(&mut self, iovs: &mut [io::IoSliceMut]) -> WasiResult<usize> {
+    fn read_vectored(&mut self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
         trace!("read_vectored(iovs={:?})", iovs);
         trace!("     | *read_start={:?}", self.cursor);
         self.data.borrow_mut().preadv(iovs, self.cursor)
     }
 
-    fn pread(&self, buf: &mut [u8], offset: wasi::__wasi_filesize_t) -> WasiResult<usize> {
-        self.data.borrow_mut().pread(buf, offset)
+    fn preadv(&self, buf: &mut [io::IoSliceMut], offset: types::Filesize) -> Result<usize> {
+        self.data.borrow_mut().preadv(buf, offset)
     }
 
-    fn pwrite(&self, buf: &mut [u8], offset: wasi::__wasi_filesize_t) -> WasiResult<usize> {
-        self.data.borrow_mut().pwrite(buf, offset)
+    fn pwritev(&self, buf: &[io::IoSlice], offset: types::Filesize) -> Result<usize> {
+        self.data.borrow_mut().pwritev(buf, offset)
     }
 
-    fn seek(&mut self, offset: SeekFrom) -> WasiResult<wasi::__wasi_filesize_t> {
+    fn seek(&mut self, offset: SeekFrom) -> Result<types::Filesize> {
         let content_len = self.data.borrow().size();
         match offset {
             SeekFrom::Current(offset) => {
                 let new_cursor = if offset < 0 {
                     self.cursor
                         .checked_sub(offset.wrapping_neg() as u64)
-                        .ok_or(WasiError::EINVAL)?
+                        .ok_or(Errno::Inval)?
                 } else {
-                    self.cursor
-                        .checked_add(offset as u64)
-                        .ok_or(WasiError::EINVAL)?
+                    self.cursor.checked_add(offset as u64).ok_or(Errno::Inval)?
                 };
                 self.cursor = std::cmp::min(content_len, new_cursor);
             }
             SeekFrom::End(offset) => {
                 // A negative offset from the end would be past the end of the file,
-                let offset: u64 = offset.try_into().map_err(|_| WasiError::EINVAL)?;
+                let offset: u64 = offset.try_into().map_err(|_| Errno::Inval)?;
                 self.cursor = content_len.saturating_sub(offset);
             }
             SeekFrom::Start(offset) => {
                 // A negative offset from the end would be before the start of the file.
-                let offset: u64 = offset.try_into().map_err(|_| WasiError::EINVAL)?;
+                let offset: u64 = offset.try_into().map_err(|_| Errno::Inval)?;
                 self.cursor = std::cmp::min(content_len, offset);
             }
         }
@@ -469,32 +442,20 @@ impl VirtualFile for InMemoryFile {
 
     fn advise(
         &self,
-        advice: wasi::__wasi_advice_t,
-        _offset: wasi::__wasi_filesize_t,
-        _len: wasi::__wasi_filesize_t,
-    ) -> WasiResult<()> {
+        _advice: types::Advice,
+        _offset: types::Filesize,
+        _len: types::Filesize,
+    ) -> Result<()> {
         // we'll just ignore advice for now, unless it's totally invalid
-        match advice {
-            wasi::__WASI_ADVICE_DONTNEED
-            | wasi::__WASI_ADVICE_SEQUENTIAL
-            | wasi::__WASI_ADVICE_WILLNEED
-            | wasi::__WASI_ADVICE_NOREUSE
-            | wasi::__WASI_ADVICE_RANDOM
-            | wasi::__WASI_ADVICE_NORMAL => Ok(()),
-            _ => Err(WasiError::EINVAL),
-        }
+        Ok(())
     }
 
-    fn allocate(
-        &self,
-        offset: wasi::__wasi_filesize_t,
-        len: wasi::__wasi_filesize_t,
-    ) -> WasiResult<()> {
-        let new_limit = offset.checked_add(len).ok_or(WasiError::EFBIG)?;
+    fn allocate(&self, offset: types::Filesize, len: types::Filesize) -> Result<()> {
+        let new_limit = offset.checked_add(len).ok_or(Errno::Fbig)?;
         let mut data = self.data.borrow_mut();
 
         if new_limit > data.max_size() {
-            return Err(WasiError::EFBIG);
+            return Err(Errno::Fbig);
         }
 
         if new_limit > data.size() {
@@ -504,16 +465,16 @@ impl VirtualFile for InMemoryFile {
         Ok(())
     }
 
-    fn filestat_set_size(&self, st_size: wasi::__wasi_filesize_t) -> WasiResult<()> {
+    fn filestat_set_size(&self, st_size: types::Filesize) -> Result<()> {
         let mut data = self.data.borrow_mut();
         if st_size > data.max_size() {
-            return Err(WasiError::EFBIG);
+            return Err(Errno::Fbig);
         }
         data.resize(st_size)
     }
 
-    fn filestat_get(&self) -> WasiResult<wasi::__wasi_filestat_t> {
-        let stat = wasi::__wasi_filestat_t {
+    fn filestat_get(&self) -> Result<types::Filestat> {
+        let stat = types::Filestat {
             dev: 0,
             ino: 0,
             nlink: 0,
@@ -526,16 +487,16 @@ impl VirtualFile for InMemoryFile {
         Ok(stat)
     }
 
-    fn get_file_type(&self) -> wasi::__wasi_filetype_t {
-        wasi::__WASI_FILETYPE_REGULAR_FILE
+    fn get_file_type(&self) -> types::Filetype {
+        types::Filetype::RegularFile
     }
 
-    fn get_rights_base(&self) -> wasi::__wasi_rights_t {
-        wasi::RIGHTS_REGULAR_FILE_BASE
+    fn get_rights_base(&self) -> types::Rights {
+        types::Rights::regular_file_base()
     }
 
-    fn get_rights_inheriting(&self) -> wasi::__wasi_rights_t {
-        wasi::RIGHTS_REGULAR_FILE_INHERITING
+    fn get_rights_inheriting(&self) -> types::Rights {
+        types::Rights::regular_file_inheriting()
     }
 }
 
@@ -610,9 +571,9 @@ impl VirtualFile for VirtualDir {
         }))
     }
 
-    fn readlinkat(&self, _path: &Path) -> WasiResult<String> {
-        // Files are not symbolic links or directories, faithfully report ENOTDIR.
-        Err(WasiError::ENOTDIR)
+    fn readlinkat(&self, _path: &Path) -> Result<String> {
+        // Files are not symbolic links or directories, faithfully report Notdir.
+        Err(Errno::Notdir)
     }
 
     fn openat(
@@ -620,9 +581,9 @@ impl VirtualFile for VirtualDir {
         path: &Path,
         read: bool,
         write: bool,
-        oflags: wasi::__wasi_oflags_t,
-        fd_flags: wasi::__wasi_fdflags_t,
-    ) -> WasiResult<Box<dyn VirtualFile>> {
+        oflags: types::Oflags,
+        fd_flags: types::Fdflags,
+    ) -> Result<Box<dyn VirtualFile>> {
         log::trace!(
             "VirtualDir::openat(path={:?}, read={:?}, write={:?}, oflags={:?}, fd_flags={:?}",
             path,
@@ -647,27 +608,27 @@ impl VirtualFile for VirtualDir {
 
         // openat may have been passed a path with a trailing slash, but files are mapped to paths
         // with trailing slashes normalized out.
-        let file_name = path.file_name().ok_or(WasiError::EINVAL)?;
+        let file_name = path.file_name().ok_or(Errno::Inval)?;
         let mut entries = self.entries.borrow_mut();
         let entry_count = entries.len();
         match entries.entry(Path::new(file_name).to_path_buf()) {
             Entry::Occupied(e) => {
-                let creat_excl_mask = wasi::__WASI_OFLAGS_CREAT | wasi::__WASI_OFLAGS_EXCL;
+                let creat_excl_mask = types::Oflags::CREAT | types::Oflags::EXCL;
                 if (oflags & creat_excl_mask) == creat_excl_mask {
                     log::trace!("VirtualDir::openat was passed oflags CREAT|EXCL, but the file {:?} exists.", file_name);
-                    log::trace!("  return EEXIST");
-                    return Err(WasiError::EEXIST);
+                    log::trace!("  return Exist");
+                    return Err(Errno::Exist);
                 }
 
-                if (oflags & wasi::__WASI_OFLAGS_DIRECTORY) != 0
-                    && e.get().get_file_type() != wasi::__WASI_FILETYPE_DIRECTORY
+                if oflags.contains(&types::Oflags::DIRECTORY)
+                    && e.get().get_file_type() != types::Filetype::Directory
                 {
                     log::trace!(
                         "VirtualDir::openat was passed oflags DIRECTORY, but {:?} is a file.",
                         file_name
                     );
-                    log::trace!("  return ENOTDIR");
-                    return Err(WasiError::ENOTDIR);
+                    log::trace!("  return Notdir");
+                    return Err(Errno::Notdir);
                 }
 
                 e.get().try_clone().map_err(Into::into)
@@ -679,7 +640,7 @@ impl VirtualFile for VirtualDir {
                     // would have with `usize`. The limit is the full `u32` range minus two so we
                     // can reserve "self" and "parent" cookie values.
                     if entry_count >= (std::u32::MAX - RESERVED_ENTRY_COUNT) as usize {
-                        return Err(WasiError::ENOSPC);
+                        return Err(Errno::Nospc);
                     }
 
                     log::trace!(
@@ -692,26 +653,26 @@ impl VirtualFile for VirtualDir {
                     file.set_parent(Some(self.try_clone().expect("can clone self")));
                     v.insert(file).try_clone().map_err(Into::into)
                 } else {
-                    Err(WasiError::EACCES)
+                    Err(Errno::Acces)
                 }
             }
         }
     }
 
-    fn remove_directory(&self, path: &str) -> WasiResult<()> {
+    fn remove_directory(&self, path: &str) -> Result<()> {
         let trimmed_path = path.trim_end_matches('/');
         let mut entries = self.entries.borrow_mut();
         match entries.entry(Path::new(trimmed_path).to_path_buf()) {
             Entry::Occupied(e) => {
                 // first, does this name a directory?
-                if e.get().get_file_type() != wasi::__WASI_FILETYPE_DIRECTORY {
-                    return Err(WasiError::ENOTDIR);
+                if e.get().get_file_type() != types::Filetype::Directory {
+                    return Err(Errno::Notdir);
                 }
 
                 // Okay, but is the directory empty?
-                let iter = e.get().readdir(wasi::__WASI_DIRCOOKIE_START)?;
+                let iter = e.get().readdir(wasi::DIRCOOKIE_START)?;
                 if iter.skip(RESERVED_ENTRY_COUNT as usize).next().is_some() {
-                    return Err(WasiError::ENOTEMPTY);
+                    return Err(Errno::Notempty);
                 }
 
                 // Alright, it's an empty directory. We can remove it.
@@ -727,27 +688,27 @@ impl VirtualFile for VirtualDir {
                     "VirtualDir::remove_directory failed to remove {}, no such entry",
                     trimmed_path
                 );
-                Err(WasiError::ENOENT)
+                Err(Errno::Noent)
             }
         }
     }
 
-    fn unlink_file(&self, path: &str) -> WasiResult<()> {
+    fn unlink_file(&self, path: &str) -> Result<()> {
         let trimmed_path = path.trim_end_matches('/');
 
         // Special case: we may be unlinking this directory itself if path is `"."`. In that case,
-        // fail with EISDIR, since this is a directory. Alternatively, we may be unlinking `".."`,
+        // fail with Isdir, since this is a directory. Alternatively, we may be unlinking `".."`,
         // which is bound the same way, as this is by definition contained in a directory.
         if trimmed_path == "." || trimmed_path == ".." {
-            return Err(WasiError::EISDIR);
+            return Err(Errno::Isdir);
         }
 
         let mut entries = self.entries.borrow_mut();
         match entries.entry(Path::new(trimmed_path).to_path_buf()) {
             Entry::Occupied(e) => {
                 // Directories must be removed through `remove_directory`, not `unlink_file`.
-                if e.get().get_file_type() == wasi::__WASI_FILETYPE_DIRECTORY {
-                    return Err(WasiError::EISDIR);
+                if e.get().get_file_type() == types::Filetype::Directory {
+                    return Err(Errno::Isdir);
                 }
 
                 let removed = e.remove_entry();
@@ -762,15 +723,15 @@ impl VirtualFile for VirtualDir {
                     "VirtualDir::unlink_file failed to remove {}, no such entry",
                     trimmed_path
                 );
-                Err(WasiError::ENOENT)
+                Err(Errno::Noent)
             }
         }
     }
 
-    fn create_directory(&self, path: &Path) -> WasiResult<()> {
+    fn create_directory(&self, path: &Path) -> Result<()> {
         let mut entries = self.entries.borrow_mut();
         match entries.entry(path.to_owned()) {
-            Entry::Occupied(_) => Err(WasiError::EEXIST),
+            Entry::Occupied(_) => Err(Errno::Exist),
             Entry::Vacant(v) => {
                 if self.writable {
                     let new_dir = Box::new(Self::new(true));
@@ -778,48 +739,50 @@ impl VirtualFile for VirtualDir {
                     v.insert(new_dir);
                     Ok(())
                 } else {
-                    Err(WasiError::EACCES)
+                    Err(Errno::Acces)
                 }
             }
         }
     }
 
-    fn write_vectored(&mut self, _iovs: &[io::IoSlice]) -> WasiResult<usize> {
-        Err(WasiError::EBADF)
+    fn write_vectored(&mut self, _iovs: &[io::IoSlice]) -> Result<usize> {
+        Err(Errno::Badf)
     }
 
     fn readdir(
         &self,
-        cookie: wasi::__wasi_dircookie_t,
-    ) -> WasiResult<Box<dyn Iterator<Item = WasiResult<Dirent>>>> {
+        cookie: types::Dircookie,
+    ) -> Result<Box<dyn Iterator<Item = Result<(types::Dirent, String)>>>> {
         struct VirtualDirIter {
             start: u32,
             entries: Rc<RefCell<HashMap<PathBuf, Box<dyn VirtualFile>>>>,
         }
         impl Iterator for VirtualDirIter {
-            type Item = WasiResult<Dirent>;
+            type Item = Result<(types::Dirent, String)>;
 
             fn next(&mut self) -> Option<Self::Item> {
                 log::trace!("VirtualDirIter::next continuing from {}", self.start);
                 if self.start == SELF_DIR_COOKIE {
                     self.start += 1;
-                    return Some(Ok(Dirent {
-                        name: ".".to_owned(),
-                        ftype: FileType::from_wasi(wasi::__WASI_FILETYPE_DIRECTORY)
-                            .expect("directories are valid file types"),
-                        ino: 0,
-                        cookie: self.start as u64,
-                    }));
+                    let name = ".".to_owned();
+                    let dirent = types::Dirent {
+                        d_next: self.start as u64,
+                        d_ino: 0,
+                        d_namlen: name.len() as _,
+                        d_type: types::Filetype::Directory,
+                    };
+                    return Some(Ok((dirent, name)));
                 }
                 if self.start == PARENT_DIR_COOKIE {
                     self.start += 1;
-                    return Some(Ok(Dirent {
-                        name: "..".to_owned(),
-                        ftype: FileType::from_wasi(wasi::__WASI_FILETYPE_DIRECTORY)
-                            .expect("directories are valid file types"),
-                        ino: 0,
-                        cookie: self.start as u64,
-                    }));
+                    let name = "..".to_owned();
+                    let dirent = types::Dirent {
+                        d_next: self.start as u64,
+                        d_ino: 0,
+                        d_namlen: name.len() as _,
+                        d_type: types::Filetype::Directory,
+                    };
+                    return Some(Ok((dirent, name)));
                 }
 
                 let entries = self.entries.borrow();
@@ -838,18 +801,20 @@ impl VirtualFile for VirtualDir {
                     .next()
                     .expect("seeked less than the length of entries");
 
-                let entry = Dirent {
-                    name: path
-                        .to_str()
-                        .expect("wasi paths are valid utf8 strings")
-                        .to_owned(),
-                    ftype: FileType::from_wasi(file.get_file_type())
-                        .expect("virtfs reports valid wasi file types"),
-                    ino: 0,
-                    cookie: self.start as u64,
+                let name = path
+                    .to_str()
+                    .expect("wasi paths are valid utf8 strings")
+                    .to_owned();
+                let dirent = || -> Result<types::Dirent> {
+                    let dirent = types::Dirent {
+                        d_namlen: name.len().try_into()?,
+                        d_type: file.get_file_type(),
+                        d_ino: 0,
+                        d_next: self.start as u64,
+                    };
+                    Ok(dirent)
                 };
-
-                Some(Ok(entry))
+                Some(dirent().map(|dirent| (dirent, name)))
             }
         }
         let cookie = match cookie.try_into() {
@@ -866,8 +831,8 @@ impl VirtualFile for VirtualDir {
         }))
     }
 
-    fn filestat_get(&self) -> WasiResult<wasi::__wasi_filestat_t> {
-        let stat = wasi::__wasi_filestat_t {
+    fn filestat_get(&self) -> Result<types::Filestat> {
+        let stat = types::Filestat {
             dev: 0,
             ino: 0,
             nlink: 0,
@@ -880,15 +845,15 @@ impl VirtualFile for VirtualDir {
         Ok(stat)
     }
 
-    fn get_file_type(&self) -> wasi::__wasi_filetype_t {
-        wasi::__WASI_FILETYPE_DIRECTORY
+    fn get_file_type(&self) -> types::Filetype {
+        types::Filetype::Directory
     }
 
-    fn get_rights_base(&self) -> wasi::__wasi_rights_t {
-        wasi::RIGHTS_DIRECTORY_BASE
+    fn get_rights_base(&self) -> types::Rights {
+        types::Rights::directory_base()
     }
 
-    fn get_rights_inheriting(&self) -> wasi::__wasi_rights_t {
-        wasi::RIGHTS_DIRECTORY_INHERITING
+    fn get_rights_inheriting(&self) -> types::Rights {
+        types::Rights::directory_inheriting()
     }
 }

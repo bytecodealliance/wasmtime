@@ -1,12 +1,10 @@
 pub mod old;
 
-use wasi_common::hostcalls;
-
 pub use wasi_common::{WasiCtx, WasiCtxBuilder};
 
 // Defines a `struct Wasi` with member fields and appropriate APIs for dealing
 // with all the various WASI exports.
-wig::define_wasi_struct!(
+wig::define_wasi_struct_for_wiggle!(
     "snapshot" "wasi_snapshot_preview1"
 );
 

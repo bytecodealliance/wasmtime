@@ -1,6 +1,8 @@
-#[path = "../linux/host_impl.rs"]
-pub(crate) mod host_impl;
-#[path = "../linux/hostcalls_impl.rs"]
-pub(crate) mod hostcalls_impl;
+#[path = "../linux/fd.rs"]
+pub(crate) mod fd;
 #[path = "../linux/oshandle.rs"]
 pub(crate) mod oshandle;
+#[path = "../linux/path.rs"]
+pub(crate) mod path;
+
+pub(crate) const O_RSYNC: yanix::file::OFlag = yanix::file::OFlag::RSYNC;

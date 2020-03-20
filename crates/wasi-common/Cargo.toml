@@ -21,6 +21,8 @@ filetime = "0.2.7"
 lazy_static = "1.4.0"
 num = { version = "0.2.0", default-features = false }
 wig = { path = "wig", version = "0.12.0" }
+wiggle = { path = "../wiggle" }
+wiggle-runtime = { path = "../wiggle/crates/runtime" }
 
 [target.'cfg(unix)'.dependencies]
 yanix = { path = "yanix", version = "0.12.0" }

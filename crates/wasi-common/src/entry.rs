@@ -1,7 +1,8 @@
 use crate::sys::dev_null;
-use crate::sys::entry_impl::{descriptor_as_oshandle, determine_type_and_access_rights, OsHandle};
+use crate::sys::entry::{descriptor_as_oshandle, determine_type_and_access_rights, OsHandle};
 use crate::virtfs::VirtualFile;
-use crate::wasi::{self, WasiError, WasiResult};
+use crate::wasi::types::{Filetype, Rights};
+use crate::wasi::{Errno, Result};
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
@@ -54,22 +55,20 @@ impl Descriptor {
     /// Return a reference to the `OsHandle` or `VirtualFile` treating it as an
     /// actual file/dir, and allowing operations which require an actual file and
     /// not just a stream or socket file descriptor.
-    pub(crate) fn as_file<'descriptor>(&'descriptor self) -> WasiResult<&'descriptor Self> {
+    pub(crate) fn as_file<'descriptor>(&'descriptor self) -> Result<&'descriptor Self> {
         match self {
             Self::OsHandle(_) => Ok(self),
             Self::VirtualFile(_) => Ok(self),
-            _ => Err(WasiError::EBADF),
+            _ => Err(Errno::Badf),
         }
     }
 
     /// Like `as_file`, but return a mutable reference.
-    pub(crate) fn as_file_mut<'descriptor>(
-        &'descriptor mut self,
-    ) -> WasiResult<&'descriptor mut Self> {
+    pub(crate) fn as_file_mut<'descriptor>(&'descriptor mut self) -> Result<&'descriptor mut Self> {
         match self {
             Self::OsHandle(_) => Ok(self),
             Self::VirtualFile(_) => Ok(self),
-            _ => Err(WasiError::EBADF),
+            _ => Err(Errno::Badf),
         }
     }
 
@@ -84,15 +83,15 @@ impl Descriptor {
 /// accessed correctly.
 ///
 /// Here, the `descriptor` field stores the host `Descriptor` object (such as a file descriptor, or
-/// stdin handle), and accessing it can only be done via the provided `FdEntry::as_descriptor` and
+/// stdin handle), and accessing it can only be done via the provided `Entry::as_descriptor` and
 /// `Entry::as_descriptor_mut` methods which require a set of base and inheriting rights to be
 /// specified, verifying whether the stored `Descriptor` object is valid for the rights specified.
 #[derive(Debug)]
 pub(crate) struct Entry {
-    pub(crate) file_type: wasi::__wasi_filetype_t,
+    pub(crate) file_type: Filetype,
     descriptor: Descriptor,
-    pub(crate) rights_base: wasi::__wasi_rights_t,
-    pub(crate) rights_inheriting: wasi::__wasi_rights_t,
+    pub(crate) rights_base: Rights,
+    pub(crate) rights_inheriting: Rights,
     pub(crate) preopen_path: Option<PathBuf>,
     // TODO: directories
 }
@@ -122,7 +121,7 @@ impl Entry {
                 })
             }
             Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-                panic!("implementation error, stdin/stdout/stderr FdEntry must not be constructed from FdEntry::from");
+                panic!("implementation error, stdin/stdout/stderr Entry must not be constructed from Entry::from");
             }
         }
     }
@@ -167,56 +166,56 @@ impl Entry {
         Self::from(OsHandle::from(dev_null()?).into())
     }
 
-    /// Convert this `FdEntry` into a host `Descriptor` object provided the specified
-    /// `rights_base` and `rights_inheriting` rights are set on this `FdEntry` object.
+    /// Convert this `Entry` into a host `Descriptor` object provided the specified
+    /// `rights_base` and `rights_inheriting` rights are set on this `Entry` object.
     ///
-    /// The `FdEntry` can only be converted into a valid `Descriptor` object if
+    /// The `Entry` can only be converted into a valid `Descriptor` object if
     /// the specified set of base rights `rights_base`, and inheriting rights `rights_inheriting`
-    /// is a subset of rights attached to this `FdEntry`. The check is performed using
-    /// `FdEntry::validate_rights` method. If the check fails, `WasiError::ENOTCAPABLE` is returned.
+    /// is a subset of rights attached to this `Entry`. The check is performed using
+    /// `Entry::validate_rights` method. If the check fails, `Errno::Notcapable` is returned.
     pub(crate) fn as_descriptor(
         &self,
-        rights_base: wasi::__wasi_rights_t,
-        rights_inheriting: wasi::__wasi_rights_t,
-    ) -> WasiResult<&Descriptor> {
+        rights_base: Rights,
+        rights_inheriting: Rights,
+    ) -> Result<&Descriptor> {
         self.validate_rights(rights_base, rights_inheriting)?;
         Ok(&self.descriptor)
     }
 
-    /// Convert this `FdEntry` into a mutable host `Descriptor` object provided the specified
-    /// `rights_base` and `rights_inheriting` rights are set on this `FdEntry` object.
+    /// Convert this `Entry` into a mutable host `Descriptor` object provided the specified
+    /// `rights_base` and `rights_inheriting` rights are set on this `Entry` object.
     ///
-    /// The `FdEntry` can only be converted into a valid `Descriptor` object if
+    /// The `Entry` can only be converted into a valid `Descriptor` object if
     /// the specified set of base rights `rights_base`, and inheriting rights `rights_inheriting`
-    /// is a subset of rights attached to this `FdEntry`. The check is performed using
-    /// `FdEntry::validate_rights` method. If the check fails, `WasiError::ENOTCAPABLE` is returned.
+    /// is a subset of rights attached to this `Entry`. The check is performed using
+    /// `Entry::validate_rights` method. If the check fails, `Errno::Notcapable` is returned.
     pub(crate) fn as_descriptor_mut(
         &mut self,
-        rights_base: wasi::__wasi_rights_t,
-        rights_inheriting: wasi::__wasi_rights_t,
-    ) -> WasiResult<&mut Descriptor> {
+        rights_base: Rights,
+        rights_inheriting: Rights,
+    ) -> Result<&mut Descriptor> {
         self.validate_rights(rights_base, rights_inheriting)?;
         Ok(&mut self.descriptor)
     }
 
-    /// Check if this `FdEntry` object satisfies the specified base rights `rights_base`, and
-    /// inheriting rights `rights_inheriting`; i.e., if rights attached to this `FdEntry` object
+    /// Check if this `Entry` object satisfies the specified base rights `rights_base`, and
+    /// inheriting rights `rights_inheriting`; i.e., if rights attached to this `Entry` object
     /// are a superset.
     ///
-    /// Upon unsuccessful check, `WasiError::ENOTCAPABLE` is returned.
-    fn validate_rights(
+    /// Upon unsuccessful check, `Errno::Notcapable` is returned.
+    pub(crate) fn validate_rights(
         &self,
-        rights_base: wasi::__wasi_rights_t,
-        rights_inheriting: wasi::__wasi_rights_t,
-    ) -> WasiResult<()> {
+        rights_base: Rights,
+        rights_inheriting: Rights,
+    ) -> Result<()> {
         let missing_base = !self.rights_base & rights_base;
         let missing_inheriting = !self.rights_inheriting & rights_inheriting;
-        if missing_base != 0 || missing_inheriting != 0 {
+        if missing_base != Rights::empty() || missing_inheriting != Rights::empty() {
             log::trace!(
                 "     | validate_rights failed: required: \
-                 rights_base = {:#x}, rights_inheriting = {:#x}; \
-                 actual: rights_base = {:#x}, rights_inheriting = {:#x}; \
-                 missing_base = {:#x}, missing_inheriting = {:#x}",
+                 rights_base = {}, rights_inheriting = {}; \
+                 actual: rights_base = {}, rights_inheriting = {}; \
+                 missing_base = {}, missing_inheriting = {}",
                 rights_base,
                 rights_inheriting,
                 self.rights_base,
@@ -224,7 +223,7 @@ impl Entry {
                 missing_base,
                 missing_inheriting
             );
-            Err(WasiError::ENOTCAPABLE)
+            Err(Errno::Notcapable)
         } else {
             Ok(())
         }
@@ -234,8 +233,8 @@ impl Entry {
     /// Note that since WASI itself lacks an `isatty` syscall and relies
     /// on a conservative approximation, we use the same approximation here.
     pub(crate) fn isatty(&self) -> bool {
-        self.file_type == wasi::__WASI_FILETYPE_CHARACTER_DEVICE
-            && (self.rights_base & (wasi::__WASI_RIGHTS_FD_SEEK | wasi::__WASI_RIGHTS_FD_TELL)) == 0
+        self.file_type == Filetype::CharacterDevice
+            && (self.rights_base & (Rights::FD_SEEK | Rights::FD_TELL)) == Rights::empty()
     }
 }
 

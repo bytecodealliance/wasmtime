@@ -17,6 +17,12 @@ pub(super) fn define_handle(
         #[derive(Copy, Clone, Debug, ::std::hash::Hash, Eq, PartialEq)]
         pub struct #ident(u32);
 
+        impl #ident {
+            pub unsafe fn inner(&self) -> u32 {
+                self.0
+            }
+        }
+
         impl From<#ident> for u32 {
             fn from(e: #ident) -> u32 {
                 e.0

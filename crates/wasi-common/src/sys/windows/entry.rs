@@ -1,5 +1,5 @@
 use crate::entry::{Descriptor, OsHandleRef};
-use crate::wasi;
+use crate::wasi::{types, RightsExt};
 use std::fs::File;
 use std::io;
 use std::mem::ManuallyDrop;
@@ -63,23 +63,19 @@ pub(crate) fn descriptor_as_oshandle<'lifetime>(
 /// This function is unsafe because it operates on a raw file descriptor.
 pub(crate) unsafe fn determine_type_and_access_rights<Handle: AsRawHandle>(
     handle: &Handle,
-) -> io::Result<(
-    wasi::__wasi_filetype_t,
-    wasi::__wasi_rights_t,
-    wasi::__wasi_rights_t,
-)> {
+) -> io::Result<(types::Filetype, types::Rights, types::Rights)> {
     use winx::file::{query_access_information, AccessMode};
 
     let (file_type, mut rights_base, rights_inheriting) = determine_type_rights(handle)?;
 
     match file_type {
-        wasi::__WASI_FILETYPE_DIRECTORY | wasi::__WASI_FILETYPE_REGULAR_FILE => {
+        types::Filetype::Directory | types::Filetype::RegularFile => {
             let mode = query_access_information(handle.as_raw_handle())?;
             if mode.contains(AccessMode::FILE_GENERIC_READ) {
-                rights_base |= wasi::__WASI_RIGHTS_FD_READ;
+                rights_base |= types::Rights::FD_READ;
             }
             if mode.contains(AccessMode::FILE_GENERIC_WRITE) {
-                rights_base |= wasi::__WASI_RIGHTS_FD_WRITE;
+                rights_base |= types::Rights::FD_WRITE;
             }
         }
         _ => {
@@ -96,20 +92,16 @@ pub(crate) unsafe fn determine_type_and_access_rights<Handle: AsRawHandle>(
 /// This function is unsafe because it operates on a raw file descriptor.
 pub(crate) unsafe fn determine_type_rights<Handle: AsRawHandle>(
     handle: &Handle,
-) -> io::Result<(
-    wasi::__wasi_filetype_t,
-    wasi::__wasi_rights_t,
-    wasi::__wasi_rights_t,
-)> {
+) -> io::Result<(types::Filetype, types::Rights, types::Rights)> {
     let (file_type, rights_base, rights_inheriting) = {
         let file_type = winx::file::get_file_type(handle.as_raw_handle())?;
         if file_type.is_char() {
             // character file: LPT device or console
             // TODO: rule out LPT device
             (
-                wasi::__WASI_FILETYPE_CHARACTER_DEVICE,
-                wasi::RIGHTS_TTY_BASE,
-                wasi::RIGHTS_TTY_BASE,
+                types::Filetype::CharacterDevice,
+                types::Rights::tty_base(),
+                types::Rights::tty_base(),
             )
         } else if file_type.is_disk() {
             // disk file: file, dir or disk device
@@ -117,15 +109,15 @@ pub(crate) unsafe fn determine_type_rights<Handle: AsRawHandle>(
             let meta = file.metadata()?;
             if meta.is_dir() {
                 (
-                    wasi::__WASI_FILETYPE_DIRECTORY,
-                    wasi::RIGHTS_DIRECTORY_BASE,
-                    wasi::RIGHTS_DIRECTORY_INHERITING,
+                    types::Filetype::Directory,
+                    types::Rights::directory_base(),
+                    types::Rights::directory_inheriting(),
                 )
             } else if meta.is_file() {
                 (
-                    wasi::__WASI_FILETYPE_REGULAR_FILE,
-                    wasi::RIGHTS_REGULAR_FILE_BASE,
-                    wasi::RIGHTS_REGULAR_FILE_INHERITING,
+                    types::Filetype::RegularFile,
+                    types::Rights::regular_file_base(),
+                    types::Rights::regular_file_inheriting(),
                 )
             } else {
                 return Err(io::Error::from_raw_os_error(libc::EINVAL));
@@ -134,9 +126,9 @@ pub(crate) unsafe fn determine_type_rights<Handle: AsRawHandle>(
             // pipe object: socket, named pipe or anonymous pipe
             // TODO: what about pipes, etc?
             (
-                wasi::__WASI_FILETYPE_SOCKET_STREAM,
-                wasi::RIGHTS_SOCKET_BASE,
-                wasi::RIGHTS_SOCKET_INHERITING,
+                types::Filetype::SocketStream,
+                types::Rights::socket_base(),
+                types::Rights::socket_inheriting(),
             )
         } else {
             return Err(io::Error::from_raw_os_error(libc::EINVAL));
