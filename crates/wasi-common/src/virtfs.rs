@@ -137,6 +137,10 @@ pub(crate) trait VirtualFile: MovableFile {
 
     fn get_file_type(&self) -> types::Filetype;
 
+    fn is_directory(&self) -> bool {
+        self.get_file_type() == types::Filetype::Directory
+    }
+
     fn get_rights_base(&self) -> types::Rights {
         types::Rights::empty()
     }
