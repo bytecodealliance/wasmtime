@@ -98,4 +98,55 @@ You shouldn't need to do anything else to get this information into `perf`. The
 perf collection data should automatically pick up all this dwarf debug
 information.
 
+### `perf` example
+
+Let's run through a quick example with `perf` to get the feel for things. First
+let's take a look at some wasm:
+
+```rust
+fn main() {
+    let n = 42;
+    println!("fib({}) = {}", n, fib(n));
+}
+
+fn fib(n: u32) -> u32 {
+    if n <= 2 {
+        1
+    } else {
+        fib(n - 1) + fib(n - 2)
+    }
+}
+```
+
+To collect perf information for this wasm module we'll execute:
+
+```sh
+$ rustc --target wasm32-wasi fib.rs -O
+$ perf record -k mono wasmtime --jitdump fib.wasm
+fib(42) = 267914296
+[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 0.147 MB perf.data (3435 samples) ]
+$ perf inject --jit --input perf.data --output perf.jit.data
+```
+
+And we should have all out information now! We can execute `perf report` for
+example to see that 99% of our runtime (as expected) is spent in our `fib`
+function. Note that the symbol has been demangled to `fib::fib` which is what
+the Rust symbol is:
+
+```
+$ perf report --input perf.jit-data
+```
+
+![perf report output](assets/perf-report-fib.png)
+
+Alternatively we could also use `perf annotate` to take a look at the
+disassembly of the `fib` function, seeing what the JIT generated:
+
+```
+$ perf annotate --input perf.jit-data
+```
+
+![perf annotate output](assets/perf-annotate-fib.png)
+
 [`Config::debug_info`]: https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.debug_info

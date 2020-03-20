@@ -221,8 +221,11 @@ impl ProfilingAgent for JitDumpAgent {
 
 impl State {
     /// Returns timestamp from a single source
-    #[allow(unused_variables)]
     fn get_time_stamp(&self) -> u64 {
+        // We need to use `CLOCK_MONOTONIC` on Linux which is what `Instant`
+        // conveniently also uses, but `Instant` doesn't allow us to get access
+        // to nanoseconds as an internal detail, so we calculate the nanoseconds
+        // ourselves here.
         unsafe {
             let mut ts = mem::MaybeUninit::zeroed();
             assert_eq!(
@@ -231,12 +234,11 @@ impl State {
             );
             let ts = ts.assume_init();
             // TODO: What does it mean for either sec or nsec to be negative?
-            (ts.tv_sec * 1000000000 + ts.tv_nsec) as u64
+            (ts.tv_sec * 1_000_000_000 + ts.tv_nsec) as u64
         }
     }
 
     /// Returns the ELF machine architecture.
-    #[allow(dead_code)]
     fn get_e_machine(&self) -> u32 {
         match target_lexicon::HOST.architecture {
             Architecture::X86_64 => elf::header::EM_X86_64 as u32,
@@ -247,7 +249,6 @@ impl State {
         }
     }
 
-    #[allow(dead_code)]
     fn write_file_header(&mut self) -> Result<()> {
         let header = FileHeader {
             timestamp: self.get_time_stamp(),

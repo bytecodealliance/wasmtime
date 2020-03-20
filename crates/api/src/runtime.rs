@@ -379,13 +379,14 @@ pub enum OptLevel {
     SpeedAndSize,
 }
 
-/// Select which profiling technique to use
+/// Select which profiling technique to support.
 #[derive(Debug, Clone, Copy)]
 pub enum ProfilingStrategy {
-    /// No profiler support
+    /// No profiler support.
     None,
 
-    /// Collect profile for jitdump file format, used with `perf` on Linux
+    /// Collect profiling info for "jitdump" file format, used with `perf` on
+    /// Linux.
     JitDump,
 }
 
