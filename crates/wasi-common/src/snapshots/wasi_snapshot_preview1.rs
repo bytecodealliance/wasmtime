@@ -533,18 +533,18 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         trace!("fd_read(fd={:?}, iovs={:?})", fd, iovs);
 
         let mut bc = GuestBorrows::new();
-        let mut slices: Vec<&'_ mut [u8]> = Vec::new();
+        let mut slices = Vec::new();
         bc.borrow_slice(&iovs)?;
         for iov_ptr in iovs.iter() {
             let iov_ptr = iov_ptr?;
             let iov: types::Iovec = iov_ptr.read()?;
-            let base: GuestPtr<u8> = iov.buf;
-            let len: u32 = iov.buf_len;
-            let buf: GuestPtr<[u8]> = base.as_array(len);
-            let slice = buf.as_raw(&mut bc)?;
-            slices.push(unsafe { &mut *slice });
+            let slice = unsafe {
+                let buf = iov.buf.as_array(iov.buf_len);
+                let raw = buf.as_raw(&mut bc)?;
+                &mut *raw
+            };
+            slices.push(io::IoSliceMut::new(slice));
         }
-        let mut slices: Vec<_> = slices.into_iter().map(io::IoSliceMut::new).collect();
 
         let mut entry = unsafe { self.get_entry_mut(fd)? };
         let host_nread =
