@@ -15,6 +15,8 @@ pub enum GuestError {
     PtrNotAligned(Region, u32),
     #[error("Pointer already borrowed: {0:?}")]
     PtrBorrowed(Region),
+    #[error("Slice length mismatch")]
+    SliceLengthsDiffer,
     #[error("In func {funcname}:{location}:")]
     InFunc {
         funcname: &'static str,
