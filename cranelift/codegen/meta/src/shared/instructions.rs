@@ -1542,6 +1542,21 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let constant =
+        &Operand::new("constant", &imm.pool_constant).with_doc("A constant in the constant pool");
+    let address = &Operand::new("address", iAddr);
+    ig.push(
+        Inst::new(
+            "const_addr",
+            r#"
+        Calculate the base address of a value in the constant pool.
+        "#,
+            &formats.unary_const,
+        )
+        .operands_in(vec![constant])
+        .operands_out(vec![address]),
+    );
+
     let mask = &Operand::new("mask", &imm.uimm128)
         .with_doc("The 16 immediate bytes used for selecting the elements to shuffle");
     let Tx16 = &TypeVar::new(

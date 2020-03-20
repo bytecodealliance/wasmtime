@@ -1463,6 +1463,21 @@ pub(crate) fn define<'shared>(
             ),
     );
 
+    // Constant addresses.
+
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("const_addr", &formats.unary_const, 5)
+            .operands_out(vec![gpr])
+            .clobbers_flags(false)
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(0, out_reg0), sink);
+                    modrm_riprel(out_reg0, sink);
+                    const_disp4(constant_handle, func, sink);
+                "#,
+            ),
+    );
+
     // Store recipes.
 
     {

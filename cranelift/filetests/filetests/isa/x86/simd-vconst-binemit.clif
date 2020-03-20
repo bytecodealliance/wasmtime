@@ -19,3 +19,11 @@ block0:
 [-, %xmm3]  v1 = vconst.i32x4 const43  ; bin: 0f 10 1d 00000011 PCRelRodata4(31)
             return
 }
+
+function %address_of_vconst() {
+const42 = i32x4 [1 0 0 0]
+
+block0:
+[-, %rax]   v0 = const_addr.i64 const42  ; bin: 48 8d 05 00000001 PCRelRodata4(8)
+            return
+}

@@ -2179,6 +2179,7 @@ fn define_entity_ref(
     let formats = &shared_defs.formats;
 
     // Shorthands for instructions.
+    let const_addr = shared.by_name("const_addr");
     let func_addr = shared.by_name("func_addr");
     let stack_addr = shared.by_name("stack_addr");
     let symbol_value = shared.by_name("symbol_value");
@@ -2188,6 +2189,7 @@ fn define_entity_ref(
     let rec_allones_fnaddr8 = r.template("allones_fnaddr8");
     let rec_fnaddr4 = r.template("fnaddr4");
     let rec_fnaddr8 = r.template("fnaddr8");
+    let rec_const_addr = r.template("const_addr");
     let rec_got_fnaddr8 = r.template("got_fnaddr8");
     let rec_got_gvaddr8 = r.template("got_gvaddr8");
     let rec_gvaddr4 = r.template("gvaddr4");
@@ -2285,6 +2287,10 @@ fn define_entity_ref(
     // don't get legalized to stack_addr + load/store.
     e.enc32(stack_addr.bind(I32), rec_spaddr4_id.opcodes(&LEA));
     e.enc64(stack_addr.bind(I64), rec_spaddr8_id.opcodes(&LEA).rex().w());
+
+    // Constant addresses (PIC).
+    e.enc64(const_addr.bind(I64), rec_const_addr.opcodes(&LEA).rex().w());
+    e.enc32(const_addr.bind(I32), rec_const_addr.opcodes(&LEA));
 }
 
 /// Control flow opcodes.
