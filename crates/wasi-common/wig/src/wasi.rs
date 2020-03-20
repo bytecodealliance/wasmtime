@@ -195,7 +195,7 @@ pub fn define_struct(args: TokenStream) -> TokenStream {
                             let memory = match caller.get_export("memory") {
                                 Some(wasmtime::Extern::Memory(m)) => m,
                                 _ => {
-                                    let e = wasi_common::wasi::__WASI_ERRNO_INVAL;
+                                    let e = wasi_common::old::snapshot_0::wasi::__WASI_ERRNO_INVAL;
                                     #handle_early_error
                                 }
                             };
@@ -384,9 +384,11 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
             let mut ret_ty = quote! { () };
             let mut cvt_ret = quote! {};
             let mut returns = Vec::new();
+            let mut handle_early_error = quote! { panic!("error: {:?}", e) };
 
             // The first result is returned bare right now...
             if let Some(ret) = results.next() {
+                handle_early_error = quote! { return e.into() };
                 match &*ret.tref.type_() {
                     // Eventually we'll want to add support for more returned
                     // types, but for now let's just conform to what `*.witx`
@@ -414,17 +416,24 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
             }
 
             let format_str = format!("{}({})", name, formats.join(", "));
-            let wrap = format_ident!("wrap{}", shim_arg_decls.len() + 1);
             ctor_externs.push(quote! {
                 let my_cx = cx.clone();
-                let #name_ident = wasmtime::Func::#wrap(
+                let #name_ident = wasmtime::Func::wrap(
                     store,
-                    move |mem: crate::WasiCallerMemory #(,#shim_arg_decls)*| -> #ret_ty {
+                    move |caller: wasmtime::Caller<'_> #(,#shim_arg_decls)*| -> #ret_ty {
                         log::trace!(
                             #format_str,
                             #(#format_args),*
                         );
                         unsafe {
+                            let mem = match caller.get_export("memory") {
+                                Some(wasmtime::Extern::Memory(m)) => m,
+                                _ => {
+                                    let e = wasi_common::wasi::Errno::Inval;
+                                    #handle_early_error
+                                }
+                            };
+                            let mem: WasiMemory = mem.into();
                             wasi_common::wasi::#module_id::#name_ident(
                                 &mut my_cx.borrow_mut(),
                                 &mem,
@@ -438,6 +447,23 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
     }
 
     quote! {
+        /// Lightweight `wasmtime::Memory` wrapper so that we can
+        /// implement `wiggle_runtime::GuestMemory` trait on it which is
+        /// now required to interface with `wasi-common`.
+        struct WasiMemory(wasmtime::Memory);
+
+        impl From<wasmtime::Memory> for WasiMemory {
+            fn from(mem: wasmtime::Memory) -> Self {
+                Self(mem)
+            }
+        }
+
+        unsafe impl wiggle_runtime::GuestMemory for WasiMemory {
+            fn base(&self) -> (*mut u8, u32) {
+                (self.0.data_ptr(), self.0.data_size() as _)
+            }
+        }
+
         /// An instantiated instance of the wasi exports.
         ///
         /// This represents a wasi module which can be used to instantiate other
