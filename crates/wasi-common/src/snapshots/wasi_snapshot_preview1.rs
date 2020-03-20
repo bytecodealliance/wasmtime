@@ -363,55 +363,45 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<types::Size> {
         trace!("fd_pread(fd={:?}, iovs={:?}, offset={})", fd, iovs, offset,);
 
-        let mut slices = Vec::new();
-        let mut total_len: types::Size = 0;
+        let mut buf = Vec::new();
         let mut bc = GuestBorrows::new();
         bc.borrow_slice(iovs)?;
         for iov_ptr in iovs.iter() {
             let iov_ptr = iov_ptr?;
             let iov: types::Iovec = iov_ptr.read()?;
-            let buf = iov.buf;
-            let buf_len = iov.buf_len;
-            total_len = total_len.checked_add(buf_len).ok_or(Errno::Inval)?;
-            let as_arr = buf.as_array(buf_len);
-            let as_raw = as_arr.as_raw(&mut bc)?;
-            slices.push(unsafe { &mut *as_raw });
+            let slice = unsafe {
+                let buf = iov.buf.as_array(iov.buf_len);
+                let raw = buf.as_raw(&mut bc)?;
+                &mut *raw
+            };
+            buf.push(io::IoSliceMut::new(slice));
         }
 
-        let entry = unsafe { self.get_entry(fd)? };
+        let mut entry = unsafe { self.get_entry_mut(fd)? };
         let file = entry
-            .as_descriptor(
+            .as_descriptor_mut(
                 types::Rights::FD_READ | types::Rights::FD_SEEK,
                 types::Rights::empty(),
             )?
-            .as_file()?;
+            .as_file_mut()?;
 
         if offset > i64::max_value() as u64 {
             return Err(Errno::Io);
         }
 
-        let mut buf = vec![0; total_len as usize];
         let host_nread = match file {
-            Descriptor::OsHandle(fd) => fd::pread(&fd, &mut buf, offset)?,
-            Descriptor::VirtualFile(virt) => virt.pread(&mut buf, offset)?,
+            Descriptor::OsHandle(fd) => {
+                let pos = SeekFrom::Start(offset);
+                fd.seek(pos)?;
+                fd.read_vectored(&mut buf)?
+            }
+            Descriptor::VirtualFile(virt) => virt.preadv(&mut buf, offset)?,
             _ => {
                 unreachable!(
                     "implementation error: fd should have been checked to not be a stream already"
                 );
             }
         };
-
-        let mut buf_offset = 0;
-        let mut left = host_nread;
-        for slice in slices {
-            if left == 0 {
-                break;
-            }
-            let vec_len = std::cmp::min(slice.len(), left);
-            slice[..vec_len].copy_from_slice(&buf[buf_offset..buf_offset + vec_len]);
-            buf_offset += vec_len;
-            left -= vec_len;
-        }
         let host_nread = host_nread.try_into()?;
 
         trace!("     | *nread={:?}", host_nread);
@@ -499,24 +489,28 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                 let raw = buf.as_raw(&mut bc)?;
                 &*raw
             };
-            buf.extend_from_slice(slice);
+            buf.push(io::IoSlice::new(slice));
         }
 
-        let entry = unsafe { self.get_entry(fd)? };
+        let mut entry = unsafe { self.get_entry_mut(fd)? };
         let file = entry
-            .as_descriptor(
+            .as_descriptor_mut(
                 types::Rights::FD_WRITE | types::Rights::FD_SEEK,
                 types::Rights::empty(),
             )?
-            .as_file()?;
+            .as_file_mut()?;
 
         if offset > i64::max_value() as u64 {
             return Err(Errno::Io);
         }
 
         let host_nwritten = match file {
-            Descriptor::OsHandle(fd) => fd::pwrite(&fd, &buf, offset)?,
-            Descriptor::VirtualFile(virt) => virt.pwrite(buf.as_mut(), offset)?,
+            Descriptor::OsHandle(fd) => {
+                let pos = SeekFrom::Start(offset);
+                fd.seek(pos)?;
+                fd.write_vectored(&buf)?
+            }
+            Descriptor::VirtualFile(virt) => virt.pwritev(&buf, offset)?,
             _ => {
                 unreachable!(
                     "implementation error: fd should have been checked to not be a stream already"

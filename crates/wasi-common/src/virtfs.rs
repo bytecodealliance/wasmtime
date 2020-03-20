@@ -88,11 +88,11 @@ pub(crate) trait VirtualFile: MovableFile {
         Err(Errno::Badf)
     }
 
-    fn pread(&self, _buf: &mut [u8], _offset: u64) -> Result<usize> {
+    fn preadv(&self, _buf: &mut [io::IoSliceMut], _offset: u64) -> Result<usize> {
         Err(Errno::Badf)
     }
 
-    fn pwrite(&self, _buf: &mut [u8], _offset: u64) -> Result<usize> {
+    fn pwritev(&self, _buf: &[io::IoSlice], _offset: u64) -> Result<usize> {
         Err(Errno::Badf)
     }
 
@@ -402,12 +402,12 @@ impl VirtualFile for InMemoryFile {
         self.data.borrow_mut().preadv(iovs, self.cursor)
     }
 
-    fn pread(&self, buf: &mut [u8], offset: types::Filesize) -> Result<usize> {
-        self.data.borrow_mut().pread(buf, offset)
+    fn preadv(&self, buf: &mut [io::IoSliceMut], offset: types::Filesize) -> Result<usize> {
+        self.data.borrow_mut().preadv(buf, offset)
     }
 
-    fn pwrite(&self, buf: &mut [u8], offset: types::Filesize) -> Result<usize> {
-        self.data.borrow_mut().pwrite(buf, offset)
+    fn pwritev(&self, buf: &[io::IoSlice], offset: types::Filesize) -> Result<usize> {
+        self.data.borrow_mut().pwritev(buf, offset)
     }
 
     fn seek(&mut self, offset: SeekFrom) -> Result<types::Filesize> {

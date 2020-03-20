@@ -3,22 +3,7 @@ use crate::sys::entry::OsHandle;
 use crate::wasi::{self, types, Result};
 use std::convert::TryInto;
 use std::fs::File;
-use std::os::unix::fs::FileExt;
 use std::os::unix::prelude::AsRawFd;
-
-pub(crate) fn pread(file: &File, buf: &mut [u8], offset: types::Filesize) -> Result<usize> {
-    log::debug!("fd_pread buf = {:#?}", buf);
-    let nread = file.read_at(buf, offset)?;
-    log::debug!("fd_pread buf = {:#?}", buf);
-    Ok(nread)
-}
-
-pub(crate) fn pwrite(file: &File, buf: &[u8], offset: types::Filesize) -> Result<usize> {
-    log::debug!("fd_pwrite buf = {:#?}", buf);
-    let nwritten = file.write_at(buf, offset)?;
-    log::debug!("fd_pwrite buf = {:#?}", buf);
-    Ok(nwritten)
-}
 
 pub(crate) fn fdstat_get(fd: &File) -> Result<types::Fdflags> {
     let fdflags = unsafe { yanix::fcntl::get_status_flags(fd.as_raw_fd())? };

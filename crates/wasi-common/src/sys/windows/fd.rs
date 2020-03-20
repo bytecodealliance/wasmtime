@@ -11,38 +11,6 @@ use std::os::windows::prelude::{AsRawHandle, FromRawHandle};
 use std::path::Path;
 use winx::file::{AccessMode, FileModeInformation, Flags};
 
-fn read_at(mut file: &File, buf: &mut [u8], offset: u64) -> io::Result<usize> {
-    // get current cursor position
-    let cur_pos = file.seek(SeekFrom::Current(0))?;
-    // perform a seek read by a specified offset
-    let nread = file.seek_read(buf, offset)?;
-    // rewind the cursor back to the original position
-    file.seek(SeekFrom::Start(cur_pos))?;
-    Ok(nread)
-}
-
-fn write_at(mut file: &File, buf: &[u8], offset: u64) -> io::Result<usize> {
-    // get current cursor position
-    let cur_pos = file.seek(SeekFrom::Current(0))?;
-    // perform a seek write by a specified offset
-    let nwritten = file.seek_write(buf, offset)?;
-    // rewind the cursor back to the original position
-    file.seek(SeekFrom::Start(cur_pos))?;
-    Ok(nwritten)
-}
-
-// TODO refactor common code with unix
-pub(crate) fn pread(file: &File, buf: &mut [u8], offset: types::Filesize) -> Result<usize> {
-    let nread = read_at(file, buf, offset)?;
-    Ok(nread)
-}
-
-// TODO refactor common code with unix
-pub(crate) fn pwrite(file: &File, buf: &[u8], offset: types::Filesize) -> Result<usize> {
-    let nwritten = write_at(file, buf, offset)?;
-    Ok(nwritten)
-}
-
 pub(crate) fn fdstat_get(fd: &File) -> Result<types::Fdflags> {
     let mut fdflags = types::Fdflags::empty();
     let handle = fd.as_raw_handle();
