@@ -1423,11 +1423,13 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn random_get(&self, buf: GuestPtr<u8>, buf_len: types::Size) -> Result<()> {
         trace!("random_get(buf={:?}, buf_len={:?})", buf, buf_len);
 
-        let mut bc = GuestBorrows::new();
-        let as_arr = buf.as_array(buf_len);
-        let slice = as_arr.as_raw(&mut bc)?;
-
-        getrandom::getrandom(unsafe { &mut *slice }).map_err(|err| {
+        let slice = unsafe {
+            let mut bc = GuestBorrows::new();
+            let buf = buf.as_array(buf_len);
+            let raw = buf.as_raw(&mut bc)?;
+            &mut *raw
+        };
+        getrandom::getrandom(slice).map_err(|err| {
             error!("getrandom failure: {:?}", err);
             Errno::Io
         })
