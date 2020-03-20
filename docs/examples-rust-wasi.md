@@ -16,6 +16,6 @@ This example shows off how to instantiate a wasm module using WASI imports.
 
 ## `wasi.rs`
 
-```rust
+```rust,ignore
 {{#include ../examples/wasi/main.rs}}
 ```

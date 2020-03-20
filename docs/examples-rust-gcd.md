@@ -17,6 +17,6 @@ numbers.
 
 ## `gcd.rs`
 
-```rust
+```rust,ignore
 {{#include ../examples/gcd.rs}}
 ```

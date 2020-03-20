@@ -17,6 +17,6 @@ exports and imports.
 
 ## `multi.rs`
 
-```rust
+```rust,ignore
 {{#include ../examples/multi.rs}}
 ```

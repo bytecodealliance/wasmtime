@@ -17,6 +17,6 @@ it.
 
 ## `hello.rs`
 
-```rust
+```rust,ignore
 {{#include ../examples/hello.rs}}
 ```

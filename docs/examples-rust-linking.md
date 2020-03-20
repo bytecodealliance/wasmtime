@@ -22,6 +22,6 @@ together.
 
 ## `linking.rs`
 
-```rust
+```rust,ignore
 {{#include ../examples/linking.rs}}
 ```

@@ -19,6 +19,6 @@ read the documentation for [`Memory`] as well.
 
 ## `memory.rs`
 
-```rust
+```rust,ignore
 {{#include ../examples/memory.rs}}
 ```

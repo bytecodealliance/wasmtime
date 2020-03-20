@@ -10,6 +10,6 @@ a native debugger like GDB or LLDB.
 
 ## `main.rs`
 
-```rust
+```rust,ignore
 {{#include ../examples/fib-debug/main.rs}}
 ```
