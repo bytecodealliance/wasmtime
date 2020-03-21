@@ -70,7 +70,7 @@ you how to use module imports and work with module linear memory.
 To show how we can use functions from the host, take a look at this rust code
 
 ```rust
-{{#include ../../crates/misc/py/examples/import/demo.rs}}
+{{#include ../crates/misc/py/examples/import/demo.rs}}
 ```
 
 We have a `test` function which calls `callback`. Since it's wrapped in `extern "C"`,
@@ -81,7 +81,7 @@ example without any extra linker options, the result module will import
 `callback` inside an `env.py` module.
 
 ```python
-{{#include ../../crates/misc/py/examples/import/env.py}}
+{{#include ../crates/misc/py/examples/import/env.py}}
 ```
 
 The module provides `callback` with a pointer to a string message. We use this
@@ -104,7 +104,7 @@ Before we can use `demo.rs` we need to compile it
 We can then use it like this
 
 ```python
-{{#include ../../crates/misc/py/examples/import/run.py}}
+{{#include ../crates/misc/py/examples/import/run.py}}
 ```
 
 The script should print `Hello, world!` and exit.
