@@ -87,9 +87,11 @@ example without any extra linker options, the result module will import
 {{#include ../../crates/misc/py/examples/import/env.py}}
 ```
 
-The module provides `callback` with a pointer to a string message. We use this to
-index into the demo module's memory, extract the message bytes and print them as
-a string.
+The module provides `callback` with a pointer to a string message. We use this
+to index into the demo module's memory, extract the message bytes and print them
+as a string. Every Webassembly module exports its main linear memory as "memory"
+by default, so it's accessible as `demo.memory` in python. We wrap the memory
+into a `memoryview` so we can safely access the values inside.
 
 Before we move on, note the type annotations on `callback`. These are necessary
 for representing your function as something callable in Webassembly, since
