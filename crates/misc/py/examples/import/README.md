@@ -3,7 +3,7 @@
 To build `demo.wasm` use rustc (nightly) for wasm32 target with debug information:
 
 ```
-rustc +nightly --target=wasm32-unknown-unknown demo.rs --crate-type=cdylib
+rustup run nightly rustc --target=wasm32-unknown-unknown demo.rs --crate-type=cdylib
 ```
 
 # Run example

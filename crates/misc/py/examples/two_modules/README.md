@@ -3,7 +3,7 @@
 To build `one.wasm` use rustc (nightly) for wasm32 target with debug information:
 
 ```
-rustc +nightly --target=wasm32-unknown-unknown one.rs --crate-type=cdylib
+rustup run nightly rustc --target=wasm32-unknown-unknown one.rs --crate-type=cdylib
 ```
 
 To build `two.wasm` use wabt.
