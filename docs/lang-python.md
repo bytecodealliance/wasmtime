@@ -95,7 +95,8 @@ Before we move on, note the type annotations on `callback`. These are necessary
 for representing your function as something callable in Webassembly, since
 Webassembly functions only operate on 32 and 64 bit floats and integers. When
 defining functions for use by Webassembly modules, make sure the parameters and
-return value are annotated as any of `'i32'`, `'i64'`, `'f32'`, or `'f64'`.
+return value are annotated appropriately as any of `'i32'`, `'i64'`, `'f32'`, or
+`'f64'`.
 
 Compile the `demo.rs` module with
 
