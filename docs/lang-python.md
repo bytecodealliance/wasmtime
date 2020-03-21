@@ -11,10 +11,7 @@ To follow this guide, you'll need
 
  - Python 3.6 or newer
  - The [Webassembly binary toolkit](https://github.com/WebAssembly/wabt/releases)
-
-It's also helpful to have [rustup](https://rustup.rs/) to install nightly versions of the rust
-compiler toolchain, since there are plenty of example modules in rust, and it's
-a good platform for authoring your own.
+ - The rust toolchain installer [rustup](https://rustup.rs/)
 
 ## Getting started and simple example
 
