@@ -100,7 +100,7 @@ defining functions for use by Webassembly modules, make sure the parameters and
 return value are annotated appropriately as any of `'i32'`, `'i64'`, `'f32'`, or
 `'f64'`.
 
-Compile the `demo.rs` module with
+Before we can use `demo.rs` we need to compile it like this
 
 > rustup run nightly rustc --target=wasm32-unknown-unknown --crate-type=cdylib
 
