@@ -12,6 +12,7 @@ into executable machine code.
 [![Fuzzit Status](https://app.fuzzit.dev/badge?org_id=bytecodealliance)](https://app.fuzzit.dev/orgs/bytecodealliance/dashboard)
 [![Chat](https://img.shields.io/badge/chat-zulip-brightgreen.svg)](https://bytecodealliance.zulipchat.com/#narrow/stream/217117-cranelift/topic/general)
 ![Minimum rustc 1.37](https://img.shields.io/badge/rustc-1.37+-green.svg)
+[![Documentation Status](https://docs.rs/cranelift/badge.svg)](https://docs.rs/cranelift)
 
 For more information, see [the documentation](docs/index.md).
 
