@@ -48,7 +48,7 @@ After you have Wasmtime installed and you've imported `wasmtime`, you can import
 Webassembly modules in your project like any other python module.
 
 ```python
-{{#include ../crates/misc/py/examples/gcd/run.py
+{{#include ../crates/misc/py/examples/gcd/run.py}}
 ```
 
 This script should output
