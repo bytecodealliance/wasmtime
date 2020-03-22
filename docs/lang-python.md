@@ -99,7 +99,7 @@ return value are annotated appropriately as any of `'i32'`, `'i64'`, `'f32'`, or
 
 Before we can use `demo.rs` we need to compile it
 
-> rustup run nightly rustc --target=wasm32-unknown-unknown --crate-type=cdylib
+> rustup run nightly rustc --target=wasm32-unknown-unknown --crate-type=cdylib demo.rs
 
 We can then use it like this
 
