@@ -182,7 +182,7 @@ pub unsafe extern "C" fn wasmtime_linker_define(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_linker_define_wasi(
     linker: *mut wasmtime_linker_t,
-    instance: *mut wasi_instance_t,
+    instance: *const wasi_instance_t,
 ) -> bool {
     let linker = &mut (*linker).linker;
     (*instance).wasi.add_to_linker(linker).is_ok()
@@ -192,7 +192,7 @@ pub unsafe extern "C" fn wasmtime_linker_define_wasi(
 pub unsafe extern "C" fn wasmtime_linker_define_instance(
     linker: *mut wasmtime_linker_t,
     name: *const wasm_name_t,
-    instance: *mut wasm_instance_t,
+    instance: *const wasm_instance_t,
 ) -> bool {
     let linker = &mut (*linker).linker;
     let name = match str::from_utf8((*name).as_slice()) {
@@ -206,10 +206,10 @@ pub unsafe extern "C" fn wasmtime_linker_define_instance(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_linker_instantiate(
-    linker: *mut wasmtime_linker_t,
-    module: *mut wasm_module_t,
+    linker: *const wasmtime_linker_t,
+    module: *const wasm_module_t,
     trap: *mut *mut wasm_trap_t,
 ) -> *mut wasm_instance_t {
-    let linker = &mut (*linker).linker;
-    record_instantiate(linker.instantiate(&(*module).module.borrow()), trap)
+    let linker = &(*linker).linker;
+    handle_instantiate(linker.instantiate(&(*module).module.borrow()), trap)
 }

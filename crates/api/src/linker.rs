@@ -1,4 +1,6 @@
-use crate::{Extern, ExternType, Func, FuncType, GlobalType, Instance, IntoFunc, Module, Store};
+use crate::{
+    Extern, ExternType, Func, FuncType, GlobalType, ImportType, Instance, IntoFunc, Module, Store,
+};
 use anyhow::{bail, Result};
 use std::collections::hash_map::{Entry, HashMap};
 use std::rc::Rc;
@@ -129,7 +131,7 @@ impl Linker {
         if !item.comes_from_same_store(&self.store) {
             bail!("all linker items must be from the same store");
         }
-        self.insert(module, name, item.ty().clone(), item)?;
+        self.insert(module, name, &item.ty(), item)?;
         Ok(self)
     }
 
@@ -228,17 +230,12 @@ impl Linker {
             bail!("all linker items must be from the same store");
         }
         for (export, item) in instance.module().exports().iter().zip(instance.exports()) {
-            self.insert(
-                module_name,
-                export.name(),
-                export.ty().clone(),
-                item.clone(),
-            )?;
+            self.insert(module_name, export.name(), export.ty(), item.clone())?;
         }
         Ok(self)
     }
 
-    fn insert(&mut self, module: &str, name: &str, ty: ExternType, item: Extern) -> Result<()> {
+    fn insert(&mut self, module: &str, name: &str, ty: &ExternType, item: Extern) -> Result<()> {
         let key = self.import_key(module, name, ty);
         match self.map.entry(key) {
             Entry::Occupied(o) => bail!(
@@ -254,16 +251,20 @@ impl Linker {
         Ok(())
     }
 
-    fn import_key(&mut self, module: &str, name: &str, ty: ExternType) -> ImportKey {
+    fn import_key(&mut self, module: &str, name: &str, ty: &ExternType) -> ImportKey {
         ImportKey {
             module: self.intern_str(module),
             name: self.intern_str(name),
-            kind: match ty {
-                ExternType::Func(f) => ImportKind::Func(f),
-                ExternType::Global(f) => ImportKind::Global(f),
-                ExternType::Memory(_) => ImportKind::Memory,
-                ExternType::Table(_) => ImportKind::Table,
-            },
+            kind: self.import_kind(ty),
+        }
+    }
+
+    fn import_kind(&self, ty: &ExternType) -> ImportKind {
+        match ty {
+            ExternType::Func(f) => ImportKind::Func(f.clone()),
+            ExternType::Global(f) => ImportKind::Global(f.clone()),
+            ExternType::Memory(_) => ImportKind::Memory,
+            ExternType::Table(_) => ImportKind::Table,
         }
     }
 
@@ -315,11 +316,10 @@ impl Linker {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn instantiate(&mut self, module: &Module) -> Result<Instance> {
+    pub fn instantiate(&self, module: &Module) -> Result<Instance> {
         let mut imports = Vec::new();
         for import in module.imports() {
-            let key = self.import_key(import.module(), import.name(), import.ty().clone());
-            if let Some(item) = self.map.get(&key) {
+            if let Some(item) = self.import_get(import) {
                 imports.push(item.clone());
                 continue;
             }
@@ -344,14 +344,25 @@ impl Linker {
             }
 
             bail!(
-                "failed to find import of `{}::{}` with matching signature; \
+                "failed to find import of `{}::{}` with matching signature\n\
+                 desired signature was: {:?}\n\
                  signatures available:\n\n{}",
                 import.module(),
                 import.name(),
+                import.ty(),
                 options,
             )
         }
 
         Instance::new(module, &imports)
+    }
+
+    fn import_get(&self, import: &ImportType) -> Option<&Extern> {
+        let key = ImportKey {
+            module: *self.string2idx.get(import.module())?,
+            name: *self.string2idx.get(import.name())?,
+            kind: self.import_kind(import.ty()),
+        };
+        self.map.get(&key)
     }
 }

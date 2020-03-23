@@ -75,7 +75,7 @@ WASM_API_EXTERN bool wasmtime_wat2wasm(
 
 WASMTIME_DECLARE_OWN(linker)
 
-WASM_API_EXTERN wasmtime_linker_t* wasmtime_linker_new(wasm_store_t* store);
+WASM_API_EXTERN own wasmtime_linker_t* wasmtime_linker_new(wasm_store_t* store);
 
 WASM_API_EXTERN bool wasmtime_linker_define(
     wasmtime_linker_t *linker,
@@ -86,18 +86,18 @@ WASM_API_EXTERN bool wasmtime_linker_define(
 
 WASM_API_EXTERN bool wasmtime_linker_define_wasi(
     wasmtime_linker_t *linker,
-    wasi_instance_t *instance
+    const wasi_instance_t *instance
 );
 
 WASM_API_EXTERN bool wasmtime_linker_define_instance(
     wasmtime_linker_t *linker,
     const wasm_name_t *name,
-    wasm_instance_t *instance
+    const wasm_instance_t *instance
 );
 
 WASM_API_EXTERN wasm_instance_t* wasmtime_linker_instantiate(
-    wasmtime_linker_t *linker,
-    wasm_module_t *module,
+    const wasmtime_linker_t *linker,
+    const wasm_module_t *module,
     own wasm_trap_t **trap
 );
 

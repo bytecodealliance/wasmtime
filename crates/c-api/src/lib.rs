@@ -732,10 +732,10 @@ pub unsafe extern "C" fn wasm_instance_new(
         }
         return ptr::null_mut();
     }
-    record_instantiate(Instance::new(module, &externs), result)
+    handle_instantiate(Instance::new(module, &externs), result)
 }
 
-unsafe fn record_instantiate(
+unsafe fn handle_instantiate(
     instance: Result<Instance>,
     result: *mut *mut wasm_trap_t,
 ) -> *mut wasm_instance_t {
