@@ -20,11 +20,9 @@ impl LifetimeExt for witx::Type {
         match self {
             witx::Type::Builtin(b) => b.is_transparent(),
             witx::Type::Struct(s) => s.is_transparent(),
-            witx::Type::Enum { .. }
-            | witx::Type::Flags { .. }
-            | witx::Type::Int { .. }
-            | witx::Type::Handle { .. } => true,
-            witx::Type::Union { .. }
+            witx::Type::Enum { .. } | witx::Type::Flags { .. } | witx::Type::Int { .. } => true,
+            witx::Type::Handle { .. }
+            | witx::Type::Union { .. }
             | witx::Type::Pointer { .. }
             | witx::Type::ConstPointer { .. }
             | witx::Type::Array { .. } => false,

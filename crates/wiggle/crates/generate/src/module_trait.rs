@@ -15,7 +15,10 @@ pub fn passed_by_reference(ty: &witx::Type) -> bool {
             witx::BuiltinType::String => true,
             _ => passed_by,
         },
-        witx::Type::Pointer(_) | witx::Type::ConstPointer(_) | witx::Type::Array(_) => true,
+        witx::Type::Handle(_)
+        | witx::Type::Pointer(_)
+        | witx::Type::ConstPointer(_)
+        | witx::Type::Array(_) => true,
         _ => passed_by,
     }
 }

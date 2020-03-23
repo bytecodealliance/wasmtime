@@ -13,19 +13,21 @@ pub(super) fn define_handle(
     let size = h.mem_size_align().size as u32;
     let align = h.mem_size_align().align as usize;
     quote! {
-        #[repr(transparent)]
-        #[derive(Copy, Clone, Debug, ::std::hash::Hash, Eq, PartialEq)]
+        #[derive(Debug, PartialEq)]
         pub struct #ident(u32);
 
         impl #ident {
-            pub unsafe fn inner(&self) -> u32 {
+            pub unsafe fn from_raw(raw: u32) -> Self {
+                Self(raw)
+            }
+            pub fn as_raw(&self) -> u32 {
                 self.0
             }
         }
 
-        impl From<#ident> for u32 {
-            fn from(e: #ident) -> u32 {
-                e.0
+        impl Clone for #ident {
+            fn clone(&self) -> Self {
+                Self(self.0)
             }
         }
 
@@ -35,11 +37,6 @@ pub(super) fn define_handle(
             }
         }
 
-        impl From<u32> for #ident {
-            fn from(e: u32) -> #ident {
-                #ident(e)
-            }
-        }
         impl From<i32> for #ident {
             fn from(e: i32) -> #ident {
                 #ident(e as u32)

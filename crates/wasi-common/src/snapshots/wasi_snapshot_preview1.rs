@@ -1198,9 +1198,8 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                     }
                 }
                 types::SubscriptionU::FdRead(fd_read) => {
-                    let fd = unsafe { types::Fd::from_raw(fd_read.file_descriptor) };
                     let rights = types::Rights::FD_READ | types::Rights::POLL_FD_READWRITE;
-                    let entry = match self.get_entry(&fd) {
+                    let entry = match self.get_entry(&fd_read.file_descriptor) {
                         Ok(entry) => entry,
                         Err(error) => {
                             events.push(types::Event {
@@ -1228,9 +1227,8 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                     });
                 }
                 types::SubscriptionU::FdWrite(ref fd_write) => {
-                    let fd = unsafe { types::Fd::from_raw(fd_write.file_descriptor) };
                     let rights = types::Rights::FD_WRITE | types::Rights::POLL_FD_READWRITE;
-                    let entry = match self.get_entry(&fd) {
+                    let entry = match self.get_entry(&fd_write.file_descriptor) {
                         Ok(entry) => entry,
                         Err(error) => {
                             events.push(types::Event {
