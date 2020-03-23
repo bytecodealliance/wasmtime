@@ -73,13 +73,27 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             builder.set_val_label(val, label);
         }
         Operator::LocalSet { local_index } => {
-            let val = state.pop1();
+            let mut val = state.pop1();
+
+            // Ensure SIMD values are cast to their default Cranelift type, I8x16.
+            let ty = builder.func.dfg.value_type(val);
+            if ty.is_vector() {
+                val = optionally_bitcast_vector(val, I8X16, builder);
+            }
+
             builder.def_var(Variable::with_u32(*local_index), val);
             let label = ValueLabel::from_u32(*local_index);
             builder.set_val_label(val, label);
         }
         Operator::LocalTee { local_index } => {
-            let val = state.peek1();
+            let mut val = state.peek1();
+
+            // Ensure SIMD values are cast to their default Cranelift type, I8x16.
+            let ty = builder.func.dfg.value_type(val);
+            if ty.is_vector() {
+                val = optionally_bitcast_vector(val, I8X16, builder);
+            }
+
             builder.def_var(Variable::with_u32(*local_index), val);
             let label = ValueLabel::from_u32(*local_index);
             builder.set_val_label(val, label);
@@ -850,15 +864,15 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().iadd(arg1, arg2));
         }
-        Operator::I32And | Operator::I64And | Operator::V128And => {
+        Operator::I32And | Operator::I64And => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().band(arg1, arg2));
         }
-        Operator::I32Or | Operator::I64Or | Operator::V128Or => {
+        Operator::I32Or | Operator::I64Or => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().bor(arg1, arg2));
         }
-        Operator::I32Xor | Operator::I64Xor | Operator::V128Xor => {
+        Operator::I32Xor | Operator::I64Xor => {
             let (arg1, arg2) = state.pop2();
             state.push1(builder.ins().bxor(arg1, arg2));
         }
@@ -1235,23 +1249,20 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let vector = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().extractlane(vector, lane.clone()))
         }
-        Operator::I8x16ReplaceLane { lane }
-        | Operator::I16x8ReplaceLane { lane }
-        | Operator::I32x4ReplaceLane { lane }
+        Operator::I8x16ReplaceLane { lane } | Operator::I16x8ReplaceLane { lane } => {
+            let (vector, replacement) = state.pop2();
+            let ty = type_of(op);
+            let reduced = builder.ins().ireduce(ty.lane_type(), replacement);
+            let vector = optionally_bitcast_vector(vector, ty, builder);
+            state.push1(builder.ins().insertlane(vector, *lane, reduced))
+        }
+        Operator::I32x4ReplaceLane { lane }
         | Operator::I64x2ReplaceLane { lane }
         | Operator::F32x4ReplaceLane { lane }
         | Operator::F64x2ReplaceLane { lane } => {
-            let (vector, replacement_value) = state.pop2();
-            let original_vector_type = builder.func.dfg.value_type(vector);
+            let (vector, replacement) = state.pop2();
             let vector = optionally_bitcast_vector(vector, type_of(op), builder);
-            let replaced_vector = builder
-                .ins()
-                .insertlane(vector, lane.clone(), replacement_value);
-            state.push1(optionally_bitcast_vector(
-                replaced_vector,
-                original_vector_type,
-                builder,
-            ))
+            state.push1(builder.ins().insertlane(vector, *lane, replacement))
         }
         Operator::V8x16Shuffle { lanes, .. } => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
@@ -1319,6 +1330,18 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I16x8Mul | Operator::I32x4Mul => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().imul(a, b))
+        }
+        Operator::V128Or => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().bor(a, b))
+        }
+        Operator::V128Xor => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().bxor(a, b))
+        }
+        Operator::V128And => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().band(a, b))
         }
         Operator::V128AndNot => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
@@ -1467,6 +1490,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().fabs(a))
         }
+        Operator::F32x4ConvertI32x4S => {
+            let a = pop1_with_bitcast(state, I32X4, builder);
+            state.push1(builder.ins().fcvt_from_sint(F32X4, a))
+        }
         Operator::I8x16Shl
         | Operator::I8x16ShrS
         | Operator::I8x16ShrU
@@ -1477,7 +1504,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I32x4TruncSatF32x4U
         | Operator::I64x2TruncSatF64x2S
         | Operator::I64x2TruncSatF64x2U
-        | Operator::F32x4ConvertI32x4S
         | Operator::F32x4ConvertI32x4U
         | Operator::F64x2ConvertI64x2S
         | Operator::F64x2ConvertI64x2U { .. }

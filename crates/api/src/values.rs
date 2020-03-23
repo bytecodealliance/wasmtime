@@ -2,7 +2,6 @@ use crate::r#ref::AnyRef;
 use crate::{Func, Store, ValType};
 use anyhow::{bail, Result};
 use std::ptr;
-use wasmtime_environ::ir;
 
 /// Possible runtime values that a WebAssembly module can either consume or
 /// produce.
@@ -81,7 +80,7 @@ impl Val {
         }
     }
 
-    pub(crate) unsafe fn write_value_to(&self, p: *mut i128) {
+    pub(crate) unsafe fn write_value_to(&self, p: *mut u128) {
         match self {
             Val::I32(i) => ptr::write(p as *mut i32, *i),
             Val::I64(i) => ptr::write(p as *mut i64, *i),
@@ -92,13 +91,13 @@ impl Val {
         }
     }
 
-    pub(crate) unsafe fn read_value_from(p: *const i128, ty: ir::Type) -> Val {
+    pub(crate) unsafe fn read_value_from(p: *const u128, ty: &ValType) -> Val {
         match ty {
-            ir::types::I32 => Val::I32(ptr::read(p as *const i32)),
-            ir::types::I64 => Val::I64(ptr::read(p as *const i64)),
-            ir::types::F32 => Val::F32(ptr::read(p as *const u32)),
-            ir::types::F64 => Val::F64(ptr::read(p as *const u64)),
-            ir::types::I8X16 => Val::V128(ptr::read(p as *const u128)),
+            ValType::I32 => Val::I32(ptr::read(p as *const i32)),
+            ValType::I64 => Val::I64(ptr::read(p as *const i64)),
+            ValType::F32 => Val::F32(ptr::read(p as *const u32)),
+            ValType::F64 => Val::F64(ptr::read(p as *const u64)),
+            ValType::V128 => Val::V128(ptr::read(p as *const u128)),
             _ => unimplemented!("Val::read_value_from"),
         }
     }

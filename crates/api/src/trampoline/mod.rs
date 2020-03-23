@@ -10,23 +10,23 @@ use self::func::create_handle_with_function;
 use self::global::create_global;
 use self::memory::create_handle_with_memory;
 use self::table::create_handle_with_table;
-use super::{Callable, FuncType, GlobalType, MemoryType, Store, TableType, Val};
+use crate::{FuncType, GlobalType, MemoryType, Store, TableType, Trap, Val};
 use anyhow::Result;
 use std::any::Any;
-use std::rc::Rc;
-use wasmtime_runtime::{VMFunctionBody, VMTrampoline};
+use wasmtime_runtime::{VMContext, VMFunctionBody, VMTrampoline};
 
 pub fn generate_func_export(
     ft: &FuncType,
-    func: &Rc<dyn Callable + 'static>,
+    func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
     store: &Store,
 ) -> Result<(
     wasmtime_runtime::InstanceHandle,
     wasmtime_runtime::ExportFunction,
+    VMTrampoline,
 )> {
-    let instance = create_handle_with_function(ft, func, store)?;
+    let (instance, trampoline) = create_handle_with_function(ft, func, store)?;
     match instance.lookup("trampoline").expect("trampoline export") {
-        wasmtime_runtime::Export::Function(f) => Ok((instance, f)),
+        wasmtime_runtime::Export::Function(f) => Ok((instance, f, trampoline)),
         _ => unreachable!(),
     }
 }

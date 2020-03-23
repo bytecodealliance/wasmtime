@@ -17,6 +17,12 @@
     i32x4.extract_lane 3
   )
 
+  (func $test_locals (local i32 v128)
+    local.get 0
+    i32x4.splat
+    local.set 1
+  )
+
   (export "test_splat" (func $test_splat))
   (export "test_insert_lane" (func $test_insert_lane))
   (export "test_const" (func $test_const))

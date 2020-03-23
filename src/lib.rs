@@ -30,8 +30,7 @@ mod obj;
 use anyhow::{bail, Result};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use wasmtime::{Config, Strategy};
-use wasmtime_profiling::ProfilingStrategy;
+use wasmtime::{Config, ProfilingStrategy, Strategy};
 
 pub use obj::compile_to_obj;
 
@@ -46,8 +45,8 @@ fn pick_compilation_strategy(cranelift: bool, lightbeam: bool) -> Result<Strateg
 
 fn pick_profiling_strategy(jitdump: bool) -> Result<ProfilingStrategy> {
     Ok(match jitdump {
-        true => ProfilingStrategy::JitDumpProfiler,
-        false => ProfilingStrategy::NullProfiler,
+        true => ProfilingStrategy::JitDump,
+        false => ProfilingStrategy::None,
     })
 }
 

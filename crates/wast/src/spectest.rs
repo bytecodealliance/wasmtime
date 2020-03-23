@@ -6,28 +6,28 @@ use wasmtime::*;
 pub fn instantiate_spectest(store: &Store) -> HashMap<&'static str, Extern> {
     let mut ret = HashMap::new();
 
-    let func = Func::wrap0(store, || {});
+    let func = Func::wrap(store, || {});
     ret.insert("print", Extern::Func(func));
 
-    let func = Func::wrap1(store, |val: i32| println!("{}: i32", val));
+    let func = Func::wrap(store, |val: i32| println!("{}: i32", val));
     ret.insert("print_i32", Extern::Func(func));
 
-    let func = Func::wrap1(store, |val: i64| println!("{}: i64", val));
+    let func = Func::wrap(store, |val: i64| println!("{}: i64", val));
     ret.insert("print_i64", Extern::Func(func));
 
-    let func = Func::wrap1(store, |val: f32| println!("{}: f32", val));
+    let func = Func::wrap(store, |val: f32| println!("{}: f32", val));
     ret.insert("print_f32", Extern::Func(func));
 
-    let func = Func::wrap1(store, |val: f64| println!("{}: f64", val));
+    let func = Func::wrap(store, |val: f64| println!("{}: f64", val));
     ret.insert("print_f64", Extern::Func(func));
 
-    let func = Func::wrap2(store, |i: i32, f: f32| {
+    let func = Func::wrap(store, |i: i32, f: f32| {
         println!("{}: i32", i);
         println!("{}: f32", f);
     });
     ret.insert("print_i32_f32", Extern::Func(func));
 
-    let func = Func::wrap2(store, |f1: f64, f2: f64| {
+    let func = Func::wrap(store, |f1: f64, f2: f64| {
         println!("{}: f64", f1);
         println!("{}: f64", f2);
     });

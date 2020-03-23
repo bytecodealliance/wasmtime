@@ -23,20 +23,19 @@ doc = false
 
 [dependencies]
 # Enable all supported architectures by default.
-wasmtime = { path = "crates/api" }
+wasmtime = { path = "crates/api", default-features = false }
 wasmtime-debug = { path = "crates/debug" }
 wasmtime-environ = { path = "crates/environ" }
 wasmtime-jit = { path = "crates/jit" }
 wasmtime-obj = { path = "crates/obj" }
-wasmtime-profiling = { path = "crates/profiling" }
 wasmtime-wast = { path = "crates/wast" }
 wasmtime-wasi = { path = "crates/wasi" }
 wasi-common = { path = "crates/wasi-common" }
 structopt = { version = "0.3.5", features = ["color", "suggestions"] }
-faerie = "0.14.0"
+faerie = "0.15.0"
 anyhow = "1.0.19"
 target-lexicon = { version = "0.10.0", default-features = false }
-pretty_env_logger = "0.3.0"
+pretty_env_logger = "0.4.0"
 file-per-thread-logger = "0.1.1"
 wat = "1.0.10"
 libc = "0.2.60"
@@ -50,7 +49,7 @@ more-asserts = "0.2.1"
 # `cargo test --features test-programs`.
 test-programs = { path = "crates/test-programs" }
 tempfile = "3.1.0"
-filecheck = "0.4.0"
+filecheck = "0.5.0"
 
 [build-dependencies]
 anyhow = "1.0.19"
@@ -68,17 +67,19 @@ members = [
   "crates/misc/rust",
   "crates/wiggle",
   "examples/fib-debug/wasm",
+  "examples/wasi/wasm",
   "fuzz",
 ]
 
 [features]
+default = ["jitdump", "wasmtime/wat"]
 lightbeam = [
     "wasmtime-environ/lightbeam",
     "wasmtime-jit/lightbeam",
     "wasmtime-wast/lightbeam",
     "wasmtime/lightbeam",
 ]
-jitdump = ["wasmtime-profiling/jitdump"]
+jitdump = ["wasmtime/jitdump"]
 test_programs = ["test-programs/test_programs"]
 
 [badges]

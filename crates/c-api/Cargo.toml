@@ -17,7 +17,12 @@ test = false
 doctest = false
 
 [dependencies]
-wasmtime = { path = "../api" }
+wasmtime = { path = "../api", default-features = false }
 wasi-common = { path = "../wasi-common" }
 wasmtime-wasi = { path = "../wasi" }
 wat = "1.0"
+
+[features]
+default = ['jitdump']
+lightbeam = ["wasmtime/lightbeam"]
+jitdump = ["wasmtime/jitdump"]

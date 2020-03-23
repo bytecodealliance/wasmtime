@@ -10,7 +10,7 @@ use crate::resolver::Resolver;
 use std::collections::HashMap;
 use std::io::Write;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_debug::read_debuginfo;
 use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
@@ -64,7 +64,7 @@ impl<'data> RawCompiledModule<'data> {
         compiler: &mut Compiler,
         data: &'data [u8],
         debug_info: bool,
-        profiler: Option<&Arc<Mutex<Box<dyn ProfilingAgent + Send>>>>,
+        profiler: &dyn ProfilingAgent,
     ) -> Result<Self, SetupError> {
         let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
 
@@ -80,26 +80,14 @@ impl<'data> RawCompiledModule<'data> {
             None
         };
 
-        let (
-            finished_functions,
-            trampolines,
-            jt_offsets,
-            relocations,
-            dbg_image,
-            trap_registration,
-        ) = compiler.compile(
+        let compilation = compiler.compile(
             &translation.module,
             translation.module_translation.as_ref().unwrap(),
             translation.function_body_inputs,
             debug_data,
         )?;
 
-        link_module(
-            &translation.module,
-            &finished_functions,
-            &jt_offsets,
-            relocations,
-        );
+        link_module(&translation.module, &compilation);
 
         // Compute indices into the shared signature table.
         let signatures = {
@@ -117,21 +105,13 @@ impl<'data> RawCompiledModule<'data> {
         compiler.publish_compiled_code();
 
         // Initialize profiler and load the wasm module
-        match profiler {
-            Some(_) => {
-                let region_name = String::from("wasm_module");
-                let mut profiler = profiler.unwrap().lock().unwrap();
-                match &dbg_image {
-                    Some(dbg) => {
-                        compiler.profiler_module_load(&mut profiler, &region_name, Some(&dbg))
-                    }
-                    _ => compiler.profiler_module_load(&mut profiler, &region_name, None),
-                };
-            }
-            _ => (),
-        };
+        profiler.module_load(
+            &translation.module,
+            &compilation.finished_functions,
+            compilation.dbg_image.as_deref(),
+        );
 
-        let dbg_jit_registration = if let Some(img) = dbg_image {
+        let dbg_jit_registration = if let Some(img) = compilation.dbg_image {
             let mut bytes = Vec::new();
             bytes.write_all(&img).expect("all written");
             let reg = GdbJitImageRegistration::register(bytes);
@@ -142,12 +122,12 @@ impl<'data> RawCompiledModule<'data> {
 
         Ok(Self {
             module: translation.module,
-            finished_functions: finished_functions.into_boxed_slice(),
-            trampolines,
+            finished_functions: compilation.finished_functions.into_boxed_slice(),
+            trampolines: compilation.trampolines,
             data_initializers: translation.data_initializers.into_boxed_slice(),
             signatures: signatures.into_boxed_slice(),
             dbg_jit_registration,
-            trap_registration,
+            trap_registration: compilation.trap_registration,
         })
     }
 }
@@ -169,7 +149,7 @@ impl CompiledModule {
         compiler: &mut Compiler,
         data: &'data [u8],
         debug_info: bool,
-        profiler: Option<&Arc<Mutex<Box<dyn ProfilingAgent + Send>>>>,
+        profiler: &dyn ProfilingAgent,
     ) -> Result<Self, SetupError> {
         let raw = RawCompiledModule::<'data>::new(compiler, data, debug_info, profiler)?;
 
@@ -302,7 +282,7 @@ pub unsafe fn instantiate(
     resolver: &mut dyn Resolver,
     debug_info: bool,
     is_bulk_memory: bool,
-    profiler: Option<&Arc<Mutex<Box<dyn ProfilingAgent + Send>>>>,
+    profiler: &dyn ProfilingAgent,
 ) -> Result<InstanceHandle, SetupError> {
     let instance = CompiledModule::new(compiler, data, debug_info, profiler)?.instantiate(
         is_bulk_memory,

@@ -81,7 +81,7 @@ block0:
 function %pshufd() {
 block0:
 [-, %rax]   v0 = iconst.i32 42
-[-, %xmm0]  v1 = scalar_to_vector.i32x4 v0  ; bin: 66 40 0f 6e c0
+[-, %xmm0]  v1 = scalar_to_vector.i32x4 v0  ; bin: 66 0f 6e c0
 [-, %xmm0]  v2 = x86_pshufd v1, 0           ; bin: 66 0f 70 c0 00
             return
 }
@@ -89,9 +89,9 @@ block0:
 function %pshufb() {
 block0:
 [-, %rax]   v0 = iconst.i8 42
-[-, %xmm0]  v1 = scalar_to_vector.i8x16 v0   ; bin: 66 40 0f 6e c0
+[-, %xmm0]  v1 = scalar_to_vector.i8x16 v0   ; bin: 66 0f 6e c0
 [-, %rbx]   v2 = iconst.i8 43
-[-, %xmm4]  v3 = scalar_to_vector.i8x16 v2   ; bin: 66 40 0f 6e e3
-[-, %xmm0]  v4 = x86_pshufb v1, v3           ; bin: 66 0f 38 00 c4
+[-, %xmm12] v3 = scalar_to_vector.i8x16 v2   ; bin: 66 44 0f 6e e3
+[-, %xmm0]  v4 = x86_pshufb v1, v3           ; bin: 66 41 0f 38 00 c4
             return
 }

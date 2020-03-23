@@ -17,7 +17,7 @@ proc-macro = true
 quote = "1.0.2"
 proc-macro2 = "1.0.6"
 heck = "0.3.1"
-witx = { path = "WASI/tools/witx", version = "0.8.0" }
+witx = { path = "WASI/tools/witx", version = "0.8.4" }
 
 [badges]
 maintenance = { status = "actively-developed" }

@@ -8,7 +8,6 @@
 
 #![deny(missing_docs, intra_doc_link_resolution_failure)]
 
-mod callable;
 mod externals;
 mod frame_info;
 mod func;
@@ -21,14 +20,13 @@ mod trap;
 mod types;
 mod values;
 
-pub use crate::callable::Callable;
 pub use crate::externals::*;
 pub use crate::frame_info::FrameInfo;
-pub use crate::func::{Func, WasmRet, WasmTy};
+pub use crate::func::*;
 pub use crate::instance::Instance;
 pub use crate::module::Module;
 pub use crate::r#ref::{AnyRef, HostInfo, HostRef};
-pub use crate::runtime::{Config, Engine, OptLevel, Store, Strategy};
+pub use crate::runtime::*;
 pub use crate::trap::Trap;
 pub use crate::types::*;
 pub use crate::values::*;

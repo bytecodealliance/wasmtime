@@ -5,7 +5,6 @@ use region;
 use std::mem::ManuallyDrop;
 use std::{cmp, mem};
 use wasmtime_environ::{Compilation, CompiledFunction};
-use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{Mmap, VMFunctionBody};
 
 struct CodeMemoryEntry {
@@ -236,23 +235,5 @@ impl CodeMemory {
         self.position = 0;
 
         Ok(())
-    }
-
-    /// Calls the module_load for a given ProfilerAgent. Includes
-    /// all memory address and length for the given module.
-    /// TODO: Properly handle the possibilities of multiple mmapped regions
-    /// which may, amongst other things, influence being more specific about
-    /// the module name.
-    pub fn profiler_module_load(
-        &mut self,
-        profiler: &mut Box<dyn ProfilingAgent + Send>,
-        module_name: &str,
-        dbg_image: Option<&[u8]>,
-    ) -> () {
-        for CodeMemoryEntry { mmap: m, table: _t } in &mut self.entries {
-            if m.len() > 0 {
-                profiler.module_load(module_name, m.as_ptr(), m.len(), dbg_image);
-            }
-        }
     }
 }

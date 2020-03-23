@@ -2,7 +2,7 @@
 
 use crate::container;
 use crate::traps::{FaerieTrapManifest, FaerieTrapSink};
-use anyhow::Error;
+use anyhow::anyhow;
 use cranelift_codegen::binemit::{
     Addend, CodeOffset, NullStackmapSink, NullTrapSink, Reloc, RelocSink, Stackmap, StackmapSink,
 };
@@ -57,9 +57,9 @@ impl FaerieBuilder {
         libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     ) -> ModuleResult<Self> {
         if !isa.flags().is_pic() {
-            return Err(ModuleError::Backend(
-                "faerie requires TargetIsa be PIC".to_owned(),
-            ));
+            return Err(ModuleError::Backend(anyhow!(
+                "faerie requires TargetIsa be PIC"
+            )));
         }
         Ok(Self {
             isa,
@@ -257,7 +257,7 @@ impl Backend for FaerieBackend {
                     to,
                     at: u64::from(offset),
                 })
-                .map_err(|e| ModuleError::Backend(e.to_string()))?;
+                .map_err(|e| ModuleError::Backend(e.into()))?;
         }
         for &(offset, id, addend) in data_relocs {
             debug_assert_eq!(
@@ -271,7 +271,7 @@ impl Backend for FaerieBackend {
                     to,
                     at: u64::from(offset),
                 })
-                .map_err(|e| ModuleError::Backend(e.to_string()))?;
+                .map_err(|e| ModuleError::Backend(e.into()))?;
         }
 
         match *init {
@@ -369,12 +369,12 @@ impl FaerieProduct {
     }
 
     /// Call `emit` on the faerie `Artifact`, producing bytes in memory.
-    pub fn emit(&self) -> Result<Vec<u8>, Error> {
+    pub fn emit(&self) -> Result<Vec<u8>, faerie::ArtifactError> {
         self.artifact.emit()
     }
 
     /// Call `write` on the faerie `Artifact`, writing to a file.
-    pub fn write(&self, sink: File) -> Result<(), Error> {
+    pub fn write(&self, sink: File) -> Result<(), faerie::ArtifactError> {
         self.artifact.write(sink)
     }
 }
@@ -383,8 +383,9 @@ fn translate_function_linkage(linkage: Linkage) -> faerie::Decl {
     match linkage {
         Linkage::Import => faerie::Decl::function_import().into(),
         Linkage::Local => faerie::Decl::function().into(),
-        Linkage::Export => faerie::Decl::function().global().into(),
         Linkage::Preemptible => faerie::Decl::function().weak().into(),
+        Linkage::Hidden => faerie::Decl::function().global().hidden().into(),
+        Linkage::Export => faerie::Decl::function().global().into(),
     }
 }
 
@@ -396,13 +397,19 @@ fn translate_data_linkage(linkage: Linkage, writable: bool, align: Option<u8>) -
             .with_writable(writable)
             .with_align(align)
             .into(),
-        Linkage::Export => faerie::Decl::data()
-            .global()
+        Linkage::Preemptible => faerie::Decl::data()
+            .weak()
             .with_writable(writable)
             .with_align(align)
             .into(),
-        Linkage::Preemptible => faerie::Decl::data()
-            .weak()
+        Linkage::Hidden => faerie::Decl::data()
+            .global()
+            .hidden()
+            .with_writable(writable)
+            .with_align(align)
+            .into(),
+        Linkage::Export => faerie::Decl::data()
+            .global()
             .with_writable(writable)
             .with_align(align)
             .into(),

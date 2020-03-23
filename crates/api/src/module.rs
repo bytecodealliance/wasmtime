@@ -367,7 +367,7 @@ impl Module {
             &mut store.compiler_mut(),
             binary,
             store.engine().config().debug_info,
-            store.engine().config().profiler.as_ref(),
+            &*store.engine().config().profiler,
         )?;
 
         Ok(Module {

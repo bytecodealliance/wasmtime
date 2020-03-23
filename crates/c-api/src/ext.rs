@@ -3,7 +3,7 @@
 
 use crate::{wasm_byte_vec_t, wasm_config_t, wasm_engine_t};
 use std::str;
-use wasmtime::{OptLevel, Strategy};
+use wasmtime::{OptLevel, ProfilingStrategy, Strategy};
 
 #[repr(u8)]
 #[derive(Clone)]
@@ -19,6 +19,13 @@ pub enum wasmtime_opt_level_t {
     WASMTIME_OPT_LEVEL_NONE,
     WASMTIME_OPT_LEVEL_SPEED,
     WASMTIME_OPT_LEVEL_SPEED_AND_SIZE,
+}
+
+#[repr(u8)]
+#[derive(Clone)]
+pub enum wasmtime_profiling_strategy_t {
+    WASMTIME_PROFILING_STRATEGY_NONE,
+    WASMTIME_PROFILING_STRATEGY_JITDUMP,
 }
 
 #[no_mangle]
@@ -86,6 +93,18 @@ pub unsafe extern "C" fn wasmtime_config_cranelift_opt_level_set(
         WASMTIME_OPT_LEVEL_SPEED => OptLevel::Speed,
         WASMTIME_OPT_LEVEL_SPEED_AND_SIZE => OptLevel::SpeedAndSize,
     });
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_config_profiler_set(
+    c: *mut wasm_config_t,
+    strategy: wasmtime_profiling_strategy_t,
+) {
+    use wasmtime_profiling_strategy_t::*;
+    drop((*c).config.profiler(match strategy {
+        WASMTIME_PROFILING_STRATEGY_NONE => ProfilingStrategy::None,
+        WASMTIME_PROFILING_STRATEGY_JITDUMP => ProfilingStrategy::JitDump,
+    }));
 }
 
 #[no_mangle]

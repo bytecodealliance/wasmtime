@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use wasmtime::*;
 
 #[test]
@@ -15,28 +14,6 @@ fn same_import_names_still_distinct() -> anyhow::Result<()> {
 )
     "#;
 
-    struct Ret1;
-
-    impl Callable for Ret1 {
-        fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
-            assert!(params.is_empty());
-            assert_eq!(results.len(), 1);
-            results[0] = 1i32.into();
-            Ok(())
-        }
-    }
-
-    struct Ret2;
-
-    impl Callable for Ret2 {
-        fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
-            assert!(params.is_empty());
-            assert_eq!(results.len(), 1);
-            results[0] = 2.0f32.into();
-            Ok(())
-        }
-    }
-
     let store = Store::default();
     let module = Module::new(&store, WAT)?;
 
@@ -44,13 +21,23 @@ fn same_import_names_still_distinct() -> anyhow::Result<()> {
         Func::new(
             &store,
             FuncType::new(Box::new([]), Box::new([ValType::I32])),
-            Rc::new(Ret1),
+            |_, params, results| {
+                assert!(params.is_empty());
+                assert_eq!(results.len(), 1);
+                results[0] = 1i32.into();
+                Ok(())
+            },
         )
         .into(),
         Func::new(
             &store,
             FuncType::new(Box::new([]), Box::new([ValType::F32])),
-            Rc::new(Ret2),
+            |_, params, results| {
+                assert!(params.is_empty());
+                assert_eq!(results.len(), 1);
+                results[0] = 2.0f32.into();
+                Ok(())
+            },
         )
         .into(),
     ];

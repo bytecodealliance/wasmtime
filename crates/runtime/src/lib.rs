@@ -28,7 +28,6 @@ mod jit_int;
 mod memory;
 mod mmap;
 mod sig_registry;
-mod signalhandlers;
 mod table;
 mod trap_registry;
 mod traphandlers;
@@ -45,9 +44,7 @@ pub use crate::sig_registry::SignatureRegistry;
 pub use crate::table::Table;
 pub use crate::trap_registry::{TrapDescription, TrapRegistration, TrapRegistry};
 pub use crate::traphandlers::resume_panic;
-pub use crate::traphandlers::{
-    catch_traps, raise_lib_trap, raise_user_trap, wasmtime_call_trampoline, Trap,
-};
+pub use crate::traphandlers::{catch_traps, raise_lib_trap, raise_user_trap, Trap};
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
     VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,

@@ -79,7 +79,7 @@ jobs:
     - run: cargo install cargo-fuzz --vers "^0.7"
     - run: cargo fetch
       working-directory: ./fuzz
-    - run: cargo fuzz build --release --debug-assertions
+    - run: cargo fuzz build --release --debug-assertions --features binaryen
     # Our corpora are too large to run in full on every pull request, they just
     # take too long. Instead, we sample some of them and make sure that running
     # our fuzzers over the sampled inputs still works OK.
@@ -87,35 +87,35 @@ jobs:
         find fuzz/corpus/compile -type f \
             | shuf \
             | head -n 3000 \
-            | xargs cargo fuzz run compile --release --debug-assertions
+            | xargs cargo fuzz run compile --release --debug-assertions --features binaryen
       env:
         RUST_BACKTRACE: 1
     - run: |
         find fuzz/corpus/instantiate -type f \
             | shuf \
             | head -n 2000 \
-            | xargs cargo fuzz run instantiate --release --debug-assertions
+            | xargs cargo fuzz run instantiate --release --debug-assertions --features binaryen
       env:
         RUST_BACKTRACE: 1
     - run: |
         find fuzz/corpus/instantiate_translated -type f \
             | shuf \
             | head -n 1000 \
-            | xargs cargo fuzz run instantiate_translated --release --debug-assertions
+            | xargs cargo fuzz run instantiate_translated --release --debug-assertions --features binaryen
       env:
         RUST_BACKTRACE: 1
     - run: |
         find fuzz/corpus/api_calls -type f \
             | shuf \
             | head -n 100 \
-            | xargs cargo fuzz run api_calls --release --debug-assertions
+            | xargs cargo fuzz run api_calls --release --debug-assertions --features binaryen
       env:
         RUST_BACKTRACE: 1
     - run: |
         find fuzz/corpus/differential -type f \
             | shuf \
             | head -n 100 \
-            | xargs cargo fuzz run differential --release --debug-assertions
+            | xargs cargo fuzz run differential --release --debug-assertions --features binaryen
       env:
         RUST_BACKTRACE: 1
 
@@ -233,6 +233,17 @@ jobs:
       continue-on-error: true
       env:
         RUST_BACKTRACE: 1
+
+    # Perform various builds of Cranelift under different configurations:
+    # - only x86 backend support,
+    # - only arm64 backend support,
+    # - no debug_assertions.
+    - run: cargo build --manifest-path=./cranelift/Cargo.toml --bin clif-util --no-default-features --features=cranelift-codegen/arm64
+      shell: bash
+    - run: cargo build --manifest-path=./cranelift/Cargo.toml --bin clif-util --no-default-features --features=cranelift-codegen/x86
+      shell: bash
+    - run: cargo rustc --manifest-path=./cranelift/Cargo.toml --bin clif-util -- -C debug_assertions=off
+      shell: bash
 
   # Verify that cranelift's code generation is deterministic
   meta_determinist_check:
@@ -364,7 +375,7 @@ jobs:
     - run: rustup target add wasm32-wasi
 
     # Build `wasmtime` and executables
-    - run: $CENTOS cargo build --release --bin wasmtime --bin wasm2obj
+    - run: $CENTOS cargo build --release --bin wasmtime
       shell: bash
     # Build `libwasmtime.so`
     - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
@@ -388,9 +399,9 @@ jobs:
       shell: bash
 
     # Move binaries to dist folder
-    - run: cp target/release/{wasmtime,wasm2obj} dist
+    - run: cp target/release/wasmtime dist
       if: matrix.os != 'windows-latest'
-    - run: cp target/release/{wasmtime,wasm2obj}.exe dist
+    - run: cp target/release/wasmtime.exe dist
       shell: bash
       if: matrix.os == 'windows-latest'
 

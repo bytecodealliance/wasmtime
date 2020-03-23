@@ -33,11 +33,12 @@ mod tests {
         assert_eq!(INFO.parse_regunit("xmm0"), fpr(0));
         assert_eq!(INFO.parse_regunit("xmm15"), fpr(15));
 
-        fn fpr32(unit: usize) -> Option<u16> {
-            Some(FPR32.unit(unit))
-        }
-        assert_eq!(INFO.parse_regunit("xmm0"), fpr32(0));
-        assert_eq!(INFO.parse_regunit("xmm31"), fpr32(31));
+        // FIXME(#1306) Add these tests back in when FPR32 is re-added.
+        // fn fpr32(unit: usize) -> Option<u16> {
+        //    Some(FPR32.unit(unit))
+        // }
+        // assert_eq!(INFO.parse_regunit("xmm0"), fpr32(0));
+        // assert_eq!(INFO.parse_regunit("xmm31"), fpr32(31));
     }
 
     #[test]
@@ -62,11 +63,12 @@ mod tests {
         assert_eq!(fpr(0), "%xmm0");
         assert_eq!(fpr(15), "%xmm15");
 
-        fn fpr32(ru: RegUnit) -> String {
-            INFO.display_regunit(FPR32.first + ru).to_string()
-        }
-        assert_eq!(fpr32(0), "%xmm0");
-        assert_eq!(fpr32(31), "%xmm31");
+        // FIXME(#1306) Add these tests back in when FPR32 is re-added.
+        // fn fpr32(ru: RegUnit) -> String {
+        //    INFO.display_regunit(FPR32.first + ru).to_string()
+        // }
+        // assert_eq!(fpr32(0), "%xmm0");
+        // assert_eq!(fpr32(31), "%xmm31");
     }
 
     #[test]

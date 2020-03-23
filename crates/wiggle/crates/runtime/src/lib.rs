@@ -429,6 +429,35 @@ impl<'a, T> GuestPtr<'a, [T]> {
         }
     }
 
+    /// Copies the data pointed to by `slice` into this guest region.
+    ///
+    /// This method is a *safe* method to copy data from the host to the guest.
+    /// This requires that `self` and `slice` have the same length. The pointee
+    /// type `T` requires the [`GuestTypeTransparent`] trait which is an
+    /// assertion that the representation on the host and on the guest is the
+    /// same.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this guest pointer is out of bounds or if the length
+    /// of this guest pointer is not equal to the length of the slice provided.
+    pub fn copy_from_slice(&self, slice: &[T]) -> Result<(), GuestError>
+    where
+        T: GuestTypeTransparent<'a> + Copy,
+    {
+        // bounds check ...
+        let raw = self.as_raw(&mut GuestBorrows::new())?;
+        unsafe {
+            // ... length check ...
+            if (*raw).len() != slice.len() {
+                return Err(GuestError::SliceLengthsDiffer);
+            }
+            // ... and copy!
+            (*raw).copy_from_slice(slice);
+            Ok(())
+        }
+    }
+
     /// Returns a `GuestPtr` pointing to the base of the array for the interior
     /// type `T`.
     pub fn as_ptr(&self) -> GuestPtr<'a, T> {

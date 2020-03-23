@@ -1,5 +1,5 @@
 #![allow(non_camel_case_types)]
-use crate::old::snapshot_0::fdentry::FdEntry;
+use crate::old::snapshot_0::entry::Entry;
 use crate::old::snapshot_0::sys::host_impl;
 use crate::old::snapshot_0::sys::hostcalls_impl::fs_helpers::*;
 use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
@@ -26,7 +26,7 @@ impl PathGet {
 ///
 /// This is a workaround for not having Capsicum support in the OS.
 pub(crate) fn path_get(
-    fe: &FdEntry,
+    fe: &Entry,
     rights_base: wasi::__wasi_rights_t,
     rights_inheriting: wasi::__wasi_rights_t,
     dirflags: wasi::__wasi_lookupflags_t,

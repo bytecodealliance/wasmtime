@@ -313,6 +313,23 @@ impl PerCpuModeEncodings {
     }
 
     /// Add two encodings for `inst`:
+    /// - X86_32, dynamically infer the REX prefix.
+    /// - X86_64, dynamically infer the REX prefix.
+    fn enc_both_inferred(&mut self, inst: impl Clone + Into<InstSpec>, template: Template) {
+        self.enc32(inst.clone(), template.infer_rex());
+        self.enc64(inst, template.infer_rex());
+    }
+    fn enc_both_inferred_maybe_isap(
+        &mut self,
+        inst: impl Clone + Into<InstSpec>,
+        template: Template,
+        isap: Option<SettingPredicateNumber>,
+    ) {
+        self.enc32_maybe_isap(inst.clone(), template.infer_rex(), isap);
+        self.enc64_maybe_isap(inst, template.infer_rex(), isap);
+    }
+
+    /// Add two encodings for `inst`:
     /// - X86_32
     /// - X86_64 with the REX prefix.
     fn enc_both_rex_only(&mut self, inst: impl Clone + Into<InstSpec>, template: Template) {
@@ -338,12 +355,6 @@ impl PerCpuModeEncodings {
             self.enc64(inst.clone().bind(I64).bind(Any), template.clone().rex());
             self.enc64(inst.clone().bind(I64).bind(Any), template);
         }
-    }
-
-    /// Add the same encoding/template pairing to both X86_32 and X86_64
-    fn enc_32_64(&mut self, inst: impl Clone + Into<InstSpec>, template: Template) {
-        self.enc32(inst.clone(), template.clone());
-        self.enc64(inst, template);
     }
 
     /// Add the same encoding/recipe pairing to both X86_32 and X86_64
@@ -1566,8 +1577,10 @@ fn define_simd(
     let bxor = shared.by_name("bxor");
     let copy = shared.by_name("copy");
     let copy_nop = shared.by_name("copy_nop");
+    let copy_to_ssa = shared.by_name("copy_to_ssa");
     let fadd = shared.by_name("fadd");
     let fcmp = shared.by_name("fcmp");
+    let fcvt_from_sint = shared.by_name("fcvt_from_sint");
     let fdiv = shared.by_name("fdiv");
     let fill = shared.by_name("fill");
     let fill_nop = shared.by_name("fill_nop");
@@ -1580,6 +1593,7 @@ fn define_simd(
     let imul = shared.by_name("imul");
     let ishl_imm = shared.by_name("ishl_imm");
     let load = shared.by_name("load");
+    let load_complex = shared.by_name("load_complex");
     let raw_bitcast = shared.by_name("raw_bitcast");
     let regfill = shared.by_name("regfill");
     let regmove = shared.by_name("regmove");
@@ -1591,6 +1605,7 @@ fn define_simd(
     let sshr_imm = shared.by_name("sshr_imm");
     let ssub_sat = shared.by_name("ssub_sat");
     let store = shared.by_name("store");
+    let store_complex = shared.by_name("store_complex");
     let uadd_sat = shared.by_name("uadd_sat");
     let ushr_imm = shared.by_name("ushr_imm");
     let usub_sat = shared.by_name("usub_sat");
@@ -1623,6 +1638,9 @@ fn define_simd(
     let rec_fld = r.template("fld");
     let rec_fldDisp32 = r.template("fldDisp32");
     let rec_fldDisp8 = r.template("fldDisp8");
+    let rec_fldWithIndex = r.template("fldWithIndex");
+    let rec_fldWithIndexDisp32 = r.template("fldWithIndexDisp32");
+    let rec_fldWithIndexDisp8 = r.template("fldWithIndexDisp8");
     let rec_fregfill32 = r.template("fregfill32");
     let rec_fregspill32 = r.template("fregspill32");
     let rec_frmov = r.template("frmov");
@@ -1631,7 +1649,11 @@ fn define_simd(
     let rec_fst = r.template("fst");
     let rec_fstDisp32 = r.template("fstDisp32");
     let rec_fstDisp8 = r.template("fstDisp8");
+    let rec_fstWithIndex = r.template("fstWithIndex");
+    let rec_fstWithIndexDisp32 = r.template("fstWithIndexDisp32");
+    let rec_fstWithIndexDisp8 = r.template("fstWithIndexDisp8");
     let rec_furm = r.template("furm");
+    let rec_furm_reg_to_ssa = r.template("furm_reg_to_ssa");
     let rec_icscc_fpr = r.template("icscc_fpr");
     let rec_null_fpr = r.recipe("null_fpr");
     let rec_pfcmp = r.template("pfcmp");
@@ -1663,17 +1685,15 @@ fn define_simd(
     // PSHUFB, 8-bit shuffle using two XMM registers.
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         let instruction = x86_pshufb.bind(vector(ty, sse_vector_size));
-        let template = rec_fa.nonrex().opcodes(&PSHUFB);
-        e.enc32_isap(instruction.clone(), template.clone(), use_ssse3_simd);
-        e.enc64_isap(instruction, template, use_ssse3_simd);
+        let template = rec_fa.opcodes(&PSHUFB);
+        e.enc_both_inferred_maybe_isap(instruction.clone(), template.clone(), Some(use_ssse3_simd));
     }
 
     // PSHUFD, 32-bit shuffle using one XMM register and a u8 immediate.
     for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 32) {
         let instruction = x86_pshufd.bind(vector(ty, sse_vector_size));
-        let template = rec_r_ib_unsigned_fpr.nonrex().opcodes(&PSHUFD);
-        e.enc32(instruction.clone(), template.clone());
-        e.enc64(instruction, template);
+        let template = rec_r_ib_unsigned_fpr.opcodes(&PSHUFD);
+        e.enc_both_inferred(instruction, template);
     }
 
     // SIMD scalar_to_vector; this uses MOV to copy the scalar value to an XMM register; according
@@ -1682,12 +1702,12 @@ fn define_simd(
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         let instruction = scalar_to_vector.bind(vector(ty, sse_vector_size));
         if ty.is_float() {
+            // No need to move floats--they already live in XMM registers.
             e.enc_32_64_rec(instruction, rec_null_fpr, 0);
         } else {
             let template = rec_frurm.opcodes(&MOVD_LOAD_XMM);
             if ty.lane_bits() < 64 {
-                e.enc32(instruction.clone(), template.clone());
-                e.enc_x86_64(instruction, template);
+                e.enc_both_inferred(instruction, template);
             } else {
                 // No 32-bit encodings for 64-bit widths.
                 assert_eq!(ty.lane_bits(), 64);
@@ -1708,7 +1728,7 @@ fn define_simd(
         let instruction = x86_pinsr.bind(vector(ty, sse_vector_size));
         let template = rec_r_ib_unsigned_r.opcodes(opcode);
         if ty.lane_bits() < 64 {
-            e.enc_32_64_maybe_isap(instruction, template.nonrex(), isap);
+            e.enc_both_inferred_maybe_isap(instruction, template, isap);
         } else {
             // It turns out the 64-bit widths have REX/W encodings and only are available on
             // x86_64.
@@ -1719,22 +1739,22 @@ fn define_simd(
     // For legalizing insertlane with floats, INSERTPS from SSE4.1.
     {
         let instruction = x86_insertps.bind(vector(F32, sse_vector_size));
-        let template = rec_fa_ib.nonrex().opcodes(&INSERTPS);
-        e.enc_32_64_maybe_isap(instruction, template, Some(use_sse41_simd));
+        let template = rec_fa_ib.opcodes(&INSERTPS);
+        e.enc_both_inferred_maybe_isap(instruction, template, Some(use_sse41_simd));
     }
 
     // For legalizing insertlane with floats,  MOVSD from SSE2.
     {
         let instruction = x86_movsd.bind(vector(F64, sse_vector_size));
-        let template = rec_fa.nonrex().opcodes(&MOVSD_LOAD);
-        e.enc_32_64_maybe_isap(instruction, template, None); // from SSE2
+        let template = rec_fa.opcodes(&MOVSD_LOAD);
+        e.enc_both_inferred(instruction, template); // from SSE2
     }
 
     // For legalizing insertlane with floats, MOVLHPS from SSE.
     {
         let instruction = x86_movlhps.bind(vector(F64, sse_vector_size));
-        let template = rec_fa.nonrex().opcodes(&MOVLHPS);
-        e.enc_32_64_maybe_isap(instruction, template, None); // from SSE
+        let template = rec_fa.opcodes(&MOVLHPS);
+        e.enc_both_inferred(instruction, template); // from SSE
     }
 
     // SIMD extractlane
@@ -1749,7 +1769,7 @@ fn define_simd(
         let instruction = x86_pextr.bind(vector(ty, sse_vector_size));
         let template = rec_r_ib_unsigned_gpr.opcodes(opcode);
         if ty.lane_bits() < 64 {
-            e.enc_32_64_maybe_isap(instruction, template.nonrex(), Some(use_sse41_simd));
+            e.enc_both_inferred_maybe_isap(instruction, template, Some(use_sse41_simd));
         } else {
             // It turns out the 64-bit widths have REX/W encodings and only are available on
             // x86_64.
@@ -1790,6 +1810,14 @@ fn define_simd(
         }
     }
 
+    // SIMD conversions
+    {
+        let fcvt_from_sint_32 = fcvt_from_sint
+            .bind(vector(F32, sse_vector_size))
+            .bind(vector(I32, sse_vector_size));
+        e.enc_both(fcvt_from_sint_32, rec_furm.opcodes(&CVTDQ2PS));
+    }
+
     // SIMD vconst for special cases (all zeroes, all ones)
     // this must be encoded prior to the MOVUPS implementation (below) so the compiler sees this
     // encoding first
@@ -1819,53 +1847,81 @@ fn define_simd(
     // in memory) but some performance measurements are needed.
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         let instruction = vconst.bind(vector(ty, sse_vector_size));
-        let template = rec_vconst.opcodes(&MOVUPS_LOAD).infer_rex();
-        e.enc_32_64_maybe_isap(instruction, template, None); // from SSE
+        let template = rec_vconst.opcodes(&MOVUPS_LOAD);
+        e.enc_both_inferred(instruction, template); // from SSE
     }
 
-    // SIMD register movement: store, load, spill, fill, regmove. All of these use encodings of
+    // SIMD register movement: store, load, spill, fill, regmove, etc. All of these use encodings of
     // MOVUPS and MOVAPS from SSE (TODO ideally all of these would either use MOVAPS when we have
     // alignment or type-specific encodings, see https://github.com/bytecodealliance/wasmtime/issues/1124).
+    // Also, it would be ideal to infer REX prefixes for all of these instructions but for the
+    // time being only instructions with common recipes have `infer_rex()` support.
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         // Store
         let bound_store = store.bind(vector(ty, sse_vector_size)).bind(Any);
-        e.enc_32_64(
-            bound_store.clone(),
-            rec_fst.opcodes(&MOVUPS_STORE).infer_rex(),
+        e.enc_both_inferred(bound_store.clone(), rec_fst.opcodes(&MOVUPS_STORE));
+        e.enc_both(bound_store.clone(), rec_fstDisp8.opcodes(&MOVUPS_STORE));
+        e.enc_both(bound_store, rec_fstDisp32.opcodes(&MOVUPS_STORE));
+
+        // Store complex
+        let bound_store_complex = store_complex.bind(vector(ty, sse_vector_size));
+        e.enc_both(
+            bound_store_complex.clone(),
+            rec_fstWithIndex.opcodes(&MOVUPS_STORE),
         );
-        e.enc_32_64(bound_store.clone(), rec_fstDisp8.opcodes(&MOVUPS_STORE));
-        e.enc_32_64(bound_store, rec_fstDisp32.opcodes(&MOVUPS_STORE));
+        e.enc_both(
+            bound_store_complex.clone(),
+            rec_fstWithIndexDisp8.opcodes(&MOVUPS_STORE),
+        );
+        e.enc_both(
+            bound_store_complex,
+            rec_fstWithIndexDisp32.opcodes(&MOVUPS_STORE),
+        );
 
         // Load
         let bound_load = load.bind(vector(ty, sse_vector_size)).bind(Any);
-        e.enc_32_64(
-            bound_load.clone(),
-            rec_fld.opcodes(&MOVUPS_LOAD).infer_rex(),
+        e.enc_both_inferred(bound_load.clone(), rec_fld.opcodes(&MOVUPS_LOAD));
+        e.enc_both(bound_load.clone(), rec_fldDisp8.opcodes(&MOVUPS_LOAD));
+        e.enc_both(bound_load, rec_fldDisp32.opcodes(&MOVUPS_LOAD));
+
+        // Load complex
+        let bound_load_complex = load_complex.bind(vector(ty, sse_vector_size));
+        e.enc_both(
+            bound_load_complex.clone(),
+            rec_fldWithIndex.opcodes(&MOVUPS_LOAD),
         );
-        e.enc_32_64(bound_load.clone(), rec_fldDisp8.opcodes(&MOVUPS_LOAD));
-        e.enc_32_64(bound_load, rec_fldDisp32.opcodes(&MOVUPS_LOAD));
+        e.enc_both(
+            bound_load_complex.clone(),
+            rec_fldWithIndexDisp8.opcodes(&MOVUPS_LOAD),
+        );
+        e.enc_both(
+            bound_load_complex,
+            rec_fldWithIndexDisp32.opcodes(&MOVUPS_LOAD),
+        );
 
         // Spill
         let bound_spill = spill.bind(vector(ty, sse_vector_size));
-        e.enc_32_64(bound_spill, rec_fspillSib32.opcodes(&MOVUPS_STORE));
+        e.enc_both(bound_spill, rec_fspillSib32.opcodes(&MOVUPS_STORE));
         let bound_regspill = regspill.bind(vector(ty, sse_vector_size));
-        e.enc_32_64(bound_regspill, rec_fregspill32.opcodes(&MOVUPS_STORE));
+        e.enc_both(bound_regspill, rec_fregspill32.opcodes(&MOVUPS_STORE));
 
         // Fill
         let bound_fill = fill.bind(vector(ty, sse_vector_size));
-        e.enc_32_64(bound_fill, rec_ffillSib32.opcodes(&MOVUPS_LOAD));
+        e.enc_both(bound_fill, rec_ffillSib32.opcodes(&MOVUPS_LOAD));
         let bound_regfill = regfill.bind(vector(ty, sse_vector_size));
-        e.enc_32_64(bound_regfill, rec_fregfill32.opcodes(&MOVUPS_LOAD));
+        e.enc_both(bound_regfill, rec_fregfill32.opcodes(&MOVUPS_LOAD));
         let bound_fill_nop = fill_nop.bind(vector(ty, sse_vector_size));
         e.enc_32_64_rec(bound_fill_nop, rec_ffillnull, 0);
 
         // Regmove
         let bound_regmove = regmove.bind(vector(ty, sse_vector_size));
-        e.enc_32_64(bound_regmove, rec_frmov.opcodes(&MOVAPS_LOAD));
+        e.enc_both(bound_regmove, rec_frmov.opcodes(&MOVAPS_LOAD));
 
         // Copy
         let bound_copy = copy.bind(vector(ty, sse_vector_size));
-        e.enc_32_64(bound_copy, rec_furm.opcodes(&MOVAPS_LOAD));
+        e.enc_both(bound_copy, rec_furm.opcodes(&MOVAPS_LOAD));
+        let bound_copy_to_ssa = copy_to_ssa.bind(vector(ty, sse_vector_size));
+        e.enc_both(bound_copy_to_ssa, rec_furm_reg_to_ssa.opcodes(&MOVAPS_LOAD));
         let bound_copy_nop = copy_nop.bind(vector(ty, sse_vector_size));
         e.enc_32_64_rec(bound_copy_nop, rec_stacknull, 0);
     }
@@ -1873,23 +1929,23 @@ fn define_simd(
     // SIMD integer addition
     for (ty, opcodes) in &[(I8, &PADDB), (I16, &PADDW), (I32, &PADDD), (I64, &PADDQ)] {
         let iadd = iadd.bind(vector(*ty, sse_vector_size));
-        e.enc_32_64(iadd, rec_fa.opcodes(*opcodes));
+        e.enc_both_inferred(iadd, rec_fa.opcodes(*opcodes));
     }
 
     // SIMD integer saturating addition
-    e.enc_32_64(
+    e.enc_both_inferred(
         sadd_sat.bind(vector(I8, sse_vector_size)),
         rec_fa.opcodes(&PADDSB),
     );
-    e.enc_32_64(
+    e.enc_both_inferred(
         sadd_sat.bind(vector(I16, sse_vector_size)),
         rec_fa.opcodes(&PADDSW),
     );
-    e.enc_32_64(
+    e.enc_both_inferred(
         uadd_sat.bind(vector(I8, sse_vector_size)),
         rec_fa.opcodes(&PADDUSB),
     );
-    e.enc_32_64(
+    e.enc_both_inferred(
         uadd_sat.bind(vector(I16, sse_vector_size)),
         rec_fa.opcodes(&PADDUSW),
     );
@@ -1898,23 +1954,23 @@ fn define_simd(
     let isub = shared.by_name("isub");
     for (ty, opcodes) in &[(I8, &PSUBB), (I16, &PSUBW), (I32, &PSUBD), (I64, &PSUBQ)] {
         let isub = isub.bind(vector(*ty, sse_vector_size));
-        e.enc_32_64(isub, rec_fa.opcodes(*opcodes));
+        e.enc_both_inferred(isub, rec_fa.opcodes(*opcodes));
     }
 
     // SIMD integer saturating subtraction
-    e.enc_32_64(
+    e.enc_both_inferred(
         ssub_sat.bind(vector(I8, sse_vector_size)),
         rec_fa.opcodes(&PSUBSB),
     );
-    e.enc_32_64(
+    e.enc_both_inferred(
         ssub_sat.bind(vector(I16, sse_vector_size)),
         rec_fa.opcodes(&PSUBSW),
     );
-    e.enc_32_64(
+    e.enc_both_inferred(
         usub_sat.bind(vector(I8, sse_vector_size)),
         rec_fa.opcodes(&PSUBUSB),
     );
-    e.enc_32_64(
+    e.enc_both_inferred(
         usub_sat.bind(vector(I16, sse_vector_size)),
         rec_fa.opcodes(&PSUBUSW),
     );
@@ -1926,7 +1982,7 @@ fn define_simd(
         (I32, &PMULLD[..], Some(use_sse41_simd)),
     ] {
         let imul = imul.bind(vector(*ty, sse_vector_size));
-        e.enc_32_64_maybe_isap(imul, rec_fa.opcodes(opcodes), *isap);
+        e.enc_both_inferred_maybe_isap(imul, rec_fa.opcodes(opcodes), *isap);
     }
 
     // SIMD integer multiplication for I64x2 using a AVX512.
@@ -1942,7 +1998,7 @@ fn define_simd(
     // SIMD integer average with rounding.
     for (ty, opcodes) in &[(I8, &PAVGB[..]), (I16, &PAVGW[..])] {
         let avgr = avg_round.bind(vector(*ty, sse_vector_size));
-        e.enc_32_64(avgr, rec_fa.opcodes(opcodes));
+        e.enc_both_inferred(avgr, rec_fa.opcodes(opcodes));
     }
 
     // SIMD logical operations
@@ -1951,23 +2007,23 @@ fn define_simd(
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         // and
         let band = band.bind(vector(ty, sse_vector_size));
-        e.enc_32_64(band, rec_fa.opcodes(&PAND));
+        e.enc_both_inferred(band, rec_fa.opcodes(&PAND));
 
         // and not (note flipped recipe operands to match band_not order)
         let band_not = band_not.bind(vector(ty, sse_vector_size));
-        e.enc_32_64(band_not, rec_fax.opcodes(&PANDN));
+        e.enc_both_inferred(band_not, rec_fax.opcodes(&PANDN));
 
         // or
         let bor = bor.bind(vector(ty, sse_vector_size));
-        e.enc_32_64(bor, rec_fa.opcodes(&POR));
+        e.enc_both_inferred(bor, rec_fa.opcodes(&POR));
 
         // xor
         let bxor = bxor.bind(vector(ty, sse_vector_size));
-        e.enc_32_64(bxor, rec_fa.opcodes(&PXOR));
+        e.enc_both_inferred(bxor, rec_fa.opcodes(&PXOR));
 
         // ptest
         let x86_ptest = x86_ptest.bind(vector(ty, sse_vector_size));
-        e.enc_32_64_maybe_isap(x86_ptest, rec_fcmp.opcodes(&PTEST), Some(use_sse41_simd));
+        e.enc_both_inferred_maybe_isap(x86_ptest, rec_fcmp.opcodes(&PTEST), Some(use_sse41_simd));
     }
 
     // SIMD bitcast from I32/I64 to the low bits of a vector (e.g. I64x2); this register movement
@@ -1975,7 +2031,7 @@ fn define_simd(
     // I128x1 but restrictions on the type builder prevent this; the general idea here is that
     // the upper bits are all zeroed and do not form parts of any separate lane. See
     // https://github.com/bytecodealliance/wasmtime/issues/1140.
-    e.enc_both(
+    e.enc_both_inferred(
         bitcast.bind(vector(I64, sse_vector_size)).bind(I32),
         rec_frurm.opcodes(&MOVD_LOAD_XMM),
     );
@@ -1987,31 +2043,31 @@ fn define_simd(
     // SIMD shift left
     for (ty, opcodes) in &[(I16, &PSLLW), (I32, &PSLLD), (I64, &PSLLQ)] {
         let x86_psll = x86_psll.bind(vector(*ty, sse_vector_size));
-        e.enc_32_64(x86_psll, rec_fa.opcodes(*opcodes));
+        e.enc_both_inferred(x86_psll, rec_fa.opcodes(*opcodes));
     }
 
     // SIMD shift right (logical)
     for (ty, opcodes) in &[(I16, &PSRLW), (I32, &PSRLD), (I64, &PSRLQ)] {
         let x86_psrl = x86_psrl.bind(vector(*ty, sse_vector_size));
-        e.enc_32_64(x86_psrl, rec_fa.opcodes(*opcodes));
+        e.enc_both_inferred(x86_psrl, rec_fa.opcodes(*opcodes));
     }
 
     // SIMD shift right (arithmetic)
     for (ty, opcodes) in &[(I16, &PSRAW), (I32, &PSRAD)] {
         let x86_psra = x86_psra.bind(vector(*ty, sse_vector_size));
-        e.enc_32_64(x86_psra, rec_fa.opcodes(*opcodes));
+        e.enc_both_inferred(x86_psra, rec_fa.opcodes(*opcodes));
     }
 
     // SIMD immediate shift
     for (ty, opcodes) in &[(I16, &PS_W_IMM), (I32, &PS_D_IMM), (I64, &PS_Q_IMM)] {
         let ishl_imm = ishl_imm.bind(vector(*ty, sse_vector_size));
-        e.enc_32_64(ishl_imm, rec_f_ib.opcodes(*opcodes).rrr(6));
+        e.enc_both_inferred(ishl_imm, rec_f_ib.opcodes(*opcodes).rrr(6));
 
         let ushr_imm = ushr_imm.bind(vector(*ty, sse_vector_size));
-        e.enc_32_64(ushr_imm, rec_f_ib.opcodes(*opcodes).rrr(2));
+        e.enc_both_inferred(ushr_imm, rec_f_ib.opcodes(*opcodes).rrr(2));
 
         let sshr_imm = sshr_imm.bind(vector(*ty, sse_vector_size));
-        e.enc_32_64(sshr_imm, rec_f_ib.opcodes(*opcodes).rrr(4));
+        e.enc_both_inferred(sshr_imm, rec_f_ib.opcodes(*opcodes).rrr(4));
     }
 
     // SIMD integer comparisons
@@ -2030,8 +2086,8 @@ fn define_simd(
             let instruction = icmp
                 .bind(Immediate::IntCC(*cc))
                 .bind(vector(*ty, sse_vector_size));
-            let template = rec_icscc_fpr.nonrex().opcodes(opcodes);
-            e.enc_32_64_maybe_isap(instruction, template, *isa_predicate);
+            let template = rec_icscc_fpr.opcodes(opcodes);
+            e.enc_both_inferred_maybe_isap(instruction, template, *isa_predicate);
         }
     }
 
@@ -2051,15 +2107,15 @@ fn define_simd(
         (I32, x86_pminu, &PMINUD[..], Some(use_sse41_simd)),
     ] {
         let inst = inst.bind(vector(*ty, sse_vector_size));
-        e.enc_32_64_maybe_isap(inst, rec_fa.opcodes(opcodes), *isa_predicate);
+        e.enc_both_inferred_maybe_isap(inst, rec_fa.opcodes(opcodes), *isa_predicate);
     }
 
     // SIMD float comparisons
-    e.enc_both(
+    e.enc_both_inferred(
         fcmp.bind(vector(F32, sse_vector_size)),
         rec_pfcmp.opcodes(&CMPPS),
     );
-    e.enc_both(
+    e.enc_both_inferred(
         fcmp.bind(vector(F64, sse_vector_size)),
         rec_pfcmp.opcodes(&CMPPD),
     );
@@ -2080,11 +2136,11 @@ fn define_simd(
         (F64, fmax, &MAXPD[..]),
     ] {
         let inst = inst.bind(vector(*ty, sse_vector_size));
-        e.enc_both(inst, rec_fa.opcodes(opcodes));
+        e.enc_both_inferred(inst, rec_fa.opcodes(opcodes));
     }
     for (ty, inst, opcodes) in &[(F32, sqrt, &SQRTPS[..]), (F64, sqrt, &SQRTPD[..])] {
         let inst = inst.bind(vector(*ty, sse_vector_size));
-        e.enc_both(inst, rec_furm.opcodes(opcodes));
+        e.enc_both_inferred(inst, rec_furm.opcodes(opcodes));
     }
 }
 
