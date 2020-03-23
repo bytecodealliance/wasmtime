@@ -60,8 +60,10 @@ Contributing
 ------------
 
 If you're interested in contributing to Cranelift: thank you! We have a
-[contributing guide](CONTRIBUTING.md) which will help you getting involved in
-the Cranelift project.
+[contributing guide] which will help you getting involved in the Cranelift
+project.
+
+[contributing guide](https://bytecodealliance.github.io/wasmtime/contributing.html)
 
 Planned uses
 ------------
