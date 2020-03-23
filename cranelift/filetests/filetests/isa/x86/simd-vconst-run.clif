@@ -17,5 +17,29 @@ block0:
     v6 = band v4, v5
     return v6
 }
+; run
 
+; Since both jump tables and constants are emitted after the function body, it is important that any RIP-relative
+; addressing of constants is not incorrect in the presence of jump tables. This test confirms that, even when both
+; jump tables and constants are emitted, the constant addressing works correctly.
+function %vconst_with_jumptables() -> b1 {
+jt0 = jump_table [block0]
+
+block10:
+    v10 = iconst.i64 0
+    br_table v10, block1, jt0
+block0:
+    v0 = iconst.i64 100
+    jump block11(v0)
+block1:
+    v1 = iconst.i64 101
+    jump block11(v1)
+block11(v11: i64):
+    v12 = icmp_imm eq v11, 100        ; We should have jumped through block 0.
+    v13 = vconst.i32x4 [1 2 3 4]
+    v14 = extractlane.i32x4 v13, 1 ; Extract the second element...
+    v15 = icmp_imm eq v14, 2       ; ...which should be the value 2.
+    v16 = band v12, v15
+    return v16
+}
 ; run
