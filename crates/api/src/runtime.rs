@@ -267,6 +267,22 @@ impl Config {
         self
     }
 
+    /// Configures whether Cranelift should perform a NaN-canonicalization pass.
+    ///
+    /// When Cranelift is used as a code generation backend this will configure
+    /// it to replace NaNs with a single canonical value. This is useful for users
+    /// requiring entirely deterministic WebAssembly computation.
+    /// This is not required by the WebAssembly spec, so it is not enabled by default.
+    ///
+    /// The default value for this is `false`
+    pub fn cranelift_nan_canonicalization(&mut self, enable: bool) -> &mut Self {
+        let val = if enable { "true" } else { "false" };
+        self.flags
+            .set("enable_nan_canonicalization", val)
+            .expect("should be valid flag");
+        self
+    }
+
     /// Loads cache configuration specified at `path`.
     ///
     /// This method will read the file specified by `path` on the filesystem and
