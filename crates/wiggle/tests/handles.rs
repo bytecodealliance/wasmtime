@@ -13,11 +13,11 @@ impl_errno!(types::Errno);
 
 impl<'a> handle_examples::HandleExamples for WasiCtx<'a> {
     fn fd_create(&self) -> Result<types::Fd, types::Errno> {
-        Ok(types::Fd::from(FD_VAL))
+        Ok(unsafe { types::Fd::from_raw(FD_VAL) })
     }
-    fn fd_consume(&self, fd: types::Fd) -> Result<(), types::Errno> {
+    fn fd_consume(&self, fd: &types::Fd) -> Result<(), types::Errno> {
         println!("FD_CONSUME {}", fd);
-        if fd == types::Fd::from(FD_VAL) {
+        if *fd == unsafe { types::Fd::from_raw(FD_VAL) } {
             Ok(())
         } else {
             Err(types::Errno::InvalidArg)

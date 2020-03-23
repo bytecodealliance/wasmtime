@@ -57,7 +57,7 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
 
     fn fd_advise(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _offset: types::Filesize,
         _len: types::Filesize,
         _advice: types::Advice,
@@ -67,49 +67,49 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
 
     fn fd_allocate(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _offset: types::Filesize,
         _len: types::Filesize,
     ) -> Result<()> {
         unimplemented!("fd_allocate")
     }
 
-    fn fd_close(&self, _fd: types::Fd) -> Result<()> {
+    fn fd_close(&self, _fd: &types::Fd) -> Result<()> {
         unimplemented!("fd_close")
     }
 
-    fn fd_datasync(&self, _fd: types::Fd) -> Result<()> {
+    fn fd_datasync(&self, _fd: &types::Fd) -> Result<()> {
         unimplemented!("fd_datasync")
     }
 
-    fn fd_fdstat_get(&self, _fd: types::Fd) -> Result<types::Fdstat> {
+    fn fd_fdstat_get(&self, _fd: &types::Fd) -> Result<types::Fdstat> {
         unimplemented!("fd_fdstat_get")
     }
 
-    fn fd_fdstat_set_flags(&self, _fd: types::Fd, _flags: types::Fdflags) -> Result<()> {
+    fn fd_fdstat_set_flags(&self, _fd: &types::Fd, _flags: types::Fdflags) -> Result<()> {
         unimplemented!("fd_fdstat_set_flags")
     }
 
     fn fd_fdstat_set_rights(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _fs_rights_base: types::Rights,
         _fs_rights_inherting: types::Rights,
     ) -> Result<()> {
         unimplemented!("fd_fdstat_set_rights")
     }
 
-    fn fd_filestat_get(&self, _fd: types::Fd) -> Result<types::Filestat> {
+    fn fd_filestat_get(&self, _fd: &types::Fd) -> Result<types::Filestat> {
         unimplemented!("fd_filestat_get")
     }
 
-    fn fd_filestat_set_size(&self, _fd: types::Fd, _size: types::Filesize) -> Result<()> {
+    fn fd_filestat_set_size(&self, _fd: &types::Fd, _size: types::Filesize) -> Result<()> {
         unimplemented!("fd_filestat_set_size")
     }
 
     fn fd_filestat_set_times(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _atim: types::Timestamp,
         _mtim: types::Timestamp,
         _fst_flags: types::Fstflags,
@@ -119,7 +119,7 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
 
     fn fd_pread(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         iovs: &types::IovecArray<'_>,
         _offset: types::Filesize,
     ) -> Result<types::Size> {
@@ -146,13 +146,13 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
         unimplemented!("fd_pread")
     }
 
-    fn fd_prestat_get(&self, _fd: types::Fd) -> Result<types::Prestat> {
+    fn fd_prestat_get(&self, _fd: &types::Fd) -> Result<types::Prestat> {
         unimplemented!("fd_prestat_get")
     }
 
     fn fd_prestat_dir_name(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _path: &GuestPtr<u8>,
         _path_len: types::Size,
     ) -> Result<()> {
@@ -161,20 +161,20 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
 
     fn fd_pwrite(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _ciovs: &types::CiovecArray<'_>,
         _offset: types::Filesize,
     ) -> Result<types::Size> {
         unimplemented!("fd_pwrite")
     }
 
-    fn fd_read(&self, _fd: types::Fd, _iovs: &types::IovecArray<'_>) -> Result<types::Size> {
+    fn fd_read(&self, _fd: &types::Fd, _iovs: &types::IovecArray<'_>) -> Result<types::Size> {
         unimplemented!("fd_read")
     }
 
     fn fd_readdir(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _buf: &GuestPtr<u8>,
         _buf_len: types::Size,
         _cookie: types::Dircookie,
@@ -182,38 +182,38 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
         unimplemented!("fd_readdir")
     }
 
-    fn fd_renumber(&self, _fd: types::Fd, _to: types::Fd) -> Result<()> {
+    fn fd_renumber(&self, _fd: &types::Fd, _to: &types::Fd) -> Result<()> {
         unimplemented!("fd_renumber")
     }
 
     fn fd_seek(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _offset: types::Filedelta,
         _whence: types::Whence,
     ) -> Result<types::Filesize> {
         unimplemented!("fd_seek")
     }
 
-    fn fd_sync(&self, _fd: types::Fd) -> Result<()> {
+    fn fd_sync(&self, _fd: &types::Fd) -> Result<()> {
         unimplemented!("fd_sync")
     }
 
-    fn fd_tell(&self, _fd: types::Fd) -> Result<types::Filesize> {
+    fn fd_tell(&self, _fd: &types::Fd) -> Result<types::Filesize> {
         unimplemented!("fd_tell")
     }
 
-    fn fd_write(&self, _fd: types::Fd, _ciovs: &types::CiovecArray<'_>) -> Result<types::Size> {
+    fn fd_write(&self, _fd: &types::Fd, _ciovs: &types::CiovecArray<'_>) -> Result<types::Size> {
         unimplemented!("fd_write")
     }
 
-    fn path_create_directory(&self, _fd: types::Fd, _path: &GuestPtr<'_, str>) -> Result<()> {
+    fn path_create_directory(&self, _fd: &types::Fd, _path: &GuestPtr<'_, str>) -> Result<()> {
         unimplemented!("path_create_directory")
     }
 
     fn path_filestat_get(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _flags: types::Lookupflags,
         _path: &GuestPtr<'_, str>,
     ) -> Result<types::Filestat> {
@@ -222,7 +222,7 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
 
     fn path_filestat_set_times(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _flags: types::Lookupflags,
         _path: &GuestPtr<'_, str>,
         _atim: types::Timestamp,
@@ -234,10 +234,10 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
 
     fn path_link(
         &self,
-        _old_fd: types::Fd,
+        _old_fd: &types::Fd,
         _old_flags: types::Lookupflags,
         _old_path: &GuestPtr<'_, str>,
-        _new_fd: types::Fd,
+        _new_fd: &types::Fd,
         _new_path: &GuestPtr<'_, str>,
     ) -> Result<()> {
         unimplemented!("path_link")
@@ -245,7 +245,7 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
 
     fn path_open(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _dirflags: types::Lookupflags,
         _path: &GuestPtr<'_, str>,
         _oflags: types::Oflags,
@@ -258,7 +258,7 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
 
     fn path_readlink(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _path: &GuestPtr<'_, str>,
         _buf: &GuestPtr<u8>,
         _buf_len: types::Size,
@@ -266,15 +266,15 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
         unimplemented!("path_readlink")
     }
 
-    fn path_remove_directory(&self, _fd: types::Fd, _path: &GuestPtr<'_, str>) -> Result<()> {
+    fn path_remove_directory(&self, _fd: &types::Fd, _path: &GuestPtr<'_, str>) -> Result<()> {
         unimplemented!("path_remove_directory")
     }
 
     fn path_rename(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _old_path: &GuestPtr<'_, str>,
-        _new_fd: types::Fd,
+        _new_fd: &types::Fd,
         _new_path: &GuestPtr<'_, str>,
     ) -> Result<()> {
         unimplemented!("path_rename")
@@ -283,13 +283,13 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
     fn path_symlink(
         &self,
         _old_path: &GuestPtr<'_, str>,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _new_path: &GuestPtr<'_, str>,
     ) -> Result<()> {
         unimplemented!("path_symlink")
     }
 
-    fn path_unlink_file(&self, _fd: types::Fd, _path: &GuestPtr<'_, str>) -> Result<()> {
+    fn path_unlink_file(&self, _fd: &types::Fd, _path: &GuestPtr<'_, str>) -> Result<()> {
         unimplemented!("path_unlink_file")
     }
 
@@ -320,7 +320,7 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
 
     fn sock_recv(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _ri_data: &types::IovecArray<'_>,
         _ri_flags: types::Riflags,
     ) -> Result<(types::Size, types::Roflags)> {
@@ -329,14 +329,14 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
 
     fn sock_send(
         &self,
-        _fd: types::Fd,
+        _fd: &types::Fd,
         _si_data: &types::CiovecArray<'_>,
         _si_flags: types::Siflags,
     ) -> Result<types::Size> {
         unimplemented!("sock_send")
     }
 
-    fn sock_shutdown(&self, _fd: types::Fd, _how: types::Sdflags) -> Result<()> {
+    fn sock_shutdown(&self, _fd: &types::Fd, _how: types::Sdflags) -> Result<()> {
         unimplemented!("sock_shutdown")
     }
 }
