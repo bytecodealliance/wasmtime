@@ -211,13 +211,13 @@ fn build_function_addr_map(
 // Utility iterator to find all ranges starts for specific Wasm address.
 // The iterator returns generated addresses sorted by RangeIndex.
 struct TransformRangeStartIter<'a> {
-    addr: u64,
-    indicies: &'a [usize],
+    addr: WasmAddress,
+    indicies: &'a [RangeIndex],
     ranges: &'a [Range],
 }
 
 impl<'a> TransformRangeStartIter<'a> {
-    fn new(func: &'a FuncTransform, addr: u64) -> Self {
+    fn new(func: &'a FuncTransform, addr: WasmAddress) -> Self {
         let found = match func
             .lookup
             .index
@@ -245,7 +245,7 @@ impl<'a> TransformRangeStartIter<'a> {
 }
 
 impl<'a> Iterator for TransformRangeStartIter<'a> {
-    type Item = (usize, RangeIndex);
+    type Item = (GeneratedAddress, RangeIndex);
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((first, tail)) = self.indicies.split_first() {
             let range_index = *first;
@@ -274,13 +274,13 @@ impl<'a> Iterator for TransformRangeStartIter<'a> {
 // Utility iterator to find all ranges ends for specific Wasm address.
 // The iterator returns generated addresses sorted by RangeIndex.
 struct TransformRangeEndIter<'a> {
-    addr: u64,
-    indicies: &'a [usize],
+    addr: WasmAddress,
+    indicies: &'a [RangeIndex],
     ranges: &'a [Range],
 }
 
 impl<'a> TransformRangeEndIter<'a> {
-    fn new(func: &'a FuncTransform, addr: u64) -> Self {
+    fn new(func: &'a FuncTransform, addr: WasmAddress) -> Self {
         let found = match func
             .lookup
             .index
@@ -308,7 +308,7 @@ impl<'a> TransformRangeEndIter<'a> {
 }
 
 impl<'a> Iterator for TransformRangeEndIter<'a> {
-    type Item = (usize, RangeIndex);
+    type Item = (GeneratedAddress, RangeIndex);
     fn next(&mut self) -> Option<Self::Item> {
         while let Some((first, tail)) = self.indicies.split_first() {
             let range_index = *first;
@@ -341,12 +341,12 @@ pub struct TransformRangeIter<'a> {
     func: &'a FuncTransform,
     start_it: TransformRangeStartIter<'a>,
     end_it: TransformRangeEndIter<'a>,
-    last_start: Option<(usize, RangeIndex)>,
-    last_end: Option<(usize, RangeIndex)>,
+    last_start: Option<(GeneratedAddress, RangeIndex)>,
+    last_end: Option<(GeneratedAddress, RangeIndex)>,
 }
 
 impl<'a> TransformRangeIter<'a> {
-    fn new(func: &'a FuncTransform, start: u64, end: u64) -> Self {
+    fn new(func: &'a FuncTransform, start: WasmAddress, end: WasmAddress) -> Self {
         let mut start_it = TransformRangeStartIter::new(func, start);
         let last_start = start_it.next();
         let mut end_it = TransformRangeEndIter::new(func, end);
@@ -367,7 +367,11 @@ impl<'a> Iterator for TransformRangeIter<'a> {
         loop {
             // Merge TransformRangeStartIter and TransformRangeEndIter data using
             // FuncLookup index's field propery to be sorted by RangeIndex.
-            let (start, end, range_index): (Option<usize>, Option<usize>, RangeIndex) = {
+            let (start, end, range_index): (
+                Option<GeneratedAddress>,
+                Option<GeneratedAddress>,
+                RangeIndex,
+            ) = {
                 match (self.last_start.as_ref(), self.last_end.as_ref()) {
                     (Some((s, sri)), Some((e, eri))) => {
                         if sri == eri {
