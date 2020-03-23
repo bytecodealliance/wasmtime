@@ -102,6 +102,7 @@ fn build_function_lookup(
     let mut ranges = Vec::new();
     let mut ranges_index = BTreeMap::new();
     let mut current_range = Vec::new();
+    let mut last_gen_inst_empty = false;
     for t in &ft.instructions {
         if t.srcloc.is_default() {
             continue;
@@ -127,13 +128,26 @@ fn build_function_lookup(
             range_wasm_start = offset;
             range_gen_start = inst_gen_start;
             current_range = Vec::new();
+            last_gen_inst_empty = false;
         }
-        // Continue existing range: add new wasm->generated code position.
-        current_range.push(Position {
-            wasm_pos: offset,
-            gen_start: inst_gen_start,
-            gen_end: inst_gen_end,
-        });
+        if last_gen_inst_empty && current_range.last().unwrap().gen_start == inst_gen_start {
+            // It is possible that previous inst_gen_start == inst_gen_end, so
+            // make an attempt to merge all such positions with current one.
+            if inst_gen_start < inst_gen_end {
+                let last = current_range.last_mut().unwrap();
+                last.gen_end = inst_gen_end;
+                last_gen_inst_empty = false;
+            }
+        } else {
+            // Continue existing range: add new wasm->generated code position.
+            current_range.push(Position {
+                wasm_pos: offset,
+                gen_start: inst_gen_start,
+                gen_end: inst_gen_end,
+            });
+            // Track if last position was empty (see if-branch above).
+            last_gen_inst_empty = inst_gen_start == inst_gen_end;
+        }
         last_wasm_pos = offset;
     }
     let last_gen_addr = ft.body_offset + ft.body_len;
