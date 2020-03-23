@@ -52,10 +52,7 @@ impl SubTest for TestRodata {
         );
 
         // Verify that the returned code size matches the emitted bytes.
-        let mut sink = RodataSink {
-            rodata: Vec::new(),
-            in_rodata: false,
-        };
+        let mut sink = RodataSink::default();
         binemit::emit_function(
             &comp_ctx.func,
             |func, inst, div, sink, isa| isa.emit_inst(func, inst, div, sink),
@@ -71,35 +68,41 @@ impl SubTest for TestRodata {
 }
 
 /// Code sink that only captures emitted rodata
+#[derive(Default)]
 struct RodataSink {
-    in_rodata: bool,
+    offset: usize,
     rodata: Vec<u8>,
+    in_rodata: bool,
 }
 
 impl binemit::CodeSink for RodataSink {
     fn offset(&self) -> binemit::CodeOffset {
-        0
+        self.offset as u32
     }
 
     fn put1(&mut self, byte: u8) {
+        self.offset += 1;
         if self.in_rodata {
             self.rodata.push(byte);
         }
     }
 
     fn put2(&mut self, bytes: u16) {
+        self.offset += 2;
         if self.in_rodata {
             self.rodata.extend_from_slice(&bytes.to_be_bytes());
         }
     }
 
     fn put4(&mut self, bytes: u32) {
+        self.offset += 4;
         if self.in_rodata {
             self.rodata.extend_from_slice(&bytes.to_be_bytes());
         }
     }
 
     fn put8(&mut self, bytes: u64) {
+        self.offset += 8;
         if self.in_rodata {
             self.rodata.extend_from_slice(&bytes.to_be_bytes());
         }
@@ -111,13 +114,16 @@ impl binemit::CodeSink for RodataSink {
     fn reloc_jt(&mut self, _reloc: binemit::Reloc, _jt: ir::JumpTable) {}
     fn trap(&mut self, _code: ir::TrapCode, _srcloc: ir::SourceLoc) {}
     fn begin_jumptables(&mut self) {
-        assert!(!self.in_rodata);
+        assert!(!self.in_rodata, "Jump tables must be emitted before rodata");
     }
     fn begin_rodata(&mut self) {
         self.in_rodata = true;
     }
     fn end_codegen(&mut self) {
-        assert!(self.in_rodata);
+        assert!(
+            self.in_rodata,
+            "Expected rodata to be emitted before the end of codegen"
+        );
     }
     fn add_stackmap(&mut self, _: &[Value], _: &Function, _: &dyn TargetIsa) {}
 }
