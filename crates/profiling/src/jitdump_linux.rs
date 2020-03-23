@@ -13,7 +13,7 @@
 
 use crate::ProfilingAgent;
 use anyhow::Result;
-use object::Object;
+use object::{Object, ObjectSection};
 use scroll::{IOwrite, SizeWith, NATIVE};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -30,11 +30,7 @@ use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::Module;
 use wasmtime_runtime::VMFunctionBody;
 
-#[cfg(target_pointer_width = "64")]
-use goblin::elf64 as elf;
-
-#[cfg(target_pointer_width = "32")]
-use goblin::elf32 as elf;
+use object::elf;
 
 /// Defines jitdump record types
 #[repr(u32)]
@@ -241,10 +237,10 @@ impl State {
     /// Returns the ELF machine architecture.
     fn get_e_machine(&self) -> u32 {
         match target_lexicon::HOST.architecture {
-            Architecture::X86_64 => elf::header::EM_X86_64 as u32,
-            Architecture::I686 => elf::header::EM_386 as u32,
-            Architecture::Arm(_) => elf::header::EM_ARM as u32,
-            Architecture::Aarch64(_) => elf::header::EM_AARCH64 as u32,
+            Architecture::X86_64 => elf::EM_X86_64 as u32,
+            Architecture::I686 => elf::EM_386 as u32,
+            Architecture::Arm(_) => elf::EM_ARM as u32,
+            Architecture::Aarch64(_) => elf::EM_AARCH64 as u32,
             _ => unimplemented!("unrecognized architecture"),
         }
     }
@@ -386,9 +382,11 @@ impl State {
         };
 
         let load_section = |id: gimli::SectionId| -> Result<borrow::Cow<[u8]>> {
-            Ok(file
-                .section_data_by_name(id.name())
-                .unwrap_or(borrow::Cow::Borrowed(&[][..])))
+            if let Some(section) = file.section_by_name(id.name()) {
+                Ok(section.data()?.into())
+            } else {
+                Ok((&[] as &[u8]).into())
+            }
         };
 
         let load_section_sup = |_| Ok(borrow::Cow::Borrowed(&[][..]));

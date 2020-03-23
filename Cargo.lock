@@ -528,7 +528,6 @@ version = "0.60.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-module",
- "goblin",
  "object",
  "target-lexicon",
 ]
@@ -1369,18 +1368,15 @@ checksum = "17b02fc0ff9a9e4b35b3342880f48e896ebf69f2967921fe8646bf5b7125956a"
 
 [[package]]
 name = "object"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea44a4fd660ab0f38434934ca0212e90fbeaaee54126ef20a3451c30c95bafae"
+checksum = "e5666bbb90bc4d1e5bdcb26c0afda1822d25928341e9384ab187a9b37ab69e36"
 dependencies = [
  "crc32fast",
  "flate2",
- "goblin",
  "indexmap",
- "parity-wasm",
- "scroll",
  "target-lexicon",
- "uuid",
+ "wasmparser",
 ]
 
 [[package]]
@@ -1407,12 +1403,6 @@ checksum = "6ff55baddef9e4ad00f88b6c743a2a8062d4c6ade126c2a528644b8e444d52ce"
 dependencies = [
  "stable_deref_trait",
 ]
-
-[[package]]
-name = "parity-wasm"
-version = "0.41.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddfc878dac00da22f8f61e7af3157988424567ab01d9920b962ef7dcbd7cd865"
 
 [[package]]
 name = "paste"
@@ -2294,12 +2284,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "uuid"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fde2f6a4bea1d6e007c4ad38c6839fa71cbb63b6dbf5b595aa38dc9b1093c11"
-
-[[package]]
 name = "vec_map"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2563,7 +2547,6 @@ dependencies = [
  "anyhow",
  "cfg-if",
  "gimli",
- "goblin",
  "lazy_static",
  "libc",
  "object",

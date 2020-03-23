@@ -515,7 +515,7 @@ impl ObjectProduct {
 
     /// Write the object bytes in memory.
     #[inline]
-    pub fn emit(self) -> Result<Vec<u8>, String> {
+    pub fn emit(self) -> Result<Vec<u8>, object::write::Error> {
         self.object.write()
     }
 }
@@ -584,7 +584,7 @@ impl RelocSink for ObjectRelocSink {
                     "ElfX86_64TlsGd is not supported for this file format"
                 );
                 (
-                    RelocationKind::Elf(goblin::elf64::reloc::R_X86_64_TLSGD),
+                    RelocationKind::Elf(object::elf::R_X86_64_TLSGD),
                     RelocationEncoding::Generic,
                     32,
                 )
@@ -598,7 +598,7 @@ impl RelocSink for ObjectRelocSink {
                 addend += 4; // X86_64_RELOC_TLV has an implicit addend of -4
                 (
                     RelocationKind::MachO {
-                        value: goblin::mach::relocation::X86_64_RELOC_TLV,
+                        value: object::macho::X86_64_RELOC_TLV,
                         relative: true,
                     },
                     RelocationEncoding::Generic,
