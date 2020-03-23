@@ -266,8 +266,10 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
     let mut get_exports = Vec::new();
     let mut ctor_externs = Vec::new();
     let mut ctor_fields = Vec::new();
+    let mut linker_add = Vec::new();
 
     for module in doc.modules() {
+        let module_name = module.name.as_str();
         let module_id = Ident::new(module.name.as_str(), Span::call_site());
         for func in module.funcs() {
             let name = func.name.as_str();
@@ -275,6 +277,9 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
             fields.push(quote! { pub #name_ident: wasmtime::Func });
             get_exports.push(quote! { #name => Some(&self.#name_ident) });
             ctor_fields.push(name_ident.clone());
+            linker_add.push(quote! {
+                linker.define(#module_name, #name, self.#name_ident.clone())?;
+            });
 
             let mut shim_arg_decls = Vec::new();
             let mut params = Vec::new();
@@ -500,6 +505,12 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
                     #(#get_exports,)*
                     _ => None,
                 }
+            }
+
+            /// Adds all wasi items to the specified `Linker`.
+            pub fn add_to_linker(&self, linker: &mut wasmtime::Linker) -> anyhow::Result<()> {
+                #(#linker_add)*
+                Ok(())
             }
         }
     }

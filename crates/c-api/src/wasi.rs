@@ -168,7 +168,7 @@ pub unsafe extern "C" fn wasi_config_preopen_dir(
 
 #[repr(C)]
 pub struct wasi_instance_t {
-    wasi: Wasi,
+    pub wasi: Wasi,
     export_cache: HashMap<String, Box<wasm_extern_t>>,
 }
 

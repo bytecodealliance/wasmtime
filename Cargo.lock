@@ -2395,6 +2395,7 @@ dependencies = [
 name = "wasmtime-c-api"
 version = "0.12.0"
 dependencies = [
+ "anyhow",
  "wasi-common",
  "wasmtime",
  "wasmtime-wasi",
