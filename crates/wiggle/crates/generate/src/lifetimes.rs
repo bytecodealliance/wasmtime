@@ -2,11 +2,15 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 pub trait LifetimeExt {
+    fn is_clone(&self) -> bool;
     fn is_transparent(&self) -> bool;
     fn needs_lifetime(&self) -> bool;
 }
 
 impl LifetimeExt for witx::TypeRef {
+    fn is_clone(&self) -> bool {
+        self.type_().is_clone()
+    }
     fn is_transparent(&self) -> bool {
         self.type_().is_transparent()
     }
@@ -16,6 +20,15 @@ impl LifetimeExt for witx::TypeRef {
 }
 
 impl LifetimeExt for witx::Type {
+    fn is_clone(&self) -> bool {
+        match self {
+            witx::Type::Builtin(b) => b.is_clone(),
+            witx::Type::Struct(s) => s.is_clone(),
+            witx::Type::Union(u) => u.is_clone(),
+            witx::Type::Handle { .. } => false,
+            _ => true,
+        }
+    }
     fn is_transparent(&self) -> bool {
         match self {
             witx::Type::Builtin(b) => b.is_transparent(),
@@ -45,6 +58,9 @@ impl LifetimeExt for witx::Type {
 }
 
 impl LifetimeExt for witx::BuiltinType {
+    fn is_clone(&self) -> bool {
+        true
+    }
     fn is_transparent(&self) -> bool {
         !self.needs_lifetime()
     }
@@ -57,6 +73,9 @@ impl LifetimeExt for witx::BuiltinType {
 }
 
 impl LifetimeExt for witx::StructDatatype {
+    fn is_clone(&self) -> bool {
+        self.members.iter().all(|m| m.tref.is_clone())
+    }
     fn is_transparent(&self) -> bool {
         self.members.iter().all(|m| m.tref.is_transparent())
     }
@@ -66,6 +85,11 @@ impl LifetimeExt for witx::StructDatatype {
 }
 
 impl LifetimeExt for witx::UnionDatatype {
+    fn is_clone(&self) -> bool {
+        self.variants
+            .iter()
+            .all(|m| m.tref.as_ref().map(|t| t.is_clone()).unwrap_or(true))
+    }
     fn is_transparent(&self) -> bool {
         false
     }

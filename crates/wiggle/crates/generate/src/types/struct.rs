@@ -76,6 +76,11 @@ pub(super) fn define_struct(
     } else {
         (quote!(), quote!(, PartialEq))
     };
+    let derive_clone = if s.is_clone() {
+        quote!(, Clone)
+    } else {
+        quote!()
+    };
 
     let transparent = if s.is_transparent() {
         let member_validate = s.member_layout().into_iter().map(|ml| {
@@ -104,7 +109,7 @@ pub(super) fn define_struct(
     };
 
     quote! {
-        #[derive(Clone, Debug #extra_derive)]
+        #[derive(Debug #derive_clone #extra_derive)]
         pub struct #ident #struct_lifetime {
             #(#member_decls),*
         }

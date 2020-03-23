@@ -25,12 +25,6 @@ pub(super) fn define_handle(
             }
         }
 
-        impl Clone for #ident {
-            fn clone(&self) -> Self {
-                Self(self.0)
-            }
-        }
-
         impl From<#ident> for i32 {
             fn from(e: #ident) -> i32 {
                 e.0 as i32

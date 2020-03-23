@@ -70,9 +70,14 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
     } else {
         (quote!(), quote!(, PartialEq))
     };
+    let derive_clone = if u.is_clone() {
+        quote!(, Clone)
+    } else {
+        quote!()
+    };
 
     quote! {
-        #[derive(Clone, Debug #extra_derive)]
+        #[derive(Debug #derive_clone #extra_derive)]
         pub enum #ident #enum_lifetime {
             #(#variants),*
         }
