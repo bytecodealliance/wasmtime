@@ -5,10 +5,10 @@
 
 // TODO complete the C API
 
+use anyhow::Result;
 use std::cell::RefCell;
 use std::panic::{self, AssertUnwindSafe};
 use std::{mem, ptr, slice};
-use anyhow::Result;
 use wasmtime::{
     AnyRef, Config, Engine, ExportType, Extern, ExternType, Func, FuncType, Global, GlobalType,
     HostInfo, HostRef, ImportType, Instance, Limits, Memory, MemoryType, Module, Store, Table,
@@ -735,7 +735,10 @@ pub unsafe extern "C" fn wasm_instance_new(
     record_instantiate(Instance::new(module, &externs), result)
 }
 
-unsafe fn record_instantiate(instance: Result<Instance>, result: *mut *mut wasm_trap_t) -> *mut wasm_instance_t {
+unsafe fn record_instantiate(
+    instance: Result<Instance>,
+    result: *mut *mut wasm_trap_t,
+) -> *mut wasm_instance_t {
     match instance {
         Ok(instance) => {
             let instance = Box::new(wasm_instance_t::new(instance));

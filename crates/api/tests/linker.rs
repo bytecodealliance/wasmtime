@@ -1,5 +1,5 @@
-use wasmtime::*;
 use anyhow::Result;
+use wasmtime::*;
 
 #[test]
 fn link_undefined() -> Result<()> {
@@ -24,7 +24,9 @@ fn link_twice_bad() -> Result<()> {
     // functions
     linker.func("", "", || {})?;
     assert!(linker.func("", "", || {}).is_err());
-    assert!(linker.func("", "", || -> Result<(), Trap> { loop {} }).is_err());
+    assert!(linker
+        .func("", "", || -> Result<(), Trap> { loop {} })
+        .is_err());
     linker.func("", "", |_: i32| {})?;
 
     // globals
