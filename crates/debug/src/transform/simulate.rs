@@ -358,8 +358,7 @@ pub fn generate_simulated_dwarf(
             write::AttributeValue::StringRef(name_id),
         );
 
-        let f = addr_tr.map().get(i).unwrap();
-        let f_start = f.addresses[0].wasm;
+        let f_start = map.addresses[0].wasm;
         let wasm_offset = di.wasm_file.code_section_offset + f_start as u64;
         die.set(
             gimli::DW_AT_decl_file,

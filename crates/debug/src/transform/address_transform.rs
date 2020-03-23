@@ -2,7 +2,6 @@ use crate::WasmFileInfo;
 use gimli::write;
 use more_asserts::assert_le;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::iter::FromIterator;
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::ir::SourceLoc;
@@ -50,13 +49,16 @@ struct Range {
     positions: Box<[Position]>,
 }
 
+type RangeIndex = usize;
+
 /// Helper function address lookup data. Contains ranges start positions
 /// index and ranges data. The multiple ranges can include the same
 /// original source position. The index (B-Tree) uses range start
-/// position as a key.
+/// position as a key. The index values reference the ranges array.
+/// The item are ordered RangeIndex.
 #[derive(Debug)]
 struct FuncLookup {
-    index: Vec<(WasmAddress, Box<[usize]>)>,
+    index: Vec<(WasmAddress, Box<[RangeIndex]>)>,
     ranges: Box<[Range]>,
 }
 
@@ -100,6 +102,7 @@ fn build_function_lookup(
     let mut ranges = Vec::new();
     let mut ranges_index = BTreeMap::new();
     let mut current_range = Vec::new();
+    let mut last_gen_inst_empty = false;
     for t in &ft.instructions {
         if t.srcloc.is_default() {
             continue;
@@ -125,13 +128,26 @@ fn build_function_lookup(
             range_wasm_start = offset;
             range_gen_start = inst_gen_start;
             current_range = Vec::new();
+            last_gen_inst_empty = false;
         }
-        // Continue existing range: add new wasm->generated code position.
-        current_range.push(Position {
-            wasm_pos: offset,
-            gen_start: inst_gen_start,
-            gen_end: inst_gen_end,
-        });
+        if last_gen_inst_empty && current_range.last().unwrap().gen_start == inst_gen_start {
+            // It is possible that previous inst_gen_start == inst_gen_end, so
+            // make an attempt to merge all such positions with current one.
+            if inst_gen_start < inst_gen_end {
+                let last = current_range.last_mut().unwrap();
+                last.gen_end = inst_gen_end;
+                last_gen_inst_empty = false;
+            }
+        } else {
+            // Continue existing range: add new wasm->generated code position.
+            current_range.push(Position {
+                wasm_pos: offset,
+                gen_start: inst_gen_start,
+                gen_end: inst_gen_end,
+            });
+            // Track if last position was empty (see if-branch above).
+            last_gen_inst_empty = inst_gen_start == inst_gen_end;
+        }
         last_wasm_pos = offset;
     }
     let last_gen_addr = ft.body_offset + ft.body_len;
@@ -156,12 +172,15 @@ fn build_function_lookup(
             continue;
         }
         if let Some(position) = last_wasm_pos {
-            index.insert(position, active_ranges.clone().into_boxed_slice());
+            let mut sorted_ranges = active_ranges.clone();
+            sorted_ranges.sort();
+            index.insert(position, sorted_ranges.into_boxed_slice());
         }
         active_ranges.retain(|r| ranges[*r].wasm_end.cmp(&wasm_start) != std::cmp::Ordering::Less);
         active_ranges.push(range_index);
         last_wasm_pos = Some(wasm_start);
     }
+    active_ranges.sort();
     index.insert(last_wasm_pos.unwrap(), active_ranges.into_boxed_slice());
     let index = Vec::from_iter(index.into_iter());
     (fn_start, fn_end, FuncLookup { index, ranges })
@@ -203,14 +222,16 @@ fn build_function_addr_map(
     map
 }
 
-struct TransformRangeIter<'a> {
-    addr: u64,
-    indicies: &'a [usize],
+// Utility iterator to find all ranges starts for specific Wasm address.
+// The iterator returns generated addresses sorted by RangeIndex.
+struct TransformRangeStartIter<'a> {
+    addr: WasmAddress,
+    indicies: &'a [RangeIndex],
     ranges: &'a [Range],
 }
 
-impl<'a> TransformRangeIter<'a> {
-    fn new(func: &'a FuncTransform, addr: u64) -> Self {
+impl<'a> TransformRangeStartIter<'a> {
+    fn new(func: &'a FuncTransform, addr: WasmAddress) -> Self {
         let found = match func
             .lookup
             .index
@@ -226,7 +247,7 @@ impl<'a> TransformRangeIter<'a> {
             }
         };
         if let Some(range_indices) = found {
-            TransformRangeIter {
+            TransformRangeStartIter {
                 addr,
                 indicies: range_indices,
                 ranges: &func.lookup.ranges,
@@ -236,8 +257,9 @@ impl<'a> TransformRangeIter<'a> {
         }
     }
 }
-impl<'a> Iterator for TransformRangeIter<'a> {
-    type Item = (usize, usize);
+
+impl<'a> Iterator for TransformRangeStartIter<'a> {
+    type Item = (GeneratedAddress, RangeIndex);
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((first, tail)) = self.indicies.split_first() {
             let range_index = *first;
@@ -263,14 +285,16 @@ impl<'a> Iterator for TransformRangeIter<'a> {
     }
 }
 
+// Utility iterator to find all ranges ends for specific Wasm address.
+// The iterator returns generated addresses sorted by RangeIndex.
 struct TransformRangeEndIter<'a> {
-    addr: u64,
-    indicies: &'a [usize],
+    addr: WasmAddress,
+    indicies: &'a [RangeIndex],
     ranges: &'a [Range],
 }
 
 impl<'a> TransformRangeEndIter<'a> {
-    fn new(func: &'a FuncTransform, addr: u64) -> Self {
+    fn new(func: &'a FuncTransform, addr: WasmAddress) -> Self {
         let found = match func
             .lookup
             .index
@@ -298,7 +322,7 @@ impl<'a> TransformRangeEndIter<'a> {
 }
 
 impl<'a> Iterator for TransformRangeEndIter<'a> {
-    type Item = (usize, usize);
+    type Item = (GeneratedAddress, RangeIndex);
     fn next(&mut self) -> Option<Self::Item> {
         while let Some((first, tail)) = self.indicies.split_first() {
             let range_index = *first;
@@ -323,6 +347,97 @@ impl<'a> Iterator for TransformRangeEndIter<'a> {
             return Some((address, range_index));
         }
         None
+    }
+}
+
+// Utility iterator to iterate by translated function ranges.
+pub struct TransformRangeIter<'a> {
+    func: &'a FuncTransform,
+    start_it: TransformRangeStartIter<'a>,
+    end_it: TransformRangeEndIter<'a>,
+    last_start: Option<(GeneratedAddress, RangeIndex)>,
+    last_end: Option<(GeneratedAddress, RangeIndex)>,
+}
+
+impl<'a> TransformRangeIter<'a> {
+    fn new(func: &'a FuncTransform, start: WasmAddress, end: WasmAddress) -> Self {
+        let mut start_it = TransformRangeStartIter::new(func, start);
+        let last_start = start_it.next();
+        let mut end_it = TransformRangeEndIter::new(func, end);
+        let last_end = end_it.next();
+        TransformRangeIter {
+            func,
+            start_it,
+            end_it,
+            last_start,
+            last_end,
+        }
+    }
+}
+
+impl<'a> Iterator for TransformRangeIter<'a> {
+    type Item = (GeneratedAddress, GeneratedAddress);
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            // Merge TransformRangeStartIter and TransformRangeEndIter data using
+            // FuncLookup index's field propery to be sorted by RangeIndex.
+            let (start, end, range_index): (
+                Option<GeneratedAddress>,
+                Option<GeneratedAddress>,
+                RangeIndex,
+            ) = {
+                match (self.last_start.as_ref(), self.last_end.as_ref()) {
+                    (Some((s, sri)), Some((e, eri))) => {
+                        if sri == eri {
+                            // Start and end RangeIndex matched.
+                            (Some(*s), Some(*e), *sri)
+                        } else if sri < eri {
+                            (Some(*s), None, *sri)
+                        } else {
+                            (None, Some(*e), *eri)
+                        }
+                    }
+                    (Some((s, sri)), None) => (Some(*s), None, *sri),
+                    (None, Some((e, eri))) => (None, Some(*e), *eri),
+                    (None, None) => {
+                        // Reached ends for start and end iterators.
+                        return None;
+                    }
+                }
+            };
+            let range_start = match start {
+                Some(range_start) => {
+                    // Consume start iterator.
+                    self.last_start = self.start_it.next();
+                    debug_assert!(
+                        self.last_start.is_none() || range_start < self.last_start.unwrap().0
+                    );
+                    range_start
+                }
+                None => {
+                    let range = &self.func.lookup.ranges[range_index];
+                    range.gen_start
+                }
+            };
+            let range_end = match end {
+                Some(range_end) => {
+                    // Consume end iterator.
+                    self.last_end = self.end_it.next();
+                    debug_assert!(self.last_end.is_none() || range_end < self.last_end.unwrap().0);
+                    range_end
+                }
+                None => {
+                    let range = &self.func.lookup.ranges[range_index];
+                    range.gen_end
+                }
+            };
+
+            if range_start < range_end {
+                return Some((range_start, range_end));
+            }
+            // Throw away empty ranges.
+            debug_assert!(range_start == range_end);
+        }
     }
 }
 
@@ -384,7 +499,7 @@ impl AddressTransform {
                 let map = &self.map[func.index];
                 return Some((func.index, map.len));
             }
-            let first_result = TransformRangeIter::new(func, addr).next();
+            let first_result = TransformRangeStartIter::new(func, addr).next();
             first_result.map(|(address, _)| (func.index, address))
         } else {
             // Address was not found: function was not compiled?
@@ -404,56 +519,64 @@ impl AddressTransform {
             })
     }
 
-    pub fn translate_ranges_raw(
-        &self,
+    pub fn translate_ranges_raw<'a>(
+        &'a self,
         start: u64,
         end: u64,
-    ) -> Option<(DefinedFuncIndex, Vec<(GeneratedAddress, GeneratedAddress)>)> {
+    ) -> Option<(DefinedFuncIndex, impl Iterator<Item = (usize, usize)> + 'a)> {
         if start == 0 {
             // It's normally 0 for debug info without the linked code.
             return None;
         }
         if let Some(func) = self.find_func(start) {
-            let mut starts: HashMap<usize, usize> =
-                HashMap::from_iter(TransformRangeIter::new(func, start).map(|(a, r)| (r, a)));
-            let mut result = Vec::new();
-            TransformRangeEndIter::new(func, end).for_each(|(a, r)| {
-                let range_start = if let Some(range_start) = starts.get(&r) {
-                    let range_start = *range_start;
-                    starts.remove(&r);
-                    range_start
-                } else {
-                    let range = &func.lookup.ranges[r];
-                    range.gen_start
-                };
-                result.push((range_start, a));
-            });
-            for (r, range_start) in starts {
-                let range = &func.lookup.ranges[r];
-                result.push((range_start, range.gen_end));
-            }
+            let result = TransformRangeIter::new(func, start, end);
             return Some((func.index, result));
         }
         // Address was not found: function was not compiled?
         None
     }
 
-    pub fn translate_ranges(&self, start: u64, end: u64) -> Vec<(write::Address, u64)> {
-        self.translate_ranges_raw(start, end)
-            .map_or(vec![], |(func_index, ranges)| {
-                ranges
-                    .iter()
-                    .map(|(start, end)| {
-                        (
-                            write::Address::Symbol {
-                                symbol: func_index.index(),
-                                addend: *start as i64,
-                            },
-                            (*end - *start) as u64,
-                        )
-                    })
-                    .collect::<Vec<_>>()
-            })
+    pub fn translate_ranges<'a>(
+        &'a self,
+        start: u64,
+        end: u64,
+    ) -> impl Iterator<Item = (write::Address, u64)> + 'a {
+        enum TranslateRangesResult<'a> {
+            Empty,
+            Raw {
+                symbol: usize,
+                it: Box<dyn Iterator<Item = (usize, usize)> + 'a>,
+            },
+        }
+        impl<'a> Iterator for TranslateRangesResult<'a> {
+            type Item = (write::Address, u64);
+            fn next(&mut self) -> Option<Self::Item> {
+                match self {
+                    TranslateRangesResult::Empty => None,
+                    TranslateRangesResult::Raw { symbol, it } => match it.next() {
+                        Some((start, end)) => {
+                            debug_assert!(start < end);
+                            Some((
+                                write::Address::Symbol {
+                                    symbol: *symbol,
+                                    addend: start as i64,
+                                },
+                                (end - start) as u64,
+                            ))
+                        }
+                        None => None,
+                    },
+                }
+            }
+        }
+
+        match self.translate_ranges_raw(start, end) {
+            Some((func_index, ranges)) => TranslateRangesResult::Raw {
+                symbol: func_index.index(),
+                it: Box::new(ranges),
+            },
+            None => TranslateRangesResult::Empty,
+        }
     }
 
     pub fn map(&self) -> &PrimaryMap<DefinedFuncIndex, FunctionMap> {
