@@ -4,7 +4,7 @@ use wasmtime::*;
 #[test]
 fn link_undefined() -> Result<()> {
     let store = Store::default();
-    let mut linker = Linker::new(&store);
+    let linker = Linker::new(&store);
     let module = Module::new(&store, r#"(module (import "" "" (func)))"#)?;
     assert!(linker.instantiate(&module).is_err());
     let module = Module::new(&store, r#"(module (import "" "" (global i32)))"#)?;
