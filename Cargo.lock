@@ -2346,6 +2346,7 @@ dependencies = [
  "wiggle-runtime",
  "winapi",
  "winx",
+ "witx",
  "yanix",
 ]
 
