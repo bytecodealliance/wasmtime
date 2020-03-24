@@ -878,18 +878,6 @@ impl InstanceHandle {
         let tables = create_tables(&module);
         let memories = create_memories(&module)?;
 
-        let vmctx_tables = tables
-            .values()
-            .map(Table::vmtable)
-            .collect::<PrimaryMap<DefinedTableIndex, _>>()
-            .into_boxed_slice();
-
-        let vmctx_memories = memories
-            .values()
-            .map(LinearMemory::vmmemory)
-            .collect::<PrimaryMap<DefinedMemoryIndex, _>>()
-            .into_boxed_slice();
-
         let offsets = VMOffsets::new(mem::size_of::<*const u8>() as u8, &module.local);
 
         let passive_data = RefCell::new(module.passive_data.clone());
@@ -949,16 +937,16 @@ impl InstanceHandle {
             instance.imported_globals_ptr() as *mut VMGlobalImport,
             imports.globals.len(),
         );
-        ptr::copy(
-            vmctx_tables.values().as_slice().as_ptr(),
-            instance.tables_ptr() as *mut VMTableDefinition,
-            vmctx_tables.len(),
-        );
-        ptr::copy(
-            vmctx_memories.values().as_slice().as_ptr(),
-            instance.memories_ptr() as *mut VMMemoryDefinition,
-            vmctx_memories.len(),
-        );
+        for (index, vmctx_table) in instance.tables
+            .iter()
+            .map(|(index, table)| (index, table.vmtable())) {
+                instance.set_table(index, vmctx_table);
+        }
+        for (index, vmctx_memory) in instance.memories
+            .iter()
+            .map(|(index, memory)| (index, memory.vmmemory())) {
+                instance.set_memory(index, vmctx_memory);
+        }
         ptr::write(
             instance.builtin_functions_ptr() as *mut VMBuiltinFunctionsArray,
             VMBuiltinFunctionsArray::initialized(),
