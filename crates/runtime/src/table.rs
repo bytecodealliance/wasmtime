@@ -75,9 +75,7 @@ impl Table {
 
     /// Set reference to the specified element.
     ///
-    /// # Panics
-    ///
-    /// Panics if `index` is out of bounds.
+    /// Returns an error if `index` is out of bounds.
     pub fn set(&self, index: u32, func: VMCallerCheckedAnyfunc) -> Result<(), ()> {
         match self.vec.borrow_mut().get_mut(index as usize) {
             Some(slot) => {
