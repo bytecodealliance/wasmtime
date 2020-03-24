@@ -1,7 +1,7 @@
+use std::cell::RefCell;
 use std::fs;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::os::unix::prelude::{AsRawFd, RawFd};
-use std::sync::Mutex;
 use yanix::dir::Dir;
 
 #[derive(Debug)]
@@ -18,12 +18,15 @@ pub(crate) struct OsHandle {
     //   > of the DIR pointer, dirp, from which they are derived.
     //   > If the directory is closed and then reopened, prior values
     //   > returned by telldir() will no longer be valid.
-    pub(crate) dir: Option<Mutex<Dir>>,
+    pub(crate) dir: RefCell<Option<Dir>>,
 }
 
 impl From<fs::File> for OsHandle {
     fn from(file: fs::File) -> Self {
-        Self { file, dir: None }
+        Self {
+            file,
+            dir: RefCell::new(None),
+        }
     }
 }
 
@@ -38,11 +41,5 @@ impl Deref for OsHandle {
 
     fn deref(&self) -> &Self::Target {
         &self.file
-    }
-}
-
-impl DerefMut for OsHandle {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.file
     }
 }

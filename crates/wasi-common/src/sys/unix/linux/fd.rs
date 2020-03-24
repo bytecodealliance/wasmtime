@@ -2,7 +2,7 @@ use crate::sys::entry::OsHandle;
 use crate::wasi::Result;
 use yanix::dir::Dir;
 
-pub(crate) fn get_dir_from_os_handle(os_handle: &mut OsHandle) -> Result<Box<Dir>> {
+pub(crate) fn get_dir_from_os_handle(os_handle: &OsHandle) -> Result<Box<Dir>> {
     // We need to duplicate the fd, because `opendir(3)`:
     //     After a successful call to fdopendir(), fd is used internally by the implementation,
     //     and should not otherwise be used by the application.
