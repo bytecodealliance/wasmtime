@@ -204,12 +204,10 @@ mod test_vmmemory_definition {
             offset_of!(VMMemoryDefinition, current_length),
             usize::from(offsets.vmmemory_definition_current_length())
         );
-        /* TODO: Assert that the size of `current_length` matches.
         assert_eq!(
             size_of::<VMMemoryDefinition::current_length>(),
             usize::from(offsets.size_of_vmmemory_definition_current_length())
         );
-        */
     }
 }
 
