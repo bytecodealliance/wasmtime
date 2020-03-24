@@ -120,22 +120,20 @@ where
 
     types
         .into_iter()
-        .map(move |ty| match ty {
-            I32 | I64 => int_gpr_iter
-                .next()
-                .map(|&r| CCLoc::Reg(r))
-                .unwrap_or_else(|| {
-                    let out = CCLoc::Stack(stack_idx);
-                    stack_idx += 1;
-                    out
-                }),
-            F32 | F64 => match float_gpr_iter.next() {
-                None => unimplemented!(),
-                Some(val) => CCLoc::Reg(*val),
-            },
+        .map(move |ty| {
+            match ty {
+                I32 | I64 => int_gpr_iter.next(),
+                F32 | F64 => float_gpr_iter.next(),
+            }
+            .map(|&r| CCLoc::Reg(r))
+            .unwrap_or_else(|| {
+                let out = CCLoc::Stack(stack_idx);
+                stack_idx += 1;
+                out
+            })
         })
         // Since we only advance the iterators based on the values in `types`,
-        // we can't do this truly lazily.
+        // we can't do this lazily.
         .collect::<Vec<_>>()
         .into_iter()
 }
