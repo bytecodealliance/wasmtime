@@ -30,7 +30,7 @@ cfg-if = "0.1.9"
 log = "0.4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-winapi = { version = "0.3.7", features = ["winnt", "impl-default"] }
+winapi = { version = "0.3.8", features = ["winnt", "impl-default"] }
 
 [features]
 lightbeam = ["wasmtime-environ/lightbeam"]
