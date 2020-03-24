@@ -194,6 +194,19 @@ impl Instance {
         unsafe { self.vmctx_plus_offset(self.offsets.vmctx_imported_globals_begin()) }
     }
 
+    /// Get a locally defined or imported function, and its associated vmctx pointer.
+    fn get_vmfunction(&self, index: FuncIndex) -> (*const VMFunctionBody, *mut VMContext) {
+        if let Some(def_index) = self.module.local.defined_func_index(index) {
+            (
+                self.finished_functions[def_index] as *const _,
+                self.vmctx_ptr(),
+            )
+        } else {
+            let import = self.imported_function(index);
+            (import.body, import.vmctx)
+        }
+    }
+
     /// Return the indexed `VMTableDefinition`.
     #[allow(dead_code)]
     fn table(&self, index: DefinedTableIndex) -> VMTableDefinition {
@@ -305,16 +318,7 @@ impl Instance {
         match export {
             wasmtime_environ::Export::Function(index) => {
                 let signature = self.signature_id(self.module.local.functions[*index]);
-                let (address, vmctx) =
-                    if let Some(def_index) = self.module.local.defined_func_index(*index) {
-                        (
-                            self.finished_functions[def_index] as *const _,
-                            self.vmctx_ptr(),
-                        )
-                    } else {
-                        let import = self.imported_function(*index);
-                        (import.body, import.vmctx)
-                    };
+                let (address, vmctx) = self.get_vmfunction(*index);
                 ExportFunction {
                     address,
                     signature,
@@ -387,21 +391,7 @@ impl Instance {
             None => return Ok(()),
         };
 
-        let (callee_address, callee_vmctx) = match self.module.local.defined_func_index(start_index)
-        {
-            Some(defined_index) => {
-                let body = *self
-                    .finished_functions
-                    .get(defined_index)
-                    .expect("function index is out of bounds");
-                (body as *const _, self.vmctx_ptr())
-            }
-            None => {
-                assert_lt!(start_index.index(), self.module.imported_funcs.len());
-                let import = self.imported_function(start_index);
-                (import.body, import.vmctx)
-            }
-        };
+        let (callee_address, callee_vmctx) = self.get_vmfunction(start_index);
 
         // Make the call.
         unsafe {
@@ -570,16 +560,7 @@ impl Instance {
         let sig = self.module.local.functions[index];
         let type_index = self.signature_id(sig);
 
-        let (func_ptr, vmctx) = if let Some(def_index) = self.module.local.defined_func_index(index)
-        {
-            (
-                self.finished_functions[def_index] as *const _,
-                self.vmctx_ptr(),
-            )
-        } else {
-            let import = self.imported_function(index);
-            (import.body, import.vmctx)
-        };
+        let (func_ptr, vmctx) = self.get_vmfunction(index);
         VMCallerCheckedAnyfunc {
             func_ptr,
             type_index,
