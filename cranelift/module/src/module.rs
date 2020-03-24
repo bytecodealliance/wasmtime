@@ -7,7 +7,6 @@
 
 use super::HashMap;
 use crate::data_context::DataContext;
-use crate::traps::TrapSite;
 use crate::Backend;
 use cranelift_codegen::binemit::{self, CodeInfo};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
@@ -363,9 +362,8 @@ where
     backend: B,
 }
 
-pub struct ModuleCompiledFunction<'a> {
+pub struct ModuleCompiledFunction {
     pub size: binemit::CodeOffset,
-    pub traps: &'a [TrapSite],
 }
 
 impl<B> Module<B>
@@ -569,11 +567,15 @@ where
     /// Returns the size of the function's code and constant data.
     ///
     /// Note: After calling this function the given `Context` will contain the compiled function.
-    pub fn define_function(
+    pub fn define_function<TS>(
         &mut self,
         func: FuncId,
         ctx: &mut Context,
-    ) -> ModuleResult<ModuleCompiledFunction> {
+        trap_sink: &mut TS,
+    ) -> ModuleResult<ModuleCompiledFunction>
+    where
+        TS: binemit::TrapSink,
+    {
         info!(
             "defining function {}: {}",
             func,
@@ -588,7 +590,7 @@ where
             return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
         }
 
-        let (compiled, traps) = self.backend.define_function(
+        let compiled = self.backend.define_function(
             func,
             &info.decl.name,
             ctx,
@@ -596,14 +598,12 @@ where
                 contents: &self.contents,
             },
             total_size,
+            trap_sink,
         )?;
 
         self.contents.functions[func].compiled = Some(compiled);
         self.functions_to_finalize.push(func);
-        Ok(ModuleCompiledFunction {
-            size: total_size,
-            traps,
-        })
+        Ok(ModuleCompiledFunction { size: total_size })
     }
 
     /// Define a function, taking the function body from the given `bytes`.
@@ -617,7 +617,6 @@ where
         &mut self,
         func: FuncId,
         bytes: &[u8],
-        traps: Vec<TrapSite>,
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {} with bytes", func);
         let info = &self.contents.functions[func];
@@ -633,22 +632,18 @@ where
             _ => Err(ModuleError::FunctionTooLarge(info.decl.name.clone()))?,
         };
 
-        let (compiled, traps) = self.backend.define_function_bytes(
+        let compiled = self.backend.define_function_bytes(
             func,
             &info.decl.name,
             bytes,
             &ModuleNamespace::<B> {
                 contents: &self.contents,
             },
-            traps,
         )?;
 
         self.contents.functions[func].compiled = Some(compiled);
         self.functions_to_finalize.push(func);
-        Ok(ModuleCompiledFunction {
-            size: total_size,
-            traps,
-        })
+        Ok(ModuleCompiledFunction { size: total_size })
     }
 
     /// Define a data object, producing the data contents from the given `DataContext`.
