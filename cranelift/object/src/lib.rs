@@ -26,10 +26,8 @@
 )]
 
 mod backend;
-mod traps;
 
-pub use crate::backend::{ObjectBackend, ObjectBuilder, ObjectProduct, ObjectTrapCollection};
-pub use crate::traps::ObjectTrapSink;
+pub use crate::backend::{ObjectBackend, ObjectBuilder, ObjectProduct};
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

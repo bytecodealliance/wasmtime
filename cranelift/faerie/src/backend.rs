@@ -1,38 +1,25 @@
 //! Defines `FaerieBackend`.
 
 use crate::container;
-use crate::traps::{FaerieTrapManifest, FaerieTrapSink};
 use anyhow::anyhow;
 use cranelift_codegen::binemit::{
-    Addend, CodeOffset, NullStackmapSink, NullTrapSink, Reloc, RelocSink, Stackmap, StackmapSink,
+    Addend, CodeOffset, NullStackmapSink, Reloc, RelocSink, Stackmap, StackmapSink, TrapSink,
 };
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, binemit, ir};
 use cranelift_module::{
     Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleError,
-    ModuleNamespace, ModuleResult, TrapSite,
+    ModuleNamespace, ModuleResult,
 };
 use faerie;
 use std::convert::TryInto;
 use std::fs::File;
 use target_lexicon::Triple;
 
-#[derive(Debug)]
-/// Setting to enable collection of traps. Setting this to `Enabled` in
-/// `FaerieBuilder` means that a `FaerieTrapManifest` will be present
-/// in the `FaerieProduct`.
-pub enum FaerieTrapCollection {
-    /// `FaerieProduct::trap_manifest` will be `None`
-    Disabled,
-    /// `FaerieProduct::trap_manifest` will be `Some`
-    Enabled,
-}
-
 /// A builder for `FaerieBackend`.
 pub struct FaerieBuilder {
     isa: Box<dyn TargetIsa>,
     name: String,
-    collect_traps: FaerieTrapCollection,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
 }
 
@@ -43,9 +30,6 @@ impl FaerieBuilder {
     ///
     /// Faerie output requires that TargetIsa have PIC (Position Independent Code) enabled.
     ///
-    /// `collect_traps` setting determines whether trap information is collected in a
-    /// `FaerieTrapManifest` available in the `FaerieProduct`.
-    ///
     /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
@@ -53,7 +37,6 @@ impl FaerieBuilder {
     pub fn new(
         isa: Box<dyn TargetIsa>,
         name: String,
-        collect_traps: FaerieTrapCollection,
         libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     ) -> ModuleResult<Self> {
         if !isa.flags().is_pic() {
@@ -64,7 +47,6 @@ impl FaerieBuilder {
         Ok(Self {
             isa,
             name,
-            collect_traps,
             libcall_names,
         })
     }
@@ -76,7 +58,6 @@ impl FaerieBuilder {
 pub struct FaerieBackend {
     isa: Box<dyn TargetIsa>,
     artifact: faerie::Artifact,
-    trap_manifest: Option<FaerieTrapManifest>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
 }
 
@@ -112,10 +93,6 @@ impl Backend for FaerieBackend {
         Self {
             artifact: faerie::Artifact::new(builder.isa.triple().clone(), builder.name),
             isa: builder.isa,
-            trap_manifest: match builder.collect_traps {
-                FaerieTrapCollection::Enabled => Some(FaerieTrapManifest::new()),
-                FaerieTrapCollection::Disabled => None,
-            },
             libcall_names: builder.libcall_names,
         }
     }
@@ -145,18 +122,21 @@ impl Backend for FaerieBackend {
             .expect("inconsistent declarations");
     }
 
-    fn define_function(
+    fn define_function<TS>(
         &mut self,
         _id: FuncId,
         name: &str,
         ctx: &cranelift_codegen::Context,
         namespace: &ModuleNamespace<Self>,
         total_size: u32,
-    ) -> ModuleResult<(FaerieCompiledFunction, &[TrapSite])> {
+        trap_sink: &mut TS,
+    ) -> ModuleResult<FaerieCompiledFunction>
+    where
+        TS: TrapSink,
+    {
         let mut code: Vec<u8> = vec![0; total_size as usize];
         // TODO: Replace this with FaerieStackmapSink once it is implemented.
         let mut stackmap_sink = NullStackmapSink {};
-        let mut traps: &[TrapSite] = &[];
 
         // Non-lexical lifetimes would obviate the braces here.
         {
@@ -168,30 +148,15 @@ impl Backend for FaerieBackend {
                 libcall_names: &*self.libcall_names,
             };
 
-            if let Some(ref mut trap_manifest) = self.trap_manifest {
-                let mut trap_sink = FaerieTrapSink::new(name, total_size);
-                unsafe {
-                    ctx.emit_to_memory(
-                        &*self.isa,
-                        code.as_mut_ptr(),
-                        &mut reloc_sink,
-                        &mut trap_sink,
-                        &mut stackmap_sink,
-                    )
-                };
-                traps = trap_manifest.add_sink(trap_sink);
-            } else {
-                let mut trap_sink = NullTrapSink {};
-                unsafe {
-                    ctx.emit_to_memory(
-                        &*self.isa,
-                        code.as_mut_ptr(),
-                        &mut reloc_sink,
-                        &mut trap_sink,
-                        &mut stackmap_sink,
-                    )
-                };
-            }
+            unsafe {
+                ctx.emit_to_memory(
+                    &*self.isa,
+                    code.as_mut_ptr(),
+                    &mut reloc_sink,
+                    trap_sink,
+                    &mut stackmap_sink,
+                )
+            };
         }
 
         // because `define` will take ownership of code, this is our last chance
@@ -201,7 +166,7 @@ impl Backend for FaerieBackend {
             .define(name, code)
             .expect("inconsistent declaration");
 
-        Ok((FaerieCompiledFunction { code_length }, traps))
+        Ok(FaerieCompiledFunction { code_length })
     }
 
     fn define_function_bytes(
@@ -210,24 +175,17 @@ impl Backend for FaerieBackend {
         name: &str,
         bytes: &[u8],
         _namespace: &ModuleNamespace<Self>,
-        traps: Vec<TrapSite>,
-    ) -> ModuleResult<(FaerieCompiledFunction, &[TrapSite])> {
+    ) -> ModuleResult<FaerieCompiledFunction> {
         let code_length: u32 = match bytes.len().try_into() {
             Ok(code_length) => code_length,
             _ => Err(ModuleError::FunctionTooLarge(name.to_string()))?,
         };
-        let mut ret_traps: &[TrapSite] = &[];
-
-        if let Some(ref mut trap_manifest) = self.trap_manifest {
-            let trap_sink = FaerieTrapSink::new_with_sites(name, code_length, traps);
-            ret_traps = trap_manifest.add_sink(trap_sink);
-        }
 
         self.artifact
             .define(name, bytes.to_vec())
             .expect("inconsistent declaration");
 
-        Ok((FaerieCompiledFunction { code_length }, ret_traps))
+        Ok(FaerieCompiledFunction { code_length })
     }
 
     fn define_data(
@@ -345,7 +303,6 @@ impl Backend for FaerieBackend {
     fn finish(self, _namespace: &ModuleNamespace<Self>) -> FaerieProduct {
         FaerieProduct {
             artifact: self.artifact,
-            trap_manifest: self.trap_manifest,
         }
     }
 }
@@ -357,9 +314,6 @@ impl Backend for FaerieBackend {
 pub struct FaerieProduct {
     /// Faerie artifact with all functions, data, and links from the module defined
     pub artifact: faerie::Artifact,
-    /// Optional trap manifest. Contains `FaerieTrapManifest` when `FaerieBuilder.collect_traps` is
-    /// set to `FaerieTrapCollection::Enabled`.
-    pub trap_manifest: Option<FaerieTrapManifest>,
 }
 
 impl FaerieProduct {
