@@ -1,4 +1,4 @@
-use crate::spectest::instantiate_spectest;
+use crate::spectest::link_spectest;
 use anyhow::{anyhow, bail, Context as _, Result};
 use std::collections::HashMap;
 use std::path::Path;
@@ -30,8 +30,8 @@ pub struct WastContext {
     current: Option<Instance>,
 
     instances: HashMap<String, Instance>,
+    linker: Linker,
     store: Store,
-    spectest: Option<HashMap<&'static str, Extern>>,
 }
 
 enum Outcome<T = Vec<Val>> {
@@ -51,11 +51,16 @@ impl<T> Outcome<T> {
 impl WastContext {
     /// Construct a new instance of `WastContext`.
     pub fn new(store: Store) -> Self {
+        // Spec tests will redefine the same module/name sometimes, so we need
+        // to allow shadowing in the linker which picks the most recent
+        // definition as what to link when linking.
+        let mut linker = Linker::new(&store);
+        linker.allow_shadowing(true);
         Self {
             current: None,
-            store,
-            spectest: None,
             instances: HashMap::new(),
+            linker,
+            store,
         }
     }
 
@@ -75,31 +80,7 @@ impl WastContext {
 
     fn instantiate(&self, module: &[u8]) -> Result<Outcome<Instance>> {
         let module = Module::new(&self.store, module)?;
-        let mut imports = Vec::new();
-        for import in module.imports() {
-            if import.module() == "spectest" {
-                let spectest = self
-                    .spectest
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("spectest module isn't instantiated"))?;
-                let export = spectest
-                    .get(import.name())
-                    .ok_or_else(|| anyhow!("unknown import `spectest::{}`", import.name()))?;
-                imports.push(export.clone());
-                continue;
-            }
-
-            let instance = self
-                .instances
-                .get(import.module())
-                .ok_or_else(|| anyhow!("no module named `{}`", import.module()))?;
-            let export = instance
-                .get_export(import.name())
-                .ok_or_else(|| anyhow!("unknown import `{}::{}`", import.name(), import.module()))?
-                .clone();
-            imports.push(export);
-        }
-        let instance = match Instance::new(&module, &imports) {
+        let instance = match self.linker.instantiate(&module) {
             Ok(i) => i,
             Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),
         };
@@ -108,7 +89,7 @@ impl WastContext {
 
     /// Register "spectest" which is used by the spec testsuite.
     pub fn register_spectest(&mut self) -> Result<()> {
-        self.spectest = Some(instantiate_spectest(&self.store));
+        link_spectest(&mut self.linker)?;
         Ok(())
     }
 
@@ -145,6 +126,7 @@ impl WastContext {
         };
         if let Some(name) = instance_name {
             self.instances.insert(name.to_string(), instance.clone());
+            self.linker.instance(name, &instance)?;
         }
         self.current = Some(instance);
         Ok(())
@@ -153,6 +135,7 @@ impl WastContext {
     /// Register an instance to make it available for performing actions.
     fn register(&mut self, name: Option<&str>, as_name: &str) -> Result<()> {
         let instance = self.get_instance(name)?.clone();
+        self.linker.instance(as_name, &instance)?;
         self.instances.insert(as_name.to_string(), instance);
         Ok(())
     }

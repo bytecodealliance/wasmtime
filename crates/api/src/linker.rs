@@ -32,11 +32,15 @@ use std::rc::Rc;
 /// name `foo` and item name `bar`, so long as they have different function
 /// signatures. Currently duplicate memories and tables are not allowed, only
 /// one-per-name is allowed.
+///
+/// Note that allowing duplicates by shadowing the previous definition can be
+/// controlled with the [`Linker::allow_shadowing`] method as well.
 pub struct Linker {
     store: Store,
     string2idx: HashMap<Rc<str>, usize>,
     strings: Vec<Rc<str>>,
     map: HashMap<ImportKey, Extern>,
+    allow_shadowing: bool,
 }
 
 #[derive(Hash, PartialEq, Eq)]
@@ -77,7 +81,38 @@ impl Linker {
             map: HashMap::new(),
             string2idx: HashMap::new(),
             strings: Vec::new(),
+            allow_shadowing: false,
         }
+    }
+
+    /// Configures whether this [`Linker`] will shadow previous duplicate
+    /// definitions of the same signature.
+    ///
+    /// By default a [`Linker`] will disallow duplicate definitions of the same
+    /// signature. This method, however, can be used to instead allow duplicates
+    /// and have the latest definition take precedence when linking modules.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// let mut linker = Linker::new(&store);
+    /// linker.func("", "", || {})?;
+    ///
+    /// // by default, duplicates are disallowed
+    /// assert!(linker.func("", "", || {}).is_err());
+    ///
+    /// // but shadowing can be configured to be allowed as well
+    /// linker.allow_shadowing(true);
+    /// linker.func("", "", || {})?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn allow_shadowing(&mut self, allow: bool) -> &mut Linker {
+        self.allow_shadowing = allow;
+        self
     }
 
     /// Defines a new item in this [`Linker`].
@@ -89,8 +124,8 @@ impl Linker {
     /// # Errors
     ///
     /// Returns an error if the `module` and `name` already identify an item
-    /// of the same type as the `item` provided. For more information see the
-    /// documentation on [`Linker`].
+    /// of the same type as the `item` provided and if shadowing is disallowed.
+    /// For more information see the documentation on [`Linker`].
     ///
     /// Also returns an error if `item` comes from a different store than this
     /// [`Linker`] was created with.
@@ -104,7 +139,7 @@ impl Linker {
     /// let mut linker = Linker::new(&store);
     /// let ty = GlobalType::new(ValType::I32, Mutability::Const);
     /// let global = Global::new(&store, ty, Val::I32(0x1234))?;
-    /// linker.define("host", "offset", global);
+    /// linker.define("host", "offset", global)?;
     ///
     /// let wat = r#"
     ///     (module
@@ -142,9 +177,9 @@ impl Linker {
     ///
     /// # Errors
     ///
-    /// Returns an error if the `module` and `name` already identify a function
-    /// of the same signature as `func`. For more information see the
-    /// documentation on [`Linker`].
+    /// Returns an error if the `module` and `name` already identify an item
+    /// of the same type as the `item` provided and if shadowing is disallowed.
+    /// For more information see the documentation on [`Linker`].
     ///
     /// # Examples
     ///
@@ -190,9 +225,9 @@ impl Linker {
     /// # Errors
     ///
     /// Returns an error if the any item is redefined twice in this linker (for
-    /// example the same `module_name` was already defined), or if `instance`
-    /// comes from a different [`Store`] than this [`Linker`] originally was
-    /// created with.
+    /// example the same `module_name` was already defined) and shadowing is
+    /// disallowed, or if `instance` comes from a different [`Store`] than this
+    /// [`Linker`] originally was created with.
     ///
     /// # Examples
     ///
@@ -238,12 +273,15 @@ impl Linker {
     fn insert(&mut self, module: &str, name: &str, ty: &ExternType, item: Extern) -> Result<()> {
         let key = self.import_key(module, name, ty);
         match self.map.entry(key) {
-            Entry::Occupied(o) => bail!(
-                "import of `{}::{}` with as {:?} defined twice",
+            Entry::Occupied(o) if !self.allow_shadowing => bail!(
+                "import of `{}::{}` with kind {:?} defined twice",
                 module,
                 name,
                 o.key().kind,
             ),
+            Entry::Occupied(mut o) => {
+                o.insert(item);
+            }
             Entry::Vacant(v) => {
                 v.insert(item);
             }
@@ -337,14 +375,14 @@ impl Linker {
             }
             if options.len() == 0 {
                 bail!(
-                    "import of `{}::{}` has not been defined",
+                    "unknown import: `{}::{}` has not been defined",
                     import.module(),
                     import.name()
                 )
             }
 
             bail!(
-                "failed to find import of `{}::{}` with matching signature\n\
+                "incompatible import type for `{}::{}` specified\n\
                  desired signature was: {:?}\n\
                  signatures available:\n\n{}",
                 import.module(),
@@ -364,5 +402,10 @@ impl Linker {
             kind: self.import_kind(import.ty()),
         };
         self.map.get(&key)
+    }
+
+    /// Returns the [`Store`] that this linker is connected to.
+    pub fn store(&self) -> &Store {
+        &self.store
     }
 }

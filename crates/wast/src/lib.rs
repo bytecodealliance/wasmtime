@@ -25,7 +25,7 @@
 mod spectest;
 mod wast;
 
-pub use crate::spectest::instantiate_spectest;
+pub use crate::spectest::link_spectest;
 pub use crate::wast::WastContext;
 
 /// Version number of this crate.

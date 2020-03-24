@@ -557,23 +557,24 @@ impl Table {
 /// **unsafe** usages of `Memory`. Do not do these things!
 ///
 /// ```rust
+/// # use anyhow::Result;
 /// use wasmtime::Memory;
 ///
 /// // NOTE: All code in this function is not safe to execute and may cause
 /// // segfaults/undefined behavior at runtime. Do not copy/paste these examples
 /// // into production code!
-/// unsafe fn unsafe_examples(mem: &Memory) {
+/// unsafe fn unsafe_examples(mem: &Memory) -> Result<()> {
 ///     // First and foremost, any borrow can be invalidated at any time via the
 ///     // `Memory::grow` function. This can relocate memory which causes any
 ///     // previous pointer to be possibly invalid now.
 ///     let pointer: &u8 = &mem.data_unchecked()[0x100];
-///     mem.grow(1); // invalidates `pointer`!
+///     mem.grow(1)?; // invalidates `pointer`!
 ///     // println!("{}", *pointer); // FATAL: use-after-free
 ///
 ///     // Note that the use-after-free also applies to slices, whether they're
 ///     // slices of bytes or strings.
 ///     let slice: &[u8] = &mem.data_unchecked()[0x100..0x102];
-///     mem.grow(1); // invalidates `slice`!
+///     mem.grow(1)?; // invalidates `slice`!
 ///     // println!("{:?}", slice); // FATAL: use-after-free
 ///
 ///     // Due to the reference-counted nature of `Memory` note that literal
@@ -597,6 +598,8 @@ impl Table {
 ///     let slice1: &mut [u8] = &mut mem.data_unchecked_mut()[0x100..][..3];
 ///     let slice2: &mut [u8] = &mut mem.data_unchecked_mut()[0x102..][..4];
 ///     // println!("{:?} {:?}", slice1, slice2); // FATAL: aliasing mutable pointers
+///
+///     Ok(())
 /// }
 /// # fn some_other_function() {}
 /// ```
