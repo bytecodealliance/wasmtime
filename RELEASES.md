@@ -27,7 +27,10 @@ Unreleased
 * The `wasmtime::Caller` type now exists as a first-class way to access the
   caller's exports, namely memory, when implementing host APIs. This can be the
   first argument of functions defined with `Func::new` or `Func::wrap` which
-  allows easily implementing methods which take a pointer into wasm memory.
+  allows easily implementing methods which take a pointer into wasm memory. Note
+  that this only works for accessing the caller's `Memory` for now and it must
+  be exported. This will eventually be replaced with a more general-purpose
+  mechanism like interface types.
   [#1290](https://github.com/bytecodealliance/wasmtime/pull/1290)
 
 * The bulk memory proposal has been fully implemented.
