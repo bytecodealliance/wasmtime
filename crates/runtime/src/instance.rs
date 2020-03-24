@@ -315,10 +315,10 @@ impl Instance {
 
     /// Lookup an export with the given export declaration.
     pub fn lookup_by_declaration(&self, export: &wasmtime_environ::Export) -> Export {
-        match export {
+        match *export {
             wasmtime_environ::Export::Function(index) => {
-                let signature = self.signature_id(self.module.local.functions[*index]);
-                let (address, vmctx) = self.get_vmfunction(*index);
+                let signature = self.signature_id(self.module.local.functions[index]);
+                let (address, vmctx) = self.get_vmfunction(index);
                 ExportFunction {
                     address,
                     signature,
@@ -328,43 +328,43 @@ impl Instance {
             }
             wasmtime_environ::Export::Table(index) => {
                 let (definition, vmctx) =
-                    if let Some(def_index) = self.module.local.defined_table_index(*index) {
+                    if let Some(def_index) = self.module.local.defined_table_index(index) {
                         (self.table_ptr(def_index), self.vmctx_ptr())
                     } else {
-                        let import = self.imported_table(*index);
+                        let import = self.imported_table(index);
                         (import.from, import.vmctx)
                     };
                 ExportTable {
                     definition,
                     vmctx,
-                    table: self.module.local.table_plans[*index].clone(),
+                    table: self.module.local.table_plans[index].clone(),
                 }
                 .into()
             }
             wasmtime_environ::Export::Memory(index) => {
                 let (definition, vmctx) =
-                    if let Some(def_index) = self.module.local.defined_memory_index(*index) {
+                    if let Some(def_index) = self.module.local.defined_memory_index(index) {
                         (self.memory_ptr(def_index), self.vmctx_ptr())
                     } else {
-                        let import = self.imported_memory(*index);
+                        let import = self.imported_memory(index);
                         (import.from, import.vmctx)
                     };
                 ExportMemory {
                     definition,
                     vmctx,
-                    memory: self.module.local.memory_plans[*index].clone(),
+                    memory: self.module.local.memory_plans[index].clone(),
                 }
                 .into()
             }
             wasmtime_environ::Export::Global(index) => ExportGlobal {
-                definition: if let Some(def_index) = self.module.local.defined_global_index(*index)
+                definition: if let Some(def_index) = self.module.local.defined_global_index(index)
                 {
                     self.global_ptr(def_index)
                 } else {
-                    self.imported_global(*index).from
+                    self.imported_global(index).from
                 },
                 vmctx: self.vmctx_ptr(),
-                global: self.module.local.globals[*index],
+                global: self.module.local.globals[index],
             }
             .into(),
         }
