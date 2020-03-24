@@ -31,7 +31,7 @@ proptest = "0.9"
 # by the `wiggle_metadata` feature flag. We use this feature flag so that
 # users of wiggle are not forced to take a direct dependency on the `witx`
 # crate unless they want it.
-wiggle_metadata = []
+wiggle_metadata = ["wiggle-runtime/wiggle_metadata"]
 # In order to test that the contents of this metadata module meet
 # expectations, we must have this feature enabled for the crate by default.
 default = ["wiggle_metadata"]
