@@ -38,7 +38,7 @@ on PyPi. It can be installed as a dependency through Pip or related tools such
 as Pipenv.
 
 ```bash
-> pip install wasmtime
+pip install wasmtime
 ```
 
 Or
