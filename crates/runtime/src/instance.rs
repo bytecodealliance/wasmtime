@@ -1321,8 +1321,7 @@ fn initialize_memories(
     Ok(())
 }
 
-/// Allocate memory for just the globals of the current module,
-/// with initializers applied.
+/// Allocate memory for just the globals of the current module.
 fn create_globals(module: &Module) -> BoxedSlice<DefinedGlobalIndex, VMGlobalDefinition> {
     let num_imports = module.imported_globals.len();
     let mut vmctx_globals = PrimaryMap::with_capacity(module.local.globals.len() - num_imports);
