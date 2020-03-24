@@ -3,7 +3,7 @@
 To build `gcd.wasm` use rustc (nightly) for wasm32 target with debug information:
 
 ```
-rustup run nightly rustc --target=wasm32-unknown-unknown -g gcd.rs --crate-type=cdylib
+rustc +nightly --target=wasm32-unknown-unknown -g gcd.rs --crate-type=cdylib
 ```
 
 # Run example
