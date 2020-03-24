@@ -34,3 +34,8 @@ cpu-time = "1.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[features]
+# Need to make the wiggle_metadata feature available to consumers of this
+# crate if they want the snapshots to have metadata available.
+wiggle_metadata = []
