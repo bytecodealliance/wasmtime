@@ -139,7 +139,7 @@ impl Linker {
     /// let mut linker = Linker::new(&store);
     /// let ty = GlobalType::new(ValType::I32, Mutability::Const);
     /// let global = Global::new(&store, ty, Val::I32(0x1234))?;
-    /// linker.define("host", "offset", global);
+    /// linker.define("host", "offset", global)?;
     ///
     /// let wat = r#"
     ///     (module

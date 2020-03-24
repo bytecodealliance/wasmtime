@@ -7,6 +7,8 @@
 //! itself for consumption from other languages.
 
 #![deny(missing_docs, intra_doc_link_resolution_failure)]
+#![doc(test(attr(deny(warnings))))]
+#![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 
 mod externals;
 mod frame_info;
