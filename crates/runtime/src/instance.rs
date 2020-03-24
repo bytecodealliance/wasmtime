@@ -863,8 +863,6 @@ impl InstanceHandle {
             .collect::<PrimaryMap<DefinedMemoryIndex, _>>()
             .into_boxed_slice();
 
-        let vmctx_globals = create_globals(&module);
-
         let offsets = VMOffsets::new(mem::size_of::<*const u8>() as u8, &module.local);
 
         let passive_data = RefCell::new(module.passive_data.clone());
@@ -933,11 +931,6 @@ impl InstanceHandle {
             vmctx_memories.values().as_slice().as_ptr(),
             instance.memories_ptr() as *mut VMMemoryDefinition,
             vmctx_memories.len(),
-        );
-        ptr::copy(
-            vmctx_globals.values().as_slice().as_ptr(),
-            instance.globals_ptr() as *mut VMGlobalDefinition,
-            vmctx_globals.len(),
         );
         ptr::write(
             instance.builtin_functions_ptr() as *mut VMBuiltinFunctionsArray,
@@ -1319,18 +1312,6 @@ fn initialize_memories(
     }
 
     Ok(())
-}
-
-/// Allocate memory for just the globals of the current module.
-fn create_globals(module: &Module) -> BoxedSlice<DefinedGlobalIndex, VMGlobalDefinition> {
-    let num_imports = module.imported_globals.len();
-    let mut vmctx_globals = PrimaryMap::with_capacity(module.local.globals.len() - num_imports);
-
-    for _ in &module.local.globals.values().as_slice()[num_imports..] {
-        vmctx_globals.push(VMGlobalDefinition::new());
-    }
-
-    vmctx_globals.into_boxed_slice()
 }
 
 fn initialize_globals(instance: &Instance) {
