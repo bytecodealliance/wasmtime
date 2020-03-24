@@ -65,7 +65,7 @@ Unreleased
 
 * The Cranelift repository has been merged into the Wasmtime repository.
 
-* Support for interface types has been temoprarily removed.
+* Support for interface types has been temporarily removed.
   [#1292](https://github.com/bytecodealliance/wasmtime/pull/1292)
 
 * The exit code of the `wasmtime` CLI has changed if the program traps.
