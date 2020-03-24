@@ -66,7 +66,40 @@ fn link_twice_bad() -> Result<()> {
 }
 
 #[test]
-fn interposition() -> Result<()> {
+fn function_interposition() -> Result<()> {
+    let store = Store::default();
+    let mut linker = Linker::new(&store);
+    linker.allow_shadowing(true);
+    let mut module = Module::new(
+        &store,
+        r#"(module (func (export "green") (result i32) (i32.const 7)))"#,
+    )?;
+    for _ in 0..4 {
+        let instance = linker.instantiate(&module)?;
+        linker.define(
+            "red",
+            "green",
+            instance.get_export("green").unwrap().clone(),
+        )?;
+        module = Module::new(
+            &store,
+            r#"(module
+                (import "red" "green" (func (result i32)))
+                (func (export "green") (result i32) (i32.mul (call 0) (i32.const 2)))
+            )"#,
+        )?;
+    }
+    let instance = linker.instantiate(&module)?;
+    let func = instance.get_export("green").unwrap().into_func().unwrap();
+    let func = func.get0::<i32>()?;
+    assert_eq!(func()?, 112);
+    Ok(())
+}
+
+// Same as `function_interposition`, but the linker's name for the function
+// differs from the module's name.
+#[test]
+fn function_interposition_renamed() -> Result<()> {
     let store = Store::default();
     let mut linker = Linker::new(&store);
     linker.allow_shadowing(true);
@@ -91,6 +124,35 @@ fn interposition() -> Result<()> {
     }
     let instance = linker.instantiate(&module)?;
     let func = instance.get_func("export").unwrap();
+    let func = func.get0::<i32>()?;
+    assert_eq!(func()?, 112);
+    Ok(())
+}
+
+// Similar to `function_interposition`, but use `Linker::instance` instead of
+// `Linker::define`.
+#[test]
+fn module_interposition() -> Result<()> {
+    let store = Store::default();
+    let mut linker = Linker::new(&store);
+    linker.allow_shadowing(true);
+    let mut module = Module::new(
+        &store,
+        r#"(module (func (export "export") (result i32) (i32.const 7)))"#,
+    )?;
+    for _ in 0..4 {
+        let instance = linker.instantiate(&module)?;
+        linker.instance("instance", &instance)?;
+        module = Module::new(
+            &store,
+            r#"(module
+                (import "instance" "export" (func (result i32)))
+                (func (export "export") (result i32) (i32.mul (call 0) (i32.const 2)))
+            )"#,
+        )?;
+    }
+    let instance = linker.instantiate(&module)?;
+    let func = instance.get_export("export").unwrap().into_func().unwrap();
     let func = func.get0::<i32>()?;
     assert_eq!(func()?, 112);
     Ok(())
