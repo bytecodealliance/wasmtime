@@ -35,15 +35,18 @@ pub fn generate(doc: &witx::Document, config: &Config) -> TokenStream {
         )
     });
 
-    let doc_text = &format!("{}", doc);
-    let metadata = quote! {
-        #[cfg(feature = "wiggle_metadata")]
-        pub mod metadata {
-            pub const DOC_TEXT: &str = #doc_text;
-            pub fn document() -> witx::Document {
-                witx::parse(DOC_TEXT).unwrap()
+    let metadata = if config.emit_metadata {
+        let doc_text = &format!("{}", doc);
+        quote! {
+            pub mod metadata {
+                pub const DOC_TEXT: &str = #doc_text;
+                pub fn document() -> witx::Document {
+                    witx::parse(DOC_TEXT).unwrap()
+                }
             }
         }
+    } else {
+        quote!()
     };
 
     quote!(

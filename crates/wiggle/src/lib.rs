@@ -87,6 +87,12 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
     config.witx.make_paths_relative_to(
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR env var"),
     );
+
+    #[cfg(feature = "wiggle_metadata")]
+    {
+        config.emit_metadata = true;
+    }
+
     let doc = witx::load(&config.witx.paths).expect("loading witx");
     TokenStream::from(wiggle_generate::generate(&doc, &config))
 }
