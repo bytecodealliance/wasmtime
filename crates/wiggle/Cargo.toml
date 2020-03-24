@@ -16,11 +16,11 @@ proc-macro = true
 
 [dependencies]
 wiggle-generate = { path = "crates/generate", version = "0.1.0" }
+wiggle-runtime = { path = "crates/runtime", version = "0.1.0" }
 witx = { path = "../wasi-common/wig/WASI/tools/witx", version = "0.8.4" }
 syn = { version = "1.0", features = ["full"] }
 
 [dev-dependencies]
-wiggle-runtime = { path = "crates/runtime", version = "0.1.0" }
 wiggle-test = { path = "crates/test", version = "0.1.0" }
 proptest = "0.9"
 
