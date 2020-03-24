@@ -207,6 +207,16 @@ impl Instance {
         }
     }
 
+    /// Get a locally defined or imported table.
+    fn get_vmtable(&self, index: TableIndex) -> (*mut VMTableDefinition, *mut VMContext) {
+        if let Some(defined_index) = self.module.local.defined_table_index(index) {
+            (self.table_ptr(defined_index), self.vmctx_ptr())
+        } else {
+            let import = self.imported_table(index);
+            (import.from, import.vmctx)
+        }
+    }
+
     /// Return the indexed `VMTableDefinition`.
     #[allow(dead_code)]
     fn table(&self, index: DefinedTableIndex) -> VMTableDefinition {
@@ -229,6 +239,19 @@ impl Instance {
     /// Return a pointer to the `VMTableDefinition`s.
     fn tables_ptr(&self) -> *mut VMTableDefinition {
         unsafe { self.vmctx_plus_offset(self.offsets.vmctx_tables_begin()) }
+    }
+
+    /// Get a locally defined or imported memory.
+    pub(crate) fn get_vmmemory(
+        &self,
+        index: MemoryIndex,
+    ) -> (*mut VMMemoryDefinition, *mut VMContext) {
+        if let Some(defined_index) = self.module.local.defined_memory_index(index) {
+            (self.memory_ptr(defined_index), self.vmctx_ptr())
+        } else {
+            let import = self.imported_memory(index);
+            (import.from, import.vmctx)
+        }
     }
 
     /// Get a locally defined or imported memory.
@@ -262,6 +285,21 @@ impl Instance {
     /// Return a pointer to the `VMMemoryDefinition`s.
     fn memories_ptr(&self) -> *mut VMMemoryDefinition {
         unsafe { self.vmctx_plus_offset(self.offsets.vmctx_memories_begin()) }
+    }
+
+    /// Get a locally defined or imported global.
+    fn get_vmglobal(&self, index: GlobalIndex) -> *mut VMGlobalDefinition {
+        if let Some(defined_index) = self.module.local.defined_global_index(index) {
+            self.global_ptr(defined_index)
+        } else {
+            let import = self.imported_global(index);
+            import.from
+        }
+    }
+
+    /// Get a locally defined or imported global.
+    fn get_global(&self, index: GlobalIndex) -> VMGlobalDefinition {
+        unsafe { *self.get_vmglobal(index) }
     }
 
     /// Return the indexed `VMGlobalDefinition`.
@@ -327,13 +365,7 @@ impl Instance {
                 .into()
             }
             wasmtime_environ::Export::Table(index) => {
-                let (definition, vmctx) =
-                    if let Some(def_index) = self.module.local.defined_table_index(index) {
-                        (self.table_ptr(def_index), self.vmctx_ptr())
-                    } else {
-                        let import = self.imported_table(index);
-                        (import.from, import.vmctx)
-                    };
+                let (definition, vmctx) = self.get_vmtable(index);
                 ExportTable {
                     definition,
                     vmctx,
@@ -342,13 +374,7 @@ impl Instance {
                 .into()
             }
             wasmtime_environ::Export::Memory(index) => {
-                let (definition, vmctx) =
-                    if let Some(def_index) = self.module.local.defined_memory_index(index) {
-                        (self.memory_ptr(def_index), self.vmctx_ptr())
-                    } else {
-                        let import = self.imported_memory(index);
-                        (import.from, import.vmctx)
-                    };
+                let (definition, vmctx) = self.get_vmmemory(index);
                 ExportMemory {
                     definition,
                     vmctx,
@@ -356,17 +382,18 @@ impl Instance {
                 }
                 .into()
             }
-            wasmtime_environ::Export::Global(index) => ExportGlobal {
-                definition: if let Some(def_index) = self.module.local.defined_global_index(index)
-                {
-                    self.global_ptr(def_index)
-                } else {
-                    self.imported_global(index).from
-                },
-                vmctx: self.vmctx_ptr(),
-                global: self.module.local.globals[index],
+            wasmtime_environ::Export::Global(index) => {
+                let definition = self.get_vmglobal(index);
+                // Unlike with functions, memories, and tables, globals don't
+                // require a vmctx pointer to access or reconfigure.
+                let vmctx = self.vmctx_ptr();
+                ExportGlobal {
+                    definition,
+                    vmctx,
+                    global: self.module.local.globals[index],
+                }
+                .into()
             }
-            .into(),
         }
     }
 
@@ -805,7 +832,7 @@ impl Instance {
     }
 
     /// Get an imported, foreign table.
-    pub(crate) fn get_foreign_table(&self, index: TableIndex) -> &Table {
+    fn get_foreign_table(&self, index: TableIndex) -> &Table {
         let import = self.imported_table(index);
         let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
         let foreign_table = unsafe { &mut *(import).from };
@@ -1151,19 +1178,7 @@ unsafe fn get_memory_slice<'instance>(
     init: &DataInitializer<'_>,
     instance: &'instance Instance,
 ) -> &'instance mut [u8] {
-    let memory = if let Some(defined_memory_index) = instance
-        .module
-        .local
-        .defined_memory_index(init.location.memory_index)
-    {
-        instance.memory(defined_memory_index)
-    } else {
-        let import = instance.imported_memory(init.location.memory_index);
-        let foreign_instance = (&mut *(import).vmctx).instance();
-        let foreign_memory = &mut *(import).from;
-        let foreign_index = foreign_instance.memory_index(foreign_memory);
-        foreign_instance.memory(foreign_index)
-    };
+    let memory = instance.get_memory(init.location.memory_index);
     slice::from_raw_parts_mut(memory.base, memory.current_length)
 }
 
@@ -1327,14 +1342,7 @@ fn initialize_globals(instance: &Instance) {
                 GlobalInit::F32Const(x) => *(*to).as_f32_bits_mut() = x,
                 GlobalInit::F64Const(x) => *(*to).as_f64_bits_mut() = x,
                 GlobalInit::V128Const(x) => *(*to).as_u128_bits_mut() = x.0,
-                GlobalInit::GetGlobal(x) => {
-                    let from = if let Some(def_x) = module.local.defined_global_index(x) {
-                        instance.global(def_x)
-                    } else {
-                        *instance.imported_global(x).from
-                    };
-                    *to = from;
-                }
+                GlobalInit::GetGlobal(x) => *to = instance.get_global(x),
                 GlobalInit::Import => panic!("locally-defined global initialized as import"),
                 GlobalInit::RefNullConst | GlobalInit::RefFunc(_) => unimplemented!(),
             }
