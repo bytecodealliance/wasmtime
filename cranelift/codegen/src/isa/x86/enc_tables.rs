@@ -1318,7 +1318,7 @@ fn convert_ineg(
     }
 }
 
-// Unsigned shift masks for i8x16 shift.
+// Masks for i8x16 unsigned right shift.
 static USHR_MASKS: [u8; 128] = [
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f,
@@ -1379,6 +1379,73 @@ fn convert_ushr(
         } else if arg0_type.is_vector() {
             // x86 has encodings for these shifts.
             pos.func.dfg.replace(inst).x86_psrl(arg0, shift_index);
+        } else {
+            unreachable!()
+        }
+    }
+}
+
+// Masks for i8x16 left shift.
+static SHL_MASKS: [u8; 128] = [
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe,
+    0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc,
+    0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8,
+    0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0,
+    0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0,
+    0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0,
+    0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+];
+
+// Convert a vector left shift. x86 has implementations for i16x8 and up (see `x86_psll`),
+// but for i8x16 we translate the shift to a i16x8 shift and mask off the lower bits. This same
+// conversion could be provided in the CDSL if we could use varargs there (TODO); i.e. `load_complex`
+// has a varargs field that we can't modify with the CDSL in legalize.rs.
+fn convert_ishl(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    isa: &dyn TargetIsa,
+) {
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    if let ir::InstructionData::Binary {
+        opcode: ir::Opcode::Ishl,
+        args: [arg0, arg1],
+    } = pos.func.dfg[inst]
+    {
+        // Note that for Wasm, the bounding of the shift index has happened during translation
+        let arg0_type = pos.func.dfg.value_type(arg0);
+        let arg1_type = pos.func.dfg.value_type(arg1);
+        assert!(!arg1_type.is_vector() && arg1_type.is_int());
+
+        // TODO it may be more clear to use scalar_to_vector here; the current issue is that
+        // scalar_to_vector has the restriction that the vector produced has a matching lane size
+        // (e.g. i32 -> i32x4) whereas bitcast allows moving any-to-any conversions (e.g. i32 ->
+        // i64x2). This matters because for some reason x86_psrl only allows i64x2 as the shift
+        // index type--this could be relaxed since it is not really meaningful.
+        let shift_index = pos.ins().bitcast(I64X2, arg1);
+
+        if arg0_type == I8X16 {
+            // First, shift the vector using an I16X8 shift.
+            let bitcasted = pos.ins().raw_bitcast(I16X8, arg0);
+            let shifted = pos.ins().x86_psll(bitcasted, shift_index);
+            let shifted = pos.ins().raw_bitcast(I8X16, shifted);
+
+            // Then, fixup the even lanes that have incorrect lower bits. This uses the 128 mask
+            // bytes as a table that we index into. It is a substantial code-size increase but
+            // reduces the instruction count slightly.
+            let masks = pos.func.dfg.constants.insert(SHL_MASKS.as_ref().into());
+            let mask_address = pos.ins().const_addr(isa.pointer_type(), masks);
+            let mask_offset = pos.ins().ishl_imm(arg1, 4);
+            let mask =
+                pos.ins()
+                    .load_complex(arg0_type, MemFlags::new(), &[mask_address, mask_offset], 0);
+            pos.func.dfg.replace(inst).band(shifted, mask);
+        } else if arg0_type.is_vector() {
+            // x86 has encodings for these shifts.
+            pos.func.dfg.replace(inst).x86_psll(arg0, shift_index);
         } else {
             unreachable!()
         }
