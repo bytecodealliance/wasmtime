@@ -4,6 +4,7 @@
 #define WASMTIME_API_H
 
 #include <wasm.h>
+#include <wasi.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,6 +66,39 @@ WASM_API_EXTERN bool wasmtime_wat2wasm(
     const wasm_byte_vec_t *wat,
     own wasm_byte_vec_t *ret,
     own wasm_byte_vec_t *error_message
+);
+
+#define WASMTIME_DECLARE_OWN(name) \
+  typedef struct wasmtime_##name##_t wasmtime_##name##_t; \
+  \
+  WASM_API_EXTERN void wasmtime_##name##_delete(own wasmtime_##name##_t*);
+
+WASMTIME_DECLARE_OWN(linker)
+
+WASM_API_EXTERN own wasmtime_linker_t* wasmtime_linker_new(wasm_store_t* store);
+
+WASM_API_EXTERN bool wasmtime_linker_define(
+    wasmtime_linker_t *linker,
+    const wasm_name_t *module,
+    const wasm_name_t *name,
+    const wasm_extern_t *item
+);
+
+WASM_API_EXTERN bool wasmtime_linker_define_wasi(
+    wasmtime_linker_t *linker,
+    const wasi_instance_t *instance
+);
+
+WASM_API_EXTERN bool wasmtime_linker_define_instance(
+    wasmtime_linker_t *linker,
+    const wasm_name_t *name,
+    const wasm_instance_t *instance
+);
+
+WASM_API_EXTERN wasm_instance_t* wasmtime_linker_instantiate(
+    const wasmtime_linker_t *linker,
+    const wasm_module_t *module,
+    own wasm_trap_t **trap
 );
 
 #undef own

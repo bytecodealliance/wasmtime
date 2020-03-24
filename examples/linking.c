@@ -64,68 +64,38 @@ int main() {
     exit(1);
   }
 
-  // Create imports for `linking2`
-  wasm_importtype_vec_t linking2_import_types;
-  wasm_module_imports(linking2_module, &linking2_import_types);
-  const wasm_extern_t **linking2_imports = calloc(linking2_import_types.size, sizeof(void*));
-  assert(linking2_imports);
-  for (int i = 0; i < linking2_import_types.size; i++) {
-    const wasm_extern_t *binding = wasi_instance_bind_import(wasi, linking2_import_types.data[i]);
-    if (binding != NULL) {
-      linking2_imports[i] = binding;
-    } else {
-      printf("> Failed to satisfy import\n");
-      exit(1);
-    }
-  }
-  wasm_importtype_vec_delete(&linking2_import_types);
+  // Create our linker which will be linking our modules together, and then add
+  // our WASI instance to it.
+  wasmtime_linker_t *linker = wasmtime_linker_new(store);
+  bool ok = wasmtime_linker_define_wasi(linker, wasi);
+  assert(ok);
 
-  // Instantiate `linking2`
-  wasm_instance_t *linking2 = wasm_instance_new(store, linking2_module, linking2_imports, &trap);
+  // Instantiate `linking2` with our linker.
+  wasm_instance_t *linking2 = wasmtime_linker_instantiate(linker, linking2_module, &trap);
   if (linking2 == NULL) {
-    print_trap(trap);
-    exit(1);
-  }
-  free(linking2_imports);
-  wasm_extern_vec_t linking2_externs;
-  wasm_instance_exports(linking2, &linking2_externs);
-  wasm_exporttype_vec_t linking2_exports;
-  wasm_module_exports(linking2_module, &linking2_exports);
-
-  // Create imports for `linking1`
-  wasm_importtype_vec_t linking1_import_types;
-  wasm_module_imports(linking1_module, &linking1_import_types);
-  const wasm_extern_t **linking1_imports = calloc(linking1_import_types.size, sizeof(void*));
-  assert(linking1_imports);
-  for (int i = 0; i < linking1_import_types.size; i++) {
-    const wasm_importtype_t *import = linking1_import_types.data[i];
-    const wasm_name_t *module = wasm_importtype_module(import);
-    const wasm_name_t *name = wasm_importtype_name(import);
-    if (strncmp(module->data, "linking2", module->size) == 0) {
-      const wasm_extern_t *e = NULL;
-      for (int j = 0; j < linking2_exports.size; j++) {
-        const wasm_name_t *export_name = wasm_exporttype_name(linking2_exports.data[j]);
-        if (name->size == export_name->size &&
-            strncmp(name->data, export_name->data, name->size) == 0) {
-          e = linking2_externs.data[j];
-          break;
-        }
-      }
-      if (e) {
-        linking1_imports[i] = e;
-        continue;
-      }
+    if (trap == NULL) {
+      printf("> failed to link!\n");
+    } else {
+      print_trap(trap);
     }
-
-    printf("> Failed to satisfy import\n");
     exit(1);
   }
-  wasm_importtype_vec_delete(&linking1_import_types);
 
-  // Instantiate `linking1`
-  wasm_instance_t *linking1 = wasm_instance_new(store, linking1_module, linking1_imports, &trap);
+  // Register our new `linking2` instance with the linker
+  wasm_name_t linking2_name;
+  linking2_name.data = "linking2";
+  linking2_name.size = strlen(linking2_name.data);
+  ok = wasmtime_linker_define_instance(linker, &linking2_name, linking2);
+  assert(ok);
+
+  // Instantiate `linking1` with the linker now that `linking2` is defined
+  wasm_instance_t *linking1 = wasmtime_linker_instantiate(linker, linking1_module, &trap);
   if (linking1 == NULL) {
-    print_trap(trap);
+    if (trap == NULL) {
+      printf("> failed to link!\n");
+    } else {
+      print_trap(trap);
+    }
     exit(1);
   }
 
@@ -143,9 +113,9 @@ int main() {
 
   // Clean up after ourselves at this point
   wasm_extern_vec_delete(&linking1_externs);
-  wasm_extern_vec_delete(&linking2_externs);
   wasm_instance_delete(linking1);
   wasm_instance_delete(linking2);
+  wasmtime_linker_delete(linker);
   wasm_module_delete(linking1_module);
   wasm_module_delete(linking2_module);
   wasm_store_delete(store);

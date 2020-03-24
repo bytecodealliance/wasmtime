@@ -5,6 +5,7 @@
 
 // TODO complete the C API
 
+use anyhow::Result;
 use std::cell::RefCell;
 use std::panic::{self, AssertUnwindSafe};
 use std::{mem, ptr, slice};
@@ -691,6 +692,15 @@ pub unsafe extern "C" fn wasm_instance_delete(instance: *mut wasm_instance_t) {
     let _ = Box::from_raw(instance);
 }
 
+impl wasm_instance_t {
+    fn new(instance: Instance) -> wasm_instance_t {
+        wasm_instance_t {
+            instance: HostRef::new(instance),
+            exports_cache: RefCell::new(None),
+        }
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn wasm_instance_new(
     store: *mut wasm_store_t,
@@ -722,12 +732,16 @@ pub unsafe extern "C" fn wasm_instance_new(
         }
         return ptr::null_mut();
     }
-    match Instance::new(module, &externs) {
+    handle_instantiate(Instance::new(module, &externs), result)
+}
+
+unsafe fn handle_instantiate(
+    instance: Result<Instance>,
+    result: *mut *mut wasm_trap_t,
+) -> *mut wasm_instance_t {
+    match instance {
         Ok(instance) => {
-            let instance = Box::new(wasm_instance_t {
-                instance: HostRef::new(instance),
-                exports_cache: RefCell::new(None),
-            });
+            let instance = Box::new(wasm_instance_t::new(instance));
             if !result.is_null() {
                 (*result) = ptr::null_mut();
             }

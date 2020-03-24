@@ -5,7 +5,7 @@ use wasmtime_environ::{ir, wasm};
 // Type attributes
 
 /// Indicator of whether a global is mutable or not
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum Mutability {
     /// The global is constant and its value does not change
     Const,
@@ -17,7 +17,7 @@ pub enum Mutability {
 /// table/memory types.
 ///
 /// A minimum is always available but the maximum may not be present.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct Limits {
     min: u32,
     max: Option<u32>,
@@ -48,7 +48,7 @@ impl Limits {
 // Value Types
 
 /// A list of all possible value types in WebAssembly.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum ValType {
     /// Signed 32 bit integer.
     I32,
@@ -114,7 +114,7 @@ impl ValType {
 ///
 /// This list can be found in [`ImportType`] or [`ExportType`], so these types
 /// can either be imported or exported.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum ExternType {
     /// This external type is the type of a WebAssembly function.
     Func(FuncType),
@@ -168,7 +168,7 @@ fn from_wasmtime_abiparam(param: &ir::AbiParam) -> Option<ValType> {
 /// A descriptor for a function in a WebAssembly module.
 ///
 /// WebAssembly functions can have 0 or more parameters and results.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct FuncType {
     params: Box<[ValType]>,
     results: Box<[ValType]>,
@@ -249,7 +249,7 @@ impl FuncType {
 /// This type describes an instance of a global in a WebAssembly module. Globals
 /// are local to an [`Instance`](crate::Instance) and are either immutable or
 /// mutable.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct GlobalType {
     content: ValType,
     mutability: Mutability,
@@ -295,7 +295,7 @@ impl GlobalType {
 /// Tables are contiguous chunks of a specific element, typically a `funcref` or
 /// an `anyref`. The most common use for tables is a function table through
 /// which `call_indirect` can invoke other functions.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct TableType {
     element: ValType,
     limits: Limits,
@@ -336,7 +336,7 @@ impl TableType {
 ///
 /// Memories are described in units of pages (64KB) and represent contiguous
 /// chunks of addressable memory.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct MemoryType {
     limits: Limits,
 }
@@ -366,7 +366,7 @@ impl MemoryType {
 /// [`Module::imports`](crate::Module::imports) API. Each [`ImportType`]
 /// describes an import into the wasm module with the module/name that it's
 /// imported from as well as the type of item that's being imported.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct ImportType {
     module: String,
     name: String,
@@ -409,7 +409,7 @@ impl ImportType {
 /// [`Module::exports`](crate::Module::exports) accessor and describes what
 /// names are exported from a wasm module and the type of the item that is
 /// exported.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct ExportType {
     name: String,
     ty: ExternType,

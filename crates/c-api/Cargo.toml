@@ -17,6 +17,7 @@ test = false
 doctest = false
 
 [dependencies]
+anyhow = "1.0"
 wasmtime = { path = "../api", default-features = false }
 wasi-common = { path = "../wasi-common" }
 wasmtime-wasi = { path = "../wasi" }
