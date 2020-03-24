@@ -84,9 +84,9 @@ fn interposition() -> Result<()> {
         module = Module::new(
             &store,
             r#"(module
-				(import "red" "green" (func (result i32)))
-				(func (export "export") (result i32) (i32.mul (call 0) (i32.const 2)))
-			)"#,
+                (import "red" "green" (func (result i32)))
+                (func (export "export") (result i32) (i32.mul (call 0) (i32.const 2)))
+            )"#,
         )?;
     }
     let instance = linker.instantiate(&module)?;
