@@ -937,15 +937,19 @@ impl InstanceHandle {
             instance.imported_globals_ptr() as *mut VMGlobalImport,
             imports.globals.len(),
         );
-        for (index, vmctx_table) in instance.tables
+        for (index, vmctx_table) in instance
+            .tables
             .iter()
-            .map(|(index, table)| (index, table.vmtable())) {
-                instance.set_table(index, vmctx_table);
+            .map(|(index, table)| (index, table.vmtable()))
+        {
+            instance.set_table(index, vmctx_table);
         }
-        for (index, vmctx_memory) in instance.memories
+        for (index, vmctx_memory) in instance
+            .memories
             .iter()
-            .map(|(index, memory)| (index, memory.vmmemory())) {
-                instance.set_memory(index, vmctx_memory);
+            .map(|(index, memory)| (index, memory.vmmemory()))
+        {
+            instance.set_memory(index, vmctx_memory);
         }
         ptr::write(
             instance.builtin_functions_ptr() as *mut VMBuiltinFunctionsArray,
