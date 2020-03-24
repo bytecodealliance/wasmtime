@@ -35,10 +35,21 @@ pub fn generate(doc: &witx::Document, config: &Config) -> TokenStream {
         )
     });
 
+    let doc_text = &format!("{}", doc);
+    let metadata = quote! {
+        pub mod metadata {
+            pub const DOC_TEXT: &str = #doc_text;
+            pub fn document() -> witx::Document {
+                witx::parse(DOC_TEXT).unwrap()
+            }
+        }
+    };
+
     quote!(
         pub mod types {
             #(#types)*
         }
         #(#modules)*
+        #metadata
     )
 }
