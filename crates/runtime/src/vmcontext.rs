@@ -139,6 +139,10 @@ mod test_vmmemory_import {
 
 /// The fields compiled code needs to access to utilize a WebAssembly global
 /// variable imported from another instance.
+///
+/// Note that unlike with functions, tables, and memories, `VMGlobalImport`
+/// doesn't include a `vmctx` pointer. Globals are never resized, and don't
+/// require a `vmctx` pointer to access.
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
 pub struct VMGlobalImport {
