@@ -3,6 +3,7 @@ use crate::fd;
 use crate::path::PathGet;
 use crate::sys::entry::OsHandle;
 use crate::wasi::{types, Errno, Result};
+use log::debug;
 use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
 use std::fs::{File, OpenOptions};
@@ -165,11 +166,47 @@ pub(crate) fn create_directory(file: &File, path: &str) -> Result<()> {
 }
 
 pub(crate) fn link(
-    _resolved_old: PathGet,
-    _resolved_new: PathGet,
-    _follow_symlinks: bool,
+    resolved_old: PathGet,
+    resolved_new: PathGet,
+    follow_symlinks: bool,
 ) -> Result<()> {
-    unimplemented!("path_link")
+    use std::fs;
+    let mut old_path = resolved_old.concatenate()?;
+    let new_path = resolved_new.concatenate()?;
+    if follow_symlinks {
+        // in particular, this will return an error if the target path doesn't exist
+        debug!("Following symlinks for path: {:?}", old_path);
+        old_path = fs::canonicalize(&old_path).map_err(|e| match e.raw_os_error() {
+            // fs::canonicalize under Windows will return:
+            // * ERROR_FILE_NOT_FOUND, if it encounters a dangling symlink
+            // * ERROR_CANT_RESOLVE_FILENAME, if it encounters a symlink loop
+            Some(code) if code as u32 == winerror::ERROR_CANT_RESOLVE_FILENAME => Errno::Loop,
+            _ => e.into(),
+        })?;
+    }
+    fs::hard_link(&old_path, &new_path).or_else(|err| {
+        match err.raw_os_error() {
+            Some(code) => {
+                debug!("path_link at fs::hard_link error code={:?}", code);
+                match code as u32 {
+                    // TODO is this needed at all????
+                    winerror::ERROR_ACCESS_DENIED => {
+                        // does the target exist?
+                        if new_path.exists() {
+                            return Err(Errno::Exist);
+                        }
+                    }
+                    _ => {}
+                }
+
+                Err(err.into())
+            }
+            None => {
+                log::debug!("Inconvertible OS error: {}", err);
+                Err(Errno::Io)
+            }
+        }
+    })
 }
 
 pub(crate) fn open(
