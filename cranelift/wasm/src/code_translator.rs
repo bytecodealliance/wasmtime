@@ -1397,7 +1397,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = state.pop1();
             state.push1(builder.ins().bnot(a));
         }
-        Operator::I16x8Shl | Operator::I32x4Shl | Operator::I64x2Shl => {
+        Operator::I8x16Shl | Operator::I16x8Shl | Operator::I32x4Shl | Operator::I64x2Shl => {
             let (a, b) = state.pop2();
             let bitcast_a = optionally_bitcast_vector(a, type_of(op), builder);
             let bitwidth = i64::from(builder.func.dfg.value_type(a).bits());
@@ -1540,8 +1540,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, I32X4, builder);
             state.push1(builder.ins().fcvt_from_sint(F32X4, a))
         }
-        Operator::I8x16Shl
-        | Operator::I8x16ShrS
+        Operator::I8x16ShrS
         | Operator::I8x16Mul
         | Operator::I64x2Mul
         | Operator::I64x2ShrS
