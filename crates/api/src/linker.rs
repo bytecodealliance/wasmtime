@@ -34,13 +34,13 @@ use std::rc::Rc;
 /// one-per-name is allowed.
 ///
 /// Note that allowing duplicates by shadowing the previous definition can be
-/// controlled with the [`Linker::allow_shadow`] method as well.
+/// controlled with the [`Linker::allow_shadowing`] method as well.
 pub struct Linker {
     store: Store,
     string2idx: HashMap<Rc<str>, usize>,
     strings: Vec<Rc<str>>,
     map: HashMap<ImportKey, Extern>,
-    allow_shadow: bool,
+    allow_shadowing: bool,
 }
 
 #[derive(Hash, PartialEq, Eq)]
@@ -81,7 +81,7 @@ impl Linker {
             map: HashMap::new(),
             string2idx: HashMap::new(),
             strings: Vec::new(),
-            allow_shadow: false,
+            allow_shadowing: false,
         }
     }
 
@@ -105,13 +105,13 @@ impl Linker {
     /// assert!(linker.func("", "", || {}).is_err());
     ///
     /// // but shadowing can be configured to be allowed as well
-    /// linker.allow_shadow(true);
+    /// linker.allow_shadowing(true);
     /// linker.func("", "", || {})?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn allow_shadow(&mut self, allow: bool) -> &mut Linker {
-        self.allow_shadow = allow;
+    pub fn allow_shadowing(&mut self, allow: bool) -> &mut Linker {
+        self.allow_shadowing = allow;
         self
     }
 
@@ -273,8 +273,8 @@ impl Linker {
     fn insert(&mut self, module: &str, name: &str, ty: &ExternType, item: Extern) -> Result<()> {
         let key = self.import_key(module, name, ty);
         match self.map.entry(key) {
-            Entry::Occupied(o) if !self.allow_shadow => bail!(
-                "import of `{}::{}` with as {:?} defined twice",
+            Entry::Occupied(o) if !self.allow_shadowing => bail!(
+                "import of `{}::{}` with kind {:?} defined twice",
                 module,
                 name,
                 o.key().kind,

@@ -51,8 +51,11 @@ impl<T> Outcome<T> {
 impl WastContext {
     /// Construct a new instance of `WastContext`.
     pub fn new(store: Store) -> Self {
+        // Spec tests will redefine the same module/name sometimes, so we need
+        // to allow shadowing in the linker which picks the most recent
+        // definition as what to link when linking.
         let mut linker = Linker::new(&store);
-        linker.allow_shadow(true);
+        linker.allow_shadowing(true);
         Self {
             current: None,
             instances: HashMap::new(),
