@@ -26,7 +26,9 @@ Before we can do anything with this module, we need to convert it to the
 Webassembly binary format. We can do this with the command line tools provided
 by the Webassembly binary toolkit
 
-> wat2wasm gcd.wat
+```bash
+wat2wasm gcd.wat
+```
 
 This will create the binary form of the gcd module `gcd.wasm`, we'll use this
 module in the following steps.
@@ -35,11 +37,15 @@ Next, install the Wasmtime module loader, which is provided as a [python package
 on PyPi. It can be installed as a dependency through Pip or related tools such
 as Pipenv.
 
+```bash
 > pip install wasmtime
+```
 
 Or
 
-> pipenv install wasmtime
+```bash
+pipenv install wasmtime
+```
 
 After you have Wasmtime installed and you've imported `wasmtime`, you can import
 Webassembly modules in your project like any other python module.
@@ -50,7 +56,9 @@ Webassembly modules in your project like any other python module.
 
 This script should output
 
-> gcd(27, 6) = 3
+```bash
+gcd(27, 6) = 3
+```
 
 If this is the output you see, congrats! You've successfully ran your first
 Webassembly code in python!
@@ -99,7 +107,9 @@ return value are annotated appropriately as any of `'i32'`, `'i64'`, `'f32'`, or
 
 Before we can use `demo.rs` we need to compile it
 
-> rustup run nightly rustc --target=wasm32-unknown-unknown --crate-type=cdylib
+```bash
+rustup run nightly rustc --target=wasm32-unknown-unknown --crate-type=cdylib demo.rs
+```
 
 We can then use it like this
 
@@ -108,5 +118,3 @@ We can then use it like this
 ```
 
 The script should print `Hello, world!` and exit.
-
-... more coming soon
