@@ -1172,7 +1172,10 @@ pub unsafe extern "C" fn wasm_externtype_as_functype_const(
     et: *const wasm_externtype_t,
 ) -> *const wasm_functype_t {
     if let wasm_externtype_t_type_cache::Empty = (*et).cache {
-        let functype = (*et).ty.unwrap_func().clone();
+        let functype = match (*et).ty.func() {
+            Some(f) => f.clone(),
+            None => return ptr::null(),
+        };
         let f = wasm_functype_t {
             functype,
             params_cache: None,
@@ -1183,7 +1186,7 @@ pub unsafe extern "C" fn wasm_externtype_as_functype_const(
     }
     match &(*et).cache {
         wasm_externtype_t_type_cache::Func(f) => f,
-        _ => panic!("wasm_externtype_as_functype_const"),
+        _ => ptr::null(),
     }
 }
 
@@ -1192,7 +1195,10 @@ pub unsafe extern "C" fn wasm_externtype_as_globaltype_const(
     et: *const wasm_externtype_t,
 ) -> *const wasm_globaltype_t {
     if let wasm_externtype_t_type_cache::Empty = (*et).cache {
-        let globaltype = (*et).ty.unwrap_global().clone();
+        let globaltype = match (*et).ty.global() {
+            Some(g) => g.clone(),
+            None => return ptr::null(),
+        };
         let g = wasm_globaltype_t {
             globaltype,
             content_cache: None,
@@ -1202,7 +1208,7 @@ pub unsafe extern "C" fn wasm_externtype_as_globaltype_const(
     }
     match &(*et).cache {
         wasm_externtype_t_type_cache::Global(g) => g,
-        _ => panic!("wasm_externtype_as_globaltype_const"),
+        _ => ptr::null(),
     }
 }
 
@@ -1211,7 +1217,10 @@ pub unsafe extern "C" fn wasm_externtype_as_tabletype_const(
     et: *const wasm_externtype_t,
 ) -> *const wasm_tabletype_t {
     if let wasm_externtype_t_type_cache::Empty = (*et).cache {
-        let tabletype = (*et).ty.unwrap_table().clone();
+        let tabletype = match (*et).ty.table() {
+            Some(t) => t.clone(),
+            None => return ptr::null(),
+        };
         let t = wasm_tabletype_t {
             tabletype,
             element_cache: None,
@@ -1222,7 +1231,7 @@ pub unsafe extern "C" fn wasm_externtype_as_tabletype_const(
     }
     match &(*et).cache {
         wasm_externtype_t_type_cache::Table(t) => t,
-        _ => panic!("wasm_externtype_as_tabletype_const"),
+        _ => ptr::null(),
     }
 }
 
@@ -1231,7 +1240,10 @@ pub unsafe extern "C" fn wasm_externtype_as_memorytype_const(
     et: *const wasm_externtype_t,
 ) -> *const wasm_memorytype_t {
     if let wasm_externtype_t_type_cache::Empty = (*et).cache {
-        let memorytype = (*et).ty.unwrap_memory().clone();
+        let memorytype = match (*et).ty.memory() {
+            Some(m) => m.clone(),
+            None => return ptr::null(),
+        };
         let m = wasm_memorytype_t {
             memorytype,
             limits_cache: None,
@@ -1241,7 +1253,7 @@ pub unsafe extern "C" fn wasm_externtype_as_memorytype_const(
     }
     match &(*et).cache {
         wasm_externtype_t_type_cache::Memory(m) => m,
-        _ => panic!("wasm_externtype_as_memorytype_const"),
+        _ => ptr::null(),
     }
 }
 
@@ -1557,6 +1569,15 @@ pub unsafe extern "C" fn wasm_memory_same(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn wasm_memory_type(m: *const wasm_memory_t) -> *mut wasm_memorytype_t {
+    let ty = (*m).memory().borrow().ty().clone();
+    Box::into_raw(Box::new(wasm_memorytype_t {
+        memorytype: ty,
+        limits_cache: None,
+    }))
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn wasm_memory_data(m: *mut wasm_memory_t) -> *mut u8 {
     (*m).memory().borrow().data_ptr()
 }
@@ -1696,6 +1717,16 @@ unsafe fn from_funcref(r: *mut wasm_ref_t) -> Val {
     } else {
         Val::AnyRef(AnyRef::Null)
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_table_type(t: *const wasm_table_t) -> *mut wasm_tabletype_t {
+    let ty = (*t).table().borrow().ty().clone();
+    Box::into_raw(Box::new(wasm_tabletype_t {
+        tabletype: ty,
+        limits_cache: None,
+        element_cache: None,
+    }))
 }
 
 #[no_mangle]
