@@ -544,7 +544,7 @@ jobs:
     - name: Calculate tag name
       run: |
         name=dev
-        if [[ $GITHUB_REF == refs/tags* ]]; then
+        if [[ $GITHUB_REF == refs/tags/v* ]]; then
           name=${GITHUB_REF:10}
         fi
         echo ::set-output name=val::$name
@@ -577,7 +577,7 @@ jobs:
 
     - name: Publish Python wheels on Pypi
       uses: pypa/gh-action-pypi-publish@37e305e7413032d8422456179fee28fac7d25187
-      if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
+      if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags/v')
       with:
         user: __token__
         password: ${{ secrets.pypi_password }}
@@ -588,7 +588,7 @@ jobs:
     # with this `sha`
     - name: Publish Release
       uses: ./.github/actions/github-release
-      if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags'))
+      if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
       with:
         files: "dist/*"
         name: ${{ steps.tagname.outputs.val }}
