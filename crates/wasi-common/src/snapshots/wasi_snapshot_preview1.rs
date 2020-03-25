@@ -529,10 +529,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let entry = self.get_entry(fd)?;
         let host_nread =
             match entry.as_descriptor(types::Rights::FD_READ, types::Rights::empty())? {
-                Descriptor::OsHandle(file) => {
-                    let mut file: &File = file;
-                    file.read_vectored(&mut slices)?
-                }
+                Descriptor::OsHandle(file) => (file as &File).read_vectored(&mut slices)?,
                 Descriptor::VirtualFile(virt) => virt.read_vectored(&mut slices)?,
                 Descriptor::Stdin => io::stdin().read_vectored(&mut slices)?,
                 _ => return Err(Errno::Badf),
@@ -658,10 +655,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             types::Whence::Set => SeekFrom::Start(offset as u64),
         };
         let host_newoffset = match file {
-            Descriptor::OsHandle(fd) => {
-                let mut fd: &File = fd;
-                fd.seek(pos)?
-            }
+            Descriptor::OsHandle(fd) => (fd as &File).seek(pos)?,
             Descriptor::VirtualFile(virt) => virt.seek(pos)?,
             _ => {
                 unreachable!(
@@ -702,10 +696,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             .as_descriptor(types::Rights::FD_TELL, types::Rights::empty())?
             .as_file()?;
         let host_offset = match file {
-            Descriptor::OsHandle(fd) => {
-                let mut fd: &File = fd;
-                fd.seek(SeekFrom::Current(0))?
-            }
+            Descriptor::OsHandle(fd) => (fd as &File).seek(SeekFrom::Current(0))?,
             Descriptor::VirtualFile(virt) => virt.seek(SeekFrom::Current(0))?,
             _ => {
                 unreachable!(
@@ -742,12 +733,10 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let desc = entry.as_descriptor(types::Rights::FD_WRITE, types::Rights::empty())?;
         let host_nwritten = match desc {
             Descriptor::OsHandle(file) => {
-                let mut file: &File = file;
                 if isatty {
-                    // let mut file: &File = file;
-                    SandboxedTTYWriter::new(&mut file).write_vectored(&slices)?
+                    SandboxedTTYWriter::new(&mut (file as &File)).write_vectored(&slices)?
                 } else {
-                    (&mut file).write_vectored(&slices)?
+                    (file as &File).write_vectored(&slices)?
                 }
             }
             Descriptor::VirtualFile(virt) => {
