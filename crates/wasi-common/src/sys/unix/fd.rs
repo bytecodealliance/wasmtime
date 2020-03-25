@@ -1,4 +1,3 @@
-use super::sys_impl::fd::get_dir_from_os_handle;
 use crate::sys::entry::OsHandle;
 use crate::wasi::{self, types, Result};
 use std::convert::TryInto;
@@ -12,7 +11,9 @@ pub(crate) fn fdstat_get(fd: &File) -> Result<types::Fdflags> {
 
 pub(crate) fn fdstat_set_flags(fd: &File, fdflags: types::Fdflags) -> Result<Option<OsHandle>> {
     unsafe { yanix::fcntl::set_status_flags(fd.as_raw_fd(), fdflags.into())? };
-    // TODO why are we returning Ok(None) here?
+    // We return None here to signal that the operation succeeded on the original
+    // file descriptor and mutating the original WASI Descriptor is thus unnecessary.
+    // This is needed as on Windows this operation required reopening a file.
     Ok(None)
 }
 
@@ -51,7 +52,7 @@ pub(crate) fn readdir<'a>(
 
     // Get an instance of `Dir`; this is host-specific due to intricasies
     // of managing a dir stream between Linux and BSD *nixes
-    let mut dir = get_dir_from_os_handle(os_handle)?;
+    let mut dir = os_handle.dir_stream()?;
 
     // Seek if needed. Unless cookie is wasi::__WASI_DIRCOOKIE_START,
     // new items may not be returned to the caller.

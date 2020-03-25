@@ -1,4 +1,3 @@
-pub(crate) mod fd;
 pub(crate) mod oshandle;
 pub(crate) mod path;
 

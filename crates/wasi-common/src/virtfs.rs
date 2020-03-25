@@ -127,7 +127,7 @@ pub(crate) trait VirtualFile: MovableFile {
         Err(Errno::Badf)
     }
 
-    fn fdstat_set_flags(&mut self, _fdflags: types::Fdflags) -> Result<()> {
+    fn fdstat_set_flags(&self, _fdflags: types::Fdflags) -> Result<Option<Box<dyn VirtualFile>>> {
         Err(Errno::Badf)
     }
 
@@ -256,7 +256,7 @@ impl VecFileContents {
 pub struct InMemoryFile {
     cursor: RefCell<types::Filesize>,
     parent: Rc<RefCell<Option<Box<dyn VirtualFile>>>>,
-    fd_flags: types::Fdflags,
+    fd_flags: RefCell<types::Fdflags>,
     data: Rc<RefCell<Box<dyn FileContents>>>,
 }
 
@@ -265,7 +265,7 @@ impl InMemoryFile {
         Self {
             cursor: RefCell::new(0),
             parent: Rc::new(RefCell::new(None)),
-            fd_flags: types::Fdflags::empty(),
+            fd_flags: RefCell::new(types::Fdflags::empty()),
             data: Rc::new(RefCell::new(Box::new(VecFileContents::new()))),
         }
     }
@@ -273,7 +273,7 @@ impl InMemoryFile {
     pub fn new(contents: Box<dyn FileContents>) -> Self {
         Self {
             cursor: RefCell::new(0),
-            fd_flags: types::Fdflags::empty(),
+            fd_flags: RefCell::new(types::Fdflags::empty()),
             parent: Rc::new(RefCell::new(None)),
             data: Rc::new(RefCell::new(contents)),
         }
@@ -288,13 +288,13 @@ impl MovableFile for InMemoryFile {
 
 impl VirtualFile for InMemoryFile {
     fn fdstat_get(&self) -> types::Fdflags {
-        self.fd_flags
+        *self.fd_flags.borrow()
     }
 
     fn try_clone(&self) -> io::Result<Box<dyn VirtualFile>> {
         Ok(Box::new(Self {
             cursor: RefCell::new(0),
-            fd_flags: self.fd_flags,
+            fd_flags: self.fd_flags.clone(),
             parent: Rc::clone(&self.parent),
             data: Rc::clone(&self.data),
         }))
@@ -351,17 +351,21 @@ impl VirtualFile for InMemoryFile {
         Err(Errno::Notdir)
     }
 
-    fn fdstat_set_flags(&mut self, fdflags: types::Fdflags) -> Result<()> {
-        self.fd_flags = fdflags;
-        Ok(())
+    fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<Option<Box<dyn VirtualFile>>> {
+        *self.fd_flags.borrow_mut() = fdflags;
+        // We return None here to signal that the operation succeeded on the original
+        // file descriptor and mutating the original WASI Descriptor is thus unnecessary.
+        // This is needed as on Windows this operation required reopening a file. So we're
+        // adhering to the common signature required across platforms.
+        Ok(None)
     }
 
     fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
         trace!("write_vectored(iovs={:?})", iovs);
         let mut data = self.data.borrow_mut();
 
-        let append_mode = self.fd_flags.contains(&types::Fdflags::APPEND);
-        trace!("     | fd_flags={}", self.fd_flags);
+        let append_mode = self.fd_flags.borrow().contains(&types::Fdflags::APPEND);
+        trace!("     | fd_flags={}", self.fd_flags.borrow());
 
         // If this file is in append mode, we write to the end.
         let write_start = if append_mode {
@@ -656,8 +660,8 @@ impl VirtualFile for VirtualDir {
                         path.display()
                     );
 
-                    let mut file = Box::new(InMemoryFile::memory_backed());
-                    file.fd_flags = fd_flags;
+                    let file = Box::new(InMemoryFile::memory_backed());
+                    *file.fd_flags.borrow_mut() = fd_flags;
                     file.set_parent(Some(self.try_clone().expect("can clone self")));
                     v.insert(file).try_clone().map_err(Into::into)
                 } else {

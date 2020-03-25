@@ -1,5 +1,3 @@
-#[path = "../linux/fd.rs"]
-pub(crate) mod fd;
 #[path = "../linux/oshandle.rs"]
 pub(crate) mod oshandle;
 #[path = "../linux/path.rs"]

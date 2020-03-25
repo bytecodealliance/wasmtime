@@ -1,7 +1,8 @@
 use crate::entry::Descriptor;
 use crate::sys;
 use crate::wasi::types;
-use std::cell::Ref;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub(crate) use sys::poll::*;
 
@@ -12,8 +13,8 @@ pub(crate) struct ClockEventData {
 }
 
 #[derive(Debug)]
-pub(crate) struct FdEventData<'a> {
-    pub(crate) descriptor: Ref<'a, Descriptor>,
+pub(crate) struct FdEventData {
+    pub(crate) descriptor: Rc<RefCell<Descriptor>>,
     pub(crate) r#type: types::Eventtype,
     pub(crate) userdata: types::Userdata,
 }
