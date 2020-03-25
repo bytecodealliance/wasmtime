@@ -1569,7 +1569,7 @@ pub unsafe extern "C" fn wasm_memory_same(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasm_memory_type(m: *mut wasm_memory_t) -> *mut wasm_memorytype_t {
+pub unsafe extern "C" fn wasm_memory_type(m: *const wasm_memory_t) -> *mut wasm_memorytype_t {
     let ty = (*m).memory().borrow().ty().clone();
     Box::into_raw(Box::new(wasm_memorytype_t {
         memorytype: ty,
