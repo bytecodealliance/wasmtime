@@ -44,7 +44,7 @@ pub(crate) fn filestat_get(file: &std::fs::File) -> Result<types::Filestat> {
 }
 
 pub(crate) fn readdir<'a>(
-    os_handle: &'a mut OsHandle,
+    os_handle: &'a OsHandle,
     cookie: types::Dircookie,
 ) -> Result<impl Iterator<Item = Result<(types::Dirent, String)>> + 'a> {
     use yanix::dir::{DirIter, Entry, EntryExt, SeekLoc};

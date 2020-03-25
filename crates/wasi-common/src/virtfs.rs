@@ -86,7 +86,7 @@ pub(crate) trait VirtualFile: MovableFile {
         Err(Errno::Badf)
     }
 
-    fn write_vectored(&mut self, _iovs: &[io::IoSlice]) -> Result<usize> {
+    fn write_vectored(&self, _iovs: &[io::IoSlice]) -> Result<usize> {
         Err(Errno::Badf)
     }
 
@@ -98,7 +98,7 @@ pub(crate) trait VirtualFile: MovableFile {
         Err(Errno::Badf)
     }
 
-    fn seek(&mut self, _offset: SeekFrom) -> Result<u64> {
+    fn seek(&self, _offset: SeekFrom) -> Result<u64> {
         Err(Errno::Badf)
     }
 
@@ -131,7 +131,7 @@ pub(crate) trait VirtualFile: MovableFile {
         Err(Errno::Badf)
     }
 
-    fn read_vectored(&mut self, _iovs: &mut [io::IoSliceMut]) -> Result<usize> {
+    fn read_vectored(&self, _iovs: &mut [io::IoSliceMut]) -> Result<usize> {
         Err(Errno::Badf)
     }
 
@@ -254,7 +254,7 @@ impl VecFileContents {
 /// a filesystem wherein a file descriptor is one view into a possibly-shared underlying collection
 /// of data and permissions on a filesystem.
 pub struct InMemoryFile {
-    cursor: types::Filesize,
+    cursor: RefCell<types::Filesize>,
     parent: Rc<RefCell<Option<Box<dyn VirtualFile>>>>,
     fd_flags: types::Fdflags,
     data: Rc<RefCell<Box<dyn FileContents>>>,
@@ -263,7 +263,7 @@ pub struct InMemoryFile {
 impl InMemoryFile {
     pub fn memory_backed() -> Self {
         Self {
-            cursor: 0,
+            cursor: RefCell::new(0),
             parent: Rc::new(RefCell::new(None)),
             fd_flags: types::Fdflags::empty(),
             data: Rc::new(RefCell::new(Box::new(VecFileContents::new()))),
@@ -272,7 +272,7 @@ impl InMemoryFile {
 
     pub fn new(contents: Box<dyn FileContents>) -> Self {
         Self {
-            cursor: 0,
+            cursor: RefCell::new(0),
             fd_flags: types::Fdflags::empty(),
             parent: Rc::new(RefCell::new(None)),
             data: Rc::new(RefCell::new(contents)),
@@ -293,7 +293,7 @@ impl VirtualFile for InMemoryFile {
 
     fn try_clone(&self) -> io::Result<Box<dyn VirtualFile>> {
         Ok(Box::new(Self {
-            cursor: 0,
+            cursor: RefCell::new(0),
             fd_flags: self.fd_flags,
             parent: Rc::clone(&self.parent),
             data: Rc::clone(&self.data),
@@ -356,7 +356,7 @@ impl VirtualFile for InMemoryFile {
         Ok(())
     }
 
-    fn write_vectored(&mut self, iovs: &[io::IoSlice]) -> Result<usize> {
+    fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
         trace!("write_vectored(iovs={:?})", iovs);
         let mut data = self.data.borrow_mut();
 
@@ -367,7 +367,7 @@ impl VirtualFile for InMemoryFile {
         let write_start = if append_mode {
             data.size()
         } else {
-            self.cursor
+            *self.cursor.borrow()
         };
 
         let max_size = iovs
@@ -396,16 +396,16 @@ impl VirtualFile for InMemoryFile {
         // If we are not appending, adjust the cursor appropriately for the write, too. This can't
         // overflow, as we checked against that before writing any data.
         if !append_mode {
-            self.cursor += written as u64;
+            *self.cursor.borrow_mut() += written as u64;
         }
 
         Ok(written)
     }
 
-    fn read_vectored(&mut self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
+    fn read_vectored(&self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
         trace!("read_vectored(iovs={:?})", iovs);
         trace!("     | *read_start={:?}", self.cursor);
-        self.data.borrow_mut().preadv(iovs, self.cursor)
+        self.data.borrow_mut().preadv(iovs, *self.cursor.borrow())
     }
 
     fn preadv(&self, buf: &mut [io::IoSliceMut], offset: types::Filesize) -> Result<usize> {
@@ -416,32 +416,36 @@ impl VirtualFile for InMemoryFile {
         self.data.borrow_mut().pwritev(buf, offset)
     }
 
-    fn seek(&mut self, offset: SeekFrom) -> Result<types::Filesize> {
+    fn seek(&self, offset: SeekFrom) -> Result<types::Filesize> {
         let content_len = self.data.borrow().size();
         match offset {
             SeekFrom::Current(offset) => {
                 let new_cursor = if offset < 0 {
                     self.cursor
+                        .borrow()
                         .checked_sub(offset.wrapping_neg() as u64)
                         .ok_or(Errno::Inval)?
                 } else {
-                    self.cursor.checked_add(offset as u64).ok_or(Errno::Inval)?
+                    self.cursor
+                        .borrow()
+                        .checked_add(offset as u64)
+                        .ok_or(Errno::Inval)?
                 };
-                self.cursor = std::cmp::min(content_len, new_cursor);
+                *self.cursor.borrow_mut() = std::cmp::min(content_len, new_cursor);
             }
             SeekFrom::End(offset) => {
                 // A negative offset from the end would be past the end of the file,
                 let offset: u64 = offset.try_into().map_err(|_| Errno::Inval)?;
-                self.cursor = content_len.saturating_sub(offset);
+                *self.cursor.borrow_mut() = content_len.saturating_sub(offset);
             }
             SeekFrom::Start(offset) => {
                 // A negative offset from the end would be before the start of the file.
                 let offset: u64 = offset.try_into().map_err(|_| Errno::Inval)?;
-                self.cursor = std::cmp::min(content_len, offset);
+                *self.cursor.borrow_mut() = std::cmp::min(content_len, offset);
             }
         }
 
-        Ok(self.cursor)
+        Ok(*self.cursor.borrow())
     }
 
     fn advise(
@@ -749,7 +753,7 @@ impl VirtualFile for VirtualDir {
         }
     }
 
-    fn write_vectored(&mut self, _iovs: &[io::IoSlice]) -> Result<usize> {
+    fn write_vectored(&self, _iovs: &[io::IoSlice]) -> Result<usize> {
         Err(Errno::Badf)
     }
 

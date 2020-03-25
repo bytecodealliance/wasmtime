@@ -5,7 +5,7 @@ use crate::wasi::types::{Filetype, Rights};
 use crate::wasi::{Errno, Result};
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::{fmt, fs, io};
 
@@ -56,15 +56,6 @@ impl Descriptor {
     /// actual file/dir, and allowing operations which require an actual file and
     /// not just a stream or socket file descriptor.
     pub(crate) fn as_file<'descriptor>(&'descriptor self) -> Result<&'descriptor Self> {
-        match self {
-            Self::OsHandle(_) => Ok(self),
-            Self::VirtualFile(_) => Ok(self),
-            _ => Err(Errno::Badf),
-        }
-    }
-
-    /// Like `as_file`, but return a mutable reference.
-    pub(crate) fn as_file_mut<'descriptor>(&'descriptor mut self) -> Result<&'descriptor mut Self> {
         match self {
             Self::OsHandle(_) => Ok(self),
             Self::VirtualFile(_) => Ok(self),
@@ -261,11 +252,5 @@ impl<'descriptor> Deref for OsHandleRef<'descriptor> {
 
     fn deref(&self) -> &Self::Target {
         &self.handle
-    }
-}
-
-impl<'descriptor> DerefMut for OsHandleRef<'descriptor> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.handle
     }
 }

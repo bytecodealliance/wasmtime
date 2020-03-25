@@ -7,8 +7,8 @@ use crate::{clock, fd, path, poll};
 use log::{debug, error, trace};
 use std::cell::Ref;
 use std::convert::TryInto;
+use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::ops::DerefMut;
 use wiggle_runtime::{GuestBorrows, GuestPtr};
 
 impl<'a> WasiSnapshotPreview1 for WasiCtx {
@@ -124,10 +124,10 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             len,
             advice
         );
-        let mut entry = self.get_entry_mut(fd)?;
+        let entry = self.get_entry(fd)?;
         let file = entry
-            .as_descriptor_mut(types::Rights::FD_ADVISE, types::Rights::empty())?
-            .as_file_mut()?;
+            .as_descriptor(types::Rights::FD_ADVISE, types::Rights::empty())?
+            .as_file()?;
         match file {
             Descriptor::OsHandle(fd) => fd::advise(&fd, advice, offset, len),
             Descriptor::VirtualFile(virt) => virt.advise(advice, offset, len),
@@ -361,13 +361,13 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             buf.push(io::IoSliceMut::new(slice));
         }
 
-        let mut entry = self.get_entry_mut(fd)?;
+        let entry = self.get_entry(fd)?;
         let file = entry
-            .as_descriptor_mut(
+            .as_descriptor(
                 types::Rights::FD_READ | types::Rights::FD_SEEK,
                 types::Rights::empty(),
             )?
-            .as_file_mut()?;
+            .as_file()?;
 
         if offset > i64::max_value() as u64 {
             return Err(Errno::Io);
@@ -375,6 +375,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
         let host_nread = match file {
             Descriptor::OsHandle(fd) => {
+                let mut fd: &File = fd;
                 let cur_pos = fd.seek(SeekFrom::Current(0))?;
                 fd.seek(SeekFrom::Start(offset))?;
                 let nread = fd.read_vectored(&mut buf)?;
@@ -474,13 +475,13 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             buf.push(io::IoSlice::new(slice));
         }
 
-        let mut entry = self.get_entry_mut(fd)?;
+        let entry = self.get_entry(fd)?;
         let file = entry
-            .as_descriptor_mut(
+            .as_descriptor(
                 types::Rights::FD_WRITE | types::Rights::FD_SEEK,
                 types::Rights::empty(),
             )?
-            .as_file_mut()?;
+            .as_file()?;
 
         if offset > i64::max_value() as u64 {
             return Err(Errno::Io);
@@ -488,6 +489,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
         let host_nwritten = match file {
             Descriptor::OsHandle(fd) => {
+                let mut fd: &File = fd;
                 let cur_pos = fd.seek(SeekFrom::Current(0))?;
                 fd.seek(SeekFrom::Start(offset))?;
                 let nwritten = fd.write_vectored(&buf)?;
@@ -524,10 +526,10 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             slices.push(io::IoSliceMut::new(slice));
         }
 
-        let mut entry = self.get_entry_mut(fd)?;
+        let entry = self.get_entry(fd)?;
         let host_nread =
-            match entry.as_descriptor_mut(types::Rights::FD_READ, types::Rights::empty())? {
-                Descriptor::OsHandle(file) => file.read_vectored(&mut slices)?,
+            match entry.as_descriptor(types::Rights::FD_READ, types::Rights::empty())? {
+                Descriptor::OsHandle(file) => (file as &File).read_vectored(&mut slices)?,
                 Descriptor::VirtualFile(virt) => virt.read_vectored(&mut slices)?,
                 Descriptor::Stdin => io::stdin().read_vectored(&mut slices)?,
                 _ => return Err(Errno::Badf),
@@ -554,10 +556,10 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             cookie,
         );
 
-        let mut entry = self.get_entry_mut(fd)?;
+        let entry = self.get_entry(fd)?;
         let file = entry
-            .as_descriptor_mut(types::Rights::FD_READDIR, types::Rights::empty())?
-            .as_file_mut()?;
+            .as_descriptor(types::Rights::FD_READDIR, types::Rights::empty())?
+            .as_file()?;
 
         fn copy_entities<T: Iterator<Item = Result<(types::Dirent, String)>>>(
             iter: T,
@@ -643,17 +645,17 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         } else {
             types::Rights::FD_SEEK | types::Rights::FD_TELL
         };
-        let mut entry = self.get_entry_mut(fd)?;
+        let entry = self.get_entry(fd)?;
         let file = entry
-            .as_descriptor_mut(rights, types::Rights::empty())?
-            .as_file_mut()?;
+            .as_descriptor(rights, types::Rights::empty())?
+            .as_file()?;
         let pos = match whence {
             types::Whence::Cur => SeekFrom::Current(offset),
             types::Whence::End => SeekFrom::End(offset),
             types::Whence::Set => SeekFrom::Start(offset as u64),
         };
         let host_newoffset = match file {
-            Descriptor::OsHandle(fd) => fd.seek(pos)?,
+            Descriptor::OsHandle(fd) => (fd as &File).seek(pos)?,
             Descriptor::VirtualFile(virt) => virt.seek(pos)?,
             _ => {
                 unreachable!(
@@ -689,12 +691,12 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_tell(&self, fd: types::Fd) -> Result<types::Filesize> {
         trace!("fd_tell(fd={:?})", fd);
 
-        let mut entry = self.get_entry_mut(fd)?;
+        let entry = self.get_entry(fd)?;
         let file = entry
-            .as_descriptor_mut(types::Rights::FD_TELL, types::Rights::empty())?
-            .as_file_mut()?;
+            .as_descriptor(types::Rights::FD_TELL, types::Rights::empty())?
+            .as_file()?;
         let host_offset = match file {
-            Descriptor::OsHandle(fd) => fd.seek(SeekFrom::Current(0))?,
+            Descriptor::OsHandle(fd) => (fd as &File).seek(SeekFrom::Current(0))?,
             Descriptor::VirtualFile(virt) => virt.seek(SeekFrom::Current(0))?,
             _ => {
                 unreachable!(
@@ -726,15 +728,15 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         }
 
         // perform unbuffered writes
-        let mut entry = self.get_entry_mut(fd)?;
+        let entry = self.get_entry(fd)?;
         let isatty = entry.isatty();
-        let desc = entry.as_descriptor_mut(types::Rights::FD_WRITE, types::Rights::empty())?;
+        let desc = entry.as_descriptor(types::Rights::FD_WRITE, types::Rights::empty())?;
         let host_nwritten = match desc {
             Descriptor::OsHandle(file) => {
                 if isatty {
-                    SandboxedTTYWriter::new(file.deref_mut()).write_vectored(&slices)?
+                    SandboxedTTYWriter::new(&mut (file as &File)).write_vectored(&slices)?
                 } else {
-                    file.write_vectored(&slices)?
+                    (file as &File).write_vectored(&slices)?
                 }
             }
             Descriptor::VirtualFile(virt) => {
