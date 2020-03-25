@@ -1,21 +1,21 @@
 # Using WebAssembly from Python
 
 Wasmtime can be used as a python module loader, which allows almost any
-Webassembly module to be used as a python module. This guide will go over adding
+WebAssembly module to be used as a python module. This guide will go over adding
 Wasmtime to your project, and some provided examples of what can be done with
-Webassembly modules.
+WebAssembly modules.
 
 ## Prerequisites
 
 To follow this guide, you'll need
 
  - Python 3.6 or newer
- - The [Webassembly binary toolkit](https://github.com/WebAssembly/wabt/releases)
+ - The [WebAssembly binary toolkit](https://github.com/WebAssembly/wabt/releases)
  - The rust toolchain installer [rustup](https://rustup.rs/)
 
 ## Getting started and simple example
 
-First, copy this example Webassembly text module into your project. It exports a
+First, copy this example WebAssembly text module into your project. It exports a
 function for calculating the greatest common denominator of two numbers.
 
 ```wat
@@ -23,8 +23,8 @@ function for calculating the greatest common denominator of two numbers.
 ```
 
 Before we can do anything with this module, we need to convert it to the
-Webassembly binary format. We can do this with the command line tools provided
-by the Webassembly binary toolkit
+WebAssembly binary format. We can do this with the command line tools provided
+by the WebAssembly binary toolkit
 
 ```bash
 wat2wasm gcd.wat
@@ -48,7 +48,7 @@ pipenv install wasmtime
 ```
 
 After you have Wasmtime installed and you've imported `wasmtime`, you can import
-Webassembly modules in your project like any other python module.
+WebAssembly modules in your project like any other python module.
 
 ```python
 {{#include ../crates/misc/py/examples/gcd/run.py}}
@@ -61,12 +61,12 @@ gcd(27, 6) = 3
 ```
 
 If this is the output you see, congrats! You've successfully ran your first
-Webassembly code in python!
+WebAssembly code in python!
 
 ## Host interaction and memory
 
-In the first example, we called a function exported by a Webassembly
-module. Depeding on what you need to accomplish, Webassembly modules can also
+In the first example, we called a function exported by a WebAssembly
+module. Depeding on what you need to accomplish, WebAssembly modules can also
 call functions from other modules and python itself. This is done through the
 module imports mechanism, which allows other modules and the host environment to
 provide functions, globals, and memory spaces. The following example will show
@@ -94,14 +94,14 @@ example without any extra linker options, the result module will import
 
 The module provides `callback` with a pointer to a string message. We use this
 to index into the demo module's memory, extract the message bytes and print them
-as a string. Every Webassembly module exports its main linear memory as "memory"
+as a string. Every WebAssembly module exports its main linear memory as "memory"
 by default, so it's accessible as `demo.memory` in python. We wrap the memory
 into a `memoryview` so we can safely access the values inside.
 
 Before we move on, note the type annotations on `callback`. These are necessary
-for representing your function as something callable in Webassembly, since
-Webassembly functions only operate on 32 and 64 bit floats and integers. When
-defining functions for use by Webassembly modules, make sure the parameters and
+for representing your function as something callable in WebAssembly, since
+WebAssembly functions only operate on 32 and 64 bit floats and integers. When
+defining functions for use by WebAssembly modules, make sure the parameters and
 return value are annotated appropriately as any of `'i32'`, `'i64'`, `'f32'`, or
 `'f64'`.
 
