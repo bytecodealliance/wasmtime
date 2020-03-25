@@ -188,7 +188,7 @@ pub struct VMMemoryDefinition {
 #[cfg(test)]
 mod test_vmmemory_definition {
     use super::VMMemoryDefinition;
-    use memoffset::offset_of;
+    use memoffset::{offset_of, span_of};
     use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
@@ -209,7 +209,7 @@ mod test_vmmemory_definition {
             usize::from(offsets.vmmemory_definition_current_length())
         );
         assert_eq!(
-            size_of::<VMMemoryDefinition::current_length>(),
+            span_of!(VMMemoryDefinition, current_length).len(),
             usize::from(offsets.size_of_vmmemory_definition_current_length())
         );
     }
@@ -230,7 +230,7 @@ pub struct VMTableDefinition {
 #[cfg(test)]
 mod test_vmtable_definition {
     use super::VMTableDefinition;
-    use memoffset::offset_of;
+    use memoffset::{offset_of, span_of};
     use std::mem::size_of;
     use wasmtime_environ::{Module, VMOffsets};
 
@@ -249,6 +249,10 @@ mod test_vmtable_definition {
         assert_eq!(
             offset_of!(VMTableDefinition, current_elements),
             usize::from(offsets.vmtable_definition_current_elements())
+        );
+        assert_eq!(
+            span_of!(VMTableDefinition, current_elements).len(),
+            usize::from(offsets.size_of_vmtable_definition_current_elements())
         );
     }
 }
