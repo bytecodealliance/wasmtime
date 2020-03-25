@@ -327,7 +327,11 @@ where
             // WebAssembly DWARF extension
             pc.read_u8()?;
             let ty = pc.read_uleb128()?;
-            assert_eq!(ty, 0);
+            // Supporting only wasm locals.
+            if ty != 0 {
+                // TODO support wasm globals?
+                return Ok(None);
+            }
             let index = pc.read_sleb128()?;
             pc.read_u8()?; // consume 159
             if !code_chunk.is_empty() {
