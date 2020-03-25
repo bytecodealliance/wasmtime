@@ -2375,6 +2375,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
         | Opcode::X86Pmaxu
         | Opcode::X86Pmins
         | Opcode::X86Pminu
+        | Opcode::X86Punpckh
+        | Opcode::X86Punpckl
         | Opcode::X86ElfTlsGetAddr
         | Opcode::X86MachoTlsGetAddr => {
             panic!("x86-specific opcode in supposedly arch-neutral IR!");

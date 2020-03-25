@@ -376,6 +376,40 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let x = &Operand::new("x", TxN);
+    let y = &Operand::new("y", TxN);
+    let a = &Operand::new("a", TxN);
+
+    ig.push(
+        Inst::new(
+            "x86_punpckh",
+            r#"
+        Unpack the high-order lanes of ``x`` and ``y`` and interleave into ``a``. With notional
+        i8x4 vectors, where ``x = [x3, x2, x1, x0]`` and ``y = [y3, y2, y1, y0]``, this operation
+        would result in ``a = [y3, x3, y2, x2]`` (using the Intel manual's right-to-left lane
+        ordering). 
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "x86_punpckl",
+            r#"
+        Unpack the low-order lanes of ``x`` and ``y`` and interleave into ``a``. With notional
+        i8x4 vectors, where ``x = [x3, x2, x1, x0]`` and ``y = [y3, y2, y1, y0]``, this operation
+        would result in ``a = [y1, x1, y0, x0]`` (using the Intel manual's right-to-left lane
+        ordering).
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
     let x = &Operand::new("x", FxN);
     let y = &Operand::new("y", FxN);
     let a = &Operand::new("a", FxN);

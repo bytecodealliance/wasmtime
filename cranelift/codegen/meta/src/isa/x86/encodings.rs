@@ -1631,6 +1631,8 @@ fn define_simd(
     let x86_psra = x86.by_name("x86_psra");
     let x86_psrl = x86.by_name("x86_psrl");
     let x86_ptest = x86.by_name("x86_ptest");
+    let x86_punpckh = x86.by_name("x86_punpckh");
+    let x86_punpckl = x86.by_name("x86_punpckl");
 
     // Shorthands for recipes.
     let rec_evex_reg_vvvv_rm_128 = r.template("evex_reg_vvvv_rm_128");
@@ -1781,6 +1783,26 @@ fn define_simd(
             // x86_64.
             e.enc64_maybe_isap(instruction, template.rex().w(), Some(use_sse41_simd));
         }
+    }
+
+    // SIMD packing/unpacking
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
+        let (high, low) = match ty.lane_bits() {
+            8 => (&PUNPCKHBW, &PUNPCKLBW),
+            16 => (&PUNPCKHWD, &PUNPCKLWD),
+            32 => (&PUNPCKHDQ, &PUNPCKLDQ),
+            64 => (&PUNPCKHQDQ, &PUNPCKLQDQ),
+            _ => panic!("invalid size for SIMD packing/unpacking"),
+        };
+
+        e.enc_both_inferred(
+            x86_punpckh.bind(vector(ty, sse_vector_size)),
+            rec_fa.opcodes(high),
+        );
+        e.enc_both_inferred(
+            x86_punpckl.bind(vector(ty, sse_vector_size)),
+            rec_fa.opcodes(low),
+        );
     }
 
     // SIMD bitcast all 128-bit vectors to each other (for legalizing splat.x16x8).
