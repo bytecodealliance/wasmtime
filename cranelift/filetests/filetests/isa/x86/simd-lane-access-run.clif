@@ -192,3 +192,16 @@ block0:
     return v5
 }
 ; run
+
+function %unpack_low() -> b1 {
+block0:
+    v0 = vconst.i32x4 [0 1 2 3]
+    v1 = vconst.i32x4 [4 5 6 7]
+    v2 = x86_punpckl v0, v1
+
+    v3 = vconst.i32x4 [0 4 1 5]
+    v4 = icmp eq v2, v3
+    v5 = vall_true v4
+    return v5
+}
+; run
