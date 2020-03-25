@@ -21,7 +21,7 @@ filetime = "0.2.7"
 lazy_static = "1.4.0"
 num = { version = "0.2.0", default-features = false }
 wig = { path = "wig", version = "0.12.0" }
-wiggle = { path = "../wiggle" }
+wiggle = { path = "../wiggle", default-features = false }
 wiggle-runtime = { path = "../wiggle/crates/runtime" }
 
 [target.'cfg(unix)'.dependencies]
@@ -34,3 +34,8 @@ cpu-time = "1.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[features]
+# Need to make the wiggle_metadata feature available to consumers of this
+# crate if they want the snapshots to have metadata available.
+wiggle_metadata = ["wiggle/wiggle_metadata", "wiggle-runtime/wiggle_metadata"]

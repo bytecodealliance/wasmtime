@@ -16,10 +16,22 @@ proc-macro = true
 
 [dependencies]
 wiggle-generate = { path = "crates/generate", version = "0.1.0" }
+wiggle-runtime = { path = "crates/runtime", version = "0.1.0" }
 witx = { path = "../wasi-common/wig/WASI/tools/witx", version = "0.8.4" }
 syn = { version = "1.0", features = ["full"] }
 
 [dev-dependencies]
-wiggle-runtime = { path = "crates/runtime", version = "0.1.0" }
 wiggle-test = { path = "crates/test", version = "0.1.0" }
 proptest = "0.9"
+
+[features]
+# These features have no effect on the users of this crate. They are only
+# necessary for testing.
+# The wiggle proc-macro emits some code (inside `pub mod metadata`) guarded
+# by the `wiggle_metadata` feature flag. We use this feature flag so that
+# users of wiggle are not forced to take a direct dependency on the `witx`
+# crate unless they want it.
+wiggle_metadata = ["wiggle-runtime/wiggle_metadata"]
+# In order to test that the contents of this metadata module meet
+# expectations, we must have this feature enabled for the crate by default.
+default = ["wiggle_metadata"]

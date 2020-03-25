@@ -6,6 +6,9 @@ use std::slice;
 use std::str;
 use std::sync::Arc;
 
+#[cfg(feature = "wiggle_metadata")]
+pub use witx;
+
 mod borrow;
 mod error;
 mod guest_type;

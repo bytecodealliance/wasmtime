@@ -1,10 +1,25 @@
 use wiggle_runtime::{GuestBorrows, GuestError, GuestErrorType, GuestPtr};
 use wiggle_test::WasiCtx;
 
+// This test file exists to make sure that the entire `wasi.witx` file can be
+// handled by wiggle, producing code that compiles correctly.
+// The trait impls here are never executed, and just exist to validate that the
+// witx is exposed with the type signatures that we expect.
+
 wiggle::from_witx!({
     witx: ["tests/wasi.witx"],
     ctx: WasiCtx,
 });
+
+// The only test in this file is to verify that the witx document provided by the
+// proc macro in the `metadata` module is equal to the document on the disk.
+#[test]
+fn document_equivelant() {
+    let macro_doc = metadata::document();
+    let disk_doc = witx::load(&["tests/wasi.witx"]).expect("load wasi.witx from disk");
+
+    assert_eq!(macro_doc, disk_doc);
+}
 
 type Result<T> = std::result::Result<T, types::Errno>;
 
