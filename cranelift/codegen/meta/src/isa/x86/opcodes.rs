@@ -291,6 +291,14 @@ pub static OR_IMM8_SIGN_EXTEND: [u8; 1] = [0x83];
 /// Return the bitwise logical OR of packed single-precision values in xmm and x/m (SSE).
 pub static ORPS: [u8; 2] = [0x0f, 0x56];
 
+/// Converts 8 packed signed word integers from xmm1 and from xxm2/m128 into 16 packed signed byte
+/// integers in xmm1 using signed saturation (SSE2).
+pub static PACKSSWB: [u8; 3] = [0x66, 0x0f, 0x63];
+
+/// Converts 4 packed signed doubleword integers from xmm1 and from xmm2/m128 into 8 packed signed
+/// word integers in xmm1 using signed saturation (SSE2).
+pub static PACKSSDW: [u8; 3] = [0x66, 0x0f, 0x6b];
+
 /// Add packed byte integers from xmm2/m128 and xmm1 (SSE2).
 pub static PADDB: [u8; 3] = [0x66, 0x0f, 0xfc];
 

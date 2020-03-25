@@ -1619,6 +1619,7 @@ fn define_simd(
     let x86_insertps = x86.by_name("x86_insertps");
     let x86_movlhps = x86.by_name("x86_movlhps");
     let x86_movsd = x86.by_name("x86_movsd");
+    let x86_packss = x86.by_name("x86_packss");
     let x86_pextr = x86.by_name("x86_pextr");
     let x86_pinsr = x86.by_name("x86_pinsr");
     let x86_pmaxs = x86.by_name("x86_pmaxs");
@@ -1803,6 +1804,10 @@ fn define_simd(
             x86_punpckl.bind(vector(ty, sse_vector_size)),
             rec_fa.opcodes(low),
         );
+    }
+    for (ty, opcodes) in &[(I16, &PACKSSWB), (I32, &PACKSSDW)] {
+        let x86_packss = x86_packss.bind(vector(*ty, sse_vector_size));
+        e.enc_both_inferred(x86_packss, rec_fa.opcodes(*opcodes));
     }
 
     // SIMD bitcast all 128-bit vectors to each other (for legalizing splat.x16x8).
