@@ -279,6 +279,16 @@ impl Type {
         }
     }
 
+    /// Split the lane width in half and double the number of lanes to maintain the same bit-width.
+    ///
+    /// If this is a scalar type of n bits, it produces a SIMD vector type of (n/2)x2.
+    pub fn split_lanes(self) -> Option<Self> {
+        match self.half_width() {
+            Some(half_width) => half_width.by(2),
+            None => None,
+        }
+    }
+
     /// Index of this type, for use with hash tables etc.
     pub fn index(self) -> usize {
         usize::from(self.0)
