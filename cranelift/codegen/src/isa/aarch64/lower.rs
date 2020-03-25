@@ -2375,6 +2375,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
         | Opcode::X86Pmaxu
         | Opcode::X86Pmins
         | Opcode::X86Pminu
+        | Opcode::X86Packss
         | Opcode::X86Punpckh
         | Opcode::X86Punpckl
         | Opcode::X86ElfTlsGetAddr
