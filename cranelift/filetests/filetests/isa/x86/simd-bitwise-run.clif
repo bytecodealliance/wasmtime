@@ -51,6 +51,19 @@ block0:
 }
 ; run
 
+function %sshr_i8x16() -> b1 {
+block0:
+    v0 = iconst.i32 1
+    v1 = vconst.i8x16 [0 0xff 2 0xfd 4 0xfb 6 0xf9 8 0xf7 10 0xf5 12 0xf3 14 0xf1]
+    v2 = sshr v1, v0
+
+    v3 = vconst.i8x16 [0 0xff 1 0xfe 2 0xfd 3 0xfc 4 0xfb 5 0xfa 6 0xf9 7 0xf8]
+    v4 = icmp eq v2, v3
+    v5 = vall_true v4
+    return v5
+}
+; run
+
 function %ishl_i8x16() -> b1 {
 block0:
     v0 = iconst.i32 1

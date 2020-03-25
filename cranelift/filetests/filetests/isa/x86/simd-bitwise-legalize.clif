@@ -18,6 +18,26 @@ block0:
     return v2
 }
 
+function %sshr_i8x16() -> i8x16 {
+block0:
+    v0 = iconst.i32 1
+    v1 = vconst.i8x16 [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15]
+    v2 = sshr v1, v0
+    ; check:  v3 = iadd_imm v0, 8
+    ; nextln: v4 = bitcast.i64x2 v3
+
+    ; nextln: v5 = x86_punpckl v1, v1
+    ; nextln: v6 = raw_bitcast.i16x8 v5
+    ; nextln: v7 = x86_psra v6, v4
+
+    ; nextln: v8 = x86_punpckh v1, v1
+    ; nextln: v9 = raw_bitcast.i16x8 v8
+    ; nextln: v10 = x86_psra v9, v4
+
+    ; nextln: v2 = x86_packss v7, v10
+    return v2
+}
+
 function %ishl_i8x16() -> i8x16 {
 block0:
     v0 = iconst.i32 1
