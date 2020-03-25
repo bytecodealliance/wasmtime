@@ -1,8 +1,9 @@
 [package]
 name = "yanix"
-version = "0.12.0"
+version = "0.13.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Yet Another Nix crate: a Unix API helper library"
+documentation = "https://docs.rs/yanix"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 edition = "2018"

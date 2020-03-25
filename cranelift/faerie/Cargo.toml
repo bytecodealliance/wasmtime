@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-faerie"
-version = "0.60.0"
+version = "0.61.0"
 authors = ["The Cranelift Project Developers"]
 description = "Emit Cranelift output to native object files with Faerie"
 repository = "https://github.com/bytecodealliance/wasmtime"
@@ -10,17 +10,12 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-module = { path = "../module", version = "0.60.0" }
+cranelift-module = { path = "../module", version = "0.61.0" }
+cranelift-codegen = { path = "../codegen", version = "0.61.0", default-features = false, features = ["std"] }
 faerie = "0.15.0"
 goblin = "0.1.0"
 anyhow = "1.0"
 target-lexicon = "0.10"
-
-[dependencies.cranelift-codegen]
-path = "../codegen"
-version = "0.60.0"
-default-features = false
-features = ["std"]
 
 [badges]
 maintenance = { status = "experimental" }

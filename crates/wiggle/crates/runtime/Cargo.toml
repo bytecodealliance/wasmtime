@@ -1,6 +1,6 @@
 [package]
 name = "wiggle-runtime"
-version = "0.1.0"
+version = "0.13.0"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"

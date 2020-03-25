@@ -3,7 +3,7 @@ set -euo pipefail
 
 # This is a convenience script for maintainers publishing a new version of
 # Cranelift to crates.io. To use, first bump the version number by running the
-# `scripts/cranelift-version.sh` script, then run this script, and run the
+# `scripts/bump-cranelift-version.sh` script, then run this script, and run the
 # commands that it prints.
 #
 # Don't forget to push a git tag for this release!
