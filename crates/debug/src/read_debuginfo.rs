@@ -83,15 +83,14 @@ fn convert_sections<'a>(sections: HashMap<&str, &'a [u8]>) -> Result<Dwarf<'a>> 
     };
     let ranges = RangeLists::new(debug_ranges, debug_rnglists);
 
-    if sections.contains_key(".debug_loclists") {
-        bail!("Unexpected .debug_loclists");
-    }
-
     let debug_loc = match sections.get(".debug_loc") {
         Some(section) => DebugLoc::new(section, endian),
         None => DebugLoc::new(EMPTY_SECTION, endian),
     };
-    let debug_loclists = DebugLocLists::new(EMPTY_SECTION, endian);
+    let debug_loclists = match sections.get(".debug_loclists") {
+        Some(section) => DebugLocLists::new(section, endian),
+        None => DebugLocLists::new(EMPTY_SECTION, endian),
+    };
     let locations = LocationLists::new(debug_loc, debug_loclists);
 
     if sections.contains_key(".debug_str_offsets") {
