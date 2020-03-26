@@ -147,7 +147,7 @@ static void read_wat_file(
 
   // Parse the wat into the binary wasm format
   wasm_byte_vec_t error;
-  if (wasmtime_wat2wasm(engine, &wat, bytes, &error) == 0) {
+  if (wasmtime_wat2wasm(&wat, bytes, &error) == 0) {
     fprintf(stderr, "failed to parse wat %.*s\n", (int) error.size, error.data);
     exit(1);
   }
