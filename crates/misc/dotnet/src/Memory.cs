@@ -38,7 +38,7 @@ namespace Wasmtime
         {
             if (minimum == 0)
             {
-                throw new ArgumentException("The minimum cannot be zero..", nameof(minimum));
+                throw new ArgumentException("The minimum cannot be zero.", nameof(minimum));
             }
 
             if (maximum < minimum)
