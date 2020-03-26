@@ -4,21 +4,19 @@ use quote::{format_ident, quote};
 use witx::{AtomType, BuiltinType, Id, TypeRef};
 
 use crate::lifetimes::LifetimeExt;
-use crate::Config;
 
-#[derive(Debug, Clone)]
 pub struct Names {
-    config: Config,
+    ctx_type: Ident,
 }
 
 impl Names {
-    pub fn new(config: &Config) -> Names {
+    pub fn new(ctx_type: &Ident) -> Names {
         Names {
-            config: config.clone(),
+            ctx_type: ctx_type.clone(),
         }
     }
     pub fn ctx_type(&self) -> Ident {
-        self.config.ctx.name.clone()
+        self.ctx_type.clone()
     }
     pub fn type_(&self, id: &Id) -> TokenStream {
         let ident = format_ident!("{}", id.as_str().to_camel_case());

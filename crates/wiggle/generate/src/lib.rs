@@ -15,7 +15,9 @@ pub use names::Names;
 pub use types::define_datatype;
 
 pub fn generate(doc: &witx::Document, config: &Config) -> TokenStream {
-    let names = Names::new(config); // TODO parse the names from the invocation of the macro, or from a file?
+    // TODO at some point config should grow more ability to configure name
+    // overrides.
+    let names = Names::new(&config.ctx.name);
 
     let types = doc.typenames().map(|t| define_datatype(&names, &t));
 
