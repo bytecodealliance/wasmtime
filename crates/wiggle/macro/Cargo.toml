@@ -16,11 +16,11 @@ proc-macro = true
 
 [dependencies]
 wiggle-generate = { path = "../generate", version = "0.13.0" }
-witx = { path = "../../../wasi-common/wig/WASI/tools/witx", version = "0.8.4" }
+witx = { path = "../../wasi-common/wig/WASI/tools/witx", version = "0.8.4" }
 syn = { version = "1.0", features = ["full"] }
 
 [dev-dependencies]
-wiggle = { path = "../.." }
+wiggle = { path = ".." }
 
 [features]
 wiggle_metadata = []
