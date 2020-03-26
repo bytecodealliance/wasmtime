@@ -267,7 +267,7 @@ namespace Wasmtime
             {
                 for (int i = 0; i < tuple.Length; ++i)
                 {
-                    SetResults(tuple[i], &results[i]);
+                    SetResult(tuple[i], &results[i]);
                 }
             }
         }
