@@ -357,7 +357,6 @@ pub struct TransformRangeIter<'a> {
     end_it: TransformRangeEndIter<'a>,
     last_start: Option<(GeneratedAddress, RangeIndex)>,
     last_end: Option<(GeneratedAddress, RangeIndex)>,
-    #[cfg(debug_assertions)]
     last_item: Option<(GeneratedAddress, GeneratedAddress)>,
 }
 
@@ -373,22 +372,9 @@ impl<'a> TransformRangeIter<'a> {
             end_it,
             last_start,
             last_end,
-            #[cfg(debug_assertions)]
             last_item: None,
         }
     }
-
-    #[cfg(debug_assertions)]
-    fn ensure_order(&mut self, start: GeneratedAddress, end: GeneratedAddress) {
-        match self.last_item.replace((start, end)) {
-            Some((_, last_end)) => debug_assert!(last_end <= start),
-            None => (),
-        }
-    }
-
-    #[cfg(not(debug_assertions))]
-    #[inline(always)]
-    fn ensure_order(&mut self, _start: GeneratedAddress, _end: GeneratedAddress) {}
 }
 
 impl<'a> Iterator for TransformRangeIter<'a> {
@@ -444,7 +430,12 @@ impl<'a> Iterator for TransformRangeIter<'a> {
                 }
             };
 
-            self.ensure_order(range_start, range_end);
+            if cfg!(debug_assertions) {
+                match self.last_item.replace((range_start, range_end)) {
+                    Some((_, last_end)) => debug_assert!(last_end <= range_start),
+                    None => (),
+                }
+            }
 
             if range_start < range_end {
                 return Some((range_start, range_end));
