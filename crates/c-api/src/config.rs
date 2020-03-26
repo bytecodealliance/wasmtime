@@ -6,6 +6,8 @@ pub struct wasm_config_t {
     pub(crate) config: Config,
 }
 
+wasmtime_c_api_macros::declare_own!(wasm_config_t);
+
 #[repr(u8)]
 #[derive(Clone)]
 pub enum wasmtime_strategy_t {
@@ -111,6 +113,3 @@ pub extern "C" fn wasmtime_config_profiler_set(
         WASMTIME_PROFILING_STRATEGY_JITDUMP => ProfilingStrategy::JitDump,
     }));
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_config_delete(_config: Box<wasm_config_t>) {}

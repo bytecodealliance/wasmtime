@@ -8,6 +8,8 @@ pub struct wasm_externtype_t {
     pub(crate) which: CExternType,
 }
 
+wasmtime_c_api_macros::declare_ty!(wasm_externtype_t);
+
 #[derive(Clone)]
 pub(crate) enum CExternType {
     Func(CFuncType),
@@ -108,6 +110,3 @@ pub extern "C" fn wasm_externtype_as_memorytype_const(
 ) -> Option<&wasm_memorytype_t> {
     wasm_memorytype_t::try_from(et)
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_externtype_delete(_et: Box<wasm_externtype_t>) {}

@@ -11,6 +11,8 @@ pub struct wasm_exporttype_t {
     type_cache: OnceCell<wasm_externtype_t>,
 }
 
+wasmtime_c_api_macros::declare_ty!(wasm_exporttype_t);
+
 impl wasm_exporttype_t {
     pub(crate) fn new(ty: ExportType) -> wasm_exporttype_t {
         wasm_exporttype_t {
@@ -43,6 +45,3 @@ pub extern "C" fn wasm_exporttype_type(et: &wasm_exporttype_t) -> &wasm_externty
     et.type_cache
         .get_or_init(|| wasm_externtype_t::new(et.ty.ty().clone()))
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_exporttype_delete(_ty: Box<wasm_exporttype_t>) {}

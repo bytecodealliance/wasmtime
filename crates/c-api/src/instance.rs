@@ -1,9 +1,9 @@
 use crate::{wasm_extern_t, wasm_extern_vec_t, wasm_module_t, wasm_trap_t};
-use crate::{wasm_store_t, ExternHost, HostInfoState};
+use crate::{wasm_store_t, ExternHost};
 use anyhow::Result;
 use std::cell::RefCell;
 use std::ptr;
-use wasmtime::{Extern, HostInfo, HostRef, Instance, Store, Trap};
+use wasmtime::{Extern, HostRef, Instance, Store, Trap};
 
 #[repr(C)]
 #[derive(Clone)]
@@ -12,12 +12,18 @@ pub struct wasm_instance_t {
     exports_cache: RefCell<Option<Vec<ExternHost>>>,
 }
 
+wasmtime_c_api_macros::declare_ref!(wasm_instance_t);
+
 impl wasm_instance_t {
     fn new(instance: Instance) -> wasm_instance_t {
         wasm_instance_t {
             instance: HostRef::new(instance),
             exports_cache: RefCell::new(None),
         }
+    }
+
+    fn anyref(&self) -> wasmtime::AnyRef {
+        self.instance.anyref()
     }
 }
 
@@ -105,21 +111,3 @@ pub extern "C" fn wasm_instance_exports(instance: &wasm_instance_t, out: &mut wa
     }
     out.set_buffer(buffer);
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_instance_set_host_info_with_finalizer(
-    instance: &wasm_instance_t,
-    info: *mut std::ffi::c_void,
-    finalizer: Option<extern "C" fn(arg1: *mut std::ffi::c_void)>,
-) {
-    let info = if info.is_null() && finalizer.is_none() {
-        None
-    } else {
-        let b: Box<dyn HostInfo> = Box::new(HostInfoState { info, finalizer });
-        Some(b)
-    };
-    instance.instance.anyref().set_host_info(info);
-}
-
-#[no_mangle]
-pub extern "C" fn wasm_instance_delete(_instance: Box<wasm_instance_t>) {}

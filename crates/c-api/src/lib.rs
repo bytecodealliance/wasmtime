@@ -60,8 +60,8 @@ struct HostInfoState {
     finalizer: Option<extern "C" fn(arg1: *mut std::ffi::c_void)>,
 }
 
-impl wasmtime::HostInfo for HostInfoState {
-    fn finalize(&mut self) {
+impl Drop for HostInfoState {
+    fn drop(&mut self) {
         if let Some(f) = &self.finalizer {
             f(self.info);
         }

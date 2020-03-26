@@ -8,6 +8,8 @@ pub struct wasm_memorytype_t {
     ext: wasm_externtype_t,
 }
 
+wasmtime_c_api_macros::declare_ty!(wasm_memorytype_t);
+
 #[derive(Clone)]
 pub(crate) struct CMemoryType {
     pub(crate) ty: MemoryType,
@@ -75,6 +77,3 @@ pub extern "C" fn wasm_memorytype_as_externtype_const(
 ) -> &wasm_externtype_t {
     &ty.ext
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_memorytype_delete(_mt: Box<wasm_memorytype_t>) {}

@@ -7,11 +7,21 @@ pub struct wasm_trap_t {
     pub(crate) trap: HostRef<Trap>,
 }
 
+wasmtime_c_api_macros::declare_ref!(wasm_trap_t);
+
+impl wasm_trap_t {
+    fn anyref(&self) -> wasmtime::AnyRef {
+        self.trap.anyref()
+    }
+}
+
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_frame_t {
     _unused: [u8; 0],
 }
+
+wasmtime_c_api_macros::declare_own!(wasm_frame_t);
 
 pub type wasm_message_t = wasm_name_t;
 
@@ -50,9 +60,6 @@ pub extern "C" fn wasm_trap_trace(_trap: &wasm_trap_t, out: &mut wasm_frame_vec_
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_trap_delete(_trap: Box<wasm_trap_t>) {}
-
-#[no_mangle]
 pub extern "C" fn wasm_frame_func_index(_arg1: *const wasm_frame_t) -> u32 {
     unimplemented!("wasm_frame_func_index")
 }
@@ -71,6 +78,3 @@ pub extern "C" fn wasm_frame_instance(_arg1: *const wasm_frame_t) -> *mut wasm_i
 pub extern "C" fn wasm_frame_module_offset(_arg1: *const wasm_frame_t) -> usize {
     unimplemented!("wasm_frame_module_offset")
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_frame_delete(_frame: Box<wasm_frame_t>) {}

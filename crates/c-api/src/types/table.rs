@@ -8,6 +8,8 @@ pub struct wasm_tabletype_t {
     ext: wasm_externtype_t,
 }
 
+wasmtime_c_api_macros::declare_ty!(wasm_tabletype_t);
+
 #[derive(Clone)]
 pub(crate) struct CTableType {
     pub(crate) ty: TableType,
@@ -87,6 +89,3 @@ pub extern "C" fn wasm_tabletype_as_externtype(ty: &wasm_tabletype_t) -> &wasm_e
 pub extern "C" fn wasm_tabletype_as_externtype_const(ty: &wasm_tabletype_t) -> &wasm_externtype_t {
     &ty.ext
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_tabletype_delete(_tt: Box<wasm_tabletype_t>) {}

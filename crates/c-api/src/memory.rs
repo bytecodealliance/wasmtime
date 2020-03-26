@@ -7,6 +7,8 @@ pub struct wasm_memory_t {
     ext: wasm_extern_t,
 }
 
+wasmtime_c_api_macros::declare_ref!(wasm_memory_t);
+
 pub type wasm_memory_pages_t = u32;
 
 impl wasm_memory_t {
@@ -22,6 +24,10 @@ impl wasm_memory_t {
             ExternHost::Memory(m) => m,
             _ => unsafe { std::hint::unreachable_unchecked() },
         }
+    }
+
+    fn anyref(&self) -> wasmtime::AnyRef {
+        self.memory().anyref()
     }
 }
 
@@ -41,16 +47,6 @@ pub extern "C" fn wasm_memory_new(
 #[no_mangle]
 pub extern "C" fn wasm_memory_as_extern(m: &wasm_memory_t) -> &wasm_extern_t {
     &m.ext
-}
-
-#[no_mangle]
-pub extern "C" fn wasm_memory_copy(m: &wasm_memory_t) -> Box<wasm_memory_t> {
-    Box::new(m.clone())
-}
-
-#[no_mangle]
-pub extern "C" fn wasm_memory_same(m1: &wasm_memory_t, m2: &wasm_memory_t) -> bool {
-    m1.memory().ptr_eq(m2.memory())
 }
 
 #[no_mangle]
@@ -78,6 +74,3 @@ pub extern "C" fn wasm_memory_size(m: &wasm_memory_t) -> wasm_memory_pages_t {
 pub extern "C" fn wasm_memory_grow(m: &wasm_memory_t, delta: wasm_memory_pages_t) -> bool {
     m.memory().borrow().grow(delta).is_ok()
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_memory_delete(_m: Box<wasm_memory_t>) {}

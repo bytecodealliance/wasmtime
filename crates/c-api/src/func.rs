@@ -1,5 +1,5 @@
 use crate::{wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t};
-use crate::{wasm_name_t, wasm_ref_t, wasm_trap_t, ExternHost};
+use crate::{ExternHost, wasm_name_t, wasm_trap_t};
 use std::ffi::c_void;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
@@ -11,6 +11,8 @@ use wasmtime::{Caller, Extern, Func, HostRef, Trap};
 pub struct wasm_func_t {
     ext: wasm_extern_t,
 }
+
+wasmtime_c_api_macros::declare_ref!(wasm_func_t);
 
 #[repr(C)]
 pub struct wasmtime_caller_t<'a> {
@@ -65,6 +67,10 @@ impl wasm_func_t {
             ExternHost::Func(f) => f,
             _ => unsafe { std::hint::unreachable_unchecked() },
         }
+    }
+
+    fn anyref(&self) -> wasmtime::AnyRef {
+        self.func().anyref()
     }
 }
 
@@ -216,18 +222,9 @@ pub extern "C" fn wasm_func_result_arity(f: &wasm_func_t) -> usize {
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_func_as_ref(f: &wasm_func_t) -> Box<wasm_ref_t> {
-    let r = f.func().anyref();
-    Box::new(wasm_ref_t { r })
-}
-
-#[no_mangle]
 pub extern "C" fn wasm_func_as_extern(f: &mut wasm_func_t) -> &mut wasm_extern_t {
     &mut (*f).ext
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_func_delete(_f: Box<wasm_func_t>) {}
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_caller_export_get(

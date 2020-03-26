@@ -7,12 +7,25 @@ pub struct wasm_extern_t {
     pub(crate) which: ExternHost,
 }
 
+wasmtime_c_api_macros::declare_ref!(wasm_extern_t);
+
 #[derive(Clone)]
 pub(crate) enum ExternHost {
     Func(HostRef<Func>),
     Global(HostRef<Global>),
     Memory(HostRef<Memory>),
     Table(HostRef<Table>),
+}
+
+impl wasm_extern_t {
+    fn anyref(&self) -> wasmtime::AnyRef {
+        match &self.which {
+            ExternHost::Func(f) => f.anyref(),
+            ExternHost::Global(f) => f.anyref(),
+            ExternHost::Memory(f) => f.anyref(),
+            ExternHost::Table(f) => f.anyref(),
+        }
+    }
 }
 
 #[no_mangle]
@@ -75,6 +88,3 @@ pub extern "C" fn wasm_extern_as_memory(e: &wasm_extern_t) -> Option<&wasm_memor
 pub extern "C" fn wasm_extern_as_memory_const(e: &wasm_extern_t) -> Option<&wasm_memory_t> {
     wasm_extern_as_memory(e)
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_extern_delete(_e: Box<wasm_extern_t>) {}

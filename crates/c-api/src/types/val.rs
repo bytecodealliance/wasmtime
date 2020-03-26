@@ -6,6 +6,8 @@ pub struct wasm_valtype_t {
     pub(crate) ty: ValType,
 }
 
+wasmtime_c_api_macros::declare_ty!(wasm_valtype_t);
+
 pub type wasm_valkind_t = u8;
 pub const WASM_I32: wasm_valkind_t = 0;
 pub const WASM_I64: wasm_valkind_t = 1;
@@ -25,9 +27,6 @@ pub extern "C" fn wasm_valtype_new(kind: wasm_valkind_t) -> Box<wasm_valtype_t> 
 pub extern "C" fn wasm_valtype_kind(vt: &wasm_valtype_t) -> wasm_valkind_t {
     from_valtype(&vt.ty)
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_valtype_delete(_vt: Box<wasm_valtype_t>) {}
 
 pub(crate) fn into_valtype(kind: wasm_valkind_t) -> ValType {
     match kind {

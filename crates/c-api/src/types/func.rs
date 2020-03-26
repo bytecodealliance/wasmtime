@@ -8,6 +8,8 @@ pub struct wasm_functype_t {
     ext: wasm_externtype_t,
 }
 
+wasmtime_c_api_macros::declare_ty!(wasm_functype_t);
+
 #[derive(Clone)]
 pub(crate) struct CFuncType {
     pub(crate) ty: FuncType,
@@ -101,6 +103,3 @@ pub extern "C" fn wasm_functype_as_externtype(ty: &wasm_functype_t) -> &wasm_ext
 pub extern "C" fn wasm_functype_as_externtype_const(ty: &wasm_functype_t) -> &wasm_externtype_t {
     &ty.ext
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_functype_delete(_ft: Box<wasm_functype_t>) {}

@@ -7,6 +7,8 @@ pub struct wasm_global_t {
     ext: wasm_extern_t,
 }
 
+wasmtime_c_api_macros::declare_ref!(wasm_global_t);
+
 impl wasm_global_t {
     pub(crate) fn try_from(e: &wasm_extern_t) -> Option<&wasm_global_t> {
         match &e.which {
@@ -20,6 +22,10 @@ impl wasm_global_t {
             ExternHost::Global(g) => g,
             _ => unsafe { std::hint::unreachable_unchecked() },
         }
+    }
+
+    fn anyref(&self) -> wasmtime::AnyRef {
+        self.global().anyref()
     }
 }
 
@@ -44,19 +50,6 @@ pub extern "C" fn wasm_global_as_extern(g: &wasm_global_t) -> &wasm_extern_t {
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_global_copy(g: &wasm_global_t) -> Box<wasm_global_t> {
-    Box::new(g.clone())
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn wasm_global_same(
-    g1: *const wasm_global_t,
-    g2: *const wasm_global_t,
-) -> bool {
-    (*g1).global().ptr_eq(&(*g2).global())
-}
-
-#[no_mangle]
 pub extern "C" fn wasm_global_type(g: &wasm_global_t) -> Box<wasm_globaltype_t> {
     let globaltype = g.global().borrow().ty().clone();
     Box::new(wasm_globaltype_t::new(globaltype))
@@ -72,6 +65,3 @@ pub extern "C" fn wasm_global_set(g: &wasm_global_t, val: &wasm_val_t) {
     let result = g.global().borrow().set(val.val());
     drop(result); // TODO: should communicate this via the api somehow?
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_global_delete(_g: Box<wasm_global_t>) {}

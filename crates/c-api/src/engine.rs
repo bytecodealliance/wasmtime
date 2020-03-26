@@ -7,6 +7,8 @@ pub struct wasm_engine_t {
     pub(crate) engine: HostRef<Engine>,
 }
 
+wasmtime_c_api_macros::declare_own!(wasm_engine_t);
+
 #[no_mangle]
 pub extern "C" fn wasm_engine_new() -> Box<wasm_engine_t> {
     Box::new(wasm_engine_t {
@@ -21,6 +23,3 @@ pub extern "C" fn wasm_engine_new_with_config(c: Box<wasm_config_t>) -> Box<wasm
         engine: HostRef::new(Engine::new(&config)),
     })
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_engine_delete(_engine: Box<wasm_engine_t>) {}

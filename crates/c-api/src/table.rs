@@ -9,6 +9,8 @@ pub struct wasm_table_t {
     ext: wasm_extern_t,
 }
 
+wasmtime_c_api_macros::declare_ref!(wasm_table_t);
+
 pub type wasm_table_size_t = u32;
 
 impl wasm_table_t {
@@ -24,6 +26,10 @@ impl wasm_table_t {
             ExternHost::Table(t) => t,
             _ => unsafe { std::hint::unreachable_unchecked() },
         }
+    }
+
+    fn anyref(&self) -> wasmtime::AnyRef {
+        self.table().anyref()
     }
 }
 
@@ -109,19 +115,6 @@ pub unsafe extern "C" fn wasm_table_grow(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasm_table_same(t1: *const wasm_table_t, t2: *const wasm_table_t) -> bool {
-    (*t1).table().ptr_eq((*t2).table())
-}
-
-#[no_mangle]
 pub extern "C" fn wasm_table_as_extern(t: &wasm_table_t) -> &wasm_extern_t {
     &t.ext
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_table_copy(t: &wasm_table_t) -> Box<wasm_table_t> {
-    Box::new(t.clone())
-}
-
-#[no_mangle]
-pub extern "C" fn wasm_table_delete(_t: Box<wasm_table_t>) {}

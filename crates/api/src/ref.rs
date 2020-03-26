@@ -5,14 +5,10 @@ use std::cell::{self, RefCell};
 use std::fmt;
 use std::rc::{Rc, Weak};
 
-pub trait HostInfo {
-    fn finalize(&mut self) {}
-}
-
 trait InternalRefBase: Any {
     fn as_any(&self) -> &dyn Any;
-    fn host_info(&self) -> Option<cell::RefMut<Box<dyn HostInfo>>>;
-    fn set_host_info(&self, info: Option<Box<dyn HostInfo>>);
+    fn host_info(&self) -> Option<cell::RefMut<Box<dyn Any>>>;
+    fn set_host_info(&self, info: Option<Box<dyn Any>>);
     fn ptr_eq(&self, other: &dyn InternalRefBase) -> bool;
 }
 
@@ -34,15 +30,7 @@ impl InternalRef {
 
 struct AnyAndHostInfo {
     any: Box<dyn Any>,
-    host_info: Option<Box<dyn HostInfo>>,
-}
-
-impl Drop for AnyAndHostInfo {
-    fn drop(&mut self) {
-        if let Some(info) = &mut self.host_info {
-            info.finalize();
-        }
-    }
+    host_info: Option<Box<dyn Any>>,
 }
 
 #[derive(Clone)]
@@ -100,7 +88,7 @@ impl AnyRef {
     /// Returns a mutable reference to the host information if available.
     /// # Panics
     /// Panics if `AnyRef` is already borrowed or `AnyRef` is `Null`.
-    pub fn host_info(&self) -> Option<cell::RefMut<Box<dyn HostInfo>>> {
+    pub fn host_info(&self) -> Option<cell::RefMut<Box<dyn Any>>> {
         match self {
             AnyRef::Null => panic!("null"),
             AnyRef::Ref(r) => r.0.host_info(),
@@ -117,7 +105,7 @@ impl AnyRef {
     /// Sets the host information for an `AnyRef`.
     /// # Panics
     /// Panics if `AnyRef` is already borrowed or `AnyRef` is `Null`.
-    pub fn set_host_info(&self, info: Option<Box<dyn HostInfo>>) {
+    pub fn set_host_info(&self, info: Option<Box<dyn Any>>) {
         match self {
             AnyRef::Null => panic!("null"),
             AnyRef::Ref(r) => r.0.set_host_info(info),
@@ -140,16 +128,8 @@ impl fmt::Debug for AnyRef {
 
 struct ContentBox<T> {
     content: T,
-    host_info: Option<Box<dyn HostInfo>>,
+    host_info: Option<Box<dyn Any>>,
     anyref_data: Weak<dyn InternalRefBase>,
-}
-
-impl<T> Drop for ContentBox<T> {
-    fn drop(&mut self) {
-        if let Some(info) = &mut self.host_info {
-            info.finalize();
-        }
-    }
 }
 
 /// Represents a piece of data located in the host environment.
@@ -215,7 +195,7 @@ impl<T: 'static> InternalRefBase for HostRef<T> {
         self
     }
 
-    fn host_info(&self) -> Option<cell::RefMut<Box<dyn HostInfo>>> {
+    fn host_info(&self) -> Option<cell::RefMut<Box<dyn Any>>> {
         let info = cell::RefMut::map(self.0.borrow_mut(), |b| &mut b.host_info);
         if info.is_none() {
             return None;
@@ -223,7 +203,7 @@ impl<T: 'static> InternalRefBase for HostRef<T> {
         Some(cell::RefMut::map(info, |info| info.as_mut().unwrap()))
     }
 
-    fn set_host_info(&self, info: Option<Box<dyn HostInfo>>) {
+    fn set_host_info(&self, info: Option<Box<dyn Any>>) {
         self.0.borrow_mut().host_info = info;
     }
 }

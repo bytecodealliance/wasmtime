@@ -10,6 +10,8 @@ pub struct wasm_globaltype_t {
     ext: wasm_externtype_t,
 }
 
+wasmtime_c_api_macros::declare_ty!(wasm_globaltype_t);
+
 #[derive(Clone)]
 pub(crate) struct CGlobalType {
     pub(crate) ty: GlobalType,
@@ -91,6 +93,3 @@ pub extern "C" fn wasm_globaltype_as_externtype_const(
 ) -> &wasm_externtype_t {
     &ty.ext
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_globaltype_delete(_gt: Box<wasm_globaltype_t>) {}

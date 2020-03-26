@@ -10,6 +10,14 @@ pub struct wasm_module_t {
     pub(crate) exports: Vec<wasm_exporttype_t>,
 }
 
+wasmtime_c_api_macros::declare_ref!(wasm_module_t);
+
+impl wasm_module_t {
+    fn anyref(&self) -> wasmtime::AnyRef {
+        self.module.anyref()
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn wasm_module_new(
     store: &wasm_store_t,
@@ -61,6 +69,3 @@ pub extern "C" fn wasm_module_imports(module: &wasm_module_t, out: &mut wasm_imp
         .collect::<Vec<_>>();
     out.set_buffer(buffer);
 }
-
-#[no_mangle]
-pub extern "C" fn wasm_module_delete(_module: Box<wasm_module_t>) {}
