@@ -3,7 +3,7 @@ use crate::sys::entry::{descriptor_as_oshandle, determine_type_and_access_rights
 use crate::virtfs::VirtualFile;
 use crate::wasi::types::{Filetype, Rights};
 use crate::wasi::{Errno, Result};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::ops::Deref;
@@ -78,7 +78,7 @@ impl<'descriptor> Deref for OsHandleRef<'descriptor> {
 
 /// Represents rights of an `Entry` entity, either already held or
 /// required.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub(crate) struct EntryRights {
     pub(crate) base: Rights,
     pub(crate) inheriting: Rights,
@@ -134,7 +134,7 @@ impl fmt::Display for EntryRights {
 pub(crate) struct Entry {
     pub(crate) file_type: Filetype,
     descriptor: Rc<RefCell<Descriptor>>,
-    pub(crate) rights: RefCell<EntryRights>,
+    pub(crate) rights: Cell<EntryRights>,
     pub(crate) preopen_path: Option<PathBuf>,
     // TODO: directories
 }
@@ -146,7 +146,7 @@ impl Entry {
                 .map(|(file_type, rights)| Self {
                     file_type,
                     descriptor: Rc::new(RefCell::new(handle.into())),
-                    rights: RefCell::new(rights),
+                    rights: Cell::new(rights),
                     preopen_path: None,
                 }),
             Descriptor::VirtualFile(virt) => {
@@ -156,7 +156,7 @@ impl Entry {
                 Ok(Self {
                     file_type,
                     descriptor: Rc::new(RefCell::new(virt.into())),
-                    rights: RefCell::new(rights),
+                    rights: Cell::new(rights),
                     preopen_path: None,
                 })
             }
@@ -170,7 +170,7 @@ impl Entry {
         unsafe { determine_type_and_access_rights(&io::stdin()) }.map(|(file_type, rights)| Self {
             file_type,
             descriptor: Rc::new(RefCell::new(Descriptor::Stdin)),
-            rights: RefCell::new(rights),
+            rights: Cell::new(rights),
             preopen_path: None,
         })
     }
@@ -179,7 +179,7 @@ impl Entry {
         unsafe { determine_type_and_access_rights(&io::stdout()) }.map(|(file_type, rights)| Self {
             file_type,
             descriptor: Rc::new(RefCell::new(Descriptor::Stdout)),
-            rights: RefCell::new(rights),
+            rights: Cell::new(rights),
             preopen_path: None,
         })
     }
@@ -188,7 +188,7 @@ impl Entry {
         unsafe { determine_type_and_access_rights(&io::stderr()) }.map(|(file_type, rights)| Self {
             file_type,
             descriptor: Rc::new(RefCell::new(Descriptor::Stderr)),
-            rights: RefCell::new(rights),
+            rights: Cell::new(rights),
             preopen_path: None,
         })
     }
@@ -215,13 +215,13 @@ impl Entry {
     ///
     /// Upon unsuccessful check, `Errno::Notcapable` is returned.
     pub(crate) fn validate_rights(&self, rights: &EntryRights) -> Result<()> {
-        if self.rights.borrow().contains(rights) {
+        if self.rights.get().contains(rights) {
             Ok(())
         } else {
             log::trace!(
                 "     | validate_rights failed: required rights = {}; actual rights = {}",
                 rights,
-                self.rights.borrow(),
+                self.rights.get(),
             );
             Err(Errno::Notcapable)
         }
@@ -234,7 +234,7 @@ impl Entry {
         self.file_type == Filetype::CharacterDevice
             && self
                 .rights
-                .borrow()
+                .get()
                 .contains(&EntryRights::from_base(Rights::FD_SEEK | Rights::FD_TELL))
     }
 }

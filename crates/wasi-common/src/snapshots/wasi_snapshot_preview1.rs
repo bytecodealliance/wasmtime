@@ -202,10 +202,11 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             Descriptor::VirtualFile(virt) => virt.fdstat_get(),
             other => fd::fdstat_get(&other.as_os_handle())?,
         };
+        let rights = fe.rights.get();
         let fdstat = types::Fdstat {
             fs_filetype: fe.file_type,
-            fs_rights_base: fe.rights.borrow().base,
-            fs_rights_inheriting: fe.rights.borrow().inheriting,
+            fs_rights_base: rights.base,
+            fs_rights_inheriting: rights.inheriting,
             fs_flags,
         };
 
@@ -252,10 +253,10 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         );
         let rights = EntryRights::new(fs_rights_base, fs_rights_inheriting);
         let entry = self.get_entry(fd)?;
-        if !entry.rights.borrow().contains(&rights) {
+        if !entry.rights.get().contains(&rights) {
             return Err(Errno::Notcapable);
         }
-        *entry.rights.borrow_mut() = rights;
+        entry.rights.set(rights);
         Ok(())
     }
 
@@ -896,8 +897,10 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let fe = Entry::from(fd)?;
         // We need to manually deny the rights which are not explicitly requested
         // because Entry::from will assign maximal consistent rights.
-        fe.rights.borrow_mut().base &= fs_rights_base;
-        fe.rights.borrow_mut().inheriting &= fs_rights_inheriting;
+        let mut rights = fe.rights.get();
+        rights.base &= fs_rights_base;
+        rights.inheriting &= fs_rights_inheriting;
+        fe.rights.set(rights);
         let guest_fd = self.insert_entry(fe)?;
 
         trace!("     | *fd={:?}", guest_fd);
