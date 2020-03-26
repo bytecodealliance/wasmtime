@@ -368,16 +368,14 @@ impl wasm_func_t {
     }
 }
 
-pub type wasm_func_callback_t = std::option::Option<
-    unsafe extern "C" fn(args: *const wasm_val_t, results: *mut wasm_val_t) -> *mut wasm_trap_t,
->;
-pub type wasm_func_callback_with_env_t = std::option::Option<
-    unsafe extern "C" fn(
-        env: *mut std::ffi::c_void,
-        args: *const wasm_val_t,
-        results: *mut wasm_val_t,
-    ) -> *mut wasm_trap_t,
->;
+pub type wasm_func_callback_t =
+    unsafe extern "C" fn(args: *const wasm_val_t, results: *mut wasm_val_t) -> *mut wasm_trap_t;
+
+pub type wasm_func_callback_with_env_t = unsafe extern "C" fn(
+    env: *mut std::ffi::c_void,
+    args: *const wasm_val_t,
+    results: *mut wasm_val_t,
+) -> *mut wasm_trap_t;
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -622,22 +620,36 @@ impl wasm_val_t {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn wasm_func_new(
+enum Callback {
+    Wasm(wasm_func_callback_t),
+    Wasmtime(crate::ext::wasmtime_func_callback_t),
+}
+
+enum CallbackWithEnv {
+    Wasm(wasm_func_callback_with_env_t),
+    Wasmtime(crate::ext::wasmtime_func_callback_with_env_t),
+}
+
+unsafe fn create_function(
     store: *mut wasm_store_t,
     ty: *const wasm_functype_t,
-    callback: wasm_func_callback_t,
+    callback: Callback,
 ) -> *mut wasm_func_t {
     let store = &(*store).store.borrow();
     let ty = (*ty).functype.clone();
-    let func = Func::new(store, ty, move |_, params, results| {
+    let func = Func::new(store, ty, move |caller, params, results| {
         let params = params
             .iter()
             .map(|p| wasm_val_t::from_val(p))
             .collect::<Vec<_>>();
         let mut out_results = vec![wasm_val_t::default(); results.len()];
-        let func = callback.expect("wasm_func_callback_t fn");
-        let out = func(params.as_ptr(), out_results.as_mut_ptr());
+        let out = match callback {
+            Callback::Wasm(callback) => callback(params.as_ptr(), out_results.as_mut_ptr()),
+            Callback::Wasmtime(callback) => {
+                let caller = crate::ext::wasmtime_caller_t { inner: caller };
+                callback(&caller, params.as_ptr(), out_results.as_mut_ptr())
+            }
+        };
         if !out.is_null() {
             let trap: Box<wasm_trap_t> = Box::from_raw(out);
             return Err(trap.trap.borrow().clone());
@@ -653,6 +665,74 @@ pub unsafe extern "C" fn wasm_func_new(
         },
     });
     Box::into_raw(func)
+}
+
+unsafe fn create_function_with_env(
+    store: *mut wasm_store_t,
+    ty: *const wasm_functype_t,
+    callback: CallbackWithEnv,
+    env: *mut std::ffi::c_void,
+    finalizer: Option<unsafe extern "C" fn(arg1: *mut std::ffi::c_void)>,
+) -> *mut wasm_func_t {
+    let store = &(*store).store.borrow();
+    let ty = (*ty).functype.clone();
+
+    // Create a small object which will run the finalizer when it's dropped, and
+    // then we move this `run_finalizer` object into the closure below (via the
+    // `drop(&run_finalizer)` statement so it's all dropped when the closure is
+    // dropped.
+    struct RunOnDrop<F: FnMut()>(F);
+    impl<F: FnMut()> Drop for RunOnDrop<F> {
+        fn drop(&mut self) {
+            (self.0)();
+        }
+    }
+    let run_finalizer = RunOnDrop(move || {
+        if let Some(finalizer) = finalizer {
+            finalizer(env);
+        }
+    });
+    let func = Func::new(store, ty, move |caller, params, results| {
+        drop(&run_finalizer);
+        let params = params
+            .iter()
+            .map(|p| wasm_val_t::from_val(p))
+            .collect::<Vec<_>>();
+        let mut out_results = vec![wasm_val_t::default(); results.len()];
+        let out = match callback {
+            CallbackWithEnv::Wasm(callback) => {
+                callback(env, params.as_ptr(), out_results.as_mut_ptr())
+            }
+            CallbackWithEnv::Wasmtime(callback) => {
+                let caller = crate::ext::wasmtime_caller_t { inner: caller };
+                callback(&caller, env, params.as_ptr(), out_results.as_mut_ptr())
+            }
+        };
+        if !out.is_null() {
+            let trap: Box<wasm_trap_t> = Box::from_raw(out);
+            return Err(trap.trap.borrow().clone());
+        }
+        for i in 0..results.len() {
+            results[i] = out_results[i].val();
+        }
+        Ok(())
+    });
+
+    let func = Box::new(wasm_func_t {
+        ext: wasm_extern_t {
+            which: ExternHost::Func(HostRef::new(func)),
+        },
+    });
+    Box::into_raw(func)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasm_func_new(
+    store: *mut wasm_store_t,
+    ty: *const wasm_functype_t,
+    callback: wasm_func_callback_t,
+) -> *mut wasm_func_t {
+    create_function(store, ty, Callback::Wasm(callback))
 }
 
 #[no_mangle]
@@ -896,49 +976,7 @@ pub unsafe extern "C" fn wasm_func_new_with_env(
     env: *mut std::ffi::c_void,
     finalizer: Option<unsafe extern "C" fn(arg1: *mut std::ffi::c_void)>,
 ) -> *mut wasm_func_t {
-    let store = &(*store).store.borrow();
-    let ty = (*ty).functype.clone();
-
-    // Create a small object which will run the finalizer when it's dropped, and
-    // then we move this `run_finalizer` object into the closure below (via the
-    // `drop(&run_finalizer)` statement so it's all dropped when the closure is
-    // dropped.
-    struct RunOnDrop<F: FnMut()>(F);
-    impl<F: FnMut()> Drop for RunOnDrop<F> {
-        fn drop(&mut self) {
-            (self.0)();
-        }
-    }
-    let run_finalizer = RunOnDrop(move || {
-        if let Some(finalizer) = finalizer {
-            finalizer(env);
-        }
-    });
-    let func = Func::new(store, ty, move |_, params, results| {
-        drop(&run_finalizer);
-        let params = params
-            .iter()
-            .map(|p| wasm_val_t::from_val(p))
-            .collect::<Vec<_>>();
-        let mut out_results = vec![wasm_val_t::default(); results.len()];
-        let func = callback.expect("wasm_func_callback_with_env_t fn");
-        let out = func(env, params.as_ptr(), out_results.as_mut_ptr());
-        if !out.is_null() {
-            let trap: Box<wasm_trap_t> = Box::from_raw(out);
-            return Err(trap.trap.borrow().clone());
-        }
-        for i in 0..results.len() {
-            results[i] = out_results[i].val();
-        }
-        Ok(())
-    });
-
-    let func = Box::new(wasm_func_t {
-        ext: wasm_extern_t {
-            which: ExternHost::Func(HostRef::new(func)),
-        },
-    });
-    Box::into_raw(func)
+    create_function_with_env(store, ty, CallbackWithEnv::Wasm(callback), env, finalizer)
 }
 
 #[no_mangle]

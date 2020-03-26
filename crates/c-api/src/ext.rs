@@ -109,7 +109,6 @@ pub unsafe extern "C" fn wasmtime_config_profiler_set(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_wat2wasm(
-    _engine: *mut wasm_engine_t,
     wat: *const wasm_byte_vec_t,
     ret: *mut wasm_byte_vec_t,
     error: *mut wasm_byte_vec_t,
@@ -150,6 +149,14 @@ pub unsafe extern "C" fn wasmtime_linker_new(store: *mut wasm_store_t) -> *mut w
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn wasmtime_linker_allow_shadowing(
+    linker: *mut wasmtime_linker_t,
+    allow_shadowing: bool,
+) {
+    (*linker).linker.allow_shadowing(allow_shadowing);
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn wasmtime_linker_delete(linker: *mut wasmtime_linker_t) {
     drop(Box::from_raw(linker));
 }
@@ -185,7 +192,7 @@ pub unsafe extern "C" fn wasmtime_linker_define_wasi(
     instance: *const wasi_instance_t,
 ) -> bool {
     let linker = &mut (*linker).linker;
-    (*instance).wasi.add_to_linker(linker).is_ok()
+    (*instance).add_to_linker(linker).is_ok()
 }
 
 #[no_mangle]
@@ -212,4 +219,68 @@ pub unsafe extern "C" fn wasmtime_linker_instantiate(
 ) -> *mut wasm_instance_t {
     let linker = &(*linker).linker;
     handle_instantiate(linker.instantiate(&(*module).module.borrow()), trap)
+}
+
+pub type wasmtime_func_callback_t = unsafe extern "C" fn(
+    caller: *const wasmtime_caller_t,
+    args: *const wasm_val_t,
+    results: *mut wasm_val_t,
+) -> *mut wasm_trap_t;
+
+pub type wasmtime_func_callback_with_env_t = unsafe extern "C" fn(
+    caller: *const wasmtime_caller_t,
+    env: *mut std::ffi::c_void,
+    args: *const wasm_val_t,
+    results: *mut wasm_val_t,
+) -> *mut wasm_trap_t;
+
+#[repr(C)]
+pub struct wasmtime_caller_t<'a> {
+    pub inner: wasmtime::Caller<'a>,
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_func_new(
+    store: *mut wasm_store_t,
+    ty: *const wasm_functype_t,
+    callback: wasmtime_func_callback_t,
+) -> *mut wasm_func_t {
+    crate::create_function(store, ty, crate::Callback::Wasmtime(callback))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_func_new_with_env(
+    store: *mut wasm_store_t,
+    ty: *const wasm_functype_t,
+    callback: wasmtime_func_callback_with_env_t,
+    env: *mut std::ffi::c_void,
+    finalizer: Option<unsafe extern "C" fn(arg1: *mut std::ffi::c_void)>,
+) -> *mut wasm_func_t {
+    crate::create_function_with_env(
+        store,
+        ty,
+        crate::CallbackWithEnv::Wasmtime(callback),
+        env,
+        finalizer,
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_caller_export_get(
+    caller: *const wasmtime_caller_t,
+    name: *const wasm_name_t,
+) -> *mut wasm_extern_t {
+    let name = match str::from_utf8((*name).as_slice()) {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    match (*caller).inner.get_export(name).map(|e| match e {
+        Extern::Func(f) => ExternHost::Func(HostRef::new(f.clone())),
+        Extern::Global(g) => ExternHost::Global(HostRef::new(g.clone())),
+        Extern::Memory(m) => ExternHost::Memory(HostRef::new(m.clone())),
+        Extern::Table(t) => ExternHost::Table(HostRef::new(t.clone())),
+    }) {
+        Some(export) => Box::into_raw(Box::new(wasm_extern_t { which: export })),
+        None => std::ptr::null_mut(),
+    }
 }

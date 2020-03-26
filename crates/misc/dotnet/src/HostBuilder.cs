@@ -43,23 +43,16 @@ namespace Wasmtime
     }
 
     /// <summary>
-    /// Represents a builder of <see cref="Engine"/> instances.
+    /// Represents a builder of <see cref="Host"/> instances.
     /// </summary>
-    public class EngineBuilder
+    public class HostBuilder
     {
-        /// <summary>
-        /// Constructs a new <see cref="EngineBuilder" />.
-        /// </summary>
-        public EngineBuilder()
-        {
-        }
-
         /// <summary>
         /// Sets whether or not to enable debug information.
         /// </summary>
         /// <param name="enable">True to enable debug information or false to disable.</param>
         /// <returns>Returns the current builder.</returns>
-        public EngineBuilder WithDebugInfo(bool enable)
+        public HostBuilder WithDebugInfo(bool enable)
         {
             _enableDebugInfo = enable;
             return this;
@@ -70,7 +63,7 @@ namespace Wasmtime
         /// </summary>
         /// <param name="enable">True to enable WebAssembly threads support or false to disable.</param>
         /// <returns>Returns the current builder.</returns>
-        public EngineBuilder WithWasmThreads(bool enable)
+        public HostBuilder WithWasmThreads(bool enable)
         {
             _enableWasmThreads = enable;
             return this;
@@ -81,7 +74,7 @@ namespace Wasmtime
         /// </summary>
         /// <param name="enable">True to enable WebAssembly reference types support or false to disable.</param>
         /// <returns>Returns the current builder.</returns>
-        public EngineBuilder WithReferenceTypes(bool enable)
+        public HostBuilder WithReferenceTypes(bool enable)
         {
             _enableReferenceTypes = enable;
             return this;
@@ -92,7 +85,7 @@ namespace Wasmtime
         /// </summary>
         /// <param name="enable">True to enable WebAssembly SIMD support or false to disable.</param>
         /// <returns>Returns the current builder.</returns>
-        public EngineBuilder WithSIMD(bool enable)
+        public HostBuilder WithSIMD(bool enable)
         {
             _enableSIMD = enable;
             return this;
@@ -103,7 +96,7 @@ namespace Wasmtime
         /// </summary>
         /// <param name="enable">True to enable WebAssembly multi-value support or false to disable.</param>
         /// <returns>Returns the current builder.</returns>
-        public EngineBuilder WithMultiValue(bool enable)
+        public HostBuilder WithMultiValue(bool enable)
         {
             _enableMultiValue = enable;
             return this;
@@ -114,7 +107,7 @@ namespace Wasmtime
         /// </summary>
         /// <param name="enable">True to enable WebAssembly bulk memory support or false to disable.</param>
         /// <returns>Returns the current builder.</returns>
-        public EngineBuilder WithBulkMemory(bool enable)
+        public HostBuilder WithBulkMemory(bool enable)
         {
             _enableBulkMemory = enable;
             return this;
@@ -125,7 +118,7 @@ namespace Wasmtime
         /// </summary>
         /// <param name="strategy">The compiler strategy to use.</param>
         /// <returns>Returns the current builder.</returns>
-        public EngineBuilder WithCompilerStrategy(CompilerStrategy strategy)
+        public HostBuilder WithCompilerStrategy(CompilerStrategy strategy)
         {
             switch (strategy)
             {
@@ -152,7 +145,7 @@ namespace Wasmtime
         /// </summary>
         /// <param name="enable">True to enable the Cranelift debug verifier or false to disable.</param>
         /// <returns>Returns the current builder.</returns>
-        public EngineBuilder WithCraneliftDebugVerifier(bool enable)
+        public HostBuilder WithCraneliftDebugVerifier(bool enable)
         {
             _enableCraneliftDebugVerifier = enable;
             return this;
@@ -163,7 +156,7 @@ namespace Wasmtime
         /// </summary>
         /// <param name="level">The optimization level to use.</param>
         /// <returns>Returns the current builder.</returns>
-        public EngineBuilder WithOptimizationLevel(OptimizationLevel level)
+        public HostBuilder WithOptimizationLevel(OptimizationLevel level)
         {
             switch (level)
             {
@@ -186,10 +179,10 @@ namespace Wasmtime
         }
 
         /// <summary>
-        /// Builds the <see cref="Engine" /> instance.
+        /// Builds the <see cref="Host" /> instance.
         /// </summary>
-        /// <returns>Returns the new <see cref="Engine" /> instance.</returns>
-        public Engine Build()
+        /// <returns>Returns the new <see cref="Host" /> instance.</returns>
+        public Host Build()
         {
             var config = Interop.wasm_config_new();
 
@@ -238,7 +231,7 @@ namespace Wasmtime
                 Interop.wasmtime_config_cranelift_opt_level_set(config, _optLevel.Value);
             }
 
-            return new Engine(config);
+            return new Host(config);
         }
 
         private bool? _enableDebugInfo;

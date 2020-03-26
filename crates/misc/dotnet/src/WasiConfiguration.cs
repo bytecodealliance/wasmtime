@@ -5,23 +5,16 @@ using System.Linq;
 namespace Wasmtime
 {
     /// <summary>
-    /// Represents a builder of <see cref="Wasi"/> instances.
+    /// Represents a WASI configuration.
     /// </summary>
-    public class WasiBuilder
+    public class WasiConfiguration
     {
         /// <summary>
-        /// Constructs a new <see cref="WasiBuilder" />.
-        /// </summary>
-        public WasiBuilder()
-        {
-        }
-
-        /// <summary>
-        /// Adds a command line argument to the builder.
+        /// Adds a command line argument to the configuration.
         /// </summary>
         /// <param name="arg">The command line argument to add.</param>
-        /// <returns>Returns the current builder.</returns>
-        public WasiBuilder WithArg(string arg)
+        /// <returns>Returns the current configuration.</returns>
+        public WasiConfiguration WithArg(string arg)
         {
             if (arg is null)
             {
@@ -39,11 +32,11 @@ namespace Wasmtime
         }
 
         /// <summary>
-        /// Adds multiple command line arguments to the builder.
+        /// Adds multiple command line arguments to the configuration.
         /// </summary>
         /// <param name="args">The command line arguments to add.</param>
-        /// <returns>Returns the current builder.</returns>
-        public WasiBuilder WithArgs(IEnumerable<string> args)
+        /// <returns>Returns the current configuration.</returns>
+        public WasiConfiguration WithArgs(IEnumerable<string> args)
         {
             if (args is null)
             {
@@ -64,21 +57,21 @@ namespace Wasmtime
         }
 
         /// <summary>
-        /// Adds multiple command line arguments to the builder.
+        /// Adds multiple command line arguments to the configuration.
         /// </summary>
         /// <param name="args">The command line arguments to add.</param>
-        /// <returns>Returns the current builder.</returns>
-        public WasiBuilder WithArgs(params string[] args)
+        /// <returns>Returns the current configuration.</returns>
+        public WasiConfiguration WithArgs(params string[] args)
         {
             return WithArgs((IEnumerable<string>)args);
         }
 
         /// <summary>
-        /// Sets the builder to inherit command line arguments.
+        /// Sets the configuration to inherit command line arguments.
         /// </summary>
         /// <remarks>Any explicitly specified command line arguments will be removed.</remarks>
-        /// <returns>Returns the current builder.</returns>
-        public WasiBuilder WithInheritedArgs()
+        /// <returns>Returns the current configuration.</returns>
+        public WasiConfiguration WithInheritedArgs()
         {
             _inheritArgs = true;
             _args.Clear();
@@ -87,12 +80,12 @@ namespace Wasmtime
         }
 
         /// <summary>
-        /// Adds an environment variable to the builder.
+        /// Adds an environment variable to the configuration.
         /// </summary>
         /// <param name="name">The name of the environment variable.</param>
         /// <param name="value">The value of the environment variable.</param>
-        /// <returns>Returns the current builder.</returns>
-        public WasiBuilder WithEnvironmentVariable(string name, string value)
+        /// <returns>Returns the current configuration.</returns>
+        public WasiConfiguration WithEnvironmentVariable(string name, string value)
         {
             if (name is null)
             {
@@ -114,11 +107,11 @@ namespace Wasmtime
         }
 
         /// <summary>
-        /// Adds multiple environment variables to the builder.
+        /// Adds multiple environment variables to the configuration.
         /// </summary>
         /// <param name="vars">The name-value tuples of the environment variables to add.</param>
-        /// <returns>Returns the current builder.</returns>
-        public WasiBuilder WithEnvironmentVariables(IEnumerable<(string,string)> vars)
+        /// <returns>Returns the current configuration.</returns>
+        public WasiConfiguration WithEnvironmentVariables(IEnumerable<(string,string)> vars)
         {
             if (vars is null)
             {
@@ -136,11 +129,11 @@ namespace Wasmtime
         }
 
         /// <summary>
-        /// Sets the builder to inherit environment variables.
+        /// Sets the configuration to inherit environment variables.
         /// </summary>
         /// <remarks>Any explicitly specified environment variables will be removed.</remarks>
-        /// <returns>Returns the current builder.</returns>
-        public WasiBuilder WithInheritedEnvironment()
+        /// <returns>Returns the current configuration.</returns>
+        public WasiConfiguration WithInheritedEnvironment()
         {
             _inheritEnv = true;
             _vars.Clear();
@@ -148,11 +141,11 @@ namespace Wasmtime
         }
 
         /// <summary>
-        /// Sets the builder to use the given file path as stdin.
+        /// Sets the configuration to use the given file path as stdin.
         /// </summary>
         /// <param name="path">The file to use as stdin.</param>
-        /// <returns>Returns the current builder.</returns>
-        public WasiBuilder WithStandardInput(string path)
+        /// <returns>Returns the current configuration.</returns>
+        public WasiConfiguration WithStandardInput(string path)
         {
             if (string.IsNullOrEmpty(path))
             {
@@ -165,11 +158,11 @@ namespace Wasmtime
         }
 
         /// <summary>
-        /// Sets the builder to inherit stdin.
+        /// Sets the configuration to inherit stdin.
         /// </summary>
         /// <remarks>Any explicitly specified stdin file will be removed.</remarks>
-        /// <returns>Returns the current builder.</returns>
-        public WasiBuilder WithInheritedStandardInput()
+        /// <returns>Returns the current configuration.</returns>
+        public WasiConfiguration WithInheritedStandardInput()
         {
             _inheritStandardInput = true;
             _standardInputPath = null;
@@ -177,11 +170,11 @@ namespace Wasmtime
         }
 
         /// <summary>
-        /// Sets the builder to use the given file path as stdout.
+        /// Sets the configuration to use the given file path as stdout.
         /// </summary>
         /// <param name="path">The file to use as stdout.</param>
-        /// <returns>Returns the current builder.</returns>
-        public WasiBuilder WithStandardOutput(string path)
+        /// <returns>Returns the current configuration.</returns>
+        public WasiConfiguration WithStandardOutput(string path)
         {
             if (string.IsNullOrEmpty(path))
             {
@@ -194,11 +187,11 @@ namespace Wasmtime
         }
 
         /// <summary>
-        /// Sets the builder to inherit stdout.
+        /// Sets the configuration to inherit stdout.
         /// </summary>
         /// <remarks>Any explicitly specified stdout file will be removed.</remarks>
-        /// <returns>Returns the current builder.</returns>
-        public WasiBuilder WithInheritedStandardOutput()
+        /// <returns>Returns the current configuration.</returns>
+        public WasiConfiguration WithInheritedStandardOutput()
         {
             _inheritStandardOutput = true;
             _standardOutputPath = null;
@@ -206,11 +199,11 @@ namespace Wasmtime
         }
 
         /// <summary>
-        /// Sets the builder to use the given file path as stderr.
+        /// Sets the configuration to use the given file path as stderr.
         /// </summary>
         /// <param name="path">The file to use as stderr.</param>
-        /// <returns>Returns the current builder.</returns>
-        public WasiBuilder WithStandardError(string path)
+        /// <returns>Returns the current configuration.</returns>
+        public WasiConfiguration WithStandardError(string path)
         {
             if (string.IsNullOrEmpty(path))
             {
@@ -223,11 +216,11 @@ namespace Wasmtime
         }
 
         /// <summary>
-        /// Sets the builder to inherit stderr.
+        /// Sets the configuration to inherit stderr.
         /// </summary>
         /// <remarks>Any explicitly specified stderr file will be removed.</remarks>
-        /// <returns>Returns the current builder.</returns>
-        public WasiBuilder WithInheritedStandardError()
+        /// <returns>Returns the current configuration.</returns>
+        public WasiConfiguration WithInheritedStandardError()
         {
             _inheritStandardError = true;
             _standardErrorPath = null;
@@ -235,12 +228,12 @@ namespace Wasmtime
         }
 
         /// <summary>
-        /// Adds a preopen directory to the builder.
+        /// Adds a preopen directory to the configuration.
         /// </summary>
         /// <param name="path">The path to the directory to add.</param>
         /// <param name="guestPath">The path the guest will use to open the directory.</param>
-        /// <returns>Returns the current builder.</returns>
-        public WasiBuilder WithPreopenedDirectory(string path, string guestPath)
+        /// <returns>Returns the current configuration.</returns>
+        public WasiConfiguration WithPreopenedDirectory(string path, string guestPath)
         {
             if (string.IsNullOrEmpty(path))
             {
@@ -255,12 +248,7 @@ namespace Wasmtime
             return this;
         }
 
-        /// <summary>
-        /// Builds the <see cref="Wasi" /> instance.
-        /// </summary>
-        /// <param name="store">The <see cref="Store" /> to use.</param>
-        /// <returns>Returns the new <see cref="Wasi" /> instance.</returns>
-        public Wasi Build(Store store)
+        internal Interop.WasiInstanceHandle CreateWasi(Interop.StoreHandle store, string name)
         {
             var config = Interop.wasi_config_new();
 
@@ -270,8 +258,22 @@ namespace Wasmtime
             SetStandardOut(config);
             SetStandardError(config);
             SetPreopenDirectories(config);
-            
-            return new Wasi(store.Handle, config);
+
+            IntPtr trap;
+            var wasi = Interop.wasi_instance_new(store, name, config, out trap);
+            config.SetHandleAsInvalid();
+
+            if (trap != IntPtr.Zero)
+            {
+                throw TrapException.FromOwnedTrap(trap);
+            }
+
+            if (wasi.IsInvalid)
+            {
+                throw new WasmtimeException($"Failed to create instance for WASI module '{name}'.");
+            }
+
+            return wasi;
         }
 
         private unsafe void SetConfigArgs(Interop.WasiConfigHandle config)

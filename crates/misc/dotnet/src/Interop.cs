@@ -64,8 +64,6 @@ namespace Wasmtime
             {
             }
 
-            public WasmFuncCallback Callback { get; set; } = null;
-
             public override bool IsInvalid => handle == IntPtr.Zero;
 
             protected override bool ReleaseHandle()
@@ -236,6 +234,36 @@ namespace Wasmtime
 
             protected override bool ReleaseHandle()
             {
+                return true;
+            }
+        }
+
+        internal class LinkerHandle : SafeHandle
+        {
+            public LinkerHandle() : base(IntPtr.Zero, true)
+            {
+            }
+
+            public override bool IsInvalid => handle == IntPtr.Zero;
+
+            protected override bool ReleaseHandle()
+            {
+                Interop.wasmtime_linker_delete(handle);
+                return true;
+            }
+        }
+
+        internal class ExternHandle : SafeHandle
+        {
+            public ExternHandle() : base(IntPtr.Zero, true)
+            {
+            }
+
+            public override bool IsInvalid => handle == IntPtr.Zero;
+
+            protected override bool ReleaseHandle()
+            {
+                Interop.wasm_extern_delete(handle);
                 return true;
             }
         }
@@ -474,6 +502,8 @@ namespace Wasmtime
 
         internal unsafe delegate IntPtr WasmFuncCallback(wasm_val_t* parameters, wasm_val_t* results);
 
+        internal unsafe delegate IntPtr WasmtimeFuncCallback(IntPtr caller, wasm_val_t* parameters, wasm_val_t* results);
+
         internal enum wasm_externkind_t : byte
         {
             WASM_EXTERN_FUNC,
@@ -706,6 +736,11 @@ namespace Wasmtime
         [DllImport(LibraryName)]
         public static extern IntPtr wasm_extern_as_memory(IntPtr ext);
 
+        // Externs
+
+        [DllImport(LibraryName)]
+        public static extern void wasm_extern_delete(IntPtr ext);
+
         // Extern type imports
 
         [DllImport(LibraryName)]
@@ -936,6 +971,7 @@ namespace Wasmtime
         [DllImport(LibraryName)]
         public static extern WasiInstanceHandle wasi_instance_new(
             StoreHandle store,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string name,
             WasiConfigHandle config,
             out IntPtr trap
         );
@@ -975,13 +1011,44 @@ namespace Wasmtime
         [DllImport(LibraryName)]
         public static extern void wasmtime_config_cranelift_opt_level_set(WasmConfigHandle config, wasmtime_opt_level_t level);
 
+        // Utility functions
+
         [DllImport(LibraryName, CharSet=CharSet.Ansi)]
         [return: MarshalAs(UnmanagedType.I1)]
-        public static extern bool wasmtime_wat2wasm(
-            EngineHandle engine,
-            ref wasm_byte_vec_t wat,
-            out wasm_byte_vec_t vec,
-            out wasm_byte_vec_t error_message
-        );
+        public static extern bool wasmtime_wat2wasm(ref wasm_byte_vec_t text, out wasm_byte_vec_t bytes, out wasm_byte_vec_t error);
+
+        // Linking functions
+
+        [DllImport(LibraryName)]
+        public static extern LinkerHandle wasmtime_linker_new(StoreHandle store);
+
+        [DllImport(LibraryName)]
+        public static extern void wasmtime_linker_allow_shadowing(LinkerHandle linker, [MarshalAs(UnmanagedType.I1)] bool allowShadowing);
+
+        [DllImport(LibraryName)]
+        public static extern void wasmtime_linker_delete(IntPtr linker);
+
+        [DllImport(LibraryName)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        public static extern bool wasmtime_linker_define(LinkerHandle linker, ref wasm_byte_vec_t module, ref wasm_byte_vec_t name, IntPtr externType);
+
+        [DllImport(LibraryName)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        public static extern bool wasmtime_linker_define_wasi(LinkerHandle linker, WasiInstanceHandle wasi);
+
+        [DllImport(LibraryName)]
+        [return: MarshalAs(UnmanagedType.I1)]
+        public static extern bool wasmtime_linker_define_instance(LinkerHandle linker, ref wasm_byte_vec_t name, InstanceHandle instance);
+
+        [DllImport(LibraryName)]
+        public static extern InstanceHandle wasmtime_linker_instantiate(LinkerHandle linker, ModuleHandle module, out IntPtr trap);
+
+        // Caller functions
+
+        [DllImport(LibraryName)]
+        public static extern FunctionHandle wasmtime_func_new(StoreHandle store, FuncTypeHandle type, WasmtimeFuncCallback callback);
+
+        [DllImport(LibraryName)]
+        public static extern ExternHandle wasmtime_caller_export_get(IntPtr caller, ref wasm_byte_vec_t name);
    }
 }

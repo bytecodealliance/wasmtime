@@ -7,25 +7,26 @@ using Xunit;
 
 namespace Wasmtime.Tests
 {
-    public class WasiFixture : ModuleFixture
+    public class WasiSnapshot0Fixture : ModuleFixture
     {
-        protected override string ModuleFileName => "Wasi.wat";
+        protected override string ModuleFileName => "WasiSnapshot0.wat";
     }
 
-    public class WasiTests : IClassFixture<WasiFixture>
+    public class WasiSnapshot0Tests : IClassFixture<WasiSnapshot0Fixture>
     {
-        public WasiTests(WasiFixture fixture)
+        public WasiSnapshot0Tests(WasiSnapshot0Fixture fixture)
         {
             Fixture = fixture;
+
+            Fixture.Host.ClearDefinitions();
         }
 
-        private WasiFixture Fixture { get; set; }
+        private WasiSnapshot0Fixture Fixture { get; set; }
 
         [Fact]
         public void ItHasNoEnvironmentByDefault()
         {
-            Fixture.Host.DefineWasi("wasi_snapshot_preview1");
-
+            Fixture.Host.DefineWasi("wasi_unstable");
             using var instance = Fixture.Host.Instantiate(Fixture.Module);
             dynamic inst = instance;
 
@@ -48,7 +49,7 @@ namespace Wasmtime.Tests
             var config = new WasiConfiguration()
                 .WithEnvironmentVariables(env.Select(kvp => (kvp.Key, kvp.Value)));
 
-            Fixture.Host.DefineWasi("wasi_snapshot_preview1", config);
+            Fixture.Host.DefineWasi("wasi_unstable", config);
 
             using var instance = Fixture.Host.Instantiate(Fixture.Module);
             dynamic inst = instance;
@@ -73,7 +74,7 @@ namespace Wasmtime.Tests
             var config = new WasiConfiguration()
                 .WithInheritedEnvironment();
 
-            Fixture.Host.DefineWasi("wasi_snapshot_preview1", config);
+            Fixture.Host.DefineWasi("wasi_unstable", config);
 
             using var instance = Fixture.Host.Instantiate(Fixture.Module);
             dynamic inst = instance;
@@ -87,7 +88,7 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItHasNoArgumentsByDefault()
         {
-            Fixture.Host.DefineWasi("wasi_snapshot_preview1");
+            Fixture.Host.DefineWasi("wasi_unstable");
 
             using var instance = Fixture.Host.Instantiate(Fixture.Module);
             dynamic inst = instance;
@@ -112,7 +113,7 @@ namespace Wasmtime.Tests
             var config = new WasiConfiguration()
                 .WithArgs(args);
 
-            Fixture.Host.DefineWasi("wasi_snapshot_preview1", config);
+            Fixture.Host.DefineWasi("wasi_unstable", config);
 
             using var instance = Fixture.Host.Instantiate(Fixture.Module);
             dynamic inst = instance;
@@ -137,7 +138,7 @@ namespace Wasmtime.Tests
             var config = new WasiConfiguration()
                 .WithInheritedArgs();
 
-            Fixture.Host.DefineWasi("wasi_snapshot_preview1", config);
+            Fixture.Host.DefineWasi("wasi_unstable", config);
 
             using var instance = Fixture.Host.Instantiate(Fixture.Module);
             dynamic inst = instance;
@@ -159,7 +160,7 @@ namespace Wasmtime.Tests
             var config = new WasiConfiguration()
                 .WithStandardInput(file.Path);
 
-            Fixture.Host.DefineWasi("wasi_snapshot_preview1", config);
+            Fixture.Host.DefineWasi("wasi_unstable", config);
 
             using var instance = Fixture.Host.Instantiate(Fixture.Module);
             dynamic inst = instance;
@@ -192,7 +193,7 @@ namespace Wasmtime.Tests
                 config.WithStandardError(file.Path);
             }
 
-            Fixture.Host.DefineWasi("wasi_snapshot_preview1", config);
+            Fixture.Host.DefineWasi("wasi_unstable", config);
 
             using var instance = Fixture.Host.Instantiate(Fixture.Module);
             dynamic inst = instance;
@@ -218,7 +219,7 @@ namespace Wasmtime.Tests
             var config = new WasiConfiguration()
                 .WithPreopenedDirectory(Path.GetDirectoryName(file.Path), "/foo");
 
-            Fixture.Host.DefineWasi("wasi_snapshot_preview1", config);
+            Fixture.Host.DefineWasi("wasi_unstable", config);
 
             using var instance = Fixture.Host.Instantiate(Fixture.Module);
             dynamic inst = instance;
