@@ -357,6 +357,8 @@ pub struct TransformRangeIter<'a> {
     end_it: TransformRangeEndIter<'a>,
     last_start: Option<(GeneratedAddress, RangeIndex)>,
     last_end: Option<(GeneratedAddress, RangeIndex)>,
+    #[cfg(debug_assertions)]
+    last_item: Option<(GeneratedAddress, GeneratedAddress)>,
 }
 
 impl<'a> TransformRangeIter<'a> {
@@ -371,8 +373,22 @@ impl<'a> TransformRangeIter<'a> {
             end_it,
             last_start,
             last_end,
+            #[cfg(debug_assertions)]
+            last_item: None,
         }
     }
+
+    #[cfg(debug_assertions)]
+    fn ensure_order(&mut self, start: GeneratedAddress, end: GeneratedAddress) {
+        match self.last_item.replace((start, end)) {
+            Some((_, last_end)) => debug_assert!(last_end <= start),
+            None => (),
+        }
+    }
+
+    #[cfg(not(debug_assertions))]
+    #[inline(always)]
+    fn ensure_order(&mut self, _start: GeneratedAddress, _end: GeneratedAddress) {}
 }
 
 impl<'a> Iterator for TransformRangeIter<'a> {
@@ -409,9 +425,6 @@ impl<'a> Iterator for TransformRangeIter<'a> {
                 Some(range_start) => {
                     // Consume start iterator.
                     self.last_start = self.start_it.next();
-                    debug_assert!(
-                        self.last_start.is_none() || range_start < self.last_start.unwrap().0
-                    );
                     range_start
                 }
                 None => {
@@ -423,7 +436,6 @@ impl<'a> Iterator for TransformRangeIter<'a> {
                 Some(range_end) => {
                     // Consume end iterator.
                     self.last_end = self.end_it.next();
-                    debug_assert!(self.last_end.is_none() || range_end < self.last_end.unwrap().0);
                     range_end
                 }
                 None => {
@@ -431,6 +443,8 @@ impl<'a> Iterator for TransformRangeIter<'a> {
                     range.gen_end
                 }
             };
+
+            self.ensure_order(range_start, range_end);
 
             if range_start < range_end {
                 return Some((range_start, range_end));
