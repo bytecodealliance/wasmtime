@@ -1,9 +1,8 @@
-use crate::{wasm_byte_vec_t, wasm_engine_t};
+use crate::wasm_byte_vec_t;
 use std::str;
 
 #[no_mangle]
 pub extern "C" fn wasmtime_wat2wasm(
-    _engine: &mut wasm_engine_t,
     wat: &wasm_byte_vec_t,
     ret: &mut wasm_byte_vec_t,
     error: Option<&mut wasm_byte_vec_t>,
