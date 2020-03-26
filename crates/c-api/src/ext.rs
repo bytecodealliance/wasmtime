@@ -142,13 +142,18 @@ pub struct wasmtime_linker_t {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_linker_new(
-    store: *mut wasm_store_t,
+pub unsafe extern "C" fn wasmtime_linker_new(store: *mut wasm_store_t) -> *mut wasmtime_linker_t {
+    Box::into_raw(Box::new(wasmtime_linker_t {
+        linker: Linker::new(&(*store).store.borrow()),
+    }))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_linker_allow_shadowing(
+    linker: *mut wasmtime_linker_t,
     allow_shadowing: bool,
-) -> *mut wasmtime_linker_t {
-    let mut linker = Linker::new(&(*store).store.borrow());
-    linker.allow_shadowing(allow_shadowing);
-    Box::into_raw(Box::new(wasmtime_linker_t { linker }))
+) {
+    (*linker).linker.allow_shadowing(allow_shadowing);
 }
 
 #[no_mangle]

@@ -1020,7 +1020,10 @@ namespace Wasmtime
         // Linking functions
 
         [DllImport(LibraryName)]
-        public static extern LinkerHandle wasmtime_linker_new(StoreHandle store, [MarshalAs(UnmanagedType.I1)] bool allowShadowing);
+        public static extern LinkerHandle wasmtime_linker_new(StoreHandle store);
+
+        [DllImport(LibraryName)]
+        public static extern void wasmtime_linker_allow_shadowing(LinkerHandle linker, [MarshalAs(UnmanagedType.I1)] bool allowShadowing);
 
         [DllImport(LibraryName)]
         public static extern void wasmtime_linker_delete(IntPtr linker);

@@ -72,7 +72,9 @@ WASM_API_EXTERN bool wasmtime_wat2wasm(
 
 WASMTIME_DECLARE_OWN(linker)
 
-WASM_API_EXTERN own wasmtime_linker_t* wasmtime_linker_new(wasm_store_t* store, bool allow_shadowing);
+WASM_API_EXTERN own wasmtime_linker_t* wasmtime_linker_new(wasm_store_t* store);
+
+WASM_API_EXTERN void wasmtime_linker_allow_shadowing(wasmtime_linker_t* linker, bool allow_shadowing);
 
 WASM_API_EXTERN bool wasmtime_linker_define(
     wasmtime_linker_t *linker,

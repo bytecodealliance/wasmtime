@@ -668,11 +668,13 @@ namespace Wasmtime
         {
             CheckDisposed();
 
-            var linker = Interop.wasmtime_linker_new(Store, allowShadowing: true);
+            var linker = Interop.wasmtime_linker_new(Store);
             if (linker.IsInvalid)
             {
                 throw new WasmtimeException("Failed to create Wasmtime linker.");
             }
+
+            Interop.wasmtime_linker_allow_shadowing(linker, allowShadowing: true);
 
             Linker.Dispose();
             Linker = linker;
@@ -722,11 +724,13 @@ namespace Wasmtime
                 throw new WasmtimeException("Failed to create Wasmtime store.");
             }
 
-            var linker = Interop.wasmtime_linker_new(store, allowShadowing: true);
+            var linker = Interop.wasmtime_linker_new(store);
             if (linker.IsInvalid)
             {
                 throw new WasmtimeException("Failed to create Wasmtime linker.");
             }
+
+            Interop.wasmtime_linker_allow_shadowing(linker, allowShadowing: true);
 
             Engine = engine;
             Store = store;
