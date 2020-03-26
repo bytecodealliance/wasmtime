@@ -61,11 +61,10 @@ fn convert_sections<'a>(sections: HashMap<&str, &'a [u8]>) -> Result<Dwarf<'a>> 
         sections.get(".debug_line").unwrap_or(&EMPTY_SECTION),
         endian,
     );
-    let debug_addr = DebugAddr::from(
-        EndianSlice::new(
-	    sections.get(".debug_addr").unwrap_or(&EMPTY_SECTION),
-	    endian)
-    );
+    let debug_addr = DebugAddr::from(EndianSlice::new(
+        sections.get(".debug_addr").unwrap_or(&EMPTY_SECTION),
+        endian,
+    ));
 
     if sections.contains_key(".debug_line_str") {
         bail!("Unexpected .debug_line_str");
