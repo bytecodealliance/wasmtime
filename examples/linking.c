@@ -58,7 +58,7 @@ int main() {
   wasi_config_inherit_stdout(wasi_config);
   wasi_config_inherit_stderr(wasi_config);
   wasm_trap_t *trap = NULL;
-  wasi_instance_t *wasi = wasi_instance_new(store, wasi_config, &trap);
+  wasi_instance_t *wasi = wasi_instance_new(store, "wasi_snapshot_preview1", wasi_config, &trap);
   if (wasi == NULL) {
     print_trap(trap);
     exit(1);
