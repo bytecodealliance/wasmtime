@@ -27,10 +27,10 @@ for cargo_toml in \
     crates/wiggle/Cargo.toml \
     crates/wasi-common/Cargo.toml \
     crates/lightbeam/Cargo.toml \
-    crates/profiling/Cargo.toml \
     crates/environ/Cargo.toml \
     crates/obj/Cargo.toml \
     crates/runtime/Cargo.toml \
+    crates/profiling/Cargo.toml \
     crates/debug/Cargo.toml \
     crates/jit/Cargo.toml \
     crates/api/Cargo.toml \
