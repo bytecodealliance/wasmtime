@@ -71,8 +71,7 @@ pub fn transform_dwarf(
     let out_encoding = gimli::Encoding {
         format: gimli::Format::Dwarf32,
         // TODO: this should be configurable
-        // macOS doesn't seem to support DWARF > 3
-        version: 3,
+        version: 4,
         address_size: isa.pointer_bytes(),
     };
 
