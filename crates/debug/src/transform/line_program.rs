@@ -81,7 +81,7 @@ where
     );
     if let Ok(program) = program {
         let header = program.header();
-        assert_le!(header.version(), 4, "not supported 5");
+        assert_le!(header.version(), 5, "not supported 6");
         let line_encoding = LineEncoding {
             minimum_instruction_length: header.minimum_instruction_length(),
             maximum_operations_per_instruction: header.maximum_operations_per_instruction(),

@@ -252,6 +252,9 @@ where
                 pending_di_refs.insert(current_scope_id, attr.name(), offset);
                 continue;
             }
+            AttributeValue::DebugAddrBase(offset) => {
+                continue;
+            }
             a => bail!("Unexpected attribute: {:?}", a),
         };
         let current_scope = out_unit.get_mut(current_scope_id);

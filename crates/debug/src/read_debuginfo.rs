@@ -61,12 +61,11 @@ fn convert_sections<'a>(sections: HashMap<&str, &'a [u8]>) -> Result<Dwarf<'a>> 
         sections.get(".debug_line").unwrap_or(&EMPTY_SECTION),
         endian,
     );
-
-    if sections.contains_key(".debug_addr") {
-        bail!("Unexpected .debug_addr");
-    }
-
-    let debug_addr = DebugAddr::from(EndianSlice::new(EMPTY_SECTION, endian));
+    let debug_addr = DebugAddr::from(
+        EndianSlice::new(
+	    sections.get(".debug_addr").unwrap_or(&EMPTY_SECTION),
+	    endian)
+    );
 
     if sections.contains_key(".debug_line_str") {
         bail!("Unexpected .debug_line_str");
@@ -75,15 +74,14 @@ fn convert_sections<'a>(sections: HashMap<&str, &'a [u8]>) -> Result<Dwarf<'a>> 
     let debug_line_str = DebugLineStr::from(EndianSlice::new(EMPTY_SECTION, endian));
     let debug_str_sup = DebugStr::from(EndianSlice::new(EMPTY_SECTION, endian));
 
-    if sections.contains_key(".debug_rnglists") {
-        bail!("Unexpected .debug_rnglists");
-    }
-
     let debug_ranges = match sections.get(".debug_ranges") {
         Some(section) => DebugRanges::new(section, endian),
         None => DebugRanges::new(EMPTY_SECTION, endian),
     };
-    let debug_rnglists = DebugRngLists::new(EMPTY_SECTION, endian);
+    let debug_rnglists = match sections.get(".debug_rnglists") {
+        Some(section) => DebugRngLists::new(section, endian),
+        None => DebugRngLists::new(EMPTY_SECTION, endian),
+    };
     let ranges = RangeLists::new(debug_ranges, debug_rnglists);
 
     if sections.contains_key(".debug_loclists") {
