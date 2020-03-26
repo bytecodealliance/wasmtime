@@ -1,5 +1,5 @@
 use crate::{wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t};
-use crate::{ExternHost, wasm_name_t, wasm_trap_t};
+use crate::{wasm_name_t, wasm_trap_t, ExternHost};
 use std::ffi::c_void;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
