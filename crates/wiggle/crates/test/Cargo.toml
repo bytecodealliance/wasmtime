@@ -1,6 +1,6 @@
 [package]
 name = "wiggle-test"
-version = "0.1.0"
+version = "0.13.0"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 license = "Apache-2.0 WITH LLVM-exception"
 edition = "2018"
@@ -11,7 +11,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 include = ["src/**/*", "LICENSE"]
 
 [dependencies]
-wiggle-runtime = { path = "../runtime", version = "0.1.0" }
+wiggle-runtime = { path = "../runtime", version = "0.13.0" }
 proptest = "0.9"
 
 [badges]

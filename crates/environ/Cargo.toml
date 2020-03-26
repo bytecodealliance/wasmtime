@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-environ"
-version = "0.12.0"
+version = "0.13.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Standalone environment support for WebAsssembly code in Cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -13,11 +13,11 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-cranelift-codegen = { path = "../../cranelift/codegen", version = "0.60.0", features = ["enable-serde"] }
-cranelift-entity = { path = "../../cranelift/entity", version = "0.60.0", features = ["enable-serde"] }
-cranelift-wasm = { path = "../../cranelift/wasm", version = "0.60.0", features = ["enable-serde"] }
+cranelift-codegen = { path = "../../cranelift/codegen", version = "0.61.0", features = ["enable-serde"] }
+cranelift-entity = { path = "../../cranelift/entity", version = "0.61.0", features = ["enable-serde"] }
+cranelift-wasm = { path = "../../cranelift/wasm", version = "0.61.0", features = ["enable-serde"] }
 wasmparser = "0.51.2"
-lightbeam = { path = "../lightbeam", optional = true, version = "0.12.0" }
+lightbeam = { path = "../lightbeam", optional = true, version = "0.13.0" }
 indexmap = "1.0.2"
 rayon = "1.2.1"
 thiserror = "1.0.4"
@@ -44,7 +44,7 @@ tempfile = "3"
 target-lexicon = { version = "0.10.0", default-features = false }
 pretty_env_logger = "0.4.0"
 rand = { version = "0.7.0", default-features = false, features = ["small_rng"] }
-cranelift-codegen = { path = "../../cranelift/codegen", version = "0.60.0", features = ["enable-serde", "all-arch"] }
+cranelift-codegen = { path = "../../cranelift/codegen", version = "0.61.0", features = ["enable-serde", "all-arch"] }
 filetime = "0.2.7"
 lazy_static = "1.3.0"
 

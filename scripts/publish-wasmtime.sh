@@ -35,6 +35,7 @@ for cargo_toml in \
     crates/misc/py/Cargo.toml \
     crates/misc/rust/macro/Cargo.toml \
     crates/misc/rust/Cargo.toml \
+    Cargo.toml \
 ; do
     version=""
     case $cargo_toml in
