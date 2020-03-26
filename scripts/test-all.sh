@@ -63,6 +63,7 @@ RUST_BACKTRACE=1 cargo test \
   --package wiggle \
   --package wiggle-generate \
   --package wiggle-test \
+  --package wiggle-macro \
   --package wasi-common \
 
 # Test wasmtime-wasi-c, which doesn't support Windows.
