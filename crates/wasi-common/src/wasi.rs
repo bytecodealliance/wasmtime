@@ -11,23 +11,23 @@ wiggle::from_witx!({
 pub use types::Errno;
 pub type Result<T> = std::result::Result<T, Errno>;
 
-impl<'a> wiggle_runtime::GuestErrorType<'a> for Errno {
+impl<'a> wiggle::GuestErrorType<'a> for Errno {
     type Context = WasiCtx;
 
     fn success() -> Self {
         Self::Success
     }
 
-    fn from_error(e: wiggle_runtime::GuestError, _ctx: &Self::Context) -> Self {
+    fn from_error(e: wiggle::GuestError, _ctx: &Self::Context) -> Self {
         eprintln!("Guest error: {:?}", e);
         // TODO proper error mapping
         Self::Inval
     }
 }
 
-impl From<wiggle_runtime::GuestError> for Errno {
-    fn from(err: wiggle_runtime::GuestError) -> Self {
-        use wiggle_runtime::GuestError::*;
+impl From<wiggle::GuestError> for Errno {
+    fn from(err: wiggle::GuestError) -> Self {
+        use wiggle::GuestError::*;
         match err {
             InvalidFlagValue { .. } => Self::Inval,
             InvalidEnumValue { .. } => Self::Inval,
@@ -83,7 +83,7 @@ pub(crate) trait AsBytes {
 impl AsBytes for types::Dirent {
     fn as_bytes(&self) -> Result<Vec<u8>> {
         use std::convert::TryInto;
-        use wiggle_runtime::GuestType;
+        use wiggle::GuestType;
 
         assert_eq!(
             Self::guest_size(),

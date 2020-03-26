@@ -11,8 +11,8 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 include = ["src/**/*", "LICENSE"]
 
 [dependencies]
-wiggle-runtime = { path = "../runtime", version = "0.13.0" }
 proptest = "0.9"
+wiggle = { path = "../..", version = "0.13.0" }
 
 [badges]
 maintenance = { status = "actively-developed" }

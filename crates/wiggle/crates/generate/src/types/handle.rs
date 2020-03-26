@@ -52,7 +52,7 @@ pub(super) fn define_handle(
             }
         }
 
-        impl<'a> wiggle_runtime::GuestType<'a> for #ident {
+        impl<'a> wiggle::GuestType<'a> for #ident {
             fn guest_size() -> u32 {
                 #size
             }
@@ -61,18 +61,18 @@ pub(super) fn define_handle(
                 #align
             }
 
-            fn read(location: &wiggle_runtime::GuestPtr<'a, #ident>) -> Result<#ident, wiggle_runtime::GuestError> {
+            fn read(location: &wiggle::GuestPtr<'a, #ident>) -> Result<#ident, wiggle::GuestError> {
                 Ok(#ident(u32::read(&location.cast())?))
             }
 
-            fn write(location: &wiggle_runtime::GuestPtr<'_, Self>, val: Self) -> Result<(), wiggle_runtime::GuestError> {
+            fn write(location: &wiggle::GuestPtr<'_, Self>, val: Self) -> Result<(), wiggle::GuestError> {
                 u32::write(&location.cast(), val.0)
             }
         }
 
-        unsafe impl<'a> wiggle_runtime::GuestTypeTransparent<'a> for #ident {
+        unsafe impl<'a> wiggle::GuestTypeTransparent<'a> for #ident {
             #[inline]
-            fn validate(_location: *mut #ident) -> Result<(), wiggle_runtime::GuestError> {
+            fn validate(_location: *mut #ident) -> Result<(), wiggle::GuestError> {
                 // All bit patterns accepted
                 Ok(())
             }

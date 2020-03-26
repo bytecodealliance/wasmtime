@@ -62,7 +62,6 @@ RUST_BACKTRACE=1 cargo test \
   --package wasmtime-obj \
   --package wiggle \
   --package wiggle-generate \
-  --package wiggle-runtime \
   --package wiggle-test \
   --package wasi-common \
 

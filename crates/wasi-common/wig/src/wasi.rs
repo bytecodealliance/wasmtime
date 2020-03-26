@@ -464,7 +464,7 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
 
     quote! {
         /// Lightweight `wasmtime::Memory` wrapper so that we can
-        /// implement `wiggle_runtime::GuestMemory` trait on it which is
+        /// implement `wiggle::GuestMemory` trait on it which is
         /// now required to interface with `wasi-common`.
         struct WasiMemory(wasmtime::Memory);
 
@@ -474,7 +474,7 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
             }
         }
 
-        unsafe impl wiggle_runtime::GuestMemory for WasiMemory {
+        unsafe impl wiggle::GuestMemory for WasiMemory {
             fn base(&self) -> (*mut u8, u32) {
                 (self.0.data_ptr(), self.0.data_size() as _)
             }

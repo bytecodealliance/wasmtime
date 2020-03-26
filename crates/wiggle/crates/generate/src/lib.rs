@@ -40,8 +40,8 @@ pub fn generate(doc: &witx::Document, config: &Config) -> TokenStream {
         quote! {
             pub mod metadata {
                 pub const DOC_TEXT: &str = #doc_text;
-                pub fn document() -> wiggle_runtime::witx::Document {
-                    wiggle_runtime::witx::parse(DOC_TEXT).unwrap()
+                pub fn document() -> wiggle::witx::Document {
+                    wiggle::witx::parse(DOC_TEXT).unwrap()
                 }
             }
         }

@@ -23,10 +23,10 @@ pub fn define_datatype(names: &Names, namedtype: &witx::NamedType) -> TokenStrea
             witx::Type::Handle(h) => handle::define_handle(names, &namedtype.name, &h),
             witx::Type::Builtin(b) => define_builtin(names, &namedtype.name, *b),
             witx::Type::Pointer(p) => {
-                define_witx_pointer(names, &namedtype.name, quote!(wiggle_runtime::GuestPtr), p)
+                define_witx_pointer(names, &namedtype.name, quote!(wiggle::GuestPtr), p)
             }
             witx::Type::ConstPointer(p) => {
-                define_witx_pointer(names, &namedtype.name, quote!(wiggle_runtime::GuestPtr), p)
+                define_witx_pointer(names, &namedtype.name, quote!(wiggle::GuestPtr), p)
             }
             witx::Type::Array(arr) => define_witx_array(names, &namedtype.name, &arr),
         },
@@ -68,7 +68,7 @@ fn define_witx_pointer(
 fn define_witx_array(names: &Names, name: &witx::Id, arr_raw: &witx::TypeRef) -> TokenStream {
     let ident = names.type_(name);
     let pointee_type = names.type_ref(arr_raw, quote!('a));
-    quote!(pub type #ident<'a> = wiggle_runtime::GuestPtr<'a, [#pointee_type]>;)
+    quote!(pub type #ident<'a> = wiggle::GuestPtr<'a, [#pointee_type]>;)
 }
 
 fn int_repr_tokens(int_repr: witx::IntRepr) -> TokenStream {

@@ -1,4 +1,4 @@
-use wiggle_runtime::{GuestBorrows, GuestError, GuestErrorType, GuestPtr};
+use wiggle::{GuestBorrows, GuestError, GuestErrorType, GuestPtr};
 use wiggle_test::WasiCtx;
 
 // This test file exists to make sure that the entire `wasi.witx` file can be

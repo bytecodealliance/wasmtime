@@ -14,7 +14,6 @@ include = ["src/**/*", "LICENSE"]
 [lib]
 
 [dependencies]
-wiggle-runtime = { path = "../runtime", version = "0.13.0" }
 witx = { version = "0.8.4", path = "../../../wasi-common/wig/WASI/tools/witx" }
 quote = "1.0"
 proc-macro2 = "1.0"
