@@ -103,8 +103,17 @@ WASM_API_EXTERN wasm_instance_t* wasmtime_linker_instantiate(
 typedef struct wasmtime_caller_t wasmtime_caller_t;
 
 typedef own wasm_trap_t* (*wasmtime_func_callback_t)(const wasmtime_caller_t* caller, const wasm_val_t args[], wasm_val_t results[]);
+typedef own wasm_trap_t* (*wasmtime_func_callback_with_env_t)(const wasmtime_caller_t* caller, void* env, const wasm_val_t args[], wasm_val_t results[]);
 
 WASM_API_EXTERN own wasm_func_t* wasmtime_func_new(wasm_store_t*, const wasm_functype_t*, wasmtime_func_callback_t callback);
+
+WASM_API_EXTERN own wasm_func_t* wasmtime_func_new_with_env(
+  wasm_store_t* store,
+  const wasm_functype_t* type,
+  wasmtime_func_callback_with_env_t callback,
+  void* env,
+  void (*finalizer)(void*)
+);
 
 WASM_API_EXTERN own wasm_extern_t* wasmtime_caller_export_get(const wasmtime_caller_t* caller, const wasm_name_t* name);
 

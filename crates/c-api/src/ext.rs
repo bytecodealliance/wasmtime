@@ -221,17 +221,22 @@ pub unsafe extern "C" fn wasmtime_linker_instantiate(
     handle_instantiate(linker.instantiate(&(*module).module.borrow()), trap)
 }
 
-pub type wasmtime_func_callback_t = std::option::Option<
-    unsafe extern "C" fn(
-        caller: *const wasmtime_caller_t,
-        args: *const wasm_val_t,
-        results: *mut wasm_val_t,
-    ) -> *mut wasm_trap_t,
->;
+pub type wasmtime_func_callback_t = unsafe extern "C" fn(
+    caller: *const wasmtime_caller_t,
+    args: *const wasm_val_t,
+    results: *mut wasm_val_t,
+) -> *mut wasm_trap_t;
+
+pub type wasmtime_func_callback_with_env_t = unsafe extern "C" fn(
+    caller: *const wasmtime_caller_t,
+    env: *mut std::ffi::c_void,
+    args: *const wasm_val_t,
+    results: *mut wasm_val_t,
+) -> *mut wasm_trap_t;
 
 #[repr(C)]
 pub struct wasmtime_caller_t<'a> {
-    inner: wasmtime::Caller<'a>,
+    pub inner: wasmtime::Caller<'a>,
 }
 
 #[no_mangle]
@@ -240,32 +245,24 @@ pub unsafe extern "C" fn wasmtime_func_new(
     ty: *const wasm_functype_t,
     callback: wasmtime_func_callback_t,
 ) -> *mut wasm_func_t {
-    let store = &(*store).store.borrow();
-    let ty = (*ty).functype.clone();
-    let func = Func::new(store, ty, move |caller, params, results| {
-        let params = params
-            .iter()
-            .map(|p| wasm_val_t::from_val(p))
-            .collect::<Vec<_>>();
-        let mut out_results = vec![wasm_val_t::default(); results.len()];
-        let func = callback.expect("wasm_func_callback_t fn");
-        let caller = wasmtime_caller_t { inner: caller };
-        let out = func(&caller, params.as_ptr(), out_results.as_mut_ptr());
-        if !out.is_null() {
-            let trap: Box<wasm_trap_t> = Box::from_raw(out);
-            return Err(trap.trap.borrow().clone());
-        }
-        for i in 0..results.len() {
-            results[i] = out_results[i].val();
-        }
-        Ok(())
-    });
-    let func = Box::new(wasm_func_t {
-        ext: wasm_extern_t {
-            which: ExternHost::Func(HostRef::new(func)),
-        },
-    });
-    Box::into_raw(func)
+    crate::create_function(store, ty, crate::Callback::Wasmtime(callback))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_func_new_with_env(
+    store: *mut wasm_store_t,
+    ty: *const wasm_functype_t,
+    callback: wasmtime_func_callback_with_env_t,
+    env: *mut std::ffi::c_void,
+    finalizer: Option<unsafe extern "C" fn(arg1: *mut std::ffi::c_void)>,
+) -> *mut wasm_func_t {
+    crate::create_function_with_env(
+        store,
+        ty,
+        crate::CallbackWithEnv::Wasmtime(callback),
+        env,
+        finalizer,
+    )
 }
 
 #[no_mangle]
