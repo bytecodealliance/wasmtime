@@ -66,7 +66,7 @@ int main() {
 
   // Create our linker which will be linking our modules together, and then add
   // our WASI instance to it.
-  wasmtime_linker_t *linker = wasmtime_linker_new(store);
+  wasmtime_linker_t *linker = wasmtime_linker_new(store, false);
   bool ok = wasmtime_linker_define_wasi(linker, wasi);
   assert(ok);
 
