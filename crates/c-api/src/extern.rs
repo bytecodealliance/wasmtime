@@ -1,6 +1,6 @@
-use crate::{wasm_func_t, wasm_global_t, wasm_memory_t, wasm_table_t, wasm_externtype_t};
 use crate::wasm_externkind_t;
-use wasmtime::{ExternType, Func, Global, Memory, Table, HostRef};
+use crate::{wasm_externtype_t, wasm_func_t, wasm_global_t, wasm_memory_t, wasm_table_t};
+use wasmtime::{ExternType, Func, Global, HostRef, Memory, Table};
 
 #[derive(Clone)]
 pub struct wasm_extern_t {

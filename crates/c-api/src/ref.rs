@@ -7,5 +7,4 @@ pub struct wasm_ref_t {
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_ref_delete(_r: Option<Box<wasm_ref_t>>) {
-}
+pub extern "C" fn wasm_ref_delete(_r: Option<Box<wasm_ref_t>>) {}

@@ -8,13 +8,13 @@
 mod config;
 mod engine;
 mod r#extern;
-mod r#ref;
 mod func;
 mod global;
 mod instance;
 mod linker;
 mod memory;
 mod module;
+mod r#ref;
 mod store;
 mod table;
 mod trap;

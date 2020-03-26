@@ -44,9 +44,7 @@ pub extern "C" fn wasm_externtype_kind(et: &wasm_externtype_t) -> wasm_externkin
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_externtype_as_functype(
-    et: &wasm_externtype_t,
-) -> Option<&wasm_functype_t> {
+pub extern "C" fn wasm_externtype_as_functype(et: &wasm_externtype_t) -> Option<&wasm_functype_t> {
     wasm_externtype_as_functype_const(et)
 }
 

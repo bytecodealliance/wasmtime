@@ -1,4 +1,4 @@
-use crate::{wasm_ref_t, wasm_valkind_t, WASM_I32, into_valtype, from_valtype};
+use crate::{from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t, WASM_I32};
 use wasmtime::{Val, ValType};
 
 #[repr(C)]

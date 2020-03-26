@@ -4,7 +4,7 @@ use std::ffi::c_void;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::str;
-use wasmtime::{Func, HostRef, Trap, Extern, Caller};
+use wasmtime::{Caller, Extern, Func, HostRef, Trap};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -143,7 +143,12 @@ pub extern "C" fn wasmtime_func_new_with_env(
 ) -> Box<wasm_func_t> {
     let finalizer = Finalizer { env, finalizer };
     create_function(store, ty, move |caller, params, results| {
-        callback(&wasmtime_caller_t { caller }, finalizer.env, params, results)
+        callback(
+            &wasmtime_caller_t { caller },
+            finalizer.env,
+            params,
+            results,
+        )
     })
 }
 
