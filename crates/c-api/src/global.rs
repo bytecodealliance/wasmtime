@@ -30,7 +30,7 @@ pub extern "C" fn wasm_global_new(
     val: &wasm_val_t,
 ) -> Option<Box<wasm_global_t>> {
     let global =
-        HostRef::new(Global::new(&store.store.borrow(), gt.globaltype.clone(), val.val()).ok()?);
+        HostRef::new(Global::new(&store.store.borrow(), gt.ty().ty.clone(), val.val()).ok()?);
     Some(Box::new(wasm_global_t {
         ext: wasm_extern_t {
             which: ExternHost::Global(global),

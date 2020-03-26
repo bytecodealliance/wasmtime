@@ -28,7 +28,7 @@ pub extern "C" fn wasm_exporttype_new(
 ) -> Option<Box<wasm_exporttype_t>> {
     let name = name.take();
     let name = str::from_utf8(&name).ok()?;
-    let ty = ExportType::new(name, ty.ty);
+    let ty = ExportType::new(name, ty.ty());
     Some(Box::new(wasm_exporttype_t::new(ty)))
 }
 

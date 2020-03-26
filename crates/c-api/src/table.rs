@@ -38,7 +38,7 @@ pub unsafe extern "C" fn wasm_table_new(
     } else {
         Val::AnyRef(AnyRef::Null)
     };
-    let table = Table::new(&store.store.borrow(), tt.tabletype.clone(), init).ok()?;
+    let table = Table::new(&store.store.borrow(), tt.ty().ty.clone(), init).ok()?;
     Some(Box::new(wasm_table_t {
         ext: wasm_extern_t {
             which: ExternHost::Table(HostRef::new(table)),

@@ -159,6 +159,30 @@ impl ExternType {
     }
 }
 
+impl From<FuncType> for ExternType {
+    fn from(ty: FuncType) -> ExternType {
+        ExternType::Func(ty)
+    }
+}
+
+impl From<GlobalType> for ExternType {
+    fn from(ty: GlobalType) -> ExternType {
+        ExternType::Global(ty)
+    }
+}
+
+impl From<MemoryType> for ExternType {
+    fn from(ty: MemoryType) -> ExternType {
+        ExternType::Memory(ty)
+    }
+}
+
+impl From<TableType> for ExternType {
+    fn from(ty: TableType) -> ExternType {
+        ExternType::Table(ty)
+    }
+}
+
 // Function Types
 fn from_wasmtime_abiparam(param: &ir::AbiParam) -> Option<ValType> {
     assert_eq!(param.purpose, ir::ArgumentPurpose::Normal);

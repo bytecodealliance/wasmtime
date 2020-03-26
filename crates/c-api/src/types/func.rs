@@ -1,19 +1,46 @@
-use crate::{wasm_valtype_t, wasm_valtype_vec_t};
+use crate::{wasm_externtype_t, wasm_valtype_t, wasm_valtype_vec_t, CExternType};
 use once_cell::unsync::OnceCell;
 use wasmtime::FuncType;
 
-#[repr(C)]
+#[repr(transparent)]
 #[derive(Clone)]
 pub struct wasm_functype_t {
-    pub(crate) functype: FuncType,
+    ext: wasm_externtype_t,
+}
+
+#[derive(Clone)]
+pub(crate) struct CFuncType {
+    pub(crate) ty: FuncType,
     params_cache: OnceCell<wasm_valtype_vec_t>,
     returns_cache: OnceCell<wasm_valtype_vec_t>,
 }
 
 impl wasm_functype_t {
-    pub(crate) fn new(functype: FuncType) -> wasm_functype_t {
+    pub(crate) fn new(ty: FuncType) -> wasm_functype_t {
         wasm_functype_t {
-            functype,
+            ext: wasm_externtype_t::new(ty.into()),
+        }
+    }
+
+    pub(crate) fn try_from(e: &wasm_externtype_t) -> Option<&wasm_functype_t> {
+        match &e.which {
+            CExternType::Func(_) => Some(unsafe { &*(e as *const _ as *const _) }),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn ty(&self) -> &CFuncType {
+        match &self.ext.which {
+            CExternType::Func(f) => &f,
+            _ => unsafe { std::hint::unreachable_unchecked() },
+        }
+    }
+}
+
+impl CFuncType {
+    pub(crate) fn new(ty: FuncType) -> CFuncType {
+        CFuncType {
+            ty,
             params_cache: OnceCell::new(),
             returns_cache: OnceCell::new(),
         }
@@ -41,8 +68,9 @@ pub extern "C" fn wasm_functype_new(
 
 #[no_mangle]
 pub extern "C" fn wasm_functype_params(ft: &wasm_functype_t) -> &wasm_valtype_vec_t {
+    let ft = ft.ty();
     ft.params_cache.get_or_init(|| {
-        ft.functype
+        ft.ty
             .params()
             .iter()
             .map(|p| Some(Box::new(wasm_valtype_t { ty: p.clone() })))
@@ -53,14 +81,25 @@ pub extern "C" fn wasm_functype_params(ft: &wasm_functype_t) -> &wasm_valtype_ve
 
 #[no_mangle]
 pub extern "C" fn wasm_functype_results(ft: &wasm_functype_t) -> &wasm_valtype_vec_t {
+    let ft = ft.ty();
     ft.returns_cache.get_or_init(|| {
-        ft.functype
+        ft.ty
             .results()
             .iter()
             .map(|p| Some(Box::new(wasm_valtype_t { ty: p.clone() })))
             .collect::<Vec<_>>()
             .into()
     })
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_functype_as_externtype(ty: &wasm_functype_t) -> &wasm_externtype_t {
+    &ty.ext
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_functype_as_externtype_const(ty: &wasm_functype_t) -> &wasm_externtype_t {
+    &ty.ext
 }
 
 #[no_mangle]

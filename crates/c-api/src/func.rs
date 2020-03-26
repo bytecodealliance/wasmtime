@@ -74,7 +74,7 @@ fn create_function(
     func: impl Fn(Caller<'_>, *const wasm_val_t, *mut wasm_val_t) -> Option<Box<wasm_trap_t>> + 'static,
 ) -> Box<wasm_func_t> {
     let store = &store.store.borrow();
-    let ty = ty.functype.clone();
+    let ty = ty.ty().ty.clone();
     let func = Func::new(store, ty, move |caller, params, results| {
         let params = params
             .iter()

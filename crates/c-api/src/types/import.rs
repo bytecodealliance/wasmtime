@@ -33,7 +33,7 @@ pub extern "C" fn wasm_importtype_new(
     let name = name.take();
     let module = str::from_utf8(&module).ok()?;
     let name = str::from_utf8(&name).ok()?;
-    let ty = ImportType::new(module, name, ty.ty);
+    let ty = ImportType::new(module, name, ty.ty());
     Some(Box::new(wasm_importtype_t::new(ty)))
 }
 
