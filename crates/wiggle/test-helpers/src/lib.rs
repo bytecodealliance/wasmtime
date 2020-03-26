@@ -1,7 +1,7 @@
 use proptest::prelude::*;
 use std::cell::UnsafeCell;
 use std::marker;
-use wiggle_runtime::GuestMemory;
+use wiggle::GuestMemory;
 
 #[derive(Debug, Clone)]
 pub struct MemAreas(Vec<MemArea>);
@@ -289,7 +289,7 @@ mod test {
 }
 
 use std::cell::RefCell;
-use wiggle_runtime::GuestError;
+use wiggle::GuestError;
 
 // In lucet, our Ctx struct needs a lifetime, so we're using one
 // on the test as well.
@@ -314,7 +314,7 @@ impl<'a> WasiCtx<'a> {
 #[macro_export]
 macro_rules! impl_errno {
     ( $errno:ty ) => {
-        impl<'a> wiggle_runtime::GuestErrorType<'a> for $errno {
+        impl<'a> wiggle::GuestErrorType<'a> for $errno {
             type Context = WasiCtx<'a>;
             fn success() -> $errno {
                 <$errno>::Ok

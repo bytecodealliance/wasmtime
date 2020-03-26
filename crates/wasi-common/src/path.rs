@@ -4,7 +4,7 @@ use crate::wasi::{types, Errno, Result};
 use crate::{entry::Descriptor, entry::Entry};
 use std::path::{Component, Path};
 use std::str;
-use wiggle_runtime::{GuestBorrows, GuestPtr};
+use wiggle::{GuestBorrows, GuestPtr};
 
 pub(crate) use sys::path::*;
 

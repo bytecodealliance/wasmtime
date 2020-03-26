@@ -1,26 +1,18 @@
 [package]
-name = "wiggle-generate"
+name = "wiggle-test"
 version = "0.13.0"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 license = "Apache-2.0 WITH LLVM-exception"
 edition = "2018"
-description = "Library crate for wiggle code generator."
+description = "Reusable testing components for wiggle code generator. Only intended to be used by tests in `wiggle` crate."
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
-readme = "README.md"
 include = ["src/**/*", "LICENSE"]
 
-[lib]
-
 [dependencies]
-wiggle-runtime = { path = "../runtime", version = "0.13.0" }
-witx = { version = "0.8.4", path = "../../../wasi-common/wig/WASI/tools/witx" }
-quote = "1.0"
-proc-macro2 = "1.0"
-heck = "0.3"
-anyhow = "1"
-syn = { version = "1.0", features = ["full"] }
+proptest = "0.9"
+wiggle = { path = "..", version = "0.13.0" }
 
 [badges]
 maintenance = { status = "actively-developed" }

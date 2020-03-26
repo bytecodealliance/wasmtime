@@ -9,7 +9,7 @@ use std::cell::Ref;
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use wiggle_runtime::{GuestBorrows, GuestPtr};
+use wiggle::{GuestBorrows, GuestPtr};
 
 impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn args_get<'b>(

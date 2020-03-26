@@ -2,26 +2,24 @@
 name = "wiggle"
 version = "0.13.0"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkonk@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
-license = "Apache-2.0 WITH LLVM-exception"
 edition = "2018"
-description = "Wiggle code generator"
+license = "Apache-2.0 WITH LLVM-exception"
+description = "Runtime components of wiggle code generator"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
-readme = "README.md"
 include = ["src/**/*", "LICENSE"]
 
-[lib]
-proc-macro = true
-
 [dependencies]
-wiggle-generate = { path = "crates/generate", version = "0.13.0" }
-wiggle-runtime = { path = "crates/runtime", version = "0.13.0" }
-witx = { path = "../wasi-common/wig/WASI/tools/witx", version = "0.8.4" }
-syn = { version = "1.0", features = ["full"] }
+thiserror = "1"
+witx = { path = "../wasi-common/wig/WASI/tools/witx", version = "0.8.4", optional = true }
+wiggle-macro = { path = "macro", version = "0.13.0" }
+
+[badges]
+maintenance = { status = "actively-developed" }
 
 [dev-dependencies]
-wiggle-test = { path = "crates/test", version = "0.13.0" }
+wiggle-test = { path = "test-helpers", version = "0.13.0" }
 proptest = "0.9"
 
 [features]
@@ -31,7 +29,7 @@ proptest = "0.9"
 # by the `wiggle_metadata` feature flag. We use this feature flag so that
 # users of wiggle are not forced to take a direct dependency on the `witx`
 # crate unless they want it.
-wiggle_metadata = ["wiggle-runtime/wiggle_metadata"]
+wiggle_metadata = ['witx', "wiggle-macro/wiggle_metadata"]
 # In order to test that the contents of this metadata module meet
 # expectations, we must have this feature enabled for the crate by default.
 default = ["wiggle_metadata"]

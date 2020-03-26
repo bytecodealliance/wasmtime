@@ -33,7 +33,7 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
             quote! {
                 #tagname::#variantname => {
                     let variant_ptr = location.cast::<u8>().add(#contents_offset)?;
-                    let variant_val = <#varianttype as wiggle_runtime::GuestType>::read(&variant_ptr.cast())?;
+                    let variant_val = <#varianttype as wiggle::GuestType>::read(&variant_ptr.cast())?;
                     Ok(#ident::#variantname(variant_val))
                 }
             }
@@ -53,7 +53,7 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
                 #ident::#variantname(contents) => {
                     #write_tag
                     let variant_ptr = location.cast::<u8>().add(#contents_offset)?;
-                    <#varianttype as wiggle_runtime::GuestType>::write(&variant_ptr.cast(), contents)?;
+                    <#varianttype as wiggle::GuestType>::write(&variant_ptr.cast(), contents)?;
                 }
             }
         } else {
@@ -77,7 +77,7 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
             #(#variants),*
         }
 
-        impl<'a> wiggle_runtime::GuestType<'a> for #ident #enum_lifetime {
+        impl<'a> wiggle::GuestType<'a> for #ident #enum_lifetime {
             fn guest_size() -> u32 {
                 #size
             }
@@ -86,8 +86,8 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
                 #align
             }
 
-            fn read(location: &wiggle_runtime::GuestPtr<'a, Self>)
-                -> Result<Self, wiggle_runtime::GuestError>
+            fn read(location: &wiggle::GuestPtr<'a, Self>)
+                -> Result<Self, wiggle::GuestError>
             {
                 let tag = location.cast().read()?;
                 match tag {
@@ -96,8 +96,8 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
 
             }
 
-            fn write(location: &wiggle_runtime::GuestPtr<'_, Self>, val: Self)
-                -> Result<(), wiggle_runtime::GuestError>
+            fn write(location: &wiggle::GuestPtr<'_, Self>, val: Self)
+                -> Result<(), wiggle::GuestError>
             {
                 match val {
                     #(#write_variant)*

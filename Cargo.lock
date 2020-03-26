@@ -2243,7 +2243,6 @@ dependencies = [
  "thiserror",
  "wig",
  "wiggle",
- "wiggle-runtime",
  "winapi",
  "winx",
  "yanix",
@@ -2517,7 +2516,7 @@ dependencies = [
  "wasmtime",
  "wasmtime-runtime",
  "wig",
- "wiggle-runtime",
+ "wiggle",
 ]
 
 [[package]]
@@ -2571,9 +2570,8 @@ name = "wiggle"
 version = "0.13.0"
 dependencies = [
  "proptest",
- "syn",
- "wiggle-generate",
- "wiggle-runtime",
+ "thiserror",
+ "wiggle-macro",
  "wiggle-test",
  "witx",
 ]
@@ -2587,15 +2585,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
- "wiggle-runtime",
  "witx",
 ]
 
 [[package]]
-name = "wiggle-runtime"
+name = "wiggle-macro"
 version = "0.13.0"
 dependencies = [
- "thiserror",
+ "syn",
+ "wiggle",
+ "wiggle-generate",
  "witx",
 ]
 
@@ -2604,7 +2603,7 @@ name = "wiggle-test"
 version = "0.13.0"
 dependencies = [
  "proptest",
- "wiggle-runtime",
+ "wiggle",
 ]
 
 [[package]]
