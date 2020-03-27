@@ -8,7 +8,6 @@ description = "Wiggle code generator"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
-readme = "README.md"
 include = ["src/**/*", "LICENSE"]
 
 [lib]
