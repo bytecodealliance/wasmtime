@@ -25,7 +25,6 @@ staticvec = "0.8"
 thiserror = "1.0.9"
 typemap = "0.3"
 wasmparser = "0.51.2"
-wasm-reader = "0.2"
 
 [dev-dependencies]
 lazy_static = "1.2"

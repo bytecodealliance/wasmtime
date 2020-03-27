@@ -145,7 +145,7 @@ impl crate::compilation::Compiler for Lightbeam {
                     offsets: &mut offset_sink,
                 },
                 i.as_u32(),
-                std::io::Cursor::new(function_body.data),
+                wasmparser::FunctionBody::new(function_body.module_offset, function_body.data),
             )
             .map_err(|e| CompileError::Codegen(format!("Failed to translate function: {}", e)))?;
 
