@@ -23,21 +23,6 @@ impl From<BinaryReaderError> for Error {
     }
 }
 
-impl From<wasm_reader::Error> for Error {
-    fn from(e: wasm_reader::Error) -> Self {
-        match e {
-            wasm_reader::Error::Error { error, offset } => {
-                if let Some(o) = offset {
-                    Error::Input(format!("At wasm offset {}: {}", o, error))
-                } else {
-                    Error::Input(format!("At wasm offset ???: {}", error))
-                }
-            }
-            wasm_reader::Error::Eof => Error::Input(format!("At wasm offset ???: eof")),
-        }
-    }
-}
-
 impl From<capstone::Error> for Error {
     fn from(e: capstone::Error) -> Self {
         Error::Disassembler(e.to_string())

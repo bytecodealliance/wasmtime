@@ -13,7 +13,8 @@ use dynasmrt::DynasmApi;
 use itertools::Either::{self, Left, Right};
 #[cfg(debug_assertions)]
 use more_asserts::assert_ge;
-use std::{collections::HashMap, fmt, hash::Hash, io, iter, mem};
+use std::{collections::HashMap, fmt, hash::Hash, iter, mem};
+use wasmparser::FunctionBody;
 
 #[derive(Debug)]
 struct Block {
@@ -55,15 +56,14 @@ pub struct Sinks<'a> {
     pub offsets: &'a mut dyn OffsetSink,
 }
 
-pub fn translate_wasm<M, R>(
+pub fn translate_wasm<M>(
     session: &mut CodeGenSession<M>,
     sinks: Sinks<'_>,
     func_idx: u32,
-    body: R,
+    body: FunctionBody<'_>,
 ) -> Result<(), Error>
 where
     M: ModuleContext,
-    R: io::Read,
     for<'any> &'any M::Signature: Into<OpSig>,
 {
     let ty = session.module_context.defined_func_type(func_idx);
@@ -92,7 +92,7 @@ pub fn translate<M, I, L: Send + Sync + 'static>(
 ) -> Result<(), Error>
 where
     M: ModuleContext,
-    I: IntoIterator<Item = Result<OperatorWithMeta<L>, Error>>,
+    I: IntoIterator<Item = Result<Operator<L>, Error>>,
     L: Hash + Clone + Eq,
     BrTarget<L>: std::fmt::Display,
 {
@@ -120,7 +120,7 @@ where
     let module_context = &*session.module_context;
     let mut op_offset_map = mem::replace(&mut session.op_offset_map, vec![]);
     {
-        let ctx = &mut session.new_context(func_idx, &mut *sinks.relocs, &mut *sinks.traps);
+        let ctx = &mut session.new_context(func_idx, &mut *sinks.relocs);
         op_offset_map.push((
             ctx.asm.offset(),
             Box::new(format!("Function {}:", func_idx)),
@@ -153,21 +153,10 @@ where
             },
         );
 
-        while let Some(op_and_meta) = body.next() {
-            let WithMeta {
-                data: op,
-                meta: Meta { loc },
-            } = op_and_meta?;
+        while let Some(op) = body.next() {
+            let op = op?;
 
-            ctx.set_source_loc(loc);
-
-            sinks.offsets.offset(loc, ctx.asm.offset().0);
-
-            if let Some(Ok(WithMeta {
-                data: Operator::Label(label),
-                ..
-            })) = body.peek()
-            {
+            if let Some(Ok(Operator::Label(label))) = body.peek() {
                 let block = match blocks.get_mut(&BrTarget::Label(label.clone())) {
                     None => {
                         return Err(Error::Microwasm(
@@ -253,11 +242,7 @@ where
                             if block.actual_num_callers == 0 {
                                 loop {
                                     let done = match body.peek() {
-                                        Some(Ok(WithMeta {
-                                            data: Operator::Label(_),
-                                            ..
-                                        }))
-                                        | None => true,
+                                        Some(Ok(Operator::Label(_))) | None => true,
                                         Some(_) => false,
                                     };
 
@@ -265,10 +250,9 @@ where
                                         break;
                                     }
 
-                                    let WithMeta { data: skipped, .. } =
-                                        body.next().ok_or_else(|| {
-                                            Error::Assembler("Unexpected EOF".into())
-                                        })??;
+                                    let skipped = body.next().ok_or_else(|| {
+                                        Error::Assembler("Unexpected EOF".into())
+                                    })??;
 
                                     // We still want to honour block definitions even in unreachable code
                                     if let Operator::Block {
