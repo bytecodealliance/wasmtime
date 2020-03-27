@@ -32,19 +32,19 @@ enum wasmtime_profiling_strategy_t { // ProfilingStrategy
   WASMTIME_PROFILING_STRATEGY_JITDUMP,
 };
 
-#define WASMTIME_CONFIG_PROP(name, ty) \
-    WASM_API_EXTERN void wasmtime_config_##name##_set(wasm_config_t*, ty);
+#define WASMTIME_CONFIG_PROP(ret, name, ty) \
+    WASM_API_EXTERN ret wasmtime_config_##name##_set(wasm_config_t*, ty);
 
-WASMTIME_CONFIG_PROP(debug_info, bool)
-WASMTIME_CONFIG_PROP(wasm_threads, bool)
-WASMTIME_CONFIG_PROP(wasm_reference_types, bool)
-WASMTIME_CONFIG_PROP(wasm_simd, bool)
-WASMTIME_CONFIG_PROP(wasm_bulk_memory, bool)
-WASMTIME_CONFIG_PROP(wasm_multi_value, bool)
-WASMTIME_CONFIG_PROP(strategy, wasmtime_strategy_t)
-WASMTIME_CONFIG_PROP(cranelift_debug_verifier, bool)
-WASMTIME_CONFIG_PROP(cranelift_opt_level, wasmtime_opt_level_t)
-WASMTIME_CONFIG_PROP(profiler, wasmtime_profiling_strategy_t)
+WASMTIME_CONFIG_PROP(void, debug_info, bool)
+WASMTIME_CONFIG_PROP(void, wasm_threads, bool)
+WASMTIME_CONFIG_PROP(void, wasm_reference_types, bool)
+WASMTIME_CONFIG_PROP(void, wasm_simd, bool)
+WASMTIME_CONFIG_PROP(void, wasm_bulk_memory, bool)
+WASMTIME_CONFIG_PROP(void, wasm_multi_value, bool)
+WASMTIME_CONFIG_PROP(bool, strategy, wasmtime_strategy_t)
+WASMTIME_CONFIG_PROP(void, cranelift_debug_verifier, bool)
+WASMTIME_CONFIG_PROP(void, cranelift_opt_level, wasmtime_opt_level_t)
+WASMTIME_CONFIG_PROP(bool, profiler, wasmtime_profiling_strategy_t)
 
 ///////////////////////////////////////////////////////////////////////////////
 

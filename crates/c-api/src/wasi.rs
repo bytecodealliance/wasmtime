@@ -1,5 +1,5 @@
 //! The WASI embedding API definitions for Wasmtime.
-use crate::{wasm_extern_t, wasm_importtype_t, wasm_store_t, wasm_trap_t, ExternHost, ExternType};
+use crate::{wasm_extern_t, wasm_importtype_t, wasm_store_t, wasm_trap_t, ExternHost};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::ffi::CStr;
@@ -50,37 +50,35 @@ pub struct wasi_config_t {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasi_config_new() -> *mut wasi_config_t {
-    Box::into_raw(Box::new(wasi_config_t::default()))
+pub extern "C" fn wasi_config_new() -> Box<wasi_config_t> {
+    Box::new(wasi_config_t::default())
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasi_config_delete(config: *mut wasi_config_t) {
-    drop(Box::from_raw(config));
-}
+pub extern "C" fn wasi_config_delete(_config: Box<wasi_config_t>) {}
 
 #[no_mangle]
 pub unsafe extern "C" fn wasi_config_set_argv(
-    config: *mut wasi_config_t,
+    config: &mut wasi_config_t,
     argc: c_int,
     argv: *const *const c_char,
 ) {
-    (*config).args = slice::from_raw_parts(argv, argc as usize)
+    config.args = slice::from_raw_parts(argv, argc as usize)
         .iter()
         .map(|p| CStr::from_ptr(*p).to_bytes().to_owned())
         .collect();
-    (*config).inherit_args = false;
+    config.inherit_args = false;
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasi_config_inherit_argv(config: *mut wasi_config_t) {
-    (*config).args.clear();
-    (*config).inherit_args = true;
+pub extern "C" fn wasi_config_inherit_argv(config: &mut wasi_config_t) {
+    config.args.clear();
+    config.inherit_args = true;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasi_config_set_env(
-    config: *mut wasi_config_t,
+    config: &mut wasi_config_t,
     envc: c_int,
     names: *const *const c_char,
     values: *const *const c_char,
@@ -88,7 +86,7 @@ pub unsafe extern "C" fn wasi_config_set_env(
     let names = slice::from_raw_parts(names, envc as usize);
     let values = slice::from_raw_parts(values, envc as usize);
 
-    (*config).env = names
+    config.env = names
         .iter()
         .map(|p| CStr::from_ptr(*p).to_bytes().to_owned())
         .zip(
@@ -97,18 +95,18 @@ pub unsafe extern "C" fn wasi_config_set_env(
                 .map(|p| CStr::from_ptr(*p).to_bytes().to_owned()),
         )
         .collect();
-    (*config).inherit_env = false;
+    config.inherit_env = false;
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasi_config_inherit_env(config: *mut wasi_config_t) {
-    (*config).env.clear();
-    (*config).inherit_env = true;
+pub extern "C" fn wasi_config_inherit_env(config: &mut wasi_config_t) {
+    config.env.clear();
+    config.inherit_env = true;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasi_config_set_stdin_file(
-    config: *mut wasi_config_t,
+    config: &mut wasi_config_t,
     path: *const c_char,
 ) -> bool {
     let file = match open_file(path) {
@@ -116,21 +114,21 @@ pub unsafe extern "C" fn wasi_config_set_stdin_file(
         None => return false,
     };
 
-    (*config).stdin = Some(file);
-    (*config).inherit_stdin = false;
+    config.stdin = Some(file);
+    config.inherit_stdin = false;
 
     true
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasi_config_inherit_stdin(config: *mut wasi_config_t) {
-    (*config).stdin = None;
-    (*config).inherit_stdin = true;
+pub extern "C" fn wasi_config_inherit_stdin(config: &mut wasi_config_t) {
+    config.stdin = None;
+    config.inherit_stdin = true;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasi_config_set_stdout_file(
-    config: *mut wasi_config_t,
+    config: &mut wasi_config_t,
     path: *const c_char,
 ) -> bool {
     let file = match create_file(path) {
@@ -138,21 +136,21 @@ pub unsafe extern "C" fn wasi_config_set_stdout_file(
         None => return false,
     };
 
-    (*config).stdout = Some(file);
-    (*config).inherit_stdout = false;
+    config.stdout = Some(file);
+    config.inherit_stdout = false;
 
     true
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasi_config_inherit_stdout(config: *mut wasi_config_t) {
-    (*config).stdout = None;
-    (*config).inherit_stdout = true;
+pub extern "C" fn wasi_config_inherit_stdout(config: &mut wasi_config_t) {
+    config.stdout = None;
+    config.inherit_stdout = true;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasi_config_set_stderr_file(
-    config: *mut wasi_config_t,
+    config: &mut wasi_config_t,
     path: *const c_char,
 ) -> bool {
     let file = match create_file(path) {
@@ -167,14 +165,14 @@ pub unsafe extern "C" fn wasi_config_set_stderr_file(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasi_config_inherit_stderr(config: *mut wasi_config_t) {
-    (*config).stderr = None;
-    (*config).inherit_stderr = true;
+pub extern "C" fn wasi_config_inherit_stderr(config: &mut wasi_config_t) {
+    config.stderr = None;
+    config.inherit_stderr = true;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasi_config_preopen_dir(
-    config: *mut wasi_config_t,
+    config: &mut wasi_config_t,
     path: *const c_char,
     guest_path: *const c_char,
 ) -> bool {
@@ -278,13 +276,12 @@ impl wasi_instance_t {
 
 #[no_mangle]
 pub unsafe extern "C" fn wasi_instance_new(
-    store: *mut wasm_store_t,
+    store: &wasm_store_t,
     name: *const c_char,
-    config: *mut wasi_config_t,
-    trap: *mut *mut wasm_trap_t,
-) -> *mut wasi_instance_t {
-    let store = &(*store).store.borrow();
-    let config = Box::from_raw(config);
+    config: Box<wasi_config_t>,
+    trap: &mut *mut wasm_trap_t,
+) -> Option<Box<wasi_instance_t>> {
+    let store = &store.store.borrow();
 
     let result = match CStr::from_ptr(name).to_str().unwrap_or("") {
         "wasi_snapshot_preview1" => create_preview1_instance(store, *config),
@@ -293,70 +290,58 @@ pub unsafe extern "C" fn wasi_instance_new(
     };
 
     match result {
-        Ok(wasi) => Box::into_raw(Box::new(wasi_instance_t {
+        Ok(wasi) => Some(Box::new(wasi_instance_t {
             wasi,
             export_cache: HashMap::new(),
         })),
         Err(e) => {
-            (*trap) = Box::into_raw(Box::new(wasm_trap_t {
+            *trap = Box::into_raw(Box::new(wasm_trap_t {
                 trap: HostRef::new(Trap::new(e.to_string())),
             }));
 
-            std::ptr::null_mut()
+            None
         }
     }
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasi_instance_delete(instance: *mut wasi_instance_t) {
-    drop(Box::from_raw(instance));
-}
+pub extern "C" fn wasi_instance_delete(_instance: Box<wasi_instance_t>) {}
 
 #[no_mangle]
-pub unsafe extern "C" fn wasi_instance_bind_import(
-    instance: *mut wasi_instance_t,
-    import: *const wasm_importtype_t,
-) -> *const wasm_extern_t {
-    // The import should be a function (WASI only exports functions)
-    let func_type = match (*import).ty.ty() {
-        ExternType::Func(f) => f,
-        _ => return std::ptr::null_mut(),
-    };
+pub extern "C" fn wasi_instance_bind_import<'a>(
+    instance: &'a mut wasi_instance_t,
+    import: &wasm_importtype_t,
+) -> Option<&'a wasm_extern_t> {
+    let module = import.ty.module();
+    let name = import.ty.name();
 
-    let module = (*import).ty.module();
-    let name = (*import).ty.name();
-
-    let import = match &(*instance).wasi {
+    let export = match &instance.wasi {
         WasiInstance::Preview1(wasi) => {
             if module != "wasi_snapshot_preview1" {
-                return std::ptr::null();
+                return None;
             }
-            wasi.get_export(name)
+            wasi.get_export(name)?
         }
         WasiInstance::Snapshot0(wasi) => {
             if module != "wasi_unstable" {
-                return std::ptr::null();
+                return None;
             }
 
-            wasi.get_export(name)
+            wasi.get_export(name)?
         }
     };
 
-    match import {
-        Some(export) => {
-            if export.ty() != func_type {
-                return std::ptr::null_mut();
-            }
-
-            &**(*instance)
-                .export_cache
-                .entry(name.to_string())
-                .or_insert_with(|| {
-                    Box::new(wasm_extern_t {
-                        which: ExternHost::Func(HostRef::new(export.clone())),
-                    })
-                }) as *const wasm_extern_t
-        }
-        None => std::ptr::null_mut(),
+    if export.ty() != import.ty.ty().func()? {
+        return None;
     }
+
+    let entry = instance
+        .export_cache
+        .entry(name.to_string())
+        .or_insert_with(|| {
+            Box::new(wasm_extern_t {
+                which: ExternHost::Func(HostRef::new(export.clone())),
+            })
+        });
+    Some(entry)
 }

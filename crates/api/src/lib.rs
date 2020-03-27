@@ -29,7 +29,7 @@ pub use crate::func::*;
 pub use crate::instance::Instance;
 pub use crate::linker::*;
 pub use crate::module::Module;
-pub use crate::r#ref::{AnyRef, HostInfo, HostRef};
+pub use crate::r#ref::{AnyRef, HostRef};
 pub use crate::runtime::*;
 pub use crate::trap::Trap;
 pub use crate::types::*;
