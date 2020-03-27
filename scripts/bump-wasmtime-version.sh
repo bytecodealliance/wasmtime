@@ -24,12 +24,14 @@ sed -i.bk -e "s/^version = \"[.*[^0.].*\"$/version = \"$version\"/" Cargo.toml
 
 # Update the required version numbers of path dependencies.
 find -name Cargo.toml \
+    -not -path ./crates/wasi-common/WASI/tools/witx/Cargo.toml \
     -not -path ./crates/wasi-common/wig/WASI/tools/witx/Cargo.toml \
     -exec sed -i.bk \
     -e "/^\(wasmtime\|wiggle\)/s/version = \"[^\"]*\"/version = \"$version\"/" \
     {} \;
 find -name Cargo.toml \
+    -not -path ./crates/wasi-common/WASI/tools/witx/Cargo.toml \
     -not -path ./crates/wasi-common/wig/WASI/tools/witx/Cargo.toml \
     -exec sed -i.bk \
-    -e "/^\(wasi-common\|wig\|yanix\|winx\) = /s/version = \"[^\"]*\"/version = \"$version\"/" \
+    -e "/^\(wasi-common\|wig\|yanix\|winx\|lightbeam\) = /s/version = \"[^\"]*\"/version = \"$version\"/" \
     {} \;
