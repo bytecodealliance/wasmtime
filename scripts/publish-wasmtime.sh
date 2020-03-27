@@ -22,9 +22,9 @@ for cargo_toml in \
     crates/wasi-common/yanix/Cargo.toml \
     crates/wasi-common/wig/Cargo.toml \
     crates/wiggle/generate/Cargo.toml \
-    crates/wiggle/test/Cargo.toml \
     crates/wiggle/macro/Cargo.toml \
     crates/wiggle/Cargo.toml \
+    crates/wiggle/test-helper/Cargo.toml \
     crates/wasi-common/Cargo.toml \
     crates/lightbeam/Cargo.toml \
     crates/environ/Cargo.toml \
