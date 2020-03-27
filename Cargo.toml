@@ -43,9 +43,6 @@ rayon = "1.2.1"
 [dev-dependencies]
 wasmtime-runtime = { path = "crates/runtime", version = "0.13.0" }
 more-asserts = "0.2.1"
-# This feature requires the wasm32-wasi target be installed. It enables
-# wasm32-wasi integration tests. To enable, run
-# `cargo test --features test-programs`.
 test-programs = { path = "crates/test-programs" }
 tempfile = "3.1.0"
 filecheck = "0.5.0"
@@ -79,7 +76,6 @@ lightbeam = [
     "wasmtime/lightbeam",
 ]
 jitdump = ["wasmtime/jitdump"]
-test_programs = ["test-programs/test_programs"]
 
 [badges]
 maintenance = { status = "actively-developed" }

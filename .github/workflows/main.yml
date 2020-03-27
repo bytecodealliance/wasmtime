@@ -202,7 +202,7 @@ jobs:
     - run: cargo run -p run-examples
 
     # Build and test all features except for lightbeam
-    - run: cargo test --features test_programs --all --exclude lightbeam --exclude wasmtime-c-api -- --nocapture
+    - run: cargo test --features test-programs/test_programs --all --exclude lightbeam --exclude wasmtime-c-api -- --nocapture
       env:
         RUST_BACKTRACE: 1
         RUSTFLAGS: "-D warnings"
@@ -381,7 +381,7 @@ jobs:
     - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
       shell: bash
     # Test what we just built
-    - run: $CENTOS cargo test --features test_programs --release --all --exclude lightbeam --exclude wasmtime --exclude wasmtime-c-api --exclude wasmtime-fuzzing
+    - run: $CENTOS cargo test --features test-programs/test_programs --release --all --exclude lightbeam --exclude wasmtime --exclude wasmtime-c-api --exclude wasmtime-fuzzing
       shell: bash
       env:
         RUST_BACKTRACE: 1
