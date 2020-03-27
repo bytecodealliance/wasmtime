@@ -72,13 +72,13 @@ pub extern "C" fn wasmtime_config_wasm_multi_value_set(c: &mut wasm_config_t, en
 pub extern "C" fn wasmtime_config_strategy_set(
     c: &mut wasm_config_t,
     strategy: wasmtime_strategy_t,
-) {
+) -> bool {
     use wasmtime_strategy_t::*;
-    drop(c.config.strategy(match strategy {
+    c.config.strategy(match strategy {
         WASMTIME_STRATEGY_AUTO => Strategy::Auto,
         WASMTIME_STRATEGY_CRANELIFT => Strategy::Cranelift,
         WASMTIME_STRATEGY_LIGHTBEAM => Strategy::Lightbeam,
-    }));
+    }).is_ok()
 }
 
 #[no_mangle]
@@ -106,10 +106,10 @@ pub extern "C" fn wasmtime_config_cranelift_opt_level_set(
 pub extern "C" fn wasmtime_config_profiler_set(
     c: &mut wasm_config_t,
     strategy: wasmtime_profiling_strategy_t,
-) {
+) -> bool {
     use wasmtime_profiling_strategy_t::*;
-    drop(c.config.profiler(match strategy {
+    c.config.profiler(match strategy {
         WASMTIME_PROFILING_STRATEGY_NONE => ProfilingStrategy::None,
         WASMTIME_PROFILING_STRATEGY_JITDUMP => ProfilingStrategy::JitDump,
-    }));
+    }).is_ok()
 }

@@ -63,5 +63,6 @@ pub extern "C" fn wasm_global_get(g: &wasm_global_t, out: &mut wasm_val_t) {
 #[no_mangle]
 pub extern "C" fn wasm_global_set(g: &wasm_global_t, val: &wasm_val_t) {
     let result = g.global().borrow().set(val.val());
-    drop(result); // TODO: should communicate this via the api somehow?
+    // FIXME(WebAssembly/wasm-c-api#131) should communicate the error here
+    drop(result);
 }

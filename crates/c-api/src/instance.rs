@@ -46,8 +46,6 @@ pub unsafe extern "C" fn wasm_instance_new(
     }
     let store = &(*store).store.borrow();
     let module = &(*module).module.borrow();
-    // FIXME(WebAssembly/wasm-c-api#126) what else can we do with the `store`
-    // argument?
     if !Store::same(&store, module.store()) {
         if let Some(result) = result {
             let trap = Trap::new("wasm_store_t must match store in wasm_module_t");

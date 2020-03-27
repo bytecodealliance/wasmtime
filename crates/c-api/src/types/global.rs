@@ -4,6 +4,9 @@ use wasmtime::GlobalType;
 
 pub type wasm_mutability_t = u8;
 
+pub const WASM_CONST: wasm_mutability_t = 0;
+pub const WASM_VAR: wasm_mutability_t = 1;
+
 #[repr(transparent)]
 #[derive(Clone)]
 pub struct wasm_globaltype_t {
@@ -53,15 +56,15 @@ impl CGlobalType {
 pub extern "C" fn wasm_globaltype_new(
     ty: Box<wasm_valtype_t>,
     mutability: wasm_mutability_t,
-) -> Box<wasm_globaltype_t> {
+) -> Option<Box<wasm_globaltype_t>> {
     use wasmtime::Mutability::*;
     let mutability = match mutability {
-        0 => Const,
-        1 => Var,
-        _ => panic!("mutability out-of-range"),
+        WASM_CONST => Const,
+        WASM_VAR => Var,
+        _ => return None,
     };
     let ty = GlobalType::new(ty.ty.clone(), mutability);
-    Box::new(wasm_globaltype_t::new(ty))
+    Some(Box::new(wasm_globaltype_t::new(ty)))
 }
 
 #[no_mangle]
@@ -77,8 +80,8 @@ pub extern "C" fn wasm_globaltype_mutability(gt: &wasm_globaltype_t) -> wasm_mut
     use wasmtime::Mutability::*;
     let gt = gt.ty();
     match gt.ty.mutability() {
-        Const => 0,
-        Var => 1,
+        Const => WASM_CONST,
+        Var => WASM_VAR,
     }
 }
 
