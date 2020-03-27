@@ -188,7 +188,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", "simd_i64x2_arith") => return true, // FIXME Unsupported feature: proposed SIMD operator I64x2Mul
             ("simd", "simd_lane") => return true, // FIXME invalid u8 number: constant out of range: (v8x16.shuffle -1 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14...
             ("simd", "simd_load") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16Shl
-            ("simd", "simd_load_extend") => return true, // FIXME Unsupported feature: proposed SIMD operator I16x8Load8x8S { memarg: MemoryImmediate { flags: 0, offset: 0 } }
             ("simd", "simd_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16ShrS
 
             // Still working on implementing these. See #929.
