@@ -21,8 +21,6 @@ mod trap;
 mod types;
 mod val;
 mod vec;
-mod wasi;
-mod wat2wasm;
 
 pub use crate::config::*;
 pub use crate::engine::*;
@@ -40,7 +38,15 @@ pub use crate::trap::*;
 pub use crate::types::*;
 pub use crate::val::*;
 pub use crate::vec::*;
+
+#[cfg(feature = "wasi")]
+mod wasi;
+#[cfg(feature = "wasi")]
 pub use crate::wasi::*;
+
+#[cfg(feature = "wat")]
+mod wat2wasm;
+#[cfg(feature = "wat")]
 pub use crate::wat2wasm::*;
 
 #[repr(C)]

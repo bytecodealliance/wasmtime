@@ -1,4 +1,4 @@
-use crate::{wasi_instance_t, wasm_extern_t, wasm_store_t, ExternHost};
+use crate::{wasm_extern_t, wasm_store_t, ExternHost};
 use crate::{wasm_instance_t, wasm_module_t, wasm_name_t, wasm_trap_t};
 use std::str;
 use wasmtime::{Extern, Linker};
@@ -51,10 +51,11 @@ pub extern "C" fn wasmtime_linker_define(
     linker.define(module, name, item).is_ok()
 }
 
+#[cfg(feature = "wasi")]
 #[no_mangle]
 pub extern "C" fn wasmtime_linker_define_wasi(
     linker: &mut wasmtime_linker_t,
-    instance: &wasi_instance_t,
+    instance: &crate::wasi_instance_t,
 ) -> bool {
     let linker = &mut linker.linker;
     instance.add_to_linker(linker).is_ok()

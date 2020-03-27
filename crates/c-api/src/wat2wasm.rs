@@ -1,5 +1,4 @@
 use crate::wasm_byte_vec_t;
-use std::str;
 
 #[no_mangle]
 pub extern "C" fn wasmtime_wat2wasm(
@@ -7,7 +6,7 @@ pub extern "C" fn wasmtime_wat2wasm(
     ret: &mut wasm_byte_vec_t,
     error: Option<&mut wasm_byte_vec_t>,
 ) -> bool {
-    let wat = match str::from_utf8(wat.as_slice()) {
+    let wat = match std::str::from_utf8(wat.as_slice()) {
         Ok(s) => s,
         Err(_) => {
             if let Some(error) = error {

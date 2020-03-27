@@ -59,6 +59,51 @@ jobs:
         name: doc-api
         path: target/doc
 
+  # Quick checks of various feature combinations and whether things
+  # compile. The goal here isn't to run tests, mostly just serve as a
+  # double-check that Rust code compiles and is likely to work everywhere else.
+  checks:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+      with:
+        toolchain: nightly
+
+    # Check some feature combinations of the `wasmtime` crate
+    - run: cargo check --manifest-path crates/api/Cargo.toml --no-default-features
+    - run: cargo check --manifest-path crates/api/Cargo.toml --features wat
+    - run: cargo check --manifest-path crates/api/Cargo.toml --features lightbeam
+    - run: cargo check --manifest-path crates/api/Cargo.toml --features jitdump
+
+    # Check some feature combinations of the `wasmtime-c-api` crate
+    - run: cargo check --manifest-path crates/c-api/Cargo.toml --no-default-features
+    - run: cargo check --manifest-path crates/c-api/Cargo.toml --features wat
+    - run: cargo check --manifest-path crates/c-api/Cargo.toml --features wasi
+
+    # Check a few builds of the cranelift backend
+    # - only x86 backend support,
+    # - only arm64 backend support,
+    # - no debug_assertions.
+    - run: cargo check --manifest-path=./cranelift/Cargo.toml --bin clif-util --no-default-features --features=cranelift-codegen/arm64
+    - run: cargo check --manifest-path=./cranelift/Cargo.toml --bin clif-util --no-default-features --features=cranelift-codegen/x86
+    - run: cargo check --manifest-path=./cranelift/Cargo.toml --bin clif-util
+      env:
+        CARGO_PROFILE_DEV_DEBUG_ASSERTIONS: false
+
+    # Check whether `crates/wasi-common` cross-compiles to the following targets:
+    # * wasm32-unknown-emscripten
+    # * armv7-unknown-linux-gnueabihf
+    - run: |
+        rustup target add wasm32-unknown-emscripten
+        rustup target add armv7-unknown-linux-gnueabihf
+    - run: cargo check --target wasm32-unknown-emscripten -p wasi-common
+    - run: cargo check --target armv7-unknown-linux-gnueabihf -p wasi-common
+
+
   # Download our libFuzzer corpus and make sure that we can still handle all the
   # inputs.
   fuzz_corpora:
@@ -119,23 +164,6 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
-  # Check whether `crates/wasi-common` cross-compiles to the following targets:
-  # * wasm32-unknown-emscripten
-  # * armv7-unknown-linux-gnueabihf
-  crosscompile:
-    name: Cross-platform checks
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v1
-      with:
-        submodules: true
-    - uses: ./.github/actions/install-rust
-    - run: |
-        rustup target add wasm32-unknown-emscripten
-        cargo check --target wasm32-unknown-emscripten -p wasi-common
-        rustup target add armv7-unknown-linux-gnueabihf
-        cargo check --target armv7-unknown-linux-gnueabihf -p wasi-common
-
   # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
   # channels of Rust as well as macOS/Linux/Windows.
   test:
@@ -192,12 +220,6 @@ jobs:
     - run: cargo fetch --locked
     - run: cargo fetch --locked --manifest-path crates/test-programs/wasi-tests/Cargo.toml
 
-    # Build some various feature combinations
-    - run: cargo build --manifest-path crates/api/Cargo.toml --no-default-features
-    - run: cargo build --manifest-path crates/api/Cargo.toml --features wat
-    - run: cargo build --manifest-path crates/api/Cargo.toml --features lightbeam
-      if: matrix.rust == 'nightly'
-
     # Ensure all our examples build and execute
     - run: cargo run -p run-examples
 
@@ -233,17 +255,6 @@ jobs:
       continue-on-error: true
       env:
         RUST_BACKTRACE: 1
-
-    # Perform various builds of Cranelift under different configurations:
-    # - only x86 backend support,
-    # - only arm64 backend support,
-    # - no debug_assertions.
-    - run: cargo build --manifest-path=./cranelift/Cargo.toml --bin clif-util --no-default-features --features=cranelift-codegen/arm64
-      shell: bash
-    - run: cargo build --manifest-path=./cranelift/Cargo.toml --bin clif-util --no-default-features --features=cranelift-codegen/x86
-      shell: bash
-    - run: cargo rustc --manifest-path=./cranelift/Cargo.toml --bin clif-util -- -C debug_assertions=off
-      shell: bash
 
   # Verify that cranelift's code generation is deterministic
   meta_determinist_check:
