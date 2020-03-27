@@ -74,11 +74,13 @@ pub extern "C" fn wasmtime_config_strategy_set(
     strategy: wasmtime_strategy_t,
 ) -> bool {
     use wasmtime_strategy_t::*;
-    c.config.strategy(match strategy {
-        WASMTIME_STRATEGY_AUTO => Strategy::Auto,
-        WASMTIME_STRATEGY_CRANELIFT => Strategy::Cranelift,
-        WASMTIME_STRATEGY_LIGHTBEAM => Strategy::Lightbeam,
-    }).is_ok()
+    c.config
+        .strategy(match strategy {
+            WASMTIME_STRATEGY_AUTO => Strategy::Auto,
+            WASMTIME_STRATEGY_CRANELIFT => Strategy::Cranelift,
+            WASMTIME_STRATEGY_LIGHTBEAM => Strategy::Lightbeam,
+        })
+        .is_ok()
 }
 
 #[no_mangle]
@@ -108,8 +110,10 @@ pub extern "C" fn wasmtime_config_profiler_set(
     strategy: wasmtime_profiling_strategy_t,
 ) -> bool {
     use wasmtime_profiling_strategy_t::*;
-    c.config.profiler(match strategy {
-        WASMTIME_PROFILING_STRATEGY_NONE => ProfilingStrategy::None,
-        WASMTIME_PROFILING_STRATEGY_JITDUMP => ProfilingStrategy::JitDump,
-    }).is_ok()
+    c.config
+        .profiler(match strategy {
+            WASMTIME_PROFILING_STRATEGY_NONE => ProfilingStrategy::None,
+            WASMTIME_PROFILING_STRATEGY_JITDUMP => ProfilingStrategy::JitDump,
+        })
+        .is_ok()
 }
