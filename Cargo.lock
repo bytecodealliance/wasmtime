@@ -81,40 +81,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "auto_enums"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d86491c78ee14681838b5ea2d6493c79710368656bf2e58d41630874fa49a91"
-dependencies = [
- "auto_enums_core",
- "auto_enums_derive",
-]
-
-[[package]]
-name = "auto_enums_core"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01d9da2929a489e7b5567c4b5dc1337d3ba4416d5082235ad3bb307c2532a436"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "auto_enums_derive"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16cf6a019fb7fb5c4c034a1f8285f9fcf1af30118c4e3d39988a73d190bec7ae"
-dependencies = [
- "derive_utils",
- "lazy_static",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "autocfg"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -680,15 +646,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive-parse"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc5a831652fa80184d7b3905c66a8d8c071acd45b9b342024f3bfafb47bf7984"
-dependencies = [
- "derive_utils",
-]
-
-[[package]]
 name = "derive_arbitrary"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -876,28 +833,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "failure"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8529c2421efa3066a5cbd8063d2244603824daccb6936b079010bb2aa89464b"
-dependencies = [
- "backtrace",
- "failure_derive",
-]
-
-[[package]]
-name = "failure_derive"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "030a733c8287d6213886dd487564ff5c8f6aae10278b3588ed177f9d18f8d231"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
- "synstructure",
-]
-
-[[package]]
 name = "fake-simd"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -958,12 +893,6 @@ name = "fnv"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fad85553e09a6f881f739c29f0b00b0f01357c743266d478b68951ce23285f3"
-
-[[package]]
-name = "frunk_core"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e04cda45add94e71c2990de778ae13059897d77b773130a9bc225e2970c413e"
 
 [[package]]
 name = "fuchsia-cprng"
@@ -1235,7 +1164,6 @@ dependencies = [
  "staticvec",
  "thiserror",
  "typemap",
- "wasm-reader",
  "wasmparser",
  "wat",
 ]
@@ -2325,30 +2253,6 @@ dependencies = [
  "winapi",
  "winx",
  "yanix",
-]
-
-[[package]]
-name = "wasm-reader"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1841a399936f9436ca0a66ce6699a576dc1165f4f5c1e4b1507dca1a407b2d43"
-dependencies = [
- "auto_enums",
- "byteorder",
- "derive-parse",
- "derive_more",
- "failure",
- "wasm-reader-traits",
- "wasmparser",
-]
-
-[[package]]
-name = "wasm-reader-traits"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21cb1b641741d0d8d103d1276b94958fedbf4dae5d43e8e492d27697a9eb5531"
-dependencies = [
- "frunk_core",
 ]
 
 [[package]]

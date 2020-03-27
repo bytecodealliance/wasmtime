@@ -632,7 +632,6 @@ impl<'module, M> CodeGenSession<'module, M> {
         &'this mut self,
         func_idx: u32,
         reloc_sink: &'this mut dyn binemit::RelocSink,
-        trap_sink: &'this mut dyn binemit::TrapSink,
     ) -> Context<'this, M> {
         {
             let func_start = &mut self.func_starts[func_idx as usize];
@@ -647,7 +646,6 @@ impl<'module, M> CodeGenSession<'module, M> {
             asm: &mut self.assembler,
             current_function: func_idx,
             reloc_sink,
-            trap_sink,
             pointer_type: self.pointer_type,
             source_loc: Default::default(),
             func_starts: &self.func_starts,
@@ -789,7 +787,6 @@ pub struct Context<'this, M> {
     pointer_type: SignlessType,
     source_loc: SourceLoc,
     reloc_sink: &'this mut dyn binemit::RelocSink,
-    trap_sink: &'this mut dyn binemit::TrapSink,
     module_context: &'this M,
     current_function: u32,
     func_starts: &'this Vec<(Option<AssemblyOffset>, DynamicLabel)>,
@@ -6099,17 +6096,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         }
     }
 
-    pub fn trap(&mut self, trap_id: TrapCode) {
-        let function_start = (self.func_starts[self.current_function as usize]
-            .0
-            .unwrap()
-            .0) as u32;
-        self.trap_sink.trap(
-            u32::try_from(self.asm.offset().0).expect("Assembly offset overflowed u32")
-                - function_start,
-            self.source_loc,
-            trap_id,
-        );
+    pub fn trap(&mut self, _trap_id: TrapCode) {
+        // TODO: Emit trap info by writing the trap ID and current source location to a
+        //       `binemit::TrapSink`.
         dynasm!(self.asm
             ; ud2
         );
