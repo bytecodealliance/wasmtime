@@ -23,7 +23,10 @@ pub fn generate(doc: &witx::Document, config: &Config) -> TokenStream {
 
     let modules = doc.modules().map(|module| {
         let modname = names.module(&module.name);
-        let fs = module.funcs().map(|f| define_func(&names, &f));
+        let trait_name = names.trait_name(&module.name);
+        let fs = module
+            .funcs()
+            .map(|f| define_func(&names, &f, quote!(#trait_name)));
         let modtrait = define_module_trait(&names, &module);
         let ctx_type = names.ctx_type();
         quote!(
