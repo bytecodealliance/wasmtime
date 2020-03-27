@@ -21,7 +21,11 @@ done
 
 # Update the required version numbers of path dependencies.
 find -name Cargo.toml \
+    -not -path ./crates/wasi-common/WASI/tools/witx/Cargo.toml \
     -not -path ./crates/wasi-common/wig/WASI/tools/witx/Cargo.toml \
     -exec sed -i.bk \
         -e "/^cranelift/s/version = \"[^\"]*\"/version = \"$version\"/" \
         {} \;
+
+# Update the Cargo.lock file for the new versions.
+cargo update

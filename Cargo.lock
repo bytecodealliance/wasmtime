@@ -1027,9 +1027,9 @@ dependencies = [
 
 [[package]]
 name = "indoc"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f9553c1e16c114b8b77ebeb329e5f2876eed62a8d51178c8bc6bff0d65f98f8"
+checksum = "79255cf29f5711995ddf9ec261b4057b1deb34e66c90656c201e41376872c544"
 dependencies = [
  "indoc-impl",
  "proc-macro-hack",
@@ -1037,9 +1037,9 @@ dependencies = [
 
 [[package]]
 name = "indoc-impl"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b714fc08d0961716390977cdff1536234415ac37b509e34e5a983def8340fb75"
+checksum = "54554010aa3d17754e484005ea0022f1c93839aabc627c2c55f3d7b47206134c"
 dependencies = [
  "proc-macro-hack",
  "proc-macro2",
@@ -1124,7 +1124,7 @@ dependencies = [
 
 [[package]]
 name = "lightbeam"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "capstone",
@@ -1779,7 +1779,7 @@ dependencies = [
 
 [[package]]
 name = "run-examples"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "cc",
 ]
@@ -2063,7 +2063,7 @@ dependencies = [
 
 [[package]]
 name = "test-programs"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -2229,7 +2229,7 @@ checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
 
 [[package]]
 name = "wasi-common"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -2266,7 +2266,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -2292,7 +2292,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-c-api"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "wasi-common",
@@ -2303,7 +2303,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-cli"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "faerie",
@@ -2331,7 +2331,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-debug"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "faerie",
@@ -2345,7 +2345,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-environ"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "base64 0.12.0",
@@ -2392,7 +2392,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-fuzzing"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "arbitrary",
@@ -2408,7 +2408,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-jit"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -2432,7 +2432,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-obj"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "faerie",
@@ -2442,7 +2442,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-profiling"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -2459,7 +2459,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-py"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "pyo3",
@@ -2472,7 +2472,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-runtime"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "backtrace",
  "cc",
@@ -2489,7 +2489,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-rust"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "wasmtime",
@@ -2499,7 +2499,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-rust-macro"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2508,7 +2508,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wasi"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "log",
@@ -2521,7 +2521,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wast"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "wasmtime",
@@ -2557,7 +2557,7 @@ dependencies = [
 
 [[package]]
 name = "wig"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -2567,7 +2567,7 @@ dependencies = [
 
 [[package]]
 name = "wiggle"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "proptest",
  "thiserror",
@@ -2578,7 +2578,7 @@ dependencies = [
 
 [[package]]
 name = "wiggle-generate"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "heck",
@@ -2590,7 +2590,7 @@ dependencies = [
 
 [[package]]
 name = "wiggle-macro"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "syn",
  "wiggle",
@@ -2600,7 +2600,7 @@ dependencies = [
 
 [[package]]
 name = "wiggle-test"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "proptest",
  "wiggle",
@@ -2639,7 +2639,7 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "winx"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "bitflags",
  "cvt",
@@ -2661,7 +2661,7 @@ dependencies = [
 
 [[package]]
 name = "yanix"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "bitflags",
  "cfg-if",

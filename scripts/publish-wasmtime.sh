@@ -21,9 +21,9 @@ for cargo_toml in \
     crates/wasi-common/winx/Cargo.toml \
     crates/wasi-common/yanix/Cargo.toml \
     crates/wasi-common/wig/Cargo.toml \
-    crates/wiggle/crates/runtime/Cargo.toml \
-    crates/wiggle/crates/generate/Cargo.toml \
-    crates/wiggle/crates/test/Cargo.toml \
+    crates/wiggle/generate/Cargo.toml \
+    crates/wiggle/test/Cargo.toml \
+    crates/wiggle/macro/Cargo.toml \
     crates/wiggle/Cargo.toml \
     crates/wasi-common/Cargo.toml \
     crates/lightbeam/Cargo.toml \

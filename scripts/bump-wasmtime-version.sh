@@ -9,12 +9,13 @@ topdir=$(dirname "$0")/..
 cd "$topdir"
 
 # All the wasmtime-* crates have the same version number
-version="0.13.0"
+version="0.14.0"
 
 # Update the version numbers of the crates to $version. Skip crates with
 # a version of "0.0.0", which are unpublished.
 echo "Updating crate versions to $version"
 find crates -name Cargo.toml \
+    -not -path crates/wasi-common/WASI/tools/witx/Cargo.toml \
     -not -path crates/wasi-common/wig/WASI/tools/witx/Cargo.toml \
     -exec sed -i.bk -e "s/^version = \"[.*[^0.].*\"$/version = \"$version\"/" {} \;
 
@@ -23,12 +24,20 @@ sed -i.bk -e "s/^version = \"[.*[^0.].*\"$/version = \"$version\"/" Cargo.toml
 
 # Update the required version numbers of path dependencies.
 find -name Cargo.toml \
+    -not -path ./crates/wasi-common/WASI/tools/witx/Cargo.toml \
     -not -path ./crates/wasi-common/wig/WASI/tools/witx/Cargo.toml \
     -exec sed -i.bk \
     -e "/^\(wasmtime\|wiggle\)/s/version = \"[^\"]*\"/version = \"$version\"/" \
     {} \;
 find -name Cargo.toml \
+    -not -path ./crates/wasi-common/WASI/tools/witx/Cargo.toml \
     -not -path ./crates/wasi-common/wig/WASI/tools/witx/Cargo.toml \
     -exec sed -i.bk \
-    -e "/^\(wasi-common\|wig\|yanix\|winx\) = /s/version = \"[^\"]*\"/version = \"$version\"/" \
+    -e "/^\(wasi-common\|wig\|yanix\|winx\|lightbeam\) = /s/version = \"[^\"]*\"/version = \"$version\"/" \
     {} \;
+
+# Update the Cargo.lock files for the new versions.
+cargo update
+cd crates/test-programs/wasi-tests
+cargo update
+cd - >/dev/null

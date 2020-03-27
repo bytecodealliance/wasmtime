@@ -1,6 +1,6 @@
 [package]
 name = "lightbeam"
-version = "0.13.0"
+version = "0.14.0"
 authors = ["The Lightbeam Project Developers"]
 description = "An optimising one-pass streaming compiler for WebAssembly"
 license = "Apache-2.0 WITH LLVM-exception"
