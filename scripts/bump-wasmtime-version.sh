@@ -35,3 +35,9 @@ find -name Cargo.toml \
     -exec sed -i.bk \
     -e "/^\(wasi-common\|wig\|yanix\|winx\|lightbeam\) = /s/version = \"[^\"]*\"/version = \"$version\"/" \
     {} \;
+
+# Update the Cargo.lock files for the new versions.
+cargo update
+cd crates/test-programs/wasi-tests
+cargo update
+cd - >/dev/null

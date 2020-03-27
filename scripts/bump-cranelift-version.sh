@@ -26,3 +26,6 @@ find -name Cargo.toml \
     -exec sed -i.bk \
         -e "/^cranelift/s/version = \"[^\"]*\"/version = \"$version\"/" \
         {} \;
+
+# Update the Cargo.lock file for the new versions.
+cargo update
