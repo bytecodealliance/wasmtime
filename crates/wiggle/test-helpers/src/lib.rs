@@ -314,15 +314,9 @@ impl<'a> WasiCtx<'a> {
 #[macro_export]
 macro_rules! impl_errno {
     ( $errno:ty ) => {
-        impl<'a> wiggle::GuestErrorType<'a> for $errno {
-            type Context = WasiCtx<'a>;
+        impl wiggle::GuestErrorType for $errno {
             fn success() -> $errno {
                 <$errno>::Ok
-            }
-            fn from_error(e: GuestError, ctx: &WasiCtx) -> $errno {
-                eprintln!("GUEST ERROR: {:?}", e);
-                ctx.guest_errors.borrow_mut().push(e);
-                types::Errno::InvalidArg
             }
         }
     };

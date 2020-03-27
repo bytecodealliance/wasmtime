@@ -1,10 +1,14 @@
 use crate::{GuestError, GuestPtr};
 use std::mem;
 
-pub trait GuestErrorType<'a> {
-    type Context;
+/// A trait for types which are used to report errors. Each type used in the
+/// first result position of an interface function is used, by convention, to
+/// indicate whether the function was successful and subsequent results are valid,
+/// or whether an error occured. This trait allows wiggle to return the correct
+/// value when the interface function's idiomatic Rust method returns
+/// Ok(<rest of return values>).
+pub trait GuestErrorType {
     fn success() -> Self;
-    fn from_error(e: GuestError, ctx: &Self::Context) -> Self;
 }
 
 /// A trait for types that are intended to be pointees in `GuestPtr<T>`.

@@ -60,7 +60,7 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
             let err_typename = names.type_ref(&tref, anon_lifetime());
             quote! {
                 let e = wiggle::GuestError::InFunc { funcname: #funcname, location: #location, err: Box::new(e.into()) };
-                let err: #err_typename = wiggle::GuestErrorType::from_error(e, ctx);
+                let err: #err_typename = wiggle::GuestErrorType::from_error(e, ctx); // XXX replace with conversion method on trait!
                 return #abi_ret::from(err);
             }
         } else {

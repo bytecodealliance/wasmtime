@@ -23,17 +23,9 @@ fn document_equivelant() {
 
 type Result<T> = std::result::Result<T, types::Errno>;
 
-impl<'a> GuestErrorType<'a> for types::Errno {
-    type Context = WasiCtx<'a>;
-
+impl GuestErrorType for types::Errno {
     fn success() -> types::Errno {
         types::Errno::Success
-    }
-
-    fn from_error(e: GuestError, ctx: &Self::Context) -> types::Errno {
-        eprintln!("GUEST ERROR: {:?}", e);
-        ctx.guest_errors.borrow_mut().push(e);
-        types::Errno::Io
     }
 }
 
