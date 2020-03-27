@@ -9,6 +9,7 @@ keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
+include = ["src/**/*", "LICENSE", "WASI/phases"]
 
 [dependencies]
 anyhow = "1.0"
