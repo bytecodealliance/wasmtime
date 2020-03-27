@@ -200,7 +200,7 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
 // `TransformGroup` in `cranelift-codegen/meta/shared/legalize.rs`.
 //
 // Concretely, this defines private functions `narrow()`, and `expand()`.
-include!(concat!(env!("OUT_DIR"), "/legalizer.rs"));
+include!(concat!(env!("OUT_DIR_SECOND"), "/legalizer.rs"));
 
 /// Custom expansion for conditional trap instructions.
 /// TODO: Add CFG support to the Rust DSL patterns so we won't have to do this.

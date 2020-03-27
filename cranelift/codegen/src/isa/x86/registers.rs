@@ -2,7 +2,7 @@
 
 use crate::isa::registers::{RegBank, RegClass, RegClassData, RegInfo, RegUnit};
 
-include!(concat!(env!("OUT_DIR"), "/registers-x86.rs"));
+include!(concat!(env!("OUT_DIR_THIRD"), "/registers-x86.rs"));
 
 #[cfg(test)]
 mod tests {

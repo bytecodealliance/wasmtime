@@ -6,5 +6,5 @@ use crate::isa::constraints::*;
 use crate::isa::enc_tables::*;
 use crate::isa::encoding::RecipeSizing;
 
-include!(concat!(env!("OUT_DIR"), "/encoding-arm32.rs"));
-include!(concat!(env!("OUT_DIR"), "/legalize-arm32.rs"));
+include!(concat!(env!("OUT_DIR_THIRD"), "/encoding-arm32.rs"));
+include!(concat!(env!("OUT_DIR_THIRD"), "/legalize-arm32.rs"));

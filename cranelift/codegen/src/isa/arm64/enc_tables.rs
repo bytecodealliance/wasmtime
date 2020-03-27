@@ -6,5 +6,5 @@ use crate::isa::constraints::*;
 use crate::isa::enc_tables::*;
 use crate::isa::encoding::RecipeSizing;
 
-include!(concat!(env!("OUT_DIR"), "/encoding-arm64.rs"));
-include!(concat!(env!("OUT_DIR"), "/legalize-arm64.rs"));
+include!(concat!(env!("OUT_DIR_THIRD"), "/encoding-arm64.rs"));
+include!(concat!(env!("OUT_DIR_THIRD"), "/legalize-arm64.rs"));

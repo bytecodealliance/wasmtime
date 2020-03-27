@@ -18,8 +18,8 @@ use crate::regalloc::RegDiversions;
 
 use cranelift_codegen_shared::isa::x86::EncodingBits;
 
-include!(concat!(env!("OUT_DIR"), "/encoding-x86.rs"));
-include!(concat!(env!("OUT_DIR"), "/legalize-x86.rs"));
+include!(concat!(env!("OUT_DIR_THIRD"), "/encoding-x86.rs"));
+include!(concat!(env!("OUT_DIR_THIRD"), "/legalize-x86.rs"));
 
 /// Whether the REX prefix is needed for encoding extended registers (via REX.RXB).
 ///

@@ -14,5 +14,5 @@ use crate::predicates;
 // - `LEVEL2`
 // - `ENCLIST`
 // - `INFO`
-include!(concat!(env!("OUT_DIR"), "/encoding-riscv.rs"));
-include!(concat!(env!("OUT_DIR"), "/legalize-riscv.rs"));
+include!(concat!(env!("OUT_DIR_THIRD"), "/encoding-riscv.rs"));
+include!(concat!(env!("OUT_DIR_THIRD"), "/legalize-riscv.rs"));

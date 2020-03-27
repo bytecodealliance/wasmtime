@@ -12,7 +12,7 @@ use crate::isa::{RegUnit, StackBase, StackBaseMask, StackRef, TargetIsa};
 use crate::regalloc::RegDiversions;
 use cranelift_codegen_shared::isa::x86::EncodingBits;
 
-include!(concat!(env!("OUT_DIR"), "/binemit-x86.rs"));
+include!(concat!(env!("OUT_DIR_THIRD"), "/binemit-x86.rs"));
 
 // Convert a stack base to the corresponding register.
 fn stk_base(base: StackBase) -> RegUnit {

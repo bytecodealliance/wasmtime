@@ -14,9 +14,12 @@
 // The build script expects to be run from the directory where this build.rs file lives. The
 // current directory is used to find the sources.
 
+extern crate pathdiff;
+
 use cranelift_codegen_meta as meta;
 
 use std::env;
+use std::path::PathBuf;
 use std::process;
 use std::time::Instant;
 
@@ -61,6 +64,23 @@ fn main() {
         process::exit(1);
     }
 
+    let out_dir = PathBuf::from(out_dir);
+
+    // Produce environment variables relative to root of project instead of absolute
+    // to enable compatibility with build systems that seperate generating build.rs config
+    // metadata from when the build executes
+    let relative_path =
+        pathdiff::diff_paths(&out_dir, &cur_dir).expect("Unable to construct a relative path");
+    println!("cargo:rustc-env=OUT_DIR_TOP=../{}", relative_path.display());
+    println!(
+        "cargo:rustc-env=OUT_DIR_SECOND=../../{}",
+        relative_path.display()
+    );
+    println!(
+        "cargo:rustc-env=OUT_DIR_THIRD=../../../{}",
+        relative_path.display()
+    );
+
     if env::var("CRANELIFT_VERBOSE").is_ok() {
         for isa in &isas {
             println!("cargo:warning=Includes support for {} ISA", isa.to_string());
@@ -69,6 +89,6 @@ fn main() {
             "cargo:warning=Build step took {:?}.",
             Instant::now() - start_time
         );
-        println!("cargo:warning=Generated files are in {}", out_dir);
+        println!("cargo:warning=Generated files are in {}", out_dir.display());
     }
 }

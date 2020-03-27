@@ -42,7 +42,7 @@ pub type ValueListPool = entity::ListPool<Value>;
 // - The `const TYPE_SETS : [ValueTypeSet; N]` table.
 // - The `const OPERAND_CONSTRAINTS : [OperandConstraint; N]` table.
 //
-include!(concat!(env!("OUT_DIR"), "/opcodes.rs"));
+include!(concat!(env!("OUT_DIR_SECOND"), "/opcodes.rs"));
 
 impl Display for Opcode {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {

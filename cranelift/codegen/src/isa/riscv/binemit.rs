@@ -7,7 +7,7 @@ use crate::predicates::is_signed_int;
 use crate::regalloc::RegDiversions;
 use core::u32;
 
-include!(concat!(env!("OUT_DIR"), "/binemit-riscv.rs"));
+include!(concat!(env!("OUT_DIR_THIRD"), "/binemit-riscv.rs"));
 
 /// R-type instructions.
 ///
