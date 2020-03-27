@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-obj"
-version = "0.13.0"
+version = "0.14.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Native object file output for WebAsssembly code in Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -12,7 +12,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-wasmtime-environ = { path = "../environ", version = "0.13.0" }
+wasmtime-environ = { path = "../environ", version = "0.14.0" }
 faerie = "0.15.0"
 more-asserts = "0.2.1"
 

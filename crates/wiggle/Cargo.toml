@@ -1,6 +1,6 @@
 [package]
 name = "wiggle"
-version = "0.13.0"
+version = "0.14.0"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkonk@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -13,13 +13,13 @@ include = ["src/**/*", "LICENSE"]
 [dependencies]
 thiserror = "1"
 witx = { path = "../wasi-common/wig/WASI/tools/witx", version = "0.8.4", optional = true }
-wiggle-macro = { path = "macro", version = "0.13.0" }
+wiggle-macro = { path = "macro", version = "0.14.0" }
 
 [badges]
 maintenance = { status = "actively-developed" }
 
 [dev-dependencies]
-wiggle-test = { path = "test-helpers", version = "0.13.0" }
+wiggle-test = { path = "test-helpers", version = "0.14.0" }
 proptest = "0.9"
 
 [features]

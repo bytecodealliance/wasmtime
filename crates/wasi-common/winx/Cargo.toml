@@ -1,6 +1,6 @@
 [package]
 name = "winx"
-version = "0.13.0"
+version = "0.14.0"
 authors = ["Jakub Konka <kubkon@jakubkonka.com>"]
 description = "Windows API helper library"
 documentation = "https://docs.rs/winx"

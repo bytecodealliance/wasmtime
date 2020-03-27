@@ -1,6 +1,6 @@
 [package]
 name = "wiggle-test"
-version = "0.13.0"
+version = "0.14.0"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 license = "Apache-2.0 WITH LLVM-exception"
 edition = "2018"
@@ -12,7 +12,7 @@ include = ["src/**/*", "LICENSE"]
 
 [dependencies]
 proptest = "0.9"
-wiggle = { path = "..", version = "0.13.0" }
+wiggle = { path = "..", version = "0.14.0" }
 
 [badges]
 maintenance = { status = "actively-developed" }
