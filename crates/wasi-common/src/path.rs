@@ -1,7 +1,7 @@
+use crate::entry::{Descriptor, Entry, EntryRights};
 use crate::sys;
 use crate::sys::entry::OsHandle;
 use crate::wasi::{types, Errno, Result};
-use crate::{entry::Descriptor, entry::Entry};
 use std::path::{Component, Path};
 use std::str;
 use wiggle::{GuestBorrows, GuestPtr};
@@ -102,8 +102,7 @@ impl<'a, 'b> PathRef<'a, 'b> {
 /// This is a workaround for not having Capsicum support in the OS.
 pub(crate) fn get(
     fe: &Entry,
-    rights_base: types::Rights,
-    rights_inheriting: types::Rights,
+    required_rights: &EntryRights,
     dirflags: types::Lookupflags,
     path: &GuestPtr<'_, str>,
     needs_final_component: bool,
@@ -129,10 +128,12 @@ pub(crate) fn get(
         return Err(Errno::Notdir);
     }
 
-    let dirfd = fe
-        .as_descriptor(rights_base, rights_inheriting)?
-        .as_file()?
-        .try_clone()?;
+    let desc = fe.as_descriptor(required_rights)?;
+    let dirfd = match &*desc.borrow() {
+        Descriptor::OsHandle(file) => file.try_clone().map(|f| OsHandle::from(f).into())?,
+        Descriptor::VirtualFile(virt) => virt.try_clone().map(Descriptor::VirtualFile)?,
+        _ => return Err(Errno::Badf),
+    };
 
     // Stack of directory file descriptors. Index 0 always corresponds with the directory provided
     // to this function. Entering a directory causes a file descriptor to be pushed, while handling

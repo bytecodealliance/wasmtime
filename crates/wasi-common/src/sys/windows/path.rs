@@ -1,4 +1,4 @@
-use crate::entry::Descriptor;
+use crate::entry::{Descriptor, EntryRights};
 use crate::fd;
 use crate::path::PathGet;
 use crate::sys::entry::OsHandle;
@@ -41,14 +41,13 @@ impl PathGetExt for PathGet {
 }
 
 pub(crate) fn open_rights(
-    rights_base: types::Rights,
-    rights_inheriting: types::Rights,
+    input_rights: &EntryRights,
     oflags: types::Oflags,
     fdflags: types::Fdflags,
-) -> (types::Rights, types::Rights) {
+) -> EntryRights {
     // which rights are needed on the dirfd?
     let mut needed_base = types::Rights::PATH_OPEN;
-    let mut needed_inheriting = rights_base | rights_inheriting;
+    let mut needed_inheriting = input_rights.base | input_rights.inheriting;
 
     // convert open flags
     if oflags.contains(&types::Oflags::CREAT) {
@@ -66,7 +65,7 @@ pub(crate) fn open_rights(
         needed_inheriting |= types::Rights::FD_SYNC;
     }
 
-    (needed_base, needed_inheriting)
+    EntryRights::new(needed_base, needed_inheriting)
 }
 
 pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {

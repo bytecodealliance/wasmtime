@@ -5,6 +5,7 @@ use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
 use std::convert::TryInto;
 use std::os::windows::io::AsRawHandle;
+use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::Mutex;
 use std::thread;
@@ -140,8 +141,7 @@ fn handle_timeout_event(timeout_event: ClockEventData, events: &mut Vec<types::E
 }
 
 fn handle_rw_event(event: FdEventData, out_events: &mut Vec<types::Event>) {
-    let descriptor: &Descriptor = &event.descriptor;
-    let size = match descriptor {
+    let size = match &*event.descriptor.borrow() {
         Descriptor::OsHandle(os_handle) => {
             if event.r#type == types::Eventtype::FdRead {
                 os_handle.metadata().map(|m| m.len()).map_err(Into::into)
@@ -201,8 +201,8 @@ pub(crate) fn oneoff(
     let mut pipe_events = vec![];
 
     for event in fd_events {
-        let descriptor: &Descriptor = &event.descriptor;
-        match descriptor {
+        let descriptor = Rc::clone(&event.descriptor);
+        match &*descriptor.borrow() {
             Descriptor::Stdin if event.r#type == types::Eventtype::FdRead => {
                 stdin_events.push(event)
             }
@@ -230,7 +230,7 @@ pub(crate) fn oneoff(
             Descriptor::VirtualFile(_) => {
                 panic!("virtual files do not get rw events");
             }
-        }
+        };
     }
 
     let immediate = !immediate_events.is_empty();

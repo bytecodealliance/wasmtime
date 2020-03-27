@@ -26,7 +26,7 @@ pub(crate) fn oneoff(
                 // events we filtered before. If we get something else here, the code has a serious bug.
                 _ => unreachable!(),
             };
-            unsafe { PollFd::new(event.descriptor.as_raw_fd(), flags) }
+            unsafe { PollFd::new(event.descriptor.borrow().as_raw_fd(), flags) }
         })
         .collect();
 
@@ -69,8 +69,8 @@ fn handle_timeout_event(timeout: ClockEventData, events: &mut Vec<types::Event>)
     });
 }
 
-fn handle_fd_event<'a>(
-    ready_events: impl Iterator<Item = (FdEventData<'a>, yanix::poll::PollFd)>,
+fn handle_fd_event(
+    ready_events: impl Iterator<Item = (FdEventData, yanix::poll::PollFd)>,
     events: &mut Vec<types::Event>,
 ) -> Result<()> {
     use crate::entry::Descriptor;
@@ -103,7 +103,7 @@ fn handle_fd_event<'a>(
         log::debug!("poll_oneoff_handle_fd_event revents = {:?}", revents);
 
         let nbytes = if fd_event.r#type == types::Eventtype::FdRead {
-            query_nbytes(&fd_event.descriptor)?
+            query_nbytes(&fd_event.descriptor.borrow())?
         } else {
             0
         };
