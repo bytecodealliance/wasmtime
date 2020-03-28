@@ -9,6 +9,7 @@
 
 use crate::Variable;
 use alloc::vec::Vec;
+use core::convert::TryInto;
 use core::mem;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::SecondaryMap;
@@ -185,10 +186,13 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
         cur.ins().null(ty)
     } else if ty.is_vector() {
         let scalar_ty = ty.lane_type();
-        if scalar_ty.is_int() {
-            cur.ins().iconst(ty, 0)
-        } else if scalar_ty.is_bool() {
-            cur.ins().bconst(ty, false)
+        if scalar_ty.is_int() || scalar_ty.is_bool() {
+            let zero = cur.func.dfg.constants.insert(
+                core::iter::repeat(0)
+                    .take(ty.bytes().try_into().unwrap())
+                    .collect(),
+            );
+            cur.ins().vconst(ty, zero)
         } else if scalar_ty == F32 {
             let scalar = cur.ins().f32const(Ieee32::with_bits(0));
             cur.ins().splat(ty, scalar)
