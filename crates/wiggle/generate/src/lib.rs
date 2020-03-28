@@ -8,6 +8,8 @@ mod types;
 use proc_macro2::TokenStream;
 use quote::quote;
 
+use lifetimes::anon_lifetime;
+
 pub use config::Config;
 pub use funcs::define_func;
 pub use module_trait::define_module_trait;
@@ -18,6 +20,17 @@ pub fn generate(doc: &witx::Document, config: &Config) -> TokenStream {
     let names = Names::new(config); // TODO parse the names from the invocation of the macro, or from a file?
 
     let types = doc.typenames().map(|t| define_datatype(&names, &t));
+
+    let guest_error_methods = doc.error_types().map(|t| {
+        let typename = names.type_ref(&t, anon_lifetime());
+        let err_method = names.guest_error_conversion_method(&t);
+        quote!(fn #err_method(&self, e: wiggle::GuestError) -> #typename;)
+    });
+    let guest_error_conversion = quote! {
+        pub trait GuestErrorConversion {
+            #(#guest_error_methods)*
+        }
+    };
 
     let modules = doc.modules().map(|module| {
         let modname = names.module(&module.name);
@@ -52,6 +65,7 @@ pub fn generate(doc: &witx::Document, config: &Config) -> TokenStream {
     quote!(
         pub mod types {
             #(#types)*
+            #guest_error_conversion
         }
         #(#modules)*
         #metadata

@@ -313,10 +313,16 @@ impl<'a> WasiCtx<'a> {
 // with these errors. We just push them to vecs.
 #[macro_export]
 macro_rules! impl_errno {
-    ( $errno:ty ) => {
+    ( $errno:ty, $convert:path ) => {
         impl wiggle::GuestErrorType for $errno {
             fn success() -> $errno {
                 <$errno>::Ok
+            }
+        }
+        impl<'a> $convert for WasiCtx<'a> {
+            fn into_errno(&self, e: wiggle::GuestError) -> $errno {
+                eprintln!("GuestError: {:?}", e);
+                <$errno>::InvalidArg
             }
         }
     };

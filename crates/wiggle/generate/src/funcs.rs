@@ -58,9 +58,10 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
                 _ => unreachable!("err should always be passed by value"),
             };
             let err_typename = names.type_ref(&tref, anon_lifetime());
+            let err_method = names.guest_error_conversion_method(&tref);
             quote! {
                 let e = wiggle::GuestError::InFunc { funcname: #funcname, location: #location, err: Box::new(e.into()) };
-                let err: #err_typename = wiggle::GuestErrorType::from_error(e, ctx); // XXX replace with conversion method on trait!
+                let err: #err_typename = GuestErrorConversion::#err_method(ctx, e); // XXX replace with conversion method on trait!
                 return #abi_ret::from(err);
             }
         } else {
