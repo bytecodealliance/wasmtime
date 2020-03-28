@@ -20,7 +20,7 @@ namespace Wasmtime
         public uint Minimum { get; private set; }
 
         /// <summary>
-        /// The minimum memory size (in WebAssembly page units).
+        /// The maximum memory size (in WebAssembly page units).
         /// </summary>
         public uint Maximum { get; private set; }
 
