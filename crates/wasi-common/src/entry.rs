@@ -115,9 +115,9 @@ impl EntryRights {
 
 impl fmt::Display for EntryRights {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(
+        write!(
             f,
-            "EntryRights {{\n\tbase: {},\n\tinheriting: {}\n}}",
+            "EntryRights {{ base: {}, inheriting: {} }}",
             self.base, self.inheriting
         )
     }

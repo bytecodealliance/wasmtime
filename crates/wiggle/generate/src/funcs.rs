@@ -38,9 +38,17 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
     };
 
     let err_type = coretype.ret.map(|ret| ret.param.tref);
-    let err_val = err_type
+    let ret_err = err_type
         .clone()
-        .map(|_res| quote!(#abi_ret::from(e)))
+        .map(|_res| {
+            quote! {
+                #[cfg(feature = "trace_log")]
+                {
+                    log::trace!("     | errno={}", e);
+                }
+                return #abi_ret::from(e);
+            }
+        })
         .unwrap_or_else(|| quote!(()));
 
     let error_handling = |location: &str| -> TokenStream {
@@ -78,13 +86,39 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
     let (trait_rets, trait_bindings) = if func.results.len() < 2 {
         (quote!({}), quote!(_))
     } else {
-        let trait_rets = func
+        let trait_rets: Vec<_> = func
             .results
             .iter()
             .skip(1)
-            .map(|result| names.func_param(&result.name));
-        let tuple = quote!((#(#trait_rets),*));
-        (tuple.clone(), tuple)
+            .map(|result| names.func_param(&result.name))
+            .collect();
+        let bindings = quote!((#(#trait_rets),*));
+        let names: Vec<_> = func
+            .results
+            .iter()
+            .skip(1)
+            .map(|result| {
+                let name = names.func_param(&result.name);
+                let fmt = match &*result.tref.type_() {
+                    witx::Type::Builtin(_)
+                    | witx::Type::Enum(_)
+                    | witx::Type::Flags(_)
+                    | witx::Type::Handle(_)
+                    | witx::Type::Int(_) => "{}",
+                    _ => "{:?}",
+                };
+                format!("{}={}", name.to_string(), fmt)
+            })
+            .collect();
+        let trace_fmt = format!("     | result=({})", names.join(","));
+        let rets = quote! {
+            #[cfg(feature = "trace_log")]
+            {
+                log::trace!(#trace_fmt, #(#trait_rets),*);
+            }
+            (#(#trait_rets),*)
+        };
+        (rets, bindings)
     };
 
     // Return value pointers need to be validated before the api call, then
@@ -101,18 +135,40 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
         let err_typename = names.type_ref(&err_type, anon_lifetime());
         quote! {
             let success:#err_typename = wiggle::GuestErrorType::success();
+            #[cfg(feature = "trace_log")]
+            {
+                log::trace!("     | errno={}", success);
+            }
             #abi_ret::from(success)
         }
     } else {
         quote!()
     };
 
+    let (placeholders, args): (Vec<_>, Vec<_>) = func
+        .params
+        .iter()
+        .map(|param| {
+            let name = names.func_param(&param.name);
+            let fmt = if passed_by_reference(&*param.tref.type_()) {
+                "{:?}"
+            } else {
+                "{}"
+            };
+            (format!("{}={}", name.to_string(), fmt), quote!(#name))
+        })
+        .unzip();
+    let trace_fmt = format!("{}({})", ident.to_string(), placeholders.join(","));
     quote!(pub fn #ident(#abi_args) -> #abi_ret {
         #(#marshal_args)*
         #(#marshal_rets_pre)*
+        #[cfg(feature = "trace_log")]
+        {
+            log::trace!(#trace_fmt, #(#args),*);
+        }
         let #trait_bindings  = match ctx.#ident(#(#trait_args),*) {
-            Ok(#trait_bindings) => #trait_rets,
-            Err(e) => { return #err_val; },
+            Ok(#trait_bindings) => { #trait_rets },
+            Err(e) => { #ret_err },
         };
         #(#marshal_rets_post)*
         #success
