@@ -36,6 +36,11 @@ cpu-time = "1.0"
 maintenance = { status = "actively-developed" }
 
 [features]
+default = ["trace_log"]
+# This feature enables `log::trace` calls in syscalls shims, in effect
+# emulating something like `strace`. This feature is an opt-out and hence
+# enabled by default.
+trace_log = []
 # Need to make the wiggle_metadata feature available to consumers of this
 # crate if they want the snapshots to have metadata available.
 wiggle_metadata = ["wiggle/wiggle_metadata"]
