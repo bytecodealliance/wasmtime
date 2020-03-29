@@ -442,16 +442,6 @@ pub(crate) fn symlink(old_path: &str, resolved: PathGet) -> Result<()> {
         Some(code) => {
             log::debug!("path_symlink at symlink_file error code={:?}", code);
             match code as u32 {
-                winerror::ERROR_NOT_A_REPARSE_POINT => {
-                    // try creating a dir symlink instead
-                    return symlink_dir(old_path, new_path).map_err(Into::into);
-                }
-                winerror::ERROR_ACCESS_DENIED => {
-                    // does the target exist?
-                    if new_path.exists() {
-                        return Err(Errno::Exist);
-                    }
-                }
                 // If the target contains a trailing slash, the Windows API returns
                 // ERROR_INVALID_NAME (which corresponds to ENOENT) instead of
                 // ERROR_ALREADY_EXISTS (which corresponds to EEXIST)
