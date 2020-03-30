@@ -5727,7 +5727,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                             self.block_state.regs.mark_used(*r);
                         }
                         CCLoc::Stack(offset) => {
-                            *offset += self.block_state.depth.0 as i32;
+                            *offset -= self.block_state.depth.0 as i32;
                         }
                     }
 
