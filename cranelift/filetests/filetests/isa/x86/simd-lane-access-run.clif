@@ -177,7 +177,7 @@ block0:
     v5 = vall_true v4
     return v5
 }
-; run:
+; run
 
 function %swizzle_with_overflow() -> b1 {
 block0:
@@ -190,4 +190,4 @@ block0:
     v5 = vall_true v4
     return v5
 }
-; run:
+; run
