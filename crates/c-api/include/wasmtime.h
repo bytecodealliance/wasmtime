@@ -65,6 +65,10 @@ WASM_API_EXTERN bool wasmtime_wat2wasm(
     own wasm_byte_vec_t *error_message
 );
 
+///////////////////////////////////////////////////////////////////////////////
+//
+// wasmtime_linker_t extension type, binding the `Linker` type in the Rust API
+
 #define WASMTIME_DECLARE_OWN(name) \
   typedef struct wasmtime_##name##_t wasmtime_##name##_t; \
   \
@@ -100,6 +104,10 @@ WASM_API_EXTERN wasm_instance_t* wasmtime_linker_instantiate(
     own wasm_trap_t **trap
 );
 
+///////////////////////////////////////////////////////////////////////////////
+//
+// wasmtime_caller_t extension, binding the `Caller` type in the Rust API
+
 typedef struct wasmtime_caller_t wasmtime_caller_t;
 
 typedef own wasm_trap_t* (*wasmtime_func_callback_t)(const wasmtime_caller_t* caller, const wasm_val_t args[], wasm_val_t results[]);
@@ -116,6 +124,13 @@ WASM_API_EXTERN own wasm_func_t* wasmtime_func_new_with_env(
 );
 
 WASM_API_EXTERN own wasm_extern_t* wasmtime_caller_export_get(const wasmtime_caller_t* caller, const wasm_name_t* name);
+
+///////////////////////////////////////////////////////////////////////////////
+//
+// Extensions to `wasm_frame_t`
+
+WASM_API_EXTERN const wasm_name_t *wasmtime_frame_func_name(const wasm_frame_t*);
+WASM_API_EXTERN const wasm_name_t *wasmtime_frame_module_name(const wasm_frame_t*);
 
 #undef own
 
