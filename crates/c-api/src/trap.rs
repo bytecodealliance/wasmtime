@@ -1,4 +1,5 @@
 use crate::{wasm_frame_vec_t, wasm_instance_t, wasm_name_t, wasm_store_t};
+use once_cell::unsync::OnceCell;
 use wasmtime::{HostRef, Trap};
 
 #[repr(C)]
@@ -18,7 +19,10 @@ impl wasm_trap_t {
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_frame_t {
-    _unused: [u8; 0],
+    trap: HostRef<Trap>,
+    idx: usize,
+    func_name: OnceCell<Option<wasm_name_t>>,
+    module_name: OnceCell<Option<wasm_name_t>>,
 }
 
 wasmtime_c_api_macros::declare_own!(wasm_frame_t);
@@ -50,18 +54,65 @@ pub extern "C" fn wasm_trap_message(trap: &wasm_trap_t, out: &mut wasm_message_t
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_trap_origin(_trap: &wasm_trap_t) -> Option<Box<wasm_frame_t>> {
-    None
+pub extern "C" fn wasm_trap_origin(raw: &wasm_trap_t) -> Option<Box<wasm_frame_t>> {
+    let trap = raw.trap.borrow();
+    if trap.trace().len() > 0 {
+        Some(Box::new(wasm_frame_t {
+            trap: raw.trap.clone(),
+            idx: 0,
+            func_name: OnceCell::new(),
+            module_name: OnceCell::new(),
+        }))
+    } else {
+        None
+    }
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_trap_trace(_trap: &wasm_trap_t, out: &mut wasm_frame_vec_t) {
-    out.set_buffer(Vec::new());
+pub extern "C" fn wasm_trap_trace(raw: &wasm_trap_t, out: &mut wasm_frame_vec_t) {
+    let trap = raw.trap.borrow();
+    let vec = (0..trap.trace().len())
+        .map(|idx| {
+            Some(Box::new(wasm_frame_t {
+                trap: raw.trap.clone(),
+                idx,
+                func_name: OnceCell::new(),
+                module_name: OnceCell::new(),
+            }))
+        })
+        .collect();
+    out.set_buffer(vec);
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_frame_func_index(_arg1: *const wasm_frame_t) -> u32 {
-    unimplemented!("wasm_frame_func_index")
+pub extern "C" fn wasm_frame_func_index(frame: &wasm_frame_t) -> u32 {
+    frame.trap.borrow().trace()[frame.idx].func_index()
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_frame_func_name(frame: &wasm_frame_t) -> Option<&wasm_name_t> {
+    frame
+        .func_name
+        .get_or_init(|| {
+            let trap = frame.trap.borrow();
+            trap.trace()[frame.idx]
+                .func_name()
+                .map(|s| wasm_name_t::from(s.to_string().into_bytes()))
+        })
+        .as_ref()
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_frame_module_name(frame: &wasm_frame_t) -> Option<&wasm_name_t> {
+    frame
+        .module_name
+        .get_or_init(|| {
+            let trap = frame.trap.borrow();
+            trap.trace()[frame.idx]
+                .module_name()
+                .map(|s| wasm_name_t::from(s.to_string().into_bytes()))
+        })
+        .as_ref()
 }
 
 #[no_mangle]
