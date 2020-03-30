@@ -1,6 +1,6 @@
 //! Memory management for linear memories.
 //!
-//! `LinearMemory` is to WebAssembly linear memories what `Table` is to WebAssembly tables.
+//! `RuntimeLinearMemory` is to WebAssembly linear memories what `Table` is to WebAssembly tables.
 
 use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
@@ -10,30 +10,32 @@ use std::convert::TryFrom;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
 /// A memory allocator
-pub trait MemoryCreator: Send + Sync {
-    /// Create new LinearMemory
-    fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn LinearMemory>, String>;
+pub trait RuntimeMemoryCreator: Send + Sync {
+    /// Create new RuntimeLinearMemory
+    fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn RuntimeLinearMemory>, String>;
 }
 
-/// A default memory creator used by Wasmtime
+/// A default memory allocator used by Wasmtime
 pub struct DefaultMemoryCreator;
 
-impl MemoryCreator for DefaultMemoryCreator {
+impl RuntimeMemoryCreator for DefaultMemoryCreator {
     /// Create new MmapMemory
-    fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn LinearMemory>, String> {
-        Ok(Box::new(MmapMemory::new(plan)?) as Box<dyn LinearMemory>)
+    fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn RuntimeLinearMemory>, String> {
+        Ok(Box::new(MmapMemory::new(plan)?) as Box<dyn RuntimeLinearMemory>)
     }
 }
 
 /// A linear memory
-pub trait LinearMemory {
+pub trait RuntimeLinearMemory {
     /// Returns the number of allocated wasm pages.
     fn size(&self) -> u32;
+
     /// Grow memory by the specified amount of wasm pages.
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of wasm pages.
     fn grow(&self, delta: u32) -> Option<u32>;
+
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
     fn vmmemory(&self) -> VMMemoryDefinition;
 }
@@ -108,7 +110,7 @@ impl MmapMemory {
     }
 }
 
-impl LinearMemory for MmapMemory {
+impl RuntimeLinearMemory for MmapMemory {
     /// Returns the number of allocated wasm pages.
     fn size(&self) -> u32 {
         self.mmap.borrow().size

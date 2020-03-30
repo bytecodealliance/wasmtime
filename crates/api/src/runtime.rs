@@ -1,3 +1,5 @@
+use crate::externals::MemoryCreator;
+use crate::trampoline::MemoryCreatorProxy;
 use anyhow::Result;
 use std::cell::RefCell;
 use std::fmt;
@@ -9,7 +11,7 @@ use wasmtime_environ::settings::{self, Configurable};
 use wasmtime_environ::CacheConfig;
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent};
-use wasmtime_runtime::MemoryCreator;
+use wasmtime_runtime::RuntimeMemoryCreator;
 
 // Runtime Environment
 
@@ -28,7 +30,7 @@ pub struct Config {
     pub(crate) strategy: CompilationStrategy,
     pub(crate) cache_config: CacheConfig,
     pub(crate) profiler: Arc<dyn ProfilingAgent>,
-    pub(crate) memory_creator: Option<Arc<dyn MemoryCreator>>,
+    pub(crate) memory_creator: Option<MemoryCreatorProxy>,
 }
 
 impl Config {
@@ -331,7 +333,7 @@ impl Config {
 
     /// Sets a custom memory creator
     pub fn with_host_memory(&mut self, mem_creator: Arc<dyn MemoryCreator>) -> &mut Self {
-        self.memory_creator = Some(mem_creator);
+        self.memory_creator = Some(MemoryCreatorProxy { mem_creator });
         self
     }
 }
@@ -511,9 +513,9 @@ impl Store {
         &self.inner.engine
     }
 
-    /// Returns an optional reference to a memory ['MemoryCreator']
-    pub(crate) fn memory_creator(&self) -> Option<&dyn MemoryCreator> {
-        self.engine().config.memory_creator.as_ref().map(|a| &**a)
+    /// Returns an optional reference to a ['RuntimeMemoryCreator']
+    pub(crate) fn memory_creator(&self) -> Option<&dyn RuntimeMemoryCreator> {
+        self.engine().config.memory_creator.as_ref().map(|x| x as _)
     }
 
     pub(crate) fn compiler(&self) -> std::cell::Ref<'_, Compiler> {

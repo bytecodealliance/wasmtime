@@ -5,7 +5,7 @@
 use crate::export::Export;
 use crate::imports::Imports;
 use crate::jit_int::GdbJitImageRegistration;
-use crate::memory::{MemoryCreator, DefaultMemoryCreator, LinearMemory};
+use crate::memory::{DefaultMemoryCreator, RuntimeLinearMemory, RuntimeMemoryCreator};
 use crate::table::Table;
 use crate::traphandlers;
 use crate::traphandlers::{catch_traps, Trap};
@@ -82,7 +82,7 @@ pub(crate) struct Instance {
     offsets: VMOffsets,
 
     /// WebAssembly linear memory data.
-    memories: BoxedSlice<DefinedMemoryIndex, Box<dyn LinearMemory>>,
+    memories: BoxedSlice<DefinedMemoryIndex, Box<dyn RuntimeLinearMemory>>,
 
     /// WebAssembly table data.
     tables: BoxedSlice<DefinedTableIndex, Table>,
@@ -861,7 +861,7 @@ impl InstanceHandle {
         finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
         trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
         imports: Imports,
-        mem_creator: Option<&dyn MemoryCreator>,
+        mem_creator: Option<&dyn RuntimeMemoryCreator>,
         data_initializers: &[DataInitializer<'_>],
         vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
@@ -1301,8 +1301,8 @@ fn initialize_passive_elements(instance: &Instance) {
 /// Allocate memory for just the memories of the current module.
 fn create_memories(
     module: &Module,
-    mem_creator: &dyn MemoryCreator,
-) -> Result<BoxedSlice<DefinedMemoryIndex, Box<dyn LinearMemory>>, InstantiationError> {
+    mem_creator: &dyn RuntimeMemoryCreator,
+) -> Result<BoxedSlice<DefinedMemoryIndex, Box<dyn RuntimeLinearMemory>>, InstantiationError> {
     let num_imports = module.imported_memories.len();
     let mut memories: PrimaryMap<DefinedMemoryIndex, _> =
         PrimaryMap::with_capacity(module.local.memory_plans.len() - num_imports);
