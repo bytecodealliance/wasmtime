@@ -2456,6 +2456,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         pass_args(self)?;
 
         self.br_on_cond_code(label, cond);
+
         Ok(())
     }
 
@@ -2492,6 +2493,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         pass_args(self)?;
 
         self.br_on_cond_code(label, cond);
+
         Ok(())
     }
 
@@ -2836,12 +2838,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 }
             }
             reg @ GPR::Rx(_) => {
-                if let Some(tmp) = self.take_reg(GPRType::Rq) {
-                    self.immediate_to_reg(tmp, val)?;
-                    let tmp = ValueLocation::Reg(tmp);
-                    self.copy_value(tmp, CCLoc::Reg(reg))?;
-                    self.free_value(tmp)?;
-                }
+                let tmp = self
+                    .take_reg(GPRType::Rq)
+                    .ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
+                self.immediate_to_reg(tmp, val)?;
+                let tmp = ValueLocation::Reg(tmp);
+                self.copy_value(tmp, CCLoc::Reg(reg))?;
+                self.free_value(tmp)?;
             }
         }
 
@@ -2856,9 +2859,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             (ValueLocation::Cond(cond), CCLoc::Stack(o)) => {
                 let offset = self.adjusted_offset(o);
 
-                dynasm!(self.asm
-                    ; mov QWORD [rsp + offset], DWORD 0
-                );
+                self.copy_value(ValueLocation::Immediate(0u64.into()), dst)?;
 
                 match cond {
                     cc::EQUAL => dynasm!(self.asm
@@ -2895,9 +2896,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
             (ValueLocation::Cond(cond), CCLoc::Reg(reg)) => match reg {
                 GPR::Rq(r) => {
-                    dynasm!(self.asm
-                        ; mov Rq(r), 0
-                    );
+                    self.copy_value(ValueLocation::Immediate(0u64.into()), dst)?;
 
                     match cond {
                         cc::EQUAL => dynasm!(self.asm
@@ -5696,12 +5695,14 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             })
             .max()
             .unwrap_or(0);
-        let mut depth = self.block_state.depth.0 + total_stack_space;
+        let original_depth = self.block_state.depth.0;
+        let mut needed_depth = original_depth + total_stack_space;
 
-        if depth & 1 != 0 {
-            self.set_stack_depth(StackDepth(self.block_state.depth.0 + 1))?;
-            depth += 1;
+        if needed_depth & 1 != 0 {
+            needed_depth += 1;
         }
+
+        self.set_stack_depth(StackDepth(needed_depth))?;
 
         let mut pending = Vec::<(ValueLocation, CCLoc)>::with_capacity(out_locs.len());
 
@@ -5765,7 +5766,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         }
 
-        self.set_stack_depth(StackDepth(depth))?;
         Ok(())
     }
 
