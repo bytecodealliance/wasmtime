@@ -92,7 +92,9 @@ fn run_file_contents(file_contents: String) -> Result<(), String> {
     let test_file = parse_test(&file_contents, options).map_err(|e| e.to_string())?;
     for (func, Details { comments, .. }) in test_file.functions {
         if comments.iter().any(|c| c.text.contains("run")) {
+            // TODO in following changes we will parse this comment to alter the FunctionRunner's behavior.
             let isa = create_target_isa(&test_file.isa_spec)?;
+            // TODO the following no longer makes sense; use FunctionRunner::with_host_isa(...) instead
             FunctionRunner::new(func, isa).run()?
         }
     }

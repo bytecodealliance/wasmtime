@@ -114,6 +114,13 @@ pub fn parse_test<'a>(text: &'a str, options: ParseOptions<'a>) -> ParseResult<T
     })
 }
 
+/// Parse the entire `text` as a run command.
+pub fn parse_run_command<'a>(text: &str, signature: &Signature) -> ParseResult<RunCommand> {
+    let _tt = timing::parse_text();
+    let mut parser = Parser::new(text);
+    parser.parse_run_command(signature)
+}
+
 pub struct Parser<'a> {
     lex: Lexer<'a>,
 
