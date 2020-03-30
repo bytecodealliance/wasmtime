@@ -20,7 +20,7 @@ pub(crate) fn witx_path_from_args(args: TokenStream) -> PathBuf {
         panic!("expected one string literals");
     }
     let root = PathBuf::from(std::env::var("WASI_ROOT").unwrap());
-    return root.join(&strings[0])
+    return root.join(&strings[0]);
 }
 
 // Convert a `Literal` holding a string literal into the `String`.
