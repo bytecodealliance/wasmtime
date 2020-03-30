@@ -12,4 +12,4 @@ use wig::witx_wasi32_types;
 pub type uintptr_t = u32;
 pub type size_t = u32;
 
-witx_wasi32_types!("old/snapshot_0" "wasi_unstable");
+witx_wasi32_types!("phases/old/snapshot_0/witx/wasi_unstable.witx");

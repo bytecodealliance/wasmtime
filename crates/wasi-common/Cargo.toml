@@ -11,6 +11,11 @@ readme = "README.md"
 edition = "2018"
 include = ["src/**/*", "LICENSE", "WASI/phases"]
 
+# This doesn't actually link to a native library, but it allows us to set env
+# vars like `DEP_WASI_COMMON_14_*` for crates that have build scripts and depend
+# on this crate, allowing other crates to use the same witx files.
+links = "wasi-common-14"
+
 [dependencies]
 anyhow = "1.0"
 thiserror = "1.0"

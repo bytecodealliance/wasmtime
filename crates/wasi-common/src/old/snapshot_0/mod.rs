@@ -9,7 +9,7 @@ pub mod wasi;
 pub mod wasi32;
 
 pub mod hostcalls {
-    wig::define_hostcalls!("old/snapshot_0" "wasi_unstable");
+    wig::define_hostcalls!("phases/old/snapshot_0/witx/wasi_unstable.witx");
 }
 
 pub use ctx::{WasiCtx, WasiCtxBuilder};

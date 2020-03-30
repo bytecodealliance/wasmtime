@@ -21,11 +21,11 @@ enum Abi {
 /// I'd recommend using `cargo +nightly expand` to explore the output of this
 /// macro some more.
 pub fn define_struct(args: TokenStream) -> TokenStream {
-    let (path, _phase) = utils::witx_path_from_args(args);
+    let path = utils::witx_path_from_args(args);
     let doc = match witx::load(&[&path]) {
         Ok(doc) => doc,
         Err(e) => {
-            panic!("error opening file {}: {}", path, e);
+            panic!("error opening file {}: {}", path.display(), e);
         }
     };
 
@@ -265,11 +265,11 @@ pub fn define_struct(args: TokenStream) -> TokenStream {
 }
 
 pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
-    let (path, _phase) = utils::witx_path_from_args(args);
+    let path = utils::witx_path_from_args(args);
     let doc = match witx::load(&[&path]) {
         Ok(doc) => doc,
         Err(e) => {
-            panic!("error opening file {}: {}", path, e);
+            panic!("error opening file {}: {}", path.display(), e);
         }
     };
 

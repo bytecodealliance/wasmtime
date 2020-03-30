@@ -12,7 +12,7 @@ include = ["src/**/*", "LICENSE"]
 
 [dependencies]
 thiserror = "1"
-witx = { path = "../wasi-common/wig/WASI/tools/witx", version = "0.8.4", optional = true }
+witx = { path = "../wasi-common/WASI/tools/witx", version = "0.8.4", optional = true }
 wiggle-macro = { path = "macro", version = "0.14.0" }
 
 [badges]
