@@ -1231,8 +1231,6 @@ block0:
 
     #[test]
     fn undef_vector_vars() {
-        use core::str::FromStr;
-
         let mut sig = Signature::new(CallConv::SystemV);
         sig.returns.push(AbiParam::new(I8X16));
         sig.returns.push(AbiParam::new(B8X16));
