@@ -1,16 +1,13 @@
-use crate::entry::{Descriptor, EntryRights};
-use crate::path::PathGet;
-use crate::sys::entry::OsHandle;
-use crate::sys::unix::sys_impl;
+use super::oshandle::OsFile;
+use crate::entry::EntryRights;
+use crate::sys::oshandle::OsHandle;
 use crate::wasi::{types, Errno, Result};
-use std::convert::TryInto;
 use std::ffi::OsStr;
-use std::fs::File;
 use std::os::unix::prelude::{AsRawFd, FromRawFd, OsStrExt};
 use std::str;
 use yanix::file::OFlag;
 
-pub(crate) use sys_impl::path::*;
+pub(crate) use super::sys_impl::path::*;
 
 /// Creates owned WASI path from OS string.
 ///
@@ -44,32 +41,14 @@ pub(crate) fn open_rights(
     if fdflags.contains(OFlag::DSYNC) {
         needed_inheriting |= types::Rights::FD_DATASYNC;
     }
-    if fdflags.intersects(sys_impl::O_RSYNC | OFlag::SYNC) {
+    if fdflags.intersects(super::O_RSYNC | OFlag::SYNC) {
         needed_inheriting |= types::Rights::FD_SYNC;
     }
 
     EntryRights::new(needed_base, needed_inheriting)
 }
 
-pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
-    use std::os::unix::prelude::{AsRawFd, FromRawFd};
-    use yanix::file::{openat, Mode};
-
-    log::debug!("path_get openat path = {:?}", path);
-
-    let raw_fd = unsafe {
-        openat(
-            dirfd.as_raw_fd(),
-            path,
-            OFlag::RDONLY | OFlag::DIRECTORY | OFlag::NOFOLLOW,
-            Mode::empty(),
-        )?
-    };
-    let file = unsafe { File::from_raw_fd(raw_fd) };
-    Ok(file)
-}
-
-pub(crate) fn readlinkat(dirfd: &File, path: &str) -> Result<String> {
+pub(crate) fn readlinkat(dirfd: &OsFile, path: &str) -> Result<String> {
     use std::os::unix::prelude::AsRawFd;
     use yanix::file::readlinkat;
 
@@ -80,15 +59,17 @@ pub(crate) fn readlinkat(dirfd: &File, path: &str) -> Result<String> {
     Ok(path)
 }
 
-pub(crate) fn create_directory(base: &File, path: &str) -> Result<()> {
+pub(crate) fn create_directory(base: &OsFile, path: &str) -> Result<()> {
     use yanix::file::{mkdirat, Mode};
     unsafe { mkdirat(base.as_raw_fd(), path, Mode::from_bits_truncate(0o777))? };
     Ok(())
 }
 
 pub(crate) fn link(
-    resolved_old: PathGet,
-    resolved_new: PathGet,
+    old_dirfd: &OsFile,
+    old_path: &str,
+    new_dirfd: &OsFile,
+    new_path: &str,
     follow_symlinks: bool,
 ) -> Result<()> {
     use yanix::file::{linkat, AtFlag};
@@ -99,10 +80,10 @@ pub(crate) fn link(
     };
     unsafe {
         linkat(
-            resolved_old.dirfd().as_raw_fd(),
-            resolved_old.path(),
-            resolved_new.dirfd().as_raw_fd(),
-            resolved_new.path(),
+            old_dirfd.as_raw_fd(),
+            old_path,
+            new_dirfd.as_raw_fd(),
+            new_path,
             flags,
         )?
     };
@@ -110,12 +91,13 @@ pub(crate) fn link(
 }
 
 pub(crate) fn open(
-    resolved: PathGet,
+    dirfd: &OsFile,
+    path: &str,
     read: bool,
     write: bool,
     oflags: types::Oflags,
     fs_flags: types::Fdflags,
-) -> Result<Descriptor> {
+) -> Result<OsHandle> {
     use yanix::file::{fstatat, openat, AtFlag, FileType, Mode, OFlag};
 
     let mut nix_all_oflags = if read && write {
@@ -139,13 +121,14 @@ pub(crate) fn open(
     // umask is, but don't set the executable flag, because it isn't yet
     // meaningful for WASI programs to create executable files.
 
-    log::debug!("path_open resolved = {:?}", resolved);
+    log::debug!("path_open dirfd = {:?}", dirfd);
+    log::debug!("path_open path = {:?}", path);
     log::debug!("path_open oflags = {:?}", nix_all_oflags);
 
     let fd_no = unsafe {
         openat(
-            resolved.dirfd().as_raw_fd(),
-            resolved.path(),
+            dirfd.as_raw_fd(),
+            path,
             nix_all_oflags,
             Mode::from_bits_truncate(0o666),
         )
@@ -156,13 +139,7 @@ pub(crate) fn open(
             match e.raw_os_error().unwrap() {
                 // Linux returns ENXIO instead of EOPNOTSUPP when opening a socket
                 libc::ENXIO => {
-                    match unsafe {
-                        fstatat(
-                            resolved.dirfd().as_raw_fd(),
-                            resolved.path(),
-                            AtFlag::SYMLINK_NOFOLLOW,
-                        )
-                    } {
+                    match unsafe { fstatat(dirfd.as_raw_fd(), path, AtFlag::SYMLINK_NOFOLLOW) } {
                         Ok(stat) => {
                             if FileType::from_stat_st_mode(stat.st_mode) == FileType::Socket {
                                 return Err(Errno::Notsup);
@@ -178,13 +155,7 @@ pub(crate) fn open(
                 libc::ENOTDIR
                     if !(nix_all_oflags & (OFlag::NOFOLLOW | OFlag::DIRECTORY)).is_empty() =>
                 {
-                    match unsafe {
-                        fstatat(
-                            resolved.dirfd().as_raw_fd(),
-                            resolved.path(),
-                            AtFlag::SYMLINK_NOFOLLOW,
-                        )
-                    } {
+                    match unsafe { fstatat(dirfd.as_raw_fd(), path, AtFlag::SYMLINK_NOFOLLOW) } {
                         Ok(stat) => {
                             if FileType::from_stat_st_mode(stat.st_mode) == FileType::Symlink {
                                 return Err(Errno::Loop);
@@ -210,13 +181,13 @@ pub(crate) fn open(
     log::debug!("path_open (host) new_fd = {:?}", new_fd);
 
     // Determine the type of the new file descriptor and which rights contradict with this type
-    Ok(OsHandle::from(unsafe { File::from_raw_fd(new_fd) }).into())
+    Ok(OsHandle::from(unsafe { OsFile::from_raw_fd(new_fd) }))
 }
 
-pub(crate) fn readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
+pub(crate) fn readlink(dirfd: &OsFile, path: &str, buf: &mut [u8]) -> Result<usize> {
     use std::cmp::min;
     use yanix::file::readlinkat;
-    let read_link = unsafe { readlinkat(resolved.dirfd().as_raw_fd(), resolved.path())? };
+    let read_link = unsafe { readlinkat(dirfd.as_raw_fd(), path)? };
     let read_link = from_host(read_link)?;
     let copy_len = min(read_link.len(), buf.len());
     if copy_len > 0 {
@@ -225,73 +196,8 @@ pub(crate) fn readlink(resolved: PathGet, buf: &mut [u8]) -> Result<usize> {
     Ok(copy_len)
 }
 
-pub(crate) fn filestat_get(
-    resolved: PathGet,
-    dirflags: types::Lookupflags,
-) -> Result<types::Filestat> {
-    use yanix::file::fstatat;
-    let atflags = dirflags.into();
-    let filestat = unsafe { fstatat(resolved.dirfd().as_raw_fd(), resolved.path(), atflags)? };
-    let filestat = filestat.try_into()?;
-    Ok(filestat)
-}
-
-pub(crate) fn filestat_set_times(
-    resolved: PathGet,
-    dirflags: types::Lookupflags,
-    st_atim: types::Timestamp,
-    st_mtim: types::Timestamp,
-    fst_flags: types::Fstflags,
-) -> Result<()> {
-    use std::time::{Duration, UNIX_EPOCH};
-    use yanix::filetime::*;
-
-    let set_atim = fst_flags.contains(&types::Fstflags::ATIM);
-    let set_atim_now = fst_flags.contains(&types::Fstflags::ATIM_NOW);
-    let set_mtim = fst_flags.contains(&types::Fstflags::MTIM);
-    let set_mtim_now = fst_flags.contains(&types::Fstflags::MTIM_NOW);
-
-    if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
-        return Err(Errno::Inval);
-    }
-
-    let symlink_nofollow = types::Lookupflags::SYMLINK_FOLLOW != dirflags;
-    let atim = if set_atim {
-        let time = UNIX_EPOCH + Duration::from_nanos(st_atim);
-        FileTime::FileTime(filetime::FileTime::from_system_time(time))
-    } else if set_atim_now {
-        FileTime::Now
-    } else {
-        FileTime::Omit
-    };
-    let mtim = if set_mtim {
-        let time = UNIX_EPOCH + Duration::from_nanos(st_mtim);
-        FileTime::FileTime(filetime::FileTime::from_system_time(time))
-    } else if set_mtim_now {
-        FileTime::Now
-    } else {
-        FileTime::Omit
-    };
-
-    utimensat(
-        &resolved.dirfd().as_os_handle(),
-        resolved.path(),
-        atim,
-        mtim,
-        symlink_nofollow,
-    )?;
-    Ok(())
-}
-
-pub(crate) fn remove_directory(resolved: PathGet) -> Result<()> {
+pub(crate) fn remove_directory(dirfd: &OsFile, path: &str) -> Result<()> {
     use yanix::file::{unlinkat, AtFlag};
-
-    unsafe {
-        unlinkat(
-            resolved.dirfd().as_raw_fd(),
-            resolved.path(),
-            AtFlag::REMOVEDIR,
-        )?
-    };
+    unsafe { unlinkat(dirfd.as_raw_fd(), path, AtFlag::REMOVEDIR)? };
     Ok(())
 }

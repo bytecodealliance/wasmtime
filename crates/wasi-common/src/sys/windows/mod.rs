@@ -1,21 +1,17 @@
 pub(crate) mod clock;
-pub(crate) mod entry;
 pub(crate) mod fd;
+pub(crate) mod oshandle;
 pub(crate) mod path;
 pub(crate) mod poll;
 
 use crate::wasi::{types, Errno, Result};
 use std::convert::{TryFrom, TryInto};
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{io, string};
 use winapi::shared::winerror;
 use winx::file::{CreationDisposition, Flags};
-
-pub(crate) fn dev_null() -> io::Result<File> {
-    OpenOptions::new().read(true).write(true).open("NUL")
-}
 
 pub fn preopen_dir<P: AsRef<Path>>(path: P) -> io::Result<File> {
     use std::fs::OpenOptions;

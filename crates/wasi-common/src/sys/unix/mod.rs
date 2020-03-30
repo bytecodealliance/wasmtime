@@ -1,6 +1,6 @@
 pub(crate) mod clock;
-pub(crate) mod entry;
 pub(crate) mod fd;
+pub(crate) mod oshandle;
 pub(crate) mod path;
 pub(crate) mod poll;
 
@@ -24,16 +24,13 @@ cfg_if::cfg_if! {
 
 use crate::wasi::{types, Errno, Result};
 use std::convert::{TryFrom, TryInto};
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io;
 use std::path::Path;
-use sys_impl::O_RSYNC;
 use yanix::clock::ClockId;
 use yanix::file::{AtFlag, OFlag};
 
-pub(crate) fn dev_null() -> io::Result<File> {
-    OpenOptions::new().read(true).write(true).open("/dev/null")
-}
+pub(crate) use sys_impl::*;
 
 pub fn preopen_dir<P: AsRef<Path>>(path: P) -> io::Result<File> {
     File::open(path)

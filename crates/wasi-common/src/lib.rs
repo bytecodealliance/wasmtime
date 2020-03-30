@@ -21,12 +21,11 @@
     )
 )]
 
-mod clock;
 mod ctx;
 mod entry;
-mod fd;
 mod fdpool;
 pub mod fs;
+mod handle;
 pub mod old;
 mod path;
 mod poll;

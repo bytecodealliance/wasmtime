@@ -1,6 +1,8 @@
+use crate::entry::EntryRights;
+use crate::handle::Handle;
 use crate::wasi::{self, types, Errno, Result, RightsExt};
-use filetime::FileTime;
 use log::trace;
+use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -22,132 +24,10 @@ impl VirtualDirEntry {
 }
 
 /// Files and directories may be moved, and for implementation reasons retain a reference to their
-/// parent VirtualFile, so files that can be moved must provide an interface to update their parent
+/// parent Handle, so files that can be moved must provide an interface to update their parent
 /// reference.
 pub(crate) trait MovableFile {
-    fn set_parent(&self, new_parent: Option<Box<dyn VirtualFile>>);
-}
-
-/// `VirtualFile` encompasses the whole interface of a `File`, `Directory`, or `Stream`-like
-/// object, suitable for forwarding from `wasi-common` public interfaces. `File` and
-/// `Directory`-style objects can be moved, so implemetors of this trait must also implement
-/// `MovableFile`.
-///
-/// Default implementations of functions here fail in ways that are intended to mimic a file-like
-/// object with no permissions, no content, and that cannot be used in any way.
-// TODO This trait should potentially be made unsafe since we need to assert that we don't
-// reenter wasm or try to reborrow/read/etc. from wasm memory.
-pub(crate) trait VirtualFile: MovableFile {
-    fn fdstat_get(&self) -> types::Fdflags {
-        types::Fdflags::empty()
-    }
-
-    fn try_clone(&self) -> io::Result<Box<dyn VirtualFile>>;
-
-    fn readlinkat(&self, _path: &Path) -> Result<String> {
-        Err(Errno::Acces)
-    }
-
-    fn openat(
-        &self,
-        _path: &Path,
-        _read: bool,
-        _write: bool,
-        _oflags: types::Oflags,
-        _fd_flags: types::Fdflags,
-    ) -> Result<Box<dyn VirtualFile>> {
-        Err(Errno::Acces)
-    }
-
-    fn remove_directory(&self, _path: &str) -> Result<()> {
-        Err(Errno::Acces)
-    }
-
-    fn unlink_file(&self, _path: &str) -> Result<()> {
-        Err(Errno::Acces)
-    }
-
-    fn datasync(&self) -> Result<()> {
-        Err(Errno::Inval)
-    }
-
-    fn sync(&self) -> Result<()> {
-        Ok(())
-    }
-
-    fn create_directory(&self, _path: &Path) -> Result<()> {
-        Err(Errno::Acces)
-    }
-
-    fn readdir(
-        &self,
-        _cookie: types::Dircookie,
-    ) -> Result<Box<dyn Iterator<Item = Result<(types::Dirent, String)>>>> {
-        Err(Errno::Badf)
-    }
-
-    fn write_vectored(&self, _iovs: &[io::IoSlice]) -> Result<usize> {
-        Err(Errno::Badf)
-    }
-
-    fn preadv(&self, _buf: &mut [io::IoSliceMut], _offset: u64) -> Result<usize> {
-        Err(Errno::Badf)
-    }
-
-    fn pwritev(&self, _buf: &[io::IoSlice], _offset: u64) -> Result<usize> {
-        Err(Errno::Badf)
-    }
-
-    fn seek(&self, _offset: SeekFrom) -> Result<u64> {
-        Err(Errno::Badf)
-    }
-
-    fn advise(
-        &self,
-        _advice: types::Advice,
-        _offset: types::Filesize,
-        _len: types::Filesize,
-    ) -> Result<()> {
-        Err(Errno::Badf)
-    }
-
-    fn allocate(&self, _offset: types::Filesize, _len: types::Filesize) -> Result<()> {
-        Err(Errno::Badf)
-    }
-
-    fn filestat_get(&self) -> Result<types::Filestat> {
-        Err(Errno::Badf)
-    }
-
-    fn filestat_set_times(&self, _atim: Option<FileTime>, _mtim: Option<FileTime>) -> Result<()> {
-        Err(Errno::Badf)
-    }
-
-    fn filestat_set_size(&self, _st_size: types::Filesize) -> Result<()> {
-        Err(Errno::Badf)
-    }
-
-    fn fdstat_set_flags(&self, _fdflags: types::Fdflags) -> Result<Option<Box<dyn VirtualFile>>> {
-        Err(Errno::Badf)
-    }
-
-    fn read_vectored(&self, _iovs: &mut [io::IoSliceMut]) -> Result<usize> {
-        Err(Errno::Badf)
-    }
-
-    fn get_file_type(&self) -> types::Filetype;
-
-    fn is_directory(&self) -> bool {
-        self.get_file_type() == types::Filetype::Directory
-    }
-
-    fn get_rights_base(&self) -> types::Rights {
-        types::Rights::empty()
-    }
-
-    fn get_rights_inheriting(&self) -> types::Rights {
-        types::Rights::empty()
-    }
+    fn set_parent(&self, new_parent: Option<Box<dyn Handle>>);
 }
 
 pub trait FileContents {
@@ -255,7 +135,7 @@ impl VecFileContents {
 /// of data and permissions on a filesystem.
 pub struct InMemoryFile {
     cursor: Cell<types::Filesize>,
-    parent: Rc<RefCell<Option<Box<dyn VirtualFile>>>>,
+    parent: Rc<RefCell<Option<Box<dyn Handle>>>>,
     fd_flags: Cell<types::Fdflags>,
     data: Rc<RefCell<Box<dyn FileContents>>>,
 }
@@ -281,17 +161,16 @@ impl InMemoryFile {
 }
 
 impl MovableFile for InMemoryFile {
-    fn set_parent(&self, new_parent: Option<Box<dyn VirtualFile>>) {
+    fn set_parent(&self, new_parent: Option<Box<dyn Handle>>) {
         *self.parent.borrow_mut() = new_parent;
     }
 }
 
-impl VirtualFile for InMemoryFile {
-    fn fdstat_get(&self) -> types::Fdflags {
-        self.fd_flags.get()
+impl Handle for InMemoryFile {
+    fn as_any(&self) -> &dyn Any {
+        self
     }
-
-    fn try_clone(&self) -> io::Result<Box<dyn VirtualFile>> {
+    fn try_clone(&self) -> io::Result<Box<dyn Handle>> {
         Ok(Box::new(Self {
             cursor: Cell::new(0),
             fd_flags: self.fd_flags.clone(),
@@ -299,68 +178,113 @@ impl VirtualFile for InMemoryFile {
             data: Rc::clone(&self.data),
         }))
     }
-
-    fn readlinkat(&self, _path: &Path) -> Result<String> {
-        // no symlink support, so always say it's invalid.
-        Err(Errno::Notdir)
+    fn get_file_type(&self) -> io::Result<types::Filetype> {
+        Ok(types::Filetype::RegularFile)
     }
-
-    fn openat(
+    fn get_rights(&self) -> io::Result<EntryRights> {
+        Ok(EntryRights::new(
+            types::Rights::regular_file_base(),
+            types::Rights::regular_file_inheriting(),
+        ))
+    }
+    // FdOps
+    fn advise(
         &self,
-        path: &Path,
-        read: bool,
-        write: bool,
-        oflags: types::Oflags,
-        fd_flags: types::Fdflags,
-    ) -> Result<Box<dyn VirtualFile>> {
-        log::trace!(
-            "InMemoryFile::openat(path={:?}, read={:?}, write={:?}, oflags={:?}, fd_flags={:?}",
-            path,
-            read,
-            write,
-            oflags,
-            fd_flags
-        );
+        _advice: types::Advice,
+        _offset: types::Filesize,
+        _len: types::Filesize,
+    ) -> Result<()> {
+        // we'll just ignore advice for now, unless it's totally invalid
+        Ok(())
+    }
+    fn allocate(&self, offset: types::Filesize, len: types::Filesize) -> Result<()> {
+        let new_limit = offset.checked_add(len).ok_or(Errno::Fbig)?;
+        let mut data = self.data.borrow_mut();
 
-        if oflags.contains(&types::Oflags::DIRECTORY) {
-            log::trace!(
-                "InMemoryFile::openat was passed oflags DIRECTORY, but {:?} is a file.",
-                path
-            );
-            log::trace!("  return Notdir");
-            return Err(Errno::Notdir);
+        if new_limit > data.max_size() {
+            return Err(Errno::Fbig);
         }
 
-        if path == Path::new(".") {
-            return self.try_clone().map_err(Into::into);
-        } else if path == Path::new("..") {
-            match &*self.parent.borrow() {
-                Some(file) => file.try_clone().map_err(Into::into),
-                None => self.try_clone().map_err(Into::into),
-            }
-        } else {
-            Err(Errno::Acces)
+        if new_limit > data.size() {
+            data.resize(new_limit)?;
         }
-    }
 
-    fn remove_directory(&self, _path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+        Ok(())
     }
-
-    fn unlink_file(&self, _path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+    fn fdstat_get(&self) -> Result<types::Fdflags> {
+        Ok(self.fd_flags.get())
     }
-
-    fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<Option<Box<dyn VirtualFile>>> {
+    fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<()> {
         self.fd_flags.set(fdflags);
-        // We return None here to signal that the operation succeeded on the original
-        // file descriptor and mutating the original WASI Descriptor is thus unnecessary.
-        // This is needed as on Windows this operation required reopening a file. So we're
-        // adhering to the common signature required across platforms.
-        Ok(None)
+        Ok(())
     }
+    fn filestat_get(&self) -> Result<types::Filestat> {
+        let stat = types::Filestat {
+            dev: 0,
+            ino: 0,
+            nlink: 0,
+            size: self.data.borrow().size(),
+            atim: 0,
+            ctim: 0,
+            mtim: 0,
+            filetype: self.get_file_type()?,
+        };
+        Ok(stat)
+    }
+    fn filestat_set_size(&self, st_size: types::Filesize) -> Result<()> {
+        let mut data = self.data.borrow_mut();
+        if st_size > data.max_size() {
+            return Err(Errno::Fbig);
+        }
+        data.resize(st_size)
+    }
+    fn preadv(&self, buf: &mut [io::IoSliceMut], offset: types::Filesize) -> Result<usize> {
+        self.data.borrow_mut().preadv(buf, offset)
+    }
+    fn pwritev(&self, buf: &[io::IoSlice], offset: types::Filesize) -> Result<usize> {
+        self.data.borrow_mut().pwritev(buf, offset)
+    }
+    fn read_vectored(&self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
+        trace!("read_vectored(iovs={:?})", iovs);
+        trace!("     | *read_start={:?}", self.cursor.get());
+        self.data.borrow_mut().preadv(iovs, self.cursor.get())
+    }
+    fn seek(&self, offset: SeekFrom) -> Result<types::Filesize> {
+        let content_len = self.data.borrow().size();
+        match offset {
+            SeekFrom::Current(offset) => {
+                let new_cursor = if offset < 0 {
+                    self.cursor
+                        .get()
+                        .checked_sub(offset.wrapping_neg() as u64)
+                        .ok_or(Errno::Inval)?
+                } else {
+                    self.cursor
+                        .get()
+                        .checked_add(offset as u64)
+                        .ok_or(Errno::Inval)?
+                };
+                self.cursor.set(std::cmp::min(content_len, new_cursor));
+            }
+            SeekFrom::End(offset) => {
+                // A negative offset from the end would be past the end of the file,
+                let offset: u64 = offset.try_into().map_err(|_| Errno::Inval)?;
+                self.cursor.set(content_len.saturating_sub(offset));
+            }
+            SeekFrom::Start(offset) => {
+                // A negative offset from the end would be before the start of the file.
+                let offset: u64 = offset.try_into().map_err(|_| Errno::Inval)?;
+                self.cursor.set(std::cmp::min(content_len, offset));
+            }
+        }
 
-    fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
+        Ok(self.cursor.get())
+    }
+    fn write_vectored(&self, iovs: &[io::IoSlice], isatty: bool) -> Result<usize> {
+        if isatty {
+            unimplemented!("writes to virtual tty");
+        }
+
         trace!("write_vectored(iovs={:?})", iovs);
         let mut data = self.data.borrow_mut();
 
@@ -406,110 +330,73 @@ impl VirtualFile for InMemoryFile {
 
         Ok(written)
     }
-
-    fn read_vectored(&self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
-        trace!("read_vectored(iovs={:?})", iovs);
-        trace!("     | *read_start={:?}", self.cursor.get());
-        self.data.borrow_mut().preadv(iovs, self.cursor.get())
+    // PathOps
+    fn create_directory(&self, _path: &str) -> Result<()> {
+        Err(Errno::Notdir)
     }
-
-    fn preadv(&self, buf: &mut [io::IoSliceMut], offset: types::Filesize) -> Result<usize> {
-        self.data.borrow_mut().preadv(buf, offset)
-    }
-
-    fn pwritev(&self, buf: &[io::IoSlice], offset: types::Filesize) -> Result<usize> {
-        self.data.borrow_mut().pwritev(buf, offset)
-    }
-
-    fn seek(&self, offset: SeekFrom) -> Result<types::Filesize> {
-        let content_len = self.data.borrow().size();
-        match offset {
-            SeekFrom::Current(offset) => {
-                let new_cursor = if offset < 0 {
-                    self.cursor
-                        .get()
-                        .checked_sub(offset.wrapping_neg() as u64)
-                        .ok_or(Errno::Inval)?
-                } else {
-                    self.cursor
-                        .get()
-                        .checked_add(offset as u64)
-                        .ok_or(Errno::Inval)?
-                };
-                self.cursor.set(std::cmp::min(content_len, new_cursor));
-            }
-            SeekFrom::End(offset) => {
-                // A negative offset from the end would be past the end of the file,
-                let offset: u64 = offset.try_into().map_err(|_| Errno::Inval)?;
-                self.cursor.set(content_len.saturating_sub(offset));
-            }
-            SeekFrom::Start(offset) => {
-                // A negative offset from the end would be before the start of the file.
-                let offset: u64 = offset.try_into().map_err(|_| Errno::Inval)?;
-                self.cursor.set(std::cmp::min(content_len, offset));
-            }
-        }
-
-        Ok(self.cursor.get())
-    }
-
-    fn advise(
+    fn openat(
         &self,
-        _advice: types::Advice,
-        _offset: types::Filesize,
-        _len: types::Filesize,
+        path: &str,
+        read: bool,
+        write: bool,
+        oflags: types::Oflags,
+        fd_flags: types::Fdflags,
+    ) -> Result<Box<dyn Handle>> {
+        log::trace!(
+            "InMemoryFile::openat(path={:?}, read={:?}, write={:?}, oflags={:?}, fd_flags={:?}",
+            path,
+            read,
+            write,
+            oflags,
+            fd_flags
+        );
+
+        if oflags.contains(&types::Oflags::DIRECTORY) {
+            log::trace!(
+                "InMemoryFile::openat was passed oflags DIRECTORY, but {:?} is a file.",
+                path
+            );
+            log::trace!("  return Notdir");
+            return Err(Errno::Notdir);
+        }
+
+        if path == "." {
+            return self.try_clone().map_err(Into::into);
+        } else if path == ".." {
+            match &*self.parent.borrow() {
+                Some(file) => file.try_clone().map_err(Into::into),
+                None => self.try_clone().map_err(Into::into),
+            }
+        } else {
+            Err(Errno::Acces)
+        }
+    }
+    fn link(
+        &self,
+        _old_path: &str,
+        _new_handle: Box<dyn Handle>,
+        _new_path: &str,
+        _follow: bool,
     ) -> Result<()> {
-        // we'll just ignore advice for now, unless it's totally invalid
-        Ok(())
+        Err(Errno::Notdir)
     }
-
-    fn allocate(&self, offset: types::Filesize, len: types::Filesize) -> Result<()> {
-        let new_limit = offset.checked_add(len).ok_or(Errno::Fbig)?;
-        let mut data = self.data.borrow_mut();
-
-        if new_limit > data.max_size() {
-            return Err(Errno::Fbig);
-        }
-
-        if new_limit > data.size() {
-            data.resize(new_limit)?;
-        }
-
-        Ok(())
+    fn readlink(&self, _path: &str, _buf: &mut [u8]) -> Result<usize> {
+        Err(Errno::Notdir)
     }
-
-    fn filestat_set_size(&self, st_size: types::Filesize) -> Result<()> {
-        let mut data = self.data.borrow_mut();
-        if st_size > data.max_size() {
-            return Err(Errno::Fbig);
-        }
-        data.resize(st_size)
+    fn readlinkat(&self, _path: &str) -> Result<String> {
+        Err(Errno::Notdir)
     }
-
-    fn filestat_get(&self) -> Result<types::Filestat> {
-        let stat = types::Filestat {
-            dev: 0,
-            ino: 0,
-            nlink: 0,
-            size: self.data.borrow().size(),
-            atim: 0,
-            ctim: 0,
-            mtim: 0,
-            filetype: self.get_file_type(),
-        };
-        Ok(stat)
+    fn rename(&self, _old_path: &str, _new_handle: Box<dyn Handle>, _new_path: &str) -> Result<()> {
+        Err(Errno::Notdir)
     }
-
-    fn get_file_type(&self) -> types::Filetype {
-        types::Filetype::RegularFile
+    fn remove_directory(&self, _path: &str) -> Result<()> {
+        Err(Errno::Notdir)
     }
-
-    fn get_rights_base(&self) -> types::Rights {
-        types::Rights::regular_file_base()
+    fn symlink(&self, _old_path: &str, _new_path: &str) -> Result<()> {
+        Err(Errno::Notdir)
     }
-
-    fn get_rights_inheriting(&self) -> types::Rights {
-        types::Rights::regular_file_inheriting()
+    fn unlink_file(&self, _path: &str) -> Result<()> {
+        Err(Errno::Notdir)
     }
 }
 
@@ -518,8 +405,8 @@ pub struct VirtualDir {
     writable: bool,
     // All copies of this `VirtualDir` must share `parent`, and changes in one copy's `parent`
     // must be reflected in all handles, so they share `Rc` of an underlying `parent`.
-    parent: Rc<RefCell<Option<Box<dyn VirtualFile>>>>,
-    entries: Rc<RefCell<HashMap<PathBuf, Box<dyn VirtualFile>>>>,
+    parent: Rc<RefCell<Option<Box<dyn Handle>>>>,
+    entries: Rc<RefCell<HashMap<PathBuf, Box<dyn Handle>>>>,
 }
 
 impl VirtualDir {
@@ -563,7 +450,7 @@ impl VirtualDir {
 }
 
 impl MovableFile for VirtualDir {
-    fn set_parent(&self, new_parent: Option<Box<dyn VirtualFile>>) {
+    fn set_parent(&self, new_parent: Option<Box<dyn Handle>>) {
         *self.parent.borrow_mut() = new_parent;
     }
 }
@@ -575,200 +462,47 @@ const PARENT_DIR_COOKIE: u32 = 1;
 // that would wrap and be mapped to the same dir cookies as `self` or `parent`.
 const RESERVED_ENTRY_COUNT: u32 = 2;
 
-impl VirtualFile for VirtualDir {
-    fn try_clone(&self) -> io::Result<Box<dyn VirtualFile>> {
+impl Handle for VirtualDir {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn try_clone(&self) -> io::Result<Box<dyn Handle>> {
         Ok(Box::new(Self {
             writable: self.writable,
             parent: Rc::clone(&self.parent),
             entries: Rc::clone(&self.entries),
         }))
     }
-
-    fn readlinkat(&self, _path: &Path) -> Result<String> {
-        // Files are not symbolic links or directories, faithfully report Notdir.
-        Err(Errno::Notdir)
+    fn get_file_type(&self) -> io::Result<types::Filetype> {
+        Ok(types::Filetype::Directory)
     }
-
-    fn openat(
-        &self,
-        path: &Path,
-        read: bool,
-        write: bool,
-        oflags: types::Oflags,
-        fd_flags: types::Fdflags,
-    ) -> Result<Box<dyn VirtualFile>> {
-        log::trace!(
-            "VirtualDir::openat(path={:?}, read={:?}, write={:?}, oflags={:?}, fd_flags={:?}",
-            path,
-            read,
-            write,
-            oflags,
-            fd_flags
-        );
-
-        if path == Path::new(".") {
-            return self.try_clone().map_err(Into::into);
-        } else if path == Path::new("..") {
-            match &*self.parent.borrow() {
-                Some(file) => {
-                    return file.try_clone().map_err(Into::into);
-                }
-                None => {
-                    return self.try_clone().map_err(Into::into);
-                }
-            }
-        }
-
-        // openat may have been passed a path with a trailing slash, but files are mapped to paths
-        // with trailing slashes normalized out.
-        let file_name = path.file_name().ok_or(Errno::Inval)?;
-        let mut entries = self.entries.borrow_mut();
-        let entry_count = entries.len();
-        match entries.entry(Path::new(file_name).to_path_buf()) {
-            Entry::Occupied(e) => {
-                let creat_excl_mask = types::Oflags::CREAT | types::Oflags::EXCL;
-                if (oflags & creat_excl_mask) == creat_excl_mask {
-                    log::trace!("VirtualDir::openat was passed oflags CREAT|EXCL, but the file {:?} exists.", file_name);
-                    log::trace!("  return Exist");
-                    return Err(Errno::Exist);
-                }
-
-                if oflags.contains(&types::Oflags::DIRECTORY)
-                    && e.get().get_file_type() != types::Filetype::Directory
-                {
-                    log::trace!(
-                        "VirtualDir::openat was passed oflags DIRECTORY, but {:?} is a file.",
-                        file_name
-                    );
-                    log::trace!("  return Notdir");
-                    return Err(Errno::Notdir);
-                }
-
-                e.get().try_clone().map_err(Into::into)
-            }
-            Entry::Vacant(v) => {
-                if self.writable {
-                    // Enforce a hard limit at `u32::MAX - 2` files.
-                    // This is to have a constant limit (rather than target-dependent limit we
-                    // would have with `usize`. The limit is the full `u32` range minus two so we
-                    // can reserve "self" and "parent" cookie values.
-                    if entry_count >= (std::u32::MAX - RESERVED_ENTRY_COUNT) as usize {
-                        return Err(Errno::Nospc);
-                    }
-
-                    log::trace!(
-                        "VirtualDir::openat creating an InMemoryFile named {}",
-                        path.display()
-                    );
-
-                    let file = Box::new(InMemoryFile::memory_backed());
-                    file.fd_flags.set(fd_flags);
-                    file.set_parent(Some(self.try_clone().expect("can clone self")));
-                    v.insert(file).try_clone().map_err(Into::into)
-                } else {
-                    Err(Errno::Acces)
-                }
-            }
-        }
+    fn get_rights(&self) -> io::Result<EntryRights> {
+        Ok(EntryRights::new(
+            types::Rights::directory_base(),
+            types::Rights::directory_inheriting(),
+        ))
     }
-
-    fn remove_directory(&self, path: &str) -> Result<()> {
-        let trimmed_path = path.trim_end_matches('/');
-        let mut entries = self.entries.borrow_mut();
-        match entries.entry(Path::new(trimmed_path).to_path_buf()) {
-            Entry::Occupied(e) => {
-                // first, does this name a directory?
-                if e.get().get_file_type() != types::Filetype::Directory {
-                    return Err(Errno::Notdir);
-                }
-
-                // Okay, but is the directory empty?
-                let iter = e.get().readdir(wasi::DIRCOOKIE_START)?;
-                if iter.skip(RESERVED_ENTRY_COUNT as usize).next().is_some() {
-                    return Err(Errno::Notempty);
-                }
-
-                // Alright, it's an empty directory. We can remove it.
-                let removed = e.remove_entry();
-
-                // And sever the file's parent ref to avoid Rc cycles.
-                removed.1.set_parent(None);
-
-                Ok(())
-            }
-            Entry::Vacant(_) => {
-                log::trace!(
-                    "VirtualDir::remove_directory failed to remove {}, no such entry",
-                    trimmed_path
-                );
-                Err(Errno::Noent)
-            }
-        }
+    // FdOps
+    fn filestat_get(&self) -> Result<types::Filestat> {
+        let stat = types::Filestat {
+            dev: 0,
+            ino: 0,
+            nlink: 0,
+            size: 0,
+            atim: 0,
+            ctim: 0,
+            mtim: 0,
+            filetype: self.get_file_type()?,
+        };
+        Ok(stat)
     }
-
-    fn unlink_file(&self, path: &str) -> Result<()> {
-        let trimmed_path = path.trim_end_matches('/');
-
-        // Special case: we may be unlinking this directory itself if path is `"."`. In that case,
-        // fail with Isdir, since this is a directory. Alternatively, we may be unlinking `".."`,
-        // which is bound the same way, as this is by definition contained in a directory.
-        if trimmed_path == "." || trimmed_path == ".." {
-            return Err(Errno::Isdir);
-        }
-
-        let mut entries = self.entries.borrow_mut();
-        match entries.entry(Path::new(trimmed_path).to_path_buf()) {
-            Entry::Occupied(e) => {
-                // Directories must be removed through `remove_directory`, not `unlink_file`.
-                if e.get().get_file_type() == types::Filetype::Directory {
-                    return Err(Errno::Isdir);
-                }
-
-                let removed = e.remove_entry();
-
-                // Sever the file's parent ref to avoid Rc cycles.
-                removed.1.set_parent(None);
-
-                Ok(())
-            }
-            Entry::Vacant(_) => {
-                log::trace!(
-                    "VirtualDir::unlink_file failed to remove {}, no such entry",
-                    trimmed_path
-                );
-                Err(Errno::Noent)
-            }
-        }
-    }
-
-    fn create_directory(&self, path: &Path) -> Result<()> {
-        let mut entries = self.entries.borrow_mut();
-        match entries.entry(path.to_owned()) {
-            Entry::Occupied(_) => Err(Errno::Exist),
-            Entry::Vacant(v) => {
-                if self.writable {
-                    let new_dir = Box::new(Self::new(true));
-                    new_dir.set_parent(Some(self.try_clone()?));
-                    v.insert(new_dir);
-                    Ok(())
-                } else {
-                    Err(Errno::Acces)
-                }
-            }
-        }
-    }
-
-    fn write_vectored(&self, _iovs: &[io::IoSlice]) -> Result<usize> {
-        Err(Errno::Badf)
-    }
-
     fn readdir(
         &self,
         cookie: types::Dircookie,
     ) -> Result<Box<dyn Iterator<Item = Result<(types::Dirent, String)>>>> {
         struct VirtualDirIter {
             start: u32,
-            entries: Rc<RefCell<HashMap<PathBuf, Box<dyn VirtualFile>>>>,
+            entries: Rc<RefCell<HashMap<PathBuf, Box<dyn Handle>>>>,
         }
         impl Iterator for VirtualDirIter {
             type Item = Result<(types::Dirent, String)>;
@@ -821,7 +555,7 @@ impl VirtualFile for VirtualDir {
                 let dirent = || -> Result<types::Dirent> {
                     let dirent = types::Dirent {
                         d_namlen: name.len().try_into()?,
-                        d_type: file.get_file_type(),
+                        d_type: file.get_file_type()?,
                         d_ino: 0,
                         d_next: self.start as u64,
                     };
@@ -843,30 +577,185 @@ impl VirtualFile for VirtualDir {
             entries: Rc::clone(&self.entries),
         }))
     }
-
-    fn filestat_get(&self) -> Result<types::Filestat> {
-        let stat = types::Filestat {
-            dev: 0,
-            ino: 0,
-            nlink: 0,
-            size: 0,
-            atim: 0,
-            ctim: 0,
-            mtim: 0,
-            filetype: self.get_file_type(),
-        };
-        Ok(stat)
+    // PathOps
+    fn create_directory(&self, path: &str) -> Result<()> {
+        let mut entries = self.entries.borrow_mut();
+        match entries.entry(PathBuf::from(path)) {
+            Entry::Occupied(_) => Err(Errno::Exist),
+            Entry::Vacant(v) => {
+                if self.writable {
+                    let new_dir = Box::new(Self::new(true));
+                    new_dir.set_parent(Some(self.try_clone()?));
+                    v.insert(new_dir);
+                    Ok(())
+                } else {
+                    Err(Errno::Acces)
+                }
+            }
+        }
     }
+    fn openat(
+        &self,
+        path: &str,
+        read: bool,
+        write: bool,
+        oflags: types::Oflags,
+        fd_flags: types::Fdflags,
+    ) -> Result<Box<dyn Handle>> {
+        log::trace!(
+            "VirtualDir::openat(path={:?}, read={:?}, write={:?}, oflags={:?}, fd_flags={:?}",
+            path,
+            read,
+            write,
+            oflags,
+            fd_flags
+        );
 
-    fn get_file_type(&self) -> types::Filetype {
-        types::Filetype::Directory
+        if path == "." {
+            return self.try_clone().map_err(Into::into);
+        } else if path == ".." {
+            match &*self.parent.borrow() {
+                Some(file) => {
+                    return file.try_clone().map_err(Into::into);
+                }
+                None => {
+                    return self.try_clone().map_err(Into::into);
+                }
+            }
+        }
+
+        // openat may have been passed a path with a trailing slash, but files are mapped to paths
+        // with trailing slashes normalized out.
+        let file_name = Path::new(path).file_name().ok_or(Errno::Inval)?;
+        let mut entries = self.entries.borrow_mut();
+        let entry_count = entries.len();
+        match entries.entry(Path::new(file_name).to_path_buf()) {
+            Entry::Occupied(e) => {
+                let creat_excl_mask = types::Oflags::CREAT | types::Oflags::EXCL;
+                if (oflags & creat_excl_mask) == creat_excl_mask {
+                    log::trace!("VirtualDir::openat was passed oflags CREAT|EXCL, but the file {:?} exists.", file_name);
+                    log::trace!("  return Exist");
+                    return Err(Errno::Exist);
+                }
+
+                if oflags.contains(&types::Oflags::DIRECTORY)
+                    && e.get().get_file_type()? != types::Filetype::Directory
+                {
+                    log::trace!(
+                        "VirtualDir::openat was passed oflags DIRECTORY, but {:?} is a file.",
+                        file_name
+                    );
+                    log::trace!("  return Notdir");
+                    return Err(Errno::Notdir);
+                }
+
+                e.get().try_clone().map_err(Into::into)
+            }
+            Entry::Vacant(v) => {
+                if self.writable {
+                    // Enforce a hard limit at `u32::MAX - 2` files.
+                    // This is to have a constant limit (rather than target-dependent limit we
+                    // would have with `usize`. The limit is the full `u32` range minus two so we
+                    // can reserve "self" and "parent" cookie values.
+                    if entry_count >= (std::u32::MAX - RESERVED_ENTRY_COUNT) as usize {
+                        return Err(Errno::Nospc);
+                    }
+
+                    log::trace!("VirtualDir::openat creating an InMemoryFile named {}", path);
+
+                    let file = Box::new(InMemoryFile::memory_backed());
+                    file.fd_flags.set(fd_flags);
+                    file.set_parent(Some(self.try_clone().expect("can clone self")));
+                    v.insert(file).try_clone().map_err(Into::into)
+                } else {
+                    Err(Errno::Acces)
+                }
+            }
+        }
     }
-
-    fn get_rights_base(&self) -> types::Rights {
-        types::Rights::directory_base()
+    fn readlinkat(&self, _path: &str) -> Result<String> {
+        // Files are not symbolic links or directories, faithfully report Notdir.
+        Err(Errno::Notdir)
     }
+    fn remove_directory(&self, path: &str) -> Result<()> {
+        let trimmed_path = path.trim_end_matches('/');
+        let mut entries = self.entries.borrow_mut();
+        match entries.entry(Path::new(trimmed_path).to_path_buf()) {
+            Entry::Occupied(e) => {
+                // first, does this name a directory?
+                if e.get().get_file_type()? != types::Filetype::Directory {
+                    return Err(Errno::Notdir);
+                }
 
-    fn get_rights_inheriting(&self) -> types::Rights {
-        types::Rights::directory_inheriting()
+                // Okay, but is the directory empty?
+                let iter = e.get().readdir(wasi::DIRCOOKIE_START)?;
+                if iter.skip(RESERVED_ENTRY_COUNT as usize).next().is_some() {
+                    return Err(Errno::Notempty);
+                }
+
+                // Alright, it's an empty directory. We can remove it.
+                let removed = e.remove_entry();
+
+                // TODO refactor
+                // And sever the file's parent ref to avoid Rc cycles.
+                if let Some(dir) = removed.1.as_any().downcast_ref::<Self>() {
+                    dir.set_parent(None);
+                } else if let Some(file) = removed.1.as_any().downcast_ref::<InMemoryFile>() {
+                    file.set_parent(None);
+                } else {
+                    panic!("neither VirtualDir nor InMemoryFile");
+                }
+
+                Ok(())
+            }
+            Entry::Vacant(_) => {
+                log::trace!(
+                    "VirtualDir::remove_directory failed to remove {}, no such entry",
+                    trimmed_path
+                );
+                Err(Errno::Noent)
+            }
+        }
+    }
+    fn unlink_file(&self, path: &str) -> Result<()> {
+        let trimmed_path = path.trim_end_matches('/');
+
+        // Special case: we may be unlinking this directory itself if path is `"."`. In that case,
+        // fail with Isdir, since this is a directory. Alternatively, we may be unlinking `".."`,
+        // which is bound the same way, as this is by definition contained in a directory.
+        if trimmed_path == "." || trimmed_path == ".." {
+            return Err(Errno::Isdir);
+        }
+
+        let mut entries = self.entries.borrow_mut();
+        match entries.entry(Path::new(trimmed_path).to_path_buf()) {
+            Entry::Occupied(e) => {
+                // Directories must be removed through `remove_directory`, not `unlink_file`.
+                if e.get().get_file_type()? == types::Filetype::Directory {
+                    return Err(Errno::Isdir);
+                }
+
+                let removed = e.remove_entry();
+
+                // TODO refactor
+                // Sever the file's parent ref to avoid Rc cycles.
+                if let Some(dir) = removed.1.as_any().downcast_ref::<Self>() {
+                    dir.set_parent(None);
+                } else if let Some(file) = removed.1.as_any().downcast_ref::<InMemoryFile>() {
+                    file.set_parent(None);
+                } else {
+                    panic!("neither VirtualDir nor InMemoryFile");
+                }
+
+                Ok(())
+            }
+            Entry::Vacant(_) => {
+                log::trace!(
+                    "VirtualDir::unlink_file failed to remove {}, no such entry",
+                    trimmed_path
+                );
+                Err(Errno::Noent)
+            }
+        }
     }
 }
