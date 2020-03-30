@@ -9,7 +9,7 @@ use wasmtime_environ::settings::{self, Configurable};
 use wasmtime_environ::CacheConfig;
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent};
-use wasmtime_runtime::Allocator;
+use wasmtime_runtime::MemoryCreator;
 
 // Runtime Environment
 
@@ -28,7 +28,7 @@ pub struct Config {
     pub(crate) strategy: CompilationStrategy,
     pub(crate) cache_config: CacheConfig,
     pub(crate) profiler: Arc<dyn ProfilingAgent>,
-    pub(crate) allocator: Option<Arc<dyn Allocator>>,
+    pub(crate) memory_creator: Option<Arc<dyn MemoryCreator>>,
 }
 
 impl Config {
@@ -68,7 +68,7 @@ impl Config {
             strategy: CompilationStrategy::Auto,
             cache_config: CacheConfig::new_cache_disabled(),
             profiler: Arc::new(NullProfilerAgent),
-            allocator: None,
+            memory_creator: None,
         }
     }
 
@@ -329,9 +329,9 @@ impl Config {
         Ok(self)
     }
 
-    /// Sets a custom memory allocator
-    pub fn with_host_memory(&mut self, allocator: Arc<dyn Allocator>) -> &mut Self {
-        self.allocator = Some(allocator);
+    /// Sets a custom memory creator
+    pub fn with_host_memory(&mut self, mem_creator: Arc<dyn MemoryCreator>) -> &mut Self {
+        self.memory_creator = Some(mem_creator);
         self
     }
 }
@@ -511,9 +511,9 @@ impl Store {
         &self.inner.engine
     }
 
-    /// Returns an optional reference to a memory ['Allocator']
-    pub(crate) fn allocator(&self) -> Option<&dyn Allocator> {
-        self.engine().config.allocator.as_ref().map(|a| &**a)
+    /// Returns an optional reference to a memory ['MemoryCreator']
+    pub(crate) fn memory_creator(&self) -> Option<&dyn MemoryCreator> {
+        self.engine().config.memory_creator.as_ref().map(|a| &**a)
     }
 
     pub(crate) fn compiler(&self) -> std::cell::Ref<'_, Compiler> {

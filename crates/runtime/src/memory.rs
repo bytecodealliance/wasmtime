@@ -10,15 +10,15 @@ use std::convert::TryFrom;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
 /// A memory allocator
-pub trait Allocator: Send + Sync {
+pub trait MemoryCreator: Send + Sync {
     /// Create new LinearMemory
     fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn LinearMemory>, String>;
 }
 
-/// A default memory allocator used by Wasmtime
-pub struct DefaultAllocator;
+/// A default memory creator used by Wasmtime
+pub struct DefaultMemoryCreator;
 
-impl Allocator for DefaultAllocator {
+impl MemoryCreator for DefaultMemoryCreator {
     /// Create new MmapMemory
     fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn LinearMemory>, String> {
         Ok(Box::new(MmapMemory::new(plan)?) as Box<dyn LinearMemory>)

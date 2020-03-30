@@ -39,7 +39,7 @@ pub use crate::export::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{InstanceHandle, InstantiationError, LinkError};
 pub use crate::jit_int::GdbJitImageRegistration;
-pub use crate::memory::{Allocator, LinearMemory};
+pub use crate::memory::{MemoryCreator, LinearMemory};
 pub use crate::mmap::Mmap;
 pub use crate::sig_registry::SignatureRegistry;
 pub use crate::table::Table;

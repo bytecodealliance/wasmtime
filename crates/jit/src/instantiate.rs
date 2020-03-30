@@ -20,7 +20,7 @@ use wasmtime_environ::{
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{
-    Allocator, GdbJitImageRegistration, InstanceHandle, InstantiationError, SignatureRegistry,
+    MemoryCreator, GdbJitImageRegistration, InstanceHandle, InstantiationError, SignatureRegistry,
     TrapRegistration, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
 };
 
@@ -203,7 +203,7 @@ impl CompiledModule {
         is_bulk_memory: bool,
         resolver: &mut dyn Resolver,
         sig_registry: &SignatureRegistry,
-        allocator: Option<&dyn Allocator>,
+        mem_creator: Option<&dyn MemoryCreator>,
     ) -> Result<InstanceHandle, InstantiationError> {
         let data_initializers = self
             .data_initializers
@@ -220,7 +220,7 @@ impl CompiledModule {
             self.finished_functions.clone(),
             self.trampolines.clone(),
             imports,
-            allocator,
+            mem_creator,
             &data_initializers,
             self.signatures.clone(),
             self.dbg_jit_registration.as_ref().map(|r| Rc::clone(&r)),
@@ -285,13 +285,13 @@ pub unsafe fn instantiate(
     debug_info: bool,
     is_bulk_memory: bool,
     profiler: &dyn ProfilingAgent,
-    allocator: Option<&dyn Allocator>,
+    mem_creator: Option<&dyn MemoryCreator>,
 ) -> Result<InstanceHandle, SetupError> {
     let instance = CompiledModule::new(compiler, data, debug_info, profiler)?.instantiate(
         is_bulk_memory,
         resolver,
         compiler.signatures(),
-        allocator,
+        mem_creator,
     )?;
     Ok(instance)
 }

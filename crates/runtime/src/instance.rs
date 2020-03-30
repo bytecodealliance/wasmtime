@@ -5,7 +5,7 @@
 use crate::export::Export;
 use crate::imports::Imports;
 use crate::jit_int::GdbJitImageRegistration;
-use crate::memory::{Allocator, DefaultAllocator, LinearMemory};
+use crate::memory::{MemoryCreator, DefaultMemoryCreator, LinearMemory};
 use crate::table::Table;
 use crate::traphandlers;
 use crate::traphandlers::{catch_traps, Trap};
@@ -861,7 +861,7 @@ impl InstanceHandle {
         finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
         trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
         imports: Imports,
-        allocator: Option<&dyn Allocator>,
+        mem_creator: Option<&dyn MemoryCreator>,
         data_initializers: &[DataInitializer<'_>],
         vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
@@ -869,8 +869,7 @@ impl InstanceHandle {
         host_state: Box<dyn Any>,
     ) -> Result<Self, InstantiationError> {
         let tables = create_tables(&module);
-
-        let memories = create_memories(&module, allocator.unwrap_or(&DefaultAllocator {}))?;
+        let memories = create_memories(&module, mem_creator.unwrap_or(&DefaultMemoryCreator {}))?;
 
         let vmctx_tables = tables
             .values()
@@ -1302,14 +1301,14 @@ fn initialize_passive_elements(instance: &Instance) {
 /// Allocate memory for just the memories of the current module.
 fn create_memories(
     module: &Module,
-    allocator: &dyn Allocator,
+    mem_creator: &dyn MemoryCreator,
 ) -> Result<BoxedSlice<DefinedMemoryIndex, Box<dyn LinearMemory>>, InstantiationError> {
     let num_imports = module.imported_memories.len();
     let mut memories: PrimaryMap<DefinedMemoryIndex, _> =
         PrimaryMap::with_capacity(module.local.memory_plans.len() - num_imports);
     for plan in &module.local.memory_plans.values().as_slice()[num_imports..] {
         memories.push(
-            allocator
+            mem_creator
                 .new_memory(plan)
                 .map_err(InstantiationError::Resource)?,
         );
