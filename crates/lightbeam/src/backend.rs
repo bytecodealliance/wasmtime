@@ -437,7 +437,7 @@ where
         BlockCallingConvention {
             // We start and return the function with stack depth 1 since we must
             // allow space for the saved return address.
-            stack_depth: self.stack_depth,
+            stack_depth: self.stack_depth.clone(),
             arguments: self.arguments.into_iter().copied(),
         }
     }
@@ -800,7 +800,7 @@ pub struct Context<'this, M> {
 pub struct Label(DynamicLabel);
 
 /// Offset from starting value of SP counted in words.
-#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct StackDepth(u32);
 
 impl StackDepth {
@@ -2247,7 +2247,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     pub fn virtual_calling_convention(&self) -> VirtualCallingConvention {
         VirtualCallingConvention {
             stack: self.block_state.stack.clone(),
-            depth: self.block_state.depth,
+            depth: self.block_state.depth.clone(),
         }
     }
 
@@ -2681,7 +2681,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
     pub fn pass_block_args(&mut self, cc: &BlockCallingConvention) -> Result<(), Error> {
         self.do_pass_block_args(cc)?;
-        self.set_stack_depth(cc.stack_depth)?;
+        self.set_stack_depth(cc.stack_depth.clone())?;
         Ok(())
     }
 
@@ -2707,10 +2707,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         out_args.reverse();
 
-        self.set_stack_depth(cc.stack_depth)?;
+        self.set_stack_depth(cc.stack_depth.clone())?;
 
         Ok(BlockCallingConvention {
-            stack_depth: cc.stack_depth,
+            stack_depth: cc.stack_depth.clone(),
             arguments: out_args,
         })
     }
@@ -2733,7 +2733,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         out.reverse();
 
         Ok(BlockCallingConvention {
-            stack_depth: self.block_state.depth,
+            stack_depth: self.block_state.depth.clone(),
             arguments: out,
         })
     }
@@ -2983,11 +2983,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 // TODO: Floats
                 let i = i.as_bytes();
                 let out_offset = self.adjusted_offset(out_offset);
-                if (i as u64) <= u32::max_value() as u64 {
-                    dynasm!(self.asm
-                        ; mov DWORD [rsp + out_offset], i as i32
-                    );
-                } else if let Some(scratch) = self.take_reg(I64) {
+                if let Some(scratch) = self.take_reg(I64) {
                     dynasm!(self.asm
                         ; mov Rq(scratch.rq().unwrap()), QWORD i
                         ; mov [rsp + out_offset], Rq(scratch.rq().unwrap())
@@ -5552,7 +5548,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ; push Rq(VMCTX)
         );
         self.block_state.depth.reserve(1);
-        let depth = self.block_state.depth;
+        let depth = self.block_state.depth.clone();
 
         self.save_volatile()?;
 
@@ -5684,8 +5680,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             .clone()
             .flat_map(|l| {
                 if let CCLoc::Stack(offset) = l {
-                    if offset > 0 {
-                        Some(offset as u32)
+                    if offset >= 0 {
+                        Some(offset as u32 + 1)
                     } else {
                         None
                     }
@@ -5695,14 +5691,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             })
             .max()
             .unwrap_or(0);
-        let original_depth = self.block_state.depth.0;
-        let mut needed_depth = original_depth + total_stack_space;
+        let original_depth = self.block_state.depth.clone();
+        let mut needed_depth = original_depth.clone();
+        needed_depth.reserve(total_stack_space);
 
-        if needed_depth & 1 != 0 {
-            needed_depth += 1;
+        if needed_depth.0 & 1 != 0 {
+            needed_depth.reserve(1);
         }
 
-        self.set_stack_depth(StackDepth(needed_depth))?;
+        self.set_stack_depth(needed_depth.clone())?;
 
         let mut pending = Vec::<(ValueLocation, CCLoc)>::with_capacity(out_locs.len());
 
@@ -5715,21 +5712,21 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         while !pending.is_empty() {
             let start_len = pending.len();
 
-            for (src, mut dst) in mem::replace(&mut pending, vec![]) {
+            for (src, dst) in mem::replace(&mut pending, vec![]) {
                 if src != ValueLocation::from(dst) {
-                    match &mut dst {
+                    let dst = match dst {
                         CCLoc::Reg(r) => {
-                            if !self.block_state.regs.is_free(*r) {
+                            if !self.block_state.regs.is_free(r) {
                                 pending.push((src, dst));
                                 continue;
                             }
 
-                            self.block_state.regs.mark_used(*r);
+                            self.block_state.regs.mark_used(r);
+
+                            dst
                         }
-                        CCLoc::Stack(offset) => {
-                            *offset -= self.block_state.depth.0 as i32;
-                        }
-                    }
+                        CCLoc::Stack(offset) => CCLoc::Stack(offset - needed_depth.0 as i32),
+                    };
 
                     self.copy_value(src, dst)?;
                     self.free_value(src)?;
@@ -5765,6 +5762,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 }
             }
         }
+
+        // We do this a second time just in case we had to use `push_physical` to resolve cycles in
+        // `pending`
+        self.set_stack_depth(needed_depth)?;
 
         Ok(())
     }
@@ -5807,7 +5808,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ; push Rq(VMCTX)
         );
         self.block_state.depth.reserve(1);
-        let depth = self.block_state.depth;
+        let depth = self.block_state.depth.clone();
 
         let locs = arg_locs_skip_caller_vmctx(arg_types);
 
