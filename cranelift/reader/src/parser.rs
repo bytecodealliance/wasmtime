@@ -3,6 +3,7 @@
 use crate::error::{Location, ParseError, ParseResult};
 use crate::isaspec;
 use crate::lexer::{LexError, Lexer, LocatedError, LocatedToken, Token};
+use crate::run_command::{Comparison, DataValue, Invocation, RunCommand};
 use crate::sourcemap::SourceMap;
 use crate::testcommand::TestCommand;
 use crate::testfile::{Comment, Details, Feature, TestFile};
@@ -2392,6 +2393,160 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
+    /// Parse a CLIF run command.
+    ///
+    /// run-command ::= "run" [":" invocation comparison expected]
+    ///               \ "print" [":" invocation]
+    fn parse_run_command(&mut self, sig: &Signature) -> ParseResult<RunCommand> {
+        // skip semicolon
+        match self.token() {
+            Some(Token::Identifier("run")) => {
+                self.consume();
+                if self.optional(Token::Colon) {
+                    let invocation = self.parse_run_invocation(sig)?;
+                    let comparison = self.parse_run_comparison()?;
+                    let expected = self.parse_run_returns(sig)?;
+                    Ok(RunCommand::Run(invocation, comparison, expected))
+                } else if sig.params.is_empty()
+                    && sig.returns.len() == 1
+                    && sig.returns[0].value_type.is_bool()
+                {
+                    // To match the existing run behavior that does not require an explicit
+                    // invocation, we create an invocation from a function like `() -> b*` and
+                    // compare it to `true`.
+                    let invocation = Invocation::new("default", vec![]);
+                    let expected = vec![DataValue::B(true)];
+                    let comparison = Comparison::Equals;
+                    Ok(RunCommand::Run(invocation, comparison, expected))
+                } else {
+                    Err(self.error("unable to parse the run command"))
+                }
+            }
+            Some(Token::Identifier("print")) => {
+                self.consume();
+                if self.optional(Token::Colon) {
+                    Ok(RunCommand::Print(self.parse_run_invocation(sig)?))
+                } else if sig.params.is_empty() {
+                    // To allow printing of functions like `() -> *`, we create a no-arg invocation.
+                    let invocation = Invocation::new("default", vec![]);
+                    Ok(RunCommand::Print(invocation))
+                } else {
+                    Err(self.error("unable to parse the print command"))
+                }
+            }
+            _ => Err(self.error("expected a 'run:' or 'print:' command")),
+        }
+    }
+
+    /// Parse the invocation of a CLIF function.
+    ///
+    /// This is different from parsing a CLIF `call`; it is used in parsing run commands like
+    /// `run: %fn(42, 4.2) == false`.
+    ///
+    /// invocation ::= name "(" [data-value-list] ")"
+    fn parse_run_invocation(&mut self, sig: &Signature) -> ParseResult<Invocation> {
+        if let Some(Token::Name(name)) = self.token() {
+            self.consume();
+            self.match_token(
+                Token::LPar,
+                "expected invocation parentheses, e.g. %fn(...)",
+            )?;
+
+            let args = self.parse_data_value_list(
+                &sig.params.iter().map(|a| a.value_type).collect::<Vec<_>>(),
+            )?;
+
+            self.match_token(
+                Token::RPar,
+                "expected invocation parentheses, e.g. %fn(...)",
+            )?;
+            Ok(Invocation::new(name, args))
+        } else {
+            Err(self.error("expected a function name, e.g. %my_fn"))
+        }
+    }
+
+    /// Parse a comparison operator for run commands.
+    ///
+    /// comparison ::= "==" | "!="
+    fn parse_run_comparison(&mut self) -> ParseResult<Comparison> {
+        if self.optional(Token::Equal) {
+            self.match_token(Token::Equal, "expected another =")?;
+            Ok(Comparison::Equals)
+        } else if self.optional(Token::Not) {
+            self.match_token(Token::Equal, "expected a =")?;
+            Ok(Comparison::NotEquals)
+        } else {
+            Err(self.error("unable to parse a valid comparison operator"))
+        }
+    }
+
+    /// Parse the expected return values of a run invocation.
+    ///
+    /// expected ::= "[" "]"
+    ///            | data-value
+    ///            | "[" data-value-list "]"
+    fn parse_run_returns(&mut self, sig: &Signature) -> ParseResult<Vec<DataValue>> {
+        if sig.returns.len() != 1 {
+            self.match_token(Token::LBracket, "expected a left bracket [")?;
+        }
+
+        let returns = self
+            .parse_data_value_list(&sig.returns.iter().map(|a| a.value_type).collect::<Vec<_>>())?;
+
+        if sig.returns.len() != 1 {
+            self.match_token(Token::RBracket, "expected a right bracket ]")?;
+        }
+        Ok(returns)
+    }
+
+    /// Parse a comma-separated list of data values.
+    ///
+    /// data-value-list ::= [data-value {"," data-value-list}]
+    fn parse_data_value_list(&mut self, types: &[Type]) -> ParseResult<Vec<DataValue>> {
+        let mut values = vec![];
+        for ty in types.iter().take(1) {
+            values.push(self.parse_data_value(*ty)?);
+        }
+        for ty in types.iter().skip(1) {
+            self.match_token(
+                Token::Comma,
+                "expected a comma between invocation arguments",
+            )?;
+            values.push(self.parse_data_value(*ty)?);
+        }
+        Ok(values)
+    }
+
+    /// Parse a data value; e.g. `42`, `4.2`, `true`.
+    ///
+    /// data-value-list ::= [data-value {"," data-value-list}]
+    fn parse_data_value(&mut self, ty: Type) -> ParseResult<DataValue> {
+        let dv = match ty {
+            I8 => DataValue::from(self.match_imm8("expected a i8")?),
+            I16 => DataValue::from(self.match_imm16("expected an i16")?),
+            I32 => DataValue::from(self.match_imm32("expected an i32")?),
+            I64 => DataValue::from(Into::<i64>::into(self.match_imm64("expected an i64")?)),
+            F32 => DataValue::from(f32::from_bits(self.match_ieee32("expected an f32")?.bits())),
+            F64 => DataValue::from(f64::from_bits(self.match_ieee64("expected an f64")?.bits())),
+            _ if ty.is_vector() => {
+                let as_vec = self.match_constant_data(ty)?.into_vec();
+                if as_vec.len() == 16 {
+                    let mut as_array = [0; 16];
+                    as_array.copy_from_slice(&as_vec[..16]);
+                    DataValue::from(as_array)
+                } else {
+                    return Err(self.error("only 128-bit vectors are currently supported"));
+                }
+            }
+            _ if ty.is_bool() && !ty.is_vector() => {
+                DataValue::from(self.match_bool("expected a boolean")?)
+            }
+            _ => return Err(self.error(&format!("don't know how to parse data values of: {}", ty))),
+        };
+        Ok(dv)
+    }
+
     // Parse the operands following the instruction opcode.
     // This depends on the format of the opcode.
     fn parse_inst_operands(
@@ -3528,5 +3683,77 @@ mod tests {
             c.into_vec(),
             [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
         )
+    }
+
+    #[test]
+    fn parse_run_commands() {
+        // Helper for creating signatures.
+        fn sig(ins: &[Type], outs: &[Type]) -> Signature {
+            let mut sig = Signature::new(CallConv::Fast);
+            for i in ins {
+                sig.params.push(AbiParam::new(*i));
+            }
+            for o in outs {
+                sig.returns.push(AbiParam::new(*o));
+            }
+            sig
+        }
+
+        // Helper for parsing run commands.
+        fn parse(text: &str, sig: &Signature) -> ParseResult<RunCommand> {
+            Parser::new(text).parse_run_command(sig)
+        }
+
+        // Check that we can parse and display the same set of run commands.
+        fn assert_roundtrip(text: &str, sig: &Signature) {
+            assert_eq!(parse(text, sig).unwrap().to_string(), text);
+        }
+        assert_roundtrip("run: %fn0() == 42", &sig(&[], &[I32]));
+        assert_roundtrip(
+            "run: %fn0(8, 16, 32, 64) == true",
+            &sig(&[I8, I16, I32, I64], &[B8]),
+        );
+        assert_roundtrip(
+            "run: %my_func(true) == 0x0f0e0d0c0b0a09080706050403020100",
+            &sig(&[B32], &[I8X16]),
+        );
+
+        // Verify that default invocations are created when not specified.
+        assert_eq!(
+            parse("run", &sig(&[], &[B32])).unwrap().to_string(),
+            "run: %default() == true"
+        );
+        assert_eq!(
+            parse("print", &sig(&[], &[F32X4, I16X8]))
+                .unwrap()
+                .to_string(),
+            "print: %default()"
+        );
+
+        // Demonstrate some unparseable cases.
+        assert!(parse("print", &sig(&[I32], &[B32])).is_err());
+        assert!(parse("run", &sig(&[], &[I32])).is_err());
+        assert!(parse("print:", &sig(&[], &[])).is_err());
+        assert!(parse("run: ", &sig(&[], &[])).is_err());
+    }
+
+    #[test]
+    fn parse_data_values() {
+        fn parse(text: &str, ty: Type) -> DataValue {
+            Parser::new(text).parse_data_value(ty).unwrap()
+        }
+
+        assert_eq!(parse("8", I8).to_string(), "8");
+        assert_eq!(parse("16", I16).to_string(), "16");
+        assert_eq!(parse("32", I32).to_string(), "32");
+        assert_eq!(parse("64", I64).to_string(), "64");
+        assert_eq!(parse("0x32.32", F32).to_string(), "0x1.919000p5");
+        assert_eq!(parse("0x64.64", F64).to_string(), "0x1.9190000000000p6");
+        assert_eq!(parse("true", B1).to_string(), "true");
+        assert_eq!(parse("false", B64).to_string(), "false");
+        assert_eq!(
+            parse("[0 1 2 3]", I32X4).to_string(),
+            "0x03000000020000000100000000"
+        );
     }
 }
