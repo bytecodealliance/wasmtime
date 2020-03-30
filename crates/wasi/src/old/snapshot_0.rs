@@ -3,9 +3,7 @@ pub use wasi_common::old::snapshot_0::{WasiCtx, WasiCtxBuilder};
 
 // Defines a `struct Wasi` with member fields and appropriate APIs for dealing
 // with all the various WASI exports.
-wig::define_wasi_struct!(
-    "old/snapshot_0" "wasi_unstable"
-);
+wig::define_wasi_struct!("phases/old/snapshot_0/witx/wasi_unstable.witx");
 
 pub fn is_wasi_module(name: &str) -> bool {
     // FIXME: this should be more conservative, but while WASI is in flux and

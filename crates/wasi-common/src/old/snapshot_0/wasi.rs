@@ -8,7 +8,7 @@
 
 use wig::witx_wasi_types;
 
-witx_wasi_types!("old/snapshot_0" "wasi_unstable");
+witx_wasi_types!("phases/old/snapshot_0/witx/wasi_unstable.witx");
 
 pub type WasiResult<T> = Result<T, WasiError>;
 
