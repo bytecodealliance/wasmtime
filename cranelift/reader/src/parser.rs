@@ -683,6 +683,49 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Match and consume an i8 immediate.
+    fn match_imm8(&mut self, err_msg: &str) -> ParseResult<i8> {
+        if let Some(Token::Integer(text)) = self.token() {
+            self.consume();
+            let negative = text.starts_with('-');
+            let positive = text.starts_with('+');
+            let text = if negative || positive {
+                // Strip sign prefix.
+                &text[1..]
+            } else {
+                text
+            };
+
+            // Parse the text value; the lexer gives us raw text that looks like an integer.
+            let value = if text.starts_with("0x") {
+                // Skip underscores.
+                let text = text.replace("_", "");
+                // Parse it as a i8 in hexadecimal form.
+                u8::from_str_radix(&text[2..], 16)
+                    .map_err(|_| self.error("unable to parse i8 as a hexadecimal immediate"))?
+            } else {
+                // Parse it as a i8 to check for overflow and other issues.
+                text.parse()
+                    .map_err(|_| self.error("expected i8 decimal immediate"))?
+            };
+
+            // Apply sign if necessary.
+            let signed = if negative {
+                let value = value.wrapping_neg() as i8;
+                if value > 0 {
+                    return Err(self.error("negative number too small"));
+                }
+                value
+            } else {
+                value as i8
+            };
+
+            Ok(signed)
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
     // Match and consume a signed 16-bit immediate.
     fn match_imm16(&mut self, err_msg: &str) -> ParseResult<i16> {
         if let Some(Token::Integer(text)) = self.token() {
@@ -695,27 +738,32 @@ impl<'a> Parser<'a> {
             } else {
                 text
             };
-            let mut value;
-            // Lexer just gives us raw text that looks like an integer.
-            if text.starts_with("0x") {
+
+            // Parse the text value; the lexer gives us raw text that looks like an integer.
+            let value = if text.starts_with("0x") {
                 // Skip underscores.
                 let text = text.replace("_", "");
                 // Parse it as a i16 in hexadecimal form.
-                value = u16::from_str_radix(&text[2..], 16)
-                    .map_err(|_| self.error("unable to parse i16 as a hexadecimal immediate"))?;
+                u16::from_str_radix(&text[2..], 16)
+                    .map_err(|_| self.error("unable to parse i16 as a hexadecimal immediate"))?
             } else {
                 // Parse it as a i16 to check for overflow and other issues.
-                value = text
-                    .parse()
-                    .map_err(|_| self.error("expected i16 decimal immediate"))?;
-            }
-            if negative {
-                value = Ok(value.wrapping_neg())?;
-                if value as i16 > 0 {
+                text.parse()
+                    .map_err(|_| self.error("expected i16 decimal immediate"))?
+            };
+
+            // Apply sign if necessary.
+            let signed = if negative {
+                let value = value.wrapping_neg() as i16;
+                if value > 0 {
                     return Err(self.error("negative number too small"));
                 }
-            }
-            Ok(value as i16)
+                value
+            } else {
+                value as i16
+            };
+
+            Ok(signed)
         } else {
             err!(self.loc, err_msg)
         }
@@ -734,27 +782,32 @@ impl<'a> Parser<'a> {
             } else {
                 text
             };
-            let mut value;
-            // Lexer just gives us raw text that looks like an integer.
-            if text.starts_with("0x") {
+
+            // Parse the text value; the lexer gives us raw text that looks like an integer.
+            let value = if text.starts_with("0x") {
                 // Skip underscores.
                 let text = text.replace("_", "");
                 // Parse it as a i32 in hexadecimal form.
-                value = u32::from_str_radix(&text[2..], 16)
-                    .map_err(|_| self.error("unable to parse i32 as a hexadecimal immediate"))?;
+                u32::from_str_radix(&text[2..], 16)
+                    .map_err(|_| self.error("unable to parse i32 as a hexadecimal immediate"))?
             } else {
                 // Parse it as a i32 to check for overflow and other issues.
-                value = text
-                    .parse()
-                    .map_err(|_| self.error("expected i32 decimal immediate"))?;
-            }
-            if negative {
-                value = Ok(value.wrapping_neg())?;
-                if value as i32 > 0 {
+                text.parse()
+                    .map_err(|_| self.error("expected i32 decimal immediate"))?
+            };
+
+            // Apply sign if necessary.
+            let signed = if negative {
+                let value = value.wrapping_neg() as i32;
+                if value > 0 {
                     return Err(self.error("negative number too small"));
                 }
-            }
-            Ok(value as i32)
+                value
+            } else {
+                value as i32
+            };
+
+            Ok(signed)
         } else {
             err!(self.loc, err_msg)
         }
