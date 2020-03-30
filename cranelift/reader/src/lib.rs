@@ -37,6 +37,7 @@ mod error;
 mod isaspec;
 mod lexer;
 mod parser;
+mod run_command;
 mod sourcemap;
 mod testcommand;
 mod testfile;
