@@ -313,10 +313,10 @@ impl PerCpuModeEncodings {
     }
 
     /// Add two encodings for `inst`:
-    /// - X86_32, dynamically infer the REX prefix.
+    /// - X86_32, no REX prefix, since this is not valid in 32-bit mode.
     /// - X86_64, dynamically infer the REX prefix.
     fn enc_both_inferred(&mut self, inst: impl Clone + Into<InstSpec>, template: Template) {
-        self.enc32(inst.clone(), template.infer_rex());
+        self.enc32(inst.clone(), template.clone());
         self.enc64(inst, template.infer_rex());
     }
     fn enc_both_inferred_maybe_isap(
@@ -325,7 +325,7 @@ impl PerCpuModeEncodings {
         template: Template,
         isap: Option<SettingPredicateNumber>,
     ) {
-        self.enc32_maybe_isap(inst.clone(), template.infer_rex(), isap);
+        self.enc32_maybe_isap(inst.clone(), template.clone(), isap);
         self.enc64_maybe_isap(inst, template.infer_rex(), isap);
     }
 
