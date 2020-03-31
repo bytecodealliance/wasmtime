@@ -12,7 +12,7 @@ include = ["src/**/*", "LICENSE"]
 
 [dependencies]
 proptest = "0.9"
-wiggle = { path = "..", version = "0.14.0" }
+wiggle = { path = ".." }
 
 [badges]
 maintenance = { status = "actively-developed" }

@@ -19,7 +19,7 @@ wiggle-macro = { path = "macro", version = "0.14.0" }
 maintenance = { status = "actively-developed" }
 
 [dev-dependencies]
-wiggle-test = { path = "test-helpers", version = "0.14.0" }
+wiggle-test = { path = "test-helpers" }
 proptest = "0.9"
 
 [features]
