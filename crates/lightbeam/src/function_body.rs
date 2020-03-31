@@ -56,6 +56,16 @@ pub struct Sinks<'a> {
     pub offsets: &'a mut dyn OffsetSink,
 }
 
+impl Sinks<'_> {
+    pub fn reborrow<'a>(&'a mut self) -> Sinks<'a> {
+        Sinks {
+            relocs: &mut *self.relocs,
+            traps: &mut *self.traps,
+            offsets: &mut *self.offsets,
+        }
+    }
+}
+
 pub fn translate_wasm<M>(
     session: &mut CodeGenSession<M>,
     sinks: Sinks<'_>,
@@ -86,7 +96,7 @@ where
 
 pub fn translate<M, I, L: Send + Sync + 'static>(
     session: &mut CodeGenSession<M>,
-    sinks: Sinks<'_>,
+    mut sinks: Sinks<'_>,
     func_idx: u32,
     body: I,
 ) -> Result<(), Error>
@@ -120,7 +130,7 @@ where
     let module_context = &*session.module_context;
     let mut op_offset_map = mem::replace(&mut session.op_offset_map, vec![]);
     {
-        let ctx = &mut session.new_context(func_idx, &mut *sinks.relocs);
+        let ctx = &mut session.new_context(func_idx, sinks.reborrow());
         op_offset_map.push((
             ctx.asm.offset(),
             Box::new(format!("Function {}:", func_idx)),
@@ -855,7 +865,6 @@ where
                     if let Some(defined_index) = module_context.defined_func_index(function_index) {
                         if defined_index == func_idx {
                             ctx.call_direct_self(
-                                defined_index,
                                 callee_ty.params().iter().map(|t| t.to_microwasm_type()),
                                 callee_ty.returns().iter().map(|t| t.to_microwasm_type()),
                             )?;

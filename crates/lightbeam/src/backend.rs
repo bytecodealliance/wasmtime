@@ -4,6 +4,7 @@ use self::registers::*;
 use crate::error::Error;
 use crate::microwasm::{BrTarget, Ieee32, Ieee64, SignlessType, Type, Value, F32, F64, I32, I64};
 use crate::module::ModuleContext;
+use crate::Sinks;
 use cranelift_codegen::{
     binemit,
     ir::{self, SourceLoc, TrapCode},
@@ -630,11 +631,11 @@ impl<'module, M> CodeGenSession<'module, M> {
 
     pub fn new_context<'this>(
         &'this mut self,
-        func_idx: u32,
-        reloc_sink: &'this mut dyn binemit::RelocSink,
+        defined_func_idx: u32,
+        sinks: Sinks<'this>,
     ) -> Context<'this, M> {
         {
-            let func_start = &mut self.func_starts[func_idx as usize];
+            let func_start = &mut self.func_starts[defined_func_idx as usize];
 
             // At this point we know the exact start address of this function. Save it
             // and define dynamic label at this location.
@@ -644,8 +645,8 @@ impl<'module, M> CodeGenSession<'module, M> {
 
         Context {
             asm: &mut self.assembler,
-            current_function: func_idx,
-            reloc_sink,
+            current_function: defined_func_idx,
+            sinks,
             pointer_type: self.pointer_type,
             source_loc: Default::default(),
             func_starts: &self.func_starts,
@@ -786,7 +787,7 @@ pub struct Context<'this, M> {
     pub asm: &'this mut Assembler,
     pointer_type: SignlessType,
     source_loc: SourceLoc,
-    reloc_sink: &'this mut dyn binemit::RelocSink,
+    sinks: Sinks<'this>,
     module_context: &'this M,
     current_function: u32,
     func_starts: &'this Vec<(Option<AssemblyOffset>, DynamicLabel)>,
@@ -5494,7 +5495,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.pass_outgoing_args(&locs)?;
 
         // 2 bytes for the 64-bit `mov` opcode + register ident, the rest is the immediate
-        self.reloc_sink.reloc_external(
+        self.sinks.relocs.reloc_external(
             (self.asm.offset().0
                 - self.func_starts[self.current_function as usize]
                     .0
@@ -5962,7 +5963,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         R: IntoIterator<Item = SignlessType>,
     >(
         &mut self,
-        defined_index: u32,
         arg_types: A,
         return_types: R,
     ) -> Result<(), Error>
@@ -5974,7 +5974,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         self.save_volatile()?;
 
-        let (_, label) = self.func_starts[defined_index as usize];
+        let (_, label) = self.func_starts[self.current_function as usize];
 
         self.pass_outgoing_args(&locs)?;
         dynasm!(self.asm
@@ -6097,9 +6097,29 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         }
     }
 
-    pub fn trap(&mut self, _trap_id: TrapCode) {
-        // TODO: Emit trap info by writing the trap ID and current source location to a
-        //       `binemit::TrapSink`.
+    pub fn trap(&mut self, trap_id: TrapCode) {
+        let function_start: u32 = self.func_starts[self.current_function as usize]
+            .0
+            .expect(
+                "PROGRAMMER ERROR: We failed to get the offset of the start of the current \
+                function - this should be impossible as we set this value when we enter the \
+                function",
+            )
+            .0
+            .try_into()
+            .expect("Assembly offset overflowed u32");
+        self.sinks.traps.trap(
+            u32::try_from(self.asm.offset().0)
+                .expect("Assembly offset overflowed u32")
+                .checked_sub(function_start)
+                .expect(
+                    "PROGRAMMER ERROR: We're trying to emit a trap with an assembly offset less \
+                    than the offset of the start of the function",
+                ),
+            // TODO: Source locations
+            Default::default(),
+            trap_id,
+        );
         dynasm!(self.asm
             ; ud2
         );
