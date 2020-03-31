@@ -10,6 +10,9 @@ pub mod settings;
 #[cfg(feature = "unwind")]
 mod unwind;
 
+#[cfg(feature = "unwind")]
+pub use fde::map_reg;
+
 use super::super::settings as shared_settings;
 #[cfg(feature = "testing_hooks")]
 use crate::binemit::CodeSink;

@@ -1,11 +1,11 @@
 use super::address_transform::AddressTransform;
-use super::map_reg::map_reg;
 use anyhow::{Context, Error, Result};
 use gimli::{self, write, Expression, Operation, Reader, ReaderOffset, X86_64};
 use more_asserts::{assert_le, assert_lt};
 use std::collections::{HashMap, HashSet};
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::ir::{StackSlots, ValueLabel, ValueLabelsRanges, ValueLoc};
+use wasmtime_environ::isa::fde::map_reg;
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{get_vmctx_value_label, DefinedFuncIndex};
 use wasmtime_environ::ModuleMemoryOffset;
