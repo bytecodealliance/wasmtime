@@ -25,13 +25,13 @@ you'll want to make sure that Wasmtime is compiled with the `jitdump` Cargo
 feature (which is enabled by default). Otherwise enabling runtime support
 depends on how you're using Wasmtime:
 
-* **Rust API** - you'll want to call the [`Config::profiler`] method with
+- **Rust API** - you'll want to call the [`Config::profiler`] method with
   `ProfilingStrategy::JitDump` to enable profiling of your wasm modules.
 
-* **C API** - you'll want to call the `wasmtime_config_profiler_set` API with a
+- **C API** - you'll want to call the `wasmtime_config_profiler_set` API with a
   `WASMTIME_PROFILING_STRATEGY_JITDUMP` value.
 
-* **Command Line** - you'll want to pass the `--jitdump` flag on the command
+- **Command Line** - you'll want to pass the `--jitdump` flag on the command
   line.
 
 Once jitdump support is enabled, you'll use `perf record` like usual to record
@@ -41,10 +41,10 @@ your application's performance. You'll need to also be sure to pass the
 For example if you're using the CLI, you'll execute:
 
 ```sh
-$ perf record -k mono wasmtime --jitdump foo.wasm
+perf record -k mono wasmtime --jitdump foo.wasm
 ```
 
-This will create a `perf.data` file as per usual, but it will *also* create a
+This will create a `perf.data` file as per usual, but it will _also_ create a
 `jit-XXXX.dump` file. This extra `*.dump` file is the jitdump file which is
 specified by `perf` and Wasmtime generates at runtime.
 
@@ -52,7 +52,7 @@ The next thing you need to do is to merge the `*.dump` file into the
 `perf.data` file, which you can do with the `perf inject` command:
 
 ```sh
-$ perf inject --jit --input perf.data --output perf.jit.data
+perf inject --jit --input perf.data --output perf.jit.data
 ```
 
 This will read `perf.data`, automatically pick up the `*.dump` file that's
@@ -65,7 +65,7 @@ After that you can explore the `perf.jit.data` profile as you usually would,
 for example with:
 
 ```sh
-$ perf report --input perf.jit.data
+perf report --input perf.jit.data
 ```
 
 You should be able to annotate wasm functions and see their raw assembly. You
@@ -88,11 +88,11 @@ numbers.
 Enabling dwarf debug information for JIT code depends on how you're using
 Wasmtime:
 
-* **Rust API** - you'll want to call the [`Config::debug_info`] method.
+- **Rust API** - you'll want to call the [`Config::debug_info`] method.
 
-* **C API** - you'll want to call the `wasmtime_config_debug_info_set` API.
+- **C API** - you'll want to call the `wasmtime_config_debug_info_set` API.
 
-* **Command Line** - you'll want to pass the `-g` flag on the command line.
+- **Command Line** - you'll want to pass the `-g` flag on the command line.
 
 You shouldn't need to do anything else to get this information into `perf`. The
 perf collection data should automatically pick up all this dwarf debug
@@ -135,7 +135,7 @@ function. Note that the symbol has been demangled to `fib::fib` which is what
 the Rust symbol is:
 
 ```sh
-$ perf report --input perf.jit-data
+perf report --input perf.jit.data
 ```
 
 ![perf report output](assets/perf-report-fib.png)
@@ -144,9 +144,9 @@ Alternatively we could also use `perf annotate` to take a look at the
 disassembly of the `fib` function, seeing what the JIT generated:
 
 ```sh
-$ perf annotate --input perf.jit-data
+perf annotate --input perf.jit.data
 ```
 
 ![perf annotate output](assets/perf-annotate-fib.png)
 
-[`Config::debug_info`]: https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.debug_info
+[`config::debug_info`]: https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.debug_info
