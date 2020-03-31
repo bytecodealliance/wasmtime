@@ -256,6 +256,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 
 [[package]]
+name = "chrono"
+version = "0.4.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80094f509cf8b5ae86a4966a39b3ff66cd7e2a3e594accec3743ff3fabeab5b2"
+dependencies = [
+ "num-integer",
+ "num-traits",
+ "time",
+]
+
+[[package]]
 name = "clap"
 version = "2.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -546,7 +557,7 @@ dependencies = [
  "file-per-thread-logger",
  "filecheck",
  "indicatif",
- "pretty_env_logger",
+ "pretty_env_logger 0.4.0",
  "serde",
  "target-lexicon",
  "term",
@@ -1322,7 +1333,7 @@ dependencies = [
  "flate2",
  "indexmap",
  "target-lexicon",
- "wasmparser 0.51.4",
+ "wasmparser",
 ]
 
 [[package]]
@@ -1389,6 +1400,17 @@ name = "ppv-lite86"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74490b50b9fbe561ac330df47c08f3f33073d2d00c150f719147d7c54522fa1b"
+
+[[package]]
+name = "pretty_env_logger"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "717ee476b1690853d222af4634056d830b5197ffd747726a9a1eee6da9f49074"
+dependencies = [
+ "chrono",
+ "env_logger 0.6.2",
+ "log",
+]
 
 [[package]]
 name = "pretty_env_logger"
@@ -2086,7 +2108,7 @@ dependencies = [
  "anyhow",
  "cfg-if",
  "os_pipe",
- "pretty_env_logger",
+ "pretty_env_logger 0.4.0",
  "target-lexicon",
  "tempfile",
  "wasi-common",
@@ -2131,6 +2153,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d40c6d1b69745a6ec6fb1ca717914848da4b44ae29d9b3080cbee91d72a69b14"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "time"
+version = "0.1.42"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db8dcfca086c1143c9270ac42a2bbd8a7ee477b78ac8e45b19abfb0cbede4b6f"
+dependencies = [
+ "libc",
+ "redox_syscall",
+ "winapi",
 ]
 
 [[package]]
@@ -2281,7 +2314,7 @@ dependencies = [
  "file-per-thread-logger",
  "lazy_static",
  "libc",
- "pretty_env_logger",
+ "pretty_env_logger 0.4.0",
  "rayon",
  "region",
  "rustc-demangle",
@@ -2328,7 +2361,7 @@ dependencies = [
  "filecheck",
  "libc",
  "more-asserts",
- "pretty_env_logger",
+ "pretty_env_logger 0.4.0",
  "rayon",
  "structopt",
  "target-lexicon",
@@ -2380,7 +2413,7 @@ dependencies = [
  "lightbeam",
  "log",
  "more-asserts",
- "pretty_env_logger",
+ "pretty_env_logger 0.4.0",
  "rand 0.7.3",
  "rayon",
  "serde",
@@ -2547,6 +2580,15 @@ dependencies = [
 
 [[package]]
 name = "wast"
+version = "9.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee7b16105405ca2aa2376ba522d8d4b1a11604941dd3bb7df9fd2ece60f8d16a"
+dependencies = [
+ "leb128",
+]
+
+[[package]]
+name = "wast"
 version = "11.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df4d67ba9266f4fcaf2e8a1afadc5e2a959e51aecc07b1ecbdf85a6ddaf08bde"
@@ -2670,10 +2712,10 @@ dependencies = [
  "anyhow",
  "diff",
  "log",
- "pretty_env_logger",
+ "pretty_env_logger 0.3.1",
  "structopt",
  "thiserror",
- "wast 11.0.0",
+ "wast 9.0.0",
 ]
 
 [[package]]
