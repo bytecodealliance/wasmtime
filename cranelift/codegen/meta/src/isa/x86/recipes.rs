@@ -335,6 +335,7 @@ impl<'builder> Template<'builder> {
                 ("Rex".to_string() + opcode, self.op_bytes.len() as u64 + 1)
             }
             RecipePrefixKind::InferRex => {
+                assert_eq!(self.w_bit, 0, "A REX.W bit always requires a REX prefix; avoid using `infer_rex().w()` and use `rex().w()` instead.");
                 // Hook up the right function for inferred compute_size().
                 assert!(
                     self.inferred_rex_compute_size.is_some(),

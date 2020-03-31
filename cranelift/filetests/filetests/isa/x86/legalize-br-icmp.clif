@@ -15,7 +15,7 @@ block1:
 ; sameln: function %br_icmp(i64 [%rdi]) fast {
 ; nextln:                                 block0(v0: i64):
 ; nextln: [RexOp1pu_id#b8]                    v1 = iconst.i64 0
-; nextln: [DynRexOp1icscc#8039]               v2 = icmp eq v0, v1
+; nextln: [RexOp1icscc#8039]                  v2 = icmp eq v0, v1
 ; nextln: [RexOp1t8jccb#75]                   brnz v2, block1
 ; nextln: [Op1jmpb#eb]                        jump block1
 ; nextln: 
@@ -37,7 +37,7 @@ block1(v2: i64):
 ; sameln: function %br_icmp_args(i64 [%rdi]) fast {
 ; nextln:                                 block0(v0: i64):
 ; nextln: [RexOp1pu_id#b8]                    v1 = iconst.i64 0
-; nextln: [DynRexOp1icscc#8039]               v3 = icmp eq v0, v1
+; nextln: [RexOp1icscc#8039]                  v3 = icmp eq v0, v1
 ; nextln: [RexOp1t8jccb#75]                   brnz v3, block1(v0)
 ; nextln: [Op1jmpb#eb]                        jump block1(v0)
 ; nextln: 
