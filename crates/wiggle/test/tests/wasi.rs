@@ -16,7 +16,7 @@ wiggle::from_witx!({
 #[test]
 fn document_equivelant() {
     let macro_doc = metadata::document();
-    let disk_doc = witx::load(&["tests/wasi.witx"]).expect("load wasi.witx from disk");
+    let disk_doc = wiggle::witx::load(&["tests/wasi.witx"]).expect("load wasi.witx from disk");
 
     assert_eq!(macro_doc, disk_doc);
 }
