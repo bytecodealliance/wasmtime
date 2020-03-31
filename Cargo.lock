@@ -2585,10 +2585,8 @@ dependencies = [
 name = "wiggle"
 version = "0.14.0"
 dependencies = [
- "proptest",
  "thiserror",
  "wiggle-macro",
- "wiggle-test",
  "witx",
 ]
 
