@@ -9,7 +9,7 @@ topdir=$(dirname "$0")/..
 cd "$topdir"
 
 # All the wasmtime-* crates have the same version number
-version="0.14.0"
+version="0.15.0"
 
 # Update the version numbers of the crates to $version. Skip crates with
 # a version of "0.0.0", which are unpublished.
