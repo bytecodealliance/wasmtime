@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime"
-version = "0.14.0"
+version = "0.15.0"
 authors = ["The Wasmtime Project Developers"]
 description = "High-level API to expose the Wasmtime runtime"
 documentation = "https://docs.rs/wasmtime"
@@ -10,10 +10,10 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-wasmtime-runtime = { path = "../runtime", version = "0.14.0" }
-wasmtime-environ = { path = "../environ", version = "0.14.0" }
-wasmtime-jit = { path = "../jit", version = "0.14.0" }
-wasmtime-profiling = { path = "../profiling", version = "0.14.0" }
+wasmtime-runtime = { path = "../runtime", version = "0.15.0" }
+wasmtime-environ = { path = "../environ", version = "0.15.0" }
+wasmtime-jit = { path = "../jit", version = "0.15.0" }
+wasmtime-profiling = { path = "../profiling", version = "0.15.0" }
 wasmparser = "0.51.2"
 target-lexicon = { version = "0.10.0", default-features = false }
 anyhow = "1.0.19"
@@ -30,7 +30,7 @@ winapi = "0.3.7"
 
 [dev-dependencies]
 # for wasmtime.rs
-wasi-common = { path = "../wasi-common", version = "0.14.0" }
+wasi-common = { path = "../wasi-common", version = "0.15.0" }
 pretty_env_logger = "0.4.0"
 rayon = "1.2.1"
 file-per-thread-logger = "0.1.1"

@@ -1,6 +1,6 @@
 [package]
 name = "wiggle-macro"
-version = "0.14.0"
+version = "0.15.0"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -14,7 +14,7 @@ include = ["src/**/*", "LICENSE"]
 proc-macro = true
 
 [dependencies]
-wiggle-generate = { path = "../generate", version = "0.14.0" }
+wiggle-generate = { path = "../generate", version = "0.15.0" }
 witx = { path = "../../wasi-common/WASI/tools/witx", version = "0.8.4" }
 syn = { version = "1.0", features = ["full"] }
 
