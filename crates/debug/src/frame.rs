@@ -1,6 +1,6 @@
-use crate::transform::map_reg;
 use std::collections::HashMap;
 use wasmtime_environ::entity::EntityRef;
+use wasmtime_environ::isa::fde::map_reg;
 use wasmtime_environ::isa::{CallConv, TargetIsa};
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::{FrameLayoutChange, FrameLayouts};
