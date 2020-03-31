@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift"
-version = "0.61.0"
+version = "0.62.0"
 description = "Umbrella for commonly-used cranelift crates"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift"
@@ -12,8 +12,8 @@ keywords = ["compile", "compiler", "jit"]
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../codegen", version = "0.61.0", default-features = false }
-cranelift-frontend = { path = "../frontend", version = "0.61.0", default-features = false }
+cranelift-codegen = { path = "../codegen", version = "0.62.0", default-features = false }
+cranelift-frontend = { path = "../frontend", version = "0.62.0", default-features = false }
 
 [features]
 default = ["std"]
