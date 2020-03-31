@@ -737,6 +737,7 @@ mod tests {
             &WasmFileInfo {
                 path: None,
                 code_section_offset: 1,
+                imported_func_count: 0,
                 funcs: Box::new([]),
             },
         );
