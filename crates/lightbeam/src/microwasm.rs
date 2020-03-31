@@ -1576,11 +1576,29 @@ where
         use iter_enum::{ExactSizeIterator, Iterator};
         use staticvec::{staticvec, StaticVec, StaticVecIntoIter};
 
-        type Consts = impl ExactSizeIterator<Item = OperatorFromWasm>;
+        struct Consts {
+            inner: <Vec<Value> as IntoIterator>::IntoIter,
+        }
+
+        impl Iterator for Consts {
+            type Item = OperatorFromWasm;
+
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                self.inner.size_hint()
+            }
+
+            fn next(&mut self) -> Option<Self::Item> {
+                self.inner.next().map(Operator::Const)
+            }
+        }
+
+        impl ExactSizeIterator for Consts {}
 
         fn consts(consts: Vec<Value>) -> Output {
             fn impl_trait_hack(consts: Vec<Value>) -> Consts {
-                consts.into_iter().map(Operator::Const)
+                Consts {
+                    inner: consts.into_iter(),
+                }
             }
 
             Output::Consts(impl_trait_hack(consts))
