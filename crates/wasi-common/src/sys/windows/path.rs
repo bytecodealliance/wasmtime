@@ -53,6 +53,9 @@ fn concatenate<P: AsRef<Path>>(file: &OsFile, path: P) -> Result<PathBuf> {
 fn file_access_mode_from_fdflags(fdflags: types::Fdflags, read: bool, write: bool) -> AccessMode {
     let mut access_mode = AccessMode::READ_CONTROL;
 
+    // We always need `FILE_WRITE_ATTRIBUTES` so that we can set attributes such as filetimes, etc.
+    access_mode.insert(AccessMode::FILE_WRITE_ATTRIBUTES);
+
     // Note that `GENERIC_READ` and `GENERIC_WRITE` cannot be used to properly support append-only mode
     // The file-specific flags `FILE_GENERIC_READ` and `FILE_GENERIC_WRITE` are used here instead
     // These flags have the same semantic meaning for file objects, but allow removal of specific permissions (see below)
@@ -253,12 +256,18 @@ pub(crate) fn open(
         Err(err) => match err.raw_os_error() {
             Some(code) => {
                 log::debug!("path_open at symlink_metadata error code={:?}", code);
-
-                if code as u32 != winerror::ERROR_FILE_NOT_FOUND {
-                    return Err(err.into());
-                }
-                // file not found, let it proceed to actually
-                // trying to open it
+                match code as u32 {
+                    winerror::ERROR_FILE_NOT_FOUND => {
+                        // file not found, let it proceed to actually
+                        // trying to open it
+                    }
+                    winerror::ERROR_INVALID_NAME => {
+                        // TODO rethink this. For now, migrate how we handled
+                        // it in `path::openat` on Windows.
+                        return Err(Errno::Notdir);
+                    }
+                    _ => return Err(err.into()),
+                };
             }
             None => {
                 log::debug!("Inconvertible OS error: {}", err);
