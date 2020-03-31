@@ -156,7 +156,7 @@ impl PerCpuModeEncodings {
         self.enc64(inst.bind(I32), template.infer_rex());
 
         // I64 on x86_64: REX.W set; REX.RXB determined at runtime from registers.
-        self.enc64(inst.bind(I64), template.infer_rex().w());
+        self.enc64(inst.bind(I64), template.rex().w());
     }
 
     /// Adds I32/I64 encodings as appropriate for a typed instruction.
@@ -192,7 +192,7 @@ impl PerCpuModeEncodings {
         self.enc64(inst.bind(B32), template.infer_rex());
 
         // B64 on x86_64: REX.W set; REX.RXB determined at runtime from registers.
-        self.enc64(inst.bind(B64), template.infer_rex().w());
+        self.enc64(inst.bind(B64), template.rex().w());
     }
 
     /// Add encodings for `inst.i32` to X86_32.
