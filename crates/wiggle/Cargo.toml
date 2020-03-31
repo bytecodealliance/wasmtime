@@ -18,18 +18,10 @@ wiggle-macro = { path = "macro", version = "0.14.0" }
 [badges]
 maintenance = { status = "actively-developed" }
 
-[dev-dependencies]
-wiggle-test = { path = "test-helpers", version = "0.14.0" }
-proptest = "0.9"
-
 [features]
-# These features have no effect on the users of this crate. They are only
-# necessary for testing.
+default = ["wiggle_metadata"]
 # The wiggle proc-macro emits some code (inside `pub mod metadata`) guarded
 # by the `wiggle_metadata` feature flag. We use this feature flag so that
 # users of wiggle are not forced to take a direct dependency on the `witx`
 # crate unless they want it.
 wiggle_metadata = ['witx', "wiggle-macro/wiggle_metadata"]
-# In order to test that the contents of this metadata module meet
-# expectations, we must have this feature enabled for the crate by default.
-default = ["wiggle_metadata"]
