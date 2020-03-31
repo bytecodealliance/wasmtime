@@ -9,7 +9,7 @@ keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
-include = ["src/**/*", "LICENSE", "WASI/phases"]
+include = ["src/**/*", "LICENSE", "WASI/phases", "build.rs"]
 
 # This doesn't actually link to a native library, but it allows us to set env
 # vars like `DEP_WASI_COMMON_15_*` for crates that have build scripts and depend
