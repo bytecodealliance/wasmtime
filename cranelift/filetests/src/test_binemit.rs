@@ -79,6 +79,7 @@ impl binemit::CodeSink for TextSink {
 
     fn reloc_external(
         &mut self,
+        _srcloc: ir::SourceLoc,
         reloc: binemit::Reloc,
         name: &ir::ExternalName,
         addend: binemit::Addend,

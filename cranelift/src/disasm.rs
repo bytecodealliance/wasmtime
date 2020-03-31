@@ -37,6 +37,7 @@ impl binemit::RelocSink for PrintRelocs {
     fn reloc_external(
         &mut self,
         where_: binemit::CodeOffset,
+        _srcloc: ir::SourceLoc,
         r: binemit::Reloc,
         name: &ir::ExternalName,
         addend: binemit::Addend,
