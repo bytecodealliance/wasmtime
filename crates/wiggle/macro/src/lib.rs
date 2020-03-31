@@ -39,7 +39,7 @@ use syn::parse_macro_input;
 /// /// full-fledged example with runtime tests, see `tests/arrays.rs` and
 /// /// the rest of the files in that directory.
 /// wiggle::from_witx!({
-///     witx: ["../tests/arrays.witx"],
+///     witx: ["resources/arrays.witx"],
 ///     ctx: YourCtxType,
 /// });
 ///
