@@ -66,9 +66,7 @@ pub struct DifferentialConfig {
 impl DifferentialConfig {
     /// Convert this differential fuzzing config into a `wasmtime::Config`.
     pub fn to_wasmtime_config(&self) -> anyhow::Result<wasmtime::Config> {
-        let mut config = wasmtime::Config::new();
-        config.cranelift_debug_verifier(true);
-        config.strategy(match self.strategy {
+        let mut config = crate::fuzz_default_config(match self.strategy {
             DifferentialStrategy::Cranelift => wasmtime::Strategy::Cranelift,
             DifferentialStrategy::Lightbeam => wasmtime::Strategy::Lightbeam,
         })?;
