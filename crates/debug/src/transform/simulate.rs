@@ -8,7 +8,7 @@ use gimli::{self, LineEncoding};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use wasmtime_environ::entity::EntityRef;
-use wasmtime_environ::wasm::get_vmctx_value_label;
+use wasmtime_environ::wasm::{get_vmctx_value_label, DefinedFuncIndex};
 use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
 
 pub use crate::read_debuginfo::{DebugInfoData, FunctionMetadata, WasmType};
@@ -18,7 +18,7 @@ const PRODUCER_NAME: &str = "wasmtime";
 
 fn generate_line_info(
     addr_tr: &AddressTransform,
-    translated: &HashSet<u32>,
+    translated: &HashSet<DefinedFuncIndex>,
     out_encoding: gimli::Encoding,
     w: &WasmFileInfo,
     comp_dir_id: write::StringId,
@@ -46,7 +46,7 @@ fn generate_line_info(
 
     for (i, map) in addr_tr.map() {
         let symbol = i.index();
-        if translated.contains(&(symbol as u32)) {
+        if translated.contains(&i) {
             continue;
         }
 
@@ -257,7 +257,7 @@ pub fn generate_simulated_dwarf(
     di: &DebugInfoData,
     vmctx_info: &ModuleVmctxInfo,
     ranges: &ValueLabelsRanges,
-    translated: &HashSet<u32>,
+    translated: &HashSet<DefinedFuncIndex>,
     out_encoding: gimli::Encoding,
     out_units: &mut write::UnitTable,
     out_strings: &mut write::StringTable,
@@ -277,6 +277,7 @@ pub fn generate_simulated_dwarf(
     } else {
         (None, None)
     };
+    let imported_func_count = di.wasm_file.imported_func_count;
 
     let (unit, root_id, name_id) = {
         let comp_dir_id = out_strings.add(
@@ -326,7 +327,7 @@ pub fn generate_simulated_dwarf(
 
     for (i, map) in addr_tr.map().iter() {
         let index = i.index();
-        if translated.contains(&(index as u32)) {
+        if translated.contains(&i) {
             continue;
         }
 
@@ -346,9 +347,10 @@ pub fn generate_simulated_dwarf(
             write::AttributeValue::Udata((end - start) as u64),
         );
 
-        let id = match func_names.and_then(|m| m.get(&(index as u32))) {
+        let func_index = imported_func_count + (index as u32);
+        let id = match func_names.and_then(|m| m.get(&func_index)) {
             Some(n) => out_strings.add(n.to_owned()),
-            None => out_strings.add(format!("wasm-function[{}]", index)),
+            None => out_strings.add(format!("wasm-function[{}]", func_index)),
         };
 
         die.set(gimli::DW_AT_name, write::AttributeValue::StringRef(id));

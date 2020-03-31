@@ -333,7 +333,14 @@ where
                 return Ok(None);
             }
             let index = pc.read_sleb128()?;
-            pc.read_u8()?; // consume 159
+            if pc.read_u8()? != 159 {
+                // FIXME The following operator is not DW_OP_stack_value, e.g. :
+                // DW_AT_location  (0x00000ea5:
+                //   [0x00001e19, 0x00001e26): DW_OP_WASM_location 0x0 +1, DW_OP_plus_uconst 0x10, DW_OP_stack_value
+                //   [0x00001e5a, 0x00001e72): DW_OP_WASM_location 0x0 +20, DW_OP_stack_value
+                // )
+                return Ok(None);
+            }
             if !code_chunk.is_empty() {
                 parts.push(CompiledExpressionPart::Code(code_chunk));
                 code_chunk = Vec::new();
