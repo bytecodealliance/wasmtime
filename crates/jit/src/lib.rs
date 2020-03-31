@@ -23,11 +23,11 @@
 
 mod code_memory;
 mod compiler;
-mod function_table;
 mod imports;
 mod instantiate;
 mod link;
 mod resolver;
+mod unwind;
 
 pub mod native;
 pub mod trampoline;

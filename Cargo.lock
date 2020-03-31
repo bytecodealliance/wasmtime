@@ -2272,6 +2272,7 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-native",
  "cranelift-wasm",
+ "gimli",
  "log",
  "more-asserts",
  "region",

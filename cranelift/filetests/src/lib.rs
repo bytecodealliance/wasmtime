@@ -42,7 +42,6 @@ mod test_cat;
 mod test_compile;
 mod test_dce;
 mod test_domtree;
-mod test_fde;
 mod test_legalizer;
 mod test_licm;
 mod test_postopt;
@@ -140,7 +139,6 @@ fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<dyn subtest::
         "preopt" => test_preopt::subtest(parsed),
         "safepoint" => test_safepoint::subtest(parsed),
         "unwind" => test_unwind::subtest(parsed),
-        "fde" => test_fde::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),
     }
 }

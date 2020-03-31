@@ -1,15 +1,9 @@
 //! x86 ABI implementation.
 
 use super::super::settings as shared_settings;
-#[cfg(feature = "unwind")]
-use super::fde::emit_fde;
 use super::registers::{FPR, GPR, RU};
 use super::settings as isa_settings;
-#[cfg(feature = "unwind")]
-use super::unwind::UnwindInfo;
 use crate::abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
-#[cfg(feature = "unwind")]
-use crate::binemit::{FrameUnwindKind, FrameUnwindSink};
 use crate::cursor::{Cursor, CursorPosition, EncCursor};
 use crate::ir;
 use crate::ir::entities::StackSlot;
@@ -17,8 +11,8 @@ use crate::ir::immediates::Imm64;
 use crate::ir::stackslot::{StackOffset, StackSize};
 use crate::ir::types;
 use crate::ir::{
-    get_probestack_funcref, AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose,
-    FrameLayoutChange, InstBuilder, ValueLoc,
+    get_probestack_funcref, AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, InstBuilder,
+    ValueLoc,
 };
 use crate::isa::{CallConv, RegClass, RegUnit, TargetIsa};
 use crate::regalloc::RegisterSet;
@@ -27,7 +21,6 @@ use crate::stack_layout::layout_stack;
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
 use core::i32;
-use std::boxed::Box;
 use target_lexicon::{PointerWidth, Triple};
 
 /// Argument registers for x86-64
@@ -525,32 +518,6 @@ fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> 
     Ok(())
 }
 
-/// CFAState is cranelift's model of the call frame layout at any particular point in a function.
-/// It describes the call frame's layout in terms of a call frame address, where it is with respect
-/// to the start of the call frame, and the where the top of the stack is with respect to it.
-///
-/// Changes in this layout are used to derive appropriate `ir::FrameLayoutChange` to record for
-/// relevant instructions.
-#[derive(Clone)]
-struct CFAState {
-    /// The register from which we can derive the call frame address. On x86_64, this is typically
-    /// `rbp`, but at function entry and exit may be `rsp` while the call frame is being
-    /// established.
-    cf_ptr_reg: RegUnit,
-    /// Given that `cf_ptr_reg` is a register containing a pointer to some memory, `cf_ptr_offset`
-    /// is the offset from that pointer to the address of the start of this function's call frame.
-    ///
-    /// For a concrete x86_64 example, we will start this at 8 - the call frame begins immediately
-    /// before the return address. This will typically then be set to 16, after pushing `rbp` to
-    /// preserve the parent call frame. It is very unlikely the offset should be anything other
-    /// than one or two pointer widths.
-    cf_ptr_offset: isize,
-    /// The offset between the start of the call frame and the current stack pointer. This is
-    /// primarily useful to point to where on the stack preserved registers are, but is maintained
-    /// through the whole function for consistency.
-    current_depth: isize,
-}
-
 /// Implementation of the fastcall-based Win64 calling convention described at [1]
 /// [1] https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention
 fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> CodegenResult<()> {
@@ -629,7 +596,7 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     // Set up the cursor and insert the prologue
     let entry_block = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_block);
-    let prologue_cfa_state = insert_common_prologue(
+    insert_common_prologue(
         &mut pos,
         local_stack_size,
         reg_type,
@@ -646,8 +613,6 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
         reg_type,
         &csrs,
         fpr_slot.as_ref(),
-        isa,
-        prologue_cfa_state,
     );
 
     Ok(())
@@ -701,20 +666,11 @@ fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     // Set up the cursor and insert the prologue
     let entry_block = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_block);
-    let prologue_cfa_state =
-        insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, None, isa);
+    insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, None, isa);
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
-    insert_common_epilogues(
-        &mut pos,
-        local_stack_size,
-        reg_type,
-        &csrs,
-        None,
-        isa,
-        prologue_cfa_state,
-    );
+    insert_common_epilogues(&mut pos, local_stack_size, reg_type, &csrs, None);
 
     Ok(())
 }
@@ -728,8 +684,7 @@ fn insert_common_prologue(
     csrs: &RegisterSet,
     fpr_slot: Option<&StackSlot>,
     isa: &dyn TargetIsa,
-) -> Option<CFAState> {
-    let word_size = isa.pointer_bytes() as isize;
+) {
     if stack_size > 0 {
         // Check if there is a special stack limit parameter. If so insert stack check.
         if let Some(stack_limit_arg) = pos.func.special_param(ArgumentPurpose::StackLimit) {
@@ -739,7 +694,8 @@ fn insert_common_prologue(
             // also should be accounted for.
             // If any FPR are present, count them as well as necessary alignment space.
             // TODO: Check if the function body actually contains a `call` instruction.
-            let mut total_stack_size = (csrs.iter(GPR).len() + 1 + 1) as i64 * word_size as i64;
+            let mut total_stack_size =
+                (csrs.iter(GPR).len() + 1 + 1) as i64 * (isa.pointer_bytes() as isize) as i64;
 
             total_stack_size += csrs.iter(FPR).len() as i64 * types::F64X2.bytes() as i64;
 
@@ -747,104 +703,29 @@ fn insert_common_prologue(
         }
     }
 
-    let mut cfa_state = if let Some(ref mut frame_layout) = pos.func.frame_layout {
-        let cfa_state = CFAState {
-            cf_ptr_reg: RU::rsp as RegUnit,
-            cf_ptr_offset: word_size,
-            current_depth: -word_size,
-        };
-
-        frame_layout.initial = vec![
-            FrameLayoutChange::CallFrameAddressAt {
-                reg: cfa_state.cf_ptr_reg,
-                offset: cfa_state.cf_ptr_offset,
-            },
-            FrameLayoutChange::ReturnAddressAt {
-                cfa_offset: cfa_state.current_depth,
-            },
-        ]
-        .into_boxed_slice();
-
-        Some(cfa_state)
-    } else {
-        None
-    };
-
     // Append param to entry block
     let block = pos.current_block().expect("missing block under cursor");
     let fp = pos.func.dfg.append_block_param(block, reg_type);
     pos.func.locations[fp] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
 
-    let push_fp_inst = pos.ins().x86_push(fp);
-
-    if let Some(ref mut frame_layout) = pos.func.frame_layout {
-        let cfa_state = cfa_state
-            .as_mut()
-            .expect("cfa state exists when recording frame layout");
-        cfa_state.current_depth -= word_size;
-        cfa_state.cf_ptr_offset += word_size;
-        frame_layout.instructions.insert(
-            push_fp_inst,
-            vec![
-                FrameLayoutChange::CallFrameAddressAt {
-                    reg: cfa_state.cf_ptr_reg,
-                    offset: cfa_state.cf_ptr_offset,
-                },
-                FrameLayoutChange::RegAt {
-                    reg: RU::rbp as RegUnit,
-                    cfa_offset: cfa_state.current_depth,
-                },
-            ]
-            .into_boxed_slice(),
-        );
-    }
+    pos.ins().x86_push(fp);
 
     let mov_sp_inst = pos
         .ins()
         .copy_special(RU::rsp as RegUnit, RU::rbp as RegUnit);
 
-    if let Some(ref mut frame_layout) = pos.func.frame_layout {
-        let mut cfa_state = cfa_state
-            .as_mut()
-            .expect("cfa state exists when recording frame layout");
-        cfa_state.cf_ptr_reg = RU::rbp as RegUnit;
-        frame_layout.instructions.insert(
-            mov_sp_inst,
-            vec![FrameLayoutChange::CallFrameAddressAt {
-                reg: cfa_state.cf_ptr_reg,
-                offset: cfa_state.cf_ptr_offset,
-            }]
-            .into_boxed_slice(),
-        );
-    }
-
+    let mut last_csr_push = None;
     for reg in csrs.iter(GPR) {
         // Append param to entry block
         let csr_arg = pos.func.dfg.append_block_param(block, reg_type);
 
         // Assign it a location
         pos.func.locations[csr_arg] = ir::ValueLoc::Reg(reg);
-
-        // Remember it so we can push it momentarily
-        let reg_push_inst = pos.ins().x86_push(csr_arg);
-
-        if let Some(ref mut frame_layout) = pos.func.frame_layout {
-            let mut cfa_state = cfa_state
-                .as_mut()
-                .expect("cfa state exists when recording frame layout");
-            cfa_state.current_depth -= word_size;
-            frame_layout.instructions.insert(
-                reg_push_inst,
-                vec![FrameLayoutChange::RegAt {
-                    reg,
-                    cfa_offset: cfa_state.current_depth,
-                }]
-                .into_boxed_slice(),
-            );
-        }
+        last_csr_push = Some(pos.ins().x86_push(csr_arg));
     }
 
     // Allocate stack frame storage.
+    let mut adjust_sp_inst = None;
     if stack_size > 0 {
         if isa.flags().enable_probestack() && stack_size > (1 << isa.flags().probestack_size_log2())
         {
@@ -880,15 +761,16 @@ fn insert_common_prologue(
             if !isa.flags().probestack_func_adjusts_sp() {
                 let result = pos.func.dfg.inst_results(call)[0];
                 pos.func.locations[result] = rax_val;
-                pos.func.prologue_end = Some(pos.ins().adjust_sp_down(result));
+                adjust_sp_inst = Some(pos.ins().adjust_sp_down(result));
             }
         } else {
             // Simply decrement the stack pointer.
-            pos.func.prologue_end = Some(pos.ins().adjust_sp_down_imm(Imm64::new(stack_size)));
+            adjust_sp_inst = Some(pos.ins().adjust_sp_down_imm(Imm64::new(stack_size)));
         }
     }
 
     // Now that RSP is prepared for the function, we can use stack slots:
+    let mut last_fpr_save = None;
     if let Some(fpr_slot) = fpr_slot {
         debug_assert!(csrs.iter(FPR).len() != 0);
 
@@ -911,33 +793,22 @@ fn insert_common_prologue(
             // Since regalloc has already run, we must assign a location.
             pos.func.locations[csr_arg] = ir::ValueLoc::Reg(reg);
 
-            let reg_store_inst =
-                pos.ins()
-                    .store(ir::MemFlags::trusted(), csr_arg, stack_addr, fpr_offset);
-
-            // If we preserve FPRs, they occur after SP is adjusted, so also fix up the end point
-            // to this new instruction.
-            pos.func.prologue_end = Some(reg_store_inst);
-            fpr_offset += types::F64X2.bytes() as i32;
-
-            if let Some(ref mut frame_layout) = pos.func.frame_layout {
-                let mut cfa_state = cfa_state
-                    .as_mut()
-                    .expect("cfa state exists when recording frame layout");
-                cfa_state.current_depth -= types::F64X2.bytes() as isize;
-                frame_layout.instructions.insert(
-                    reg_store_inst,
-                    vec![FrameLayoutChange::RegAt {
-                        reg,
-                        cfa_offset: cfa_state.current_depth,
-                    }]
-                    .into_boxed_slice(),
+            last_fpr_save =
+                Some(
+                    pos.ins()
+                        .store(ir::MemFlags::trusted(), csr_arg, stack_addr, fpr_offset),
                 );
-            }
+
+            fpr_offset += types::F64X2.bytes() as i32;
         }
     }
 
-    cfa_state
+    pos.func.prologue_end = Some(
+        last_fpr_save
+            .or(adjust_sp_inst)
+            .or(last_csr_push)
+            .unwrap_or(mov_sp_inst),
+    );
 }
 
 /// Insert a check that generates a trap if the stack pointer goes
@@ -970,25 +841,12 @@ fn insert_common_epilogues(
     reg_type: ir::types::Type,
     csrs: &RegisterSet,
     fpr_slot: Option<&StackSlot>,
-    isa: &dyn TargetIsa,
-    cfa_state: Option<CFAState>,
 ) {
     while let Some(block) = pos.next_block() {
         pos.goto_last_inst(block);
         if let Some(inst) = pos.current_inst() {
             if pos.func.dfg[inst].opcode().is_return() {
-                let is_last = pos.func.layout.last_block() == Some(block);
-                insert_common_epilogue(
-                    inst,
-                    stack_size,
-                    pos,
-                    reg_type,
-                    csrs,
-                    fpr_slot,
-                    isa,
-                    is_last,
-                    cfa_state.clone(),
-                );
+                insert_common_epilogue(inst, stack_size, pos, reg_type, csrs, fpr_slot);
             }
         }
     }
@@ -1003,17 +861,13 @@ fn insert_common_epilogue(
     reg_type: ir::types::Type,
     csrs: &RegisterSet,
     fpr_slot: Option<&StackSlot>,
-    isa: &dyn TargetIsa,
-    is_last: bool,
-    mut cfa_state: Option<CFAState>,
 ) {
-    let word_size = isa.pointer_bytes() as isize;
-
     // Even though instructions to restore FPRs are inserted first, we have to append them after
     // restored GPRs to satisfy parameter order in the return.
     let mut restored_fpr_values = Vec::new();
 
     // Restore FPRs before we move RSP and invalidate stack slots.
+    let mut first_fpr_load = None;
     if let Some(fpr_slot) = fpr_slot {
         debug_assert!(csrs.iter(FPR).len() != 0);
 
@@ -1023,6 +877,8 @@ fn insert_common_epilogue(
         //
         // See also: https://github.com/bytecodealliance/wasmtime/pull/1198
         let stack_addr = pos.ins().stack_addr(types::I64, *fpr_slot, 0);
+
+        first_fpr_load.get_or_insert(pos.current_inst().expect("current inst"));
 
         // Use r11 as fastcall allows it to be clobbered, and it won't have a meaningful value at
         // function exit.
@@ -1039,13 +895,6 @@ fn insert_common_epilogue(
             );
             fpr_offset += types::F64X2.bytes() as i32;
 
-            if let Some(ref mut cfa_state) = cfa_state.as_mut() {
-                // Note: don't bother recording a frame layout change because the popped value is
-                // still correct in memory, and won't be overwritten until we've returned where the
-                // current frame's layout would no longer matter. Only adjust `current_depth` for a
-                // consistency check later.
-                cfa_state.current_depth += types::F64X2.bytes() as isize;
-            }
             // Unlike GPRs before, we don't need to step back after reach restoration because FPR
             // restoration is order-insensitive. Furthermore: we want GPR restoration to begin
             // after FPR restoration, so that stack adjustments occur after we're done relying on
@@ -1056,114 +905,56 @@ fn insert_common_epilogue(
         }
     }
 
+    let mut sp_adjust_inst = None;
     if stack_size > 0 {
-        pos.ins().adjust_sp_up_imm(Imm64::new(stack_size));
+        sp_adjust_inst = Some(pos.ins().adjust_sp_up_imm(Imm64::new(stack_size)));
     }
 
-    // Pop all the callee-saved registers, stepping backward each time to
-    // preserve the correct order.
-    let fp_ret = pos.ins().x86_pop(reg_type);
-    let fp_pop_inst = pos.built_inst();
+    // Insert the pop of the frame pointer
+    let fp_pop = pos.ins().x86_pop(reg_type);
+    let fp_pop_inst = pos.prev_inst().unwrap();
+    pos.func.locations[fp_pop] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
+    pos.func.dfg.append_inst_arg(inst, fp_pop);
 
-    if let Some(ref mut cfa_state) = cfa_state.as_mut() {
-        // Account for CFA state in the reverse of `insert_common_prologue`.
-        cfa_state.current_depth += word_size;
-        cfa_state.cf_ptr_offset -= word_size;
-        // And now that we're going to overwrite `rbp`, `rsp` is the only way to get to the call frame.
-        // We don't apply a frame layout change *yet* because we check that at return the depth is
-        // exactly one `word_size`.
-        cfa_state.cf_ptr_reg = RU::rsp as RegUnit;
-    }
-
-    pos.prev_inst();
-
-    pos.func.locations[fp_ret] = ir::ValueLoc::Reg(RU::rbp as RegUnit);
-    pos.func.dfg.append_inst_arg(inst, fp_ret);
-
+    // Insert the CSR pops
+    let mut first_csr_pop_inst = None;
     for reg in csrs.iter(GPR) {
-        let csr_ret = pos.ins().x86_pop(reg_type);
-        if let Some(ref mut cfa_state) = cfa_state.as_mut() {
-            // Note: don't bother recording a frame layout change because the popped value is
-            // still correct in memory, and won't be overwritten until we've returned where the
-            // current frame's layout would no longer matter. Only adjust `current_depth` for a
-            // consistency check later.
-            cfa_state.current_depth += word_size;
-        }
-        pos.prev_inst();
-
-        pos.func.locations[csr_ret] = ir::ValueLoc::Reg(reg);
-        pos.func.dfg.append_inst_arg(inst, csr_ret);
+        let csr_pop = pos.ins().x86_pop(reg_type);
+        first_csr_pop_inst = Some(pos.prev_inst().unwrap());
+        pos.func.locations[csr_pop] = ir::ValueLoc::Reg(reg);
+        pos.func.dfg.append_inst_arg(inst, csr_pop);
     }
 
     for value in restored_fpr_values.into_iter() {
         pos.func.dfg.append_inst_arg(inst, value);
     }
 
-    if let Some(ref mut frame_layout) = pos.func.frame_layout {
-        let cfa_state = cfa_state
-            .as_mut()
-            .expect("cfa state exists when recording frame layout");
-        // Validity checks - if we accounted correctly, CFA state at a return will match CFA state
-        // at the entry of a function.
-        //
-        // Current_depth starts assuming a return address is pushed, and cf_ptr_offset is one
-        // pointer below current_depth.
-        assert_eq!(cfa_state.current_depth, -word_size);
-        assert_eq!(cfa_state.cf_ptr_offset, word_size);
-
-        // Inserting preserve CFA state operation after FP pop instructions.
-        let new_cfa = FrameLayoutChange::CallFrameAddressAt {
-            reg: cfa_state.cf_ptr_reg,
-            offset: cfa_state.cf_ptr_offset,
-        };
-        let new_cfa = if is_last {
-            vec![new_cfa]
-        } else {
-            vec![FrameLayoutChange::Preserve, new_cfa]
-        };
-
-        frame_layout
-            .instructions
-            .entry(fp_pop_inst)
-            .and_modify(|insts| {
-                *insts = insts
-                    .iter()
-                    .cloned()
-                    .chain(new_cfa.clone().into_iter())
-                    .collect::<Box<[_]>>();
-            })
-            .or_insert_with(|| new_cfa.into_boxed_slice());
-
-        if !is_last {
-            // Inserting restore CFA state operation after each return.
-            frame_layout
-                .instructions
-                .insert(inst, vec![FrameLayoutChange::Restore].into_boxed_slice());
-        }
-    }
+    pos.func.epilogues_start.push(
+        first_fpr_load
+            .or(sp_adjust_inst)
+            .or(first_csr_pop_inst)
+            .unwrap_or(fp_pop_inst),
+    );
 }
 
 #[cfg(feature = "unwind")]
-pub fn emit_unwind_info(
+pub fn create_unwind_info(
     func: &ir::Function,
     isa: &dyn TargetIsa,
-    kind: FrameUnwindKind,
-    sink: &mut dyn FrameUnwindSink,
-) -> CodegenResult<()> {
-    match kind {
-        FrameUnwindKind::Fastcall => {
-            // Assumption: RBP is being used as the frame pointer
-            // In the future, Windows fastcall codegen should usually omit the frame pointer
-            if let Some(info) = UnwindInfo::try_from_func(func, isa, Some(RU::rbp.into()))? {
-                info.emit(sink);
-            }
-        }
-        FrameUnwindKind::Libunwind => {
-            if func.frame_layout.is_some() {
-                emit_fde(func, isa, sink)?;
-            }
-        }
-    }
+) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
+    use crate::isa::unwind::UnwindInfo;
 
-    Ok(())
+    // Assumption: RBP is being used as the frame pointer for both calling conventions
+    // In the future, we should be omitting frame pointer as an optimization, so this will change
+    Ok(match func.signature.call_conv {
+        CallConv::Fast | CallConv::Cold | CallConv::SystemV => {
+            super::unwind::systemv::create_unwind_info(func, isa, Some(RU::rbp.into()))?
+                .map(|u| UnwindInfo::SystemV(u))
+        }
+        CallConv::WindowsFastcall => {
+            super::unwind::windows::create_unwind_info(func, isa, Some(RU::rbp.into()))?
+                .map(|u| UnwindInfo::WindowsX64(u))
+        }
+        _ => None,
+    })
 }

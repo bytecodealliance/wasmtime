@@ -64,25 +64,18 @@ pub fn compile_to_obj(
         .context("failed to translate module")?;
 
     // TODO: use the traps information
-    let (
-        compilation,
-        relocations,
-        address_transform,
-        value_ranges,
-        stack_slots,
-        _traps,
-        frame_layouts,
-    ) = match strategy {
-        Strategy::Auto | Strategy::Cranelift => {
-            Cranelift::compile_module(&translation, &*isa, cache_config)
+    let (compilation, relocations, address_transform, value_ranges, stack_slots, _traps) =
+        match strategy {
+            Strategy::Auto | Strategy::Cranelift => {
+                Cranelift::compile_module(&translation, &*isa, cache_config)
+            }
+            #[cfg(feature = "lightbeam")]
+            Strategy::Lightbeam => Lightbeam::compile_module(&translation, &*isa, cache_config),
+            #[cfg(not(feature = "lightbeam"))]
+            Strategy::Lightbeam => bail!("lightbeam support not enabled"),
+            other => bail!("unsupported compilation strategy {:?}", other),
         }
-        #[cfg(feature = "lightbeam")]
-        Strategy::Lightbeam => Lightbeam::compile_module(&translation, &*isa, cache_config),
-        #[cfg(not(feature = "lightbeam"))]
-        Strategy::Lightbeam => bail!("lightbeam support not enabled"),
-        other => bail!("unsupported compilation strategy {:?}", other),
-    }
-    .context("failed to compile module")?;
+        .context("failed to compile module")?;
 
     if compilation.is_empty() {
         bail!("no functions were found/compiled");
@@ -127,7 +120,7 @@ pub fn compile_to_obj(
             &debug_data,
             &address_transform,
             &value_ranges,
-            &frame_layouts,
+            &compilation,
         )
         .context("failed to emit debug sections")?;
     }

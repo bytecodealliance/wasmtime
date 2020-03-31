@@ -55,7 +55,7 @@ impl crate::compilation::Compiler for Lightbeam {
         let code_section_ranges_and_jt = code_section
             .funcs()
             .into_iter()
-            .map(|r| (r, SecondaryMap::new(), 0..0));
+            .map(|r| (r, SecondaryMap::new()));
 
         Ok((
             Compilation::from_buffer(code_section.buffer().to_vec(), code_section_ranges_and_jt),
@@ -64,7 +64,6 @@ impl crate::compilation::Compiler for Lightbeam {
             ValueLabelsRanges::new(),
             PrimaryMap::new(),
             Traps::new(),
-            PrimaryMap::new(),
         ))
     }
 }

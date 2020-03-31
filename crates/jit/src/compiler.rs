@@ -14,9 +14,9 @@ use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
 use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex};
 use wasmtime_environ::{
-    CacheConfig, CompileError, CompiledFunction, CompiledFunctionUnwindInfo, Compiler as _C,
-    ModuleAddressMap, ModuleMemoryOffset, ModuleTranslation, ModuleVmctxInfo, Relocation,
-    RelocationTarget, Relocations, Traps, Tunables, VMOffsets,
+    CacheConfig, CompileError, CompiledFunction, Compiler as _C, ModuleAddressMap,
+    ModuleMemoryOffset, ModuleTranslation, ModuleVmctxInfo, Relocation, RelocationTarget,
+    Relocations, Traps, Tunables, VMOffsets,
 };
 use wasmtime_runtime::{
     InstantiationError, SignatureRegistry, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
@@ -46,7 +46,6 @@ pub enum CompilationStrategy {
 /// TODO: Consider using cranelift-module.
 pub struct Compiler {
     isa: Box<dyn TargetIsa>,
-
     code_memory: CodeMemory,
     signatures: SignatureRegistry,
     strategy: CompilationStrategy,
@@ -102,34 +101,27 @@ impl Compiler {
         translation: &ModuleTranslation,
         debug_data: Option<DebugInfoData>,
     ) -> Result<Compilation, SetupError> {
-        let (
-            compilation,
-            relocations,
-            address_transform,
-            value_ranges,
-            stack_slots,
-            traps,
-            frame_layouts,
-        ) = match self.strategy {
-            // For now, interpret `Auto` as `Cranelift` since that's the most stable
-            // implementation.
-            CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
-                wasmtime_environ::cranelift::Cranelift::compile_module(
-                    translation,
-                    &*self.isa,
-                    &self.cache_config,
-                )
+        let (compilation, relocations, address_transform, value_ranges, stack_slots, traps) =
+            match self.strategy {
+                // For now, interpret `Auto` as `Cranelift` since that's the most stable
+                // implementation.
+                CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
+                    wasmtime_environ::cranelift::Cranelift::compile_module(
+                        translation,
+                        &*self.isa,
+                        &self.cache_config,
+                    )
+                }
+                #[cfg(feature = "lightbeam")]
+                CompilationStrategy::Lightbeam => {
+                    wasmtime_environ::lightbeam::Lightbeam::compile_module(
+                        translation,
+                        &*self.isa,
+                        &self.cache_config,
+                    )
+                }
             }
-            #[cfg(feature = "lightbeam")]
-            CompilationStrategy::Lightbeam => {
-                wasmtime_environ::lightbeam::Lightbeam::compile_module(
-                    translation,
-                    &*self.isa,
-                    &self.cache_config,
-                )
-            }
-        }
-        .map_err(SetupError::Compile)?;
+            .map_err(SetupError::Compile)?;
 
         // Allocate all of the compiled functions into executable memory,
         // copying over their contents.
@@ -202,8 +194,8 @@ impl Compiler {
                 &module_vmctx_info,
                 &address_transform,
                 &value_ranges,
-                &frame_layouts,
                 &funcs,
+                &compilation,
             )
             .map_err(SetupError::DebugInfo)?;
             Some(bytes)
@@ -227,7 +219,7 @@ impl Compiler {
 
     /// Make memory containing compiled code executable.
     pub(crate) fn publish_compiled_code(&mut self) {
-        self.code_memory.publish();
+        self.code_memory.publish(self.isa.as_ref());
     }
 
     /// Shared signature registry.
@@ -264,7 +256,6 @@ pub fn make_trampoline(
 
     let mut context = Context::new();
     context.func = ir::Function::with_name_signature(ir::ExternalName::user(0, 0), wrapper_sig);
-    context.func.collect_frame_layout_info();
 
     {
         let mut builder = FunctionBuilder::new(&mut context.func, fn_builder_ctx);
@@ -343,7 +334,7 @@ pub fn make_trampoline(
             )))
         })?;
 
-    let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context).map_err(|error| {
+    let unwind_info = context.create_unwind_info(isa).map_err(|error| {
         SetupError::Compile(CompileError::Codegen(pretty_error(
             &context.func,
             Some(isa),
@@ -369,6 +360,10 @@ fn allocate_functions(
     code_memory: &mut CodeMemory,
     compilation: &wasmtime_environ::Compilation,
 ) -> Result<PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>, String> {
+    if compilation.is_empty() {
+        return Ok(PrimaryMap::new());
+    }
+
     let fat_ptrs = code_memory.allocate_for_compilation(compilation)?;
 
     // Second, create a PrimaryMap from result vector of pointers.
@@ -377,6 +372,7 @@ fn allocate_functions(
         let fat_ptr: *mut [VMFunctionBody] = fat_ptrs[i];
         result.push(fat_ptr);
     }
+
     Ok(result)
 }
 

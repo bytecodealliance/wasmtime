@@ -4,137 +4,12 @@
 use crate::cache::ModuleCacheDataTupleType;
 use crate::CacheConfig;
 use crate::ModuleTranslation;
-use cranelift_codegen::{binemit, ir, isa, CodegenResult, Context};
+use cranelift_codegen::{binemit, ir, isa, isa::unwind::UnwindInfo};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use thiserror::Error;
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct FDERelocEntry(pub i64, pub usize, pub u8);
-
-/// Relocation entry for unwind info.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct CompiledFunctionUnwindInfoReloc {
-    /// Entry offest in the code block.
-    pub offset: u32,
-    /// Entry addend relative to the code block.
-    pub addend: u32,
-}
-
-/// Compiled function unwind information.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum CompiledFunctionUnwindInfo {
-    /// No info.
-    None,
-    /// Windows UNWIND_INFO.
-    Windows(Vec<u8>),
-    /// Frame layout info.
-    FrameLayout(Vec<u8>, usize, Vec<FDERelocEntry>),
-}
-
-impl CompiledFunctionUnwindInfo {
-    /// Constructs unwind info object.
-    pub fn new(isa: &dyn isa::TargetIsa, context: &Context) -> CodegenResult<Self> {
-        use cranelift_codegen::binemit::{
-            FrameUnwindKind, FrameUnwindOffset, FrameUnwindSink, Reloc,
-        };
-        use cranelift_codegen::isa::CallConv;
-
-        struct Sink(Vec<u8>, usize, Vec<FDERelocEntry>);
-        impl FrameUnwindSink for Sink {
-            fn len(&self) -> FrameUnwindOffset {
-                self.0.len()
-            }
-            fn bytes(&mut self, b: &[u8]) {
-                self.0.extend_from_slice(b);
-            }
-            fn reserve(&mut self, len: usize) {
-                self.0.reserve(len)
-            }
-            fn reloc(&mut self, r: Reloc, off: FrameUnwindOffset) {
-                self.2.push(FDERelocEntry(
-                    0,
-                    off,
-                    match r {
-                        Reloc::Abs4 => 4,
-                        Reloc::Abs8 => 8,
-                        _ => {
-                            panic!("unexpected reloc type");
-                        }
-                    },
-                ))
-            }
-            fn set_entry_offset(&mut self, off: FrameUnwindOffset) {
-                self.1 = off;
-            }
-        }
-
-        let kind = match context.func.signature.call_conv {
-            CallConv::SystemV | CallConv::Fast | CallConv::Cold => FrameUnwindKind::Libunwind,
-            CallConv::WindowsFastcall => FrameUnwindKind::Fastcall,
-            _ => {
-                return Ok(CompiledFunctionUnwindInfo::None);
-            }
-        };
-
-        let mut sink = Sink(Vec::new(), 0, Vec::new());
-        context.emit_unwind_info(isa, kind, &mut sink)?;
-
-        let Sink(data, offset, relocs) = sink;
-        if data.is_empty() {
-            return Ok(CompiledFunctionUnwindInfo::None);
-        }
-
-        let info = match kind {
-            FrameUnwindKind::Fastcall => CompiledFunctionUnwindInfo::Windows(data),
-            FrameUnwindKind::Libunwind => {
-                CompiledFunctionUnwindInfo::FrameLayout(data, offset, relocs)
-            }
-        };
-
-        Ok(info)
-    }
-
-    /// Retuns true is no unwind info data.
-    pub fn is_empty(&self) -> bool {
-        match self {
-            CompiledFunctionUnwindInfo::None => true,
-            CompiledFunctionUnwindInfo::Windows(d) => d.is_empty(),
-            CompiledFunctionUnwindInfo::FrameLayout(c, _, _) => c.is_empty(),
-        }
-    }
-
-    /// Returns size of serilized unwind info.
-    pub fn len(&self) -> usize {
-        match self {
-            CompiledFunctionUnwindInfo::None => 0,
-            CompiledFunctionUnwindInfo::Windows(d) => d.len(),
-            CompiledFunctionUnwindInfo::FrameLayout(c, _, _) => c.len(),
-        }
-    }
-
-    /// Serializes data into byte array.
-    pub fn serialize(&self, dest: &mut [u8], relocs: &mut Vec<CompiledFunctionUnwindInfoReloc>) {
-        match self {
-            CompiledFunctionUnwindInfo::None => (),
-            CompiledFunctionUnwindInfo::Windows(d) => {
-                dest.copy_from_slice(d);
-            }
-            CompiledFunctionUnwindInfo::FrameLayout(code, _fde_offset, r) => {
-                dest.copy_from_slice(code);
-                r.iter().for_each(move |r| {
-                    assert_eq!(r.2, 8);
-                    relocs.push(CompiledFunctionUnwindInfoReloc {
-                        offset: r.1 as u32,
-                        addend: r.0 as u32,
-                    })
-                });
-            }
-        }
-    }
-}
 
 /// Compiled function: machine code body, jump table offsets, and unwind information.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -146,7 +21,7 @@ pub struct CompiledFunction {
     pub jt_offsets: ir::JumpTableOffsets,
 
     /// The unwind information.
-    pub unwind_info: CompiledFunctionUnwindInfo,
+    pub unwind_info: Option<UnwindInfo>,
 }
 
 type Functions = PrimaryMap<DefinedFuncIndex, CompiledFunction>;
@@ -167,15 +42,15 @@ impl Compilation {
     /// Allocates the compilation result with the given function bodies.
     pub fn from_buffer(
         buffer: Vec<u8>,
-        functions: impl IntoIterator<Item = (Range<usize>, ir::JumpTableOffsets, Range<usize>)>,
+        functions: impl IntoIterator<Item = (Range<usize>, ir::JumpTableOffsets)>,
     ) -> Self {
         Self::new(
             functions
                 .into_iter()
-                .map(|(body_range, jt_offsets, unwind_range)| CompiledFunction {
+                .map(|(body_range, jt_offsets)| CompiledFunction {
                     body: buffer[body_range].to_vec(),
                     jt_offsets,
-                    unwind_info: CompiledFunctionUnwindInfo::Windows(buffer[unwind_range].to_vec()),
+                    unwind_info: None, // not implemented for lightbeam currently
                 })
                 .collect(),
         )
