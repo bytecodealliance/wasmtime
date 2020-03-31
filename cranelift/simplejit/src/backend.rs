@@ -631,6 +631,7 @@ impl RelocSink for SimpleJITRelocSink {
     fn reloc_external(
         &mut self,
         offset: CodeOffset,
+        _srcloc: ir::SourceLoc,
         reloc: Reloc,
         name: &ir::ExternalName,
         addend: Addend,

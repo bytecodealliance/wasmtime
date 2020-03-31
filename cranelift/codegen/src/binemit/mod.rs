@@ -140,7 +140,7 @@ pub trait CodeSink {
     fn reloc_block(&mut self, _: Reloc, _: CodeOffset);
 
     /// Add a relocation referencing an external symbol plus the addend at the current offset.
-    fn reloc_external(&mut self, _: Reloc, _: &ExternalName, _: Addend);
+    fn reloc_external(&mut self, _: SourceLoc, _: Reloc, _: &ExternalName, _: Addend);
 
     /// Add a relocation referencing a constant.
     fn reloc_constant(&mut self, _: Reloc, _: ConstantOffset);

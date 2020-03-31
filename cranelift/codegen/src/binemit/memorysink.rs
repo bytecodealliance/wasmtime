@@ -78,7 +78,14 @@ pub trait RelocSink {
     fn reloc_block(&mut self, _: CodeOffset, _: Reloc, _: CodeOffset);
 
     /// Add a relocation referencing an external symbol at the current offset.
-    fn reloc_external(&mut self, _: CodeOffset, _: Reloc, _: &ExternalName, _: Addend);
+    fn reloc_external(
+        &mut self,
+        _: CodeOffset,
+        _: SourceLoc,
+        _: Reloc,
+        _: &ExternalName,
+        _: Addend,
+    );
 
     /// Add a relocation referencing a constant.
     fn reloc_constant(&mut self, _: CodeOffset, _: Reloc, _: ConstantOffset);
@@ -132,9 +139,15 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
         self.relocs.reloc_block(ofs, rel, block_offset);
     }
 
-    fn reloc_external(&mut self, rel: Reloc, name: &ExternalName, addend: Addend) {
+    fn reloc_external(
+        &mut self,
+        srcloc: SourceLoc,
+        rel: Reloc,
+        name: &ExternalName,
+        addend: Addend,
+    ) {
         let ofs = self.offset();
-        self.relocs.reloc_external(ofs, rel, name, addend);
+        self.relocs.reloc_external(ofs, srcloc, rel, name, addend);
     }
 
     fn reloc_constant(&mut self, rel: Reloc, constant_offset: ConstantOffset) {
@@ -177,10 +190,18 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
 pub struct NullRelocSink {}
 
 impl RelocSink for NullRelocSink {
-    fn reloc_block(&mut self, _: u32, _: Reloc, _: u32) {}
-    fn reloc_external(&mut self, _: u32, _: Reloc, _: &ExternalName, _: i64) {}
+    fn reloc_block(&mut self, _: CodeOffset, _: Reloc, _: CodeOffset) {}
+    fn reloc_external(
+        &mut self,
+        _: CodeOffset,
+        _: SourceLoc,
+        _: Reloc,
+        _: &ExternalName,
+        _: Addend,
+    ) {
+    }
     fn reloc_constant(&mut self, _: CodeOffset, _: Reloc, _: ConstantOffset) {}
-    fn reloc_jt(&mut self, _: u32, _: Reloc, _: JumpTable) {}
+    fn reloc_jt(&mut self, _: CodeOffset, _: Reloc, _: JumpTable) {}
 }
 
 /// A `TrapSink` implementation that does nothing, which is convenient when

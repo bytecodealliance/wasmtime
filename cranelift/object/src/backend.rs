@@ -530,6 +530,7 @@ impl RelocSink for ObjectRelocSink {
     fn reloc_external(
         &mut self,
         offset: CodeOffset,
+        _srcloc: ir::SourceLoc,
         reloc: Reloc,
         name: &ir::ExternalName,
         mut addend: Addend,
