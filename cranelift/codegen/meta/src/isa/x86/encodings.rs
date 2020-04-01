@@ -1945,15 +1945,8 @@ fn define_simd(
         for recipe in &[rec_fld, rec_fldDisp8, rec_fldDisp32] {
             let inst = *inst;
             let template = recipe.opcodes(*opcodes);
-            e.enc32_maybe_isap(inst.clone().bind(I32), template.clone(), isap);
-            // REX-less encoding must come after REX encoding so we don't use it by
-            // default. Otherwise reg-alloc would never use r8 and up.
-            e.enc64_maybe_isap(inst.clone().bind(I32), template.clone().rex(), isap);
-            e.enc64_maybe_isap(inst.clone().bind(I32), template.clone(), isap);
-            // Similar to above; TODO some of this duplication can be cleaned up by infer_rex()
-            // tracked in https://github.com/bytecodealliance/cranelift/issues/1090
-            e.enc64_maybe_isap(inst.clone().bind(I64), template.clone().rex(), isap);
-            e.enc64_maybe_isap(inst.bind(I64), template, isap);
+            e.enc_both_inferred_maybe_isap(inst.clone().bind(I32), template.clone(), isap);
+            e.enc64_maybe_isap(inst.bind(I64), template.infer_rex(), isap);
         }
     }
 
