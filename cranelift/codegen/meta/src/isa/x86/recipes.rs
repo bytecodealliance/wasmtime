@@ -1604,7 +1604,7 @@ pub(crate) fn define<'shared>(
         );
 
         // XX /r register-indirect store with 8-bit offset of FPR.
-        recipes.add_template_recipe(
+        recipes.add_template_inferred(
             EncodingRecipeBuilder::new("fstDisp8", &formats.store, 2)
                 .operands_in(vec![fpr, gpr])
                 .inst_predicate(has_small_offset)
@@ -1626,6 +1626,7 @@ pub(crate) fn define<'shared>(
                         sink.put1(offset as u8);
                     "#,
                 ),
+            "size_plus_maybe_sib_inreg1_plus_rex_prefix_for_inreg0_inreg1",
         );
 
         // XX /r register-indirect store with 32-bit offset.
@@ -1682,7 +1683,7 @@ pub(crate) fn define<'shared>(
         );
 
         // XX /r register-indirect store with 32-bit offset of FPR.
-        recipes.add_template_recipe(
+        recipes.add_template_inferred(
             EncodingRecipeBuilder::new("fstDisp32", &formats.store, 5)
                 .operands_in(vec![fpr, gpr])
                 .clobbers_flags(false)
@@ -1703,6 +1704,7 @@ pub(crate) fn define<'shared>(
                         sink.put4(offset as u32);
                     "#,
                 ),
+            "size_plus_maybe_sib_inreg1_plus_rex_prefix_for_inreg0_inreg1",
         );
     }
 

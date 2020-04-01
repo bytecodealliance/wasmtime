@@ -7,13 +7,30 @@ block0(v0: i64 [%rax]):
 [-, %xmm0]    v10 = load.i32x4 v0   ; bin: heap_oob 0f 10 00
 [-]           store v10, v0         ; bin: heap_oob 0f 11 00
 
-              ; use displacement
-[-, %xmm0]    v11 = load.f32x4 v0+42 ; bin: heap_oob 40 0f 10 40 2a
-[-]           store v11, v0+42       ; bin: heap_oob 40 0f 11 40 2a
-
               ; use REX prefix
 [-, %xmm8]    v12 = load.i8x16 v0   ; bin: heap_oob 44 0f 10 00
 [-]           store v12, v0         ; bin: heap_oob 44 0f 11 00
+
+    return
+}
+
+function %load_store_with_displacement(i64) {
+block0(v0: i64 [%rax]):
+              ; use 8-bit displacement
+[-, %xmm0]    v1 = load.f32x4 v0+42 ; bin: heap_oob 0f 10 40 2a
+[-]           store v1, v0+42       ; bin: heap_oob 0f 11 40 2a
+
+              ; use 8-bit displacement with REX prefix
+[-, %xmm8]    v2 = load.i8x16 v0   ; bin: heap_oob 44 0f 10 00
+[-]           store v2, v0         ; bin: heap_oob 44 0f 11 00
+
+              ; use 32-bit displacement
+[-, %xmm0]    v3 = load.f32x4 v0+256 ; bin: heap_oob 0f 10 80 00000100
+[-]           store v3, v0+256       ; bin: heap_oob 0f 11 80 00000100
+
+              ; use 32-bit displacement with REX prefix
+[-, %xmm8]    v4 = load.f32x4 v0+256 ; bin: heap_oob 44 0f 10 80 00000100
+[-]           store v4, v0+256       ; bin: heap_oob 44 0f 11 80 00000100
 
     return
 }
