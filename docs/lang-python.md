@@ -73,4 +73,4 @@ examples](https://github.com/bytecodealliance/wasmtime-py/tree/master/examples)
 as well. Feel free to browse those, but if you find anything missing don't
 hesitate to [open an
 issue](https://github.com/bytecodealliance/wasmtime-py/issues/new) and let us
-know with any questions!
+know if you have any questions!
