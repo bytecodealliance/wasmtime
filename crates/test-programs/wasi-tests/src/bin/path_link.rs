@@ -97,9 +97,9 @@ unsafe fn check_rights(orig_fd: wasi::Fd, link_fd: wasi::Fd) {
 
     // Disabled: fd_fdstat_get causes CI test failures on Windows
     // Compare Fdstats
-    // let orig_fdstat = wasi::fd_fdstat_get(orig_fd).expect("reading fdstat of the source");
-    // let link_fdstat = wasi::fd_fdstat_get(link_fd).expect("reading fdstat of the link");
-    // fdstats_assert_eq(orig_fdstat, link_fdstat);
+    let orig_fdstat = wasi::fd_fdstat_get(orig_fd).expect("reading fdstat of the source");
+    let link_fdstat = wasi::fd_fdstat_get(link_fd).expect("reading fdstat of the link");
+    fdstats_assert_eq(orig_fdstat, link_fdstat);
 }
 
 // Use of WasiFile is needed for Windows, which will not remove the directory until all
