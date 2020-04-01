@@ -269,102 +269,6 @@ jobs:
     - run: cd cranelift/codegen && cargo build --features all-arch
     - run: ci/ensure_deterministic_build.sh
 
-  # Builds a Python wheel (package) for Windows/Mac/Linux. Note that we're
-  # careful to create binary-compatible releases here to old releases of
-  # Windows/Mac/Linux. This will also build wheels for Python 3.6, 3.7 and 3.8.
-  wheels:
-    name: Python Wheel
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    steps:
-    - uses: actions/checkout@v1
-      with:
-        submodules: true
-    - uses: ./.github/actions/install-rust
-      with:
-        toolchain: nightly-2020-01-06
-    - uses: ./.github/actions/binary-compatible-builds
-    - run: mkdir crates/misc/py/wheelhouse
-      shell: bash
-
-    # Install Python & dependencies needed for our `setup.py` scripts
-    - name: Setup Python 3.6
-      uses: actions/setup-python@v1
-      with:
-        python-version: '3.6'
-        architecture: x64
-    - run: $CENTOS pip3 install setuptools wheel setuptools-rust
-      shell: bash
-    - run: (cd crates/misc/py && $CENTOS $python setup.py bdist_wheel)
-      shell: bash
-
-    # Clear the build directory between building different wheels for different
-    # Python versions to ensure that we don't package dynamic libraries twice by
-    # accident.
-    - run: $CENTOS rm -rf crates/misc/py/build
-      shell: bash
-
-    # Set up Python 3.7 (and build it on Linux), reinstall dependencies, then
-    # rebuild our wheels
-    - name: Setup Python 3.7
-      uses: actions/setup-python@v1
-      with:
-        python-version: '3.7'
-        architecture: x64
-      if: matrix.os != 'ubuntu-latest'
-    - name: Build Python 3.7
-      run: $CENTOS sh ci/setup_centos6_python3.sh 3.7.3
-      if: matrix.os == 'ubuntu-latest'
-    - run: $CENTOS pip3 install setuptools wheel setuptools-rust auditwheel
-      shell: bash
-    - run: (cd crates/misc/py && $CENTOS $python setup.py bdist_wheel)
-      shell: bash
-
-    # Clear the build directory between building different wheels for different
-    # Python versions to ensure that we don't package dynamic libraries twice by
-    # accident.
-    - run: $CENTOS rm -rf crates/misc/py/build
-      shell: bash
-
-    # Set up Python 3.8 (and build it on Linux), reinstall dependencies, then
-    # rebuild our wheels
-    - name: Setup Python 3.8
-      uses: actions/setup-python@v1
-      with:
-        python-version: '3.8'
-        architecture: x64
-      if: matrix.os != 'ubuntu-latest'
-    - name: Build Python 3.8
-      run: $CENTOS sh ci/setup_centos6_python3.sh 3.8.0
-      if: matrix.os == 'ubuntu-latest'
-    - run: $CENTOS pip3 install setuptools wheel setuptools-rust auditwheel
-      shell: bash
-    - run: (cd crates/misc/py && $CENTOS $python setup.py bdist_wheel)
-      shell: bash
-
-    # Move `dist/*.whl` into `wheelhouse/` so we can deploy them, but on Linux we
-    # need to run an `auditwheel` command as well to turn these into "manylinux"
-    # wheels to run across a number of distributions.
-    - run: cp crates/misc/py/dist/*.whl crates/misc/py/wheelhouse/
-      shell: bash
-      if: matrix.os != 'ubuntu-latest'
-    - run: |
-        set -e
-        cd crates/misc/py
-        for whl in dist/*.whl; do
-            $CENTOS auditwheel repair "$whl" -w wheelhouse/
-        done
-      shell: bash
-      if: matrix.os == 'ubuntu-latest'
-
-    # Upload this for the publishing stage of pipelines
-    - uses: actions/upload-artifact@v1
-      with:
-        name: wheels-${{ matrix.os }}
-        path: crates/misc/py/wheelhouse
-
   # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds on
   # Windows/Mac/Linux, and artifacts are uploaded after the build is finished.
   # Note that we also run tests here to test exactly what we're deploying.
@@ -491,7 +395,7 @@ jobs:
   # github releases and/or tags for pushes.
   publish:
     name: Publish
-    needs: [doc_book, doc_api, wheels, build]
+    needs: [doc_book, doc_api, build]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
@@ -510,26 +414,14 @@ jobs:
       uses: actions/download-artifact@v1
       with:
         name: doc-api
-    - name: Download macOS Wheel
-      uses: actions/download-artifact@v1
-      with:
-        name: wheels-macos-latest
     - name: Download macOS binaries
       uses: actions/download-artifact@v1
       with:
         name: bins-macos-latest
-    - name: Download Linux Wheel
-      uses: actions/download-artifact@v1
-      with:
-        name: wheels-ubuntu-latest
     - name: Download Linux binaries
       uses: actions/download-artifact@v1
       with:
         name: bins-ubuntu-latest
-    - name: Download Windows Wheel
-      uses: actions/download-artifact@v1
-      with:
-        name: wheels-windows-latest
     - name: Download Windows binaries
       uses: actions/download-artifact@v1
       with:
@@ -585,14 +477,6 @@ jobs:
     - run: |
         mkdir -p tmp/whl
         find dist/ -name '*.whl' -type f -exec cp '{}' tmp/whl -v \;
-
-    - name: Publish Python wheels on Pypi
-      uses: pypa/gh-action-pypi-publish@37e305e7413032d8422456179fee28fac7d25187
-      if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags/v')
-      with:
-        user: __token__
-        password: ${{ secrets.pypi_password }}
-        packages_dir: tmp/whl
 
     # ... and if this was an actual push (tag or `master`) then we publish a
     # new release. This'll automatically publish a tag release or update `dev`

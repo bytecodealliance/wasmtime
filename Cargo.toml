@@ -58,7 +58,6 @@ members = [
   "cranelift",
   "crates/c-api",
   "crates/fuzzing",
-  "crates/misc/py",
   "crates/misc/run-examples",
   "crates/misc/rust",
   "crates/wiggle",

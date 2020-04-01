@@ -638,16 +638,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ctor"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47c5e5ac752e18207b12e16b10631ae5f7f68f8805f335f9b817ead83d9ffce1"
-dependencies = [
- "quote",
- "syn",
-]
-
-[[package]]
 name = "cvt"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -916,17 +906,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ghost"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a36606a68532b5640dc86bb1f33c64b45c4682aad4c50f3937b317ea387f3d6"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "gimli"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1023,51 +1002,6 @@ dependencies = [
  "lazy_static",
  "number_prefix",
  "regex",
-]
-
-[[package]]
-name = "indoc"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79255cf29f5711995ddf9ec261b4057b1deb34e66c90656c201e41376872c544"
-dependencies = [
- "indoc-impl",
- "proc-macro-hack",
-]
-
-[[package]]
-name = "indoc-impl"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54554010aa3d17754e484005ea0022f1c93839aabc627c2c55f3d7b47206134c"
-dependencies = [
- "proc-macro-hack",
- "proc-macro2",
- "quote",
- "syn",
- "unindent",
-]
-
-[[package]]
-name = "inventory"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bf98296081bd2cb540acc09ef9c97f22b7e487841520350293605db1b2c7a27"
-dependencies = [
- "ctor",
- "ghost",
- "inventory-impl",
-]
-
-[[package]]
-name = "inventory-impl"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a8e30575afe28eea36a9a39136b70b2fb6b0dd0a212a5bd1f30a498395c0274"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -1340,28 +1274,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "paste"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8292c1e1e81ddb552c4c90c36af201a0ce7e34995f55f0480f01052f242811c9"
-dependencies = [
- "paste-impl",
- "proc-macro-hack",
-]
-
-[[package]]
-name = "paste-impl"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e9c43f2645f06ee452544ad032886a75f3d1797b9487dcadcae9100ba58a51c"
-dependencies = [
- "proc-macro-hack",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "plain"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1453,50 +1365,6 @@ dependencies = [
  "regex-syntax",
  "rusty-fork",
  "tempfile",
-]
-
-[[package]]
-name = "pyo3"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1bfe257586436fbe1296d917f14a167d4253d0873bf43e2c9b9bdd58a3f9f35"
-dependencies = [
- "indoc",
- "inventory",
- "lazy_static",
- "libc",
- "num-traits",
- "paste",
- "pyo3cls",
- "regex",
- "serde",
- "serde_json",
- "spin",
- "unindent",
- "version_check",
-]
-
-[[package]]
-name = "pyo3-derive-backend"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4882d8237fd8c7373cc25cb802fe0dab9ff70830fd56f47ef6c7f3f287fcc057"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "pyo3cls"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdf321cfab555f7411298733c86d21e5136f5ded13f5872fabf9de3337beecda"
-dependencies = [
- "proc-macro2",
- "pyo3-derive-backend",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -1935,12 +1803,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c2fb2ec9bcd216a5b0d0ccf31ab17b5ed1d627960edff65bbe95d3ce221cefc"
 
 [[package]]
-name = "spin"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
-
-[[package]]
 name = "stable_deref_trait"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2179,12 +2041,6 @@ name = "unicode-xid"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "826e7639553986605ec5979c7dd957c7895e93eabed50ab2ffa7f6128a75097c"
-
-[[package]]
-name = "unindent"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63f18aa3b0e35fed5a0048f029558b1518095ffe2a0a31fb87c93dece93a4993"
 
 [[package]]
 name = "unsafe-any"
@@ -2471,19 +2327,6 @@ dependencies = [
  "target-lexicon",
  "wasmtime-environ",
  "wasmtime-runtime",
-]
-
-[[package]]
-name = "wasmtime-py"
-version = "0.14.0"
-dependencies = [
- "anyhow",
- "pyo3",
- "region",
- "target-lexicon",
- "wasmparser",
- "wasmtime",
- "wasmtime-wasi",
 ]
 
 [[package]]
