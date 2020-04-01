@@ -1866,8 +1866,8 @@ fn define_simd(
         // Store
         let bound_store = store.bind(vector(ty, sse_vector_size)).bind(Any);
         e.enc_both_inferred(bound_store.clone(), rec_fst.opcodes(&MOVUPS_STORE));
-        e.enc_both(bound_store.clone(), rec_fstDisp8.opcodes(&MOVUPS_STORE));
-        e.enc_both(bound_store, rec_fstDisp32.opcodes(&MOVUPS_STORE));
+        e.enc_both_inferred(bound_store.clone(), rec_fstDisp8.opcodes(&MOVUPS_STORE));
+        e.enc_both_inferred(bound_store, rec_fstDisp32.opcodes(&MOVUPS_STORE));
 
         // Store complex
         let bound_store_complex = store_complex.bind(vector(ty, sse_vector_size));
@@ -1887,8 +1887,8 @@ fn define_simd(
         // Load
         let bound_load = load.bind(vector(ty, sse_vector_size)).bind(Any);
         e.enc_both_inferred(bound_load.clone(), rec_fld.opcodes(&MOVUPS_LOAD));
-        e.enc_both(bound_load.clone(), rec_fldDisp8.opcodes(&MOVUPS_LOAD));
-        e.enc_both(bound_load, rec_fldDisp32.opcodes(&MOVUPS_LOAD));
+        e.enc_both_inferred(bound_load.clone(), rec_fldDisp8.opcodes(&MOVUPS_LOAD));
+        e.enc_both_inferred(bound_load, rec_fldDisp32.opcodes(&MOVUPS_LOAD));
 
         // Load complex
         let bound_load_complex = load_complex.bind(vector(ty, sse_vector_size));
