@@ -1,7 +1,7 @@
 use crate::wasi::{self, types, Errno, Result, RightsExt};
 use filetime::FileTime;
 use log::trace;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -86,7 +86,7 @@ pub(crate) trait VirtualFile: MovableFile {
         Err(Errno::Badf)
     }
 
-    fn write_vectored(&mut self, _iovs: &[io::IoSlice]) -> Result<usize> {
+    fn write_vectored(&self, _iovs: &[io::IoSlice]) -> Result<usize> {
         Err(Errno::Badf)
     }
 
@@ -98,7 +98,7 @@ pub(crate) trait VirtualFile: MovableFile {
         Err(Errno::Badf)
     }
 
-    fn seek(&mut self, _offset: SeekFrom) -> Result<u64> {
+    fn seek(&self, _offset: SeekFrom) -> Result<u64> {
         Err(Errno::Badf)
     }
 
@@ -127,11 +127,11 @@ pub(crate) trait VirtualFile: MovableFile {
         Err(Errno::Badf)
     }
 
-    fn fdstat_set_flags(&mut self, _fdflags: types::Fdflags) -> Result<()> {
+    fn fdstat_set_flags(&self, _fdflags: types::Fdflags) -> Result<Option<Box<dyn VirtualFile>>> {
         Err(Errno::Badf)
     }
 
-    fn read_vectored(&mut self, _iovs: &mut [io::IoSliceMut]) -> Result<usize> {
+    fn read_vectored(&self, _iovs: &mut [io::IoSliceMut]) -> Result<usize> {
         Err(Errno::Badf)
     }
 
@@ -254,26 +254,26 @@ impl VecFileContents {
 /// a filesystem wherein a file descriptor is one view into a possibly-shared underlying collection
 /// of data and permissions on a filesystem.
 pub struct InMemoryFile {
-    cursor: types::Filesize,
+    cursor: Cell<types::Filesize>,
     parent: Rc<RefCell<Option<Box<dyn VirtualFile>>>>,
-    fd_flags: types::Fdflags,
+    fd_flags: Cell<types::Fdflags>,
     data: Rc<RefCell<Box<dyn FileContents>>>,
 }
 
 impl InMemoryFile {
     pub fn memory_backed() -> Self {
         Self {
-            cursor: 0,
+            cursor: Cell::new(0),
             parent: Rc::new(RefCell::new(None)),
-            fd_flags: types::Fdflags::empty(),
+            fd_flags: Cell::new(types::Fdflags::empty()),
             data: Rc::new(RefCell::new(Box::new(VecFileContents::new()))),
         }
     }
 
     pub fn new(contents: Box<dyn FileContents>) -> Self {
         Self {
-            cursor: 0,
-            fd_flags: types::Fdflags::empty(),
+            cursor: Cell::new(0),
+            fd_flags: Cell::new(types::Fdflags::empty()),
             parent: Rc::new(RefCell::new(None)),
             data: Rc::new(RefCell::new(contents)),
         }
@@ -288,13 +288,13 @@ impl MovableFile for InMemoryFile {
 
 impl VirtualFile for InMemoryFile {
     fn fdstat_get(&self) -> types::Fdflags {
-        self.fd_flags
+        self.fd_flags.get()
     }
 
     fn try_clone(&self) -> io::Result<Box<dyn VirtualFile>> {
         Ok(Box::new(Self {
-            cursor: 0,
-            fd_flags: self.fd_flags,
+            cursor: Cell::new(0),
+            fd_flags: self.fd_flags.clone(),
             parent: Rc::clone(&self.parent),
             data: Rc::clone(&self.data),
         }))
@@ -351,23 +351,27 @@ impl VirtualFile for InMemoryFile {
         Err(Errno::Notdir)
     }
 
-    fn fdstat_set_flags(&mut self, fdflags: types::Fdflags) -> Result<()> {
-        self.fd_flags = fdflags;
-        Ok(())
+    fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<Option<Box<dyn VirtualFile>>> {
+        self.fd_flags.set(fdflags);
+        // We return None here to signal that the operation succeeded on the original
+        // file descriptor and mutating the original WASI Descriptor is thus unnecessary.
+        // This is needed as on Windows this operation required reopening a file. So we're
+        // adhering to the common signature required across platforms.
+        Ok(None)
     }
 
-    fn write_vectored(&mut self, iovs: &[io::IoSlice]) -> Result<usize> {
+    fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
         trace!("write_vectored(iovs={:?})", iovs);
         let mut data = self.data.borrow_mut();
 
-        let append_mode = self.fd_flags.contains(&types::Fdflags::APPEND);
-        trace!("     | fd_flags={}", self.fd_flags);
+        let append_mode = self.fd_flags.get().contains(&types::Fdflags::APPEND);
+        trace!("     | fd_flags={}", self.fd_flags.get());
 
         // If this file is in append mode, we write to the end.
         let write_start = if append_mode {
             data.size()
         } else {
-            self.cursor
+            self.cursor.get()
         };
 
         let max_size = iovs
@@ -396,16 +400,17 @@ impl VirtualFile for InMemoryFile {
         // If we are not appending, adjust the cursor appropriately for the write, too. This can't
         // overflow, as we checked against that before writing any data.
         if !append_mode {
-            self.cursor += written as u64;
+            let update = self.cursor.get() + written as u64;
+            self.cursor.set(update);
         }
 
         Ok(written)
     }
 
-    fn read_vectored(&mut self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
+    fn read_vectored(&self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
         trace!("read_vectored(iovs={:?})", iovs);
-        trace!("     | *read_start={:?}", self.cursor);
-        self.data.borrow_mut().preadv(iovs, self.cursor)
+        trace!("     | *read_start={:?}", self.cursor.get());
+        self.data.borrow_mut().preadv(iovs, self.cursor.get())
     }
 
     fn preadv(&self, buf: &mut [io::IoSliceMut], offset: types::Filesize) -> Result<usize> {
@@ -416,32 +421,36 @@ impl VirtualFile for InMemoryFile {
         self.data.borrow_mut().pwritev(buf, offset)
     }
 
-    fn seek(&mut self, offset: SeekFrom) -> Result<types::Filesize> {
+    fn seek(&self, offset: SeekFrom) -> Result<types::Filesize> {
         let content_len = self.data.borrow().size();
         match offset {
             SeekFrom::Current(offset) => {
                 let new_cursor = if offset < 0 {
                     self.cursor
+                        .get()
                         .checked_sub(offset.wrapping_neg() as u64)
                         .ok_or(Errno::Inval)?
                 } else {
-                    self.cursor.checked_add(offset as u64).ok_or(Errno::Inval)?
+                    self.cursor
+                        .get()
+                        .checked_add(offset as u64)
+                        .ok_or(Errno::Inval)?
                 };
-                self.cursor = std::cmp::min(content_len, new_cursor);
+                self.cursor.set(std::cmp::min(content_len, new_cursor));
             }
             SeekFrom::End(offset) => {
                 // A negative offset from the end would be past the end of the file,
                 let offset: u64 = offset.try_into().map_err(|_| Errno::Inval)?;
-                self.cursor = content_len.saturating_sub(offset);
+                self.cursor.set(content_len.saturating_sub(offset));
             }
             SeekFrom::Start(offset) => {
                 // A negative offset from the end would be before the start of the file.
                 let offset: u64 = offset.try_into().map_err(|_| Errno::Inval)?;
-                self.cursor = std::cmp::min(content_len, offset);
+                self.cursor.set(std::cmp::min(content_len, offset));
             }
         }
 
-        Ok(self.cursor)
+        Ok(self.cursor.get())
     }
 
     fn advise(
@@ -652,8 +661,8 @@ impl VirtualFile for VirtualDir {
                         path.display()
                     );
 
-                    let mut file = Box::new(InMemoryFile::memory_backed());
-                    file.fd_flags = fd_flags;
+                    let file = Box::new(InMemoryFile::memory_backed());
+                    file.fd_flags.set(fd_flags);
                     file.set_parent(Some(self.try_clone().expect("can clone self")));
                     v.insert(file).try_clone().map_err(Into::into)
                 } else {
@@ -749,7 +758,7 @@ impl VirtualFile for VirtualDir {
         }
     }
 
-    fn write_vectored(&mut self, _iovs: &[io::IoSlice]) -> Result<usize> {
+    fn write_vectored(&self, _iovs: &[io::IoSlice]) -> Result<usize> {
         Err(Errno::Badf)
     }
 

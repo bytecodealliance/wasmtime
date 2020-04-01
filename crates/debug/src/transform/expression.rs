@@ -1,11 +1,11 @@
 use super::address_transform::AddressTransform;
-use super::map_reg::map_reg;
 use anyhow::{Context, Error, Result};
 use gimli::{self, write, Expression, Operation, Reader, ReaderOffset, X86_64};
 use more_asserts::{assert_le, assert_lt};
 use std::collections::{HashMap, HashSet};
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::ir::{StackSlots, ValueLabel, ValueLabelsRanges, ValueLoc};
+use wasmtime_environ::isa::fde::map_reg;
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{get_vmctx_value_label, DefinedFuncIndex};
 use wasmtime_environ::ModuleMemoryOffset;
@@ -327,9 +327,20 @@ where
             // WebAssembly DWARF extension
             pc.read_u8()?;
             let ty = pc.read_uleb128()?;
-            assert_eq!(ty, 0);
+            // Supporting only wasm locals.
+            if ty != 0 {
+                // TODO support wasm globals?
+                return Ok(None);
+            }
             let index = pc.read_sleb128()?;
-            pc.read_u8()?; // consume 159
+            if pc.read_u8()? != 159 {
+                // FIXME The following operator is not DW_OP_stack_value, e.g. :
+                // DW_AT_location  (0x00000ea5:
+                //   [0x00001e19, 0x00001e26): DW_OP_WASM_location 0x0 +1, DW_OP_plus_uconst 0x10, DW_OP_stack_value
+                //   [0x00001e5a, 0x00001e72): DW_OP_WASM_location 0x0 +20, DW_OP_stack_value
+                // )
+                return Ok(None);
+            }
             if !code_chunk.is_empty() {
                 parts.push(CompiledExpressionPart::Code(code_chunk));
                 code_chunk = Vec::new();

@@ -101,46 +101,46 @@ impl PendingCString {
 
 /// A builder allowing customizable construction of `WasiCtx` instances.
 pub struct WasiCtxBuilder {
-    stdin: PendingEntry,
-    stdout: PendingEntry,
-    stderr: PendingEntry,
-    preopens: Vec<(PathBuf, File)>,
-    args: Vec<PendingCString>,
-    env: HashMap<PendingCString, PendingCString>,
+    stdin: Option<PendingEntry>,
+    stdout: Option<PendingEntry>,
+    stderr: Option<PendingEntry>,
+    preopens: Option<Vec<(PathBuf, File)>>,
+    args: Option<Vec<PendingCString>>,
+    env: Option<HashMap<PendingCString, PendingCString>>,
 }
 
 impl WasiCtxBuilder {
     /// Builder for a new `WasiCtx`.
     pub fn new() -> Self {
-        let stdin = PendingEntry::Thunk(Entry::null);
-        let stdout = PendingEntry::Thunk(Entry::null);
-        let stderr = PendingEntry::Thunk(Entry::null);
         Self {
-            stdin,
-            stdout,
-            stderr,
-            preopens: Vec::new(),
-            args: vec![],
-            env: HashMap::new(),
+            stdin: Some(PendingEntry::Thunk(Entry::null)),
+            stdout: Some(PendingEntry::Thunk(Entry::null)),
+            stderr: Some(PendingEntry::Thunk(Entry::null)),
+            preopens: Some(Vec::new()),
+            args: Some(Vec::new()),
+            env: Some(HashMap::new()),
         }
     }
 
     /// Add arguments to the command-line arguments list.
     ///
     /// Arguments must be valid UTF-8 with no NUL bytes, or else `WasiCtxBuilder::build()` will fail.
-    pub fn args<S: AsRef<[u8]>>(mut self, args: impl IntoIterator<Item = S>) -> Self {
-        self.args = args
-            .into_iter()
-            .map(|arg| arg.as_ref().to_vec().into())
-            .collect();
+    pub fn args<S: AsRef<[u8]>>(&mut self, args: impl IntoIterator<Item = S>) -> &mut Self {
+        self.args
+            .as_mut()
+            .unwrap()
+            .extend(args.into_iter().map(|a| a.as_ref().to_vec().into()));
         self
     }
 
     /// Add an argument to the command-line arguments list.
     ///
     /// Arguments must be valid UTF-8 with no NUL bytes, or else `WasiCtxBuilder::build()` will fail.
-    pub fn arg<S: AsRef<[u8]>>(mut self, arg: S) -> Self {
-        self.args.push(arg.as_ref().to_vec().into());
+    pub fn arg<S: AsRef<[u8]>>(&mut self, arg: S) -> &mut Self {
+        self.args
+            .as_mut()
+            .unwrap()
+            .push(arg.as_ref().to_vec().into());
         self
     }
 
@@ -148,16 +148,36 @@ impl WasiCtxBuilder {
     ///
     /// If any arguments from the host process contain invalid UTF-8, `WasiCtxBuilder::build()` will
     /// fail.
-    pub fn inherit_args(mut self) -> Self {
-        self.args = env::args_os().map(PendingCString::OsString).collect();
+    pub fn inherit_args(&mut self) -> &mut Self {
+        let args = self.args.as_mut().unwrap();
+        args.clear();
+        args.extend(env::args_os().map(PendingCString::OsString));
+        self
+    }
+
+    /// Inherit stdin from the host process.
+    pub fn inherit_stdin(&mut self) -> &mut Self {
+        self.stdin = Some(PendingEntry::Thunk(Entry::duplicate_stdin));
+        self
+    }
+
+    /// Inherit stdout from the host process.
+    pub fn inherit_stdout(&mut self) -> &mut Self {
+        self.stdout = Some(PendingEntry::Thunk(Entry::duplicate_stdout));
+        self
+    }
+
+    /// Inherit stdout from the host process.
+    pub fn inherit_stderr(&mut self) -> &mut Self {
+        self.stderr = Some(PendingEntry::Thunk(Entry::duplicate_stderr));
         self
     }
 
     /// Inherit the stdin, stdout, and stderr streams from the host process.
-    pub fn inherit_stdio(mut self) -> Self {
-        self.stdin = PendingEntry::Thunk(Entry::duplicate_stdin);
-        self.stdout = PendingEntry::Thunk(Entry::duplicate_stdout);
-        self.stderr = PendingEntry::Thunk(Entry::duplicate_stderr);
+    pub fn inherit_stdio(&mut self) -> &mut Self {
+        self.stdin = Some(PendingEntry::Thunk(Entry::duplicate_stdin));
+        self.stdout = Some(PendingEntry::Thunk(Entry::duplicate_stdout));
+        self.stderr = Some(PendingEntry::Thunk(Entry::duplicate_stderr));
         self
     }
 
@@ -165,10 +185,10 @@ impl WasiCtxBuilder {
     ///
     /// If any environment variables from the host process contain invalid Unicode (UTF-16 for
     /// Windows, UTF-8 for other platforms), `WasiCtxBuilder::build()` will fail.
-    pub fn inherit_env(mut self) -> Self {
-        self.env = std::env::vars_os()
-            .map(|(k, v)| (k.into(), v.into()))
-            .collect();
+    pub fn inherit_env(&mut self) -> &mut Self {
+        let env = self.env.as_mut().unwrap();
+        env.clear();
+        env.extend(std::env::vars_os().map(|(k, v)| (k.into(), v.into())));
         self
     }
 
@@ -176,8 +196,10 @@ impl WasiCtxBuilder {
     ///
     /// Environment variable keys and values must be valid UTF-8 with no NUL bytes, or else
     /// `WasiCtxBuilder::build()` will fail.
-    pub fn env<S: AsRef<[u8]>>(mut self, k: S, v: S) -> Self {
+    pub fn env<S: AsRef<[u8]>>(&mut self, k: S, v: S) -> &mut Self {
         self.env
+            .as_mut()
+            .unwrap()
             .insert(k.as_ref().to_vec().into(), v.as_ref().to_vec().into());
         self
     }
@@ -187,40 +209,40 @@ impl WasiCtxBuilder {
     /// Environment variable keys and values must be valid UTF-8 with no NUL bytes, or else
     /// `WasiCtxBuilder::build()` will fail.
     pub fn envs<S: AsRef<[u8]>, T: Borrow<(S, S)>>(
-        mut self,
+        &mut self,
         envs: impl IntoIterator<Item = T>,
-    ) -> Self {
-        self.env = envs
-            .into_iter()
-            .map(|t| {
-                let (k, v) = t.borrow();
-                (k.as_ref().to_vec().into(), v.as_ref().to_vec().into())
-            })
-            .collect();
+    ) -> &mut Self {
+        self.env.as_mut().unwrap().extend(envs.into_iter().map(|t| {
+            let (k, v) = t.borrow();
+            (k.as_ref().to_vec().into(), v.as_ref().to_vec().into())
+        }));
         self
     }
 
     /// Provide a File to use as stdin
-    pub fn stdin(mut self, file: File) -> Self {
-        self.stdin = PendingEntry::File(file);
+    pub fn stdin(&mut self, file: File) -> &mut Self {
+        self.stdin = Some(PendingEntry::File(file));
         self
     }
 
     /// Provide a File to use as stdout
-    pub fn stdout(mut self, file: File) -> Self {
-        self.stdout = PendingEntry::File(file);
+    pub fn stdout(&mut self, file: File) -> &mut Self {
+        self.stdout = Some(PendingEntry::File(file));
         self
     }
 
     /// Provide a File to use as stderr
-    pub fn stderr(mut self, file: File) -> Self {
-        self.stderr = PendingEntry::File(file);
+    pub fn stderr(&mut self, file: File) -> &mut Self {
+        self.stderr = Some(PendingEntry::File(file));
         self
     }
 
     /// Add a preopened directory.
-    pub fn preopened_dir<P: AsRef<Path>>(mut self, dir: File, guest_path: P) -> Self {
-        self.preopens.push((guest_path.as_ref().to_owned(), dir));
+    pub fn preopened_dir<P: AsRef<Path>>(&mut self, dir: File, guest_path: P) -> &mut Self {
+        self.preopens
+            .as_mut()
+            .unwrap()
+            .push((guest_path.as_ref().to_owned(), dir));
         self
     }
 
@@ -228,17 +250,21 @@ impl WasiCtxBuilder {
     ///
     /// If any of the arguments or environment variables in this builder cannot be converted into
     /// `CString`s, either due to NUL bytes or Unicode conversions, this returns an error.
-    pub fn build(self) -> WasiCtxBuilderResult<WasiCtx> {
+    pub fn build(&mut self) -> WasiCtxBuilderResult<WasiCtx> {
         // Process arguments and environment variables into `CString`s, failing quickly if they
         // contain any NUL bytes, or if conversion from `OsString` fails.
         let args = self
             .args
+            .take()
+            .unwrap()
             .into_iter()
             .map(|arg| arg.into_utf8_cstring())
             .collect::<WasiCtxBuilderResult<Vec<CString>>>()?;
 
         let env = self
             .env
+            .take()
+            .unwrap()
             .into_iter()
             .map(|(k, v)| {
                 k.into_string().and_then(|mut pair| {
@@ -257,12 +283,12 @@ impl WasiCtxBuilder {
         let mut fd_pool = FdPool::new();
         let mut entries: HashMap<wasi::__wasi_fd_t, Entry> = HashMap::new();
         // Populate the non-preopen fds.
-        for pending in vec![self.stdin, self.stdout, self.stderr] {
+        for pending in &mut [&mut self.stdin, &mut self.stdout, &mut self.stderr] {
             let fd = fd_pool
                 .allocate()
                 .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
             log::debug!("WasiCtx inserting ({:?}, {:?})", fd, pending);
-            match pending {
+            match pending.take().unwrap() {
                 PendingEntry::Thunk(f) => {
                     entries.insert(fd, f()?);
                 }
@@ -272,7 +298,7 @@ impl WasiCtxBuilder {
             }
         }
         // Then add the preopen fds.
-        for (guest_path, dir) in self.preopens {
+        for (guest_path, dir) in self.preopens.take().unwrap() {
             // We do the increment at the beginning of the loop body, so that we don't overflow
             // unnecessarily if we have exactly the maximum number of file descriptors.
             let preopen_fd = fd_pool

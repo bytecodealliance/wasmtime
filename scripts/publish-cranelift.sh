@@ -3,7 +3,7 @@ set -euo pipefail
 
 # This is a convenience script for maintainers publishing a new version of
 # Cranelift to crates.io. To use, first bump the version number by running the
-# `scripts/cranelift-version.sh` script, then run this script, and run the
+# `scripts/bump-cranelift-version.sh` script, then run this script, and run the
 # commands that it prints.
 #
 # Don't forget to push a git tag for this release!
@@ -36,7 +36,7 @@ do
 
     # Sleep for a few seconds to allow the server to update the index.
     # https://internals.rust-lang.org/t/changes-to-how-crates-io-handles-index-updates/9608
-    echo sleep 10
+    echo sleep 20
 done
 
 echo git tag cranelift-v$(grep version cranelift/Cargo.toml | head -n 1 | cut -d '"' -f 2)

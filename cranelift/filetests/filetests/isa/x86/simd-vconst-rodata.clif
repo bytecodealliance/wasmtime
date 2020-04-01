@@ -17,3 +17,23 @@ block0:
 }
 
 ; sameln: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0]
+
+
+; Since both jump tables and constants are emitted after the function body, it is important that they do not interfere.
+; This test shows that even in the presence of jump tables, constants are emitted correctly
+function %vconst_with_jumptables() {
+jt0 = jump_table [block0]
+
+block10:
+    v10 = iconst.i64 0
+    br_table v10, block1, jt0
+block0:
+    jump block11
+block1:
+    jump block11
+block11:
+    v11 = vconst.i8x16 [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]
+    return
+}
+
+; sameln: [1, 2, 3, 4, 5, 6, 7, 8, 9, A, B, C, D, E, F, 10]

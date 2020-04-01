@@ -21,11 +21,11 @@ enum Abi {
 /// I'd recommend using `cargo +nightly expand` to explore the output of this
 /// macro some more.
 pub fn define_struct(args: TokenStream) -> TokenStream {
-    let (path, _phase) = utils::witx_path_from_args(args);
+    let path = utils::witx_path_from_args(args);
     let doc = match witx::load(&[&path]) {
         Ok(doc) => doc,
         Err(e) => {
-            panic!("error opening file {}: {}", path, e);
+            panic!("error opening file {}: {}", path.display(), e);
         }
     };
 
@@ -33,14 +33,19 @@ pub fn define_struct(args: TokenStream) -> TokenStream {
     let mut get_exports = Vec::new();
     let mut ctor_externs = Vec::new();
     let mut ctor_fields = Vec::new();
+    let mut linker_add = Vec::new();
 
     for module in doc.modules() {
+        let module_name = module.name.as_str();
         for func in module.funcs() {
             let name = func.name.as_str();
-            let name_ident = Ident::new(func.name.as_str(), Span::call_site());
+            let name_ident = Ident::new(name, Span::call_site());
             fields.push(quote! { pub #name_ident: wasmtime::Func });
             get_exports.push(quote! { #name => Some(&self.#name_ident) });
             ctor_fields.push(name_ident.clone());
+            linker_add.push(quote! {
+                linker.define(#module_name, #name, self.#name_ident.clone())?;
+            });
 
             let mut shim_arg_decls = Vec::new();
             let mut params = Vec::new();
@@ -249,16 +254,22 @@ pub fn define_struct(args: TokenStream) -> TokenStream {
                     _ => None,
                 }
             }
+
+            /// Adds all wasi items to the specified `Linker`.
+            pub fn add_to_linker(&self, linker: &mut wasmtime::Linker) -> anyhow::Result<()> {
+                #(#linker_add)*
+                Ok(())
+            }
         }
     }
 }
 
 pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
-    let (path, _phase) = utils::witx_path_from_args(args);
+    let path = utils::witx_path_from_args(args);
     let doc = match witx::load(&[&path]) {
         Ok(doc) => doc,
         Err(e) => {
-            panic!("error opening file {}: {}", path, e);
+            panic!("error opening file {}: {}", path.display(), e);
         }
     };
 
@@ -270,10 +281,10 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
 
     for module in doc.modules() {
         let module_name = module.name.as_str();
-        let module_id = Ident::new(module.name.as_str(), Span::call_site());
+        let module_id = Ident::new(module_name, Span::call_site());
         for func in module.funcs() {
             let name = func.name.as_str();
-            let name_ident = Ident::new(func.name.as_str(), Span::call_site());
+            let name_ident = Ident::new(name, Span::call_site());
             fields.push(quote! { pub #name_ident: wasmtime::Func });
             get_exports.push(quote! { #name => Some(&self.#name_ident) });
             ctor_fields.push(name_ident.clone());
@@ -453,7 +464,7 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
 
     quote! {
         /// Lightweight `wasmtime::Memory` wrapper so that we can
-        /// implement `wiggle_runtime::GuestMemory` trait on it which is
+        /// implement `wiggle::GuestMemory` trait on it which is
         /// now required to interface with `wasi-common`.
         struct WasiMemory(wasmtime::Memory);
 
@@ -463,7 +474,7 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
             }
         }
 
-        unsafe impl wiggle_runtime::GuestMemory for WasiMemory {
+        unsafe impl wiggle::GuestMemory for WasiMemory {
             fn base(&self) -> (*mut u8, u32) {
                 (self.0.data_ptr(), self.0.data_size() as _)
             }

@@ -14,20 +14,16 @@ namespace Wasmtime.Tests
     {
         const string THROW_MESSAGE = "Test error message for wasmtime dotnet unit tests.";
 
-        class MyHost : IHost
-        {
-            public Instance Instance { get; set; }
-
-            [Import("add", Module = "env")]
-            public int Add(int x, int y) => x + y;
-
-            [Import("do_throw", Module = "env")]
-            public void Throw() => throw new Exception(THROW_MESSAGE);
-        }
-
         public FunctionThunkingTests(FunctionThunkingFixture fixture)
         {
             Fixture = fixture;
+
+            Fixture.Host.DefineFunction("env", "add", (int x, int y) => x + y);
+            Fixture.Host.DefineFunction("env", "swap", (int x, int y) => (y, x));
+            Fixture.Host.DefineFunction("env", "do_throw", () => throw new Exception(THROW_MESSAGE));
+            Fixture.Host.DefineFunction("env", "check_string", (Caller caller, int address, int length) => {
+                caller.GetMemory("mem").ReadString(address, length).Should().Be("Hello World");
+            });
         }
 
         private FunctionThunkingFixture Fixture { get; }
@@ -35,30 +31,37 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItBindsImportMethodsAndCallsThemCorrectly()
         {
-            var host = new MyHost();
-            using var instance = Fixture.Module.Instantiate(host);
+            using dynamic instance = Fixture.Host.Instantiate(Fixture.Module);
 
-            var add_func = instance.Externs.Functions.Where(f => f.Name == "add_wrapper").Single();
-            int invoke_add(int x, int y) => (int)add_func.Invoke(new object[] { x, y });
+            int x = instance.add(40, 2);
+            x.Should().Be(42);
+            x = instance.add(22, 5);
+            x.Should().Be(27);
 
-            invoke_add(40, 2).Should().Be(42);
-            invoke_add(22, 5).Should().Be(27);
+            object[] results = instance.swap(10, 100);
+            results.Should().Equal(new object[] { 100, 10 });
 
-            //Collect garbage to make sure delegate function pointers pasted to wasmtime are rooted.
+            instance.check_string();
+
+            // Collect garbage to make sure delegate function pointers pasted to wasmtime are rooted.
             GC.Collect();
             GC.WaitForPendingFinalizers();
 
-            invoke_add(1970, 50).Should().Be(2020);
+            x = instance.add(1970, 50);
+            x.Should().Be(2020);
+
+            results = instance.swap(2020, 1970);
+            results.Should().Equal(new object[] { 1970, 2020 });
+
+            instance.check_string();
         }
 
         [Fact]
         public void ItPropagatesExceptionsToCallersViaTraps()
         {
-            var host = new MyHost();
-            using var instance = Fixture.Module.Instantiate(host);
+            using dynamic instance = Fixture.Host.Instantiate(Fixture.Module);
 
-            var throw_func = instance.Externs.Functions.Where(f => f.Name == "do_throw_wrapper").Single();
-            Action action = () => throw_func.Invoke();
+            Action action = () => instance.do_throw();
 
             action
                 .Should()

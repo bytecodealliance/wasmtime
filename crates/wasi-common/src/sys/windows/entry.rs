@@ -1,9 +1,9 @@
-use crate::entry::{Descriptor, OsHandleRef};
+use crate::entry::{Descriptor, EntryRights, OsHandleRef};
 use crate::wasi::{types, RightsExt};
 use std::fs::File;
 use std::io;
 use std::mem::ManuallyDrop;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle, RawHandle};
 
 #[derive(Debug)]
@@ -26,12 +26,6 @@ impl Deref for OsHandle {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl DerefMut for OsHandle {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 
@@ -63,19 +57,19 @@ pub(crate) fn descriptor_as_oshandle<'lifetime>(
 /// This function is unsafe because it operates on a raw file descriptor.
 pub(crate) unsafe fn determine_type_and_access_rights<Handle: AsRawHandle>(
     handle: &Handle,
-) -> io::Result<(types::Filetype, types::Rights, types::Rights)> {
+) -> io::Result<(types::Filetype, EntryRights)> {
     use winx::file::{query_access_information, AccessMode};
 
-    let (file_type, mut rights_base, rights_inheriting) = determine_type_rights(handle)?;
+    let (file_type, mut rights) = determine_type_rights(handle)?;
 
     match file_type {
         types::Filetype::Directory | types::Filetype::RegularFile => {
             let mode = query_access_information(handle.as_raw_handle())?;
             if mode.contains(AccessMode::FILE_GENERIC_READ) {
-                rights_base |= types::Rights::FD_READ;
+                rights.base |= types::Rights::FD_READ;
             }
             if mode.contains(AccessMode::FILE_GENERIC_WRITE) {
-                rights_base |= types::Rights::FD_WRITE;
+                rights.base |= types::Rights::FD_WRITE;
             }
         }
         _ => {
@@ -84,7 +78,7 @@ pub(crate) unsafe fn determine_type_and_access_rights<Handle: AsRawHandle>(
         }
     }
 
-    Ok((file_type, rights_base, rights_inheriting))
+    Ok((file_type, rights))
 }
 
 /// Returns the set of all possible rights that are relevant for file type.
@@ -92,10 +86,10 @@ pub(crate) unsafe fn determine_type_and_access_rights<Handle: AsRawHandle>(
 /// This function is unsafe because it operates on a raw file descriptor.
 pub(crate) unsafe fn determine_type_rights<Handle: AsRawHandle>(
     handle: &Handle,
-) -> io::Result<(types::Filetype, types::Rights, types::Rights)> {
-    let (file_type, rights_base, rights_inheriting) = {
+) -> io::Result<(types::Filetype, EntryRights)> {
+    let (file_type, rights) = {
         let file_type = winx::file::get_file_type(handle.as_raw_handle())?;
-        if file_type.is_char() {
+        let (file_type, base, inheriting) = if file_type.is_char() {
             // character file: LPT device or console
             // TODO: rule out LPT device
             (
@@ -132,7 +126,8 @@ pub(crate) unsafe fn determine_type_rights<Handle: AsRawHandle>(
             )
         } else {
             return Err(io::Error::from_raw_os_error(libc::EINVAL));
-        }
+        };
+        (file_type, EntryRights::new(base, inheriting))
     };
-    Ok((file_type, rights_base, rights_inheriting))
+    Ok((file_type, rights))
 }

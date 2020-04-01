@@ -36,3 +36,33 @@ block0:
 
     return
 }
+
+function %uload_extend() {
+block0:
+    [-,%rdx]     v1 = iconst.i64 0x0123_4567_89ab_cdef
+    [-,%xmm2]    v3 = uload8x8 v1+0     ; bin: heap_oob 66 40 0f 38 30 12
+    [-,%xmm2]    v4 = uload8x8 v1+20    ; bin: heap_oob 66 40 0f 38 30 52 14
+    [-,%xmm2]    v5 = uload8x8 v1+256   ; bin: heap_oob 66 40 0f 38 30 92 00000100
+    [-,%xmm2]    v6 = uload16x4 v1+0    ; bin: heap_oob 66 40 0f 38 33 12
+    [-,%xmm2]    v7 = uload16x4 v1+20   ; bin: heap_oob 66 40 0f 38 33 52 14
+    [-,%xmm2]    v8 = uload16x4 v1+256  ; bin: heap_oob 66 40 0f 38 33 92 00000100
+    [-,%xmm2]    v9 = uload32x2 v1+0    ; bin: heap_oob 66 40 0f 38 35 12
+    [-,%xmm2]    v10 = uload32x2 v1+20  ; bin: heap_oob 66 40 0f 38 35 52 14
+    [-,%xmm2]    v11 = uload32x2 v1+256 ; bin: heap_oob 66 40 0f 38 35 92 00000100
+    return
+}
+
+function %sload_extend() {
+block0:
+    [-,%rdx]     v1 = iconst.i64 0x0123_4567_89ab_cdef
+    [-,%xmm2]    v3 = sload8x8 v1+0     ; bin: heap_oob 66 40 0f 38 20 12
+    [-,%xmm2]    v4 = sload8x8 v1+20    ; bin: heap_oob 66 40 0f 38 20 52 14
+    [-,%xmm2]    v5 = sload8x8 v1+256   ; bin: heap_oob 66 40 0f 38 20 92 00000100
+    [-,%xmm2]    v6 = sload16x4 v1+0    ; bin: heap_oob 66 40 0f 38 23 12
+    [-,%xmm2]    v7 = sload16x4 v1+20   ; bin: heap_oob 66 40 0f 38 23 52 14
+    [-,%xmm2]    v8 = sload16x4 v1+256  ; bin: heap_oob 66 40 0f 38 23 92 00000100
+    [-,%xmm2]    v9 = sload32x2 v1+0    ; bin: heap_oob 66 40 0f 38 25 12
+    [-,%xmm2]    v10 = sload32x2 v1+20  ; bin: heap_oob 66 40 0f 38 25 52 14
+    [-,%xmm2]    v11 = sload32x2 v1+256 ; bin: heap_oob 66 40 0f 38 25 92 00000100
+    return
+}

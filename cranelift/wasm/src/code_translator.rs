@@ -32,6 +32,7 @@ use crate::translation_utils::{FuncIndex, GlobalIndex, MemoryIndex, SignatureInd
 use crate::wasm_unsupported;
 use core::{i32, u32};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
+use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
     self, ConstantData, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
@@ -650,6 +651,48 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             memarg: MemoryImmediate { flags: _, offset },
         } => {
             translate_load(*offset, ir::Opcode::Load, I8X16, builder, state, environ)?;
+        }
+        Operator::I16x8Load8x8S {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
+            let (flags, base, offset) = prepare_load(*offset, builder, state, environ)?;
+            let loaded = builder.ins().sload8x8(flags, base, offset);
+            state.push1(loaded);
+        }
+        Operator::I16x8Load8x8U {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
+            let (flags, base, offset) = prepare_load(*offset, builder, state, environ)?;
+            let loaded = builder.ins().uload8x8(flags, base, offset);
+            state.push1(loaded);
+        }
+        Operator::I32x4Load16x4S {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
+            let (flags, base, offset) = prepare_load(*offset, builder, state, environ)?;
+            let loaded = builder.ins().sload16x4(flags, base, offset);
+            state.push1(loaded);
+        }
+        Operator::I32x4Load16x4U {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
+            let (flags, base, offset) = prepare_load(*offset, builder, state, environ)?;
+            let loaded = builder.ins().uload16x4(flags, base, offset);
+            state.push1(loaded);
+        }
+        Operator::I64x2Load32x2S {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
+            let (flags, base, offset) = prepare_load(*offset, builder, state, environ)?;
+            let loaded = builder.ins().sload32x2(flags, base, offset);
+            state.push1(loaded);
+        }
+        Operator::I64x2Load32x2U {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => {
+            let (flags, base, offset) = prepare_load(*offset, builder, state, environ)?;
+            let loaded = builder.ins().uload32x2(flags, base, offset);
+            state.push1(loaded);
         }
         /****************************** Store instructions ***********************************
          * Wasm specifies an integer alignment flag but we drop it in Cranelift.
@@ -1518,13 +1561,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I32x4WidenLowI16x8S { .. }
         | Operator::I32x4WidenHighI16x8S { .. }
         | Operator::I32x4WidenLowI16x8U { .. }
-        | Operator::I32x4WidenHighI16x8U { .. }
-        | Operator::I16x8Load8x8S { .. }
-        | Operator::I16x8Load8x8U { .. }
-        | Operator::I32x4Load16x4S { .. }
-        | Operator::I32x4Load16x4U { .. }
-        | Operator::I64x2Load32x2S { .. }
-        | Operator::I64x2Load32x2U { .. } => {
+        | Operator::I32x4WidenHighI16x8U { .. } => {
             return Err(wasm_unsupported!("proposed SIMD operator {:?}", op));
         }
     };
@@ -1696,6 +1733,27 @@ fn get_heap_addr(
     }
 }
 
+/// Prepare for a load; factors out common functionality between load and load_extend operations.
+fn prepare_load<FE: FuncEnvironment + ?Sized>(
+    offset: u32,
+    builder: &mut FunctionBuilder,
+    state: &mut FuncTranslationState,
+    environ: &mut FE,
+) -> WasmResult<(MemFlags, Value, Offset32)> {
+    let addr32 = state.pop1();
+
+    // We don't yet support multiple linear memories.
+    let heap = state.get_heap(builder.func, 0, environ)?;
+    let (base, offset) = get_heap_addr(heap, addr32, offset, environ.pointer_type(), builder);
+
+    // Note that we don't set `is_aligned` here, even if the load instruction's
+    // alignment immediate says it's aligned, because WebAssembly's immediate
+    // field is just a hint, while Cranelift's aligned flag needs a guarantee.
+    let flags = MemFlags::new();
+
+    Ok((flags, base, offset.into()))
+}
+
 /// Translate a load instruction.
 fn translate_load<FE: FuncEnvironment + ?Sized>(
     offset: u32,
@@ -1705,17 +1763,8 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
-    let addr32 = state.pop1();
-    // We don't yet support multiple linear memories.
-    let heap = state.get_heap(builder.func, 0, environ)?;
-    let (base, offset) = get_heap_addr(heap, addr32, offset, environ.pointer_type(), builder);
-    // Note that we don't set `is_aligned` here, even if the load instruction's
-    // alignment immediate says it's aligned, because WebAssembly's immediate
-    // field is just a hint, while Cranelift's aligned flag needs a guarantee.
-    let flags = MemFlags::new();
-    let (load, dfg) = builder
-        .ins()
-        .Load(opcode, result_ty, flags, offset.into(), base);
+    let (flags, base, offset) = prepare_load(offset, builder, state, environ)?;
+    let (load, dfg) = builder.ins().Load(opcode, result_ty, flags, offset, base);
     state.push1(dfg.first_result(load));
     Ok(())
 }

@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle_runtime::{GuestBorrows, GuestError, GuestMemory, GuestPtr};
+use wiggle::{GuestBorrows, GuestError, GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, MemAreas, WasiCtx};
 
 wiggle::from_witx!({

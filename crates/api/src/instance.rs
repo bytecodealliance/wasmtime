@@ -124,6 +124,7 @@ impl Instance {
             }
         }
 
+        module.register_frame_info();
         let config = store.engine().config();
         let instance_handle = instantiate(
             config,
@@ -142,7 +143,6 @@ impl Instance {
                 export,
             ));
         }
-        module.register_frame_info();
         Ok(Instance {
             instance_handle,
             module: module.clone(),

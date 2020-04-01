@@ -25,7 +25,7 @@ rustup target add wasm32-wasi
 Next, to run all tests including the WASI integration tests, execute this command:
 
 ```shell
-cargo test --features test_programs --all
+cargo test --features test-programs/test_programs --all
 ```
 
 You can also exclude a particular crate from testing with `--exclude`. For
@@ -78,7 +78,7 @@ can be useful when working on the `wasi-common` crate. This can be done by
 executing this command:
 
 ```shell
-cargo test --features test_programs -p test-programs
+cargo test --features test-programs/test_programs -p test-programs
 ```
 
 ## Adding New Tests

@@ -58,7 +58,7 @@ int main() {
   wasi_config_inherit_stdout(wasi_config);
   wasi_config_inherit_stderr(wasi_config);
   wasm_trap_t *trap = NULL;
-  wasi_instance_t *wasi = wasi_instance_new(store, wasi_config, &trap);
+  wasi_instance_t *wasi = wasi_instance_new(store, "wasi_snapshot_preview1", wasi_config, &trap);
   if (wasi == NULL) {
     print_trap(trap);
     exit(1);
@@ -147,7 +147,7 @@ static void read_wat_file(
 
   // Parse the wat into the binary wasm format
   wasm_byte_vec_t error;
-  if (wasmtime_wat2wasm(engine, &wat, bytes, &error) == 0) {
+  if (wasmtime_wat2wasm(&wat, bytes, &error) == 0) {
     fprintf(stderr, "failed to parse wat %.*s\n", (int) error.size, error.data);
     exit(1);
   }

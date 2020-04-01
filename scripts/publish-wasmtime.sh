@@ -11,7 +11,7 @@ topdir=$(dirname "$0")/..
 cd "$topdir"
 
 # Publishing Wasmtime requires publishing any local Cranelift changes.
-./publish-cranelift.sh
+scripts/publish-cranelift.sh
 
 # Commands needed to publish.
 #
@@ -21,12 +21,15 @@ for cargo_toml in \
     crates/wasi-common/winx/Cargo.toml \
     crates/wasi-common/yanix/Cargo.toml \
     crates/wasi-common/wig/Cargo.toml \
+    crates/wiggle/generate/Cargo.toml \
+    crates/wiggle/macro/Cargo.toml \
+    crates/wiggle/Cargo.toml \
     crates/wasi-common/Cargo.toml \
     crates/lightbeam/Cargo.toml \
-    crates/profiling/Cargo.toml \
     crates/environ/Cargo.toml \
     crates/obj/Cargo.toml \
     crates/runtime/Cargo.toml \
+    crates/profiling/Cargo.toml \
     crates/debug/Cargo.toml \
     crates/jit/Cargo.toml \
     crates/api/Cargo.toml \
@@ -35,6 +38,7 @@ for cargo_toml in \
     crates/misc/py/Cargo.toml \
     crates/misc/rust/macro/Cargo.toml \
     crates/misc/rust/Cargo.toml \
+    Cargo.toml \
 ; do
     version=""
     case $cargo_toml in
@@ -46,7 +50,7 @@ for cargo_toml in \
 
     # Sleep for a few seconds to allow the server to update the index.
     # https://internals.rust-lang.org/t/changes-to-how-crates-io-handles-index-updates/9608
-    echo sleep 10
+    echo sleep 20
 done
 
 echo echo git tag v$(grep "version =" Cargo.toml | head -n 1 | cut -d '"' -f 2)

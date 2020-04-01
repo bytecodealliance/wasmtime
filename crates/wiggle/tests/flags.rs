@@ -1,6 +1,6 @@
 use proptest::prelude::*;
 use std::convert::TryFrom;
-use wiggle_runtime::{GuestError, GuestMemory, GuestPtr};
+use wiggle::{GuestError, GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({

@@ -1008,7 +1008,7 @@ pub(crate) fn define<'shared>(
                 ))
                 .emit(
                     r#"
-                    {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
+                    {{PUT_OP}}(bits, rex2(out_reg0, in_reg0), sink);
                     modrm_rr(out_reg0, in_reg0, sink); // note the flipped register in the ModR/M byte
                     let imm:i64 = lane.into();
                     sink.put1(imm as u8);

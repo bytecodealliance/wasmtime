@@ -361,3 +361,36 @@ fn call_signature_mismatch() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn start_trap_pretty() -> Result<()> {
+    let store = Store::default();
+    let wat = r#"
+        (module $m
+            (func $die unreachable)
+            (func call $die)
+            (func $foo call 1)
+            (func $start call $foo)
+            (start $start)
+        )
+    "#;
+
+    let module = Module::new(&store, wat)?;
+    let e = match Instance::new(&module, &[]) {
+        Ok(_) => panic!("expected failure"),
+        Err(e) => e.downcast::<Trap>()?,
+    };
+
+    assert_eq!(
+        e.to_string(),
+        "\
+wasm trap: unreachable, source location: @001d
+wasm backtrace:
+  0: m!die
+  1: m!<wasm function 1>
+  2: m!foo
+  3: m!start
+"
+    );
+    Ok(())
+}

@@ -3,27 +3,24 @@ using Wasmtime;
 
 namespace HelloExample
 {
-    class Host : IHost
-    {
-        public Instance Instance { get; set; }
-
-        [Import("log")]
-        public void Log(int address, int length)
-        {
-            var message = Instance.Externs.Memories[0].ReadString(address, length);
-            Console.WriteLine($"Message from WebAssembly: {message}");
-        }
-    }
-
     class Program
     {
         static void Main(string[] args)
         {
-            using var engine = new Engine();
-            using var store = engine.CreateStore();
-            using var module = store.CreateModule("memory.wasm");
-            using dynamic instance = module.Instantiate(new Host());
+            using var host = new Host();
 
+            host.DefineFunction(
+                "",
+                "log",
+                (Caller caller, int address, int length) => {
+                    var message = caller.GetMemory("mem").ReadString(address, length);
+                    Console.WriteLine($"Message from WebAssembly: {message}");
+                }
+            );
+
+            using var module = host.LoadModule("memory.wasm");
+
+            using dynamic instance = host.Instantiate(module);
             instance.run();
         }
     }

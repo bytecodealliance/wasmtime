@@ -16,18 +16,6 @@ use dummy::dummy_imports;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
-fn fuzz_default_config(strategy: Strategy) -> Config {
-    crate::init_fuzzing();
-    let mut config = Config::new();
-    config
-        .cranelift_debug_verifier(true)
-        .wasm_multi_value(true)
-        .wasm_bulk_memory(true)
-        .strategy(strategy)
-        .expect("failed to enable lightbeam");
-    return config;
-}
-
 fn log_wasm(wasm: &[u8]) {
     static CNT: AtomicUsize = AtomicUsize::new(0);
     if !log::log_enabled!(log::Level::Debug) {
@@ -51,7 +39,7 @@ fn log_wasm(wasm: &[u8]) {
 ///
 /// You can control which compiler is used via passing a `Strategy`.
 pub fn instantiate(wasm: &[u8], strategy: Strategy) {
-    instantiate_with_config(wasm, fuzz_default_config(strategy));
+    instantiate_with_config(wasm, crate::fuzz_default_config(strategy).unwrap());
 }
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
@@ -98,7 +86,7 @@ pub fn instantiate_with_config(wasm: &[u8], config: Config) {
 pub fn compile(wasm: &[u8], strategy: Strategy) {
     crate::init_fuzzing();
 
-    let engine = Engine::new(&fuzz_default_config(strategy));
+    let engine = Engine::new(&crate::fuzz_default_config(strategy).unwrap());
     let store = Store::new(&engine);
     log_wasm(wasm);
     let _ = Module::new(&store, wasm);

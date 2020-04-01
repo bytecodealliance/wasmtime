@@ -1,11 +1,11 @@
-use crate::entry::Descriptor;
+use crate::entry::{Descriptor, EntryRights};
 use crate::fd;
 use crate::path::PathGet;
 use crate::sys::entry::OsHandle;
 use crate::wasi::{types, Errno, Result};
 use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
-use std::fs::{File, OpenOptions};
+use std::fs::{File, Metadata, OpenOptions};
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
@@ -41,14 +41,13 @@ impl PathGetExt for PathGet {
 }
 
 pub(crate) fn open_rights(
-    rights_base: types::Rights,
-    rights_inheriting: types::Rights,
+    input_rights: &EntryRights,
     oflags: types::Oflags,
     fdflags: types::Fdflags,
-) -> (types::Rights, types::Rights) {
+) -> EntryRights {
     // which rights are needed on the dirfd?
     let mut needed_base = types::Rights::PATH_OPEN;
-    let mut needed_inheriting = rights_base | rights_inheriting;
+    let mut needed_inheriting = input_rights.base | input_rights.inheriting;
 
     // convert open flags
     if oflags.contains(&types::Oflags::CREAT) {
@@ -66,7 +65,7 @@ pub(crate) fn open_rights(
         needed_inheriting |= types::Rights::FD_SYNC;
     }
 
-    (needed_base, needed_inheriting)
+    EntryRights::new(needed_base, needed_inheriting)
 }
 
 pub(crate) fn openat(dirfd: &File, path: &str) -> Result<File> {
@@ -414,13 +413,27 @@ pub(crate) fn filestat_set_times(
 }
 
 pub(crate) fn symlink(old_path: &str, resolved: PathGet) -> Result<()> {
+    use std::fs;
     use std::os::windows::fs::{symlink_dir, symlink_file};
 
     let old_path = concatenate(&resolved.dirfd().as_os_handle(), Path::new(old_path))?;
     let new_path = resolved.concatenate()?;
 
-    // try creating a file symlink
-    let err = match symlink_file(&old_path, &new_path) {
+    // Windows distinguishes between file and directory symlinks.
+    // If the source doesn't exist or is an exotic file type, we fall back
+    // to regular file symlinks.
+    let use_dir_symlink = fs::metadata(&new_path)
+        .as_ref()
+        .map(Metadata::is_dir)
+        .unwrap_or(false);
+
+    let res = if use_dir_symlink {
+        symlink_dir(&old_path, &new_path)
+    } else {
+        symlink_file(&old_path, &new_path)
+    };
+
+    let err = match res {
         Ok(()) => return Ok(()),
         Err(e) => e,
     };
@@ -428,18 +441,15 @@ pub(crate) fn symlink(old_path: &str, resolved: PathGet) -> Result<()> {
         Some(code) => {
             log::debug!("path_symlink at symlink_file error code={:?}", code);
             match code as u32 {
-                winerror::ERROR_NOT_A_REPARSE_POINT => {
-                    // try creating a dir symlink instead
-                    return symlink_dir(old_path, new_path).map_err(Into::into);
-                }
-                winerror::ERROR_ACCESS_DENIED => {
-                    // does the target exist?
-                    if new_path.exists() {
-                        return Err(Errno::Exist);
-                    }
-                }
+                // If the target contains a trailing slash, the Windows API returns
+                // ERROR_INVALID_NAME (which corresponds to ENOENT) instead of
+                // ERROR_ALREADY_EXISTS (which corresponds to EEXIST)
+                //
+                // This concerns only trailing slashes (not backslashes) and
+                // only symbolic links (not hard links).
+                //
+                // Since POSIX will return EEXIST in such case, we simulate this behavior
                 winerror::ERROR_INVALID_NAME => {
-                    // does the target without trailing slashes exist?
                     if let Some(path) = strip_trailing_slashes_and_concatenate(&resolved)? {
                         if path.exists() {
                             return Err(Errno::Exist);
