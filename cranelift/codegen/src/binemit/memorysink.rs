@@ -16,7 +16,7 @@
 use super::{Addend, CodeInfo, CodeOffset, CodeSink, Reloc};
 use crate::binemit::stackmap::Stackmap;
 use crate::ir::entities::Value;
-use crate::ir::{ConstantOffset, ExternalName, Function, JumpTable, SourceLoc, TrapCode};
+use crate::ir::{ConstantOffset, ExternalName, Function, JumpTable, Opcode, SourceLoc, TrapCode};
 use crate::isa::TargetIsa;
 use core::ptr::write_unaligned;
 
@@ -92,6 +92,10 @@ pub trait RelocSink {
 
     /// Add a relocation referencing a jump table.
     fn reloc_jt(&mut self, _: CodeOffset, _: Reloc, _: JumpTable);
+
+    /// Track a call site whose return address is the given CodeOffset, for the given opcode. Does
+    /// nothing in general, only useful for certain embedders (SpiderMonkey).
+    fn add_call_site(&mut self, _: Opcode, _: CodeOffset, _: SourceLoc) {}
 }
 
 /// A trait for receiving trap codes and offsets.
@@ -182,6 +186,15 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
         let ofs = self.offset();
         let stackmap = Stackmap::from_values(&val_list, func, isa);
         self.stackmaps.add_stackmap(ofs, stackmap);
+    }
+
+    fn add_call_site(&mut self, opcode: Opcode, loc: SourceLoc) {
+        debug_assert!(
+            opcode.is_call(),
+            "adding call site info for a non-call instruction."
+        );
+        let ret_addr = self.offset();
+        self.relocs.add_call_site(opcode, ret_addr, loc);
     }
 }
 
