@@ -2417,6 +2417,7 @@ pub(crate) fn define<'shared>(
                                 &func.dfg.ext_funcs[func_ref].name,
                                 -4);
             sink.put4(0);
+            sink.add_call_site(opcode, func.srclocs[inst]);
         "#,
         ),
     );
@@ -2431,6 +2432,7 @@ pub(crate) fn define<'shared>(
                                 &func.dfg.ext_funcs[func_ref].name,
                                 -4);
             sink.put4(0);
+            sink.add_call_site(opcode, func.srclocs[inst]);
         "#,
         ),
     );
@@ -2443,6 +2445,7 @@ pub(crate) fn define<'shared>(
                     sink.trap(TrapCode::StackOverflow, func.srclocs[inst]);
                     {{PUT_OP}}(bits, rex1(in_reg0), sink);
                     modrm_r_bits(in_reg0, bits, sink);
+                    sink.add_call_site(opcode, func.srclocs[inst]);
                 "#,
             ),
     );
