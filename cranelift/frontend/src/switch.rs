@@ -160,6 +160,9 @@ impl Switch {
                 bx.ins().brnz(should_take_right_side, right_block, &[]);
                 bx.ins().jump(left_block, &[]);
 
+                bx.seal_block(left_block);
+                bx.seal_block(right_block);
+
                 stack.push((Some(left_block), left));
                 stack.push((Some(right_block), right));
             }
@@ -181,6 +184,7 @@ impl Switch {
             if was_branch {
                 let block = bx.create_block();
                 bx.ins().jump(block, &[]);
+                bx.seal_block(block);
                 bx.switch_to_block(block);
             }
         };
@@ -203,6 +207,7 @@ impl Switch {
                     // if `first_index` is 0, then `icmp_imm uge val, first_index` is trivially true
                     let jt_block = bx.create_block();
                     bx.ins().jump(jt_block, &[]);
+                    bx.seal_block(jt_block);
                     cases_and_jt_blocks.push((first_index, jt_block, blocks));
                     // `jump otherwise` below must not be hit, because the current block has been
                     // filled above. This is the last iteration anyway, as 0 is the smallest
@@ -218,6 +223,7 @@ impl Switch {
                         first_index as i64,
                     );
                     bx.ins().brnz(is_good_val, jt_block, &[]);
+                    bx.seal_block(jt_block);
                     cases_and_jt_blocks.push((first_index, jt_block, blocks));
                 }
             }
@@ -487,5 +493,41 @@ block0:
 block4:
     br_table.i32 v1, block0, jt0"
         );
+    }
+
+    #[test]
+    fn switch_seal_generated_blocks() {
+        let keys = [0, 1, 2, 10, 11, 12, 20, 30, 40, 50];
+
+        let mut func = Function::new();
+        let mut builder_ctx = FunctionBuilderContext::new();
+        let mut builder = FunctionBuilder::new(&mut func, &mut builder_ctx);
+
+        let root_block = builder.create_block();
+        let default_block = builder.create_block();
+        let mut switch = Switch::new();
+
+        let case_blocks = keys
+            .iter()
+            .map(|key| {
+                let block = builder.create_block();
+                switch.set_entry(*key, block);
+                block
+            })
+            .collect::<Vec<_>>();
+
+        builder.seal_block(root_block);
+        builder.switch_to_block(root_block);
+
+        let val = builder.ins().iconst(types::I32, 1);
+        switch.emit(&mut builder, val, default_block);
+
+        for &block in case_blocks.iter().chain(std::iter::once(&default_block)) {
+            builder.seal_block(block);
+            builder.switch_to_block(block);
+            builder.ins().return_(&[]);
+        }
+
+        builder.finalize(); // Will panic if some blocks are not sealed
     }
 }
