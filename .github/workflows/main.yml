@@ -224,7 +224,7 @@ jobs:
     - run: cargo run -p run-examples
 
     # Build and test all features except for lightbeam
-    - run: cargo test --features test-programs/test_programs --all --exclude lightbeam --exclude wasmtime-c-api -- --nocapture
+    - run: cargo test --features test-programs/test_programs --all --exclude lightbeam -- --nocapture
       env:
         RUST_BACKTRACE: 1
         RUSTFLAGS: "-D warnings"
@@ -242,16 +242,6 @@ jobs:
       if: matrix.rust == 'nightly'
     - run: cargo test --package lightbeam -- --nocapture
       if: matrix.rust == 'nightly'
-      continue-on-error: true
-      env:
-        RUST_BACKTRACE: 1
-
-    # Build and test c-api examples. Skipping testing on Windows due to
-    # GNU make dependency when executing the wasm-c-api examples.
-    - run: cargo build --package wasmtime-c-api
-      if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
-    - run: cargo test --package wasmtime-c-api -- --nocapture --test-threads 1
-      if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
       continue-on-error: true
       env:
         RUST_BACKTRACE: 1
