@@ -51,6 +51,9 @@ lightbeam = ["wasmtime-jit/lightbeam"]
 # Enables support for the `perf` jitdump profiler
 jitdump = ["wasmtime-jit/jitdump"]
 
+# Enables support for the `VTune` profiler
+vtune = ["wasmtime-jit/vtune"]
+
 [[test]]
 name = "host-segfault"
 harness = false

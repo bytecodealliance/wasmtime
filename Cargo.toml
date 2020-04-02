@@ -75,6 +75,7 @@ lightbeam = [
     "wasmtime/lightbeam",
 ]
 jitdump = ["wasmtime/jitdump"]
+vtune = ["wasmtime/vtune"]
 
 [badges]
 maintenance = { status = "actively-developed" }
