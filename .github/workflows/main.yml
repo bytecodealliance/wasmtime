@@ -16,6 +16,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - run: rustup component add rustfmt
     - run: cargo fmt --all -- --check
 
   # Build `mdBook` documentation for `wasmtime`, and upload it as a temporary
