@@ -259,7 +259,7 @@ impl<'a> FunctionBuilder<'a> {
         self.handle_ssa_side_effects(side_effects);
     }
 
-    /// Effectively calls seal_block on all blocks in the function.
+    /// Effectively calls seal_block on all unsealed blocks in the function.
     ///
     /// It's more efficient to seal `Block`s as soon as possible, during
     /// translation, but for frontends where this is impractical to do, this
