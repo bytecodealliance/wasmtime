@@ -194,8 +194,8 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("reference_types", "table_copy_on_imported_tables") => return false,
             ("reference_types", _) => return true,
 
-            ("misc", "export_large_signature") |
-            ("spec", "call") |
+            ("misc_testsuite", "export_large_signature") |
+            ("spec_testsuite", "call") |
             ("multi_value", "call") |
             ("multi_value", "func") => {
                 // FIXME These involves functions with very large stack frames that Cranelift currently
