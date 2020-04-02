@@ -194,8 +194,11 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("reference_types", "table_copy_on_imported_tables") => return false,
             ("reference_types", _) => return true,
 
+            ("misc", "export_large_signature") |
+            ("spec", "call") |
+            ("multi_value", "call") |
             ("multi_value", "func") => {
-                // FIXME This involves a function with very large stack frame that Cranelift currently
+                // FIXME These involves functions with very large stack frames that Cranelift currently
                 // cannot compile using the fastcall (Windows) calling convention.
                 // See https://github.com/bytecodealliance/wasmtime/pull/1216.
                 #[cfg(windows)]
