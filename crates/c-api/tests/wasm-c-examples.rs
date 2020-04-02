@@ -1,28 +1,85 @@
 use std::env;
-use std::path::PathBuf;
+use std::fs;
+use std::path::Path;
 use std::process::Command;
+use std::sync::Once;
 
-fn run_c_example(name: &'static str, expected_out: &[u8]) {
-    let cargo = env::var("MAKE").unwrap_or("make".to_string());
-    let pkg_dir = env!("CARGO_MANIFEST_DIR");
-    let examples_dir = PathBuf::from(pkg_dir).join("examples");
-    let make_arg = format!("run-{}-c", name);
-    let output = Command::new(cargo)
-        .current_dir(examples_dir)
-        .args(&["-s", &make_arg])
+fn run_c_example(name: &'static str, expected_out: &str) {
+    // Windows requires different `cc` flags and I'm not sure what they
+    // are. Also we need a way to shepherd the current host target to the `cc`
+    // invocation but `cargo` only defines the `TARGET` environment variable for
+    // build scripts, not tests. Therefore, we just make these tests specific to
+    // bog standard x64 linux. This should run in CI, at least!
+    if cfg!(not(all(
+        target_arch = "x86_64",
+        target_os = "linux",
+        target_env = "gnu"
+    ))) {
+        eprintln!("This test is only enabled for the `x86_64-unknown-linux-gnu` target");
+        return;
+    }
+
+    let pkg_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+
+    // Make sure we've built `libwasmtime.a` with the `wat` feature enabled
+    // so that we have the `wasmtime_wat2wasm` function.
+    static BUILD_LIBWASMTIME: Once = Once::new();
+    BUILD_LIBWASMTIME.call_once(|| {
+        let status = Command::new("cargo")
+            .args(&["build", "-p", "wasmtime-c-api", "--features", "wat"])
+            .current_dir(pkg_dir)
+            .status()
+            .expect("should run `cargo build` OK");
+        assert!(status.success());
+    });
+
+    let examples_dir = pkg_dir
+        // Pop `c-api`.
+        .join("..")
+        // Pop `crates`.
+        .join("..")
+        .join("examples");
+    let include_dir = pkg_dir.join("include");
+    let wasm_c_api_include_dir = pkg_dir.join("wasm-c-api").join("include");
+    let out_dir = pkg_dir.join("..").join("..").join("target").join("debug");
+    let c_examples_dir = out_dir.join("c-examples");
+    fs::create_dir_all(&c_examples_dir).unwrap();
+    let libwasmtime = out_dir.join("libwasmtime.a");
+    assert!(libwasmtime.exists());
+
+    let status = Command::new(env::var("CC").unwrap_or("gcc".into()))
+        .arg(examples_dir.join(name).with_extension("c"))
+        .arg(libwasmtime)
+        .arg(format!("-I{}", include_dir.display()))
+        .arg(format!("-I{}", wasm_c_api_include_dir.display()))
+        .arg("-lpthread")
+        .arg("-ldl")
+        .arg("-lm")
+        .current_dir(&examples_dir)
+        .arg("-o")
+        .arg(c_examples_dir.join(name))
+        .status()
+        .expect("should spawn CC ok");
+    assert!(status.success());
+    assert!(c_examples_dir.join(name).exists());
+
+    let output = Command::new(c_examples_dir.join(name))
+        .current_dir(pkg_dir.join("..").join(".."))
         .output()
-        .expect("success");
+        .expect("should spawn C example OK");
+
     assert!(
         output.status.success(),
         "failed to execute the C example '{}': {}",
         name,
         String::from_utf8_lossy(&output.stderr),
     );
+
+    let actual_stdout =
+        String::from_utf8(output.stdout).expect("C example's output should be utf-8");
     assert_eq!(
-        output.stdout.as_slice(),
-        expected_out,
-        "unexpected stdout from example: {}",
-        String::from_utf8_lossy(&output.stdout),
+        actual_stdout, expected_out,
+        "unexpected stdout from example",
     );
 }
 
@@ -30,20 +87,15 @@ fn run_c_example(name: &'static str, expected_out: &[u8]) {
 fn test_run_hello_example() {
     run_c_example(
         "hello",
-        br#"==== C hello ====
-Initializing...
-Loading binary...
-Compiling module...
-Creating callback...
-Instantiating module...
-Extracting export...
-Calling export...
-Calling back...
-> Hello World!
-Shutting down...
-Done.
-==== Done ====
-"#,
+        "Initializing...\n\
+         Compiling module...\n\
+         Creating callback...\n\
+         Instantiating module...\n\
+         Extracting export...\n\
+         Calling export...\n\
+         Calling back...\n\
+         > Hello World!\n\
+         All finished!\n",
     );
 }
 
@@ -51,148 +103,45 @@ Done.
 fn test_run_memory_example() {
     run_c_example(
         "memory",
-        br#"==== C memory ====
-Initializing...
-Loading binary...
-Compiling module...
-Instantiating module...
-Extracting exports...
-Checking memory...
-Mutating memory...
-Growing memory...
-Creating stand-alone memory...
-Shutting down...
-Done.
-==== Done ====
-"#,
+        "Initializing...\n\
+         Compiling module...\n\
+         Instantiating module...\n\
+         Extracting exports...\n\
+         Checking memory...\n\
+         Mutating memory...\n\
+         Growing memory...\n\
+         Creating stand-alone memory...\n\
+         Shutting down...\n\
+         Done.\n",
     );
 }
 
 #[test]
-fn test_run_global_example() {
+fn test_run_linking_example() {
+    run_c_example("linking", "Hello, world!\n");
+}
+
+#[test]
+fn test_run_multi_example() {
     run_c_example(
-        "global",
-        br#"==== C global ====
-Initializing...
-Loading binary...
-Compiling module...
-Creating globals...
-Instantiating module...
-Extracting exports...
-Accessing globals...
-Shutting down...
-Done.
-==== Done ====
-"#,
+        "multi",
+        "Initializing...\n\
+         Compiling module...\n\
+         Creating callback...\n\
+         Instantiating module...\n\
+         Extracting export...\n\
+         Calling export...\n\
+         Calling back...\n\
+         > 1 2\n\
+         \n\
+         Printing result...\n\
+         > 2 1\n\
+         Shutting down...\n\
+         Done.\n",
     );
 }
 
 #[test]
-fn test_run_callback_example() {
-    run_c_example(
-        "callback",
-        br#"==== C callback ====
-Initializing...
-Loading binary...
-Compiling module...
-Creating callback...
-Instantiating module...
-Extracting export...
-Calling export...
-Calling back...
-> 7
-Calling back closure...
-> 42
-Printing result...
-> 49
-Shutting down...
-Done.
-==== Done ====
-"#,
-    );
-}
-
-#[test]
-fn test_run_reflect_example() {
-    run_c_example(
-        "reflect",
-        br#"==== C reflect ====
-Initializing...
-Loading binary...
-Compiling module...
-Instantiating module...
-Extracting export...
-> export 0 "func"
->> initial: func i32 f64 f32 -> i32
->> current: func i32 f64 f32 -> i32
->> in-arity: 3, out-arity: 1
-> export 1 "global"
->> initial: global const f64
->> current: global const f64
-> export 2 "table"
->> initial: table 0d 50d funcref
->> current: table 0d 50d funcref
-> export 3 "memory"
->> initial: memory 1d
->> current: memory 1d
-Shutting down...
-Done.
-==== Done ====
-"#,
-    );
-}
-
-#[test]
-fn test_run_start_example() {
-    run_c_example(
-        "start",
-        br#"==== C start ====
-Initializing...
-Loading binary...
-Compiling module...
-Instantiating module...
-Printing message...
-> wasm trap: unreachable, source location: @002e
-Printing origin...
-> Empty origin.
-Printing trace...
-> Empty trace.
-Shutting down...
-Done.
-==== Done ====
-"#,
-    );
-}
-
-#[test]
-fn test_run_trap_example() {
-    run_c_example(
-        "trap",
-        br#"==== C trap ====
-Initializing...
-Loading binary...
-Compiling module...
-Creating callback...
-Instantiating module...
-Extracting exports...
-Calling export 0...
-Calling back...
-Printing message...
-> callback abort
-Printing origin...
-> Empty origin.
-Printing trace...
-> Empty trace.
-Calling export 1...
-Printing message...
-> wasm trap: unreachable, source location: @0065
-Printing origin...
-> Empty origin.
-Printing trace...
-> Empty trace.
-Shutting down...
-Done.
-==== Done ====
-"#,
-    );
+fn test_run_gcd_example() {
+    run_c_example("gcd", "gcd(6, 27) = 3\n");
 }
