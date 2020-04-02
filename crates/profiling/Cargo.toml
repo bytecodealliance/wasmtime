@@ -22,9 +22,11 @@ serde = { version = "1.0.99", features = ["derive"] }
 target-lexicon = "0.10.0"
 wasmtime-environ = { path = "../environ", version = "0.14.0" }
 wasmtime-runtime = { path = "../runtime", version = "0.14.0" }
+ittapi-rs = { version = "0.1.5", optional = true }
 
 [badges]
 maintenance = { status = "actively-developed" }
 
 [features]
 jitdump = ['object', 'scroll', 'gimli']
+vtune = ['ittapi-rs']

@@ -313,10 +313,10 @@ impl PerCpuModeEncodings {
     }
 
     /// Add two encodings for `inst`:
-    /// - X86_32, dynamically infer the REX prefix.
+    /// - X86_32, no REX prefix, since this is not valid in 32-bit mode.
     /// - X86_64, dynamically infer the REX prefix.
     fn enc_both_inferred(&mut self, inst: impl Clone + Into<InstSpec>, template: Template) {
-        self.enc32(inst.clone(), template.infer_rex());
+        self.enc32(inst.clone(), template.clone());
         self.enc64(inst, template.infer_rex());
     }
     fn enc_both_inferred_maybe_isap(
@@ -325,7 +325,7 @@ impl PerCpuModeEncodings {
         template: Template,
         isap: Option<SettingPredicateNumber>,
     ) {
-        self.enc32_maybe_isap(inst.clone(), template.infer_rex(), isap);
+        self.enc32_maybe_isap(inst.clone(), template.clone(), isap);
         self.enc64_maybe_isap(inst, template.infer_rex(), isap);
     }
 
@@ -1866,8 +1866,8 @@ fn define_simd(
         // Store
         let bound_store = store.bind(vector(ty, sse_vector_size)).bind(Any);
         e.enc_both_inferred(bound_store.clone(), rec_fst.opcodes(&MOVUPS_STORE));
-        e.enc_both(bound_store.clone(), rec_fstDisp8.opcodes(&MOVUPS_STORE));
-        e.enc_both(bound_store, rec_fstDisp32.opcodes(&MOVUPS_STORE));
+        e.enc_both_inferred(bound_store.clone(), rec_fstDisp8.opcodes(&MOVUPS_STORE));
+        e.enc_both_inferred(bound_store, rec_fstDisp32.opcodes(&MOVUPS_STORE));
 
         // Store complex
         let bound_store_complex = store_complex.bind(vector(ty, sse_vector_size));
@@ -1887,8 +1887,8 @@ fn define_simd(
         // Load
         let bound_load = load.bind(vector(ty, sse_vector_size)).bind(Any);
         e.enc_both_inferred(bound_load.clone(), rec_fld.opcodes(&MOVUPS_LOAD));
-        e.enc_both(bound_load.clone(), rec_fldDisp8.opcodes(&MOVUPS_LOAD));
-        e.enc_both(bound_load, rec_fldDisp32.opcodes(&MOVUPS_LOAD));
+        e.enc_both_inferred(bound_load.clone(), rec_fldDisp8.opcodes(&MOVUPS_LOAD));
+        e.enc_both_inferred(bound_load, rec_fldDisp32.opcodes(&MOVUPS_LOAD));
 
         // Load complex
         let bound_load_complex = load_complex.bind(vector(ty, sse_vector_size));
@@ -1945,15 +1945,8 @@ fn define_simd(
         for recipe in &[rec_fld, rec_fldDisp8, rec_fldDisp32] {
             let inst = *inst;
             let template = recipe.opcodes(*opcodes);
-            e.enc32_maybe_isap(inst.clone().bind(I32), template.clone(), isap);
-            // REX-less encoding must come after REX encoding so we don't use it by
-            // default. Otherwise reg-alloc would never use r8 and up.
-            e.enc64_maybe_isap(inst.clone().bind(I32), template.clone().rex(), isap);
-            e.enc64_maybe_isap(inst.clone().bind(I32), template.clone(), isap);
-            // Similar to above; TODO some of this duplication can be cleaned up by infer_rex()
-            // tracked in https://github.com/bytecodealliance/cranelift/issues/1090
-            e.enc64_maybe_isap(inst.clone().bind(I64), template.clone().rex(), isap);
-            e.enc64_maybe_isap(inst.bind(I64), template, isap);
+            e.enc_both_inferred_maybe_isap(inst.clone().bind(I32), template.clone(), isap);
+            e.enc64_maybe_isap(inst.bind(I64), template.infer_rex(), isap);
         }
     }
 
