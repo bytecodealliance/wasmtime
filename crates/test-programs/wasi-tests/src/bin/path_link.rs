@@ -1,4 +1,3 @@
-#![allow(warnings)]
 use more_asserts::assert_gt;
 use std::{env, process};
 use wasi_tests::{create_file, open_scratch_directory};
