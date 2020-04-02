@@ -136,13 +136,12 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
     wasi::path_create_directory(dir_fd, "subdir").expect("creating a subdirectory");
     create_or_open(dir_fd, "subdir", wasi::OFLAGS_DIRECTORY);
 
-    let err = wasi::path_link(dir_fd, 0, "subdir", dir_fd, "link")
-        .expect_err("creating a link to a directory should fail")
-        .raw_error();
-    assert!(
-        err == wasi::ERRNO_PERM || err == wasi::ERRNO_ACCES,
-        "errno should be ERRNO_PERM or ERRNO_ACCESS, was: {}",
-        err
+    assert_eq!(
+        wasi::path_link(dir_fd, 0, "subdir", dir_fd, "link")
+            .expect_err("creating a link to a directory should fail")
+            .raw_error(),
+        wasi::ERRNO_PERM,
+        "errno should be ERRNO_PERM"
     );
     wasi::path_remove_directory(dir_fd, "subdir").expect("removing a subdirectory");
 

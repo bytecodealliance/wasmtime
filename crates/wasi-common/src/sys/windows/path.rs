@@ -189,11 +189,12 @@ pub(crate) fn link(
             Some(code) => {
                 debug!("path_link at fs::hard_link error code={:?}", code);
                 match code as u32 {
-                    // TODO is this needed at all????
                     winerror::ERROR_ACCESS_DENIED => {
-                        // does the target exist?
-                        if new_path.exists() {
-                            return Err(Errno::Exist);
+                        // If an attempt is made to create a hard link to a directory, POSIX-compliant
+                        // implementations of link return `EPERM`, but `ERROR_ACCESS_DENIED` is converted
+                        // to `EACCES`. We detect and correct this case here.
+                        if fs::metadata(&old_path).map(|m| m.is_dir()).unwrap_or(false) {
+                            return Err(Errno::Perm);
                         }
                     }
                     _ => {}
