@@ -3,32 +3,6 @@ use more_asserts::assert_gt;
 use std::{env, process};
 use wasi_tests::{create_file, open_scratch_directory};
 
-// RAII adapter for path_open. On Windows we need to explicitly close the fds
-// or files may not be removed.
-struct WasiFile {
-    fd: wasi::Fd,
-}
-
-impl WasiFile {
-    unsafe fn open(dir_fd: wasi::Fd, name: &str) -> Self {
-        Self {
-            fd: open_link(dir_fd, name),
-        }
-    }
-
-    unsafe fn create_or_open(dir_fd: wasi::Fd, name: &str, flags: wasi::Oflags) -> Self {
-        Self {
-            fd: create_or_open(dir_fd, name, flags),
-        }
-    }
-}
-
-impl Drop for WasiFile {
-    fn drop(&mut self) {
-        unsafe { wasi::fd_close(self.fd).expect("Closing fd") }
-    }
-}
-
 const TEST_RIGHTS: wasi::Rights = wasi::RIGHTS_FD_READ
     | wasi::RIGHTS_PATH_LINK_SOURCE
     | wasi::RIGHTS_PATH_LINK_TARGET
@@ -95,15 +69,14 @@ unsafe fn check_rights(orig_fd: wasi::Fd, link_fd: wasi::Fd) {
     let link_filestat = wasi::fd_filestat_get(link_fd).expect("reading filestat of the link");
     filestats_assert_eq(orig_filestat, link_filestat);
 
-    // Disabled: fd_fdstat_get causes CI test failures on Windows
     // Compare Fdstats
     let orig_fdstat = wasi::fd_fdstat_get(orig_fd).expect("reading fdstat of the source");
     let link_fdstat = wasi::fd_fdstat_get(link_fd).expect("reading fdstat of the link");
     fdstats_assert_eq(orig_fdstat, link_fdstat);
 }
 
-// Use of WasiFile is needed for Windows, which will not remove the directory until all
-// handles are closed. WasiFile does this as a part of RAII.
+// Extra calls of fd_close are needed for Windows, which will not remove
+// the directory until all handles are closed.
 unsafe fn test_path_link(dir_fd: wasi::Fd) {
     // Create a file
     let file_fd = create_or_open(dir_fd, "file", wasi::OFLAGS_CREAT);
@@ -111,22 +84,20 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
     // Create a link in the same directory and compare rights
     wasi::path_link(dir_fd, 0, "file", dir_fd, "link")
         .expect("creating a link in the same directory");
-    {
-        let link_fd = WasiFile::open(dir_fd, "link");
-        check_rights(file_fd, link_fd.fd);
-    }
+    let link_fd = open_link(dir_fd, "link");
+    check_rights(file_fd, link_fd);
+    wasi::fd_close(link_fd).expect("Closing link_fd"); // needed for Windows
     wasi::path_unlink_file(dir_fd, "link").expect("removing a link");
 
     // Create a link in a different directory and compare rights
-    {
-        wasi::path_create_directory(dir_fd, "subdir").expect("creating a subdirectory");
-        let subdir_fd = WasiFile::create_or_open(dir_fd, "subdir", wasi::OFLAGS_DIRECTORY);
-        wasi::path_link(dir_fd, 0, "file", subdir_fd.fd, "link")
-            .expect("creating a link in subdirectory");
-        let link_fd = WasiFile::open(subdir_fd.fd, "link");
-        check_rights(file_fd, link_fd.fd);
-        wasi::path_unlink_file(subdir_fd.fd, "link").expect("removing a link");
-    }
+    wasi::path_create_directory(dir_fd, "subdir").expect("creating a subdirectory");
+    let subdir_fd = create_or_open(dir_fd, "subdir", wasi::OFLAGS_DIRECTORY);
+    wasi::path_link(dir_fd, 0, "file", subdir_fd, "link").expect("creating a link in subdirectory");
+    let link_fd = open_link(subdir_fd, "link");
+    check_rights(file_fd, link_fd);
+    wasi::path_unlink_file(subdir_fd, "link").expect("removing a link");
+    wasi::fd_close(subdir_fd).expect("Closing subdir_fd"); // needed for Windows
+    wasi::fd_close(link_fd).expect("Closing link_fd"); // needed for Windows
     wasi::path_remove_directory(dir_fd, "subdir").expect("removing a subdirectory");
 
     // Create a link to a path that already exists
