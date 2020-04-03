@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasmtime::*;
@@ -57,7 +58,7 @@ fn test_import_calling_export() {
 }
 
 #[test]
-fn test_returns_incorrect_type() {
+fn test_returns_incorrect_type() -> Result<()> {
     const WAT: &str = r#"
     (module
         (import "env" "evil" (func $evil (result i32)))
@@ -68,7 +69,7 @@ fn test_returns_incorrect_type() {
     "#;
 
     let store = Store::default();
-    let module = Module::new(&store, WAT).expect("failed to create module");
+    let module = Module::new(&store, WAT)?;
 
     let callback_func = Func::new(
         &store,
@@ -81,8 +82,7 @@ fn test_returns_incorrect_type() {
     );
 
     let imports = vec![callback_func.into()];
-    let instance =
-        Instance::new(&module, imports.as_slice()).expect("failed to instantiate module");
+    let instance = Instance::new(&module, imports.as_slice())?;
 
     let exports = instance.exports();
     assert!(!exports.is_empty());
@@ -91,9 +91,13 @@ fn test_returns_incorrect_type() {
         .func()
         .expect("expected a run func in the module");
 
-    let trap = run_func.call(&[]).expect_err("the execution should fail");
+    let trap = run_func
+        .call(&[])
+        .expect_err("the execution should fail")
+        .downcast::<Trap>()?;
     assert_eq!(
         trap.message(),
         "function attempted to return an incompatible value"
     );
+    Ok(())
 }

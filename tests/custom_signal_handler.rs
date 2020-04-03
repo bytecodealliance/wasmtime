@@ -37,7 +37,7 @@ mod tests {
 )
 "#;
 
-    fn invoke_export(instance: &Instance, func_name: &str) -> Result<Box<[Val]>, Trap> {
+    fn invoke_export(instance: &Instance, func_name: &str) -> Result<Box<[Val]>> {
         let ret = instance
             .get_export(func_name)
             .unwrap()
@@ -117,7 +117,9 @@ mod tests {
 
         {
             println!("calling read_out_of_bounds...");
-            let trap = invoke_export(&instance, "read_out_of_bounds").unwrap_err();
+            let trap = invoke_export(&instance, "read_out_of_bounds")
+                .unwrap_err()
+                .downcast::<Trap>()?;
             assert!(
                 trap.message()
                     .starts_with("wasm trap: out of bounds memory access"),
@@ -141,7 +143,10 @@ mod tests {
                 .func()
                 .expect("expected a 'read_out_of_bounds' func in the module");
             println!("calling read_out_of_bounds...");
-            let trap = read_out_of_bounds_func.call(&[]).unwrap_err();
+            let trap = read_out_of_bounds_func
+                .call(&[])
+                .unwrap_err()
+                .downcast::<Trap>()?;
             assert!(trap
                 .message()
                 .starts_with("wasm trap: out of bounds memory access"));

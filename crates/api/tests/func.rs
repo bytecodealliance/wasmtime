@@ -174,11 +174,12 @@ fn import_works() -> Result<()> {
 }
 
 #[test]
-fn trap_smoke() {
+fn trap_smoke() -> Result<()> {
     let store = Store::default();
     let f = Func::wrap(&store, || -> Result<(), Trap> { Err(Trap::new("test")) });
-    let err = f.call(&[]).unwrap_err();
+    let err = f.call(&[]).unwrap_err().downcast::<Trap>()?;
     assert_eq!(err.message(), "test");
+    Ok(())
 }
 
 #[test]
@@ -391,7 +392,7 @@ fn func_write_nothing() -> anyhow::Result<()> {
     let store = Store::default();
     let ty = FuncType::new(Box::new([]), Box::new([ValType::I32]));
     let f = Func::new(&store, ty, |_, _, _| Ok(()));
-    let err = f.call(&[]).unwrap_err();
+    let err = f.call(&[]).unwrap_err().downcast::<Trap>()?;
     assert_eq!(
         err.message(),
         "function attempted to return an incompatible value"
