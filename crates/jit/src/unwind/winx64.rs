@@ -37,7 +37,7 @@ impl UnwindRegistry {
                 // The unwind information should be immediately following the function
                 // with padding for 4 byte alignment
                 unsafe {
-                    *entry.u.UnwindInfoAddress_mut() = ((entry.EndAddress + 3) & !3);
+                    *entry.u.UnwindInfoAddress_mut() = (entry.EndAddress + 3) & !3;
                 }
 
                 self.functions.push(entry);
@@ -49,7 +49,7 @@ impl UnwindRegistry {
     }
 
     /// Publishes all registered functions.
-    pub fn publish(&mut self, isa: &dyn TargetIsa) -> Result<()> {
+    pub fn publish(&mut self, _isa: &dyn TargetIsa) -> Result<()> {
         if self.published {
             bail!("unwind registry has already been published");
         }
@@ -68,7 +68,7 @@ impl UnwindRegistry {
                 if winnt::RtlAddFunctionTable(
                     self.functions.as_mut_ptr(),
                     self.functions.len() as u32,
-                    base_address as u64,
+                    self.base_address as u64,
                 ) == 0
                 {
                     bail!("failed to register function table");
