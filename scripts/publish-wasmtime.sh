@@ -53,4 +53,4 @@ for cargo_toml in \
     echo sleep 20
 done
 
-echo echo git tag v$(grep "version =" Cargo.toml | head -n 1 | cut -d '"' -f 2)
+echo git tag v$(grep "version =" Cargo.toml | head -n 1 | cut -d '"' -f 2)
