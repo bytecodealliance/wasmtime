@@ -670,7 +670,7 @@ fn setup_unix_sigaltstack() -> Result<(), Trap> {
             return Err(Trap::oom());
         }
 
-        // Prepare the stack with readable/writable memory and then reigster it
+        // Prepare the stack with readable/writable memory and then register it
         // with `sigaltstack`.
         let stack_ptr = (ptr as usize + guard_size) as *mut libc::c_void;
         let r = libc::mprotect(
