@@ -864,6 +864,9 @@ impl Memory {
 /// To prevent possible silent overflows, the memory should be protected by a guard page.
 /// Additionally the safety concerns explained in ['Memory'], for accessing the memory
 /// apply here as well.
+///
+/// Note that this is a relatively new and experimental feature and it is recommended
+/// to be familiar with wasmtime runtime code to use it.
 pub unsafe trait LinearMemory {
     /// Returns the number of allocated wasm pages.
     fn size(&self) -> u32;
@@ -886,6 +889,9 @@ pub unsafe trait LinearMemory {
 /// memory management. Memories created by the MemoryCreator should always be treated
 /// as owned by wasmtime instance, and any modification of them outside of wasmtime
 /// invoked routines is unsafe and may lead to corruption.
+///
+/// Note that this is a relatively new and experimental feature and it is recommended
+/// to be familiar with wasmtime runtime code to use it.
 pub unsafe trait MemoryCreator: Send + Sync {
     /// Create new LinearMemory
     fn new_memory(&self, ty: MemoryType) -> Result<Box<dyn LinearMemory>, String>;
