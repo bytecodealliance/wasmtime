@@ -233,7 +233,6 @@ mod wasi_tests {
                         "dangling_symlink" => true,
                         "symlink_loop" => true,
                         "truncation_rights" => true,
-                        "path_link" => true,
                         "dangling_fd" => true,
                         // TODO: virtfs files cannot be poll_oneoff'd yet
                         "poll_oneoff_virtualfs" => true,
