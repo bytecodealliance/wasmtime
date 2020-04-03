@@ -1,0 +1,8 @@
+digraph {
+        node [
+              shape=record,
+              fontsize=10,
+              fontname="Vera Sans, DejaVu Sans, Liberation Sans, Arial, Helvetica, sans"
+        ]
+        "static" [label="mapped\npages|unmapped\npages|offset_guard\npages"]
+}

@@ -14,6 +14,9 @@ pub mod settings {
 
 pub mod isa {
     pub use cranelift_codegen::isa::{CallConv, RegUnit, TargetFrontendConfig, TargetIsa};
+    pub mod fde {
+        pub use cranelift_codegen::isa::fde::map_reg;
+    }
 }
 
 pub mod entity {

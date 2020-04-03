@@ -25,11 +25,11 @@ impl Mode {
 pub fn gen(args: TokenStream, mode: Mode) -> TokenStream {
     let mut output = TokenStream::new();
 
-    let (path, _phase) = utils::witx_path_from_args(args);
+    let path = utils::witx_path_from_args(args);
     let doc = match witx::load(&[&path]) {
         Ok(doc) => doc,
         Err(e) => {
-            panic!("error opening file {}: {}", path, e);
+            panic!("error opening file {}: {}", path.display(), e);
         }
     };
 

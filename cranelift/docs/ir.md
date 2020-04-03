@@ -95,11 +95,12 @@ execution can never fall through to the next EBB without an explicit branch.
 
 A `.clif` file consists of a sequence of independent function definitions:
 
-.. productionlist::
-    function_list : { function }
-    function      : "function" function_name signature "{" preamble function_body "}"
-    preamble      : { preamble_decl }
-    function_body : { extended_basic_block }
+```
+function_list : { function }
+function      : "function" function_name signature "{" preamble function_body "}"
+preamble      : { preamble_decl }
+function_body : { extended_basic_block }
+```
 
 ### Static single assignment form
 
@@ -116,11 +117,11 @@ arguments to the entry EBB's parameters.
 Instructions define zero, one, or more result values. All SSA values are either
 EBB parameters or instruction results.
 
-In the example above, the loop induction variable `i` is represented as three
-SSA values: In the entry block, `v4` is the initial value. In the loop block
-`ebb2`, the EBB parameter `v5` represents the value of the induction
-variable during each iteration. Finally, `v12` is computed as the induction
-variable value for the next iteration.
+In the example above, the loop induction variable `i` is represented
+as three SSA values: In `block2`, `v3` is the initial value. In the
+loop block `block3`, the EBB parameter `v4` represents the value of the
+induction variable during each iteration. Finally, `v11` is computed
+as the induction variable value for the next iteration.
 
 The `cranelift_frontend` crate contains utilities for translating from programs
 containing multiple assignments to the same variables into SSA form for
@@ -397,14 +398,15 @@ be known when the function call is compiled. The function signature describes
 how to call the function, including parameters, return values, and the calling
 convention:
 
-.. productionlist::
-    signature    : "(" [paramlist] ")" ["->" retlist] [call_conv]
-    paramlist    : param { "," param }
-    retlist      : paramlist
-    param        : type [paramext] [paramspecial]
-    paramext     : "uext" | "sext"
-    paramspecial : "sret" | "link" | "fp" | "csr" | "vmctx" | "sigid" | "stack_limit"
-    callconv     : "fast" | "cold" | "system_v" | "fastcall" | "baldrdash_system_v" | "baldrdash_windows"
+```
+signature    : "(" [paramlist] ")" ["->" retlist] [call_conv]
+paramlist    : param { "," param }
+retlist      : paramlist
+param        : type [paramext] [paramspecial]
+paramext     : "uext" | "sext"
+paramspecial : "sret" | "link" | "fp" | "csr" | "vmctx" | "sigid" | "stack_limit"
+callconv     : "fast" | "cold" | "system_v" | "fastcall" | "baldrdash_system_v" | "baldrdash_windows"
+```
 
 A function's calling convention determines exactly how arguments and return
 values are passed, and how stack frames are managed. Since all of these details
@@ -620,16 +622,7 @@ returns a pointer that is guaranteed to trap. Heap addresses can be smaller than
 the native pointer size, for example unsigned `i32` offsets on a 64-bit
 architecture.
 
-.. digraph:: static
-    :align: center
-    :caption: Heap address space layout
-
-    node [
-        shape=record,
-        fontsize=10,
-        fontname="Vera Sans, DejaVu Sans, Liberation Sans, Arial, Helvetica, sans"
-    ]
-    "static" [label="mapped\npages|unmapped\npages|offset_guard\npages"]
+![Heap address space layout](./heap.svg)
 
 A heap appears as three consecutive ranges of address space:
 

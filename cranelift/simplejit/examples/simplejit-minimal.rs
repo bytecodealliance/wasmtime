@@ -1,4 +1,5 @@
 use cranelift::prelude::*;
+use cranelift_codegen::binemit::NullTrapSink;
 use cranelift_module::{default_libcall_names, Linkage, Module};
 use cranelift_simplejit::{SimpleJITBackend, SimpleJITBuilder};
 use std::mem;
@@ -38,7 +39,10 @@ fn main() {
         bcx.seal_all_blocks();
         bcx.finalize();
     }
-    module.define_function(func_a, &mut ctx).unwrap();
+    let mut trap_sink = NullTrapSink {};
+    module
+        .define_function(func_a, &mut ctx, &mut trap_sink)
+        .unwrap();
     module.clear_context(&mut ctx);
 
     ctx.func.signature = sig_b;
@@ -60,7 +64,9 @@ fn main() {
         bcx.seal_all_blocks();
         bcx.finalize();
     }
-    module.define_function(func_b, &mut ctx).unwrap();
+    module
+        .define_function(func_b, &mut ctx, &mut trap_sink)
+        .unwrap();
     module.clear_context(&mut ctx);
 
     // Perform linking.

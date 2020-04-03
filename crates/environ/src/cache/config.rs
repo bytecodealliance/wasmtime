@@ -283,9 +283,7 @@ macro_rules! generate_setting_getter {
         ///
         /// Panics if the cache is disabled.
         pub fn $setting(&self) -> $setting_type {
-            self
-                .$setting
-                .expect(CACHE_IMPROPER_CONFIG_ERROR_MSG)
+            self.$setting.expect(CACHE_IMPROPER_CONFIG_ERROR_MSG)
         }
     };
 }

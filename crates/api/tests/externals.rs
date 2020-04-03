@@ -62,7 +62,7 @@ fn cross_store() -> anyhow::Result<()> {
 
     // ============ Cross-store instantiation ==============
 
-    let func = Func::wrap0(&store2, || {});
+    let func = Func::wrap(&store2, || {});
     let ty = GlobalType::new(ValType::I32, Mutability::Const);
     let global = Global::new(&store2, ty, Val::I32(0))?;
     let ty = MemoryType::new(Limits::new(1, None));
@@ -84,8 +84,8 @@ fn cross_store() -> anyhow::Result<()> {
 
     // ============ Cross-store globals ==============
 
-    let store1val = Val::FuncRef(Func::wrap0(&store1, || {}));
-    let store2val = Val::FuncRef(Func::wrap0(&store2, || {}));
+    let store1val = Val::FuncRef(Func::wrap(&store1, || {}));
+    let store2val = Val::FuncRef(Func::wrap(&store2, || {}));
 
     let ty = GlobalType::new(ValType::FuncRef, Mutability::Var);
     assert!(Global::new(&store2, ty.clone(), store1val.clone()).is_err());

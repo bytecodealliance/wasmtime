@@ -10,8 +10,8 @@ use anyhow::{Context, Error};
 use gimli::write;
 use gimli::{AttributeValue, DebuggingInformationEntry, Unit};
 use std::collections::HashSet;
-use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::isa::TargetIsa;
+use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
 
 struct InheritedAttr<T> {
@@ -148,7 +148,7 @@ pub(crate) fn clone_unit<'a, R>(
     module_info: &ModuleVmctxInfo,
     out_units: &mut write::UnitTable,
     out_strings: &mut write::StringTable,
-    translated: &mut HashSet<u32>,
+    translated: &mut HashSet<DefinedFuncIndex>,
     isa: &dyn TargetIsa,
 ) -> Result<Option<(write::UnitId, UnitRefsMap, PendingDebugInfoRefs)>, Error>
 where
@@ -270,7 +270,7 @@ where
                 {
                     current_value_range.push(new_stack_len, frame_info);
                 }
-                translated.insert(func_index.index() as u32);
+                translated.insert(func_index);
                 current_scope_ranges.push(new_stack_len, range_builder.get_ranges(addr_tr));
                 Some(range_builder)
             } else {

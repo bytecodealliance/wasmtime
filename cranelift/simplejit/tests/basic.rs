@@ -1,3 +1,4 @@
+use cranelift_codegen::binemit::NullTrapSink;
 use cranelift_codegen::ir::*;
 use cranelift_codegen::isa::CallConv;
 use cranelift_codegen::{ir::types::I16, Context};
@@ -46,7 +47,10 @@ fn define_simple_function(module: &mut Module<SimpleJITBackend>) -> FuncId {
         bcx.ins().return_(&[]);
     }
 
-    module.define_function(func_id, &mut ctx).unwrap();
+    let mut trap_sink = NullTrapSink {};
+    module
+        .define_function(func_id, &mut ctx, &mut trap_sink)
+        .unwrap();
 
     func_id
 }
@@ -191,7 +195,10 @@ fn libcall_function() {
         bcx.ins().return_(&[]);
     }
 
-    module.define_function(func_id, &mut ctx).unwrap();
+    let mut trap_sink = NullTrapSink {};
+    module
+        .define_function(func_id, &mut ctx, &mut trap_sink)
+        .unwrap();
 
     module.finalize_definitions();
 }

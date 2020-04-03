@@ -1,0 +1,13 @@
+[package]
+name = "wasmtime-c-api-macros"
+version = "0.1.0"
+authors = ["The Wasmtime Project Developers"]
+edition = "2018"
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1.0"
+proc-macro2 = "1.0"

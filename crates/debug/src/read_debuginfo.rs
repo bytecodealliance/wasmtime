@@ -26,6 +26,7 @@ pub struct FunctionMetadata {
 pub struct WasmFileInfo {
     pub path: Option<PathBuf>,
     pub code_section_offset: u64,
+    pub imported_func_count: u32,
     pub funcs: Box<[FunctionMetadata]>,
 }
 
@@ -164,6 +165,7 @@ pub fn read_debuginfo(data: &[u8]) -> Result<DebugInfoData> {
     let mut sections = HashMap::new();
     let mut name_section = None;
     let mut code_section_offset = 0;
+    let mut imported_func_count = 0;
 
     let mut signatures_params: Vec<Box<[WasmType]>> = Vec::new();
     let mut func_params_refs: Vec<usize> = Vec::new();
@@ -192,6 +194,13 @@ pub fn read_debuginfo(data: &[u8]) -> Result<DebugInfoData> {
                     .into_iter()
                     .map(|ft| Ok(ft?.params))
                     .collect::<Result<Vec<_>>>()?;
+            }
+            SectionCode::Import => {
+                for i in section.get_import_section_reader()? {
+                    if let wasmparser::ImportSectionEntryType::Function(_) = i?.ty {
+                        imported_func_count += 1;
+                    }
+                }
             }
             SectionCode::Function => {
                 func_params_refs = section
@@ -234,6 +243,7 @@ pub fn read_debuginfo(data: &[u8]) -> Result<DebugInfoData> {
         wasm_file: WasmFileInfo {
             path: None,
             code_section_offset,
+            imported_func_count,
             funcs: func_meta.into_boxed_slice(),
         },
     })

@@ -22,7 +22,7 @@ function u0:2691(i32 [%rdi], i32 [%rsi], i64 vmctx [%r14]) -> i64 uext [%rax] ba
 
                                 block3(v8: i32 [%rdi], v19: i32 [%rsi]):
 @0005 [RexOp1ldDisp8#808b,%rax]        v7 = load.i64 v2+48
-@0005 [DynRexOp1rcmp_ib#f083,%rflags]  v91 = ifcmp_imm v7, 0
+@0005 [RexOp1rcmp_ib#f083,%rflags]     v91 = ifcmp_imm v7, 0
 @0005 [trapif#00]                      trapif ne v91, interrupt
 [DynRexOp1umr#89,%rax]                 v105 = copy v8
 @000b [DynRexOp1r_ib#83,%rax]          v10 = iadd_imm v105, 1

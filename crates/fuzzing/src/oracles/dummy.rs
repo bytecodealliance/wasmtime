@@ -1,9 +1,8 @@
 //! Dummy implementations of things that a Wasm module can import.
 
-use std::rc::Rc;
 use wasmtime::{
-    Callable, Extern, ExternType, Func, FuncType, Global, GlobalType, ImportType, Memory,
-    MemoryType, Store, Table, TableType, Trap, Val, ValType,
+    Extern, ExternType, Func, FuncType, Global, GlobalType, ImportType, Memory, MemoryType, Store,
+    Table, TableType, Trap, Val, ValType,
 };
 
 /// Create a set of dummy functions/globals/etc for the given imports.
@@ -11,7 +10,7 @@ pub fn dummy_imports(store: &Store, import_tys: &[ImportType]) -> Result<Vec<Ext
     let mut imports = Vec::with_capacity(import_tys.len());
     for imp in import_tys {
         imports.push(match imp.ty() {
-            ExternType::Func(func_ty) => Extern::Func(DummyFunc::new(&store, func_ty.clone())),
+            ExternType::Func(func_ty) => Extern::Func(dummy_func(&store, func_ty.clone())),
             ExternType::Global(global_ty) => {
                 Extern::Global(dummy_global(&store, global_ty.clone())?)
             }
@@ -22,27 +21,14 @@ pub fn dummy_imports(store: &Store, import_tys: &[ImportType]) -> Result<Vec<Ext
     Ok(imports)
 }
 
-/// A function that doesn't do anything but return the default (zero) value for
-/// the function's type.
-#[derive(Debug)]
-pub struct DummyFunc(FuncType);
-
-impl DummyFunc {
-    /// Construct a new dummy `Func`.
-    pub fn new(store: &Store, ty: FuncType) -> Func {
-        let callable = DummyFunc(ty.clone());
-        Func::new(store, ty, Rc::new(callable) as _)
-    }
-}
-
-impl Callable for DummyFunc {
-    fn call(&self, _params: &[Val], results: &mut [Val]) -> Result<(), Trap> {
-        for (ret_ty, result) in self.0.results().iter().zip(results) {
+/// Construct a dummy function for the given function type
+pub fn dummy_func(store: &Store, ty: FuncType) -> Func {
+    Func::new(store, ty.clone(), move |_, _, results| {
+        for (ret_ty, result) in ty.results().iter().zip(results) {
             *result = dummy_value(ret_ty)?;
         }
-
         Ok(())
-    }
+    })
 }
 
 /// Construct a dummy value for the given value type.

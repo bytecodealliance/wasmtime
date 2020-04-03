@@ -1,7 +1,7 @@
 use crate::vmcontext::{
-    VMContext, VMFunctionBody, VMGlobalDefinition, VMMemoryDefinition, VMTableDefinition,
+    VMContext, VMFunctionBody, VMGlobalDefinition, VMMemoryDefinition, VMSharedSignatureIndex,
+    VMTableDefinition,
 };
-use wasmtime_environ::ir;
 use wasmtime_environ::wasm::Global;
 use wasmtime_environ::{MemoryPlan, TablePlan};
 
@@ -9,96 +9,84 @@ use wasmtime_environ::{MemoryPlan, TablePlan};
 #[derive(Debug, Clone)]
 pub enum Export {
     /// A function export value.
-    Function {
-        /// The address of the native-code function.
-        address: *const VMFunctionBody,
-        /// Pointer to the containing `VMContext`.
-        vmctx: *mut VMContext,
-        /// The function signature declaration, used for compatibilty checking.
-        signature: ir::Signature,
-    },
+    Function(ExportFunction),
 
     /// A table export value.
-    Table {
-        /// The address of the table descriptor.
-        definition: *mut VMTableDefinition,
-        /// Pointer to the containing `VMContext`.
-        vmctx: *mut VMContext,
-        /// The table declaration, used for compatibilty checking.
-        table: TablePlan,
-    },
+    Table(ExportTable),
 
     /// A memory export value.
-    Memory {
-        /// The address of the memory descriptor.
-        definition: *mut VMMemoryDefinition,
-        /// Pointer to the containing `VMContext`.
-        vmctx: *mut VMContext,
-        /// The memory declaration, used for compatibilty checking.
-        memory: MemoryPlan,
-    },
+    Memory(ExportMemory),
 
     /// A global export value.
-    Global {
-        /// The address of the global storage.
-        definition: *mut VMGlobalDefinition,
-        /// Pointer to the containing `VMContext`.
-        vmctx: *mut VMContext,
-        /// The global declaration, used for compatibilty checking.
-        global: Global,
-    },
+    Global(ExportGlobal),
 }
 
-impl Export {
-    /// Construct a function export value.
-    pub fn function(
-        address: *const VMFunctionBody,
-        vmctx: *mut VMContext,
-        signature: ir::Signature,
-    ) -> Self {
-        Self::Function {
-            address,
-            vmctx,
-            signature,
-        }
-    }
+/// A function export value.
+#[derive(Debug, Clone)]
+pub struct ExportFunction {
+    /// The address of the native-code function.
+    pub address: *const VMFunctionBody,
+    /// Pointer to the containing `VMContext`.
+    pub vmctx: *mut VMContext,
+    /// The function signature declaration, used for compatibilty checking.
+    ///
+    /// Note that this indexes within the module associated with `vmctx`.
+    pub signature: VMSharedSignatureIndex,
+}
 
-    /// Construct a table export value.
-    pub fn table(
-        definition: *mut VMTableDefinition,
-        vmctx: *mut VMContext,
-        table: TablePlan,
-    ) -> Self {
-        Self::Table {
-            definition,
-            vmctx,
-            table,
-        }
+impl From<ExportFunction> for Export {
+    fn from(func: ExportFunction) -> Export {
+        Export::Function(func)
     }
+}
 
-    /// Construct a memory export value.
-    pub fn memory(
-        definition: *mut VMMemoryDefinition,
-        vmctx: *mut VMContext,
-        memory: MemoryPlan,
-    ) -> Self {
-        Self::Memory {
-            definition,
-            vmctx,
-            memory,
-        }
+/// A table export value.
+#[derive(Debug, Clone)]
+pub struct ExportTable {
+    /// The address of the table descriptor.
+    pub definition: *mut VMTableDefinition,
+    /// Pointer to the containing `VMContext`.
+    pub vmctx: *mut VMContext,
+    /// The table declaration, used for compatibilty checking.
+    pub table: TablePlan,
+}
+
+impl From<ExportTable> for Export {
+    fn from(func: ExportTable) -> Export {
+        Export::Table(func)
     }
+}
 
-    /// Construct a global export value.
-    pub fn global(
-        definition: *mut VMGlobalDefinition,
-        vmctx: *mut VMContext,
-        global: Global,
-    ) -> Self {
-        Self::Global {
-            definition,
-            vmctx,
-            global,
-        }
+/// A memory export value.
+#[derive(Debug, Clone)]
+pub struct ExportMemory {
+    /// The address of the memory descriptor.
+    pub definition: *mut VMMemoryDefinition,
+    /// Pointer to the containing `VMContext`.
+    pub vmctx: *mut VMContext,
+    /// The memory declaration, used for compatibilty checking.
+    pub memory: MemoryPlan,
+}
+
+impl From<ExportMemory> for Export {
+    fn from(func: ExportMemory) -> Export {
+        Export::Memory(func)
+    }
+}
+
+/// A global export value.
+#[derive(Debug, Clone)]
+pub struct ExportGlobal {
+    /// The address of the global storage.
+    pub definition: *mut VMGlobalDefinition,
+    /// Pointer to the containing `VMContext`.
+    pub vmctx: *mut VMContext,
+    /// The global declaration, used for compatibilty checking.
+    pub global: Global,
+}
+
+impl From<ExportGlobal> for Export {
+    fn from(func: ExportGlobal) -> Export {
+        Export::Global(func)
     }
 }

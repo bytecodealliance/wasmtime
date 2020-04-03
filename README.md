@@ -12,6 +12,7 @@
     <a href="https://github.com/bytecodealliance/wasmtime/actions?query=workflow%3ACI"><img src="https://github.com/bytecodealliance/wasmtime/workflows/CI/badge.svg" alt="build status" /></a>
     <a href="https://bytecodealliance.zulipchat.com/#narrow/stream/217126-wasmtime"><img src="https://img.shields.io/badge/zulip-join_chat-brightgreen.svg" alt="zulip chat" /></a>
     <img src="https://img.shields.io/badge/rustc-1.37+-green.svg" alt="min rustc" />
+    <a href="https://docs.rs/wasmtime"><img src="https://docs.rs/wasmtime/badge.svg" alt="Documentation Status" /></a>
   </p>
 
   <h3>
@@ -63,7 +64,7 @@ Hello, world!
 
 * **Lightweight**. Wasmtime is a standalone runtime for WebAssembly that scales
   with your needs. It fits on tiny chips as well as makes use of huge servers.
-  Wasmtime can be embedded into almost any application too.
+  Wasmtime can be [embedded] into almost any application too.
 
 * **Fast**. Wasmtime is built on the optimizing [Cranelift] code generator to
   quickly generate high-quality machine code at runtime.
@@ -83,6 +84,7 @@ Hello, world!
   standards process all along the way too.
 
 [Cranelift]: https://github.com/bytecodealliance/wasmtime/blob/master/cranelift/README.md
+[embedded]: https://bytecodealliance.github.io/wasmtime/embed.html
 
 ## Documentation
 

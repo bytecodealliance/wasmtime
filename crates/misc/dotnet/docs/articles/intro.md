@@ -109,7 +109,7 @@ dotnet new console
 To use Wasmtime for .NET from the project, we need to add a reference to the [Wasmtime NuGet package](https://www.nuget.org/packages/Wasmtime):
 
 ```text
-dotnet add package --version 0.0.1-alpha1 wasmtime
+dotnet add package --version 0.14.0-preview1 wasmtime
 ```
 
 _Note that the `--version` option is required because the package is currently prerelease._
@@ -126,38 +126,32 @@ using Wasmtime;
 
 namespace Tutorial
 {
-    class Host : IHost
-    {
-        public Instance Instance { get; set; }
-
-        [Import("print", Module="env")]
-        public void Print(int address, int length)
-        {
-            var message = Instance.Externs.Memories[0].ReadString(address, length);
-            Console.WriteLine(message);
-        }
-    }
-
     class Program
     {
         static void Main(string[] args)
         {
-            using var engine = new Engine();
-            using var store = engine.CreateStore();
-            using var module = store.CreateModule("hello.wasm");
-            using dynamic instance = module.Instantiate(new Host());
+            using var host = new Host();
 
+            host.DefineFunction(
+                "env",
+                "print",
+                (Caller caller, int address, int length) => {
+                    Console.WriteLine(caller.GetMemory("mem").ReadString(address, length));
+                }
+            );
+
+            using var module = host.LoadModule("hello.wasm");
+
+            using dynamic instance = host.Instantiate(module);
             instance.run();
         }
     }
 }
 ```
 
-The `Host` class is responsible for implementing the imported [functions](https://webassembly.github.io/spec/core/syntax/modules.html#functions), [globals](https://webassembly.github.io/spec/core/syntax/modules.html#globals), [memories](https://webassembly.github.io/spec/core/syntax/modules.html#memories), and [tables](https://webassembly.github.io/spec/core/syntax/modules.html#syntax-table) for the WebAssembly module.  For Wasmtime for .NET, this is done via the [`Import`](https://peterhuene.github.io/wasmtime.net/api/Wasmtime.ImportAttribute.html) attribute applied to functions and fields of type [`Global<T>`](https://peterhuene.github.io/wasmtime.net/api/Wasmtime.Global-1.html), [`MutableGlobal<T>`](https://peterhuene.github.io/wasmtime.net/api/Wasmtime.MutableGlobal-1.html), and [`Memory`](https://peterhuene.github.io/wasmtime.net/api/Wasmtime.Memory.html) (support for WebAssembly tables is not yet implemented).  The [`Instance`](https://peterhuene.github.io/wasmtime.net/api/Wasmtime.IHost.html#Wasmtime_IHost_Instance) property of the host is set during instantiation of the WebAssembly module.
+The `Host` class is responsible for implementing an environment that WebAssembly modules can execute in.
 
-Here the host is implementing an import of `print` in the `env` module, which is the default import module name for WebAssembly modules compiled using the Rust toolchain.
-
-The [`Engine`](https://peterhuene.github.io/wasmtime.net/api/Wasmtime.Engine.html) is used to create a [`Store`](https://peterhuene.github.io/wasmtime.net/api/Wasmtime.Store.html) that will store all Wasmtime runtime objects, such as WebAssembly modules and their instantiations.
+Here we are creating a host that is implementing a function named `print` in the `env` module, which is the default import module name for WebAssembly modules compiled using the Rust toolchain.
 
 A WebAssembly module _instantiation_ is the stateful representation of a module that can be executed.  Here, the code is casting the [`Instance`](https://peterhuene.github.io/wasmtime.net/api/Wasmtime.Instance.html) to [`dynamic`](https://docs.microsoft.com/en-us/dotnet/csharp/programming-guide/types/using-type-dynamic) which allows us to easily invoke the `run` function that was exported by the WebAssembly module.
 
@@ -165,7 +159,7 @@ Alternatively, the `run` function could be invoked without using the runtime bin
 
 ```c#
 ...
-using var instance = module.Instantiate(new Host());
+using var instance = host.Instantiate(module);
 instance.Externs.Functions[0].Invoke();
 ...
 ```

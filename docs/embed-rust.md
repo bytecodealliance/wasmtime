@@ -3,10 +3,11 @@
 This document shows an example of how to embed Wasmtime using the [Rust
 API][apidoc] to execute a simple wasm program. Be sure to also check out the
 [full API documentation][apidoc] for a full listing of what the [`wasmtime`
-crate][crate] has to offer.
+crate][wasmtime] has to offer and the [book examples for
+Rust](./examples-rust-embed.md) for more information.
 
 [apidoc]: https://bytecodealliance.github.io/wasmtime/api/wasmtime/
-[wasmtime]: https://crates.io/crates/wasmtime
+[crate]: https://crates.io/crates/wasmtime
 
 ## Creating the WebAssembly to execute
 
@@ -149,12 +150,12 @@ looks like this:
 # (import "" "double" (func $double (param i32) (result i32))))"#)?;
 // First we can create our `log` function, which will simply print out the
 // parameter it receives.
-let log = Func::wrap1(&store, |param: i32| {
+let log = Func::wrap(&store, |param: i32| {
     println!("log: {}", param);
 });
 
 // Next we can create our double function which doubles the input it receives.
-let double = Func::wrap1(&store, |param: i32| param * 2);
+let double = Func::wrap(&store, |param: i32| param * 2);
 
 // When instantiating the module we now need to provide the imports to the
 // instantiation process. This is the second slice argument, where each

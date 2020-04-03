@@ -8,14 +8,12 @@ namespace Wasmtime.Tests
     {
         public ModuleFixture()
         {
-            Engine = new EngineBuilder()
+            Host = new HostBuilder()
                 .WithMultiValue(true)
                 .WithReferenceTypes(true)
                 .Build();
-            Store = Engine.CreateStore();
-            var wat = Path.Combine("Modules", ModuleFileName);
-            var wasm = Engine.WatToWasm(File.ReadAllText(wat));
-            Module = Store.CreateModule(wat, wasm);
+
+            Module = Host.LoadModuleText(Path.Combine("Modules", ModuleFileName));
         }
 
         public void Dispose()
@@ -26,21 +24,14 @@ namespace Wasmtime.Tests
                 Module = null;
             }
 
-            if (!(Store is null))
+            if (!(Host is null))
             {
-                Store.Dispose();
-                Store = null;
-            }
-
-            if (!(Engine is null))
-            {
-                Engine.Dispose();
-                Engine = null;
+                Host.Dispose();
+                Host = null;
             }
         }
 
-        public Engine Engine { get; set; }
-        public Store Store { get; set; }
+        public Host Host { get; set; }
         public Module Module { get; set; }
 
         protected abstract string ModuleFileName { get; }

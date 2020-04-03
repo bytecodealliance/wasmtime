@@ -10,6 +10,7 @@ use gimli::write::{
     FrameDescriptionEntry, FrameTable, Result, Writer,
 };
 use gimli::{Encoding, Format, LittleEndian, Register, X86_64};
+use thiserror::Error;
 
 pub type FDERelocEntry = (FrameUnwindOffset, Reloc);
 
@@ -74,8 +75,15 @@ fn return_address_reg(isa: &dyn TargetIsa) -> Register {
     X86_64::RA
 }
 
-fn map_reg(isa: &dyn TargetIsa, reg: RegUnit) -> Register {
-    assert!(isa.name() == "x86" && isa.pointer_bits() == 64);
+/// Map Cranelift registers to their corresponding Gimli registers.
+pub fn map_reg(
+    isa: &dyn TargetIsa,
+    reg: RegUnit,
+) -> core::result::Result<Register, RegisterMappingError> {
+    if isa.name() != "x86" || isa.pointer_bits() != 64 {
+        return Err(RegisterMappingError::UnsupportedArchitecture);
+    }
+
     // Mapping from https://github.com/bytecodealliance/cranelift/pull/902 by @iximeow
     const X86_GP_REG_MAP: [gimli::Register; 16] = [
         X86_64::RAX,
@@ -113,19 +121,30 @@ fn map_reg(isa: &dyn TargetIsa, reg: RegUnit) -> Register {
         X86_64::XMM14,
         X86_64::XMM15,
     ];
+
     let reg_info = isa.register_info();
-    let bank = reg_info.bank_containing_regunit(reg).unwrap();
+    let bank = reg_info
+        .bank_containing_regunit(reg)
+        .ok_or_else(|| RegisterMappingError::MissingBank)?;
     match bank.name {
         "IntRegs" => {
             // x86 GP registers have a weird mapping to DWARF registers, so we use a
             // lookup table.
-            X86_GP_REG_MAP[(reg - bank.first_unit) as usize]
+            Ok(X86_GP_REG_MAP[(reg - bank.first_unit) as usize])
         }
-        "FloatRegs" => X86_XMM_REG_MAP[(reg - bank.first_unit) as usize],
-        _ => {
-            panic!("unsupported register bank: {}", bank.name);
-        }
+        "FloatRegs" => Ok(X86_XMM_REG_MAP[(reg - bank.first_unit) as usize]),
+        _ => Err(RegisterMappingError::UnsupportedRegisterBank(bank.name)),
     }
+}
+
+#[derive(Error, Debug)]
+pub enum RegisterMappingError {
+    #[error("unable to find bank for register info")]
+    MissingBank,
+    #[error("register mapping is currently only implemented for x86_64")]
+    UnsupportedArchitecture,
+    #[error("unsupported register bank: {0}")]
+    UnsupportedRegisterBank(&'static str),
 }
 
 fn to_cfi(
@@ -136,7 +155,7 @@ fn to_cfi(
 ) -> Option<CallFrameInstruction> {
     Some(match change {
         FrameLayoutChange::CallFrameAddressAt { reg, offset } => {
-            let mapped = map_reg(isa, *reg);
+            let mapped = map_reg(isa, *reg).expect("a register mapping from cranelift to gimli");
             let offset = (*offset) as i32;
             if mapped != *cfa_def_reg && offset != *cfa_def_offset {
                 *cfa_def_reg = mapped;
@@ -155,7 +174,7 @@ fn to_cfi(
         FrameLayoutChange::RegAt { reg, cfa_offset } => {
             assert!(cfa_offset % -8 == 0);
             let cfa_offset = *cfa_offset as i32;
-            let mapped = map_reg(isa, *reg);
+            let mapped = map_reg(isa, *reg).expect("a register mapping from cranelift to gimli");
             CallFrameInstruction::Offset(mapped, cfa_offset)
         }
         FrameLayoutChange::ReturnAddressAt { cfa_offset } => {

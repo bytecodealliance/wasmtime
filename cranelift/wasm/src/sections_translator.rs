@@ -429,9 +429,13 @@ pub fn parse_name_section<'data>(
                         environ.declare_func_name(index, name)?;
                     }
                 }
-                return Ok(());
             }
-            wasmparser::Name::Local(_) | wasmparser::Name::Module(_) => {}
+            wasmparser::Name::Module(module) => {
+                if let Ok(name) = module.get_name() {
+                    environ.declare_module_name(name)?;
+                }
+            }
+            wasmparser::Name::Local(_) => {}
         };
     }
     Ok(())

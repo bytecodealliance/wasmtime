@@ -30,6 +30,12 @@ pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<Instanc
         "global".to_string(),
         wasmtime_environ::Export::Global(global_id),
     );
-    let handle = create_handle(module, store, PrimaryMap::new(), Box::new(()))?;
+    let handle = create_handle(
+        module,
+        store,
+        PrimaryMap::new(),
+        Default::default(),
+        Box::new(()),
+    )?;
     Ok(handle)
 }

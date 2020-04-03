@@ -84,6 +84,7 @@ fn run_wasmtime_simple_wat() -> Result<()> {
 
 // Running a wat that traps.
 #[test]
+#[ignore] // FIXME(#1298)
 fn run_wasmtime_unreachable_wat() -> Result<()> {
     let wasm = build_wasm("tests/wasm/unreachable.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
@@ -102,6 +103,23 @@ fn run_wasmtime_unreachable_wat() -> Result<()> {
     assert_eq!(code, 128 + libc::SIGABRT);
     #[cfg(windows)]
     assert_eq!(code, 3);
+    Ok(())
+}
 
+// Run a simple WASI hello world, snapshot0 edition.
+#[test]
+fn hello_wasi_snapshot0() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/hello_wasi_snapshot0.wat")?;
+    let stdout = run_wasmtime(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    assert_eq!(stdout, "Hello, world!\n");
+    Ok(())
+}
+
+// Run a simple WASI hello world, snapshot1 edition.
+#[test]
+fn hello_wasi_snapshot1() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/hello_wasi_snapshot1.wat")?;
+    let stdout = run_wasmtime(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    assert_eq!(stdout, "Hello, world!\n");
     Ok(())
 }

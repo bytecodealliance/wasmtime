@@ -52,6 +52,7 @@ WASI_DECLARE_OWN(instance)
 
 WASI_API_EXTERN own wasi_instance_t* wasi_instance_new(
   wasm_store_t* store,
+  const char* name,
   own wasi_config_t* config,
   own wasm_trap_t** trap
 );

@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle_runtime::{GuestError, GuestMemory, GuestPtr};
+use wiggle::{GuestError, GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
@@ -44,10 +44,13 @@ impl<'a> structs::Structs for WasiCtx<'a> {
 
     fn return_pair_of_ptrs<'b>(
         &self,
-        first: GuestPtr<'b, i32>,
-        second: GuestPtr<'b, i32>,
+        first: &GuestPtr<'b, i32>,
+        second: &GuestPtr<'b, i32>,
     ) -> Result<types::PairIntPtrs<'b>, types::Errno> {
-        Ok(types::PairIntPtrs { first, second })
+        Ok(types::PairIntPtrs {
+            first: *first,
+            second: *second,
+        })
     }
 }
 

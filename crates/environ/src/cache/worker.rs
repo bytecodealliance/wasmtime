@@ -219,6 +219,15 @@ impl WorkerThread {
         }
     }
 
+    #[cfg(target_os = "fuchsia")]
+    fn lower_thread_priority() {
+        // TODO This needs to use Fuchsia thread profiles
+        // https://fuchsia.dev/fuchsia-src/reference/kernel_objects/profile
+        warn!(
+            "Lowering thread priority on Fuchsia is currently a noop. It might affect application performance."
+        );
+    }
+
     #[cfg(target_os = "windows")]
     fn lower_thread_priority() {
         use std::convert::TryInto;
@@ -241,7 +250,7 @@ impl WorkerThread {
         }
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "fuchsia")))]
     fn lower_thread_priority() {
         // http://man7.org/linux/man-pages/man7/sched.7.html
 

@@ -267,7 +267,7 @@ impl<'a> Lexer<'a> {
             Some('+') => {
                 self.next_ch();
                 if !self.looking_at_numeric() {
-                    // If the next characters won't parse as a number, we return Token::Minus
+                    // If the next characters won't parse as a number, we return Token::Plus
                     return token(Token::Plus, loc);
                 }
             }

@@ -1,10 +1,25 @@
-use wiggle_runtime::{GuestBorrows, GuestError, GuestErrorType, GuestPtr};
+use wiggle::{GuestBorrows, GuestError, GuestErrorType, GuestPtr};
 use wiggle_test::WasiCtx;
+
+// This test file exists to make sure that the entire `wasi.witx` file can be
+// handled by wiggle, producing code that compiles correctly.
+// The trait impls here are never executed, and just exist to validate that the
+// witx is exposed with the type signatures that we expect.
 
 wiggle::from_witx!({
     witx: ["tests/wasi.witx"],
     ctx: WasiCtx,
 });
+
+// The only test in this file is to verify that the witx document provided by the
+// proc macro in the `metadata` module is equal to the document on the disk.
+#[test]
+fn document_equivelant() {
+    let macro_doc = metadata::document();
+    let disk_doc = witx::load(&["tests/wasi.witx"]).expect("load wasi.witx from disk");
+
+    assert_eq!(macro_doc, disk_doc);
+}
 
 type Result<T> = std::result::Result<T, types::Errno>;
 
@@ -23,7 +38,7 @@ impl<'a> GuestErrorType<'a> for types::Errno {
 }
 
 impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
-    fn args_get(&self, _argv: GuestPtr<GuestPtr<u8>>, _argv_buf: GuestPtr<u8>) -> Result<()> {
+    fn args_get(&self, _argv: &GuestPtr<GuestPtr<u8>>, _argv_buf: &GuestPtr<u8>) -> Result<()> {
         unimplemented!("args_get")
     }
 
@@ -33,8 +48,8 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
 
     fn environ_get(
         &self,
-        _environ: GuestPtr<GuestPtr<u8>>,
-        _environ_buf: GuestPtr<u8>,
+        _environ: &GuestPtr<GuestPtr<u8>>,
+        _environ_buf: &GuestPtr<u8>,
     ) -> Result<()> {
         unimplemented!("environ_get")
     }
@@ -153,7 +168,7 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
     fn fd_prestat_dir_name(
         &self,
         _fd: types::Fd,
-        _path: GuestPtr<u8>,
+        _path: &GuestPtr<u8>,
         _path_len: types::Size,
     ) -> Result<()> {
         unimplemented!("fd_prestat_dir_name")
@@ -175,7 +190,7 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
     fn fd_readdir(
         &self,
         _fd: types::Fd,
-        _buf: GuestPtr<u8>,
+        _buf: &GuestPtr<u8>,
         _buf_len: types::Size,
         _cookie: types::Dircookie,
     ) -> Result<types::Size> {
@@ -260,7 +275,7 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
         &self,
         _fd: types::Fd,
         _path: &GuestPtr<'_, str>,
-        _buf: GuestPtr<u8>,
+        _buf: &GuestPtr<u8>,
         _buf_len: types::Size,
     ) -> Result<types::Size> {
         unimplemented!("path_readlink")
@@ -295,8 +310,8 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
 
     fn poll_oneoff(
         &self,
-        _in_: GuestPtr<types::Subscription>,
-        _out: GuestPtr<types::Event>,
+        _in_: &GuestPtr<types::Subscription>,
+        _out: &GuestPtr<types::Event>,
         _nsubscriptions: types::Size,
     ) -> Result<types::Size> {
         unimplemented!("poll_oneoff")
@@ -314,7 +329,7 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
         unimplemented!("sched_yield")
     }
 
-    fn random_get(&self, _buf: GuestPtr<u8>, _buf_len: types::Size) -> Result<()> {
+    fn random_get(&self, _buf: &GuestPtr<u8>, _buf_len: types::Size) -> Result<()> {
         unimplemented!("random_get")
     }
 

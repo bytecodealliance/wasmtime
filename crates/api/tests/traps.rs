@@ -1,18 +1,9 @@
 use anyhow::Result;
 use std::panic::{self, AssertUnwindSafe};
-use std::rc::Rc;
 use wasmtime::*;
 
 #[test]
 fn test_trap_return() -> Result<()> {
-    struct HelloCallback;
-
-    impl Callable for HelloCallback {
-        fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
-            Err(Trap::new("test 123"))
-        }
-    }
-
     let store = Store::default();
     let wat = r#"
         (module
@@ -23,7 +14,7 @@ fn test_trap_return() -> Result<()> {
 
     let module = Module::new(&store, wat)?;
     let hello_type = FuncType::new(Box::new([]), Box::new([]));
-    let hello_func = Func::new(&store, hello_type, Rc::new(HelloCallback));
+    let hello_func = Func::new(&store, hello_type, |_, _, _| Err(Trap::new("test 123")));
 
     let instance = Instance::new(&module, &[hello_func.into()])?;
     let run_func = instance.exports()[0]
@@ -74,14 +65,6 @@ fn test_trap_trace() -> Result<()> {
 
 #[test]
 fn test_trap_trace_cb() -> Result<()> {
-    struct ThrowCallback;
-
-    impl Callable for ThrowCallback {
-        fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
-            Err(Trap::new("cb throw"))
-        }
-    }
-
     let store = Store::default();
     let wat = r#"
         (module $hello_mod
@@ -92,7 +75,7 @@ fn test_trap_trace_cb() -> Result<()> {
     "#;
 
     let fn_type = FuncType::new(Box::new([]), Box::new([]));
-    let fn_func = Func::new(&store, fn_type, Rc::new(ThrowCallback));
+    let fn_func = Func::new(&store, fn_type, |_, _, _| Err(Trap::new("cb throw")));
 
     let module = Module::new(&store, wat)?;
     let instance = Instance::new(&module, &[fn_func.into()])?;
@@ -223,14 +206,6 @@ wasm backtrace:
 
 #[test]
 fn trap_start_function_import() -> Result<()> {
-    struct ReturnTrap;
-
-    impl Callable for ReturnTrap {
-        fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
-            Err(Trap::new("user trap"))
-        }
-    }
-
     let store = Store::default();
     let binary = wat::parse_str(
         r#"
@@ -243,7 +218,7 @@ fn trap_start_function_import() -> Result<()> {
 
     let module = Module::new(&store, &binary)?;
     let sig = FuncType::new(Box::new([]), Box::new([]));
-    let func = Func::new(&store, sig, Rc::new(ReturnTrap));
+    let func = Func::new(&store, sig, |_, _, _| Err(Trap::new("user trap")));
     let err = Instance::new(&module, &[func.into()]).err().unwrap();
     assert_eq!(err.downcast_ref::<Trap>().unwrap().message(), "user trap");
     Ok(())
@@ -251,14 +226,6 @@ fn trap_start_function_import() -> Result<()> {
 
 #[test]
 fn rust_panic_import() -> Result<()> {
-    struct Panic;
-
-    impl Callable for Panic {
-        fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
-            panic!("this is a panic");
-        }
-    }
-
     let store = Store::default();
     let binary = wat::parse_str(
         r#"
@@ -273,12 +240,12 @@ fn rust_panic_import() -> Result<()> {
 
     let module = Module::new(&store, &binary)?;
     let sig = FuncType::new(Box::new([]), Box::new([]));
-    let func = Func::new(&store, sig, Rc::new(Panic));
+    let func = Func::new(&store, sig, |_, _, _| panic!("this is a panic"));
     let instance = Instance::new(
         &module,
         &[
             func.into(),
-            Func::wrap0(&store, || panic!("this is another panic")).into(),
+            Func::wrap(&store, || panic!("this is another panic")).into(),
         ],
     )?;
     let func = instance.exports()[0].func().unwrap().clone();
@@ -302,14 +269,6 @@ fn rust_panic_import() -> Result<()> {
 
 #[test]
 fn rust_panic_start_function() -> Result<()> {
-    struct Panic;
-
-    impl Callable for Panic {
-        fn call(&self, _params: &[Val], _results: &mut [Val]) -> Result<(), Trap> {
-            panic!("this is a panic");
-        }
-    }
-
     let store = Store::default();
     let binary = wat::parse_str(
         r#"
@@ -322,14 +281,14 @@ fn rust_panic_start_function() -> Result<()> {
 
     let module = Module::new(&store, &binary)?;
     let sig = FuncType::new(Box::new([]), Box::new([]));
-    let func = Func::new(&store, sig, Rc::new(Panic));
+    let func = Func::new(&store, sig, |_, _, _| panic!("this is a panic"));
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
         drop(Instance::new(&module, &[func.into()]));
     }))
     .unwrap_err();
     assert_eq!(err.downcast_ref::<&'static str>(), Some(&"this is a panic"));
 
-    let func = Func::wrap0(&store, || panic!("this is another panic"));
+    let func = Func::wrap(&store, || panic!("this is another panic"));
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
         drop(Instance::new(&module, &[func.into()]));
     }))
@@ -399,6 +358,39 @@ fn call_signature_mismatch() -> Result<()> {
     assert_eq!(
         err.message(),
         "wasm trap: indirect call type mismatch, source location: @0030"
+    );
+    Ok(())
+}
+
+#[test]
+fn start_trap_pretty() -> Result<()> {
+    let store = Store::default();
+    let wat = r#"
+        (module $m
+            (func $die unreachable)
+            (func call $die)
+            (func $foo call 1)
+            (func $start call $foo)
+            (start $start)
+        )
+    "#;
+
+    let module = Module::new(&store, wat)?;
+    let e = match Instance::new(&module, &[]) {
+        Ok(_) => panic!("expected failure"),
+        Err(e) => e.downcast::<Trap>()?,
+    };
+
+    assert_eq!(
+        e.to_string(),
+        "\
+wasm trap: unreachable, source location: @001d
+wasm backtrace:
+  0: m!die
+  1: m!<wasm function 1>
+  2: m!foo
+  3: m!start
+"
     );
     Ok(())
 }

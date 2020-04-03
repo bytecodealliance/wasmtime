@@ -64,14 +64,10 @@
             <Component Id="wasmtime.exe" Guid="*">
                 <File Id="wasmtime.exe" Source="target\release\wasmtime.exe" KeyPath="yes" Checksum="yes"/>
             </Component>
-            <Component Id="wasm2obj.exe" Guid="*">
-                <File Id="wasm2obj.exe" Source="target\release\wasm2obj.exe" KeyPath="yes" Checksum="yes"/>
-            </Component>
         </DirectoryRef>
 
-        <Feature Id="InstallWasmtime" Title="Wasmtime and Wasm2obj" Level="1">
+        <Feature Id="InstallWasmtime" Title="Wasmtime" Level="1">
             <ComponentRef Id="wasmtime.exe" />
-            <ComponentRef Id="wasm2obj.exe" />
             <ComponentRef Id="LICENSE" />
             <ComponentRef Id="README" />
             <ComponentRef Id="InstallDir" />

@@ -1,0 +1,7 @@
+# Use LF-style line endings for all text files.
+* text=auto eol=lf
+
+# Older git versions try to fix line endings on images, this prevents it.
+*.png binary
+*.ico binary
+*.wasm binary

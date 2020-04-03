@@ -74,6 +74,12 @@ mod riscv;
 #[cfg(feature = "x86")]
 mod x86;
 
+#[cfg(all(feature = "x86", feature = "unwind"))]
+/// Expose the register-mapping functionality necessary for exception handling, debug, etc.
+pub mod fde {
+    pub use super::x86::map_reg;
+}
+
 #[cfg(feature = "arm32")]
 mod arm32;
 

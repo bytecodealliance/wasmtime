@@ -13,11 +13,6 @@ namespace Wasmtime.Tests
 
     public class MemoryExportsTests : IClassFixture<MemoryExportsFixture>
     {
-        public class Host : IHost
-        {
-            public Instance Instance { get; set; }
-        }
-
         public MemoryExportsTests(MemoryExportsFixture fixture)
         {
             Fixture = fixture;
@@ -44,8 +39,7 @@ namespace Wasmtime.Tests
         [Fact]
         public void ItCreatesExternsForTheMemories()
         {
-            var host = new Host();
-            using var instance = Fixture.Module.Instantiate(host);
+            using var instance = Fixture.Host.Instantiate(Fixture.Module);
 
             instance.Externs.Memories.Count.Should().Be(1);
 

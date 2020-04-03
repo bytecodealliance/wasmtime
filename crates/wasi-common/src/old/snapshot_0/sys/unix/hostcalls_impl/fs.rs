@@ -2,7 +2,7 @@
 #![allow(unused_unsafe)]
 use crate::old::snapshot_0::host::Dirent;
 use crate::old::snapshot_0::hostcalls_impl::PathGet;
-use crate::old::snapshot_0::sys::{fdentry_impl::OsHandle, host_impl, unix::sys_impl};
+use crate::old::snapshot_0::sys::{entry_impl::OsHandle, host_impl, unix::sys_impl};
 use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
 use std::convert::TryInto;
 use std::fs::File;

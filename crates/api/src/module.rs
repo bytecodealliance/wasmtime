@@ -7,10 +7,7 @@ use crate::types::{
 use anyhow::{bail, Error, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use wasmparser::{
-    validate, CustomSectionKind, ExternalKind, ImportSectionEntryType, ModuleReader, Name,
-    SectionCode,
-};
+use wasmparser::{validate, ExternalKind, ImportSectionEntryType, ModuleReader, SectionCode};
 use wasmtime_jit::CompiledModule;
 
 fn into_memory_type(mt: wasmparser::MemoryType) -> Result<MemoryType> {
@@ -73,11 +70,63 @@ fn into_table_type(tt: wasmparser::TableType) -> TableType {
 /// representation. Instead you'll need to create an
 /// [`Instance`](crate::Instance) to interact with the wasm module.
 ///
+/// Creating a `Module` currently involves compiling code, meaning that it can
+/// be an expensive operation. All `Module` instances are compiled according to
+/// the configuration in [`Config`], but typically they're JIT-compiled. If
+/// you'd like to instantiate a module multiple times you can do so with
+/// compiling the original wasm module only once with a single [`Module`]
+/// instance.
+///
 /// ## Modules and `Clone`
 ///
 /// Using `clone` on a `Module` is a cheap operation. It will not create an
 /// entirely new module, but rather just a new reference to the existing module.
 /// In other words it's a shallow copy, not a deep copy.
+///
+/// ## Examples
+///
+/// There are a number of ways you can create a `Module`, for example pulling
+/// the bytes from a number of locations. One example is loading a module from
+/// the filesystem:
+///
+/// ```no_run
+/// # use wasmtime::*;
+/// # fn main() -> anyhow::Result<()> {
+/// let store = Store::default();
+/// let module = Module::from_file(&store, "path/to/foo.wasm")?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// You can also load the wasm text format if more convenient too:
+///
+/// ```no_run
+/// # use wasmtime::*;
+/// # fn main() -> anyhow::Result<()> {
+/// let store = Store::default();
+/// // Now we're using the WebAssembly text extension: `.wat`!
+/// let module = Module::from_file(&store, "path/to/foo.wat")?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// And if you've already got the bytes in-memory you can use the
+/// [`Module::new`] constructor:
+///
+/// ```no_run
+/// # use wasmtime::*;
+/// # fn main() -> anyhow::Result<()> {
+/// let store = Store::default();
+/// # let wasm_bytes: Vec<u8> = Vec::new();
+/// let module = Module::new(&store, &wasm_bytes)?;
+///
+/// // It also works with the text format!
+/// let module = Module::new(&store, "(module (func))")?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// [`Config`]: crate::Config
 #[derive(Clone)]
 pub struct Module {
     inner: Arc<ModuleInner>,
@@ -89,12 +138,6 @@ struct ModuleInner {
     exports: Box<[ExportType]>,
     compiled: CompiledModule,
     frame_info_registration: Mutex<Option<Option<GlobalFrameInfoRegistration>>>,
-    names: Arc<Names>,
-}
-
-pub struct Names {
-    pub module: Arc<wasmtime_environ::Module>,
-    pub module_name: Option<String>,
 }
 
 impl Module {
@@ -143,6 +186,32 @@ impl Module {
     ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     /// [text]: https://webassembly.github.io/spec/core/text/index.html
+    ///
+    /// # Examples
+    ///
+    /// The `new` function can be invoked with a in-memory array of bytes:
+    ///
+    /// ```no_run
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// # let wasm_bytes: Vec<u8> = Vec::new();
+    /// let module = Module::new(&store, &wasm_bytes)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Or you can also pass in a string to be parsed as the wasm text
+    /// format:
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// let module = Module::new(&store, "(module (func))")?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new(store: &Store, bytes: impl AsRef<[u8]>) -> Result<Module> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(bytes.as_ref())?;
@@ -156,7 +225,7 @@ impl Module {
     pub fn new_with_name(store: &Store, bytes: impl AsRef<[u8]>, name: &str) -> Result<Module> {
         let mut module = Module::new(store, bytes.as_ref())?;
         let inner = Arc::get_mut(&mut module.inner).unwrap();
-        Arc::get_mut(&mut inner.names).unwrap().module_name = Some(name.to_string());
+        Arc::get_mut(inner.compiled.module_mut()).unwrap().name = Some(name.to_string());
         Ok(module)
     }
 
@@ -166,6 +235,28 @@ impl Module {
     /// This is a convenience function that will read the `file` provided and
     /// pass the bytes to the [`Module::new`] function. For more information
     /// see [`Module::new`]
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// let store = Store::default();
+    /// let module = Module::from_file(&store, "./path/to/foo.wasm")?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// The `.wat` text format is also supported:
+    ///
+    /// ```no_run
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// let module = Module::from_file(&store, "./path/to/foo.wat")?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn from_file(store: &Store, file: impl AsRef<Path>) -> Result<Module> {
         #[cfg(feature = "wat")]
         let wasm = wat::parse_file(file)?;
@@ -182,6 +273,29 @@ impl Module {
     /// by this function. It's generally recommended to use [`Module::new`],
     /// but if it's required to not support the text format this function can be
     /// used instead.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// let wasm = b"\0asm\x01\0\0\0";
+    /// let module = Module::from_binary(&store, wasm)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Note that the text format is **not** accepted by this function:
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// assert!(Module::from_binary(&store, b"(module)").is_err());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn from_binary(store: &Store, binary: &[u8]) -> Result<Module> {
         Module::validate(store, binary)?;
         // Note that the call to `from_binary_unchecked` here should be ok
@@ -253,19 +367,14 @@ impl Module {
             &mut store.compiler_mut(),
             binary,
             store.engine().config().debug_info,
-            store.engine().config().profiler.as_ref(),
+            &*store.engine().config().profiler,
         )?;
 
-        let names = Arc::new(Names {
-            module_name: None,
-            module: compiled.module().clone(),
-        });
         Ok(Module {
             inner: Arc::new(ModuleInner {
                 store: store.clone(),
                 imports: Box::new([]),
                 exports: Box::new([]),
-                names,
                 compiled,
                 frame_info_registration: Mutex::new(None),
             }),
@@ -278,18 +387,138 @@ impl Module {
 
     /// Returns identifier/name that this [`Module`] has. This name
     /// is used in traps/backtrace details.
+    ///
+    /// Note that most LLVM/clang/Rust-produced modules do not have a name
+    /// associated with them, but other wasm tooling can be used to inject or
+    /// add a name.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// let module = Module::new(&store, "(module $foo)")?;
+    /// assert_eq!(module.name(), Some("foo"));
+    ///
+    /// let module = Module::new(&store, "(module)")?;
+    /// assert_eq!(module.name(), None);
+    ///
+    /// let module = Module::new_with_name(&store, "(module)", "bar")?;
+    /// assert_eq!(module.name(), Some("bar"));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn name(&self) -> Option<&str> {
-        self.inner.names.module_name.as_deref()
+        self.inner.compiled.module().name.as_deref()
     }
 
     /// Returns the list of imports that this [`Module`] has and must be
     /// satisfied.
+    ///
+    /// This function returns the list of imports that the wasm module has, but
+    /// only the types of each import. The type of each import is used to
+    /// typecheck the [`Instance::new`](crate::Instance::new) method's `imports`
+    /// argument. The arguments to that function must match up 1-to-1 with the
+    /// entries in the array returned here.
+    ///
+    /// The imports returned reflect the order of the imports in the wasm module
+    /// itself, and note that no form of deduplication happens.
+    ///
+    /// # Examples
+    ///
+    /// Modules with no imports return an empty list here:
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// let module = Module::new(&store, "(module)")?;
+    /// assert_eq!(module.imports().len(), 0);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// and modules with imports will have a non-empty list:
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// let wat = r#"
+    ///     (module
+    ///         (import "host" "foo" (func))
+    ///     )
+    /// "#;
+    /// let module = Module::new(&store, wat)?;
+    /// assert_eq!(module.imports().len(), 1);
+    /// let import = &module.imports()[0];
+    /// assert_eq!(import.module(), "host");
+    /// assert_eq!(import.name(), "foo");
+    /// match import.ty() {
+    ///     ExternType::Func(_) => { /* ... */ }
+    ///     _ => panic!("unexpected import type!"),
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn imports(&self) -> &[ImportType] {
         &self.inner.imports
     }
 
     /// Returns the list of exports that this [`Module`] has and will be
     /// available after instantiation.
+    ///
+    /// This function will return the type of each item that will be returned
+    /// from [`Instance::exports`](crate::Instance::exports). Each entry in this
+    /// list corresponds 1-to-1 with that list, and the entries here will
+    /// indicate the name of the export along with the type of the export.
+    ///
+    /// # Examples
+    ///
+    /// Modules might not have any exports:
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// let module = Module::new(&store, "(module)")?;
+    /// assert!(module.exports().is_empty());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// When the exports are not empty, you can inspect each export:
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// let wat = r#"
+    ///     (module
+    ///         (func (export "foo"))
+    ///         (memory (export "memory") 1)
+    ///     )
+    /// "#;
+    /// let module = Module::new(&store, wat)?;
+    /// assert_eq!(module.exports().len(), 2);
+    ///
+    /// let foo = &module.exports()[0];
+    /// assert_eq!(foo.name(), "foo");
+    /// match foo.ty() {
+    ///     ExternType::Func(_) => { /* ... */ }
+    ///     _ => panic!("unexpected export type!"),
+    /// }
+    ///
+    /// let memory = &module.exports()[1];
+    /// assert_eq!(memory.name(), "memory");
+    /// match memory.ty() {
+    ///     ExternType::Memory(_) => { /* ... */ }
+    ///     _ => panic!("unexpected export type!"),
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn exports(&self) -> &[ExportType] {
         &self.inner.exports
     }
@@ -402,21 +631,26 @@ impl Module {
                     }
                 }
                 SectionCode::Custom {
-                    kind: CustomSectionKind::Name,
+                    name: "webidl-bindings",
+                    ..
+                }
+                | SectionCode::Custom {
+                    name: "wasm-interface-types",
                     ..
                 } => {
-                    // Read name section. Per spec, ignore invalid custom section.
-                    if let Ok(mut reader) = section.get_name_section_reader() {
-                        while let Ok(entry) = reader.read() {
-                            if let Name::Module(name) = entry {
-                                if let Ok(name) = name.get_name() {
-                                    Arc::get_mut(&mut inner.names).unwrap().module_name =
-                                        Some(name.to_string());
-                                }
-                                break;
-                            }
-                        }
-                    }
+                    bail!(
+                        "\
+support for interface types has temporarily been removed from `wasmtime`
+
+for more information about this temoprary you can read on the issue online:
+
+    https://github.com/bytecodealliance/wasmtime/issues/1271
+
+and for re-adding support for interface types you can see this issue:
+
+    https://github.com/bytecodealliance/wasmtime/issues/677
+"
+                    );
                 }
                 _ => {
                     // skip other sections
@@ -437,6 +671,6 @@ impl Module {
         if info.is_some() {
             return;
         }
-        *info = Some(FRAME_INFO.register(&self.inner.names, &self.inner.compiled));
+        *info = Some(FRAME_INFO.register(&self.inner.compiled));
     }
 }

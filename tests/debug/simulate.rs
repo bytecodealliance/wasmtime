@@ -54,3 +54,24 @@ fn test_debug_dwarf_simulate_simple_x86_64() -> Result<()> {
 )"#,
     )
 }
+
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
+fn test_debug_dwarf_simulate_with_imports_x86_64() -> Result<()> {
+    check_wat(
+        r#"
+;; check: DW_TAG_compile_unit 
+(module
+;; check: DW_TAG_subprogram 
+;; check: DW_AT_name	("func1")
+    (import "foo" "bar" (func $import1) )
+    (func $func1 (result i32)
+        i32.const 1
+    )
+)"#,
+    )
+}

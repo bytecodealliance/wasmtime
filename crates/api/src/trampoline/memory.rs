@@ -23,5 +23,11 @@ pub fn create_handle_with_memory(store: &Store, memory: &MemoryType) -> Result<I
         wasmtime_environ::Export::Memory(memory_id),
     );
 
-    create_handle(module, store, PrimaryMap::new(), Box::new(()))
+    create_handle(
+        module,
+        store,
+        PrimaryMap::new(),
+        Default::default(),
+        Box::new(()),
+    )
 }

@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-wast"
-version = "0.12.0"
+version = "0.14.0"
 authors = ["The Wasmtime Project Developers"]
 description = "wast testing support for wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -12,11 +12,11 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.19"
-wasmtime = { path = "../api", version = "0.12.0" }
-wast = "9.0.0"
+wasmtime = { path = "../api", version = "0.14.0", default-features = false }
+wast = "11.0.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
 
 [features]
-lightbeam = []
+lightbeam = ["wasmtime/lightbeam"]

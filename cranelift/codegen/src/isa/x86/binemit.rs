@@ -74,10 +74,15 @@ fn evex2(rm: RegUnit, reg: RegUnit) -> u8 {
     0x00 | r_ | (b << 1) | (x << 2) | (r << 3)
 }
 
-/// Determines whether a REX prefix should be emitted.
+/// Determines whether a REX prefix should be emitted. A REX byte always has 0100 in bits 7:4; bits
+/// 3:0 correspond to WRXB. W allows certain instructions to declare a 64-bit operand size; because
+/// [needs_rex] is only used by [infer_rex] and we prevent [infer_rex] from using [w] in
+/// [Template::build], we do not need to check again whether [w] forces an inferred REX prefix--it
+/// always does and should be encoded like `.rex().w()`. The RXB are extension of ModR/M or SIB
+/// fields; see section 2.2.1.2 in the Intel Software Development Manual.
 #[inline]
-fn needs_rex(bits: u16, rex: u8) -> bool {
-    rex != BASE_REX || EncodingBits::from(bits).rex_w() == 1
+fn needs_rex(rex: u8) -> bool {
+    rex != BASE_REX
 }
 
 // Emit a REX prefix.
@@ -107,7 +112,7 @@ fn put_rexop1<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
 /// Emit a single-byte opcode with inferred REX prefix.
 fn put_dynrexop1<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
     debug_assert_eq!(bits & 0x0f00, 0, "Invalid encoding bits for DynRexOp1*");
-    if needs_rex(bits, rex) {
+    if needs_rex(rex) {
         rex_prefix(bits, rex, sink);
     }
     sink.put1(bits as u8);
@@ -136,7 +141,7 @@ fn put_dynrexop2<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
         0x0400,
         "Invalid encoding bits for DynRexOp2*"
     );
-    if needs_rex(bits, rex) {
+    if needs_rex(rex) {
         rex_prefix(bits, rex, sink);
     }
     sink.put1(0x0f);
@@ -190,14 +195,14 @@ fn put_dynrexmp2<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
     );
     let enc = EncodingBits::from(bits);
     sink.put1(PREFIX[(enc.pp() - 1) as usize]);
-    if needs_rex(bits, rex) {
+    if needs_rex(rex) {
         rex_prefix(bits, rex, sink);
     }
     sink.put1(0x0f);
     sink.put1(bits as u8);
 }
 
-// Emit three-byte opcode (0F 3[8A] XX) with mandatory prefix.
+/// Emit three-byte opcode (0F 3[8A] XX) with mandatory prefix.
 fn put_mp3<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
     debug_assert_eq!(bits & 0x8800, 0x0800, "Invalid encoding bits for Mp3*");
     debug_assert_eq!(rex, BASE_REX, "Invalid registers for REX-less Mp3 encoding");
@@ -208,12 +213,29 @@ fn put_mp3<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
     sink.put1(bits as u8);
 }
 
-// Emit three-byte opcode (0F 3[8A] XX) with mandatory prefix and REX
+/// Emit three-byte opcode (0F 3[8A] XX) with mandatory prefix and REX
 fn put_rexmp3<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
     debug_assert_eq!(bits & 0x0800, 0x0800, "Invalid encoding bits for RexMp3*");
     let enc = EncodingBits::from(bits);
     sink.put1(PREFIX[(enc.pp() - 1) as usize]);
     rex_prefix(bits, rex, sink);
+    sink.put1(0x0f);
+    sink.put1(OP3_BYTE2[(enc.mm() - 2) as usize]);
+    sink.put1(bits as u8);
+}
+
+/// Emit three-byte opcode (0F 3[8A] XX) with mandatory prefix and an inferred REX prefix.
+fn put_dynrexmp3<CS: CodeSink + ?Sized>(bits: u16, rex: u8, sink: &mut CS) {
+    debug_assert_eq!(
+        bits & 0x0800,
+        0x0800,
+        "Invalid encoding bits for DynRexMp3*"
+    );
+    let enc = EncodingBits::from(bits);
+    sink.put1(PREFIX[(enc.pp() - 1) as usize]);
+    if needs_rex(rex) {
+        rex_prefix(bits, rex, sink);
+    }
     sink.put1(0x0f);
     sink.put1(OP3_BYTE2[(enc.mm() - 2) as usize]);
     sink.put1(bits as u8);

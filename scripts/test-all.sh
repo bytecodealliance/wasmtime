@@ -59,8 +59,12 @@ RUST_BACKTRACE=1 cargo test \
   --package wasmtime-environ \
   --package wasmtime-runtime \
   --package wasmtime-jit \
-  --package wasmtime-interface-types \
   --package wasmtime-obj \
+  --package wiggle \
+  --package wiggle-generate \
+  --package wiggle-test \
+  --package wiggle-macro \
+  --package wasi-common \
 
 # Test wasmtime-wasi-c, which doesn't support Windows.
 if [ "${OS:-Not}" != "Windows_NT" ]; then

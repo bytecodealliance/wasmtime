@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-cli"
-version = "0.12.0"
+version = "0.14.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Command-line interface for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -11,7 +11,6 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
 default-run = "wasmtime"
-publish = false
 
 [lib]
 doctest = false
@@ -23,36 +22,30 @@ doc = false
 
 [dependencies]
 # Enable all supported architectures by default.
-wasmtime = { path = "crates/api" }
-wasmtime-debug = { path = "crates/debug" }
-wasmtime-environ = { path = "crates/environ" }
-wasmtime-interface-types = { path = "crates/interface-types" }
-wasmtime-jit = { path = "crates/jit" }
-wasmtime-obj = { path = "crates/obj" }
-wasmtime-profiling = { path = "crates/profiling" }
-wasmtime-wast = { path = "crates/wast" }
-wasmtime-wasi = { path = "crates/wasi" }
-wasi-common = { path = "crates/wasi-common" }
+wasmtime = { path = "crates/api", version = "0.14.0", default-features = false }
+wasmtime-debug = { path = "crates/debug", version = "0.14.0" }
+wasmtime-environ = { path = "crates/environ", version = "0.14.0" }
+wasmtime-jit = { path = "crates/jit", version = "0.14.0" }
+wasmtime-obj = { path = "crates/obj", version = "0.14.0" }
+wasmtime-wast = { path = "crates/wast", version = "0.14.0" }
+wasmtime-wasi = { path = "crates/wasi", version = "0.14.0" }
+wasi-common = { path = "crates/wasi-common", version = "0.14.0" }
 structopt = { version = "0.3.5", features = ["color", "suggestions"] }
-faerie = "0.14.0"
+faerie = "0.15.0"
 anyhow = "1.0.19"
 target-lexicon = { version = "0.10.0", default-features = false }
-pretty_env_logger = "0.3.0"
+pretty_env_logger = "0.4.0"
 file-per-thread-logger = "0.1.1"
 wat = "1.0.10"
 libc = "0.2.60"
 rayon = "1.2.1"
-wasm-webidl-bindings = "0.8"
 
 [dev-dependencies]
-wasmtime-runtime = { path = "crates/runtime" }
+wasmtime-runtime = { path = "crates/runtime", version = "0.14.0" }
 more-asserts = "0.2.1"
-# This feature requires the wasm32-wasi target be installed. It enables
-# wasm32-wasi integration tests. To enable, run
-# `cargo test --features test-programs`.
 test-programs = { path = "crates/test-programs" }
 tempfile = "3.1.0"
-filecheck = "0.4.0"
+filecheck = "0.5.0"
 
 [build-dependencies]
 anyhow = "1.0.19"
@@ -65,23 +58,24 @@ members = [
   "cranelift",
   "crates/c-api",
   "crates/fuzzing",
-  "crates/misc/py",
   "crates/misc/run-examples",
   "crates/misc/rust",
   "crates/wiggle",
   "examples/fib-debug/wasm",
+  "examples/wasi/wasm",
   "fuzz",
 ]
 
 [features]
+default = ["jitdump", "wasmtime/wat"]
 lightbeam = [
     "wasmtime-environ/lightbeam",
     "wasmtime-jit/lightbeam",
     "wasmtime-wast/lightbeam",
     "wasmtime/lightbeam",
 ]
-jitdump = ["wasmtime-profiling/jitdump"]
-test_programs = ["test-programs/test_programs"]
+jitdump = ["wasmtime/jitdump"]
+vtune = ["wasmtime/vtune"]
 
 [badges]
 maintenance = { status = "actively-developed" }

@@ -1,40 +1,29 @@
 //! Defines `ObjectBackend`.
 
-use crate::traps::ObjectTrapSink;
 use cranelift_codegen::binemit::{
-    Addend, CodeOffset, NullStackmapSink, NullTrapSink, Reloc, RelocSink,
+    Addend, CodeOffset, NullStackmapSink, Reloc, RelocSink, TrapSink,
 };
 use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, binemit, ir};
 use cranelift_module::{
     Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleNamespace,
-    ModuleResult, TrapSite,
+    ModuleResult,
 };
 use object::write::{
     Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
 };
-use object::{RelocationEncoding, RelocationKind, SymbolFlags, SymbolKind, SymbolScope};
+use object::{
+    RelocationEncoding, RelocationKind, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
+};
 use std::collections::HashMap;
 use std::mem;
-use std::ops::IndexMut;
 use target_lexicon::{BinaryFormat, PointerWidth};
-
-#[derive(Debug)]
-/// Setting to enable collection of traps. Setting this to `Enabled` in
-/// `ObjectBuilder` means that `ObjectProduct` will contains trap sites.
-pub enum ObjectTrapCollection {
-    /// `ObjectProduct::traps` will be empty
-    Disabled,
-    /// `ObjectProduct::traps` will contain trap sites
-    Enabled,
-}
 
 /// A builder for `ObjectBackend`.
 pub struct ObjectBuilder {
     isa: Box<dyn TargetIsa>,
     name: Vec<u8>,
-    collect_traps: ObjectTrapCollection,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     function_alignment: u64,
 }
@@ -43,9 +32,6 @@ impl ObjectBuilder {
     /// Create a new `ObjectBuilder` using the given Cranelift target, that
     /// can be passed to [`Module::new`](cranelift_module::Module::new).
     ///
-    /// `collect_traps` setting determines whether trap information is collected in the
-    /// `ObjectProduct`.
-    ///
     /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
@@ -53,13 +39,11 @@ impl ObjectBuilder {
     pub fn new<V: Into<Vec<u8>>>(
         isa: Box<dyn TargetIsa>,
         name: V,
-        collect_traps: ObjectTrapCollection,
         libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     ) -> Self {
         Self {
             isa,
             name: name.into(),
-            collect_traps,
             libcall_names,
             function_alignment: 1,
         }
@@ -80,11 +64,9 @@ pub struct ObjectBackend {
     object: Object,
     functions: SecondaryMap<FuncId, Option<SymbolId>>,
     data_objects: SecondaryMap<DataId, Option<SymbolId>>,
-    traps: SecondaryMap<FuncId, Vec<TrapSite>>,
     relocs: Vec<SymbolRelocs>,
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
-    collect_traps: ObjectTrapCollection,
     function_alignment: u64,
 }
 
@@ -111,11 +93,9 @@ impl Backend for ObjectBackend {
             object,
             functions: SecondaryMap::new(),
             data_objects: SecondaryMap::new(),
-            traps: SecondaryMap::new(),
             relocs: Vec::new(),
             libcalls: HashMap::new(),
             libcall_names: builder.libcall_names,
-            collect_traps: builder.collect_traps,
             function_alignment: builder.function_alignment,
         }
     }
@@ -182,41 +162,31 @@ impl Backend for ObjectBackend {
         }
     }
 
-    fn define_function(
+    fn define_function<TS>(
         &mut self,
         func_id: FuncId,
         _name: &str,
         ctx: &cranelift_codegen::Context,
         _namespace: &ModuleNamespace<Self>,
         code_size: u32,
-    ) -> ModuleResult<(ObjectCompiledFunction, &[TrapSite])> {
+        trap_sink: &mut TS,
+    ) -> ModuleResult<ObjectCompiledFunction>
+    where
+        TS: TrapSink,
+    {
         let mut code: Vec<u8> = vec![0; code_size as usize];
         let mut reloc_sink = ObjectRelocSink::new(self.object.format());
-        let mut trap_sink = ObjectTrapSink::default();
         let mut stackmap_sink = NullStackmapSink {};
 
-        if let ObjectTrapCollection::Enabled = self.collect_traps {
-            unsafe {
-                ctx.emit_to_memory(
-                    &*self.isa,
-                    code.as_mut_ptr(),
-                    &mut reloc_sink,
-                    &mut trap_sink,
-                    &mut stackmap_sink,
-                )
-            };
-        } else {
-            let mut trap_sink = NullTrapSink {};
-            unsafe {
-                ctx.emit_to_memory(
-                    &*self.isa,
-                    code.as_mut_ptr(),
-                    &mut reloc_sink,
-                    &mut trap_sink,
-                    &mut stackmap_sink,
-                )
-            };
-        }
+        unsafe {
+            ctx.emit_to_memory(
+                &*self.isa,
+                code.as_mut_ptr(),
+                &mut reloc_sink,
+                trap_sink,
+                &mut stackmap_sink,
+            )
+        };
 
         let symbol = self.functions[func_id].unwrap();
         let section = self.object.section_id(StandardSection::Text);
@@ -230,9 +200,7 @@ impl Backend for ObjectBackend {
                 relocs: reloc_sink.relocs,
             });
         }
-        let trapref = self.traps.index_mut(func_id);
-        *trapref = trap_sink.sites;
-        Ok((ObjectCompiledFunction, trapref))
+        Ok(ObjectCompiledFunction)
     }
 
     fn define_function_bytes(
@@ -241,16 +209,13 @@ impl Backend for ObjectBackend {
         _name: &str,
         bytes: &[u8],
         _namespace: &ModuleNamespace<Self>,
-        traps: Vec<TrapSite>,
-    ) -> ModuleResult<(ObjectCompiledFunction, &[TrapSite])> {
+    ) -> ModuleResult<ObjectCompiledFunction> {
         let symbol = self.functions[func_id].unwrap();
         let section = self.object.section_id(StandardSection::Text);
         let _offset = self
             .object
             .add_symbol_data(symbol, section, bytes, self.function_alignment);
-        let trapref = self.traps.index_mut(func_id);
-        *trapref = traps;
-        Ok((ObjectCompiledFunction, trapref))
+        Ok(ObjectCompiledFunction)
     }
 
     fn define_data(
@@ -417,11 +382,19 @@ impl Backend for ObjectBackend {
             }
         }
 
+        // Indicate that this object has a non-executable stack.
+        if self.object.format() == BinaryFormat::Elf {
+            self.object.add_section(
+                vec![],
+                ".note.GNU-stack".as_bytes().to_vec(),
+                SectionKind::Linker,
+            );
+        }
+
         ObjectProduct {
             object: self.object,
             functions: self.functions,
             data_objects: self.data_objects,
-            traps: self.traps,
         }
     }
 }
@@ -474,6 +447,7 @@ fn translate_linkage(linkage: Linkage) -> (SymbolScope, bool) {
     let scope = match linkage {
         Linkage::Import => SymbolScope::Unknown,
         Linkage::Local => SymbolScope::Compilation,
+        Linkage::Hidden => SymbolScope::Linkage,
         Linkage::Export | Linkage::Preemptible => SymbolScope::Dynamic,
     };
     // TODO: this matches rustc_codegen_cranelift, but may be wrong.
@@ -495,8 +469,6 @@ pub struct ObjectProduct {
     pub functions: SecondaryMap<FuncId, Option<SymbolId>>,
     /// Symbol IDs for data objects (both declared and defined).
     pub data_objects: SecondaryMap<DataId, Option<SymbolId>>,
-    /// Trap sites for defined functions.
-    pub traps: SecondaryMap<FuncId, Vec<TrapSite>>,
 }
 
 impl ObjectProduct {
@@ -514,7 +486,7 @@ impl ObjectProduct {
 
     /// Write the object bytes in memory.
     #[inline]
-    pub fn emit(self) -> Result<Vec<u8>, String> {
+    pub fn emit(self) -> Result<Vec<u8>, object::write::Error> {
         self.object.write()
     }
 }
@@ -583,7 +555,7 @@ impl RelocSink for ObjectRelocSink {
                     "ElfX86_64TlsGd is not supported for this file format"
                 );
                 (
-                    RelocationKind::Elf(goblin::elf64::reloc::R_X86_64_TLSGD),
+                    RelocationKind::Elf(object::elf::R_X86_64_TLSGD),
                     RelocationEncoding::Generic,
                     32,
                 )
@@ -597,7 +569,7 @@ impl RelocSink for ObjectRelocSink {
                 addend += 4; // X86_64_RELOC_TLV has an implicit addend of -4
                 (
                     RelocationKind::MachO {
-                        value: goblin::mach::relocation::X86_64_RELOC_TLV,
+                        value: object::macho::X86_64_RELOC_TLV,
                         relative: true,
                     },
                     RelocationEncoding::Generic,

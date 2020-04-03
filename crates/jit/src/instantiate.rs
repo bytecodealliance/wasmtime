@@ -7,9 +7,10 @@ use crate::compiler::Compiler;
 use crate::imports::resolve_imports;
 use crate::link::link_module;
 use crate::resolver::Resolver;
+use std::collections::HashMap;
 use std::io::Write;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_debug::read_debuginfo;
 use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
@@ -19,8 +20,8 @@ use wasmtime_environ::{
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{
-    GdbJitImageRegistration, InstanceHandle, InstantiationError, TrapRegistration, VMFunctionBody,
-    VMSharedSignatureIndex,
+    GdbJitImageRegistration, InstanceHandle, InstantiationError, SignatureRegistry,
+    TrapRegistration, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
 };
 
 /// An error condition while setting up a wasm instance, be it validation,
@@ -50,6 +51,7 @@ pub enum SetupError {
 struct RawCompiledModule<'data> {
     module: Module,
     finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
     data_initializers: Box<[DataInitializer<'data>]>,
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<GdbJitImageRegistration>,
@@ -62,7 +64,7 @@ impl<'data> RawCompiledModule<'data> {
         compiler: &mut Compiler,
         data: &'data [u8],
         debug_info: bool,
-        profiler: Option<&Arc<Mutex<Box<dyn ProfilingAgent + Send>>>>,
+        profiler: &dyn ProfilingAgent,
     ) -> Result<Self, SetupError> {
         let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
 
@@ -78,20 +80,14 @@ impl<'data> RawCompiledModule<'data> {
             None
         };
 
-        let (finished_functions, jt_offsets, relocations, dbg_image, trap_registration) = compiler
-            .compile(
-                &translation.module,
-                translation.module_translation.as_ref().unwrap(),
-                translation.function_body_inputs,
-                debug_data,
-            )?;
-
-        link_module(
+        let compilation = compiler.compile(
             &translation.module,
-            &finished_functions,
-            &jt_offsets,
-            relocations,
-        );
+            translation.module_translation.as_ref().unwrap(),
+            translation.function_body_inputs,
+            debug_data,
+        )?;
+
+        link_module(&translation.module, &compilation);
 
         // Compute indices into the shared signature table.
         let signatures = {
@@ -109,21 +105,13 @@ impl<'data> RawCompiledModule<'data> {
         compiler.publish_compiled_code();
 
         // Initialize profiler and load the wasm module
-        match profiler {
-            Some(_) => {
-                let region_name = String::from("wasm_module");
-                let mut profiler = profiler.unwrap().lock().unwrap();
-                match &dbg_image {
-                    Some(dbg) => {
-                        compiler.profiler_module_load(&mut profiler, &region_name, Some(&dbg))
-                    }
-                    _ => compiler.profiler_module_load(&mut profiler, &region_name, None),
-                };
-            }
-            _ => (),
-        };
+        profiler.module_load(
+            &translation.module,
+            &compilation.finished_functions,
+            compilation.dbg_image.as_deref(),
+        );
 
-        let dbg_jit_registration = if let Some(img) = dbg_image {
+        let dbg_jit_registration = if let Some(img) = compilation.dbg_image {
             let mut bytes = Vec::new();
             bytes.write_all(&img).expect("all written");
             let reg = GdbJitImageRegistration::register(bytes);
@@ -134,11 +122,12 @@ impl<'data> RawCompiledModule<'data> {
 
         Ok(Self {
             module: translation.module,
-            finished_functions: finished_functions.into_boxed_slice(),
+            finished_functions: compilation.finished_functions.into_boxed_slice(),
+            trampolines: compilation.trampolines,
             data_initializers: translation.data_initializers.into_boxed_slice(),
             signatures: signatures.into_boxed_slice(),
             dbg_jit_registration,
-            trap_registration,
+            trap_registration: compilation.trap_registration,
         })
     }
 }
@@ -147,6 +136,7 @@ impl<'data> RawCompiledModule<'data> {
 pub struct CompiledModule {
     module: Arc<Module>,
     finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
     data_initializers: Box<[OwnedDataInitializer]>,
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
@@ -159,13 +149,14 @@ impl CompiledModule {
         compiler: &mut Compiler,
         data: &'data [u8],
         debug_info: bool,
-        profiler: Option<&Arc<Mutex<Box<dyn ProfilingAgent + Send>>>>,
+        profiler: &dyn ProfilingAgent,
     ) -> Result<Self, SetupError> {
         let raw = RawCompiledModule::<'data>::new(compiler, data, debug_info, profiler)?;
 
         Ok(Self::from_parts(
             raw.module,
             raw.finished_functions,
+            raw.trampolines,
             raw.data_initializers
                 .iter()
                 .map(OwnedDataInitializer::new)
@@ -181,6 +172,7 @@ impl CompiledModule {
     pub fn from_parts(
         module: Module,
         finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
+        trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
         data_initializers: Box<[OwnedDataInitializer]>,
         signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         dbg_jit_registration: Option<GdbJitImageRegistration>,
@@ -189,6 +181,7 @@ impl CompiledModule {
         Self {
             module: Arc::new(module),
             finished_functions,
+            trampolines,
             data_initializers,
             signatures,
             dbg_jit_registration: dbg_jit_registration.map(Rc::new),
@@ -209,6 +202,7 @@ impl CompiledModule {
         &self,
         is_bulk_memory: bool,
         resolver: &mut dyn Resolver,
+        sig_registry: &SignatureRegistry,
     ) -> Result<InstanceHandle, InstantiationError> {
         let data_initializers = self
             .data_initializers
@@ -218,11 +212,12 @@ impl CompiledModule {
                 data: &*init.data,
             })
             .collect::<Vec<_>>();
-        let imports = resolve_imports(&self.module, resolver)?;
+        let imports = resolve_imports(&self.module, &sig_registry, resolver)?;
         InstanceHandle::new(
             Arc::clone(&self.module),
             self.trap_registration.clone(),
             self.finished_functions.clone(),
+            self.trampolines.clone(),
             imports,
             &data_initializers,
             self.signatures.clone(),
@@ -235,6 +230,11 @@ impl CompiledModule {
     /// Return a reference-counting pointer to a module.
     pub fn module(&self) -> &Arc<Module> {
         &self.module
+    }
+
+    /// Return a reference-counting pointer to a module.
+    pub fn module_mut(&mut self) -> &mut Arc<Module> {
+        &mut self.module
     }
 
     /// Return a reference to a module.
@@ -282,9 +282,12 @@ pub unsafe fn instantiate(
     resolver: &mut dyn Resolver,
     debug_info: bool,
     is_bulk_memory: bool,
-    profiler: Option<&Arc<Mutex<Box<dyn ProfilingAgent + Send>>>>,
+    profiler: &dyn ProfilingAgent,
 ) -> Result<InstanceHandle, SetupError> {
-    let instance = CompiledModule::new(compiler, data, debug_info, profiler)?
-        .instantiate(is_bulk_memory, resolver)?;
+    let instance = CompiledModule::new(compiler, data, debug_info, profiler)?.instantiate(
+        is_bulk_memory,
+        resolver,
+        compiler.signatures(),
+    )?;
     Ok(instance)
 }

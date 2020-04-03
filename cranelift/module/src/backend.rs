@@ -6,7 +6,6 @@ use crate::FuncId;
 use crate::Linkage;
 use crate::ModuleNamespace;
 use crate::ModuleResult;
-use crate::TrapSite;
 use core::marker;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
@@ -15,7 +14,6 @@ use cranelift_codegen::{binemit, ir};
 use std::borrow::ToOwned;
 use std::boxed::Box;
 use std::string::String;
-use std::vec::Vec;
 
 /// A `Backend` implements the functionality needed to support a `Module`.
 ///
@@ -79,14 +77,17 @@ where
     /// Define a function, producing the function body from the given `Context`.
     ///
     /// Functions must be declared before being defined.
-    fn define_function(
+    fn define_function<TS>(
         &mut self,
         id: FuncId,
         name: &str,
         ctx: &Context,
         namespace: &ModuleNamespace<Self>,
         code_size: u32,
-    ) -> ModuleResult<(Self::CompiledFunction, &[TrapSite])>;
+        trap_sink: &mut TS,
+    ) -> ModuleResult<Self::CompiledFunction>
+    where
+        TS: binemit::TrapSink;
 
     /// Define a function, taking the function body from the given `bytes`.
     ///
@@ -97,8 +98,7 @@ where
         name: &str,
         bytes: &[u8],
         namespace: &ModuleNamespace<Self>,
-        traps: Vec<TrapSite>,
-    ) -> ModuleResult<(Self::CompiledFunction, &[TrapSite])>;
+    ) -> ModuleResult<Self::CompiledFunction>;
 
     /// Define a zero-initialized data object of the given size.
     ///

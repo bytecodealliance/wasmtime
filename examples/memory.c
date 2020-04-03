@@ -141,7 +141,7 @@ int main(int argc, const char* argv[]) {
 
   // Parse the wat into the binary wasm format
   wasm_byte_vec_t binary, error;
-  if (wasmtime_wat2wasm(engine, &wat, &binary, &error) == 0) {
+  if (wasmtime_wat2wasm(&wat, &binary, &error) == 0) {
     fprintf(stderr, "failed to parse wat %.*s\n", (int) error.size, error.data);
     return 1;
   }
