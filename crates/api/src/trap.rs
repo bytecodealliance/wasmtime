@@ -50,6 +50,9 @@ impl Trap {
             wasmtime_runtime::Trap::Wasm { desc, backtrace } => {
                 Trap::new_with_trace(desc.to_string(), backtrace)
             }
+            wasmtime_runtime::Trap::OOM { backtrace } => {
+                Trap::new_with_trace("out of memory".to_string(), backtrace)
+            }
         }
     }
 
