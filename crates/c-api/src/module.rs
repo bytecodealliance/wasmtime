@@ -1,5 +1,7 @@
+use crate::{handle_result, wasmtime_error_t};
 use crate::{wasm_byte_vec_t, wasm_exporttype_vec_t, wasm_importtype_vec_t};
 use crate::{wasm_exporttype_t, wasm_importtype_t, wasm_store_t};
+use std::ptr;
 use wasmtime::{HostRef, Module};
 
 #[repr(C)]
@@ -23,31 +25,57 @@ pub extern "C" fn wasm_module_new(
     store: &wasm_store_t,
     binary: &wasm_byte_vec_t,
 ) -> Option<Box<wasm_module_t>> {
+    let mut ret = ptr::null_mut();
+    match wasmtime_module_new(store, binary, &mut ret) {
+        Some(_err) => None,
+        None => {
+            assert!(!ret.is_null());
+            Some(unsafe { Box::from_raw(ret) })
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_module_new(
+    store: &wasm_store_t,
+    binary: &wasm_byte_vec_t,
+    ret: &mut *mut wasm_module_t,
+) -> Option<Box<wasmtime_error_t>> {
     let binary = binary.as_slice();
     let store = &store.store.borrow();
-    let module = Module::from_binary(store, binary).ok()?;
-    let imports = module
-        .imports()
-        .iter()
-        .map(|i| wasm_importtype_t::new(i.clone()))
-        .collect::<Vec<_>>();
-    let exports = module
-        .exports()
-        .iter()
-        .map(|e| wasm_exporttype_t::new(e.clone()))
-        .collect::<Vec<_>>();
-    Some(Box::new(wasm_module_t {
-        module: HostRef::new(module),
-        imports,
-        exports,
-    }))
+    handle_result(Module::from_binary(store, binary), |module| {
+        let imports = module
+            .imports()
+            .iter()
+            .map(|i| wasm_importtype_t::new(i.clone()))
+            .collect::<Vec<_>>();
+        let exports = module
+            .exports()
+            .iter()
+            .map(|e| wasm_exporttype_t::new(e.clone()))
+            .collect::<Vec<_>>();
+        let module = Box::new(wasm_module_t {
+            module: HostRef::new(module),
+            imports,
+            exports,
+        });
+        *ret = Box::into_raw(module);
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_module_validate(store: &wasm_store_t, binary: &wasm_byte_vec_t) -> bool {
+    wasmtime_module_validate(store, binary).is_none()
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_module_validate(
+    store: &wasm_store_t,
+    binary: &wasm_byte_vec_t,
+) -> Option<Box<wasmtime_error_t>> {
     let binary = binary.as_slice();
     let store = &store.store.borrow();
-    Module::validate(store, binary).is_ok()
+    handle_result(Module::validate(store, binary), |()| {})
 }
 
 #[no_mangle]

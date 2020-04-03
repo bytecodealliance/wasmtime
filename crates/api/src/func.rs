@@ -1,5 +1,5 @@
 use crate::{Extern, FuncType, Memory, Store, Trap, Val, ValType};
-use anyhow::{ensure, Context as _};
+use anyhow::{bail, ensure, Context as _, Result};
 use std::cmp::max;
 use std::fmt;
 use std::mem;
@@ -493,18 +493,18 @@ impl Func {
     ///
     /// This function should not panic unless the underlying function itself
     /// initiates a panic.
-    pub fn call(&self, params: &[Val]) -> Result<Box<[Val]>, Trap> {
+    pub fn call(&self, params: &[Val]) -> Result<Box<[Val]>> {
         // We need to perform a dynamic check that the arguments given to us
         // match the signature of this function and are appropriate to pass to
         // this function. This involves checking to make sure we have the right
         // number and types of arguments as well as making sure everything is
         // from the same `Store`.
         if self.ty.params().len() != params.len() {
-            return Err(Trap::new(format!(
+            bail!(
                 "expected {} arguments, got {}",
                 self.ty.params().len(),
                 params.len()
-            )));
+            );
         }
 
         let mut values_vec = vec![0; max(params.len(), self.ty.results().len())];
@@ -513,12 +513,10 @@ impl Func {
         let param_tys = self.ty.params().iter();
         for ((arg, slot), ty) in params.iter().zip(&mut values_vec).zip(param_tys) {
             if arg.ty() != *ty {
-                return Err(Trap::new("argument type mismatch"));
+                bail!("argument type mismatch");
             }
             if !arg.comes_from_same_store(&self.store) {
-                return Err(Trap::new(
-                    "cross-`Store` values are not currently supported",
-                ));
+                bail!("cross-`Store` values are not currently supported");
             }
             unsafe {
                 arg.write_value_to(slot);
@@ -536,7 +534,7 @@ impl Func {
                 )
             })
         } {
-            return Err(Trap::from_jit(error));
+            return Err(Trap::from_jit(error).into());
         }
 
         // Load the return values out of `values_vec`.

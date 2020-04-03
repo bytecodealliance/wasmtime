@@ -11,6 +11,12 @@ pub struct wasm_trap_t {
 wasmtime_c_api_macros::declare_ref!(wasm_trap_t);
 
 impl wasm_trap_t {
+    pub(crate) fn new(trap: Trap) -> wasm_trap_t {
+        wasm_trap_t {
+            trap: HostRef::new(trap),
+        }
+    }
+
     fn anyref(&self) -> wasmtime::AnyRef {
         self.trap.anyref()
     }

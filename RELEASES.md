@@ -2,6 +2,29 @@
 
 --------------------------------------------------------------------------------
 
+## 0.16.0
+
+Unreleased
+
+### Added
+
+* The C API has a number of new `wasmtime_*` functions which return error
+  objects to get detailed error information when an API fails.
+  [#TODO](https://github.com/bytecodealliance/wasmtime/pull/TODO)
+
+### Changed
+
+* The `Func::call` API has changed its error type from `Trap` to `anyhow::Error`
+  to distinguish between wasm traps and runtiem violations (like the wrong
+  number of parameters).
+  [#TODO](https://github.com/bytecodealliance/wasmtime/pull/TODO)
+
+* A number of `wasmtime_linker_*` and `wasmtime_config_*` C APIs have new type
+  signatures which reflect returning errors.
+  [#TODO](https://github.com/bytecodealliance/wasmtime/pull/TODO)
+
+--------------------------------------------------------------------------------
+
 ## 0.15.0
 
 Unreleased

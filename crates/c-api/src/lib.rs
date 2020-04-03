@@ -7,6 +7,7 @@
 
 mod config;
 mod engine;
+mod error;
 mod r#extern;
 mod func;
 mod global;
@@ -24,6 +25,7 @@ mod vec;
 
 pub use crate::config::*;
 pub use crate::engine::*;
+pub use crate::error::*;
 pub use crate::func::*;
 pub use crate::global::*;
 pub use crate::instance::*;

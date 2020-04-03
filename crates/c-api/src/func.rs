@@ -1,5 +1,6 @@
 use crate::{wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t};
-use crate::{wasm_name_t, wasm_trap_t, ExternHost};
+use crate::{wasm_name_t, wasm_trap_t, wasmtime_error_t, ExternHost};
+use anyhow::anyhow;
 use std::ffi::c_void;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
@@ -160,16 +161,54 @@ pub extern "C" fn wasmtime_func_new_with_env(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_func_call(
-    func: &wasm_func_t,
+    wasm_func: &wasm_func_t,
     args: *const wasm_val_t,
     results: *mut wasm_val_t,
 ) -> *mut wasm_trap_t {
-    let func = func.func().borrow();
-    let mut params = Vec::with_capacity(func.param_arity());
-    for i in 0..func.param_arity() {
-        let val = &(*args.add(i));
-        params.push(val.val());
+    let func = wasm_func.func().borrow();
+    let mut trap = ptr::null_mut();
+    let error = wasmtime_func_call(
+        wasm_func,
+        args,
+        func.param_arity(),
+        results,
+        func.result_arity(),
+        &mut trap,
+    );
+    match error {
+        Some(err) => Box::into_raw(err.to_trap()),
+        None => trap,
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_func_call(
+    func: &wasm_func_t,
+    args: *const wasm_val_t,
+    num_args: usize,
+    results: *mut wasm_val_t,
+    num_results: usize,
+    trap_ptr: &mut *mut wasm_trap_t,
+) -> Option<Box<wasmtime_error_t>> {
+    _wasmtime_func_call(
+        func,
+        std::slice::from_raw_parts(args, num_args),
+        std::slice::from_raw_parts_mut(results, num_results),
+        trap_ptr,
+    )
+}
+
+fn _wasmtime_func_call(
+    func: &wasm_func_t,
+    args: &[wasm_val_t],
+    results: &mut [wasm_val_t],
+    trap_ptr: &mut *mut wasm_trap_t,
+) -> Option<Box<wasmtime_error_t>> {
+    let func = func.func().borrow();
+    if results.len() != func.result_arity() {
+        return Some(Box::new(anyhow!("wrong number of results provided").into()));
+    }
+    let params = args.iter().map(|i| i.val()).collect::<Vec<_>>();
 
     // We're calling arbitrary code here most of the time, and we in general
     // want to try to insulate callers against bugs in wasmtime/wasi/etc if we
@@ -178,18 +217,18 @@ pub unsafe extern "C" fn wasm_func_call(
     let result = panic::catch_unwind(AssertUnwindSafe(|| func.call(&params)));
     match result {
         Ok(Ok(out)) => {
-            for i in 0..func.result_arity() {
-                let val = &mut (*results.add(i));
-                *val = wasm_val_t::from_val(&out[i]);
+            for (slot, val) in results.iter_mut().zip(out.iter()) {
+                *slot = wasm_val_t::from_val(val);
             }
-            ptr::null_mut()
+            None
         }
-        Ok(Err(trap)) => {
-            let trap = Box::new(wasm_trap_t {
-                trap: HostRef::new(trap),
-            });
-            Box::into_raw(trap)
-        }
+        Ok(Err(trap)) => match trap.downcast::<Trap>() {
+            Ok(trap) => {
+                *trap_ptr = Box::into_raw(Box::new(wasm_trap_t::new(trap)));
+                None
+            }
+            Err(err) => Some(Box::new(err.into())),
+        },
         Err(panic) => {
             let trap = if let Some(msg) = panic.downcast_ref::<String>() {
                 Trap::new(msg)
@@ -198,10 +237,9 @@ pub unsafe extern "C" fn wasm_func_call(
             } else {
                 Trap::new("rust panic happened")
             };
-            let trap = Box::new(wasm_trap_t {
-                trap: HostRef::new(trap),
-            });
-            Box::into_raw(trap)
+            let trap = Box::new(wasm_trap_t::new(trap));
+            *trap_ptr = Box::into_raw(trap);
+            None
         }
     }
 }
