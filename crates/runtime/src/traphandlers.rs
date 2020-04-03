@@ -659,7 +659,7 @@ fn setup_unix_sigaltstack() -> Result<(), Trap> {
         assert_eq!(r, 0, "learning about sigaltstack failed");
         if old_stack.ss_flags & libc::SS_DISABLE == 0 && old_stack.ss_size >= MIN_STACK_SIZE {
             *slot = Tls::BigEnough;
-            return Ok(())
+            return Ok(());
         }
 
         // ... but failing that we need to allocate our own, so do all that
@@ -677,13 +677,17 @@ fn setup_unix_sigaltstack() -> Result<(), Trap> {
             0,
         );
         if ptr == libc::MAP_FAILED {
-            return Err(Trap::oom())
+            return Err(Trap::oom());
         }
 
         // Prepare the stack with readable/writable memory and then reigster it
         // with `sigaltstack`.
         let stack_ptr = (ptr as usize + guard_size) as *mut libc::c_void;
-        let r = libc::mprotect(stack_ptr, MIN_STACK_SIZE, libc::PROT_READ | libc::PROT_WRITE);
+        let r = libc::mprotect(
+            stack_ptr,
+            MIN_STACK_SIZE,
+            libc::PROT_READ | libc::PROT_WRITE,
+        );
         assert_eq!(r, 0, "mprotect to configure memory for sigaltstack failed");
         let new_stack = libc::stack_t {
             ss_sp: stack_ptr,
@@ -703,7 +707,10 @@ fn setup_unix_sigaltstack() -> Result<(), Trap> {
     impl Drop for Tls {
         fn drop(&mut self) {
             let (ptr, size) = match self {
-                Tls::Allocated { mmap_ptr, mmap_size } => (*mmap_ptr, *mmap_size),
+                Tls::Allocated {
+                    mmap_ptr,
+                    mmap_size,
+                } => (*mmap_ptr, *mmap_size),
                 _ => return,
             };
             unsafe {
