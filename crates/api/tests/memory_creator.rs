@@ -22,9 +22,10 @@ mod not_for_windows {
 
     impl CustomMemory {
         unsafe fn new(num_wasm_pages: u32, max_wasm_pages: u32) -> Self {
-            let size = max_wasm_pages as usize * WASM_PAGE_SIZE as usize;
-            let used_size = num_wasm_pages as usize * WASM_PAGE_SIZE as usize;
             let page_size = sysconf(_SC_PAGESIZE) as usize;
+            let guard_size = page_size;
+            let size = max_wasm_pages as usize * WASM_PAGE_SIZE as usize + guard_size;
+            let used_size = num_wasm_pages as usize * WASM_PAGE_SIZE as usize;
             assert_eq!(size % page_size, 0); // we rely on WASM_PAGE_SIZE being multiple of host page size
 
             let mem = mmap(null_mut(), size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
@@ -62,7 +63,9 @@ mod not_for_windows {
             let new_pages = prev_pages.checked_add(delta)?;
             let new_size = (new_pages as usize).checked_mul(WASM_PAGE_SIZE as usize)?;
 
-            if new_size > self.size {
+            let guard_size = unsafe { sysconf(_SC_PAGESIZE) as usize };
+
+            if new_size > self.size - guard_size {
                 return None;
             }
             unsafe {
