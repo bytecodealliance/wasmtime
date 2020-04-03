@@ -54,7 +54,7 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
     fn vmmemory(&self) -> VMMemoryDefinition {
         let mut mem = self.mem.borrow_mut();
         VMMemoryDefinition {
-            base: mem.as_mut_ptr(),
+            base: mem.as_ptr(),
             current_length: mem.size() as usize * WASM_PAGE_SIZE as usize,
         }
     }

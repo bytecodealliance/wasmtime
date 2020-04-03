@@ -874,11 +874,8 @@ pub unsafe trait LinearMemory {
     /// of wasm pages.
     fn grow(&self, delta: u32) -> Option<u32>;
 
-    /// Return the allocated memory as a pointer to u8.
-    fn as_ptr(&self) -> *const u8;
-
     /// Return the allocated memory as a mutable pointer to u8.
-    fn as_mut_ptr(&mut self) -> *mut u8;
+    fn as_ptr(&mut self) -> *mut u8;
 }
 
 /// A memory creator. Can be used to provide a memory creator
