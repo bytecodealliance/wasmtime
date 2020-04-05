@@ -40,9 +40,9 @@ function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8])
                           block16:
 [RexOp1pu_id#b8]              v21 = iconst.i32 0
 [RexOp1umr#89]                v79 = uextend.i64 v5
-[DynRexOp1r_ib#8083]          v80 = iadd_imm.i64 v4, 0
+[RexOp1r_ib#8083]             v80 = iadd_imm.i64 v4, 0
 [RexOp1ld#808b]               v81 = load.i64 v80
-[DynRexOp1rr#8001]            v22 = iadd v81, v79
+[RexOp1rr#8001]               v22 = iadd v81, v79
 [RexMp1st#189]                istore16 v21, v22
 [Op1jmpb#eb]                  jump block9
 
@@ -81,14 +81,14 @@ function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8])
 
                           block19:
 [RexOp1umr#89]                v82 = uextend.i64 v52
-[DynRexOp1r_ib#8083]          v83 = iadd_imm.i64 v4, 0
+[RexOp1r_ib#8083]             v83 = iadd_imm.i64 v4, 0
 [RexOp1ld#808b]               v84 = load.i64 v83
-[DynRexOp1rr#8001]            v57 = iadd v84, v82
+[RexOp1rr#8001]               v57 = iadd v84, v82
 [RexOp1ld#8b]                 v58 = load.i32 v57
 [RexOp1umr#89]                v85 = uextend.i64 v58
-[DynRexOp1r_ib#8083]          v86 = iadd_imm.i64 v4, 0
+[RexOp1r_ib#8083]             v86 = iadd_imm.i64 v4, 0
 [RexOp1ld#808b]               v87 = load.i64 v86
-[DynRexOp1rr#8001]            v64 = iadd v87, v85
+[RexOp1rr#8001]               v64 = iadd v87, v85
 [RexOp1st#88]                 istore8 v59, v64
 [RexOp1pu_id#b8]              v65 = iconst.i32 0
 [Op1jmpb#eb]                  jump block13(v65)
@@ -98,9 +98,9 @@ function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8])
 
                           block13(v51: i32):
 [RexOp1umr#89]                v88 = uextend.i64 v45
-[DynRexOp1r_ib#8083]          v89 = iadd_imm.i64 v4, 0
+[RexOp1r_ib#8083]             v89 = iadd_imm.i64 v4, 0
 [RexOp1ld#808b]               v90 = load.i64 v89
-[DynRexOp1rr#8001]            v71 = iadd v90, v88
+[RexOp1rr#8001]               v71 = iadd v90, v88
 [RexOp1st#89]                 store v51, v71
 [Op1jmpb#eb]                  jump block12
 

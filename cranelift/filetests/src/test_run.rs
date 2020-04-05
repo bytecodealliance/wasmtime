@@ -6,7 +6,9 @@ use crate::function_runner::FunctionRunner;
 use crate::subtest::{Context, SubTest, SubtestResult};
 use cranelift_codegen;
 use cranelift_codegen::ir;
+use cranelift_reader::parse_run_command;
 use cranelift_reader::TestCommand;
+use log::trace;
 use std::borrow::Cow;
 
 struct TestRun;
@@ -36,6 +38,12 @@ impl SubTest for TestRun {
     fn run(&self, func: Cow<ir::Function>, context: &Context) -> SubtestResult<()> {
         for comment in context.details.comments.iter() {
             if comment.text.contains("run") {
+                let trimmed_comment = comment.text.trim_start_matches(|c| c == ' ' || c == ';');
+                let command = parse_run_command(trimmed_comment, &func.signature)
+                    .map_err(|e| format!("{}", e))?;
+                trace!("Parsed run command: {}", command);
+                // TODO in following changes we will use the parsed command to alter FunctionRunner's behavior.
+
                 let runner =
                     FunctionRunner::with_host_isa(func.clone().into_owned(), context.flags.clone());
                 runner.run()?

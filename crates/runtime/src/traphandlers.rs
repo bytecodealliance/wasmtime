@@ -252,16 +252,6 @@ pub fn init() {
 }
 
 fn real_init() {
-    // This is a really weird and unfortunate function call. For all the gory
-    // details see #829, but the tl;dr; is that in a trap handler we have 2
-    // pages of stack space on Linux, and calling into libunwind which triggers
-    // the dynamic loader blows the stack.
-    //
-    // This is a dumb hack to work around this system-specific issue by
-    // capturing a backtrace once in the lifetime of a process to ensure that
-    // when we capture a backtrace in the trap handler all caches are primed,
-    // aka the dynamic loader has resolved all the relevant symbols.
-    drop(backtrace::Backtrace::new_unresolved());
     unsafe {
         platform_init();
     }
@@ -337,6 +327,12 @@ pub enum Trap {
         /// Native stack backtrace at the time the trap occurred
         backtrace: Backtrace,
     },
+
+    /// A trap indicating that the runtime was unable to allocate sufficient memory.
+    OOM {
+        /// Native stack backtrace at the time the OOM occurred
+        backtrace: Backtrace,
+    },
 }
 
 impl fmt::Display for Trap {
@@ -344,6 +340,7 @@ impl fmt::Display for Trap {
         match self {
             Trap::User(user) => user.fmt(f),
             Trap::Wasm { desc, .. } => desc.fmt(f),
+            Trap::OOM { .. } => write!(f, "Out of memory"),
         }
     }
 }
@@ -362,6 +359,14 @@ impl Trap {
         let backtrace = Backtrace::new();
         Trap::Wasm { desc, backtrace }
     }
+
+    /// Construct a new OOM trap with the given source location and trap code.
+    ///
+    /// Internally saves a backtrace when constructed.
+    pub fn oom() -> Self {
+        let backtrace = Backtrace::new();
+        Trap::OOM { backtrace }
+    }
 }
 
 /// Catches any wasm traps that happen within the execution of `closure`,
@@ -372,6 +377,10 @@ pub unsafe fn catch_traps<F>(vmctx: *mut VMContext, mut closure: F) -> Result<()
 where
     F: FnMut(),
 {
+    // Ensure that we have our sigaltstack installed.
+    #[cfg(unix)]
+    setup_unix_sigaltstack()?;
+
     return CallThreadState::new(vmctx).with(|cx| {
         RegisterSetjmp(
             cx.jmp_buf.as_ptr(),
@@ -591,5 +600,114 @@ mod tls {
             let p = ptr.get();
             unsafe { closure(if p.is_null() { None } else { Some(&*p) }) }
         })
+    }
+}
+
+/// A module for registering a custom alternate signal stack (sigaltstack).
+///
+/// Rust's libstd installs an alternate stack with size `SIGSTKSZ`, which is not
+/// always large enough for our signal handling code. Override it by creating
+/// and registering our own alternate stack that is large enough and has a guard
+/// page.
+#[cfg(unix)]
+fn setup_unix_sigaltstack() -> Result<(), Trap> {
+    use std::cell::RefCell;
+    use std::convert::TryInto;
+    use std::ptr::null_mut;
+
+    thread_local! {
+        /// Thread-local state is lazy-initialized on the first time it's used,
+        /// and dropped when the thread exits.
+        static TLS: RefCell<Tls> = RefCell::new(Tls::None);
+    }
+
+    /// The size of the sigaltstack (not including the guard, which will be
+    /// added). Make this large enough to run our signal handlers.
+    const MIN_STACK_SIZE: usize = 16 * 4096;
+
+    enum Tls {
+        None,
+        Allocated {
+            mmap_ptr: *mut libc::c_void,
+            mmap_size: usize,
+        },
+        BigEnough,
+    }
+
+    return TLS.with(|slot| unsafe {
+        let mut slot = slot.borrow_mut();
+        match *slot {
+            Tls::None => {}
+            // already checked
+            _ => return Ok(()),
+        }
+
+        // Check to see if the existing sigaltstack, if it exists, is big
+        // enough. If so we don't need to allocate our own.
+        let mut old_stack = mem::zeroed();
+        let r = libc::sigaltstack(ptr::null(), &mut old_stack);
+        assert_eq!(r, 0, "learning about sigaltstack failed");
+        if old_stack.ss_flags & libc::SS_DISABLE == 0 && old_stack.ss_size >= MIN_STACK_SIZE {
+            *slot = Tls::BigEnough;
+            return Ok(());
+        }
+
+        // ... but failing that we need to allocate our own, so do all that
+        // here.
+        let page_size: usize = libc::sysconf(libc::_SC_PAGESIZE).try_into().unwrap();
+        let guard_size = page_size;
+        let alloc_size = guard_size + MIN_STACK_SIZE;
+
+        let ptr = libc::mmap(
+            null_mut(),
+            alloc_size,
+            libc::PROT_NONE,
+            libc::MAP_PRIVATE | libc::MAP_ANON,
+            -1,
+            0,
+        );
+        if ptr == libc::MAP_FAILED {
+            return Err(Trap::oom());
+        }
+
+        // Prepare the stack with readable/writable memory and then register it
+        // with `sigaltstack`.
+        let stack_ptr = (ptr as usize + guard_size) as *mut libc::c_void;
+        let r = libc::mprotect(
+            stack_ptr,
+            MIN_STACK_SIZE,
+            libc::PROT_READ | libc::PROT_WRITE,
+        );
+        assert_eq!(r, 0, "mprotect to configure memory for sigaltstack failed");
+        let new_stack = libc::stack_t {
+            ss_sp: stack_ptr,
+            ss_flags: 0,
+            ss_size: MIN_STACK_SIZE,
+        };
+        let r = libc::sigaltstack(&new_stack, ptr::null_mut());
+        assert_eq!(r, 0, "registering new sigaltstack failed");
+
+        *slot = Tls::Allocated {
+            mmap_ptr: ptr,
+            mmap_size: alloc_size,
+        };
+        Ok(())
+    });
+
+    impl Drop for Tls {
+        fn drop(&mut self) {
+            let (ptr, size) = match self {
+                Tls::Allocated {
+                    mmap_ptr,
+                    mmap_size,
+                } => (*mmap_ptr, *mmap_size),
+                _ => return,
+            };
+            unsafe {
+                // Deallocate the stack memory.
+                let r = libc::munmap(ptr, size);
+                debug_assert_eq!(r, 0, "munmap failed during thread shutdown");
+            }
+        }
     }
 }

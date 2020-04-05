@@ -69,7 +69,7 @@ impl From<io::Error> for Errno {
                 winerror::ERROR_DIRECTORY => Self::Notdir,
                 winerror::ERROR_ALREADY_EXISTS => Self::Exist,
                 x => {
-                    log::debug!("unknown error value: {}", x);
+                    log::debug!("winerror: unknown error value: {}", x);
                     Self::Io
                 }
             },
