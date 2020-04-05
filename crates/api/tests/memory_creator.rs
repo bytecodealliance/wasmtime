@@ -78,7 +78,7 @@ mod not_for_windows {
             Some(prev_pages)
         }
 
-        fn as_ptr(&mut self) -> *mut u8 {
+        fn as_ptr(&self) -> *mut u8 {
             self.mem as *mut u8
         }
     }

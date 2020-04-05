@@ -9,7 +9,6 @@ use wasmtime_runtime::{
     InstanceHandle, RuntimeLinearMemory, RuntimeMemoryCreator, VMMemoryDefinition,
 };
 
-use std::cell::RefCell;
 use std::sync::Arc;
 
 pub fn create_handle_with_memory(store: &Store, memory: &MemoryType) -> Result<InstanceHandle> {
@@ -39,23 +38,22 @@ pub fn create_handle_with_memory(store: &Store, memory: &MemoryType) -> Result<I
 }
 
 struct LinearMemoryProxy {
-    mem: RefCell<Box<dyn LinearMemory>>,
+    mem: Box<dyn LinearMemory>,
 }
 
 impl RuntimeLinearMemory for LinearMemoryProxy {
     fn size(&self) -> u32 {
-        self.mem.borrow().size()
+        self.mem.size()
     }
 
     fn grow(&self, delta: u32) -> Option<u32> {
-        self.mem.borrow().grow(delta)
+        self.mem.grow(delta)
     }
 
     fn vmmemory(&self) -> VMMemoryDefinition {
-        let mut mem = self.mem.borrow_mut();
         VMMemoryDefinition {
-            base: mem.as_ptr(),
-            current_length: mem.size() as usize * WASM_PAGE_SIZE as usize,
+            base: self.mem.as_ptr(),
+            current_length: self.mem.size() as usize * WASM_PAGE_SIZE as usize,
         }
     }
 }
@@ -68,10 +66,8 @@ pub(crate) struct MemoryCreatorProxy {
 impl RuntimeMemoryCreator for MemoryCreatorProxy {
     fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn RuntimeLinearMemory>, String> {
         let ty = MemoryType::new(Limits::new(plan.memory.minimum, plan.memory.maximum));
-        self.mem_creator.new_memory(ty).map(|x| {
-            Box::new(LinearMemoryProxy {
-                mem: RefCell::new(x),
-            }) as Box<dyn RuntimeLinearMemory>
-        })
+        self.mem_creator
+            .new_memory(ty)
+            .map(|mem| Box::new(LinearMemoryProxy { mem }) as Box<dyn RuntimeLinearMemory>)
     }
 }
