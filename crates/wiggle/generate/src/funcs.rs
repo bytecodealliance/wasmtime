@@ -5,7 +5,11 @@ use crate::lifetimes::anon_lifetime;
 use crate::module_trait::passed_by_reference;
 use crate::names::Names;
 
-pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
+pub fn define_func(
+    names: &Names,
+    func: &witx::InterfaceFunc,
+    trait_name: TokenStream,
+) -> TokenStream {
     let funcname = func.name.as_str();
 
     let ident = names.func(&func.name);
@@ -166,7 +170,7 @@ pub fn define_func(names: &Names, func: &witx::InterfaceFunc) -> TokenStream {
         {
             log::trace!(#trace_fmt, #(#args),*);
         }
-        let #trait_bindings  = match ctx.#ident(#(#trait_args),*) {
+        let #trait_bindings  = match #trait_name::#ident(ctx, #(#trait_args),*) {
             Ok(#trait_bindings) => { #trait_rets },
             Err(e) => { #ret_err },
         };
