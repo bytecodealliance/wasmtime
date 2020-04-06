@@ -99,7 +99,8 @@ void check_ok2(wasm_func_t* func, int32_t arg1, int32_t arg2) {
 }
 
 void check_trap(wasm_func_t* func, wasm_val_t args[], size_t num_args, size_t num_results) {
-  wasm_val_t results[num_results];
+  wasm_val_t results[1];
+  assert(num_results <= 1);
   wasm_trap_t *trap = NULL;
   wasmtime_error_t *error = wasmtime_func_call(func, args, num_args, results, num_results, &trap);
   if (error != NULL)
