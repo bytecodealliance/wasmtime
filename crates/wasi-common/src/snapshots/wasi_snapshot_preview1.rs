@@ -727,8 +727,8 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             match subscription.u {
                 types::SubscriptionU::Clock(clock) => {
                     let delay = clock::to_relative_ns_delay(&clock)?;
-                    log::debug!("poll_oneoff event.u.clock = {:?}", clock);
-                    log::debug!("poll_oneoff delay = {:?}ns", delay);
+                    debug!("poll_oneoff event.u.clock = {:?}", clock);
+                    debug!("poll_oneoff delay = {:?}ns", delay);
                     let current = poll::ClockEventData {
                         delay,
                         userdata: subscription.userdata,

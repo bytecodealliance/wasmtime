@@ -361,12 +361,10 @@ impl WasiCtxBuilder {
             let handle = EntryHandle::from(dir);
             let mut entry = Entry::from(handle)?;
             entry.preopen_path = Some(guest_path);
-            // log::debug!("WasiCtx inserting {:?}", entry);
             let fd = entries
                 .insert(entry)
                 .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
             log::debug!("WasiCtx inserted at {:?}", fd);
-            // log::debug!("WasiCtx entries = {:?}", entries);
         }
 
         Ok(WasiCtx {

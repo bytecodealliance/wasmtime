@@ -178,30 +178,22 @@ pub(crate) fn link(
             _ => e.into(),
         })?;
     }
-    fs::hard_link(&old_path, &new_path).or_else(|err| {
-        match err.raw_os_error() {
-            Some(code) => {
-                log::debug!("path_link at fs::hard_link error code={:?}", code);
-                match code as u32 {
-                    winerror::ERROR_ACCESS_DENIED => {
-                        // If an attempt is made to create a hard link to a directory, POSIX-compliant
-                        // implementations of link return `EPERM`, but `ERROR_ACCESS_DENIED` is converted
-                        // to `EACCES`. We detect and correct this case here.
-                        if fs::metadata(&old_path).map(|m| m.is_dir()).unwrap_or(false) {
-                            return Err(Errno::Perm);
-                        }
-                    }
-                    _ => {}
-                }
-
-                Err(err.into())
-            }
-            None => {
-                log::debug!("Inconvertible OS error: {}", err);
-                Err(Errno::Io)
+    let err = match fs::hard_link(&old_path, &new_path) {
+        Ok(()) => return Ok(()),
+        Err(e) => e,
+    };
+    if let Some(code) = err.raw_os_error() {
+        log::debug!("path_link at fs::hard_link error code={:?}", code);
+        if code as u32 == winerror::ERROR_ACCESS_DENIED {
+            // If an attempt is made to create a hard link to a directory, POSIX-compliant
+            // implementations of link return `EPERM`, but `ERROR_ACCESS_DENIED` is converted
+            // to `EACCES`. We detect and correct this case here.
+            if fs::metadata(&old_path).map(|m| m.is_dir()).unwrap_or(false) {
+                return Err(Errno::Perm);
             }
         }
-    })
+    }
+    Err(err.into())
 }
 
 pub(crate) fn open(
