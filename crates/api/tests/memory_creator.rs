@@ -18,10 +18,15 @@ mod not_for_windows {
         mem: *mut c_void,
         size: usize,
         used_wasm_pages: RefCell<u32>,
+        glob_page_counter: Arc<Mutex<u64>>,
     }
 
     impl CustomMemory {
-        unsafe fn new(num_wasm_pages: u32, max_wasm_pages: u32) -> Self {
+        unsafe fn new(
+            num_wasm_pages: u32,
+            max_wasm_pages: u32,
+            glob_counter: Arc<Mutex<u64>>,
+        ) -> Self {
             let page_size = sysconf(_SC_PAGESIZE) as usize;
             let guard_size = page_size;
             let size = max_wasm_pages as usize * WASM_PAGE_SIZE as usize + guard_size;
@@ -33,17 +38,21 @@ mod not_for_windows {
 
             let r = mprotect(mem, used_size, PROT_READ | PROT_WRITE);
             assert_eq!(r, 0, "mprotect failed: {}", Error::last_os_error());
+            *glob_counter.lock().unwrap() += num_wasm_pages as u64;
 
             Self {
                 mem,
                 size,
                 used_wasm_pages: RefCell::new(num_wasm_pages),
+                glob_page_counter: glob_counter,
             }
         }
     }
 
     impl Drop for CustomMemory {
         fn drop(&mut self) {
+            let n = *self.used_wasm_pages.borrow() as u64;
+            *self.glob_page_counter.lock().unwrap() -= n;
             let r = unsafe { munmap(self.mem, self.size) };
             assert_eq!(r, 0, "munmap failed: {}", Error::last_os_error());
         }
@@ -74,6 +83,7 @@ mod not_for_windows {
                 assert_eq!(r, 0, "mprotect failed: {}", Error::last_os_error());
             }
 
+            *self.glob_page_counter.lock().unwrap() += delta as u64;
             *self.used_wasm_pages.borrow_mut() = new_pages;
             Some(prev_pages)
         }
@@ -85,12 +95,14 @@ mod not_for_windows {
 
     struct CustomMemoryCreator {
         pub num_created_memories: Mutex<usize>,
+        pub num_total_pages: Arc<Mutex<u64>>,
     }
 
     impl CustomMemoryCreator {
         pub fn new() -> Self {
             Self {
                 num_created_memories: Mutex::new(0),
+                num_total_pages: Arc::new(Mutex::new(0)),
             }
         }
     }
@@ -99,7 +111,11 @@ mod not_for_windows {
         fn new_memory(&self, ty: MemoryType) -> Result<Box<dyn LinearMemory>, String> {
             let max = ty.limits().max().unwrap_or(WASM_MAX_PAGES);
             unsafe {
-                let mem = Box::new(CustomMemory::new(ty.limits().min(), max));
+                let mem = Box::new(CustomMemory::new(
+                    ty.limits().min(),
+                    max,
+                    self.num_total_pages.clone(),
+                ));
                 *self.num_created_memories.lock().unwrap() += 1;
                 Ok(mem)
             }
@@ -125,6 +141,51 @@ mod not_for_windows {
         Instance::new(&module, &[])?;
 
         assert_eq!(*mem_creator.num_created_memories.lock().unwrap(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn host_memory_grow() -> anyhow::Result<()> {
+        let mem_creator = Arc::new(CustomMemoryCreator::new());
+        let mut config = Config::default();
+        config.with_host_memory(mem_creator.clone());
+        let engine = Engine::new(&config);
+        let store = Store::new(&engine);
+
+        let module = Module::new(
+            &store,
+            r#"
+            (module
+                (func $f (drop (memory.grow (i32.const 1))))
+                (memory (export "memory") 1 2)
+                (start $f)
+            )
+        "#,
+        )?;
+
+        let instance1 = Instance::new(&module, &[])?;
+        let instance2 = Instance::new(&module, &[])?;
+
+        assert_eq!(*mem_creator.num_created_memories.lock().unwrap(), 2);
+
+        assert_eq!(
+            instance2
+                .get_export("memory")
+                .unwrap()
+                .memory()
+                .unwrap()
+                .size(),
+            2
+        );
+
+        // we take the lock outside the assert, so it won't get poisoned on assert failure
+        let tot_pages = *mem_creator.num_total_pages.lock().unwrap();
+        assert_eq!(tot_pages, 4);
+
+        drop(instance1);
+        let tot_pages = *mem_creator.num_total_pages.lock().unwrap();
+        assert_eq!(tot_pages, 2);
 
         Ok(())
     }
