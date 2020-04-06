@@ -5,7 +5,7 @@
 use crate::export::Export;
 use crate::imports::Imports;
 use crate::jit_int::GdbJitImageRegistration;
-use crate::memory::LinearMemory;
+use crate::memory::{DefaultMemoryCreator, RuntimeLinearMemory, RuntimeMemoryCreator};
 use crate::table::Table;
 use crate::traphandlers;
 use crate::traphandlers::{catch_traps, Trap};
@@ -82,7 +82,7 @@ pub(crate) struct Instance {
     offsets: VMOffsets,
 
     /// WebAssembly linear memory data.
-    memories: BoxedSlice<DefinedMemoryIndex, LinearMemory>,
+    memories: BoxedSlice<DefinedMemoryIndex, Box<dyn RuntimeLinearMemory>>,
 
     /// WebAssembly table data.
     tables: BoxedSlice<DefinedTableIndex, Table>,
@@ -861,6 +861,7 @@ impl InstanceHandle {
         finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
         trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
         imports: Imports,
+        mem_creator: Option<&dyn RuntimeMemoryCreator>,
         data_initializers: &[DataInitializer<'_>],
         vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
@@ -868,7 +869,7 @@ impl InstanceHandle {
         host_state: Box<dyn Any>,
     ) -> Result<Self, InstantiationError> {
         let tables = create_tables(&module);
-        let memories = create_memories(&module)?;
+        let memories = create_memories(&module, mem_creator.unwrap_or(&DefaultMemoryCreator {}))?;
 
         let vmctx_tables = tables
             .values()
@@ -878,7 +879,7 @@ impl InstanceHandle {
 
         let vmctx_memories = memories
             .values()
-            .map(LinearMemory::vmmemory)
+            .map(|a| a.vmmemory())
             .collect::<PrimaryMap<DefinedMemoryIndex, _>>()
             .into_boxed_slice();
 
@@ -1300,12 +1301,17 @@ fn initialize_passive_elements(instance: &Instance) {
 /// Allocate memory for just the memories of the current module.
 fn create_memories(
     module: &Module,
-) -> Result<BoxedSlice<DefinedMemoryIndex, LinearMemory>, InstantiationError> {
+    mem_creator: &dyn RuntimeMemoryCreator,
+) -> Result<BoxedSlice<DefinedMemoryIndex, Box<dyn RuntimeLinearMemory>>, InstantiationError> {
     let num_imports = module.imported_memories.len();
     let mut memories: PrimaryMap<DefinedMemoryIndex, _> =
         PrimaryMap::with_capacity(module.local.memory_plans.len() - num_imports);
     for plan in &module.local.memory_plans.values().as_slice()[num_imports..] {
-        memories.push(LinearMemory::new(plan).map_err(InstantiationError::Resource)?);
+        memories.push(
+            mem_creator
+                .new_memory(plan)
+                .map_err(InstantiationError::Resource)?,
+        );
     }
     Ok(memories.into_boxed_slice())
 }

@@ -6,6 +6,8 @@ mod global;
 mod memory;
 mod table;
 
+pub(crate) use memory::MemoryCreatorProxy;
+
 use self::func::create_handle_with_function;
 use self::global::create_global;
 use self::memory::create_handle_with_memory;

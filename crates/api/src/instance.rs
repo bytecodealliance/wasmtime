@@ -31,6 +31,7 @@ fn instantiate(
                 config.validating_config.operator_config.enable_bulk_memory,
                 &mut resolver,
                 sig_registry,
+                config.memory_creator.as_ref().map(|a| a as _),
             )
             .map_err(|e| -> Error {
                 match e {

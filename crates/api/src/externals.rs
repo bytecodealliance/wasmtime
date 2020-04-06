@@ -853,3 +853,46 @@ impl Memory {
         }
     }
 }
+
+/// A linear memory. This trait provides an interface for raw memory buffers which are used
+/// by wasmtime, e.g. inside ['Memory']. Such buffers are in principle not thread safe.
+/// By implementing this trait together with MemoryCreator,
+/// one can supply wasmtime with custom allocated host managed memory.
+///
+/// # Safety
+/// The memory should be page aligned and a multiple of page size.
+/// To prevent possible silent overflows, the memory should be protected by a guard page.
+/// Additionally the safety concerns explained in ['Memory'], for accessing the memory
+/// apply here as well.
+///
+/// Note that this is a relatively new and experimental feature and it is recommended
+/// to be familiar with wasmtime runtime code to use it.
+pub unsafe trait LinearMemory {
+    /// Returns the number of allocated wasm pages.
+    fn size(&self) -> u32;
+
+    /// Grow memory by the specified amount of wasm pages.
+    ///
+    /// Returns `None` if memory can't be grown by the specified amount
+    /// of wasm pages.
+    fn grow(&self, delta: u32) -> Option<u32>;
+
+    /// Return the allocated memory as a mutable pointer to u8.
+    fn as_ptr(&self) -> *mut u8;
+}
+
+/// A memory creator. Can be used to provide a memory creator
+/// to wasmtime which supplies host managed memory.
+///
+/// # Safety
+/// This trait is unsafe, as the memory safety depends on proper implementation of
+/// memory management. Memories created by the MemoryCreator should always be treated
+/// as owned by wasmtime instance, and any modification of them outside of wasmtime
+/// invoked routines is unsafe and may lead to corruption.
+///
+/// Note that this is a relatively new and experimental feature and it is recommended
+/// to be familiar with wasmtime runtime code to use it.
+pub unsafe trait MemoryCreator: Send + Sync {
+    /// Create new LinearMemory
+    fn new_memory(&self, ty: MemoryType) -> Result<Box<dyn LinearMemory>, String>;
+}

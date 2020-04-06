@@ -43,6 +43,7 @@ pub(crate) fn create_handle(
             finished_functions.into_boxed_slice(),
             trampolines,
             imports,
+            store.memory_creator(),
             &data_initializers,
             signatures.into_boxed_slice(),
             None,
