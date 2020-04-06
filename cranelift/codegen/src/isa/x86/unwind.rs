@@ -338,7 +338,10 @@ impl UnwindInfo {
 
         if saved_fpr {
             if static_frame_allocation_size > 240 && saved_fpr {
-                panic!("stack frame is too large ({} bytes) to use with Windows x64 SEH when preserving FPRs", static_frame_allocation_size);
+                panic!("stack frame is too large ({} bytes) to use with Windows x64 SEH when preserving FPRs. \
+                    This is a Cranelift implementation limit, see \
+                    https://github.com/bytecodealliance/wasmtime/issues/1475",
+                    static_frame_allocation_size);
             }
             // Only test static frame size is 16-byte aligned when an FPR is saved to avoid
             // panicking when alignment is elided because no FPRs are saved and no child calls are
