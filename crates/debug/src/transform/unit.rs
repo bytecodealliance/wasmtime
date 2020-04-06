@@ -108,6 +108,23 @@ where
     );
     die.set(gimli::DW_AT_byte_size, write::AttributeValue::Data1(4));
 
+    let die_this_type_id = comp_unit.add(parent_id, gimli::DW_TAG_pointer_type);
+    let die_this_type = comp_unit.get_mut(die_this_type_id);
+    die_this_type.set(
+        gimli::DW_AT_type,
+        write::AttributeValue::ThisUnitEntryRef(die_id),
+    );
+
+    let ref_type_id = comp_unit.add(parent_id, gimli::DW_TAG_reference_type);
+    let ref_type = comp_unit.get_mut(ref_type_id);
+    ref_type.set(
+        gimli::DW_AT_type,
+        write::AttributeValue::ThisUnitEntryRef(wp_die_id),
+    );
+    if let Some(AttributeValue::UnitRef(ref offset)) = entry.attr_value(gimli::DW_AT_type)? {
+        pending_die_refs.insert(ref_type_id, gimli::DW_AT_type, *offset);
+    }
+
     let p_die_id = comp_unit.add(die_id, gimli::DW_TAG_template_type_parameter);
     let p_die = comp_unit.get_mut(p_die_id);
     p_die.set(
@@ -136,6 +153,29 @@ where
         gimli::DW_AT_data_member_location,
         write::AttributeValue::Data1(0),
     );
+
+    let sub_die_id = comp_unit.add(die_id, gimli::DW_TAG_subprogram);
+    let sub_die = comp_unit.get_mut(sub_die_id);
+    sub_die.set(
+        gimli::DW_AT_linkage_name,
+        write::AttributeValue::StringRef(out_strings.add("_resolve_vmctx_memory_ptr")),
+    );
+    sub_die.set(
+        gimli::DW_AT_name,
+        write::AttributeValue::StringRef(out_strings.add("operator*")),
+    );
+    sub_die.set(
+        gimli::DW_AT_type,
+        write::AttributeValue::ThisUnitEntryRef(ref_type_id),
+    );
+    let this_param_id = comp_unit.add(sub_die_id, gimli::DW_TAG_formal_parameter);
+    let this_param = comp_unit.get_mut(this_param_id);
+    this_param.set(
+        gimli::DW_AT_type,
+        write::AttributeValue::ThisUnitEntryRef(die_this_type_id),
+    );
+    this_param.set(gimli::DW_AT_artificial, write::AttributeValue::Flag(true));
+
     Ok(die_id)
 }
 

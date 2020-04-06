@@ -99,6 +99,24 @@ pub(crate) fn add_internal_types(
         write::AttributeValue::ThisUnitEntryRef(vmctx_die_id),
     );
 
+    let sub_die_id = comp_unit.add(vmctx_die_id, gimli::DW_TAG_subprogram);
+    let sub_die = comp_unit.get_mut(sub_die_id);
+    sub_die.set(
+        gimli::DW_AT_linkage_name,
+        write::AttributeValue::StringRef(out_strings.add("_set_vmctx_memory")),
+    );
+    sub_die.set(
+        gimli::DW_AT_name,
+        write::AttributeValue::StringRef(out_strings.add("set")),
+    );
+    let this_param_id = comp_unit.add(sub_die_id, gimli::DW_TAG_formal_parameter);
+    let this_param = comp_unit.get_mut(this_param_id);
+    this_param.set(
+        gimli::DW_AT_type,
+        write::AttributeValue::ThisUnitEntryRef(vmctx_ptr_die_id),
+    );
+    this_param.set(gimli::DW_AT_artificial, write::AttributeValue::Flag(true));
+
     (wp_die_id, vmctx_ptr_die_id)
 }
 
