@@ -73,6 +73,17 @@ use syn::parse_macro_input;
 ///     }
 /// }
 ///
+/// /// The `types::GuestErrorConversion` trait is also generated with a method for
+/// /// each type used in the `Error` position. This trait allows wiggle-generated
+/// /// code to convert a `wiggle::GuestError` into the right error type. The trait
+/// /// must be implemented for the user's `ctx` type.
+///
+/// impl types::GuestErrorConversion for YourCtxType {
+///     fn into_errno(&self, _e: wiggle::GuestError) -> types::Errno {
+///         unimplemented!()
+///     }
+/// }
+///
 /// # fn main() { println!("this fools doc tests into compiling the above outside a function body")
 /// # }
 /// ```
