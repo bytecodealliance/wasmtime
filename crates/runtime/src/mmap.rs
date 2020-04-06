@@ -47,7 +47,93 @@ impl Mmap {
     /// Create a new `Mmap` pointing to `accessible_size` bytes of page-aligned accessible memory,
     /// within a reserved mapping of `mapping_size` bytes. `accessible_size` and `mapping_size`
     /// must be native page-size multiples.
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "fuchsia")]
+    pub fn accessible_reserved(
+        accessible_size: usize,
+        mapping_size: usize,
+    ) -> Result<Self, String> {
+        use fuchsia_zircon_sys::{self as sys, ZX_HANDLE_INVALID, ZX_OK};
+        use std::ffi::CString;
+
+        extern "C" {
+            pub fn zx_vmar_root_self() -> sys::zx_handle_t;
+        }
+
+        let page_size = region::page::size();
+        assert_le!(accessible_size, mapping_size);
+        assert_eq!(mapping_size & (page_size - 1), 0);
+        assert_eq!(accessible_size & (page_size - 1), 0);
+
+        let mut vmo_handle = ZX_HANDLE_INVALID;
+        if accessible_size != mapping_size {
+            return Err("accessible_size != mapping_size".to_string());
+        }
+
+        let status = unsafe { sys::zx_vmo_create(mapping_size as u64, 0, &mut vmo_handle) };
+        if status != ZX_OK {
+            return Err(format!("zx_vmo_create returned error code: {}", status));
+        }
+
+        // TODO(bwb) Would be nice to tag pages with more info
+        let vmo_name = CString::new("wasmtime").expect("CString::new failed");
+        let status = unsafe {
+            sys::zx_object_set_property(vmo_handle, 3, vmo_name.as_ptr() as *const u8, 8)
+        };
+        if status != ZX_OK {
+            return Err(format!(
+                "zx_object_set_property returned error code: {}",
+                status
+            ));
+        }
+
+        let status = unsafe {
+            sys::zx_vmo_replace_as_executable(
+                vmo_handle,
+                // TODO(bwb) This is using the ambient handle mechanism.
+                // This will not work in the future.
+                ZX_HANDLE_INVALID,
+                &mut vmo_handle as *mut _,
+            )
+        };
+        if status != ZX_OK {
+            // making a VMO executable is a very privileged operation on Fuchsia.
+            // if you encounter this, make sure you have handle to do this.
+            return Err(format!(
+                "zx_vmo_replace_as_executable returned error code: {}",
+                status
+            ));
+        }
+
+        let mut ptr = 0;
+        let mut options: sys::zx_vm_option_t = 0;
+        options |= sys::ZX_VM_PERM_READ;
+        options |= sys::ZX_VM_PERM_WRITE;
+        let status = unsafe {
+            sys::zx_vmar_map(
+                zx_vmar_root_self(),
+                options,
+                0,
+                vmo_handle,
+                0,
+                mapping_size,
+                &mut ptr,
+            )
+        };
+        if status != ZX_OK {
+            return Err(format!("zx_vmar_map returned error code: {}", status));
+        }
+
+        unsafe { sys::zx_handle_close(vmo_handle) };
+        Ok(Self {
+            ptr: ptr as usize,
+            len: mapping_size,
+        })
+    }
+
+    /// Create a new `Mmap` pointing to `accessible_size` bytes of page-aligned accessible memory,
+    /// within a reserved mapping of `mapping_size` bytes. `accessible_size` and `mapping_size`
+    /// must be native page-size multiples.
+    #[cfg(not(any(target_os = "windows", target_os = "fuchsia")))]
     pub fn accessible_reserved(
         accessible_size: usize,
         mapping_size: usize,

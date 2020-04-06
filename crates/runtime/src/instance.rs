@@ -35,7 +35,7 @@ use wasmtime_environ::wasm::{
 use wasmtime_environ::{ir, DataInitializer, Module, TableElements, VMOffsets};
 
 cfg_if::cfg_if! {
-    if #[cfg(unix)] {
+    if #[cfg(all(unix, not(target_os = "fuchsia")))] {
         pub type SignalHandler = dyn Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool;
 
         impl InstanceHandle {
@@ -47,6 +47,20 @@ cfg_if::cfg_if! {
                 self.instance().signal_handler.set(Some(Box::new(handler)));
             }
         }
+    } else if #[cfg(target_os = "fuchsia")] {
+        use fuchsia_zircon_sys as sys;
+        pub type SignalHandler = dyn Fn(sys::zx_exception_report_t) -> bool;
+
+        impl InstanceHandle {
+            /// Set a custom signal handler
+            pub fn set_signal_handler<H>(&mut self, handler: H)
+            where
+                H: 'static + Fn(sys::zx_exception_report_t) -> bool,
+            {
+                self.instance().signal_handler.set(Some(Box::new(handler)));
+            }
+        }
+
     } else if #[cfg(target_os = "windows")] {
         pub type SignalHandler = dyn Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool;
 

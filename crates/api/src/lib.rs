@@ -36,7 +36,7 @@ pub use crate::types::*;
 pub use crate::values::*;
 
 cfg_if::cfg_if! {
-    if #[cfg(unix)] {
+    if #[cfg(all(unix, not(target_os = "fuchsia")))] {
         pub mod unix;
     } else if #[cfg(windows)] {
         pub mod windows;

@@ -10,6 +10,7 @@ use std::cell::Cell;
 use std::error::Error;
 use std::fmt;
 use std::io;
+use std::mem;
 use std::ptr;
 use std::sync::Once;
 use wasmtime_environ::ir;
@@ -24,8 +25,8 @@ extern "C" {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(unix)] {
-        use std::mem::{self, MaybeUninit};
+    if #[cfg(all(unix, not(target_os = "fuchsia")))] {
+        use std::mem::MaybeUninit;
 
         static mut PREV_SIGSEGV: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
         static mut PREV_SIGBUS: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
@@ -170,19 +171,150 @@ cfg_if::cfg_if! {
                 }
             }
         }
-    } else if #[cfg(target_os = "windows")] {
-        use winapi::um::errhandlingapi::*;
-        use winapi::um::winnt::*;
-        use winapi::um::minwinbase::*;
-        use winapi::vc::excpt::*;
+    } else if #[cfg(target_os = "fuchsia")] {
+        use fuchsia_zircon_sys::{self as sys, ZX_HANDLE_INVALID, ZX_OK};
+        use std::mem::MaybeUninit;
+
+        extern "C" {
+            pub fn zx_thread_self() -> sys::zx_handle_t;
+            pub fn zx_process_self() -> sys::zx_handle_t;
+        }
 
         unsafe fn platform_init() {
-            // our trap handler needs to go first, so that we can recover from
-            // wasm faults and continue execution, so pass `1` as a true value
-            // here.
-            if AddVectoredExceptionHandler(1, Some(exception_handler)).is_null() {
-                panic!("failed to add exception handler: {}", io::Error::last_os_error());
+            // TODO Currently we spawn one exception handling thread per runtime thread
+            // We should have a global exception handler that uses `zx_object_wait_async`
+            let mut channel_handle: sys::zx_handle_t = sys::ZX_HANDLE_INVALID;
+            let status = unsafe { sys::zx_task_create_exception_channel(zx_thread_self(), 0, &mut channel_handle) };
+            if status != ZX_OK {
+                panic!("zx_task_create_exception_channel returned error code: {}", status);
             }
+
+            // In Fuchsia, threads don't handle their own exceptions. Exception handling
+            // is driven from userspace instead of a kernel callback
+            std::thread::spawn(move || {
+                loop {
+                    // Wait until we get ZX_CHANNEL_READABLE (exception) or ZX_CHANNEL_PEER_CLOSED (task terminated).
+                    let mut signals: sys::zx_signals_t = 0;
+                    let status = unsafe {
+                        sys::zx_object_wait_one(
+                            channel_handle,
+                            sys::ZX_CHANNEL_READABLE | sys::ZX_CHANNEL_PEER_CLOSED,
+                            sys::ZX_TIME_INFINITE,
+                            &mut signals)
+                    };
+                    if status != ZX_OK {
+                        panic!("zx_object_wait_one returned error code: {}", status);
+                    }
+
+                    if (signals & sys::ZX_CHANNEL_READABLE == 1) {
+                        // Read the exception info off the channel
+                        let mut info = MaybeUninit::<sys::zx_exception_info_t>::uninit();
+                        let mut exception_handle: sys::zx_handle_t = sys::ZX_HANDLE_INVALID;
+                        let mut num_bytes = 0;
+                        let mut num_handles = 0;
+                        let status = unsafe {
+                            sys::zx_channel_read(
+                                channel_handle,
+                                0,
+                                info.as_mut_ptr() as *mut _,
+                                &mut exception_handle as *mut _,
+                                24, 1, &mut num_bytes, &mut num_handles)
+                        };
+                        let info = unsafe {
+                            if (status != ZX_OK) {
+                                panic!("zx_channel_read returned error code: {}", status);
+                            }
+                            info.assume_init()
+                        };
+
+                        // Get a handle to the faulted thread
+                        let mut fault_thread_handle = sys::ZX_HANDLE_INVALID;
+                        let status = unsafe { sys::zx_exception_get_thread(exception_handle, &mut fault_thread_handle) };
+                        if (status != ZX_OK) {
+                            panic!("zx_exception_get_thread: {}", status);
+                        }
+
+                        // Get the exception report
+                        let mut report = MaybeUninit::<sys::zx_exception_report_t>::uninit();
+                        let status = unsafe {
+                            sys::zx_object_get_info(
+                                fault_thread_handle,
+                                sys::ZX_INFO_THREAD_EXCEPTION_REPORT,
+                                report.as_mut_ptr() as *mut u8,
+                                std::mem::size_of::<sys::zx_exception_report_t>(),
+                                std::ptr::null_mut(),
+                                std::ptr::null_mut())
+                        };
+                        let report = unsafe {
+                            if (status != ZX_OK) {
+                                panic!("zx_channel_read returned error code: {}", status);
+                            }
+                            report.assume_init()
+                        };
+
+                        // Get the registers from the faulted thread
+                        let mut regs = MaybeUninit::<sys::zx_thread_state_general_regs_t>::uninit();
+                        let status = unsafe {
+                            sys::zx_thread_read_state(fault_thread_handle,
+                                sys::ZX_THREAD_STATE_GENERAL_REGS,
+                                regs.as_mut_ptr() as *mut u8,
+                                std::mem::size_of::<sys::zx_thread_state_general_regs_t>(),
+                            )
+                        };
+                        let mut regs = unsafe {
+                            if (status != ZX_OK) {
+                                panic!("zx_thread_read_state returned error code: {}", status);
+                            }
+                            regs.assume_init()
+                        };
+
+                        // Setup a fault handler on the faulted thread. After closing
+                        // the exception handle we should resume on fuchsia::fault_handler
+                        fuchsia::setup_fault_handler(&mut regs, &report);
+
+                        let status = unsafe {
+                            sys::zx_thread_write_state(fault_thread_handle,
+                                sys::ZX_THREAD_STATE_GENERAL_REGS,
+                                &regs as *const _ as *const u8,
+                                std::mem::size_of::<sys::zx_thread_state_general_regs_t>(),
+                            )
+                        };
+                        if (status != ZX_OK) {
+                            panic!("zx_thread_write_state returned error code: {}", status);
+                        }
+
+                        // mark the exception as handled and resume the thread
+                        let ZX_EXCEPTION_STATE_HANDLED: u32 = 1;
+                        let status = unsafe {
+                            sys::zx_object_set_property(
+                                exception_handle,
+                                sys::ZX_PROP_EXCEPTION_STATE,
+                                &ZX_EXCEPTION_STATE_HANDLED as *const _ as *const u8,
+                                std::mem::size_of::<u32>())
+                        };
+                        if (status != ZX_OK) {
+                            panic!("zx_object_set_property returned error code: {}", status);
+                        }
+                        unsafe { sys::zx_handle_close(exception_handle); }
+                    } else {
+                        unsafe { sys::zx_handle_close(channel_handle) } ;
+                    }
+                }
+            });
+        }
+    } else if #[cfg(target_os = "windows")] {
+            use winapi::um::errhandlingapi::*;
+            use winapi::um::winnt::*;
+            use winapi::um::minwinbase::*;
+            use winapi::vc::excpt::*;
+
+            unsafe fn platform_init() {
+                // our trap handler needs to go first, so that we can recover from
+                // wasm faults and continue execution, so pass `1` as a true value
+                // here.
+                if AddVectoredExceptionHandler(1, Some(exception_handler)).is_null() {
+                    panic!("failed to add exception handler: {}", io::Error::last_os_error());
+                }
         }
 
         unsafe extern "system" fn exception_handler(
@@ -378,7 +510,7 @@ where
     F: FnMut(),
 {
     // Ensure that we have our sigaltstack installed.
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "fuchsia")))]
     setup_unix_sigaltstack()?;
 
     return CallThreadState::new(vmctx).with(|cx| {
@@ -603,13 +735,90 @@ mod tls {
     }
 }
 
+/// A module for handling faults on Fuchsia
+#[cfg(target_os = "fuchsia")]
+mod fuchsia {
+    use super::*;
+
+    // Be very careful here. There is a contract with the stack in setup_fault_handler
+    pub extern "C" fn fault_handler(
+        regs: *const sys::zx_thread_state_general_regs_t,
+        report: *const sys::zx_exception_report_t,
+    ) {
+        let handled = tls::with(|info| {
+            let info = match info {
+                Some(info) => info,
+                None => return false,
+            };
+
+            let jmp_buf = unsafe {
+                info.handle_trap((*regs).rip as *const _, false, |handler| handler(*report))
+            };
+
+            if jmp_buf.is_null() {
+                return false;
+            } else if jmp_buf as usize == 1 {
+                return true;
+            } else {
+                unsafe { Unwind(jmp_buf) }
+            }
+        });
+    }
+
+    fn align_16(x: usize) -> usize {
+        ((x + 16 - 1) / 16) * 16
+    }
+
+    /// Intended to be called on the exception handling thread. Sets up the stack and updates the
+    /// rip for the faulted thread to call the fault_handler function when it is resumed.
+    pub fn setup_fault_handler(
+        regs: &mut sys::zx_thread_state_general_regs_t,
+        report: &sys::zx_exception_report_t,
+    ) {
+        let fault_addr = regs.rip;
+        regs.rsp -= regs.rsp % 16;
+
+        // put the register info on the stack
+        regs.rsp -= align_16(std::mem::size_of::<sys::zx_thread_state_general_regs_t>()) as u64;
+        let info_regs: sys::zx_thread_state_general_regs_t = regs.clone();
+        unsafe {
+            (*(regs.rsp as *mut _)) = info_regs;
+        }
+        regs.rdi = regs.rsp;
+
+        // exception report info
+        regs.rsp -= align_16(std::mem::size_of::<sys::zx_exception_report_t>()) as u64;
+        let report: sys::zx_exception_report_t = report.clone();
+        unsafe {
+            (*(regs.rsp as *mut _)) = report;
+        }
+        regs.rsi = regs.rsp;
+
+        // reasonable place to ret
+        regs.rsp -= 8;
+        unsafe { (*(regs.rsp as *mut _)) = fault_addr + 1 };
+
+        // Update the RIP to point at the fault handling instruction
+        let ptr = unsafe {
+            std::mem::transmute::<
+                extern "C" fn(
+                    *const sys::zx_thread_state_general_regs_t,
+                    *const sys::zx_exception_report_t,
+                ),
+                *const (),
+            >(fuchsia::fault_handler)
+        };
+        regs.rip = ptr as u64;
+    }
+}
+
 /// A module for registering a custom alternate signal stack (sigaltstack).
 ///
 /// Rust's libstd installs an alternate stack with size `SIGSTKSZ`, which is not
 /// always large enough for our signal handling code. Override it by creating
 /// and registering our own alternate stack that is large enough and has a guard
 /// page.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "fuchsia")))]
 fn setup_unix_sigaltstack() -> Result<(), Trap> {
     use std::cell::RefCell;
     use std::convert::TryInto;
