@@ -43,9 +43,10 @@ namespace Wasmtime
 
             using var wasi = config.CreateWasi(Store, name);
 
-            if (!Interop.wasmtime_linker_define_wasi(Linker, wasi))
+            var error = Interop.wasmtime_linker_define_wasi(Linker, wasi);
+            if (error != IntPtr.Zero)
             {
-                throw new WasmtimeException($"Failed to define WASI module '{name}'.");
+                throw WasmtimeException.FromOwnedError(error);
             }
         }
 
@@ -618,12 +619,10 @@ namespace Wasmtime
                     textVec.size = (UIntPtr)textBytes.Length;
                     textVec.data = ptr;
 
-                    if (!Interop.wasmtime_wat2wasm(ref textVec, out var bytes, out var error))
+                    var error = Interop.wasmtime_wat2wasm(ref textVec, out var bytes);
+                    if (error != IntPtr.Zero)
                     {
-                        var errorSpan = new ReadOnlySpan<byte>(error.data, checked((int)error.size));
-                        var message = Encoding.UTF8.GetString(errorSpan);
-                        Interop.wasm_byte_vec_delete(ref error);
-                        throw new WasmtimeException($"Failed to parse module text: {message}");
+                        throw WasmtimeException.FromOwnedError(error);
                     }
 
                     var byteSpan = new ReadOnlySpan<byte>(bytes.data, checked((int)bytes.size));
@@ -792,7 +791,11 @@ namespace Wasmtime
                     nameVec.size = (UIntPtr)nameBytes.Length;
                     nameVec.data = namePtr;
 
-                    return Interop.wasmtime_linker_define(Linker, ref moduleNameVec, ref nameVec, ext);
+                    var error = Interop.wasmtime_linker_define(Linker, ref moduleNameVec, ref nameVec, ext);
+                    if (error == IntPtr.Zero)
+                      return true;
+                    Interop.wasmtime_error_delete(error);
+                    return false;
                 }
             }
         }

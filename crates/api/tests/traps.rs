@@ -21,7 +21,11 @@ fn test_trap_return() -> Result<()> {
         .func()
         .expect("expected function export");
 
-    let e = run_func.call(&[]).err().expect("error calling function");
+    let e = run_func
+        .call(&[])
+        .err()
+        .expect("error calling function")
+        .downcast::<Trap>()?;
 
     assert_eq!(e.message(), "test 123");
 
@@ -44,7 +48,11 @@ fn test_trap_trace() -> Result<()> {
         .func()
         .expect("expected function export");
 
-    let e = run_func.call(&[]).err().expect("error calling function");
+    let e = run_func
+        .call(&[])
+        .err()
+        .expect("error calling function")
+        .downcast::<Trap>()?;
 
     let trace = e.trace();
     assert_eq!(trace.len(), 2);
@@ -83,7 +91,11 @@ fn test_trap_trace_cb() -> Result<()> {
         .func()
         .expect("expected function export");
 
-    let e = run_func.call(&[]).err().expect("error calling function");
+    let e = run_func
+        .call(&[])
+        .err()
+        .expect("error calling function")
+        .downcast::<Trap>()?;
 
     let trace = e.trace();
     assert_eq!(trace.len(), 2);
@@ -111,7 +123,11 @@ fn test_trap_stack_overflow() -> Result<()> {
         .func()
         .expect("expected function export");
 
-    let e = run_func.call(&[]).err().expect("error calling function");
+    let e = run_func
+        .call(&[])
+        .err()
+        .expect("error calling function")
+        .downcast::<Trap>()?;
 
     let trace = e.trace();
     assert!(trace.len() >= 32);
@@ -315,17 +331,17 @@ fn mismatched_arguments() -> Result<()> {
     let instance = Instance::new(&module, &[])?;
     let func = instance.exports()[0].func().unwrap().clone();
     assert_eq!(
-        func.call(&[]).unwrap_err().message(),
+        func.call(&[]).unwrap_err().to_string(),
         "expected 1 arguments, got 0"
     );
     assert_eq!(
-        func.call(&[Val::F32(0)]).unwrap_err().message(),
+        func.call(&[Val::F32(0)]).unwrap_err().to_string(),
         "argument type mismatch",
     );
     assert_eq!(
         func.call(&[Val::I32(0), Val::I32(1)])
             .unwrap_err()
-            .message(),
+            .to_string(),
         "expected 1 arguments, got 2"
     );
     Ok(())

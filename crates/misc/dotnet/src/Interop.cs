@@ -268,6 +268,21 @@ namespace Wasmtime
             }
         }
 
+        internal class ErrorHandle : SafeHandle
+        {
+            public ErrorHandle() : base(IntPtr.Zero, true)
+            {
+            }
+
+            public override bool IsInvalid => handle == IntPtr.Zero;
+
+            protected override bool ReleaseHandle()
+            {
+                Interop.wasmtime_error_delete(handle);
+                return true;
+            }
+        }
+
         [StructLayout(LayoutKind.Sequential)]
         internal unsafe struct wasm_byte_vec_t
         {
@@ -1003,7 +1018,7 @@ namespace Wasmtime
         public static extern void wasmtime_config_wasm_multi_value_set(WasmConfigHandle config, [MarshalAs(UnmanagedType.I1)] bool enable);
 
         [DllImport(LibraryName)]
-        public static extern void wasmtime_config_strategy_set(WasmConfigHandle config, wasmtime_strategy_t strategy);
+        public static extern IntPtr wasmtime_config_strategy_set(WasmConfigHandle config, wasmtime_strategy_t strategy);
 
         [DllImport(LibraryName)]
         public static extern void wasmtime_config_cranelift_debug_verifier_set(WasmConfigHandle config, [MarshalAs(UnmanagedType.I1)] bool enable);
@@ -1013,9 +1028,8 @@ namespace Wasmtime
 
         // Utility functions
 
-        [DllImport(LibraryName, CharSet=CharSet.Ansi)]
-        [return: MarshalAs(UnmanagedType.I1)]
-        public static extern bool wasmtime_wat2wasm(ref wasm_byte_vec_t text, out wasm_byte_vec_t bytes, out wasm_byte_vec_t error);
+        [DllImport(LibraryName)]
+        public static extern IntPtr wasmtime_wat2wasm(ref wasm_byte_vec_t text, out wasm_byte_vec_t bytes);
 
         // Linking functions
 
@@ -1029,19 +1043,16 @@ namespace Wasmtime
         public static extern void wasmtime_linker_delete(IntPtr linker);
 
         [DllImport(LibraryName)]
-        [return: MarshalAs(UnmanagedType.I1)]
-        public static extern bool wasmtime_linker_define(LinkerHandle linker, ref wasm_byte_vec_t module, ref wasm_byte_vec_t name, IntPtr externType);
+        public static extern IntPtr wasmtime_linker_define(LinkerHandle linker, ref wasm_byte_vec_t module, ref wasm_byte_vec_t name, IntPtr externType);
 
         [DllImport(LibraryName)]
-        [return: MarshalAs(UnmanagedType.I1)]
-        public static extern bool wasmtime_linker_define_wasi(LinkerHandle linker, WasiInstanceHandle wasi);
+        public static extern IntPtr wasmtime_linker_define_wasi(LinkerHandle linker, WasiInstanceHandle wasi);
 
         [DllImport(LibraryName)]
-        [return: MarshalAs(UnmanagedType.I1)]
-        public static extern bool wasmtime_linker_define_instance(LinkerHandle linker, ref wasm_byte_vec_t name, InstanceHandle instance);
+        public static extern IntPtr wasmtime_linker_define_instance(LinkerHandle linker, ref wasm_byte_vec_t name, InstanceHandle instance);
 
         [DllImport(LibraryName)]
-        public static extern InstanceHandle wasmtime_linker_instantiate(LinkerHandle linker, ModuleHandle module, out IntPtr trap);
+        public static extern IntPtr wasmtime_linker_instantiate(LinkerHandle linker, ModuleHandle module, out InstanceHandle instance, out IntPtr trap);
 
         // Caller functions
 
@@ -1050,5 +1061,11 @@ namespace Wasmtime
 
         [DllImport(LibraryName)]
         public static extern ExternHandle wasmtime_caller_export_get(IntPtr caller, ref wasm_byte_vec_t name);
+
+        [DllImport(LibraryName)]
+        public static extern void wasmtime_error_message(IntPtr error, out wasm_byte_vec_t message);
+
+        [DllImport(LibraryName)]
+        public static extern void wasmtime_error_delete(IntPtr error);
    }
 }

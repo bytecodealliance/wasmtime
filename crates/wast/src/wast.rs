@@ -154,7 +154,7 @@ impl WastContext {
             .ok_or_else(|| anyhow!("no function named `{}`", field))?;
         Ok(match func.call(args) {
             Ok(result) => Outcome::Ok(result.into()),
-            Err(e) => Outcome::Trap(e),
+            Err(e) => Outcome::Trap(e.downcast()?),
         })
     }
 

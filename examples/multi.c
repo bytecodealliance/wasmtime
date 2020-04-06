@@ -28,6 +28,8 @@ originally
 #include <wasm.h>
 #include <wasmtime.h>
 
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
+
 // A function to be called from Wasm code.
 wasm_trap_t* callback(
   const wasm_val_t args[], wasm_val_t results[]
@@ -83,20 +85,18 @@ int main(int argc, const char* argv[]) {
   fclose(file);
 
   // Parse the wat into the binary wasm format
-  wasm_byte_vec_t binary, error;
-  if (wasmtime_wat2wasm(&wat, &binary, &error) == 0) {
-    fprintf(stderr, "failed to parse wat %.*s\n", (int) error.size, error.data);
-    return 1;
-  }
+  wasm_byte_vec_t binary;
+  wasmtime_error_t *error = wasmtime_wat2wasm(&wat, &binary);
+  if (error != NULL)
+    exit_with_error("failed to parse wat", error, NULL);
   wasm_byte_vec_delete(&wat);
 
   // Compile.
   printf("Compiling module...\n");
-  wasm_module_t* module = wasm_module_new(store, &binary);
-  if (!module) {
-    printf("> Error compiling module!\n");
-    return 1;
-  }
+  wasm_module_t* module = NULL;
+  error = wasmtime_module_new(store, &binary, &module);
+  if (error)
+    exit_with_error("failed to compile module", error, NULL);
 
   wasm_byte_vec_delete(&binary);
 
@@ -116,12 +116,11 @@ int main(int argc, const char* argv[]) {
   // Instantiate.
   printf("Instantiating module...\n");
   const wasm_extern_t* imports[] = {wasm_func_as_extern(callback_func)};
-  wasm_instance_t* instance =
-    wasm_instance_new(store, module, imports, NULL);
-  if (!instance) {
-    printf("> Error instantiating module!\n");
-    return 1;
-  }
+  wasm_instance_t* instance = NULL;
+  wasm_trap_t* trap = NULL;
+  error = wasmtime_instance_new(module, imports, 1, &instance, &trap);
+  if (!instance)
+    exit_with_error("failed to instantiate", error, trap);
 
   wasm_func_delete(callback_func);
 
@@ -133,7 +132,7 @@ int main(int argc, const char* argv[]) {
     printf("> Error accessing exports!\n");
     return 1;
   }
-  const wasm_func_t* run_func = wasm_extern_as_func(exports.data[0]);
+  wasm_func_t* run_func = wasm_extern_as_func(exports.data[0]);
   if (run_func == NULL) {
     printf("> Error accessing export!\n");
     return 1;
@@ -144,16 +143,15 @@ int main(int argc, const char* argv[]) {
 
   // Call.
   printf("Calling export...\n");
-  wasm_val_t args[4];
+  wasm_val_t args[2];
   args[0].kind = WASM_I32;
   args[0].of.i32 = 1;
   args[1].kind = WASM_I64;
   args[1].of.i64 = 2;
   wasm_val_t results[2];
-  if (wasm_func_call(run_func, args, results)) {
-    printf("> Error calling function!\n");
-    return 1;
-  }
+  error = wasmtime_func_call(run_func, args, 2, results, 2, &trap);
+  if (error != NULL || trap != NULL)
+    exit_with_error("failed to call run", error, trap);
 
   wasm_extern_vec_delete(&exports);
 
@@ -177,3 +175,17 @@ int main(int argc, const char* argv[]) {
   return 0;
 }
 
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+  fprintf(stderr, "error: %s\n", message);
+  wasm_byte_vec_t error_message;
+  if (error != NULL) {
+    wasmtime_error_message(error, &error_message);
+    wasmtime_error_delete(error);
+  } else {
+    wasm_trap_message(trap, &error_message);
+    wasm_trap_delete(trap);
+  }
+  fprintf(stderr, "%.*s\n", (int) error_message.size, error_message.data);
+  wasm_byte_vec_delete(&error_message);
+  exit(1);
+}

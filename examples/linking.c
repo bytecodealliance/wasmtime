@@ -26,7 +26,7 @@ to tweak the `-lpthread` and such annotations.
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
-static void print_trap(wasm_trap_t *trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
 static void read_wat_file(wasm_engine_t *engine, wasm_byte_vec_t *bytes, const char *file);
 
 int main() {
@@ -42,10 +42,15 @@ int main() {
   read_wat_file(engine, &linking2_wasm, "examples/linking2.wat");
 
   // Compile our two modules
-  wasm_module_t *linking1_module = wasm_module_new(store, &linking1_wasm);
-  assert(linking1_module != NULL);
-  wasm_module_t *linking2_module = wasm_module_new(store, &linking2_wasm);
-  assert(linking2_module != NULL);
+  wasmtime_error_t *error;
+  wasm_module_t *linking1_module = NULL;
+  wasm_module_t *linking2_module = NULL;
+  error = wasmtime_module_new(store, &linking1_wasm, &linking1_module);
+  if (error != NULL)
+    exit_with_error("failed to compile linking1", error, NULL);
+  error = wasmtime_module_new(store, &linking2_wasm, &linking2_module);
+  if (error != NULL)
+    exit_with_error("failed to compile linking2", error, NULL);
   wasm_byte_vec_delete(&linking1_wasm);
   wasm_byte_vec_delete(&linking2_wasm);
 
@@ -59,45 +64,35 @@ int main() {
   wasi_config_inherit_stderr(wasi_config);
   wasm_trap_t *trap = NULL;
   wasi_instance_t *wasi = wasi_instance_new(store, "wasi_snapshot_preview1", wasi_config, &trap);
-  if (wasi == NULL) {
-    print_trap(trap);
-    exit(1);
-  }
+  if (wasi == NULL)
+    exit_with_error("failed to instantiate wasi", NULL, trap);
 
   // Create our linker which will be linking our modules together, and then add
   // our WASI instance to it.
   wasmtime_linker_t *linker = wasmtime_linker_new(store);
-  bool ok = wasmtime_linker_define_wasi(linker, wasi);
-  assert(ok);
+  error = wasmtime_linker_define_wasi(linker, wasi);
+  if (error != NULL)
+    exit_with_error("failed to link wasi", error, NULL);
 
   // Instantiate `linking2` with our linker.
-  wasm_instance_t *linking2 = wasmtime_linker_instantiate(linker, linking2_module, &trap);
-  if (linking2 == NULL) {
-    if (trap == NULL) {
-      printf("> failed to link!\n");
-    } else {
-      print_trap(trap);
-    }
-    exit(1);
-  }
+  wasm_instance_t *linking2;
+  error = wasmtime_linker_instantiate(linker, linking2_module, &linking2, &trap);
+  if (error != NULL || trap != NULL)
+    exit_with_error("failed to instantiate linking2", error, trap);
 
   // Register our new `linking2` instance with the linker
   wasm_name_t linking2_name;
   linking2_name.data = "linking2";
   linking2_name.size = strlen(linking2_name.data);
-  ok = wasmtime_linker_define_instance(linker, &linking2_name, linking2);
-  assert(ok);
+  error = wasmtime_linker_define_instance(linker, &linking2_name, linking2);
+  if (error != NULL)
+    exit_with_error("failed to link linking2", error, NULL);
 
   // Instantiate `linking1` with the linker now that `linking2` is defined
-  wasm_instance_t *linking1 = wasmtime_linker_instantiate(linker, linking1_module, &trap);
-  if (linking1 == NULL) {
-    if (trap == NULL) {
-      printf("> failed to link!\n");
-    } else {
-      print_trap(trap);
-    }
-    exit(1);
-  }
+  wasm_instance_t *linking1;
+  error = wasmtime_linker_instantiate(linker, linking1_module, &linking1, &trap);
+  if (error != NULL || trap != NULL)
+    exit_with_error("failed to instantiate linking1", error, trap);
 
   // Lookup our `run` export function
   wasm_extern_vec_t linking1_externs;
@@ -105,11 +100,9 @@ int main() {
   assert(linking1_externs.size == 1);
   wasm_func_t *run = wasm_extern_as_func(linking1_externs.data[0]);
   assert(run != NULL);
-  trap = wasm_func_call(run, NULL, NULL);
-  if (trap != NULL) {
-    print_trap(trap);
-    exit(1);
-  }
+  error = wasmtime_func_call(run, NULL, 0, NULL, 0, &trap);
+  if (error != NULL || trap != NULL)
+    exit_with_error("failed to call run", error, trap);
 
   // Clean up after ourselves at this point
   wasm_extern_vec_delete(&linking1_externs);
@@ -146,19 +139,23 @@ static void read_wat_file(
   fclose(file);
 
   // Parse the wat into the binary wasm format
-  wasm_byte_vec_t error;
-  if (wasmtime_wat2wasm(&wat, bytes, &error) == 0) {
-    fprintf(stderr, "failed to parse wat %.*s\n", (int) error.size, error.data);
-    exit(1);
-  }
+  wasmtime_error_t *error = wasmtime_wat2wasm(&wat, bytes);
+  if (error != NULL)
+    exit_with_error("failed to parse wat", error, NULL);
   wasm_byte_vec_delete(&wat);
 }
 
-static void print_trap(wasm_trap_t *trap) {
-  assert(trap != NULL);
-  wasm_message_t message;
-  wasm_trap_message(trap, &message);
-  fprintf(stderr, "failed to instantiate module %.*s\n", (int) message.size, message.data);
-  wasm_byte_vec_delete(&message);
-  wasm_trap_delete(trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+  fprintf(stderr, "error: %s\n", message);
+  wasm_byte_vec_t error_message;
+  if (error != NULL) {
+    wasmtime_error_message(error, &error_message);
+    wasmtime_error_delete(error);
+  } else {
+    wasm_trap_message(trap, &error_message);
+    wasm_trap_delete(trap);
+  }
+  fprintf(stderr, "%.*s\n", (int) error_message.size, error_message.data);
+  wasm_byte_vec_delete(&error_message);
+  exit(1);
 }

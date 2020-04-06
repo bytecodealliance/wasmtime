@@ -198,7 +198,7 @@ pub fn differential_execution(
                 Ok(p) => p,
                 Err(_) => continue,
             };
-            let this_result = f.call(&params);
+            let this_result = f.call(&params).map_err(|e| e.downcast::<Trap>().unwrap());
 
             let existing_result = export_func_results
                 .entry(name.to_string())

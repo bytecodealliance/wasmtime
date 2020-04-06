@@ -23,7 +23,7 @@ to tweak the `-lpthread` and such annotations.
 #include <wasm.h>
 #include <wasmtime.h>
 
-static void print_trap(wasm_trap_t *trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
 
 int main() {
   int ret = 0;
@@ -51,23 +51,23 @@ int main() {
   fclose(file);
 
   // Parse the wat into the binary wasm format
-  wasm_byte_vec_t wasm, error;
-  if (wasmtime_wat2wasm(&wat, &wasm, &error) == 0) {
-    fprintf(stderr, "failed to parse wat %.*s\n", (int) error.size, error.data);
-    goto free_store;
-  }
+  wasm_byte_vec_t wasm;
+  wasmtime_error_t *error = wasmtime_wat2wasm(&wat, &wasm);
+  if (error != NULL)
+    exit_with_error("failed to parse wat", error, NULL);
   wasm_byte_vec_delete(&wat);
 
   // Compile and instantiate our module
-  wasm_module_t *module = wasm_module_new(store, &wasm);
+  wasm_module_t *module = NULL;
+  error = wasmtime_module_new(store, &wasm, &module);
+  if (module == NULL)
+    exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&wasm);
-  assert(module != NULL);
   wasm_trap_t *trap = NULL;
-  wasm_instance_t *instance = wasm_instance_new(store, module, NULL, &trap);
-  if (instance == NULL) {
-    print_trap(trap);
-    goto free_module;
-  }
+  wasm_instance_t *instance = NULL;
+  error = wasmtime_instance_new(module, NULL, 0, &instance, &trap);
+  if (instance == NULL)
+    exit_with_error("failed to instantiate", error, trap);
 
   // Lookup our `gcd` export function
   wasm_extern_vec_t externs;
@@ -85,11 +85,9 @@ int main() {
   params[0].of.i32 = a;
   params[1].kind = WASM_I32;
   params[1].of.i32 = b;
-  trap = wasm_func_call(gcd, params, results);
-  if (trap != NULL) {
-    print_trap(trap);
-    goto free_instance;
-  }
+  error = wasmtime_func_call(gcd, params, 2, results, 1, &trap);
+  if (error != NULL || trap != NULL)
+    exit_with_error("failed to call gcd", error, trap);
   assert(results[0].kind == WASM_I32);
 
   printf("gcd(%d, %d) = %d\n", a, b, results[0].of.i32);
@@ -97,22 +95,23 @@ int main() {
   // Clean up after ourselves at this point
   ret = 0;
 
-free_instance:
   wasm_extern_vec_delete(&externs);
   wasm_instance_delete(instance);
-free_module:
   wasm_module_delete(module);
-free_store:
   wasm_store_delete(store);
   wasm_engine_delete(engine);
   return ret;
 }
 
-static void print_trap(wasm_trap_t *trap) {
-  assert(trap != NULL);
-  wasm_message_t message;
-  wasm_trap_message(trap, &message);
-  fprintf(stderr, "failed to instantiate module %.*s\n", (int) message.size, message.data);
-  wasm_byte_vec_delete(&message);
-  wasm_trap_delete(trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+  fprintf(stderr, "error: %s\n", message);
+  wasm_byte_vec_t error_message;
+  if (error != NULL) {
+    wasmtime_error_message(error, &error_message);
+  } else {
+    wasm_trap_message(trap, &error_message);
+  }
+  fprintf(stderr, "%.*s\n", (int) error_message.size, error_message.data);
+  wasm_byte_vec_delete(&error_message);
+  exit(1);
 }
