@@ -28,13 +28,6 @@ namespace Wasmtime
             {
                 Interop.wasmtime_error_message(error, out var bytes);
                 var byteSpan = new ReadOnlySpan<byte>(bytes.data, checked((int)bytes.size));
-
-                int indexOfNull = byteSpan.LastIndexOf((byte)0);
-                if (indexOfNull != -1)
-                {
-                    byteSpan = byteSpan.Slice(0, indexOfNull);
-                }
-
                 var message = Encoding.UTF8.GetString(byteSpan);
                 Interop.wasm_byte_vec_delete(ref bytes);
 
