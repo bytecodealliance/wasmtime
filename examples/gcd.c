@@ -23,7 +23,7 @@ to tweak the `-lpthread` and such annotations.
 #include <wasm.h>
 #include <wasmtime.h>
 
-static void print_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
 
 int main() {
   int ret = 0;
@@ -54,20 +54,20 @@ int main() {
   wasm_byte_vec_t wasm;
   wasmtime_error_t *error = wasmtime_wat2wasm(&wat, &wasm);
   if (error != NULL)
-    print_error("failed to parse wat", error, NULL);
+    exit_with_error("failed to parse wat", error, NULL);
   wasm_byte_vec_delete(&wat);
 
   // Compile and instantiate our module
   wasm_module_t *module = NULL;
   error = wasmtime_module_new(store, &wasm, &module);
   if (module == NULL)
-    print_error("failed to compile module", error, NULL);
+    exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&wasm);
   wasm_trap_t *trap = NULL;
   wasm_instance_t *instance = NULL;
   error = wasmtime_instance_new(module, NULL, 0, &instance, &trap);
   if (instance == NULL)
-    print_error("failed to instantiate", error, trap);
+    exit_with_error("failed to instantiate", error, trap);
 
   // Lookup our `gcd` export function
   wasm_extern_vec_t externs;
@@ -87,7 +87,7 @@ int main() {
   params[1].of.i32 = b;
   error = wasmtime_func_call(gcd, params, 2, results, 1, &trap);
   if (error != NULL || trap != NULL)
-    print_error("failed to call gcd", error, trap);
+    exit_with_error("failed to call gcd", error, trap);
   assert(results[0].kind == WASM_I32);
 
   printf("gcd(%d, %d) = %d\n", a, b, results[0].of.i32);
@@ -103,7 +103,7 @@ int main() {
   return ret;
 }
 
-static void print_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
   fprintf(stderr, "error: %s\n", message);
   wasm_byte_vec_t error_message;
   if (error != NULL) {

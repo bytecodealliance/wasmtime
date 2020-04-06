@@ -8,7 +8,7 @@
 
 #define own
 
-static void print_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
 
 int main(int argc, const char* argv[]) {
   // Configuring engine to support generating of DWARF info.
@@ -44,9 +44,8 @@ int main(int argc, const char* argv[]) {
   printf("Compiling module...\n");
   wasm_module_t *module = NULL;
   wasmtime_error_t* error = wasmtime_module_new(store, &binary, &module);
-  if (!module) {
-    print_error("failed to compile module", error, NULL);
-  }
+  if (!module)
+    exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&binary);
 
   // Figure out which export is the `fib` export
@@ -73,9 +72,8 @@ int main(int argc, const char* argv[]) {
   wasm_instance_t* instance = NULL;
   wasm_trap_t *trap = NULL;
   error = wasmtime_instance_new(module, NULL, 0, &instance, &trap);
-  if (error != NULL || trap != NULL) {
-    print_error("failed to instantiate", error, trap);
-  }
+  if (error != NULL || trap != NULL)
+    exit_with_error("failed to instantiate", error, trap);
   wasm_module_delete(module);
 
   // Extract export.
@@ -100,10 +98,8 @@ int main(int argc, const char* argv[]) {
   wasm_val_t params[1] = { {.kind = WASM_I32, .of = {.i32 = 6}} };
   wasm_val_t results[1];
   error = wasmtime_func_call(run_func, params, 1, results, 1, &trap);
-  if (error != NULL || trap != NULL) {
-    print_error("failed to call function", error, trap);
-    return 1;
-  }
+  if (error != NULL || trap != NULL)
+    exit_with_error("failed to call function", error, trap);
 
   wasm_extern_vec_delete(&exports);
 
@@ -119,7 +115,7 @@ int main(int argc, const char* argv[]) {
   return 0;
 }
 
-static void print_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
   fprintf(stderr, "error: %s\n", message);
   wasm_byte_vec_t error_message;
   if (error != NULL) {

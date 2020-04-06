@@ -25,7 +25,7 @@ to tweak the `-lpthread` and such annotations.
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
-static void print_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
 
 int main() {
   int ret = 0;
@@ -56,7 +56,7 @@ int main() {
   wasm_module_t *module = NULL;
   wasmtime_error_t *error = wasmtime_module_new(store, &wasm, &module);
   if (!module)
-    print_error("failed to compile module", error, NULL);
+    exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&wasm);
 
   // Instantiate wasi
@@ -70,7 +70,7 @@ int main() {
   wasm_trap_t *trap = NULL;
   wasi_instance_t *wasi = wasi_instance_new(store, "wasi_snapshot_preview1", wasi_config, &trap);
   if (wasi == NULL)
-    print_error("failed to instantiate WASI", NULL, trap);
+    exit_with_error("failed to instantiate WASI", NULL, trap);
 
   // Create import list for our module using wasi
   wasm_importtype_vec_t import_types;
@@ -91,7 +91,7 @@ int main() {
   wasm_instance_t *instance = NULL;
   error = wasmtime_instance_new(module, imports, import_types.size, &instance, &trap);
   if (instance == NULL)
-    print_error("failed to instantiate", error, trap);
+    exit_with_error("failed to instantiate", error, trap);
   free(imports);
   wasm_importtype_vec_delete(&import_types);
 
@@ -111,7 +111,7 @@ int main() {
   assert(start != NULL);
   error = wasmtime_func_call(start, NULL, 0, NULL, 0, &trap);
   if (error != NULL || trap != NULL)
-    print_error("failed to call `_start`", error, trap);
+    exit_with_error("failed to call `_start`", error, trap);
 
   // Clean up after ourselves at this point
   wasm_exporttype_vec_delete(&exports);
@@ -123,7 +123,7 @@ int main() {
   return 0;
 }
 
-static void print_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
   fprintf(stderr, "error: %s\n", message);
   wasm_byte_vec_t error_message;
   if (error != NULL) {

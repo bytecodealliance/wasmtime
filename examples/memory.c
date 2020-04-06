@@ -28,7 +28,7 @@ originally
 #include <wasm.h>
 #include <wasmtime.h>
 
-static void print_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
 
 wasm_memory_t* get_export_memory(const wasm_extern_vec_t* exports, size_t i) {
   if (exports->size <= i || !wasm_extern_as_memory(exports->data[i])) {
@@ -59,7 +59,7 @@ void check_call(wasm_func_t* func, wasm_val_t args[], size_t num_args, int32_t e
   wasm_trap_t *trap = NULL;
   wasmtime_error_t *error = wasmtime_func_call(func, args, num_args, results, 1, &trap);
   if (error != NULL || trap != NULL)
-    print_error("failed to call function", error, trap);
+    exit_with_error("failed to call function", error, trap);
   if (results[0].of.i32 != expected) {
     printf("> Error on result\n");
     exit(1);
@@ -87,7 +87,7 @@ void check_ok(wasm_func_t* func, wasm_val_t args[], size_t num_args) {
   wasm_trap_t *trap = NULL;
   wasmtime_error_t *error = wasmtime_func_call(func, args, num_args, NULL, 0, &trap);
   if (error != NULL || trap != NULL)
-    print_error("failed to call function", error, trap);
+    exit_with_error("failed to call function", error, trap);
 }
 
 void check_ok2(wasm_func_t* func, int32_t arg1, int32_t arg2) {
@@ -104,7 +104,7 @@ void check_trap(wasm_func_t* func, wasm_val_t args[], size_t num_args, size_t nu
   wasm_trap_t *trap = NULL;
   wasmtime_error_t *error = wasmtime_func_call(func, args, num_args, results, num_results, &trap);
   if (error != NULL)
-    print_error("failed to call function", error, NULL);
+    exit_with_error("failed to call function", error, NULL);
   if (trap == NULL) {
     printf("> Error on result, expected trap\n");
     exit(1);
@@ -152,7 +152,7 @@ int main(int argc, const char* argv[]) {
   wasm_byte_vec_t binary;
   wasmtime_error_t *error = wasmtime_wat2wasm(&wat, &binary);
   if (error != NULL)
-    print_error("failed to parse wat", error, NULL);
+    exit_with_error("failed to parse wat", error, NULL);
   wasm_byte_vec_delete(&wat);
 
   // Compile.
@@ -160,7 +160,7 @@ int main(int argc, const char* argv[]) {
   wasm_module_t* module = NULL;
   error = wasmtime_module_new(store, &binary, &module);
   if (error)
-    print_error("failed to compile module", error, NULL);
+    exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&binary);
 
   // Instantiate.
@@ -169,7 +169,7 @@ int main(int argc, const char* argv[]) {
   wasm_trap_t *trap = NULL;
   error = wasmtime_instance_new(module, NULL, 0, &instance, &trap);
   if (!instance)
-    print_error("failed to instantiate", error, trap);
+    exit_with_error("failed to instantiate", error, trap);
 
   // Extract export.
   printf("Extracting exports...\n");
@@ -253,7 +253,7 @@ int main(int argc, const char* argv[]) {
   return 0;
 }
 
-static void print_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
   fprintf(stderr, "error: %s\n", message);
   wasm_byte_vec_t error_message;
   if (error != NULL) {

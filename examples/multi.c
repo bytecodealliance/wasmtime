@@ -28,7 +28,7 @@ originally
 #include <wasm.h>
 #include <wasmtime.h>
 
-static void print_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
 
 // A function to be called from Wasm code.
 wasm_trap_t* callback(
@@ -88,7 +88,7 @@ int main(int argc, const char* argv[]) {
   wasm_byte_vec_t binary;
   wasmtime_error_t *error = wasmtime_wat2wasm(&wat, &binary);
   if (error != NULL)
-    print_error("failed to parse wat", error, NULL);
+    exit_with_error("failed to parse wat", error, NULL);
   wasm_byte_vec_delete(&wat);
 
   // Compile.
@@ -96,7 +96,7 @@ int main(int argc, const char* argv[]) {
   wasm_module_t* module = NULL;
   error = wasmtime_module_new(store, &binary, &module);
   if (error)
-    print_error("failed to compile module", error, NULL);
+    exit_with_error("failed to compile module", error, NULL);
 
   wasm_byte_vec_delete(&binary);
 
@@ -120,7 +120,7 @@ int main(int argc, const char* argv[]) {
   wasm_trap_t* trap = NULL;
   error = wasmtime_instance_new(module, imports, 1, &instance, &trap);
   if (!instance)
-    print_error("failed to instantiate", error, trap);
+    exit_with_error("failed to instantiate", error, trap);
 
   wasm_func_delete(callback_func);
 
@@ -151,7 +151,7 @@ int main(int argc, const char* argv[]) {
   wasm_val_t results[2];
   error = wasmtime_func_call(run_func, args, 2, results, 2, &trap);
   if (error != NULL || trap != NULL)
-    print_error("failed to call run", error, trap);
+    exit_with_error("failed to call run", error, trap);
 
   wasm_extern_vec_delete(&exports);
 
@@ -175,7 +175,7 @@ int main(int argc, const char* argv[]) {
   return 0;
 }
 
-static void print_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
   fprintf(stderr, "error: %s\n", message);
   wasm_byte_vec_t error_message;
   if (error != NULL) {

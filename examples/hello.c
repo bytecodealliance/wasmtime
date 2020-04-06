@@ -24,7 +24,7 @@ to tweak the `-lpthread` and such annotations as well as the name of the
 #include <wasm.h>
 #include <wasmtime.h>
 
-static void print_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
 
 static wasm_trap_t* hello_callback(const wasm_val_t args[], wasm_val_t results[]) {
   printf("Calling back...\n");
@@ -61,7 +61,7 @@ int main() {
   wasm_byte_vec_t wasm;
   wasmtime_error_t *error = wasmtime_wat2wasm(&wat, &wasm);
   if (error != NULL)
-    print_error("failed to parse wat", error, NULL);
+    exit_with_error("failed to parse wat", error, NULL);
   wasm_byte_vec_delete(&wat);
 
   // Now that we've got our binary webassembly we can compile our module.
@@ -70,7 +70,7 @@ int main() {
   error = wasmtime_module_new(store, &wasm, &module);
   wasm_byte_vec_delete(&wasm);
   if (error != NULL)
-    print_error("failed to compile module", error, NULL);
+    exit_with_error("failed to compile module", error, NULL);
 
   // Next up we need to create the function that the wasm module imports. Here
   // we'll be hooking up a thunk function to the `hello_callback` native
@@ -89,7 +89,7 @@ int main() {
   const wasm_extern_t *imports[] = { wasm_func_as_extern(hello) };
   error = wasmtime_instance_new(module, imports, 1, &instance, &trap);
   if (instance == NULL)
-    print_error("failed to instantiate", error, trap);
+    exit_with_error("failed to instantiate", error, trap);
 
   // Lookup our `run` export function
   printf("Extracting export...\n");
@@ -103,7 +103,7 @@ int main() {
   printf("Calling export...\n");
   error = wasmtime_func_call(run, NULL, 0, NULL, 0, &trap);
   if (error != NULL || trap != NULL)
-    print_error("failed to call function", error, trap);
+    exit_with_error("failed to call function", error, trap);
 
   // Clean up after ourselves at this point
   printf("All finished!\n");
@@ -117,7 +117,7 @@ int main() {
   return ret;
 }
 
-static void print_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
   fprintf(stderr, "error: %s\n", message);
   wasm_byte_vec_t error_message;
   if (error != NULL) {
