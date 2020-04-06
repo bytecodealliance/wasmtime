@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.Serialization;
+using System.Text;
 
 namespace Wasmtime
 {
@@ -20,5 +21,27 @@ namespace Wasmtime
 
         /// <inheritdoc/>
         protected WasmtimeException(SerializationInfo info, StreamingContext context) : base(info, context) { }
+
+        internal static WasmtimeException FromOwnedError(IntPtr error)
+        {
+            unsafe
+            {
+                Interop.wasmtime_error_message(error, out var bytes);
+                var byteSpan = new ReadOnlySpan<byte>(bytes.data, checked((int)bytes.size));
+
+                int indexOfNull = byteSpan.LastIndexOf((byte)0);
+                if (indexOfNull != -1)
+                {
+                    byteSpan = byteSpan.Slice(0, indexOfNull);
+                }
+
+                var message = Encoding.UTF8.GetString(byteSpan);
+                Interop.wasm_byte_vec_delete(ref bytes);
+
+                Interop.wasmtime_error_delete(error);
+
+                return new WasmtimeException(message);
+            }
+        }
     }
 }

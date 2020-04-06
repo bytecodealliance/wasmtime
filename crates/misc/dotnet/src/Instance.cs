@@ -80,8 +80,13 @@ namespace Wasmtime
 
             unsafe
             {
-                Handle = Interop.wasmtime_linker_instantiate(linker, module.Handle, out var trap);
+                var error = Interop.wasmtime_linker_instantiate(linker, module.Handle, out var handle, out var trap);
+                Handle = handle;
 
+                if (error != IntPtr.Zero)
+                {
+                    throw WasmtimeException.FromOwnedError(error);
+                }
                 if (trap != IntPtr.Zero)
                 {
                     throw TrapException.FromOwnedTrap(trap);
