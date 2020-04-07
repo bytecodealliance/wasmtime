@@ -12,18 +12,31 @@ pub(crate) fn add_internal_types(
     out_strings: &mut write::StringTable,
     module_info: &ModuleVmctxInfo,
 ) -> (write::UnitEntryId, write::UnitEntryId) {
+    const WASM_PTR_LEN: u8 = 4;
+
+    // Build DW_TAG_base_type for generic `WebAssemblyPtr`
+    //  .. DW_AT_name = "WebAssemblyPtr"
+    //  .. DW_AT_byte_size = 4
+    //  .. DW_AT_encoding = DW_ATE_unsigned
     let wp_die_id = comp_unit.add(root_id, gimli::DW_TAG_base_type);
     let wp_die = comp_unit.get_mut(wp_die_id);
     wp_die.set(
         gimli::DW_AT_name,
         write::AttributeValue::StringRef(out_strings.add("WebAssemblyPtr")),
     );
-    wp_die.set(gimli::DW_AT_byte_size, write::AttributeValue::Data1(4));
+    wp_die.set(
+        gimli::DW_AT_byte_size,
+        write::AttributeValue::Data1(WASM_PTR_LEN),
+    );
     wp_die.set(
         gimli::DW_AT_encoding,
         write::AttributeValue::Encoding(gimli::DW_ATE_unsigned),
     );
 
+    // Build DW_TAG_base_type for Wasm byte:
+    //  .. DW_AT_name = u8
+    //  .. DW_AT_encoding = DW_ATE_unsigned
+    //  .. DW_AT_byte_size = 1
     let memory_byte_die_id = comp_unit.add(root_id, gimli::DW_TAG_base_type);
     let memory_byte_die = comp_unit.get_mut(memory_byte_die_id);
     memory_byte_die.set(
@@ -36,6 +49,9 @@ pub(crate) fn add_internal_types(
     );
     memory_byte_die.set(gimli::DW_AT_byte_size, write::AttributeValue::Data1(1));
 
+    // Build DW_TAG_pointer_type that references Wasm bytes:
+    //  .. DW_AT_name = "u8*"
+    //  .. DW_AT_type = <memory_byte_die>
     let memory_bytes_die_id = comp_unit.add(root_id, gimli::DW_TAG_pointer_type);
     let memory_bytes_die = comp_unit.get_mut(memory_bytes_die_id);
     memory_bytes_die.set(
@@ -48,7 +64,8 @@ pub(crate) fn add_internal_types(
     );
 
     // Create artificial VMContext type and its reference for convinience viewing
-    // its fields (such as memory ref) in a debugger.
+    // its fields (such as memory ref) in a debugger. Build DW_TAG_structure_type:
+    //   .. DW_AT_name = "WasmtimeVMContext"
     let vmctx_die_id = comp_unit.add(root_id, gimli::DW_TAG_structure_type);
     let vmctx_die = comp_unit.get_mut(vmctx_die_id);
     vmctx_die.set(
@@ -56,6 +73,7 @@ pub(crate) fn add_internal_types(
         write::AttributeValue::StringRef(out_strings.add("WasmtimeVMContext")),
     );
 
+    // TODO multiple memories
     match module_info.memory_offset {
         ModuleMemoryOffset::Defined(memory_offset) => {
             // The context has defined memory: extend the WasmtimeVMContext size
@@ -67,6 +85,10 @@ pub(crate) fn add_internal_types(
             );
 
             // Define the "memory" field which is a direct pointer to allocated Wasm memory.
+            // Build DW_TAG_member:
+            //  .. DW_AT_name = "memory"
+            //  .. DW_AT_type = <memory_bytes_die>
+            //  .. DW_AT_data_member_location = `memory_offset`
             let m_die_id = comp_unit.add(vmctx_die_id, gimli::DW_TAG_member);
             let m_die = comp_unit.get_mut(m_die_id);
             m_die.set(
@@ -88,6 +110,9 @@ pub(crate) fn add_internal_types(
         ModuleMemoryOffset::None => (),
     }
 
+    // Build DW_TAG_pointer_type for `WasmtimeVMContext*`:
+    //  .. DW_AT_name = "WasmtimeVMContext*"
+    //  .. DW_AT_type = <vmctx_die>
     let vmctx_ptr_die_id = comp_unit.add(root_id, gimli::DW_TAG_pointer_type);
     let vmctx_ptr_die = comp_unit.get_mut(vmctx_ptr_die_id);
     vmctx_ptr_die.set(
@@ -99,23 +124,29 @@ pub(crate) fn add_internal_types(
         write::AttributeValue::ThisUnitEntryRef(vmctx_die_id),
     );
 
-    let sub_die_id = comp_unit.add(vmctx_die_id, gimli::DW_TAG_subprogram);
-    let sub_die = comp_unit.get_mut(sub_die_id);
-    sub_die.set(
+    // Build vmctx_die's DW_TAG_subprogram for `set` method:
+    //  .. DW_AT_linkage_name = "_set_vmctx_memory"
+    //  .. DW_AT_name = "set"
+    //  .. DW_TAG_formal_parameter
+    //  ..  .. DW_AT_type = <vmctx_ptr_die>
+    //  ..  .. DW_AT_artificial = 1
+    let vmctx_set_id = comp_unit.add(vmctx_die_id, gimli::DW_TAG_subprogram);
+    let vmctx_set = comp_unit.get_mut(vmctx_set_id);
+    vmctx_set.set(
         gimli::DW_AT_linkage_name,
         write::AttributeValue::StringRef(out_strings.add("_set_vmctx_memory")),
     );
-    sub_die.set(
+    vmctx_set.set(
         gimli::DW_AT_name,
         write::AttributeValue::StringRef(out_strings.add("set")),
     );
-    let this_param_id = comp_unit.add(sub_die_id, gimli::DW_TAG_formal_parameter);
-    let this_param = comp_unit.get_mut(this_param_id);
-    this_param.set(
+    let vmctx_set_this_param_id = comp_unit.add(vmctx_set_id, gimli::DW_TAG_formal_parameter);
+    let vmctx_set_this_param = comp_unit.get_mut(vmctx_set_this_param_id);
+    vmctx_set_this_param.set(
         gimli::DW_AT_type,
         write::AttributeValue::ThisUnitEntryRef(vmctx_ptr_die_id),
     );
-    this_param.set(gimli::DW_AT_artificial, write::AttributeValue::Flag(true));
+    vmctx_set_this_param.set(gimli::DW_AT_artificial, write::AttributeValue::Flag(true));
 
     (wp_die_id, vmctx_ptr_die_id)
 }
