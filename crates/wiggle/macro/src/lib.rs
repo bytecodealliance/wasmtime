@@ -66,14 +66,20 @@ use syn::parse_macro_input;
 ///
 /// /// For all types used in the `Error` position of a `Result` in the module
 /// /// traits, you must implement `GuestErrorType` which tells wiggle-generated
-/// /// code how to determine if a method call has been successful, as well as
-/// /// how to translate a wiggle runtime error into an ABI-level error.
-/// impl<'a> GuestErrorType<'a> for types::Errno {
-///     type Context = YourCtxType;
+/// /// code what value to return when the method returns Ok(...).
+/// impl GuestErrorType for types::Errno {
 ///     fn success() -> Self {
 ///         unimplemented!()
 ///     }
-///     fn from_error(_e: wiggle::GuestError, _c: &Self::Context) -> Self {
+/// }
+///
+/// /// The `types::GuestErrorConversion` trait is also generated with a method for
+/// /// each type used in the `Error` position. This trait allows wiggle-generated
+/// /// code to convert a `wiggle::GuestError` into the right error type. The trait
+/// /// must be implemented for the user's `ctx` type.
+///
+/// impl types::GuestErrorConversion for YourCtxType {
+///     fn into_errno(&self, _e: wiggle::GuestError) -> types::Errno {
 ///         unimplemented!()
 ///     }
 /// }

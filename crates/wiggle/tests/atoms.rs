@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle::{GuestError, GuestMemory};
+use wiggle::GuestMemory;
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
@@ -7,7 +7,7 @@ wiggle::from_witx!({
     ctx: WasiCtx,
 });
 
-impl_errno!(types::Errno);
+impl_errno!(types::Errno, types::GuestErrorConversion);
 
 impl<'a> atoms::Atoms for WasiCtx<'a> {
     fn int_float_args(&self, an_int: u32, an_float: f32) -> Result<(), types::Errno> {
