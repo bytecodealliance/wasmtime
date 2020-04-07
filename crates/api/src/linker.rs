@@ -357,7 +357,7 @@ impl Linker {
     pub fn instantiate(&self, module: &Module) -> Result<Instance> {
         let mut imports = Vec::new();
         for import in module.imports() {
-            if let Some(item) = self.import_get(import) {
+            if let Some(item) = self.get(import) {
                 imports.push(item.clone());
                 continue;
             }
@@ -395,7 +395,26 @@ impl Linker {
         Instance::new(module, &imports)
     }
 
-    fn import_get(&self, import: &ImportType) -> Option<&Extern> {
+    /// Returns the [`Store`] that this linker is connected to.
+    pub fn store(&self) -> &Store {
+        &self.store
+    }
+
+    /// Returns an iterator over all items defined in this `Linker`.
+    ///
+    /// Note that multiple `Extern` items may be defined for the same
+    /// module/name pair.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &str, &Extern)> {
+        self.map
+            .iter()
+            .map(move |(key, item)| (&*self.strings[key.module], &*self.strings[key.name], item))
+    }
+
+    /// Looks up a value in this `Linker` which matches the `import` type
+    /// provided.
+    ///
+    /// Returns `None` if no match was found.
+    pub fn get(&self, import: &ImportType) -> Option<&Extern> {
         let key = ImportKey {
             module: *self.string2idx.get(import.module())?,
             name: *self.string2idx.get(import.name())?,
@@ -404,8 +423,20 @@ impl Linker {
         self.map.get(&key)
     }
 
-    /// Returns the [`Store`] that this linker is connected to.
-    pub fn store(&self) -> &Store {
-        &self.store
+    /// Returns all items defined for the `module` and `name` pair.
+    ///
+    /// This may return an empty iterator, but it may also return multiple items
+    /// if the module/name have been defined twice.
+    pub fn get_by_name<'a: 'p, 'p>(
+        &'a self,
+        module: &'p str,
+        name: &'p str,
+    ) -> impl Iterator<Item = &'a Extern> + 'p {
+        self.map
+            .iter()
+            .filter(move |(key, _item)| {
+                &*self.strings[key.module] == module && &*self.strings[key.name] == name
+            })
+            .map(|(_, item)| item)
     }
 }
