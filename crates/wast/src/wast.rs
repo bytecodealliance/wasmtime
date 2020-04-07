@@ -66,16 +66,7 @@ impl WastContext {
 
     fn get_export(&self, module: Option<&str>, name: &str) -> Result<&Extern> {
         match module {
-            Some(module) => {
-                let mut items = self.linker.get_by_name(module, name);
-                let ret = items
-                    .next()
-                    .ok_or_else(|| anyhow!("no item named `{}` in `{}`", name, module))?;
-                if items.next().is_some() {
-                    bail!("too many items named `{}` in `{}`", name, module);
-                }
-                return Ok(ret);
-            }
+            Some(module) => self.linker.get_one_by_name(module, name),
             None => self
                 .current
                 .as_ref()
@@ -142,26 +133,16 @@ impl WastContext {
     /// Register an instance to make it available for performing actions.
     fn register(&mut self, name: Option<&str>, as_name: &str) -> Result<()> {
         match name {
-            Some(name) => {
-                let items = self
-                    .linker
-                    .iter()
-                    .filter(|(module, _, _)| *module == name)
-                    .map(|(_, name, item)| (name.to_string(), item.clone()))
-                    .collect::<Vec<_>>();
-                for (name, item) in items {
-                    self.linker.define(as_name, &name, item)?;
-                }
-            }
+            Some(name) => self.linker.alias(name, as_name),
             None => {
                 let current = self
                     .current
                     .as_ref()
                     .ok_or(anyhow!("no previous instance"))?;
                 self.linker.instance(as_name, current)?;
+                Ok(())
             }
         }
-        Ok(())
     }
 
     /// Invoke an exported function from an instance.

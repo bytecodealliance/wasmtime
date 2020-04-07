@@ -1,7 +1,7 @@
 use crate::{
     Extern, ExternType, Func, FuncType, GlobalType, ImportType, Instance, IntoFunc, Module, Store,
 };
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use std::collections::hash_map::{Entry, HashMap};
 use std::rc::Rc;
 
@@ -270,6 +270,27 @@ impl Linker {
         Ok(self)
     }
 
+    /// Aliases one module's name as another.
+    ///
+    /// This method will alias all currently defined under `module` to also be
+    /// defined under the name `as_module` too.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any shadowing violations happen while defining new
+    /// items.
+    pub fn alias(&mut self, module: &str, as_module: &str) -> Result<()> {
+        let items = self
+            .iter()
+            .filter(|(m, _, _)| *m == module)
+            .map(|(_, name, item)| (name.to_string(), item.clone()))
+            .collect::<Vec<_>>();
+        for (name, item) in items {
+            self.define(as_module, &name, item)?;
+        }
+        Ok(())
+    }
+
     fn insert(&mut self, module: &str, name: &str, ty: &ExternType, item: Extern) -> Result<()> {
         let key = self.import_key(module, name, ty);
         match self.map.entry(key) {
@@ -402,6 +423,10 @@ impl Linker {
 
     /// Returns an iterator over all items defined in this `Linker`.
     ///
+    /// The iterator returned will yield 3-tuples where the first two elements
+    /// are the module name and item name for the external item, and the third
+    /// item is the item itself that is defined.
+    ///
     /// Note that multiple `Extern` items may be defined for the same
     /// module/name pair.
     pub fn iter(&self) -> impl Iterator<Item = (&str, &str, &Extern)> {
@@ -438,5 +463,22 @@ impl Linker {
                 &*self.strings[key.module] == module && &*self.strings[key.name] == name
             })
             .map(|(_, item)| item)
+    }
+
+    /// Returns the single item defined for the `module` and `name` pair.
+    ///
+    /// Unlike the similar [`Linker::get_by_name`] method this function returns
+    /// a single `&Extern` item. If the `module` and `name` pair isn't defined
+    /// in this linker then an error is returned. If more than one value exists
+    /// for the `module` and `name` pairs, then an error is returned as well.
+    pub fn get_one_by_name(&self, module: &str, name: &str) -> Result<&Extern> {
+        let mut items = self.get_by_name(module, name);
+        let ret = items
+            .next()
+            .ok_or_else(|| anyhow!("no item named `{}` in `{}`", name, module))?;
+        if items.next().is_some() {
+            bail!("too many items named `{}` in `{}`", name, module);
+        }
+        Ok(ret)
     }
 }
