@@ -148,6 +148,18 @@ where
         pending_die_refs.insert(ref_type_id, gimli::DW_AT_type, *offset);
     }
 
+    // Build DW_TAG_pointer_type for `T*`:
+    //  .. DW_AT_type = <base_type>
+    let ptr_type_id = comp_unit.add(parent_id, gimli::DW_TAG_pointer_type);
+    let ptr_type = comp_unit.get_mut(ptr_type_id);
+    ptr_type.set(
+        gimli::DW_AT_type,
+        write::AttributeValue::ThisUnitEntryRef(wp_die_id),
+    );
+    if let Some(AttributeValue::UnitRef(ref offset)) = base_type_id {
+        pending_die_refs.insert(ptr_type_id, gimli::DW_AT_type, *offset);
+    }
+
     // Build wrapper_die's DW_TAG_template_type_parameter:
     //  .. DW_AT_name = "T"
     //  .. DW_AT_type = <base_type>
@@ -200,6 +212,35 @@ where
     deref_op_die.set(
         gimli::DW_AT_type,
         write::AttributeValue::ThisUnitEntryRef(ref_type_id),
+    );
+    let deref_op_this_param_id = comp_unit.add(deref_op_die_id, gimli::DW_TAG_formal_parameter);
+    let deref_op_this_param = comp_unit.get_mut(deref_op_this_param_id);
+    deref_op_this_param.set(
+        gimli::DW_AT_type,
+        write::AttributeValue::ThisUnitEntryRef(wrapper_ptr_type_id),
+    );
+    deref_op_this_param.set(gimli::DW_AT_artificial, write::AttributeValue::Flag(true));
+
+    // Build wrapper_die's DW_TAG_subprogram for `operator->`:
+    //  .. DW_AT_linkage_name = "_resolve_vmctx_memory_ptr"
+    //  .. DW_AT_name = "operator->"
+    //  .. DW_AT_type = <ptr_type>
+    //  .. DW_TAG_formal_parameter
+    //  ..  .. DW_AT_type = <wrapper_ptr_type>
+    //  ..  .. DW_AT_artificial = 1
+    let deref_op_die_id = comp_unit.add(wrapper_die_id, gimli::DW_TAG_subprogram);
+    let deref_op_die = comp_unit.get_mut(deref_op_die_id);
+    deref_op_die.set(
+        gimli::DW_AT_linkage_name,
+        write::AttributeValue::StringRef(out_strings.add("_resolve_vmctx_memory_ptr")),
+    );
+    deref_op_die.set(
+        gimli::DW_AT_name,
+        write::AttributeValue::StringRef(out_strings.add("operator->")),
+    );
+    deref_op_die.set(
+        gimli::DW_AT_type,
+        write::AttributeValue::ThisUnitEntryRef(ptr_type_id),
     );
     let deref_op_this_param_id = comp_unit.add(deref_op_die_id, gimli::DW_TAG_formal_parameter);
     let deref_op_this_param = comp_unit.get_mut(deref_op_this_param_id);
