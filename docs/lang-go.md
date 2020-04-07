@@ -66,8 +66,8 @@ WebAssembly code in Go!
 
 ## More examples and contributing
 
-The `wasmtime` Go package currently [lives in its own repository outside of
-`wasmtime`](https://github.com/bytecodealliance/wasmtime-go) and has a [number
+The `wasmtime` Go package [lives in its own
+repository](https://github.com/bytecodealliance/wasmtime-go) and has a [number
 of other more advanced
 examples](https://pkg.go.dev/github.com/bytecodealliance/wasmtime-go?tab=doc#pkg-examples)
 as well. Feel free to browse those, but if you find anything missing don't
