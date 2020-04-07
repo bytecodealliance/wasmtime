@@ -124,6 +124,14 @@ impl Instance {
             }
         }
 
+        if imports.len() != module.imports().len() {
+            bail!(
+                "wrong number of imports provided, {} != {}",
+                imports.len(),
+                module.imports().len()
+            );
+        }
+
         module.register_frame_info();
         let config = store.engine().config();
         let instance_handle = instantiate(
