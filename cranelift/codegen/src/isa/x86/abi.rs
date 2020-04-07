@@ -407,7 +407,7 @@ fn callee_saved_fprs(isa: &dyn TargetIsa, call_conv: CallConv) -> &'static [RU] 
                 // "registers RBX, ... , and XMM6-15 are considered nonvolatile and must be saved
                 //  and restored by a function that uses them."
                 // as per https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention as of
-                // February 2nd, 2020.
+                // February 5th, 2020.
                 &[
                     RU::xmm6,
                     RU::xmm7,
