@@ -1,5 +1,5 @@
-use wasmtime::*;
 use anyhow::Result;
+use wasmtime::*;
 
 #[test]
 fn wrong_import_numbers() -> Result<()> {
