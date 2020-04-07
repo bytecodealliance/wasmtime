@@ -407,7 +407,7 @@ fn callee_saved_fprs(isa: &dyn TargetIsa, call_conv: CallConv) -> &'static [RU] 
                 // "registers RBX, ... , and XMM6-15 are considered nonvolatile and must be saved
                 //  and restored by a function that uses them."
                 // as per https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention as of
-                // 02-05-2020.
+                // February 2nd, 2020.
                 &[
                     RU::xmm6,
                     RU::xmm7,
@@ -572,6 +572,12 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
 
     // Only create an FPR stack slot if we're going to save FPRs.
     let fpr_slot = if num_fprs > 0 {
+        // Create a stack slot for FPRs to be preserved in. This is an `ExplicitSlot` because it
+        // seems to most closely map to it as a `StackSlotKind`: FPR preserve/restore should be
+        // through `stack_load` and `stack_store` (see later comment about issue #1198). Even
+        // though in a certain light FPR preserve/restore is "spilling" an argument, regalloc
+        // implies that `SpillSlot` may be eligible for certain optimizations, and we know with
+        // certainty that this space may not be reused in the function, nor moved around.
         Some(func.create_stack_slot(ir::StackSlotData {
             kind: ir::StackSlotKind::ExplicitSlot,
             size: (num_fprs * types::F64X2.bytes() as usize) as u32,
@@ -886,20 +892,20 @@ fn insert_common_prologue(
     }
 
     // Now that RSP is prepared for the function, we can use stack slots:
-    if csrs.iter(FPR).len() != 0 {
-        let mut fpr_offset = 0;
+    if let Some(fpr_slot) = fpr_slot {
+        debug_assert!(csrs.iter(FPR).len() != 0);
 
         // `stack_store` is not directly encodable in x86_64 at the moment, so we'll need a base
         // address. We are well after postopt could run, so load the CSR region base once here,
         // instead of hoping that the addr/store will be combined later.
         // See also: https://github.com/bytecodealliance/wasmtime/pull/1198
-        let stack_addr = pos.ins().stack_addr(
-            types::I64,
-            *fpr_slot.expect("if FPRs are preserved, a stack slot is allocated for them"),
-            0,
-        );
+        let stack_addr = pos.ins().stack_addr(types::I64, *fpr_slot, 0);
 
+        // Use r11 as fastcall allows it to be clobbered, and it won't have a meaningful value at
+        // function entry.
         pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::r11 as u16);
+
+        let mut fpr_offset = 0;
 
         for reg in csrs.iter(FPR) {
             // Append param to entry Block
@@ -1011,21 +1017,21 @@ fn insert_common_epilogue(
     let mut restored_fpr_values = alloc::vec::Vec::new();
 
     // Restore FPRs before we move RSP and invalidate stack slots.
-    if csrs.iter(FPR).len() != 0 {
-        let mut fpr_offset = 0;
+    if let Some(fpr_slot) = fpr_slot {
+        debug_assert!(csrs.iter(FPR).len() != 0);
 
         // `stack_load` is not directly encodable in x86_64 at the moment, so we'll need a base
         // address. We are well after postopt could run, so load the CSR region base once here,
         // instead of hoping that the addr/store will be combined later.
         //
         // See also: https://github.com/bytecodealliance/wasmtime/pull/1198
-        let stack_addr = pos.ins().stack_addr(
-            types::I64,
-            *fpr_slot.expect("if FPRs are preserved, a stack slot is allocated for them"),
-            0,
-        );
+        let stack_addr = pos.ins().stack_addr(types::I64, *fpr_slot, 0);
 
+        // Use r11 as fastcall allows it to be clobbered, and it won't have a meaningful value at
+        // function exit.
         pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::r11 as u16);
+
+        let mut fpr_offset = 0;
 
         for reg in csrs.iter(FPR) {
             let value = pos
