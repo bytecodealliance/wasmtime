@@ -1,6 +1,5 @@
 use crate::spectest::link_spectest;
 use anyhow::{anyhow, bail, Context as _, Result};
-use std::collections::HashMap;
 use std::path::Path;
 use std::str;
 use wasmtime::*;
@@ -28,8 +27,9 @@ pub struct WastContext {
     /// Wast files have a concept of a "current" module, which is the most
     /// recently defined.
     current: Option<Instance>,
-
-    instances: HashMap<String, Instance>,
+    // FIXME(#1479) this is only needed to retain correct trap information after
+    // we've dropped previous `Instance` values.
+    modules: Vec<Module>,
     linker: Linker,
     store: Store,
 }
@@ -58,28 +58,27 @@ impl WastContext {
         linker.allow_shadowing(true);
         Self {
             current: None,
-            instances: HashMap::new(),
             linker,
             store,
+            modules: Vec::new(),
         }
     }
 
-    fn get_instance(&self, instance_name: Option<&str>) -> Result<Instance> {
-        match instance_name {
-            Some(name) => self
-                .instances
-                .get(name)
-                .cloned()
-                .ok_or_else(|| anyhow!("failed to find instance named `{}`", name)),
+    fn get_export(&self, module: Option<&str>, name: &str) -> Result<&Extern> {
+        match module {
+            Some(module) => self.linker.get_one_by_name(module, name),
             None => self
                 .current
-                .clone()
-                .ok_or_else(|| anyhow!("no previous instance found")),
+                .as_ref()
+                .ok_or_else(|| anyhow!("no previous instance found"))?
+                .get_export(name)
+                .ok_or_else(|| anyhow!("no item named `{}` found", name)),
         }
     }
 
-    fn instantiate(&self, module: &[u8]) -> Result<Outcome<Instance>> {
+    fn instantiate(&mut self, module: &[u8]) -> Result<Outcome<Instance>> {
         let module = Module::new(&self.store, module)?;
+        self.modules.push(module.clone());
         let instance = match self.linker.instantiate(&module) {
             Ok(i) => i,
             Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),
@@ -125,7 +124,6 @@ impl WastContext {
             Outcome::Trap(e) => bail!("instantiation failed with: {}", e.message()),
         };
         if let Some(name) = instance_name {
-            self.instances.insert(name.to_string(), instance.clone());
             self.linker.instance(name, &instance)?;
         }
         self.current = Some(instance);
@@ -134,10 +132,17 @@ impl WastContext {
 
     /// Register an instance to make it available for performing actions.
     fn register(&mut self, name: Option<&str>, as_name: &str) -> Result<()> {
-        let instance = self.get_instance(name)?.clone();
-        self.linker.instance(as_name, &instance)?;
-        self.instances.insert(as_name.to_string(), instance);
-        Ok(())
+        match name {
+            Some(name) => self.linker.alias(name, as_name),
+            None => {
+                let current = self
+                    .current
+                    .as_ref()
+                    .ok_or(anyhow!("no previous instance"))?;
+                self.linker.instance(as_name, current)?;
+                Ok(())
+            }
+        }
     }
 
     /// Invoke an exported function from an instance.
@@ -147,10 +152,9 @@ impl WastContext {
         field: &str,
         args: &[Val],
     ) -> Result<Outcome> {
-        let instance = self.get_instance(instance_name.as_ref().map(|x| &**x))?;
-        let func = instance
-            .get_export(field)
-            .and_then(|e| e.func())
+        let func = self
+            .get_export(instance_name, field)?
+            .func()
             .ok_or_else(|| anyhow!("no function named `{}`", field))?;
         Ok(match func.call(args) {
             Ok(result) => Outcome::Ok(result.into()),
@@ -160,10 +164,9 @@ impl WastContext {
 
     /// Get the value of an exported global from an instance.
     fn get(&mut self, instance_name: Option<&str>, field: &str) -> Result<Outcome> {
-        let instance = self.get_instance(instance_name.as_ref().map(|x| &**x))?;
-        let global = instance
-            .get_export(field)
-            .and_then(|e| e.global())
+        let global = self
+            .get_export(instance_name, field)?
+            .global()
             .ok_or_else(|| anyhow!("no global named `{}`", field))?;
         Ok(Outcome::Ok(vec![global.get()]))
     }
