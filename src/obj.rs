@@ -77,13 +77,7 @@ pub fn compile_to_obj(
             Cranelift::compile_module(&translation, &*isa, cache_config)
         }
         #[cfg(feature = "lightbeam")]
-        Strategy::Lightbeam => Lightbeam::compile_module(
-            &module,
-            &module_translation,
-            lazy_function_body_inputs,
-            &*isa,
-            cache_config,
-        ),
+        Strategy::Lightbeam => Lightbeam::compile_module(&translation, &*isa, cache_config),
         #[cfg(not(feature = "lightbeam"))]
         Strategy::Lightbeam => bail!("lightbeam support not enabled"),
         other => bail!("unsupported compilation strategy {:?}", other),

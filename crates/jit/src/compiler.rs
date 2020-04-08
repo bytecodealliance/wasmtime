@@ -126,11 +126,8 @@ impl Compiler {
             #[cfg(feature = "lightbeam")]
             CompilationStrategy::Lightbeam => {
                 wasmtime_environ::lightbeam::Lightbeam::compile_module(
-                    module,
-                    module_translation,
-                    function_body_inputs,
+                    translation,
                     &*self.isa,
-                    debug_data.is_some(),
                     &self.cache_config,
                 )
             }
