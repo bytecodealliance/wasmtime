@@ -27,7 +27,7 @@ pub(crate) struct OsFile {
 impl OsFile {
     /// Consumes `other` taking the ownership of the underlying
     /// `RawFd` file descriptor.
-    /// 
+    ///
     /// Note that the state of `Dir` stream pointer *will* not be carried
     /// across from `other` to `self`.
     pub(crate) fn update_from(&self, other: Self) {
