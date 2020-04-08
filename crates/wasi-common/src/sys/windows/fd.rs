@@ -35,9 +35,10 @@ pub(crate) fn fdstat_get(file: &File) -> Result<types::Fdflags> {
     Ok(fdflags)
 }
 
-// TODO is this correct if we're modifying Stdio on Windows? If setting flags
-// requires reopening a file on Windows, then modifying Stdio handles wouldn't
-// probably work I guess.
+// TODO Investigate further for Stdio handles. `ReOpenFile` requires the file
+// handle came from `CreateFile`, but the Rust's libstd will use `GetStdHandle`
+// rather than `CreateFile`. Relevant discussion can be found in:
+// https://github.com/rust-lang/rust/issues/40490
 pub(crate) fn fdstat_set_flags(file: &File, fdflags: types::Fdflags) -> Result<Option<OsFile>> {
     let handle = file.as_raw_handle();
     let access_mode = winx::file::query_access_information(handle)?;

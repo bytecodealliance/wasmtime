@@ -10,7 +10,6 @@ pub(crate) trait Handle {
     fn get_rights(&self) -> io::Result<EntryRights> {
         Ok(EntryRights::empty())
     }
-    // TODO
     fn is_directory(&self) -> bool {
         if let Ok(ft) = self.get_file_type() {
             return ft == types::Filetype::Directory;
