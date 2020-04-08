@@ -22,6 +22,7 @@ use wasmparser::*;
 #[derive(Arbitrary, Debug)]
 struct Swarm {
     config_debug_info: bool,
+    config_interruptable: bool,
     module_new: bool,
     module_drop: bool,
     instance_new: bool,
@@ -35,6 +36,7 @@ struct Swarm {
 pub enum ApiCall {
     ConfigNew,
     ConfigDebugInfo(bool),
+    ConfigInterruptable(bool),
     EngineNew,
     StoreNew,
     ModuleNew { id: usize, wasm: super::WasmOptTtf },
@@ -163,9 +165,10 @@ impl Arbitrary for ApiCalls {
                 // minimum size.
                 arbitrary::size_hint::and(
                     <Swarm as Arbitrary>::size_hint(depth),
-                    // `arbitrary_config` uses two bools when
-                    // `swarm.config_debug_info` is true.
-                    <(bool, bool) as Arbitrary>::size_hint(depth),
+                    // `arbitrary_config` uses four bools:
+                    // 2 when `swarm.config_debug_info` is true
+                    // 2 when `swarm.config_interruptable` is true
+                    <(bool, bool, bool, bool) as Arbitrary>::size_hint(depth),
                 ),
                 // We can generate arbitrary `WasmOptTtf` instances, which have
                 // no upper bound on the number of bytes they consume. This sets
@@ -185,6 +188,10 @@ fn arbitrary_config(
 
     if swarm.config_debug_info && bool::arbitrary(input)? {
         calls.push(ConfigDebugInfo(bool::arbitrary(input)?));
+    }
+
+    if swarm.config_interruptable && bool::arbitrary(input)? {
+        calls.push(ConfigInterruptable(bool::arbitrary(input)?));
     }
 
     // TODO: flags, features, and compilation strategy.

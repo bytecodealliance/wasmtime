@@ -35,6 +35,7 @@ fn instantiate(
                 &mut resolver,
                 sig_registry,
                 config.memory_creator.as_ref().map(|a| a as _),
+                config.max_wasm_stack,
                 host,
             )
             .map_err(|e| -> Error {

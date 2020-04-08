@@ -45,6 +45,16 @@ pub extern "C" fn wasmtime_config_debug_info_set(c: &mut wasm_config_t, enable: 
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_config_interruptable_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.interruptable(enable);
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_max_wasm_stack_set(c: &mut wasm_config_t, size: usize) {
+    c.config.max_wasm_stack(size);
+}
+
+#[no_mangle]
 pub extern "C" fn wasmtime_config_wasm_threads_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_threads(enable);
 }

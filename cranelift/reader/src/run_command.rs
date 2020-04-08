@@ -12,7 +12,8 @@ use std::fmt::{Display, Formatter, Result};
 
 /// A run command appearing in a test file.
 ///
-/// For parsing, see [Parser::parse_run_command].
+/// For parsing, see
+/// [Parser::parse_run_command](crate::parser::Parser::parse_run_command).
 #[derive(PartialEq, Debug)]
 pub enum RunCommand {
     /// Invoke a function and print its result.
@@ -66,6 +67,8 @@ impl Display for Invocation {
 
 /// Represent a data value. Where [Value] is an SSA reference, [DataValue] is the type + value
 /// that would be referred to by a [Value].
+///
+/// [Value]: cranelift_codegen::ir::Value
 #[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum DataValue {

@@ -11,8 +11,8 @@ use crate::traphandlers;
 use crate::traphandlers::{catch_traps, Trap};
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport,
-    VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
-    VMTableDefinition, VMTableImport, VMTrampoline,
+    VMGlobalDefinition, VMGlobalImport, VMInterrupts, VMMemoryDefinition, VMMemoryImport,
+    VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMTrampoline,
 };
 use crate::{ExportFunction, ExportGlobal, ExportMemory, ExportTable};
 use memoffset::offset_of;
@@ -109,6 +109,10 @@ pub(crate) struct Instance {
 
     /// Handler run when `SIGBUS`, `SIGFPE`, `SIGILL`, or `SIGSEGV` are caught by the instance thread.
     pub(crate) signal_handler: Cell<Option<Box<SignalHandler>>>,
+
+    /// Externally allocated data indicating how this instance will be
+    /// interrupted.
+    pub(crate) interrupts: Arc<VMInterrupts>,
 
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
@@ -275,6 +279,11 @@ impl Instance {
         unsafe { self.vmctx_plus_offset(self.offsets.vmctx_builtin_functions_begin()) }
     }
 
+    /// Return a pointer to the interrupts structure
+    pub fn interrupts(&self) -> *mut *const VMInterrupts {
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_interrupts()) }
+    }
+
     /// Return a reference to the vmctx used by compiled wasm code.
     pub fn vmctx(&self) -> &VMContext {
         &self.vmctx
@@ -377,17 +386,21 @@ impl Instance {
     }
 
     /// Invoke the WebAssembly start function of the instance, if one is present.
-    fn invoke_start_function(&self) -> Result<(), InstantiationError> {
+    fn invoke_start_function(&self, max_wasm_stack: usize) -> Result<(), InstantiationError> {
         let start_index = match self.module.start_func {
             Some(idx) => idx,
             None => return Ok(()),
         };
 
-        self.invoke_function_index(start_index)
+        self.invoke_function_index(start_index, max_wasm_stack)
             .map_err(InstantiationError::StartTrap)
     }
 
-    fn invoke_function_index(&self, callee_index: FuncIndex) -> Result<(), Trap> {
+    fn invoke_function_index(
+        &self,
+        callee_index: FuncIndex,
+        max_wasm_stack: usize,
+    ) -> Result<(), Trap> {
         let (callee_address, callee_vmctx) =
             match self.module.local.defined_func_index(callee_index) {
                 Some(defined_index) => {
@@ -404,17 +417,18 @@ impl Instance {
                 }
             };
 
-        self.invoke_function(callee_vmctx, callee_address)
+        self.invoke_function(callee_vmctx, callee_address, max_wasm_stack)
     }
 
     fn invoke_function(
         &self,
         callee_vmctx: *mut VMContext,
         callee_address: *const VMFunctionBody,
+        max_wasm_stack: usize,
     ) -> Result<(), Trap> {
         // Make the call.
         unsafe {
-            catch_traps(callee_vmctx, || {
+            catch_traps(callee_vmctx, max_wasm_stack, || {
                 mem::transmute::<
                     *const VMFunctionBody,
                     unsafe extern "C" fn(*mut VMContext, *mut VMContext),
@@ -869,6 +883,8 @@ impl InstanceHandle {
         dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
         is_bulk_memory: bool,
         host_state: Box<dyn Any>,
+        interrupts: Arc<VMInterrupts>,
+        max_wasm_stack: usize,
     ) -> Result<Self, InstantiationError> {
         let tables = create_tables(&module);
         let memories = create_memories(&module, mem_creator.unwrap_or(&DefaultMemoryCreator {}))?;
@@ -906,6 +922,7 @@ impl InstanceHandle {
                 dbg_jit_registration,
                 host_state,
                 signal_handler: Cell::new(None),
+                interrupts,
                 vmctx: VMContext {},
             };
             let layout = instance.alloc_layout();
@@ -964,6 +981,7 @@ impl InstanceHandle {
             instance.builtin_functions_ptr() as *mut VMBuiltinFunctionsArray,
             VMBuiltinFunctionsArray::initialized(),
         );
+        *instance.interrupts() = &*instance.interrupts;
 
         // Check initializer bounds before initializing anything. Only do this
         // when bulk memory is disabled, since the bulk memory proposal changes
@@ -986,7 +1004,7 @@ impl InstanceHandle {
 
         // The WebAssembly spec specifies that the start function is
         // invoked automatically at instantiation time.
-        instance.invoke_start_function()?;
+        instance.invoke_start_function(max_wasm_stack)?;
 
         Ok(handle)
     }

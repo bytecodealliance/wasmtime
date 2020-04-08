@@ -1,4 +1,3 @@
-use crate::func_environ::FuncEnvironment;
 use crate::module::{EntityIndex, MemoryPlan, Module, TableElements, TablePlan};
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
@@ -44,13 +43,6 @@ pub struct ModuleTranslation<'data> {
 
     /// The decoded Wasm types for the module.
     pub module_translation: Option<ModuleTranslationState>,
-}
-
-impl<'data> ModuleTranslation<'data> {
-    /// Return a new `FuncEnvironment` for translating a function.
-    pub fn func_env(&self) -> FuncEnvironment<'_> {
-        FuncEnvironment::new(self.target_config, &self.module.local)
-    }
 }
 
 /// Object containing the standalone environment information.

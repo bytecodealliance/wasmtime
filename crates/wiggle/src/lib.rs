@@ -401,7 +401,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
     /// trait documentation.
     ///
     /// For safety against overlapping mutable borrows, the user must use the
-    /// same `GuestBorrows` to create all *mut str or *mut [T] that are alive
+    /// same `GuestBorrows` to create all `*mut str` or `*mut [T]` that are alive
     /// at the same time.
     pub fn as_raw(&self, bc: &mut GuestBorrows) -> Result<*mut [T], GuestError>
     where
@@ -503,8 +503,8 @@ impl<'a> GuestPtr<'a, str> {
     /// trait documentation.
     ///
     /// For safety against overlapping mutable borrows, the user must use the
-    /// same `GuestBorrows` to create all *mut str or *mut [T] that are alive
-    /// at the same time.
+    /// same `GuestBorrows` to create all `*mut str` or `*mut [T]` that are
+    /// alive at the same time.
     pub fn as_raw(&self, bc: &mut GuestBorrows) -> Result<*mut str, GuestError> {
         let ptr = self
             .mem

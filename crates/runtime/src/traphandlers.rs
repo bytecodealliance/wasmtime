@@ -2,13 +2,14 @@
 //! signalhandling mechanisms.
 
 use crate::instance::{InstanceHandle, SignalHandler};
-use crate::vmcontext::VMContext;
+use crate::VMContext;
 use backtrace::Backtrace;
 use std::any::Any;
 use std::cell::Cell;
 use std::error::Error;
 use std::io;
 use std::ptr;
+use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::Once;
 use wasmtime_environ::ir;
 
@@ -38,15 +39,10 @@ cfg_if::cfg_if! {
                 // SA_SIGINFO gives us access to information like the program
                 // counter from where the fault happened.
                 //
-                // SA_ONSTACK allows us to handle signals on an alternate stack,
-                // so that the handler can run in response to running out of
-                // stack space on the main stack. Rust installs an alternate
-                // stack with sigaltstack, so we rely on that.
-                //
                 // SA_NODEFER allows us to reenter the signal handler if we
                 // crash while handling the signal, and fall through to the
                 // Breakpad handler by testing handlingSegFault.
-                handler.sa_flags = libc::SA_SIGINFO | libc::SA_NODEFER | libc::SA_ONSTACK;
+                handler.sa_flags = libc::SA_SIGINFO | libc::SA_NODEFER;
                 handler.sa_sigaction = trap_handler as usize;
                 libc::sigemptyset(&mut handler.sa_mask);
                 if libc::sigaction(signal, &handler, slot.as_mut_ptr()) != 0 {
@@ -104,7 +100,6 @@ cfg_if::cfg_if! {
                 // out what to do based on the result of the trap handling.
                 let jmp_buf = info.handle_trap(
                     get_pc(context),
-                    false,
                     |handler| handler(signum, siginfo, context),
                 );
 
@@ -198,7 +193,6 @@ cfg_if::cfg_if! {
             let record = &*(*exception_info).ExceptionRecord;
             if record.ExceptionCode != EXCEPTION_ACCESS_VIOLATION &&
                 record.ExceptionCode != EXCEPTION_ILLEGAL_INSTRUCTION &&
-                record.ExceptionCode != EXCEPTION_STACK_OVERFLOW &&
                 record.ExceptionCode != EXCEPTION_INT_DIVIDE_BY_ZERO &&
                 record.ExceptionCode != EXCEPTION_INT_OVERFLOW
             {
@@ -226,7 +220,6 @@ cfg_if::cfg_if! {
                 };
                 let jmp_buf = info.handle_trap(
                     (*(*exception_info).ContextRecord).Rip as *const u8,
-                    record.ExceptionCode == EXCEPTION_STACK_OVERFLOW,
                     |handler| handler(exception_info),
                 );
                 if jmp_buf.is_null() {
@@ -302,22 +295,6 @@ pub unsafe fn resume_panic(payload: Box<dyn Any + Send>) -> ! {
     tls::with(|info| info.unwrap().unwind_with(UnwindReason::Panic(payload)))
 }
 
-#[cfg(target_os = "windows")]
-fn reset_guard_page() {
-    extern "C" {
-        fn _resetstkoflw() -> winapi::ctypes::c_int;
-    }
-
-    // We need to restore guard page under stack to handle future stack overflows properly.
-    // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/resetstkoflw?view=vs-2019
-    if unsafe { _resetstkoflw() } == 0 {
-        panic!("failed to restore stack guard page");
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn reset_guard_page() {}
-
 /// Stores trace message with backtrace.
 #[derive(Debug)]
 pub enum Trap {
@@ -330,6 +307,10 @@ pub enum Trap {
         pc: usize,
         /// Native stack backtrace at the time the trap occurred
         backtrace: Backtrace,
+        /// An indicator for whether this may have been a trap generated from an
+        /// interrupt, used for switching what would otherwise be a stack
+        /// overflow trap to be an interrupt trap.
+        maybe_interrupted: bool,
     },
 
     /// A trap raised from a wasm libcall
@@ -372,15 +353,15 @@ impl Trap {
 /// returning them as a `Result`.
 ///
 /// Highly unsafe since `closure` won't have any dtors run.
-pub unsafe fn catch_traps<F>(vmctx: *mut VMContext, mut closure: F) -> Result<(), Trap>
+pub unsafe fn catch_traps<F>(
+    vmctx: *mut VMContext,
+    max_wasm_stack: usize,
+    mut closure: F,
+) -> Result<(), Trap>
 where
     F: FnMut(),
 {
-    // Ensure that we have our sigaltstack installed.
-    #[cfg(unix)]
-    setup_unix_sigaltstack()?;
-
-    return CallThreadState::new(vmctx).with(|cx| {
+    return CallThreadState::new(vmctx).with(max_wasm_stack, |cx| {
         RegisterSetjmp(
             cx.jmp_buf.as_ptr(),
             call_closure::<F>,
@@ -401,7 +382,6 @@ where
 pub struct CallThreadState {
     unwind: Cell<UnwindReason>,
     jmp_buf: Cell<*const u8>,
-    reset_guard_page: Cell<bool>,
     prev: Option<*const CallThreadState>,
     vmctx: *mut VMContext,
     handling_trap: Cell<bool>,
@@ -421,15 +401,19 @@ impl CallThreadState {
             unwind: Cell::new(UnwindReason::None),
             vmctx,
             jmp_buf: Cell::new(ptr::null()),
-            reset_guard_page: Cell::new(false),
             prev: None,
             handling_trap: Cell::new(false),
         }
     }
 
-    fn with(mut self, closure: impl FnOnce(&CallThreadState) -> i32) -> Result<(), Trap> {
+    fn with(
+        mut self,
+        max_wasm_stack: usize,
+        closure: impl FnOnce(&CallThreadState) -> i32,
+    ) -> Result<(), Trap> {
         tls::with(|prev| {
             self.prev = prev.map(|p| p as *const _);
+            let _reset = self.update_stack_limit(max_wasm_stack)?;
             let ret = tls::set(&self, || closure(&self));
             match self.unwind.replace(UnwindReason::None) {
                 UnwindReason::None => {
@@ -443,7 +427,15 @@ impl CallThreadState {
                 UnwindReason::LibTrap(trap) => Err(trap),
                 UnwindReason::JitTrap { backtrace, pc } => {
                     debug_assert_eq!(ret, 0);
-                    Err(Trap::Jit { pc, backtrace })
+                    let maybe_interrupted = unsafe {
+                        (*self.vmctx).instance().interrupts.stack_limit.load(SeqCst)
+                            == wasmtime_environ::INTERRUPTED as usize
+                    };
+                    Err(Trap::Jit {
+                        pc,
+                        backtrace,
+                        maybe_interrupted,
+                    })
                 }
                 UnwindReason::Panic(panic) => {
                     debug_assert_eq!(ret, 0);
@@ -451,6 +443,87 @@ impl CallThreadState {
                 }
             }
         })
+    }
+
+    /// Checks and/or initializes the wasm native call stack limit.
+    ///
+    /// This function will inspect the current state of the stack and calling
+    /// context to determine which of three buckets we're in:
+    ///
+    /// 1. We are the first wasm call on the stack. This means that we need to
+    ///    set up a stack limit where beyond which if the native wasm stack
+    ///    pointer goes beyond forces a trap. For now we simply reserve an
+    ///    arbitrary chunk of bytes (1 MB from roughly the current native stack
+    ///    pointer). This logic will likely get tweaked over time.
+    ///
+    /// 2. We aren't the first wasm call on the stack. In this scenario the wasm
+    ///    stack limit is already configured. This case of wasm -> host -> wasm
+    ///    we assume that the native stack consumed by the host is accounted for
+    ///    in the initial stack limit calculation. That means that in this
+    ///    scenario we do nothing.
+    ///
+    /// 3. We were previously interrupted. In this case we consume the interrupt
+    ///    here and return a trap, clearing the interrupt and allowing the next
+    ///    wasm call to proceed.
+    ///
+    /// The return value here is a trap for case 3, a noop destructor in case 2,
+    /// and a meaningful destructor in case 1
+    ///
+    /// For more information about interrupts and stack limits see
+    /// `crates/environ/src/cranelift.rs`.
+    ///
+    /// Note that this function must be called with `self` on the stack, not the
+    /// heap/etc.
+    fn update_stack_limit(&self, max_wasm_stack: usize) -> Result<impl Drop + '_, Trap> {
+        // Make an "educated guess" to figure out where the wasm sp value should
+        // start trapping if it drops below.
+        let wasm_stack_limit = self as *const _ as usize - max_wasm_stack;
+
+        let interrupts = unsafe { &**(&*self.vmctx).instance().interrupts() };
+        let reset_stack_limit = match interrupts.stack_limit.compare_exchange(
+            usize::max_value(),
+            wasm_stack_limit,
+            SeqCst,
+            SeqCst,
+        ) {
+            Ok(_) => {
+                // We're the first wasm on the stack so we've now reserved the
+                // `max_wasm_stack` bytes of native stack space for wasm.
+                // Nothing left to do here now except reset back when we're
+                // done.
+                true
+            }
+            Err(n) if n == wasmtime_environ::INTERRUPTED as usize => {
+                // This means that an interrupt happened before we actually
+                // called this function, which means that we're now
+                // considered interrupted. Be sure to consume this interrupt
+                // as part of this process too.
+                interrupts.stack_limit.store(usize::max_value(), SeqCst);
+                return Err(Trap::Wasm {
+                    trap_code: ir::TrapCode::Interrupt,
+                    backtrace: Backtrace::new_unresolved(),
+                });
+            }
+            Err(_) => {
+                // The stack limit was previously set by a previous wasm
+                // call on the stack. We leave the original stack limit for
+                // wasm in place in that case, and don't reset the stack
+                // limit when we're done.
+                false
+            }
+        };
+
+        struct Reset<'a>(bool, &'a AtomicUsize);
+
+        impl Drop for Reset<'_> {
+            fn drop(&mut self) {
+                if self.0 {
+                    self.1.store(usize::max_value(), SeqCst);
+                }
+            }
+        }
+
+        Ok(Reset(reset_stack_limit, &interrupts.stack_limit))
     }
 
     fn any_instance(&self, func: impl Fn(&InstanceHandle) -> bool) -> bool {
@@ -475,8 +548,6 @@ impl CallThreadState {
     /// Trap handler using our thread-local state.
     ///
     /// * `pc` - the program counter the trap happened at
-    /// * `reset_guard_page` - whether or not to reset the guard page,
-    ///   currently Windows specific
     /// * `call_handler` - a closure used to invoke the platform-specific
     ///   signal handler for each instance, if available.
     ///
@@ -492,7 +563,6 @@ impl CallThreadState {
     fn handle_trap(
         &self,
         pc: *const u8,
-        reset_guard_page: bool,
         call_handler: impl Fn(&SignalHandler) -> bool,
     ) -> *const u8 {
         // If we hit a fault while handling a previous trap, that's quite bad,
@@ -532,21 +602,12 @@ impl CallThreadState {
             return ptr::null();
         }
         let backtrace = Backtrace::new_unresolved();
-        self.reset_guard_page.set(reset_guard_page);
         self.unwind.replace(UnwindReason::JitTrap {
             backtrace,
             pc: pc as usize,
         });
         self.handling_trap.set(false);
         self.jmp_buf.get()
-    }
-}
-
-impl Drop for CallThreadState {
-    fn drop(&mut self) {
-        if self.reset_guard_page.get() {
-            reset_guard_page();
-        }
     }
 }
 
@@ -587,114 +648,5 @@ mod tls {
             let p = ptr.get();
             unsafe { closure(if p.is_null() { None } else { Some(&*p) }) }
         })
-    }
-}
-
-/// A module for registering a custom alternate signal stack (sigaltstack).
-///
-/// Rust's libstd installs an alternate stack with size `SIGSTKSZ`, which is not
-/// always large enough for our signal handling code. Override it by creating
-/// and registering our own alternate stack that is large enough and has a guard
-/// page.
-#[cfg(unix)]
-fn setup_unix_sigaltstack() -> Result<(), Trap> {
-    use std::cell::RefCell;
-    use std::convert::TryInto;
-    use std::ptr::null_mut;
-
-    thread_local! {
-        /// Thread-local state is lazy-initialized on the first time it's used,
-        /// and dropped when the thread exits.
-        static TLS: RefCell<Tls> = RefCell::new(Tls::None);
-    }
-
-    /// The size of the sigaltstack (not including the guard, which will be
-    /// added). Make this large enough to run our signal handlers.
-    const MIN_STACK_SIZE: usize = 16 * 4096;
-
-    enum Tls {
-        None,
-        Allocated {
-            mmap_ptr: *mut libc::c_void,
-            mmap_size: usize,
-        },
-        BigEnough,
-    }
-
-    return TLS.with(|slot| unsafe {
-        let mut slot = slot.borrow_mut();
-        match *slot {
-            Tls::None => {}
-            // already checked
-            _ => return Ok(()),
-        }
-
-        // Check to see if the existing sigaltstack, if it exists, is big
-        // enough. If so we don't need to allocate our own.
-        let mut old_stack = mem::zeroed();
-        let r = libc::sigaltstack(ptr::null(), &mut old_stack);
-        assert_eq!(r, 0, "learning about sigaltstack failed");
-        if old_stack.ss_flags & libc::SS_DISABLE == 0 && old_stack.ss_size >= MIN_STACK_SIZE {
-            *slot = Tls::BigEnough;
-            return Ok(());
-        }
-
-        // ... but failing that we need to allocate our own, so do all that
-        // here.
-        let page_size: usize = libc::sysconf(libc::_SC_PAGESIZE).try_into().unwrap();
-        let guard_size = page_size;
-        let alloc_size = guard_size + MIN_STACK_SIZE;
-
-        let ptr = libc::mmap(
-            null_mut(),
-            alloc_size,
-            libc::PROT_NONE,
-            libc::MAP_PRIVATE | libc::MAP_ANON,
-            -1,
-            0,
-        );
-        if ptr == libc::MAP_FAILED {
-            return Err(Trap::oom());
-        }
-
-        // Prepare the stack with readable/writable memory and then register it
-        // with `sigaltstack`.
-        let stack_ptr = (ptr as usize + guard_size) as *mut libc::c_void;
-        let r = libc::mprotect(
-            stack_ptr,
-            MIN_STACK_SIZE,
-            libc::PROT_READ | libc::PROT_WRITE,
-        );
-        assert_eq!(r, 0, "mprotect to configure memory for sigaltstack failed");
-        let new_stack = libc::stack_t {
-            ss_sp: stack_ptr,
-            ss_flags: 0,
-            ss_size: MIN_STACK_SIZE,
-        };
-        let r = libc::sigaltstack(&new_stack, ptr::null_mut());
-        assert_eq!(r, 0, "registering new sigaltstack failed");
-
-        *slot = Tls::Allocated {
-            mmap_ptr: ptr,
-            mmap_size: alloc_size,
-        };
-        Ok(())
-    });
-
-    impl Drop for Tls {
-        fn drop(&mut self) {
-            let (ptr, size) = match self {
-                Tls::Allocated {
-                    mmap_ptr,
-                    mmap_size,
-                } => (*mmap_ptr, *mmap_size),
-                _ => return,
-            };
-            unsafe {
-                // Deallocate the stack memory.
-                let r = libc::munmap(ptr, size);
-                debug_assert_eq!(r, 0, "munmap failed during thread shutdown");
-            }
-        }
     }
 }

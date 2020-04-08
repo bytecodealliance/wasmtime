@@ -12,6 +12,9 @@ pub struct Tunables {
 
     /// Whether or not to generate DWARF debug information.
     pub debug_info: bool,
+
+    /// Whether or not loops and function entries will be interruptable,
+    pub interruptable: bool,
 }
 
 impl Default for Tunables {
@@ -44,6 +47,7 @@ impl Default for Tunables {
             dynamic_memory_offset_guard_size: 0x1_0000,
 
             debug_info: false,
+            interruptable: false,
         }
     }
 }

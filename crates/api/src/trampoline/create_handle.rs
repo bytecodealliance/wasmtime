@@ -53,6 +53,8 @@ pub(crate) fn create_handle(
                 .operator_config
                 .enable_bulk_memory,
             state,
+            store.compiler().interrupts().clone(),
+            store.engine().config().max_wasm_stack,
         )?)
     }
 }
