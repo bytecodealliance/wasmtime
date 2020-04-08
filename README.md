@@ -97,7 +97,7 @@ the implementation:
 * **[.NET]** - the [`Wasmtime` NuGet package]
 * **[Go]** - the [wasmtime-go repository]
 
-[Rust]: https://bytecodealliance.github.io/wasmtime/embed-rust.html
+[Rust]: https://bytecodealliance.github.io/wasmtime/lang-rust.html
 [C]: https://bytecodealliance.github.io/wasmtime/examples-c-embed.html
 [`wasmtime` crate]: https://crates.io/crates/wasmtime
 [`wasm.h`]: https://github.com/WebAssembly/wasm-c-api/blob/master/include/wasm.h
