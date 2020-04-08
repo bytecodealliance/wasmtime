@@ -92,3 +92,37 @@ check: exited with status
     )?;
     Ok(())
 }
+
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
+pub fn test_debug_dwarf_ptr() -> Result<()> {
+    let output = lldb_with_script(
+        &[
+            "-g",
+            "--opt-level",
+            "0",
+            "tests/debug/testsuite/reverse-str.wasm",
+        ],
+        r#"b reverse-str.c:9
+r
+p __vmctx->set(),&*s
+c"#,
+    )?;
+
+    check_lldb_output(
+        &output,
+        r#"
+check: Breakpoint 1: no locations (pending)
+check: stop reason = breakpoint 1.1
+check: frame #0
+sameln: reverse(s=(__ptr =
+check: "Hello, world."
+check: resuming
+"#,
+    )?;
+    Ok(())
+}
