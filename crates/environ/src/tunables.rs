@@ -1,5 +1,5 @@
 /// Tunable parameters for WebAssembly compilation.
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct Tunables {
     /// For static heaps, the size in wasm pages of the heap protected by bounds checking.
     pub static_memory_bound: u32,
@@ -9,6 +9,9 @@ pub struct Tunables {
 
     /// The size in bytes of the offset guard for dynamic heaps.
     pub dynamic_memory_offset_guard_size: u64,
+
+    /// Whether or not to generate DWARF debug information.
+    pub debug_info: bool,
 }
 
 impl Default for Tunables {
@@ -39,6 +42,8 @@ impl Default for Tunables {
             /// Allocate a small guard to optimize common cases but without
             /// wasting too much memor.
             dynamic_memory_offset_guard_size: 0x1_0000,
+
+            debug_info: false,
         }
     }
 }

@@ -62,14 +62,14 @@ pub struct ModuleEnvironment<'data> {
 
 impl<'data> ModuleEnvironment<'data> {
     /// Allocates the environment data structures.
-    pub fn new(target_config: TargetFrontendConfig, tunables: Tunables) -> Self {
+    pub fn new(target_config: TargetFrontendConfig, tunables: &Tunables) -> Self {
         Self {
             result: ModuleTranslation {
                 target_config,
                 module: Module::new(),
                 function_body_inputs: PrimaryMap::new(),
                 data_initializers: Vec::new(),
-                tunables,
+                tunables: tunables.clone(),
                 module_translation: None,
             },
             imports: 0,

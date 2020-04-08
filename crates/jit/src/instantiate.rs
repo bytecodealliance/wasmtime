@@ -63,7 +63,6 @@ impl<'data> RawCompiledModule<'data> {
     fn new(
         compiler: &mut Compiler,
         data: &'data [u8],
-        debug_info: bool,
         profiler: &dyn ProfilingAgent,
     ) -> Result<Self, SetupError> {
         let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
@@ -72,20 +71,13 @@ impl<'data> RawCompiledModule<'data> {
             .translate(data)
             .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
 
-        let debug_data = if debug_info {
+        let mut debug_data = None;
+        if compiler.tunables().debug_info {
             // TODO Do we want to ignore invalid DWARF data?
-            let debug_data = read_debuginfo(&data)?;
-            Some(debug_data)
-        } else {
-            None
-        };
+            debug_data = Some(read_debuginfo(&data)?);
+        }
 
-        let compilation = compiler.compile(
-            &translation.module,
-            translation.module_translation.as_ref().unwrap(),
-            translation.function_body_inputs,
-            debug_data,
-        )?;
+        let compilation = compiler.compile(&translation, debug_data)?;
 
         link_module(&translation.module, &compilation);
 
@@ -148,10 +140,9 @@ impl CompiledModule {
     pub fn new<'data>(
         compiler: &mut Compiler,
         data: &'data [u8],
-        debug_info: bool,
         profiler: &dyn ProfilingAgent,
     ) -> Result<Self, SetupError> {
-        let raw = RawCompiledModule::<'data>::new(compiler, data, debug_info, profiler)?;
+        let raw = RawCompiledModule::<'data>::new(compiler, data, profiler)?;
 
         Ok(Self::from_parts(
             raw.module,
@@ -282,12 +273,11 @@ pub unsafe fn instantiate(
     compiler: &mut Compiler,
     data: &[u8],
     resolver: &mut dyn Resolver,
-    debug_info: bool,
     is_bulk_memory: bool,
     profiler: &dyn ProfilingAgent,
     mem_creator: Option<&dyn RuntimeMemoryCreator>,
 ) -> Result<InstanceHandle, SetupError> {
-    let instance = CompiledModule::new(compiler, data, debug_info, profiler)?.instantiate(
+    let instance = CompiledModule::new(compiler, data, profiler)?.instantiate(
         is_bulk_memory,
         resolver,
         compiler.signatures(),

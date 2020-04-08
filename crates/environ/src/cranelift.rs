@@ -8,9 +8,7 @@ use crate::compilation::{
 };
 use crate::frame_layout::FrameLayout;
 use crate::func_environ::{get_func_name, FuncEnvironment};
-use crate::module::{Module, ModuleLocal};
-use crate::module_environ::FunctionBodyData;
-use crate::CacheConfig;
+use crate::{CacheConfig, FunctionBodyData, ModuleLocal, ModuleTranslation, Tunables};
 use cranelift_codegen::ir::{self, ExternalName};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{binemit, isa, Context};
@@ -196,72 +194,58 @@ impl crate::compilation::Compiler for Cranelift {
     /// Compile the module using Cranelift, producing a compilation result with
     /// associated relocations.
     fn compile_module(
-        module: &Module,
-        module_translation: &ModuleTranslationState,
-        function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'_>>,
+        translation: &ModuleTranslation,
         isa: &dyn isa::TargetIsa,
-        generate_debug_info: bool,
         cache_config: &CacheConfig,
     ) -> Result<ModuleCacheDataTupleType, CompileError> {
         let cache_entry = ModuleCacheEntry::new("cranelift", cache_config);
 
         let data = cache_entry.get_data(
-            (
-                &module.local,
-                HashedModuleTranslationState(module_translation),
-                function_body_inputs,
-                Isa(isa),
-                generate_debug_info,
-            ),
+            CompileEnv {
+                local: &translation.module.local,
+                module_translation: HashedModuleTranslationState(
+                    translation.module_translation.as_ref().unwrap(),
+                ),
+                function_body_inputs: &translation.function_body_inputs,
+                isa: Isa(isa),
+                tunables: &translation.tunables,
+            },
             compile,
         )?;
         Ok(data.into_tuple())
     }
 }
 
-fn compile(
-    (
-        module,
-        HashedModuleTranslationState(module_translation),
-        function_body_inputs,
-        Isa(isa),
-        generate_debug_info,
-    ): (
-        &ModuleLocal,
-        HashedModuleTranslationState<'_>,
-        PrimaryMap<DefinedFuncIndex, FunctionBodyData<'_>>,
-        Isa<'_, '_>,
-        bool,
-    ),
-) -> Result<ModuleCacheDataTupleType, CompileError> {
-    let mut functions = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut relocations = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut address_transforms = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut value_ranges = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut stack_slots = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut traps = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut frame_layouts = PrimaryMap::with_capacity(function_body_inputs.len());
+fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError> {
+    let Isa(isa) = env.isa;
+    let mut functions = PrimaryMap::with_capacity(env.function_body_inputs.len());
+    let mut relocations = PrimaryMap::with_capacity(env.function_body_inputs.len());
+    let mut address_transforms = PrimaryMap::with_capacity(env.function_body_inputs.len());
+    let mut value_ranges = PrimaryMap::with_capacity(env.function_body_inputs.len());
+    let mut stack_slots = PrimaryMap::with_capacity(env.function_body_inputs.len());
+    let mut traps = PrimaryMap::with_capacity(env.function_body_inputs.len());
+    let mut frame_layouts = PrimaryMap::with_capacity(env.function_body_inputs.len());
 
-    function_body_inputs
+    env.function_body_inputs
         .into_iter()
         .collect::<Vec<(DefinedFuncIndex, &FunctionBodyData<'_>)>>()
         .par_iter()
         .map_init(FuncTranslator::new, |func_translator, (i, input)| {
-            let func_index = module.func_index(*i);
+            let func_index = env.local.func_index(*i);
             let mut context = Context::new();
             context.func.name = get_func_name(func_index);
-            context.func.signature = module.signatures[module.functions[func_index]].clone();
+            context.func.signature = env.local.signatures[env.local.functions[func_index]].clone();
             context.func.collect_frame_layout_info();
-            if generate_debug_info {
+            if env.tunables.debug_info {
                 context.func.collect_debug_info();
             }
 
             func_translator.translate(
-                module_translation,
+                env.module_translation.0,
                 input.data,
                 input.module_offset,
                 &mut context.func,
-                &mut FuncEnvironment::new(isa.frontend_config(), module),
+                &mut FuncEnvironment::new(isa.frontend_config(), env.local),
             )?;
 
             let mut code_buf: Vec<u8> = Vec::new();
@@ -282,14 +266,14 @@ fn compile(
 
             let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context);
 
-            let address_transform = if generate_debug_info {
+            let address_transform = if env.tunables.debug_info {
                 let body_len = code_buf.len();
                 Some(get_function_address_map(&context, input, body_len, isa))
             } else {
                 None
             };
 
-            let frame_layout = if generate_debug_info {
+            let frame_layout = if env.tunables.debug_info {
                 let (initial_commands, commands) = get_frame_layout(&context, isa);
                 Some(FrameLayout {
                     call_conv: context.func.signature.call_conv,
@@ -300,7 +284,7 @@ fn compile(
                 None
             };
 
-            let ranges = if generate_debug_info {
+            let ranges = if env.tunables.debug_info {
                 let ranges = context.build_value_labels_ranges(isa).map_err(|error| {
                     CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
                 })?;
@@ -366,6 +350,15 @@ fn compile(
     ))
 }
 
+#[derive(Hash)]
+struct CompileEnv<'a> {
+    local: &'a ModuleLocal,
+    module_translation: HashedModuleTranslationState<'a>,
+    function_body_inputs: &'a PrimaryMap<DefinedFuncIndex, FunctionBodyData<'a>>,
+    isa: Isa<'a, 'a>,
+    tunables: &'a Tunables,
+}
+
 /// This is a wrapper struct to hash the specific bits of `TargetIsa` that
 /// affect the output we care about. The trait itself can't implement `Hash`
 /// (it's not object safe) so we have to implement our own hashing.
@@ -374,6 +367,7 @@ struct Isa<'a, 'b>(&'a (dyn isa::TargetIsa + 'b));
 impl Hash for Isa<'_, '_> {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
         self.0.triple().hash(hasher);
+        self.0.frontend_config().hash(hasher);
 
         // TODO: if this `to_string()` is too expensive then we should upstream
         // a native hashing ability of flags into cranelift itself, but

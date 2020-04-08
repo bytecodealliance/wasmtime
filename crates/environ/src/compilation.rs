@@ -2,12 +2,11 @@
 //! module.
 
 use crate::cache::ModuleCacheDataTupleType;
-use crate::module;
-use crate::module_environ::FunctionBodyData;
 use crate::CacheConfig;
+use crate::ModuleTranslation;
 use cranelift_codegen::{binemit, ir, isa, Context};
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, ModuleTranslationState, WasmError};
+use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use thiserror::Error;
@@ -287,12 +286,9 @@ pub enum CompileError {
 /// An implementation of a compiler from parsed WebAssembly module to native code.
 pub trait Compiler {
     /// Compile a parsed module with the given `TargetIsa`.
-    fn compile_module<'data, 'module>(
-        module: &'module module::Module,
-        module_translation: &ModuleTranslationState,
-        function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
+    fn compile_module(
+        translation: &ModuleTranslation,
         isa: &dyn isa::TargetIsa,
-        generate_debug_info: bool,
         cache_config: &CacheConfig,
     ) -> Result<ModuleCacheDataTupleType, CompileError>;
 }
