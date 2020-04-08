@@ -56,6 +56,8 @@ use crate::binemit;
 use crate::flowgraph;
 use crate::ir;
 use crate::isa::enc_tables::Encodings;
+#[cfg(feature = "unwind")]
+use crate::isa::fde::RegisterMappingError;
 use crate::regalloc;
 use crate::result::CodegenResult;
 use crate::settings;
@@ -74,11 +76,8 @@ mod riscv;
 #[cfg(feature = "x86")]
 mod x86;
 
-#[cfg(all(feature = "x86", feature = "unwind"))]
-/// Expose the register-mapping functionality necessary for exception handling, debug, etc.
-pub mod fde {
-    pub use super::x86::map_reg;
-}
+#[cfg(feature = "unwind")]
+pub mod fde;
 
 #[cfg(feature = "arm32")]
 mod arm32;
@@ -259,6 +258,12 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     /// Get a data structure describing the registers in this ISA.
     fn register_info(&self) -> RegInfo;
+
+    #[cfg(feature = "unwind")]
+    /// Map a Cranelift register to its corresponding DWARF register.
+    fn map_dwarf_register(&self, _: RegUnit) -> Result<u16, RegisterMappingError> {
+        Err(RegisterMappingError::UnsupportedArchitecture)
+    }
 
     /// Returns an iterator over legal encodings for the instruction.
     fn legal_encodings<'a>(
