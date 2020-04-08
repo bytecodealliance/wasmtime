@@ -70,9 +70,13 @@ pub mod debug_builtins {
         VMCTX = vmctx_ptr;
     }
 
-    /// Ensures that _set_vmctx_memory and _resolve_vmctx_memory_ptr are linked.
-    pub fn ensure() {
-        assert!(!(resolve_vmctx_memory_ptr as *const u8).is_null());
-        assert!(!(set_vmctx_memory as *const u8).is_null());
+    /// Ensures that _set_vmctx_memory and _resolve_vmctx_memory_ptr are linked and
+    /// exported as symbols. It is a workaround: the executable normally ignores
+    /// `pub extern "C"`, see rust-lang/rust#25057.
+    pub fn ensure_exported() {
+        unsafe {
+            std::ptr::read_volatile(resolve_vmctx_memory_ptr as *const u8);
+            std::ptr::read_volatile(set_vmctx_memory as *const u8);
+        }
     }
 }

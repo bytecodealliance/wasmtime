@@ -60,7 +60,7 @@ impl WasmtimeApp {
 }
 
 fn main() -> Result<()> {
-    wasmtime::debug_builtins::ensure();
+    wasmtime::debug_builtins::ensure_exported();
     WasmtimeApp::from_iter_safe(std::env::args())
         .unwrap_or_else(|e| match e.kind {
             ErrorKind::HelpDisplayed
