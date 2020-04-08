@@ -22,6 +22,8 @@ use crate::binemit::{FrameUnwindKind, FrameUnwindSink};
 use crate::ir;
 use crate::isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encodings};
 use crate::isa::Builder as IsaBuilder;
+#[cfg(feature = "unwind")]
+use crate::isa::{fde::RegisterMappingError, RegUnit};
 use crate::isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use crate::regalloc;
 use crate::result::CodegenResult;
@@ -89,6 +91,11 @@ impl TargetIsa for Isa {
 
     fn register_info(&self) -> RegInfo {
         registers::INFO.clone()
+    }
+
+    #[cfg(feature = "unwind")]
+    fn map_dwarf_register(&self, reg: RegUnit) -> Result<u16, RegisterMappingError> {
+        map_reg(self, reg).map(|r| r.0)
     }
 
     fn encoding_info(&self) -> EncInfo {

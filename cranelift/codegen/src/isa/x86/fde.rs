@@ -2,6 +2,7 @@
 
 use crate::binemit::{FrameUnwindOffset, FrameUnwindSink, Reloc};
 use crate::ir::{FrameLayoutChange, Function};
+use crate::isa::fde::RegisterMappingError;
 use crate::isa::{CallConv, RegUnit, TargetIsa};
 use alloc::vec::Vec;
 use core::convert::TryInto;
@@ -10,7 +11,6 @@ use gimli::write::{
     FrameDescriptionEntry, FrameTable, Result, Writer,
 };
 use gimli::{Encoding, Format, LittleEndian, Register, X86_64};
-use thiserror::Error;
 
 pub type FDERelocEntry = (FrameUnwindOffset, Reloc);
 
@@ -135,16 +135,6 @@ pub fn map_reg(
         "FloatRegs" => Ok(X86_XMM_REG_MAP[(reg - bank.first_unit) as usize]),
         _ => Err(RegisterMappingError::UnsupportedRegisterBank(bank.name)),
     }
-}
-
-#[derive(Error, Debug)]
-pub enum RegisterMappingError {
-    #[error("unable to find bank for register info")]
-    MissingBank,
-    #[error("register mapping is currently only implemented for x86_64")]
-    UnsupportedArchitecture,
-    #[error("unsupported register bank: {0}")]
-    UnsupportedRegisterBank(&'static str),
 }
 
 fn to_cfi(

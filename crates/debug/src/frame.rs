@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use wasmtime_environ::entity::EntityRef;
-use wasmtime_environ::isa::fde::map_reg;
 use wasmtime_environ::isa::{CallConv, TargetIsa};
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::{FrameLayoutChange, FrameLayouts};
@@ -19,8 +18,8 @@ fn to_cfi(
 ) -> Option<CallFrameInstruction> {
     Some(match change {
         FrameLayoutChange::CallFrameAddressAt { reg, offset } => {
-            let mapped = match map_reg(isa, *reg) {
-                Ok(r) => r,
+            let mapped = match isa.map_dwarf_register(*reg) {
+                Ok(r) => Register(r),
                 Err(_) => return None,
             };
             let offset = (*offset) as i32;
@@ -41,8 +40,8 @@ fn to_cfi(
         FrameLayoutChange::RegAt { reg, cfa_offset } => {
             assert!(cfa_offset % -8 == 0);
             let cfa_offset = *cfa_offset as i32;
-            let mapped = match map_reg(isa, *reg) {
-                Ok(r) => r,
+            let mapped = match isa.map_dwarf_register(*reg) {
+                Ok(r) => Register(r),
                 Err(_) => return None,
             };
             CallFrameInstruction::Offset(mapped, cfa_offset)
