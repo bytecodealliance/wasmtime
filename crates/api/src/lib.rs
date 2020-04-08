@@ -44,39 +44,3 @@ cfg_if::cfg_if! {
         // ... unknown os!
     }
 }
-
-/// Debug helpers.
-pub mod debug_builtins {
-    use wasmtime_runtime::{InstanceHandle, VMContext};
-
-    static mut VMCTX: *mut VMContext = std::ptr::null_mut();
-
-    #[no_mangle]
-    #[allow(dead_code, missing_docs)]
-    pub unsafe extern "C" fn resolve_vmctx_memory_ptr(p: *const u32) -> *const u8 {
-        let handle = InstanceHandle::from_vmctx(VMCTX);
-        let mem = if let Some(wasmtime_runtime::Export::Memory(mem)) = handle.lookup("memory") {
-            mem.definition
-        } else {
-            panic!();
-        };
-        let ptr = std::ptr::read(p);
-        (*mem).base.add(ptr as usize)
-    }
-
-    #[no_mangle]
-    #[allow(dead_code, missing_docs)]
-    pub unsafe extern "C" fn set_vmctx_memory(vmctx_ptr: *mut VMContext) {
-        VMCTX = vmctx_ptr;
-    }
-
-    /// Ensures that _set_vmctx_memory and _resolve_vmctx_memory_ptr are linked and
-    /// exported as symbols. It is a workaround: the executable normally ignores
-    /// `pub extern "C"`, see rust-lang/rust#25057.
-    pub fn ensure_exported() {
-        unsafe {
-            std::ptr::read_volatile(resolve_vmctx_memory_ptr as *const u8);
-            std::ptr::read_volatile(set_vmctx_memory as *const u8);
-        }
-    }
-}
