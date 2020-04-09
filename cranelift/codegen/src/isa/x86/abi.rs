@@ -1161,7 +1161,7 @@ pub fn emit_unwind_info(
         }
         FrameUnwindKind::Libunwind => {
             if func.frame_layout.is_some() {
-                emit_fde(func, isa, sink);
+                emit_fde(func, isa, sink)?;
             }
         }
     }
