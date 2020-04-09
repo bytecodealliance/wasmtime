@@ -40,6 +40,14 @@ fn is_load_with_defined_trapping(opcode: Opcode, data: &InstructionData) -> bool
     }
 }
 
+/// Does the given instruction have any side-effect that would preclude it from being removed when
+/// its value is unused?
+pub fn has_side_effect(func: &Function, inst: Inst) -> bool {
+    let data = &func.dfg[inst];
+    let opcode = data.opcode();
+    trivially_unsafe_for_dce(opcode) || is_load_with_defined_trapping(opcode, data)
+}
+
 /// Perform DCE on `func`.
 pub fn do_dce(func: &mut Function, domtree: &mut DominatorTree) {
     let _tt = timing::dce();
@@ -50,10 +58,7 @@ pub fn do_dce(func: &mut Function, domtree: &mut DominatorTree) {
         let mut pos = FuncCursor::new(func).at_bottom(block);
         while let Some(inst) = pos.prev_inst() {
             {
-                let data = &pos.func.dfg[inst];
-                let opcode = data.opcode();
-                if trivially_unsafe_for_dce(opcode)
-                    || is_load_with_defined_trapping(opcode, &data)
+                if has_side_effect(pos.func, inst)
                     || any_inst_results_used(inst, &live, &pos.func.dfg)
                 {
                     for arg in pos.func.dfg.inst_args(inst) {
