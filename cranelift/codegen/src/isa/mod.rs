@@ -55,9 +55,10 @@ pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
 use crate::binemit;
 use crate::flowgraph;
 use crate::ir;
-use crate::isa::enc_tables::Encodings;
+pub use crate::isa::enc_tables::Encodings;
 #[cfg(feature = "unwind")]
 use crate::isa::fde::RegisterMappingError;
+use crate::machinst::MachBackend;
 use crate::regalloc;
 use crate::result::CodegenResult;
 use crate::settings;
@@ -399,6 +400,11 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         _sink: &mut dyn binemit::FrameUnwindSink,
     ) {
         // No-op by default
+    }
+
+    /// Get the new-style MachBackend, if this is an adapter around one.
+    fn get_mach_backend(&self) -> Option<&dyn MachBackend> {
+        None
     }
 }
 
