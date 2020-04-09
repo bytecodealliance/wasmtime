@@ -3,6 +3,8 @@
 //! The `Function` struct defined in this module owns all of its basic blocks and
 //! instructions.
 
+#![allow(unused_imports)]
+
 use crate::binemit::CodeOffset;
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir;
@@ -17,6 +19,7 @@ use crate::isa::{CallConv, EncInfo, Encoding, Legalize, TargetIsa};
 use crate::regalloc::{EntryRegDiversions, RegDiversions};
 use crate::value_label::ValueLabelsRanges;
 use crate::write::write_function;
+use alloc::boxed::Box;
 use core::fmt;
 
 /// A function.
@@ -238,13 +241,21 @@ impl Function {
 
     /// Wrapper around `encode` which assigns `inst` the resulting encoding.
     pub fn update_encoding(&mut self, inst: ir::Inst, isa: &dyn TargetIsa) -> Result<(), Legalize> {
-        self.encode(inst, isa).map(|e| self.encodings[inst] = e)
+        if isa.get_mach_backend().is_some() {
+            Ok(())
+        } else {
+            self.encode(inst, isa).map(|e| self.encodings[inst] = e)
+        }
     }
 
     /// Wrapper around `TargetIsa::encode` for encoding an existing instruction
     /// in the `Function`.
     pub fn encode(&self, inst: ir::Inst, isa: &dyn TargetIsa) -> Result<Encoding, Legalize> {
-        isa.encode(&self, &self.dfg[inst], self.dfg.ctrl_typevar(inst))
+        if isa.get_mach_backend().is_some() {
+            Ok(Encoding::new(0, 0))
+        } else {
+            isa.encode(&self, &self.dfg[inst], self.dfg.ctrl_typevar(inst))
+        }
     }
 
     /// Starts collection of debug information.

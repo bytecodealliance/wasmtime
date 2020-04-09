@@ -28,13 +28,17 @@ pub fn verify_flags(
     errors: &mut VerifierErrors,
 ) -> VerifierStepResult<()> {
     let _tt = timing::verify_flags();
-    let mut verifier = FlagsVerifier {
-        func,
-        cfg,
-        encinfo: isa.map(|isa| isa.encoding_info()),
-        livein: SecondaryMap::new(),
-    };
-    verifier.check(errors)
+    if isa.is_none() || isa.unwrap().get_mach_backend().is_none() {
+        let mut verifier = FlagsVerifier {
+            func,
+            cfg,
+            encinfo: isa.map(|isa| isa.encoding_info()),
+            livein: SecondaryMap::new(),
+        };
+        verifier.check(errors)
+    } else {
+        Ok(())
+    }
 }
 
 struct FlagsVerifier<'a> {

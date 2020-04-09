@@ -48,6 +48,7 @@ pub use crate::isa::call_conv::CallConv;
 pub use crate::isa::constraints::{
     BranchRange, ConstraintKind, OperandConstraint, RecipeConstraints,
 };
+pub use crate::isa::enc_tables::Encodings;
 pub use crate::isa::encoding::{base_size, EncInfo, Encoding};
 pub use crate::isa::registers::{regs_overlap, RegClass, RegClassIndex, RegInfo, RegUnit};
 pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
@@ -55,9 +56,8 @@ pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
 use crate::binemit;
 use crate::flowgraph;
 use crate::ir;
-pub use crate::isa::enc_tables::Encodings;
-#[cfg(feature = "unwind")]
 use crate::isa::fde::RegisterMappingError;
+#[cfg(feature = "unwind")]
 use crate::machinst::MachBackend;
 use crate::regalloc;
 use crate::result::CodegenResult;
@@ -117,6 +117,7 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
             isa_builder!(x86, "x86", triple)
         }
         Architecture::Arm { .. } => isa_builder!(arm32, "arm32", triple),
+        Architecture::Aarch64 { .. } => isa_builder!(arm64, "arm64", triple),
         _ => Err(LookupError::Unsupported),
     }
 }
