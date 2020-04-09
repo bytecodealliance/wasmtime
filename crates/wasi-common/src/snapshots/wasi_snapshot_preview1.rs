@@ -1,13 +1,12 @@
-use crate::entry::{Descriptor, Entry, EntryRights};
-use crate::sandboxed_tty_writer::SandboxedTTYWriter;
+use crate::entry::{Entry, EntryHandle, EntryRights};
+use crate::sys::clock;
 use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
 use crate::wasi::{types, AsBytes, Errno, Result};
 use crate::WasiCtx;
-use crate::{clock, fd, path, poll};
+use crate::{path, poll};
 use log::{debug, error, trace};
 use std::convert::TryInto;
-use std::fs::File;
-use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::io::{self, SeekFrom};
 use wiggle::{GuestBorrows, GuestPtr};
 
 impl<'a> WasiSnapshotPreview1 for WasiCtx {
@@ -94,13 +93,9 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<()> {
         let required_rights = EntryRights::from_base(types::Rights::FD_ADVISE);
         let entry = self.get_entry(fd)?;
-        let desc = entry.as_descriptor(&required_rights)?;
-        match &*desc.borrow() {
-            Descriptor::OsHandle(fd) => fd::advise(&fd, advice, offset, len)?,
-            Descriptor::VirtualFile(virt) => virt.advise(advice, offset, len)?,
-            _ => return Err(Errno::Badf),
-        };
-        Ok(())
+        entry
+            .as_handle(&required_rights)?
+            .advise(advice, offset, len)
     }
 
     fn fd_allocate(
@@ -111,24 +106,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<()> {
         let required_rights = EntryRights::from_base(types::Rights::FD_ALLOCATE);
         let entry = self.get_entry(fd)?;
-        let desc = entry.as_descriptor(&required_rights)?;
-        match &*desc.borrow() {
-            Descriptor::OsHandle(fd) => {
-                let metadata = fd.metadata()?;
-                let current_size = metadata.len();
-                let wanted_size = offset.checked_add(len).ok_or(Errno::TooBig)?;
-                // This check will be unnecessary when rust-lang/rust#63326 is fixed
-                if wanted_size > i64::max_value() as u64 {
-                    return Err(Errno::TooBig);
-                }
-                if wanted_size > current_size {
-                    fd.set_len(wanted_size)?;
-                }
-            }
-            Descriptor::VirtualFile(virt) => virt.allocate(offset, len)?,
-            _ => return Err(Errno::Badf),
-        };
-        Ok(())
+        entry.as_handle(&required_rights)?.allocate(offset, len)
     }
 
     fn fd_close(&self, fd: types::Fd) -> Result<()> {
@@ -145,26 +123,16 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_datasync(&self, fd: types::Fd) -> Result<()> {
         let required_rights = EntryRights::from_base(types::Rights::FD_DATASYNC);
         let entry = self.get_entry(fd)?;
-        let file = entry.as_descriptor(&required_rights)?;
-        match &*file.borrow() {
-            Descriptor::OsHandle(fd) => fd.sync_data()?,
-            Descriptor::VirtualFile(virt) => virt.datasync()?,
-            other => other.as_os_handle().sync_data()?,
-        };
-        Ok(())
+        entry.as_handle(&required_rights)?.datasync()
     }
 
     fn fd_fdstat_get(&self, fd: types::Fd) -> Result<types::Fdstat> {
-        let fe = self.get_entry(fd)?;
-        let wasi_file = fe.as_descriptor(&EntryRights::empty())?;
-        let fs_flags = match &*wasi_file.borrow() {
-            Descriptor::OsHandle(wasi_fd) => fd::fdstat_get(&wasi_fd)?,
-            Descriptor::VirtualFile(virt) => virt.fdstat_get(),
-            other => fd::fdstat_get(&other.as_os_handle())?,
-        };
-        let rights = fe.rights.get();
+        let entry = self.get_entry(fd)?;
+        let file = entry.as_handle(&EntryRights::empty())?;
+        let fs_flags = file.fdstat_get()?;
+        let rights = entry.rights.get();
         let fdstat = types::Fdstat {
-            fs_filetype: fe.file_type,
+            fs_filetype: entry.file_type,
             fs_rights_base: rights.base,
             fs_rights_inheriting: rights.inheriting,
             fs_flags,
@@ -175,23 +143,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_fdstat_set_flags(&self, fd: types::Fd, flags: types::Fdflags) -> Result<()> {
         let required_rights = EntryRights::from_base(types::Rights::FD_FDSTAT_SET_FLAGS);
         let entry = self.get_entry(fd)?;
-        let desc = entry.as_descriptor(&required_rights)?;
-        let maybe_new_desc = match &*desc.borrow() {
-            Descriptor::OsHandle(handle) => {
-                fd::fdstat_set_flags(&handle, flags)?.map(Descriptor::OsHandle)
-            }
-            Descriptor::VirtualFile(handle) => {
-                handle.fdstat_set_flags(flags)?.map(Descriptor::VirtualFile)
-            }
-            stream => {
-                fd::fdstat_set_flags(&stream.as_os_handle(), flags)?.map(Descriptor::OsHandle)
-            }
-        };
-        // TODO What happens on None?
-        if let Some(new_desc) = maybe_new_desc {
-            *desc.borrow_mut() = new_desc;
-        }
-        Ok(())
+        entry.as_handle(&required_rights)?.fdstat_set_flags(flags)
     }
 
     fn fd_fdstat_set_rights(
@@ -212,29 +164,18 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_filestat_get(&self, fd: types::Fd) -> Result<types::Filestat> {
         let required_rights = EntryRights::from_base(types::Rights::FD_FILESTAT_GET);
         let entry = self.get_entry(fd)?;
-        let desc = entry.as_descriptor(&required_rights)?;
-        let host_filestat = match &*desc.borrow() {
-            Descriptor::OsHandle(fd) => fd::filestat_get(&fd)?,
-            Descriptor::VirtualFile(virt) => virt.filestat_get()?,
-            _ => return Err(Errno::Badf),
-        };
+        let host_filestat = entry.as_handle(&required_rights)?.filestat_get()?;
         Ok(host_filestat)
     }
 
     fn fd_filestat_set_size(&self, fd: types::Fd, size: types::Filesize) -> Result<()> {
         let required_rights = EntryRights::from_base(types::Rights::FD_FILESTAT_SET_SIZE);
         let entry = self.get_entry(fd)?;
-        let desc = entry.as_descriptor(&required_rights)?;
         // This check will be unnecessary when rust-lang/rust#63326 is fixed
         if size > i64::max_value() as u64 {
             return Err(Errno::TooBig);
         }
-        match &*desc.borrow() {
-            Descriptor::OsHandle(fd) => fd.set_len(size)?,
-            Descriptor::VirtualFile(virt) => virt.filestat_set_size(size)?,
-            _ => return Err(Errno::Badf),
-        };
-        Ok(())
+        entry.as_handle(&required_rights)?.filestat_set_size(size)
     }
 
     fn fd_filestat_set_times(
@@ -246,9 +187,9 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<()> {
         let required_rights = EntryRights::from_base(types::Rights::FD_FILESTAT_SET_TIMES);
         let entry = self.get_entry(fd)?;
-        let desc = entry.as_descriptor(&required_rights)?;
-        fd::filestat_set_times_impl(&desc.borrow(), atim, mtim, fst_flags)?;
-        Ok(())
+        entry
+            .as_handle(&required_rights)?
+            .filestat_set_times(atim, mtim, fst_flags)
     }
 
     fn fd_pread(
@@ -274,25 +215,13 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let required_rights =
             EntryRights::from_base(types::Rights::FD_READ | types::Rights::FD_SEEK);
         let entry = self.get_entry(fd)?;
-        let desc = entry.as_descriptor(&required_rights)?;
-
         if offset > i64::max_value() as u64 {
             return Err(Errno::Io);
         }
-
-        let host_nread = match &*desc.borrow() {
-            Descriptor::OsHandle(fd) => {
-                let mut fd: &File = fd;
-                let cur_pos = fd.seek(SeekFrom::Current(0))?;
-                fd.seek(SeekFrom::Start(offset))?;
-                let nread = fd.read_vectored(&mut buf)?;
-                fd.seek(SeekFrom::Start(cur_pos))?;
-                nread
-            }
-            Descriptor::VirtualFile(virt) => virt.preadv(&mut buf, offset)?,
-            _ => return Err(Errno::Badf),
-        };
-        let host_nread = host_nread.try_into()?;
+        let host_nread = entry
+            .as_handle(&required_rights)?
+            .preadv(&mut buf, offset)?
+            .try_into()?;
         Ok(host_nread)
     }
 
@@ -362,26 +291,15 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let required_rights =
             EntryRights::from_base(types::Rights::FD_WRITE | types::Rights::FD_SEEK);
         let entry = self.get_entry(fd)?;
-        let desc = entry.as_descriptor(&required_rights)?;
 
         if offset > i64::max_value() as u64 {
             return Err(Errno::Io);
         }
 
-        let host_nwritten = match &*desc.borrow() {
-            Descriptor::OsHandle(fd) => {
-                let mut fd: &File = fd;
-                let cur_pos = fd.seek(SeekFrom::Current(0))?;
-                fd.seek(SeekFrom::Start(offset))?;
-                let nwritten = fd.write_vectored(&buf)?;
-                fd.seek(SeekFrom::Start(cur_pos))?;
-                nwritten
-            }
-            Descriptor::VirtualFile(virt) => virt.pwritev(&buf, offset)?,
-            _ => return Err(Errno::Badf),
-        };
-        let host_nwritten = host_nwritten.try_into()?;
-
+        let host_nwritten = entry
+            .as_handle(&required_rights)?
+            .pwritev(&buf, offset)?
+            .try_into()?;
         Ok(host_nwritten)
     }
 
@@ -402,13 +320,10 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
         let required_rights = EntryRights::from_base(types::Rights::FD_READ);
         let entry = self.get_entry(fd)?;
-        let host_nread = match &*entry.as_descriptor(&required_rights)?.borrow() {
-            Descriptor::OsHandle(file) => (file as &File).read_vectored(&mut slices)?,
-            Descriptor::VirtualFile(virt) => virt.read_vectored(&mut slices)?,
-            Descriptor::Stdin => io::stdin().read_vectored(&mut slices)?,
-            _ => return Err(Errno::Badf),
-        };
-        let host_nread = host_nread.try_into()?;
+        let host_nread = entry
+            .as_handle(&required_rights)?
+            .read_vectored(&mut slices)?
+            .try_into()?;
 
         Ok(host_nread)
     }
@@ -422,39 +337,26 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<types::Size> {
         let required_rights = EntryRights::from_base(types::Rights::FD_READDIR);
         let entry = self.get_entry(fd)?;
-        let desc = entry.as_descriptor(&required_rights)?;
 
-        fn copy_entities<T: Iterator<Item = Result<(types::Dirent, String)>>>(
-            iter: T,
-            buf: &GuestPtr<u8>,
-            buf_len: types::Size,
-        ) -> Result<types::Size> {
-            let mut bufused = 0;
-            let mut buf = buf.clone();
-            for pair in iter {
-                let (dirent, name) = pair?;
-                let dirent_raw = dirent.as_bytes()?;
-                let dirent_len: types::Size = dirent_raw.len().try_into()?;
-                let name_raw = name.as_bytes();
-                let name_len = name_raw.len().try_into()?;
-                let offset = dirent_len.checked_add(name_len).ok_or(Errno::Overflow)?;
-                if (buf_len - bufused) < offset {
-                    break;
-                } else {
-                    buf.as_array(dirent_len).copy_from_slice(&dirent_raw)?;
-                    buf = buf.add(dirent_len)?;
-                    buf.as_array(name_len).copy_from_slice(name_raw)?;
-                    buf = buf.add(name_len)?;
-                    bufused += offset;
-                }
+        let mut bufused = 0;
+        let mut buf = buf.clone();
+        for pair in entry.as_handle(&required_rights)?.readdir(cookie)? {
+            let (dirent, name) = pair?;
+            let dirent_raw = dirent.as_bytes()?;
+            let dirent_len: types::Size = dirent_raw.len().try_into()?;
+            let name_raw = name.as_bytes();
+            let name_len = name_raw.len().try_into()?;
+            let offset = dirent_len.checked_add(name_len).ok_or(Errno::Overflow)?;
+            if (buf_len - bufused) < offset {
+                break;
+            } else {
+                buf.as_array(dirent_len).copy_from_slice(&dirent_raw)?;
+                buf = buf.add(dirent_len)?;
+                buf.as_array(name_len).copy_from_slice(name_raw)?;
+                buf = buf.add(name_len)?;
+                bufused += offset;
             }
-            Ok(bufused)
         }
-        let bufused = match &*desc.borrow() {
-            Descriptor::OsHandle(file) => copy_entities(fd::readdir(file, cookie)?, buf, buf_len)?,
-            Descriptor::VirtualFile(virt) => copy_entities(virt.readdir(cookie)?, buf, buf_len)?,
-            _ => return Err(Errno::Badf),
-        };
 
         Ok(bufused)
     }
@@ -495,43 +397,27 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         };
         let required_rights = EntryRights::from_base(base);
         let entry = self.get_entry(fd)?;
-        let desc = entry.as_descriptor(&required_rights)?;
         let pos = match whence {
             types::Whence::Cur => SeekFrom::Current(offset),
             types::Whence::End => SeekFrom::End(offset),
             types::Whence::Set => SeekFrom::Start(offset as u64),
         };
-        let host_newoffset = match &*desc.borrow() {
-            Descriptor::OsHandle(fd) => (fd as &File).seek(pos)?,
-            Descriptor::VirtualFile(virt) => virt.seek(pos)?,
-            _ => return Err(Errno::Badf),
-        };
-
+        let host_newoffset = entry.as_handle(&required_rights)?.seek(pos)?;
         Ok(host_newoffset)
     }
 
     fn fd_sync(&self, fd: types::Fd) -> Result<()> {
         let required_rights = EntryRights::from_base(types::Rights::FD_SYNC);
         let entry = self.get_entry(fd)?;
-        let desc = entry.as_descriptor(&required_rights)?;
-        match &*desc.borrow() {
-            Descriptor::OsHandle(fd) => fd.sync_all()?,
-            Descriptor::VirtualFile(virt) => virt.sync()?,
-            _ => return Err(Errno::Badf),
-        };
-        Ok(())
+        entry.as_handle(&required_rights)?.sync()
     }
 
     fn fd_tell(&self, fd: types::Fd) -> Result<types::Filesize> {
         let required_rights = EntryRights::from_base(types::Rights::FD_TELL);
         let entry = self.get_entry(fd)?;
-        let desc = entry.as_descriptor(&required_rights)?;
-        let host_offset = match &*desc.borrow() {
-            Descriptor::OsHandle(fd) => (fd as &File).seek(SeekFrom::Current(0))?,
-            Descriptor::VirtualFile(virt) => virt.seek(SeekFrom::Current(0))?,
-            _ => return Err(Errno::Badf),
-        };
-
+        let host_offset = entry
+            .as_handle(&required_rights)?
+            .seek(SeekFrom::Current(0))?;
         Ok(host_offset)
     }
 
@@ -549,63 +435,28 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             };
             slices.push(io::IoSlice::new(slice));
         }
-
-        // perform unbuffered writes
         let required_rights = EntryRights::from_base(types::Rights::FD_WRITE);
         let entry = self.get_entry(fd)?;
         let isatty = entry.isatty();
-        let desc = entry.as_descriptor(&required_rights)?;
-        let host_nwritten = match &*desc.borrow() {
-            Descriptor::OsHandle(file) => {
-                if isatty {
-                    SandboxedTTYWriter::new(&mut (file as &File)).write_vectored(&slices)?
-                } else {
-                    (file as &File).write_vectored(&slices)?
-                }
-            }
-            Descriptor::VirtualFile(virt) => {
-                if isatty {
-                    unimplemented!("writes to virtual tty");
-                } else {
-                    virt.write_vectored(&slices)?
-                }
-            }
-            Descriptor::Stdin => return Err(Errno::Badf),
-            Descriptor::Stdout => {
-                // lock for the duration of the scope
-                let stdout = io::stdout();
-                let mut stdout = stdout.lock();
-                let nwritten = if isatty {
-                    SandboxedTTYWriter::new(&mut stdout).write_vectored(&slices)?
-                } else {
-                    stdout.write_vectored(&slices)?
-                };
-                stdout.flush()?;
-                nwritten
-            }
-            // Always sanitize stderr, even if it's not directly connected to a tty,
-            // because stderr is meant for diagnostics rather than binary output,
-            // and may be redirected to a file which could end up being displayed
-            // on a tty later.
-            Descriptor::Stderr => {
-                SandboxedTTYWriter::new(&mut io::stderr()).write_vectored(&slices)?
-            }
-        };
-        Ok(host_nwritten.try_into()?)
+        let host_nwritten = entry
+            .as_handle(&required_rights)?
+            .write_vectored(&slices, isatty)?
+            .try_into()?;
+        Ok(host_nwritten)
     }
 
     fn path_create_directory(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
         let required_rights =
             EntryRights::from_base(types::Rights::PATH_OPEN | types::Rights::PATH_CREATE_DIRECTORY);
         let entry = self.get_entry(dirfd)?;
-        let resolved = path::get(
+        let (dirfd, path) = path::get(
             &entry,
             &required_rights,
             types::Lookupflags::empty(),
             path,
             false,
         )?;
-        resolved.create_directory()
+        dirfd.create_directory(&path)
     }
 
     fn path_filestat_get(
@@ -616,20 +467,16 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<types::Filestat> {
         let required_rights = EntryRights::from_base(types::Rights::PATH_FILESTAT_GET);
         let entry = self.get_entry(dirfd)?;
-        let resolved = path::get(&entry, &required_rights, flags, path, false)?;
-        let host_filestat = match resolved.dirfd() {
-            Descriptor::VirtualFile(virt) => virt
-                .openat(
-                    std::path::Path::new(resolved.path()),
-                    false,
-                    false,
-                    types::Oflags::empty(),
-                    types::Fdflags::empty(),
-                )?
-                .filestat_get()?,
-            _ => path::filestat_get(resolved, flags)?,
-        };
-
+        let (dirfd, path) = path::get(&entry, &required_rights, flags, path, false)?;
+        let host_filestat = dirfd
+            .openat(
+                &path,
+                false,
+                false,
+                types::Oflags::empty(),
+                types::Fdflags::empty(),
+            )?
+            .filestat_get()?;
         Ok(host_filestat)
     }
 
@@ -644,13 +491,17 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<()> {
         let required_rights = EntryRights::from_base(types::Rights::PATH_FILESTAT_SET_TIMES);
         let entry = self.get_entry(dirfd)?;
-        let resolved = path::get(&entry, &required_rights, flags, path, false)?;
-        match resolved.dirfd() {
-            Descriptor::VirtualFile(_virt) => {
-                unimplemented!("virtual filestat_set_times");
-            }
-            _ => path::filestat_set_times(resolved, flags, atim, mtim, fst_flags),
-        }
+        let (dirfd, path) = path::get(&entry, &required_rights, flags, path, false)?;
+        dirfd
+            .openat(
+                &path,
+                false,
+                false,
+                types::Oflags::empty(),
+                types::Fdflags::empty(),
+            )?
+            .filestat_set_times(atim, mtim, fst_flags)?;
+        Ok(())
     }
 
     fn path_link(
@@ -663,7 +514,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<()> {
         let required_rights = EntryRights::from_base(types::Rights::PATH_LINK_SOURCE);
         let old_entry = self.get_entry(old_fd)?;
-        let resolved_old = path::get(
+        let (old_dirfd, old_path) = path::get(
             &old_entry,
             &required_rights,
             types::Lookupflags::empty(),
@@ -672,16 +523,17 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         )?;
         let required_rights = EntryRights::from_base(types::Rights::PATH_LINK_TARGET);
         let new_entry = self.get_entry(new_fd)?;
-        let resolved_new = path::get(
+        let (new_dirfd, new_path) = path::get(
             &new_entry,
             &required_rights,
             types::Lookupflags::empty(),
             new_path,
             false,
         )?;
-        path::link(
-            resolved_old,
-            resolved_new,
+        old_dirfd.link(
+            &old_path,
+            new_dirfd,
+            &new_path,
             old_flags.contains(&types::Lookupflags::SYMLINK_FOLLOW),
         )
     }
@@ -701,20 +553,15 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             oflags,
             fdflags,
         );
-
         trace!("     | needed_rights={}", needed_rights);
-
-        let resolved = {
-            let entry = self.get_entry(dirfd)?;
-            path::get(
-                &entry,
-                &needed_rights,
-                dirflags,
-                path,
-                oflags & types::Oflags::CREAT != types::Oflags::empty(),
-            )?
-        };
-
+        let entry = self.get_entry(dirfd)?;
+        let (dirfd, path) = path::get(
+            &entry,
+            &needed_rights,
+            dirflags,
+            path,
+            oflags & types::Oflags::CREAT != types::Oflags::empty(),
+        )?;
         // which open mode do we need?
         let read = fs_rights_base & (types::Rights::FD_READ | types::Rights::FD_READDIR)
             != types::Rights::empty();
@@ -724,15 +571,13 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                 | types::Rights::FD_ALLOCATE
                 | types::Rights::FD_FILESTAT_SET_SIZE)
             != types::Rights::empty();
-
         trace!(
             "     | calling path_open impl: read={}, write={}",
             read,
             write
         );
-
-        let fd = resolved.open_with(read, write, oflags, fdflags)?;
-        let fe = Entry::from(fd)?;
+        let fd = dirfd.openat(&path, read, write, oflags, fdflags)?;
+        let fe = Entry::from(EntryHandle::from(fd))?;
         // We need to manually deny the rights which are not explicitly requested
         // because Entry::from will assign maximal consistent rights.
         let mut rights = fe.rights.get();
@@ -752,47 +597,34 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<types::Size> {
         let required_rights = EntryRights::from_base(types::Rights::PATH_READLINK);
         let entry = self.get_entry(dirfd)?;
-        let resolved = path::get(
+        let (dirfd, path) = path::get(
             &entry,
             &required_rights,
             types::Lookupflags::empty(),
             path,
             false,
         )?;
-
         let slice = unsafe {
             let mut bc = GuestBorrows::new();
             let buf = buf.as_array(buf_len);
             let raw = buf.as_raw(&mut bc)?;
             &mut *raw
         };
-        let host_bufused = match resolved.dirfd() {
-            Descriptor::VirtualFile(_virt) => {
-                unimplemented!("virtual readlink");
-            }
-            _ => path::readlink(resolved, slice)?,
-        };
-        let host_bufused = host_bufused.try_into()?;
+        let host_bufused = dirfd.readlink(&path, slice)?.try_into()?;
         Ok(host_bufused)
     }
 
     fn path_remove_directory(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
         let required_rights = EntryRights::from_base(types::Rights::PATH_REMOVE_DIRECTORY);
         let entry = self.get_entry(dirfd)?;
-        let resolved = path::get(
+        let (dirfd, path) = path::get(
             &entry,
             &required_rights,
             types::Lookupflags::empty(),
             path,
             true,
         )?;
-
-        debug!("path_remove_directory resolved={:?}", resolved);
-
-        match resolved.dirfd() {
-            Descriptor::VirtualFile(virt) => virt.remove_directory(resolved.path()),
-            _ => path::remove_directory(resolved),
-        }
+        dirfd.remove_directory(&path)
     }
 
     fn path_rename(
@@ -804,7 +636,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<()> {
         let required_rights = EntryRights::from_base(types::Rights::PATH_RENAME_SOURCE);
         let entry = self.get_entry(old_fd)?;
-        let resolved_old = path::get(
+        let (old_dirfd, old_path) = path::get(
             &entry,
             &required_rights,
             types::Lookupflags::empty(),
@@ -813,26 +645,14 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         )?;
         let required_rights = EntryRights::from_base(types::Rights::PATH_RENAME_TARGET);
         let entry = self.get_entry(new_fd)?;
-        let resolved_new = path::get(
+        let (new_dirfd, new_path) = path::get(
             &entry,
             &required_rights,
             types::Lookupflags::empty(),
             new_path,
             true,
         )?;
-
-        debug!("path_rename resolved_old={:?}", resolved_old);
-        debug!("path_rename resolved_new={:?}", resolved_new);
-
-        if let (Descriptor::OsHandle(_), Descriptor::OsHandle(_)) =
-            (resolved_old.dirfd(), resolved_new.dirfd())
-        {
-            path::rename(resolved_old, resolved_new)
-        } else {
-            // Virtual files do not support rename, at the moment, and streams don't have paths to
-            // rename, so any combination of Descriptor that gets here is an error in the making.
-            panic!("path_rename with one or more non-OS files");
-        }
+        old_dirfd.rename(&old_path, new_dirfd, &new_path)
     }
 
     fn path_symlink(
@@ -843,44 +663,34 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<()> {
         let required_rights = EntryRights::from_base(types::Rights::PATH_SYMLINK);
         let entry = self.get_entry(dirfd)?;
-        let resolved_new = path::get(
+        let (new_fd, new_path) = path::get(
             &entry,
             &required_rights,
             types::Lookupflags::empty(),
             new_path,
             true,
         )?;
-
         let old_path = unsafe {
             let mut bc = GuestBorrows::new();
             let raw = old_path.as_raw(&mut bc)?;
             &*raw
         };
-
         trace!("     | old_path='{}'", old_path);
-
-        match resolved_new.dirfd() {
-            Descriptor::VirtualFile(_virt) => {
-                unimplemented!("virtual path_symlink");
-            }
-            _non_virtual => path::symlink(old_path, resolved_new),
-        }
+        new_fd.symlink(&old_path, &new_path)
     }
 
     fn path_unlink_file(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
         let required_rights = EntryRights::from_base(types::Rights::PATH_UNLINK_FILE);
         let entry = self.get_entry(dirfd)?;
-        let resolved = path::get(
+        let (dirfd, path) = path::get(
             &entry,
             &required_rights,
             types::Lookupflags::empty(),
             path,
             false,
         )?;
-        match resolved.dirfd() {
-            Descriptor::VirtualFile(virt) => virt.unlink_file(resolved.path()),
-            _ => path::unlink_file(resolved),
-        }
+        dirfd.unlink_file(&path)?;
+        Ok(())
     }
 
     fn poll_oneoff(
@@ -949,7 +759,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                         }
                     };
                     fd_events.push(poll::FdEventData {
-                        descriptor: entry.as_descriptor(&required_rights)?,
+                        handle: entry.as_handle(&required_rights)?,
                         r#type: types::Eventtype::FdRead,
                         userdata: subscription.userdata,
                     });
@@ -975,7 +785,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                         }
                     };
                     fd_events.push(poll::FdEventData {
-                        descriptor: entry.as_descriptor(&required_rights)?,
+                        handle: entry.as_handle(&required_rights)?,
                         r#type: types::Eventtype::FdWrite,
                         userdata: subscription.userdata,
                     });
@@ -984,7 +794,6 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         }
         debug!("poll_oneoff events = {:?}", events);
         debug!("poll_oneoff timeout = {:?}", timeout);
-        debug!("poll_oneoff fd_events = {:?}", fd_events);
         // The underlying implementation should successfully and immediately return
         // if no events have been passed. Such situation may occur if all provided
         // events have been filtered out as errors in the code above.
@@ -997,6 +806,9 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             let event_ptr = event_ptr?;
             event_ptr.write(event)?;
         }
+
+        trace!("     | *nevents={:?}", nevents);
+
         Ok(nevents)
     }
 

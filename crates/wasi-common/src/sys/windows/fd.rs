@@ -1,6 +1,7 @@
 use super::file_serial_no;
+use super::oshandle::OsFile;
 use crate::path;
-use crate::sys::entry::OsHandle;
+use crate::sys::oshandle::AsFile;
 use crate::wasi::{types, Result};
 use log::trace;
 use std::convert::TryInto;
@@ -10,9 +11,9 @@ use std::os::windows::prelude::{AsRawHandle, FromRawHandle};
 use std::path::Path;
 use winx::file::{AccessMode, FileModeInformation, Flags};
 
-pub(crate) fn fdstat_get(fd: &File) -> Result<types::Fdflags> {
+pub(crate) fn fdstat_get(file: &File) -> Result<types::Fdflags> {
     let mut fdflags = types::Fdflags::empty();
-    let handle = fd.as_raw_handle();
+    let handle = file.as_raw_handle();
     let access_mode = winx::file::query_access_information(handle)?;
     let mode = winx::file::query_mode_information(handle)?;
 
@@ -34,27 +35,30 @@ pub(crate) fn fdstat_get(fd: &File) -> Result<types::Fdflags> {
     Ok(fdflags)
 }
 
-pub(crate) fn fdstat_set_flags(fd: &File, fdflags: types::Fdflags) -> Result<Option<OsHandle>> {
-    let handle = fd.as_raw_handle();
-
+// TODO Investigate further for Stdio handles. `ReOpenFile` requires the file
+// handle came from `CreateFile`, but the Rust's libstd will use `GetStdHandle`
+// rather than `CreateFile`. Relevant discussion can be found in:
+// https://github.com/rust-lang/rust/issues/40490
+pub(crate) fn fdstat_set_flags(file: &File, fdflags: types::Fdflags) -> Result<Option<OsFile>> {
+    let handle = file.as_raw_handle();
     let access_mode = winx::file::query_access_information(handle)?;
-
     let new_access_mode = file_access_mode_from_fdflags(
         fdflags,
         access_mode.contains(AccessMode::FILE_READ_DATA),
         access_mode.contains(AccessMode::FILE_WRITE_DATA)
             | access_mode.contains(AccessMode::FILE_APPEND_DATA),
     );
-
     unsafe {
-        Ok(Some(OsHandle::from(File::from_raw_handle(
-            winx::file::reopen_file(handle, new_access_mode, fdflags.into())?,
-        ))))
+        Ok(Some(OsFile::from_raw_handle(winx::file::reopen_file(
+            handle,
+            new_access_mode,
+            fdflags.into(),
+        )?)))
     }
 }
 
 pub(crate) fn advise(
-    _file: &File,
+    _file: &OsFile,
     _advice: types::Advice,
     _offset: types::Filesize,
     _len: types::Filesize,
@@ -116,13 +120,13 @@ fn file_access_mode_from_fdflags(fdflags: types::Fdflags, read: bool, write: boo
 // ..       gets cookie = 2
 // other entries, in order they were returned by FindNextFileW get subsequent integers as their cookies
 pub(crate) fn readdir(
-    fd: &File,
+    file: &OsFile,
     cookie: types::Dircookie,
-) -> Result<impl Iterator<Item = Result<(types::Dirent, String)>>> {
+) -> Result<Box<dyn Iterator<Item = Result<(types::Dirent, String)>>>> {
     use winx::file::get_file_path;
 
     let cookie = cookie.try_into()?;
-    let path = get_file_path(fd)?;
+    let path = get_file_path(&file.as_file())?;
     // std::fs::ReadDir doesn't return . and .., so we need to emulate it
     let path = Path::new(&path);
     // The directory /.. is the same as / on Unix (at least on ext4), so emulate this behavior too
@@ -155,7 +159,7 @@ pub(crate) fn readdir(
     // small host_buf, but this is difficult to implement efficiently.
     //
     // See https://github.com/WebAssembly/WASI/issues/61 for more details.
-    Ok(iter.skip(cookie))
+    Ok(Box::new(iter.skip(cookie)))
 }
 
 fn dirent_from_path<P: AsRef<Path>>(
@@ -182,7 +186,7 @@ fn dirent_from_path<P: AsRef<Path>>(
     Ok((dirent, name))
 }
 
-pub(crate) fn filestat_get(file: &std::fs::File) -> Result<types::Filestat> {
+pub(crate) fn filestat_get(file: &File) -> Result<types::Filestat> {
     let filestat = file.try_into()?;
     Ok(filestat)
 }

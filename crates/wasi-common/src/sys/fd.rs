@@ -1,13 +1,12 @@
-use crate::entry::Descriptor;
-use crate::sys;
 use crate::wasi::{types, Errno, Result};
 use filetime::{set_file_handle_times, FileTime};
+use std::fs::File;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-pub(crate) use sys::fd::*;
+pub(crate) use super::sys_impl::fd::*;
 
-pub(crate) fn filestat_set_times_impl(
-    file: &Descriptor,
+pub(crate) fn filestat_set_times(
+    file: &File,
     st_atim: types::Timestamp,
     st_mtim: types::Timestamp,
     fst_flags: types::Fstflags,
@@ -39,13 +38,7 @@ pub(crate) fn filestat_set_times_impl(
     } else {
         None
     };
-    match file {
-        Descriptor::OsHandle(fd) => set_file_handle_times(fd, atim, mtim).map_err(Into::into),
-        Descriptor::VirtualFile(virt) => virt.filestat_set_times(atim, mtim),
-        _ => {
-            unreachable!(
-                "implementation error: fd should have been checked to not be a stream already"
-            );
-        }
-    }
+
+    set_file_handle_times(file, atim, mtim)?;
+    Ok(())
 }

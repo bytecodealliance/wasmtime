@@ -1,4 +1,4 @@
-use crate::sys::entry::OsHandle;
+use super::oshandle::OsFile;
 use crate::wasi::{self, types, Result};
 use std::convert::TryInto;
 use std::fs::File;
@@ -9,7 +9,7 @@ pub(crate) fn fdstat_get(fd: &File) -> Result<types::Fdflags> {
     Ok(fdflags.into())
 }
 
-pub(crate) fn fdstat_set_flags(fd: &File, fdflags: types::Fdflags) -> Result<Option<OsHandle>> {
+pub(crate) fn fdstat_set_flags(fd: &File, fdflags: types::Fdflags) -> Result<Option<OsFile>> {
     unsafe { yanix::fcntl::set_status_flags(fd.as_raw_fd(), fdflags.into())? };
     // We return None here to signal that the operation succeeded on the original
     // file descriptor and mutating the original WASI Descriptor is thus unnecessary.
@@ -18,7 +18,7 @@ pub(crate) fn fdstat_set_flags(fd: &File, fdflags: types::Fdflags) -> Result<Opt
 }
 
 pub(crate) fn advise(
-    file: &File,
+    file: &OsFile,
     advice: types::Advice,
     offset: types::Filesize,
     len: types::Filesize,
@@ -38,21 +38,21 @@ pub(crate) fn advise(
     Ok(())
 }
 
-pub(crate) fn filestat_get(file: &std::fs::File) -> Result<types::Filestat> {
+pub(crate) fn filestat_get(file: &File) -> Result<types::Filestat> {
     use yanix::file::fstat;
     let stat = unsafe { fstat(file.as_raw_fd())? };
     Ok(stat.try_into()?)
 }
 
 pub(crate) fn readdir<'a>(
-    os_handle: &'a OsHandle,
+    file: &'a OsFile,
     cookie: types::Dircookie,
-) -> Result<impl Iterator<Item = Result<(types::Dirent, String)>> + 'a> {
+) -> Result<Box<dyn Iterator<Item = Result<(types::Dirent, String)>> + 'a>> {
     use yanix::dir::{DirIter, Entry, EntryExt, SeekLoc};
 
     // Get an instance of `Dir`; this is host-specific due to intricasies
     // of managing a dir stream between Linux and BSD *nixes
-    let mut dir = os_handle.dir_stream()?;
+    let mut dir = file.dir_stream()?;
 
     // Seek if needed. Unless cookie is wasi::__WASI_DIRCOOKIE_START,
     // new items may not be returned to the caller.
@@ -65,7 +65,7 @@ pub(crate) fn readdir<'a>(
         dir.seek(loc);
     }
 
-    Ok(DirIter::new(dir).map(|entry| {
+    Ok(Box::new(DirIter::new(dir).map(|entry| {
         let entry: Entry = entry?;
         let name = entry.file_name().to_str()?.to_owned();
         let dirent = types::Dirent {
@@ -75,5 +75,5 @@ pub(crate) fn readdir<'a>(
             d_type: entry.file_type().into(),
         };
         Ok((dirent, name))
-    }))
+    })))
 }
