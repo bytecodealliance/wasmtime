@@ -99,13 +99,13 @@ pub(crate) fn add_internal_types(
     });
 
     // Build vmctx_die's DW_TAG_subprogram for `set` method:
-    //  .. DW_AT_linkage_name = "_set_vmctx_memory"
+    //  .. DW_AT_linkage_name = "set_vmctx_memory"
     //  .. DW_AT_name = "set"
     //  .. DW_TAG_formal_parameter
     //  ..  .. DW_AT_type = <vmctx_ptr_die>
     //  ..  .. DW_AT_artificial = 1
     add_tag!(vmctx_die_id, gimli::DW_TAG_subprogram => vmctx_set as vmctx_set_id {
-        gimli::DW_AT_linkage_name = write::AttributeValue::StringRef(out_strings.add("_set_vmctx_memory")),
+        gimli::DW_AT_linkage_name = write::AttributeValue::StringRef(out_strings.add("set_vmctx_memory")),
         gimli::DW_AT_name = write::AttributeValue::StringRef(out_strings.add("set"))
     });
     add_tag!(vmctx_set_id, gimli::DW_TAG_formal_parameter => vmctx_set_this_param as vmctx_set_this_param_id {

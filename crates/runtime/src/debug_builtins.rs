@@ -29,7 +29,7 @@ pub unsafe extern "C" fn set_vmctx_memory(vmctx_ptr: *mut VMContext) {
     VMCTX_AND_MEMORY = (vmctx_ptr, 0);
 }
 
-/// Ensures that _set_vmctx_memory and _resolve_vmctx_memory_ptr are linked and
+/// Ensures that set_vmctx_memory and resolve_vmctx_memory_ptr are linked and
 /// exported as symbols. It is a workaround: the executable normally ignores
 /// `pub extern "C"`, see rust-lang/rust#25057.
 pub fn ensure_exported() {

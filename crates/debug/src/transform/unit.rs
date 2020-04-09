@@ -92,7 +92,7 @@ where
 /// `__ptr` field. The utility operators overloads is added to
 /// provide better debugging experience.
 ///
-/// Notice that "_resolve_vmctx_memory_ptr" is external/builtin
+/// Notice that "resolve_vmctx_memory_ptr" is external/builtin
 /// subprogram that is not part of Wasm code.
 fn replace_pointer_type<R>(
     parent_id: write::UnitEntryId,
@@ -171,14 +171,14 @@ where
     });
 
     // Build wrapper_die's DW_TAG_subprogram for `operator*`:
-    //  .. DW_AT_linkage_name = "_resolve_vmctx_memory_ptr"
+    //  .. DW_AT_linkage_name = "resolve_vmctx_memory_ptr"
     //  .. DW_AT_name = "operator*"
     //  .. DW_AT_type = <ref_type>
     //  .. DW_TAG_formal_parameter
     //  ..  .. DW_AT_type = <wrapper_ptr_type>
     //  ..  .. DW_AT_artificial = 1
     add_tag!(wrapper_die_id, gimli::DW_TAG_subprogram => deref_op_die as deref_op_die_id {
-        gimli::DW_AT_linkage_name = write::AttributeValue::StringRef(out_strings.add("_resolve_vmctx_memory_ptr")),
+        gimli::DW_AT_linkage_name = write::AttributeValue::StringRef(out_strings.add("resolve_vmctx_memory_ptr")),
         gimli::DW_AT_name = write::AttributeValue::StringRef(out_strings.add("operator*")),
         gimli::DW_AT_type = write::AttributeValue::ThisUnitEntryRef(ref_type_id)
     });
@@ -188,14 +188,14 @@ where
     });
 
     // Build wrapper_die's DW_TAG_subprogram for `operator->`:
-    //  .. DW_AT_linkage_name = "_resolve_vmctx_memory_ptr"
+    //  .. DW_AT_linkage_name = "resolve_vmctx_memory_ptr"
     //  .. DW_AT_name = "operator->"
     //  .. DW_AT_type = <ptr_type>
     //  .. DW_TAG_formal_parameter
     //  ..  .. DW_AT_type = <wrapper_ptr_type>
     //  ..  .. DW_AT_artificial = 1
     add_tag!(wrapper_die_id, gimli::DW_TAG_subprogram => deref_op_die as deref_op_die_id {
-        gimli::DW_AT_linkage_name = write::AttributeValue::StringRef(out_strings.add("_resolve_vmctx_memory_ptr")),
+        gimli::DW_AT_linkage_name = write::AttributeValue::StringRef(out_strings.add("resolve_vmctx_memory_ptr")),
         gimli::DW_AT_name = write::AttributeValue::StringRef(out_strings.add("operator->")),
         gimli::DW_AT_type = write::AttributeValue::ThisUnitEntryRef(ptr_type_id)
     });
