@@ -116,7 +116,6 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
             isa_builder!(x86, "x86", triple)
         }
         Architecture::Arm { .. } => isa_builder!(arm32, "arm32", triple),
-        Architecture::Aarch64 { .. } => isa_builder!(arm64, "arm64", triple),
         _ => Err(LookupError::Unsupported),
     }
 }
