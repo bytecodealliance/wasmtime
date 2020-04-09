@@ -42,7 +42,15 @@ macro_rules! declare_vecs {
             }
 
             pub fn as_slice(&self) -> &[$elem_ty] {
-                unsafe { slice::from_raw_parts(self.data, self.size) }
+                // Note that we're careful to not create a slice with a null
+                // pointer as the data pointer, since that isn't defined
+                // behavior in Rust.
+                if self.size == 0 {
+                    &[]
+                } else {
+                    assert!(!self.data.is_null());
+                    unsafe { slice::from_raw_parts(self.data, self.size) }
+                }
             }
 
             pub fn take(&mut self) -> Vec<$elem_ty> {
