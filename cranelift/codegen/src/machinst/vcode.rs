@@ -299,6 +299,11 @@ impl<I: VCodeInst> VCode<I> {
         }
     }
 
+    /// Returns the flags controlling this function's compilation.
+    pub fn flags(&self) -> &settings::Flags {
+        self.abi.flags()
+    }
+
     /// Get the IR-level type of a VReg.
     pub fn vreg_type(&self, vreg: VirtualReg) -> Type {
         self.vreg_types[vreg.get_index()]
@@ -329,11 +334,7 @@ impl<I: VCodeInst> VCode<I> {
     /// Take the results of register allocation, with a sequence of
     /// instructions including spliced fill/reload/move instructions, and replace
     /// the VCode with them.
-    pub fn replace_insns_from_regalloc(
-        &mut self,
-        result: RegAllocResult<Self>,
-        flags: &settings::Flags,
-    ) {
+    pub fn replace_insns_from_regalloc(&mut self, result: RegAllocResult<Self>) {
         self.final_block_order = compute_final_block_order(self);
 
         // Record the spillslot count and clobbered registers for the ABI/stack
@@ -355,7 +356,7 @@ impl<I: VCodeInst> VCode<I> {
 
             if *block == self.entry {
                 // Start with the prologue.
-                final_insns.extend(self.abi.gen_prologue(flags).into_iter());
+                final_insns.extend(self.abi.gen_prologue().into_iter());
             }
 
             for i in start..end {
@@ -371,7 +372,7 @@ impl<I: VCodeInst> VCode<I> {
                 // with the epilogue.
                 let is_ret = insn.is_term() == MachTerminator::Ret;
                 if is_ret {
-                    final_insns.extend(self.abi.gen_epilogue(flags).into_iter());
+                    final_insns.extend(self.abi.gen_epilogue().into_iter());
                 } else {
                     final_insns.push(insn.clone());
                 }

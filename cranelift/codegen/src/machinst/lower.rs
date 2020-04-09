@@ -102,9 +102,9 @@ pub trait LowerBackend {
 
 /// Machine-independent lowering driver / machine-instruction container. Maintains a correspondence
 /// from original Inst to MachInsts.
-pub struct Lower<'a, I: VCodeInst> {
+pub struct Lower<'func, I: VCodeInst> {
     /// The function to lower.
-    f: &'a Function,
+    f: &'func Function,
 
     /// Lowered machine instructions.
     vcode: VCodeBuilder<I>,
@@ -142,9 +142,9 @@ enum GenerateReturn {
     No,
 }
 
-impl<'a, I: VCodeInst> Lower<'a, I> {
+impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Prepare a new lowering context for the given IR function.
-    pub fn new(f: &'a Function, abi: Box<dyn ABIBody<I = I>>) -> Lower<'a, I> {
+    pub fn new(f: &'func Function, abi: Box<dyn ABIBody<I = I>>) -> Lower<'func, I> {
         let mut vcode = VCodeBuilder::new(abi);
 
         let num_uses = NumUses::compute(f).take_uses();
@@ -516,7 +516,7 @@ impl<'a, I: VCodeInst> Lower<'a, I> {
     }
 }
 
-impl<'a, I: VCodeInst> LowerCtx for Lower<'a, I> {
+impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
     type I = I;
 
     /// Get the instdata for a given IR instruction.
