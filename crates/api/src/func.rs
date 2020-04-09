@@ -1030,8 +1030,12 @@ macro_rules! impl_into_func {
                     R: WasmRet,
                 {
                     let ret = {
-                        let instance = InstanceHandle::from_vmctx(vmctx);
-                        let (func, store) = instance.host_state().downcast_ref::<(F, Store)>().expect("state");
+                        let state = (*vmctx).host_state();
+                        // Double-check ourselves in debug mode, but we control
+                        // the `Any` here so an unsafe downcast should also
+                        // work.
+                        debug_assert!(state.is::<(F, Store)>());
+                        let (func, store) = &*(state as *const _ as *const (F, Store));
                         panic::catch_unwind(AssertUnwindSafe(|| {
                             func(
                                 Caller { store, caller_vmctx },
