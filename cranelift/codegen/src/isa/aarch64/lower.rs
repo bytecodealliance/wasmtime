@@ -184,6 +184,7 @@ fn output_to_const<C: LowerCtx<I = Inst>>(ctx: &mut C, out: InsnOutput) -> Optio
                     let imm: i64 = imm.into();
                     Some(imm as u64)
                 }
+                &InstructionData::UnaryBool { opcode: _, imm } => Some(u64::from(imm)),
                 &InstructionData::UnaryIeee32 { opcode: _, imm } => Some(u64::from(imm.bits())),
                 &InstructionData::UnaryIeee64 { opcode: _, imm } => Some(imm.bits()),
                 _ => None,
