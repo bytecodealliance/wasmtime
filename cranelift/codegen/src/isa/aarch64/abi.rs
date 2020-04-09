@@ -58,7 +58,7 @@ static BALDRDASH_JIT_CALLEE_SAVED_GPR: &[bool] = &[
     /* 24 = */ false, false, false, false,
     // There should be 28, the pseudo stack pointer in this list, however the wasm stubs trash it
     // gladly right now.
-    /* 28 = */ false, false, true /* x30 = FP */, true /* x31 = SP */
+    /* 28 = */ false, false, true /* x30 = FP */, false /* x31 = SP */
 ];
 
 #[rustfmt::skip]
@@ -314,17 +314,11 @@ fn is_callee_save(call_conv: isa::CallConv, r: RealReg) -> bool {
         match r.get_class() {
             RegClass::I64 => {
                 let enc = r.get_hw_encoding();
-                if BALDRDASH_JIT_CALLEE_SAVED_GPR[enc] {
-                    return true;
-                }
-                // Otherwise, fall through to preserve native ABI registers.
+                return BALDRDASH_JIT_CALLEE_SAVED_GPR[enc];
             }
             RegClass::V128 => {
                 let enc = r.get_hw_encoding();
-                if BALDRDASH_JIT_CALLEE_SAVED_FPU[enc] {
-                    return true;
-                }
-                // Otherwise, fall through to preserve native ABI registers.
+                return BALDRDASH_JIT_CALLEE_SAVED_FPU[enc];
             }
             _ => unimplemented!("baldrdash callee saved on non-i64 reg classes"),
         };
