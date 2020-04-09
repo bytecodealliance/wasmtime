@@ -176,7 +176,7 @@ pub type Legalize =
 
 /// This struct provides information that a frontend may need to know about a target to
 /// produce Cranelift IR for the target.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash)]
 pub struct TargetFrontendConfig {
     /// The default calling convention of the target.
     pub default_call_conv: CallConv,

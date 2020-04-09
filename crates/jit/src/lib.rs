@@ -28,7 +28,6 @@ mod imports;
 mod instantiate;
 mod link;
 mod resolver;
-mod target_tunables;
 
 pub mod native;
 pub mod trampoline;
@@ -38,7 +37,6 @@ pub use crate::compiler::{make_trampoline, Compilation, CompilationStrategy, Com
 pub use crate::instantiate::{instantiate, CompiledModule, SetupError};
 pub use crate::link::link_module;
 pub use crate::resolver::{NullResolver, Resolver};
-pub use crate::target_tunables::target_tunables;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

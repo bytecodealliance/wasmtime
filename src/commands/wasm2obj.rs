@@ -11,8 +11,6 @@ use std::{
 use structopt::{clap::AppSettings, StructOpt};
 use target_lexicon::Triple;
 use wasmtime_environ::CacheConfig;
-#[cfg(feature = "lightbeam")]
-use wasmtime_environ::Lightbeam;
 
 /// The after help text for the `wasm2obj` command.
 pub const WASM2OBJ_AFTER_HELP: &str = "The translation is dependent on the environment chosen.\n\

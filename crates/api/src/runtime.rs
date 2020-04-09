@@ -2,6 +2,7 @@ use crate::externals::MemoryCreator;
 use crate::trampoline::MemoryCreatorProxy;
 use anyhow::Result;
 use std::cell::RefCell;
+use std::cmp::min;
 use std::fmt;
 use std::path::Path;
 use std::rc::Rc;
@@ -9,6 +10,7 @@ use std::sync::Arc;
 use wasmparser::{OperatorValidatorConfig, ValidatingParserConfig};
 use wasmtime_environ::settings::{self, Configurable};
 use wasmtime_environ::CacheConfig;
+use wasmtime_environ::Tunables;
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::RuntimeMemoryCreator;
@@ -26,7 +28,7 @@ use wasmtime_runtime::RuntimeMemoryCreator;
 pub struct Config {
     pub(crate) flags: settings::Builder,
     pub(crate) validating_config: ValidatingParserConfig,
-    pub(crate) debug_info: bool,
+    pub(crate) tunables: Tunables,
     pub(crate) strategy: CompilationStrategy,
     pub(crate) cache_config: CacheConfig,
     pub(crate) profiler: Arc<dyn ProfilingAgent>,
@@ -37,6 +39,15 @@ impl Config {
     /// Creates a new configuration object with the default configuration
     /// specified.
     pub fn new() -> Config {
+        let mut tunables = Tunables::default();
+        if cfg!(windows) {
+            // For now, use a smaller footprint on Windows so that we don't
+            // don't outstrip the paging file.
+            tunables.static_memory_bound = min(tunables.static_memory_bound, 0x100);
+            tunables.static_memory_offset_guard_size =
+                min(tunables.static_memory_offset_guard_size, 0x10000);
+        }
+
         let mut flags = settings::builder();
 
         // There are two possible traps for division, and this way
@@ -56,7 +67,7 @@ impl Config {
             .expect("should be valid flag");
 
         Config {
-            debug_info: false,
+            tunables,
             validating_config: ValidatingParserConfig {
                 operator_config: OperatorValidatorConfig {
                     enable_threads: false,
@@ -79,7 +90,7 @@ impl Config {
     ///
     /// By default this option is `false`.
     pub fn debug_info(&mut self, enable: bool) -> &mut Self {
-        self.debug_info = enable;
+        self.tunables.debug_info = enable;
         self
     }
 
@@ -349,7 +360,7 @@ impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let features = &self.validating_config.operator_config;
         f.debug_struct("Config")
-            .field("debug_info", &self.debug_info)
+            .field("debug_info", &self.tunables.debug_info)
             .field("strategy", &self.strategy)
             .field("wasm_threads", &features.enable_threads)
             .field("wasm_reference_types", &features.enable_reference_types)
@@ -503,6 +514,7 @@ impl Store {
             isa,
             engine.config.strategy,
             engine.config.cache_config.clone(),
+            engine.config.tunables.clone(),
         );
         Store {
             inner: Rc::new(StoreInner {

@@ -366,7 +366,6 @@ impl Module {
         let compiled = CompiledModule::new(
             &mut store.compiler_mut(),
             binary,
-            store.engine().config().debug_info,
             &*store.engine().config().profiler,
         )?;
 

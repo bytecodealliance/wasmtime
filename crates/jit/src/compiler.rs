@@ -2,25 +2,22 @@
 
 use crate::code_memory::CodeMemory;
 use crate::instantiate::SetupError;
-use crate::target_tunables::target_tunables;
 use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::ir::InstBuilder;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
-use cranelift_wasm::ModuleTranslationState;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
 use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex};
-use wasmtime_environ::RelocationTarget;
 use wasmtime_environ::{
     CacheConfig, CompileError, CompiledFunction, CompiledFunctionUnwindInfo, Compiler as _C,
-    FunctionBodyData, Module, ModuleMemoryOffset, ModuleVmctxInfo, Relocation, Relocations, Traps,
-    Tunables, VMOffsets,
+    ModuleMemoryOffset, ModuleTranslation, ModuleVmctxInfo, Relocation, RelocationTarget,
+    Relocations, Traps, Tunables, VMOffsets,
 };
 use wasmtime_runtime::{
     InstantiationError, SignatureRegistry, TrapRegistration, TrapRegistry, VMFunctionBody,
@@ -57,6 +54,7 @@ pub struct Compiler {
     signatures: SignatureRegistry,
     strategy: CompilationStrategy,
     cache_config: CacheConfig,
+    tunables: Tunables,
 }
 
 impl Compiler {
@@ -65,6 +63,7 @@ impl Compiler {
         isa: Box<dyn TargetIsa>,
         strategy: CompilationStrategy,
         cache_config: CacheConfig,
+        tunables: Tunables,
     ) -> Self {
         Self {
             isa,
@@ -73,6 +72,7 @@ impl Compiler {
             strategy,
             trap_registry: TrapRegistry::default(),
             cache_config,
+            tunables,
         }
     }
 }
@@ -95,16 +95,14 @@ impl Compiler {
     }
 
     /// Return the tunables in use by this engine.
-    pub fn tunables(&self) -> Tunables {
-        target_tunables(self.isa.triple())
+    pub fn tunables(&self) -> &Tunables {
+        &self.tunables
     }
 
     /// Compile the given function bodies.
     pub(crate) fn compile<'data>(
         &mut self,
-        module: &Module,
-        module_translation: &ModuleTranslationState,
-        function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
+        translation: &ModuleTranslation,
         debug_data: Option<DebugInfoData>,
     ) -> Result<Compilation, SetupError> {
         let (
@@ -120,22 +118,16 @@ impl Compiler {
             // implementation.
             CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
                 wasmtime_environ::cranelift::Cranelift::compile_module(
-                    module,
-                    module_translation,
-                    function_body_inputs,
+                    translation,
                     &*self.isa,
-                    debug_data.is_some(),
                     &self.cache_config,
                 )
             }
             #[cfg(feature = "lightbeam")]
             CompilationStrategy::Lightbeam => {
                 wasmtime_environ::lightbeam::Lightbeam::compile_module(
-                    module,
-                    module_translation,
-                    function_body_inputs,
+                    translation,
                     &*self.isa,
-                    debug_data.is_some(),
                     &self.cache_config,
                 )
             }
@@ -164,7 +156,7 @@ impl Compiler {
         let mut cx = FunctionBuilderContext::new();
         let mut trampolines = HashMap::new();
         let mut trampoline_relocations = HashMap::new();
-        for sig in module.local.signatures.values() {
+        for sig in translation.module.local.signatures.values() {
             let index = self.signatures.register(sig);
             if trampolines.contains_key(&index) {
                 continue;
@@ -190,7 +182,7 @@ impl Compiler {
         // Translate debug info (DWARF) only if at least one function is present.
         let dbg_image = if debug_data.is_some() && !finished_functions.is_empty() {
             let target_config = self.isa.frontend_config();
-            let ofs = VMOffsets::new(target_config.pointer_bytes(), &module.local);
+            let ofs = VMOffsets::new(target_config.pointer_bytes(), &translation.module.local);
 
             let mut funcs = Vec::new();
             for (i, allocated) in finished_functions.into_iter() {
