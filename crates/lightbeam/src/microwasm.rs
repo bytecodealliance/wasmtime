@@ -2,6 +2,7 @@ use crate::{
     error::Error,
     module::{ModuleContext, SigType, Signature},
 };
+use cranelift_codegen::ir::SourceLoc;
 use itertools::Either;
 use smallvec::SmallVec;
 use std::{
@@ -1133,6 +1134,11 @@ where
     }
 }
 
+pub struct WithLoc<T> {
+    pub op: T,
+    pub offset: SourceLoc,
+}
+
 impl<'a, M: ModuleContext> MicrowasmConv<'a, M>
 where
     for<'any> &'any M::Signature: Into<OpSig>,
@@ -1571,13 +1577,45 @@ where
     #[inline(always)]
     fn next(
         &mut self,
-    ) -> Result<Option<impl ExactSizeIterator<Item = OperatorFromWasm> + '_>, Error> {
+    ) -> Result<Option<impl ExactSizeIterator<Item = WithLoc<OperatorFromWasm>> + '_>, Error> {
         use derive_more::From;
         use iter_enum::{ExactSizeIterator, Iterator};
         use staticvec::{staticvec, StaticVec, StaticVecIntoIter};
 
         struct Consts {
             inner: <Vec<Value> as IntoIterator>::IntoIter,
+        }
+
+        struct WithLocIter<I> {
+            iter: I,
+            source_loc: SourceLoc,
+        }
+
+        impl<I> Iterator for WithLocIter<I>
+        where
+            I: Iterator,
+        {
+            type Item = WithLoc<I::Item>;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                self.iter.next().map(|op| WithLoc {
+                    op,
+                    offset: self.source_loc.clone(),
+                })
+            }
+
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                self.iter.size_hint()
+            }
+        }
+
+        impl<I> ExactSizeIterator for WithLocIter<I>
+        where
+            I: ExactSizeIterator,
+        {
+            fn len(&self) -> usize {
+                self.iter.len()
+            }
         }
 
         impl Iterator for Consts {
@@ -1648,8 +1686,11 @@ where
                 let first_non_local_depth = block.returns.len() as u32;
 
                 (|| {
-                    let last_non_local_depth =
-                        (len as u32).checked_sub(1)?.checked_sub(block.arguments)?;
+                    let last_non_local_depth = if block.kind == ControlFrameKind::Function {
+                        (len as u32).checked_sub(1)?
+                    } else {
+                        (len as u32).checked_sub(1)?.checked_sub(block.arguments)?
+                    };
 
                     if first_non_local_depth <= last_non_local_depth {
                         Some(first_non_local_depth..=last_non_local_depth)
@@ -1661,7 +1702,10 @@ where
         }
 
         if let Some(consts_to_emit) = self.consts_to_emit.take() {
-            return Ok(Some(consts(consts_to_emit)));
+            return Ok(Some(WithLocIter {
+                iter: consts(consts_to_emit),
+                source_loc: Default::default(),
+            }));
         }
 
         if self.unreachable {
@@ -1673,12 +1717,12 @@ where
             // be executed. Tracking this in the microwasm translation step is
             // very complicated so we just do basic code removal here and leave
             // the removal of uncalled blocks to the backend.
-            return Ok(Some(loop {
+            let (out, offset) = loop {
                 if self.is_done {
                     return Ok(None);
                 }
 
-                let op = self.operators.read()?;
+                let (op, offset) = self.operators.read_with_offset()?;
 
                 match op {
                     WasmOperator::Block { .. }
@@ -1698,7 +1742,7 @@ where
                                 *has_else = true;
                             }
 
-                            break one(Operator::Label((block.id, NameTag::Else)));
+                            break (one(Operator::Label((block.id, NameTag::Else))), offset);
                         }
                     }
                     WasmOperator::End => {
@@ -1709,7 +1753,14 @@ where
 
                             if self.control_frames.is_empty() {
                                 self.is_done = true;
-                                return Ok(Some(none()));
+                                return Ok(Some(WithLocIter {
+                                    iter: none(),
+                                    source_loc: SourceLoc::new(
+                                        offset
+                                            .try_into()
+                                            .expect("Wasm module size overflowed `u32`"),
+                                    ),
+                                }));
                             }
 
                             self.stack.truncate(block.arguments as _);
@@ -1721,15 +1772,18 @@ where
                                 has_else: false, ..
                             } = block.kind
                             {
-                                break vec([
-                                    Operator::Label((block.id, NameTag::Else)),
-                                    Operator::Br {
-                                        target: BrTarget::Label(end_label),
-                                    },
-                                    Operator::Label(end_label),
-                                ]);
+                                break (
+                                    vec([
+                                        Operator::Label((block.id, NameTag::Else)),
+                                        Operator::Br {
+                                            target: BrTarget::Label(end_label),
+                                        },
+                                        Operator::Label(end_label),
+                                    ]),
+                                    offset,
+                                );
                             } else {
-                                break one(Operator::Label((block.id, NameTag::End)));
+                                break (one(Operator::Label((block.id, NameTag::End))), offset);
                             }
                         } else {
                             depth -= 1;
@@ -1737,6 +1791,15 @@ where
                     }
                     _ => {}
                 }
+            };
+
+            return Ok(Some(WithLocIter {
+                iter: out,
+                source_loc: SourceLoc::new(
+                    offset
+                        .try_into()
+                        .expect("Wasm module size overflowed `u32`"),
+                ),
             }));
         }
 
@@ -1744,14 +1807,14 @@ where
             return Ok(None);
         }
 
-        let op = self.operators.read()?;
+        let (op, offset) = self.operators.read_with_offset()?;
 
         let op_sig = self.op_sig(&op)?;
 
         self.apply_op(op_sig)
             .map_err(|e| Error::Microwasm(format!("{} (in {:?})", e, op)))?;
 
-        Ok(Some(match op {
+        let out = match op {
             WasmOperator::Unreachable => {
                 self.unreachable = true;
                 one(Operator::Unreachable)
@@ -2349,6 +2412,15 @@ where
                 return Err(Error::Microwasm("I64TruncSatF64U unimplemented".into()))
             }
             _other => return Err(Error::Microwasm("Opcode unimplemented".into())),
+        };
+
+        Ok(Some(WithLocIter {
+            iter: out,
+            source_loc: SourceLoc::new(
+                offset
+                    .try_into()
+                    .expect("Wasm module size overflowed `u32`"),
+            ),
         }))
     }
 }
@@ -2357,7 +2429,7 @@ impl<M: ModuleContext> Iterator for MicrowasmConv<'_, M>
 where
     for<'any> &'any M::Signature: Into<OpSig>,
 {
-    type Item = Result<SmallVec<[OperatorFromWasm; 1]>, Error>;
+    type Item = Result<SmallVec<[WithLoc<OperatorFromWasm>; 1]>, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.next() {

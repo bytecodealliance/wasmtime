@@ -158,6 +158,8 @@ impl crate::compilation::Compiler for Lightbeam {
             .into_translated_code_section()
             .map_err(|e| CompileError::Codegen(format!("Failed to generate output code: {}", e)))?;
 
+        code_section.disassemble();
+
         // TODO pass jump table offsets to Compilation::from_buffer() when they
         // are implemented in lightbeam -- using empty set of offsets for now.
         // TODO: pass an empty range for the unwind information until lightbeam emits it
