@@ -1,0 +1,157 @@
+test vcode arch=arm64
+
+function %f_u_8_64(i8) -> i64 {
+block0(v0: i8):
+  v1 = uextend.i64 v0
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: uxtb x0, w0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f_u_8_32(i8) -> i32 {
+block0(v0: i8):
+  v1 = uextend.i32 v0
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: uxtb w0, w0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f_u_8_16(i8) -> i16 {
+block0(v0: i8):
+  v1 = uextend.i16 v0
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: uxtb w0, w0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f_s_8_64(i8) -> i64 {
+block0(v0: i8):
+  v1 = sextend.i64 v0
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sxtb x0, w0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f_s_8_32(i8) -> i32 {
+block0(v0: i8):
+  v1 = sextend.i32 v0
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sxtb w0, w0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f_s_8_16(i8) -> i16 {
+block0(v0: i8):
+  v1 = sextend.i16 v0
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sxtb w0, w0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f_u_16_64(i16) -> i64 {
+block0(v0: i16):
+  v1 = uextend.i64 v0
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: uxth x0, w0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f_u_16_32(i16) -> i32 {
+block0(v0: i16):
+  v1 = uextend.i32 v0
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: uxth w0, w0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f_s_16_64(i16) -> i64 {
+block0(v0: i16):
+  v1 = sextend.i64 v0
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sxth x0, w0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f_s_16_32(i16) -> i32 {
+block0(v0: i16):
+  v1 = sextend.i32 v0
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sxth w0, w0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f_u_32_64(i32) -> i64 {
+block0(v0: i32):
+  v1 = uextend.i64 v0
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: mov w0, w0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f_s_32_64(i32) -> i64 {
+block0(v0: i32):
+  v1 = sextend.i64 v0
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sxtw x0, w0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret

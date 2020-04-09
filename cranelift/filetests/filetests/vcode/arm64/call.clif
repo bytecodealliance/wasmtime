@@ -1,0 +1,16 @@
+test vcode arch=arm64
+
+function %f(i64) -> i64 {
+    fn0 = %g(i64) -> i64
+
+block0(v0: i64):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  bl 0
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret

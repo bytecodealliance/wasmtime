@@ -1,0 +1,16 @@
+test vcode arch=arm64
+
+function %f() -> i64 {
+  gv0 = symbol %my_global
+
+block0:
+  v0 = symbol_value.i64 gv0
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: ldr x0, 8 ; b 12 ; data
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret

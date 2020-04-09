@@ -1,0 +1,439 @@
+test vcode arch=arm64
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ROR, variable
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %f0(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = rotr.i64 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  ror x0, x0, x1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f1(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = rotr.i32 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  ror w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f2(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = rotr.i16 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  uxth w0, w0
+; nextln:  sub w2, w1, #16
+; nextln:  sub w2, wzr, w2
+; nextln:  lsr w1, w0, w1
+; nextln:  lsl w0, w0, w2
+; nextln:  orr w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f3(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = rotr.i8 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  uxtb w0, w0
+; nextln:  sub w2, w1, #8
+; nextln:  sub w2, wzr, w2
+; nextln:  lsr w1, w0, w1
+; nextln:  lsl w0, w0, w2
+; nextln:  orr w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ROL, variable
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %f4(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = rotl.i64 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  sub w2, w1, #64
+; nextln:  sub w2, wzr, w2
+; nextln:  lsl x1, x0, x1
+; nextln:  lsr x0, x0, x2
+; nextln:  orr x0, x0, x1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f5(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = rotl.i32 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  sub w2, w1, #32
+; nextln:  sub w2, wzr, w2
+; nextln:  lsl w1, w0, w1
+; nextln:  lsr w0, w0, w2
+; nextln:  orr w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f6(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = rotl.i16 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  uxth w0, w0
+; nextln:  sub w2, w1, #16
+; nextln:  sub w2, wzr, w2
+; nextln:  lsl w1, w0, w1
+; nextln:  lsr w0, w0, w2
+; nextln:  orr w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f7(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = rotl.i8 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  uxtb w0, w0
+; nextln:  sub w2, w1, #8
+; nextln:  sub w2, wzr, w2
+; nextln:  lsl w1, w0, w1
+; nextln:  lsr w0, w0, w2
+; nextln:  orr w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; LSR, variable
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %f8(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = ushr.i64 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  lsr x0, x0, x1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f9(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = ushr.i32 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  lsr w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f10(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = ushr.i16 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  uxth w0, w0
+; nextln:  lsr w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f11(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = ushr.i8 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  uxtb w0, w0
+; nextln:  lsr w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; LSL, variable
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %f12(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = ishl.i64 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  lsl x0, x0, x1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f13(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = ishl.i32 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  lsl w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f14(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = ishl.i16 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  lsl w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f15(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = ishl.i8 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  lsl w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ASR, variable
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %f16(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = sshr.i64 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  asr x0, x0, x1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f17(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = sshr.i32 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  asr w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f18(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = sshr.i16 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  sxth w0, w0
+; nextln:  asr w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f19(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = sshr.i8 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  sxtb w0, w0
+; nextln:  asr w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; immediate forms
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %f20(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i32 17
+  v2 = rotr.i64 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  ror x0, x0, #17
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f21(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i32 17
+  v2 = rotl.i64 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  lsl x1, x0, #17
+; nextln:  lsr x0, x0, #47
+; nextln:  orr x0, x0, x1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f22(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 17
+  v2 = rotl.i32 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  lsl w1, w0, #17
+; nextln:  lsr w0, w0, #15
+; nextln:  orr w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f23(i16) -> i16 {
+block0(v0: i16):
+  v1 = iconst.i32 10
+  v2 = rotl.i16 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  uxth w0, w0
+; nextln:  lsl w1, w0, #10
+; nextln:  lsr w0, w0, #6
+; nextln:  orr w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f24(i8) -> i8 {
+block0(v0: i8):
+  v1 = iconst.i32 3
+  v2 = rotl.i8 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  uxtb w0, w0
+; nextln:  lsl w1, w0, #3
+; nextln:  lsr w0, w0, #5
+; nextln:  orr w0, w0, w1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f25(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i32 17
+  v2 = ushr.i64 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  lsr x0, x0, #17
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f26(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i32 17
+  v2 = sshr.i64 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  asr x0, x0, #17
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f27(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i32 17
+  v2 = ishl.i64 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  lsl x0, x0, #17
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret

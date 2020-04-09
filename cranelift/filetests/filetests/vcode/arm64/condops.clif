@@ -1,0 +1,42 @@
+test vcode arch=arm64
+
+function %f(i8, i64, i64) -> i64 {
+block0(v0: i8, v1: i64, v2: i64):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = selectif.i64 eq v4, v1, v2
+  return v5
+}
+
+; check: subs wzr
+; check: csel x0, $(=x[0-9]+, x[0-9]+), eq
+
+function %g(i8) -> b1 {
+block0(v0: i8):
+  v3 = iconst.i8 42
+  v4 = ifcmp v0, v3
+  v5 = trueif eq v4
+  return v5
+}
+
+; check: subs wzr
+; check: cset x0, eq
+
+function %h(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = bitselect.i8 v0, v1, v2
+  return v3
+}
+
+; check: and
+; nextln: bic
+; nextln: orr
+
+function %i(b1, i8, i8) -> i8 {
+block0(v0: b1, v1: i8, v2: i8):
+  v3 = select.i8 v0, v1, v2
+  return v3
+}
+
+; check: subs wzr
+; nextln: csel

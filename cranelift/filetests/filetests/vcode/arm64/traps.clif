@@ -1,0 +1,28 @@
+test vcode arch=arm64
+
+function %f() {
+block0:
+  trap user0
+}
+
+; check: udf
+
+function %g(i64) {
+block0(v0: i64):
+  v1 = iconst.i64 42
+  v2 = ifcmp v0, v1
+  trapif eq v2, user0
+  return
+}
+
+; check: subs xzr, x0, #42
+; nextln: b.ne 8
+; nextln: udf
+
+function %h() {
+block0:
+  debugtrap
+  return
+}
+
+; check: brk #0
