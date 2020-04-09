@@ -31,6 +31,7 @@ cfg_if::cfg_if! {
         static mut PREV_SIGBUS: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
         static mut PREV_SIGILL: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
         static mut PREV_SIGFPE: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
+        static mut PREV_SIGTRAP: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
 
         unsafe fn platform_init() {
             let register = |slot: &mut MaybeUninit<libc::sigaction>, signal: i32| {
@@ -70,6 +71,9 @@ cfg_if::cfg_if! {
                 register(&mut PREV_SIGFPE, libc::SIGFPE);
             }
 
+            // on ARM64, we use `brk` to report traps, which generates SIGTRAP.
+            register(&mut PREV_SIGTRAP, libc::SIGTRAP);
+
             // On ARM, handle Unaligned Accesses.
             // On Darwin, guard page accesses are raised as SIGBUS.
             if cfg!(target_arch = "arm") || cfg!(target_os = "macos") {
@@ -87,6 +91,7 @@ cfg_if::cfg_if! {
                 libc::SIGBUS => &PREV_SIGBUS,
                 libc::SIGFPE => &PREV_SIGFPE,
                 libc::SIGILL => &PREV_SIGILL,
+                libc::SIGTRAP => &PREV_SIGTRAP,
                 _ => panic!("unknown signal: {}", signum),
             };
             let handled = tls::with(|info| {
@@ -158,6 +163,12 @@ cfg_if::cfg_if! {
                 if #[cfg(all(target_os = "linux", target_arch = "x86_64"))] {
                     let cx = &*(cx as *const libc::ucontext_t);
                     cx.uc_mcontext.gregs[libc::REG_RIP as usize] as *const u8
+                } else if #[cfg(all(target_os = "linux", target_arch = "aarch64"))] {
+                    // libc doesn't seem to support Linux/aarch64 at the moment?
+                    extern "C" {
+                        fn GetPcFromUContext(cx: *mut libc::c_void) -> *const u8;
+                    }
+                    GetPcFromUContext(cx)
                 } else if #[cfg(target_os = "macos")] {
                     // FIXME(rust-lang/libc#1702) - once that lands and is
                     // released we should inline the definition here

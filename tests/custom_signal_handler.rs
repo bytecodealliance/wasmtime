@@ -122,7 +122,7 @@ mod tests {
                 .downcast::<Trap>()?;
             assert!(
                 trap.message()
-                    .starts_with("wasm trap: out of bounds memory access"),
+                    .starts_with("wasm trap: out of bounds"),
                 "bad trap message: {:?}",
                 trap.message()
             );
@@ -149,7 +149,7 @@ mod tests {
                 .downcast::<Trap>()?;
             assert!(trap
                 .message()
-                .starts_with("wasm trap: out of bounds memory access"));
+                .starts_with("wasm trap: out of bounds"));
         }
         Ok(())
     }
