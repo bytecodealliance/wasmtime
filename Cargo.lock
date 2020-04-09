@@ -433,6 +433,7 @@ dependencies = [
  "memmap",
  "num_cpus",
  "region",
+ "target-lexicon",
 ]
 
 [[package]]
