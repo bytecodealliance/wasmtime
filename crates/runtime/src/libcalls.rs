@@ -35,7 +35,6 @@
 use crate::table::Table;
 use crate::traphandlers::raise_lib_trap;
 use crate::vmcontext::VMContext;
-use wasmtime_environ::ir;
 use wasmtime_environ::wasm::{DataIndex, DefinedMemoryIndex, ElemIndex, MemoryIndex, TableIndex};
 
 /// Implementation of f32.ceil
@@ -175,16 +174,14 @@ pub unsafe extern "C" fn wasmtime_table_copy(
     dst: u32,
     src: u32,
     len: u32,
-    source_loc: u32,
 ) {
     let result = {
         let dst_table_index = TableIndex::from_u32(dst_table_index);
         let src_table_index = TableIndex::from_u32(src_table_index);
-        let source_loc = ir::SourceLoc::new(source_loc);
         let instance = (&mut *vmctx).instance();
         let dst_table = instance.get_table(dst_table_index);
         let src_table = instance.get_table(src_table_index);
-        Table::copy(dst_table, src_table, dst, src, len, source_loc)
+        Table::copy(dst_table, src_table, dst, src, len)
     };
     if let Err(trap) = result {
         raise_lib_trap(trap);
@@ -199,14 +196,12 @@ pub unsafe extern "C" fn wasmtime_table_init(
     dst: u32,
     src: u32,
     len: u32,
-    source_loc: u32,
 ) {
     let result = {
         let table_index = TableIndex::from_u32(table_index);
-        let source_loc = ir::SourceLoc::new(source_loc);
         let elem_index = ElemIndex::from_u32(elem_index);
         let instance = (&mut *vmctx).instance();
-        instance.table_init(table_index, elem_index, dst, src, len, source_loc)
+        instance.table_init(table_index, elem_index, dst, src, len)
     };
     if let Err(trap) = result {
         raise_lib_trap(trap);
@@ -227,13 +222,11 @@ pub unsafe extern "C" fn wasmtime_defined_memory_copy(
     dst: u32,
     src: u32,
     len: u32,
-    source_loc: u32,
 ) {
     let result = {
         let memory_index = DefinedMemoryIndex::from_u32(memory_index);
-        let source_loc = ir::SourceLoc::new(source_loc);
         let instance = (&mut *vmctx).instance();
-        instance.defined_memory_copy(memory_index, dst, src, len, source_loc)
+        instance.defined_memory_copy(memory_index, dst, src, len)
     };
     if let Err(trap) = result {
         raise_lib_trap(trap);
@@ -247,13 +240,11 @@ pub unsafe extern "C" fn wasmtime_imported_memory_copy(
     dst: u32,
     src: u32,
     len: u32,
-    source_loc: u32,
 ) {
     let result = {
         let memory_index = MemoryIndex::from_u32(memory_index);
-        let source_loc = ir::SourceLoc::new(source_loc);
         let instance = (&mut *vmctx).instance();
-        instance.imported_memory_copy(memory_index, dst, src, len, source_loc)
+        instance.imported_memory_copy(memory_index, dst, src, len)
     };
     if let Err(trap) = result {
         raise_lib_trap(trap);
@@ -267,13 +258,11 @@ pub unsafe extern "C" fn wasmtime_memory_fill(
     dst: u32,
     val: u32,
     len: u32,
-    source_loc: u32,
 ) {
     let result = {
         let memory_index = DefinedMemoryIndex::from_u32(memory_index);
-        let source_loc = ir::SourceLoc::new(source_loc);
         let instance = (&mut *vmctx).instance();
-        instance.defined_memory_fill(memory_index, dst, val, len, source_loc)
+        instance.defined_memory_fill(memory_index, dst, val, len)
     };
     if let Err(trap) = result {
         raise_lib_trap(trap);
@@ -287,13 +276,11 @@ pub unsafe extern "C" fn wasmtime_imported_memory_fill(
     dst: u32,
     val: u32,
     len: u32,
-    source_loc: u32,
 ) {
     let result = {
         let memory_index = MemoryIndex::from_u32(memory_index);
-        let source_loc = ir::SourceLoc::new(source_loc);
         let instance = (&mut *vmctx).instance();
-        instance.imported_memory_fill(memory_index, dst, val, len, source_loc)
+        instance.imported_memory_fill(memory_index, dst, val, len)
     };
     if let Err(trap) = result {
         raise_lib_trap(trap);
@@ -308,14 +295,12 @@ pub unsafe extern "C" fn wasmtime_memory_init(
     dst: u32,
     src: u32,
     len: u32,
-    source_loc: u32,
 ) {
     let result = {
         let memory_index = MemoryIndex::from_u32(memory_index);
         let data_index = DataIndex::from_u32(data_index);
-        let source_loc = ir::SourceLoc::new(source_loc);
         let instance = (&mut *vmctx).instance();
-        instance.memory_init(memory_index, data_index, dst, src, len, source_loc)
+        instance.memory_init(memory_index, data_index, dst, src, len)
     };
     if let Err(trap) = result {
         raise_lib_trap(trap);

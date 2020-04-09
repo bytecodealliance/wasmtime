@@ -16,7 +16,8 @@ use wasmtime_debug::read_debuginfo;
 use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
 use wasmtime_environ::{
-    CompileError, DataInitializer, DataInitializerLocation, Module, ModuleEnvironment, Traps,
+    CompileError, DataInitializer, DataInitializerLocation, Module, ModuleAddressMap,
+    ModuleEnvironment, Traps,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{
@@ -56,6 +57,7 @@ struct RawCompiledModule<'data> {
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<GdbJitImageRegistration>,
     traps: Traps,
+    address_transform: ModuleAddressMap,
 }
 
 impl<'data> RawCompiledModule<'data> {
@@ -120,6 +122,7 @@ impl<'data> RawCompiledModule<'data> {
             signatures: signatures.into_boxed_slice(),
             dbg_jit_registration,
             traps: compilation.traps,
+            address_transform: compilation.address_transform,
         })
     }
 }
@@ -133,6 +136,7 @@ pub struct CompiledModule {
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
     traps: Traps,
+    address_transform: ModuleAddressMap,
 }
 
 impl CompiledModule {
@@ -156,6 +160,7 @@ impl CompiledModule {
             raw.signatures.clone(),
             raw.dbg_jit_registration,
             raw.traps,
+            raw.address_transform,
         ))
     }
 
@@ -168,6 +173,7 @@ impl CompiledModule {
         signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         dbg_jit_registration: Option<GdbJitImageRegistration>,
         traps: Traps,
+        address_transform: ModuleAddressMap,
     ) -> Self {
         Self {
             module: Arc::new(module),
@@ -177,6 +183,7 @@ impl CompiledModule {
             signatures,
             dbg_jit_registration: dbg_jit_registration.map(Rc::new),
             traps,
+            address_transform,
         }
     }
 
@@ -239,9 +246,14 @@ impl CompiledModule {
         &self.finished_functions
     }
 
-    /// Returns the map of all finished JIT functions compiled for this module
+    /// Returns the a map for all traps in this module.
     pub fn traps(&self) -> &Traps {
         &self.traps
+    }
+
+    /// Returns a map of compiled addresses back to original bytecode offsets.
+    pub fn address_transform(&self) -> &ModuleAddressMap {
+        &self.address_transform
     }
 }
 

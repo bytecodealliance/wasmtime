@@ -15,8 +15,8 @@ use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
 use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex};
 use wasmtime_environ::{
     CacheConfig, CompileError, CompiledFunction, CompiledFunctionUnwindInfo, Compiler as _C,
-    ModuleMemoryOffset, ModuleTranslation, ModuleVmctxInfo, Relocation, RelocationTarget,
-    Relocations, Traps, Tunables, VMOffsets,
+    ModuleAddressMap, ModuleMemoryOffset, ModuleTranslation, ModuleVmctxInfo, Relocation,
+    RelocationTarget, Relocations, Traps, Tunables, VMOffsets,
 };
 use wasmtime_runtime::{
     InstantiationError, SignatureRegistry, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
@@ -82,6 +82,7 @@ pub struct Compilation {
     pub jt_offsets: PrimaryMap<DefinedFuncIndex, ir::JumpTableOffsets>,
     pub dbg_image: Option<Vec<u8>>,
     pub traps: Traps,
+    pub address_transform: ModuleAddressMap,
 }
 
 impl Compiler {
@@ -220,6 +221,7 @@ impl Compiler {
             jt_offsets,
             dbg_image,
             traps,
+            address_transform,
         })
     }
 

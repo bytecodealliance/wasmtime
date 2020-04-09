@@ -3,7 +3,7 @@ use crate::FrameInfo;
 use backtrace::Backtrace;
 use std::fmt;
 use std::sync::Arc;
-use wasmtime_environ::ir::{SourceLoc, TrapCode};
+use wasmtime_environ::ir::TrapCode;
 
 /// A struct representing an aborted instruction execution, with a message
 /// indicating the cause.
@@ -31,7 +31,7 @@ impl Trap {
     /// ```
     pub fn new<I: Into<String>>(message: I) -> Self {
         let info = FRAME_INFO.read().unwrap();
-        Trap::new_with_trace(&info, message.into(), Backtrace::new_unresolved())
+        Trap::new_with_trace(&info, None, message.into(), Backtrace::new_unresolved())
     }
 
     pub(crate) fn from_jit(jit: wasmtime_runtime::Trap) -> Self {
@@ -51,27 +51,26 @@ impl Trap {
                     .expect("only `Trap` user errors are supported")
             }
             wasmtime_runtime::Trap::Jit { pc, backtrace } => {
-                let (code, loc) = info
+                let code = info
                     .lookup_trap_info(pc)
-                    .map(|info| (info.trap_code, info.source_loc))
-                    .unwrap_or((TrapCode::StackOverflow, SourceLoc::default()));
-                Trap::new_wasm(&info, code, loc, backtrace)
+                    .map(|info| info.trap_code)
+                    .unwrap_or(TrapCode::StackOverflow);
+                Trap::new_wasm(&info, Some(pc), code, backtrace)
             }
             wasmtime_runtime::Trap::Wasm {
                 trap_code,
-                source_loc,
                 backtrace,
-            } => Trap::new_wasm(&info, trap_code, source_loc, backtrace),
+            } => Trap::new_wasm(&info, None, trap_code, backtrace),
             wasmtime_runtime::Trap::OOM { backtrace } => {
-                Trap::new_with_trace(&info, "out of memory".to_string(), backtrace)
+                Trap::new_with_trace(&info, None, "out of memory".to_string(), backtrace)
             }
         }
     }
 
     fn new_wasm(
         info: &GlobalFrameInfo,
+        trap_pc: Option<usize>,
         code: TrapCode,
-        loc: SourceLoc,
         backtrace: Backtrace,
     ) -> Self {
         use wasmtime_environ::ir::TrapCode::*;
@@ -89,19 +88,34 @@ impl Trap {
             Interrupt => "interrupt",
             User(_) => unreachable!(),
         };
-        let msg = if loc != SourceLoc::default() {
-            format!("wasm trap: {}, source location: {}", desc, loc)
-        } else {
-            format!("wasm trap: {}", desc)
-        };
-        Trap::new_with_trace(info, msg, backtrace)
+        let msg = format!("wasm trap: {}", desc);
+        Trap::new_with_trace(info, trap_pc, msg, backtrace)
     }
 
-    fn new_with_trace(info: &GlobalFrameInfo, message: String, native_trace: Backtrace) -> Self {
+    fn new_with_trace(
+        info: &GlobalFrameInfo,
+        trap_pc: Option<usize>,
+        message: String,
+        native_trace: Backtrace,
+    ) -> Self {
         let mut wasm_trace = Vec::new();
         for frame in native_trace.frames() {
             let pc = frame.ip() as usize;
-            if let Some(info) = info.lookup_frame_info(pc) {
+            if pc == 0 {
+                continue;
+            }
+            // Note that we need to be careful about the pc we pass in here to
+            // lookup frame information. This program counter is used to
+            // translate back to an original source location in the origin wasm
+            // module. If this pc is the exact pc that the trap happened at,
+            // then we look up that pc precisely. Otherwise backtrace
+            // information typically points at the pc *after* the call
+            // instruction (because otherwise it's likely a call instruction on
+            // the stack). In that case we want to lookup information for the
+            // previous instruction (the call instruction) so we subtract one as
+            // the lookup.
+            let pc_to_lookup = if Some(pc) == trap_pc { pc } else { pc - 1 };
+            if let Some(info) = info.lookup_frame_info(pc_to_lookup) {
                 wasm_trace.push(info);
             }
         }
@@ -146,7 +160,7 @@ impl fmt::Display for Trap {
         writeln!(f, "\nwasm backtrace:")?;
         for (i, frame) in self.trace().iter().enumerate() {
             let name = frame.module_name().unwrap_or("<unknown>");
-            write!(f, "  {}: {}!", i, name)?;
+            write!(f, "  {}: {:#6x} - {}!", i, frame.module_offset(), name)?;
             match frame.func_name() {
                 Some(name) => match rustc_demangle::try_demangle(name) {
                     Ok(name) => write!(f, "{}", name)?,

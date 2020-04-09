@@ -328,8 +328,6 @@ pub enum Trap {
 
     /// A trap raised from a wasm libcall
     Wasm {
-        /// Where in the original source this trap should be from
-        source_loc: ir::SourceLoc,
         /// Code of the trap.
         trap_code: ir::TrapCode,
         /// Native stack backtrace at the time the trap occurred
@@ -347,10 +345,9 @@ impl Trap {
     /// Construct a new Wasm trap with the given source location and trap code.
     ///
     /// Internally saves a backtrace when constructed.
-    pub fn wasm(source_loc: ir::SourceLoc, trap_code: ir::TrapCode) -> Self {
-        let backtrace = Backtrace::new();
+    pub fn wasm(trap_code: ir::TrapCode) -> Self {
+        let backtrace = Backtrace::new_unresolved();
         Trap::Wasm {
-            source_loc,
             trap_code,
             backtrace,
         }
@@ -360,7 +357,7 @@ impl Trap {
     ///
     /// Internally saves a backtrace when constructed.
     pub fn oom() -> Self {
-        let backtrace = Backtrace::new();
+        let backtrace = Backtrace::new_unresolved();
         Trap::OOM { backtrace }
     }
 }

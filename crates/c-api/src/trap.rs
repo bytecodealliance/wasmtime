@@ -122,8 +122,9 @@ pub extern "C" fn wasmtime_frame_module_name(frame: &wasm_frame_t) -> Option<&wa
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_frame_func_offset(_arg1: *const wasm_frame_t) -> usize {
-    unimplemented!("wasm_frame_func_offset")
+pub extern "C" fn wasm_frame_func_offset(frame: &wasm_frame_t) -> usize {
+    let trap = frame.trap.borrow();
+    trap.trace()[frame.idx].func_offset()
 }
 
 #[no_mangle]
@@ -132,6 +133,7 @@ pub extern "C" fn wasm_frame_instance(_arg1: *const wasm_frame_t) -> *mut wasm_i
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_frame_module_offset(_arg1: *const wasm_frame_t) -> usize {
-    unimplemented!("wasm_frame_module_offset")
+pub extern "C" fn wasm_frame_module_offset(frame: &wasm_frame_t) -> usize {
+    let trap = frame.trap.borrow();
+    trap.trace()[frame.idx].module_offset()
 }
