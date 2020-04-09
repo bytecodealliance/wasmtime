@@ -2,7 +2,7 @@ use crate::trampoline::{generate_global_export, generate_memory_export, generate
 use crate::values::{from_checked_anyfunc, into_checked_anyfunc, Val};
 use crate::Mutability;
 use crate::{ExternType, GlobalType, MemoryType, TableType, ValType};
-use crate::{Func, Store};
+use crate::{Func, Store, Trap};
 use anyhow::{anyhow, bail, Result};
 use std::slice;
 use wasmtime_environ::{ir, wasm};
@@ -429,7 +429,8 @@ impl Table {
             src_index,
             len,
             ir::SourceLoc::default(),
-        )?;
+        )
+        .map_err(Trap::from_jit)?;
         Ok(())
     }
 

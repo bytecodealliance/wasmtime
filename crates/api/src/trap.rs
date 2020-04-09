@@ -1,8 +1,9 @@
-use crate::frame_info::FRAME_INFO;
+use crate::frame_info::{GlobalFrameInfo, FRAME_INFO};
 use crate::FrameInfo;
 use backtrace::Backtrace;
 use std::fmt;
 use std::sync::Arc;
+use wasmtime_environ::ir::{SourceLoc, TrapCode};
 
 /// A struct representing an aborted instruction execution, with a message
 /// indicating the cause.
@@ -29,10 +30,12 @@ impl Trap {
     /// assert_eq!("unexpected error", trap.message());
     /// ```
     pub fn new<I: Into<String>>(message: I) -> Self {
-        Trap::new_with_trace(message.into(), Backtrace::new_unresolved())
+        let info = FRAME_INFO.read().unwrap();
+        Trap::new_with_trace(&info, message.into(), Backtrace::new_unresolved())
     }
 
     pub(crate) fn from_jit(jit: wasmtime_runtime::Trap) -> Self {
+        let info = FRAME_INFO.read().unwrap();
         match jit {
             wasmtime_runtime::Trap::User(error) => {
                 // Since we're the only one using the wasmtime internals (in
@@ -47,20 +50,58 @@ impl Trap {
                     .downcast()
                     .expect("only `Trap` user errors are supported")
             }
-            wasmtime_runtime::Trap::Wasm { desc, backtrace } => {
-                Trap::new_with_trace(desc.to_string(), backtrace)
+            wasmtime_runtime::Trap::Jit { pc, backtrace } => {
+                let (code, loc) = info
+                    .lookup_trap_info(pc)
+                    .map(|info| (info.trap_code, info.source_loc))
+                    .unwrap_or((TrapCode::StackOverflow, SourceLoc::default()));
+                Trap::new_wasm(&info, code, loc, backtrace)
             }
+            wasmtime_runtime::Trap::Wasm {
+                trap_code,
+                source_loc,
+                backtrace,
+            } => Trap::new_wasm(&info, trap_code, source_loc, backtrace),
             wasmtime_runtime::Trap::OOM { backtrace } => {
-                Trap::new_with_trace("out of memory".to_string(), backtrace)
+                Trap::new_with_trace(&info, "out of memory".to_string(), backtrace)
             }
         }
     }
 
-    fn new_with_trace(message: String, native_trace: Backtrace) -> Self {
+    fn new_wasm(
+        info: &GlobalFrameInfo,
+        code: TrapCode,
+        loc: SourceLoc,
+        backtrace: Backtrace,
+    ) -> Self {
+        use wasmtime_environ::ir::TrapCode::*;
+        let desc = match code {
+            StackOverflow => "call stack exhausted",
+            HeapOutOfBounds => "out of bounds memory access",
+            TableOutOfBounds => "undefined element: out of bounds table access",
+            OutOfBounds => "out of bounds",
+            IndirectCallToNull => "uninitialized element",
+            BadSignature => "indirect call type mismatch",
+            IntegerOverflow => "integer overflow",
+            IntegerDivisionByZero => "integer divide by zero",
+            BadConversionToInteger => "invalid conversion to integer",
+            UnreachableCodeReached => "unreachable",
+            Interrupt => "interrupt",
+            User(_) => unreachable!(),
+        };
+        let msg = if loc != SourceLoc::default() {
+            format!("wasm trap: {}, source location: {}", desc, loc)
+        } else {
+            format!("wasm trap: {}", desc)
+        };
+        Trap::new_with_trace(info, msg, backtrace)
+    }
+
+    fn new_with_trace(info: &GlobalFrameInfo, message: String, native_trace: Backtrace) -> Self {
         let mut wasm_trace = Vec::new();
         for frame in native_trace.frames() {
             let pc = frame.ip() as usize;
-            if let Some(info) = FRAME_INFO.lookup(pc) {
+            if let Some(info) = info.lookup_frame_info(pc) {
                 wasm_trace.push(info);
             }
         }

@@ -16,12 +16,12 @@ use wasmtime_debug::read_debuginfo;
 use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
 use wasmtime_environ::{
-    CompileError, DataInitializer, DataInitializerLocation, Module, ModuleEnvironment,
+    CompileError, DataInitializer, DataInitializerLocation, Module, ModuleEnvironment, Traps,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{
     GdbJitImageRegistration, InstanceHandle, InstantiationError, RuntimeMemoryCreator,
-    SignatureRegistry, TrapRegistration, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
+    SignatureRegistry, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
 };
 
 /// An error condition while setting up a wasm instance, be it validation,
@@ -55,7 +55,7 @@ struct RawCompiledModule<'data> {
     data_initializers: Box<[DataInitializer<'data>]>,
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<GdbJitImageRegistration>,
-    trap_registration: TrapRegistration,
+    traps: Traps,
 }
 
 impl<'data> RawCompiledModule<'data> {
@@ -119,7 +119,7 @@ impl<'data> RawCompiledModule<'data> {
             data_initializers: translation.data_initializers.into_boxed_slice(),
             signatures: signatures.into_boxed_slice(),
             dbg_jit_registration,
-            trap_registration: compilation.trap_registration,
+            traps: compilation.traps,
         })
     }
 }
@@ -132,7 +132,7 @@ pub struct CompiledModule {
     data_initializers: Box<[OwnedDataInitializer]>,
     signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
-    trap_registration: TrapRegistration,
+    traps: Traps,
 }
 
 impl CompiledModule {
@@ -155,7 +155,7 @@ impl CompiledModule {
                 .into_boxed_slice(),
             raw.signatures.clone(),
             raw.dbg_jit_registration,
-            raw.trap_registration,
+            raw.traps,
         ))
     }
 
@@ -167,7 +167,7 @@ impl CompiledModule {
         data_initializers: Box<[OwnedDataInitializer]>,
         signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         dbg_jit_registration: Option<GdbJitImageRegistration>,
-        trap_registration: TrapRegistration,
+        traps: Traps,
     ) -> Self {
         Self {
             module: Arc::new(module),
@@ -176,7 +176,7 @@ impl CompiledModule {
             data_initializers,
             signatures,
             dbg_jit_registration: dbg_jit_registration.map(Rc::new),
-            trap_registration,
+            traps,
         }
     }
 
@@ -207,7 +207,6 @@ impl CompiledModule {
         let imports = resolve_imports(&self.module, &sig_registry, resolver)?;
         InstanceHandle::new(
             Arc::clone(&self.module),
-            self.trap_registration.clone(),
             self.finished_functions.clone(),
             self.trampolines.clone(),
             imports,
@@ -238,6 +237,11 @@ impl CompiledModule {
     /// Returns the map of all finished JIT functions compiled for this module
     pub fn finished_functions(&self) -> &BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]> {
         &self.finished_functions
+    }
+
+    /// Returns the map of all finished JIT functions compiled for this module
+    pub fn traps(&self) -> &Traps {
+        &self.traps
     }
 }
 
