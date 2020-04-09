@@ -21,11 +21,11 @@ use crate::ir::{
     FrameLayoutChange, InstBuilder, ValueLoc,
 };
 use crate::isa::{CallConv, RegClass, RegUnit, TargetIsa};
-use alloc::vec::Vec;
 use crate::regalloc::RegisterSet;
 use crate::result::CodegenResult;
 use crate::stack_layout::layout_stack;
 use alloc::borrow::Cow;
+use alloc::vec::Vec;
 use core::i32;
 use std::boxed::Box;
 use target_lexicon::{PointerWidth, Triple};

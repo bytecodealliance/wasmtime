@@ -4,7 +4,7 @@
 use crate::cache::ModuleCacheDataTupleType;
 use crate::CacheConfig;
 use crate::ModuleTranslation;
-use cranelift_codegen::{binemit, ir, isa, Context, CodegenResult};
+use cranelift_codegen::{binemit, ir, isa, CodegenResult, Context};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError};
 use serde::{Deserialize, Serialize};

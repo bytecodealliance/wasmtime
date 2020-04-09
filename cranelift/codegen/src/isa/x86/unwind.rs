@@ -474,7 +474,10 @@ mod tests {
 
         context.compile(&*isa).expect("expected compilation");
 
-        assert_eq!(UnwindInfo::try_from_func(&context.func, &*isa, None).expect("can emit unwind info"), None);
+        assert_eq!(
+            UnwindInfo::try_from_func(&context.func, &*isa, None).expect("can emit unwind info"),
+            None
+        );
     }
 
     #[test]
