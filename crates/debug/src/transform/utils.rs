@@ -6,6 +6,13 @@ use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::{ModuleMemoryOffset, ModuleVmctxInfo, ValueLabelsRanges};
 
+/// Adds internal Wasm utility types DIEs such as WebAssemblyPtr and
+/// WasmtimeVMContext.
+///
+/// For unwrapping Wasm pointer, the WasmtimeVMContext has the `set()` method
+/// that allows to contol current Wasm memory to inspect.
+/// Notice that "set_vmctx_memory" is an external/builtin subprogram that
+/// is not part of Wasm code.
 pub(crate) fn add_internal_types(
     comp_unit: &mut write::Unit,
     root_id: write::UnitEntryId,
