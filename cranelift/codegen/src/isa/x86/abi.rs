@@ -21,6 +21,7 @@ use crate::ir::{
     FrameLayoutChange, InstBuilder, ValueLoc,
 };
 use crate::isa::{CallConv, RegClass, RegUnit, TargetIsa};
+use alloc::vec::Vec;
 use crate::regalloc::RegisterSet;
 use crate::result::CodegenResult;
 use crate::stack_layout::layout_stack;
@@ -1014,7 +1015,7 @@ fn insert_common_epilogue(
 
     // Even though instructions to restore FPRs are inserted first, we have to append them after
     // restored GPRs to satisfy parameter order in the return.
-    let mut restored_fpr_values = alloc::vec::Vec::new();
+    let mut restored_fpr_values = Vec::new();
 
     // Restore FPRs before we move RSP and invalidate stack slots.
     if let Some(fpr_slot) = fpr_slot {
@@ -1149,12 +1150,12 @@ pub fn emit_unwind_info(
     isa: &dyn TargetIsa,
     kind: FrameUnwindKind,
     sink: &mut dyn FrameUnwindSink,
-) {
+) -> CodegenResult<()> {
     match kind {
         FrameUnwindKind::Fastcall => {
             // Assumption: RBP is being used as the frame pointer
             // In the future, Windows fastcall codegen should usually omit the frame pointer
-            if let Some(info) = UnwindInfo::try_from_func(func, isa, Some(RU::rbp.into())) {
+            if let Some(info) = UnwindInfo::try_from_func(func, isa, Some(RU::rbp.into()))? {
                 info.emit(sink);
             }
         }
@@ -1164,4 +1165,6 @@ pub fn emit_unwind_info(
             }
         }
     }
+
+    Ok(())
 }

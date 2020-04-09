@@ -4,8 +4,10 @@ use super::registers::{FPR, GPR, RU};
 use crate::binemit::FrameUnwindSink;
 use crate::ir::{Function, InstructionData, Opcode, ValueLoc};
 use crate::isa::{CallConv, RegUnit, TargetIsa};
+use crate::result::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use byteorder::{ByteOrder, LittleEndian};
+use log::warn;
 
 /// Maximum (inclusive) size of a "small" stack allocation
 const SMALL_ALLOC_MAX_SIZE: u32 = 128;
@@ -166,10 +168,10 @@ impl UnwindInfo {
         func: &Function,
         isa: &dyn TargetIsa,
         frame_register: Option<RegUnit>,
-    ) -> Option<Self> {
+    ) -> CodegenResult<Option<Self>> {
         // Only Windows fastcall is supported for unwind information
         if func.signature.call_conv != CallConv::WindowsFastcall || func.prologue_end.is_none() {
-            return None;
+            return Ok(None);
         }
 
         let prologue_end = func.prologue_end.unwrap();
@@ -200,7 +202,8 @@ impl UnwindInfo {
         for (offset, inst, size) in func.inst_offsets(entry_block, &isa.encoding_info()) {
             // x64 ABI prologues cannot exceed 255 bytes in length
             if (offset + size) > 255 {
-                panic!("function prologues cannot exceed 255 bytes in size for Windows x64");
+                warn!("function prologues cannot exceed 255 bytes in size for Windows x64");
+                return Err(CodegenError::CodeTooLarge);
             }
 
             prologue_size += size;
@@ -333,15 +336,16 @@ impl UnwindInfo {
         }
 
         if !found_end {
-            return None;
+            return Ok(None);
         }
 
         if saved_fpr {
             if static_frame_allocation_size > 240 && saved_fpr {
-                panic!("stack frame is too large ({} bytes) to use with Windows x64 SEH when preserving FPRs. \
+                warn!("stack frame is too large ({} bytes) to use with Windows x64 SEH when preserving FPRs. \
                     This is a Cranelift implementation limit, see \
                     https://github.com/bytecodealliance/wasmtime/issues/1475",
                     static_frame_allocation_size);
+                return Err(CodegenError::ImplLimitExceeded);
             }
             // Only test static frame size is 16-byte aligned when an FPR is saved to avoid
             // panicking when alignment is elided because no FPRs are saved and no child calls are
@@ -365,13 +369,13 @@ impl UnwindInfo {
             0
         };
 
-        Some(Self {
+        Ok(Some(Self {
             flags: 0, // this assumes cranelift functions have no SEH handlers
             prologue_size: prologue_size as u8,
             frame_register,
             frame_register_offset: reported_frame_offset,
             unwind_codes,
-        })
+        }))
     }
 
     pub fn size(&self) -> usize {
@@ -470,7 +474,7 @@ mod tests {
 
         context.compile(&*isa).expect("expected compilation");
 
-        assert_eq!(UnwindInfo::try_from_func(&context.func, &*isa, None), None);
+        assert_eq!(UnwindInfo::try_from_func(&context.func, &*isa, None).expect("can emit unwind info"), None);
     }
 
     #[test]
@@ -487,6 +491,7 @@ mod tests {
         context.compile(&*isa).expect("expected compilation");
 
         let unwind = UnwindInfo::try_from_func(&context.func, &*isa, Some(RU::rbp.into()))
+            .expect("can emit unwind info")
             .expect("expected unwind info");
 
         assert_eq!(
@@ -551,6 +556,7 @@ mod tests {
         context.compile(&*isa).expect("expected compilation");
 
         let unwind = UnwindInfo::try_from_func(&context.func, &*isa, Some(RU::rbp.into()))
+            .expect("can emit unwind info")
             .expect("expected unwind info");
 
         assert_eq!(
@@ -615,6 +621,7 @@ mod tests {
         context.compile(&*isa).expect("expected compilation");
 
         let unwind = UnwindInfo::try_from_func(&context.func, &*isa, Some(RU::rbp.into()))
+            .expect("can emit unwind info")
             .expect("expected unwind info");
 
         assert_eq!(

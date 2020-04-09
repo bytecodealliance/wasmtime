@@ -59,7 +59,7 @@ impl SubTest for TestUnwind {
         }
 
         let mut sink = Sink(Vec::new());
-        comp_ctx.emit_unwind_info(isa, FrameUnwindKind::Fastcall, &mut sink);
+        comp_ctx.emit_unwind_info(isa, FrameUnwindKind::Fastcall, &mut sink).expect("can emit unwind info");
 
         let mut text = String::new();
         if sink.0.is_empty() {

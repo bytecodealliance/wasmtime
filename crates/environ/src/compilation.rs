@@ -80,7 +80,7 @@ impl CompiledFunctionUnwindInfo {
         };
 
         let mut sink = Sink(Vec::new(), 0, Vec::new());
-        context.emit_unwind_info(isa, kind, &mut sink);
+        context.emit_unwind_info(isa, kind, &mut sink).expect("can emit unwind info");;
 
         let Sink(data, offset, relocs) = sink;
         if data.is_empty() {
