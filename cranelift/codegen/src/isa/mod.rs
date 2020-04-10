@@ -399,8 +399,8 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         _kind: binemit::FrameUnwindKind,
         _sink: &mut dyn binemit::FrameUnwindSink,
     ) -> CodegenResult<()> {
-        Ok(())
         // No-op by default
+        Ok(())
     }
 }
 
