@@ -118,6 +118,53 @@ block0:
 ; nextln:     ],
 ; nextln: }
 
+function %fpr_with_function_call(i64, i64) windows_fastcall {
+    fn0 = %foo(f64, f64, i64, i64, i64) windows_fastcall;
+block0(v0: i64, v1: i64):
+    v2 = load.f64 v0+0
+    v3 = load.f64 v0+8
+    v4 = load.i64 v0+16
+    v15 = load.f64 v0+104
+    v16 = load.f64 v0+112
+    v17 = load.f64 v0+120
+    v18 = load.f64 v0+128
+    v19 = load.f64 v0+136
+    v20 = load.f64 v0+144
+    v21 = load.f64 v0+152
+    v22 = load.f64 v0+160
+    v23 = load.f64 v0+168
+    call fn0(v2, v3, v4, v1, v1)
+    store.f64 v15, v1+104
+    store.f64 v16, v1+112
+    store.f64 v17, v1+120
+    store.f64 v18, v1+128
+    store.f64 v19, v1+136
+    store.f64 v20, v1+144
+    store.f64 v21, v1+152
+    store.f64 v22, v1+160
+    store.f64 v23, v1+168
+    return
+}
+; Only check the first unwind code here because this test specifically looks to
+; see that in a function that is not a leaf, a callee-save FPR is stored in an
+; area that does not overlap either the callee's shadow space or stack argument
+; space.
+;
+; sameln: UnwindInfo {
+; nextln:     version: 1,
+; nextln:     flags: 0,
+; nextln:     prologue_size: 26,
+; nextln:     unwind_code_count_raw: 7,
+; nextln:     frame_register: 5,
+; nextln:     frame_register_offset: 12,
+; nextln:     unwind_codes: [
+; nextln:       UnwindCode {
+; nextln:         offset: 26,
+; nextln:         op: SaveXmm128,
+; nextln:         info: 15,
+; nextln:         value: U16(
+; nextln:             3,
+
 ; check a function that has CSRs
 function %lots_of_registers(i64, i64) windows_fastcall {
 block0(v0: i64, v1: i64):
@@ -134,6 +181,15 @@ block0(v0: i64, v1: i64):
     v12 = load.i32 v0+80
     v13 = load.i32 v0+88
     v14 = load.i32 v0+96
+    v15 = load.f64 v0+104
+    v16 = load.f64 v0+112
+    v17 = load.f64 v0+120
+    v18 = load.f64 v0+128
+    v19 = load.f64 v0+136
+    v20 = load.f64 v0+144
+    v21 = load.f64 v0+152
+    v22 = load.f64 v0+160
+    v23 = load.f64 v0+168
     store.i32 v2, v1+0
     store.i32 v3, v1+8
     store.i32 v4, v1+16
@@ -147,20 +203,53 @@ block0(v0: i64, v1: i64):
     store.i32 v12, v1+80
     store.i32 v13, v1+88
     store.i32 v14, v1+96
+    store.f64 v15, v1+104
+    store.f64 v16, v1+112
+    store.f64 v17, v1+120
+    store.f64 v18, v1+128
+    store.f64 v19, v1+136
+    store.f64 v20, v1+144
+    store.f64 v21, v1+152
+    store.f64 v22, v1+160
+    store.f64 v23, v1+168
     return
 }
 ; sameln: UnwindInfo {
 ; nextln:     version: 1,
 ; nextln:     flags: 0,
-; nextln:     prologue_size: 19,
-; nextln:     unwind_code_count_raw: 10,
+; nextln:     prologue_size: 44,
+; nextln:     unwind_code_count_raw: 16,
 ; nextln:     frame_register: 5,
-; nextln:     frame_register_offset: 0,
+; nextln:     frame_register_offset: 10,
 ; nextln:     unwind_codes: [
+; nextln:         UnwindCode {
+; nextln:             offset: 44,
+; nextln:             op: SaveXmm128,
+; nextln:             info: 8,
+; nextln:             value: U16(
+; nextln:                 2,
+; nextln:             ),
+; nextln:           },
+; nextln:         UnwindCode {
+; nextln:             offset: 38,
+; nextln:             op: SaveXmm128,
+; nextln:             info: 7,
+; nextln:             value: U16(
+; nextln:                 1,
+; nextln:             ),
+; nextln:         },
+; nextln:         UnwindCode {
+; nextln:             offset: 32,
+; nextln:             op: SaveXmm128,
+; nextln:             info: 6,
+; nextln:             value: U16(
+; nextln:                 0,
+; nextln:             ),
+; nextln:         },
 ; nextln:         UnwindCode {
 ; nextln:             offset: 19,
 ; nextln:             op: SmallStackAlloc,
-; nextln:             info: 3,
+; nextln:             info: 12,
 ; nextln:             value: None,
 ; nextln:         },
 ; nextln:         UnwindCode {

@@ -12,8 +12,10 @@ use crate::abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
 use crate::binemit::{FrameUnwindKind, FrameUnwindSink};
 use crate::cursor::{Cursor, CursorPosition, EncCursor};
 use crate::ir;
+use crate::ir::entities::StackSlot;
 use crate::ir::immediates::Imm64;
 use crate::ir::stackslot::{StackOffset, StackSize};
+use crate::ir::types;
 use crate::ir::{
     get_probestack_funcref, AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose,
     FrameLayoutChange, InstBuilder, ValueLoc,
@@ -23,6 +25,7 @@ use crate::regalloc::RegisterSet;
 use crate::result::CodegenResult;
 use crate::stack_layout::layout_stack;
 use alloc::borrow::Cow;
+use alloc::vec::Vec;
 use core::i32;
 use std::boxed::Box;
 use target_lexicon::{PointerWidth, Triple};
@@ -366,17 +369,18 @@ pub fn allocatable_registers(triple: &Triple, flags: &shared_settings::Flags) ->
     regs
 }
 
-/// Get the set of callee-saved registers.
+/// Get the set of callee-saved general-purpose registers.
 fn callee_saved_gprs(isa: &dyn TargetIsa, call_conv: CallConv) -> &'static [RU] {
     match isa.triple().pointer_width().unwrap() {
         PointerWidth::U16 => panic!(),
         PointerWidth::U32 => &[RU::rbx, RU::rsi, RU::rdi],
         PointerWidth::U64 => {
             if call_conv.extends_windows_fastcall() {
-                // "registers RBX, RBP, RDI, RSI, RSP, R12, R13, R14, R15 are considered nonvolatile
-                //  and must be saved and restored by a function that uses them."
+                // "registers RBX, RBP, RDI, RSI, RSP, R12, R13, R14, R15, and XMM6-15 are
+                // considered nonvolatile and must be saved and restored by a function that uses
+                //  them."
                 // as per https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention
-                // RSP & RSB are not listed below, since they are restored automatically during
+                // RSP & RBP are not listed below, since they are restored automatically during
                 // a function call. If that wasn't the case, function calls (RET) would not work.
                 &[
                     RU::rbx,
@@ -394,11 +398,44 @@ fn callee_saved_gprs(isa: &dyn TargetIsa, call_conv: CallConv) -> &'static [RU] 
     }
 }
 
+/// Get the set of callee-saved floating-point (SIMD) registers.
+fn callee_saved_fprs(isa: &dyn TargetIsa, call_conv: CallConv) -> &'static [RU] {
+    match isa.triple().pointer_width().unwrap() {
+        PointerWidth::U16 => panic!(),
+        PointerWidth::U32 => &[],
+        PointerWidth::U64 => {
+            if call_conv.extends_windows_fastcall() {
+                // "registers RBX, ... , and XMM6-15 are considered nonvolatile and must be saved
+                //  and restored by a function that uses them."
+                // as per https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention as of
+                // February 5th, 2020.
+                &[
+                    RU::xmm6,
+                    RU::xmm7,
+                    RU::xmm8,
+                    RU::xmm9,
+                    RU::xmm10,
+                    RU::xmm11,
+                    RU::xmm12,
+                    RU::xmm13,
+                    RU::xmm14,
+                    RU::xmm15,
+                ]
+            } else {
+                &[]
+            }
+        }
+    }
+}
+
 /// Get the set of callee-saved registers that are used.
-fn callee_saved_gprs_used(isa: &dyn TargetIsa, func: &ir::Function) -> RegisterSet {
+fn callee_saved_regs_used(isa: &dyn TargetIsa, func: &ir::Function) -> RegisterSet {
     let mut all_callee_saved = RegisterSet::empty();
     for reg in callee_saved_gprs(isa, func.signature.call_conv) {
         all_callee_saved.free(GPR, *reg as RegUnit);
+    }
+    for reg in callee_saved_fprs(isa, func.signature.call_conv) {
+        all_callee_saved.free(FPR, *reg as RegUnit);
     }
 
     let mut used = RegisterSet::empty();
@@ -407,8 +444,14 @@ fn callee_saved_gprs_used(isa: &dyn TargetIsa, func: &ir::Function) -> RegisterS
         // register. We don't use registers that overlap each other in the x86 ISA, but in others
         // we do. So this should not be blindly reused.
         if let ValueLoc::Reg(ru) = *value_loc {
-            if !used.is_avail(GPR, ru) {
-                used.free(GPR, ru);
+            if GPR.contains(ru) {
+                if !used.is_avail(GPR, ru) {
+                    used.free(GPR, ru);
+                }
+            } else if FPR.contains(ru) {
+                if !used.is_avail(FPR, ru) {
+                    used.free(FPR, ru);
+                }
             }
         }
     }
@@ -424,8 +467,14 @@ fn callee_saved_gprs_used(isa: &dyn TargetIsa, func: &ir::Function) -> RegisterS
             match func.dfg[inst] {
                 ir::instructions::InstructionData::RegMove { dst, .. }
                 | ir::instructions::InstructionData::RegFill { dst, .. } => {
-                    if !used.is_avail(GPR, dst) {
-                        used.free(GPR, dst);
+                    if GPR.contains(dst) {
+                        if !used.is_avail(GPR, dst) {
+                            used.free(GPR, dst);
+                        }
+                    } else if FPR.contains(dst) {
+                        if !used.is_avail(FPR, dst) {
+                            used.free(FPR, dst);
+                        }
                     }
                 }
                 _ => (),
@@ -509,7 +558,7 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
         panic!("TODO: windows-fastcall: x86-32 not implemented yet");
     }
 
-    let csrs = callee_saved_gprs_used(isa, func);
+    let csrs = callee_saved_regs_used(isa, func);
 
     // The reserved stack area is composed of:
     //   return address + frame pointer + all callee-saved registers + shadow space
@@ -519,11 +568,28 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     // will adjust the stack pointer to make room for the rest of the required
     // space for this frame.
     let word_size = isa.pointer_bytes() as usize;
+    let num_fprs = csrs.iter(FPR).len();
     let csr_stack_size = ((csrs.iter(GPR).len() + 2) * word_size) as i32;
+
+    // Only create an FPR stack slot if we're going to save FPRs.
+    let fpr_slot = if num_fprs > 0 {
+        // Create a stack slot for FPRs to be preserved in. This is an `ExplicitSlot` because it
+        // seems to most closely map to it as a `StackSlotKind`: FPR preserve/restore should be
+        // through `stack_load` and `stack_store` (see later comment about issue #1198). Even
+        // though in a certain light FPR preserve/restore is "spilling" an argument, regalloc
+        // implies that `SpillSlot` may be eligible for certain optimizations, and we know with
+        // certainty that this space may not be reused in the function, nor moved around.
+        Some(func.create_stack_slot(ir::StackSlotData {
+            kind: ir::StackSlotKind::ExplicitSlot,
+            size: (num_fprs * types::F64X2.bytes() as usize) as u32,
+            offset: None,
+        }))
+    } else {
+        None
+    };
 
     // TODO: eventually use the 32 bytes (shadow store) as spill slot. This currently doesn't work
     //       since cranelift does not support spill slots before incoming args
-
     func.create_stack_slot(ir::StackSlotData {
         kind: ir::StackSlotKind::IncomingArg,
         size: csr_stack_size as u32,
@@ -544,8 +610,22 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     func.signature.params.push(fp_arg);
     func.signature.returns.push(fp_arg);
 
-    for csr in csrs.iter(GPR) {
-        let csr_arg = ir::AbiParam::special_reg(reg_type, ir::ArgumentPurpose::CalleeSaved, csr);
+    for gp_csr in csrs.iter(GPR) {
+        let csr_arg = ir::AbiParam::special_reg(reg_type, ir::ArgumentPurpose::CalleeSaved, gp_csr);
+        func.signature.params.push(csr_arg);
+        func.signature.returns.push(csr_arg);
+    }
+
+    for fp_csr in csrs.iter(FPR) {
+        // The calling convention described in
+        // https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention only requires
+        // preserving the low 128 bits of XMM6-XMM15.
+        //
+        // TODO: For now, add just an `F64` rather than `F64X2` because `F64X2` would require
+        // encoding a fstDisp8 with REX bits set, and we currently can't encode that. F64 causes a
+        // whole XMM register to be preserved anyway.
+        let csr_arg =
+            ir::AbiParam::special_reg(types::F64, ir::ArgumentPurpose::CalleeSaved, fp_csr);
         func.signature.params.push(csr_arg);
         func.signature.returns.push(csr_arg);
     }
@@ -553,8 +633,14 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     // Set up the cursor and insert the prologue
     let entry_block = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_block);
-    let prologue_cfa_state =
-        insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, isa);
+    let prologue_cfa_state = insert_common_prologue(
+        &mut pos,
+        local_stack_size,
+        reg_type,
+        &csrs,
+        fpr_slot.as_ref(),
+        isa,
+    );
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
@@ -563,6 +649,7 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
         local_stack_size,
         reg_type,
         &csrs,
+        fpr_slot.as_ref(),
         isa,
         prologue_cfa_state,
     );
@@ -575,7 +662,11 @@ fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     let pointer_width = isa.triple().pointer_width().unwrap();
     let word_size = pointer_width.bytes() as usize;
 
-    let csrs = callee_saved_gprs_used(isa, func);
+    let csrs = callee_saved_regs_used(isa, func);
+    assert!(
+        csrs.iter(FPR).len() == 0,
+        "SysV ABI does not have callee-save SIMD registers"
+    );
 
     // The reserved stack area is composed of:
     //   return address + frame pointer + all callee-saved registers
@@ -615,7 +706,7 @@ fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     let entry_block = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_block);
     let prologue_cfa_state =
-        insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, isa);
+        insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, None, isa);
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
@@ -624,6 +715,7 @@ fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
         local_stack_size,
         reg_type,
         &csrs,
+        None,
         isa,
         prologue_cfa_state,
     );
@@ -638,6 +730,7 @@ fn insert_common_prologue(
     stack_size: i64,
     reg_type: ir::types::Type,
     csrs: &RegisterSet,
+    fpr_slot: Option<&StackSlot>,
     isa: &dyn TargetIsa,
 ) -> Option<CFAState> {
     let word_size = isa.pointer_bytes() as isize;
@@ -648,8 +741,11 @@ fn insert_common_prologue(
             // pushed CSRs, frame pointer.
             // Also, the size of a return address, implicitly pushed by a x86 `call` instruction,
             // also should be accounted for.
+            // If any FPR are present, count them as well as necessary alignment space.
             // TODO: Check if the function body actually contains a `call` instruction.
-            let total_stack_size = (csrs.iter(GPR).len() + 1 + 1) as i64 * word_size as i64;
+            let mut total_stack_size = (csrs.iter(GPR).len() + 1 + 1) as i64 * word_size as i64;
+
+            total_stack_size += csrs.iter(FPR).len() as i64 * types::F64X2.bytes() as i64;
 
             insert_stack_check(pos, total_stack_size, stack_limit_arg);
         }
@@ -796,6 +892,55 @@ fn insert_common_prologue(
         }
     }
 
+    // Now that RSP is prepared for the function, we can use stack slots:
+    if let Some(fpr_slot) = fpr_slot {
+        debug_assert!(csrs.iter(FPR).len() != 0);
+
+        // `stack_store` is not directly encodable in x86_64 at the moment, so we'll need a base
+        // address. We are well after postopt could run, so load the CSR region base once here,
+        // instead of hoping that the addr/store will be combined later.
+        // See also: https://github.com/bytecodealliance/wasmtime/pull/1198
+        let stack_addr = pos.ins().stack_addr(types::I64, *fpr_slot, 0);
+
+        // Use r11 as fastcall allows it to be clobbered, and it won't have a meaningful value at
+        // function entry.
+        pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::r11 as u16);
+
+        let mut fpr_offset = 0;
+
+        for reg in csrs.iter(FPR) {
+            // Append param to entry Block
+            let csr_arg = pos.func.dfg.append_block_param(block, types::F64);
+
+            // Since regalloc has already run, we must assign a location.
+            pos.func.locations[csr_arg] = ir::ValueLoc::Reg(reg);
+
+            let reg_store_inst =
+                pos.ins()
+                    .store(ir::MemFlags::trusted(), csr_arg, stack_addr, fpr_offset);
+
+            // If we preserve FPRs, they occur after SP is adjusted, so also fix up the end point
+            // to this new instruction.
+            pos.func.prologue_end = Some(reg_store_inst);
+            fpr_offset += types::F64X2.bytes() as i32;
+
+            if let Some(ref mut frame_layout) = pos.func.frame_layout {
+                let mut cfa_state = cfa_state
+                    .as_mut()
+                    .expect("cfa state exists when recording frame layout");
+                cfa_state.current_depth -= types::F64X2.bytes() as isize;
+                frame_layout.instructions.insert(
+                    reg_store_inst,
+                    vec![FrameLayoutChange::RegAt {
+                        reg,
+                        cfa_offset: cfa_state.current_depth,
+                    }]
+                    .into_boxed_slice(),
+                );
+            }
+        }
+    }
+
     cfa_state
 }
 
@@ -828,6 +973,7 @@ fn insert_common_epilogues(
     stack_size: i64,
     reg_type: ir::types::Type,
     csrs: &RegisterSet,
+    fpr_slot: Option<&StackSlot>,
     isa: &dyn TargetIsa,
     cfa_state: Option<CFAState>,
 ) {
@@ -842,6 +988,7 @@ fn insert_common_epilogues(
                     pos,
                     reg_type,
                     csrs,
+                    fpr_slot,
                     isa,
                     is_last,
                     cfa_state.clone(),
@@ -859,11 +1006,57 @@ fn insert_common_epilogue(
     pos: &mut EncCursor,
     reg_type: ir::types::Type,
     csrs: &RegisterSet,
+    fpr_slot: Option<&StackSlot>,
     isa: &dyn TargetIsa,
     is_last: bool,
     mut cfa_state: Option<CFAState>,
 ) {
     let word_size = isa.pointer_bytes() as isize;
+
+    // Even though instructions to restore FPRs are inserted first, we have to append them after
+    // restored GPRs to satisfy parameter order in the return.
+    let mut restored_fpr_values = Vec::new();
+
+    // Restore FPRs before we move RSP and invalidate stack slots.
+    if let Some(fpr_slot) = fpr_slot {
+        debug_assert!(csrs.iter(FPR).len() != 0);
+
+        // `stack_load` is not directly encodable in x86_64 at the moment, so we'll need a base
+        // address. We are well after postopt could run, so load the CSR region base once here,
+        // instead of hoping that the addr/store will be combined later.
+        //
+        // See also: https://github.com/bytecodealliance/wasmtime/pull/1198
+        let stack_addr = pos.ins().stack_addr(types::I64, *fpr_slot, 0);
+
+        // Use r11 as fastcall allows it to be clobbered, and it won't have a meaningful value at
+        // function exit.
+        pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::r11 as u16);
+
+        let mut fpr_offset = 0;
+
+        for reg in csrs.iter(FPR) {
+            let value = pos
+                .ins()
+                .load(types::F64, ir::MemFlags::trusted(), stack_addr, fpr_offset);
+            fpr_offset += types::F64X2.bytes() as i32;
+
+            if let Some(ref mut cfa_state) = cfa_state.as_mut() {
+                // Note: don't bother recording a frame layout change because the popped value is
+                // still correct in memory, and won't be overwritten until we've returned where the
+                // current frame's layout would no longer matter. Only adjust `current_depth` for a
+                // consistency check later.
+                cfa_state.current_depth += types::F64X2.bytes() as isize;
+            }
+            // Unlike GPRs before, we don't need to step back after reach restoration because FPR
+            // restoration is order-insensitive. Furthermore: we want GPR restoration to begin
+            // after FPR restoration, so that stack adjustments occur after we're done relying on
+            // StackSlot validity.
+
+            pos.func.locations[value] = ir::ValueLoc::Reg(reg);
+            restored_fpr_values.push(value);
+        }
+    }
+
     if stack_size > 0 {
         pos.ins().adjust_sp_up_imm(Imm64::new(stack_size));
     }
@@ -901,6 +1094,10 @@ fn insert_common_epilogue(
 
         pos.func.locations[csr_ret] = ir::ValueLoc::Reg(reg);
         pos.func.dfg.append_inst_arg(inst, csr_ret);
+    }
+
+    for value in restored_fpr_values.into_iter() {
+        pos.func.dfg.append_inst_arg(inst, value);
     }
 
     if let Some(ref mut frame_layout) = pos.func.frame_layout {
@@ -953,19 +1150,21 @@ pub fn emit_unwind_info(
     isa: &dyn TargetIsa,
     kind: FrameUnwindKind,
     sink: &mut dyn FrameUnwindSink,
-) {
+) -> CodegenResult<()> {
     match kind {
         FrameUnwindKind::Fastcall => {
             // Assumption: RBP is being used as the frame pointer
             // In the future, Windows fastcall codegen should usually omit the frame pointer
-            if let Some(info) = UnwindInfo::try_from_func(func, isa, Some(RU::rbp.into())) {
+            if let Some(info) = UnwindInfo::try_from_func(func, isa, Some(RU::rbp.into()))? {
                 info.emit(sink);
             }
         }
         FrameUnwindKind::Libunwind => {
             if func.frame_layout.is_some() {
-                emit_fde(func, isa, sink);
+                emit_fde(func, isa, sink)?;
             }
         }
     }
+
+    Ok(())
 }

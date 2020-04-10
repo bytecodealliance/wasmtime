@@ -355,7 +355,13 @@ pub fn make_trampoline(
             )))
         })?;
 
-    let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context);
+    let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context).map_err(|error| {
+        SetupError::Compile(CompileError::Codegen(pretty_error(
+            &context.func,
+            Some(isa),
+            error,
+        )))
+    })?;
 
     let ptr = code_memory
         .allocate_for_function(&CompiledFunction {

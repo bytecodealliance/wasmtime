@@ -264,7 +264,9 @@ fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError
                     CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
                 })?;
 
-            let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context);
+            let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context).map_err(|error| {
+                CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
+            })?;
 
             let address_transform = if env.tunables.debug_info {
                 let body_len = code_buf.len();

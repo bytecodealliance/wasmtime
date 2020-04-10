@@ -4,6 +4,7 @@ use crate::binemit::{FrameUnwindOffset, FrameUnwindSink, Reloc};
 use crate::ir::{FrameLayoutChange, Function};
 use crate::isa::fde::RegisterMappingError;
 use crate::isa::{CallConv, RegUnit, TargetIsa};
+use crate::result::CodegenResult;
 use alloc::vec::Vec;
 use core::convert::TryInto;
 use gimli::write::{
@@ -178,7 +179,11 @@ fn to_cfi(
 }
 
 /// Creates FDE structure from FrameLayout.
-pub fn emit_fde(func: &Function, isa: &dyn TargetIsa, sink: &mut dyn FrameUnwindSink) {
+pub fn emit_fde(
+    func: &Function,
+    isa: &dyn TargetIsa,
+    sink: &mut dyn FrameUnwindSink,
+) -> CodegenResult<()> {
     assert!(isa.name() == "x86");
 
     // Expecting function with System V prologue
@@ -266,6 +271,8 @@ pub fn emit_fde(func: &Function, isa: &dyn TargetIsa, sink: &mut dyn FrameUnwind
 
     // Need 0 marker for GCC unwind to end FDE "list".
     sink.bytes(&[0, 0, 0, 0]);
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -314,7 +321,7 @@ mod tests {
         context.compile(&*isa).expect("expected compilation");
 
         let mut sink = SimpleUnwindSink(Vec::new(), 0, Vec::new());
-        emit_fde(&context.func, &*isa, &mut sink);
+        emit_fde(&context.func, &*isa, &mut sink).expect("can emit fde");
 
         assert_eq!(
             sink.0,
@@ -376,7 +383,7 @@ mod tests {
         context.compile(&*isa).expect("expected compilation");
 
         let mut sink = SimpleUnwindSink(Vec::new(), 0, Vec::new());
-        emit_fde(&context.func, &*isa, &mut sink);
+        emit_fde(&context.func, &*isa, &mut sink).expect("can emit fde");
 
         assert_eq!(
             sink.0,

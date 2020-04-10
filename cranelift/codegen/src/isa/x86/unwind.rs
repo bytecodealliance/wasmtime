@@ -1,11 +1,13 @@
 //! Unwind information for x64 Windows.
 
-use super::registers::{GPR, RU};
+use super::registers::{FPR, GPR, RU};
 use crate::binemit::FrameUnwindSink;
-use crate::ir::{Function, InstructionData, Opcode};
+use crate::ir::{Function, InstructionData, Opcode, ValueLoc};
 use crate::isa::{CallConv, RegUnit, TargetIsa};
+use crate::result::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use byteorder::{ByteOrder, LittleEndian};
+use log::warn;
 
 /// Maximum (inclusive) size of a "small" stack allocation
 const SMALL_ALLOC_MAX_SIZE: u32 = 128;
@@ -35,18 +37,34 @@ fn write_u32<T: ByteOrder>(sink: &mut dyn FrameUnwindSink, v: u32) {
 /// Note: the Cranelift x86 ISA RU enum matches the Windows unwind GPR encoding values.
 #[derive(Debug, PartialEq, Eq)]
 enum UnwindCode {
-    PushRegister { offset: u8, reg: RegUnit },
-    StackAlloc { offset: u8, size: u32 },
-    SetFramePointer { offset: u8, sp_offset: u8 },
+    PushRegister {
+        offset: u8,
+        reg: RegUnit,
+    },
+    SaveXmm {
+        offset: u8,
+        reg: RegUnit,
+        stack_offset: u32,
+    },
+    StackAlloc {
+        offset: u8,
+        size: u32,
+    },
+    SetFramePointer {
+        offset: u8,
+        sp_offset: u8,
+    },
 }
 
 impl UnwindCode {
     fn emit(&self, sink: &mut dyn FrameUnwindSink) {
         enum UnwindOperation {
-            PushNonvolatileRegister,
-            LargeStackAlloc,
-            SmallStackAlloc,
-            SetFramePointer,
+            PushNonvolatileRegister = 0,
+            LargeStackAlloc = 1,
+            SmallStackAlloc = 2,
+            SetFramePointer = 3,
+            SaveXmm128 = 8,
+            SaveXmm128Far = 9,
         }
 
         match self {
@@ -57,6 +75,28 @@ impl UnwindCode {
                     ((GPR.index_of(*reg) as u8) << 4)
                         | (UnwindOperation::PushNonvolatileRegister as u8),
                 );
+            }
+            Self::SaveXmm {
+                offset,
+                reg,
+                stack_offset,
+            } => {
+                write_u8(sink, *offset);
+                let stack_offset = stack_offset / 16;
+                if stack_offset <= core::u16::MAX as u32 {
+                    write_u8(
+                        sink,
+                        (FPR.index_of(*reg) << 4) as u8 | (UnwindOperation::SaveXmm128 as u8),
+                    );
+                    write_u16::<LittleEndian>(sink, stack_offset as u16);
+                } else {
+                    write_u8(
+                        sink,
+                        (FPR.index_of(*reg) << 4) as u8 | (UnwindOperation::SaveXmm128Far as u8),
+                    );
+                    write_u16::<LittleEndian>(sink, stack_offset as u16);
+                    write_u16::<LittleEndian>(sink, (stack_offset >> 16) as u16);
+                }
             }
             Self::StackAlloc { offset, size } => {
                 // Stack allocations on Windows must be a multiple of 8 and be at least 1 slot
@@ -98,6 +138,13 @@ impl UnwindCode {
                     3
                 }
             }
+            Self::SaveXmm { stack_offset, .. } => {
+                if *stack_offset <= core::u16::MAX as u32 {
+                    2
+                } else {
+                    3
+                }
+            }
             _ => 1,
         }
     }
@@ -121,10 +168,10 @@ impl UnwindInfo {
         func: &Function,
         isa: &dyn TargetIsa,
         frame_register: Option<RegUnit>,
-    ) -> Option<Self> {
+    ) -> CodegenResult<Option<Self>> {
         // Only Windows fastcall is supported for unwind information
         if func.signature.call_conv != CallConv::WindowsFastcall || func.prologue_end.is_none() {
-            return None;
+            return Ok(None);
         }
 
         let prologue_end = func.prologue_end.unwrap();
@@ -136,10 +183,27 @@ impl UnwindInfo {
         let mut unwind_codes = Vec::new();
         let mut found_end = false;
 
+        // Have we saved at least one FPR? if so, we might have to check additional constraints.
+        let mut saved_fpr = false;
+
+        // In addition to the min offset for a callee-save, we need to know the offset from the
+        // frame base to the stack pointer, so that we can record an unwind offset that spans only
+        // to the end of callee-save space.
+        let mut static_frame_allocation_size = 0u32;
+
+        // For the time being, FPR preservation is split into a stack_addr and later store/load.
+        // Store the register used for stack store and ensure it is the same register with no
+        // intervening changes to the frame size.
+        let mut callee_save_region_reg = None;
+        // Also record the callee-save region's offset from RSP, because it must be added to FPR
+        // save offsets to compute an offset from the frame base.
+        let mut callee_save_offset = None;
+
         for (offset, inst, size) in func.inst_offsets(entry_block, &isa.encoding_info()) {
             // x64 ABI prologues cannot exceed 255 bytes in length
             if (offset + size) > 255 {
-                panic!("function prologues cannot exceed 255 bytes in size for Windows x64");
+                warn!("function prologues cannot exceed 255 bytes in size for Windows x64");
+                return Err(CodegenError::CodeTooLarge);
             }
 
             prologue_size += size;
@@ -150,18 +214,23 @@ impl UnwindInfo {
                 InstructionData::Unary { opcode, arg } => {
                     match opcode {
                         Opcode::X86Push => {
+                            static_frame_allocation_size += 8;
+
                             unwind_codes.push(UnwindCode::PushRegister {
                                 offset: unwind_offset,
                                 reg: func.locations[arg].unwrap_reg(),
                             });
                         }
                         Opcode::AdjustSpDown => {
+                            let stack_size =
+                                stack_size.expect("expected a previous stack size instruction");
+                            static_frame_allocation_size += stack_size;
+
                             // This is used when calling a stack check function
                             // We need to track the assignment to RAX which has the size of the stack
                             unwind_codes.push(UnwindCode::StackAlloc {
                                 offset: unwind_offset,
-                                size: stack_size
-                                    .expect("expected a previous stack size instruction"),
+                                size: stack_size,
                             });
                         }
                         _ => {}
@@ -170,6 +239,10 @@ impl UnwindInfo {
                 InstructionData::CopySpecial { src, dst, .. } => {
                     if let Some(frame_register) = frame_register {
                         if src == (RU::rsp as RegUnit) && dst == frame_register {
+                            // Constructing an rbp-based stack frame, so the static frame
+                            // allocation restarts at 0 from here.
+                            static_frame_allocation_size = 0;
+
                             unwind_codes.push(UnwindCode::SetFramePointer {
                                 offset: unwind_offset,
                                 sp_offset: 0,
@@ -194,12 +267,63 @@ impl UnwindInfo {
                             let imm: i64 = imm.into();
                             assert!(imm <= core::u32::MAX as i64);
 
+                            static_frame_allocation_size += imm as u32;
+
                             unwind_codes.push(UnwindCode::StackAlloc {
                                 offset: unwind_offset,
                                 size: imm as u32,
                             });
                         }
                         _ => {}
+                    }
+                }
+                InstructionData::StackLoad {
+                    opcode: Opcode::StackAddr,
+                    stack_slot,
+                    offset: _,
+                } => {
+                    let result = func.dfg.inst_results(inst).get(0).unwrap();
+                    if let ValueLoc::Reg(frame_reg) = func.locations[*result] {
+                        callee_save_region_reg = Some(frame_reg);
+
+                        // Figure out the offset in the call frame that `frame_reg` will have.
+                        let frame_size = func
+                            .stack_slots
+                            .layout_info
+                            .expect("func's stack slots have layout info if stack operations exist")
+                            .frame_size;
+                        // Because we're well after the prologue has been constructed, stack slots
+                        // must have been laid out...
+                        let slot_offset = func.stack_slots[stack_slot]
+                            .offset
+                            .expect("callee-save slot has an offset computed");
+                        let frame_offset = frame_size as i32 + slot_offset;
+
+                        callee_save_offset = Some(frame_offset as u32);
+                    }
+                }
+                InstructionData::Store {
+                    opcode: Opcode::Store,
+                    args: [arg1, arg2],
+                    flags: _flags,
+                    offset,
+                } => {
+                    if let (ValueLoc::Reg(ru), ValueLoc::Reg(base_ru)) =
+                        (func.locations[arg1], func.locations[arg2])
+                    {
+                        if Some(base_ru) == callee_save_region_reg {
+                            let offset_int: i32 = offset.into();
+                            assert!(offset_int >= 0, "negative fpr offset would store outside the stack frame, and is almost certainly an error");
+                            let offset_int: u32 = offset_int as u32 + callee_save_offset.expect("FPR presevation requires an FPR save region, which has some stack offset");
+                            if FPR.contains(ru) {
+                                saved_fpr = true;
+                                unwind_codes.push(UnwindCode::SaveXmm {
+                                    offset: unwind_offset,
+                                    reg: ru,
+                                    stack_offset: offset_int,
+                                });
+                            }
+                        }
                     }
                 }
                 _ => {}
@@ -212,16 +336,46 @@ impl UnwindInfo {
         }
 
         if !found_end {
-            return None;
+            return Ok(None);
         }
 
-        Some(Self {
+        if saved_fpr {
+            if static_frame_allocation_size > 240 && saved_fpr {
+                warn!("stack frame is too large ({} bytes) to use with Windows x64 SEH when preserving FPRs. \
+                    This is a Cranelift implementation limit, see \
+                    https://github.com/bytecodealliance/wasmtime/issues/1475",
+                    static_frame_allocation_size);
+                return Err(CodegenError::ImplLimitExceeded);
+            }
+            // Only test static frame size is 16-byte aligned when an FPR is saved to avoid
+            // panicking when alignment is elided because no FPRs are saved and no child calls are
+            // made.
+            assert!(
+                static_frame_allocation_size % 16 == 0,
+                "static frame allocation must be a multiple of 16"
+            );
+        }
+
+        // Hack to avoid panicking unnecessarily. Because Cranelift generates prologues with RBP at
+        // one end of the call frame, and RSP at the other, required offsets are arbitrarily large.
+        // Windows x64 SEH only allows this offset be up to 240 bytes, however, meaning large
+        // frames are inexpressible, and we cannot actually compile the function. In case there are
+        // no preserved FPRs, we can lie without error and claim the offset to RBP is 0 - nothing
+        // will actually check it. This, then, avoids panics when compiling functions with large
+        // call frames.
+        let reported_frame_offset = if saved_fpr {
+            (static_frame_allocation_size / 16) as u8
+        } else {
+            0
+        };
+
+        Ok(Some(Self {
             flags: 0, // this assumes cranelift functions have no SEH handlers
             prologue_size: prologue_size as u8,
             frame_register,
-            frame_register_offset: 0,
+            frame_register_offset: reported_frame_offset,
             unwind_codes,
-        })
+        }))
     }
 
     pub fn size(&self) -> usize {
@@ -320,7 +474,10 @@ mod tests {
 
         context.compile(&*isa).expect("expected compilation");
 
-        assert_eq!(UnwindInfo::try_from_func(&context.func, &*isa, None), None);
+        assert_eq!(
+            UnwindInfo::try_from_func(&context.func, &*isa, None).expect("can emit unwind info"),
+            None
+        );
     }
 
     #[test]
@@ -337,6 +494,7 @@ mod tests {
         context.compile(&*isa).expect("expected compilation");
 
         let unwind = UnwindInfo::try_from_func(&context.func, &*isa, Some(RU::rbp.into()))
+            .expect("can emit unwind info")
             .expect("expected unwind info");
 
         assert_eq!(
@@ -401,6 +559,7 @@ mod tests {
         context.compile(&*isa).expect("expected compilation");
 
         let unwind = UnwindInfo::try_from_func(&context.func, &*isa, Some(RU::rbp.into()))
+            .expect("can emit unwind info")
             .expect("expected unwind info");
 
         assert_eq!(
@@ -465,6 +624,7 @@ mod tests {
         context.compile(&*isa).expect("expected compilation");
 
         let unwind = UnwindInfo::try_from_func(&context.func, &*isa, Some(RU::rbp.into()))
+            .expect("can emit unwind info")
             .expect("expected unwind info");
 
         assert_eq!(

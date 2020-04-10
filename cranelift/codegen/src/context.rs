@@ -206,8 +206,8 @@ impl Context {
         isa: &dyn TargetIsa,
         kind: FrameUnwindKind,
         sink: &mut dyn FrameUnwindSink,
-    ) {
-        isa.emit_unwind_info(&self.func, kind, sink);
+    ) -> CodegenResult<()> {
+        isa.emit_unwind_info(&self.func, kind, sink)
     }
 
     /// Run the verifier on the function.

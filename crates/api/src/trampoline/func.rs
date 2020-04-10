@@ -188,7 +188,9 @@ fn make_trampoline(
         .map_err(|error| pretty_error(&context.func, Some(isa), error))
         .expect("compile_and_emit");
 
-    let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context);
+    let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context)
+        .map_err(|error| pretty_error(&context.func, Some(isa), error))
+        .expect("emit unwind info");
 
     code_memory
         .allocate_for_function(&CompiledFunction {

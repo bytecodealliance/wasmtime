@@ -64,7 +64,9 @@ impl SubTest for TestUnwind {
         }
 
         let mut sink = SimpleUnwindSink(Vec::new(), 0, Vec::new());
-        comp_ctx.emit_unwind_info(isa, FrameUnwindKind::Libunwind, &mut sink);
+        comp_ctx
+            .emit_unwind_info(isa, FrameUnwindKind::Libunwind, &mut sink)
+            .expect("can emit unwind info");
 
         let mut text = String::new();
         if sink.0.is_empty() {

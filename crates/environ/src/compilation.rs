@@ -4,7 +4,7 @@
 use crate::cache::ModuleCacheDataTupleType;
 use crate::CacheConfig;
 use crate::ModuleTranslation;
-use cranelift_codegen::{binemit, ir, isa, Context};
+use cranelift_codegen::{binemit, ir, isa, CodegenResult, Context};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError};
 use serde::{Deserialize, Serialize};
@@ -36,7 +36,7 @@ pub enum CompiledFunctionUnwindInfo {
 
 impl CompiledFunctionUnwindInfo {
     /// Constructs unwind info object.
-    pub fn new(isa: &dyn isa::TargetIsa, context: &Context) -> Self {
+    pub fn new(isa: &dyn isa::TargetIsa, context: &Context) -> CodegenResult<Self> {
         use cranelift_codegen::binemit::{
             FrameUnwindKind, FrameUnwindOffset, FrameUnwindSink, Reloc,
         };
@@ -75,24 +75,26 @@ impl CompiledFunctionUnwindInfo {
             CallConv::SystemV | CallConv::Fast | CallConv::Cold => FrameUnwindKind::Libunwind,
             CallConv::WindowsFastcall => FrameUnwindKind::Fastcall,
             _ => {
-                return CompiledFunctionUnwindInfo::None;
+                return Ok(CompiledFunctionUnwindInfo::None);
             }
         };
 
         let mut sink = Sink(Vec::new(), 0, Vec::new());
-        context.emit_unwind_info(isa, kind, &mut sink);
+        context.emit_unwind_info(isa, kind, &mut sink)?;
 
         let Sink(data, offset, relocs) = sink;
         if data.is_empty() {
-            return CompiledFunctionUnwindInfo::None;
+            return Ok(CompiledFunctionUnwindInfo::None);
         }
 
-        match kind {
+        let info = match kind {
             FrameUnwindKind::Fastcall => CompiledFunctionUnwindInfo::Windows(data),
             FrameUnwindKind::Libunwind => {
                 CompiledFunctionUnwindInfo::FrameLayout(data, offset, relocs)
             }
-        }
+        };
+
+        Ok(info)
     }
 
     /// Retuns true is no unwind info data.

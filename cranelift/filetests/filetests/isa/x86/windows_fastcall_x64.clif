@@ -32,6 +32,31 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64):
 }
 ; check: function %five_args(i64 [%rcx], i64 [%rdx], i64 [%r8], i64 [%r9], i64 [32], i64 fp [%rbp]) -> i64 fp [%rbp] windows_fastcall {
 
+; check that we preserve xmm6 and above if we're using them locally
+function %float_callee_saves(f64, f64, f64, f64) windows_fastcall {
+block0(v0: f64, v1: f64, v2: f64, v3: f64):
+; explicitly use a callee-save register
+[-, %xmm6]  v4 = fadd v0, v1
+[-, %xmm7]  v5 = fadd v0, v1
+    return
+}
+; check: function %float_callee_sav(f64 [%xmm0], f64 [%xmm1], f64 [%xmm2], f64 [%xmm3], i64 fp [%rbp], f64 csr [%xmm6], f64 csr [%xmm7]) -> i64 fp [%rbp], f64 csr [%xmm6], f64 csr [%xmm7] windows_fastcall {
+; nextln:                         ss0 = explicit_slot 32, offset -80
+; nextln:                         ss1 = incoming_arg 16, offset -48
+; check: block0(v0: f64 [%xmm0], v1: f64 [%xmm1], v2: f64 [%xmm2], v3: f64 [%xmm3], v6: i64 [%rbp], v8: f64 [%xmm6], v9: f64 [%xmm7]):
+; nextln:                         x86_push v6
+; nextln:                         copy_special %rsp -> %rbp
+; nextln:                         adjust_sp_down_imm 64
+; nextln:                         v7 = stack_addr.i64 ss0
+; nextln:                         store notrap aligned v8, v7
+; nextln:                         store notrap aligned v9, v7+16
+; check:                          v10 = stack_addr.i64 ss0
+; nextln:                         v11 = load.f64 notrap aligned v10
+; nextln:                         v12 = load.f64 notrap aligned v10+16
+; nextln:                         adjust_sp_up_imm 64
+; nextln:                         v13 = x86_pop.i64
+; nextln:                         v13, v11, v12
+
 function %mixed_int_float(i64, f64, i64, f32) windows_fastcall {
 block0(v0: i64, v1: f64, v2: i64, v3: f32):
     return
@@ -43,3 +68,29 @@ block0(v0: f32, v1: f64, v2: i64, v3: i64):
     return v1
 }
 ; check: function %ret_val_float(f32 [%xmm0], f64 [%xmm1], i64 [%r8], i64 [%r9], i64 fp [%rbp]) -> f64 [%xmm0], i64 fp [%rbp] windows_fastcall {
+
+function %internal_stack_arg_function_call(i64) -> i64 windows_fastcall {
+  fn0 = %foo(i64, i64, i64, i64) -> i64
+  fn1 = %foo2(i64, i64, i64, i64) -> i64
+block0(v0: i64):
+    v1 = load.i64 v0+0
+    v2 = load.i64 v0+8
+    v3 = load.i64 v0+16
+    v4 = load.i64 v0+24
+    v5 = load.i64 v0+32
+    v6 = load.i64 v0+40
+    v7 = load.i64 v0+48
+    v8 = load.i64 v0+56
+    v9 = load.i64 v0+64
+    v10 = call fn0(v1, v2, v3, v4)
+    store.i64 v1, v0+8
+    store.i64 v2, v0+16
+    store.i64 v3, v0+24
+    store.i64 v4, v0+32
+    store.i64 v5, v0+40
+    store.i64 v6, v0+48
+    store.i64 v7, v0+56
+    store.i64 v8, v0+64
+    store.i64 v9, v0+72
+    return v10
+}
