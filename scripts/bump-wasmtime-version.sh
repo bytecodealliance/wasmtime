@@ -9,7 +9,8 @@ topdir=$(dirname "$0")/..
 cd "$topdir"
 
 # All the wasmtime-* crates have the same version number
-version="0.15.0"
+short_version="15"
+version="0.$short_version.0"
 
 # Update the version numbers of the crates to $version. Skip crates with
 # a version of "0.0.0", which are unpublished.
@@ -32,6 +33,11 @@ find -name Cargo.toml \
     -exec sed -i.bk \
     -e "/^\(wasi-common\|wig\|yanix\|winx\|lightbeam\) = /s/version = \"[^\"]*\"/version = \"$version\"/" \
     {} \;
+
+find crates -type f -print0 | xargs -0 sed -i \
+    "s/wasi-common-[0-9][0-9]*/wasi-common-$short_version/"
+find crates -type f -print0 | xargs -0 sed -i \
+    "s/DEP_WASI_COMMON_[0-9][0-9]*/DEP_WASI_COMMON_${short_version}/"
 
 # Update the Cargo.lock files for the new versions.
 cargo update
