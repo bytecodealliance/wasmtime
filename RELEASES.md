@@ -10,28 +10,60 @@ Unreleased
 
 * The C API has a number of new `wasmtime_*` functions which return error
   objects to get detailed error information when an API fails.
-  [#TODO](https://github.com/bytecodealliance/wasmtime/pull/TODO)
+  [#1467](https://github.com/bytecodealliance/wasmtime/pull/1467)
+
+* Users now have fine-grained control over creation of instances of `Memory`
+  with a new `MemoryCreator` trait.
+  [#1400](https://github.com/bytecodealliance/wasmtime/pull/1400)
+
+* Go bindings for Wasmtime are [now available][go-bindings].
+  [#1481](https://github.com/bytecodealliance/wasmtime/pull/1481)
+
+* APIs for looking up values in a `Linker` have been added.
+  [#1480](https://github.com/bytecodealliance/wasmtime/pull/1480)
+
+[go-bindings]: https://github.com/bytecodealliance/wasmtime-go
 
 ### Changed
 
 * The `Func::call` API has changed its error type from `Trap` to `anyhow::Error`
   to distinguish between wasm traps and runtiem violations (like the wrong
   number of parameters).
-  [#TODO](https://github.com/bytecodealliance/wasmtime/pull/TODO)
+  [#1467](https://github.com/bytecodealliance/wasmtime/pull/1467)
 
 * A number of `wasmtime_linker_*` and `wasmtime_config_*` C APIs have new type
   signatures which reflect returning errors.
-  [#TODO](https://github.com/bytecodealliance/wasmtime/pull/TODO)
+  [#1467](https://github.com/bytecodealliance/wasmtime/pull/1467)
+
+* Bindings for .NET have moved to
+  https://github.com/bytecodealliance/wasmtime-dotnet.
+  [#1477](https://github.com/bytecodealliance/wasmtime/pull/1477)
+
+* Passing too many imports to `Instance::new` is now considered an error.
+  [#1478](https://github.com/bytecodealliance/wasmtime/pull/1478)
+
+### Fixed
+
+* Spurious segfaults due to out-of-stack conditions when handling signals have
+  been fixed.
+  [#1315](https://github.com/bytecodealliance/wasmtime/pull/1315)
 
 --------------------------------------------------------------------------------
 
 ## 0.15.0
 
-Unreleased
+Released 2020-03-31.
+
+### Fixed
+
+Full release produced for all artifacts to account for hiccups in 0.13.0 and
+0.14.0.
 
 --------------------------------------------------------------------------------
 
 ## 0.14.0
+
+*This version ended up not getting a full release*
 
 ### Fixed
 
