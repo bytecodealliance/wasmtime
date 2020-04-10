@@ -2364,7 +2364,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
 
 //=============================================================================
 // Helpers for instruction lowering.
-fn ty_bits(ty: Type) -> usize {
+
+/// Returns the size (in bits) of a given type.
+pub fn ty_bits(ty: Type) -> usize {
     match ty {
         B1 => 1,
         B8 | I8 => 8,
