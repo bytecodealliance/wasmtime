@@ -376,6 +376,7 @@ impl Instance {
     }
 
     /// Return a reference to the custom state attached to this instance.
+    #[inline]
     pub fn host_state(&self) -> &dyn Any {
         &*self.host_state
     }
@@ -416,6 +417,7 @@ impl Instance {
     }
 
     /// Return the offset from the vmctx pointer to its containing Instance.
+    #[inline]
     pub(crate) fn vmctx_offset() -> isize {
         offset_of!(Self, vmctx) as isize
     }
