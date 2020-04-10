@@ -3,6 +3,8 @@ use anyhow::{anyhow, bail, Context as _, Result};
 use std::path::Path;
 use std::str;
 use wasmtime::*;
+use wast::parser::{self, ParseBuffer};
+use wast::Wat;
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
 fn runtime_value(v: &wast::Expression<'_>) -> Result<Val> {
@@ -233,6 +235,17 @@ impl WastContext {
             Module(mut module) => {
                 let binary = module.encode()?;
                 self.module(module.id.map(|s| s.name()), &binary)?;
+            }
+            QuoteModule { span: _, source } => {
+                let mut module = String::new();
+                for src in source {
+                    module.push_str(str::from_utf8(src)?);
+                    module.push_str(" ");
+                }
+                let buf = ParseBuffer::new(&module)?;
+                let mut wat = parser::parse::<Wat>(&buf)?;
+                let binary = wat.module.encode()?;
+                self.module(wat.module.id.map(|s| s.name()), &binary)?;
             }
             Register {
                 span: _,
