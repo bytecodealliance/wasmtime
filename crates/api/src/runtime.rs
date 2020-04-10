@@ -13,7 +13,7 @@ use wasmtime_environ::CacheConfig;
 use wasmtime_environ::Tunables;
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
-use wasmtime_runtime::RuntimeMemoryCreator;
+use wasmtime_runtime::{debug_builtins, RuntimeMemoryCreator};
 
 // Runtime Environment
 
@@ -465,6 +465,7 @@ impl Engine {
     /// Creates a new [`Engine`] with the specified compilation and
     /// configuration settings.
     pub fn new(config: &Config) -> Engine {
+        debug_builtins::ensure_exported();
         Engine {
             config: Arc::new(config.clone()),
         }

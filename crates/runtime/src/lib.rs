@@ -33,6 +33,7 @@ mod trap_registry;
 mod traphandlers;
 mod vmcontext;
 
+pub mod debug_builtins;
 pub mod libcalls;
 
 pub use crate::export::*;
