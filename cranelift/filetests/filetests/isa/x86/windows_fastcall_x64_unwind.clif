@@ -153,13 +153,13 @@ block0(v0: i64, v1: i64):
 ; sameln: UnwindInfo {
 ; nextln:     version: 1,
 ; nextln:     flags: 0,
-; nextln:     prologue_size: 26,
+; nextln:     prologue_size: 25,
 ; nextln:     unwind_code_count_raw: 7,
 ; nextln:     frame_register: 5,
 ; nextln:     frame_register_offset: 12,
 ; nextln:     unwind_codes: [
 ; nextln:       UnwindCode {
-; nextln:         offset: 26,
+; nextln:         offset: 25,
 ; nextln:         op: SaveXmm128,
 ; nextln:         info: 15,
 ; nextln:         value: U16(
@@ -217,13 +217,13 @@ block0(v0: i64, v1: i64):
 ; sameln: UnwindInfo {
 ; nextln:     version: 1,
 ; nextln:     flags: 0,
-; nextln:     prologue_size: 44,
+; nextln:     prologue_size: 41,
 ; nextln:     unwind_code_count_raw: 16,
 ; nextln:     frame_register: 5,
 ; nextln:     frame_register_offset: 10,
 ; nextln:     unwind_codes: [
 ; nextln:         UnwindCode {
-; nextln:             offset: 44,
+; nextln:             offset: 41,
 ; nextln:             op: SaveXmm128,
 ; nextln:             info: 8,
 ; nextln:             value: U16(
@@ -231,7 +231,7 @@ block0(v0: i64, v1: i64):
 ; nextln:             ),
 ; nextln:           },
 ; nextln:         UnwindCode {
-; nextln:             offset: 38,
+; nextln:             offset: 36,
 ; nextln:             op: SaveXmm128,
 ; nextln:             info: 7,
 ; nextln:             value: U16(
@@ -239,7 +239,7 @@ block0(v0: i64, v1: i64):
 ; nextln:             ),
 ; nextln:         },
 ; nextln:         UnwindCode {
-; nextln:             offset: 32,
+; nextln:             offset: 31,
 ; nextln:             op: SaveXmm128,
 ; nextln:             info: 6,
 ; nextln:             value: U16(

@@ -40,10 +40,10 @@ block0(v0: f64, v1: f64, v2: f64, v3: f64):
 [-, %xmm7]  v5 = fadd v0, v1
     return
 }
-; check: function %float_callee_sav(f64 [%xmm0], f64 [%xmm1], f64 [%xmm2], f64 [%xmm3], i64 fp [%rbp], f64 csr [%xmm6], f64 csr [%xmm7]) -> i64 fp [%rbp], f64 csr [%xmm6], f64 csr [%xmm7] windows_fastcall {
+; check: function %float_callee_sav(f64 [%xmm0], f64 [%xmm1], f64 [%xmm2], f64 [%xmm3], i64 fp [%rbp], f64x2 csr [%xmm6], f64x2 csr [%xmm7]) -> i64 fp [%rbp], f64x2 csr [%xmm6], f64x2 csr [%xmm7] windows_fastcall {
 ; nextln:                         ss0 = explicit_slot 32, offset -80
 ; nextln:                         ss1 = incoming_arg 16, offset -48
-; check: block0(v0: f64 [%xmm0], v1: f64 [%xmm1], v2: f64 [%xmm2], v3: f64 [%xmm3], v6: i64 [%rbp], v8: f64 [%xmm6], v9: f64 [%xmm7]):
+; check: block0(v0: f64 [%xmm0], v1: f64 [%xmm1], v2: f64 [%xmm2], v3: f64 [%xmm3], v6: i64 [%rbp], v8: f64x2 [%xmm6], v9: f64x2 [%xmm7]):
 ; nextln:                         x86_push v6
 ; nextln:                         copy_special %rsp -> %rbp
 ; nextln:                         adjust_sp_down_imm 64
@@ -51,8 +51,8 @@ block0(v0: f64, v1: f64, v2: f64, v3: f64):
 ; nextln:                         store notrap aligned v8, v7
 ; nextln:                         store notrap aligned v9, v7+16
 ; check:                          v10 = stack_addr.i64 ss0
-; nextln:                         v11 = load.f64 notrap aligned v10
-; nextln:                         v12 = load.f64 notrap aligned v10+16
+; nextln:                         v11 = load.f64x2 notrap aligned v10
+; nextln:                         v12 = load.f64x2 notrap aligned v10+16
 ; nextln:                         adjust_sp_up_imm 64
 ; nextln:                         v13 = x86_pop.i64
 ; nextln:                         v13, v11, v12
