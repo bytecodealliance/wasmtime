@@ -35,6 +35,6 @@ mod sys;
 mod virtfs;
 pub mod wasi;
 
-pub use ctx::{WasiCtx, WasiCtxBuilder};
+pub use ctx::{WasiCtx, WasiCtxBuilder, WasiCtxBuilderError};
 pub use sys::preopen_dir;
 pub use virtfs::{FileContents, VirtualDirEntry};
