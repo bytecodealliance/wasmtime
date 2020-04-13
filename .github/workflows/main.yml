@@ -52,7 +52,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2020-04-07
+        toolchain: nightly
     - run: cargo doc --no-deps --all --exclude wasmtime-cli --exclude test-programs --exclude cranelift-codegen-meta
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
     - uses: actions/upload-artifact@v1
@@ -72,7 +72,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2020-04-07
+        toolchain: nightly
 
     # Check some feature combinations of the `wasmtime` crate
     - run: cargo check --manifest-path crates/api/Cargo.toml --no-default-features
@@ -121,7 +121,7 @@ jobs:
         ref: refs/heads/master
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2020-04-07
+        toolchain: nightly
     - run: cargo install cargo-fuzz --vers "^0.7"
     - run: cargo fetch
       working-directory: ./fuzz
@@ -182,7 +182,7 @@ jobs:
             rust: beta
           - build: nightly
             os: ubuntu-latest
-            rust: nightly-2020-04-07
+            rust: nightly
           - build: macos
             os: macos-latest
             rust: stable
