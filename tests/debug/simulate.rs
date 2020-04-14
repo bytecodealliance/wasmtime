@@ -75,3 +75,25 @@ fn test_debug_dwarf_simulate_with_imports_x86_64() -> Result<()> {
 )"#,
     )
 }
+
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
+fn test_debug_dwarf_simulate_with_invalid_name_x86_64() -> Result<()> {
+    check_wat(
+        r#"
+;; check: DW_TAG_compile_unit 
+(module (@name "\00")
+;; check: DW_TAG_subprogram 
+;; check: DW_AT_name	("wasm-function[1]")
+    (import "foo" "bar" (func $import1) )
+    (func (@name "\00f") (result i32)
+        (local (@name "l\00") i32)
+        i32.const 1
+    )
+)"#,
+    )
+}
