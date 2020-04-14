@@ -277,12 +277,9 @@ fn generate_vars(
 }
 
 fn check_invalid_chars_in_path(path: PathBuf) -> Option<PathBuf> {
-    use std::os::unix::ffi::OsStrExt;
-    if path.as_os_str().as_bytes().contains(&0) {
-        None
-    } else {
-        Some(path)
-    }
+    path.clone()
+        .to_str()
+        .and_then(move |s| if s.contains('\x00') { None } else { Some(path) })
 }
 
 pub fn generate_simulated_dwarf(
