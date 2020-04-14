@@ -60,7 +60,7 @@ impl Arbitrary for WasmOptTtf {
 #[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DifferentialConfig {
     strategy: DifferentialStrategy,
-    opt_level: DifferentialOptLevel,
+    opt_level: OptLevel,
 }
 
 impl DifferentialConfig {
@@ -70,11 +70,7 @@ impl DifferentialConfig {
             DifferentialStrategy::Cranelift => wasmtime::Strategy::Cranelift,
             DifferentialStrategy::Lightbeam => wasmtime::Strategy::Lightbeam,
         })?;
-        config.cranelift_opt_level(match self.opt_level {
-            DifferentialOptLevel::None => wasmtime::OptLevel::None,
-            DifferentialOptLevel::Speed => wasmtime::OptLevel::Speed,
-            DifferentialOptLevel::SpeedAndSize => wasmtime::OptLevel::SpeedAndSize,
-        });
+        config.cranelift_opt_level(self.opt_level.to_wasmtime());
         Ok(config)
     }
 }
@@ -85,9 +81,21 @@ enum DifferentialStrategy {
     Lightbeam,
 }
 
+#[allow(missing_docs)]
 #[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
-enum DifferentialOptLevel {
+pub enum OptLevel {
     None,
     Speed,
     SpeedAndSize,
+}
+
+impl OptLevel {
+    /// Converts to the native wasmtime optimization level for cranelift
+    pub fn to_wasmtime(&self) -> wasmtime::OptLevel {
+        match self {
+            OptLevel::None => wasmtime::OptLevel::None,
+            OptLevel::Speed => wasmtime::OptLevel::Speed,
+            OptLevel::SpeedAndSize => wasmtime::OptLevel::SpeedAndSize,
+        }
+    }
 }

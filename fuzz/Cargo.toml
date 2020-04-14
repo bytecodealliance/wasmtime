@@ -16,6 +16,8 @@ libfuzzer-sys = "0.3.2"
 target-lexicon = "0.10"
 wasmtime = { path = "../crates/api" }
 wasmtime-fuzzing = { path = "../crates/fuzzing" }
+wasmtime-wast = { path = "../crates/wast" }
+arbitrary = { version = "0.4.1", features = ["derive"] }
 
 [[bin]]
 name = "compile"
@@ -49,6 +51,12 @@ path = "fuzz_targets/differential.rs"
 test = false
 doc = false
 required-features = ['binaryen']
+
+[[bin]]
+name = "spectests"
+path = "fuzz_targets/spectests.rs"
+test = false
+doc = false
 
 [features]
 binaryen = ['wasmtime-fuzzing/binaryen']

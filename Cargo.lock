@@ -2229,6 +2229,7 @@ dependencies = [
 name = "wasmtime-fuzz"
 version = "0.0.0"
 dependencies = [
+ "arbitrary",
  "cranelift-codegen",
  "cranelift-reader",
  "cranelift-wasm",
@@ -2236,6 +2237,7 @@ dependencies = [
  "target-lexicon",
  "wasmtime",
  "wasmtime-fuzzing",
+ "wasmtime-wast",
 ]
 
 [[package]]
