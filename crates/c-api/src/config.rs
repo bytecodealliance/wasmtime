@@ -146,3 +146,18 @@ pub unsafe extern "C" fn wasmtime_config_cache_config_load(
         |_cfg| {},
     )
 }
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_static_memory_maximum_size_set(c: &mut wasm_config_t, size: u64) {
+    c.config.static_memory_maximum_size(size);
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_static_memory_guard_size(c: &mut wasm_config_t, size: u64) {
+    c.config.static_memory_guard_size(size);
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_dynamic_memory_guard_size(c: &mut wasm_config_t, size: u64) {
+    c.config.dynamic_memory_guard_size(size);
+}

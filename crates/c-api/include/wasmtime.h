@@ -60,6 +60,9 @@ WASMTIME_CONFIG_PROP(wasmtime_error_t*, strategy, wasmtime_strategy_t)
 WASMTIME_CONFIG_PROP(void, cranelift_debug_verifier, bool)
 WASMTIME_CONFIG_PROP(void, cranelift_opt_level, wasmtime_opt_level_t)
 WASMTIME_CONFIG_PROP(wasmtime_error_t*, profiler, wasmtime_profiling_strategy_t)
+WASMTIME_CONFIG_PROP(void, static_memory_maximum_size, uint64_t)
+WASMTIME_CONFIG_PROP(void, static_memory_guard_size, uint64_t)
+WASMTIME_CONFIG_PROP(void, dynamic_memory_guard_size, uint64_t)
 
 WASM_API_EXTERN wasmtime_error_t* wasmtime_config_cache_config_load(wasm_config_t*, const char*);
 

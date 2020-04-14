@@ -105,8 +105,13 @@ pub struct Config {
     debug_verifier: bool,
     debug_info: bool,
     canonicalize_nans: bool,
-    spectest: usize,
     interruptable: bool,
+
+    // Note that we use 32-bit values here to avoid blowing the 64-bit address
+    // space by requesting ungodly-large sizes/guards.
+    static_memory_maximum_size: Option<u32>,
+    static_memory_guard_size: Option<u32>,
+    dynamic_memory_guard_size: Option<u32>,
 }
 
 impl Config {
@@ -114,6 +119,9 @@ impl Config {
     pub fn to_wasmtime(&self) -> wasmtime::Config {
         let mut cfg = wasmtime::Config::new();
         cfg.debug_info(self.debug_info)
+            .static_memory_maximum_size(self.static_memory_maximum_size.unwrap_or(0).into())
+            .static_memory_guard_size(self.static_memory_guard_size.unwrap_or(0).into())
+            .dynamic_memory_guard_size(self.dynamic_memory_guard_size.unwrap_or(0).into())
             .cranelift_nan_canonicalization(self.canonicalize_nans)
             .cranelift_debug_verifier(self.debug_verifier)
             .cranelift_opt_level(self.opt_level.to_wasmtime())
