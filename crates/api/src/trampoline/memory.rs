@@ -19,9 +19,9 @@ pub fn create_handle_with_memory(store: &Store, memory: &MemoryType) -> Result<I
         maximum: memory.limits().max(),
         shared: false, // TODO
     };
-    let tunable = Default::default();
 
-    let memory_plan = wasmtime_environ::MemoryPlan::for_memory(memory, &tunable);
+    let memory_plan =
+        wasmtime_environ::MemoryPlan::for_memory(memory, &store.engine().config().tunables);
     let memory_id = module.local.memory_plans.push(memory_plan);
     module.exports.insert(
         "memory".to_string(),

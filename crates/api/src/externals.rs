@@ -896,3 +896,25 @@ pub unsafe trait MemoryCreator: Send + Sync {
     /// Create new LinearMemory
     fn new_memory(&self, ty: MemoryType) -> Result<Box<dyn LinearMemory>, String>;
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+
+    // Assert that creating a memory via `Memory::new` respects the limits/tunables
+    // in `Config`.
+    #[test]
+    fn respect_tunables() {
+        let mut cfg = Config::new();
+        cfg.static_memory_maximum_size(0)
+            .dynamic_memory_guard_size(0);
+        let store = Store::new(&Engine::new(&cfg));
+        let ty = MemoryType::new(Limits::new(1, None));
+        let mem = Memory::new(&store, ty);
+        assert_eq!(mem.wasmtime_export.memory.offset_guard_size, 0);
+        match mem.wasmtime_export.memory.style {
+            wasmtime_environ::MemoryStyle::Dynamic => {}
+            other => panic!("unexpected style {:?}", other),
+        }
+    }
+}
