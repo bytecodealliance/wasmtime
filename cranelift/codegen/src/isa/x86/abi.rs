@@ -245,24 +245,17 @@ pub fn legalize_signature(
         isa_flags,
     );
 
-    let sig_is_multi_return = sig.is_multi_return();
-
-    // If this is a multi-value return and we don't have enough available return
-    // registers to fit all of the return values, we need to backtrack and start
+    // If we don't have enough available return registers
+    // to fit all of the return values, we need to backtrack and start
     // assigning locations all over again with a different strategy. In order to
     // do that, we need a copy of the original assigner for the returns.
-    let backup_rets_for_struct_return = if sig_is_multi_return {
-        Some(rets.clone())
-    } else {
-        None
-    };
+    let mut backup_rets = rets.clone();
 
     if let Some(new_returns) = legalize_args(&sig.returns, &mut rets) {
-        if sig.is_multi_return()
-            && new_returns
-                .iter()
-                .filter(|r| r.purpose == ArgumentPurpose::Normal)
-                .any(|r| !r.location.is_reg())
+        if new_returns
+            .iter()
+            .filter(|r| r.purpose == ArgumentPurpose::Normal)
+            .any(|r| !r.location.is_reg())
         {
             // The return values couldn't all fit into available return
             // registers. Introduce the use of a struct-return parameter.
@@ -282,8 +275,6 @@ pub fn legalize_signature(
                 }
                 _ => unreachable!("return pointer should always get a register assignment"),
             }
-
-            let mut backup_rets = backup_rets_for_struct_return.unwrap();
 
             // We're using the first return register for the return pointer (like
             // sys v does).
