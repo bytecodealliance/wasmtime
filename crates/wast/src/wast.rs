@@ -68,7 +68,7 @@ impl WastContext {
 
     fn get_export(&self, module: Option<&str>, name: &str) -> Result<Extern> {
         match module {
-            Some(module) => self.linker.get_one_by_name(module, name).map(Extern::clone),
+            Some(module) => self.linker.get_one_by_name(module, name),
             None => self
                 .current
                 .as_ref()

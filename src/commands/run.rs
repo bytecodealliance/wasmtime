@@ -199,7 +199,6 @@ impl RunCommand {
         // Resolve import using module_registry.
         let imports = module
             .imports()
-            .iter()
             .map(|i| {
                 let export = match i.module() {
                     "wasi_snapshot_preview1" => {
@@ -231,11 +230,7 @@ impl RunCommand {
         // If a function to invoke was given, invoke it.
         if let Some(name) = self.invoke.as_ref() {
             self.invoke_export(instance, name)?;
-        } else if module
-            .exports()
-            .iter()
-            .any(|export| export.name().is_empty())
-        {
+        } else if module.exports().any(|export| export.name().is_empty()) {
             // Launch the default command export.
             self.invoke_export(instance, "")?;
         } else {

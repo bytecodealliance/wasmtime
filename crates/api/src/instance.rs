@@ -126,11 +126,11 @@ impl Instance {
             }
         }
 
-        if imports.len() != module.imports().len() {
+        if imports.len() != module.num_imports() {
             bail!(
                 "wrong number of imports provided, {} != {}",
                 imports.len(),
-                module.imports().len()
+                module.num_imports()
             );
         }
 

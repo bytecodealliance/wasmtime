@@ -398,7 +398,7 @@ impl Instance {
                     (body as *const _, self.vmctx_ptr())
                 }
                 None => {
-                    assert_lt!(callee_index.index(), self.module.imported_funcs.len());
+                    assert_lt!(callee_index.index(), self.module.local.num_imported_funcs);
                     let import = self.imported_function(callee_index);
                     (import.body, import.vmctx)
                 }
@@ -1216,7 +1216,7 @@ fn check_memory_init_bounds(
 
 /// Allocate memory for just the tables of the current module.
 fn create_tables(module: &Module) -> BoxedSlice<DefinedTableIndex, Table> {
-    let num_imports = module.imported_tables.len();
+    let num_imports = module.local.num_imported_tables;
     let mut tables: PrimaryMap<DefinedTableIndex, _> =
         PrimaryMap::with_capacity(module.local.table_plans.len() - num_imports);
     for table in &module.local.table_plans.values().as_slice()[num_imports..] {
@@ -1303,7 +1303,7 @@ fn create_memories(
     module: &Module,
     mem_creator: &dyn RuntimeMemoryCreator,
 ) -> Result<BoxedSlice<DefinedMemoryIndex, Box<dyn RuntimeLinearMemory>>, InstantiationError> {
-    let num_imports = module.imported_memories.len();
+    let num_imports = module.local.num_imported_memories;
     let mut memories: PrimaryMap<DefinedMemoryIndex, _> =
         PrimaryMap::with_capacity(module.local.memory_plans.len() - num_imports);
     for plan in &module.local.memory_plans.values().as_slice()[num_imports..] {
@@ -1348,7 +1348,7 @@ fn initialize_memories(
 /// Allocate memory for just the globals of the current module,
 /// with initializers applied.
 fn create_globals(module: &Module) -> BoxedSlice<DefinedGlobalIndex, VMGlobalDefinition> {
-    let num_imports = module.imported_globals.len();
+    let num_imports = module.local.num_imported_globals;
     let mut vmctx_globals = PrimaryMap::with_capacity(module.local.globals.len() - num_imports);
 
     for _ in &module.local.globals.values().as_slice()[num_imports..] {
@@ -1360,7 +1360,7 @@ fn create_globals(module: &Module) -> BoxedSlice<DefinedGlobalIndex, VMGlobalDef
 
 fn initialize_globals(instance: &Instance) {
     let module = Arc::clone(&instance.module);
-    let num_imports = module.imported_globals.len();
+    let num_imports = module.local.num_imported_globals;
     for (index, global) in module.local.globals.iter().skip(num_imports) {
         let def_index = module.local.defined_global_index(index).unwrap();
         unsafe {

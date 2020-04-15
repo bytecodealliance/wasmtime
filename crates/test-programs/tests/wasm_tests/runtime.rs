@@ -51,7 +51,6 @@ pub fn instantiate(
     let module = Module::new(&store, &data).context("failed to create wasm module")?;
     let imports = module
         .imports()
-        .iter()
         .map(|i| {
             let field_name = i.name();
             if let Some(export) = snapshot1.get_export(field_name) {
