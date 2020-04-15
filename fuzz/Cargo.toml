@@ -50,5 +50,11 @@ test = false
 doc = false
 required-features = ['binaryen']
 
+[[bin]]
+name = "spectests"
+path = "fuzz_targets/spectests.rs"
+test = false
+doc = false
+
 [features]
 binaryen = ['wasmtime-fuzzing/binaryen']

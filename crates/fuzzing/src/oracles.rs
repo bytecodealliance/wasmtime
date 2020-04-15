@@ -15,6 +15,7 @@ pub mod dummy;
 use dummy::dummy_imports;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
+use wasmtime_wast::WastContext;
 
 fn log_wasm(wasm: &[u8]) {
     static CNT: AtomicUsize = AtomicUsize::new(0);
@@ -399,4 +400,16 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
             }
         }
     }
+}
+
+/// Executes the wast `test` spectest with the `config` specified.
+///
+/// Ensures that spec tests pass regardless of the `Config`.
+pub fn spectest(config: crate::generators::Config, test: crate::generators::SpecTest) {
+    let store = Store::new(&Engine::new(&config.to_wasmtime()));
+    let mut wast_context = WastContext::new(store);
+    wast_context.register_spectest().unwrap();
+    wast_context
+        .run_buffer(test.file, test.contents.as_bytes())
+        .unwrap();
 }

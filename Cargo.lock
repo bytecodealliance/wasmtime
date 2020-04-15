@@ -2251,6 +2251,7 @@ dependencies = [
  "wasmparser",
  "wasmprinter",
  "wasmtime",
+ "wasmtime-wast",
  "wat",
 ]
 
