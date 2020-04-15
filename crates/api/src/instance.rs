@@ -35,9 +35,9 @@ fn instantiate(
             )
             .map_err(|e| -> Error {
                 match e {
-                    InstantiationError::StartTrap(trap) | InstantiationError::Trap(trap) => {
-                        Trap::from_jit(trap).into()
-                    }
+                    InstantiationError::StartTrap(trap)
+                    | InstantiationError::Trap(trap)
+                    | InstantiationError::WASITrap(trap) => Trap::from_jit(trap).into(),
                     other => other.into(),
                 }
             })?;
@@ -65,7 +65,6 @@ fn instantiate(
 pub struct Instance {
     pub(crate) instance_handle: InstanceHandle,
     module: Module,
-    exports: Box<[Extern]>,
 }
 
 impl Instance {
@@ -141,20 +140,9 @@ impl Instance {
             store.compiler().signatures(),
         )?;
 
-        let mut exports = Vec::with_capacity(module.exports().len());
-        for export in module.exports() {
-            let name = export.name().to_string();
-            let export = instance_handle.lookup(&name).expect("export");
-            exports.push(Extern::from_wasmtime_export(
-                store,
-                instance_handle.clone(),
-                export,
-            ));
-        }
         Ok(Instance {
             instance_handle,
             module: module.clone(),
-            exports: exports.into_boxed_slice(),
         })
     }
 
@@ -182,8 +170,14 @@ impl Instance {
     /// export you'll need to consult [`Module::exports`]. The list returned
     /// here maps 1:1 with the list that [`Module::exports`] returns, and
     /// [`ExportType`](crate::ExportType) contains the name of each export.
-    pub fn exports(&self) -> &[Extern] {
-        &self.exports
+    pub fn exports<'me>(&'me self) -> impl Iterator<Item = Extern> + 'me {
+        let instance_handle = self.instance_handle.clone();
+        let module = self.module.clone();
+        self.module.exports().iter().map(move |export| {
+            let name = export.name();
+            let export = instance_handle.lookup(&name).expect("export");
+            Extern::from_wasmtime_export(module.store(), instance_handle.clone(), export)
+        })
     }
 
     /// Looks up an exported [`Extern`] value by name.
@@ -192,18 +186,47 @@ impl Instance {
     /// the value, if found.
     ///
     /// Returns `None` if there was no export named `name`.
-    pub fn get_export(&self, name: &str) -> Option<&Extern> {
-        let (i, _) = self
-            .module
-            .exports()
-            .iter()
-            .enumerate()
-            .find(|(_, e)| e.name() == name)?;
-        Some(&self.exports()[i])
+    pub fn get_export(&self, name: &str) -> Option<Extern> {
+        let export = self.module.exports().iter().find(|e| e.name() == name)?;
+        let name = export.name();
+        let export = self.instance_handle.lookup(&name).expect("export");
+        Some(Extern::from_wasmtime_export(
+            self.module.store(),
+            self.instance_handle.clone(),
+            export,
+        ))
     }
 
     #[doc(hidden)]
     pub fn handle(&self) -> &InstanceHandle {
         &self.instance_handle
+    }
+
+    /// Interpret this instance's WASI-specified start function, if present:
+    ///  - If the instance has an export named "_start", run it as a commmand,
+    ///    and consume the instance, returning Ok(None).
+    ///  - If the instance has an export named "_initialize", run it as a
+    ///    reactor initialization function, and return Ok(self).
+    ///  - Otherwise, do nothing, and return Ok(self).
+    pub fn invoke_wasi_start_function(self) -> Result<Option<Self>, Error> {
+        let Instance {
+            instance_handle,
+            module,
+        } = self;
+
+        Ok(instance_handle
+            .invoke_wasi_start_function()
+            .map_err(|e| -> Error {
+                match e {
+                    InstantiationError::StartTrap(trap)
+                    | InstantiationError::Trap(trap)
+                    | InstantiationError::WASITrap(trap) => Trap::from_jit(trap).into(),
+                    other => other.into(),
+                }
+            })?
+            .map(|instance_handle| Instance {
+                instance_handle,
+                module,
+            }))
     }
 }

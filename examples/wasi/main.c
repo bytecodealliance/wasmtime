@@ -96,6 +96,7 @@ int main() {
   wasm_importtype_vec_delete(&import_types);
 
   // Lookup our `_start` export function
+  // TODO: Add API for this to call invoke_wasi_start_function.
   wasm_extern_vec_t externs;
   wasm_instance_exports(instance, &externs);
   wasm_exporttype_vec_t exports;

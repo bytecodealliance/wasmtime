@@ -38,7 +38,7 @@ use wasmtime_runtime::{ExportFunction, VMTrampoline};
 /// let store = Store::default();
 /// let module = Module::new(&store, r#"(module (func (export "foo")))"#)?;
 /// let instance = Instance::new(&module, &[])?;
-/// let foo = instance.exports()[0].func().expect("export wasn't a function");
+/// let foo = instance.exports().next().unwrap().func().expect("export wasn't a function");
 ///
 /// // Work with `foo` as a `Func` at this point, such as calling it
 /// // dynamically...
@@ -88,7 +88,7 @@ use wasmtime_runtime::{ExportFunction, VMTrampoline};
 ///     "#,
 /// )?;
 /// let instance = Instance::new(&module, &[add.into()])?;
-/// let call_add_twice = instance.exports()[0].func().expect("export wasn't a function");
+/// let call_add_twice = instance.exports().next().unwrap().func().expect("export wasn't a function");
 /// let call_add_twice = call_add_twice.get0::<i32>()?;
 ///
 /// assert_eq!(call_add_twice()?, 10);
@@ -149,8 +149,8 @@ macro_rules! getters {
     )*) => ($(
         $(#[$doc])*
         #[allow(non_snake_case)]
-        pub fn $name<'a, $($args,)* R>(&'a self)
-            -> anyhow::Result<impl Fn($($args,)*) -> Result<R, Trap> + 'a>
+        pub fn $name<$($args,)* R>(self)
+            -> anyhow::Result<impl Fn($($args,)*) -> Result<R, Trap>>
         where
             $($args: WasmTy,)*
             R: WasmTy,
@@ -174,7 +174,6 @@ macro_rules! getters {
 
             // ... and then once we've passed the typechecks we can hand out our
             // object since our `transmute` below should be safe!
-            let f = self.wasmtime_function();
             Ok(move |$($args: $args),*| -> Result<R, Trap> {
                 unsafe {
                     let fnptr = mem::transmute::<
@@ -184,11 +183,11 @@ macro_rules! getters {
                             *mut VMContext,
                             $($args,)*
                         ) -> R,
-                    >(f.address);
+                    >(self.export.address);
                     let mut ret = None;
                     $(let $args = $args.into_abi();)*
-                    wasmtime_runtime::catch_traps(f.vmctx, || {
-                        ret = Some(fnptr(f.vmctx, ptr::null_mut(), $($args,)*));
+                    wasmtime_runtime::catch_traps(self.export.vmctx, || {
+                        ret = Some(fnptr(self.export.vmctx, ptr::null_mut(), $($args,)*));
                     }).map_err(Trap::from_jit)?;
                     Ok(ret.unwrap())
                 }
@@ -340,7 +339,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&module, &[add.into()])?;
-    /// let foo = instance.exports()[0].func().unwrap().get2::<i32, i32, i32>()?;
+    /// let foo = instance.exports().next().unwrap().func().unwrap().get2::<i32, i32, i32>()?;
     /// assert_eq!(foo(1, 2)?, 3);
     /// # Ok(())
     /// # }
@@ -371,7 +370,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&module, &[add.into()])?;
-    /// let foo = instance.exports()[0].func().unwrap().get2::<i32, i32, i32>()?;
+    /// let foo = instance.exports().next().unwrap().func().unwrap().get2::<i32, i32, i32>()?;
     /// assert_eq!(foo(1, 2)?, 3);
     /// assert!(foo(i32::max_value(), 1).is_err());
     /// # Ok(())
@@ -404,7 +403,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&module, &[debug.into()])?;
-    /// let foo = instance.exports()[0].func().unwrap().get0::<()>()?;
+    /// let foo = instance.exports().next().unwrap().func().unwrap().get0::<()>()?;
     /// foo()?;
     /// # Ok(())
     /// # }
@@ -460,7 +459,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&module, &[log_str.into()])?;
-    /// let foo = instance.exports()[0].func().unwrap().get0::<()>()?;
+    /// let foo = instance.exports().next().unwrap().func().unwrap().get0::<()>()?;
     /// foo()?;
     /// # Ok(())
     /// # }

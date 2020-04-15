@@ -122,3 +122,54 @@ fn hello_wasi_snapshot1() -> Result<()> {
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
 }
+
+// Run a command which does nothing.
+#[test]
+fn minimal_command() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/minimal-command.wat")?;
+    let stdout = run_wasmtime(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    assert_eq!(stdout, "");
+    Ok(())
+}
+
+// Attempt to invoke an export on a command.
+#[test]
+fn minimal_command_with_invoke() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/minimal-command.wat")?;
+    assert!(
+        run_wasmtime(&[
+            "run",
+            wasm.path().to_str().unwrap(),
+            "--invoke",
+            "_start",
+            "--disable-cache",
+        ])
+        .is_err(),
+        "shall fail"
+    );
+    Ok(())
+}
+
+// Run a reactor which does nothing.
+#[test]
+fn minimal_reactor() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/minimal-reactor.wat")?;
+    let stdout = run_wasmtime(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    assert_eq!(stdout, "");
+    Ok(())
+}
+
+// Invoke an export on a reactor.
+#[test]
+fn minimal_reactor_with_invoke() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/minimal-reactor.wat")?;
+    let output = run_wasmtime(&[
+        "run",
+        wasm.path().to_str().unwrap(),
+        "--invoke",
+        "_initialize",
+        "--disable-cache",
+    ])?;
+    assert!(output.is_empty());
+    Ok(())
+}

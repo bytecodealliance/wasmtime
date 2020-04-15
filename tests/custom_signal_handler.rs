@@ -105,8 +105,7 @@ mod tests {
             });
         }
 
-        let exports = instance.exports();
-        assert!(!exports.is_empty());
+        let mut exports = instance.exports();
 
         // these invoke wasmtime_call_trampoline from action.rs
         {
@@ -130,7 +129,9 @@ mod tests {
 
         // these invoke wasmtime_call_trampoline from callable.rs
         {
-            let read_func = exports[0]
+            let read_func = exports
+                .next()
+                .unwrap()
                 .func()
                 .expect("expected a 'read' func in the module");
             println!("calling read...");
@@ -139,7 +140,9 @@ mod tests {
         }
 
         {
-            let read_out_of_bounds_func = exports[1]
+            let read_out_of_bounds_func = exports
+                .next()
+                .unwrap()
                 .func()
                 .expect("expected a 'read_out_of_bounds' func in the module");
             println!("calling read_out_of_bounds...");
@@ -216,8 +219,8 @@ mod tests {
 
         // First instance1
         {
-            let exports1 = instance1.exports();
-            assert!(!exports1.is_empty());
+            let mut exports1 = instance1.exports();
+            assert!(exports1.next().is_some());
 
             println!("calling instance1.read...");
             let result = invoke_export(&instance1, "read").expect("read succeeded");
@@ -231,8 +234,8 @@ mod tests {
 
         // And then instance2
         {
-            let exports2 = instance2.exports();
-            assert!(!exports2.is_empty());
+            let mut exports2 = instance2.exports();
+            assert!(exports2.next().is_some());
 
             println!("calling instance2.read...");
             let result = invoke_export(&instance2, "read").expect("read succeeded");
@@ -262,11 +265,10 @@ mod tests {
             });
         }
 
-        let instance1_exports = instance1.exports();
-        assert!(!instance1_exports.is_empty());
-        let instance1_read = instance1_exports[0].clone();
+        let mut instance1_exports = instance1.exports();
+        let instance1_read = instance1_exports.next().unwrap();
 
-        // instance2 wich calls 'instance1.read'
+        // instance2 which calls 'instance1.read'
         let module2 = Module::new(&store, WAT2)?;
         let instance2 = Instance::new(&module2, &[instance1_read])?;
         // since 'instance2.run' calls 'instance1.read' we need to set up the signal handler to handle

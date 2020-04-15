@@ -71,15 +71,11 @@ pub fn instantiate(
         bin_name,
     ))?;
 
-    let export = instance
-        .get_export("_start")
-        .context("expected a _start export")?
-        .clone();
+    let result = instance.invoke_wasi_start_function()?;
 
-    export
-        .func()
-        .context("expected export to be a func")?
-        .call(&[])?;
+    if result.is_some() {
+        bail!("expected module to be a command with a \"_start\" function")
+    }
 
     Ok(())
 }

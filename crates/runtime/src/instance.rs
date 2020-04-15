@@ -383,22 +383,35 @@ impl Instance {
             None => return Ok(()),
         };
 
-        let (callee_address, callee_vmctx) = match self.module.local.defined_func_index(start_index)
-        {
-            Some(defined_index) => {
-                let body = *self
-                    .finished_functions
-                    .get(defined_index)
-                    .expect("function index is out of bounds");
-                (body as *const _, self.vmctx_ptr())
-            }
-            None => {
-                assert_lt!(start_index.index(), self.module.imported_funcs.len());
-                let import = self.imported_function(start_index);
-                (import.body, import.vmctx)
-            }
-        };
+        self.invoke_function_index(start_index)
+            .map_err(InstantiationError::StartTrap)
+    }
 
+    fn invoke_function_index(&self, callee_index: FuncIndex) -> Result<(), Trap> {
+        let (callee_address, callee_vmctx) =
+            match self.module.local.defined_func_index(callee_index) {
+                Some(defined_index) => {
+                    let body = *self
+                        .finished_functions
+                        .get(defined_index)
+                        .expect("function index is out of bounds");
+                    (body as *const _, self.vmctx_ptr())
+                }
+                None => {
+                    assert_lt!(callee_index.index(), self.module.imported_funcs.len());
+                    let import = self.imported_function(callee_index);
+                    (import.body, import.vmctx)
+                }
+            };
+
+        self.invoke_function(callee_vmctx, callee_address)
+    }
+
+    fn invoke_function(
+        &self,
+        callee_vmctx: *mut VMContext,
+        callee_address: *const VMFunctionBody,
+    ) -> Result<(), Trap> {
         // Make the call.
         unsafe {
             catch_traps(callee_vmctx, || {
@@ -407,7 +420,6 @@ impl Instance {
                     unsafe extern "C" fn(*mut VMContext, *mut VMContext),
                 >(callee_address)(callee_vmctx, self.vmctx_ptr())
             })
-            .map_err(InstantiationError::StartTrap)
         }
     }
 
@@ -1096,6 +1108,77 @@ impl InstanceHandle {
         self.instance().trampolines.get(&sig).cloned()
     }
 
+    /// Invoke the WASI start function of the instance, if one is present.
+    pub fn invoke_wasi_start_function(self) -> Result<Option<Self>, InstantiationError> {
+        if self.instance().refcount.get() != 1 {
+            return Err(InstantiationError::WASIInvalid(
+                "Multiple instance handles are active".to_owned(),
+            ));
+        }
+
+        let command_start = self.module().exports.get("_start");
+        let reactor_start = self.module().exports.get("_initialize");
+        match (command_start, reactor_start) {
+            (Some(command_start), None) => {
+                if let wasmtime_environ::Export::Function(func_index) = command_start {
+                    // No wasm params or returns; just the vmctx params.
+                    let sig =
+                        &self.module().local.signatures[self.module().local.functions[*func_index]];
+                    if sig.params.len() != 2 || !sig.returns.is_empty() {
+                        return Err(InstantiationError::WASIInvalid(
+                            "Function must have no param or result types".to_owned(),
+                        ));
+                    }
+
+                    self.instance()
+                        .invoke_function_index(*func_index)
+                        .map_err(InstantiationError::WASITrap)?;
+
+                    // For commands, we consume the instance after running the program.
+                    Ok(None)
+                } else {
+                    Err(InstantiationError::WASIInvalid(
+                        "Must be a function".to_owned(),
+                    ))
+                }
+            }
+            (None, Some(reactor_start)) => {
+                if let wasmtime_environ::Export::Function(func_index) = reactor_start {
+                    // No wasm params or returns; just the vmctx params.
+                    let sig =
+                        &self.module().local.signatures[self.module().local.functions[*func_index]];
+                    if sig.params.len() != 2 || !sig.returns.is_empty() {
+                        return Err(InstantiationError::WASIInvalid(
+                            "Function must have no param or result types".to_owned(),
+                        ));
+                    }
+
+                    self.instance()
+                        .invoke_function_index(*func_index)
+                        .map_err(InstantiationError::WASITrap)?;
+
+                    // For reactors, we return the instance after running the initialization.
+                    Ok(Some(self))
+                } else {
+                    Err(InstantiationError::WASIInvalid(
+                        "Must be a function".to_owned(),
+                    ))
+                }
+            }
+            (None, None) => {
+                // Treat modules which don't declare themselves as commands or reactors as
+                // reactors which have no initialization to do.
+                Ok(Some(self))
+            }
+            (Some(_), Some(_)) => {
+                // Module declares to be both a command and a reactor.
+                Err(InstantiationError::WASIInvalid(
+                    "Program cannot be both a command and a reactor".to_owned(),
+                ))
+            }
+        }
+    }
+
     /// Return a reference to the contained `Instance`.
     pub(crate) fn instance(&self) -> &Instance {
         unsafe { &*(self.instance as *const Instance) }
@@ -1394,7 +1477,15 @@ pub enum InstantiationError {
     #[error("Trap occurred during instantiation")]
     Trap(Trap),
 
-    /// A compilation error occured.
+    /// A trap occurred while running the wasm start function.
     #[error("Trap occurred while invoking start function")]
     StartTrap(Trap),
+
+    /// A trap occurred while running the WASI start function.
+    #[error("Trap occurred while invoking a WASI start function")]
+    WASITrap(Trap),
+
+    /// The WASI start function had the wrong type.
+    #[error("Invalid WASI start function: {0}")]
+    WASIInvalid(String),
 }
