@@ -13,8 +13,8 @@
 set -ex
 
 platform=$1
-src=$2
-exe=$3
+src=$1
+exe=$2
 
 rm -rf tmp
 mkdir tmp

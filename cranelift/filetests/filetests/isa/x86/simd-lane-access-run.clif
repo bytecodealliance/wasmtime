@@ -1,5 +1,6 @@
 test run
 set enable_simd
+target x86_64
 
 function %shuffle_different_ssa_values() -> b1 {
 block0:

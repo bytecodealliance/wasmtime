@@ -1,5 +1,6 @@
 test run
 set enable_simd
+target x86_64
 
 function %vconst_syntax() -> b1 {
 block0:

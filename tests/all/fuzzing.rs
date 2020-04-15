@@ -21,6 +21,7 @@ fn instantiate_empty_module_with_memory() {
 }
 
 #[test]
+#[cfg_attr(target_arch = "aarch64", should_panic)] // FIXME(#1521)
 fn instantiate_module_that_compiled_to_x64_has_register_32() {
     let mut config = Config::new();
     config.debug_info(true);

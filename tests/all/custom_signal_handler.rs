@@ -87,6 +87,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
     fn test_custom_signal_handler_single_instance() -> Result<()> {
         let engine = Engine::new(&Config::default());
         let store = Store::new(&engine);

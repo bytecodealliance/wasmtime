@@ -7,6 +7,7 @@ publish = false
 
 [lib]
 proc-macro = true
+test = false
 
 [dependencies]
 quote = "1.0"

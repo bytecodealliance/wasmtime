@@ -12,6 +12,7 @@ include = ["src/**/*", "LICENSE", "WASI"]
 
 [lib]
 proc-macro = true
+test = false
 
 [dependencies]
 quote = "1.0.2"
