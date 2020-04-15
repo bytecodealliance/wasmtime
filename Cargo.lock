@@ -409,6 +409,7 @@ version = "0.63.0"
 dependencies = [
  "byteorder",
  "cranelift-codegen",
+ "cranelift-frontend",
  "cranelift-native",
  "cranelift-preopt",
  "cranelift-reader",
@@ -420,6 +421,7 @@ dependencies = [
  "num_cpus",
  "region",
  "target-lexicon",
+ "thiserror",
 ]
 
 [[package]]

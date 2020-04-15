@@ -2,7 +2,7 @@
 //!
 //! The `run` test command compiles each function on the host machine and executes it
 
-use crate::function_runner::FunctionRunner;
+use crate::function_runner::SingleFunctionCompiler;
 use crate::subtest::{Context, SubTest, SubtestResult};
 use cranelift_codegen::ir;
 use cranelift_reader::parse_run_command;
@@ -36,11 +36,11 @@ impl SubTest for TestRun {
     }
 
     fn run(&self, func: Cow<ir::Function>, context: &Context) -> SubtestResult<()> {
+        let mut compiler = SingleFunctionCompiler::with_host_isa(context.flags.clone());
         for comment in context.details.comments.iter() {
-            if comment.text.contains("run") {
-                let trimmed_comment = comment.text.trim_start_matches(|c| c == ' ' || c == ';');
-                let command = parse_run_command(trimmed_comment, &func.signature)
-                    .map_err(|e| format!("{}", e))?;
+            if let Some(command) =
+                parse_run_command(comment.text, &func.signature).map_err(|e| e.to_string())?
+            {
                 trace!("Parsed run command: {}", command);
 
                 // If this test requests to run on a completely different
@@ -51,16 +51,15 @@ impl SubTest for TestRun {
                     return Ok(());
                 }
 
-                // TODO in following changes we will use the parsed command to alter FunctionRunner's behavior.
-                //
                 // Note that here we're also explicitly ignoring `context.isa`,
                 // regardless of what's requested. We want to use the native
                 // host ISA no matter what here, so the ISA listed in the file
                 // is only used as a filter to not run into situations like
                 // running x86_64 code on aarch64 platforms.
-                let runner =
-                    FunctionRunner::with_host_isa(func.clone().into_owned(), context.flags.clone());
-                runner.run()?
+                let compiled_fn = compiler
+                    .compile(func.clone().into_owned())
+                    .map_err(|e| e.to_string())?;
+                command.run(|args| compiled_fn.call(args))?;
             }
         }
         Ok(())

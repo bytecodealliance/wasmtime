@@ -2,9 +2,9 @@
 
 use crate::utils::read_to_string;
 use cranelift_codegen::isa::{CallConv, TargetIsa};
-use cranelift_filetests::FunctionRunner;
+use cranelift_filetests::SingleFunctionCompiler;
 use cranelift_native::builder as host_isa_builder;
-use cranelift_reader::{parse_test, Details, IsaSpec, ParseOptions};
+use cranelift_reader::{parse_run_command, parse_test, Details, IsaSpec, ParseOptions};
 use std::path::PathBuf;
 use target_lexicon::Triple;
 use walkdir::WalkDir;
@@ -90,12 +90,16 @@ fn run_file_contents(file_contents: String) -> Result<(), String> {
         ..ParseOptions::default()
     };
     let test_file = parse_test(&file_contents, options).map_err(|e| e.to_string())?;
+    let isa = create_target_isa(&test_file.isa_spec)?;
+    let mut compiler = SingleFunctionCompiler::new(isa);
     for (func, Details { comments, .. }) in test_file.functions {
-        if comments.iter().any(|c| c.text.contains("run")) {
-            // TODO in following changes we will parse this comment to alter the FunctionRunner's behavior.
-            let isa = create_target_isa(&test_file.isa_spec)?;
-            // TODO the following no longer makes sense; use FunctionRunner::with_host_isa(...) instead
-            FunctionRunner::new(func, isa).run()?
+        for comment in comments {
+            if let Some(command) =
+                parse_run_command(comment.text, &func.signature).map_err(|e| e.to_string())?
+            {
+                let compiled_fn = compiler.compile(func.clone()).map_err(|e| e.to_string())?;
+                command.run(|args| compiled_fn.call(args))?;
+            }
         }
     }
     Ok(())

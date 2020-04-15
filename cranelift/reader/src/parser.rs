@@ -114,11 +114,25 @@ pub fn parse_test<'a>(text: &'a str, options: ParseOptions<'a>) -> ParseResult<T
     })
 }
 
-/// Parse the entire `text` as a run command.
-pub fn parse_run_command<'a>(text: &str, signature: &Signature) -> ParseResult<RunCommand> {
+/// Parse a CLIF comment `text` as a run command.
+///
+/// Return:
+///  - `Ok(None)` if the comment is not intended to be a `RunCommand` (i.e. does not start with `run`
+///    or `print`
+///  - `Ok(Some(command))` if the comment is intended as a `RunCommand` and can be parsed to one
+///  - `Err` otherwise.
+pub fn parse_run_command<'a>(text: &str, signature: &Signature) -> ParseResult<Option<RunCommand>> {
     let _tt = timing::parse_text();
-    let mut parser = Parser::new(text);
-    parser.parse_run_command(signature)
+    // We remove leading spaces and semi-colons for convenience here instead of at the call sites
+    // since this function will be attempting to parse a RunCommand from a CLIF comment.
+    let trimmed_text = text.trim_start_matches(|c| c == ' ' || c == ';');
+    let mut parser = Parser::new(trimmed_text);
+    match parser.token() {
+        Some(Token::Identifier("run")) | Some(Token::Identifier("print")) => {
+            parser.parse_run_command(signature).map(|c| Some(c))
+        }
+        Some(_) | None => Ok(None),
+    }
 }
 
 pub struct Parser<'a> {
