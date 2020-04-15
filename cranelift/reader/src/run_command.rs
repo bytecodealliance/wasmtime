@@ -7,8 +7,8 @@
 //! - `; run: %fn(42, 4.2) == false`: this syntax specifies the parameters and return values.
 
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
-use cranelift_codegen::ir::ConstantData;
-use std::fmt::{Display, Formatter, Result};
+use cranelift_codegen::ir::{self, ConstantData, Type};
+use std::fmt::{self, Display, Formatter};
 
 /// A run command appearing in a test file.
 ///
@@ -22,8 +22,37 @@ pub enum RunCommand {
     Run(Invocation, Comparison, Vec<DataValue>),
 }
 
+impl RunCommand {
+    /// Run the [RunCommand]:
+    ///  - for [RunCommand::Print], print the returned values from invoking the function.
+    ///  - for [RunCommand::Run], compare the returned values from the invoked function and
+    ///    return an `Err` with a descriptive string if the comparison fails.
+    pub fn run<F>(&self, invoke_fn: F) -> Result<(), String>
+    where
+        F: FnOnce(&[DataValue]) -> Vec<DataValue>,
+    {
+        match self {
+            RunCommand::Print(invoke) => {
+                let actual = invoke_fn(&invoke.args);
+                println!("{:?} -> {:?}", invoke, actual)
+            }
+            RunCommand::Run(invoke, compare, expected) => {
+                let actual = invoke_fn(&invoke.args);
+                let matched = match compare {
+                    Comparison::Equals => *expected == actual,
+                    Comparison::NotEquals => *expected != actual,
+                };
+                if !matched {
+                    return Err(format!("Failed test: {:?}, actual: {:?}", self, actual));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Display for RunCommand {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             RunCommand::Print(invocation) => write!(f, "print: {}", invocation),
             RunCommand::Run(invocation, comparison, expected) => {
@@ -58,7 +87,7 @@ impl Invocation {
 }
 
 impl Display for Invocation {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "%{}(", self.func)?;
         write_data_value_list(f, &self.args)?;
         write!(f, ")")
@@ -82,6 +111,22 @@ pub enum DataValue {
     V128([u8; 16]),
 }
 
+impl DataValue {
+    /// Return the Cranelift IR [Type] for this [DataValue].
+    pub fn ty(&self) -> Type {
+        match self {
+            DataValue::B(_) => ir::types::B8,
+            DataValue::I8(_) => ir::types::I8,
+            DataValue::I16(_) => ir::types::I16,
+            DataValue::I32(_) => ir::types::I32,
+            DataValue::I64(_) => ir::types::I64,
+            DataValue::F32(_) => ir::types::F32,
+            DataValue::F64(_) => ir::types::F64,
+            DataValue::V128(_) => ir::types::I8X16,
+        }
+    }
+}
+
 /// Helper for creating [From] implementations for [DataValue]
 macro_rules! from_data {
     ( $ty:ty, $variant:ident ) => {
@@ -102,7 +147,7 @@ from_data!(f64, F64);
 from_data!([u8; 16], V128);
 
 impl Display for DataValue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             DataValue::B(dv) => write!(f, "{}", dv),
             DataValue::I8(dv) => write!(f, "{}", dv),
@@ -119,7 +164,7 @@ impl Display for DataValue {
 }
 
 /// Helper function for displaying `Vec<DataValue>`.
-fn write_data_value_list(f: &mut Formatter<'_>, list: &[DataValue]) -> Result {
+fn write_data_value_list(f: &mut Formatter<'_>, list: &[DataValue]) -> fmt::Result {
     match list.len() {
         0 => Ok(()),
         1 => write!(f, "{}", list[0]),
@@ -142,10 +187,30 @@ pub enum Comparison {
 }
 
 impl Display for Comparison {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Comparison::Equals => write!(f, "=="),
             Comparison::NotEquals => write!(f, "!="),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::parse_run_command;
+    use cranelift_codegen::ir::{types, AbiParam, Signature};
+    use cranelift_codegen::isa::CallConv;
+
+    #[test]
+    fn run_a_command() {
+        let mut signature = Signature::new(CallConv::Fast);
+        signature.returns.push(AbiParam::new(types::I32));
+        let command = parse_run_command(";; run: %return42() == 42 ", &signature)
+            .unwrap()
+            .unwrap();
+
+        assert!(command.run(|_| vec![DataValue::I32(42)]).is_ok());
+        assert!(command.run(|_| vec![DataValue::I32(43)]).is_err());
     }
 }
