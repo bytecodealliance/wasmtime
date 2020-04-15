@@ -53,6 +53,11 @@ anyhow = "1.0.19"
 [profile.release.build-override]
 opt-level = 0
 
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+
 [workspace]
 members = [
   "cranelift",

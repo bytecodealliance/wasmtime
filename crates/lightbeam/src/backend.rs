@@ -519,8 +519,8 @@ pub enum CondCode {
 mod cc {
     use super::CondCode;
 
-    pub const EQUAL: CondCode = CondCode::ZF0;
-    pub const NOT_EQUAL: CondCode = CondCode::ZF1;
+    pub const EQUAL: CondCode = CondCode::ZF1;
+    pub const NOT_EQUAL: CondCode = CondCode::ZF0;
     pub const GE_U: CondCode = CondCode::CF0;
     pub const LT_U: CondCode = CondCode::CF1;
     pub const GT_U: CondCode = CondCode::CF0AndZF0;
@@ -2272,6 +2272,17 @@ pub struct VirtualCallingConvention {
     pub depth: StackDepth,
 }
 
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub enum BrAction {
+    Jump,
+    Continue,
+}
+
+pub struct Target {
+    pub target: BrTarget<Label>,
+    pub action: BrAction,
+}
+
 impl<'this, M: ModuleContext> Context<'this, M> {
     fn free_reg(&mut self, type_: GPRType) -> Result<bool, Error> {
         let pos = if let Some(pos) = self
@@ -2541,18 +2552,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Ok(())
     }
 
-    /// Pops i32 predicate and branches to the specified label
-    /// if the predicate is equal to zero.
-    pub fn br_if_false(
+    fn br_if(
         &mut self,
-        target: impl Into<BrTarget<Label>>,
-        pass_args: impl FnOnce(&mut Self) -> Result<(StackDepth, StackDepth), Error>,
+        mut val: ValueLocation,
+        if_true: Target,
+        if_false: Target,
+        depth: StackDepth,
     ) -> Result<(), Error> {
-        let mut val = self.pop()?;
-        let label = self.target_to_label(target.into());
-
         let cond = match val {
-            ValueLocation::Cond(cc) => !cc,
+            ValueLocation::Cond(cc) => cc,
             _ => {
                 let predicate = match self.put_into_register(I32, &mut val) {
                     Err(e) => return Err(e),
@@ -2567,48 +2575,24 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         };
 
-        self.free_value(val)?;
+        self.set_stack_depth(depth)?;
 
-        let (stack_depth_if_true, stack_depth_if_false) = pass_args(self)?;
-
-        self.select_stack_depth(cond, stack_depth_if_false, stack_depth_if_true)?;
-        self.br_on_cond_code(label, cond);
-
-        Ok(())
-    }
-
-    /// Pops i32 predicate and branches to the specified label
-    /// if the predicate is not equal to zero.
-    pub fn br_if_true(
-        &mut self,
-        target: impl Into<BrTarget<Label>>,
-        pass_args: impl FnOnce(&mut Self) -> Result<(StackDepth, StackDepth), Error>,
-    ) -> Result<(), Error> {
-        let mut val = self.pop()?;
-        let label = self.target_to_label(target.into());
-
-        let cond = match val {
-            ValueLocation::Cond(cc) => cc,
-            _ => {
-                let predicate = match self.put_into_register(I32, &mut val) {
-                    Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
-                };
-
-                dynasm!(self.asm
-                    ; test Rd(predicate.rq().unwrap()), Rd(predicate.rq().unwrap())
-                );
-
-                CondCode::ZF1
+        match (if_true.action, if_false.action) {
+            (BrAction::Jump, BrAction::Jump) => {
+                let if_true = self.target_to_label(if_true.target);
+                self.br_on_cond_code(if_true, cond);
+                self.br(if_false.target);
             }
-        };
-
-        self.free_value(val)?;
-
-        let (stack_depth_if_true, stack_depth_if_false) = pass_args(self)?;
-
-        self.select_stack_depth(cond, stack_depth_if_true, stack_depth_if_false)?;
-        self.br_on_cond_code(label, cond);
+            (BrAction::Continue, BrAction::Jump) => {
+                let if_false = self.target_to_label(if_false.target);
+                self.br_on_cond_code(if_false, !cond);
+            }
+            (BrAction::Jump, BrAction::Continue) => {
+                let if_true = self.target_to_label(if_true.target);
+                self.br_on_cond_code(if_true, cond);
+            }
+            (BrAction::Continue, BrAction::Continue) => {}
+        }
 
         Ok(())
     }
@@ -2624,25 +2608,29 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     /// If `default` is `None` then the default is just continuing execution
-    pub fn br_table<I>(
+    pub fn end_block<I>(
         &mut self,
         targets: I,
-        default: Option<BrTarget<Label>>,
-        pass_args: impl FnOnce(&mut Self, ValueLocation) -> Result<ValueLocation, Error>,
+        default: Target,
+        pass_args: impl FnOnce(&mut Self, ValueLocation) -> Result<(ValueLocation, StackDepth), Error>,
     ) -> Result<(), Error>
     where
-        I: IntoIterator<Item = Option<BrTarget<Label>>>,
+        I: IntoIterator<Item = Target>,
         I::IntoIter: ExactSizeIterator + DoubleEndedIterator,
     {
         let mut targets = targets.into_iter();
         let count = targets.len();
 
         let selector = self.pop()?;
-        let mut selector = pass_args(self, selector)?;
+        let (mut selector, depth) = pass_args(self, selector)?;
 
         if let Some(imm) = selector.imm_i32() {
-            if let Some(target) = targets.nth(imm as _).or(Some(default)).and_then(|a| a) {
-                match target {
+            let target = targets.nth(imm as _).unwrap_or(default);
+
+            self.set_stack_depth(depth)?;
+
+            if target.action == BrAction::Jump {
+                match target.target {
                     BrTarget::Label(label) => self.br(label),
                     BrTarget::Return => {
                         self.ret();
@@ -2650,77 +2638,91 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 }
             }
         } else {
-            let end_label = self.create_label();
+            match count {
+                0 => {
+                    debug_assert!(targets.next().is_none(), "Invalid `ExactSizeIterator` impl");
 
-            if count > 0 {
-                let (selector_reg, saved_selector) =
-                    match self.put_into_temp_register(GPRType::Rq, &mut selector)? {
-                        Some(r) => (r, None),
-                        None => (
-                            RAX,
+                    self.set_stack_depth(depth)?;
+
+                    if default.action == BrAction::Jump {
+                        self.br(default.target);
+                    }
+                }
+                1 => {
+                    let only_target = targets.next().expect("Invalid `ExactSizeIterator` impl");
+                    debug_assert!(targets.next().is_none(), "Invalid `ExactSizeIterator` impl");
+
+                    self.br_if(selector, default, only_target, depth)?;
+                }
+                _ => {
+                    let (selector_reg, saved_selector) =
+                        match self.put_into_temp_register(GPRType::Rq, &mut selector)? {
+                            Some(r) => (r, None),
+                            None => (
+                                RAX,
+                                Some(ValueLocation::from(
+                                    self.push_copy_physical(ValueLocation::Reg(RAX))?,
+                                )),
+                            ),
+                        };
+
+                    self.set_stack_depth(depth)?;
+
+                    let (tmp, saved_tmp) = if let Some(reg) = self.take_or_free_reg(I64) {
+                        (reg, None)
+                    } else {
+                        let out_reg = if selector_reg == RAX { RCX } else { RAX };
+
+                        (
+                            out_reg,
                             Some(ValueLocation::from(
-                                self.push_copy_physical(ValueLocation::Reg(RAX))?,
+                                self.push_copy_physical(ValueLocation::Reg(out_reg))?,
                             )),
-                        ),
+                        )
                     };
 
-                let (tmp, saved_tmp) = if let Some(reg) = self.take_or_free_reg(I64) {
-                    (reg, None)
-                } else {
-                    let out_reg = if selector_reg == RAX { RCX } else { RAX };
-
-                    (
-                        out_reg,
-                        Some(ValueLocation::from(
-                            self.push_copy_physical(ValueLocation::Reg(out_reg))?,
-                        )),
-                    )
-                };
-
-                self.immediate_to_reg(tmp, (count as u32).into())?;
-                dynasm!(self.asm
-                    ; cmp Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
-                    ; cmova Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
-                    ; lea Rq(tmp.rq().unwrap()), [>start_label]
-                    ; lea Rq(selector_reg.rq().unwrap()), [
-                        Rq(selector_reg.rq().unwrap()) * 5
-                    ]
-                    ; add Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
-                );
-
-                if let Some(saved) = saved_tmp {
-                    self.copy_value(saved, CCLoc::Reg(tmp))?;
-                } else {
-                    self.block_state.regs.release(tmp)?;
-                }
-
-                if let Some(saved) = saved_selector {
-                    self.copy_value(saved, CCLoc::Reg(selector_reg))?;
-                }
-
-                dynasm!(self.asm
-                    ; jmp Rq(selector_reg.rq().unwrap())
-                ; start_label:
-                );
-
-                for target in targets {
-                    let label = target
-                        .map(|target| self.target_to_label(target))
-                        .unwrap_or(end_label);
+                    self.immediate_to_reg(tmp, (count as u32).into())?;
                     dynasm!(self.asm
-                        ; jmp =>label.0
+                        ; cmp Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
+                        ; cmova Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
+                        ; lea Rq(tmp.rq().unwrap()), [>start_label]
+                        ; lea Rq(selector_reg.rq().unwrap()), [
+                            Rq(selector_reg.rq().unwrap()) * 5
+                        ]
+                        ; add Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
                     );
+
+                    if let Some(saved) = saved_tmp {
+                        self.copy_value(saved, CCLoc::Reg(tmp))?;
+                    } else {
+                        self.block_state.regs.release(tmp)?;
+                    }
+
+                    if let Some(saved) = saved_selector {
+                        self.copy_value(saved, CCLoc::Reg(selector_reg))?;
+                    }
+
+                    dynasm!(self.asm
+                        ; jmp Rq(selector_reg.rq().unwrap())
+                    ; start_label:
+                    );
+
+                    for target in targets {
+                        let label = self.target_to_label(target.target);
+                        dynasm!(self.asm
+                            ; jmp =>label.0
+                        );
+                    }
+
+                    if default.action == BrAction::Jump {
+                        self.br(default.target);
+                    }
                 }
             }
-
-            if let Some(def) = default {
-                self.br(def);
-            }
-
-            self.define_label(end_label);
         }
 
         self.free_value(selector)?;
+
         Ok(())
     }
 
@@ -2774,7 +2776,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.check_block_depth_inbounds(self.block_state.depth.clone())
     }
 
-    fn do_pass_block_args<I>(&mut self, params: I) -> Result<Vec<CCLoc>, Error>
+    fn do_pass_block_args<I>(&mut self, params: I) -> Result<BlockCallingConvention, Error>
     where
         I: ExactSizeIterator<Item = Option<CCLoc>> + DoubleEndedIterator,
     {
@@ -2874,7 +2876,19 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(out)
+        let max_stack_depth = out
+            .iter()
+            .filter_map(|l| l.stack().map(|offset| -offset))
+            .max()
+            .and_then(|max| u32::try_from(max).ok())
+            .map(|max| max.max(FUNCTION_START_DEPTH.0))
+            .map(StackDepth)
+            .unwrap_or(FUNCTION_START_DEPTH);
+
+        Ok(BlockCallingConvention {
+            arguments: out,
+            stack_depth: max_stack_depth,
+        })
     }
 
     pub fn shrink_stack_to_fit(&mut self) -> Result<(), Error> {
@@ -2884,8 +2898,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             .iter()
             .filter_map(|val| val.stack().map(|offset| -offset))
             .max()
-            .map(|max| max.max(FUNCTION_START_DEPTH.0 as i32))
             .and_then(|max| u32::try_from(max).ok())
+            .map(|max| max.max(FUNCTION_START_DEPTH.0))
             .map(StackDepth)
             .unwrap_or(FUNCTION_START_DEPTH);
 
@@ -2907,7 +2921,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             self.block_state.stack = cc.arguments.iter().cloned().map(Into::into).collect();
         }
 
-        self.set_stack_depth(cc.stack_depth.clone())?;
         Ok(())
     }
 
@@ -2923,18 +2936,19 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     {
         self.set_stack_depth(StackDepth(self.block_state.depth.0.max(stack_depth.0)))?;
 
-        let out_args = self.do_pass_block_args(params.into_iter().map(Into::into))?;
+        let mut out_cc = self.do_pass_block_args(params.into_iter().map(Into::into))?;
 
         if cfg!(debug_assertions) {
             // So that the assertions in `set_stack_depth` trip. If we remove this the assertions
             // won't have false-positives, but they won't trip when they should either.
-            self.block_state.stack = out_args.iter().cloned().map(Into::into).collect();
+            self.block_state.stack = out_cc.arguments.iter().cloned().map(Into::into).collect();
         }
 
-        Ok(BlockCallingConvention {
-            stack_depth: self.block_state.depth.clone(),
-            arguments: out_args,
-        })
+        debug_assert_le!(out_cc.stack_depth.0, stack_depth.0);
+
+        out_cc.stack_depth = stack_depth.clone();
+
+        Ok(out_cc)
     }
 
     /// Puts all stack values into "real" locations so that they can i.e. be set to different
@@ -3321,6 +3335,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     /// Multiple labels can be defined at the same position. However, a label
     /// can be defined only once.
     pub fn define_label(&mut self, label: Label) {
+        // TODO: Use `lea rsp, [rbp + depth]`-style construct to ensure that the stack depth is
+        //       always correct here.
         self.asm.dynamic_label(label.0);
     }
 
@@ -6368,9 +6384,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     ; ret
                 );
             }
-            Err(label) => {
+            Err(_) => {
                 dynasm!(self.asm
-                    ; jmp =>label.0
+                    ; pop rbp
+                    ; ret
                 );
             }
         }

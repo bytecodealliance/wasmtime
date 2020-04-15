@@ -4,7 +4,7 @@ use crate::{
 };
 use cranelift_codegen::ir::SourceLoc;
 use itertools::Either;
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use std::{
     convert::TryInto,
     fmt,
@@ -339,9 +339,27 @@ impl SignlessType {
 }
 
 #[derive(Debug, Clone)]
-pub struct BrTable<L> {
-    pub targets: Vec<BrTargetDrop<L>>,
+pub struct Targets<L> {
+    pub targets: SmallVec<[BrTargetDrop<L>; 1]>,
     pub default: BrTargetDrop<L>,
+}
+
+impl<L> From<BrTargetDrop<L>> for Targets<L> {
+    fn from(other: BrTargetDrop<L>) -> Self {
+        Self {
+            targets: Default::default(),
+            default: other,
+        }
+    }
+}
+
+impl<L> From<BrTarget<L>> for Targets<L> {
+    fn from(other: BrTarget<L>) -> Self {
+        Self {
+            targets: Default::default(),
+            default: other.into(),
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -452,7 +470,7 @@ pub enum Operator<Label> {
     Unreachable,
     /// Define metadata for a block - its label, its signature, whether it has backwards callers etc. It
     /// is an error to branch to a block that has yet to be defined.
-    Block {
+    Declare {
         label: Label,
         // TODO: Do we need this?
         params: Vec<SignlessType>,
@@ -460,28 +478,13 @@ pub enum Operator<Label> {
         has_backwards_callers: bool,
         num_callers: Option<u32>,
     },
-    /// Start a new block. It is an error if the previous block has not been closed by emitting a `Br` or
-    /// `BrTable`.
-    Label(Label),
-    /// Unconditionally break to a new block. This the parameters off the stack and passes them into
-    /// the new block. Any remaining elements on the stack are discarded.
-    Br {
-        /// Returning from the function is just calling the "return" block
-        target: BrTarget<Label>,
-    },
-    /// Pop a value off the top of the stack, jump to the `else_` label if this value is `true`
-    /// and the `then` label otherwise. The `then` and `else_` blocks must have the same parameters.
-    BrIf {
-        /// Label to jump to if the value at the top of the stack is true
-        then: BrTargetDrop<Label>,
-        /// Label to jump to if the value at the top of the stack is false
-        else_: BrTargetDrop<Label>,
-    },
+    /// Start a new block. It is an error if the previous block has not been closed by emitting `End`
+    Start(Label),
     /// Pop a value off the top of the stack, jump to `table[value.min(table.len() - 1)]`. All elements
     /// in the table must have the same parameters.
-    BrTable(
+    End(
         /// The table of labels to jump to - the index should be clamped to the length of the table
-        BrTable<Label>,
+        Targets<Label>,
     ),
     /// Call a function
     Call {
@@ -612,20 +615,20 @@ pub enum Operator<Label> {
 impl<L> Operator<L> {
     pub fn is_label(&self) -> bool {
         match self {
-            Operator::Label(..) => true,
+            Operator::Start(..) => true,
             _ => false,
         }
     }
 
     pub fn is_block(&self) -> bool {
         match self {
-            Operator::Block { .. } => true,
+            Operator::Declare { .. } => true,
             _ => false,
         }
     }
 
-    pub fn end(params: Vec<SignlessType>, label: L) -> Self {
-        Operator::Block {
+    pub fn end_wasm_block(params: Vec<SignlessType>, label: L) -> Self {
+        Operator::Declare {
             params,
             label,
             has_backwards_callers: false,
@@ -635,7 +638,7 @@ impl<L> Operator<L> {
     }
 
     pub fn block(params: Vec<SignlessType>, label: L) -> Self {
-        Operator::Block {
+        Operator::Declare {
             params,
             label,
             has_backwards_callers: false,
@@ -644,7 +647,7 @@ impl<L> Operator<L> {
     }
 
     pub fn loop_(params: Vec<SignlessType>, label: L) -> Self {
-        Operator::Block {
+        Operator::Declare {
             params,
             label,
             has_backwards_callers: true,
@@ -661,8 +664,8 @@ where
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Operator::Unreachable => write!(f, "unreachable"),
-            Operator::Label(label) => write!(f, "{}:", BrTarget::Label(label.clone())),
-            Operator::Block {
+            Operator::Start(label) => write!(f, "start {}:", BrTarget::Label(label.clone())),
+            Operator::Declare {
                 label,
                 params,
                 has_backwards_callers,
@@ -688,19 +691,18 @@ where
 
                 Ok(())
             }
-            Operator::Br { target } => write!(f, "br {}", target),
-            Operator::BrIf { then, else_ } => write!(f, "br_if {}, {}", then, else_),
-            Operator::BrTable(BrTable { targets, default }) => {
-                write!(f, "br_table [")?;
+            Operator::End(Targets { targets, default }) => {
+                write!(f, "end ")?;
                 let mut iter = targets.iter();
                 if let Some(p) = iter.next() {
-                    write!(f, "{}", p)?;
+                    write!(f, "[{}", p)?;
                     for p in iter {
                         write!(f, ", {}", p)?;
                     }
+                    write!(f, "], ")?;
                 }
 
-                write!(f, "], {}", default)
+                write!(f, "{}", default)
             }
             Operator::Call { function_index } => write!(f, "call {}", function_index),
             Operator::CallIndirect { .. } => write!(f, "call_indirect"),
@@ -828,100 +830,6 @@ where
             ),
         }
     }
-}
-
-// TODO: If we return a `Vec<<T as MicrowasmReceiver>::Item>` will that convert to (essentially) a no-op
-//       in the case that `Item` is a ZST? That is important for ensuring that we don't do unnecessary
-//       work when we're directly generating asm.
-/// WIP: Trait to abstract over either producing a stream of Microwasm or directly producing assembly
-/// from the Wasm. This should give a significant speedup since we don't need to allocate any vectors
-/// or pay the cost of branches - we can just use iterators and direct function calls.
-pub trait MicrowasmReceiver<Label> {
-    type Item;
-
-    fn unreachable(&mut self) -> Self::Item;
-    fn block(
-        &mut self,
-        label: Label,
-        params: impl Iterator<Item = SignlessType>,
-        has_backwards_callers: bool,
-        num_callers: Option<u32>,
-    ) -> Self::Item;
-    fn label(&mut self, _: Label) -> Self::Item;
-    fn br(&mut self, target: BrTarget<Label>) -> Self::Item;
-    fn br_if(&mut self, then: BrTargetDrop<Label>, else_: BrTargetDrop<Label>) -> Self::Item;
-    fn br_table(&mut self, _: BrTable<Label>) -> Self::Item;
-    fn call(&mut self, function_index: u32) -> Self::Item;
-    fn call_indirect(&mut self, type_index: u32, table_index: u32) -> Self::Item;
-    fn drop(&mut self, _: RangeInclusive<u32>) -> Self::Item;
-    fn select(&mut self) -> Self::Item;
-    fn pick(&mut self, _: u32) -> Self::Item;
-    fn swap(&mut self, _: u32) -> Self::Item;
-    fn get_global(&mut self, index: u32) -> Self::Item;
-    fn set_global(&mut self, index: u32) -> Self::Item;
-    fn load(&mut self, ty: SignlessType, memarg: MemoryImmediate) -> Self::Item;
-    fn load8(&mut self, ty: SignfulInt, memarg: MemoryImmediate) -> Self::Item;
-    fn load16(&mut self, ty: SignfulInt, memarg: MemoryImmediate) -> Self::Item;
-    fn load32(&mut self, sign: Signedness, memarg: MemoryImmediate) -> Self::Item;
-    fn store(&mut self, ty: SignlessType, memarg: MemoryImmediate) -> Self::Item;
-    fn store8(&mut self, ty: Int, memarg: MemoryImmediate) -> Self::Item;
-    fn store16(&mut self, ty: Int, memarg: MemoryImmediate) -> Self::Item;
-    fn store32(&mut self, memarg: MemoryImmediate) -> Self::Item;
-    fn memory_size(&mut self, reserved: u32) -> Self::Item;
-    fn memory_grow(&mut self, reserved: u32) -> Self::Item;
-    fn const_(&mut self, _: Value) -> Self::Item;
-    fn ref_null(&mut self) -> Self::Item;
-    fn ref_is_null(&mut self) -> Self::Item;
-    fn eq(&mut self, _: SignlessType) -> Self::Item;
-    fn ne(&mut self, _: SignlessType) -> Self::Item;
-    fn eqz(&mut self, _: Int) -> Self::Item;
-    fn lt(&mut self, _: SignfulType) -> Self::Item;
-    fn gt(&mut self, _: SignfulType) -> Self::Item;
-    fn le(&mut self, _: SignfulType) -> Self::Item;
-    fn ge(&mut self, _: SignfulType) -> Self::Item;
-    fn add(&mut self, _: SignlessType) -> Self::Item;
-    fn sub(&mut self, _: SignlessType) -> Self::Item;
-    fn mul(&mut self, _: SignlessType) -> Self::Item;
-    fn clz(&mut self, _: Int) -> Self::Item;
-    fn ctz(&mut self, _: Int) -> Self::Item;
-    fn popcnt(&mut self, _: Int) -> Self::Item;
-    fn div(&mut self, _: SignfulType) -> Self::Item;
-    fn rem(&mut self, _: SignfulInt) -> Self::Item;
-    fn and(&mut self, _: Int) -> Self::Item;
-    fn or(&mut self, _: Int) -> Self::Item;
-    fn xor(&mut self, _: Int) -> Self::Item;
-    fn shl(&mut self, _: Int) -> Self::Item;
-    fn shr(&mut self, _: SignfulInt) -> Self::Item;
-    fn rotl(&mut self, _: Int) -> Self::Item;
-    fn rotr(&mut self, _: Int) -> Self::Item;
-    fn abs(&mut self, _: Float) -> Self::Item;
-    fn neg(&mut self, _: Float) -> Self::Item;
-    fn ceil(&mut self, _: Float) -> Self::Item;
-    fn floor(&mut self, _: Float) -> Self::Item;
-    fn trunc(&mut self, _: Float) -> Self::Item;
-    fn nearest(&mut self, _: Float) -> Self::Item;
-    fn sqrt(&mut self, _: Float) -> Self::Item;
-    fn min(&mut self, _: Float) -> Self::Item;
-    fn max(&mut self, _: Float) -> Self::Item;
-    fn copysign(&mut self, _: Float) -> Self::Item;
-    fn i32_wrap_from_i64(&mut self) -> Self::Item;
-    fn i_trunc_from_f(&mut self, input_ty: Float, output_ty: SignfulInt) -> Self::Item;
-    fn f_convert_from_i(&mut self, input_ty: SignfulInt, output_ty: Float) -> Self::Item;
-    fn f32_demote_from_f64(&mut self) -> Self::Item;
-    fn f64_promote_from_f32(&mut self) -> Self::Item;
-    fn i32_reinterpret_from_f32(&mut self) -> Self::Item;
-    fn i64_reinterpret_from_f64(&mut self) -> Self::Item;
-    fn f32_reinterpret_from_i32(&mut self) -> Self::Item;
-    fn f64_reinterpret_from_i64(&mut self) -> Self::Item;
-    fn extend(&mut self, sign: Signedness) -> Self::Item;
-    fn i_sat_trunc_from_f(&mut self, input_ty: Float, output_ty: SignfulInt) -> Self::Item;
-    fn memory_init(&mut self, segment: u32) -> Self::Item;
-    fn data_drop(&mut self, segment: u32) -> Self::Item;
-    fn memory_copy(&mut self) -> Self::Item;
-    fn memory_fill(&mut self) -> Self::Item;
-    fn table_init(&mut self, segment: u32) -> Self::Item;
-    fn elem_drop(&mut self, segment: u32) -> Self::Item;
-    fn table_copy(&mut self) -> Self::Item;
 }
 
 /// Type of a control frame.
@@ -1580,7 +1488,7 @@ where
     ) -> Result<Option<impl ExactSizeIterator<Item = WithLoc<OperatorFromWasm>> + '_>, Error> {
         use derive_more::From;
         use iter_enum::{ExactSizeIterator, Iterator};
-        use staticvec::{staticvec, StaticVec, StaticVecIntoIter};
+        use staticvec::staticvec;
 
         struct Consts {
             inner: <Vec<Value> as IntoIterator>::IntoIter,
@@ -1642,21 +1550,12 @@ where
             Output::Consts(impl_trait_hack(consts))
         }
 
-        fn vec(vals: impl Into<StaticVec<OperatorFromWasm, 5>>) -> Output {
-            vals.into().into_iter().into()
+        fn vec(vals: SmallVec<[OperatorFromWasm; 5]>) -> Output {
+            Output::Vec(vals.into_iter())
         }
 
         fn iter(vals: impl IntoIterator<Item = OperatorFromWasm>) -> Output {
-            let mut vals = vals.into_iter();
-            let v = StaticVec::from_iter(vals.by_ref());
-            if let Some(next) = vals.next() {
-                let mut v = Vec::from_iter(v);
-                v.push(next);
-                v.extend(vals);
-                Output::VariableLength(v.into_iter())
-            } else {
-                vec(v)
-            }
+            Output::Vec(SmallVec::from_iter(vals.into_iter()).into_iter())
         }
 
         fn none() -> Output {
@@ -1667,11 +1566,20 @@ where
             Output::One(std::iter::once(op))
         }
 
+        fn end_if(
+            then: BrTargetDrop<WasmLabel>,
+            else_: BrTargetDrop<WasmLabel>,
+        ) -> OperatorFromWasm {
+            Operator::End(Targets {
+                targets: [else_.into()].into(),
+                default: then.into(),
+            })
+        }
+
         #[derive(From, Iterator, ExactSizeIterator)]
         enum Output {
             Consts(Consts),
-            FixedLength(StaticVecIntoIter<OperatorFromWasm, 5>),
-            VariableLength(std::vec::IntoIter<OperatorFromWasm>),
+            Vec(smallvec::IntoIter<[OperatorFromWasm; 5]>),
             None(std::iter::Empty<OperatorFromWasm>),
             One(std::iter::Once<OperatorFromWasm>),
         }
@@ -1742,7 +1650,7 @@ where
                                 *has_else = true;
                             }
 
-                            break (one(Operator::Label((block.id, NameTag::Else))), offset);
+                            break (one(Operator::Start((block.id, NameTag::Else))), offset);
                         }
                     }
                     WasmOperator::End => {
@@ -1773,17 +1681,16 @@ where
                             } = block.kind
                             {
                                 break (
-                                    vec([
-                                        Operator::Label((block.id, NameTag::Else)),
-                                        Operator::Br {
-                                            target: BrTarget::Label(end_label),
-                                        },
-                                        Operator::Label(end_label),
+                                    vec(smallvec![
+                                        Operator::Start((block.id, NameTag::Else)),
+                                        Operator::Const(0i32.into()),
+                                        Operator::End(BrTarget::Label(end_label).into()),
+                                        Operator::Start(end_label),
                                     ]),
                                     offset,
                                 );
                             } else {
-                                break (one(Operator::Label((block.id, NameTag::End))), offset);
+                                break (one(Operator::Start((block.id, NameTag::End))), offset);
                             }
                         } else {
                             depth -= 1;
@@ -1835,7 +1742,7 @@ where
 
                 let block_param_type_wasm = self.block_params_with_wasm_type(ty)?;
 
-                one(Operator::end(
+                one(Operator::end_wasm_block(
                     block_param_type_wasm.collect(),
                     (id, NameTag::End),
                 ))
@@ -1854,13 +1761,12 @@ where
                 let block_param_type_wasm = self.block_params_with_wasm_type(ty)?;
                 let label = (id, NameTag::Header);
 
-                vec([
+                vec(smallvec![
                     Operator::loop_(self.block_params(), label),
-                    Operator::end(block_param_type_wasm.collect(), (id, NameTag::End)),
-                    Operator::Br {
-                        target: BrTarget::Label(label),
-                    },
-                    Operator::Label(label),
+                    Operator::end_wasm_block(block_param_type_wasm.collect(), (id, NameTag::End)),
+                    Operator::Const(0i32.into()),
+                    Operator::End(BrTarget::Label(label).into()),
+                    Operator::Start(label),
                 ])
             }
             WasmOperator::If { ty } => {
@@ -1880,15 +1786,12 @@ where
                     (id, NameTag::Else),
                     (id, NameTag::End),
                 );
-                vec([
+                vec(smallvec![
                     Operator::block(self.block_params(), then),
                     Operator::block(self.block_params(), else_),
-                    Operator::end(block_param_type_wasm.collect(), end),
-                    Operator::BrIf {
-                        then: BrTarget::Label(then).into(),
-                        else_: BrTarget::Label(else_).into(),
-                    },
-                    Operator::Label(then),
+                    Operator::end_wasm_block(block_param_type_wasm.collect(), end),
+                    end_if(BrTarget::Label(then).into(), BrTarget::Label(else_).into()),
+                    Operator::Start(then),
                 ])
             }
             WasmOperator::Else => {
@@ -1911,10 +1814,9 @@ where
                 let label = (block.id, NameTag::Else);
 
                 iter(to_drop.into_iter().map(Operator::Drop).chain(staticvec![
-                    Operator::Br {
-                        target: BrTarget::Label((block.id, NameTag::End)),
-                    },
-                    Operator::Label(label)
+                    Operator::Const(0i32.into()),
+                    Operator::End(BrTarget::Label((block.id, NameTag::End)).into()),
+                    Operator::Start(label)
                 ]))
             }
             WasmOperator::End => {
@@ -1936,30 +1838,28 @@ where
                     let end = (block.id, NameTag::End);
 
                     iter(to_drop.map(Operator::Drop).into_iter().chain(staticvec![
-                        Operator::Br {
-                            target: BrTarget::Label(end),
-                        },
-                        Operator::Label(else_),
-                        Operator::Br {
-                            target: BrTarget::Label(end),
-                        },
-                        Operator::Label(end),
+                        Operator::Const(0i32.into()),
+                        Operator::End(BrTarget::Label(end).into()),
+                        Operator::Start(else_),
+                        Operator::Const(0i32.into()),
+                        Operator::End(BrTarget::Label(end).into()),
+                        Operator::Start(end),
                     ]))
                 } else {
                     if self.control_frames.is_empty() {
                         self.is_done = true;
 
-                        one(Operator::Br {
-                            target: BrTarget::Return,
-                        })
+                        iter(staticvec![
+                            Operator::Const(0i32.into()),
+                            Operator::End(BrTarget::Return.into()),
+                        ])
                     } else if block.needs_end_label() {
                         let label = (block.id, NameTag::End);
 
                         iter(to_drop.map(Operator::Drop).into_iter().chain(staticvec![
-                            Operator::Br {
-                                target: BrTarget::Label(label),
-                            },
-                            Operator::Label(label)
+                            Operator::Const(0i32.into()),
+                            Operator::End(BrTarget::Label(label).into()),
+                            Operator::Start(label)
                         ]))
                     } else {
                         iter(to_drop.map(Operator::Drop).into_iter())
@@ -1972,14 +1872,10 @@ where
 
                 let block = &mut self.control_frames[relative_depth as _];
                 block.mark_branched_to();
-                iter(
-                    to_drop
-                        .into_iter()
-                        .map(Operator::Drop)
-                        .chain(iter::once(Operator::Br {
-                            target: block.br_target(),
-                        })),
-                )
+                iter(to_drop.into_iter().map(Operator::Drop).chain(staticvec![
+                    Operator::Const(0i32.into()),
+                    Operator::End(block.br_target().into()),
+                ]))
             }
             WasmOperator::BrIf { relative_depth } => {
                 let to_drop = to_drop!(self.control_frames[relative_depth as _]);
@@ -1989,16 +1885,16 @@ where
                 let block = &mut self.control_frames[relative_depth as _];
                 block.mark_branched_to();
 
-                vec([
+                vec(smallvec![
                     Operator::block(params, label),
-                    Operator::BrIf {
-                        then: BrTargetDrop {
+                    end_if(
+                        BrTargetDrop {
                             to_drop,
                             target: block.br_target(),
                         },
-                        else_: BrTarget::Label(label).into(),
-                    },
-                    Operator::Label(label),
+                        BrTarget::Label(label).into(),
+                    ),
+                    Operator::Start(label),
                 ])
             }
             WasmOperator::BrTable { table } => {
@@ -2018,7 +1914,7 @@ where
                             target,
                         }
                     })
-                    .collect::<Vec<_>>();
+                    .collect();
 
                 self.control_frames[default as _].mark_branched_to();
 
@@ -2029,7 +1925,7 @@ where
                     target,
                 };
 
-                one(Operator::BrTable(BrTable { targets, default }))
+                one(Operator::End(Targets { targets, default }))
             }
             WasmOperator::Return => {
                 self.unreachable = true;
@@ -2037,14 +1933,10 @@ where
                 let block = self.control_frames.function_block();
                 let to_drop = to_drop!(block);
 
-                iter(
-                    to_drop
-                        .into_iter()
-                        .map(Operator::Drop)
-                        .chain(iter::once(Operator::Br {
-                            target: block.br_target(),
-                        })),
-                )
+                iter(to_drop.into_iter().map(Operator::Drop).chain(staticvec![
+                    Operator::Const(0i32.into()),
+                    Operator::End(block.br_target().into()),
+                ]))
             }
             WasmOperator::Call { function_index } => one(Operator::Call { function_index }),
             WasmOperator::CallIndirect { index, table_index } => one(Operator::CallIndirect {
@@ -2072,7 +1964,7 @@ where
                 let depth = depth
                     .try_into()
                     .map_err(|_| Error::Microwasm("LocalSet - Local out of range".into()))?;
-                vec([Operator::Swap(depth), Operator::Drop(0..=0)])
+                vec(smallvec![Operator::Swap(depth), Operator::Drop(0..=0)])
             }
             WasmOperator::LocalTee { local_index } => {
                 let depth = self
@@ -2082,7 +1974,7 @@ where
                 let depth = depth
                     .try_into()
                     .map_err(|_| Error::Microwasm("LocalTee - Local out of range".into()))?;
-                vec([
+                vec(smallvec![
                     Operator::Pick(0),
                     Operator::Swap(depth),
                     Operator::Drop(0..=0),

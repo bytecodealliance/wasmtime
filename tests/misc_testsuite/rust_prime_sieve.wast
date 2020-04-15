@@ -9128,7 +9128,7 @@
 (assert_return (invoke "is_prime" (i32.const 0x3)) (i32.const 0x1))
 (assert_return (invoke "is_prime" (i32.const 0x2)) (i32.const 0x1))
 (assert_return (invoke "is_prime" (i32.const 0x1)) (i32.const 0x0))
-;; (assert_return (invoke "is_prime" (i32.const 0x0)) (i32.const 0x0))
+(assert_return (invoke "is_prime" (i32.const 0x0)) (i32.const 0x0))
 (assert_return (invoke "nth_prime" (i32.const 0x0)) (i32.const 0x2))
 (assert_return (invoke "nth_prime" (i32.const 0x1)) (i32.const 0x3))
 (assert_return (invoke "nth_prime" (i32.const 0x2)) (i32.const 0x5))
