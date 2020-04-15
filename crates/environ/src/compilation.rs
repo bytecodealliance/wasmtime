@@ -256,7 +256,7 @@ pub enum RelocationTarget {
 pub type Relocations = PrimaryMap<DefinedFuncIndex, Vec<Relocation>>;
 
 /// Information about trap.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct TrapInformation {
     /// The offset of the trapping instruction in native code. It is relative to the beginning of the function.
     pub code_offset: binemit::CodeOffset,

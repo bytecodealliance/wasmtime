@@ -14,7 +14,6 @@ use crate::vmcontext::{
     VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
     VMTableDefinition, VMTableImport, VMTrampoline,
 };
-use crate::TrapRegistration;
 use crate::{ExportFunction, ExportGlobal, ExportMemory, ExportTable};
 use memoffset::offset_of;
 use more_asserts::assert_lt;
@@ -110,10 +109,6 @@ pub(crate) struct Instance {
 
     /// Handler run when `SIGBUS`, `SIGFPE`, `SIGILL`, or `SIGSEGV` are caught by the instance thread.
     pub(crate) signal_handler: Cell<Option<Box<SignalHandler>>>,
-
-    /// Handle to our registration of traps so signals know what trap to return
-    /// when a segfault/sigill happens.
-    pub(crate) trap_registration: TrapRegistration,
 
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
@@ -603,7 +598,6 @@ impl Instance {
         dst: u32,
         src: u32,
         len: u32,
-        source_loc: ir::SourceLoc,
     ) -> Result<(), Trap> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
 
@@ -619,7 +613,7 @@ impl Instance {
             .map_or(true, |n| n as usize > elem.len())
             || dst.checked_add(len).map_or(true, |m| m > table.size())
         {
-            return Err(Trap::wasm(source_loc, ir::TrapCode::TableOutOfBounds));
+            return Err(Trap::wasm(ir::TrapCode::TableOutOfBounds));
         }
 
         // TODO(#983): investigate replacing this get/set loop with a `memcpy`.
@@ -654,7 +648,6 @@ impl Instance {
         dst: u32,
         src: u32,
         len: u32,
-        source_loc: ir::SourceLoc,
     ) -> Result<(), Trap> {
         // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-memory-copy
 
@@ -667,7 +660,7 @@ impl Instance {
                 .checked_add(len)
                 .map_or(true, |m| m as usize > memory.current_length)
         {
-            return Err(Trap::wasm(source_loc, ir::TrapCode::HeapOutOfBounds));
+            return Err(Trap::wasm(ir::TrapCode::HeapOutOfBounds));
         }
 
         let dst = usize::try_from(dst).unwrap();
@@ -691,14 +684,13 @@ impl Instance {
         dst: u32,
         src: u32,
         len: u32,
-        source_loc: ir::SourceLoc,
     ) -> Result<(), Trap> {
         let import = self.imported_memory(memory_index);
         unsafe {
             let foreign_instance = (&*import.vmctx).instance();
             let foreign_memory = &*import.from;
             let foreign_index = foreign_instance.memory_index(foreign_memory);
-            foreign_instance.defined_memory_copy(foreign_index, dst, src, len, source_loc)
+            foreign_instance.defined_memory_copy(foreign_index, dst, src, len)
         }
     }
 
@@ -713,7 +705,6 @@ impl Instance {
         dst: u32,
         val: u32,
         len: u32,
-        source_loc: ir::SourceLoc,
     ) -> Result<(), Trap> {
         let memory = self.memory(memory_index);
 
@@ -721,7 +712,7 @@ impl Instance {
             .checked_add(len)
             .map_or(true, |m| m as usize > memory.current_length)
         {
-            return Err(Trap::wasm(source_loc, ir::TrapCode::HeapOutOfBounds));
+            return Err(Trap::wasm(ir::TrapCode::HeapOutOfBounds));
         }
 
         let dst = isize::try_from(dst).unwrap();
@@ -748,14 +739,13 @@ impl Instance {
         dst: u32,
         val: u32,
         len: u32,
-        source_loc: ir::SourceLoc,
     ) -> Result<(), Trap> {
         let import = self.imported_memory(memory_index);
         unsafe {
             let foreign_instance = (&*import.vmctx).instance();
             let foreign_memory = &*import.from;
             let foreign_index = foreign_instance.memory_index(foreign_memory);
-            foreign_instance.defined_memory_fill(foreign_index, dst, val, len, source_loc)
+            foreign_instance.defined_memory_fill(foreign_index, dst, val, len)
         }
     }
 
@@ -773,7 +763,6 @@ impl Instance {
         dst: u32,
         src: u32,
         len: u32,
-        source_loc: ir::SourceLoc,
     ) -> Result<(), Trap> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-memory-init
 
@@ -790,7 +779,7 @@ impl Instance {
                 .checked_add(len)
                 .map_or(true, |m| m as usize > memory.current_length)
         {
-            return Err(Trap::wasm(source_loc, ir::TrapCode::HeapOutOfBounds));
+            return Err(Trap::wasm(ir::TrapCode::HeapOutOfBounds));
         }
 
         let src_slice = &data[src as usize..(src + len) as usize];
@@ -859,7 +848,6 @@ impl InstanceHandle {
     /// safety.
     pub unsafe fn new(
         module: Arc<Module>,
-        trap_registration: TrapRegistration,
         finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
         trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
         imports: Imports,
@@ -906,7 +894,6 @@ impl InstanceHandle {
                 dbg_jit_registration,
                 host_state,
                 signal_handler: Cell::new(None),
-                trap_registration,
                 vmctx: VMContext {},
             };
             let layout = instance.alloc_layout();
@@ -1256,7 +1243,6 @@ fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
             .map_or(true, |end| end > table.size() as usize)
         {
             return Err(InstantiationError::Trap(Trap::wasm(
-                ir::SourceLoc::default(),
                 ir::TrapCode::HeapOutOfBounds,
             )));
         }
@@ -1332,7 +1318,6 @@ fn initialize_memories(
             .map_or(true, |end| end > memory.current_length)
         {
             return Err(InstantiationError::Trap(Trap::wasm(
-                ir::SourceLoc::default(),
                 ir::TrapCode::HeapOutOfBounds,
             )));
         }
@@ -1407,9 +1392,9 @@ pub enum InstantiationError {
 
     /// A trap ocurred during instantiation, after linking.
     #[error("Trap occurred during instantiation")]
-    Trap(#[source] Trap),
+    Trap(Trap),
 
     /// A compilation error occured.
     #[error("Trap occurred while invoking start function")]
-    StartTrap(#[source] Trap),
+    StartTrap(Trap),
 }

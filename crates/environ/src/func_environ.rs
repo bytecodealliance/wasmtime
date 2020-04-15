@@ -1,7 +1,7 @@
 use crate::module::{MemoryPlan, MemoryStyle, ModuleLocal, TableStyle};
 use crate::vmoffsets::VMOffsets;
 use crate::WASM_PAGE_SIZE;
-use cranelift_codegen::cursor::{Cursor, FuncCursor};
+use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
@@ -262,8 +262,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     AbiParam::new(I32),
                     // Number of elements to copy.
                     AbiParam::new(I32),
-                    // Source location.
-                    AbiParam::new(I32),
                 ],
                 returns: vec![],
                 call_conv: self.target_config.default_call_conv,
@@ -302,8 +300,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     // Source index within segment.
                     AbiParam::new(I32),
                     // Number of elements to initialize.
-                    AbiParam::new(I32),
-                    // Source location.
                     AbiParam::new(I32),
                 ],
                 returns: vec![],
@@ -362,8 +358,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     AbiParam::new(I32),
                     // Length.
                     AbiParam::new(I32),
-                    // Source location.
-                    AbiParam::new(I32),
                 ],
                 returns: vec![],
                 call_conv: self.target_config.default_call_conv,
@@ -406,8 +400,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     // Value.
                     AbiParam::new(I32),
                     // Length.
-                    AbiParam::new(I32),
-                    // Source location.
                     AbiParam::new(I32),
                 ],
                 returns: vec![],
@@ -453,8 +445,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     // Source index within the data segment.
                     AbiParam::new(I32),
                     // Length.
-                    AbiParam::new(I32),
-                    // Source location.
                     AbiParam::new(I32),
                 ],
                 returns: vec![],
@@ -1102,13 +1092,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
 
-        let src_loc = pos.srcloc();
-        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
-
         pos.ins().call_indirect(
             func_sig,
             func_addr,
-            &[vmctx, memory_index_arg, dst, src, len, src_loc_arg],
+            &[vmctx, memory_index_arg, dst, src, len],
         );
 
         Ok(())
@@ -1130,13 +1117,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
 
-        let src_loc = pos.srcloc();
-        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
-
         pos.ins().call_indirect(
             func_sig,
             func_addr,
-            &[vmctx, memory_index_arg, dst, val, len, src_loc_arg],
+            &[vmctx, memory_index_arg, dst, val, len],
         );
 
         Ok(())
@@ -1156,23 +1140,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let memory_index_arg = pos.ins().iconst(I32, memory_index.index() as i64);
         let seg_index_arg = pos.ins().iconst(I32, seg_index as i64);
-        let src_loc = pos.srcloc();
-        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
 
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
 
         pos.ins().call_indirect(
             func_sig,
             func_addr,
-            &[
-                vmctx,
-                memory_index_arg,
-                seg_index_arg,
-                dst,
-                src,
-                len,
-                src_loc_arg,
-            ],
+            &[vmctx, memory_index_arg, seg_index_arg, dst, src, len],
         );
 
         Ok(())
@@ -1215,9 +1189,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let dst_table_index_arg = pos.ins().iconst(I32, dst_table_index_arg as i64);
         let src_table_index_arg = pos.ins().iconst(I32, src_table_index_arg as i64);
 
-        let src_loc = pos.srcloc();
-        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
-
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
 
         pos.ins().call_indirect(
@@ -1230,7 +1201,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 dst,
                 src,
                 len,
-                src_loc_arg,
             ],
         );
 
@@ -1253,23 +1223,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let table_index_arg = pos.ins().iconst(I32, table_index_arg as i64);
         let seg_index_arg = pos.ins().iconst(I32, seg_index as i64);
 
-        let src_loc = pos.srcloc();
-        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
-
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
 
         pos.ins().call_indirect(
             func_sig,
             func_addr,
-            &[
-                vmctx,
-                table_index_arg,
-                seg_index_arg,
-                dst,
-                src,
-                len,
-                src_loc_arg,
-            ],
+            &[vmctx, table_index_arg, seg_index_arg, dst, src, len],
         );
 
         Ok(())

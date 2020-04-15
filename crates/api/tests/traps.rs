@@ -59,9 +59,13 @@ fn test_trap_trace() -> Result<()> {
     assert_eq!(trace[0].module_name().unwrap(), "hello_mod");
     assert_eq!(trace[0].func_index(), 1);
     assert_eq!(trace[0].func_name(), Some("hello"));
+    assert_eq!(trace[0].func_offset(), 1);
+    assert_eq!(trace[0].module_offset(), 0x26);
     assert_eq!(trace[1].module_name().unwrap(), "hello_mod");
     assert_eq!(trace[1].func_index(), 0);
     assert_eq!(trace[1].func_name(), None);
+    assert_eq!(trace[1].func_offset(), 1);
+    assert_eq!(trace[1].module_offset(), 0x21);
     assert!(
         e.message().contains("unreachable"),
         "wrong message: {}",
@@ -163,12 +167,12 @@ fn trap_display_pretty() -> Result<()> {
     assert_eq!(
         e.to_string(),
         "\
-wasm trap: unreachable, source location: @0023
+wasm trap: unreachable
 wasm backtrace:
-  0: m!die
-  1: m!<wasm function 1>
-  2: m!foo
-  3: m!<wasm function 3>
+  0:   0x23 - m!die
+  1:   0x27 - m!<wasm function 1>
+  2:   0x2c - m!foo
+  3:   0x31 - m!<wasm function 3>
 "
     );
     Ok(())
@@ -207,14 +211,14 @@ fn trap_display_multi_module() -> Result<()> {
     assert_eq!(
         e.to_string(),
         "\
-wasm trap: unreachable, source location: @0023
+wasm trap: unreachable
 wasm backtrace:
-  0: a!die
-  1: a!<wasm function 1>
-  2: a!foo
-  3: a!<wasm function 3>
-  4: b!middle
-  5: b!<wasm function 2>
+  0:   0x23 - a!die
+  1:   0x27 - a!<wasm function 1>
+  2:   0x2c - a!foo
+  3:   0x31 - a!<wasm function 3>
+  4:   0x29 - b!middle
+  5:   0x2e - b!<wasm function 2>
 "
     );
     Ok(())
@@ -371,10 +375,7 @@ fn call_signature_mismatch() -> Result<()> {
         .unwrap()
         .downcast::<Trap>()
         .unwrap();
-    assert_eq!(
-        err.message(),
-        "wasm trap: indirect call type mismatch, source location: @0030"
-    );
+    assert_eq!(err.message(), "wasm trap: indirect call type mismatch");
     Ok(())
 }
 
@@ -400,12 +401,12 @@ fn start_trap_pretty() -> Result<()> {
     assert_eq!(
         e.to_string(),
         "\
-wasm trap: unreachable, source location: @001d
+wasm trap: unreachable
 wasm backtrace:
-  0: m!die
-  1: m!<wasm function 1>
-  2: m!foo
-  3: m!start
+  0:   0x1d - m!die
+  1:   0x21 - m!<wasm function 1>
+  2:   0x26 - m!foo
+  3:   0x2b - m!start
 "
     );
     Ok(())

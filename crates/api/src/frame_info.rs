@@ -1,8 +1,10 @@
+use std::cmp;
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 use wasmtime_environ::entity::EntityRef;
+use wasmtime_environ::ir;
 use wasmtime_environ::wasm::FuncIndex;
-use wasmtime_environ::Module;
+use wasmtime_environ::{FunctionAddressMap, Module, TrapInformation};
 use wasmtime_jit::CompiledModule;
 
 lazy_static::lazy_static! {
@@ -11,7 +13,7 @@ lazy_static::lazy_static! {
     /// This global cache is used during `Trap` creation to symbolicate frames.
     /// This is populated on module compilation, and it is cleared out whenever
     /// all references to a module are dropped.
-    pub static ref FRAME_INFO: GlobalFrameInfo = GlobalFrameInfo::default();
+    pub static ref FRAME_INFO: RwLock<GlobalFrameInfo> = Default::default();
 }
 
 #[derive(Default)]
@@ -25,7 +27,7 @@ pub struct GlobalFrameInfo {
     ///
     /// The key of this map is the highest address in the module and the value
     /// is the module's information, which also contains the start address.
-    ranges: RwLock<BTreeMap<usize, ModuleFrameInfo>>,
+    ranges: BTreeMap<usize, ModuleFrameInfo>,
 }
 
 /// An RAII structure used to unregister a module's frame information when the
@@ -38,91 +40,162 @@ pub struct GlobalFrameInfoRegistration {
 
 struct ModuleFrameInfo {
     start: usize,
-    functions: BTreeMap<usize, (usize, FuncIndex)>,
+    functions: BTreeMap<usize, FunctionInfo>,
     module: Arc<Module>,
 }
 
+struct FunctionInfo {
+    start: usize,
+    index: FuncIndex,
+    traps: Vec<TrapInformation>,
+    instr_map: FunctionAddressMap,
+}
+
 impl GlobalFrameInfo {
-    /// Registers a new compiled module's frame information.
-    ///
-    /// This function will register the `names` information for all of the
-    /// compiled functions within `module`. If the `module` has no functions
-    /// then `None` will be returned. Otherwise the returned object, when
-    /// dropped, will be used to unregister all name information from this map.
-    pub fn register(&self, module: &CompiledModule) -> Option<GlobalFrameInfoRegistration> {
-        let mut min = usize::max_value();
-        let mut max = 0;
-        let mut functions = BTreeMap::new();
-        for (i, allocated) in module.finished_functions() {
-            let (start, end) = unsafe {
-                let ptr = (**allocated).as_ptr();
-                let len = (**allocated).len();
-                (ptr as usize, ptr as usize + len)
-            };
-            if start < min {
-                min = start;
-            }
-            if end > max {
-                max = end;
-            }
-            let func_index = module.module().local.func_index(i);
-            assert!(functions.insert(end, (start, func_index)).is_none());
-        }
-        if functions.len() == 0 {
-            return None;
-        }
-
-        let mut ranges = self.ranges.write().unwrap();
-        // First up assert that our chunk of jit functions doesn't collide with
-        // any other known chunks of jit functions...
-        if let Some((_, prev)) = ranges.range(max..).next() {
-            assert!(prev.start > max);
-        }
-        if let Some((prev_end, _)) = ranges.range(..=min).next_back() {
-            assert!(*prev_end < min);
-        }
-
-        // ... then insert our range and assert nothing was there previously
-        let prev = ranges.insert(
-            max,
-            ModuleFrameInfo {
-                start: min,
-                functions,
-                module: module.module().clone(),
-            },
-        );
-        assert!(prev.is_none());
-        Some(GlobalFrameInfoRegistration { key: max })
-    }
-
-    /// Fetches information about a program counter in a backtrace.
+    /// Fetches frame information about a program counter in a backtrace.
     ///
     /// Returns an object if this `pc` is known to some previously registered
     /// module, or returns `None` if no information can be found.
-    pub fn lookup(&self, pc: usize) -> Option<FrameInfo> {
-        let ranges = self.ranges.read().ok()?;
-        let (end, info) = ranges.range(pc..).next()?;
+    pub fn lookup_frame_info(&self, pc: usize) -> Option<FrameInfo> {
+        let (module, func) = self.func(pc)?;
+
+        // Use our relative position from the start of the function to find the
+        // machine instruction that corresponds to `pc`, which then allows us to
+        // map that to a wasm original source location.
+        let rel_pos = pc - func.start;
+        let pos = match func
+            .instr_map
+            .instructions
+            .binary_search_by_key(&rel_pos, |map| map.code_offset)
+        {
+            // Exact hit!
+            Ok(pos) => Some(pos),
+
+            // This *would* be at the first slot in the array, so no
+            // instructions cover `pc`.
+            Err(0) => None,
+
+            // This would be at the `nth` slot, so check `n-1` to see if we're
+            // part of that instruction. This happens due to the minus one when
+            // this function is called form trap symbolication, where we don't
+            // always get called with a `pc` that's an exact instruction
+            // boundary.
+            Err(n) => {
+                let instr = &func.instr_map.instructions[n - 1];
+                if instr.code_offset <= rel_pos && rel_pos < instr.code_offset + instr.code_len {
+                    Some(n - 1)
+                } else {
+                    None
+                }
+            }
+        };
+
+        // In debug mode for now assert that we found a mapping for `pc` within
+        // the function, because otherwise something is buggy along the way and
+        // not accounting for all the instructions. This isn't super critical
+        // though so we can omit this check in release mode.
+        debug_assert!(pos.is_some(), "failed to find instruction for {:x}", pc);
+
+        let instr = match pos {
+            Some(pos) => func.instr_map.instructions[pos].srcloc,
+            None => func.instr_map.start_srcloc,
+        };
+        Some(FrameInfo {
+            module_name: module.module.name.clone(),
+            func_index: func.index.index() as u32,
+            func_name: module.module.func_names.get(&func.index).cloned(),
+            instr,
+            func_start: func.instr_map.start_srcloc,
+        })
+    }
+
+    /// Fetches trap information about a program counter in a backtrace.
+    pub fn lookup_trap_info(&self, pc: usize) -> Option<&TrapInformation> {
+        let (_module, func) = self.func(pc)?;
+        let idx = func
+            .traps
+            .binary_search_by_key(&((pc - func.start) as u32), |info| info.code_offset)
+            .ok()?;
+        Some(&func.traps[idx])
+    }
+
+    fn func(&self, pc: usize) -> Option<(&ModuleFrameInfo, &FunctionInfo)> {
+        let (end, info) = self.ranges.range(pc..).next()?;
         if pc < info.start || *end < pc {
             return None;
         }
-        let (end, (start, func_index)) = info.functions.range(pc..).next()?;
-        if pc < *start || *end < pc {
+        let (end, func) = info.functions.range(pc..).next()?;
+        if pc < func.start || *end < pc {
             return None;
         }
-        Some(FrameInfo {
-            module_name: info.module.name.clone(),
-            func_index: func_index.index() as u32,
-            func_name: info.module.func_names.get(func_index).cloned(),
-        })
+        Some((info, func))
     }
 }
 
 impl Drop for GlobalFrameInfoRegistration {
     fn drop(&mut self) {
-        if let Ok(mut map) = FRAME_INFO.ranges.write() {
-            map.remove(&self.key);
+        if let Ok(mut info) = FRAME_INFO.write() {
+            info.ranges.remove(&self.key);
         }
     }
+}
+
+/// Registers a new compiled module's frame information.
+///
+/// This function will register the `names` information for all of the
+/// compiled functions within `module`. If the `module` has no functions
+/// then `None` will be returned. Otherwise the returned object, when
+/// dropped, will be used to unregister all name information from this map.
+pub fn register(module: &CompiledModule) -> Option<GlobalFrameInfoRegistration> {
+    let mut min = usize::max_value();
+    let mut max = 0;
+    let mut functions = BTreeMap::new();
+    for (((i, allocated), traps), instrs) in module
+        .finished_functions()
+        .iter()
+        .zip(module.traps().values())
+        .zip(module.address_transform().values())
+    {
+        let (start, end) = unsafe {
+            let ptr = (**allocated).as_ptr();
+            let len = (**allocated).len();
+            (ptr as usize, ptr as usize + len)
+        };
+        min = cmp::min(min, start);
+        max = cmp::max(max, end);
+        let func = FunctionInfo {
+            start,
+            index: module.module().local.func_index(i),
+            traps: traps.to_vec(),
+            instr_map: (*instrs).clone(),
+        };
+        assert!(functions.insert(end, func).is_none());
+    }
+    if functions.len() == 0 {
+        return None;
+    }
+
+    let mut info = FRAME_INFO.write().unwrap();
+    // First up assert that our chunk of jit functions doesn't collide with
+    // any other known chunks of jit functions...
+    if let Some((_, prev)) = info.ranges.range(max..).next() {
+        assert!(prev.start > max);
+    }
+    if let Some((prev_end, _)) = info.ranges.range(..=min).next_back() {
+        assert!(*prev_end < min);
+    }
+
+    // ... then insert our range and assert nothing was there previously
+    let prev = info.ranges.insert(
+        max,
+        ModuleFrameInfo {
+            start: min,
+            functions,
+            module: module.module().clone(),
+        },
+    );
+    assert!(prev.is_none());
+    Some(GlobalFrameInfoRegistration { key: max })
 }
 
 /// Description of a frame in a backtrace for a [`Trap`].
@@ -137,6 +210,8 @@ pub struct FrameInfo {
     module_name: Option<String>,
     func_index: u32,
     func_name: Option<String>,
+    func_start: ir::SourceLoc,
+    instr: ir::SourceLoc,
 }
 
 impl FrameInfo {
@@ -177,5 +252,24 @@ impl FrameInfo {
     /// This function returns `None` when no name could be inferred.
     pub fn func_name(&self) -> Option<&str> {
         self.func_name.as_deref()
+    }
+
+    /// Returns the offset within the original wasm module this frame's program
+    /// counter was at.
+    ///
+    /// The offset here is the offset from the beginning of the original wasm
+    /// module to the instruction that this frame points to.
+    pub fn module_offset(&self) -> usize {
+        self.instr.bits() as usize
+    }
+
+    /// Returns the offset from the original wasm module's function to this
+    /// frame's program counter.
+    ///
+    /// The offset here is the offset from the beginning of the defining
+    /// function of this frame (within the wasm module) to the instruction this
+    /// frame points to.
+    pub fn func_offset(&self) -> usize {
+        (self.instr.bits() - self.func_start.bits()) as usize
     }
 }

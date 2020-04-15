@@ -39,7 +39,6 @@ pub(crate) fn create_handle(
     unsafe {
         Ok(InstanceHandle::new(
             Arc::new(module),
-            store.compiler().trap_registry().register_traps(Vec::new()),
             finished_functions.into_boxed_slice(),
             trampolines,
             imports,

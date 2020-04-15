@@ -2,13 +2,11 @@
 //! signalhandling mechanisms.
 
 use crate::instance::{InstanceHandle, SignalHandler};
-use crate::trap_registry::TrapDescription;
 use crate::vmcontext::VMContext;
 use backtrace::Backtrace;
 use std::any::Any;
 use std::cell::Cell;
 use std::error::Error;
-use std::fmt;
 use std::io;
 use std::ptr;
 use std::sync::Once;
@@ -319,11 +317,19 @@ fn reset_guard_page() {}
 pub enum Trap {
     /// A user-raised trap through `raise_user_trap`.
     User(Box<dyn Error + Send + Sync>),
-    /// A wasm-originating trap from wasm code itself.
+
+    /// A trap raised from jit code
+    Jit {
+        /// The program counter in JIT code where this trap happened.
+        pc: usize,
+        /// Native stack backtrace at the time the trap occurred
+        backtrace: Backtrace,
+    },
+
+    /// A trap raised from a wasm libcall
     Wasm {
-        /// What sort of trap happened, as well as where in the original wasm module
-        /// it happened.
-        desc: TrapDescription,
+        /// Code of the trap.
+        trap_code: ir::TrapCode,
         /// Native stack backtrace at the time the trap occurred
         backtrace: Backtrace,
     },
@@ -335,36 +341,23 @@ pub enum Trap {
     },
 }
 
-impl fmt::Display for Trap {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Trap::User(user) => user.fmt(f),
-            Trap::Wasm { desc, .. } => desc.fmt(f),
-            Trap::OOM { .. } => write!(f, "Out of memory"),
-        }
-    }
-}
-
-impl std::error::Error for Trap {}
-
 impl Trap {
     /// Construct a new Wasm trap with the given source location and trap code.
     ///
     /// Internally saves a backtrace when constructed.
-    pub fn wasm(source_loc: ir::SourceLoc, trap_code: ir::TrapCode) -> Self {
-        let desc = TrapDescription {
-            source_loc,
+    pub fn wasm(trap_code: ir::TrapCode) -> Self {
+        let backtrace = Backtrace::new_unresolved();
+        Trap::Wasm {
             trap_code,
-        };
-        let backtrace = Backtrace::new();
-        Trap::Wasm { desc, backtrace }
+            backtrace,
+        }
     }
 
     /// Construct a new OOM trap with the given source location and trap code.
     ///
     /// Internally saves a backtrace when constructed.
     pub fn oom() -> Self {
-        let backtrace = Backtrace::new();
+        let backtrace = Backtrace::new_unresolved();
         Trap::OOM { backtrace }
     }
 }
@@ -413,7 +406,7 @@ enum UnwindReason {
     Panic(Box<dyn Any + Send>),
     UserTrap(Box<dyn Error + Send + Sync>),
     LibTrap(Trap),
-    Trap { backtrace: Backtrace, pc: usize },
+    JitTrap { backtrace: Backtrace, pc: usize },
 }
 
 impl CallThreadState {
@@ -442,21 +435,9 @@ impl CallThreadState {
                     Err(Trap::User(data))
                 }
                 UnwindReason::LibTrap(trap) => Err(trap),
-                UnwindReason::Trap { backtrace, pc } => {
+                UnwindReason::JitTrap { backtrace, pc } => {
                     debug_assert_eq!(ret, 0);
-                    let instance = unsafe { InstanceHandle::from_vmctx(self.vmctx) };
-
-                    Err(Trap::Wasm {
-                        desc: instance
-                            .instance()
-                            .trap_registration
-                            .get_trap(pc)
-                            .unwrap_or_else(|| TrapDescription {
-                                source_loc: ir::SourceLoc::default(),
-                                trap_code: ir::TrapCode::StackOverflow,
-                            }),
-                        backtrace,
-                    })
+                    Err(Trap::Jit { pc, backtrace })
                 }
                 UnwindReason::Panic(panic) => {
                     debug_assert_eq!(ret, 0);
@@ -546,7 +527,7 @@ impl CallThreadState {
         }
         let backtrace = Backtrace::new_unresolved();
         self.reset_guard_page.set(reset_guard_page);
-        self.unwind.replace(UnwindReason::Trap {
+        self.unwind.replace(UnwindReason::JitTrap {
             backtrace,
             pc: pc as usize,
         });

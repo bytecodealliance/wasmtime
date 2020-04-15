@@ -1,4 +1,4 @@
-use crate::frame_info::{GlobalFrameInfoRegistration, FRAME_INFO};
+use crate::frame_info::GlobalFrameInfoRegistration;
 use crate::runtime::Store;
 use crate::types::{
     ExportType, ExternType, FuncType, GlobalType, ImportType, Limits, MemoryType, Mutability,
@@ -670,6 +670,6 @@ and for re-adding support for interface types you can see this issue:
         if info.is_some() {
             return;
         }
-        *info = Some(FRAME_INFO.register(&self.inner.compiled));
+        *info = Some(super::frame_info::register(&self.inner.compiled));
     }
 }

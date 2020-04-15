@@ -268,12 +268,7 @@ fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError
                 CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
             })?;
 
-            let address_transform = if env.tunables.debug_info {
-                let body_len = code_buf.len();
-                Some(get_function_address_map(&context, input, body_len, isa))
-            } else {
-                None
-            };
+            let address_transform = get_function_address_map(&context, input, code_buf.len(), isa);
 
             let frame_layout = if env.tunables.debug_info {
                 let (initial_commands, commands) = get_frame_layout(&context, isa);
@@ -327,9 +322,7 @@ fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError
                     unwind_info,
                 });
                 relocations.push(relocs);
-                if let Some(address_transform) = address_transform {
-                    address_transforms.push(address_transform);
-                }
+                address_transforms.push(address_transform);
                 value_ranges.push(ranges.unwrap_or_default());
                 stack_slots.push(sss);
                 traps.push(function_traps);

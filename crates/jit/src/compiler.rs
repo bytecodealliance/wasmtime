@@ -9,19 +9,17 @@ use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
 use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex};
 use wasmtime_environ::{
     CacheConfig, CompileError, CompiledFunction, CompiledFunctionUnwindInfo, Compiler as _C,
-    ModuleMemoryOffset, ModuleTranslation, ModuleVmctxInfo, Relocation, RelocationTarget,
-    Relocations, Traps, Tunables, VMOffsets,
+    ModuleAddressMap, ModuleMemoryOffset, ModuleTranslation, ModuleVmctxInfo, Relocation,
+    RelocationTarget, Relocations, Traps, Tunables, VMOffsets,
 };
 use wasmtime_runtime::{
-    InstantiationError, SignatureRegistry, TrapRegistration, TrapRegistry, VMFunctionBody,
-    VMSharedSignatureIndex, VMTrampoline,
+    InstantiationError, SignatureRegistry, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
 };
 
 /// Select which kind of compilation to use.
@@ -50,7 +48,6 @@ pub struct Compiler {
     isa: Box<dyn TargetIsa>,
 
     code_memory: CodeMemory,
-    trap_registry: TrapRegistry,
     signatures: SignatureRegistry,
     strategy: CompilationStrategy,
     cache_config: CacheConfig,
@@ -70,7 +67,6 @@ impl Compiler {
             code_memory: CodeMemory::new(),
             signatures: SignatureRegistry::new(),
             strategy,
-            trap_registry: TrapRegistry::default(),
             cache_config,
             tunables,
         }
@@ -85,7 +81,8 @@ pub struct Compilation {
     pub trampoline_relocations: HashMap<VMSharedSignatureIndex, Vec<Relocation>>,
     pub jt_offsets: PrimaryMap<DefinedFuncIndex, ir::JumpTableOffsets>,
     pub dbg_image: Option<Vec<u8>>,
-    pub trap_registration: TrapRegistration,
+    pub traps: Traps,
+    pub address_transform: ModuleAddressMap,
 }
 
 impl Compiler {
@@ -143,11 +140,6 @@ impl Compiler {
                     message
                 )))
             })?;
-
-        // Create a registration value for all traps in our allocated
-        // functions. This registration will allow us to map a trapping PC
-        // value to what the trap actually means if it came from JIT code.
-        let trap_registration = register_traps(&finished_functions, &traps, &self.trap_registry);
 
         // Eagerly generate a entry trampoline for every type signature in the
         // module. This should be "relatively lightweight" for most modules and
@@ -228,7 +220,8 @@ impl Compiler {
             trampoline_relocations,
             jt_offsets,
             dbg_image,
-            trap_registration,
+            traps,
+            address_transform,
         })
     }
 
@@ -240,11 +233,6 @@ impl Compiler {
     /// Shared signature registry.
     pub fn signatures(&self) -> &SignatureRegistry {
         &self.signatures
-    }
-
-    /// Shared registration of trap information
-    pub fn trap_registry(&self) -> &TrapRegistry {
-        &self.trap_registry
     }
 }
 
@@ -390,26 +378,6 @@ fn allocate_functions(
         result.push(fat_ptr);
     }
     Ok(result)
-}
-
-fn register_traps(
-    allocated_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-    traps: &Traps,
-    registry: &TrapRegistry,
-) -> TrapRegistration {
-    let traps =
-        allocated_functions
-            .values()
-            .zip(traps.values())
-            .flat_map(|(func_addr, func_traps)| {
-                func_traps.iter().map(move |trap_desc| {
-                    let func_addr = *func_addr as *const u8 as usize;
-                    let offset = usize::try_from(trap_desc.code_offset).unwrap();
-                    let trap_addr = func_addr + offset;
-                    (trap_addr, trap_desc.source_loc, trap_desc.trap_code)
-                })
-            });
-    registry.register_traps(traps)
 }
 
 /// We don't expect trampoline compilation to produce many relocations, so
