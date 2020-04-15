@@ -6,7 +6,7 @@ use crate::isa::{
     x86::registers::RU,
     CallConv, RegUnit, TargetIsa,
 };
-use crate::result::CodegenResult;
+use crate::result::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use gimli::{write::CommonInformationEntry, Encoding, Format, Register, X86_64};
 
@@ -117,7 +117,7 @@ impl<'a> InstructionBuilder<'a> {
         }
     }
 
-    fn push_reg(&mut self, offset: u32, arg: Value) {
+    fn push_reg(&mut self, offset: u32, arg: Value) -> Result<(), RegisterMappingError> {
         self.cfa_offset += 8;
 
         let reg = self.func.locations[arg].unwrap_reg();
@@ -135,13 +135,10 @@ impl<'a> InstructionBuilder<'a> {
         // Pushes in the prologue are register saves, so record an offset of the save
         self.instructions.push((
             offset,
-            CallFrameInstruction::Offset(
-                map_reg(self.isa, reg)
-                    .expect("a register mapping from cranelift to gimli")
-                    .0,
-                -self.cfa_offset,
-            ),
+            CallFrameInstruction::Offset(map_reg(self.isa, reg)?.0, -self.cfa_offset),
         ));
+
+        Ok(())
     }
 
     fn adjust_sp_down(&mut self, offset: u32) {
@@ -183,20 +180,23 @@ impl<'a> InstructionBuilder<'a> {
             .push((offset, CallFrameInstruction::CfaOffset(self.cfa_offset)));
     }
 
-    fn move_reg(&mut self, offset: u32, src: RegUnit, dst: RegUnit) {
+    fn move_reg(
+        &mut self,
+        offset: u32,
+        src: RegUnit,
+        dst: RegUnit,
+    ) -> Result<(), RegisterMappingError> {
         if let Some(fp) = self.frame_register {
             // Check for change in CFA register (RSP is always the starting CFA)
             if src == (RU::rsp as RegUnit) && dst == fp {
                 self.instructions.push((
                     offset,
-                    CallFrameInstruction::CfaRegister(
-                        map_reg(self.isa, dst)
-                            .expect("a register mapping from cranelift to gimli")
-                            .0,
-                    ),
+                    CallFrameInstruction::CfaRegister(map_reg(self.isa, dst)?.0),
                 ));
             }
         }
+
+        Ok(())
     }
 
     fn prologue_imm_const(&mut self, imm: i64) {
@@ -210,7 +210,7 @@ impl<'a> InstructionBuilder<'a> {
         self.stack_size = Some(imm as i32);
     }
 
-    fn ret(&mut self, inst: Inst) {
+    fn ret(&mut self, inst: Inst) -> Result<(), RegisterMappingError> {
         let args = self.func.dfg.inst_args(inst);
 
         for (i, arg) in args.iter().rev().enumerate() {
@@ -229,9 +229,7 @@ impl<'a> InstructionBuilder<'a> {
                         self.instructions.push((
                             self.epilogue_pop_offsets[i],
                             CallFrameInstruction::Cfa(
-                                map_reg(self.isa, RU::rsp as RegUnit)
-                                    .expect("a register mapping from cranelift to gimli")
-                                    .0,
+                                map_reg(self.isa, RU::rsp as RegUnit)?.0,
                                 self.cfa_offset,
                             ),
                         ));
@@ -247,17 +245,15 @@ impl<'a> InstructionBuilder<'a> {
                     // This isn't necessary when using a frame pointer as the CFA doesn't change for CSR restores
                     self.instructions.push((
                         self.epilogue_pop_offsets[i],
-                        CallFrameInstruction::SameValue(
-                            map_reg(self.isa, reg)
-                                .expect("a register mapping from cranelift to gimli")
-                                .0,
-                        ),
+                        CallFrameInstruction::SameValue(map_reg(self.isa, reg)?.0),
                     ));
                 }
             };
         }
 
         self.epilogue_pop_offsets.clear();
+
+        Ok(())
     }
 
     fn insert_pop_offset(&mut self, offset: u32) {
@@ -332,7 +328,9 @@ pub(crate) fn create_unwind_info(
             match builder.func.dfg[inst] {
                 InstructionData::Unary { opcode, arg } => match opcode {
                     Opcode::X86Push => {
-                        builder.push_reg(offset, arg);
+                        builder
+                            .push_reg(offset, arg)
+                            .map_err(CodegenError::RegisterMappingError)?;
                     }
                     Opcode::AdjustSpDown => {
                         builder.adjust_sp_down(offset);
@@ -340,7 +338,9 @@ pub(crate) fn create_unwind_info(
                     _ => {}
                 },
                 InstructionData::CopySpecial { src, dst, .. } => {
-                    builder.move_reg(offset, src, dst);
+                    builder
+                        .move_reg(offset, src, dst)
+                        .map_err(CodegenError::RegisterMappingError)?;
                 }
                 InstructionData::NullAry { opcode } => match opcode {
                     Opcode::X86Pop => {
@@ -362,7 +362,9 @@ pub(crate) fn create_unwind_info(
                 },
                 InstructionData::MultiAry { opcode, .. } => match opcode {
                     Opcode::Return => {
-                        builder.ret(inst);
+                        builder
+                            .ret(inst)
+                            .map_err(CodegenError::RegisterMappingError)?;
 
                         if !is_last_block {
                             builder.restore_state(offset);

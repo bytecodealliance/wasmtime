@@ -12,7 +12,7 @@ type Expression = Vec<u8>;
 
 /// Enumerate the errors possible in mapping Cranelift registers to their DWARF equivalent.
 #[allow(missing_docs)]
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum RegisterMappingError {
     #[error("unable to find bank for register info")]
     MissingBank,
