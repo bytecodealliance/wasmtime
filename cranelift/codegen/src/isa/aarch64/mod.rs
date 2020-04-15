@@ -2,7 +2,6 @@
 
 use crate::ir::Function;
 use crate::isa::Builder as IsaBuilder;
-use crate::isa::TargetIsa;
 use crate::machinst::{
     compile, MachBackend, MachCompileResult, ShowWithRRU, TargetIsaAdapter, VCode,
 };
@@ -10,10 +9,9 @@ use crate::result::CodegenResult;
 use crate::settings;
 
 use alloc::boxed::Box;
-use std::str::FromStr;
 
 use regalloc::RealRegUniverse;
-use target_lexicon::Triple;
+use target_lexicon::{Aarch64Architecture, Architecture, Triple};
 
 // New backend:
 mod abi;
@@ -22,29 +20,30 @@ mod lower;
 
 use inst::create_reg_universe;
 
-/// An ARM64 backend.
-pub struct Arm64Backend {
+/// An AArch64 backend.
+pub struct AArch64Backend {
+    triple: Triple,
     flags: settings::Flags,
 }
 
-impl Arm64Backend {
-    /// Create a new ARM64 backend with the given (shared) flags.
-    pub fn new_with_flags(flags: settings::Flags) -> Arm64Backend {
-        Arm64Backend { flags }
+impl AArch64Backend {
+    /// Create a new AArch64 backend with the given (shared) flags.
+    pub fn new_with_flags(triple: Triple, flags: settings::Flags) -> AArch64Backend {
+        AArch64Backend { triple, flags }
     }
 
-    fn compile_vcode(&self, mut func: Function, flags: &settings::Flags) -> VCode<inst::Inst> {
+    fn compile_vcode(&self, func: &Function, flags: &settings::Flags) -> VCode<inst::Inst> {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
-        let abi = Box::new(abi::ARM64ABIBody::new(&func));
-        compile::compile::<Arm64Backend>(&mut func, self, abi, flags)
+        let abi = Box::new(abi::AArch64ABIBody::new(func));
+        compile::compile::<AArch64Backend>(func, self, abi, flags)
     }
 }
 
-impl MachBackend for Arm64Backend {
+impl MachBackend for AArch64Backend {
     fn compile_function(
         &self,
-        func: Function,
+        func: &Function,
         want_disasm: bool,
     ) -> CodegenResult<MachCompileResult> {
         let flags = self.flags();
@@ -66,11 +65,11 @@ impl MachBackend for Arm64Backend {
     }
 
     fn name(&self) -> &'static str {
-        "arm64"
+        "aarch64"
     }
 
     fn triple(&self) -> Triple {
-        FromStr::from_str("arm64").unwrap()
+        self.triple.clone()
     }
 
     fn flags(&self) -> &settings::Flags {
@@ -84,32 +83,28 @@ impl MachBackend for Arm64Backend {
 
 /// Create a new `isa::Builder`.
 pub fn isa_builder(triple: Triple) -> IsaBuilder {
+    assert!(triple.architecture == Architecture::Aarch64(Aarch64Architecture::Aarch64));
     IsaBuilder {
         triple,
         setup: settings::builder(),
-        constructor: isa_constructor,
+        constructor: |triple, shared_flags, _| {
+            let backend = AArch64Backend::new_with_flags(triple, shared_flags);
+            Box::new(TargetIsaAdapter::new(backend))
+        },
     }
-}
-
-fn isa_constructor(
-    _: Triple,
-    shared_flags: settings::Flags,
-    _arch_flag_builder: settings::Builder,
-) -> Box<dyn TargetIsa> {
-    let backend = Arm64Backend::new_with_flags(shared_flags);
-    Box::new(TargetIsaAdapter::new(backend))
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::binemit::{NullRelocSink, NullStackmapSink, NullTrapSink};
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::types::*;
     use crate::ir::{AbiParam, ExternalName, Function, InstBuilder, Signature};
     use crate::isa::CallConv;
     use crate::settings;
     use crate::settings::Configurable;
+    use core::str::FromStr;
+    use target_lexicon::Triple;
 
     #[test]
     fn test_compile_function() {
@@ -130,8 +125,11 @@ mod test {
 
         let mut shared_flags = settings::builder();
         shared_flags.set("opt_level", "none").unwrap();
-        let backend = Arm64Backend::new_with_flags(settings::Flags::new(shared_flags));
-        let sections = backend.compile_function(func, false).unwrap().sections;
+        let backend = AArch64Backend::new_with_flags(
+            Triple::from_str("aarch64").unwrap(),
+            settings::Flags::new(shared_flags),
+        );
+        let sections = backend.compile_function(&mut func, false).unwrap().sections;
         let code = &sections.sections[0].data;
 
         // stp x29, x30, [sp, #-16]!
@@ -182,9 +180,12 @@ mod test {
 
         let mut shared_flags = settings::builder();
         shared_flags.set("opt_level", "none").unwrap();
-        let backend = Arm64Backend::new_with_flags(settings::Flags::new(shared_flags));
+        let backend = AArch64Backend::new_with_flags(
+            Triple::from_str("aarch64").unwrap(),
+            settings::Flags::new(shared_flags),
+        );
         let result = backend
-            .compile_function(func, /* want_disasm = */ false)
+            .compile_function(&mut func, /* want_disasm = */ false)
             .unwrap();
         let code = &result.sections.sections[0].data;
 

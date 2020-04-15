@@ -1,22 +1,14 @@
-//! ARM64 ISA: binary code emission.
+//! AArch64 ISA: binary code emission.
 
-#![allow(dead_code)]
-#![allow(non_snake_case)]
-
-use crate::binemit::{CodeOffset, CodeSink, Reloc};
+use crate::binemit::{CodeOffset, Reloc};
 use crate::ir::constant::ConstantData;
 use crate::ir::types::*;
-use crate::ir::{Opcode, TrapCode, Type};
-use crate::isa::arm64::inst::*;
-use crate::machinst::*;
-use cranelift_entity::EntityRef;
+use crate::ir::TrapCode;
+use crate::isa::aarch64::inst::*;
 
-use std::env;
+use core::convert::TryFrom;
 
-use regalloc::{
-    RealReg, RealRegUniverse, Reg, RegClass, RegClassInfo, SpillSlot, VirtualReg, Writable,
-    NUM_REG_CLASSES,
-};
+use regalloc::{Reg, RegClass, Writable};
 
 use alloc::vec::Vec;
 
@@ -66,16 +58,7 @@ pub fn mem_finalize(insn_off: CodeOffset, mem: &MemArg) -> (Vec<Inst>, MemArg) {
 
 /// Helper: get a ConstantData from a u64.
 pub fn u64_constant(bits: u64) -> ConstantData {
-    let data = [
-        (bits & 0xff) as u8,
-        ((bits >> 8) & 0xff) as u8,
-        ((bits >> 16) & 0xff) as u8,
-        ((bits >> 24) & 0xff) as u8,
-        ((bits >> 32) & 0xff) as u8,
-        ((bits >> 40) & 0xff) as u8,
-        ((bits >> 48) & 0xff) as u8,
-        ((bits >> 56) & 0xff) as u8,
-    ];
+    let data = bits.to_le_bytes();
     ConstantData::from(&data[..])
 }
 
@@ -84,41 +67,42 @@ pub fn u64_constant(bits: u64) -> ConstantData {
 
 fn machreg_to_gpr(m: Reg) -> u32 {
     assert!(m.get_class() == RegClass::I64);
-    assert!(m.is_real());
-    m.to_real_reg().get_hw_encoding() as u32
+    u32::try_from(m.to_real_reg().get_hw_encoding()).unwrap()
 }
 
 fn machreg_to_vec(m: Reg) -> u32 {
     assert!(m.get_class() == RegClass::V128);
-    assert!(m.is_real());
-    m.to_real_reg().get_hw_encoding() as u32
+    u32::try_from(m.to_real_reg().get_hw_encoding()).unwrap()
 }
 
 fn machreg_to_gpr_or_vec(m: Reg) -> u32 {
-    m.to_real_reg().get_hw_encoding() as u32
+    u32::try_from(m.to_real_reg().get_hw_encoding()).unwrap()
 }
 
-fn enc_arith_rrr(bits_31_21: u16, bits_15_10: u8, rd: Writable<Reg>, rn: Reg, rm: Reg) -> u32 {
-    ((bits_31_21 as u32) << 21)
-        | ((bits_15_10 as u32) << 10)
+fn enc_arith_rrr(bits_31_21: u32, bits_15_10: u32, rd: Writable<Reg>, rn: Reg, rm: Reg) -> u32 {
+    (bits_31_21 << 21)
+        | (bits_15_10 << 10)
         | machreg_to_gpr(rd.to_reg())
         | (machreg_to_gpr(rn) << 5)
         | (machreg_to_gpr(rm) << 16)
 }
 
-fn enc_arith_rr_imm12(bits_31_24: u8, immshift: u8, imm12: u16, rn: Reg, rd: Writable<Reg>) -> u32 {
-    ((bits_31_24 as u32) << 24)
-        | ((immshift as u32) << 22)
-        | ((imm12 as u32) << 10)
+fn enc_arith_rr_imm12(
+    bits_31_24: u32,
+    immshift: u32,
+    imm12: u32,
+    rn: Reg,
+    rd: Writable<Reg>,
+) -> u32 {
+    (bits_31_24 << 24)
+        | (immshift << 22)
+        | (imm12 << 10)
         | (machreg_to_gpr(rn) << 5)
         | machreg_to_gpr(rd.to_reg())
 }
 
-fn enc_arith_rr_imml(bits_31_23: u16, imm_bits: u16, rn: Reg, rd: Writable<Reg>) -> u32 {
-    ((bits_31_23 as u32) << 23)
-        | ((imm_bits as u32) << 10)
-        | (machreg_to_gpr(rn) << 5)
-        | machreg_to_gpr(rd.to_reg())
+fn enc_arith_rr_imml(bits_31_23: u32, imm_bits: u32, rn: Reg, rd: Writable<Reg>) -> u32 {
+    (bits_31_23 << 23) | (imm_bits << 10) | (machreg_to_gpr(rn) << 5) | machreg_to_gpr(rd.to_reg())
 }
 
 fn enc_arith_rrrr(top11: u32, rm: Reg, bit15: u32, ra: Reg, rn: Reg, rd: Writable<Reg>) -> u32 {
@@ -159,8 +143,8 @@ fn enc_move_wide(op: MoveWideOpcode, rd: Writable<Reg>, imm: MoveWideConst) -> u
     assert!(imm.shift <= 0b11);
     MOVE_WIDE_FIXED
         | (op as u32) << 29
-        | (imm.shift as u32) << 21
-        | (imm.bits as u32) << 5
+        | u32::from(imm.shift) << 21
+        | u32::from(imm.bits) << 5
         | machreg_to_gpr(rd.to_reg())
 }
 
@@ -201,7 +185,7 @@ fn enc_ldst_reg(
         Some(ExtendOp::UXTW) => 0b010,
         Some(ExtendOp::SXTW) => 0b110,
         Some(ExtendOp::SXTX) => 0b111,
-        None => 0b011, /* LSL */
+        None => 0b011, // LSL
         _ => panic!("bad extend mode for ld/st MemArg"),
     };
     (op_31_22 << 22)
@@ -244,7 +228,7 @@ fn enc_br(rn: Reg) -> u32 {
 }
 
 fn enc_adr(off: i32, rd: Writable<Reg>) -> u32 {
-    let off = off as u32;
+    let off = u32::try_from(off).unwrap();
     let immlo = off & 3;
     let immhi = (off >> 2) & ((1 << 19) - 1);
     (0b00010000 << 24) | (immlo << 29) | (immhi << 5) | machreg_to_gpr(rd.to_reg())
@@ -258,8 +242,8 @@ fn enc_csel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond) -> u32 {
         | (cond.bits() << 12)
 }
 
-fn enc_fcsel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond, is32: bool) -> u32 {
-    let ty_bit = if is32 { 0 } else { 1 };
+fn enc_fcsel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond, size: InstSize) -> u32 {
+    let ty_bit = if size.is32() { 0 } else { 1 };
     0b000_11110_00_1_00000_0000_11_00000_00000
         | (machreg_to_vec(rm) << 16)
         | (machreg_to_vec(rn) << 5)
@@ -301,8 +285,8 @@ fn enc_fpurrrr(top17: u32, rd: Writable<Reg>, rn: Reg, rm: Reg, ra: Reg) -> u32 
         | machreg_to_vec(rd.to_reg())
 }
 
-fn enc_fcmp(is32: bool, rn: Reg, rm: Reg) -> u32 {
-    let bits = if is32 {
+fn enc_fcmp(size: InstSize, rn: Reg, rm: Reg) -> u32 {
+    let bits = if size.is32() {
         0b000_11110_00_1_00000_00_1000_00000_00000
     } else {
         0b000_11110_01_1_00000_00_1000_00000_00000
@@ -359,7 +343,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     | ALUOp::SMulH
                     | ALUOp::UMulH => {
                         //// RRRR ops.
-                        panic!("Bad ALUOp in RRR form!");
+                        panic!("Bad ALUOp {:?} in RRR form!", alu_op);
                     }
                 };
                 let bit15_10 = match alu_op {
@@ -450,14 +434,14 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
             } => {
                 let amt = immshift.value();
                 let (top10, immr, imms) = match alu_op {
-                    ALUOp::RotR32 => (0b0001001110, machreg_to_gpr(rn), amt as u32),
-                    ALUOp::RotR64 => (0b1001001111, machreg_to_gpr(rn), amt as u32),
-                    ALUOp::Lsr32 => (0b0101001100, amt as u32, 0b011111),
-                    ALUOp::Lsr64 => (0b1101001101, amt as u32, 0b111111),
-                    ALUOp::Asr32 => (0b0001001100, amt as u32, 0b011111),
-                    ALUOp::Asr64 => (0b1001001101, amt as u32, 0b111111),
-                    ALUOp::Lsl32 => (0b0101001100, (32 - amt) as u32, (31 - amt) as u32),
-                    ALUOp::Lsl64 => (0b1101001101, (64 - amt) as u32, (63 - amt) as u32),
+                    ALUOp::RotR32 => (0b0001001110, machreg_to_gpr(rn), u32::from(amt)),
+                    ALUOp::RotR64 => (0b1001001111, machreg_to_gpr(rn), u32::from(amt)),
+                    ALUOp::Lsr32 => (0b0101001100, u32::from(amt), 0b011111),
+                    ALUOp::Lsr64 => (0b1101001101, u32::from(amt), 0b111111),
+                    ALUOp::Asr32 => (0b0001001100, u32::from(amt), 0b011111),
+                    ALUOp::Asr64 => (0b1001001101, u32::from(amt), 0b111111),
+                    ALUOp::Lsl32 => (0b0101001100, u32::from(32 - amt), u32::from(31 - amt)),
+                    ALUOp::Lsl64 => (0b1101001101, u32::from(64 - amt), u32::from(63 - amt)),
                     _ => unimplemented!("{:?}", alu_op),
                 };
                 sink.put4(
@@ -476,7 +460,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 rm,
                 ref shiftop,
             } => {
-                let top11: u16 = match alu_op {
+                let top11: u32 = match alu_op {
                     ALUOp::Add32 => 0b000_01011000,
                     ALUOp::Add64 => 0b100_01011000,
                     ALUOp::AddS32 => 0b001_01011000,
@@ -499,8 +483,8 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     ALUOp::AndNot64 => 0b100_01010001,
                     _ => unimplemented!("{:?}", alu_op),
                 };
-                let top11 = top11 | ((shiftop.op().bits() as u16) << 1);
-                let bits_15_10 = shiftop.amt().value();
+                let top11 = top11 | (u32::from(shiftop.op().bits()) << 1);
+                let bits_15_10 = u32::from(shiftop.amt().value());
                 sink.put4(enc_arith_rrr(top11, bits_15_10, rd, rn, rm));
             }
 
@@ -511,7 +495,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 rm,
                 extendop,
             } => {
-                let top11 = match alu_op {
+                let top11: u32 = match alu_op {
                     ALUOp::Add32 => 0b00001011001,
                     ALUOp::Add64 => 0b10001011001,
                     ALUOp::Sub32 => 0b01001011001,
@@ -522,12 +506,12 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     ALUOp::SubS64 => 0b11101011001,
                     _ => unimplemented!("{:?}", alu_op),
                 };
-                let bits_15_10 = extendop.bits() << 3;
+                let bits_15_10 = u32::from(extendop.bits()) << 3;
                 sink.put4(enc_arith_rrr(top11, bits_15_10, rd, rn, rm));
             }
 
             &Inst::BitRR { op, rd, rn, .. } => {
-                let size = if op.is_32_bit() { 0b0 } else { 0b1 };
+                let size = if op.inst_size().is32() { 0b0 } else { 0b1 };
                 let (op1, op2) = match op {
                     BitOp::RBit32 | BitOp::RBit64 => (0b00000, 0b000000),
                     BitOp::Clz32 | BitOp::Clz64 => (0b00000, 0b000100),
@@ -655,6 +639,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     }
                     &MemArg::Label(ref label) => {
                         let offset = match label {
+                            // cast i32 to u32 (two's-complement)
                             &MemLabel::PCRel(off) => off as u32,
                         } / 4;
                         assert!(offset < (1 << 19));
@@ -825,10 +810,16 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
             &Inst::Mov { rd, rm } => {
                 assert!(rd.to_reg().get_class() == rm.get_class());
                 assert!(rm.get_class() == RegClass::I64);
+                // MOV to SP is interpreted as MOV to XZR instead. And our codegen
+                // should never MOV to XZR.
+                assert!(machreg_to_gpr(rd.to_reg()) != 31);
                 // Encoded as ORR rd, rm, zero.
                 sink.put4(enc_arith_rrr(0b10101010_000, 0b000_000, rd, zero_reg(), rm));
             }
             &Inst::Mov32 { rd, rm } => {
+                // MOV to SP is interpreted as MOV to XZR instead. And our codegen
+                // should never MOV to XZR.
+                assert!(machreg_to_gpr(rd.to_reg()) != 31);
                 // Encoded as ORR rd, rm, zero.
                 sink.put4(enc_arith_rrr(0b00101010_000, 0b000_000, rd, zero_reg(), rm));
             }
@@ -888,10 +879,10 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 sink.put4(enc_fpurrrr(top17, rd, rn, rm, ra));
             }
             &Inst::FpuCmp32 { rn, rm } => {
-                sink.put4(enc_fcmp(/* is32 = */ true, rn, rm));
+                sink.put4(enc_fcmp(InstSize::Size32, rn, rm));
             }
             &Inst::FpuCmp64 { rn, rm } => {
-                sink.put4(enc_fcmp(/* is32 = */ false, rn, rm));
+                sink.put4(enc_fcmp(InstSize::Size64, rn, rm));
             }
             &Inst::FpuToInt { op, rd, rn } => {
                 let top16 = match op {
@@ -962,10 +953,10 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 sink.put8(const_data.to_bits());
             }
             &Inst::FpuCSel32 { rd, rn, rm, cond } => {
-                sink.put4(enc_fcsel(rd, rn, rm, cond, /* is32 = */ true));
+                sink.put4(enc_fcsel(rd, rn, rm, cond, InstSize::Size32));
             }
             &Inst::FpuCSel64 { rd, rn, rm, cond } => {
-                sink.put4(enc_fcsel(rd, rn, rm, cond, /* is32 = */ false));
+                sink.put4(enc_fcsel(rd, rn, rm, cond, InstSize::Size64));
             }
             &Inst::FpuRound { op, rd, rn } => {
                 let top22 = match op {
@@ -1093,10 +1084,10 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 // do early (fake) emission for size computation.
                 sink.put4(enc_jump26(0b000101, dest.as_off26().unwrap()));
             }
-            &Inst::Ret {} => {
+            &Inst::Ret => {
                 sink.put4(0xd65f03c0);
             }
-            &Inst::EpiloguePlaceholder {} => {
+            &Inst::EpiloguePlaceholder => {
                 // Noop; this is just a placeholder for epilogues.
             }
             &Inst::Call {
@@ -1168,7 +1159,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
             &Inst::IndirectBr { rn, .. } => {
                 sink.put4(enc_br(rn));
             }
-            &Inst::Nop => {}
+            &Inst::Nop0 => {}
             &Inst::Nop4 => {
                 sink.put4(0xd503201f);
             }
@@ -1204,7 +1195,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 // the middle; we depend on hardcoded PC-rel addressing below.
                 //
                 // N.B.: if PC-rel addressing on ADR below is changed, also update
-                // `Inst::with_block_offsets()` in arm64/inst/mod.rs.
+                // `Inst::with_block_offsets()` in aarch64/inst/mod.rs.
 
                 // Save index in a tmp (the live range of ridx only goes to start of this
                 // sequence; rtmp1 or rtmp2 may overwrite it).
@@ -1219,7 +1210,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 // Load value out of jump table
                 let inst = Inst::SLoad32 {
                     rd: rtmp2,
-                    mem: MemArg::reg_reg_scaled_extended(
+                    mem: MemArg::reg_plus_reg_scaled_extended(
                         rtmp1.to_reg(),
                         rtmp2.to_reg(),
                         I32,
@@ -1246,7 +1237,9 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 // Emit jump table (table of 32-bit offsets).
                 for target in targets {
                     let off = target.as_offset_words() * 4;
-                    let off = off as i32 as u32;
+                    let off = i32::try_from(off).unwrap();
+                    // cast i32 to u32 (two's-complement)
+                    let off = off as u32;
                     sink.put4(off);
                 }
             }
@@ -1292,7 +1285,7 @@ mod test {
     use crate::isa::test_utils;
 
     #[test]
-    fn test_arm64_binemit() {
+    fn test_aarch64_binemit() {
         let mut insns = Vec::<(Inst, &str, &str)>::new();
 
         // N.B.: the architecture is little-endian, so when transcribing the 32-bit
@@ -1310,10 +1303,10 @@ mod test {
         //
         // Then:
         //
-        //      $ echo "mov x1, x2" | arm64inst.sh
-        insns.push((Inst::Ret {}, "C0035FD6", "ret"));
-        insns.push((Inst::Nop {}, "", "nop-zero-len"));
-        insns.push((Inst::Nop4 {}, "1F2003D5", "nop"));
+        //      $ echo "mov x1, x2" | aarch64inst.sh
+        insns.push((Inst::Ret, "C0035FD6", "ret"));
+        insns.push((Inst::Nop0, "", "nop-zero-len"));
+        insns.push((Inst::Nop4, "1F2003D5", "nop"));
         insns.push((
             Inst::AluRRR {
                 alu_op: ALUOp::Add32,
@@ -4052,7 +4045,7 @@ mod test {
         let rru = create_reg_universe();
         for (insn, expected_encoding, expected_printing) in insns {
             println!(
-                "ARM64: {:?}, {}, {}",
+                "AArch64: {:?}, {}, {}",
                 insn, expected_encoding, expected_printing
             );
 

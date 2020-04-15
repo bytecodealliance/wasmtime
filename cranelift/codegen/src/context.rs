@@ -180,8 +180,7 @@ impl Context {
         }
 
         if let Some(backend) = isa.get_mach_backend() {
-            let func = std::mem::replace(&mut self.func, Function::new());
-            let result = backend.compile_function(func, self.want_disasm)?;
+            let result = backend.compile_function(&mut self.func, self.want_disasm)?;
             let info = result.code_info();
             self.mach_compile_result = Some(result);
             Ok(info)
@@ -312,15 +311,15 @@ impl Context {
 
     /// Run the legalizer for `isa` on the function.
     pub fn legalize(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
+        // Legalization invalidates the domtree and loop_analysis by mutating the CFG.
+        // TODO: Avoid doing this when legalization doesn't actually mutate the CFG.
+        self.domtree.clear();
+        self.loop_analysis.clear();
         if isa.get_mach_backend().is_some() {
             // Run some specific legalizations only.
             simple_legalize(&mut self.func, &mut self.cfg, isa);
-            Ok(())
+            self.verify_if(isa)
         } else {
-            // Legalization invalidates the domtree and loop_analysis by mutating the CFG.
-            // TODO: Avoid doing this when legalization doesn't actually mutate the CFG.
-            self.domtree.clear();
-            self.loop_analysis.clear();
             legalize_function(&mut self.func, &mut self.cfg, isa);
             debug!("Legalized:\n{}", self.func.display(isa));
             self.verify_if(isa)

@@ -17,7 +17,6 @@
 //! See the main module comment in `mod.rs` for more details on the VCode-based
 //! backend pipeline.
 
-use crate::binemit::Reloc;
 use crate::ir;
 use crate::machinst::*;
 use crate::settings;
@@ -32,7 +31,6 @@ use log::debug;
 use smallvec::SmallVec;
 use std::fmt;
 use std::iter;
-use std::ops::Index;
 use std::string::String;
 
 /// Index referring to an instruction in VCode.
@@ -59,13 +57,13 @@ pub struct VCode<I: VCodeInst> {
     vreg_types: Vec<Type>,
 
     /// Lowered machine instructions in order corresponding to the original IR.
-    pub insts: Vec<I>,
+    insts: Vec<I>,
 
     /// Entry block.
     entry: BlockIndex,
 
     /// Block instruction indices.
-    pub block_ranges: Vec<(InsnIndex, InsnIndex)>,
+    block_ranges: Vec<(InsnIndex, InsnIndex)>,
 
     /// Block successors: index range in the successor-list below.
     block_succ_range: Vec<(usize, usize)>,
@@ -94,7 +92,7 @@ pub struct VCode<I: VCodeInst> {
     code_size: CodeOffset,
 
     /// ABI object.
-    abi: Box<dyn ABIBody<I>>,
+    abi: Box<dyn ABIBody<I = I>>,
 }
 
 /// A builder for a VCode function body. This builder is designed for the
@@ -128,7 +126,7 @@ pub struct VCodeBuilder<I: VCodeInst> {
 
 impl<I: VCodeInst> VCodeBuilder<I> {
     /// Create a new VCodeBuilder.
-    pub fn new(abi: Box<dyn ABIBody<I>>) -> VCodeBuilder<I> {
+    pub fn new(abi: Box<dyn ABIBody<I = I>>) -> VCodeBuilder<I> {
         let vcode = VCode::new(abi);
         VCodeBuilder {
             vcode,
@@ -139,7 +137,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     /// Access the ABI object.
-    pub fn abi(&mut self) -> &mut dyn ABIBody<I> {
+    pub fn abi(&mut self) -> &mut dyn ABIBody<I = I> {
         &mut *self.vcode.abi
     }
 
@@ -282,7 +280,7 @@ fn is_trivial_jump_block<I: VCodeInst>(vcode: &VCode<I>, block: BlockIndex) -> O
 
 impl<I: VCodeInst> VCode<I> {
     /// New empty VCode.
-    fn new(abi: Box<dyn ABIBody<I>>) -> VCode<I> {
+    fn new(abi: Box<dyn ABIBody<I = I>>) -> VCode<I> {
         VCode {
             liveins: abi.liveins(),
             liveouts: abi.liveouts(),
@@ -472,10 +470,10 @@ impl<I: VCodeInst> VCode<I> {
         // Compute block offsets.
         let mut code_section = MachSectionSize::new(0);
         let mut block_offsets = vec![0; self.num_blocks()];
-        for block in &self.final_block_order {
+        for &block in &self.final_block_order {
             code_section.offset = I::align_basic_block(code_section.offset);
-            block_offsets[*block as usize] = code_section.offset;
-            let (start, end) = self.block_ranges[*block as usize];
+            block_offsets[block as usize] = code_section.offset;
+            let (start, end) = self.block_ranges[block as usize];
             for iix in start..end {
                 self.insts[iix as usize].emit(&mut code_section);
             }
@@ -490,9 +488,9 @@ impl<I: VCodeInst> VCode<I> {
         // it (so forward references are now possible), and (ii) mutates the
         // instructions.
         let mut code_section = MachSectionSize::new(0);
-        for block in &self.final_block_order {
+        for &block in &self.final_block_order {
             code_section.offset = I::align_basic_block(code_section.offset);
-            let (start, end) = self.block_ranges[*block as usize];
+            let (start, end) = self.block_ranges[block as usize];
             for iix in start..end {
                 self.insts[iix as usize]
                     .with_block_offsets(code_section.offset, &self.final_block_offsets[..]);
@@ -510,7 +508,7 @@ impl<I: VCodeInst> VCode<I> {
         let code_idx = sections.add_section(0, self.code_size);
         let code_section = sections.get_section(code_idx);
 
-        for block in &self.final_block_order {
+        for &block in &self.final_block_order {
             let new_offset = I::align_basic_block(code_section.cur_offset_from_start());
             while new_offset > code_section.cur_offset_from_start() {
                 // Pad with NOPs up to the aligned block offset.
@@ -519,7 +517,7 @@ impl<I: VCodeInst> VCode<I> {
             }
             assert_eq!(code_section.cur_offset_from_start(), new_offset);
 
-            let (start, end) = self.block_ranges[*block as usize];
+            let (start, end) = self.block_ranges[block as usize];
             for iix in start..end {
                 self.insts[iix as usize].emit(code_section);
             }
@@ -639,9 +637,6 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     }
 }
 
-// N.B.: Debug impl assumes that VCode has already been through all compilation
-// passes, and so has a final block order and offsets.
-
 impl<I: VCodeInst> fmt::Debug for VCode<I> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "VCode_Debug {{")?;
@@ -665,22 +660,21 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
     }
 }
 
-// Pretty-printing with `RealRegUniverse` context.
+/// Pretty-printing with `RealRegUniverse` context.
 impl<I: VCodeInst + ShowWithRRU> ShowWithRRU for VCode<I> {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
-        use crate::alloc::string::ToString;
         use std::fmt::Write;
 
         // Calculate an order in which to display the blocks.  This is the same
         // as final_block_order, but also includes blocks which are in the
         // representation but not in final_block_order.
         let mut display_order = Vec::<usize>::new();
-        // First display blocks in |final_block_order|
+        // First display blocks in `final_block_order`
         for bix in &self.final_block_order {
             assert!((*bix as usize) < self.num_blocks());
             display_order.push(*bix as usize);
         }
-        // Now also take care of those not listed in |final_block_order|.
+        // Now also take care of those not listed in `final_block_order`.
         // This is quadratic, but it's also debug-only code.
         for bix in 0..self.num_blocks() {
             if display_order.contains(&bix) {
@@ -690,48 +684,46 @@ impl<I: VCodeInst + ShowWithRRU> ShowWithRRU for VCode<I> {
         }
 
         let mut s = String::new();
-        s = s + &format!("VCode_ShowWithRRU {{{{");
-        s = s + &"\n".to_string();
-        s = s + &format!("  Entry block: {}", self.entry);
-        s = s + &"\n".to_string();
-        s = s + &format!("  Final block order: {:?}", self.final_block_order);
-        s = s + &"\n".to_string();
+        write!(&mut s, "VCode_ShowWithRRU {{{{\n").unwrap();
+        write!(&mut s, "  Entry block: {}\n", self.entry).unwrap();
+        write!(
+            &mut s,
+            "  Final block order: {:?}\n",
+            self.final_block_order
+        )
+        .unwrap();
 
         for i in 0..self.num_blocks() {
             let block = display_order[i];
 
-            let omitted =
-                (if !self.final_block_order.is_empty() && i >= self.final_block_order.len() {
-                    "** OMITTED **"
-                } else {
-                    ""
-                })
-                .to_string();
+            let omitted = if !self.final_block_order.is_empty() && i >= self.final_block_order.len()
+            {
+                "** OMITTED **"
+            } else {
+                ""
+            };
 
-            s = s + &format!("Block {}: {}", block, omitted);
-            s = s + &"\n".to_string();
+            write!(&mut s, "Block {}: {}\n", block, omitted).unwrap();
             if let Some(bb) = self.bindex_to_bb(block as BlockIndex) {
-                s = s + &format!("  (original IR block: {})\n", bb);
+                write!(&mut s, "  (original IR block: {})\n", bb).unwrap();
             }
             for succ in self.succs(block as BlockIndex) {
-                s = s + &format!("  (successor: Block {})", succ);
-                s = s + &"\n".to_string();
+                write!(&mut s, "  (successor: Block {})\n", succ).unwrap();
             }
             let (start, end) = self.block_ranges[block];
-            s = s + &format!("  (instruction range: {} .. {})", start, end);
-            s = s + &"\n".to_string();
+            write!(&mut s, "  (instruction range: {} .. {})\n", start, end).unwrap();
             for inst in start..end {
-                s = s + &format!(
-                    "  Inst {}:   {}",
+                write!(
+                    &mut s,
+                    "  Inst {}:   {}\n",
                     inst,
                     self.insts[inst as usize].show_rru(mb_rru)
-                );
-                s = s + &"\n".to_string();
+                )
+                .unwrap();
             }
         }
 
-        s = s + &format!("}}}}");
-        s = s + &"\n".to_string();
+        write!(&mut s, "}}}}\n").unwrap();
 
         s
     }

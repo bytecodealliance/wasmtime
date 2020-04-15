@@ -1,4 +1,5 @@
-test vcode arch=arm64
+test vcode
+target aarch64
 
 function %f(i64, i64) -> b1 {
 block0(v0: i64, v1: i64):
@@ -33,7 +34,7 @@ block2:
 ; nextln: mov fp, sp
 ; nextln: subs xzr, x0, x1
 ; nextln: b.eq 20
-; check: Block 0:
+; check: Block 2:
 ; check: movz x0, #2
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
@@ -58,7 +59,7 @@ block1:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: subs xzr, x0, x1
-; check: Block 0:
+; check: Block 1:
 ; check: movz x0, #1
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16

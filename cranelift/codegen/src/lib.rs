@@ -87,6 +87,7 @@ mod context;
 mod dce;
 mod divconst_magic_numbers;
 mod fx;
+mod inst_predicates;
 mod iterators;
 mod legalizer;
 mod licm;

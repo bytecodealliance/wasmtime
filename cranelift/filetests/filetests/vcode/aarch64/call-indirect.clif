@@ -1,4 +1,5 @@
-test vcode arch=arm64
+test vcode
+target aarch64
 
 function %f(i64, i64) -> i64 {
     sig0 = (i64) -> i64

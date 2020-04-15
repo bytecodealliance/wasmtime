@@ -1,15 +1,17 @@
 //! ABI definitions.
 
-use crate::ir;
 use crate::ir::StackSlot;
 use crate::machinst::*;
 use crate::settings;
 
-use regalloc::{Reg, Set, SpillSlot, VirtualReg, Writable};
+use regalloc::{Reg, Set, SpillSlot, Writable};
 
 /// Trait implemented by an object that tracks ABI-related state (e.g., stack
 /// layout) and can generate code while emitting the *body* of a function.
-pub trait ABIBody<I: VCodeInst> {
+pub trait ABIBody {
+    /// The instruction type for the ISA associated with this ABI.
+    type I: VCodeInst;
+
     /// Get the liveins of the function.
     fn liveins(&self) -> Set<RealReg>;
 
@@ -27,17 +29,19 @@ pub trait ABIBody<I: VCodeInst> {
 
     /// Generate an instruction which copies an argument to a destination
     /// register.
-    fn gen_copy_arg_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> I;
+    fn gen_copy_arg_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Self::I;
 
     /// Generate an instruction which copies a source register to a return
     /// value slot.
-    fn gen_copy_reg_to_retval(&self, idx: usize, from_reg: Reg) -> I;
+    fn gen_copy_reg_to_retval(&self, idx: usize, from_reg: Reg) -> Self::I;
 
     /// Generate a return instruction.
-    fn gen_ret(&self) -> I;
+    fn gen_ret(&self) -> Self::I;
 
-    /// Generate an epilogue placeholder.
-    fn gen_epilogue_placeholder(&self) -> I;
+    /// Generate an epilogue placeholder. The returned instruction should return `true` from
+    /// `is_epilogue_placeholder()`; this is used to indicate to the lowering driver when
+    /// the epilogue should be inserted.
+    fn gen_epilogue_placeholder(&self) -> Self::I;
 
     // -----------------------------------------------------------------
     // Every function above this line may only be called pre-regalloc.
@@ -56,32 +60,32 @@ pub trait ABIBody<I: VCodeInst> {
     fn load_stackslot(
         &self,
         slot: StackSlot,
-        offset: usize,
+        offset: u32,
         ty: Type,
         into_reg: Writable<Reg>,
-    ) -> I;
+    ) -> Self::I;
 
     /// Store to a stackslot.
-    fn store_stackslot(&self, slot: StackSlot, offset: usize, ty: Type, from_reg: Reg) -> I;
+    fn store_stackslot(&self, slot: StackSlot, offset: u32, ty: Type, from_reg: Reg) -> Self::I;
 
     /// Load from a spillslot.
-    fn load_spillslot(&self, slot: SpillSlot, ty: Type, into_reg: Writable<Reg>) -> I;
+    fn load_spillslot(&self, slot: SpillSlot, ty: Type, into_reg: Writable<Reg>) -> Self::I;
 
     /// Store to a spillslot.
-    fn store_spillslot(&self, slot: SpillSlot, ty: Type, from_reg: Reg) -> I;
+    fn store_spillslot(&self, slot: SpillSlot, ty: Type, from_reg: Reg) -> Self::I;
 
     /// Generate a prologue, post-regalloc. This should include any stack
     /// frame or other setup necessary to use the other methods (`load_arg`,
-    /// `store_retval`, and spillslot accesses.)  |self| is mutable so that we
+    /// `store_retval`, and spillslot accesses.)  `self` is mutable so that we
     /// can store information in it which will be useful when creating the
     /// epilogue.
-    fn gen_prologue(&mut self, flags: &settings::Flags) -> Vec<I>;
+    fn gen_prologue(&mut self, flags: &settings::Flags) -> Vec<Self::I>;
 
     /// Generate an epilogue, post-regalloc. Note that this must generate the
     /// actual return instruction (rather than emitting this in the lowering
     /// logic), because the epilogue code comes before the return and the two are
     /// likely closely related.
-    fn gen_epilogue(&self, flags: &settings::Flags) -> Vec<I>;
+    fn gen_epilogue(&self, flags: &settings::Flags) -> Vec<Self::I>;
 
     /// Returns the full frame size for the given function, after prologue emission has run. This
     /// comprises the spill space, incoming argument space, alignment padding, etc.
@@ -91,10 +95,10 @@ pub trait ABIBody<I: VCodeInst> {
     fn get_spillslot_size(&self, rc: RegClass, ty: Type) -> u32;
 
     /// Generate a spill.
-    fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg, ty: Type) -> I;
+    fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg, ty: Type) -> Self::I;
 
     /// Generate a reload (fill).
-    fn gen_reload(&self, to_reg: Writable<RealReg>, from_slot: SpillSlot, ty: Type) -> I;
+    fn gen_reload(&self, to_reg: Writable<RealReg>, from_slot: SpillSlot, ty: Type) -> Self::I;
 }
 
 /// Trait implemented by an object that tracks ABI-related state and can
@@ -111,22 +115,25 @@ pub trait ABIBody<I: VCodeInst> {
 /// and retval copies, and attach the register use/def info to the call.
 ///
 /// This trait is thus provided for convenience to the backends.
-pub trait ABICall<I: VCodeInst> {
+pub trait ABICall {
+    /// The instruction type for the ISA associated with this ABI.
+    type I: VCodeInst;
+
     /// Get the number of arguments expected.
     fn num_args(&self) -> usize;
 
     /// Save the clobbered registers.
     /// Copy an argument value from a source register, prior to the call.
-    fn gen_copy_reg_to_arg(&self, idx: usize, from_reg: Reg) -> I;
+    fn gen_copy_reg_to_arg(&self, idx: usize, from_reg: Reg) -> Self::I;
 
     /// Copy a return value into a destination register, after the call returns.
-    fn gen_copy_retval_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> I;
+    fn gen_copy_retval_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Self::I;
 
     /// Pre-adjust the stack, prior to argument copies and call.
-    fn gen_stack_pre_adjust(&self) -> Vec<I>;
+    fn gen_stack_pre_adjust(&self) -> Vec<Self::I>;
 
     /// Post-adjust the satck, after call return and return-value copies.
-    fn gen_stack_post_adjust(&self) -> Vec<I>;
+    fn gen_stack_post_adjust(&self) -> Vec<Self::I>;
 
     /// Generate the call itself.
     ///
@@ -138,5 +145,5 @@ pub trait ABICall<I: VCodeInst> {
     /// registers are also logically defs, but should never be read; their
     /// values are "defined" (to the regalloc) but "undefined" in every other
     /// sense.)
-    fn gen_call(&self) -> Vec<I>;
+    fn gen_call(&self) -> Vec<Self::I>;
 }

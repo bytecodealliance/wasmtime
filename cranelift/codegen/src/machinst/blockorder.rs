@@ -1,6 +1,7 @@
 //! Computation of basic block order in emitted code.
 
 use crate::machinst::*;
+use regalloc::{BlockIx, Function};
 
 /// Simple reverse postorder-based block order emission.
 ///
@@ -29,9 +30,8 @@ impl BlockRPO {
             }
         }
 
-        let (start, end) = &vcode.block_ranges[block as usize];
-        for i in *start..*end {
-            if vcode.insts[i as usize].is_epilogue_placeholder() {
+        for i in vcode.block_insns(BlockIx::new(block)) {
+            if vcode.get_insn(i).is_epilogue_placeholder() {
                 debug_assert!(self.deferred_last.is_none());
                 self.deferred_last = Some(block);
                 return;

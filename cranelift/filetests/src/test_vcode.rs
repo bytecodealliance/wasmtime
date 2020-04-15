@@ -4,11 +4,9 @@ use cranelift_codegen::isa::lookup;
 use cranelift_codegen::settings;
 use cranelift_codegen::Context as CodegenContext;
 use cranelift_reader::{TestCommand, TestOption};
-use target_lexicon::Triple;
 
 use log::info;
 use std::borrow::Cow;
-use std::str::FromStr;
 use std::string::String;
 
 struct TestVCode {
@@ -41,14 +39,12 @@ impl SubTest for TestVCode {
     }
 
     fn needs_isa(&self) -> bool {
-        false
+        true
     }
 
     fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
+        let triple = context.isa.unwrap().triple().clone();
         let func = func.into_owned();
-
-        let triple =
-            Triple::from_str(&self.arch).map_err(|_| format!("Unknown arch: '{}'", self.arch))?;
 
         let mut isa = lookup(triple)
             .map_err(|_| format!("Could not look up backend for arch '{}'", self.arch))?

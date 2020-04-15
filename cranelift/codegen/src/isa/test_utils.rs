@@ -1,10 +1,13 @@
+// This is unused when no platforms with the new backend are enabled.
+#![allow(dead_code)]
+
 use crate::binemit::{Addend, CodeOffset, CodeSink, Reloc};
 use crate::ir::Value;
 use crate::ir::{ConstantOffset, ExternalName, Function, JumpTable, Opcode, SourceLoc, TrapCode};
 use crate::isa::TargetIsa;
 
 use alloc::vec::Vec;
-use std::string::{String, ToString};
+use std::string::String;
 
 pub struct TestCodeSink {
     bytes: Vec<u8>,
@@ -16,11 +19,13 @@ impl TestCodeSink {
         TestCodeSink { bytes: vec![] }
     }
 
-    /// This is pretty lame, but whatever ..
+    /// Return the code emitted to this sink as a hex string.
     pub fn stringify(&self) -> String {
-        let mut s = "".to_string();
+        // This is pretty lame, but whatever ..
+        use std::fmt::Write;
+        let mut s = String::with_capacity(self.bytes.len() * 2);
         for b in &self.bytes {
-            s = s + &format!("{:02X}", b).to_string();
+            write!(&mut s, "{:02X}", b).unwrap();
         }
         s
     }

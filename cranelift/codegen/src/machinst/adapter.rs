@@ -4,8 +4,11 @@ use crate::binemit;
 use crate::ir;
 use crate::isa::{EncInfo, Encoding, Encodings, Legalize, RegClass, RegInfo, TargetIsa};
 use crate::machinst::*;
-use crate::regalloc::{RegDiversions, RegisterSet};
+use crate::regalloc::RegisterSet;
 use crate::settings::Flags;
+
+#[cfg(feature = "testing_hooks")]
+use crate::regalloc::RegDiversions;
 
 use std::borrow::Cow;
 use std::fmt;
@@ -30,7 +33,11 @@ impl TargetIsaAdapter {
 
 impl fmt::Display for TargetIsaAdapter {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "MachBackend")
+        f.debug_struct("MachBackend")
+            .field("name", &self.backend.name())
+            .field("triple", &self.backend.triple())
+            .field("flags", &format!("{}", self.backend.flags()))
+            .finish()
     }
 }
 

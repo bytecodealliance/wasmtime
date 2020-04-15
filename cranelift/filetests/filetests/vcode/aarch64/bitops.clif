@@ -1,4 +1,5 @@
-test vcode arch=arm64
+test vcode
+target aarch64
 
 function %a(i32) -> i32 {
 block0(v0: i32):

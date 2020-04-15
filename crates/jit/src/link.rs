@@ -142,12 +142,17 @@ cfg_if::cfg_if! {
             pub fn ___chkstk();
         }
         const PROBESTACK: unsafe extern "C" fn() = ___chkstk;
+    } else if #[cfg(not(any(target_arch = "x86_64", target_arch = "x86")))] {
+        // As per
+        // https://github.com/rust-lang/compiler-builtins/blob/cae3e6ea23739166504f9f9fb50ec070097979d4/src/probestack.rs#L39,
+        // LLVM only has stack-probe support on x86-64 and x86. Thus, on any other CPU
+        // architecture, we simply use an empty stack-probe function.
+        extern "C" fn empty_probestack() {}
+        const PROBESTACK: unsafe extern "C" fn() = empty_probestack;
     } else {
         extern "C" {
             pub fn __rust_probestack();
         }
-        static PROBESTACK: unsafe extern "C" fn() = empty_probestack;
+        static PROBESTACK: unsafe extern "C" fn() = __rust_probestack;
     }
 }
-
-extern "C" fn empty_probestack() {}

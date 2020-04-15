@@ -1,4 +1,5 @@
-test vcode arch=arm64
+test vcode
+target aarch64
 
 function %add8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):

@@ -34,7 +34,7 @@ regalloc = "0.0.17"
 cranelift-codegen-meta = { path = "meta", version = "0.62.0" }
 
 [features]
-default = ["std", "unwind", "all-arch"]
+default = ["std", "unwind"]
 
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two

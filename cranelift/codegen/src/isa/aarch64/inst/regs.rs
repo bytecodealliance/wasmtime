@@ -1,13 +1,9 @@
-//! ARM64 ISA definitions: registers.
+//! AArch64 ISA definitions: registers.
 
-#![allow(dead_code)]
-
+use crate::isa::aarch64::inst::InstSize;
 use crate::machinst::*;
 
-use regalloc::{
-    RealReg, RealRegUniverse, Reg, RegClass, RegClassInfo, SpillSlot, VirtualReg, Writable,
-    NUM_REG_CLASSES,
-};
+use regalloc::{RealRegUniverse, Reg, RegClass, RegClassInfo, Writable, NUM_REG_CLASSES};
 
 use std::string::{String, ToString};
 
@@ -83,7 +79,7 @@ pub fn writable_zero_reg() -> Writable<Reg> {
 /// Get a reference to the stack-pointer register.
 pub fn stack_reg() -> Reg {
     // XSP (stack) and XZR (zero) are logically different registers which have
-    // the same hardware encoding, and whose meaning, in real arm64
+    // the same hardware encoding, and whose meaning, in real aarch64
     // instructions, is context-dependent.  For convenience of
     // universe-construction and for correct printing, we make them be two
     // different real registers.
@@ -134,7 +130,7 @@ pub fn writable_spilltmp_reg() -> Writable<Reg> {
     Writable::from_reg(spilltmp_reg())
 }
 
-/// Create the register universe for ARM64.
+/// Create the register universe for AArch64.
 pub fn create_reg_universe() -> RealRegUniverse {
     let mut regs = vec![];
     let mut allocable_by_class = [None; NUM_REG_CLASSES];
@@ -217,37 +213,38 @@ pub fn create_reg_universe() -> RealRegUniverse {
     }
 }
 
-/// If |ireg| denotes an I64-classed reg, make a best-effort attempt to show
+/// If `ireg` denotes an I64-classed reg, make a best-effort attempt to show
 /// its name at the 32-bit size.
-pub fn show_ireg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, is32: bool) -> String {
+pub fn show_ireg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, size: InstSize) -> String {
     let mut s = reg.show_rru(mb_rru);
-    if reg.get_class() != RegClass::I64 || !is32 {
+    if reg.get_class() != RegClass::I64 || !size.is32() {
         // We can't do any better.
         return s;
     }
 
     if reg.is_real() {
         // Change (eg) "x42" into "w42" as appropriate
-        if reg.get_class() == RegClass::I64 && is32 && s.starts_with("x") {
+        if reg.get_class() == RegClass::I64 && size.is32() && s.starts_with("x") {
             s = "w".to_string() + &s[1..];
         }
     } else {
         // Add a "w" suffix to RegClass::I64 vregs used in a 32-bit role
-        if reg.get_class() == RegClass::I64 && is32 {
-            s = s + &"w";
+        if reg.get_class() == RegClass::I64 && size.is32() {
+            s.push('w');
         }
     }
     s
 }
 
 /// Show a vector register when its use as a 32-bit or 64-bit float is known.
-pub fn show_freg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, is32: bool) -> String {
-    let s = reg.show_rru(mb_rru);
+pub fn show_freg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, size: InstSize) -> String {
+    let mut s = reg.show_rru(mb_rru);
     if reg.get_class() != RegClass::V128 {
         return s;
     }
-    let prefix = if is32 { "s" } else { "d" };
-    prefix.to_string() + &s[1..]
+    let prefix = if size.is32() { "s" } else { "d" };
+    s.replace_range(0..1, prefix);
+    s
 }
 
 /// Show a vector register used in a scalar context.
@@ -261,12 +258,12 @@ pub fn show_vreg_scalar(reg: Reg, mb_rru: Option<&RealRegUniverse>) -> String {
     if reg.is_real() {
         // Change (eg) "v0" into "d0".
         if reg.get_class() == RegClass::V128 && s.starts_with("v") {
-            s = "d".to_string() + &s[1..];
+            s.replace_range(0..1, "d");
         }
     } else {
         // Add a "d" suffix to RegClass::V128 vregs.
         if reg.get_class() == RegClass::V128 {
-            s = s + &"d";
+            s.push('d');
         }
     }
     s

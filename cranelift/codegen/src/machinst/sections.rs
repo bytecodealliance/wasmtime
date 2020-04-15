@@ -3,7 +3,7 @@
 //! simultaneously, so we buffer the result in memory and hand off to the
 //! caller at the end of compilation.
 
-use crate::binemit::{Addend, CodeOffset, CodeSink, Reloc, RelocSink, StackmapSink, TrapSink};
+use crate::binemit::{Addend, CodeOffset, CodeSink, Reloc};
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode};
 
 use alloc::vec::Vec;
@@ -104,28 +104,31 @@ pub trait MachSectionOutput {
 
     /// Add 2 bytes to the section.
     fn put2(&mut self, value: u16) {
-        self.put1((value & 0xff) as u8);
-        self.put1(((value >> 8) & 0xff) as u8);
+        let [b0, b1] = value.to_le_bytes();
+        self.put1(b0);
+        self.put1(b1);
     }
 
     /// Add 4 bytes to the section.
     fn put4(&mut self, value: u32) {
-        self.put1((value & 0xff) as u8);
-        self.put1(((value >> 8) & 0xff) as u8);
-        self.put1(((value >> 16) & 0xff) as u8);
-        self.put1(((value >> 24) & 0xff) as u8);
+        let [b0, b1, b2, b3] = value.to_le_bytes();
+        self.put1(b0);
+        self.put1(b1);
+        self.put1(b2);
+        self.put1(b3);
     }
 
     /// Add 8 bytes to the section.
     fn put8(&mut self, value: u64) {
-        self.put1((value & 0xff) as u8);
-        self.put1(((value >> 8) & 0xff) as u8);
-        self.put1(((value >> 16) & 0xff) as u8);
-        self.put1(((value >> 24) & 0xff) as u8);
-        self.put1(((value >> 32) & 0xff) as u8);
-        self.put1(((value >> 40) & 0xff) as u8);
-        self.put1(((value >> 48) & 0xff) as u8);
-        self.put1(((value >> 56) & 0xff) as u8);
+        let [b0, b1, b2, b3, b4, b5, b6, b7] = value.to_le_bytes();
+        self.put1(b0);
+        self.put1(b1);
+        self.put1(b2);
+        self.put1(b3);
+        self.put1(b4);
+        self.put1(b5);
+        self.put1(b6);
+        self.put1(b7);
     }
 
     /// Add a slice of bytes to the section.

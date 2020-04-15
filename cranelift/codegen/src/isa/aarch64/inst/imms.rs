@@ -1,8 +1,7 @@
-//! ARM64 ISA definitions: immediate constants.
+//! AArch64 ISA definitions: immediate constants.
 
-#![allow(dead_code)]
-#![allow(non_snake_case)]
-
+// Some variants are never constructed, but we still want them as options in the future.
+#[allow(dead_code)]
 use crate::ir::types::*;
 use crate::ir::Type;
 use crate::machinst::*;
@@ -28,12 +27,12 @@ impl SImm7Scaled {
         assert!(scale_ty == I64 || scale_ty == I32);
         let scale = scale_ty.bytes();
         assert!(scale.is_power_of_two());
-        let scale = scale as i64;
+        let scale = i64::from(scale);
         let upper_limit = 63 * scale;
         let lower_limit = -(64 * scale);
         if value >= lower_limit && value <= upper_limit && (value & (scale - 1)) == 0 {
             Some(SImm7Scaled {
-                value: value as i16,
+                value: i16::try_from(value).unwrap(),
                 scale_ty,
             })
         } else {
@@ -48,7 +47,12 @@ impl SImm7Scaled {
 
     /// Bits for encoding.
     pub fn bits(&self) -> u32 {
-        ((self.value / self.scale_ty.bytes() as i16) as u32) & 0x7f
+        let ty_bytes: i16 = self.scale_ty.bytes() as i16;
+        let scaled: i16 = self.value / ty_bytes;
+        assert!(scaled <= 63 && scaled >= -64);
+        let scaled: i8 = scaled as i8;
+        let encoded: u32 = scaled as u32;
+        encoded & 0x7f
     }
 }
 
@@ -125,7 +129,7 @@ impl UImm12Scaled {
 #[derive(Clone, Debug)]
 pub struct Imm12 {
     /// The immediate bits.
-    pub bits: usize,
+    pub bits: u16,
     /// Whether the immediate bits are shifted left by 12 or not.
     pub shift12: bool,
 }
@@ -140,12 +144,12 @@ impl Imm12 {
             })
         } else if val < 0xfff {
             Some(Imm12 {
-                bits: val as usize,
+                bits: val as u16,
                 shift12: false,
             })
         } else if val < 0xfff_000 && (val & 0xfff == 0) {
             Some(Imm12 {
-                bits: (val as usize) >> 12,
+                bits: (val >> 12) as u16,
                 shift12: true,
             })
         } else {
@@ -154,7 +158,7 @@ impl Imm12 {
     }
 
     /// Bits for 2-bit "shift" field in e.g. AddI.
-    pub fn shift_bits(&self) -> u8 {
+    pub fn shift_bits(&self) -> u32 {
         if self.shift12 {
             0b01
         } else {
@@ -163,8 +167,8 @@ impl Imm12 {
     }
 
     /// Bits for 12-bit "imm" field in e.g. AddI.
-    pub fn imm_bits(&self) -> u16 {
-        self.bits as u16
+    pub fn imm_bits(&self) -> u32 {
+        self.bits as u32
     }
 }
 
@@ -175,11 +179,11 @@ pub struct ImmLogic {
     /// The actual value.
     value: u64,
     /// `N` flag.
-    pub N: bool,
+    pub n: bool,
     /// `S` field: element size and element bits.
-    pub R: u8,
+    pub r: u8,
     /// `R` field: rotate amount.
-    pub S: u8,
+    pub s: u8,
 }
 
 impl ImmLogic {
@@ -367,24 +371,19 @@ impl ImmLogic {
         debug_assert!(u8::try_from(s).is_ok());
         Some(ImmLogic {
             value: original_value,
-            N: out_n != 0,
-            R: r as u8,
-            S: s as u8,
+            n: out_n != 0,
+            r: r as u8,
+            s: s as u8,
         })
     }
 
     pub fn from_raw(value: u64, n: bool, r: u8, s: u8) -> ImmLogic {
-        ImmLogic {
-            N: n,
-            R: r,
-            S: s,
-            value,
-        }
+        ImmLogic { n, r, s, value }
     }
 
     /// Returns bits ready for encoding: (N:1, R:6, S:6)
-    pub fn enc_bits(&self) -> u16 {
-        ((self.N as u16) << 12) | ((self.R as u16) << 6) | (self.S as u16)
+    pub fn enc_bits(&self) -> u32 {
+        ((self.n as u32) << 12) | ((self.r as u32) << 6) | (self.s as u32)
     }
 
     /// Returns the value that this immediate represents.
@@ -427,7 +426,7 @@ impl ImmShift {
 pub struct MoveWideConst {
     /// The value.
     pub bits: u16,
-    /// shifted 16*shift bits to the left.
+    /// Result is `bits` shifted 16*shift bits to the left.
     pub shift: u8,
 }
 
@@ -487,7 +486,7 @@ impl MoveWideConst {
 impl ShowWithRRU for Imm12 {
     fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
         let shift = if self.shift12 { 12 } else { 0 };
-        let value = self.bits << shift;
+        let value = u32::from(self.bits) << shift;
         format!("#{}", value)
     }
 }
@@ -544,9 +543,9 @@ mod test {
         assert_eq!(
             Some(ImmLogic {
                 value: 1,
-                N: true,
-                R: 0,
-                S: 0
+                n: true,
+                r: 0,
+                s: 0
             }),
             ImmLogic::maybe_from_u64(1, I64)
         );
@@ -554,9 +553,9 @@ mod test {
         assert_eq!(
             Some(ImmLogic {
                 value: 2,
-                N: true,
-                R: 63,
-                S: 0
+                n: true,
+                r: 63,
+                s: 0
             }),
             ImmLogic::maybe_from_u64(2, I64)
         );
@@ -568,9 +567,9 @@ mod test {
         assert_eq!(
             Some(ImmLogic {
                 value: 248,
-                N: true,
-                R: 61,
-                S: 4
+                n: true,
+                r: 61,
+                s: 4
             }),
             ImmLogic::maybe_from_u64(248, I64)
         );
@@ -580,9 +579,9 @@ mod test {
         assert_eq!(
             Some(ImmLogic {
                 value: 1920,
-                N: true,
-                R: 57,
-                S: 3
+                n: true,
+                r: 57,
+                s: 3
             }),
             ImmLogic::maybe_from_u64(1920, I64)
         );
@@ -590,9 +589,9 @@ mod test {
         assert_eq!(
             Some(ImmLogic {
                 value: 0x7ffe,
-                N: true,
-                R: 63,
-                S: 13
+                n: true,
+                r: 63,
+                s: 13
             }),
             ImmLogic::maybe_from_u64(0x7ffe, I64)
         );
@@ -600,9 +599,9 @@ mod test {
         assert_eq!(
             Some(ImmLogic {
                 value: 0x30000,
-                N: true,
-                R: 48,
-                S: 1
+                n: true,
+                r: 48,
+                s: 1
             }),
             ImmLogic::maybe_from_u64(0x30000, I64)
         );
@@ -610,9 +609,9 @@ mod test {
         assert_eq!(
             Some(ImmLogic {
                 value: 0x100000,
-                N: true,
-                R: 44,
-                S: 0
+                n: true,
+                r: 44,
+                s: 0
             }),
             ImmLogic::maybe_from_u64(0x100000, I64)
         );
@@ -620,9 +619,9 @@ mod test {
         assert_eq!(
             Some(ImmLogic {
                 value: u64::max_value() - 1,
-                N: true,
-                R: 63,
-                S: 62
+                n: true,
+                r: 63,
+                s: 62
             }),
             ImmLogic::maybe_from_u64(u64::max_value() - 1, I64)
         );
@@ -630,9 +629,9 @@ mod test {
         assert_eq!(
             Some(ImmLogic {
                 value: 0xaaaaaaaaaaaaaaaa,
-                N: false,
-                R: 1,
-                S: 60
+                n: false,
+                r: 1,
+                s: 60
             }),
             ImmLogic::maybe_from_u64(0xaaaaaaaaaaaaaaaa, I64)
         );
@@ -640,9 +639,9 @@ mod test {
         assert_eq!(
             Some(ImmLogic {
                 value: 0x8181818181818181,
-                N: false,
-                R: 1,
-                S: 49
+                n: false,
+                r: 1,
+                s: 49
             }),
             ImmLogic::maybe_from_u64(0x8181818181818181, I64)
         );
@@ -650,9 +649,9 @@ mod test {
         assert_eq!(
             Some(ImmLogic {
                 value: 0xffc3ffc3ffc3ffc3,
-                N: false,
-                R: 10,
-                S: 43
+                n: false,
+                r: 10,
+                s: 43
             }),
             ImmLogic::maybe_from_u64(0xffc3ffc3ffc3ffc3, I64)
         );
@@ -660,9 +659,9 @@ mod test {
         assert_eq!(
             Some(ImmLogic {
                 value: 0x100000001,
-                N: false,
-                R: 0,
-                S: 0
+                n: false,
+                r: 0,
+                s: 0
             }),
             ImmLogic::maybe_from_u64(0x100000001, I64)
         );
@@ -670,9 +669,9 @@ mod test {
         assert_eq!(
             Some(ImmLogic {
                 value: 0x1111111111111111,
-                N: false,
-                R: 0,
-                S: 56
+                n: false,
+                r: 0,
+                s: 56
             }),
             ImmLogic::maybe_from_u64(0x1111111111111111, I64)
         );

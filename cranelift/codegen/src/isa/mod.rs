@@ -84,7 +84,7 @@ pub mod fde;
 mod arm32;
 
 #[cfg(feature = "arm64")]
-mod arm64;
+mod aarch64;
 
 mod call_conv;
 mod constraints;
@@ -92,6 +92,9 @@ mod enc_tables;
 mod encoding;
 pub mod registers;
 mod stack;
+
+#[cfg(test)]
+mod test_utils;
 
 /// Returns a builder that can create a corresponding `TargetIsa`
 /// or `Err(LookupError::SupportDisabled)` if not enabled.
@@ -117,7 +120,7 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
             isa_builder!(x86, "x86", triple)
         }
         Architecture::Arm { .. } => isa_builder!(arm32, "arm32", triple),
-        Architecture::Aarch64 { .. } => isa_builder!(arm64, "arm64", triple),
+        Architecture::Aarch64 { .. } => isa_builder!(aarch64, "arm64", triple),
         _ => Err(LookupError::Unsupported),
     }
 }

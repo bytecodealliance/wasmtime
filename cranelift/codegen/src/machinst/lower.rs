@@ -2,39 +2,37 @@
 //! to machine instructions with virtual registers. This is *almost* the final
 //! machine code, except for register allocation.
 
-use crate::binemit::CodeSink;
-use crate::dce::has_side_effect;
 use crate::entity::SecondaryMap;
+use crate::inst_predicates::has_side_effect;
+use crate::ir::instructions::BranchInfo;
 use crate::ir::{
     Block, ExternalName, Function, GlobalValueData, Inst, InstructionData, MemFlags, Opcode,
     Signature, SourceLoc, Type, Value, ValueDef,
 };
-use crate::isa::registers::RegUnit;
-use crate::machinst::{
-    ABIBody, BlockIndex, MachInst, MachInstEmit, VCode, VCodeBuilder, VCodeInst,
-};
+use crate::machinst::{ABIBody, BlockIndex, VCode, VCodeBuilder, VCodeInst};
 use crate::num_uses::NumUses;
 
-use regalloc::Function as RegallocFunction;
-use regalloc::{RealReg, Reg, RegClass, Set, VirtualReg, Writable};
+use regalloc::{Reg, RegClass, Set, VirtualReg, Writable};
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use log::debug;
 use smallvec::SmallVec;
 use std::collections::VecDeque;
-use std::ops::Range;
 
 /// A context that machine-specific lowering code can use to emit lowered instructions. This is the
 /// view of the machine-independent per-function lowering context that is seen by the machine
 /// backend.
-pub trait LowerCtx<I> {
+pub trait LowerCtx {
+    /// The instruction type for which this lowering framework is instantiated.
+    type I;
+
     /// Get the instdata for a given IR instruction.
     fn data(&self, ir_inst: Inst) -> &InstructionData;
     /// Get the controlling type for a polymorphic IR instruction.
     fn ty(&self, ir_inst: Inst) -> Type;
     /// Emit a machine instruction.
-    fn emit(&mut self, mach_inst: I);
+    fn emit(&mut self, mach_inst: Self::I);
     /// Indicate that an IR instruction has been merged, and so one of its
     /// uses is gone (replaced by uses of the instruction's inputs). This
     /// helps the lowering algorithm to perform on-the-fly DCE, skipping over
@@ -87,11 +85,11 @@ pub trait LowerBackend {
     /// Lower a single instruction. Instructions are lowered in reverse order.
     /// This function need not handle branches; those are always passed to
     /// `lower_branch_group` below.
-    fn lower<C: LowerCtx<Self::MInst>>(&self, ctx: &mut C, inst: Inst);
+    fn lower<C: LowerCtx<I = Self::MInst>>(&self, ctx: &mut C, inst: Inst);
 
     /// Lower a block-terminating group of branches (which together can be seen as one
     /// N-way branch), given a vcode BlockIndex for each target.
-    fn lower_branch_group<C: LowerCtx<Self::MInst>>(
+    fn lower_branch_group<C: LowerCtx<I = Self::MInst>>(
         &self,
         ctx: &mut C,
         insts: &[Inst],
@@ -103,22 +101,22 @@ pub trait LowerBackend {
 /// Machine-independent lowering driver / machine-instruction container. Maintains a correspondence
 /// from original Inst to MachInsts.
 pub struct Lower<'a, I: VCodeInst> {
-    // The function to lower.
+    /// The function to lower.
     f: &'a Function,
 
-    // Lowered machine instructions.
+    /// Lowered machine instructions.
     vcode: VCodeBuilder<I>,
 
-    // Number of active uses (minus `dec_use()` calls by backend) of each instruction.
+    /// Number of active uses (minus `dec_use()` calls by backend) of each instruction.
     num_uses: SecondaryMap<Inst, u32>,
 
-    // Mapping from `Value` (SSA value in IR) to virtual register.
+    /// Mapping from `Value` (SSA value in IR) to virtual register.
     value_regs: SecondaryMap<Value, Reg>,
 
-    // Return-value vregs.
+    /// Return-value vregs.
     retval_regs: Vec<Reg>,
 
-    // Next virtual register number to allocate.
+    /// Next virtual register number to allocate.
     next_vreg: u32,
 }
 
@@ -144,7 +142,7 @@ enum GenerateReturn {
 
 impl<'a, I: VCodeInst> Lower<'a, I> {
     /// Prepare a new lowering context for the given IR function.
-    pub fn new(f: &'a Function, abi: Box<dyn ABIBody<I>>) -> Lower<'a, I> {
+    pub fn new(f: &'a Function, abi: Box<dyn ABIBody<I = I>>) -> Lower<'a, I> {
         let mut vcode = VCodeBuilder::new(abi);
 
         let num_uses = NumUses::compute(f).take_uses();
@@ -244,7 +242,9 @@ impl<'a, I: VCodeInst> Lower<'a, I> {
                 let mut succs: SmallVec<[Block; 16]> = SmallVec::new();
                 for inst in self.f.layout.block_insts(b) {
                     if self.f.dfg[inst].opcode().is_branch() {
-                        succs.extend(branch_targets(self.f, b, inst).into_iter());
+                        visit_branch_targets(self.f, b, inst, |succ| {
+                            succs.push(succ);
+                        });
                     }
                 }
                 for succ in succs.into_iter() {
@@ -264,17 +264,14 @@ impl<'a, I: VCodeInst> Lower<'a, I> {
     /// Lower the function.
     pub fn lower<B: LowerBackend<MInst = I>>(mut self, backend: &B) -> VCode<I> {
         // Find all reachable blocks.
-        let mut bbs = self.find_reachable_bbs();
-        // Work backward (reverse block order, reverse through each block), skipping insns with zero
-        // uses.
-        bbs.reverse();
+        let bbs = self.find_reachable_bbs();
 
         // This records a Block-to-BlockIndex map so that branch targets can be resolved.
         let mut next_bindex = self.vcode.init_bb_map(&bbs[..]);
 
         // Allocate a separate BlockIndex for each control-flow instruction so that we can create
         // the edge blocks later. Each entry for a control-flow inst is the edge block; the list
-        // has (cf-inst, edge block, orig block) tuples.
+        // has (control flow inst, edge block, orig block) tuples.
         let mut edge_blocks_by_inst: SecondaryMap<Inst, Vec<BlockIndex>> =
             SecondaryMap::with_default(vec![]);
         let mut edge_blocks: Vec<(Inst, BlockIndex, Block)> = vec![];
@@ -282,7 +279,9 @@ impl<'a, I: VCodeInst> Lower<'a, I> {
         debug!("about to lower function: {:?}", self.f);
         debug!("bb map: {:?}", self.vcode.blocks_by_bb());
 
-        for bb in bbs.iter() {
+        // Work backward (reverse block order, reverse through each block), skipping insns with zero
+        // uses.
+        for bb in bbs.iter().rev() {
             for inst in self.f.layout.block_insts(*bb) {
                 let op = self.f.dfg[inst].opcode();
                 if op.is_branch() {
@@ -293,9 +292,9 @@ impl<'a, I: VCodeInst> Lower<'a, I> {
                         edge_blocks_by_inst[inst].push(edge_block);
                         edge_blocks.push((inst, edge_block, next_bb));
                     };
-                    for succ in branch_targets(self.f, *bb, inst).into_iter() {
+                    visit_branch_targets(self.f, *bb, inst, |succ| {
                         add_succ(succ);
-                    }
+                    });
                 }
             }
         }
@@ -303,7 +302,9 @@ impl<'a, I: VCodeInst> Lower<'a, I> {
         for bb in bbs.iter() {
             debug!("lowering bb: {}", bb);
 
-            // If this is a return block, produce the return value setup.
+            // If this is a return block, produce the return value setup.  N.B.: this comes
+            // *before* the below because it must occur *after* any other instructions, and
+            // instructions are lowered in reverse order.
             let last_insn = self.f.layout.block_insts(*bb).last().unwrap();
             let last_insn_opcode = self.f.dfg[last_insn].opcode();
             if last_insn_opcode.is_return() {
@@ -513,7 +514,9 @@ impl<'a, I: VCodeInst> Lower<'a, I> {
     }
 }
 
-impl<'a, I: VCodeInst> LowerCtx<I> for Lower<'a, I> {
+impl<'a, I: VCodeInst> LowerCtx for Lower<'a, I> {
+    type I = I;
+
     /// Get the instdata for a given IR instruction.
     fn data(&self, ir_inst: Inst) -> &InstructionData {
         &self.f.dfg[ir_inst]
@@ -695,29 +698,23 @@ impl<'a, I: VCodeInst> LowerCtx<I> for Lower<'a, I> {
     }
 }
 
-fn branch_targets(f: &Function, block: Block, inst: Inst) -> SmallVec<[Block; 16]> {
-    let mut ret = SmallVec::new();
+fn visit_branch_targets<F: FnMut(Block)>(f: &Function, block: Block, inst: Inst, mut visit: F) {
     if f.dfg[inst].opcode() == Opcode::Fallthrough {
-        ret.push(f.layout.next_block(block).unwrap());
+        visit(f.layout.next_block(block).unwrap());
     } else {
-        match &f.dfg[inst] {
-            &InstructionData::Jump { destination, .. }
-            | &InstructionData::Branch { destination, .. }
-            | &InstructionData::BranchInt { destination, .. }
-            | &InstructionData::BranchIcmp { destination, .. }
-            | &InstructionData::BranchFloat { destination, .. } => {
-                ret.push(destination);
+        match f.dfg[inst].analyze_branch(&f.dfg.value_lists) {
+            BranchInfo::NotABranch => {}
+            BranchInfo::SingleDest(dest, _) => {
+                visit(dest);
             }
-            &InstructionData::BranchTable {
-                destination, table, ..
-            } => {
-                ret.push(destination);
-                for dest in f.jump_tables[table].as_slice() {
-                    ret.push(*dest);
+            BranchInfo::Table(table, maybe_dest) => {
+                if let Some(dest) = maybe_dest {
+                    visit(dest);
+                }
+                for &dest in f.jump_tables[table].as_slice() {
+                    visit(dest);
                 }
             }
-            _ => {}
         }
     }
-    ret
 }

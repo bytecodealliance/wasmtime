@@ -1,15 +1,9 @@
 //! A pass that computes the number of uses of any given instruction.
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
-use crate::cursor::{Cursor, FuncCursor};
-use crate::dce::has_side_effect;
 use crate::entity::SecondaryMap;
 use crate::ir::dfg::ValueDef;
-use crate::ir::instructions::InstructionData;
 use crate::ir::Value;
-use crate::ir::{DataFlowGraph, Function, Inst, Opcode};
+use crate::ir::{DataFlowGraph, Function, Inst};
 
 /// Auxiliary data structure that counts the number of uses of any given
 /// instruction in a Function. This is used during instruction selection
@@ -49,16 +43,6 @@ impl NumUses {
             }
             _ => {}
         }
-    }
-
-    /// How many times is an instruction used?
-    pub fn use_count(&self, i: Inst) -> usize {
-        self.uses[i] as usize
-    }
-
-    /// Is an instruction used at all?
-    pub fn is_used(&self, i: Inst) -> bool {
-        self.use_count(i) > 0
     }
 
     /// Take the complete uses map, consuming this analysis result.

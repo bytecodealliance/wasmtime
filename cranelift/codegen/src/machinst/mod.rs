@@ -17,105 +17,97 @@
 //! (N.B.: though we show the VCode separately at each stage, the passes
 //! mutate the VCode in place; these are not separate copies of the code.)
 //!
-//! |    ir::Function                (SSA IR, machine-independent opcodes)
-//! |        |
-//! |        |  [lower]
-//! |        |
-//! |    VCode<arch_backend::Inst>   (machine instructions:
-//! |        |                        - mostly virtual registers.
-//! |        |                        - cond branches in two-target form.
-//! |        |                        - branch targets are block indices.
-//! |        |                        - in-memory constants held by insns,
-//! |        |                          with unknown offsets.
-//! |        |                        - critical edges (actually all edges)
-//! |        |                          are split.)
-//! |        | [regalloc]
-//! |        |
-//! |    VCode<arch_backend::Inst>   (machine instructions:
-//! |        |                        - all real registers.
-//! |        |                        - new instruction sequence returned
-//! |        |                          out-of-band in RegAllocResult.
-//! |        |                        - instruction sequence has spills,
-//! |        |                          reloads, and moves inserted.
-//! |        |                        - other invariants same as above.)
-//! |        |
-//! |        | [preamble/postamble]
-//! |        |
-//! |    VCode<arch_backend::Inst>   (machine instructions:
-//! |        |                        - stack-frame size known.
-//! |        |                        - out-of-band instruction sequence
-//! |        |                          has preamble prepended to entry
-//! |        |                          block, and postamble injected before
-//! |        |                          every return instruction.
-//! |        |                        - all symbolic stack references to
-//! |        |                          stackslots and spillslots are resolved
-//! |        |                          to concrete FP-offset mem addresses.)
-//! |        | [block/insn ordering]
-//! |        |
-//! |    VCode<arch_backend::Inst>   (machine instructions:
-//! |        |                        - vcode.final_block_order is filled in.
-//! |        |                        - new insn sequence from regalloc is
-//! |        |                          placed back into vcode and block
-//! |        |                          boundaries are updated.)
-//! |        | [redundant branch/block
-//! |        |  removal]
-//! |        |
-//! |    VCode<arch_backend::Inst>   (machine instructions:
-//! |        |                        - all blocks that were just an
-//! |        |                          unconditional branch are removed.)
-//! |        |
-//! |        | [branch finalization
-//! |        |  (fallthroughs)]
-//! |        |
-//! |    VCode<arch_backend::Inst>   (machine instructions:
-//! |        |                        - all branches are in lowered one-
-//! |        |                          target form, but targets are still
-//! |        |                          block indices.)
-//! |        |
-//! |        | [branch finalization
-//! |        |  (offsets)]
-//! |        |
-//! |    VCode<arch_backend::Inst>   (machine instructions:
-//! |        |                        - all branch offsets from start of
-//! |        |                          function are known, and all branches
-//! |        |                          have resolved-offset targets.)
-//! |        |
-//! |        | [MemArg finalization]
-//! |        |
-//! |    VCode<arch_backend::Inst>   (machine instructions:
-//! |        |                        - all MemArg references to the constant
-//! |        |                          pool are replaced with offsets.
-//! |        |                        - all constant-pool data is collected
-//! |        |                          in the VCode.)
-//! |        |
-//! |        | [binary emission]
-//! |        |
-//! |    Vec<u8>                     (machine code!)
-//! |
+//! ```plain
+//!
+//!     ir::Function                (SSA IR, machine-independent opcodes)
+//!         |
+//!         |  [lower]
+//!         |
+//!     VCode<arch_backend::Inst>   (machine instructions:
+//!         |                        - mostly virtual registers.
+//!         |                        - cond branches in two-target form.
+//!         |                        - branch targets are block indices.
+//!         |                        - in-memory constants held by insns,
+//!         |                          with unknown offsets.
+//!         |                        - critical edges (actually all edges)
+//!         |                          are split.)
+//!         | [regalloc]
+//!         |
+//!     VCode<arch_backend::Inst>   (machine instructions:
+//!         |                        - all real registers.
+//!         |                        - new instruction sequence returned
+//!         |                          out-of-band in RegAllocResult.
+//!         |                        - instruction sequence has spills,
+//!         |                          reloads, and moves inserted.
+//!         |                        - other invariants same as above.)
+//!         |
+//!         | [preamble/postamble]
+//!         |
+//!     VCode<arch_backend::Inst>   (machine instructions:
+//!         |                        - stack-frame size known.
+//!         |                        - out-of-band instruction sequence
+//!         |                          has preamble prepended to entry
+//!         |                          block, and postamble injected before
+//!         |                          every return instruction.
+//!         |                        - all symbolic stack references to
+//!         |                          stackslots and spillslots are resolved
+//!         |                          to concrete FP-offset mem addresses.)
+//!         | [block/insn ordering]
+//!         |
+//!     VCode<arch_backend::Inst>   (machine instructions:
+//!         |                        - vcode.final_block_order is filled in.
+//!         |                        - new insn sequence from regalloc is
+//!         |                          placed back into vcode and block
+//!         |                          boundaries are updated.)
+//!         | [redundant branch/block
+//!         |  removal]
+//!         |
+//!     VCode<arch_backend::Inst>   (machine instructions:
+//!         |                        - all blocks that were just an
+//!         |                          unconditional branch are removed.)
+//!         |
+//!         | [branch finalization
+//!         |  (fallthroughs)]
+//!         |
+//!     VCode<arch_backend::Inst>   (machine instructions:
+//!         |                        - all branches are in lowered one-
+//!         |                          target form, but targets are still
+//!         |                          block indices.)
+//!         |
+//!         | [branch finalization
+//!         |  (offsets)]
+//!         |
+//!     VCode<arch_backend::Inst>   (machine instructions:
+//!         |                        - all branch offsets from start of
+//!         |                          function are known, and all branches
+//!         |                          have resolved-offset targets.)
+//!         |
+//!         | [MemArg finalization]
+//!         |
+//!     VCode<arch_backend::Inst>   (machine instructions:
+//!         |                        - all MemArg references to the constant
+//!         |                          pool are replaced with offsets.
+//!         |                        - all constant-pool data is collected
+//!         |                          in the VCode.)
+//!         |
+//!         | [binary emission]
+//!         |
+//!     Vec<u8>                     (machine code!)
+//!
+//! ```
 
-#![allow(unused_imports)]
-
-use crate::binemit::{
-    CodeInfo, CodeOffset, CodeSink, MemoryCodeSink, RelocSink, StackmapSink, TrapSink,
-};
-use crate::entity::EntityRef;
+use crate::binemit::{CodeInfo, CodeOffset};
 use crate::entity::SecondaryMap;
 use crate::ir::condcodes::IntCC;
-use crate::ir::ValueLocations;
-use crate::ir::{DataFlowGraph, Function, Inst, Opcode, Type, Value};
-use crate::isa::RegUnit;
+use crate::ir::{Function, Type};
 use crate::result::CodegenResult;
 use crate::settings::Flags;
-use crate::HashMap;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt::Debug;
-use core::iter::Sum;
 use regalloc::Map as RegallocMap;
 use regalloc::RegUsageCollector;
 use regalloc::{RealReg, RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
-use smallvec::SmallVec;
-use std::hash::Hash;
 use std::string::String;
 use target_lexicon::Triple;
 
@@ -129,8 +121,8 @@ pub mod blockorder;
 pub use blockorder::*;
 pub mod abi;
 pub use abi::*;
-pub mod pp;
-pub use pp::*;
+pub mod pretty_print;
+pub use pretty_print::*;
 pub mod sections;
 pub use sections::*;
 pub mod adapter;
@@ -255,10 +247,10 @@ impl MachCompileResult {
 /// Top-level machine backend trait, which wraps all monomorphized code and
 /// allows a virtual call from the machine-independent `Function::compile()`.
 pub trait MachBackend {
-    /// Compile the given function. Consumes the function.
+    /// Compile the given function.
     fn compile_function(
         &self,
-        func: Function,
+        func: &Function,
         want_disasm: bool,
     ) -> CodegenResult<MachCompileResult>;
 

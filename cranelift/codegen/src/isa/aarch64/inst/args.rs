@@ -1,47 +1,32 @@
-//! ARM64 ISA definitions: instruction arguments.
+//! AArch64 ISA definitions: instruction arguments.
 
+// Some variants are never constructed, but we still want them as options in the future.
 #![allow(dead_code)]
-#![allow(non_snake_case)]
 
-use crate::binemit::{CodeOffset, CodeSink};
-use crate::ir::constant::{ConstantData, ConstantOffset};
+use crate::binemit::CodeOffset;
 use crate::ir::Type;
-use crate::isa::arm64::inst::*;
-use crate::machinst::*;
+use crate::isa::aarch64::inst::*;
 
-use regalloc::{
-    RealReg, RealRegUniverse, Reg, RegClass, RegClassInfo, SpillSlot, VirtualReg, Writable,
-    NUM_REG_CLASSES,
-};
+use regalloc::{RealRegUniverse, Reg, Writable};
 
-use std::string::{String, ToString};
+use core::convert::{Into, TryFrom};
+use std::string::String;
 
 /// A shift operator for a register or immediate.
 #[derive(Clone, Copy, Debug)]
+#[repr(u8)]
 pub enum ShiftOp {
-    ASR,
-    LSR,
-    LSL,
-    ROR,
+    LSL = 0b00,
+    LSR = 0b01,
+    ASR = 0b10,
+    ROR = 0b11,
 }
 
 impl ShiftOp {
     /// Get the encoding of this shift op.
-    pub fn bits(&self) -> u8 {
-        match self {
-            &ShiftOp::LSL => 0b00,
-            &ShiftOp::LSR => 0b01,
-            &ShiftOp::ASR => 0b10,
-            &ShiftOp::ROR => 0b11,
-        }
+    pub fn bits(self) -> u8 {
+        self as u8
     }
-}
-
-/// A shift operator with an amount, guaranteed to be within range.
-#[derive(Clone, Debug)]
-pub struct ShiftOpAndAmt {
-    op: ShiftOp,
-    shift: ShiftOpShiftImm,
 }
 
 /// A shift operator amount.
@@ -62,9 +47,16 @@ impl ShiftOpShiftImm {
     }
 
     /// Return the shift amount.
-    pub fn value(&self) -> u8 {
+    pub fn value(self) -> u8 {
         self.0
     }
+}
+
+/// A shift operator with an amount, guaranteed to be within range.
+#[derive(Clone, Debug)]
+pub struct ShiftOpAndAmt {
+    op: ShiftOp,
+    shift: ShiftOpShiftImm,
 }
 
 impl ShiftOpAndAmt {
@@ -74,7 +66,7 @@ impl ShiftOpAndAmt {
 
     /// Get the shift op.
     pub fn op(&self) -> ShiftOp {
-        self.op.clone()
+        self.op
     }
 
     /// Get the shift amount.
@@ -85,30 +77,22 @@ impl ShiftOpAndAmt {
 
 /// An extend operator for a register.
 #[derive(Clone, Copy, Debug)]
+#[repr(u8)]
 pub enum ExtendOp {
-    SXTB,
-    SXTH,
-    SXTW,
-    SXTX,
-    UXTB,
-    UXTH,
-    UXTW,
-    UXTX,
+    UXTB = 0b000,
+    UXTH = 0b001,
+    UXTW = 0b010,
+    UXTX = 0b011,
+    SXTB = 0b100,
+    SXTH = 0b101,
+    SXTW = 0b110,
+    SXTX = 0b111,
 }
 
 impl ExtendOp {
     /// Encoding of this op.
-    pub fn bits(&self) -> u8 {
-        match self {
-            &ExtendOp::UXTB => 0b000,
-            &ExtendOp::UXTH => 0b001,
-            &ExtendOp::UXTW => 0b010,
-            &ExtendOp::UXTX => 0b011,
-            &ExtendOp::SXTB => 0b100,
-            &ExtendOp::SXTH => 0b101,
-            &ExtendOp::SXTW => 0b110,
-            &ExtendOp::SXTX => 0b111,
-        }
+    pub fn bits(self) -> u8 {
+        self as u8
     }
 }
 
@@ -128,18 +112,34 @@ pub enum MemLabel {
 #[derive(Clone, Debug)]
 pub enum MemArg {
     Label(MemLabel),
+    /// "post-indexed" mode as per AArch64 docs: postincrement reg after address computation.
     PostIndexed(Writable<Reg>, SImm9),
+    /// "pre-indexed" mode as per AArch64 docs: preincrement reg before address computation.
     PreIndexed(Writable<Reg>, SImm9),
+
     // N.B.: RegReg, RegScaled, and RegScaledExtended all correspond to
     // what the ISA calls the "register offset" addressing mode. We split out
     // several options here for more ergonomic codegen.
+    /// Register plus register offset.
     RegReg(Reg, Reg),
+
+    /// Register plus register offset, scaled by type's size.
     RegScaled(Reg, Reg, Type),
+
+    /// Register plus register offset, scaled by type's size, with index sign- or zero-extended
+    /// first.
     RegScaledExtended(Reg, Reg, Type, ExtendOp),
+
+    /// Unscaled signed 9-bit immediate offset from reg.
     Unscaled(Reg, SImm9),
+
+    /// Scaled (by size of a type) unsigned 12-bit immediate offset from reg.
     UnsignedOffset(Reg, UImm12Scaled),
-    /// Offset from the stack pointer or frame pointer.
+
+    /// Offset from the stack pointer. Lowered into a real amode at emission.
     SPOffset(i64),
+
+    /// Offset from the frame pointer. Lowered into a real amode at emission.
     FPOffset(i64),
 }
 
@@ -153,9 +153,7 @@ impl MemArg {
 
     /// Memory reference using an address in a register and an offset, if possible.
     pub fn reg_maybe_offset(reg: Reg, offset: i64, value_type: Type) -> Option<MemArg> {
-        if offset == 0 {
-            Some(MemArg::Unscaled(reg, SImm9::zero()))
-        } else if let Some(simm9) = SImm9::maybe_from_i64(offset) {
+        if let Some(simm9) = SImm9::maybe_from_i64(offset) {
             Some(MemArg::Unscaled(reg, simm9))
         } else if let Some(uimm12s) = UImm12Scaled::maybe_from_i64(offset, value_type) {
             Some(MemArg::UnsignedOffset(reg, uimm12s))
@@ -165,17 +163,18 @@ impl MemArg {
     }
 
     /// Memory reference using the sum of two registers as an address.
-    pub fn reg_reg(reg1: Reg, reg2: Reg) -> MemArg {
+    pub fn reg_plus_reg(reg1: Reg, reg2: Reg) -> MemArg {
         MemArg::RegReg(reg1, reg2)
     }
 
     /// Memory reference using `reg1 + sizeof(ty) * reg2` as an address.
-    pub fn reg_reg_scaled(reg1: Reg, reg2: Reg, ty: Type) -> MemArg {
+    pub fn reg_plus_reg_scaled(reg1: Reg, reg2: Reg, ty: Type) -> MemArg {
         MemArg::RegScaled(reg1, reg2, ty)
     }
 
-    /// Memory reference using `reg1 + sizeof(ty) * reg2` as an address.
-    pub fn reg_reg_scaled_extended(reg1: Reg, reg2: Reg, ty: Type, op: ExtendOp) -> MemArg {
+    /// Memory reference using `reg1 + sizeof(ty) * reg2` as an address, with `reg2` sign- or
+    /// zero-extended as per `op`.
+    pub fn reg_plus_reg_scaled_extended(reg1: Reg, reg2: Reg, ty: Type, op: ExtendOp) -> MemArg {
         MemArg::RegScaledExtended(reg1, reg2, ty, op)
     }
 
@@ -199,23 +198,24 @@ pub enum PairMemArg {
 
 /// Condition for conditional branches.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
 pub enum Cond {
-    Eq,
-    Ne,
-    Hs,
-    Lo,
-    Mi,
-    Pl,
-    Vs,
-    Vc,
-    Hi,
-    Ls,
-    Ge,
-    Lt,
-    Gt,
-    Le,
-    Al,
-    Nv,
+    Eq = 0,
+    Ne = 1,
+    Hs = 2,
+    Lo = 3,
+    Mi = 4,
+    Pl = 5,
+    Vs = 6,
+    Vc = 7,
+    Hi = 8,
+    Ls = 9,
+    Ge = 10,
+    Lt = 11,
+    Gt = 12,
+    Le = 13,
+    Al = 14,
+    Nv = 15,
 }
 
 impl Cond {
@@ -224,18 +224,25 @@ impl Cond {
         match self {
             Cond::Eq => Cond::Ne,
             Cond::Ne => Cond::Eq,
+
             Cond::Hs => Cond::Lo,
             Cond::Lo => Cond::Hs,
+
             Cond::Mi => Cond::Pl,
             Cond::Pl => Cond::Mi,
+
             Cond::Vs => Cond::Vc,
             Cond::Vc => Cond::Vs,
+
             Cond::Hi => Cond::Ls,
             Cond::Ls => Cond::Hi,
+
             Cond::Ge => Cond::Lt,
             Cond::Lt => Cond::Ge,
+
             Cond::Gt => Cond::Le,
             Cond::Le => Cond::Gt,
+
             Cond::Al => Cond::Nv,
             Cond::Nv => Cond::Al,
         }
@@ -243,24 +250,7 @@ impl Cond {
 
     /// Return the machine encoding of this condition.
     pub fn bits(self) -> u32 {
-        match self {
-            Cond::Eq => 0,
-            Cond::Ne => 1,
-            Cond::Hs => 2,
-            Cond::Lo => 3,
-            Cond::Mi => 4,
-            Cond::Pl => 5,
-            Cond::Vs => 6,
-            Cond::Vc => 7,
-            Cond::Hi => 8,
-            Cond::Ls => 9,
-            Cond::Ge => 10,
-            Cond::Lt => 11,
-            Cond::Gt => 12,
-            Cond::Le => 13,
-            Cond::Al => 14,
-            Cond::Nv => 15,
-        }
+        self as u32
     }
 }
 
@@ -305,7 +295,7 @@ impl BranchTarget {
     pub fn lower(&mut self, targets: &[CodeOffset], my_offset: CodeOffset) {
         match self {
             &mut BranchTarget::Block(bix) => {
-                let bix = bix as usize;
+                let bix = usize::try_from(bix).unwrap();
                 assert!(bix < targets.len());
                 let block_offset_in_func = targets[bix];
                 let branch_offset = (block_offset_in_func as isize) - (my_offset as isize);
@@ -343,7 +333,7 @@ impl BranchTarget {
         }
     }
 
-    /// Get the offset as a 16-bit offset, or `None` if overflow.
+    /// Get the offset as a 19-bit offset, or `None` if overflow.
     pub fn as_off19(&self) -> Option<u32> {
         let off = self.as_offset_words();
         if (off < (1 << 18)) && (off >= -(1 << 18)) {
@@ -357,7 +347,7 @@ impl BranchTarget {
     pub fn map(&mut self, block_index_map: &[BlockIndex]) {
         match self {
             &mut BranchTarget::Block(ref mut bix) => {
-                let n = block_index_map[*bix as usize];
+                let n = block_index_map[usize::try_from(*bix).unwrap()];
                 *bix = n;
             }
             &mut BranchTarget::ResolvedOffset(_) => {}
@@ -392,7 +382,7 @@ fn shift_for_type(ty: Type) -> usize {
         4 => 2,
         8 => 3,
         16 => 4,
-        _ => panic!("unknown type"),
+        _ => panic!("unknown type: {}", ty),
     }
 }
 
@@ -427,15 +417,15 @@ impl ShowWithRRU for MemArg {
             }
             &MemArg::RegScaledExtended(r1, r2, ty, op) => {
                 let shift = shift_for_type(ty);
-                let is32 = match op {
-                    ExtendOp::SXTW | ExtendOp::UXTW => true,
-                    _ => false,
+                let size = match op {
+                    ExtendOp::SXTW | ExtendOp::UXTW => InstSize::Size32,
+                    _ => InstSize::Size64,
                 };
                 let op = op.show_rru(mb_rru);
                 format!(
                     "[{}, {}, {} #{}]",
                     r1.show_rru(mb_rru),
-                    show_ireg_sized(r2, mb_rru, is32),
+                    show_ireg_sized(r2, mb_rru, size),
                     op,
                     shift
                 )
@@ -496,6 +486,43 @@ impl ShowWithRRU for BranchTarget {
         match self {
             &BranchTarget::Block(block) => format!("block{}", block),
             &BranchTarget::ResolvedOffset(off) => format!("{}", off),
+        }
+    }
+}
+
+/// Type used to communicate the operand size of a machine instruction, as AArch64 has 32- and
+/// 64-bit variants of many instructions (and integer registers).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InstSize {
+    Size32,
+    Size64,
+}
+
+impl InstSize {
+    /// 32-bit case?
+    pub fn is32(self) -> bool {
+        self == InstSize::Size32
+    }
+    /// 64-bit case?
+    pub fn is64(self) -> bool {
+        self == InstSize::Size64
+    }
+    /// Convert from an `is32` boolean flag to an `InstSize`.
+    pub fn from_is32(is32: bool) -> InstSize {
+        if is32 {
+            InstSize::Size32
+        } else {
+            InstSize::Size64
+        }
+    }
+    /// Convert from a needed width to the smallest size that fits.
+    pub fn from_bits<I: Into<usize>>(bits: I) -> InstSize {
+        let bits: usize = bits.into();
+        assert!(bits <= 64);
+        if bits <= 32 {
+            InstSize::Size32
+        } else {
+            InstSize::Size64
         }
     }
 }

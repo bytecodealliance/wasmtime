@@ -3,8 +3,6 @@
 //! The `Function` struct defined in this module owns all of its basic blocks and
 //! instructions.
 
-#![allow(unused_imports)]
-
 use crate::binemit::CodeOffset;
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir;
@@ -19,7 +17,6 @@ use crate::isa::{CallConv, EncInfo, Encoding, Legalize, TargetIsa};
 use crate::regalloc::{EntryRegDiversions, RegDiversions};
 use crate::value_label::ValueLabelsRanges;
 use crate::write::write_function;
-use alloc::boxed::Box;
 use core::fmt;
 
 /// A function.

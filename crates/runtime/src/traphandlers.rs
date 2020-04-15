@@ -31,7 +31,6 @@ cfg_if::cfg_if! {
         static mut PREV_SIGBUS: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
         static mut PREV_SIGILL: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
         static mut PREV_SIGFPE: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
-        static mut PREV_SIGTRAP: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
 
         unsafe fn platform_init() {
             let register = |slot: &mut MaybeUninit<libc::sigaction>, signal: i32| {
@@ -71,9 +70,6 @@ cfg_if::cfg_if! {
                 register(&mut PREV_SIGFPE, libc::SIGFPE);
             }
 
-            // on ARM64, we use `brk` to report traps, which generates SIGTRAP.
-            register(&mut PREV_SIGTRAP, libc::SIGTRAP);
-
             // On ARM, handle Unaligned Accesses.
             // On Darwin, guard page accesses are raised as SIGBUS.
             if cfg!(target_arch = "arm") || cfg!(target_os = "macos") {
@@ -91,7 +87,6 @@ cfg_if::cfg_if! {
                 libc::SIGBUS => &PREV_SIGBUS,
                 libc::SIGFPE => &PREV_SIGFPE,
                 libc::SIGILL => &PREV_SIGILL,
-                libc::SIGTRAP => &PREV_SIGTRAP,
                 _ => panic!("unknown signal: {}", signum),
             };
             let handled = tls::with(|info| {

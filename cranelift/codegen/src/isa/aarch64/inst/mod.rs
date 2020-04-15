@@ -1,28 +1,19 @@
-//! This module defines arm64-specific machine instruction types.
+//! This module defines aarch64-specific machine instruction types.
 
-#![allow(non_snake_case)]
-#![allow(unused_imports)]
-#![allow(non_camel_case_types)]
+// Some variants are not constructed, but we still want them as options in the future.
 #![allow(dead_code)]
 
 use crate::binemit::CodeOffset;
-use crate::ir::constant::{ConstantData, ConstantOffset};
-use crate::ir::types::{
-    B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, IFLAGS,
-};
-use crate::ir::{ExternalName, GlobalValue, JumpTable, Opcode, SourceLoc, TrapCode, Type};
+use crate::ir::types::{B1, B16, B32, B64, B8, F32, F64, FFLAGS, I16, I32, I64, I8, IFLAGS};
+use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
 
 use regalloc::Map as RegallocMap;
-use regalloc::{
-    RealReg, RealRegUniverse, Reg, RegClass, RegClassInfo, SpillSlot, VirtualReg, Writable,
-    NUM_REG_CLASSES,
-};
+use regalloc::{RealReg, RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
 use regalloc::{RegUsageCollector, Set};
 
 use alloc::vec::Vec;
 use smallvec::{smallvec, SmallVec};
-use std::mem;
 use std::string::{String, ToString};
 
 pub mod regs;
@@ -47,25 +38,43 @@ pub enum ALUOp {
     Sub64,
     Orr32,
     Orr64,
+    /// NOR
     OrrNot32,
+    /// NOR
     OrrNot64,
     And32,
     And64,
+    /// NAND
     AndNot32,
+    /// NAND
     AndNot64,
+    /// XOR (AArch64 calls this "EOR")
     Eor32,
+    /// XOR (AArch64 calls this "EOR")
     Eor64,
+    /// XNOR (AArch64 calls this "EOR-NOT")
     EorNot32,
+    /// XNOR (AArch64 calls this "EOR-NOT")
     EorNot64,
+    /// Add, setting flags
     AddS32,
+    /// Add, setting flags
     AddS64,
+    /// Sub, setting flags
     SubS32,
+    /// Sub, setting flags
     SubS64,
-    MAdd32, // multiply-add
+    /// Multiply-add
+    MAdd32,
+    /// Multiply-add
     MAdd64,
+    /// Multiply-sub
     MSub32,
+    /// Multiply-sub
     MSub64,
+    /// Signed multiply, high-word result
     SMulH,
+    /// Unsigned multiply, high-word result
     UMulH,
     SDiv64,
     UDiv64,
@@ -159,17 +168,23 @@ pub enum FpuRoundMode {
 /// A vector ALU operation.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum VecALUOp {
-    SQAddScalar, // signed saturating add
-    UQAddScalar, // unsigned saturating add
-    SQSubScalar, // signed saturating subtract
-    UQSubScalar, // unsigned saturating subtract
+    /// Signed saturating add
+    SQAddScalar,
+    /// Unsigned saturating add
+    UQAddScalar,
+    /// Signed saturating subtract
+    SQSubScalar,
+    /// Unsigned saturating subtract
+    UQSubScalar,
 }
 
 /// An operation on the bits of a register. This can be paired with several instruction formats
 /// below (see `Inst`) in any combination.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BitOp {
+    /// Bit reverse
     RBit32,
+    /// Bit reverse
     RBit64,
     Clz32,
     Clz64,
@@ -178,13 +193,11 @@ pub enum BitOp {
 }
 
 impl BitOp {
-    /// Is the opcode a 32-bit operation.
-    pub fn is_32_bit(&self) -> bool {
+    /// What is the opcode's native width?
+    pub fn inst_size(&self) -> InstSize {
         match self {
-            BitOp::RBit32 => true,
-            BitOp::Clz32 => true,
-            BitOp::Cls32 => true,
-            _ => false,
+            BitOp::RBit32 | BitOp::Clz32 | BitOp::Cls32 => InstSize::Size32,
+            _ => InstSize::Size64,
         }
     }
 
@@ -217,7 +230,7 @@ impl From<(Opcode, Type)> for BitOp {
 #[derive(Clone, Debug)]
 pub enum Inst {
     /// A no-op of zero size.
-    Nop,
+    Nop0,
 
     /// A no-op that is one instruction large.
     Nop4,
@@ -465,32 +478,37 @@ pub enum Inst {
         rm: Reg,
     },
 
-    /// Floating-point loads and stores.
+    /// Floating-point load, single-precision (32 bit).
     FpuLoad32 {
         rd: Writable<Reg>,
         mem: MemArg,
         srcloc: Option<SourceLoc>,
     },
+    /// Floating-point store, single-precision (32 bit).
     FpuStore32 {
         rd: Reg,
         mem: MemArg,
         srcloc: Option<SourceLoc>,
     },
+    /// Floating-point load, double-precision (64 bit).
     FpuLoad64 {
         rd: Writable<Reg>,
         mem: MemArg,
         srcloc: Option<SourceLoc>,
     },
+    /// Floating-point store, double-precision (64 bit).
     FpuStore64 {
         rd: Reg,
         mem: MemArg,
         srcloc: Option<SourceLoc>,
     },
+    /// Floating-point/vector load, 128 bit.
     FpuLoad128 {
         rd: Writable<Reg>,
         mem: MemArg,
         srcloc: Option<SourceLoc>,
     },
+    /// Floating-point/vector store, 128 bit.
     FpuStore128 {
         rd: Reg,
         mem: MemArg,
@@ -507,26 +525,28 @@ pub enum Inst {
         const_data: f64,
     },
 
-    /// Conversions between FP and integer values.
+    /// Conversion: FP -> integer.
     FpuToInt {
         op: FpuToIntOp,
         rd: Writable<Reg>,
         rn: Reg,
     },
 
+    /// Conversion: integer -> FP.
     IntToFpu {
         op: IntToFpuOp,
         rd: Writable<Reg>,
         rn: Reg,
     },
 
-    // FP conditional select.
+    /// FP conditional select, 32 bit.
     FpuCSel32 {
         rd: Writable<Reg>,
         rn: Reg,
         rm: Reg,
         cond: Cond,
     },
+    /// FP conditional select, 64 bit.
     FpuCSel64 {
         rd: Writable<Reg>,
         rn: Reg,
@@ -534,7 +554,7 @@ pub enum Inst {
         cond: Cond,
     },
 
-    // Round to integer.
+    /// Round to integer.
     FpuRound {
         op: FpuRoundMode,
         rd: Writable<Reg>,
@@ -596,11 +616,11 @@ pub enum Inst {
 
     // ---- branches (exactly one must appear at end of BB) ----
     /// A machine return instruction.
-    Ret {},
+    Ret,
 
     /// A placeholder instruction, generating no code, meaning that a function epilogue must be
     /// inserted there.
-    EpiloguePlaceholder {},
+    EpiloguePlaceholder,
 
     /// An unconditional branch.
     Jump {
@@ -689,7 +709,7 @@ pub enum Inst {
     },
 }
 
-fn count_clear_half_words(mut value: u64) -> usize {
+fn count_zero_half_words(mut value: u64) -> usize {
     let mut count = 0;
     for _ in 0..4 {
         if value & 0xffff == 0 {
@@ -748,7 +768,7 @@ impl Inst {
 
             // If the number of 0xffff half words is greater than the number of 0x0000 half words
             // it is more efficient to use `movn` for the first instruction.
-            let first_is_inverted = count_clear_half_words(!value) > count_clear_half_words(value);
+            let first_is_inverted = count_zero_half_words(!value) > count_zero_half_words(value);
             // Either 0xffff or 0x0000 half words can be skipped, depending on the first
             // instruction used.
             let ignored_halfword = if first_is_inverted { 0xffff } else { 0 };
@@ -839,7 +859,7 @@ fn pairmemarg_regs(pairmemarg: &PairMemArg, collector: &mut RegUsageCollector) {
     }
 }
 
-fn arm64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
+fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
     match inst {
         &Inst::AluRRR { rd, rn, rm, .. } => {
             collector.add_def(rd);
@@ -1024,7 +1044,7 @@ fn arm64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             collector.add_use(rn);
         }
-        &Inst::Jump { .. } | &Inst::Ret { .. } | &Inst::EpiloguePlaceholder { .. } => {}
+        &Inst::Jump { .. } | &Inst::Ret | &Inst::EpiloguePlaceholder => {}
         &Inst::Call {
             ref uses, ref defs, ..
         } => {
@@ -1052,7 +1072,7 @@ fn arm64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::IndirectBr { rn, .. } => {
             collector.add_use(rn);
         }
-        &Inst::Nop | Inst::Nop4 => {}
+        &Inst::Nop0 | Inst::Nop4 => {}
         &Inst::Brk => {}
         &Inst::Udf { .. } => {}
         &Inst::Adr { rd, .. } => {
@@ -1075,548 +1095,555 @@ fn arm64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
 //=============================================================================
 // Instructions: map_regs
 
-fn arm64_map_regs(
+fn aarch64_map_regs(
     inst: &mut Inst,
     pre_map: &RegallocMap<VirtualReg, RealReg>,
     post_map: &RegallocMap<VirtualReg, RealReg>,
 ) {
-    fn map(m: &RegallocMap<VirtualReg, RealReg>, r: Reg) -> Reg {
+    fn map(m: &RegallocMap<VirtualReg, RealReg>, r: &mut Reg) {
         if r.is_virtual() {
-            m.get(&r.to_virtual_reg()).cloned().unwrap().to_reg()
-        } else {
-            r
+            let new = m.get(&r.to_virtual_reg()).cloned().unwrap().to_reg();
+            *r = new;
         }
     }
 
-    fn map_wr(m: &RegallocMap<VirtualReg, RealReg>, r: Writable<Reg>) -> Writable<Reg> {
-        Writable::from_reg(map(m, r.to_reg()))
+    fn map_wr(m: &RegallocMap<VirtualReg, RealReg>, r: &mut Writable<Reg>) {
+        let mut reg = r.to_reg();
+        map(m, &mut reg);
+        *r = Writable::from_reg(reg);
     }
 
-    fn map_mem(u: &RegallocMap<VirtualReg, RealReg>, mem: &MemArg) -> MemArg {
+    fn map_mem(u: &RegallocMap<VirtualReg, RealReg>, mem: &mut MemArg) {
         // N.B.: we take only the pre-map here, but this is OK because the
         // only addressing modes that update registers (pre/post-increment on
-        // ARM64) both read and write registers, so they are "mods" rather
+        // AArch64) both read and write registers, so they are "mods" rather
         // than "defs", so must be the same in both the pre- and post-map.
         match mem {
-            &MemArg::Unscaled(reg, simm9) => MemArg::Unscaled(map(u, reg), simm9),
-            &MemArg::UnsignedOffset(reg, uimm12) => MemArg::UnsignedOffset(map(u, reg), uimm12),
-            &MemArg::RegReg(r1, r2) => MemArg::RegReg(map(u, r1), map(u, r2)),
-            &MemArg::RegScaled(r1, r2, ty) => MemArg::RegScaled(map(u, r1), map(u, r2), ty),
-            &MemArg::RegScaledExtended(r1, r2, ty, op) => {
-                MemArg::RegScaledExtended(map(u, r1), map(u, r2), ty, op)
+            &mut MemArg::Unscaled(ref mut reg, ..) => map(u, reg),
+            &mut MemArg::UnsignedOffset(ref mut reg, ..) => map(u, reg),
+            &mut MemArg::RegReg(ref mut r1, ref mut r2) => {
+                map(u, r1);
+                map(u, r2);
             }
-            &MemArg::Label(ref l) => MemArg::Label(l.clone()),
-            &MemArg::PreIndexed(r, simm9) => MemArg::PreIndexed(map_wr(u, r), simm9),
-            &MemArg::PostIndexed(r, simm9) => MemArg::PostIndexed(map_wr(u, r), simm9),
-            &MemArg::FPOffset(off) => MemArg::FPOffset(off),
-            &MemArg::SPOffset(off) => MemArg::SPOffset(off),
-        }
+            &mut MemArg::RegScaled(ref mut r1, ref mut r2, ..) => {
+                map(u, r1);
+                map(u, r2);
+            }
+            &mut MemArg::RegScaledExtended(ref mut r1, ref mut r2, ..) => {
+                map(u, r1);
+                map(u, r2);
+            }
+            &mut MemArg::Label(..) => {}
+            &mut MemArg::PreIndexed(ref mut r, ..) => map_wr(u, r),
+            &mut MemArg::PostIndexed(ref mut r, ..) => map_wr(u, r),
+            &mut MemArg::FPOffset(..) | &mut MemArg::SPOffset(..) => {}
+        };
     }
 
-    fn map_pairmem(u: &RegallocMap<VirtualReg, RealReg>, mem: &PairMemArg) -> PairMemArg {
+    fn map_pairmem(u: &RegallocMap<VirtualReg, RealReg>, mem: &mut PairMemArg) {
         match mem {
-            &PairMemArg::SignedOffset(reg, simm7) => PairMemArg::SignedOffset(map(u, reg), simm7),
-            &PairMemArg::PreIndexed(reg, simm7) => PairMemArg::PreIndexed(map_wr(u, reg), simm7),
-            &PairMemArg::PostIndexed(reg, simm7) => PairMemArg::PostIndexed(map_wr(u, reg), simm7),
+            &mut PairMemArg::SignedOffset(ref mut reg, ..) => map(u, reg),
+            &mut PairMemArg::PreIndexed(ref mut reg, ..) => map_wr(u, reg),
+            &mut PairMemArg::PostIndexed(ref mut reg, ..) => map_wr(u, reg),
         }
     }
 
-    fn map_br(u: &RegallocMap<VirtualReg, RealReg>, br: &CondBrKind) -> CondBrKind {
+    fn map_br(u: &RegallocMap<VirtualReg, RealReg>, br: &mut CondBrKind) {
         match br {
-            &CondBrKind::Zero(reg) => CondBrKind::Zero(map(u, reg)),
-            &CondBrKind::NotZero(reg) => CondBrKind::NotZero(map(u, reg)),
-            &CondBrKind::Cond(c) => CondBrKind::Cond(c),
-        }
+            &mut CondBrKind::Zero(ref mut reg) => map(u, reg),
+            &mut CondBrKind::NotZero(ref mut reg) => map(u, reg),
+            &mut CondBrKind::Cond(..) => {}
+        };
     }
 
     let u = pre_map; // For brevity below.
     let d = post_map;
 
-    let newval = match inst {
-        &mut Inst::AluRRR { alu_op, rd, rn, rm } => Inst::AluRRR {
-            alu_op,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-            rm: map(u, rm),
-        },
+    match inst {
+        &mut Inst::AluRRR {
+            ref mut rd,
+            ref mut rn,
+            ref mut rm,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+            map(u, rm);
+        }
         &mut Inst::AluRRRR {
-            alu_op,
-            rd,
-            rn,
-            rm,
-            ra,
-        } => Inst::AluRRRR {
-            alu_op,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-            rm: map(u, rm),
-            ra: map(u, ra),
-        },
+            ref mut rd,
+            ref mut rn,
+            ref mut rm,
+            ref mut ra,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+            map(u, rm);
+            map(u, ra);
+        }
         &mut Inst::AluRRImm12 {
-            alu_op,
-            rd,
-            rn,
-            ref imm12,
-        } => Inst::AluRRImm12 {
-            alu_op,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-            imm12: imm12.clone(),
-        },
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+        }
         &mut Inst::AluRRImmLogic {
-            alu_op,
-            rd,
-            rn,
-            ref imml,
-        } => Inst::AluRRImmLogic {
-            alu_op,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-            imml: imml.clone(),
-        },
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+        }
         &mut Inst::AluRRImmShift {
-            alu_op,
-            rd,
-            rn,
-            ref immshift,
-        } => Inst::AluRRImmShift {
-            alu_op,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-            immshift: immshift.clone(),
-        },
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+        }
         &mut Inst::AluRRRShift {
-            alu_op,
-            rd,
-            rn,
-            rm,
-            ref shiftop,
-        } => Inst::AluRRRShift {
-            alu_op,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-            rm: map(u, rm),
-            shiftop: shiftop.clone(),
-        },
+            ref mut rd,
+            ref mut rn,
+            ref mut rm,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+            map(u, rm);
+        }
         &mut Inst::AluRRRExtend {
-            alu_op,
-            rd,
-            rn,
-            rm,
-            ref extendop,
-        } => Inst::AluRRRExtend {
-            alu_op,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-            rm: map(u, rm),
-            extendop: extendop.clone(),
-        },
-        &mut Inst::BitRR { op, rd, rn } => Inst::BitRR {
-            op,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-        },
+            ref mut rd,
+            ref mut rn,
+            ref mut rm,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+            map(u, rm);
+        }
+        &mut Inst::BitRR {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+        }
         &mut Inst::ULoad8 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::ULoad8 {
-            rd: map_wr(d, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map_wr(d, rd);
+            map_mem(u, mem);
+        }
         &mut Inst::SLoad8 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::SLoad8 {
-            rd: map_wr(d, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map_wr(d, rd);
+            map_mem(u, mem);
+        }
         &mut Inst::ULoad16 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::ULoad16 {
-            rd: map_wr(d, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map_wr(d, rd);
+            map_mem(u, mem);
+        }
         &mut Inst::SLoad16 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::SLoad16 {
-            rd: map_wr(d, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map_wr(d, rd);
+            map_mem(u, mem);
+        }
         &mut Inst::ULoad32 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::ULoad32 {
-            rd: map_wr(d, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map_wr(d, rd);
+            map_mem(u, mem);
+        }
         &mut Inst::SLoad32 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::SLoad32 {
-            rd: map_wr(d, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map_wr(d, rd);
+            map_mem(u, mem);
+        }
+
         &mut Inst::ULoad64 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::ULoad64 {
-            rd: map_wr(d, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map_wr(d, rd);
+            map_mem(u, mem);
+        }
         &mut Inst::Store8 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::Store8 {
-            rd: map(u, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map(u, rd);
+            map_mem(u, mem);
+        }
         &mut Inst::Store16 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::Store16 {
-            rd: map(u, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map(u, rd);
+            map_mem(u, mem);
+        }
         &mut Inst::Store32 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::Store32 {
-            rd: map(u, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map(u, rd);
+            map_mem(u, mem);
+        }
         &mut Inst::Store64 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::Store64 {
-            rd: map(u, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
-        &mut Inst::StoreP64 { rt, rt2, ref mem } => Inst::StoreP64 {
-            rt: map(u, rt),
-            rt2: map(u, rt2),
-            mem: map_pairmem(u, mem),
-        },
-        &mut Inst::LoadP64 { rt, rt2, ref mem } => Inst::LoadP64 {
-            rt: map_wr(d, rt),
-            rt2: map_wr(d, rt2),
-            mem: map_pairmem(u, mem),
-        },
-        &mut Inst::Mov { rd, rm } => Inst::Mov {
-            rd: map_wr(d, rd),
-            rm: map(u, rm),
-        },
-        &mut Inst::Mov32 { rd, rm } => Inst::Mov32 {
-            rd: map_wr(d, rd),
-            rm: map(u, rm),
-        },
-        &mut Inst::MovZ { rd, ref imm } => Inst::MovZ {
-            rd: map_wr(d, rd),
-            imm: imm.clone(),
-        },
-        &mut Inst::MovN { rd, ref imm } => Inst::MovN {
-            rd: map_wr(d, rd),
-            imm: imm.clone(),
-        },
-        &mut Inst::MovK { rd, ref imm } => Inst::MovK {
-            rd: map_wr(d, rd),
-            imm: imm.clone(),
-        },
-        &mut Inst::CSel { rd, rn, rm, cond } => Inst::CSel {
-            cond,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-            rm: map(u, rm),
-        },
-        &mut Inst::CSet { rd, cond } => Inst::CSet {
-            cond,
-            rd: map_wr(d, rd),
-        },
-        &mut Inst::FpuMove64 { rd, rn } => Inst::FpuMove64 {
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-        },
-        &mut Inst::FpuRR { fpu_op, rd, rn } => Inst::FpuRR {
-            fpu_op,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-        },
-        &mut Inst::FpuRRR { fpu_op, rd, rn, rm } => Inst::FpuRRR {
-            fpu_op,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-            rm: map(u, rm),
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map(u, rd);
+            map_mem(u, mem);
+        }
+
+        &mut Inst::StoreP64 {
+            ref mut rt,
+            ref mut rt2,
+            ref mut mem,
+        } => {
+            map(u, rt);
+            map(u, rt2);
+            map_pairmem(u, mem);
+        }
+        &mut Inst::LoadP64 {
+            ref mut rt,
+            ref mut rt2,
+            ref mut mem,
+        } => {
+            map_wr(d, rt);
+            map_wr(d, rt2);
+            map_pairmem(u, mem);
+        }
+        &mut Inst::Mov {
+            ref mut rd,
+            ref mut rm,
+        } => {
+            map_wr(d, rd);
+            map(u, rm);
+        }
+        &mut Inst::Mov32 {
+            ref mut rd,
+            ref mut rm,
+        } => {
+            map_wr(d, rd);
+            map(u, rm);
+        }
+        &mut Inst::MovZ { ref mut rd, .. } => {
+            map_wr(d, rd);
+        }
+        &mut Inst::MovN { ref mut rd, .. } => {
+            map_wr(d, rd);
+        }
+        &mut Inst::MovK { ref mut rd, .. } => {
+            map_wr(d, rd);
+        }
+        &mut Inst::CSel {
+            ref mut rd,
+            ref mut rn,
+            ref mut rm,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+            map(u, rm);
+        }
+        &mut Inst::CSet { ref mut rd, .. } => {
+            map_wr(d, rd);
+        }
+        &mut Inst::FpuMove64 {
+            ref mut rd,
+            ref mut rn,
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+        }
+        &mut Inst::FpuRR {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+        }
+        &mut Inst::FpuRRR {
+            ref mut rd,
+            ref mut rn,
+            ref mut rm,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+            map(u, rm);
+        }
         &mut Inst::FpuRRRR {
-            fpu_op,
-            rd,
-            rn,
-            rm,
-            ra,
-        } => Inst::FpuRRRR {
-            fpu_op,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-            rm: map(u, rm),
-            ra: map(u, ra),
-        },
-        &mut Inst::FpuCmp32 { rn, rm } => Inst::FpuCmp32 {
-            rn: map(u, rn),
-            rm: map(u, rm),
-        },
-        &mut Inst::FpuCmp64 { rn, rm } => Inst::FpuCmp64 {
-            rn: map(u, rn),
-            rm: map(u, rm),
-        },
+            ref mut rd,
+            ref mut rn,
+            ref mut rm,
+            ref mut ra,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+            map(u, rm);
+            map(u, ra);
+        }
+        &mut Inst::FpuCmp32 {
+            ref mut rn,
+            ref mut rm,
+        } => {
+            map(u, rn);
+            map(u, rm);
+        }
+        &mut Inst::FpuCmp64 {
+            ref mut rn,
+            ref mut rm,
+        } => {
+            map(u, rn);
+            map(u, rm);
+        }
         &mut Inst::FpuLoad32 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::FpuLoad32 {
-            rd: map_wr(d, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map_wr(d, rd);
+            map_mem(u, mem);
+        }
         &mut Inst::FpuLoad64 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::FpuLoad64 {
-            rd: map_wr(d, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map_wr(d, rd);
+            map_mem(u, mem);
+        }
         &mut Inst::FpuLoad128 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::FpuLoad64 {
-            rd: map_wr(d, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map_wr(d, rd);
+            map_mem(u, mem);
+        }
         &mut Inst::FpuStore32 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::FpuStore32 {
-            rd: map(u, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map(u, rd);
+            map_mem(u, mem);
+        }
         &mut Inst::FpuStore64 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::FpuStore64 {
-            rd: map(u, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map(u, rd);
+            map_mem(u, mem);
+        }
         &mut Inst::FpuStore128 {
-            rd,
-            ref mem,
-            srcloc,
-        } => Inst::FpuStore64 {
-            rd: map(u, rd),
-            mem: map_mem(u, mem),
-            srcloc,
-        },
-        &mut Inst::LoadFpuConst32 { rd, const_data } => Inst::LoadFpuConst32 {
-            rd: map_wr(d, rd),
-            const_data,
-        },
-        &mut Inst::LoadFpuConst64 { rd, const_data } => Inst::LoadFpuConst64 {
-            rd: map_wr(d, rd),
-            const_data,
-        },
-        &mut Inst::FpuToInt { op, rd, rn } => Inst::FpuToInt {
-            op,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-        },
-        &mut Inst::IntToFpu { op, rd, rn } => Inst::IntToFpu {
-            op,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-        },
-        &mut Inst::FpuCSel32 { rd, rn, rm, cond } => Inst::FpuCSel32 {
-            cond,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-            rm: map(u, rm),
-        },
-        &mut Inst::FpuCSel64 { rd, rn, rm, cond } => Inst::FpuCSel64 {
-            cond,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-            rm: map(u, rm),
-        },
-        &mut Inst::FpuRound { op, rd, rn } => Inst::FpuRound {
-            op,
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-        },
-        &mut Inst::MovToVec64 { rd, rn } => Inst::MovToVec64 {
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-        },
-        &mut Inst::MovFromVec64 { rd, rn } => Inst::MovFromVec64 {
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-        },
-        &mut Inst::VecRRR { rd, rn, rm, alu_op } => Inst::VecRRR {
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-            rm: map(u, rm),
-            alu_op,
-        },
-        &mut Inst::MovToNZCV { rn } => Inst::MovToNZCV { rn: map(u, rn) },
-        &mut Inst::MovFromNZCV { rd } => Inst::MovFromNZCV { rd: map_wr(d, rd) },
-        &mut Inst::CondSet { rd, cond } => Inst::CondSet {
-            rd: map_wr(d, rd),
-            cond,
-        },
+            ref mut rd,
+            ref mut mem,
+            ..
+        } => {
+            map(u, rd);
+            map_mem(u, mem);
+        }
+        &mut Inst::LoadFpuConst32 { ref mut rd, .. } => {
+            map_wr(d, rd);
+        }
+        &mut Inst::LoadFpuConst64 { ref mut rd, .. } => {
+            map_wr(d, rd);
+        }
+        &mut Inst::FpuToInt {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+        }
+        &mut Inst::IntToFpu {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+        }
+        &mut Inst::FpuCSel32 {
+            ref mut rd,
+            ref mut rn,
+            ref mut rm,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+            map(u, rm);
+        }
+        &mut Inst::FpuCSel64 {
+            ref mut rd,
+            ref mut rn,
+            ref mut rm,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+            map(u, rm);
+        }
+        &mut Inst::FpuRound {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+        }
+        &mut Inst::MovToVec64 {
+            ref mut rd,
+            ref mut rn,
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+        }
+        &mut Inst::MovFromVec64 {
+            ref mut rd,
+            ref mut rn,
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+        }
+        &mut Inst::VecRRR {
+            ref mut rd,
+            ref mut rn,
+            ref mut rm,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+            map(u, rm);
+        }
+        &mut Inst::MovToNZCV { ref mut rn } => {
+            map(u, rn);
+        }
+        &mut Inst::MovFromNZCV { ref mut rd } => {
+            map_wr(d, rd);
+        }
+        &mut Inst::CondSet { ref mut rd, .. } => {
+            map_wr(d, rd);
+        }
         &mut Inst::Extend {
-            rd,
-            rn,
-            signed,
-            from_bits,
-            to_bits,
-        } => Inst::Extend {
-            rd: map_wr(d, rd),
-            rn: map(u, rn),
-            signed,
-            from_bits,
-            to_bits,
-        },
-        &mut Inst::Jump { dest } => Inst::Jump { dest },
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_wr(d, rd);
+            map(u, rn);
+        }
+        &mut Inst::Jump { .. } => {}
         &mut Inst::Call {
-            ref uses,
-            ref defs,
-            ref dest,
-            loc,
-            opcode,
+            ref mut uses,
+            ref mut defs,
+            ..
         } => {
-            let uses = uses.map(|r| map(u, *r));
-            let defs = defs.map(|r| map_wr(d, *r));
-            let dest = dest.clone();
-            Inst::Call {
-                dest,
-                uses,
-                defs,
-                loc,
-                opcode,
-            }
+            // TODO: add `map_mut()` to regalloc.rs's Set.
+            let new_uses = uses.map(|r| {
+                let mut r = *r;
+                map(u, &mut r);
+                r
+            });
+            let new_defs = defs.map(|r| {
+                let mut r = *r;
+                map_wr(d, &mut r);
+                r
+            });
+            *uses = new_uses;
+            *defs = new_defs;
         }
-        &mut Inst::Ret {} => Inst::Ret {},
-        &mut Inst::EpiloguePlaceholder {} => Inst::EpiloguePlaceholder {},
+        &mut Inst::Ret | &mut Inst::EpiloguePlaceholder => {}
         &mut Inst::CallInd {
-            ref uses,
-            ref defs,
-            rn,
-            loc,
-            opcode,
+            ref mut uses,
+            ref mut defs,
+            ref mut rn,
+            ..
         } => {
-            let uses = uses.map(|r| map(u, *r));
-            let defs = defs.map(|r| map_wr(d, *r));
-            Inst::CallInd {
-                uses,
-                defs,
-                rn: map(u, rn),
-                loc,
-                opcode,
-            }
+            // TODO: add `map_mut()` to regalloc.rs's Set.
+            let new_uses = uses.map(|r| {
+                let mut r = *r;
+                map(u, &mut r);
+                r
+            });
+            let new_defs = defs.map(|r| {
+                let mut r = *r;
+                map_wr(d, &mut r);
+                r
+            });
+            *uses = new_uses;
+            *defs = new_defs;
+            map(u, rn);
         }
-        &mut Inst::CondBr {
-            taken,
-            not_taken,
-            kind,
-        } => Inst::CondBr {
-            taken,
-            not_taken,
-            kind: map_br(u, &kind),
-        },
-        &mut Inst::CondBrLowered { target, kind } => Inst::CondBrLowered {
-            target,
-            kind: map_br(u, &kind),
-        },
-        &mut Inst::CondBrLoweredCompound {
-            taken,
-            not_taken,
-            kind,
-        } => Inst::CondBrLoweredCompound {
-            taken,
-            not_taken,
-            kind: map_br(u, &kind),
-        },
-        &mut Inst::IndirectBr { rn, ref targets } => Inst::IndirectBr {
-            rn: map(u, rn),
-            targets: targets.clone(),
-        },
-        &mut Inst::Nop => Inst::Nop,
-        &mut Inst::Nop4 => Inst::Nop4,
-        &mut Inst::Brk => Inst::Brk,
-        &mut Inst::Udf { trap_info } => Inst::Udf { trap_info },
-        &mut Inst::Adr { rd, ref label } => Inst::Adr {
-            rd: map_wr(d, rd),
-            label: label.clone(),
-        },
-        &mut Inst::Word4 { data } => Inst::Word4 { data },
-        &mut Inst::Word8 { data } => Inst::Word8 { data },
+        &mut Inst::CondBr { ref mut kind, .. } => {
+            map_br(u, kind);
+        }
+        &mut Inst::CondBrLowered { ref mut kind, .. } => {
+            map_br(u, kind);
+        }
+        &mut Inst::CondBrLoweredCompound { ref mut kind, .. } => {
+            map_br(u, kind);
+        }
+        &mut Inst::IndirectBr { ref mut rn, .. } => {
+            map(u, rn);
+        }
+        &mut Inst::Nop0 | &mut Inst::Nop4 | &mut Inst::Brk | &mut Inst::Udf { .. } => {}
+        &mut Inst::Adr { ref mut rd, .. } => {
+            map_wr(d, rd);
+        }
+        &mut Inst::Word4 { .. } | &mut Inst::Word8 { .. } => {}
         &mut Inst::JTSequence {
-            ridx,
-            rtmp1,
-            rtmp2,
-            ref targets,
-            ref targets_for_term,
-        } => Inst::JTSequence {
-            targets: targets.clone(),
-            targets_for_term: targets_for_term.clone(),
-            ridx: map(u, ridx),
-            rtmp1: map_wr(d, rtmp1),
-            rtmp2: map_wr(d, rtmp2),
-        },
-        &mut Inst::LoadConst64 { rd, const_data } => Inst::LoadConst64 {
-            rd: map_wr(d, rd),
-            const_data,
-        },
-        &mut Inst::LoadExtName {
-            rd,
-            ref name,
-            offset,
-            srcloc,
-        } => Inst::LoadExtName {
-            rd: map_wr(d, rd),
-            name: name.clone(),
-            offset,
-            srcloc,
-        },
-    };
-    *inst = newval;
+            ref mut ridx,
+            ref mut rtmp1,
+            ref mut rtmp2,
+            ..
+        } => {
+            map(u, ridx);
+            map_wr(d, rtmp1);
+            map_wr(d, rtmp2);
+        }
+        &mut Inst::LoadConst64 { ref mut rd, .. } => {
+            map_wr(d, rd);
+        }
+        &mut Inst::LoadExtName { ref mut rd, .. } => {
+            map_wr(d, rd);
+        }
+    }
 }
 
 //=============================================================================
@@ -1624,7 +1651,7 @@ fn arm64_map_regs(
 
 impl MachInst for Inst {
     fn get_regs(&self, collector: &mut RegUsageCollector) {
-        arm64_get_regs(self, collector)
+        aarch64_get_regs(self, collector)
     }
 
     fn map_regs(
@@ -1632,7 +1659,7 @@ impl MachInst for Inst {
         pre_map: &RegallocMap<VirtualReg, RealReg>,
         post_map: &RegallocMap<VirtualReg, RealReg>,
     ) {
-        arm64_map_regs(self, pre_map, post_map);
+        aarch64_map_regs(self, pre_map, post_map);
     }
 
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
@@ -1644,7 +1671,7 @@ impl MachInst for Inst {
     }
 
     fn is_epilogue_placeholder(&self) -> bool {
-        if let Inst::EpiloguePlaceholder { .. } = self {
+        if let Inst::EpiloguePlaceholder = self {
             true
         } else {
             false
@@ -1653,7 +1680,7 @@ impl MachInst for Inst {
 
     fn is_term<'a>(&'a self) -> MachTerminator<'a> {
         match self {
-            &Inst::Ret {} | &Inst::EpiloguePlaceholder {} => MachTerminator::Ret,
+            &Inst::Ret | &Inst::EpiloguePlaceholder => MachTerminator::Ret,
             &Inst::Jump { dest } => MachTerminator::Uncond(dest.as_block_index().unwrap()),
             &Inst::CondBr {
                 taken, not_taken, ..
@@ -1687,7 +1714,7 @@ impl MachInst for Inst {
     }
 
     fn gen_zero_len_nop() -> Inst {
-        Inst::Nop
+        Inst::Nop0
     }
 
     fn gen_nop(preferred_size: usize) -> Inst {
@@ -1704,7 +1731,6 @@ impl MachInst for Inst {
         match ty {
             I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 => RegClass::I64,
             F32 | F64 => RegClass::V128,
-            I128 | B128 => RegClass::V128,
             IFLAGS | FFLAGS => RegClass::I64,
             _ => panic!("Unexpected SSA-value type: {}", ty),
         }
@@ -1750,7 +1776,7 @@ impl MachInst for Inst {
                 if taken.as_block_index() == fallthrough
                     && not_taken.as_block_index() == fallthrough
                 {
-                    *self = Inst::Nop;
+                    *self = Inst::Nop0;
                 } else if taken.as_block_index() == fallthrough {
                     *self = Inst::CondBrLowered {
                         target: not_taken,
@@ -1772,7 +1798,7 @@ impl MachInst for Inst {
             }
             &mut Inst::Jump { dest } => {
                 if dest.as_block_index() == fallthrough {
-                    *self = Inst::Nop;
+                    *self = Inst::Nop0;
                 }
             }
             _ => {}
@@ -1831,55 +1857,55 @@ fn mem_finalize_for_show(mem: &MemArg, mb_rru: Option<&RealRegUniverse>) -> (Str
 
 impl ShowWithRRU for Inst {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
-        fn op_is32(alu_op: ALUOp) -> (&'static str, bool) {
+        fn op_name_size(alu_op: ALUOp) -> (&'static str, InstSize) {
             match alu_op {
-                ALUOp::Add32 => ("add", true),
-                ALUOp::Add64 => ("add", false),
-                ALUOp::Sub32 => ("sub", true),
-                ALUOp::Sub64 => ("sub", false),
-                ALUOp::Orr32 => ("orr", true),
-                ALUOp::Orr64 => ("orr", false),
-                ALUOp::And32 => ("and", true),
-                ALUOp::And64 => ("and", false),
-                ALUOp::Eor32 => ("eor", true),
-                ALUOp::Eor64 => ("eor", false),
-                ALUOp::AddS32 => ("adds", true),
-                ALUOp::AddS64 => ("adds", false),
-                ALUOp::SubS32 => ("subs", true),
-                ALUOp::SubS64 => ("subs", false),
-                ALUOp::MAdd32 => ("madd", true),
-                ALUOp::MAdd64 => ("madd", false),
-                ALUOp::MSub32 => ("msub", true),
-                ALUOp::MSub64 => ("msub", false),
-                ALUOp::SMulH => ("smulh", false),
-                ALUOp::UMulH => ("umulh", false),
-                ALUOp::SDiv64 => ("sdiv", false),
-                ALUOp::UDiv64 => ("udiv", false),
-                ALUOp::AndNot32 => ("bic", true),
-                ALUOp::AndNot64 => ("bic", false),
-                ALUOp::OrrNot32 => ("orn", true),
-                ALUOp::OrrNot64 => ("orn", false),
-                ALUOp::EorNot32 => ("eon", true),
-                ALUOp::EorNot64 => ("eon", false),
-                ALUOp::RotR32 => ("ror", true),
-                ALUOp::RotR64 => ("ror", false),
-                ALUOp::Lsr32 => ("lsr", true),
-                ALUOp::Lsr64 => ("lsr", false),
-                ALUOp::Asr32 => ("asr", true),
-                ALUOp::Asr64 => ("asr", false),
-                ALUOp::Lsl32 => ("lsl", true),
-                ALUOp::Lsl64 => ("lsl", false),
+                ALUOp::Add32 => ("add", InstSize::Size32),
+                ALUOp::Add64 => ("add", InstSize::Size64),
+                ALUOp::Sub32 => ("sub", InstSize::Size32),
+                ALUOp::Sub64 => ("sub", InstSize::Size64),
+                ALUOp::Orr32 => ("orr", InstSize::Size32),
+                ALUOp::Orr64 => ("orr", InstSize::Size64),
+                ALUOp::And32 => ("and", InstSize::Size32),
+                ALUOp::And64 => ("and", InstSize::Size64),
+                ALUOp::Eor32 => ("eor", InstSize::Size32),
+                ALUOp::Eor64 => ("eor", InstSize::Size64),
+                ALUOp::AddS32 => ("adds", InstSize::Size32),
+                ALUOp::AddS64 => ("adds", InstSize::Size64),
+                ALUOp::SubS32 => ("subs", InstSize::Size32),
+                ALUOp::SubS64 => ("subs", InstSize::Size64),
+                ALUOp::MAdd32 => ("madd", InstSize::Size32),
+                ALUOp::MAdd64 => ("madd", InstSize::Size64),
+                ALUOp::MSub32 => ("msub", InstSize::Size32),
+                ALUOp::MSub64 => ("msub", InstSize::Size64),
+                ALUOp::SMulH => ("smulh", InstSize::Size64),
+                ALUOp::UMulH => ("umulh", InstSize::Size64),
+                ALUOp::SDiv64 => ("sdiv", InstSize::Size64),
+                ALUOp::UDiv64 => ("udiv", InstSize::Size64),
+                ALUOp::AndNot32 => ("bic", InstSize::Size32),
+                ALUOp::AndNot64 => ("bic", InstSize::Size64),
+                ALUOp::OrrNot32 => ("orn", InstSize::Size32),
+                ALUOp::OrrNot64 => ("orn", InstSize::Size64),
+                ALUOp::EorNot32 => ("eon", InstSize::Size32),
+                ALUOp::EorNot64 => ("eon", InstSize::Size64),
+                ALUOp::RotR32 => ("ror", InstSize::Size32),
+                ALUOp::RotR64 => ("ror", InstSize::Size64),
+                ALUOp::Lsr32 => ("lsr", InstSize::Size32),
+                ALUOp::Lsr64 => ("lsr", InstSize::Size64),
+                ALUOp::Asr32 => ("asr", InstSize::Size32),
+                ALUOp::Asr64 => ("asr", InstSize::Size64),
+                ALUOp::Lsl32 => ("lsl", InstSize::Size32),
+                ALUOp::Lsl64 => ("lsl", InstSize::Size64),
             }
         }
 
         match self {
-            &Inst::Nop => "nop-zero-len".to_string(),
+            &Inst::Nop0 => "nop-zero-len".to_string(),
             &Inst::Nop4 => "nop".to_string(),
             &Inst::AluRRR { alu_op, rd, rn, rm } => {
-                let (op, is32) = op_is32(alu_op);
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, is32);
-                let rn = show_ireg_sized(rn, mb_rru, is32);
-                let rm = show_ireg_sized(rm, mb_rru, is32);
+                let (op, size) = op_name_size(alu_op);
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
+                let rn = show_ireg_sized(rn, mb_rru, size);
+                let rm = show_ireg_sized(rm, mb_rru, size);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
             &Inst::AluRRRR {
@@ -1889,12 +1915,12 @@ impl ShowWithRRU for Inst {
                 rm,
                 ra,
             } => {
-                let (op, is32) = op_is32(alu_op);
+                let (op, size) = op_name_size(alu_op);
                 let four_args = alu_op != ALUOp::SMulH && alu_op != ALUOp::UMulH;
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, is32);
-                let rn = show_ireg_sized(rn, mb_rru, is32);
-                let rm = show_ireg_sized(rm, mb_rru, is32);
-                let ra = show_ireg_sized(ra, mb_rru, is32);
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
+                let rn = show_ireg_sized(rn, mb_rru, size);
+                let rm = show_ireg_sized(rm, mb_rru, size);
+                let ra = show_ireg_sized(ra, mb_rru, size);
                 if four_args {
                     format!("{} {}, {}, {}, {}", op, rd, rn, rm, ra)
                 } else {
@@ -1909,9 +1935,9 @@ impl ShowWithRRU for Inst {
                 rn,
                 ref imm12,
             } => {
-                let (op, is32) = op_is32(alu_op);
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, is32);
-                let rn = show_ireg_sized(rn, mb_rru, is32);
+                let (op, size) = op_name_size(alu_op);
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
+                let rn = show_ireg_sized(rn, mb_rru, size);
 
                 if imm12.bits == 0 && alu_op == ALUOp::Add64 {
                     // special-case MOV (used for moving into SP).
@@ -1927,9 +1953,9 @@ impl ShowWithRRU for Inst {
                 rn,
                 ref imml,
             } => {
-                let (op, is32) = op_is32(alu_op);
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, is32);
-                let rn = show_ireg_sized(rn, mb_rru, is32);
+                let (op, size) = op_name_size(alu_op);
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
+                let rn = show_ireg_sized(rn, mb_rru, size);
                 let imml = imml.show_rru(mb_rru);
                 format!("{} {}, {}, {}", op, rd, rn, imml)
             }
@@ -1939,9 +1965,9 @@ impl ShowWithRRU for Inst {
                 rn,
                 ref immshift,
             } => {
-                let (op, is32) = op_is32(alu_op);
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, is32);
-                let rn = show_ireg_sized(rn, mb_rru, is32);
+                let (op, size) = op_name_size(alu_op);
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
+                let rn = show_ireg_sized(rn, mb_rru, size);
                 let immshift = immshift.show_rru(mb_rru);
                 format!("{} {}, {}, {}", op, rd, rn, immshift)
             }
@@ -1952,10 +1978,10 @@ impl ShowWithRRU for Inst {
                 rm,
                 ref shiftop,
             } => {
-                let (op, is32) = op_is32(alu_op);
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, is32);
-                let rn = show_ireg_sized(rn, mb_rru, is32);
-                let rm = show_ireg_sized(rm, mb_rru, is32);
+                let (op, size) = op_name_size(alu_op);
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
+                let rn = show_ireg_sized(rn, mb_rru, size);
+                let rm = show_ireg_sized(rm, mb_rru, size);
                 let shiftop = shiftop.show_rru(mb_rru);
                 format!("{} {}, {}, {}, {}", op, rd, rn, rm, shiftop)
             }
@@ -1966,18 +1992,18 @@ impl ShowWithRRU for Inst {
                 rm,
                 ref extendop,
             } => {
-                let (op, is32) = op_is32(alu_op);
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, is32);
-                let rn = show_ireg_sized(rn, mb_rru, is32);
-                let rm = show_ireg_sized(rm, mb_rru, is32);
+                let (op, size) = op_name_size(alu_op);
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
+                let rn = show_ireg_sized(rn, mb_rru, size);
+                let rm = show_ireg_sized(rm, mb_rru, size);
                 let extendop = extendop.show_rru(mb_rru);
                 format!("{} {}, {}, {}, {}", op, rd, rn, rm, extendop)
             }
             &Inst::BitRR { op, rd, rn } => {
-                let is32 = op.is_32_bit();
+                let size = op.inst_size();
                 let op = op.op_str();
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, is32);
-                let rn = show_ireg_sized(rn, mb_rru, is32);
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
+                let rn = show_ireg_sized(rn, mb_rru, size);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::ULoad8 {
@@ -2022,24 +2048,24 @@ impl ShowWithRRU for Inst {
                     &MemArg::Unscaled(..) => true,
                     _ => false,
                 };
-                let (op, is32) = match (self, is_unscaled) {
-                    (&Inst::ULoad8 { .. }, false) => ("ldrb", true),
-                    (&Inst::ULoad8 { .. }, true) => ("ldurb", true),
-                    (&Inst::SLoad8 { .. }, false) => ("ldrsb", false),
-                    (&Inst::SLoad8 { .. }, true) => ("ldursb", false),
-                    (&Inst::ULoad16 { .. }, false) => ("ldrh", true),
-                    (&Inst::ULoad16 { .. }, true) => ("ldurh", true),
-                    (&Inst::SLoad16 { .. }, false) => ("ldrsh", false),
-                    (&Inst::SLoad16 { .. }, true) => ("ldursh", false),
-                    (&Inst::ULoad32 { .. }, false) => ("ldr", true),
-                    (&Inst::ULoad32 { .. }, true) => ("ldur", true),
-                    (&Inst::SLoad32 { .. }, false) => ("ldrsw", false),
-                    (&Inst::SLoad32 { .. }, true) => ("ldursw", false),
-                    (&Inst::ULoad64 { .. }, false) => ("ldr", false),
-                    (&Inst::ULoad64 { .. }, true) => ("ldur", false),
+                let (op, size) = match (self, is_unscaled) {
+                    (&Inst::ULoad8 { .. }, false) => ("ldrb", InstSize::Size32),
+                    (&Inst::ULoad8 { .. }, true) => ("ldurb", InstSize::Size32),
+                    (&Inst::SLoad8 { .. }, false) => ("ldrsb", InstSize::Size64),
+                    (&Inst::SLoad8 { .. }, true) => ("ldursb", InstSize::Size64),
+                    (&Inst::ULoad16 { .. }, false) => ("ldrh", InstSize::Size32),
+                    (&Inst::ULoad16 { .. }, true) => ("ldurh", InstSize::Size32),
+                    (&Inst::SLoad16 { .. }, false) => ("ldrsh", InstSize::Size64),
+                    (&Inst::SLoad16 { .. }, true) => ("ldursh", InstSize::Size64),
+                    (&Inst::ULoad32 { .. }, false) => ("ldr", InstSize::Size32),
+                    (&Inst::ULoad32 { .. }, true) => ("ldur", InstSize::Size32),
+                    (&Inst::SLoad32 { .. }, false) => ("ldrsw", InstSize::Size64),
+                    (&Inst::SLoad32 { .. }, true) => ("ldursw", InstSize::Size64),
+                    (&Inst::ULoad64 { .. }, false) => ("ldr", InstSize::Size64),
+                    (&Inst::ULoad64 { .. }, true) => ("ldur", InstSize::Size64),
                     _ => unreachable!(),
                 };
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, is32);
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
                 let mem = mem.show_rru(mb_rru);
                 format!("{}{} {}, {}", mem_str, op, rd, mem)
             }
@@ -2070,18 +2096,18 @@ impl ShowWithRRU for Inst {
                     &MemArg::Unscaled(..) => true,
                     _ => false,
                 };
-                let (op, is32) = match (self, is_unscaled) {
-                    (&Inst::Store8 { .. }, false) => ("strb", true),
-                    (&Inst::Store8 { .. }, true) => ("sturb", true),
-                    (&Inst::Store16 { .. }, false) => ("strh", true),
-                    (&Inst::Store16 { .. }, true) => ("sturh", true),
-                    (&Inst::Store32 { .. }, false) => ("str", true),
-                    (&Inst::Store32 { .. }, true) => ("stur", true),
-                    (&Inst::Store64 { .. }, false) => ("str", false),
-                    (&Inst::Store64 { .. }, true) => ("stur", false),
+                let (op, size) = match (self, is_unscaled) {
+                    (&Inst::Store8 { .. }, false) => ("strb", InstSize::Size32),
+                    (&Inst::Store8 { .. }, true) => ("sturb", InstSize::Size32),
+                    (&Inst::Store16 { .. }, false) => ("strh", InstSize::Size32),
+                    (&Inst::Store16 { .. }, true) => ("sturh", InstSize::Size32),
+                    (&Inst::Store32 { .. }, false) => ("str", InstSize::Size32),
+                    (&Inst::Store32 { .. }, true) => ("stur", InstSize::Size32),
+                    (&Inst::Store64 { .. }, false) => ("str", InstSize::Size64),
+                    (&Inst::Store64 { .. }, true) => ("stur", InstSize::Size64),
                     _ => unreachable!(),
                 };
-                let rd = show_ireg_sized(rd, mb_rru, is32);
+                let rd = show_ireg_sized(rd, mb_rru, size);
                 let mem = mem.show_rru(mb_rru);
                 format!("{}{} {}, {}", mem_str, op, rd, mem)
             }
@@ -2103,8 +2129,8 @@ impl ShowWithRRU for Inst {
                 format!("mov {}, {}", rd, rm)
             }
             &Inst::Mov32 { rd, rm } => {
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, /* is32 = */ true);
-                let rm = show_ireg_sized(rm, mb_rru, /* is32 = */ true);
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, InstSize::Size32);
+                let rm = show_ireg_sized(rm, mb_rru, InstSize::Size32);
                 format!("mov {}, {}", rd, rm)
             }
             &Inst::MovZ { rd, ref imm } => {
@@ -2140,38 +2166,38 @@ impl ShowWithRRU for Inst {
                 format!("mov {}.8b, {}.8b", rd, rn)
             }
             &Inst::FpuRR { fpu_op, rd, rn } => {
-                let (op, is32src, is32dst) = match fpu_op {
-                    FPUOp1::Abs32 => ("fabs", true, true),
-                    FPUOp1::Abs64 => ("fabs", false, false),
-                    FPUOp1::Neg32 => ("fneg", true, true),
-                    FPUOp1::Neg64 => ("fneg", false, false),
-                    FPUOp1::Sqrt32 => ("fsqrt", true, true),
-                    FPUOp1::Sqrt64 => ("fsqrt", false, false),
-                    FPUOp1::Cvt32To64 => ("fcvt", true, false),
-                    FPUOp1::Cvt64To32 => ("fcvt", false, true),
+                let (op, sizesrc, sizedest) = match fpu_op {
+                    FPUOp1::Abs32 => ("fabs", InstSize::Size32, InstSize::Size32),
+                    FPUOp1::Abs64 => ("fabs", InstSize::Size64, InstSize::Size64),
+                    FPUOp1::Neg32 => ("fneg", InstSize::Size32, InstSize::Size32),
+                    FPUOp1::Neg64 => ("fneg", InstSize::Size64, InstSize::Size64),
+                    FPUOp1::Sqrt32 => ("fsqrt", InstSize::Size32, InstSize::Size32),
+                    FPUOp1::Sqrt64 => ("fsqrt", InstSize::Size64, InstSize::Size64),
+                    FPUOp1::Cvt32To64 => ("fcvt", InstSize::Size32, InstSize::Size64),
+                    FPUOp1::Cvt64To32 => ("fcvt", InstSize::Size64, InstSize::Size32),
                 };
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, is32dst);
-                let rn = show_freg_sized(rn, mb_rru, is32src);
+                let rd = show_freg_sized(rd.to_reg(), mb_rru, sizedest);
+                let rn = show_freg_sized(rn, mb_rru, sizesrc);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::FpuRRR { fpu_op, rd, rn, rm } => {
-                let (op, is32) = match fpu_op {
-                    FPUOp2::Add32 => ("fadd", true),
-                    FPUOp2::Add64 => ("fadd", false),
-                    FPUOp2::Sub32 => ("fsub", true),
-                    FPUOp2::Sub64 => ("fsub", false),
-                    FPUOp2::Mul32 => ("fmul", true),
-                    FPUOp2::Mul64 => ("fmul", false),
-                    FPUOp2::Div32 => ("fdiv", true),
-                    FPUOp2::Div64 => ("fdiv", false),
-                    FPUOp2::Max32 => ("fmax", true),
-                    FPUOp2::Max64 => ("fmax", false),
-                    FPUOp2::Min32 => ("fmin", true),
-                    FPUOp2::Min64 => ("fmin", false),
+                let (op, size) = match fpu_op {
+                    FPUOp2::Add32 => ("fadd", InstSize::Size32),
+                    FPUOp2::Add64 => ("fadd", InstSize::Size64),
+                    FPUOp2::Sub32 => ("fsub", InstSize::Size32),
+                    FPUOp2::Sub64 => ("fsub", InstSize::Size64),
+                    FPUOp2::Mul32 => ("fmul", InstSize::Size32),
+                    FPUOp2::Mul64 => ("fmul", InstSize::Size64),
+                    FPUOp2::Div32 => ("fdiv", InstSize::Size32),
+                    FPUOp2::Div64 => ("fdiv", InstSize::Size64),
+                    FPUOp2::Max32 => ("fmax", InstSize::Size32),
+                    FPUOp2::Max64 => ("fmax", InstSize::Size64),
+                    FPUOp2::Min32 => ("fmin", InstSize::Size32),
+                    FPUOp2::Min64 => ("fmin", InstSize::Size64),
                 };
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, is32);
-                let rn = show_freg_sized(rn, mb_rru, is32);
-                let rm = show_freg_sized(rm, mb_rru, is32);
+                let rd = show_freg_sized(rd.to_reg(), mb_rru, size);
+                let rn = show_freg_sized(rn, mb_rru, size);
+                let rm = show_freg_sized(rm, mb_rru, size);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
             &Inst::FpuRRRR {
@@ -2181,33 +2207,33 @@ impl ShowWithRRU for Inst {
                 rm,
                 ra,
             } => {
-                let (op, is32) = match fpu_op {
-                    FPUOp3::MAdd32 => ("fmadd", true),
-                    FPUOp3::MAdd64 => ("fmadd", false),
+                let (op, size) = match fpu_op {
+                    FPUOp3::MAdd32 => ("fmadd", InstSize::Size32),
+                    FPUOp3::MAdd64 => ("fmadd", InstSize::Size64),
                 };
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, is32);
-                let rn = show_freg_sized(rn, mb_rru, is32);
-                let rm = show_freg_sized(rm, mb_rru, is32);
-                let ra = show_freg_sized(ra, mb_rru, is32);
+                let rd = show_freg_sized(rd.to_reg(), mb_rru, size);
+                let rn = show_freg_sized(rn, mb_rru, size);
+                let rm = show_freg_sized(rm, mb_rru, size);
+                let ra = show_freg_sized(ra, mb_rru, size);
                 format!("{} {}, {}, {}, {}", op, rd, rn, rm, ra)
             }
             &Inst::FpuCmp32 { rn, rm } => {
-                let rn = show_freg_sized(rn, mb_rru, /* is32 = */ true);
-                let rm = show_freg_sized(rm, mb_rru, /* is32 = */ true);
+                let rn = show_freg_sized(rn, mb_rru, InstSize::Size32);
+                let rm = show_freg_sized(rm, mb_rru, InstSize::Size32);
                 format!("fcmp {}, {}", rn, rm)
             }
             &Inst::FpuCmp64 { rn, rm } => {
-                let rn = show_freg_sized(rn, mb_rru, /* is32 = */ false);
-                let rm = show_freg_sized(rm, mb_rru, /* is32 = */ false);
+                let rn = show_freg_sized(rn, mb_rru, InstSize::Size64);
+                let rm = show_freg_sized(rm, mb_rru, InstSize::Size64);
                 format!("fcmp {}, {}", rn, rm)
             }
             &Inst::FpuLoad32 { rd, ref mem, .. } => {
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, /* is32 = */ true);
+                let rd = show_freg_sized(rd.to_reg(), mb_rru, InstSize::Size32);
                 let mem = mem.show_rru_sized(mb_rru, /* size = */ 4);
                 format!("ldr {}, {}", rd, mem)
             }
             &Inst::FpuLoad64 { rd, ref mem, .. } => {
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, /* is32 = */ false);
+                let rd = show_freg_sized(rd.to_reg(), mb_rru, InstSize::Size64);
                 let mem = mem.show_rru_sized(mb_rru, /* size = */ 8);
                 format!("ldr {}, {}", rd, mem)
             }
@@ -2218,12 +2244,12 @@ impl ShowWithRRU for Inst {
                 format!("ldr {}, {}", rd, mem)
             }
             &Inst::FpuStore32 { rd, ref mem, .. } => {
-                let rd = show_freg_sized(rd, mb_rru, /* is32 = */ true);
+                let rd = show_freg_sized(rd, mb_rru, InstSize::Size32);
                 let mem = mem.show_rru_sized(mb_rru, /* size = */ 4);
                 format!("str {}, {}", rd, mem)
             }
             &Inst::FpuStore64 { rd, ref mem, .. } => {
-                let rd = show_freg_sized(rd, mb_rru, /* is32 = */ false);
+                let rd = show_freg_sized(rd, mb_rru, InstSize::Size64);
                 let mem = mem.show_rru_sized(mb_rru, /* size = */ 8);
                 format!("str {}, {}", rd, mem)
             }
@@ -2234,70 +2260,70 @@ impl ShowWithRRU for Inst {
                 format!("str {}, {}", rd, mem)
             }
             &Inst::LoadFpuConst32 { rd, const_data } => {
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, /* is32 = */ true);
+                let rd = show_freg_sized(rd.to_reg(), mb_rru, InstSize::Size32);
                 format!("ldr {}, pc+8 ; b 8 ; data.f32 {}", rd, const_data)
             }
             &Inst::LoadFpuConst64 { rd, const_data } => {
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, /* is32 = */ false);
+                let rd = show_freg_sized(rd.to_reg(), mb_rru, InstSize::Size64);
                 format!("ldr {}, pc+8 ; b 12 ; data.f64 {}", rd, const_data)
             }
             &Inst::FpuToInt { op, rd, rn } => {
-                let (op, is32src, is32dest) = match op {
-                    FpuToIntOp::F32ToI32 => ("fcvtzs", true, true),
-                    FpuToIntOp::F32ToU32 => ("fcvtzu", true, true),
-                    FpuToIntOp::F32ToI64 => ("fcvtzs", true, false),
-                    FpuToIntOp::F32ToU64 => ("fcvtzu", true, false),
-                    FpuToIntOp::F64ToI32 => ("fcvtzs", false, true),
-                    FpuToIntOp::F64ToU32 => ("fcvtzu", false, true),
-                    FpuToIntOp::F64ToI64 => ("fcvtzs", false, false),
-                    FpuToIntOp::F64ToU64 => ("fcvtzu", false, false),
+                let (op, sizesrc, sizedest) = match op {
+                    FpuToIntOp::F32ToI32 => ("fcvtzs", InstSize::Size32, InstSize::Size32),
+                    FpuToIntOp::F32ToU32 => ("fcvtzu", InstSize::Size32, InstSize::Size32),
+                    FpuToIntOp::F32ToI64 => ("fcvtzs", InstSize::Size32, InstSize::Size64),
+                    FpuToIntOp::F32ToU64 => ("fcvtzu", InstSize::Size32, InstSize::Size64),
+                    FpuToIntOp::F64ToI32 => ("fcvtzs", InstSize::Size64, InstSize::Size32),
+                    FpuToIntOp::F64ToU32 => ("fcvtzu", InstSize::Size64, InstSize::Size32),
+                    FpuToIntOp::F64ToI64 => ("fcvtzs", InstSize::Size64, InstSize::Size64),
+                    FpuToIntOp::F64ToU64 => ("fcvtzu", InstSize::Size64, InstSize::Size64),
                 };
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, is32dest);
-                let rn = show_freg_sized(rn, mb_rru, is32src);
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, sizedest);
+                let rn = show_freg_sized(rn, mb_rru, sizesrc);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::IntToFpu { op, rd, rn } => {
-                let (op, is32src, is32dest) = match op {
-                    IntToFpuOp::I32ToF32 => ("scvtf", true, true),
-                    IntToFpuOp::U32ToF32 => ("ucvtf", true, true),
-                    IntToFpuOp::I64ToF32 => ("scvtf", false, true),
-                    IntToFpuOp::U64ToF32 => ("ucvtf", false, true),
-                    IntToFpuOp::I32ToF64 => ("scvtf", true, false),
-                    IntToFpuOp::U32ToF64 => ("ucvtf", true, false),
-                    IntToFpuOp::I64ToF64 => ("scvtf", false, false),
-                    IntToFpuOp::U64ToF64 => ("ucvtf", false, false),
+                let (op, sizesrc, sizedest) = match op {
+                    IntToFpuOp::I32ToF32 => ("scvtf", InstSize::Size32, InstSize::Size32),
+                    IntToFpuOp::U32ToF32 => ("ucvtf", InstSize::Size32, InstSize::Size32),
+                    IntToFpuOp::I64ToF32 => ("scvtf", InstSize::Size64, InstSize::Size32),
+                    IntToFpuOp::U64ToF32 => ("ucvtf", InstSize::Size64, InstSize::Size32),
+                    IntToFpuOp::I32ToF64 => ("scvtf", InstSize::Size32, InstSize::Size64),
+                    IntToFpuOp::U32ToF64 => ("ucvtf", InstSize::Size32, InstSize::Size64),
+                    IntToFpuOp::I64ToF64 => ("scvtf", InstSize::Size64, InstSize::Size64),
+                    IntToFpuOp::U64ToF64 => ("ucvtf", InstSize::Size64, InstSize::Size64),
                 };
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, is32dest);
-                let rn = show_ireg_sized(rn, mb_rru, is32src);
+                let rd = show_freg_sized(rd.to_reg(), mb_rru, sizedest);
+                let rn = show_ireg_sized(rn, mb_rru, sizesrc);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::FpuCSel32 { rd, rn, rm, cond } => {
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, /* is32 = */ true);
-                let rn = show_freg_sized(rn, mb_rru, /* is32 = */ true);
-                let rm = show_freg_sized(rm, mb_rru, /* is32 = */ true);
+                let rd = show_freg_sized(rd.to_reg(), mb_rru, InstSize::Size32);
+                let rn = show_freg_sized(rn, mb_rru, InstSize::Size32);
+                let rm = show_freg_sized(rm, mb_rru, InstSize::Size32);
                 let cond = cond.show_rru(mb_rru);
                 format!("fcsel {}, {}, {}, {}", rd, rn, rm, cond)
             }
             &Inst::FpuCSel64 { rd, rn, rm, cond } => {
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, /* is32 = */ false);
-                let rn = show_freg_sized(rn, mb_rru, /* is32 = */ false);
-                let rm = show_freg_sized(rm, mb_rru, /* is32 = */ false);
+                let rd = show_freg_sized(rd.to_reg(), mb_rru, InstSize::Size64);
+                let rn = show_freg_sized(rn, mb_rru, InstSize::Size64);
+                let rm = show_freg_sized(rm, mb_rru, InstSize::Size64);
                 let cond = cond.show_rru(mb_rru);
                 format!("fcsel {}, {}, {}, {}", rd, rn, rm, cond)
             }
             &Inst::FpuRound { op, rd, rn } => {
-                let (inst, is32) = match op {
-                    FpuRoundMode::Minus32 => ("frintm", true),
-                    FpuRoundMode::Minus64 => ("frintm", false),
-                    FpuRoundMode::Plus32 => ("frintp", true),
-                    FpuRoundMode::Plus64 => ("frintp", false),
-                    FpuRoundMode::Zero32 => ("frintz", true),
-                    FpuRoundMode::Zero64 => ("frintz", false),
-                    FpuRoundMode::Nearest32 => ("frintn", true),
-                    FpuRoundMode::Nearest64 => ("frintn", false),
+                let (inst, size) = match op {
+                    FpuRoundMode::Minus32 => ("frintm", InstSize::Size32),
+                    FpuRoundMode::Minus64 => ("frintm", InstSize::Size64),
+                    FpuRoundMode::Plus32 => ("frintp", InstSize::Size32),
+                    FpuRoundMode::Plus64 => ("frintp", InstSize::Size64),
+                    FpuRoundMode::Zero32 => ("frintz", InstSize::Size32),
+                    FpuRoundMode::Zero64 => ("frintz", InstSize::Size64),
+                    FpuRoundMode::Nearest32 => ("frintn", InstSize::Size32),
+                    FpuRoundMode::Nearest64 => ("frintn", InstSize::Size64),
                 };
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, is32);
-                let rn = show_freg_sized(rn, mb_rru, is32);
+                let rd = show_freg_sized(rd.to_reg(), mb_rru, size);
+                let rn = show_freg_sized(rn, mb_rru, size);
                 format!("{} {}, {}", inst, rd, rn)
             }
             &Inst::MovToVec64 { rd, rn } => {
@@ -2346,13 +2372,13 @@ impl ShowWithRRU for Inst {
                 // extend-to width is <= 32 bits, *unless* we have an unsigned
                 // 32-to-64-bit extension, which is implemented with a "mov" to a
                 // 32-bit (W-reg) dest, because this zeroes the top 32 bits.
-                let dest_is32 = if !signed && from_bits == 32 && to_bits == 64 {
-                    true
+                let dest_size = if !signed && from_bits == 32 && to_bits == 64 {
+                    InstSize::Size32
                 } else {
-                    to_bits <= 32
+                    InstSize::from_bits(to_bits)
                 };
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, dest_is32);
-                let rn = show_ireg_sized(rn, mb_rru, from_bits <= 32);
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, dest_size);
+                let rn = show_ireg_sized(rn, mb_rru, InstSize::from_bits(from_bits));
                 let op = match (signed, from_bits, to_bits) {
                     (false, 8, 32) => "uxtb",
                     (true, 8, 32) => "sxtb",
@@ -2375,11 +2401,11 @@ impl ShowWithRRU for Inst {
                 from_bits,
                 to_bits,
             } if from_bits == 1 && signed => {
-                let dest_is32 = to_bits <= 32;
-                let zr = if dest_is32 { "wzr" } else { "xzr" };
-                let rd32 = show_ireg_sized(rd.to_reg(), mb_rru, /* is32 = */ true);
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, dest_is32);
-                let rn = show_ireg_sized(rn, mb_rru, /* is32 = */ true);
+                let dest_size = InstSize::from_bits(to_bits);
+                let zr = if dest_size.is32() { "wzr" } else { "xzr" };
+                let rd32 = show_ireg_sized(rd.to_reg(), mb_rru, InstSize::Size32);
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, dest_size);
+                let rn = show_ireg_sized(rn, mb_rru, InstSize::Size32);
                 format!("and {}, {}, #1 ; sub {}, {}, {}", rd32, rn, rd, zr, rd)
             }
             &Inst::Extend {
@@ -2389,8 +2415,8 @@ impl ShowWithRRU for Inst {
                 from_bits,
                 ..
             } if from_bits == 1 && !signed => {
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, /* is32 = */ true);
-                let rn = show_ireg_sized(rn, mb_rru, /* is32 = */ true);
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, InstSize::Size32);
+                let rn = show_ireg_sized(rn, mb_rru, InstSize::Size32);
                 format!("and {}, {}, #1", rd, rn)
             }
             &Inst::Extend { .. } => {
@@ -2401,8 +2427,8 @@ impl ShowWithRRU for Inst {
                 let rn = rn.show_rru(mb_rru);
                 format!("blr {}", rn)
             }
-            &Inst::Ret {} => "ret".to_string(),
-            &Inst::EpiloguePlaceholder {} => "epilogue placeholder".to_string(),
+            &Inst::Ret => "ret".to_string(),
+            &Inst::EpiloguePlaceholder => "epilogue placeholder".to_string(),
             &Inst::Jump { ref dest } => {
                 let dest = dest.show_rru(mb_rru);
                 format!("b {}", dest)

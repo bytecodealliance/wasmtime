@@ -364,19 +364,17 @@ pub fn do_postopt(func: &mut Function, isa: &dyn TargetIsa) {
     while let Some(_block) = pos.next_block() {
         let mut last_flags_clobber = None;
         while let Some(inst) = pos.next_inst() {
-            if isa.uses_cpu_flags() {
+            if !is_mach_backend && isa.uses_cpu_flags() {
                 // Optimize instructions to make use of flags.
                 optimize_cpu_flags(&mut pos, inst, last_flags_clobber, isa);
 
-                if !is_mach_backend {
-                    // Track the most recent seen instruction that clobbers the flags.
-                    if let Some(constraints) = isa
-                        .encoding_info()
-                        .operand_constraints(pos.func.encodings[inst])
-                    {
-                        if constraints.clobbers_flags {
-                            last_flags_clobber = Some(inst)
-                        }
+                // Track the most recent seen instruction that clobbers the flags.
+                if let Some(constraints) = isa
+                    .encoding_info()
+                    .operand_constraints(pos.func.encodings[inst])
+                {
+                    if constraints.clobbers_flags {
+                        last_flags_clobber = Some(inst)
                     }
                 }
             }
