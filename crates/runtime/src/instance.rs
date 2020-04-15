@@ -383,22 +383,35 @@ impl Instance {
             None => return Ok(()),
         };
 
-        let (callee_address, callee_vmctx) = match self.module.local.defined_func_index(start_index)
-        {
-            Some(defined_index) => {
-                let body = *self
-                    .finished_functions
-                    .get(defined_index)
-                    .expect("function index is out of bounds");
-                (body as *const _, self.vmctx_ptr())
-            }
-            None => {
-                assert_lt!(start_index.index(), self.module.imported_funcs.len());
-                let import = self.imported_function(start_index);
-                (import.body, import.vmctx)
-            }
-        };
+        self.invoke_function_index(start_index)
+            .map_err(InstantiationError::StartTrap)
+    }
 
+    fn invoke_function_index(&self, callee_index: FuncIndex) -> Result<(), Trap> {
+        let (callee_address, callee_vmctx) =
+            match self.module.local.defined_func_index(callee_index) {
+                Some(defined_index) => {
+                    let body = *self
+                        .finished_functions
+                        .get(defined_index)
+                        .expect("function index is out of bounds");
+                    (body as *const _, self.vmctx_ptr())
+                }
+                None => {
+                    assert_lt!(callee_index.index(), self.module.imported_funcs.len());
+                    let import = self.imported_function(callee_index);
+                    (import.body, import.vmctx)
+                }
+            };
+
+        self.invoke_function(callee_vmctx, callee_address)
+    }
+
+    fn invoke_function(
+        &self,
+        callee_vmctx: *mut VMContext,
+        callee_address: *const VMFunctionBody,
+    ) -> Result<(), Trap> {
         // Make the call.
         unsafe {
             catch_traps(callee_vmctx, || {
@@ -407,7 +420,6 @@ impl Instance {
                     unsafe extern "C" fn(*mut VMContext, *mut VMContext),
                 >(callee_address)(callee_vmctx, self.vmctx_ptr())
             })
-            .map_err(InstantiationError::StartTrap)
         }
     }
 
@@ -1394,7 +1406,7 @@ pub enum InstantiationError {
     #[error("Trap occurred during instantiation")]
     Trap(Trap),
 
-    /// A compilation error occured.
+    /// A trap occurred while running the wasm start function.
     #[error("Trap occurred while invoking start function")]
     StartTrap(Trap),
 }

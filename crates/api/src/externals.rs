@@ -34,7 +34,7 @@ impl Extern {
     /// Returns the underlying `Func`, if this external is a function.
     ///
     /// Returns `None` if this is not a function.
-    pub fn func(&self) -> Option<&Func> {
+    pub fn func(self) -> Option<Func> {
         match self {
             Extern::Func(func) => Some(func),
             _ => None,
@@ -44,7 +44,7 @@ impl Extern {
     /// Returns the underlying `Global`, if this external is a global.
     ///
     /// Returns `None` if this is not a global.
-    pub fn global(&self) -> Option<&Global> {
+    pub fn global(self) -> Option<Global> {
         match self {
             Extern::Global(global) => Some(global),
             _ => None,
@@ -54,7 +54,7 @@ impl Extern {
     /// Returns the underlying `Table`, if this external is a table.
     ///
     /// Returns `None` if this is not a table.
-    pub fn table(&self) -> Option<&Table> {
+    pub fn table(self) -> Option<Table> {
         match self {
             Extern::Table(table) => Some(table),
             _ => None,
@@ -64,7 +64,7 @@ impl Extern {
     /// Returns the underlying `Memory`, if this external is a memory.
     ///
     /// Returns `None` if this is not a memory.
-    pub fn memory(&self) -> Option<&Memory> {
+    pub fn memory(self) -> Option<Memory> {
         match self {
             Extern::Memory(memory) => Some(memory),
             _ => None,

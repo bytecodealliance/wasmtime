@@ -40,18 +40,20 @@ fn test_import_calling_export() {
     let instance =
         Instance::new(&module, imports.as_slice()).expect("failed to instantiate module");
 
-    let exports = instance.exports();
-    assert!(!exports.is_empty());
+    let mut exports = instance.exports();
 
-    let run_func = exports[0]
+    let run_func = exports
+        .next()
+        .unwrap()
         .func()
         .expect("expected a run func in the module");
 
     *other.borrow_mut() = Some(
-        exports[1]
+        exports
+            .next()
+            .unwrap()
             .func()
-            .expect("expected an other func in the module")
-            .clone(),
+            .expect("expected an other func in the module"),
     );
 
     run_func.call(&[]).expect("expected function not to trap");
@@ -84,10 +86,11 @@ fn test_returns_incorrect_type() -> Result<()> {
     let imports = vec![callback_func.into()];
     let instance = Instance::new(&module, imports.as_slice())?;
 
-    let exports = instance.exports();
-    assert!(!exports.is_empty());
+    let mut exports = instance.exports();
 
-    let run_func = exports[0]
+    let run_func = exports
+        .next()
+        .unwrap()
         .func()
         .expect("expected a run func in the module");
 

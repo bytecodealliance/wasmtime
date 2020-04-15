@@ -68,7 +68,6 @@ fn instantiate(
 pub struct Instance {
     pub(crate) instance_handle: InstanceHandle,
     module: Module,
-    exports: Box<[Extern]>,
 }
 
 impl Instance {
@@ -145,20 +144,9 @@ impl Instance {
             Box::new(info),
         )?;
 
-        let mut exports = Vec::with_capacity(module.exports().len());
-        for export in module.exports() {
-            let name = export.name().to_string();
-            let export = instance_handle.lookup(&name).expect("export");
-            exports.push(Extern::from_wasmtime_export(
-                store,
-                instance_handle.clone(),
-                export,
-            ));
-        }
         Ok(Instance {
             instance_handle,
             module: module.clone(),
-            exports: exports.into_boxed_slice(),
         })
     }
 
@@ -186,8 +174,15 @@ impl Instance {
     /// export you'll need to consult [`Module::exports`]. The list returned
     /// here maps 1:1 with the list that [`Module::exports`] returns, and
     /// [`ExportType`](crate::ExportType) contains the name of each export.
-    pub fn exports(&self) -> &[Extern] {
-        &self.exports
+    pub fn exports<'me>(&'me self) -> impl Iterator<Item = Extern> + 'me {
+        let instance_handle = &self.instance_handle;
+        let store = self.module.store();
+        self.instance_handle
+            .exports()
+            .map(move |(_, entity_index)| {
+                let export = instance_handle.lookup_by_declaration(entity_index);
+                Extern::from_wasmtime_export(store, instance_handle.clone(), export)
+            })
     }
 
     /// Looks up an exported [`Extern`] value by name.
@@ -196,14 +191,13 @@ impl Instance {
     /// the value, if found.
     ///
     /// Returns `None` if there was no export named `name`.
-    pub fn get_export(&self, name: &str) -> Option<&Extern> {
-        let (i, _) = self
-            .module
-            .exports()
-            .iter()
-            .enumerate()
-            .find(|(_, e)| e.name() == name)?;
-        Some(&self.exports()[i])
+    pub fn get_export(&self, name: &str) -> Option<Extern> {
+        let export = self.instance_handle.lookup(&name)?;
+        Some(Extern::from_wasmtime_export(
+            self.module.store(),
+            self.instance_handle.clone(),
+            export,
+        ))
     }
 
     #[doc(hidden)]

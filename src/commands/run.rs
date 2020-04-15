@@ -248,19 +248,16 @@ impl RunCommand {
     }
 
     fn invoke_export(&self, instance: Instance, name: &str) -> Result<()> {
-        let pos = instance
-            .module()
-            .exports()
-            .iter()
-            .enumerate()
-            .find(|(_, e)| e.name() == name);
-        let (ty, export) = match pos {
-            Some((i, ty)) => match (ty.ty(), &instance.exports()[i]) {
-                (wasmtime::ExternType::Func(ty), wasmtime::Extern::Func(f)) => (ty, f),
-                _ => bail!("export of `{}` wasn't a function", name),
-            },
-            None => bail!("failed to find export of `{}` in module", name),
+        let func = if let Some(export) = instance.get_export(name) {
+            if let Some(func) = export.func() {
+                func
+            } else {
+                bail!("export of `{}` wasn't a function", name)
+            }
+        } else {
+            bail!("failed to find export of `{}` in module", name)
         };
+        let ty = func.ty();
         if ty.params().len() > 0 {
             eprintln!(
                 "warning: using `--invoke` with a function that takes arguments \
@@ -288,7 +285,7 @@ impl RunCommand {
 
         // Invoke the function and then afterwards print all the results that came
         // out, if there are any.
-        let results = export
+        let results = func
             .call(&values)
             .with_context(|| format!("failed to invoke `{}`", name))?;
         if !results.is_empty() {
