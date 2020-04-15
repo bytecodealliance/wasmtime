@@ -138,7 +138,6 @@ pub struct Func {
     store: Store,
     instance: InstanceHandle,
     export: ExportFunction,
-    ty: FuncType,
     trampoline: VMTrampoline,
 }
 
@@ -157,7 +156,8 @@ macro_rules! getters {
         {
             // Verify all the paramers match the expected parameters, and that
             // there are no extra parameters...
-            let mut params = self.ty().params().iter().cloned();
+            let ty = self.ty();
+            let mut params = ty.params().iter().cloned();
             let n = 0;
             $(
                 let n = n + 1;
@@ -167,7 +167,7 @@ macro_rules! getters {
             ensure!(params.next().is_none(), "Type mismatch: too many arguments (expected {})", n);
 
             // ... then do the same for the results...
-            let mut results = self.ty().results().iter().cloned();
+            let mut results = ty.results().iter().cloned();
             R::matches(&mut results)
                 .context("Type mismatch in return type")?;
             ensure!(results.next().is_none(), "Type mismatch: too many return values (expected 1)");
@@ -271,7 +271,6 @@ impl Func {
             crate::trampoline::generate_func_export(&ty, func, store).expect("generated func");
         Func {
             store: store.clone(),
-            ty,
             instance,
             export,
             trampoline,
@@ -469,18 +468,42 @@ impl Func {
     }
 
     /// Returns the underlying wasm type that this `Func` has.
-    pub fn ty(&self) -> &FuncType {
-        &self.ty
+    pub fn ty(&self) -> FuncType {
+        // Signatures should always be registered in the store's registry of
+        // shared signatures, so we should be able to unwrap safely here.
+        let sig = self
+            .store
+            .compiler()
+            .signatures()
+            .lookup(self.export.signature)
+            .expect("failed to lookup signature");
+
+        // This is only called with `Export::Function`, and since it's coming
+        // from wasmtime_runtime itself we should support all the types coming
+        // out of it, so assert such here.
+        FuncType::from_wasmtime_signature(sig).expect("core wasm signature should be supported")
     }
 
     /// Returns the number of parameters that this function takes.
     pub fn param_arity(&self) -> usize {
-        self.ty.params().len()
+        let sig = self
+            .store
+            .compiler()
+            .signatures()
+            .lookup(self.export.signature)
+            .expect("failed to lookup signature");
+        sig.params.len()
     }
 
     /// Returns the number of results this function produces.
     pub fn result_arity(&self) -> usize {
-        self.ty.results().len()
+        let sig = self
+            .store
+            .compiler()
+            .signatures()
+            .lookup(self.export.signature)
+            .expect("failed to lookup signature");
+        sig.returns.len()
     }
 
     /// Invokes this function with the `params` given, returning the results and
@@ -498,18 +521,19 @@ impl Func {
         // this function. This involves checking to make sure we have the right
         // number and types of arguments as well as making sure everything is
         // from the same `Store`.
-        if self.ty.params().len() != params.len() {
+        let my_ty = self.ty();
+        if my_ty.params().len() != params.len() {
             bail!(
                 "expected {} arguments, got {}",
-                self.ty.params().len(),
+                my_ty.params().len(),
                 params.len()
             );
         }
 
-        let mut values_vec = vec![0; max(params.len(), self.ty.results().len())];
+        let mut values_vec = vec![0; max(params.len(), my_ty.results().len())];
 
         // Store the argument values into `values_vec`.
-        let param_tys = self.ty.params().iter();
+        let param_tys = my_ty.params().iter();
         for ((arg, slot), ty) in params.iter().zip(&mut values_vec).zip(param_tys) {
             if arg.ty() != *ty {
                 bail!("argument type mismatch");
@@ -537,8 +561,8 @@ impl Func {
         }
 
         // Load the return values out of `values_vec`.
-        let mut results = Vec::with_capacity(self.ty.results().len());
-        for (index, ty) in self.ty.results().iter().enumerate() {
+        let mut results = Vec::with_capacity(my_ty.results().len());
+        for (index, ty) in my_ty.results().iter().enumerate() {
             unsafe {
                 let ptr = values_vec.as_ptr().add(index);
                 results.push(Val::read_value_from(ptr, ty));
@@ -557,20 +581,6 @@ impl Func {
         store: &Store,
         instance: InstanceHandle,
     ) -> Self {
-        // Signatures should always be registered in the store's registry of
-        // shared signatures, so we should be able to unwrap safely here.
-        let sig = store
-            .compiler()
-            .signatures()
-            .lookup(export.signature)
-            .expect("failed to lookup signature");
-
-        // This is only called with `Export::Function`, and since it's coming
-        // from wasmtime_runtime itself we should support all the types coming
-        // out of it, so assert such here.
-        let ty = FuncType::from_wasmtime_signature(sig)
-            .expect("core wasm signature should be supported");
-
         // Each function signature in a module should have a trampoline stored
         // on that module as well, so unwrap the result here since otherwise
         // it's a bug in wasmtime.
@@ -582,7 +592,6 @@ impl Func {
             instance,
             export,
             trampoline,
-            ty,
             store: store.clone(),
         }
     }
@@ -1094,7 +1103,6 @@ macro_rules! impl_into_func {
                     .expect("failed to generate export");
                     Func {
                         store: store.clone(),
-                        ty,
                         instance,
                         export,
                         trampoline,

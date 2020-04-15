@@ -74,10 +74,10 @@ impl Extern {
     /// Returns the type associated with this `Extern`.
     pub fn ty(&self) -> ExternType {
         match self {
-            Extern::Func(ft) => ExternType::Func(ft.ty().clone()),
-            Extern::Memory(ft) => ExternType::Memory(ft.ty().clone()),
-            Extern::Table(tt) => ExternType::Table(tt.ty().clone()),
-            Extern::Global(gt) => ExternType::Global(gt.ty().clone()),
+            Extern::Func(ft) => ExternType::Func(ft.ty()),
+            Extern::Memory(ft) => ExternType::Memory(ft.ty()),
+            Extern::Table(tt) => ExternType::Table(tt.ty()),
+            Extern::Global(gt) => ExternType::Global(gt.ty()),
         }
     }
 
@@ -164,7 +164,6 @@ impl From<Table> for Extern {
 #[derive(Clone)]
 pub struct Global {
     store: Store,
-    ty: GlobalType,
     wasmtime_export: wasmtime_runtime::ExportGlobal,
     wasmtime_handle: InstanceHandle,
 }
@@ -191,27 +190,40 @@ impl Global {
         let (wasmtime_handle, wasmtime_export) = generate_global_export(store, &ty, val)?;
         Ok(Global {
             store: store.clone(),
-            ty,
             wasmtime_export,
             wasmtime_handle,
         })
     }
 
     /// Returns the underlying type of this `global`.
-    pub fn ty(&self) -> &GlobalType {
-        &self.ty
+    pub fn ty(&self) -> GlobalType {
+        // The original export is coming from wasmtime_runtime itself we should
+        // support all the types coming out of it, so assert such here.
+        GlobalType::from_wasmtime_global(&self.wasmtime_export.global)
+            .expect("core wasm global type should be supported")
+    }
+
+    /// Returns the underlying mutability of this `global`.
+    pub fn mutability(&self) -> Mutability {
+        if self.wasmtime_export.global.mutability {
+            Mutability::Var
+        } else {
+            Mutability::Const
+        }
     }
 
     /// Returns the current [`Val`] of this global.
     pub fn get(&self) -> Val {
         unsafe {
             let definition = &mut *self.wasmtime_export.definition;
-            match self.ty().content() {
+            let ty = ValType::from_wasmtime_type(self.wasmtime_export.global.ty)
+                .expect("core wasm type should be supported");
+            match ty {
                 ValType::I32 => Val::from(*definition.as_i32()),
                 ValType::I64 => Val::from(*definition.as_i64()),
                 ValType::F32 => Val::F32(*definition.as_u32()),
                 ValType::F64 => Val::F64(*definition.as_u64()),
-                _ => unimplemented!("Global::get for {:?}", self.ty().content()),
+                _ => unimplemented!("Global::get for {:?}", ty),
             }
         }
     }
@@ -223,15 +235,13 @@ impl Global {
     /// Returns an error if this global has a different type than `Val`, or if
     /// it's not a mutable global.
     pub fn set(&self, val: Val) -> Result<()> {
-        if self.ty().mutability() != Mutability::Var {
+        if self.mutability() != Mutability::Var {
             bail!("immutable global cannot be set");
         }
-        if val.ty() != *self.ty().content() {
-            bail!(
-                "global of type {:?} cannot be set to {:?}",
-                self.ty().content(),
-                val.ty()
-            );
+        let ty = ValType::from_wasmtime_type(self.wasmtime_export.global.ty)
+            .expect("core wasm type should be supported");
+        if val.ty() != ty {
+            bail!("global of type {:?} cannot be set to {:?}", ty, val.ty());
         }
         if !val.comes_from_same_store(&self.store) {
             bail!("cross-`Store` values are not supported");
@@ -254,13 +264,8 @@ impl Global {
         store: &Store,
         wasmtime_handle: InstanceHandle,
     ) -> Global {
-        // The original export is coming from wasmtime_runtime itself we should
-        // support all the types coming out of it, so assert such here.
-        let ty = GlobalType::from_wasmtime_global(&wasmtime_export.global)
-            .expect("core wasm global type should be supported");
         Global {
             store: store.clone(),
-            ty: ty,
             wasmtime_export,
             wasmtime_handle,
         }
@@ -285,7 +290,6 @@ impl Global {
 #[derive(Clone)]
 pub struct Table {
     store: Store,
-    ty: TableType,
     wasmtime_handle: InstanceHandle,
     wasmtime_export: wasmtime_runtime::ExportTable,
 }
@@ -326,7 +330,6 @@ impl Table {
 
         Ok(Table {
             store: store.clone(),
-            ty,
             wasmtime_handle,
             wasmtime_export,
         })
@@ -334,8 +337,8 @@ impl Table {
 
     /// Returns the underlying type of this table, including its element type as
     /// well as the maximum/minimum lower bounds.
-    pub fn ty(&self) -> &TableType {
-        &self.ty
+    pub fn ty(&self) -> TableType {
+        TableType::from_wasmtime_table(&self.wasmtime_export.table.table)
     }
 
     fn wasmtime_table_index(&self) -> wasm::DefinedTableIndex {
@@ -432,10 +435,8 @@ impl Table {
         store: &Store,
         wasmtime_handle: wasmtime_runtime::InstanceHandle,
     ) -> Table {
-        let ty = TableType::from_wasmtime_table(&wasmtime_export.table.table);
         Table {
             store: store.clone(),
-            ty,
             wasmtime_handle,
             wasmtime_export,
         }
@@ -651,7 +652,6 @@ impl Table {
 #[derive(Clone)]
 pub struct Memory {
     store: Store,
-    ty: MemoryType,
     wasmtime_handle: InstanceHandle,
     wasmtime_export: wasmtime_runtime::ExportMemory,
 }
@@ -684,7 +684,6 @@ impl Memory {
             generate_memory_export(store, &ty).expect("generated memory");
         Memory {
             store: store.clone(),
-            ty,
             wasmtime_handle,
             wasmtime_export,
         }
@@ -706,8 +705,8 @@ impl Memory {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn ty(&self) -> &MemoryType {
-        &self.ty
+    pub fn ty(&self) -> MemoryType {
+        MemoryType::from_wasmtime_memory(&self.wasmtime_export.memory.memory)
     }
 
     /// Returns this memory as a slice view that can be read natively in Rust.
@@ -838,10 +837,8 @@ impl Memory {
         store: &Store,
         wasmtime_handle: wasmtime_runtime::InstanceHandle,
     ) -> Memory {
-        let ty = MemoryType::from_wasmtime_memory(&wasmtime_export.memory.memory);
         Memory {
             store: store.clone(),
-            ty: ty,
             wasmtime_handle,
             wasmtime_export,
         }
