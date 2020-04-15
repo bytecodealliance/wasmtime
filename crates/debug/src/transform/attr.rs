@@ -253,8 +253,8 @@ where
                 continue;
             }
             AttributeValue::DebugAddrBase(offset) => {
-                if offset.0 != 0 {
-                    bail!("Non-zero DebugAddrBase: {}", offset.0)
+                if offset.0 != 8 {
+                    bail!("Unexpected (8) DebugAddrBase: {}", offset.0)
                 }
                 continue;
             }
