@@ -9,8 +9,10 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-    let dir = env::current_dir().unwrap().join("../tests/spec_testsuite");
-    let mut code = format!("pub static FILES: &[(&str, &str)] = &[\n");
+    let dir = env::current_dir()
+        .unwrap()
+        .join("../../tests/spec_testsuite");
+    let mut code = format!("static FILES: &[(&str, &str)] = &[\n");
     for entry in dir.read_dir().unwrap() {
         let entry = entry.unwrap();
         let path = entry.path().display().to_string();

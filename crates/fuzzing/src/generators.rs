@@ -11,7 +11,7 @@
 #[cfg(feature = "binaryen")]
 pub mod api;
 
-use arbitrary::Arbitrary;
+use arbitrary::{Arbitrary, Unstructured};
 
 /// A Wasm test case generator that is powered by Binaryen's `wasm-opt -ttf`.
 #[derive(Clone)]
@@ -81,21 +81,66 @@ enum DifferentialStrategy {
     Lightbeam,
 }
 
-#[allow(missing_docs)]
 #[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum OptLevel {
+enum OptLevel {
     None,
     Speed,
     SpeedAndSize,
 }
 
 impl OptLevel {
-    /// Converts to the native wasmtime optimization level for cranelift
-    pub fn to_wasmtime(&self) -> wasmtime::OptLevel {
+    fn to_wasmtime(&self) -> wasmtime::OptLevel {
         match self {
             OptLevel::None => wasmtime::OptLevel::None,
             OptLevel::Speed => wasmtime::OptLevel::Speed,
             OptLevel::SpeedAndSize => wasmtime::OptLevel::SpeedAndSize,
         }
+    }
+}
+
+/// Implementation of generating a `wasmtime::Config` arbitrarily
+#[derive(Arbitrary, Debug)]
+pub struct Config {
+    opt_level: OptLevel,
+    debug_verifier: bool,
+    debug_info: bool,
+    canonicalize_nans: bool,
+    spectest: usize,
+}
+
+impl Config {
+    /// Converts this to a `wasmtime::Config` object
+    pub fn to_wasmtime(&self) -> wasmtime::Config {
+        let mut cfg = wasmtime::Config::new();
+        cfg.debug_info(self.debug_info)
+            .cranelift_nan_canonicalization(self.canonicalize_nans)
+            .cranelift_debug_verifier(self.debug_verifier)
+            .cranelift_opt_level(self.opt_level.to_wasmtime());
+        return cfg;
+    }
+}
+
+include!(concat!(env!("OUT_DIR"), "/spectests.rs"));
+
+/// A spec test from the upstream wast testsuite, arbitrarily chosen from the
+/// list of known spec tests.
+#[derive(Debug)]
+pub struct SpecTest {
+    /// The filename of the spec test
+    pub file: &'static str,
+    /// The `*.wast` contents of the spec test
+    pub contents: &'static str,
+}
+
+impl Arbitrary for SpecTest {
+    fn arbitrary(u: &mut Unstructured) -> arbitrary::Result<Self> {
+        // NB: this does get a uniform value in the provided range.
+        let i = u.int_in_range(0..=FILES.len() - 1)?;
+        let (file, contents) = FILES[i];
+        Ok(SpecTest { file, contents })
+    }
+
+    fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+        (1, Some(std::mem::size_of::<usize>()))
     }
 }
