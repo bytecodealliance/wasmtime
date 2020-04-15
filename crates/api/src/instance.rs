@@ -3,6 +3,7 @@ use crate::module::Module;
 use crate::runtime::{Config, Store};
 use crate::trap::Trap;
 use anyhow::{bail, Error, Result};
+use std::any::Any;
 use wasmtime_jit::{CompiledModule, Resolver};
 use wasmtime_runtime::{Export, InstanceHandle, InstantiationError, SignatureRegistry};
 
@@ -23,6 +24,7 @@ fn instantiate(
     compiled_module: &CompiledModule,
     imports: &[Extern],
     sig_registry: &SignatureRegistry,
+    host: Box<dyn Any>,
 ) -> Result<InstanceHandle, Error> {
     let mut resolver = SimpleResolver { imports };
     unsafe {
@@ -32,6 +34,7 @@ fn instantiate(
                 &mut resolver,
                 sig_registry,
                 config.memory_creator.as_ref().map(|a| a as _),
+                host,
             )
             .map_err(|e| -> Error {
                 match e {
@@ -132,13 +135,14 @@ impl Instance {
             );
         }
 
-        module.register_frame_info();
+        let info = module.register_frame_info();
         let config = store.engine().config();
         let instance_handle = instantiate(
             config,
             module.compiled_module(),
             imports,
             store.compiler().signatures(),
+            Box::new(info),
         )?;
 
         let mut exports = Vec::with_capacity(module.exports().len());
