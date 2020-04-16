@@ -148,7 +148,7 @@ macro_rules! getters {
     )*) => ($(
         $(#[$doc])*
         #[allow(non_snake_case)]
-        pub fn $name<$($args,)* R>(self)
+        pub fn $name<$($args,)* R>(&self)
             -> anyhow::Result<impl Fn($($args,)*) -> Result<R, Trap>>
         where
             $($args: WasmTy,)*
@@ -172,6 +172,17 @@ macro_rules! getters {
                 .context("Type mismatch in return type")?;
             ensure!(results.next().is_none(), "Type mismatch: too many return values (expected 1)");
 
+            // Pass the instance into the closure so that we keep it live for the lifetime
+            // of the closure. Pass the export in so that we can call it.
+            struct ClosureState {
+                _instance: InstanceHandle,
+                export: ExportFunction
+            }
+            let closure = ClosureState {
+                _instance: self.instance.clone(),
+                export: self.export.clone()
+            };
+
             // ... and then once we've passed the typechecks we can hand out our
             // object since our `transmute` below should be safe!
             Ok(move |$($args: $args),*| -> Result<R, Trap> {
@@ -183,11 +194,11 @@ macro_rules! getters {
                             *mut VMContext,
                             $($args,)*
                         ) -> R,
-                    >(self.export.address);
+                    >(closure.export.address);
                     let mut ret = None;
                     $(let $args = $args.into_abi();)*
-                    wasmtime_runtime::catch_traps(self.export.vmctx, || {
-                        ret = Some(fnptr(self.export.vmctx, ptr::null_mut(), $($args,)*));
+                    wasmtime_runtime::catch_traps(closure.export.vmctx, || {
+                        ret = Some(fnptr(closure.export.vmctx, ptr::null_mut(), $($args,)*));
                     }).map_err(Trap::from_jit)?;
                     Ok(ret.unwrap())
                 }
