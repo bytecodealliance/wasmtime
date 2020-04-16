@@ -1138,7 +1138,7 @@ impl InstanceHandle {
                     Ok(None)
                 } else {
                     Err(InstantiationError::WASIInvalid(
-                        "Must be a function".to_owned(),
+                        "_start must be a function".to_owned(),
                     ))
                 }
             }
@@ -1161,7 +1161,7 @@ impl InstanceHandle {
                     Ok(Some(self))
                 } else {
                     Err(InstantiationError::WASIInvalid(
-                        "Must be a function".to_owned(),
+                        "_initialize must be a function".to_owned(),
                     ))
                 }
             }
