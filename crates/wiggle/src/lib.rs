@@ -121,6 +121,12 @@ pub unsafe trait GuestMemory {
         align: usize,
         len: u32,
     ) -> Result<*mut u8, GuestError> {
+        // Even though the 0-offset location of linear memory is a valid
+        // location, toolchains use it for the null pointer.
+        if offset == 0 {
+            return Err(GuestError::NullPtr);
+        }
+
         let (base_ptr, base_len) = self.base();
         let region = Region { start: offset, len };
 

@@ -58,7 +58,8 @@ impl HostMemory {
             .prop_filter_map("needs to fit in memory", move |p| {
                 let p_aligned = p - (p % align); // Align according to argument
                 let ptr = p_aligned % 4096; // Put inside memory
-                if ptr + align < 4096 {
+                if ptr + align < 4096 && ptr != 0 {
+                    // Not beyond end of memory, and not null:
                     Some(MemArea { ptr, len: align })
                 } else {
                     None
@@ -167,14 +168,17 @@ impl MemArea {
         return true;
     }
 
-    /// Enumerate all memareas of size `len` inside a given area
+    /// Enumerate all non-null memareas of size `len` inside a given area
     fn inside(&self, len: u32) -> impl Iterator<Item = MemArea> {
         let end: i64 = self.len as i64 - len as i64;
         let start = self.ptr;
-        (0..end).into_iter().map(move |v| MemArea {
-            ptr: start + v as u32,
-            len,
-        })
+        (0..end)
+            .into_iter()
+            .map(move |v| MemArea {
+                ptr: start + v as u32,
+                len,
+            })
+            .filter(|m| m.ptr != 0)
     }
 }
 

@@ -7,6 +7,8 @@ pub enum GuestError {
     InvalidFlagValue(&'static str),
     #[error("Invalid enum value {0}")]
     InvalidEnumValue(&'static str),
+    #[error("Null pointer")]
+    NullPtr,
     #[error("Pointer overflow")]
     PtrOverflow,
     #[error("Pointer out of bounds: {0:?}")]
