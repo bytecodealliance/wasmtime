@@ -405,13 +405,14 @@ impl Module {
     /// # }
     /// ```
     pub fn imports<'me>(&'me self) -> impl Iterator<Item = ImportType> + 'me {
-        let inner = self.inner.clone();
-        self.inner.compiled.module_ref().imports.iter().map(
-            move |(module_name, name, entity_index)| {
-                let r#type = entity_type(entity_index, inner.compiled.module_ref());
+        let module = self.inner.compiled.module_ref();
+        module
+            .imports
+            .iter()
+            .map(move |(module_name, name, entity_index)| {
+                let r#type = entity_type(entity_index, module);
                 ImportType::new(module_name, name, r#type)
-            },
-        )
+            })
     }
 
     /// Return the number of imports in this module.
@@ -473,16 +474,11 @@ impl Module {
     /// # }
     /// ```
     pub fn exports<'me>(&'me self) -> impl Iterator<Item = ExportType> + 'me {
-        let inner = self.inner.clone();
-        self.inner
-            .compiled
-            .module_ref()
-            .exports
-            .iter()
-            .map(move |(name, entity_index)| {
-                let r#type = entity_type(entity_index, inner.compiled.module_ref());
-                ExportType::new(name, r#type)
-            })
+        let module = self.inner.compiled.module_ref();
+        module.exports.iter().map(move |(name, entity_index)| {
+            let r#type = entity_type(entity_index, module);
+            ExportType::new(name, r#type)
+        })
     }
 
     /// Return the number of exports in this module.
