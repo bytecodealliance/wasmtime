@@ -31,6 +31,7 @@ impl From<wiggle::GuestError> for Errno {
         match err {
             InvalidFlagValue { .. } => Self::Inval,
             InvalidEnumValue { .. } => Self::Inval,
+            NullPtr { .. } => Self::Inval,
             PtrOverflow { .. } => Self::Fault,
             PtrOutOfBounds { .. } => Self::Fault,
             PtrNotAligned { .. } => Self::Inval,
