@@ -407,39 +407,9 @@ impl Module {
     pub fn imports<'me>(&'me self) -> impl Iterator<Item = ImportType> + 'me {
         let inner = self.inner.clone();
         self.inner.compiled.module_ref().imports.iter().map(
-            move |(module_name, field_name, import)| {
-                let module = inner.compiled.module_ref();
-                match import {
-                    EntityIndex::Function(func_index) => {
-                        let sig_index = module.local.functions[*func_index];
-                        let sig = &module.local.signatures[sig_index];
-                        let ty = FuncType::from_wasmtime_signature(sig)
-                            .expect("core wasm function type should be supported")
-                            .into();
-                        ImportType::new(module_name, field_name, ty)
-                    }
-                    EntityIndex::Table(table_index) => {
-                        let ty = TableType::from_wasmtime_table(
-                            &module.local.table_plans[*table_index].table,
-                        )
-                        .into();
-                        ImportType::new(module_name, field_name, ty)
-                    }
-                    EntityIndex::Memory(memory_index) => {
-                        let ty = MemoryType::from_wasmtime_memory(
-                            &module.local.memory_plans[*memory_index].memory,
-                        )
-                        .into();
-                        ImportType::new(module_name, field_name, ty)
-                    }
-                    EntityIndex::Global(global_index) => {
-                        let ty =
-                            GlobalType::from_wasmtime_global(&module.local.globals[*global_index])
-                                .expect("core wasm global type should be supported")
-                                .into();
-                        ImportType::new(module_name, field_name, ty)
-                    }
-                }
+            move |(module_name, name, entity_index)| {
+                let r#type = entity_type(entity_index, inner.compiled.module_ref());
+                ImportType::new(module_name, name, r#type)
             },
         )
     }
@@ -509,32 +479,8 @@ impl Module {
             .module_ref()
             .exports
             .iter()
-            .map(move |(name, ty)| {
-                let module = inner.compiled.module_ref();
-                let r#type = match ty {
-                    EntityIndex::Function(func_index) => {
-                        let sig_index = module.local.functions[*func_index];
-                        let sig = &module.local.signatures[sig_index];
-                        ExternType::Func(
-                            FuncType::from_wasmtime_signature(sig)
-                                .expect("core wasm function type should be supported"),
-                        )
-                    }
-                    EntityIndex::Table(table_index) => {
-                        ExternType::Table(TableType::from_wasmtime_table(
-                            &module.local.table_plans[*table_index].table,
-                        ))
-                    }
-                    EntityIndex::Memory(memory_index) => {
-                        ExternType::Memory(MemoryType::from_wasmtime_memory(
-                            &module.local.memory_plans[*memory_index].memory,
-                        ))
-                    }
-                    EntityIndex::Global(global_index) => ExternType::Global(
-                        GlobalType::from_wasmtime_global(&module.local.globals[*global_index])
-                            .expect("core wasm global type should be supported"),
-                    ),
-                };
+            .map(move |(name, entity_index)| {
+                let r#type = entity_type(entity_index, inner.compiled.module_ref());
                 ExportType::new(name, r#type)
             })
     }
@@ -560,5 +506,30 @@ impl Module {
         let ret = super::frame_info::register(&self.inner.compiled).map(Arc::new);
         *info = Some(ret.clone());
         return ret;
+    }
+}
+
+/// Translate from a `EntityIndex` into an `ExternType`.
+fn entity_type(entity_index: &EntityIndex, module: &wasmtime_environ::Module) -> ExternType {
+    match entity_index {
+        EntityIndex::Function(func_index) => {
+            let sig_index = module.local.functions[*func_index];
+            let sig = &module.local.signatures[sig_index];
+            FuncType::from_wasmtime_signature(sig)
+                .expect("core wasm function type should be supported")
+                .into()
+        }
+        EntityIndex::Table(table_index) => {
+            TableType::from_wasmtime_table(&module.local.table_plans[*table_index].table).into()
+        }
+        EntityIndex::Memory(memory_index) => {
+            MemoryType::from_wasmtime_memory(&module.local.memory_plans[*memory_index].memory)
+                .into()
+        }
+        EntityIndex::Global(global_index) => {
+            GlobalType::from_wasmtime_global(&module.local.globals[*global_index])
+                .expect("core wasm global type should be supported")
+                .into()
+        }
     }
 }
