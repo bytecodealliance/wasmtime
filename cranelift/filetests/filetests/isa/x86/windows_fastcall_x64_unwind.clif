@@ -3,46 +3,29 @@ set opt_level=speed_and_size
 set is_pic
 target x86_64 haswell
 
-; check that there is no unwind information for a system_v function
-function %not_fastcall() system_v {
-block0:
-    return
-}
-; sameln: No unwind information.
-
 ; check the unwind information with a function with no args
 function %no_args() windows_fastcall {
 block0:
     return
 }
-; sameln: UnwindInfo {
-; nextln:     version: 1,
-; nextln:     flags: 0,
-; nextln:     prologue_size: 8,
-; nextln:     unwind_code_count_raw: 3,
-; nextln:     frame_register: 5,
-; nextln:     frame_register_offset: 0,
-; nextln:     unwind_codes: [
-; nextln:         UnwindCode {
-; nextln:             offset: 8,
-; nextln:             op: SmallStackAlloc,
-; nextln:             info: 3,
-; nextln:             value: None,
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 4,
-; nextln:             op: SetFramePointer,
-; nextln:             info: 0,
-; nextln:             value: None,
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 1,
-; nextln:             op: PushNonvolatileRegister,
-; nextln:             info: 5,
-; nextln:             value: None,
-; nextln:         },
-; nextln:     ],
-; nextln: }
+; sameln:                version: 1
+; nextln:                  flags: 0
+; nextln:          prologue size: 8
+; nextln:         frame register: 5
+; nextln:  frame register offset: 0
+; nextln:           unwind codes: 3
+; nextln:  
+; nextln:                 offset: 1
+; nextln:                     op: PushNonvolatileRegister
+; nextln:                   info: 5
+; nextln:  
+; nextln:                 offset: 4
+; nextln:                     op: SetFramePointer
+; nextln:                   info: 0
+; nextln:  
+; nextln:                 offset: 8
+; nextln:                     op: SmallStackAlloc
+; nextln:                   info: 3
 
 ; check a function with medium-sized stack alloc
 function %medium_stack() windows_fastcall {
@@ -50,36 +33,25 @@ function %medium_stack() windows_fastcall {
 block0:
     return
 }
-; sameln: UnwindInfo {
-; nextln:     version: 1,
-; nextln:     flags: 0,
-; nextln:     prologue_size: 17,
-; nextln:     unwind_code_count_raw: 4,
-; nextln:     frame_register: 5,
-; nextln:     frame_register_offset: 0,
-; nextln:     unwind_codes: [
-; nextln:         UnwindCode {
-; nextln:             offset: 17,
-; nextln:             op: LargeStackAlloc,
-; nextln:             info: 0,
-; nextln:             value: U16(
-; nextln:                 12504,
-; nextln:             ),
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 4,
-; nextln:             op: SetFramePointer,
-; nextln:             info: 0,
-; nextln:             value: None,
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 1,
-; nextln:             op: PushNonvolatileRegister,
-; nextln:             info: 5,
-; nextln:             value: None,
-; nextln:         },
-; nextln:     ],
-; nextln: }
+; sameln:               version: 1
+; nextln:                 flags: 0
+; nextln:         prologue size: 17
+; nextln:        frame register: 5
+; nextln: frame register offset: 0
+; nextln:          unwind codes: 3
+; nextln: 
+; nextln:                offset: 1
+; nextln:                    op: PushNonvolatileRegister
+; nextln:                  info: 5
+; nextln: 
+; nextln:                offset: 4
+; nextln:                    op: SetFramePointer
+; nextln:                  info: 0
+; nextln: 
+; nextln:                offset: 17
+; nextln:                    op: LargeStackAlloc
+; nextln:                  info: 0
+; nextln:                 value: 12504 (u16)
 
 ; check a function with large-sized stack alloc
 function %large_stack() windows_fastcall {
@@ -87,36 +59,25 @@ function %large_stack() windows_fastcall {
 block0:
     return
 }
-; sameln: UnwindInfo {
-; nextln:     version: 1,
-; nextln:     flags: 0,
-; nextln:     prologue_size: 17,
-; nextln:     unwind_code_count_raw: 5,
-; nextln:     frame_register: 5,
-; nextln:     frame_register_offset: 0,
-; nextln:     unwind_codes: [
-; nextln:         UnwindCode {
-; nextln:             offset: 17,
-; nextln:             op: LargeStackAlloc,
-; nextln:             info: 1,
-; nextln:             value: U32(
-; nextln:                 524320,
-; nextln:             ),
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 4,
-; nextln:             op: SetFramePointer,
-; nextln:             info: 0,
-; nextln:             value: None,
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 1,
-; nextln:             op: PushNonvolatileRegister,
-; nextln:             info: 5,
-; nextln:             value: None,
-; nextln:         },
-; nextln:     ],
-; nextln: }
+; sameln:                version: 1
+; nextln:                  flags: 0
+; nextln:          prologue size: 17
+; nextln:         frame register: 5
+; nextln:  frame register offset: 0
+; nextln:           unwind codes: 3
+; nextln:  
+; nextln:                 offset: 1
+; nextln:                     op: PushNonvolatileRegister
+; nextln:                   info: 5
+; nextln:  
+; nextln:                 offset: 4
+; nextln:                     op: SetFramePointer
+; nextln:                   info: 0
+; nextln:  
+; nextln:                 offset: 17
+; nextln:                     op: LargeStackAlloc
+; nextln:                   info: 1
+; nextln:                  value: 524320 (u32)
 
 function %fpr_with_function_call(i64, i64) windows_fastcall {
     fn0 = %foo(f64, f64, i64, i64, i64) windows_fastcall;
@@ -150,20 +111,34 @@ block0(v0: i64, v1: i64):
 ; area that does not overlap either the callee's shadow space or stack argument
 ; space.
 ;
-; sameln: UnwindInfo {
-; nextln:     version: 1,
-; nextln:     flags: 0,
-; nextln:     prologue_size: 25,
-; nextln:     unwind_code_count_raw: 7,
-; nextln:     frame_register: 5,
-; nextln:     frame_register_offset: 12,
-; nextln:     unwind_codes: [
-; nextln:       UnwindCode {
-; nextln:         offset: 25,
-; nextln:         op: SaveXmm128,
-; nextln:         info: 15,
-; nextln:         value: U16(
-; nextln:             3,
+; sameln:                version: 1
+; nextln:                  flags: 0 
+; nextln:          prologue size: 25
+; nextln:         frame register: 5
+; nextln:  frame register offset: 12
+; nextln:           unwind codes: 5
+; nextln:  
+; nextln:                 offset: 1
+; nextln:                     op: PushNonvolatileRegister
+; nextln:                   info: 5
+; nextln:  
+; nextln:                 offset: 4
+; nextln:                     op: SetFramePointer
+; nextln:                   info: 0
+; nextln:  
+; nextln:                 offset: 6
+; nextln:                     op: PushNonvolatileRegister
+; nextln:                   info: 15
+; nextln:  
+; nextln:                 offset: 13
+; nextln:                     op: LargeStackAlloc
+; nextln:                   info: 0
+; nextln:                  value: 23 (u16)
+; nextln:  
+; nextln:                 offset: 25
+; nextln:                     op: SaveXmm128
+; nextln:                   info: 15
+; nextln:                  value: 3 (u16)
 
 ; check a function that has CSRs
 function %lots_of_registers(i64, i64) windows_fastcall {
@@ -214,97 +189,64 @@ block0(v0: i64, v1: i64):
     store.f64 v23, v1+168
     return
 }
-; sameln: UnwindInfo {
-; nextln:     version: 1,
-; nextln:     flags: 0,
-; nextln:     prologue_size: 41,
-; nextln:     unwind_code_count_raw: 16,
-; nextln:     frame_register: 5,
-; nextln:     frame_register_offset: 10,
-; nextln:     unwind_codes: [
-; nextln:         UnwindCode {
-; nextln:             offset: 41,
-; nextln:             op: SaveXmm128,
-; nextln:             info: 8,
-; nextln:             value: U16(
-; nextln:                 2,
-; nextln:             ),
-; nextln:           },
-; nextln:         UnwindCode {
-; nextln:             offset: 36,
-; nextln:             op: SaveXmm128,
-; nextln:             info: 7,
-; nextln:             value: U16(
-; nextln:                 1,
-; nextln:             ),
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 31,
-; nextln:             op: SaveXmm128,
-; nextln:             info: 6,
-; nextln:             value: U16(
-; nextln:                 0,
-; nextln:             ),
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 19,
-; nextln:             op: SmallStackAlloc,
-; nextln:             info: 12,
-; nextln:             value: None,
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 15,
-; nextln:             op: PushNonvolatileRegister,
-; nextln:             info: 15,
-; nextln:             value: None,
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 13,
-; nextln:             op: PushNonvolatileRegister,
-; nextln:             info: 14,
-; nextln:             value: None,
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 11,
-; nextln:             op: PushNonvolatileRegister,
-; nextln:             info: 13,
-; nextln:             value: None,
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 9,
-; nextln:             op: PushNonvolatileRegister,
-; nextln:             info: 12,
-; nextln:             value: None,
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 7,
-; nextln:             op: PushNonvolatileRegister,
-; nextln:             info: 7,
-; nextln:             value: None,
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 6,
-; nextln:             op: PushNonvolatileRegister,
-; nextln:             info: 6,
-; nextln:             value: None,
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 5,
-; nextln:             op: PushNonvolatileRegister,
-; nextln:             info: 3,
-; nextln:             value: None,
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 4,
-; nextln:             op: SetFramePointer,
-; nextln:             info: 0,
-; nextln:             value: None,
-; nextln:         },
-; nextln:         UnwindCode {
-; nextln:             offset: 1,
-; nextln:             op: PushNonvolatileRegister,
-; nextln:             info: 5,
-; nextln:             value: None,
-; nextln:         },
-; nextln:     ],
-; nextln: }
+; sameln:                version: 1
+; nextln:                  flags: 0
+; nextln:          prologue size: 41
+; nextln:         frame register: 5
+; nextln:  frame register offset: 10
+; nextln:           unwind codes: 13
+; nextln:  
+; nextln:                 offset: 1
+; nextln:                     op: PushNonvolatileRegister
+; nextln:                   info: 5
+; nextln:  
+; nextln:                 offset: 4
+; nextln:                     op: SetFramePointer
+; nextln:                   info: 0
+; nextln:  
+; nextln:                 offset: 5
+; nextln:                     op: PushNonvolatileRegister
+; nextln:                   info: 3
+; nextln:  
+; nextln:                 offset: 6
+; nextln:                     op: PushNonvolatileRegister
+; nextln:                   info: 6
+; nextln:  
+; nextln:                 offset: 7
+; nextln:                     op: PushNonvolatileRegister
+; nextln:                   info: 7
+; nextln:  
+; nextln:                 offset: 9
+; nextln:                     op: PushNonvolatileRegister
+; nextln:                   info: 12
+; nextln:  
+; nextln:                 offset: 11
+; nextln:                     op: PushNonvolatileRegister
+; nextln:                   info: 13
+; nextln:  
+; nextln:                 offset: 13
+; nextln:                     op: PushNonvolatileRegister
+; nextln:                   info: 14
+; nextln:  
+; nextln:                 offset: 15
+; nextln:                     op: PushNonvolatileRegister
+; nextln:                   info: 15
+; nextln:  
+; nextln:                 offset: 19
+; nextln:                     op: SmallStackAlloc
+; nextln:                   info: 12
+; nextln:  
+; nextln:                 offset: 31
+; nextln:                     op: SaveXmm128
+; nextln:                   info: 6
+; nextln:                  value: 0 (u16)
+; nextln:  
+; nextln:                 offset: 36
+; nextln:                     op: SaveXmm128
+; nextln:                   info: 7
+; nextln:                  value: 1 (u16)
+; nextln:  
+; nextln:                 offset: 41
+; nextln:                     op: SaveXmm128
+; nextln:                   info: 8
+; nextln:                  value: 2 (u16)

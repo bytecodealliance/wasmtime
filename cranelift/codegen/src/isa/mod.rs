@@ -56,8 +56,8 @@ pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
 use crate::binemit;
 use crate::flowgraph;
 use crate::ir;
-use crate::isa::fde::RegisterMappingError;
 #[cfg(feature = "unwind")]
+use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::machinst::MachBackend;
 use crate::regalloc;
 use crate::result::CodegenResult;
@@ -77,14 +77,14 @@ mod riscv;
 #[cfg(feature = "x86")]
 mod x86;
 
-#[cfg(feature = "unwind")]
-pub mod fde;
-
 #[cfg(feature = "arm32")]
 mod arm32;
 
 #[cfg(feature = "arm64")]
 mod aarch64;
+
+#[cfg(feature = "unwind")]
+pub mod unwind;
 
 mod call_conv;
 mod constraints;
@@ -394,17 +394,25 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// IntCC condition for Unsigned Subtraction Overflow (Borrow/Carry).
     fn unsigned_sub_overflow_condition(&self) -> ir::condcodes::IntCC;
 
-    /// Emit unwind information for the given function.
+    /// Creates unwind information for the function.
     ///
-    /// Only some calling conventions (e.g. Windows fastcall) will have unwind information.
-    fn emit_unwind_info(
+    /// Returns `None` if there is no unwind information for the function.
+    #[cfg(feature = "unwind")]
+    fn create_unwind_info(
         &self,
         _func: &ir::Function,
-        _kind: binemit::FrameUnwindKind,
-        _sink: &mut dyn binemit::FrameUnwindSink,
-    ) -> CodegenResult<()> {
-        // No-op by default
-        Ok(())
+    ) -> CodegenResult<Option<unwind::UnwindInfo>> {
+        // By default, an ISA has no unwind information
+        Ok(None)
+    }
+
+    /// Creates a new System V Common Information Entry for the ISA.
+    ///
+    /// Returns `None` if the ISA does not support System V unwind information.
+    #[cfg(feature = "unwind")]
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        // By default, an ISA cannot create a System V CIE
+        None
     }
 
     /// Get the new-style MachBackend, if this is an adapter around one.

@@ -27,7 +27,6 @@
 mod address_map;
 mod compilation;
 mod data_structures;
-mod frame_layout;
 mod func_environ;
 mod module;
 mod module_environ;
@@ -47,13 +46,11 @@ pub use crate::address_map::{
 pub use crate::cache::create_new_config as cache_create_new_config;
 pub use crate::cache::CacheConfig;
 pub use crate::compilation::{
-    Compilation, CompileError, CompiledFunction, CompiledFunctionUnwindInfo,
-    CompiledFunctionUnwindInfoReloc, Compiler, Relocation, RelocationTarget, Relocations,
-    TrapInformation, Traps,
+    Compilation, CompileError, CompiledFunction, Compiler, Relocation, RelocationTarget,
+    Relocations, TrapInformation, Traps,
 };
 pub use crate::cranelift::Cranelift;
 pub use crate::data_structures::*;
-pub use crate::frame_layout::{FrameLayout, FrameLayoutChange, FrameLayouts};
 pub use crate::func_environ::BuiltinFunctionIndex;
 #[cfg(feature = "lightbeam")]
 pub use crate::lightbeam::Lightbeam;

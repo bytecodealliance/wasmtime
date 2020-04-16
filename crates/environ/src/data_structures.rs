@@ -13,7 +13,7 @@ pub mod settings {
 }
 
 pub mod isa {
-    pub use cranelift_codegen::isa::{CallConv, RegUnit, TargetFrontendConfig, TargetIsa};
+    pub use cranelift_codegen::isa::{unwind, CallConv, RegUnit, TargetFrontendConfig, TargetIsa};
 }
 
 pub mod entity {
