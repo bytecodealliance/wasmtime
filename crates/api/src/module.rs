@@ -7,6 +7,7 @@ use anyhow::{Error, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use wasmparser::validate;
+use wasmtime_environ::EntityIndex;
 use wasmtime_jit::CompiledModule;
 
 /// A compiled WebAssembly module, ready to be instantiated.
@@ -409,7 +410,7 @@ impl Module {
             move |(module_name, field_name, import)| {
                 let module = inner.compiled.module_ref();
                 match import {
-                    wasmtime_environ::Export::Function(func_index) => {
+                    EntityIndex::Function(func_index) => {
                         let sig_index = module.local.functions[*func_index];
                         let sig = &module.local.signatures[sig_index];
                         let ty = FuncType::from_wasmtime_signature(sig)
@@ -417,21 +418,21 @@ impl Module {
                             .into();
                         ImportType::new(module_name, field_name, ty)
                     }
-                    wasmtime_environ::Export::Table(table_index) => {
+                    EntityIndex::Table(table_index) => {
                         let ty = TableType::from_wasmtime_table(
                             &module.local.table_plans[*table_index].table,
                         )
                         .into();
                         ImportType::new(module_name, field_name, ty)
                     }
-                    wasmtime_environ::Export::Memory(memory_index) => {
+                    EntityIndex::Memory(memory_index) => {
                         let ty = MemoryType::from_wasmtime_memory(
                             &module.local.memory_plans[*memory_index].memory,
                         )
                         .into();
                         ImportType::new(module_name, field_name, ty)
                     }
-                    wasmtime_environ::Export::Global(global_index) => {
+                    EntityIndex::Global(global_index) => {
                         let ty =
                             GlobalType::from_wasmtime_global(&module.local.globals[*global_index])
                                 .expect("core wasm global type should be supported")
@@ -511,7 +512,7 @@ impl Module {
             .map(move |(name, ty)| {
                 let module = inner.compiled.module_ref();
                 let r#type = match ty {
-                    wasmtime_environ::Export::Function(func_index) => {
+                    EntityIndex::Function(func_index) => {
                         let sig_index = module.local.functions[*func_index];
                         let sig = &module.local.signatures[sig_index];
                         ExternType::Func(
@@ -519,17 +520,17 @@ impl Module {
                                 .expect("core wasm function type should be supported"),
                         )
                     }
-                    wasmtime_environ::Export::Table(table_index) => {
+                    EntityIndex::Table(table_index) => {
                         ExternType::Table(TableType::from_wasmtime_table(
                             &module.local.table_plans[*table_index].table,
                         ))
                     }
-                    wasmtime_environ::Export::Memory(memory_index) => {
+                    EntityIndex::Memory(memory_index) => {
                         ExternType::Memory(MemoryType::from_wasmtime_memory(
                             &module.local.memory_plans[*memory_index].memory,
                         ))
                     }
-                    wasmtime_environ::Export::Global(global_index) => ExternType::Global(
+                    EntityIndex::Global(global_index) => ExternType::Global(
                         GlobalType::from_wasmtime_global(&module.local.globals[*global_index])
                             .expect("core wasm global type should be supported"),
                     ),

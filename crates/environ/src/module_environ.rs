@@ -1,5 +1,5 @@
 use crate::func_environ::FuncEnvironment;
-use crate::module::{Export, MemoryPlan, Module, TableElements, TablePlan};
+use crate::module::{EntityIndex, MemoryPlan, Module, TableElements, TablePlan};
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
@@ -87,7 +87,7 @@ impl<'data> ModuleEnvironment<'data> {
         Ok(self.result)
     }
 
-    fn declare_export(&mut self, export: Export, name: &str) -> WasmResult<()> {
+    fn declare_export(&mut self, export: EntityIndex, name: &str) -> WasmResult<()> {
         self.result
             .module
             .exports
@@ -144,7 +144,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         self.result.module.imports.push((
             module.to_owned(),
             field.to_owned(),
-            Export::Function(func_index),
+            EntityIndex::Function(func_index),
         ));
         self.result.module.local.num_imported_funcs += 1;
         Ok(())
@@ -161,7 +161,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         self.result.module.imports.push((
             module.to_owned(),
             field.to_owned(),
-            Export::Table(table_index),
+            EntityIndex::Table(table_index),
         ));
         self.result.module.local.num_imported_tables += 1;
         Ok(())
@@ -186,7 +186,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         self.result.module.imports.push((
             module.to_owned(),
             field.to_owned(),
-            Export::Memory(memory_index),
+            EntityIndex::Memory(memory_index),
         ));
         self.result.module.local.num_imported_memories += 1;
         Ok(())
@@ -207,7 +207,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         self.result.module.imports.push((
             module.to_owned(),
             field.to_owned(),
-            Export::Global(global_index),
+            EntityIndex::Global(global_index),
         ));
         self.result.module.local.num_imported_globals += 1;
         Ok(())
@@ -286,19 +286,19 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn declare_func_export(&mut self, func_index: FuncIndex, name: &str) -> WasmResult<()> {
-        self.declare_export(Export::Function(func_index), name)
+        self.declare_export(EntityIndex::Function(func_index), name)
     }
 
     fn declare_table_export(&mut self, table_index: TableIndex, name: &str) -> WasmResult<()> {
-        self.declare_export(Export::Table(table_index), name)
+        self.declare_export(EntityIndex::Table(table_index), name)
     }
 
     fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &str) -> WasmResult<()> {
-        self.declare_export(Export::Memory(memory_index), name)
+        self.declare_export(EntityIndex::Memory(memory_index), name)
     }
 
     fn declare_global_export(&mut self, global_index: GlobalIndex, name: &str) -> WasmResult<()> {
-        self.declare_export(Export::Global(global_index), name)
+        self.declare_export(EntityIndex::Global(global_index), name)
     }
 
     fn declare_start_func(&mut self, func_index: FuncIndex) -> WasmResult<()> {

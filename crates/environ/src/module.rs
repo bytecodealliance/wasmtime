@@ -30,16 +30,16 @@ pub struct TableElements {
     pub elements: Box<[FuncIndex]>,
 }
 
-/// An entity to export.
+/// An index of an entity.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Export {
-    /// Function export.
+pub enum EntityIndex {
+    /// Function index.
     Function(FuncIndex),
-    /// Table export.
+    /// Table index.
     Table(TableIndex),
-    /// Memory export.
+    /// Memory index.
     Memory(MemoryIndex),
-    /// Global export.
+    /// Global index.
     Global(GlobalIndex),
 }
 
@@ -151,10 +151,10 @@ pub struct Module {
     pub local: ModuleLocal,
 
     /// All import records, in the order they are declared in the module.
-    pub imports: Vec<(String, String, Export)>,
+    pub imports: Vec<(String, String, EntityIndex)>,
 
     /// Exported entities.
-    pub exports: IndexMap<String, Export>,
+    pub exports: IndexMap<String, EntityIndex>,
 
     /// The module "start" function, if present.
     pub start_func: Option<FuncIndex>,

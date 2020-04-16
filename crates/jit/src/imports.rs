@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::convert::TryInto;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::{Global, GlobalInit, Memory, Table, TableElementType};
-use wasmtime_environ::{MemoryPlan, MemoryStyle, Module, TablePlan};
+use wasmtime_environ::{EntityIndex, MemoryPlan, MemoryStyle, Module, TablePlan};
 use wasmtime_runtime::{
     Export, Imports, InstanceHandle, LinkError, SignatureRegistry, VMFunctionImport,
     VMGlobalImport, VMMemoryImport, VMTableImport,
@@ -33,7 +33,7 @@ pub fn resolve_imports(
         let export = resolver.resolve(import_idx, module_name, field_name);
 
         match (import, &export) {
-            (wasmtime_environ::Export::Function(func_index), Some(Export::Function(f))) => {
+            (EntityIndex::Function(func_index), Some(Export::Function(f))) => {
                 let import_signature =
                     &module.local.signatures[module.local.functions[*func_index]];
                 let signature = signatures.lookup(f.signature).unwrap();
@@ -52,20 +52,20 @@ pub fn resolve_imports(
                     vmctx: f.vmctx,
                 });
             }
-            (wasmtime_environ::Export::Function(_), Some(_)) => {
+            (EntityIndex::Function(_), Some(_)) => {
                 return Err(LinkError(format!(
                     "{}/{}: incompatible import type: export incompatible with function import",
                     module_name, field_name
                 )));
             }
-            (wasmtime_environ::Export::Function(_), None) => {
+            (EntityIndex::Function(_), None) => {
                 return Err(LinkError(format!(
                     "{}/{}: unknown import function: function not provided",
                     module_name, field_name
                 )));
             }
 
-            (wasmtime_environ::Export::Table(table_index), Some(Export::Table(t))) => {
+            (EntityIndex::Table(table_index), Some(Export::Table(t))) => {
                 let import_table = &module.local.table_plans[*table_index];
                 if !is_table_compatible(&t.table, import_table) {
                     return Err(LinkError(format!(
@@ -80,20 +80,20 @@ pub fn resolve_imports(
                     vmctx: t.vmctx,
                 });
             }
-            (wasmtime_environ::Export::Table(_), Some(_)) => {
+            (EntityIndex::Table(_), Some(_)) => {
                 return Err(LinkError(format!(
                     "{}/{}: incompatible import type: export incompatible with table import",
                     module_name, field_name
                 )));
             }
-            (wasmtime_environ::Export::Table(_), None) => {
+            (EntityIndex::Table(_), None) => {
                 return Err(LinkError(format!(
                     "{}/{}: unknown import table: table not provided",
                     module_name, field_name
                 )));
             }
 
-            (wasmtime_environ::Export::Memory(memory_index), Some(Export::Memory(m))) => {
+            (EntityIndex::Memory(memory_index), Some(Export::Memory(m))) => {
                 let import_memory = &module.local.memory_plans[*memory_index];
                 if !is_memory_compatible(&m.memory, import_memory) {
                     return Err(LinkError(format!(
@@ -122,20 +122,20 @@ pub fn resolve_imports(
                     vmctx: m.vmctx,
                 });
             }
-            (wasmtime_environ::Export::Memory(_), Some(_)) => {
+            (EntityIndex::Memory(_), Some(_)) => {
                 return Err(LinkError(format!(
                     "{}/{}: incompatible import type: export incompatible with memory import",
                     module_name, field_name
                 )));
             }
-            (wasmtime_environ::Export::Memory(_), None) => {
+            (EntityIndex::Memory(_), None) => {
                 return Err(LinkError(format!(
                     "{}/{}: unknown import memory: memory not provided",
                     module_name, field_name
                 )));
             }
 
-            (wasmtime_environ::Export::Global(global_index), Some(Export::Global(g))) => {
+            (EntityIndex::Global(global_index), Some(Export::Global(g))) => {
                 let imported_global = module.local.globals[*global_index];
                 if !is_global_compatible(&g.global, &imported_global) {
                     return Err(LinkError(format!(
@@ -147,13 +147,13 @@ pub fn resolve_imports(
                 dependencies.insert(unsafe { InstanceHandle::from_vmctx(g.vmctx) });
                 global_imports.push(VMGlobalImport { from: g.definition });
             }
-            (wasmtime_environ::Export::Global(_), Some(_)) => {
+            (EntityIndex::Global(_), Some(_)) => {
                 return Err(LinkError(format!(
                     "{}/{}: incompatible import type: export incompatible with global import",
                     module_name, field_name
                 )));
             }
-            (wasmtime_environ::Export::Global(_), None) => {
+            (EntityIndex::Global(_), None) => {
                 return Err(LinkError(format!(
                     "{}/{}: unknown import global: global not provided",
                     module_name, field_name

@@ -31,7 +31,7 @@ use wasmtime_environ::wasm::{
     DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
     ElemIndex, FuncIndex, GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
-use wasmtime_environ::{ir, DataInitializer, Module, TableElements, VMOffsets};
+use wasmtime_environ::{ir, DataInitializer, EntityIndex, Module, TableElements, VMOffsets};
 
 cfg_if::cfg_if! {
     if #[cfg(unix)] {
@@ -296,9 +296,9 @@ impl Instance {
     }
 
     /// Lookup an export with the given export declaration.
-    pub fn lookup_by_declaration(&self, export: &wasmtime_environ::Export) -> Export {
+    pub fn lookup_by_declaration(&self, export: &EntityIndex) -> Export {
         match export {
-            wasmtime_environ::Export::Function(index) => {
+            EntityIndex::Function(index) => {
                 let signature = self.signature_id(self.module.local.functions[*index]);
                 let (address, vmctx) =
                     if let Some(def_index) = self.module.local.defined_func_index(*index) {
@@ -317,7 +317,7 @@ impl Instance {
                 }
                 .into()
             }
-            wasmtime_environ::Export::Table(index) => {
+            EntityIndex::Table(index) => {
                 let (definition, vmctx) =
                     if let Some(def_index) = self.module.local.defined_table_index(*index) {
                         (self.table_ptr(def_index), self.vmctx_ptr())
@@ -332,7 +332,7 @@ impl Instance {
                 }
                 .into()
             }
-            wasmtime_environ::Export::Memory(index) => {
+            EntityIndex::Memory(index) => {
                 let (definition, vmctx) =
                     if let Some(def_index) = self.module.local.defined_memory_index(*index) {
                         (self.memory_ptr(def_index), self.vmctx_ptr())
@@ -347,7 +347,7 @@ impl Instance {
                 }
                 .into()
             }
-            wasmtime_environ::Export::Global(index) => ExportGlobal {
+            EntityIndex::Global(index) => ExportGlobal {
                 definition: if let Some(def_index) = self.module.local.defined_global_index(*index)
                 {
                     self.global_ptr(def_index)
@@ -366,7 +366,7 @@ impl Instance {
     /// Specifically, it provides access to the key-value pairs, where they keys
     /// are export names, and the values are export declarations which can be
     /// resolved `lookup_by_declaration`.
-    pub fn exports(&self) -> indexmap::map::Iter<String, wasmtime_environ::Export> {
+    pub fn exports(&self) -> indexmap::map::Iter<String, EntityIndex> {
         self.module.exports.iter()
     }
 
@@ -1031,7 +1031,7 @@ impl InstanceHandle {
     }
 
     /// Lookup an export with the given export declaration.
-    pub fn lookup_by_declaration(&self, export: &wasmtime_environ::Export) -> Export {
+    pub fn lookup_by_declaration(&self, export: &EntityIndex) -> Export {
         self.instance().lookup_by_declaration(export)
     }
 
@@ -1040,7 +1040,7 @@ impl InstanceHandle {
     /// Specifically, it provides access to the key-value pairs, where the keys
     /// are export names, and the values are export declarations which can be
     /// resolved `lookup_by_declaration`.
-    pub fn exports(&self) -> indexmap::map::Iter<String, wasmtime_environ::Export> {
+    pub fn exports(&self) -> indexmap::map::Iter<String, EntityIndex> {
         self.instance().exports()
     }
 

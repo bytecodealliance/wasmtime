@@ -3,7 +3,7 @@ use crate::Store;
 use crate::{GlobalType, Mutability, Val};
 use anyhow::{bail, Result};
 use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::{wasm, Module};
+use wasmtime_environ::{wasm, EntityIndex, Module};
 use wasmtime_runtime::InstanceHandle;
 
 pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<InstanceHandle> {
@@ -26,10 +26,9 @@ pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<Instanc
     };
     let mut module = Module::new();
     let global_id = module.local.globals.push(global);
-    module.exports.insert(
-        "global".to_string(),
-        wasmtime_environ::Export::Global(global_id),
-    );
+    module
+        .exports
+        .insert("global".to_string(), EntityIndex::Global(global_id));
     let handle = create_handle(
         module,
         store,

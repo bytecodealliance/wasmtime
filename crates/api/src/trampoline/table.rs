@@ -3,7 +3,7 @@ use crate::Store;
 use crate::{TableType, ValType};
 use anyhow::{bail, Result};
 use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::{wasm, Module};
+use wasmtime_environ::{wasm, EntityIndex, Module};
 use wasmtime_runtime::InstanceHandle;
 
 pub fn create_handle_with_table(store: &Store, table: &TableType) -> Result<InstanceHandle> {
@@ -21,10 +21,9 @@ pub fn create_handle_with_table(store: &Store, table: &TableType) -> Result<Inst
 
     let table_plan = wasmtime_environ::TablePlan::for_table(table, &tunable);
     let table_id = module.local.table_plans.push(table_plan);
-    module.exports.insert(
-        "table".to_string(),
-        wasmtime_environ::Export::Table(table_id),
-    );
+    module
+        .exports
+        .insert("table".to_string(), EntityIndex::Table(table_id));
 
     create_handle(
         module,
