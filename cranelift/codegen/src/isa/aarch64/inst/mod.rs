@@ -221,7 +221,7 @@ impl From<(Opcode, Type)> for BitOp {
             (Opcode::Clz, I64) => BitOp::Clz64,
             (Opcode::Cls, I32) => BitOp::Cls32,
             (Opcode::Cls, I64) => BitOp::Cls64,
-            _ => unreachable!("Called with non-bit op!"),
+            _ => unreachable!("Called with non-bit op!: {:?}", op_ty),
         }
     }
 }
