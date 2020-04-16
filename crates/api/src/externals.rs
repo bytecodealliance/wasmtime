@@ -203,6 +203,12 @@ impl Global {
             .expect("core wasm global type should be supported")
     }
 
+    /// Returns the value type of this `global`.
+    pub fn val_type(&self) -> ValType {
+        ValType::from_wasmtime_type(self.wasmtime_export.global.ty)
+            .expect("core wasm type should be supported")
+    }
+
     /// Returns the underlying mutability of this `global`.
     pub fn mutability(&self) -> Mutability {
         if self.wasmtime_export.global.mutability {
@@ -216,14 +222,12 @@ impl Global {
     pub fn get(&self) -> Val {
         unsafe {
             let definition = &mut *self.wasmtime_export.definition;
-            let ty = ValType::from_wasmtime_type(self.wasmtime_export.global.ty)
-                .expect("core wasm type should be supported");
-            match ty {
+            match self.val_type() {
                 ValType::I32 => Val::from(*definition.as_i32()),
                 ValType::I64 => Val::from(*definition.as_i64()),
                 ValType::F32 => Val::F32(*definition.as_u32()),
                 ValType::F64 => Val::F64(*definition.as_u64()),
-                _ => unimplemented!("Global::get for {:?}", ty),
+                ty => unimplemented!("Global::get for {:?}", ty),
             }
         }
     }
@@ -238,8 +242,7 @@ impl Global {
         if self.mutability() != Mutability::Var {
             bail!("immutable global cannot be set");
         }
-        let ty = ValType::from_wasmtime_type(self.wasmtime_export.global.ty)
-            .expect("core wasm type should be supported");
+        let ty = self.val_type();
         if val.ty() != ty {
             bail!("global of type {:?} cannot be set to {:?}", ty, val.ty());
         }
