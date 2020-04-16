@@ -1,18 +1,18 @@
-use crate::externals::Extern;
+use crate::externals::{Export, Extern};
 use crate::module::Module;
 use crate::runtime::{Config, Store};
 use crate::trap::Trap;
 use anyhow::{bail, Error, Result};
 use std::any::Any;
 use wasmtime_jit::{CompiledModule, Resolver};
-use wasmtime_runtime::{Export, InstanceHandle, InstantiationError, SignatureRegistry};
+use wasmtime_runtime::{InstanceHandle, InstantiationError, SignatureRegistry};
 
 struct SimpleResolver<'a> {
     imports: &'a [Extern],
 }
 
 impl Resolver for SimpleResolver<'_> {
-    fn resolve(&mut self, idx: u32, _name: &str, _field: &str) -> Option<Export> {
+    fn resolve(&mut self, idx: u32, _name: &str, _field: &str) -> Option<wasmtime_runtime::Export> {
         self.imports
             .get(idx as usize)
             .map(|i| i.get_wasmtime_export())
@@ -169,19 +169,21 @@ impl Instance {
 
     /// Returns the list of exported items from this [`Instance`].
     ///
-    /// Note that the exports here do not have names associated with them,
-    /// they're simply the values that are exported. To learn the value of each
-    /// export you'll need to consult [`Module::exports`]. The list returned
-    /// here maps 1:1 with the list that [`Module::exports`] returns, and
-    /// [`ExportType`](crate::ExportType) contains the name of each export.
-    pub fn exports<'me>(&'me self) -> impl Iterator<Item = Extern> + 'me {
+    /// The actual returned value is a tuple containing the name of an export and
+    /// information about the export itself. The list returned here maps 1:1 with
+    /// the list that [`Module::exports`] returns, and [`ExportType`](crate::ExportType)
+    /// contains the name of each export.
+    pub fn exports<'me>(&'me self) -> impl Iterator<Item = Export> + 'me {
         let instance_handle = &self.instance_handle;
         let store = self.module.store();
         self.instance_handle
             .exports()
-            .map(move |(_, entity_index)| {
+            .map(move |(name, entity_index)| {
                 let export = instance_handle.lookup_by_declaration(entity_index);
-                Extern::from_wasmtime_export(store, instance_handle.clone(), export)
+                Export {
+                    name,
+                    external: Extern::from_wasmtime_export(store, instance_handle.clone(), export),
+                }
             })
     }
 

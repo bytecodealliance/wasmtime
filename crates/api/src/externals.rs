@@ -890,3 +890,46 @@ pub unsafe trait MemoryCreator: Send + Sync {
     /// Create new LinearMemory
     fn new_memory(&self, ty: MemoryType) -> Result<Box<dyn LinearMemory>, String>;
 }
+
+// Exports
+
+/// An exported WebAssembly value.
+///
+/// This type is primarily accessed from the
+/// [`Instance::exports`](crate::Instance::exports) accessor and describes what
+/// names and items are exported from a wasm instance.
+#[derive(Clone)]
+pub struct Export<'instance> {
+    /// The name of the export.
+    pub name: &'instance str,
+
+    /// The value of the export.
+    pub external: Extern,
+}
+
+impl<'instance> Export<'instance> {
+    /// Shorthand for `self.external.func()`.
+    pub fn func(self) -> Option<Func> {
+        self.external.func()
+    }
+
+    /// Shorthand for `self.external.table()`.
+    pub fn table(self) -> Option<Table> {
+        self.external.table()
+    }
+
+    /// Shorthand for `self.external.memory()`.
+    pub fn memory(self) -> Option<Memory> {
+        self.external.memory()
+    }
+
+    /// Shorthand for `self.external.global()`.
+    pub fn global(self) -> Option<Global> {
+        self.external.global()
+    }
+
+    /// Shorthand for `self.external.ty()`.
+    pub fn ty(&self) -> ExternType {
+        self.external.ty()
+    }
+}

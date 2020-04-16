@@ -12,7 +12,7 @@ pub fn dummy_imports(
 ) -> Result<Vec<Extern>, Trap> {
     import_tys
         .map(|imp| {
-            Ok(match imp.ty() {
+            Ok(match imp.ty {
                 ExternType::Func(func_ty) => Extern::Func(dummy_func(&store, func_ty.clone())),
                 ExternType::Global(global_ty) => {
                     Extern::Global(dummy_global(&store, global_ty.clone())?)

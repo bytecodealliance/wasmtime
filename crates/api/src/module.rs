@@ -395,9 +395,9 @@ impl Module {
     /// let module = Module::new(&store, wat)?;
     /// assert_eq!(module.num_imports(), 1);
     /// let import = module.imports().next().unwrap();
-    /// assert_eq!(import.module(), "host");
-    /// assert_eq!(import.name(), "foo");
-    /// match import.ty() {
+    /// assert_eq!(import.module, "host");
+    /// assert_eq!(import.name, "foo");
+    /// match import.ty {
     ///     ExternType::Func(_) => { /* ... */ }
     ///     _ => panic!("unexpected import type!"),
     /// }
@@ -411,7 +411,11 @@ impl Module {
             .iter()
             .map(move |(module_name, name, entity_index)| {
                 let r#type = entity_type(entity_index, module);
-                ImportType::new(module_name, name, r#type)
+                ImportType {
+                    module: module_name.to_owned(),
+                    name: name.to_owned(),
+                    ty: r#type,
+                }
             })
     }
 
@@ -458,15 +462,15 @@ impl Module {
     /// assert_eq!(module.num_exports(), 2);
     ///
     /// let foo = module.exports().next().unwrap();
-    /// assert_eq!(foo.name(), "foo");
-    /// match foo.ty() {
+    /// assert_eq!(foo.name, "foo");
+    /// match foo.ty {
     ///     ExternType::Func(_) => { /* ... */ }
     ///     _ => panic!("unexpected export type!"),
     /// }
     ///
     /// let memory = module.exports().nth(1).unwrap();
-    /// assert_eq!(memory.name(), "memory");
-    /// match memory.ty() {
+    /// assert_eq!(memory.name, "memory");
+    /// match memory.ty {
     ///     ExternType::Memory(_) => { /* ... */ }
     ///     _ => panic!("unexpected export type!"),
     /// }
@@ -477,7 +481,10 @@ impl Module {
         let module = self.inner.compiled.module_ref();
         module.exports.iter().map(move |(name, entity_index)| {
             let r#type = entity_type(entity_index, module);
-            ExportType::new(name, r#type)
+            ExportType {
+                name: name.to_owned(),
+                ty: r#type,
+            }
         })
     }
 

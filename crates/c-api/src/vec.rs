@@ -9,8 +9,8 @@ use std::slice;
 pub type wasm_name_t = wasm_byte_vec_t;
 
 impl wasm_name_t {
-    pub(crate) fn from_name(name: &str) -> wasm_name_t {
-        name.to_string().into_bytes().into()
+    pub(crate) fn from_name(name: String) -> wasm_name_t {
+        name.into_bytes().into()
     }
 }
 

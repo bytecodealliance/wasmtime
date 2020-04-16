@@ -217,7 +217,7 @@ fn trap_display_multi_module() -> Result<()> {
         )
     "#;
     let module = Module::new(&store, wat)?;
-    let instance = Instance::new(&module, &[bar])?;
+    let instance = Instance::new(&module, &[bar.external])?;
     let bar2 = instance
         .exports()
         .next()

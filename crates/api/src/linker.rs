@@ -264,8 +264,8 @@ impl Linker {
         if !Store::same(&self.store, instance.store()) {
             bail!("all linker items must be from the same store");
         }
-        for (export, item) in instance.module().exports().zip(instance.exports()) {
-            self.insert(module_name, export.name(), export.ty().clone(), item)?;
+        for export in instance.exports() {
+            self.insert(module_name, &export.name, export.ty(), export.external)?;
         }
         Ok(self)
     }
@@ -385,8 +385,8 @@ impl Linker {
 
             let mut options = String::new();
             for i in self.map.keys() {
-                if &*self.strings[i.module] != import.module()
-                    || &*self.strings[i.name] != import.name()
+                if &*self.strings[i.module] != import.module
+                    || &*self.strings[i.name] != import.name
                 {
                     continue;
                 }
@@ -397,8 +397,8 @@ impl Linker {
             if options.len() == 0 {
                 bail!(
                     "unknown import: `{}::{}` has not been defined",
-                    import.module(),
-                    import.name()
+                    import.module,
+                    import.name
                 )
             }
 
@@ -406,9 +406,9 @@ impl Linker {
                 "incompatible import type for `{}::{}` specified\n\
                  desired signature was: {:?}\n\
                  signatures available:\n\n{}",
-                import.module(),
-                import.name(),
-                import.ty(),
+                import.module,
+                import.name,
+                import.ty,
                 options,
             )
         }
@@ -445,9 +445,9 @@ impl Linker {
     /// Returns `None` if no match was found.
     pub fn get(&self, import: &ImportType) -> Option<Extern> {
         let key = ImportKey {
-            module: *self.string2idx.get(import.module())?,
-            name: *self.string2idx.get(import.name())?,
-            kind: self.import_kind(import.ty().clone()),
+            module: *self.string2idx.get(import.module.as_str())?,
+            name: *self.string2idx.get(import.name.as_str())?,
+            kind: self.import_kind(import.ty.clone()),
         };
         self.map.get(&key).cloned()
     }

@@ -35,24 +35,28 @@ pub extern "C" fn wasm_importtype_new(
     let name = name.take();
     let module = str::from_utf8(&module).ok()?;
     let name = str::from_utf8(&name).ok()?;
-    let ty = ImportType::new(module, name, ty.ty());
+    let ty = ImportType {
+        module: module.to_owned(),
+        name: name.to_owned(),
+        ty: ty.ty(),
+    };
     Some(Box::new(wasm_importtype_t::new(ty)))
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_importtype_module(it: &wasm_importtype_t) -> &wasm_name_t {
     it.module_cache
-        .get_or_init(|| wasm_name_t::from_name(&it.ty.module()))
+        .get_or_init(|| wasm_name_t::from_name(it.ty.module.clone()))
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_importtype_name(it: &wasm_importtype_t) -> &wasm_name_t {
     it.name_cache
-        .get_or_init(|| wasm_name_t::from_name(&it.ty.name()))
+        .get_or_init(|| wasm_name_t::from_name(it.ty.name.clone()))
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_importtype_type(it: &wasm_importtype_t) -> &wasm_externtype_t {
     it.type_cache
-        .get_or_init(|| wasm_externtype_t::new(it.ty.ty().clone()))
+        .get_or_init(|| wasm_externtype_t::new(it.ty.ty.clone()))
 }

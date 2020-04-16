@@ -392,37 +392,14 @@ impl MemoryType {
 /// imported from as well as the type of item that's being imported.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct ImportType {
-    module: String,
-    name: String,
-    ty: ExternType,
-}
+    /// The module of the import.
+    pub module: String,
 
-impl ImportType {
-    /// Creates a new import descriptor which comes from `module` and `name` and
-    /// is of type `ty`.
-    pub fn new(module: &str, name: &str, ty: ExternType) -> ImportType {
-        ImportType {
-            module: module.to_string(),
-            name: name.to_string(),
-            ty,
-        }
-    }
+    /// The field of the import.
+    pub name: String,
 
-    /// Returns the module name that this import is expected to come from.
-    pub fn module(&self) -> &str {
-        &self.module
-    }
-
-    /// Returns the field name of the module that this import is expected to
-    /// come from.
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    /// Returns the expected type of this import.
-    pub fn ty(&self) -> &ExternType {
-        &self.ty
-    }
+    /// The type of the import.
+    pub ty: ExternType,
 }
 
 // Export Types
@@ -435,27 +412,9 @@ impl ImportType {
 /// exported.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct ExportType {
-    name: String,
-    ty: ExternType,
-}
+    /// The name of the export.
+    pub name: String,
 
-impl ExportType {
-    /// Creates a new export which is exported with the given `name` and has the
-    /// given `ty`.
-    pub fn new(name: &str, ty: ExternType) -> ExportType {
-        ExportType {
-            name: name.to_string(),
-            ty,
-        }
-    }
-
-    /// Returns the name by which this export is known by.
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    /// Returns the type of this export.
-    pub fn ty(&self) -> &ExternType {
-        &self.ty
-    }
+    /// The type of the export.
+    pub ty: ExternType,
 }

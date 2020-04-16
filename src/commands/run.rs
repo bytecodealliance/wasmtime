@@ -190,7 +190,7 @@ impl RunCommand {
         store: &Store,
         module_registry: &ModuleRegistry,
         path: &Path,
-    ) -> Result<(Instance, Module)> {
+    ) -> Result<Instance> {
         // Read the wasm module binary either as `*.wat` or a raw binary
         let data = wat::parse_file(path)?;
 
@@ -200,20 +200,16 @@ impl RunCommand {
         let imports = module
             .imports()
             .map(|i| {
-                let export = match i.module() {
+                let export = match i.module.as_str() {
                     "wasi_snapshot_preview1" => {
-                        module_registry.wasi_snapshot_preview1.get_export(i.name())
+                        module_registry.wasi_snapshot_preview1.get_export(&i.name)
                     }
-                    "wasi_unstable" => module_registry.wasi_unstable.get_export(i.name()),
+                    "wasi_unstable" => module_registry.wasi_unstable.get_export(&i.name),
                     other => bail!("import module `{}` was not found", other),
                 };
                 match export {
                     Some(export) => Ok(export.clone().into()),
-                    None => bail!(
-                        "import `{}` was not found in module `{}`",
-                        i.name(),
-                        i.module()
-                    ),
+                    None => bail!("import `{}` was not found in module `{}`", i.name, i.module),
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -221,16 +217,16 @@ impl RunCommand {
         let instance = Instance::new(&module, &imports)
             .context(format!("failed to instantiate {:?}", path))?;
 
-        Ok((instance, module))
+        Ok(instance)
     }
 
     fn handle_module(&self, store: &Store, module_registry: &ModuleRegistry) -> Result<()> {
-        let (instance, module) = Self::instantiate_module(store, module_registry, &self.module)?;
+        let instance = Self::instantiate_module(store, module_registry, &self.module)?;
 
         // If a function to invoke was given, invoke it.
         if let Some(name) = self.invoke.as_ref() {
             self.invoke_export(instance, name)?;
-        } else if module.exports().any(|export| export.name().is_empty()) {
+        } else if instance.exports().any(|export| export.name.is_empty()) {
             // Launch the default command export.
             self.invoke_export(instance, "")?;
         } else {
