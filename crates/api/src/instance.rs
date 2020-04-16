@@ -158,15 +158,6 @@ impl Instance {
         self.module.store()
     }
 
-    /// Returns the associated [`Module`] that this `Instance` instantiated.
-    ///
-    /// The corresponding [`Module`] here is a static version of this `Instance`
-    /// which can be used to learn information such as naming information about
-    /// various functions.
-    pub fn module(&self) -> &Module {
-        &self.module
-    }
-
     /// Returns the list of exported items from this [`Instance`].
     ///
     /// The actual returned value is a tuple containing the name of an export and
