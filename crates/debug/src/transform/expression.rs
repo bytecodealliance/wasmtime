@@ -29,10 +29,16 @@ impl<'a> FunctionFrameInfo<'a> {
     }
 }
 
+// FIXME Document: The following operator is not DW_OP_stack_value, e.g. :
+// DW_AT_location  (0x00000ea5:
+//   [0x00001e19, 0x00001e26): DW_OP_WASM_location 0x0 +1, DW_OP_plus_uconst 0x10, DW_OP_stack_value
+//   [0x00001e5a, 0x00001e72): DW_OP_WASM_location 0x0 +20, DW_OP_stack_value
+// )
+
 #[derive(Debug)]
 enum CompiledExpressionPart {
     Code(Vec<u8>),
-    Local(ValueLabel),
+    Local { label: ValueLabel, trailing: bool },
     Deref,
 }
 
@@ -47,7 +53,10 @@ impl Clone for CompiledExpressionPart {
     fn clone(&self) -> Self {
         match self {
             CompiledExpressionPart::Code(c) => CompiledExpressionPart::Code(c.clone()),
-            CompiledExpressionPart::Local(i) => CompiledExpressionPart::Local(*i),
+            CompiledExpressionPart::Local { label, trailing } => CompiledExpressionPart::Local {
+                label: *label,
+                trailing: *trailing,
+            },
             CompiledExpressionPart::Deref => CompiledExpressionPart::Deref,
         }
     }
@@ -60,10 +69,10 @@ impl<'a> CompiledExpression<'a> {
 
     pub fn from_label(label: ValueLabel, isa: &'a dyn TargetIsa) -> CompiledExpression<'a> {
         CompiledExpression {
-            parts: vec![
-                CompiledExpressionPart::Local(label),
-                CompiledExpressionPart::Code(vec![gimli::constants::DW_OP_stack_value.0 as u8]),
-            ],
+            parts: vec![CompiledExpressionPart::Local {
+                label,
+                trailing: true,
+            }],
             need_deref: false,
             isa,
         }
@@ -74,10 +83,11 @@ fn translate_loc(
     loc: ValueLoc,
     frame_info: Option<&FunctionFrameInfo>,
     isa: &dyn TargetIsa,
+    add_stack_value: bool,
 ) -> Result<Option<Vec<u8>>> {
     use gimli::write::Writer;
     Ok(match loc {
-        ValueLoc::Reg(reg) => {
+        ValueLoc::Reg(reg) if add_stack_value => {
             let machine_reg = isa.map_dwarf_register(reg)? as u8;
             Some(if machine_reg < 32 {
                 vec![gimli::constants::DW_OP_reg0.0 + machine_reg]
@@ -89,6 +99,20 @@ fn translate_loc(
                 writer.into_vec()
             })
         }
+        ValueLoc::Reg(reg) => {
+            assert!(!add_stack_value);
+            let machine_reg = isa.map_dwarf_register(reg)? as u8;
+            Some(if machine_reg < 32 {
+                vec![gimli::constants::DW_OP_breg0.0 + machine_reg, 0]
+            } else {
+                let endian = gimli::RunTimeEndian::Little;
+                let mut writer = write::EndianVec::new(endian);
+                writer.write_u8(gimli::constants::DW_OP_bregx.0 as u8)?;
+                writer.write_uleb128(machine_reg.into())?;
+                writer.write_sleb128(0)?;
+                writer.into_vec()
+            })
+        }
         ValueLoc::Stack(ss) => {
             if let Some(frame_info) = frame_info {
                 if let Some(ss_offset) = frame_info.stack_slots[ss].offset {
@@ -96,7 +120,10 @@ fn translate_loc(
                     let mut writer = write::EndianVec::new(endian);
                     writer.write_u8(gimli::constants::DW_OP_breg0.0 + X86_64::RBP.0 as u8)?;
                     writer.write_sleb128(ss_offset as i64 + 16)?;
-                    writer.write_u8(gimli::constants::DW_OP_deref.0 as u8)?;
+                    if !add_stack_value {
+                        writer.write_u8(gimli::constants::DW_OP_deref.0 as u8)?;
+                        //writer.write_u8(gimli::constants::DW_OP_stack_value.0 as u8)?;
+                    }
                     let buf = writer.into_vec();
                     return Ok(Some(buf));
                 }
@@ -153,7 +180,6 @@ fn append_memory_deref(
     }
     writer.write_u8(gimli::constants::DW_OP_deref.0 as u8)?;
     writer.write_u8(gimli::constants::DW_OP_swap.0 as u8)?;
-    writer.write_u8(gimli::constants::DW_OP_stack_value.0 as u8)?;
     writer.write_u8(gimli::constants::DW_OP_constu.0 as u8)?;
     writer.write_uleb128(0xffff_ffff)?;
     writer.write_u8(gimli::constants::DW_OP_and.0 as u8)?;
@@ -208,7 +234,7 @@ impl<'a> CompiledExpression<'a> {
         for p in &self.parts {
             match p {
                 CompiledExpressionPart::Code(_) => (),
-                CompiledExpressionPart::Local(label) => ranges_builder.process_label(*label),
+                CompiledExpressionPart::Local { label, .. } => ranges_builder.process_label(*label),
                 CompiledExpressionPart::Deref => ranges_builder.process_label(vmctx_label),
             }
         }
@@ -231,9 +257,9 @@ impl<'a> CompiledExpression<'a> {
             for part in &self.parts {
                 match part {
                     CompiledExpressionPart::Code(c) => code_buf.extend_from_slice(c.as_slice()),
-                    CompiledExpressionPart::Local(label) => {
+                    CompiledExpressionPart::Local { label, trailing } => {
                         let loc = *label_location.get(&label).context("label_location")?;
-                        if let Some(expr) = translate_loc(loc, frame_info, self.isa)? {
+                        if let Some(expr) = translate_loc(loc, frame_info, self.isa, *trailing)? {
                             code_buf.extend_from_slice(&expr)
                         } else {
                             continue 'range;
@@ -315,10 +341,21 @@ where
     if is_old_expression_format(&buf) && frame_base.is_some() {
         // Still supporting old DWARF variable expressions without fbreg.
         parts.extend_from_slice(&frame_base.unwrap().parts);
+        if let Some(CompiledExpressionPart::Local { trailing, .. }) = parts.last_mut() {
+            *trailing = false;
+        }
         need_deref = frame_base.unwrap().need_deref;
     }
     let base_len = parts.len();
     let mut code_chunk = Vec::new();
+    macro_rules! flush_code_chunk {
+        () => {
+            if !code_chunk.is_empty() {
+                parts.push(CompiledExpressionPart::Code(code_chunk));
+                code_chunk = Vec::new();
+            }
+        };
+    };
     while !pc.is_empty() {
         let next = buf[pc.offset_from(&expr.0).into_u64() as usize];
         need_deref = true;
@@ -331,21 +368,13 @@ where
                 // TODO support wasm globals?
                 return Ok(None);
             }
-            let index = pc.read_uleb128()?;
-            if pc.read_u8()? != 159 {
-                // FIXME The following operator is not DW_OP_stack_value, e.g. :
-                // DW_AT_location  (0x00000ea5:
-                //   [0x00001e19, 0x00001e26): DW_OP_WASM_location 0x0 +1, DW_OP_plus_uconst 0x10, DW_OP_stack_value
-                //   [0x00001e5a, 0x00001e72): DW_OP_WASM_location 0x0 +20, DW_OP_stack_value
-                // )
-                return Ok(None);
-            }
-            if !code_chunk.is_empty() {
-                parts.push(CompiledExpressionPart::Code(code_chunk));
-                code_chunk = Vec::new();
-            }
+            let index = pc.read_sleb128()?;
+            flush_code_chunk!();
             let label = ValueLabel::from_u32(index as u32);
-            parts.push(CompiledExpressionPart::Local(label));
+            parts.push(CompiledExpressionPart::Local {
+                label,
+                trailing: false,
+            });
         } else {
             let pos = pc.offset_from(&expr.0).into_u64() as usize;
             let op = Operation::parse(&mut pc, &expr.0, encoding)?;
@@ -355,12 +384,13 @@ where
                     use gimli::write::Writer;
                     if frame_base.is_some() {
                         // Add frame base expressions.
-                        if !code_chunk.is_empty() {
-                            parts.push(CompiledExpressionPart::Code(code_chunk));
-                            code_chunk = Vec::new();
-                        }
+                        flush_code_chunk!();
                         parts.extend_from_slice(&frame_base.unwrap().parts);
                         need_deref = frame_base.unwrap().need_deref;
+                    }
+                    if let Some(CompiledExpressionPart::Local { trailing, .. }) = parts.last_mut() {
+                        // Reset local trailing flag.
+                        *trailing = false;
                     }
                     // Append DW_OP_plus_uconst part.
                     let endian = gimli::RunTimeEndian::Little;
@@ -370,15 +400,23 @@ where
                     code_chunk.extend(writer.into_vec());
                     continue;
                 }
-                Operation::Literal { .. } | Operation::PlusConstant { .. } => (),
+                Operation::Literal { .. }
+                | Operation::PlusConstant { .. }
+                | Operation::Piece { .. } => (),
                 Operation::StackValue => {
-                    need_deref = false;
+                    // Find extra stack_value, that follow wasm-local operators,
+                    // and mark such locals with special flag.
+                    if let (Some(CompiledExpressionPart::Local { trailing, .. }), true) =
+                        (parts.last_mut(), code_chunk.is_empty())
+                    {
+                        *trailing = true;
+                        continue;
+                    } else {
+                        need_deref = false;
+                    }
                 }
                 Operation::Deref { .. } => {
-                    if !code_chunk.is_empty() {
-                        parts.push(CompiledExpressionPart::Code(code_chunk));
-                        code_chunk = Vec::new();
-                    }
+                    flush_code_chunk!();
                     parts.push(CompiledExpressionPart::Deref);
                 }
                 _ => {
