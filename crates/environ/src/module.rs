@@ -331,4 +331,9 @@ impl ModuleLocal {
     pub fn is_imported_global(&self, index: GlobalIndex) -> bool {
         index.index() < self.num_imported_globals
     }
+
+    /// Convenience method for looking up the signature of a function.
+    pub fn func_signature(&self, func_index: FuncIndex) -> &ir::Signature {
+        &self.signatures[self.functions[func_index]]
+    }
 }

@@ -513,8 +513,7 @@ impl Module {
 fn entity_type(entity_index: &EntityIndex, module: &wasmtime_environ::Module) -> ExternType {
     match entity_index {
         EntityIndex::Function(func_index) => {
-            let sig_index = module.local.functions[*func_index];
-            let sig = &module.local.signatures[sig_index];
+            let sig = module.local.func_signature(*func_index);
             FuncType::from_wasmtime_signature(sig)
                 .expect("core wasm function type should be supported")
                 .into()

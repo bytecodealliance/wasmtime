@@ -34,8 +34,7 @@ pub fn resolve_imports(
 
         match (import, &export) {
             (EntityIndex::Function(func_index), Some(Export::Function(f))) => {
-                let import_signature =
-                    &module.local.signatures[module.local.functions[*func_index]];
+                let import_signature = module.local.func_signature(*func_index);
                 let signature = signatures.lookup(f.signature).unwrap();
                 if signature != *import_signature {
                     // TODO: If the difference is in the calling convention,
