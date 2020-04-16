@@ -54,7 +54,9 @@ pub enum Reloc {
     X86GOTPCRel4,
     /// Arm32 call target
     Arm32Call,
-    /// Arm64 call target
+    /// Arm64 call target. Encoded as bottom 26 bits of instruction. This
+    /// value is sign-extended, multiplied by 4, and added to the PC of
+    /// the call instruction to form the destination address.
     Arm64Call,
     /// RISC-V call target
     RiscvCall,

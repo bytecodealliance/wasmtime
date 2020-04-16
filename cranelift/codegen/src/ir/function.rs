@@ -238,13 +238,21 @@ impl Function {
 
     /// Wrapper around `encode` which assigns `inst` the resulting encoding.
     pub fn update_encoding(&mut self, inst: ir::Inst, isa: &dyn TargetIsa) -> Result<(), Legalize> {
-        self.encode(inst, isa).map(|e| self.encodings[inst] = e)
+        if isa.get_mach_backend().is_some() {
+            Ok(())
+        } else {
+            self.encode(inst, isa).map(|e| self.encodings[inst] = e)
+        }
     }
 
     /// Wrapper around `TargetIsa::encode` for encoding an existing instruction
     /// in the `Function`.
     pub fn encode(&self, inst: ir::Inst, isa: &dyn TargetIsa) -> Result<Encoding, Legalize> {
-        isa.encode(&self, &self.dfg[inst], self.dfg.ctrl_typevar(inst))
+        if isa.get_mach_backend().is_some() {
+            Ok(Encoding::new(0, 0))
+        } else {
+            isa.encode(&self, &self.dfg[inst], self.dfg.ctrl_typevar(inst))
+        }
     }
 
     /// Starts collection of debug information.

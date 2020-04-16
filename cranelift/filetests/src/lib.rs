@@ -56,6 +56,7 @@ mod test_shrink;
 mod test_simple_gvn;
 mod test_simple_preopt;
 mod test_unwind;
+mod test_vcode;
 mod test_verifier;
 
 /// The result of running the test in a file.
@@ -134,6 +135,7 @@ fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<dyn subtest::
         "run" => test_run::subtest(parsed),
         "shrink" => test_shrink::subtest(parsed),
         "simple-gvn" => test_simple_gvn::subtest(parsed),
+        "vcode" => test_vcode::subtest(parsed),
         "verifier" => test_verifier::subtest(parsed),
         "preopt" => test_preopt::subtest(parsed),
         "safepoint" => test_safepoint::subtest(parsed),

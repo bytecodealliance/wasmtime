@@ -1,0 +1,44 @@
+test vcode
+target aarch64
+
+function %f(i64) -> i64 {
+  jt0 = jump_table [block1, block2, block3]
+
+block0(v0: i64):
+  br_table v0, block4, jt0
+
+block1:
+  v1 = iconst.i64 1
+  jump block5(v1)
+
+block2:
+  v2 = iconst.i64 2
+  jump block5(v2)
+
+block3:
+  v3 = iconst.i64 3
+  jump block5(v3)
+
+block4:
+  v4 = iconst.i64 4
+  jump block5(v4)
+
+block5(v5: i64):
+  v6 = iadd.i64 v0, v5
+  return v6
+}
+
+; check:   subs wzr, w0, #3
+; nextln:   b.hs
+; nextln:   adr x2, pc+16 ; ldrsw x1, [x2, x0, LSL 2] ; add x2, x2, x1 ; br x2 ; jt_entries
+
+; check:   movz x1, #3
+; nextln:   b
+
+; check:   movz x1, #2
+; nextln:   b
+
+; check:   movz x1, #1
+
+; check:   add x0, x0, x1
+

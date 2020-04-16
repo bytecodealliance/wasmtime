@@ -1,0 +1,16 @@
+test vcode
+target aarch64
+
+function %f(i64, i64) -> i64 {
+    sig0 = (i64) -> i64
+block0(v0: i64, v1: i64):
+    v2 = call_indirect.i64 sig0, v1(v0)
+    return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  blr x1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret

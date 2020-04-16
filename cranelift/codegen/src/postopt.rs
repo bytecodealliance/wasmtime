@@ -360,10 +360,11 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &dyn TargetI
 pub fn do_postopt(func: &mut Function, isa: &dyn TargetIsa) {
     let _tt = timing::postopt();
     let mut pos = EncCursor::new(func, isa);
+    let is_mach_backend = isa.get_mach_backend().is_some();
     while let Some(_block) = pos.next_block() {
         let mut last_flags_clobber = None;
         while let Some(inst) = pos.next_inst() {
-            if isa.uses_cpu_flags() {
+            if !is_mach_backend && isa.uses_cpu_flags() {
                 // Optimize instructions to make use of flags.
                 optimize_cpu_flags(&mut pos, inst, last_flags_clobber, isa);
 

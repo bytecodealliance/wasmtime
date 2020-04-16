@@ -2,7 +2,7 @@
 
 use crate::Compilation;
 use cranelift_codegen::binemit::Reloc;
-use std::ptr::write_unaligned;
+use std::ptr::{read_unaligned, write_unaligned};
 use wasmtime_environ::{Module, Relocation, RelocationTarget};
 use wasmtime_runtime::libcalls;
 use wasmtime_runtime::VMFunctionBody;
@@ -101,6 +101,23 @@ fn apply_reloc(
         Reloc::X86PCRelRodata4 => {
             // ignore
         }
+        Reloc::Arm64Call => unsafe {
+            let reloc_address = body.add(r.offset as usize) as usize;
+            let reloc_addend = r.addend as isize;
+            let reloc_delta = (target_func_address as u64).wrapping_sub(reloc_address as u64);
+            // TODO: come up with a PLT-like solution for longer calls. We can't extend the
+            // code segment at this point, but we could conservatively allocate space at the
+            // end of the function during codegen, a fixed amount per call, to allow for
+            // potential branch islands.
+            assert!((reloc_delta as i64) < (1 << 27));
+            assert!((reloc_delta as i64) >= -(1 << 27));
+            let reloc_delta = reloc_delta as u32;
+            let reloc_delta = reloc_delta.wrapping_add(reloc_addend as u32);
+            let delta_bits = reloc_delta >> 2;
+            let insn = read_unaligned(reloc_address as *const u32);
+            let new_insn = (insn & 0xfc00_0000) | (delta_bits & 0x03ff_ffff);
+            write_unaligned(reloc_address as *mut u32, new_insn);
+        },
         _ => panic!("unsupported reloc kind"),
     }
 }
@@ -108,14 +125,11 @@ fn apply_reloc(
 // A declaration for the stack probe function in Rust's standard library, for
 // catching callstack overflow.
 cfg_if::cfg_if! {
-    if #[cfg(any(
-        target_arch="aarch64",
-        all(
+    if #[cfg(all(
             target_os = "windows",
             target_env = "msvc",
             target_pointer_width = "64"
-        )
-    ))] {
+            ))] {
         extern "C" {
             pub fn __chkstk();
         }
@@ -128,6 +142,13 @@ cfg_if::cfg_if! {
             pub fn ___chkstk();
         }
         const PROBESTACK: unsafe extern "C" fn() = ___chkstk;
+    } else if #[cfg(not(any(target_arch = "x86_64", target_arch = "x86")))] {
+        // As per
+        // https://github.com/rust-lang/compiler-builtins/blob/cae3e6ea23739166504f9f9fb50ec070097979d4/src/probestack.rs#L39,
+        // LLVM only has stack-probe support on x86-64 and x86. Thus, on any other CPU
+        // architecture, we simply use an empty stack-probe function.
+        extern "C" fn empty_probestack() {}
+        const PROBESTACK: unsafe extern "C" fn() = empty_probestack;
     } else {
         extern "C" {
             pub fn __rust_probestack();

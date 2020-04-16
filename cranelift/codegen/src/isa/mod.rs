@@ -48,6 +48,7 @@ pub use crate::isa::call_conv::CallConv;
 pub use crate::isa::constraints::{
     BranchRange, ConstraintKind, OperandConstraint, RecipeConstraints,
 };
+pub use crate::isa::enc_tables::Encodings;
 pub use crate::isa::encoding::{base_size, EncInfo, Encoding};
 pub use crate::isa::registers::{regs_overlap, RegClass, RegClassIndex, RegInfo, RegUnit};
 pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
@@ -55,9 +56,9 @@ pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
 use crate::binemit;
 use crate::flowgraph;
 use crate::ir;
-use crate::isa::enc_tables::Encodings;
-#[cfg(feature = "unwind")]
 use crate::isa::fde::RegisterMappingError;
+#[cfg(feature = "unwind")]
+use crate::machinst::MachBackend;
 use crate::regalloc;
 use crate::result::CodegenResult;
 use crate::settings;
@@ -83,7 +84,7 @@ pub mod fde;
 mod arm32;
 
 #[cfg(feature = "arm64")]
-mod arm64;
+mod aarch64;
 
 mod call_conv;
 mod constraints;
@@ -91,6 +92,9 @@ mod enc_tables;
 mod encoding;
 pub mod registers;
 mod stack;
+
+#[cfg(test)]
+mod test_utils;
 
 /// Returns a builder that can create a corresponding `TargetIsa`
 /// or `Err(LookupError::SupportDisabled)` if not enabled.
@@ -116,7 +120,7 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
             isa_builder!(x86, "x86", triple)
         }
         Architecture::Arm { .. } => isa_builder!(arm32, "arm32", triple),
-        Architecture::Aarch64 { .. } => isa_builder!(arm64, "arm64", triple),
+        Architecture::Aarch64 { .. } => isa_builder!(aarch64, "arm64", triple),
         _ => Err(LookupError::Unsupported),
     }
 }
@@ -401,6 +405,11 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     ) -> CodegenResult<()> {
         // No-op by default
         Ok(())
+    }
+
+    /// Get the new-style MachBackend, if this is an adapter around one.
+    fn get_mach_backend(&self) -> Option<&dyn MachBackend> {
+        None
     }
 }
 

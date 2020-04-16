@@ -379,6 +379,7 @@ dependencies = [
  "gimli",
  "hashbrown 0.7.1",
  "log",
+ "regalloc",
  "serde",
  "smallvec",
  "target-lexicon",
@@ -432,6 +433,7 @@ dependencies = [
  "memmap",
  "num_cpus",
  "region",
+ "target-lexicon",
 ]
 
 [[package]]
@@ -1590,6 +1592,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "regalloc"
+version = "0.0.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89ce0cd835fa6e91bbf5d010beee19d0c2e97e4ad5e13c399a31122cfc83bdd6"
+dependencies = [
+ "log",
+ "rustc-hash",
+]
+
+[[package]]
 name = "regex"
 version = "1.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1652,6 +1664,12 @@ name = "rustc-demangle"
 version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c691c0e608126e00913e33f0ccf3727d5fc84573623b8d65b2df340b5201783"
+
+[[package]]
+name = "rustc-hash"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustc_version"

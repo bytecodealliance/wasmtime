@@ -1,0 +1,176 @@
+test vcode
+target aarch64
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x0, #0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x0, #65535
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff0000
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x0, #65535, LSL #16
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff00000000
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x0, #65535, LSL #32
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff000000000000
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x0, #65535, LSL #48
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffffffffffffffff
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movn x0, #0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffffffffffff0000
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movn x0, #65535
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffffffff0000ffff
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movn x0, #65535, LSL #16
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff0000ffffffff
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movn x0, #65535, LSL #32
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0x0000ffffffffffff
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movn x0, #65535, LSL #48
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xf34bf0a31212003a ; random digits
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x0, #58
+; nextln: movk x0, #4626, LSL #16
+; nextln: movk x0, #61603, LSL #32
+; nextln: movk x0, #62283, LSL #48
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0x12e900001ef40000 ; random digits with 2 clear half words
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x0, #7924, LSL #16
+; nextln: movk x0, #4841, LSL #48
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0x12e9ffff1ef4ffff ; random digits with 2 full half words
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movn x0, #57611, LSL #16
+; nextln: movk x0, #4841, LSL #48
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
