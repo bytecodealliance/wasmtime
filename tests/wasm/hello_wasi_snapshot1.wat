@@ -5,7 +5,7 @@
     (func $__wasi_fd_write (param i32 i32 i32 i32) (result i32)))
   (func $_start
     (i32.store (i32.const 24) (i32.const 14))
-    (i32.store (i32.const 20) (i32.const 0))
+    (i32.store (i32.const 20) (i32.const 4))
     (block
       (br_if 0
         (call $__wasi_fd_write
@@ -21,5 +21,5 @@
   (memory 1)
   (export "memory" (memory 0))
   (export "_start" (func $_start))
-  (data (i32.const 0) "Hello, world!\0a")
+  (data (i32.const 4) "Hello, world!\0a")
 )
