@@ -123,11 +123,11 @@ impl Instance {
             }
         }
 
-        if imports.len() != module.imports().len() {
+        if imports.len() != module.num_imports() {
             bail!(
                 "wrong number of imports provided, {} != {}",
                 imports.len(),
-                module.imports().len()
+                module.num_imports()
             );
         }
 
@@ -173,7 +173,7 @@ impl Instance {
     pub fn exports<'me>(&'me self) -> impl Iterator<Item = Extern> + 'me {
         let instance_handle = self.instance_handle.clone();
         let module = self.module.clone();
-        self.module.exports().iter().map(move |export| {
+        self.module.exports().map(move |export| {
             let name = export.name();
             let export = instance_handle.lookup(&name).expect("export");
             Extern::from_wasmtime_export(module.store(), instance_handle.clone(), export)
@@ -187,7 +187,7 @@ impl Instance {
     ///
     /// Returns `None` if there was no export named `name`.
     pub fn get_export(&self, name: &str) -> Option<Extern> {
-        let export = self.module.exports().iter().find(|e| e.name() == name)?;
+        let export = self.module.exports().find(|e| e.name() == name)?;
         let name = export.name();
         let export = self.instance_handle.lookup(&name).expect("export");
         Some(Extern::from_wasmtime_export(

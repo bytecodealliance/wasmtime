@@ -199,7 +199,6 @@ impl RunCommand {
         // Resolve import using module_registry.
         let imports = module
             .imports()
-            .iter()
             .map(|i| {
                 let export = match i.module() {
                     "wasi_snapshot_preview1" => {

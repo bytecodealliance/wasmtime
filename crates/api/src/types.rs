@@ -247,7 +247,7 @@ impl FuncType {
     /// Returns `None` if any types in the signature can't be converted to the
     /// types in this crate, but that should very rarely happen and largely only
     /// indicate a bug in our cranelift integration.
-    pub(crate) fn from_wasmtime_signature(signature: ir::Signature) -> Option<FuncType> {
+    pub(crate) fn from_wasmtime_signature(signature: &ir::Signature) -> Option<FuncType> {
         let params = signature
             .params
             .iter()

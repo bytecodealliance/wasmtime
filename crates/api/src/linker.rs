@@ -264,8 +264,8 @@ impl Linker {
         if !Store::same(&self.store, instance.store()) {
             bail!("all linker items must be from the same store");
         }
-        for (export, item) in instance.module().exports().iter().zip(instance.exports()) {
-            self.insert(module_name, export.name(), export.ty(), item.clone())?;
+        for (export, item) in instance.module().exports().zip(instance.exports()) {
+            self.insert(module_name, export.name(), export.ty().clone(), item)?;
         }
         Ok(self)
     }
@@ -378,8 +378,8 @@ impl Linker {
     pub fn instantiate(&self, module: &Module) -> Result<Instance> {
         let mut imports = Vec::new();
         for import in module.imports() {
-            if let Some(item) = self.get(import) {
-                imports.push(item.clone());
+            if let Some(item) = self.get(&import) {
+                imports.push(item);
                 continue;
             }
 
@@ -447,7 +447,7 @@ impl Linker {
         let key = ImportKey {
             module: *self.string2idx.get(import.module())?,
             name: *self.string2idx.get(import.name())?,
-            kind: self.import_kind(import.ty()),
+            kind: self.import_kind(import.ty().clone()),
         };
         self.map.get(&key).cloned()
     }

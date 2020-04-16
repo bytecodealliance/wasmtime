@@ -150,18 +150,8 @@ pub struct Module {
     /// function.
     pub local: ModuleLocal,
 
-    /// Names of imported functions, as well as the index of the import that
-    /// performed this import.
-    pub imported_funcs: PrimaryMap<FuncIndex, (String, String, u32)>,
-
-    /// Names of imported tables.
-    pub imported_tables: PrimaryMap<TableIndex, (String, String, u32)>,
-
-    /// Names of imported memories.
-    pub imported_memories: PrimaryMap<MemoryIndex, (String, String, u32)>,
-
-    /// Names of imported globals.
-    pub imported_globals: PrimaryMap<GlobalIndex, (String, String, u32)>,
+    /// All import records, in the order they are declared in the module.
+    pub imports: Vec<(String, String, Export)>,
 
     /// Exported entities.
     pub exports: IndexMap<String, Export>,
@@ -226,10 +216,7 @@ impl Module {
         Self {
             id: NEXT_ID.fetch_add(1, SeqCst),
             name: None,
-            imported_funcs: PrimaryMap::new(),
-            imported_tables: PrimaryMap::new(),
-            imported_memories: PrimaryMap::new(),
-            imported_globals: PrimaryMap::new(),
+            imports: Vec::new(),
             exports: IndexMap::new(),
             start_func: None,
             table_elements: Vec::new(),

@@ -331,7 +331,7 @@ pub extern "C" fn wasi_instance_bind_import<'a>(
         }
     };
 
-    if export.ty() != import.ty.ty().func()? {
+    if &export.ty() != import.ty.ty().func()? {
         return None;
     }
 
