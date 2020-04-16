@@ -2554,24 +2554,49 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
     fn br_if(
         &mut self,
-        mut val: ValueLocation,
+        val: ValueLocation,
         if_true: Target,
         if_false: Target,
         depth: StackDepth,
     ) -> Result<(), Error> {
         let cond = match val {
-            ValueLocation::Cond(cc) => cc,
-            _ => {
-                let predicate = match self.put_into_register(I32, &mut val) {
-                    Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+            ValueLocation::Immediate(imm) => {
+                let target = if imm.as_bytes() == 0 {
+                    if_false
+                } else {
+                    if_true
                 };
 
+                self.set_stack_depth(depth)?;
+                if target.action == BrAction::Jump {
+                    self.br(target.target);
+                }
+
+                return Ok(());
+            }
+            ValueLocation::Cond(cc) => cc,
+            ValueLocation::Reg(GPR::Rq(rq)) => {
                 dynasm!(self.asm
-                    ; test Rd(predicate.rq().unwrap()), Rd(predicate.rq().unwrap())
+                    ; test Rd(rq), Rd(rq)
                 );
 
                 CondCode::ZF0
+            }
+            ValueLocation::Reg(GPR::Rx(rx)) => {
+                dynasm!(self.asm
+                    ; ptest Rx(rx), Rx(rx)
+                );
+
+                CondCode::ZF0
+            }
+            ValueLocation::Stack(o) => {
+                let offset = self.adjusted_offset(o);
+
+                dynasm!(self.asm
+                    ; test DWORD [rsp + offset], DWORD std::i32::MAX
+                );
+
+                cc::NOT_EQUAL
             }
         };
 
@@ -2624,99 +2649,101 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let selector = self.pop()?;
         let (mut selector, depth) = pass_args(self, selector)?;
 
-        if let Some(imm) = selector.imm_i32() {
-            let target = targets.nth(imm as _).unwrap_or(default);
+        match (count, selector) {
+            (0, _) => {
+                debug_assert!(targets.next().is_none(), "Invalid `ExactSizeIterator` impl");
 
-            self.set_stack_depth(depth)?;
+                self.set_stack_depth(depth)?;
 
-            if target.action == BrAction::Jump {
-                match target.target {
-                    BrTarget::Label(label) => self.br(label),
-                    BrTarget::Return => {
-                        self.ret();
+                if default.action == BrAction::Jump {
+                    self.br(default.target);
+                }
+            }
+            (1, _) => {
+                let only_target = targets.next().expect("Invalid `ExactSizeIterator` impl");
+                debug_assert!(targets.next().is_none(), "Invalid `ExactSizeIterator` impl");
+
+                self.br_if(selector, default, only_target, depth)?;
+            }
+            (_, ValueLocation::Immediate(imm)) => {
+                let target = usize::try_from(imm.as_bytes())
+                    .ok()
+                    .and_then(|i| targets.nth(i))
+                    .unwrap_or(default);
+
+                self.set_stack_depth(depth)?;
+
+                if target.action == BrAction::Jump {
+                    match target.target {
+                        BrTarget::Label(label) => self.br(label),
+                        BrTarget::Return => {
+                            self.ret();
+                        }
                     }
                 }
             }
-        } else {
-            match count {
-                0 => {
-                    debug_assert!(targets.next().is_none(), "Invalid `ExactSizeIterator` impl");
-
-                    self.set_stack_depth(depth)?;
-
-                    if default.action == BrAction::Jump {
-                        self.br(default.target);
-                    }
-                }
-                1 => {
-                    let only_target = targets.next().expect("Invalid `ExactSizeIterator` impl");
-                    debug_assert!(targets.next().is_none(), "Invalid `ExactSizeIterator` impl");
-
-                    self.br_if(selector, default, only_target, depth)?;
-                }
-                _ => {
-                    let (selector_reg, saved_selector) =
-                        match self.put_into_temp_register(GPRType::Rq, &mut selector)? {
-                            Some(r) => (r, None),
-                            None => (
-                                RAX,
-                                Some(ValueLocation::from(
-                                    self.push_copy_physical(ValueLocation::Reg(RAX))?,
-                                )),
-                            ),
-                        };
-
-                    self.set_stack_depth(depth)?;
-
-                    let (tmp, saved_tmp) = if let Some(reg) = self.take_or_free_reg(I64) {
-                        (reg, None)
-                    } else {
-                        let out_reg = if selector_reg == RAX { RCX } else { RAX };
-
-                        (
-                            out_reg,
+            (_, _) => {
+                let (selector_reg, saved_selector) =
+                    match self.put_into_temp_register(GPRType::Rq, &mut selector)? {
+                        Some(r) => (r, None),
+                        None => (
+                            RAX,
                             Some(ValueLocation::from(
-                                self.push_copy_physical(ValueLocation::Reg(out_reg))?,
+                                self.push_copy_physical(ValueLocation::Reg(RAX))?,
                             )),
-                        )
+                        ),
                     };
 
-                    self.immediate_to_reg(tmp, (count as u32).into())?;
+                self.set_stack_depth(depth)?;
+
+                let (tmp, saved_tmp) = if let Some(reg) = self.take_or_free_reg(I64) {
+                    (reg, None)
+                } else {
+                    let out_reg = if selector_reg == RAX { RCX } else { RAX };
+
+                    (
+                        out_reg,
+                        Some(ValueLocation::from(
+                            self.push_copy_physical(ValueLocation::Reg(out_reg))?,
+                        )),
+                    )
+                };
+
+                self.immediate_to_reg(tmp, (count as u32).into())?;
+                dynasm!(self.asm
+                    ; cmp Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
+                    ; cmova Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
+                    ; lea Rq(tmp.rq().unwrap()), [>start_label]
+                    ; lea Rq(selector_reg.rq().unwrap()), [
+                        Rq(selector_reg.rq().unwrap()) * 5
+                    ]
+                    ; add Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
+                );
+
+                if let Some(saved) = saved_tmp {
+                    self.copy_value(saved, CCLoc::Reg(tmp))?;
+                } else {
+                    self.block_state.regs.release(tmp)?;
+                }
+
+                if let Some(saved) = saved_selector {
+                    self.copy_value(saved, CCLoc::Reg(selector_reg))?;
+                }
+
+                dynasm!(self.asm
+                    ; jmp Rq(selector_reg.rq().unwrap())
+                ; start_label:
+                );
+
+                for target in targets {
+                    let label = self.target_to_label(target.target);
                     dynasm!(self.asm
-                        ; cmp Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
-                        ; cmova Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
-                        ; lea Rq(tmp.rq().unwrap()), [>start_label]
-                        ; lea Rq(selector_reg.rq().unwrap()), [
-                            Rq(selector_reg.rq().unwrap()) * 5
-                        ]
-                        ; add Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
+                        ; jmp =>label.0
                     );
+                }
 
-                    if let Some(saved) = saved_tmp {
-                        self.copy_value(saved, CCLoc::Reg(tmp))?;
-                    } else {
-                        self.block_state.regs.release(tmp)?;
-                    }
-
-                    if let Some(saved) = saved_selector {
-                        self.copy_value(saved, CCLoc::Reg(selector_reg))?;
-                    }
-
-                    dynasm!(self.asm
-                        ; jmp Rq(selector_reg.rq().unwrap())
-                    ; start_label:
-                    );
-
-                    for target in targets {
-                        let label = self.target_to_label(target.target);
-                        dynasm!(self.asm
-                            ; jmp =>label.0
-                        );
-                    }
-
-                    if default.action == BrAction::Jump {
-                        self.br(default.target);
-                    }
+                if default.action == BrAction::Jump {
+                    self.br(default.target);
                 }
             }
         }
