@@ -411,3 +411,25 @@ wasm backtrace:
     );
     Ok(())
 }
+
+#[test]
+fn present_after_module_drop() -> Result<()> {
+    let store = Store::default();
+    let module = Module::new(&store, r#"(func (export "foo") unreachable)"#)?;
+    let instance = Instance::new(&module, &[])?;
+    let func = instance.exports()[0].func().unwrap().clone();
+
+    println!("asserting before we drop modules");
+    assert_trap(func.call(&[]).unwrap_err().downcast()?);
+    drop((instance, module));
+
+    println!("asserting after drop");
+    assert_trap(func.call(&[]).unwrap_err().downcast()?);
+    return Ok(());
+
+    fn assert_trap(t: Trap) {
+        println!("{}", t);
+        assert_eq!(t.trace().len(), 1);
+        assert_eq!(t.trace()[0].func_index(), 0);
+    }
+}

@@ -137,7 +137,7 @@ struct ModuleInner {
     imports: Box<[ImportType]>,
     exports: Box<[ExportType]>,
     compiled: CompiledModule,
-    frame_info_registration: Mutex<Option<Option<GlobalFrameInfoRegistration>>>,
+    frame_info_registration: Mutex<Option<Option<Arc<GlobalFrameInfoRegistration>>>>,
 }
 
 impl Module {
@@ -665,11 +665,13 @@ and for re-adding support for interface types you can see this issue:
     /// Register this module's stack frame information into the global scope.
     ///
     /// This is required to ensure that any traps can be properly symbolicated.
-    pub(crate) fn register_frame_info(&self) {
+    pub(crate) fn register_frame_info(&self) -> Option<Arc<GlobalFrameInfoRegistration>> {
         let mut info = self.inner.frame_info_registration.lock().unwrap();
-        if info.is_some() {
-            return;
+        if let Some(info) = &*info {
+            return info.clone();
         }
-        *info = Some(super::frame_info::register(&self.inner.compiled));
+        let ret = super::frame_info::register(&self.inner.compiled).map(Arc::new);
+        *info = Some(ret.clone());
+        return ret;
     }
 }

@@ -7,6 +7,7 @@ use crate::compiler::Compiler;
 use crate::imports::resolve_imports;
 use crate::link::link_module;
 use crate::resolver::Resolver;
+use std::any::Any;
 use std::collections::HashMap;
 use std::io::Write;
 use std::rc::Rc;
@@ -202,6 +203,7 @@ impl CompiledModule {
         resolver: &mut dyn Resolver,
         sig_registry: &SignatureRegistry,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
+        host_state: Box<dyn Any>,
     ) -> Result<InstanceHandle, InstantiationError> {
         let data_initializers = self
             .data_initializers
@@ -222,7 +224,7 @@ impl CompiledModule {
             self.signatures.clone(),
             self.dbg_jit_registration.as_ref().map(|r| Rc::clone(&r)),
             is_bulk_memory,
-            Box::new(()),
+            host_state,
         )
     }
 
@@ -274,30 +276,4 @@ impl OwnedDataInitializer {
             data: borrowed.data.to_vec().into_boxed_slice(),
         }
     }
-}
-
-/// Create a new wasm instance by compiling the wasm module in `data` and instatiating it.
-///
-/// This is equivalent to creating a `CompiledModule` and calling `instantiate()` on it,
-/// but avoids creating an intermediate copy of the data initializers.
-///
-/// # Unsafety
-///
-/// See `InstanceHandle::new`
-#[allow(clippy::implicit_hasher)]
-pub unsafe fn instantiate(
-    compiler: &mut Compiler,
-    data: &[u8],
-    resolver: &mut dyn Resolver,
-    is_bulk_memory: bool,
-    profiler: &dyn ProfilingAgent,
-    mem_creator: Option<&dyn RuntimeMemoryCreator>,
-) -> Result<InstanceHandle, SetupError> {
-    let instance = CompiledModule::new(compiler, data, profiler)?.instantiate(
-        is_bulk_memory,
-        resolver,
-        compiler.signatures(),
-        mem_creator,
-    )?;
-    Ok(instance)
 }
