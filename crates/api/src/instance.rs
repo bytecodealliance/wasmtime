@@ -126,11 +126,11 @@ impl Instance {
             }
         }
 
-        if imports.len() != module.num_imports() {
+        if imports.len() != module.imports().len() {
             bail!(
                 "wrong number of imports provided, {} != {}",
                 imports.len(),
-                module.num_imports()
+                module.imports().len()
             );
         }
 
@@ -164,7 +164,7 @@ impl Instance {
     /// information about the export itself. The list returned here maps 1:1 with
     /// the list that [`Module::exports`] returns, and [`ExportType`](crate::ExportType)
     /// contains the name of each export.
-    pub fn exports<'me>(&'me self) -> impl Iterator<Item = Export> + 'me {
+    pub fn exports<'me>(&'me self) -> impl ExactSizeIterator<Item = Export> + 'me {
         let instance_handle = &self.instance_handle;
         let store = self.module.store();
         self.instance_handle

@@ -376,7 +376,7 @@ impl Module {
     /// # fn main() -> anyhow::Result<()> {
     /// # let store = Store::default();
     /// let module = Module::new(&store, "(module)")?;
-    /// assert_eq!(module.num_imports(), 0);
+    /// assert_eq!(module.imports().len(), 0);
     /// # Ok(())
     /// # }
     /// ```
@@ -393,7 +393,7 @@ impl Module {
     ///     )
     /// "#;
     /// let module = Module::new(&store, wat)?;
-    /// assert_eq!(module.num_imports(), 1);
+    /// assert_eq!(module.imports().len(), 1);
     /// let import = module.imports().next().unwrap();
     /// assert_eq!(import.module, "host");
     /// assert_eq!(import.name, "foo");
@@ -404,7 +404,7 @@ impl Module {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn imports<'me>(&'me self) -> impl Iterator<Item = ImportType> + 'me {
+    pub fn imports<'me>(&'me self) -> impl ExactSizeIterator<Item = ImportType> + 'me {
         let module = self.inner.compiled.module_ref();
         module
             .imports
@@ -417,11 +417,6 @@ impl Module {
                     ty: r#type,
                 }
             })
-    }
-
-    /// Return the number of imports in this module.
-    pub fn num_imports(&self) -> usize {
-        self.inner.compiled.module_ref().imports.len()
     }
 
     /// Returns the list of exports that this [`Module`] has and will be
@@ -459,7 +454,7 @@ impl Module {
     ///     )
     /// "#;
     /// let module = Module::new(&store, wat)?;
-    /// assert_eq!(module.num_exports(), 2);
+    /// assert_eq!(module.exports().len(), 2);
     ///
     /// let foo = module.exports().next().unwrap();
     /// assert_eq!(foo.name, "foo");
@@ -477,7 +472,7 @@ impl Module {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn exports<'me>(&'me self) -> impl Iterator<Item = ExportType> + 'me {
+    pub fn exports<'me>(&'me self) -> impl ExactSizeIterator<Item = ExportType> + 'me {
         let module = self.inner.compiled.module_ref();
         module.exports.iter().map(move |(name, entity_index)| {
             let r#type = entity_type(entity_index, module);
@@ -486,11 +481,6 @@ impl Module {
                 ty: r#type,
             }
         })
-    }
-
-    /// Return the number of exports in this module.
-    pub fn num_exports(&self) -> usize {
-        self.inner.compiled.module_ref().exports.len()
     }
 
     /// Returns the [`Store`] that this [`Module`] was compiled into.
