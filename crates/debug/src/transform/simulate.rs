@@ -230,10 +230,10 @@ fn generate_vars(
             let loc_list_id = {
                 let endian = gimli::RunTimeEndian::Little;
 
-                let expr = CompiledExpression::from_label(*label, isa);
+                let expr = CompiledExpression::from_label(*label);
                 let mut locs = Vec::new();
                 for (begin, length, data) in
-                    expr.build_with_locals(scope_ranges, addr_tr, Some(frame_info), endian)?
+                    expr.build_with_locals(scope_ranges, addr_tr, Some(frame_info), endian, isa)?
                 {
                     locs.push(write::Location::StartLength {
                         begin,

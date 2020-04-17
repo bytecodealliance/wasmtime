@@ -29,12 +29,6 @@ impl<'a> FunctionFrameInfo<'a> {
     }
 }
 
-// FIXME Document: The following operator is not DW_OP_stack_value, e.g. :
-// DW_AT_location  (0x00000ea5:
-//   [0x00001e19, 0x00001e26): DW_OP_WASM_location 0x0 +1, DW_OP_plus_uconst 0x10, DW_OP_stack_value
-//   [0x00001e5a, 0x00001e72): DW_OP_WASM_location 0x0 +20, DW_OP_stack_value
-// )
-
 #[derive(Debug)]
 enum CompiledExpressionPart {
     Code(Vec<u8>),
@@ -43,10 +37,9 @@ enum CompiledExpressionPart {
 }
 
 #[derive(Debug)]
-pub struct CompiledExpression<'a> {
+pub struct CompiledExpression {
     parts: Vec<CompiledExpressionPart>,
     need_deref: bool,
-    isa: &'a dyn TargetIsa,
 }
 
 impl Clone for CompiledExpressionPart {
@@ -62,19 +55,18 @@ impl Clone for CompiledExpressionPart {
     }
 }
 
-impl<'a> CompiledExpression<'a> {
-    pub fn vmctx(isa: &'a dyn TargetIsa) -> CompiledExpression {
-        CompiledExpression::from_label(get_vmctx_value_label(), isa)
+impl CompiledExpression {
+    pub fn vmctx() -> CompiledExpression {
+        CompiledExpression::from_label(get_vmctx_value_label())
     }
 
-    pub fn from_label(label: ValueLabel, isa: &'a dyn TargetIsa) -> CompiledExpression<'a> {
+    pub fn from_label(label: ValueLabel) -> CompiledExpression {
         CompiledExpression {
             parts: vec![CompiledExpressionPart::Local {
                 label,
                 trailing: true,
             }],
             need_deref: false,
-            isa,
         }
     }
 }
@@ -188,7 +180,7 @@ fn append_memory_deref(
     Ok(true)
 }
 
-impl<'a> CompiledExpression<'a> {
+impl CompiledExpression {
     pub fn is_simple(&self) -> bool {
         if let [CompiledExpressionPart::Code(_)] = self.parts.as_slice() {
             true
@@ -211,6 +203,7 @@ impl<'a> CompiledExpression<'a> {
         addr_tr: &AddressTransform,
         frame_info: Option<&FunctionFrameInfo>,
         endian: gimli::RunTimeEndian,
+        isa: &dyn TargetIsa,
     ) -> Result<Vec<(write::Address, u64, write::Expression)>> {
         if scope.is_empty() {
             return Ok(vec![]);
@@ -259,7 +252,7 @@ impl<'a> CompiledExpression<'a> {
                     CompiledExpressionPart::Code(c) => code_buf.extend_from_slice(c.as_slice()),
                     CompiledExpressionPart::Local { label, trailing } => {
                         let loc = *label_location.get(&label).context("label_location")?;
-                        if let Some(expr) = translate_loc(loc, frame_info, self.isa, *trailing)? {
+                        if let Some(expr) = translate_loc(loc, frame_info, isa, *trailing)? {
                             code_buf.extend_from_slice(&expr)
                         } else {
                             continue 'range;
@@ -274,7 +267,7 @@ impl<'a> CompiledExpression<'a> {
                                 frame_info,
                                 *vmctx_loc,
                                 endian,
-                                self.isa,
+                                isa,
                             )? {
                                 continue 'range;
                             }
@@ -288,13 +281,7 @@ impl<'a> CompiledExpression<'a> {
                 if let (Some(vmctx_loc), Some(frame_info)) =
                     (label_location.get(&vmctx_label), frame_info)
                 {
-                    if !append_memory_deref(
-                        &mut code_buf,
-                        frame_info,
-                        *vmctx_loc,
-                        endian,
-                        self.isa,
-                    )? {
+                    if !append_memory_deref(&mut code_buf, frame_info, *vmctx_loc, endian, isa)? {
                         continue 'range;
                     }
                 } else {
@@ -325,12 +312,11 @@ fn is_old_expression_format(buf: &[u8]) -> bool {
     buf.contains(&(gimli::constants::DW_OP_plus_uconst.0 as u8))
 }
 
-pub fn compile_expression<'a, R>(
+pub fn compile_expression<R>(
     expr: &Expression<R>,
     encoding: gimli::Encoding,
     frame_base: Option<&CompiledExpression>,
-    isa: &'a dyn TargetIsa,
-) -> Result<Option<CompiledExpression<'a>>, Error>
+) -> Result<Option<CompiledExpression>, Error>
 where
     R: Reader,
 {
@@ -444,11 +430,7 @@ where
         }
     }
 
-    Ok(Some(CompiledExpression {
-        parts,
-        need_deref,
-        isa,
-    }))
+    Ok(Some(CompiledExpression { parts, need_deref }))
 }
 
 #[derive(Debug, Clone)]

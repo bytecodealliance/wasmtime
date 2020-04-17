@@ -386,7 +386,7 @@ where
         }
 
         if let Some(AttributeValue::Exprloc(expr)) = entry.attr_value(gimli::DW_AT_frame_base)? {
-            if let Some(expr) = compile_expression(&expr, unit.encoding(), None, isa)? {
+            if let Some(expr) = compile_expression(&expr, unit.encoding(), None)? {
                 current_frame_base.push(new_stack_len, expr);
             }
         }

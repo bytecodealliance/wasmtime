@@ -136,10 +136,10 @@ pub(crate) fn append_vmctx_info(
     let loc = {
         let endian = gimli::RunTimeEndian::Little;
 
-        let expr = CompiledExpression::vmctx(isa);
+        let expr = CompiledExpression::vmctx();
         let mut locs = Vec::new();
         for (begin, length, data) in
-            expr.build_with_locals(scope_ranges, addr_tr, frame_info, endian)?
+            expr.build_with_locals(scope_ranges, addr_tr, frame_info, endian, isa)?
         {
             locs.push(write::Location::StartLength {
                 begin,

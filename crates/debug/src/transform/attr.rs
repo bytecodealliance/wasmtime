@@ -13,11 +13,7 @@ use wasmtime_environ::isa::TargetIsa;
 #[derive(Debug)]
 pub(crate) enum FileAttributeContext<'a> {
     Root(Option<DebugLineOffset>),
-    Children(
-        &'a Vec<write::FileId>,
-        u64,
-        Option<&'a CompiledExpression<'a>>,
-    ),
+    Children(&'a Vec<write::FileId>, u64, Option<&'a CompiledExpression>),
 }
 
 fn is_exprloc_to_loclist_allowed(attr_name: gimli::constants::DwAt) -> bool {
@@ -157,9 +153,7 @@ where
                     };
                 let mut result = None;
                 while let Some(loc) = locs.next()? {
-                    if let Some(expr) =
-                        compile_expression(&loc.data, unit_encoding, frame_base, isa)?
-                    {
+                    if let Some(expr) = compile_expression(&loc.data, unit_encoding, frame_base)? {
                         if result.is_none() {
                             result = Some(Vec::new());
                         }
@@ -168,6 +162,7 @@ where
                             addr_tr,
                             frame_info,
                             endian,
+                            isa,
                         )? {
                             if len == 0 {
                                 // Ignore empty range
@@ -197,7 +192,7 @@ where
                     } else {
                         None
                     };
-                if let Some(expr) = compile_expression(expr, unit_encoding, frame_base, isa)? {
+                if let Some(expr) = compile_expression(expr, unit_encoding, frame_base)? {
                     if expr.is_simple() {
                         if let Some(expr) = expr.build() {
                             write::AttributeValue::Exprloc(expr)
@@ -207,8 +202,13 @@ where
                     } else {
                         // Conversion to loclist is required.
                         if let Some(scope_ranges) = scope_ranges {
-                            let exprs =
-                                expr.build_with_locals(scope_ranges, addr_tr, frame_info, endian)?;
+                            let exprs = expr.build_with_locals(
+                                scope_ranges,
+                                addr_tr,
+                                frame_info,
+                                endian,
+                                isa,
+                            )?;
                             if exprs.is_empty() {
                                 continue;
                             }
