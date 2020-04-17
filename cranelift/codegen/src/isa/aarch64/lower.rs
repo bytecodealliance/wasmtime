@@ -1515,6 +1515,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
             panic!("table_addr should have been removed by legalization!");
         }
 
+        Opcode::ConstAddr => unimplemented!(),
+
         Opcode::Nop => {
             // Nothing.
         }
