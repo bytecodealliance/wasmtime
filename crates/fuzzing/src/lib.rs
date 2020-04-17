@@ -24,10 +24,9 @@ pub(crate) fn init_fuzzing() {
     INIT.call_once(|| {
         let _ = env_logger::try_init();
 
-        rayon::ThreadPoolBuilder::new()
+        let _ = rayon::ThreadPoolBuilder::new()
             .num_threads(1)
-            .build_global()
-            .expect("should only initialize the rayon thread pool once!");
+            .build_global();
     })
 }
 

@@ -157,7 +157,7 @@ fn write_testsuite_tests(
     writeln!(out, "fn r#{}() -> anyhow::Result<()> {{", &testname)?;
     writeln!(
         out,
-        "crate::run_wast(r#\"{}\"#, crate::Strategy::{})",
+        "crate::wast::run_wast(r#\"{}\"#, crate::wast::Strategy::{})",
         path.display(),
         strategy
     )?;
