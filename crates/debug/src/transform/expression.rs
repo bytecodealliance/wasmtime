@@ -29,6 +29,41 @@ impl<'a> FunctionFrameInfo<'a> {
     }
 }
 
+struct GimliWriter(write::EndianVec<gimli::RunTimeEndian>);
+
+impl GimliWriter {
+    pub fn new() -> Self {
+        let endian = gimli::RunTimeEndian::Little;
+        let writer = write::EndianVec::new(endian);
+        GimliWriter(writer)
+    }
+
+    pub fn write_op(&mut self, op: gimli::DwOp) -> write::Result<()> {
+        self.write_u8(op.0 as u8)
+    }
+
+    pub fn write_op_reg(&mut self, op: gimli::DwOp, reg: u16) -> write::Result<()> {
+        assert!(reg < 32);
+        self.write_u8(op.0 as u8 + reg as u8)
+    }
+
+    pub fn write_u8(&mut self, b: u8) -> write::Result<()> {
+        write::Writer::write_u8(&mut self.0, b)
+    }
+
+    pub fn write_uleb128(&mut self, i: u64) -> write::Result<()> {
+        write::Writer::write_uleb128(&mut self.0, i)
+    }
+
+    pub fn write_sleb128(&mut self, i: i64) -> write::Result<()> {
+        write::Writer::write_sleb128(&mut self.0, i)
+    }
+
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0.into_vec()
+    }
+}
+
 #[derive(Debug)]
 enum CompiledExpressionPart {
     Code(Vec<u8>),
@@ -77,47 +112,41 @@ fn translate_loc(
     isa: &dyn TargetIsa,
     add_stack_value: bool,
 ) -> Result<Option<Vec<u8>>> {
-    use gimli::write::Writer;
     Ok(match loc {
         ValueLoc::Reg(reg) if add_stack_value => {
-            let machine_reg = isa.map_dwarf_register(reg)? as u8;
-            Some(if machine_reg < 32 {
-                vec![gimli::constants::DW_OP_reg0.0 + machine_reg]
+            let machine_reg = isa.map_dwarf_register(reg)?;
+            let mut writer = GimliWriter::new();
+            if machine_reg < 32 {
+                writer.write_op_reg(gimli::constants::DW_OP_reg0, machine_reg)?;
             } else {
-                let endian = gimli::RunTimeEndian::Little;
-                let mut writer = write::EndianVec::new(endian);
-                writer.write_u8(gimli::constants::DW_OP_regx.0 as u8)?;
+                writer.write_op(gimli::constants::DW_OP_regx)?;
                 writer.write_uleb128(machine_reg.into())?;
-                writer.into_vec()
-            })
+            }
+            Some(writer.into_vec())
         }
         ValueLoc::Reg(reg) => {
             assert!(!add_stack_value);
-            let machine_reg = isa.map_dwarf_register(reg)? as u8;
-            Some(if machine_reg < 32 {
-                vec![gimli::constants::DW_OP_breg0.0 + machine_reg, 0]
+            let machine_reg = isa.map_dwarf_register(reg)?;
+            let mut writer = GimliWriter::new();
+            if machine_reg < 32 {
+                writer.write_op_reg(gimli::constants::DW_OP_breg0, machine_reg)?;
             } else {
-                let endian = gimli::RunTimeEndian::Little;
-                let mut writer = write::EndianVec::new(endian);
-                writer.write_u8(gimli::constants::DW_OP_bregx.0 as u8)?;
+                writer.write_op(gimli::constants::DW_OP_bregx)?;
                 writer.write_uleb128(machine_reg.into())?;
-                writer.write_sleb128(0)?;
-                writer.into_vec()
-            })
+            }
+            writer.write_sleb128(0)?;
+            Some(writer.into_vec())
         }
         ValueLoc::Stack(ss) => {
             if let Some(frame_info) = frame_info {
                 if let Some(ss_offset) = frame_info.stack_slots[ss].offset {
-                    let endian = gimli::RunTimeEndian::Little;
-                    let mut writer = write::EndianVec::new(endian);
-                    writer.write_u8(gimli::constants::DW_OP_breg0.0 + X86_64::RBP.0 as u8)?;
+                    let mut writer = GimliWriter::new();
+                    writer.write_op_reg(gimli::constants::DW_OP_breg0, X86_64::RBP.0)?;
                     writer.write_sleb128(ss_offset as i64 + 16)?;
                     if !add_stack_value {
-                        writer.write_u8(gimli::constants::DW_OP_deref.0 as u8)?;
-                        //writer.write_u8(gimli::constants::DW_OP_stack_value.0 as u8)?;
+                        writer.write_op(gimli::constants::DW_OP_deref)?;
                     }
-                    let buf = writer.into_vec();
-                    return Ok(Some(buf));
+                    return Ok(Some(writer.into_vec()));
                 }
             }
             None
@@ -130,11 +159,9 @@ fn append_memory_deref(
     buf: &mut Vec<u8>,
     frame_info: &FunctionFrameInfo,
     vmctx_loc: ValueLoc,
-    endian: gimli::RunTimeEndian,
     isa: &dyn TargetIsa,
 ) -> Result<bool> {
-    use gimli::write::Writer;
-    let mut writer = write::EndianVec::new(endian);
+    let mut writer = GimliWriter::new();
     // FIXME for imported memory
     match vmctx_loc {
         ValueLoc::Reg(vmctx_reg) => {
@@ -150,10 +177,10 @@ fn append_memory_deref(
         }
         ValueLoc::Stack(ss) => {
             if let Some(ss_offset) = frame_info.stack_slots[ss].offset {
-                writer.write_u8(gimli::constants::DW_OP_breg0.0 + X86_64::RBP.0 as u8)?;
+                writer.write_op_reg(gimli::constants::DW_OP_breg0, X86_64::RBP.0)?;
                 writer.write_sleb128(ss_offset as i64 + 16)?;
-                writer.write_u8(gimli::constants::DW_OP_deref.0 as u8)?;
-                writer.write_u8(gimli::constants::DW_OP_consts.0 as u8)?;
+                writer.write_op(gimli::constants::DW_OP_deref)?;
+                writer.write_op(gimli::constants::DW_OP_consts)?;
                 let memory_offset = match frame_info.vmctx_memory_offset() {
                     Some(offset) => offset,
                     None => {
@@ -161,7 +188,7 @@ fn append_memory_deref(
                     }
                 };
                 writer.write_sleb128(memory_offset)?;
-                writer.write_u8(gimli::constants::DW_OP_plus.0 as u8)?;
+                writer.write_op(gimli::constants::DW_OP_plus)?;
             } else {
                 return Ok(false);
             }
@@ -170,13 +197,13 @@ fn append_memory_deref(
             return Ok(false);
         }
     }
-    writer.write_u8(gimli::constants::DW_OP_deref.0 as u8)?;
-    writer.write_u8(gimli::constants::DW_OP_swap.0 as u8)?;
-    writer.write_u8(gimli::constants::DW_OP_constu.0 as u8)?;
+    writer.write_op(gimli::constants::DW_OP_deref)?;
+    writer.write_op(gimli::constants::DW_OP_swap)?;
+    writer.write_op(gimli::constants::DW_OP_constu)?;
     writer.write_uleb128(0xffff_ffff)?;
-    writer.write_u8(gimli::constants::DW_OP_and.0 as u8)?;
-    writer.write_u8(gimli::constants::DW_OP_plus.0 as u8)?;
-    buf.extend_from_slice(writer.slice());
+    writer.write_op(gimli::constants::DW_OP_and)?;
+    writer.write_op(gimli::constants::DW_OP_plus)?;
+    buf.extend(writer.into_vec());
     Ok(true)
 }
 
@@ -202,7 +229,6 @@ impl CompiledExpression {
         scope: &[(u64, u64)], // wasm ranges
         addr_tr: &AddressTransform,
         frame_info: Option<&FunctionFrameInfo>,
-        endian: gimli::RunTimeEndian,
         isa: &dyn TargetIsa,
     ) -> Result<Vec<(write::Address, u64, write::Expression)>> {
         if scope.is_empty() {
@@ -262,13 +288,7 @@ impl CompiledExpression {
                         if let (Some(vmctx_loc), Some(frame_info)) =
                             (label_location.get(&vmctx_label), frame_info)
                         {
-                            if !append_memory_deref(
-                                &mut code_buf,
-                                frame_info,
-                                *vmctx_loc,
-                                endian,
-                                isa,
-                            )? {
+                            if !append_memory_deref(&mut code_buf, frame_info, *vmctx_loc, isa)? {
                                 continue 'range;
                             }
                         } else {
@@ -281,7 +301,7 @@ impl CompiledExpression {
                 if let (Some(vmctx_loc), Some(frame_info)) =
                     (label_location.get(&vmctx_label), frame_info)
                 {
-                    if !append_memory_deref(&mut code_buf, frame_info, *vmctx_loc, endian, isa)? {
+                    if !append_memory_deref(&mut code_buf, frame_info, *vmctx_loc, isa)? {
                         continue 'range;
                     }
                 } else {
@@ -367,7 +387,6 @@ where
             match op {
                 Operation::FrameOffset { offset } => {
                     // Expand DW_OP_fpreg into frame location and DW_OP_plus_uconst.
-                    use gimli::write::Writer;
                     if frame_base.is_some() {
                         // Add frame base expressions.
                         flush_code_chunk!();
@@ -379,9 +398,8 @@ where
                         *trailing = false;
                     }
                     // Append DW_OP_plus_uconst part.
-                    let endian = gimli::RunTimeEndian::Little;
-                    let mut writer = write::EndianVec::new(endian);
-                    writer.write_u8(gimli::constants::DW_OP_plus_uconst.0 as u8)?;
+                    let mut writer = GimliWriter::new();
+                    writer.write_op(gimli::constants::DW_OP_plus_uconst)?;
                     writer.write_uleb128(offset as u64)?;
                     code_chunk.extend(writer.into_vec());
                     continue;

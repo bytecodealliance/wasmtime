@@ -51,8 +51,6 @@ pub(crate) fn clone_die_attributes<'a, R>(
 where
     R: Reader,
 {
-    let _tag = &entry.tag();
-    let endian = gimli::RunTimeEndian::Little;
     let unit_encoding = unit.encoding();
 
     let range_info = if let Some(subprogram_range_builder) = subprogram_range_builder {
@@ -161,7 +159,6 @@ where
                             &[(loc.range.begin, loc.range.end)],
                             addr_tr,
                             frame_info,
-                            endian,
                             isa,
                         )? {
                             if len == 0 {
@@ -202,13 +199,8 @@ where
                     } else {
                         // Conversion to loclist is required.
                         if let Some(scope_ranges) = scope_ranges {
-                            let exprs = expr.build_with_locals(
-                                scope_ranges,
-                                addr_tr,
-                                frame_info,
-                                endian,
-                                isa,
-                            )?;
+                            let exprs =
+                                expr.build_with_locals(scope_ranges, addr_tr, frame_info, isa)?;
                             if exprs.is_empty() {
                                 continue;
                             }

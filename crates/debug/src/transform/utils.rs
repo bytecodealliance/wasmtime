@@ -134,12 +134,10 @@ pub(crate) fn append_vmctx_info(
     isa: &dyn TargetIsa,
 ) -> Result<(), Error> {
     let loc = {
-        let endian = gimli::RunTimeEndian::Little;
-
         let expr = CompiledExpression::vmctx();
         let mut locs = Vec::new();
         for (begin, length, data) in
-            expr.build_with_locals(scope_ranges, addr_tr, frame_info, endian, isa)?
+            expr.build_with_locals(scope_ranges, addr_tr, frame_info, isa)?
         {
             locs.push(write::Location::StartLength {
                 begin,
