@@ -73,11 +73,17 @@
 // your stack". This means that with a write of a magical value to one location
 // we can interrupt both loops and function bodies.
 //
-// The "magical value" here is `usize::max_value() - 1`. We reserve
-// `usize::max_value()` for "the stack limit isn't set yet" and so -2 is
+// The "magical value" here is `usize::max_value() - N`. We reserve
+// `usize::max_value()` for "the stack limit isn't set yet" and so -N is
 // then used for "you got interrupted". We do a bit of patching afterwards to
 // translate a stack overflow into an interrupt trap if we see that an
-// interrupt happened.
+// interrupt happened. Note that `N` here is a medium-size-ish nonzero value
+// chosen in coordination with the cranelift backend. Currently it's 32k. The
+// value of N is basically a threshold in the backend for "anything less than
+// this requires only one branch in the prologue, any stack size bigger requires
+// two branches". Naturally we want most functions to have one branch, but we
+// also need to actually catch stack overflow, so for now 32k is chosen and it's
+// assume no valid stack pointer will ever be `usize::max_value() - 32k`.
 
 use crate::address_map::{FunctionAddressMap, InstructionAddressMap};
 use crate::cache::{ModuleCacheDataTupleType, ModuleCacheEntry};
