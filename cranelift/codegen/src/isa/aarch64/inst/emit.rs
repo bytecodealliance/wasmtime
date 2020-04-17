@@ -1291,9 +1291,8 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                         };
                         inst.emit(sink);
                     } else {
-                        let tmp = writable_spilltmp_reg();
                         let const_insts =
-                            Inst::load_constant(tmp, u64::try_from(fp_off.abs()).unwrap());
+                            Inst::load_constant(rd, u64::try_from(fp_off.abs()).unwrap());
                         for inst in const_insts {
                             inst.emit(sink);
                         }
@@ -1301,7 +1300,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                             alu_op,
                             rd,
                             rn: fp_reg(),
-                            rm: tmp.to_reg(),
+                            rm: rd.to_reg(),
                         };
                         inst.emit(sink);
                     }
