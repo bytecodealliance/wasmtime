@@ -286,14 +286,15 @@ fn rust_panic_import() -> Result<()> {
             Func::wrap(&store, || panic!("this is another panic")).into(),
         ],
     )?;
-    let func = instance.exports().next().unwrap().into_func().unwrap();
+    let mut exports = instance.exports();
+    let func = exports.next().unwrap().into_func().unwrap();
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
         drop(func.call(&[]));
     }))
     .unwrap_err();
     assert_eq!(err.downcast_ref::<&'static str>(), Some(&"this is a panic"));
 
-    let func = instance.exports().nth(1).unwrap().into_func().unwrap();
+    let func = exports.next().unwrap().into_func().unwrap();
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
         drop(func.call(&[]));
     }))

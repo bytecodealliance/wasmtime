@@ -456,14 +456,15 @@ impl Module {
     /// let module = Module::new(&store, wat)?;
     /// assert_eq!(module.exports().len(), 2);
     ///
-    /// let foo = module.exports().next().unwrap();
+    /// let mut exports = module.exports();
+    /// let foo = exports.next().unwrap();
     /// assert_eq!(foo.name, "foo");
     /// match foo.ty {
     ///     ExternType::Func(_) => { /* ... */ }
     ///     _ => panic!("unexpected export type!"),
     /// }
     ///
-    /// let memory = module.exports().nth(1).unwrap();
+    /// let memory = exports.next().unwrap();
     /// assert_eq!(memory.name, "memory");
     /// match memory.ty {
     ///     ExternType::Memory(_) => { /* ... */ }
