@@ -125,15 +125,19 @@ fn get_function_address_map<'data>(
     let mut blocks = func.layout.blocks().collect::<Vec<_>>();
     blocks.sort_by_key(|block| func.offsets[*block]); // Ensure inst offsets always increase
 
-    let encinfo = isa.encoding_info();
-    for block in blocks {
-        for (offset, inst, size) in func.inst_offsets(block, &encinfo) {
-            let srcloc = func.srclocs[inst];
-            instructions.push(InstructionAddressMap {
-                srcloc,
-                code_offset: offset as usize,
-                code_len: size as usize,
-            });
+    // FIXME(#1523): New backend does not support debug info or instruction-address mapping
+    // yet.
+    if !isa.get_mach_backend().is_some() {
+        let encinfo = isa.encoding_info();
+        for block in blocks {
+            for (offset, inst, size) in func.inst_offsets(block, &encinfo) {
+                let srcloc = func.srclocs[inst];
+                instructions.push(InstructionAddressMap {
+                    srcloc,
+                    code_offset: offset as usize,
+                    code_len: size as usize,
+                });
+            }
         }
     }
 
