@@ -92,12 +92,13 @@ use crate::compilation::{
 };
 use crate::func_environ::{get_func_name, FuncEnvironment};
 use crate::{CacheConfig, FunctionBodyData, ModuleLocal, ModuleTranslation, Tunables};
-use cranelift_codegen::ir::{self, ArgumentPurpose, ExternalName, InstBuilder};
+use cranelift_codegen::ir::{self, ExternalName};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{binemit, isa, Context};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, ModuleTranslationState};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 
 /// Implementation of a relocation sink that just saves all the information for later
@@ -308,24 +309,26 @@ fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError
             //
             // For more information about interrupts and stack checks, see the
             // top of this file.
-            assert_eq!(func_env.offsets.vmctx_interrupts(), 0);
-            assert_eq!(func_env.offsets.vminterrupts_stack_limit(), 0);
-            context.func.stack_limit_from_arguments = Some(|pos, scratch| {
-                let pointer_type = pos.isa.pointer_type();
-                let vmctx = pos
-                    .func
-                    .special_param(ArgumentPurpose::VMContext)
-                    .expect("failed to find VMContext argument");
-                let interrupts_ptr =
-                    pos.ins()
-                        .load(pointer_type, ir::MemFlags::trusted(), vmctx, 0);
-                pos.func.locations[interrupts_ptr] = scratch;
-                let sp_threshold =
-                    pos.ins()
-                        .load(pointer_type, ir::MemFlags::trusted(), interrupts_ptr, 0);
-                pos.func.locations[sp_threshold] = scratch;
-                sp_threshold
+            let vmctx = context
+                .func
+                .create_global_value(ir::GlobalValueData::VMContext);
+            let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
+                base: vmctx,
+                offset: i32::try_from(func_env.offsets.vmctx_interrupts())
+                    .unwrap()
+                    .into(),
+                global_type: isa.pointer_type(),
+                readonly: true,
             });
+            let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
+                base: interrupts_ptr,
+                offset: i32::try_from(func_env.offsets.vminterrupts_stack_limit())
+                    .unwrap()
+                    .into(),
+                global_type: isa.pointer_type(),
+                readonly: false,
+            });
+            context.func.stack_limit = Some(stack_limit);
             func_translator.translate(
                 env.module_translation.0,
                 input.data,

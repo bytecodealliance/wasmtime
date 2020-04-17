@@ -706,8 +706,8 @@ fn insert_common_prologue(
             }
             None => pos
                 .func
-                .stack_limit_from_arguments
-                .map(|closure| closure(pos, scratch)),
+                .stack_limit
+                .map(|gv| interpret_gv(pos, gv, scratch)),
         };
         if let Some(stack_limit_arg) = stack_limit_arg {
             insert_stack_check(pos, stack_size, stack_limit_arg);
@@ -820,6 +820,34 @@ fn insert_common_prologue(
             .or(last_csr_push)
             .unwrap_or(mov_sp_inst),
     );
+}
+
+/// Inserts code necessary to calculate `gv`.
+///
+/// Note that this is typically done with `ins().global_value(...)` but that
+/// requires legalization to run to encode it, and we're running super late
+/// here in the backend where legalization isn't possible. To get around this
+/// we manually interpret the `gv` specified and do register allocation for
+/// intermediate values.
+///
+/// This is an incomplete implementation of loading `GlobalValue` values to get
+/// compared to the stack pointer, but currently it serves enough functionality
+/// to get this implemented in `wasmtime` itself. This'll likely get expanded a
+/// bit over time!
+fn interpret_gv(pos: &mut EncCursor, gv: ir::GlobalValue, scratch: ir::ValueLoc) -> ir::Value {
+    match pos.func.global_values[gv] {
+        ir::GlobalValueData::VMContext => {
+            pos.func.special_param(ir::ArgumentPurpose::VMContext)
+                .expect("no vmcontext parameter found")
+        }
+        ir::GlobalValueData::Load { base, offset, global_type, readonly: _ } => {
+            let base = interpret_gv(pos, base, scratch);
+            let ret = pos.ins().load(global_type, ir::MemFlags::trusted(), base, offset);
+            pos.func.locations[ret] = scratch;
+            return ret;
+        }
+        ref other => panic!("global value for stack limit not supported: {}", other),
+    }
 }
 
 /// Insert a check that generates a trap if the stack pointer goes

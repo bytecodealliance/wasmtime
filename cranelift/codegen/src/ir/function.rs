@@ -4,7 +4,6 @@
 //! instructions.
 
 use crate::binemit::CodeOffset;
-use crate::cursor::EncCursor;
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir;
 use crate::ir::{
@@ -97,17 +96,12 @@ pub struct Function {
     /// This is used for some ABIs to generate unwind information.
     pub epilogues_start: Vec<Inst>,
 
-    /// An optional closure which calculates the stack limit for this function
-    /// from the arguments of the function.
-    ///
-    /// When configured a stack check will be emitted in the prologue of this
-    /// function, trapping if the stack check fails. This closure, if specified,
-    /// can be then used to infer the stack limit from provided arguments as an
-    /// alternative to using `ArgumentPurpose::StackLimit`.
-    ///
-    /// The first argument is the cursor we're encoding the prologue too, and
-    /// the second argument is a scratch register location if necessary.
-    pub stack_limit_from_arguments: Option<fn(&mut EncCursor, ir::ValueLoc) -> ir::Value>,
+    /// An optional global value which represents an expression evaluating to
+    /// the stack limit for this function. This `GlobalValue` will be
+    /// interpreted in the prologue, if necessary, to insert a stack check to
+    /// ensure that a trap happens if the stack pointer goes below the
+    /// threshold specified here.
+    pub stack_limit: Option<ir::GlobalValue>,
 }
 
 impl Function {
@@ -132,7 +126,7 @@ impl Function {
             srclocs: SecondaryMap::new(),
             prologue_end: None,
             epilogues_start: Vec::new(),
-            stack_limit_from_arguments: None,
+            stack_limit: None,
         }
     }
 
@@ -154,7 +148,7 @@ impl Function {
         self.srclocs.clear();
         self.prologue_end = None;
         self.epilogues_start.clear();
-        self.stack_limit_from_arguments = None;
+        self.stack_limit = None;
     }
 
     /// Create a new empty, anonymous function with a Fast calling convention.
