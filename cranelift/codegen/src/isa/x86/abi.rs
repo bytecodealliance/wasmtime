@@ -836,13 +836,20 @@ fn insert_common_prologue(
 /// bit over time!
 fn interpret_gv(pos: &mut EncCursor, gv: ir::GlobalValue, scratch: ir::ValueLoc) -> ir::Value {
     match pos.func.global_values[gv] {
-        ir::GlobalValueData::VMContext => {
-            pos.func.special_param(ir::ArgumentPurpose::VMContext)
-                .expect("no vmcontext parameter found")
-        }
-        ir::GlobalValueData::Load { base, offset, global_type, readonly: _ } => {
+        ir::GlobalValueData::VMContext => pos
+            .func
+            .special_param(ir::ArgumentPurpose::VMContext)
+            .expect("no vmcontext parameter found"),
+        ir::GlobalValueData::Load {
+            base,
+            offset,
+            global_type,
+            readonly: _,
+        } => {
             let base = interpret_gv(pos, base, scratch);
-            let ret = pos.ins().load(global_type, ir::MemFlags::trusted(), base, offset);
+            let ret = pos
+                .ins()
+                .load(global_type, ir::MemFlags::trusted(), base, offset);
             pos.func.locations[ret] = scratch;
             return ret;
         }
