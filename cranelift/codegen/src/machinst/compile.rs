@@ -2,6 +2,7 @@
 
 use crate::ir::Function;
 use crate::machinst::*;
+use crate::settings;
 use crate::timing;
 
 use log::debug;
@@ -25,8 +26,12 @@ where
     debug!("vcode from lowering: \n{}", vcode.show_rru(Some(universe)));
 
     // Perform register allocation.
-    // TODO: select register allocation algorithm from flags.
-    let algorithm = RegAllocAlgorithm::Backtracking;
+    let algorithm = match vcode.flags().regalloc() {
+        settings::Regalloc::Backtracking => RegAllocAlgorithm::Backtracking,
+        settings::Regalloc::BacktrackingChecked => RegAllocAlgorithm::BacktrackingChecked,
+        settings::Regalloc::ExperimentalLinearScan => RegAllocAlgorithm::LinearScan,
+    };
+
     let result = {
         let _tt = timing::regalloc();
         allocate_registers(
