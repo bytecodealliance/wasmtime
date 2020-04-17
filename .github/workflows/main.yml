@@ -218,6 +218,10 @@ jobs:
     - run: rustup target add wasm32-wasi
     - run: rustup target add wasm32-unknown-unknown
 
+    - run: du -a . | sort -n -r | head -n 20
+    - run: df -h
+    - run: du . | sort -nr | head -n100
+
     - run: cargo fetch --locked
     - run: cargo fetch --locked --manifest-path crates/test-programs/wasi-tests/Cargo.toml
 
@@ -246,6 +250,11 @@ jobs:
       continue-on-error: true
       env:
         RUST_BACKTRACE: 1
+
+    - run: du -a . | sort -n -r | head -n 20
+      if: always()
+    - run: du . | sort -nr | head -n100
+      if: always()
 
   # Verify that cranelift's code generation is deterministic
   meta_determinist_check:
