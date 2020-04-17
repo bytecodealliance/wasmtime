@@ -555,3 +555,51 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
             .retain(|r| r.label_location.len() == processed_labels_len);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::compile_expression;
+    use gimli::{self, Encoding, EndianSlice, Expression, RunTimeEndian};
+
+    macro_rules! expression {
+        ($($i:literal),*) => {
+            Expression(EndianSlice::new(
+                &[$($i),*],
+                RunTimeEndian::Little,
+            ))
+        }
+    }
+
+    static DWARF_ENCODING: Encoding = Encoding {
+        address_size: 4,
+        format: gimli::Format::Dwarf32,
+        version: 4,
+    };
+
+    #[test]
+    fn test_debug_parse_expressions() {
+        // DW_OP_WASM_location 0x0 +20, DW_OP_stack_value
+        let e = expression!(0xed, 0x00, 0x14, 0x9f);
+        let ce = compile_expression(&e, DWARF_ENCODING, None)
+            .expect("non-error")
+            .expect("expression");
+        assert_eq!(format!("{:?}", ce), "CompiledExpression { parts: [Local { label: val20, trailing: true }], need_deref: true }");
+
+        //  DW_OP_WASM_location 0x0 +1, DW_OP_plus_uconst 0x10, DW_OP_stack_value
+        let e = expression!(0xed, 0x00, 0x01, 0x23, 0x10, 0x9f);
+        let ce = compile_expression(&e, DWARF_ENCODING, None)
+            .expect("non-error")
+            .expect("expression");
+        assert_eq!(format!("{:?}", ce), "CompiledExpression { parts: [Local { label: val1, trailing: false }, Code([35, 16, 159])], need_deref: false }");
+
+        // Frame base: DW_OP_WASM_location 0x0 +3, DW_OP_stack_value
+        let e = expression!(0xed, 0x00, 0x03, 0x9f);
+        let fe = compile_expression(&e, DWARF_ENCODING, None).expect("non-error");
+        // DW_OP_fpreg 0x12
+        let e = expression!(0x91, 0x12);
+        let ce = compile_expression(&e, DWARF_ENCODING, fe.as_ref())
+            .expect("non-error")
+            .expect("expression");
+        assert_eq!(format!("{:?}", ce), "CompiledExpression { parts: [Local { label: val3, trailing: false }, Code([35, 18])], need_deref: true }");
+    }
+}
