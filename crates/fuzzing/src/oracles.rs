@@ -171,7 +171,6 @@ pub fn differential_execution(
 
         let funcs = module
             .exports()
-            .iter()
             .filter_map(|e| {
                 if let ExternType::Func(_) = e.ty() {
                     Some(e.name())
@@ -378,7 +377,6 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
 
                 let funcs = instance
                     .exports()
-                    .iter()
                     .filter_map(|e| match e {
                         Extern::Func(f) => Some(f.clone()),
                         _ => None,

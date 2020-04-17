@@ -76,7 +76,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // run it.
     let answer = instance.get_export("answer")
         .expect("export named `answer` not found")
-        .func()
+        .into_func()
         .expect("export `answer` was not a function");
 
     // There's a few ways we can call the `answer` `Func` value. The easiest

@@ -21,7 +21,7 @@ fn test_trap_return() -> Result<()> {
         .exports()
         .next()
         .unwrap()
-        .func()
+        .into_func()
         .expect("expected function export");
 
     let e = run_func
@@ -51,7 +51,7 @@ fn test_trap_trace() -> Result<()> {
         .exports()
         .next()
         .unwrap()
-        .func()
+        .into_func()
         .expect("expected function export");
 
     let e = run_func
@@ -101,7 +101,7 @@ fn test_trap_trace_cb() -> Result<()> {
         .exports()
         .next()
         .unwrap()
-        .func()
+        .into_func()
         .expect("expected function export");
 
     let e = run_func
@@ -136,7 +136,7 @@ fn test_trap_stack_overflow() -> Result<()> {
         .exports()
         .next()
         .unwrap()
-        .func()
+        .into_func()
         .expect("expected function export");
 
     let e = run_func
@@ -175,7 +175,7 @@ fn trap_display_pretty() -> Result<()> {
         .exports()
         .next()
         .unwrap()
-        .func()
+        .into_func()
         .expect("expected function export");
 
     let e = run_func.call(&[]).err().expect("error calling function");
@@ -222,7 +222,7 @@ fn trap_display_multi_module() -> Result<()> {
         .exports()
         .next()
         .unwrap()
-        .func()
+        .into_func()
         .expect("expected function export");
 
     let e = bar2.call(&[]).err().expect("error calling function");
@@ -286,14 +286,14 @@ fn rust_panic_import() -> Result<()> {
             Func::wrap(&store, || panic!("this is another panic")).into(),
         ],
     )?;
-    let func = instance.exports().next().unwrap().func().unwrap();
+    let func = instance.exports().next().unwrap().into_func().unwrap();
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
         drop(func.call(&[]));
     }))
     .unwrap_err();
     assert_eq!(err.downcast_ref::<&'static str>(), Some(&"this is a panic"));
 
-    let func = instance.exports().nth(1).unwrap().func().unwrap();
+    let func = instance.exports().nth(1).unwrap().into_func().unwrap();
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
         drop(func.call(&[]));
     }))
@@ -351,7 +351,7 @@ fn mismatched_arguments() -> Result<()> {
 
     let module = Module::new(&store, &binary)?;
     let instance = Instance::new(&module, &[])?;
-    let func = instance.exports().next().unwrap().func().unwrap();
+    let func = instance.exports().next().unwrap().into_func().unwrap();
     assert_eq!(
         func.call(&[]).unwrap_err().to_string(),
         "expected 1 arguments, got 0"
@@ -435,7 +435,7 @@ fn present_after_module_drop() -> Result<()> {
     let store = Store::default();
     let module = Module::new(&store, r#"(func (export "foo") unreachable)"#)?;
     let instance = Instance::new(&module, &[])?;
-    let func = instance.exports()[0].func().unwrap().clone();
+    let func = instance.exports().next().unwrap().into_func().unwrap();
 
     println!("asserting before we drop modules");
     assert_trap(func.call(&[]).unwrap_err().downcast()?);

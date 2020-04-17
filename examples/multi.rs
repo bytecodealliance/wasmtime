@@ -44,7 +44,7 @@ fn main() -> Result<()> {
     println!("Extracting export...");
     let g = instance
         .get_export("g")
-        .and_then(|e| e.func())
+        .and_then(|e| e.into_func())
         .ok_or(format_err!("failed to find export `g`"))?;
 
     // Call `$g`.
@@ -61,7 +61,7 @@ fn main() -> Result<()> {
     println!("Calling export \"round_trip_many\"...");
     let round_trip_many = instance
         .get_export("round_trip_many")
-        .and_then(|e| e.func())
+        .and_then(|e| e.into_func())
         .ok_or(format_err!("failed to find export `round_trip_many`"))?;
     let args = vec![
         Val::I64(0),

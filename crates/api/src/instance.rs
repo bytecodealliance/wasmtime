@@ -159,11 +159,6 @@ impl Instance {
     }
 
     /// Returns the list of exported items from this [`Instance`].
-    ///
-    /// The actual returned value is a tuple containing the name of an export and
-    /// information about the export itself. The list returned here maps 1:1 with
-    /// the list that [`Module::exports`] returns, and [`ExportType`](crate::ExportType)
-    /// contains the name of each export.
     pub fn exports<'me>(&'me self) -> impl ExactSizeIterator<Item = Export> + 'me {
         let instance_handle = &self.instance_handle;
         let store = self.module.store();

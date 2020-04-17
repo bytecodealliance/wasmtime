@@ -38,7 +38,7 @@ use wasmtime_runtime::{ExportFunction, VMTrampoline};
 /// let store = Store::default();
 /// let module = Module::new(&store, r#"(module (func (export "foo")))"#)?;
 /// let instance = Instance::new(&module, &[])?;
-/// let foo = instance.exports().next().unwrap().func().expect("export wasn't a function");
+/// let foo = instance.exports().next().unwrap().into_func().expect("export wasn't a function");
 ///
 /// // Work with `foo` as a `Func` at this point, such as calling it
 /// // dynamically...
@@ -88,7 +88,7 @@ use wasmtime_runtime::{ExportFunction, VMTrampoline};
 ///     "#,
 /// )?;
 /// let instance = Instance::new(&module, &[add.into()])?;
-/// let call_add_twice = instance.exports().next().unwrap().func().expect("export wasn't a function");
+/// let call_add_twice = instance.exports().next().unwrap().into_func().expect("export wasn't a function");
 /// let call_add_twice = call_add_twice.get0::<i32>()?;
 ///
 /// assert_eq!(call_add_twice()?, 10);
@@ -349,7 +349,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&module, &[add.into()])?;
-    /// let foo = instance.exports().next().unwrap().func().unwrap().get2::<i32, i32, i32>()?;
+    /// let foo = instance.exports().next().unwrap().into_func().unwrap().get2::<i32, i32, i32>()?;
     /// assert_eq!(foo(1, 2)?, 3);
     /// # Ok(())
     /// # }
@@ -380,7 +380,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&module, &[add.into()])?;
-    /// let foo = instance.exports().next().unwrap().func().unwrap().get2::<i32, i32, i32>()?;
+    /// let foo = instance.exports().next().unwrap().into_func().unwrap().get2::<i32, i32, i32>()?;
     /// assert_eq!(foo(1, 2)?, 3);
     /// assert!(foo(i32::max_value(), 1).is_err());
     /// # Ok(())
@@ -413,7 +413,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&module, &[debug.into()])?;
-    /// let foo = instance.exports().next().unwrap().func().unwrap().get0::<()>()?;
+    /// let foo = instance.exports().next().unwrap().into_func().unwrap().get0::<()>()?;
     /// foo()?;
     /// # Ok(())
     /// # }
@@ -469,7 +469,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&module, &[log_str.into()])?;
-    /// let foo = instance.exports().next().unwrap().func().unwrap().get0::<()>()?;
+    /// let foo = instance.exports().next().unwrap().into_func().unwrap().get0::<()>()?;
     /// foo()?;
     /// # Ok(())
     /// # }

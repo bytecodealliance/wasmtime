@@ -19,21 +19,21 @@ fn main() -> Result<()> {
     // Load up our exports from the instance
     let memory = instance
         .get_export("memory")
-        .and_then(|e| e.memory())
+        .and_then(|e| e.into_memory())
         .ok_or(anyhow::format_err!("failed to find `memory` export"))?;
     let size = instance
         .get_export("size")
-        .and_then(|e| e.func())
+        .and_then(|e| e.into_func())
         .ok_or(anyhow::format_err!("failed to find `size` export"))?
         .get0::<i32>()?;
     let load = instance
         .get_export("load")
-        .and_then(|e| e.func())
+        .and_then(|e| e.into_func())
         .ok_or(anyhow::format_err!("failed to find `load` export"))?
         .get1::<i32, i32>()?;
     let store = instance
         .get_export("store")
-        .and_then(|e| e.func())
+        .and_then(|e| e.into_func())
         .ok_or(anyhow::format_err!("failed to find `store` export"))?
         .get2::<i32, i32, ()>()?;
 

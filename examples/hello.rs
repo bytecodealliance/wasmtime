@@ -36,7 +36,7 @@ fn main() -> Result<()> {
     println!("Extracting export...");
     let run = instance
         .get_export("run")
-        .and_then(|e| e.func())
+        .and_then(|e| e.into_func())
         .ok_or(anyhow::format_err!("failed to find `run` function export"))?
         .get0::<()>()?;
 

@@ -19,7 +19,7 @@ fn test_invoke_func_via_table() -> Result<()> {
     let f = instance
         .get_export("table")
         .unwrap()
-        .table()
+        .into_table()
         .unwrap()
         .get(0)
         .unwrap()

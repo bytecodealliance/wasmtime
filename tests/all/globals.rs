@@ -70,7 +70,7 @@ fn use_after_drop() -> anyhow::Result<()> {
         "#,
     )?;
     let instance = Instance::new(&module, &[])?;
-    let g = instance.exports().next().unwrap().global().unwrap();
+    let g = instance.exports().next().unwrap().into_global().unwrap();
     assert_eq!(g.get().i32(), Some(100));
     g.set(101.into())?;
     drop(instance);

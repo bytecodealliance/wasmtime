@@ -41,7 +41,7 @@ mod tests {
         let ret = instance
             .get_export(func_name)
             .unwrap()
-            .func()
+            .into_func()
             .unwrap()
             .call(&[])?;
         Ok(ret)
@@ -49,7 +49,11 @@ mod tests {
 
     // Locate "memory" export, get base address and size and set memory protection to PROT_NONE
     fn set_up_memory(instance: &Instance) -> (*mut u8, usize) {
-        let mem_export = instance.get_export("memory").unwrap().memory().unwrap();
+        let mem_export = instance
+            .get_export("memory")
+            .unwrap()
+            .into_memory()
+            .unwrap();
         let base = mem_export.data_ptr();
         let length = mem_export.data_size();
 
@@ -132,7 +136,7 @@ mod tests {
             let read_func = exports
                 .next()
                 .unwrap()
-                .func()
+                .into_func()
                 .expect("expected a 'read' func in the module");
             println!("calling read...");
             let result = read_func.call(&[]).expect("expected function not to trap");
@@ -143,7 +147,7 @@ mod tests {
             let read_out_of_bounds_func = exports
                 .next()
                 .unwrap()
-                .func()
+                .into_func()
                 .expect("expected a 'read_out_of_bounds' func in the module");
             println!("calling read_out_of_bounds...");
             let trap = read_out_of_bounds_func

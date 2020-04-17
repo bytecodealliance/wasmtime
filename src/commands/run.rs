@@ -240,7 +240,7 @@ impl RunCommand {
 
     fn invoke_export(&self, instance: Instance, name: &str) -> Result<()> {
         let func = if let Some(export) = instance.get_export(name) {
-            if let Some(func) = export.func() {
+            if let Some(func) = export.into_func() {
                 func
             } else {
                 bail!("export of `{}` wasn't a function", name)

@@ -45,14 +45,14 @@ fn test_import_calling_export() {
     let run_func = exports
         .next()
         .unwrap()
-        .func()
+        .into_func()
         .expect("expected a run func in the module");
 
     *other.borrow_mut() = Some(
         exports
             .next()
             .unwrap()
-            .func()
+            .into_func()
             .expect("expected an other func in the module"),
     );
 
@@ -91,7 +91,7 @@ fn test_returns_incorrect_type() -> Result<()> {
     let run_func = exports
         .next()
         .unwrap()
-        .func()
+        .into_func()
         .expect("expected a run func in the module");
 
     let trap = run_func

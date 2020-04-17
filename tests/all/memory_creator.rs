@@ -173,7 +173,7 @@ mod not_for_windows {
             instance2
                 .get_export("memory")
                 .unwrap()
-                .memory()
+                .into_memory()
                 .unwrap()
                 .size(),
             2

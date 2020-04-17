@@ -34,7 +34,7 @@ fn main() -> Result<()> {
     let instance = Instance::new(&module, &imports)?;
     let start = instance
         .get_export("_start")
-        .and_then(|e| e.func())
+        .and_then(|e| e.into_func())
         .unwrap();
     let start = start.get0::<()>()?;
     start()?;

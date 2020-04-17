@@ -72,7 +72,7 @@ pub fn instantiate(
         .clone();
 
     export
-        .func()
+        .into_func()
         .context("expected export to be a func")?
         .call(&[])?;
 

@@ -17,7 +17,7 @@ fn main() -> Result<()> {
     // Invoke `gcd` export
     let gcd = instance
         .get_export("gcd")
-        .and_then(|e| e.func())
+        .and_then(|e| e.into_func())
         .ok_or(anyhow::format_err!("failed to find `gcd` function export"))?
         .get2::<i32, i32, i32>()?;
 

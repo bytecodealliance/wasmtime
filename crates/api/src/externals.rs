@@ -34,7 +34,7 @@ impl Extern {
     /// Returns the underlying `Func`, if this external is a function.
     ///
     /// Returns `None` if this is not a function.
-    pub fn func(self) -> Option<Func> {
+    pub fn into_func(self) -> Option<Func> {
         match self {
             Extern::Func(func) => Some(func),
             _ => None,
@@ -44,7 +44,7 @@ impl Extern {
     /// Returns the underlying `Global`, if this external is a global.
     ///
     /// Returns `None` if this is not a global.
-    pub fn global(self) -> Option<Global> {
+    pub fn into_global(self) -> Option<Global> {
         match self {
             Extern::Global(global) => Some(global),
             _ => None,
@@ -54,7 +54,7 @@ impl Extern {
     /// Returns the underlying `Table`, if this external is a table.
     ///
     /// Returns `None` if this is not a table.
-    pub fn table(self) -> Option<Table> {
+    pub fn into_table(self) -> Option<Table> {
         match self {
             Extern::Table(table) => Some(table),
             _ => None,
@@ -64,7 +64,7 @@ impl Extern {
     /// Returns the underlying `Memory`, if this external is a memory.
     ///
     /// Returns `None` if this is not a memory.
-    pub fn memory(self) -> Option<Memory> {
+    pub fn into_memory(self) -> Option<Memory> {
         match self {
             Extern::Memory(memory) => Some(memory),
             _ => None,
@@ -702,7 +702,7 @@ impl Memory {
     /// let store = Store::default();
     /// let module = Module::new(&store, "(module (memory (export \"mem\") 1))")?;
     /// let instance = Instance::new(&module, &[])?;
-    /// let memory = instance.get_export("mem").unwrap().memory().unwrap();
+    /// let memory = instance.get_export("mem").unwrap().into_memory().unwrap();
     /// let ty = memory.ty();
     /// assert_eq!(ty.limits().min(), 1);
     /// # Ok(())
@@ -814,7 +814,7 @@ impl Memory {
     /// let store = Store::default();
     /// let module = Module::new(&store, "(module (memory (export \"mem\") 1 2))")?;
     /// let instance = Instance::new(&module, &[])?;
-    /// let memory = instance.get_export("mem").unwrap().memory().unwrap();
+    /// let memory = instance.get_export("mem").unwrap().into_memory().unwrap();
     ///
     /// assert_eq!(memory.size(), 1);
     /// assert_eq!(memory.grow(1)?, 1);
@@ -908,24 +908,24 @@ pub struct Export<'instance> {
 }
 
 impl<'instance> Export<'instance> {
-    /// Shorthand for `self.external.func()`.
-    pub fn func(self) -> Option<Func> {
-        self.external.func()
+    /// Shorthand for `self.external.into_func()`.
+    pub fn into_func(self) -> Option<Func> {
+        self.external.into_func()
     }
 
-    /// Shorthand for `self.external.table()`.
-    pub fn table(self) -> Option<Table> {
-        self.external.table()
+    /// Shorthand for `self.external.into_table()`.
+    pub fn into_table(self) -> Option<Table> {
+        self.external.into_table()
     }
 
-    /// Shorthand for `self.external.memory()`.
-    pub fn memory(self) -> Option<Memory> {
-        self.external.memory()
+    /// Shorthand for `self.external.into_memory()`.
+    pub fn into_memory(self) -> Option<Memory> {
+        self.external.into_memory()
     }
 
-    /// Shorthand for `self.external.global()`.
-    pub fn global(self) -> Option<Global> {
-        self.external.global()
+    /// Shorthand for `self.external.into_global()`.
+    pub fn into_global(self) -> Option<Global> {
+        self.external.into_global()
     }
 
     /// Shorthand for `self.external.ty()`.
