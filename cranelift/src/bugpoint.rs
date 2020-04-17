@@ -146,22 +146,6 @@ impl ReplaceInstWithConst {
             inst: first_inst,
         }
     }
-
-    fn const_for_type<'f, T: InstBuilder<'f>>(builder: T, ty: ir::Type) -> &'static str {
-        // Try to keep the result type consistent, and default to an integer type
-        // otherwise: this will cover all the cases for f32/f64 and integer types, or
-        // create verifier errors otherwise.
-        if ty == F32 {
-            builder.f32const(0.0);
-            "f32const"
-        } else if ty == F64 {
-            builder.f64const(0.0);
-            "f64const"
-        } else {
-            builder.iconst(ty, 0);
-            "iconst"
-        }
-    }
 }
 
 impl Mutator for ReplaceInstWithConst {
@@ -189,7 +173,7 @@ impl Mutator for ReplaceInstWithConst {
 
                 if num_results == 1 {
                     let ty = func.dfg.value_type(func.dfg.first_result(prev_inst));
-                    let new_inst_name = Self::const_for_type(func.dfg.replace(prev_inst), ty);
+                    let new_inst_name = const_for_type(func.dfg.replace(prev_inst), ty);
                     return (
                         func,
                         format!("Replace inst {} with {}.", prev_inst, new_inst_name),
@@ -212,7 +196,7 @@ impl Mutator for ReplaceInstWithConst {
                 for r in results {
                     let ty = pos.func.dfg.value_type(r);
                     let builder = pos.ins().with_results([Some(r)]);
-                    let new_inst_name = Self::const_for_type(builder, ty);
+                    let new_inst_name = const_for_type(builder, ty);
                     inst_names.push(new_inst_name);
                 }
 
@@ -309,6 +293,80 @@ impl Mutator for RemoveBlock {
                 ProgressStatus::ExpandedOrShrinked,
             )
         })
+    }
+}
+
+/// Try to replace the block params with constants.
+struct ReplaceBlockParamWithConst {
+    block: Block,
+    params_remaining: usize,
+}
+
+impl ReplaceBlockParamWithConst {
+    fn new(func: &Function) -> Self {
+        let first_block = func.layout.entry_block().unwrap();
+        Self {
+            block: first_block,
+            params_remaining: func.dfg.num_block_params(first_block),
+        }
+    }
+}
+
+impl Mutator for ReplaceBlockParamWithConst {
+    fn name(&self) -> &'static str {
+        "replace block parameter with const"
+    }
+
+    fn mutation_count(&self, func: &Function) -> usize {
+        func.layout
+            .blocks()
+            .map(|block| func.dfg.num_block_params(block))
+            .sum()
+    }
+
+    fn mutate(&mut self, mut func: Function) -> Option<(Function, String, ProgressStatus)> {
+        while self.params_remaining == 0 {
+            self.block = func.layout.next_block(self.block)?;
+            self.params_remaining = func.dfg.num_block_params(self.block);
+        }
+
+        self.params_remaining -= 1;
+        let param_index = self.params_remaining;
+
+        let param = func.dfg.block_params(self.block)[param_index];
+        let param_type = func.dfg.value_type(param);
+        func.dfg.remove_block_param(param);
+
+        let first_inst = func.layout.first_inst(self.block).unwrap();
+        let mut pos = FuncCursor::new(&mut func).at_inst(first_inst);
+        let builder = pos.ins().with_results([Some(param)]);
+        let new_inst_name = const_for_type(builder, param_type);
+
+        let mut cfg = ControlFlowGraph::new();
+        cfg.compute(&func);
+
+        // Remove parameters in branching instructions that point to this block
+        for pred in cfg.pred_iter(self.block) {
+            let inst = &mut func.dfg[pred.inst];
+            let num_fixed_args = inst.opcode().constraints().num_fixed_value_arguments();
+            let mut values = inst.take_value_list().unwrap();
+            values.remove(num_fixed_args + param_index, &mut func.dfg.value_lists);
+            func.dfg[pred.inst].put_value_list(values);
+        }
+
+        if Some(self.block) == func.layout.entry_block() {
+            // Entry block params must match function params
+            func.signature.params.remove(param_index);
+        }
+
+        Some((
+            func,
+            format!(
+                "Replaced param {} of {} by {}",
+                param, self.block, new_inst_name
+            ),
+            ProgressStatus::ExpandedOrShrinked,
+        ))
     }
 }
 
@@ -652,6 +710,25 @@ impl Mutator for MergeBlocks {
     }
 }
 
+fn const_for_type<'f, T: InstBuilder<'f>>(builder: T, ty: ir::Type) -> &'static str {
+    // Try to keep the result type consistent, and default to an integer type
+    // otherwise: this will cover all the cases for f32/f64, integer and boolean types,
+    // or create verifier errors otherwise.
+    if ty == F32 {
+        builder.f32const(0.0);
+        "f32const"
+    } else if ty == F64 {
+        builder.f64const(0.0);
+        "f64const"
+    } else if ty.is_bool() {
+        builder.bconst(ty, false);
+        "bconst"
+    } else {
+        builder.iconst(ty, 0);
+        "iconst"
+    }
+}
+
 fn next_inst_ret_prev(
     func: &Function,
     block: &mut Block,
@@ -722,8 +799,9 @@ fn reduce(
                 1 => Box::new(ReplaceInstWithConst::new(&func)),
                 2 => Box::new(ReplaceInstWithTrap::new(&func)),
                 3 => Box::new(RemoveBlock::new(&func)),
-                4 => Box::new(RemoveUnusedEntities::new()),
-                5 => Box::new(MergeBlocks::new(&func)),
+                4 => Box::new(ReplaceBlockParamWithConst::new(&func)),
+                5 => Box::new(RemoveUnusedEntities::new()),
+                6 => Box::new(MergeBlocks::new(&func)),
                 _ => break,
             };
 
