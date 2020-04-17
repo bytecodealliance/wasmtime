@@ -32,7 +32,7 @@ fn check_wasm(wasm_path: &str, directives: &str) -> Result<()> {
 ))]
 fn test_debug_dwarf_translate() -> Result<()> {
     check_wasm(
-        "tests/debug/testsuite/fib-wasm.wasm",
+        "tests/all/debug/testsuite/fib-wasm.wasm",
         r##"
 check: DW_TAG_compile_unit
 # We have "fib" function

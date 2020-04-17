@@ -63,7 +63,7 @@ pub fn test_debug_dwarf_lldb() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-g",
-            "tests/debug/testsuite/fib-wasm.wasm",
+            "tests/all/debug/testsuite/fib-wasm.wasm",
             "--invoke",
             "fib",
             "3",
@@ -105,7 +105,7 @@ pub fn test_debug_dwarf_ptr() -> Result<()> {
             "-g",
             "--opt-level",
             "0",
-            "tests/debug/testsuite/reverse-str.wasm",
+            "tests/all/debug/testsuite/reverse-str.wasm",
         ],
         r#"b reverse-str.c:9
 r

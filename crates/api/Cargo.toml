@@ -29,13 +29,7 @@ wat = { version = "1.0.10", optional = true }
 winapi = "0.3.7"
 
 [dev-dependencies]
-# for wasmtime.rs
-wasi-common = { path = "../wasi-common", version = "0.15.0" }
-pretty_env_logger = "0.4.0"
-rayon = "1.2.1"
-file-per-thread-logger = "0.1.1"
-wat = "1.0.10"
-tempfile = "3.1"
+tempfile = "3.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
@@ -53,7 +47,3 @@ jitdump = ["wasmtime-jit/jitdump"]
 
 # Enables support for the `VTune` profiler
 vtune = ["wasmtime-jit/vtune"]
-
-[[test]]
-name = "host-segfault"
-harness = false
