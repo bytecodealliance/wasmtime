@@ -12,7 +12,7 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: sub sp, sp, #16
-; nextln: load_addr x0, [fp, #-8]
+; nextln: sub x0, fp, #8
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
@@ -31,7 +31,7 @@ block0:
 ; nextln: mov fp, sp
 ; nextln: ldr x15, 8 ; b 12 ; data 100016
 ; nextln: sub sp, sp, x15, UXTX
-; nextln: movn x15, #34471 ; movk x15, #65534, LSL #16 ; add x15, x15, fp ; load_addr x0, [x15]
+; nextln: movz x0, #34472; movk x0, #1, LSL #16; sub x0, fp, x0
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
@@ -50,7 +50,7 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: sub sp, sp, #16
-; nextln: load_addr x0, [fp, #-8]
+; nextln: sub x0, fp, #8
 ; nextln: ldur x0, [x0]
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
@@ -70,7 +70,7 @@ block0:
 ; nextln: mov fp, sp
 ; nextln: ldr x15, 8 ; b 12 ; data 100016
 ; nextln: sub sp, sp, x15, UXTX
-; nextln: movn x15, #34471 ; movk x15, #65534, LSL #16 ; add x15, x15, fp ; load_addr x0, [x15]
+; nextln: movz x0, #34472; movk x0, #1, LSL #16; sub x0, fp, x0
 ; nextln: ldur x0, [x0]
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
@@ -88,7 +88,7 @@ block0(v0: i64):
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: sub sp, sp, #16
-; nextln: load_addr x1, [fp, #-8]
+; nextln: sub x1, fp, #8
 ; nextln: stur x0, [x1]
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
@@ -108,7 +108,7 @@ block0(v0: i64):
 ; nextln: mov fp, sp
 ; nextln: ldr x15, 8 ; b 12 ; data 100016
 ; nextln: sub sp, sp, x15, UXTX
-; nextln: movn x15, #34471 ; movk x15, #65534, LSL #16 ; add x15, x15, fp ; load_addr x1, [x15]
+; nextln: movz x1, #34472; movk x1, #1, LSL #16; sub x1, fp, x1
 ; nextln: stur x0, [x1]
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16

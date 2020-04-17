@@ -13,6 +13,7 @@ use regalloc::{RealReg, RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, W
 use regalloc::{RegUsageCollector, Set};
 
 use alloc::vec::Vec;
+use core::convert::TryFrom;
 use smallvec::{smallvec, SmallVec};
 use std::string::{String, ToString};
 
@@ -2552,12 +2553,42 @@ impl ShowWithRRU for Inst {
                 let rd = rd.show_rru(mb_rru);
                 format!("ldr {}, 8 ; b 12 ; data {:?} + {}", rd, name, offset)
             }
-            &Inst::LoadAddr { rd, ref mem } => {
-                let rd = rd.show_rru(mb_rru);
-                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
-                let mem = mem.show_rru(mb_rru);
-                format!("{}load_addr {}, {}", mem_str, rd, mem)
-            }
+            &Inst::LoadAddr { rd, ref mem } => match *mem {
+                MemArg::FPOffset(fp_off) => {
+                    let alu_op = if fp_off < 0 {
+                        ALUOp::Sub64
+                    } else {
+                        ALUOp::Add64
+                    };
+                    if let Some(imm12) = Imm12::maybe_from_u64(u64::try_from(fp_off.abs()).unwrap())
+                    {
+                        let inst = Inst::AluRRImm12 {
+                            alu_op,
+                            rd,
+                            imm12,
+                            rn: fp_reg(),
+                        };
+                        inst.show_rru(mb_rru)
+                    } else {
+                        let mut res = String::new();
+                        let const_insts =
+                            Inst::load_constant(rd, u64::try_from(fp_off.abs()).unwrap());
+                        for inst in const_insts {
+                            res.push_str(&inst.show_rru(mb_rru));
+                            res.push_str("; ");
+                        }
+                        let inst = Inst::AluRRR {
+                            alu_op,
+                            rd,
+                            rn: fp_reg(),
+                            rm: rd.to_reg(),
+                        };
+                        res.push_str(&inst.show_rru(mb_rru));
+                        res
+                    }
+                }
+                _ => unimplemented!("{:?}", mem),
+            },
         }
     }
 }
