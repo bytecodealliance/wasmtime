@@ -228,14 +228,12 @@ jobs:
     - run: cargo test --features test-programs/test_programs --all --exclude lightbeam -- --nocapture
       env:
         RUST_BACKTRACE: 1
-        RUSTFLAGS: "-D warnings"
 
     # Test debug (DWARF) related functionality.
     - run: cargo test test_debug_dwarf_ -- --ignored --nocapture --test-threads 1
       if: matrix.os == 'ubuntu-latest'
       env:
         RUST_BACKTRACE: 1
-        RUSTFLAGS: "-D warnings"
 
     # Build and test lightbeam if we're using the nightly toolchain. Note that
     # Lightbeam tests fail right now, but we don't want to block on that.
