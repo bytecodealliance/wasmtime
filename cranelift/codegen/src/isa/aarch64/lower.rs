@@ -2289,6 +2289,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
 
         Opcode::AvgRound => unimplemented!(),
         Opcode::TlsValue => unimplemented!(),
+        Opcode::ConstAddr => unimplemented!(),
     }
 }
 
