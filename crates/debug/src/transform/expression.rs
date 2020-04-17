@@ -29,13 +29,13 @@ impl<'a> FunctionFrameInfo<'a> {
     }
 }
 
-struct GimliWriter(write::EndianVec<gimli::RunTimeEndian>);
+struct ExpressionWriter(write::EndianVec<gimli::RunTimeEndian>);
 
-impl GimliWriter {
+impl ExpressionWriter {
     pub fn new() -> Self {
         let endian = gimli::RunTimeEndian::Little;
         let writer = write::EndianVec::new(endian);
-        GimliWriter(writer)
+        ExpressionWriter(writer)
     }
 
     pub fn write_op(&mut self, op: gimli::DwOp) -> write::Result<()> {
@@ -64,30 +64,22 @@ impl GimliWriter {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum CompiledExpressionPart {
+    // Untranslated DWARF expression.
     Code(Vec<u8>),
+    // The wasm-local DWARF operator. The label points to `ValueLabel`.
+    // The trailing field denotes that the operator was last in sequence,
+    // and it is the DWARF location (not a pointer).
     Local { label: ValueLabel, trailing: bool },
+    // Deference is needed.
     Deref,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CompiledExpression {
     parts: Vec<CompiledExpressionPart>,
     need_deref: bool,
-}
-
-impl Clone for CompiledExpressionPart {
-    fn clone(&self) -> Self {
-        match self {
-            CompiledExpressionPart::Code(c) => CompiledExpressionPart::Code(c.clone()),
-            CompiledExpressionPart::Local { label, trailing } => CompiledExpressionPart::Local {
-                label: *label,
-                trailing: *trailing,
-            },
-            CompiledExpressionPart::Deref => CompiledExpressionPart::Deref,
-        }
-    }
 }
 
 impl CompiledExpression {
@@ -106,6 +98,8 @@ impl CompiledExpression {
     }
 }
 
+const X86_64_STACK_OFFSET: i64 = 16;
+
 fn translate_loc(
     loc: ValueLoc,
     frame_info: Option<&FunctionFrameInfo>,
@@ -115,7 +109,7 @@ fn translate_loc(
     Ok(match loc {
         ValueLoc::Reg(reg) if add_stack_value => {
             let machine_reg = isa.map_dwarf_register(reg)?;
-            let mut writer = GimliWriter::new();
+            let mut writer = ExpressionWriter::new();
             if machine_reg < 32 {
                 writer.write_op_reg(gimli::constants::DW_OP_reg0, machine_reg)?;
             } else {
@@ -127,7 +121,7 @@ fn translate_loc(
         ValueLoc::Reg(reg) => {
             assert!(!add_stack_value);
             let machine_reg = isa.map_dwarf_register(reg)?;
-            let mut writer = GimliWriter::new();
+            let mut writer = ExpressionWriter::new();
             if machine_reg < 32 {
                 writer.write_op_reg(gimli::constants::DW_OP_breg0, machine_reg)?;
             } else {
@@ -140,9 +134,9 @@ fn translate_loc(
         ValueLoc::Stack(ss) => {
             if let Some(frame_info) = frame_info {
                 if let Some(ss_offset) = frame_info.stack_slots[ss].offset {
-                    let mut writer = GimliWriter::new();
+                    let mut writer = ExpressionWriter::new();
                     writer.write_op_reg(gimli::constants::DW_OP_breg0, X86_64::RBP.0)?;
-                    writer.write_sleb128(ss_offset as i64 + 16)?;
+                    writer.write_sleb128(ss_offset as i64 + X86_64_STACK_OFFSET)?;
                     if !add_stack_value {
                         writer.write_op(gimli::constants::DW_OP_deref)?;
                     }
@@ -161,7 +155,7 @@ fn append_memory_deref(
     vmctx_loc: ValueLoc,
     isa: &dyn TargetIsa,
 ) -> Result<bool> {
-    let mut writer = GimliWriter::new();
+    let mut writer = ExpressionWriter::new();
     // FIXME for imported memory
     match vmctx_loc {
         ValueLoc::Reg(vmctx_reg) => {
@@ -178,7 +172,7 @@ fn append_memory_deref(
         ValueLoc::Stack(ss) => {
             if let Some(ss_offset) = frame_info.stack_slots[ss].offset {
                 writer.write_op_reg(gimli::constants::DW_OP_breg0, X86_64::RBP.0)?;
-                writer.write_sleb128(ss_offset as i64 + 16)?;
+                writer.write_sleb128(ss_offset as i64 + X86_64_STACK_OFFSET)?;
                 writer.write_op(gimli::constants::DW_OP_deref)?;
                 writer.write_op(gimli::constants::DW_OP_consts)?;
                 let memory_offset = match frame_info.vmctx_memory_offset() {
@@ -398,7 +392,7 @@ where
                         *trailing = false;
                     }
                     // Append DW_OP_plus_uconst part.
-                    let mut writer = GimliWriter::new();
+                    let mut writer = ExpressionWriter::new();
                     writer.write_op(gimli::constants::DW_OP_plus_uconst)?;
                     writer.write_uleb128(offset as u64)?;
                     code_chunk.extend(writer.into_vec());
