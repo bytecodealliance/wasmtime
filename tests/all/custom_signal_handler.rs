@@ -100,8 +100,6 @@ mod tests {
             });
         }
 
-        let mut exports = instance.exports();
-
         // these invoke wasmtime_call_trampoline from action.rs
         {
             println!("calling read...");
@@ -124,10 +122,8 @@ mod tests {
 
         // these invoke wasmtime_call_trampoline from callable.rs
         {
-            let read_func = exports
-                .next()
-                .unwrap()
-                .into_func()
+            let read_func = instance
+                .get_func("read")
                 .expect("expected a 'read' func in the module");
             println!("calling read...");
             let result = read_func.call(&[]).expect("expected function not to trap");
@@ -135,10 +131,8 @@ mod tests {
         }
 
         {
-            let read_out_of_bounds_func = exports
-                .next()
-                .unwrap()
-                .into_func()
+            let read_out_of_bounds_func = instance
+                .get_func("read_out_of_bounds")
                 .expect("expected a 'read_out_of_bounds' func in the module");
             println!("calling read_out_of_bounds...");
             let trap = read_out_of_bounds_func

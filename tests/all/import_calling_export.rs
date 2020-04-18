@@ -42,17 +42,13 @@ fn test_import_calling_export() {
 
     let mut exports = instance.exports();
 
-    let run_func = exports
-        .next()
-        .unwrap()
-        .into_func()
+    let run_func = instance
+        .get_func("run")
         .expect("expected a run func in the module");
 
     *other.borrow_mut() = Some(
-        exports
-            .next()
-            .unwrap()
-            .into_func()
+        instance
+            .get_func("other")
             .expect("expected an other func in the module"),
     );
 
@@ -86,12 +82,8 @@ fn test_returns_incorrect_type() -> Result<()> {
     let imports = vec![callback_func.into()];
     let instance = Instance::new(&module, imports.as_slice())?;
 
-    let mut exports = instance.exports();
-
-    let run_func = exports
-        .next()
-        .unwrap()
-        .into_func()
+    let run_func = instance
+        .get_func("run")
         .expect("expected a run func in the module");
 
     let trap = run_func
