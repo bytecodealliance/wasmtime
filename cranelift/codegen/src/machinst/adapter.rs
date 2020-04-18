@@ -84,8 +84,63 @@ impl TargetIsa for TargetIsaAdapter {
         panic!("Should not be called when new-style backend is available!")
     }
 
-    fn legalize_signature(&self, _sig: &mut Cow<ir::Signature>, _current: bool) {
-        panic!("Should not be called when new-style backend is available!")
+    fn legalize_signature(&self, sig: &mut Cow<ir::Signature>, _current: bool) {
+        use ir::{types, AbiParam};
+
+        enum SingleOrPair {
+            None,
+            Single(AbiParam),
+            Pair(AbiParam, AbiParam),
+        }
+
+        impl Iterator for SingleOrPair {
+            type Item = AbiParam;
+
+            fn next(&mut self) -> Option<AbiParam> {
+                match *self {
+                    SingleOrPair::None => None,
+                    SingleOrPair::Single(param) => {
+                        *self = SingleOrPair::None;
+                        Some(param)
+                    }
+                    SingleOrPair::Pair(param1, param2) => {
+                        *self = SingleOrPair::Single(param2);
+                        Some(param1)
+                    }
+                }
+            }
+        }
+
+        fn legalize_args(args: &[AbiParam]) -> Vec<AbiParam> {
+            args.iter()
+                .cloned()
+                .flat_map(|param| {
+                    if param.value_type == ir::types::I128 {
+                        assert_eq!(param.extension, ir::ArgumentExtension::None);
+                        assert_eq!(param.location, ir::ArgumentLoc::Unassigned);
+                        assert_eq!(param.purpose, ir::ArgumentPurpose::Normal);
+                        SingleOrPair::Pair(AbiParam::new(types::I64), AbiParam::new(types::I64))
+                    } else {
+                        SingleOrPair::Single(param)
+                    }
+                })
+                .collect()
+        }
+
+        if sig
+            .params
+            .iter()
+            .any(|param| param.value_type == types::I128)
+        {
+            sig.to_mut().params = legalize_args(&sig.params);
+        }
+        if sig
+            .returns
+            .iter()
+            .any(|param| param.value_type == types::I128)
+        {
+            sig.to_mut().returns = legalize_args(&sig.returns);
+        }
     }
 
     fn regclass_for_abi_type(&self, _ty: ir::Type) -> RegClass {

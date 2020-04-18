@@ -108,6 +108,51 @@ fn legalize_inst(
         return LegalizeInstResult::Legalized;
     }
 
+    if isa.get_mach_backend().is_some() {
+        // These opcodes must always be legalized, even for new style backend.
+        match opcode {
+            ir::Opcode::BrIcmp
+            | ir::Opcode::GlobalValue
+            | ir::Opcode::HeapAddr
+            | ir::Opcode::StackLoad
+            | ir::Opcode::StackStore
+            | ir::Opcode::TableAddr
+            | ir::Opcode::Trapnz
+            | ir::Opcode::Trapz
+            | ir::Opcode::BandImm
+            | ir::Opcode::BorImm
+            | ir::Opcode::BxorImm
+            | ir::Opcode::IaddImm
+            | ir::Opcode::IfcmpImm
+            | ir::Opcode::ImulImm
+            | ir::Opcode::IrsubImm
+            | ir::Opcode::IshlImm
+            | ir::Opcode::RotlImm
+            | ir::Opcode::RotrImm
+            | ir::Opcode::SdivImm
+            | ir::Opcode::SremImm
+            | ir::Opcode::SshrImm
+            | ir::Opcode::UdivImm
+            | ir::Opcode::UremImm
+            | ir::Opcode::UshrImm
+            | ir::Opcode::IcmpImm => {
+                if expand(inst, &mut pos.func, cfg, isa) {
+                    return LegalizeInstResult::Legalized;
+                }
+            }
+            _ => {}
+        }
+
+        // Backends are not expected to implement 128bit integer operations themself.
+        if pos.func.dfg.ctrl_typevar(inst) == ir::types::I128 {
+            if narrow_flags(inst, &mut pos.func, cfg, isa) {
+                return LegalizeInstResult::Legalized;
+            }
+        }
+
+        return LegalizeInstResult::Done;
+    }
+
     match pos.func.update_encoding(inst, isa) {
         Ok(()) => LegalizeInstResult::Done,
         Err(action) => {
@@ -142,8 +187,10 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
     debug_assert!(cfg.is_valid());
 
     boundary::legalize_signatures(func, isa);
-
-    func.encodings.resize(func.dfg.num_insts());
+    if isa.get_mach_backend().is_none() {
+        // New style backends don't use the old encodings scheme.
+        func.encodings.resize(func.dfg.num_insts());
+    }
 
     let mut pos = FuncCursor::new(func);
     let func_begin = pos.position();
@@ -193,55 +240,6 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
     // Now that we've lowered all br_tables, we don't need the jump tables anymore.
     if !isa.flags().enable_jump_tables() {
         pos.func.jump_tables.clear();
-    }
-}
-
-/// Perform a simple legalization by expansion of the function, without
-/// platform-specific transforms.
-pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa: &dyn TargetIsa) {
-    let mut pos = FuncCursor::new(func);
-    let func_begin = pos.position();
-    pos.set_position(func_begin);
-    while let Some(_block) = pos.next_block() {
-        let mut prev_pos = pos.position();
-        while let Some(inst) = pos.next_inst() {
-            let expanded = match pos.func.dfg[inst].opcode() {
-                ir::Opcode::BrIcmp
-                | ir::Opcode::GlobalValue
-                | ir::Opcode::HeapAddr
-                | ir::Opcode::StackLoad
-                | ir::Opcode::StackStore
-                | ir::Opcode::TableAddr
-                | ir::Opcode::Trapnz
-                | ir::Opcode::Trapz
-                | ir::Opcode::BandImm
-                | ir::Opcode::BorImm
-                | ir::Opcode::BxorImm
-                | ir::Opcode::IaddImm
-                | ir::Opcode::IfcmpImm
-                | ir::Opcode::ImulImm
-                | ir::Opcode::IrsubImm
-                | ir::Opcode::IshlImm
-                | ir::Opcode::RotlImm
-                | ir::Opcode::RotrImm
-                | ir::Opcode::SdivImm
-                | ir::Opcode::SremImm
-                | ir::Opcode::SshrImm
-                | ir::Opcode::UdivImm
-                | ir::Opcode::UremImm
-                | ir::Opcode::UshrImm
-                | ir::Opcode::IcmpImm => expand(inst, &mut pos.func, cfg, isa),
-                _ => false,
-            };
-
-            if expanded {
-                // Legalization implementations require fixpoint loop
-                // here. TODO: fix this.
-                pos.set_position(prev_pos);
-            } else {
-                prev_pos = pos.position();
-            }
-        }
     }
 }
 

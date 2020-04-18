@@ -19,7 +19,6 @@ use crate::flowgraph::ControlFlowGraph;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
 use crate::legalize_function;
-use crate::legalizer::simple_legalize;
 use crate::licm::do_licm;
 use crate::loop_analysis::LoopAnalysis;
 use crate::machinst::MachCompileResult;
@@ -311,15 +310,10 @@ impl Context {
         // TODO: Avoid doing this when legalization doesn't actually mutate the CFG.
         self.domtree.clear();
         self.loop_analysis.clear();
-        if isa.get_mach_backend().is_some() {
-            // Run some specific legalizations only.
-            simple_legalize(&mut self.func, &mut self.cfg, isa);
-            self.verify_if(isa)
-        } else {
-            legalize_function(&mut self.func, &mut self.cfg, isa);
-            debug!("Legalized:\n{}", self.func.display(isa));
-            self.verify_if(isa)
-        }
+
+        legalize_function(&mut self.func, &mut self.cfg, isa);
+        debug!("Legalized:\n{}", self.func.display(isa));
+        self.verify_if(isa)
     }
 
     /// Perform post-legalization rewrites on the function.
