@@ -1,4 +1,5 @@
-use crate::externals::{Export, Extern};
+use crate::externals::{Export, Extern, Global, Memory, Table};
+use crate::func::Func;
 use crate::module::Module;
 use crate::runtime::{Config, Store};
 use crate::trap::Trap;
@@ -186,6 +187,38 @@ impl Instance {
             self.instance_handle.clone(),
             export,
         ))
+    }
+
+    /// Looks up an exported [`Func`] value by name.
+    ///
+    /// Returns `None` if there was no export named `name`, or if there was but
+    /// it wasn't a function.
+    pub fn get_func(&self, name: &str) -> Option<Func> {
+        self.get_export(name)?.into_func()
+    }
+
+    /// Looks up an exported [`Table`] value by name.
+    ///
+    /// Returns `None` if there was no export named `name`, or if there was but
+    /// it wasn't a table.
+    pub fn get_table(&self, name: &str) -> Option<Table> {
+        self.get_export(name)?.into_table()
+    }
+
+    /// Looks up an exported [`Memory`] value by name.
+    ///
+    /// Returns `None` if there was no export named `name`, or if there was but
+    /// it wasn't a memory.
+    pub fn get_memory(&self, name: &str) -> Option<Memory> {
+        self.get_export(name)?.into_memory()
+    }
+
+    /// Looks up an exported [`Global`] value by name.
+    ///
+    /// Returns `None` if there was no export named `name`, or if there was but
+    /// it wasn't a global.
+    pub fn get_global(&self, name: &str) -> Option<Global> {
+        self.get_export(name)?.into_global()
     }
 
     #[doc(hidden)]

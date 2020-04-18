@@ -185,13 +185,11 @@ pub fn differential_execution(
             // infinite loop when calling another export.
             init_hang_limit(&instance);
 
-            let f = match instance
+            let f = instance
                 .get_export(&name)
                 .expect("instance should have export from module")
-            {
-                Extern::Func(f) => f.clone(),
-                _ => panic!("export should be a function"),
-            };
+                .into_func()
+                .expect("export should be a function");
 
             let ty = f.ty();
             let params = match dummy::dummy_values(ty.params()) {

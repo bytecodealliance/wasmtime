@@ -702,7 +702,7 @@ impl Memory {
     /// let store = Store::default();
     /// let module = Module::new(&store, "(module (memory (export \"mem\") 1))")?;
     /// let instance = Instance::new(&module, &[])?;
-    /// let memory = instance.get_export("mem").unwrap().into_memory().unwrap();
+    /// let memory = instance.get_memory("mem").unwrap();
     /// let ty = memory.ty();
     /// assert_eq!(ty.limits().min(), 1);
     /// # Ok(())
@@ -814,7 +814,7 @@ impl Memory {
     /// let store = Store::default();
     /// let module = Module::new(&store, "(module (memory (export \"mem\") 1 2))")?;
     /// let instance = Instance::new(&module, &[])?;
-    /// let memory = instance.get_export("mem").unwrap().into_memory().unwrap();
+    /// let memory = instance.get_memory("mem").unwrap();
     ///
     /// assert_eq!(memory.size(), 1);
     /// assert_eq!(memory.grow(1)?, 1);

@@ -38,22 +38,13 @@ mod tests {
 "#;
 
     fn invoke_export(instance: &Instance, func_name: &str) -> Result<Box<[Val]>> {
-        let ret = instance
-            .get_export(func_name)
-            .unwrap()
-            .into_func()
-            .unwrap()
-            .call(&[])?;
+        let ret = instance.get_func(func_name).unwrap().call(&[])?;
         Ok(ret)
     }
 
     // Locate "memory" export, get base address and size and set memory protection to PROT_NONE
     fn set_up_memory(instance: &Instance) -> (*mut u8, usize) {
-        let mem_export = instance
-            .get_export("memory")
-            .unwrap()
-            .into_memory()
-            .unwrap();
+        let mem_export = instance.get_memory("memory").unwrap();
         let base = mem_export.data_ptr();
         let length = mem_export.data_size();
 

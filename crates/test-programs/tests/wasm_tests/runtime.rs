@@ -66,12 +66,9 @@ pub fn instantiate(
         bin_name,
     ))?;
 
-    let export = instance
+    instance
         .get_export("_start")
         .context("expected a _start export")?
-        .clone();
-
-    export
         .into_func()
         .context("expected export to be a func")?
         .call(&[])?;
