@@ -200,16 +200,20 @@ impl RunCommand {
         let imports = module
             .imports()
             .map(|i| {
-                let export = match i.module.as_str() {
+                let export = match i.module() {
                     "wasi_snapshot_preview1" => {
-                        module_registry.wasi_snapshot_preview1.get_export(&i.name)
+                        module_registry.wasi_snapshot_preview1.get_export(i.name())
                     }
-                    "wasi_unstable" => module_registry.wasi_unstable.get_export(&i.name),
+                    "wasi_unstable" => module_registry.wasi_unstable.get_export(i.name()),
                     other => bail!("import module `{}` was not found", other),
                 };
                 match export {
                     Some(export) => Ok(export.clone().into()),
-                    None => bail!("import `{}` was not found in module `{}`", i.name, i.module),
+                    None => bail!(
+                        "import `{}` was not found in module `{}`",
+                        i.name(),
+                        i.module()
+                    ),
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;

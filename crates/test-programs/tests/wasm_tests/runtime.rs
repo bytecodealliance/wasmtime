@@ -52,11 +52,15 @@ pub fn instantiate(
     let imports = module
         .imports()
         .map(|i| {
-            let field_name = &i.name;
+            let field_name = i.name();
             if let Some(export) = snapshot1.get_export(field_name) {
                 Ok(export.clone().into())
             } else {
-                bail!("import {} was not found in module {}", field_name, i.module,)
+                bail!(
+                    "import {} was not found in module {}",
+                    field_name,
+                    i.module()
+                )
             }
         })
         .collect::<Result<Vec<_>, _>>()?;

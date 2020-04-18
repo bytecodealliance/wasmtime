@@ -40,8 +40,6 @@ fn test_import_calling_export() {
     let instance =
         Instance::new(&module, imports.as_slice()).expect("failed to instantiate module");
 
-    let mut exports = instance.exports();
-
     let run_func = instance
         .get_func("run")
         .expect("expected a run func in the module");

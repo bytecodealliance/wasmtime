@@ -17,15 +17,16 @@ fn main() -> Result<()> {
     let wasi = Wasi::new(&store, WasiCtx::new(std::env::args())?);
     let mut imports = Vec::new();
     for import in module.imports() {
-        if import.module == "wasi_snapshot_preview1" {
-            if let Some(export) = wasi.get_export(&import.name) {
+        if import.module() == "wasi_snapshot_preview1" {
+            if let Some(export) = wasi.get_export(import.name()) {
                 imports.push(Extern::from(export.clone()));
                 continue;
             }
         }
         panic!(
             "couldn't find import for `{}::{}`",
-            import.module, import.name
+            import.module(),
+            import.name()
         );
     }
 

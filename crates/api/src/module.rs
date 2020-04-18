@@ -1,13 +1,10 @@
 use crate::frame_info::GlobalFrameInfoRegistration;
 use crate::runtime::Store;
-use crate::types::{
-    ExportType, ExternType, FuncType, GlobalType, ImportType, MemoryType, TableType,
-};
+use crate::types::{EntityType, ExportType, ImportType};
 use anyhow::{Error, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use wasmparser::validate;
-use wasmtime_environ::EntityIndex;
 use wasmtime_jit::CompiledModule;
 
 /// A compiled WebAssembly module, ready to be instantiated.
@@ -395,27 +392,23 @@ impl Module {
     /// let module = Module::new(&store, wat)?;
     /// assert_eq!(module.imports().len(), 1);
     /// let import = module.imports().next().unwrap();
-    /// assert_eq!(import.module, "host");
-    /// assert_eq!(import.name, "foo");
-    /// match import.ty {
+    /// assert_eq!(import.module(), "host");
+    /// assert_eq!(import.name(), "foo");
+    /// match import.ty() {
     ///     ExternType::Func(_) => { /* ... */ }
     ///     _ => panic!("unexpected import type!"),
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub fn imports<'me>(&'me self) -> impl ExactSizeIterator<Item = ImportType> + 'me {
+    pub fn imports<'me>(&'me self) -> impl ExactSizeIterator<Item = ImportType<'me>> + 'me {
         let module = self.inner.compiled.module_ref();
         module
             .imports
             .iter()
             .map(move |(module_name, name, entity_index)| {
-                let r#type = entity_type(entity_index, module);
-                ImportType {
-                    module: module_name.to_owned(),
-                    name: name.to_owned(),
-                    ty: r#type,
-                }
+                let r#type = EntityType::new(entity_index, module);
+                ImportType::new(module_name, name, r#type)
             })
     }
 
@@ -458,29 +451,26 @@ impl Module {
     ///
     /// let mut exports = module.exports();
     /// let foo = exports.next().unwrap();
-    /// assert_eq!(foo.name, "foo");
-    /// match foo.ty {
+    /// assert_eq!(foo.name(), "foo");
+    /// match foo.ty() {
     ///     ExternType::Func(_) => { /* ... */ }
     ///     _ => panic!("unexpected export type!"),
     /// }
     ///
     /// let memory = exports.next().unwrap();
-    /// assert_eq!(memory.name, "memory");
-    /// match memory.ty {
+    /// assert_eq!(memory.name(), "memory");
+    /// match memory.ty() {
     ///     ExternType::Memory(_) => { /* ... */ }
     ///     _ => panic!("unexpected export type!"),
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub fn exports<'me>(&'me self) -> impl ExactSizeIterator<Item = ExportType> + 'me {
+    pub fn exports<'me>(&'me self) -> impl ExactSizeIterator<Item = ExportType<'me>> + 'me {
         let module = self.inner.compiled.module_ref();
         module.exports.iter().map(move |(name, entity_index)| {
-            let r#type = entity_type(entity_index, module);
-            ExportType {
-                name: name.to_owned(),
-                ty: r#type,
-            }
+            let r#type = EntityType::new(entity_index, module);
+            ExportType::new(name, r#type)
         })
     }
 
@@ -500,29 +490,5 @@ impl Module {
         let ret = super::frame_info::register(&self.inner.compiled).map(Arc::new);
         *info = Some(ret.clone());
         return ret;
-    }
-}
-
-/// Translate from a `EntityIndex` into an `ExternType`.
-fn entity_type(entity_index: &EntityIndex, module: &wasmtime_environ::Module) -> ExternType {
-    match entity_index {
-        EntityIndex::Function(func_index) => {
-            let sig = module.local.func_signature(*func_index);
-            FuncType::from_wasmtime_signature(sig)
-                .expect("core wasm function type should be supported")
-                .into()
-        }
-        EntityIndex::Table(table_index) => {
-            TableType::from_wasmtime_table(&module.local.table_plans[*table_index].table).into()
-        }
-        EntityIndex::Memory(memory_index) => {
-            MemoryType::from_wasmtime_memory(&module.local.memory_plans[*memory_index].memory)
-                .into()
-        }
-        EntityIndex::Global(global_index) => {
-            GlobalType::from_wasmtime_global(&module.local.globals[*global_index])
-                .expect("core wasm global type should be supported")
-                .into()
-        }
     }
 }

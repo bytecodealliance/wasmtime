@@ -1,4 +1,5 @@
-use wasmtime_environ::{ir, wasm};
+use std::fmt;
+use wasmtime_environ::{ir, wasm, EntityIndex};
 
 // Type Representations
 
@@ -382,6 +383,53 @@ impl MemoryType {
     }
 }
 
+// Entity Types
+
+#[derive(Clone, Hash, Eq, PartialEq)]
+pub(crate) enum EntityType<'module> {
+    Function(&'module ir::Signature),
+    Table(&'module wasm::Table),
+    Memory(&'module wasm::Memory),
+    Global(&'module wasm::Global),
+}
+
+impl<'module> EntityType<'module> {
+    /// Translate from a `EntityIndex` into an `ExternType`.
+    pub(crate) fn new(
+        entity_index: &EntityIndex,
+        module: &'module wasmtime_environ::Module,
+    ) -> EntityType<'module> {
+        match entity_index {
+            EntityIndex::Function(func_index) => {
+                let sig = module.local.func_signature(*func_index);
+                EntityType::Function(&sig)
+            }
+            EntityIndex::Table(table_index) => {
+                EntityType::Table(&module.local.table_plans[*table_index].table)
+            }
+            EntityIndex::Memory(memory_index) => {
+                EntityType::Memory(&module.local.memory_plans[*memory_index].memory)
+            }
+            EntityIndex::Global(global_index) => {
+                EntityType::Global(&module.local.globals[*global_index])
+            }
+        }
+    }
+
+    fn extern_type(&self) -> ExternType {
+        match self {
+            EntityType::Function(sig) => FuncType::from_wasmtime_signature(sig)
+                .expect("core wasm function type should be supported")
+                .into(),
+            EntityType::Table(table) => TableType::from_wasmtime_table(table).into(),
+            EntityType::Memory(memory) => MemoryType::from_wasmtime_memory(memory).into(),
+            EntityType::Global(global) => GlobalType::from_wasmtime_global(global)
+                .expect("core wasm global type should be supported")
+                .into(),
+        }
+    }
+}
+
 // Import Types
 
 /// A descriptor for an imported value into a wasm module.
@@ -390,16 +438,54 @@ impl MemoryType {
 /// [`Module::imports`](crate::Module::imports) API. Each [`ImportType`]
 /// describes an import into the wasm module with the module/name that it's
 /// imported from as well as the type of item that's being imported.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct ImportType {
+#[derive(Clone, Hash, Eq, PartialEq)]
+pub struct ImportType<'module> {
     /// The module of the import.
-    pub module: String,
+    module: &'module str,
 
     /// The field of the import.
-    pub name: String,
+    name: &'module str,
 
     /// The type of the import.
-    pub ty: ExternType,
+    ty: EntityType<'module>,
+}
+
+impl<'module> ImportType<'module> {
+    /// Creates a new import descriptor which comes from `module` and `name` and
+    /// is of type `ty`.
+    pub(crate) fn new(
+        module: &'module str,
+        name: &'module str,
+        ty: EntityType<'module>,
+    ) -> ImportType<'module> {
+        ImportType { module, name, ty }
+    }
+
+    /// Returns the module name that this import is expected to come from.
+    pub fn module(&'module self) -> &'module str {
+        self.module
+    }
+
+    /// Returns the field name of the module that this import is expected to
+    /// come from.
+    pub fn name(&'module self) -> &'module str {
+        self.name
+    }
+
+    /// Returns the expected type of this import.
+    pub fn ty(&'module self) -> ExternType {
+        self.ty.extern_type()
+    }
+}
+
+impl<'module> fmt::Debug for ImportType<'module> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ImportType")
+            .field("module", &self.module().to_owned())
+            .field("name", &self.name().to_owned())
+            .field("ty", &self.ty())
+            .finish()
+    }
 }
 
 // Export Types
@@ -410,11 +496,38 @@ pub struct ImportType {
 /// [`Module::exports`](crate::Module::exports) accessor and describes what
 /// names are exported from a wasm module and the type of the item that is
 /// exported.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct ExportType {
+#[derive(Clone, Hash, Eq, PartialEq)]
+pub struct ExportType<'module> {
     /// The name of the export.
-    pub name: String,
+    name: &'module str,
 
     /// The type of the export.
-    pub ty: ExternType,
+    ty: EntityType<'module>,
+}
+
+impl<'module> ExportType<'module> {
+    /// Creates a new export which is exported with the given `name` and has the
+    /// given `ty`.
+    pub(crate) fn new(name: &'module str, ty: EntityType<'module>) -> ExportType<'module> {
+        ExportType { name, ty }
+    }
+
+    /// Returns the name by which this export is known by.
+    pub fn name(&'module self) -> &'module str {
+        self.name
+    }
+
+    /// Returns the type of this export.
+    pub fn ty(&'module self) -> ExternType {
+        self.ty.extern_type()
+    }
+}
+
+impl<'module> fmt::Debug for ExportType<'module> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ExportType")
+            .field("name", &self.name().to_owned())
+            .field("ty", &self.ty())
+            .finish()
+    }
 }
