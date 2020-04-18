@@ -1240,24 +1240,64 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
             }
         }
 
-        Opcode::Bitrev | Opcode::Clz | Opcode::Cls => {
+        Opcode::Bitrev | Opcode::Clz | Opcode::Cls | Opcode::Ctz => {
             let rd = output_to_reg(ctx, outputs[0]);
-            let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
-            let op = BitOp::from((op, ty.unwrap()));
-            ctx.emit(Inst::BitRR { rd, rn, op });
-        }
+            let needs_zext = match op {
+                Opcode::Bitrev | Opcode::Ctz => false,
+                Opcode::Clz | Opcode::Cls => true,
+                _ => unreachable!(),
+            };
+            let ty = ty.unwrap();
+            let narrow_mode = if needs_zext && ty_bits(ty) == 64 {
+                NarrowValueMode::ZeroExtend64
+            } else if needs_zext {
+                NarrowValueMode::ZeroExtend32
+            } else {
+                NarrowValueMode::None
+            };
+            let rn = input_to_reg(ctx, inputs[0], narrow_mode);
+            let op_ty = match ty {
+                I8 | I16 | I32 => I32,
+                I64 => I64,
+                _ => panic!("Unsupported type for Bitrev/Clz/Cls"),
+            };
+            let bitop = match op {
+                Opcode::Clz | Opcode::Cls | Opcode::Bitrev => BitOp::from((op, op_ty)),
+                Opcode::Ctz => BitOp::from((Opcode::Bitrev, op_ty)),
+                _ => unreachable!(),
+            };
+            ctx.emit(Inst::BitRR { rd, rn, op: bitop });
 
-        Opcode::Ctz => {
-            let rd = output_to_reg(ctx, outputs[0]);
-            let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
-            let op = BitOp::from((Opcode::Bitrev, ty.unwrap()));
-            ctx.emit(Inst::BitRR { rd, rn, op });
-            let op = BitOp::from((Opcode::Clz, ty.unwrap()));
-            ctx.emit(Inst::BitRR {
-                rd,
-                rn: rd.to_reg(),
-                op,
-            });
+            // Both bitrev and ctz use a bit-reverse (rbit) instruction; ctz to reduce the problem
+            // to a clz, and bitrev as the main operation.
+            if op == Opcode::Bitrev || op == Opcode::Ctz {
+                // Reversing an n-bit value (n < 32) with a 32-bit bitrev instruction will place
+                // the reversed result in the highest n bits, so we need to shift them down into
+                // place.
+                let right_shift = match ty {
+                    I8 => Some(24),
+                    I16 => Some(16),
+                    I32 => None,
+                    I64 => None,
+                    _ => panic!("Unsupported type for Bitrev"),
+                };
+                if let Some(s) = right_shift {
+                    ctx.emit(Inst::AluRRImmShift {
+                        alu_op: ALUOp::Lsr32,
+                        rd,
+                        rn: rd.to_reg(),
+                        immshift: ImmShift::maybe_from_u64(s).unwrap(),
+                    });
+                }
+            }
+
+            if op == Opcode::Ctz {
+                ctx.emit(Inst::BitRR {
+                    op: BitOp::from((Opcode::Clz, op_ty)),
+                    rd,
+                    rn: rd.to_reg(),
+                });
+            }
         }
 
         Opcode::Popcnt => {
@@ -1272,7 +1312,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
             //   x >> 56
             let ty = ty.unwrap();
             let rd = output_to_reg(ctx, outputs[0]);
-            let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
+            // FIXME(#1537): zero-extend 8/16/32-bit operands only to 32 bits,
+            // and fix the sequence below to work properly for this.
+            let narrow_mode = NarrowValueMode::ZeroExtend64;
+            let rn = input_to_reg(ctx, inputs[0], narrow_mode);
             let tmp = ctx.tmp(RegClass::I64, I64);
 
             // If this is a 32-bit Popcnt, use Lsr32 to clear the top 32 bits of the register, then
