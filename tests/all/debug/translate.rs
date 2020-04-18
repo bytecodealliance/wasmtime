@@ -74,17 +74,18 @@ check:      DW_AT_name	("fib")
 # Accepts one parameter
 check:      DW_TAG_formal_parameter
 check:        DW_AT_name	("n")
-check:        DW_AT_decl_line	(5)
-# Has four locals: i, t, a, b
-check:      DW_TAG_variable
-check:        DW_AT_name	("i")
-check:        DW_AT_decl_line	(6)
+check:        DW_AT_decl_line	(8)
+# Has four locals: t, a, b, i
 check:      DW_TAG_variable
 check:        DW_AT_name	("t")
+check:        DW_AT_decl_line	(9)
 check:      DW_TAG_variable
 check:        DW_AT_name	("a")
 check:      DW_TAG_variable
 check:        DW_AT_name	("b")
+check:      DW_TAG_variable
+check:        DW_AT_name	("i")
+check:        DW_AT_decl_line	(10)
     "##,
     )
 }
