@@ -689,6 +689,12 @@ fn define_moves(e: &mut PerCpuModeEncodings, shared_defs: &SharedDefinitions, r:
             }
         }
     }
+    for (to, from) in &[(I16, B16), (I32, B32), (I64, B64)] {
+        e.enc_both(
+            bint.bind(*to).bind(*from),
+            rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+        );
+    }
 
     // Copy Special
     // For x86-64, only define REX forms for now, since we can't describe the
