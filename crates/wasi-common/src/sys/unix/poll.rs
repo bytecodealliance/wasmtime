@@ -1,6 +1,10 @@
-use super::super::oshandle::OsHandle;
+use crate::entry::EntryHandle;
 use crate::poll::{ClockEventData, FdEventData};
-use crate::sys::oshandle::AsFile;
+use crate::sys::osdir::OsDir;
+use crate::sys::osfile::OsFile;
+use crate::sys::osother::OsOther;
+use crate::sys::stdio::Stdio;
+use crate::sys::AsFile;
 use crate::wasi::{types, Errno, Result};
 use std::io;
 use std::{convert::TryInto, os::unix::prelude::AsRawFd};
@@ -28,12 +32,18 @@ pub(crate) fn oneoff(
                 // events we filtered before. If we get something else here, the code has a serious bug.
                 _ => unreachable!(),
             };
-            let handle = event
-                .handle
-                .as_any()
-                .downcast_ref::<OsHandle>()
-                .expect("can poll FdEvent for OS resources only");
-            unsafe { PollFd::new(handle.as_raw_fd(), flags) }
+            let fd = if let Some(file) = event.handle.as_any().downcast_ref::<OsFile>() {
+                file.as_raw_fd()
+            } else if let Some(dir) = event.handle.as_any().downcast_ref::<OsDir>() {
+                dir.as_raw_fd()
+            } else if let Some(stdio) = event.handle.as_any().downcast_ref::<Stdio>() {
+                stdio.as_raw_fd()
+            } else if let Some(other) = event.handle.as_any().downcast_ref::<OsOther>() {
+                other.as_raw_fd()
+            } else {
+                panic!("can poll FdEvent for OS resources only")
+            };
+            unsafe { PollFd::new(fd, flags) }
         })
         .collect();
 
@@ -80,18 +90,23 @@ fn handle_fd_event(
     ready_events: impl Iterator<Item = (FdEventData, yanix::poll::PollFd)>,
     events: &mut Vec<types::Event>,
 ) -> Result<()> {
-    fn query_nbytes(handle: &OsHandle) -> Result<u64> {
-        // fionread may overflow for large files, so use another way for regular files.
-        if let OsHandle::OsFile(file) = handle {
+    fn query_nbytes(handle: EntryHandle) -> Result<u64> {
+        if let Some(file) = handle.as_any().downcast_ref::<OsFile>() {
+            // fionread may overflow for large files, so use another way for regular files.
+            use yanix::file::tell;
             let meta = file.as_file().metadata()?;
-            if meta.file_type().is_file() {
-                use yanix::file::tell;
-                let len = meta.len();
-                let host_offset = unsafe { tell(file.as_raw_fd())? };
-                return Ok(len - host_offset);
-            }
+            let len = meta.len();
+            let host_offset = unsafe { tell(file.as_raw_fd())? };
+            Ok(len - host_offset)
+        } else if let Some(dir) = handle.as_any().downcast_ref::<OsDir>() {
+            unsafe { Ok(fionread(dir.as_raw_fd())?.into()) }
+        } else if let Some(stdio) = handle.as_any().downcast_ref::<Stdio>() {
+            unsafe { Ok(fionread(stdio.as_raw_fd())?.into()) }
+        } else if let Some(other) = handle.as_any().downcast_ref::<OsOther>() {
+            unsafe { Ok(fionread(other.as_raw_fd())?.into()) }
+        } else {
+            panic!("can poll FdEvent for OS resources only")
         }
-        unsafe { Ok(fionread(handle.as_raw_fd())?.into()) }
     }
 
     for (fd_event, poll_fd) in ready_events {
@@ -106,12 +121,7 @@ fn handle_fd_event(
         log::debug!("poll_oneoff_handle_fd_event revents = {:?}", revents);
 
         let nbytes = if fd_event.r#type == types::Eventtype::FdRead {
-            let handle = fd_event
-                .handle
-                .as_any()
-                .downcast_ref::<OsHandle>()
-                .expect("can poll FdEvent for OS resources only");
-            query_nbytes(handle)?
+            query_nbytes(fd_event.handle)?
         } else {
             0
         };

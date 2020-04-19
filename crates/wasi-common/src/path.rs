@@ -1,5 +1,5 @@
-use crate::entry::{Entry, EntryRights};
-use crate::handle::Handle;
+use crate::entry::Entry;
+use crate::handle::{Handle, HandleRights};
 use crate::wasi::{types, Errno, Result};
 use std::path::{Component, Path};
 use std::str;
@@ -12,7 +12,7 @@ pub(crate) use crate::sys::path::{from_host, open_rights};
 /// This is a workaround for not having Capsicum support in the OS.
 pub(crate) fn get(
     entry: &Entry,
-    required_rights: &EntryRights,
+    required_rights: &HandleRights,
     dirflags: types::Lookupflags,
     path: &GuestPtr<'_, str>,
     needs_final_component: bool,
@@ -33,7 +33,7 @@ pub(crate) fn get(
         return Err(Errno::Ilseq);
     }
 
-    if entry.file_type != types::Filetype::Directory {
+    if entry.get_file_type() != types::Filetype::Directory {
         // if `dirfd` doesn't refer to a directory, return `Notdir`.
         return Err(Errno::Notdir);
     }

@@ -1,8 +1,12 @@
 pub(crate) mod clock;
 pub(crate) mod fd;
+pub(crate) mod osdir;
+pub(crate) mod osfile;
 pub(crate) mod oshandle;
+pub(crate) mod osother;
 pub(crate) mod path;
 pub(crate) mod poll;
+pub(crate) mod stdio;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
@@ -22,15 +26,57 @@ cfg_if::cfg_if! {
     }
 }
 
+use crate::sys::AsFile;
 use crate::wasi::{types, Errno, Result};
 use std::convert::{TryFrom, TryInto};
 use std::fs::File;
 use std::io;
+use std::mem::ManuallyDrop;
+use std::os::unix::prelude::{AsRawFd, FileTypeExt, FromRawFd};
 use std::path::Path;
 use yanix::clock::ClockId;
 use yanix::file::{AtFlag, OFlag};
 
 pub(crate) use sys_impl::*;
+
+impl<T: AsRawFd> AsFile for T {
+    fn as_file(&self) -> ManuallyDrop<File> {
+        let file = unsafe { File::from_raw_fd(self.as_raw_fd()) };
+        ManuallyDrop::new(file)
+    }
+}
+
+pub(super) fn get_file_type(file: &File) -> io::Result<types::Filetype> {
+    let ft = file.metadata()?.file_type();
+    let file_type = if ft.is_block_device() {
+        log::debug!("Host fd {:?} is a block device", file.as_raw_fd());
+        types::Filetype::BlockDevice
+    } else if ft.is_char_device() {
+        log::debug!("Host fd {:?} is a char device", file.as_raw_fd());
+        types::Filetype::CharacterDevice
+    } else if ft.is_dir() {
+        log::debug!("Host fd {:?} is a directory", file.as_raw_fd());
+        types::Filetype::Directory
+    } else if ft.is_file() {
+        log::debug!("Host fd {:?} is a file", file.as_raw_fd());
+        types::Filetype::RegularFile
+    } else if ft.is_socket() {
+        log::debug!("Host fd {:?} is a socket", file.as_raw_fd());
+        use yanix::socket::{get_socket_type, SockType};
+        match unsafe { get_socket_type(file.as_raw_fd())? } {
+            SockType::Datagram => types::Filetype::SocketDgram,
+            SockType::Stream => types::Filetype::SocketStream,
+            _ => return Err(io::Error::from_raw_os_error(libc::EINVAL)),
+        }
+    } else if ft.is_fifo() {
+        log::debug!("Host fd {:?} is a fifo", file.as_raw_fd());
+        types::Filetype::Unknown
+    } else {
+        log::debug!("Host fd {:?} is unknown", file.as_raw_fd());
+        return Err(io::Error::from_raw_os_error(libc::EINVAL));
+    };
+    Ok(file_type)
+}
 
 pub fn preopen_dir<P: AsRef<Path>>(path: P) -> io::Result<File> {
     File::open(path)

@@ -1,11 +1,14 @@
-use super::super::oshandle::OsHandle;
+use crate::handle::Handle;
 use crate::poll::{ClockEventData, FdEventData};
-use crate::sys::oshandle::AsFile;
+use crate::sys::osdir::OsDir;
+use crate::sys::osfile::OsFile;
+use crate::sys::osother::OsOther;
+use crate::sys::stdio::Stdio;
+use crate::sys::AsFile;
 use crate::wasi::{types, Errno, Result};
 use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
 use std::convert::TryInto;
-use std::os::windows::io::AsRawHandle;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::Mutex;
 use std::thread;
@@ -141,30 +144,56 @@ fn handle_timeout_event(timeout_event: ClockEventData, events: &mut Vec<types::E
 }
 
 fn handle_rw_event(event: FdEventData, out_events: &mut Vec<types::Event>) {
-    let handle = event
-        .handle
-        .as_any()
-        .downcast_ref::<OsHandle>()
-        .expect("can poll FdEvent for OS resources only");
-    let size = match handle {
-        OsHandle::OsFile(file) => {
-            if event.r#type == types::Eventtype::FdRead {
-                file.as_file()
-                    .metadata()
-                    .map(|m| m.len())
-                    .map_err(Into::into)
-            } else {
-                // The spec is unclear what nbytes should actually be for __WASI_EVENTTYPE_FD_WRITE and
-                // the implementation on Unix just returns 0 here, so it's probably fine
-                // to do the same on Windows for now.
-                // cf. https://github.com/WebAssembly/WASI/issues/148
-                Ok(0)
-            }
+    let handle = &event.handle;
+    let size = if let Some(file) = handle.as_any().downcast_ref::<OsFile>() {
+        if event.r#type == types::Eventtype::FdRead {
+            file.as_file()
+                .metadata()
+                .map(|m| m.len())
+                .map_err(Into::into)
+        } else {
+            // The spec is unclear what nbytes should actually be for __WASI_EVENTTYPE_FD_WRITE and
+            // the implementation on Unix just returns 0 here, so it's probably fine
+            // to do the same on Windows for now.
+            // cf. https://github.com/WebAssembly/WASI/issues/148
+            Ok(0)
         }
-        // We return the only universally correct lower bound, see the comment later in the function.
-        OsHandle::Stdin => Ok(1),
-        // On Unix, ioctl(FIONREAD) will return 0 for stdout/stderr. Emulate the same behavior on Windows.
-        OsHandle::Stdout | OsHandle::Stderr => Ok(0),
+    } else if let Some(dir) = handle.as_any().downcast_ref::<OsDir>() {
+        if event.r#type == types::Eventtype::FdRead {
+            dir.as_file()
+                .metadata()
+                .map(|m| m.len())
+                .map_err(Into::into)
+        } else {
+            // The spec is unclear what nbytes should actually be for __WASI_EVENTTYPE_FD_WRITE and
+            // the implementation on Unix just returns 0 here, so it's probably fine
+            // to do the same on Windows for now.
+            // cf. https://github.com/WebAssembly/WASI/issues/148
+            Ok(0)
+        }
+    } else if let Some(stdio) = handle.as_any().downcast_ref::<Stdio>() {
+        match stdio {
+            // We return the only universally correct lower bound, see the comment later in the function.
+            Stdio::In { .. } => Ok(1),
+            // On Unix, ioctl(FIONREAD) will return 0 for stdout/stderr. Emulate the same behavior on Windows.
+            Stdio::Out { .. } | Stdio::Err { .. } => Ok(0),
+        }
+    } else if let Some(other) = handle.as_any().downcast_ref::<OsOther>() {
+        if event.r#type == types::Eventtype::FdRead {
+            other
+                .as_file()
+                .metadata()
+                .map(|m| m.len())
+                .map_err(Into::into)
+        } else {
+            // The spec is unclear what nbytes should actually be for __WASI_EVENTTYPE_FD_WRITE and
+            // the implementation on Unix just returns 0 here, so it's probably fine
+            // to do the same on Windows for now.
+            // cf. https://github.com/WebAssembly/WASI/issues/148
+            Ok(0)
+        }
+    } else {
+        panic!("can poll FdEvent for OS resources only")
     };
 
     let new_event = make_rw_event(&event, size);
@@ -206,33 +235,37 @@ pub(crate) fn oneoff(
     let mut pipe_events = vec![];
 
     for event in fd_events {
-        let handle = event
-            .handle
-            .as_any()
-            .downcast_ref::<OsHandle>()
-            .expect("can poll FdEvent for OS resources only");
-        match handle {
-            OsHandle::Stdin if event.r#type == types::Eventtype::FdRead => stdin_events.push(event),
-            // stdout/stderr are always considered ready to write because there seems to
-            // be no way of checking if a write to stdout would block.
-            //
-            // If stdin is polled for anything else then reading, then it is also
-            // considered immediately ready, following the behavior on Linux.
-            OsHandle::Stdin | OsHandle::Stderr | OsHandle::Stdout => immediate_events.push(event),
-            OsHandle::OsFile(file) => {
-                let ftype = unsafe { winx::file::get_file_type(file.as_raw_handle()) }?;
-                if ftype.is_unknown() || ftype.is_char() {
-                    debug!("poll_oneoff: unsupported file type: {:?}", ftype);
-                    handle_error_event(event, Errno::Notsup, events);
-                } else if ftype.is_disk() {
-                    immediate_events.push(event);
-                } else if ftype.is_pipe() {
-                    pipe_events.push(event);
-                } else {
-                    unreachable!();
+        let handle = &event.handle;
+        if let Some(_) = handle.as_any().downcast_ref::<OsFile>() {
+            immediate_events.push(event);
+        } else if let Some(_) = handle.as_any().downcast_ref::<OsDir>() {
+            immediate_events.push(event);
+        } else if let Some(stdio) = handle.as_any().downcast_ref::<Stdio>() {
+            match stdio {
+                Stdio::In { .. } if event.r#type == types::Eventtype::FdRead => {
+                    stdin_events.push(event)
                 }
+                // stdout/stderr are always considered ready to write because there seems to
+                // be no way of checking if a write to stdout would block.
+                //
+                // If stdin is polled for anything else then reading, then it is also
+                // considered immediately ready, following the behavior on Linux.
+                _ => immediate_events.push(event),
+            };
+        } else if let Some(other) = handle.as_any().downcast_ref::<OsOther>() {
+            if other.get_file_type() == types::Filetype::SocketStream {
+                // We map pipe to SocketStream
+                pipe_events.push(event);
+            } else {
+                debug!(
+                    "poll_oneoff: unsupported file type: {}",
+                    other.get_file_type()
+                );
+                handle_error_event(event, Errno::Notsup, events);
             }
-        };
+        } else {
+            panic!("can poll FdEvent for OS resources only");
+        }
     }
 
     let immediate = !immediate_events.is_empty();

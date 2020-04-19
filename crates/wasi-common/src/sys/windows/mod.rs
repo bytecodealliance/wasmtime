@@ -1,17 +1,58 @@
 pub(crate) mod clock;
 pub(crate) mod fd;
+pub(crate) mod osdir;
+pub(crate) mod osfile;
 pub(crate) mod oshandle;
+pub(crate) mod osother;
 pub(crate) mod path;
 pub(crate) mod poll;
+pub(crate) mod stdio;
 
+use crate::sys::AsFile;
 use crate::wasi::{types, Errno, Result};
 use std::convert::{TryFrom, TryInto};
 use std::fs::File;
+use std::mem::ManuallyDrop;
+use std::os::windows::prelude::{AsRawHandle, FromRawHandle};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{io, string};
 use winapi::shared::winerror;
 use winx::file::{CreationDisposition, Flags};
+
+impl<T: AsRawHandle> AsFile for T {
+    fn as_file(&self) -> ManuallyDrop<File> {
+        let file = unsafe { File::from_raw_handle(self.as_raw_handle()) };
+        ManuallyDrop::new(file)
+    }
+}
+
+pub(crate) fn get_file_type(file: &File) -> io::Result<types::Filetype> {
+    let file_type = unsafe { winx::file::get_file_type(file.as_raw_handle())? };
+    let file_type = if file_type.is_char() {
+        // character file: LPT device or console
+        // TODO: rule out LPT device
+        types::Filetype::CharacterDevice
+    } else if file_type.is_disk() {
+        // disk file: file, dir or disk device
+        let file = file.as_file();
+        let meta = file.metadata()?;
+        if meta.is_dir() {
+            types::Filetype::Directory
+        } else if meta.is_file() {
+            types::Filetype::RegularFile
+        } else {
+            return Err(io::Error::from_raw_os_error(libc::EINVAL));
+        }
+    } else if file_type.is_pipe() {
+        // pipe object: socket, named pipe or anonymous pipe
+        // TODO: what about pipes, etc?
+        types::Filetype::SocketStream
+    } else {
+        return Err(io::Error::from_raw_os_error(libc::EINVAL));
+    };
+    Ok(file_type)
+}
 
 pub fn preopen_dir<P: AsRef<Path>>(path: P) -> io::Result<File> {
     use std::fs::OpenOptions;

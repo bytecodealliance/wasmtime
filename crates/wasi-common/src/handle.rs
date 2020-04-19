@@ -1,20 +1,65 @@
-use crate::entry::EntryRights;
-use crate::wasi::{types, Errno, Result};
+use crate::wasi::types::{self, Rights};
+use crate::wasi::{Errno, Result};
 use std::any::Any;
+use std::fmt;
 use std::io::{self, SeekFrom};
+
+/// Represents rights of a `Handle`, either already held or required.
+#[derive(Debug, Copy, Clone)]
+pub(crate) struct HandleRights {
+    pub(crate) base: Rights,
+    pub(crate) inheriting: Rights,
+}
+
+impl HandleRights {
+    pub(crate) fn new(base: Rights, inheriting: Rights) -> Self {
+        Self { base, inheriting }
+    }
+
+    /// Create new `HandleRights` instance from `base` rights only, keeping
+    /// `inheriting` set to none.
+    pub(crate) fn from_base(base: Rights) -> Self {
+        Self {
+            base,
+            inheriting: Rights::empty(),
+        }
+    }
+
+    /// Create new `HandleRights` instance with both `base` and `inheriting`
+    /// rights set to none.
+    pub(crate) fn empty() -> Self {
+        Self {
+            base: Rights::empty(),
+            inheriting: Rights::empty(),
+        }
+    }
+
+    /// Check if `other` is a subset of those rights.
+    pub(crate) fn contains(&self, other: &Self) -> bool {
+        self.base.contains(&other.base) && self.inheriting.contains(&other.inheriting)
+    }
+}
+
+impl fmt::Display for HandleRights {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "HandleRights {{ base: {}, inheriting: {} }}",
+            self.base, self.inheriting
+        )
+    }
+}
 
 pub(crate) trait Handle {
     fn as_any(&self) -> &dyn Any;
     fn try_clone(&self) -> io::Result<Box<dyn Handle>>;
-    fn get_file_type(&self) -> io::Result<types::Filetype>;
-    fn get_rights(&self) -> io::Result<EntryRights> {
-        Ok(EntryRights::empty())
+    fn get_file_type(&self) -> types::Filetype;
+    fn get_rights(&self) -> HandleRights {
+        HandleRights::empty()
     }
+    fn set_rights(&self, rights: HandleRights);
     fn is_directory(&self) -> bool {
-        if let Ok(ft) = self.get_file_type() {
-            return ft == types::Filetype::Directory;
-        }
-        false
+        self.get_file_type() == types::Filetype::Directory
     }
     // TODO perhaps should be a separate trait?
     // FdOps
