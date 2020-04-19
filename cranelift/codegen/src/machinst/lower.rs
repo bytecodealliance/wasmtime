@@ -31,6 +31,8 @@ pub trait LowerCtx {
     fn data(&self, ir_inst: Inst) -> &InstructionData;
     /// Get the controlling type for a polymorphic IR instruction.
     fn ty(&self, ir_inst: Inst) -> Type;
+    /// Get the `ABIBody`.
+    fn abi(&mut self) -> &dyn ABIBody<I = Self::I>;
     /// Emit a machine instruction.
     fn emit(&mut self, mach_inst: Self::I);
     /// Indicate that an IR instruction has been merged, and so one of its
@@ -525,6 +527,10 @@ impl<'a, I: VCodeInst> LowerCtx for Lower<'a, I> {
     /// Get the controlling type for a polymorphic IR instruction.
     fn ty(&self, ir_inst: Inst) -> Type {
         self.f.dfg.ctrl_typevar(ir_inst)
+    }
+
+    fn abi(&mut self) -> &dyn ABIBody<I = I> {
+        self.vcode.abi()
     }
 
     /// Emit a machine instruction.

@@ -497,6 +497,16 @@ impl ABIBody for AArch64ABIBody {
         store_stack(fp_off, from_reg, ty)
     }
 
+    fn stackslot_addr(&self, slot: StackSlot, offset: u32, into_reg: Writable<Reg>) -> Inst {
+        // Offset from beginning of stackslot area, which is at FP - stackslots_size.
+        let stack_off = self.stackslots[slot.as_u32() as usize] as i64;
+        let fp_off: i64 = -(self.stackslots_size as i64) + stack_off + (offset as i64);
+        Inst::LoadAddr {
+            rd: into_reg,
+            mem: MemArg::FPOffset(fp_off),
+        }
+    }
+
     // Load from a spillslot.
     fn load_spillslot(&self, slot: SpillSlot, ty: Type, into_reg: Writable<Reg>) -> Inst {
         // Note that when spills/fills are generated, we don't yet know how many

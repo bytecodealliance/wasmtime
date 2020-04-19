@@ -56,6 +56,9 @@ pub trait ABIBody {
     /// Update with the clobbered registers, post-regalloc.
     fn set_clobbered(&mut self, clobbered: Set<Writable<RealReg>>);
 
+    /// Get the address of a stackslot.
+    fn stackslot_addr(&self, slot: StackSlot, offset: u32, into_reg: Writable<Reg>) -> Self::I;
+
     /// Load from a stackslot.
     fn load_stackslot(
         &self,

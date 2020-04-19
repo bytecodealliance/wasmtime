@@ -1,0 +1,115 @@
+test vcode
+target aarch64
+
+function %stack_addr_small() -> i64 {
+ss0 = explicit_slot 8
+
+block0:
+  v0 = stack_addr.i64 ss0
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sub sp, sp, #16
+; nextln: sub x0, fp, #8
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %stack_addr_big() -> i64 {
+ss0 = explicit_slot 100000
+ss1 = explicit_slot 8
+
+block0:
+  v0 = stack_addr.i64 ss0
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: ldr x15, 8 ; b 12 ; data 100016
+; nextln: sub sp, sp, x15, UXTX
+; nextln: movz x0, #34472; movk x0, #1, LSL #16; sub x0, fp, x0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+; FIXME: don't use stack_addr legalization for stack_load and stack_store
+
+function %stack_load_small() -> i64 {
+ss0 = explicit_slot 8
+
+block0:
+  v0 = stack_load.i64 ss0
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sub sp, sp, #16
+; nextln: sub x0, fp, #8
+; nextln: ldur x0, [x0]
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %stack_load_big() -> i64 {
+ss0 = explicit_slot 100000
+ss1 = explicit_slot 8
+
+block0:
+  v0 = stack_load.i64 ss0
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: ldr x15, 8 ; b 12 ; data 100016
+; nextln: sub sp, sp, x15, UXTX
+; nextln: movz x0, #34472; movk x0, #1, LSL #16; sub x0, fp, x0
+; nextln: ldur x0, [x0]
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %stack_store_small(i64) {
+ss0 = explicit_slot 8
+
+block0(v0: i64):
+  stack_store.i64 v0, ss0
+  return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sub sp, sp, #16
+; nextln: sub x1, fp, #8
+; nextln: stur x0, [x1]
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %stack_store_big(i64) {
+ss0 = explicit_slot 100000
+ss1 = explicit_slot 8
+
+block0(v0: i64):
+  stack_store.i64 v0, ss0
+  return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: ldr x15, 8 ; b 12 ; data 100016
+; nextln: sub sp, sp, x15, UXTX
+; nextln: movz x1, #34472; movk x1, #1, LSL #16; sub x1, fp, x1
+; nextln: stur x0, [x1]
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
