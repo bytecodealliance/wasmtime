@@ -17,8 +17,7 @@ fn main() -> Result<()> {
     let module = Module::from_file(&store, "examples/interrupt.wat")?;
     let instance = Instance::new(&module, &[])?;
     let run = instance
-        .get_export("run")
-        .and_then(|e| e.func())
+        .get_func("run")
         .ok_or(anyhow::format_err!("failed to find `run` function export"))?
         .get0::<()>()?;
 
