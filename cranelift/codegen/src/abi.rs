@@ -18,6 +18,10 @@ pub enum ArgAction {
     /// Assign the argument to the given location.
     Assign(ArgumentLoc),
 
+    /// Assign the argument to the given location and change the type to the specified type.
+    /// This is used by [`ArgumentPurpose::StructArgument`].
+    AssignAndChangeType(ArgumentLoc, Type),
+
     /// Convert the argument, then call again.
     ///
     /// This action can split an integer type into two smaller integer arguments, or it can split a
@@ -117,6 +121,13 @@ pub fn legalize_args<AA: ArgAssigner>(args: &[AbiParam], aa: &mut AA) -> Option<
             // Assign argument to a location and move on to the next one.
             ArgAction::Assign(loc) => {
                 args.to_mut()[argno].location = loc;
+                argno += 1;
+            }
+            // Assign argument to a location, change type to `INVALID` and move on to the next one.
+            ArgAction::AssignAndChangeType(loc, ty) => {
+                let arg = &mut args.to_mut()[argno];
+                arg.location = loc;
+                arg.value_type = ty;
                 argno += 1;
             }
             // Split this argument into two smaller ones. Then revisit both.

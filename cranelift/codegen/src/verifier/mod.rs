@@ -65,9 +65,9 @@ use crate::ir;
 use crate::ir::entities::AnyEntity;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{
-    types, ArgumentLoc, Block, Constant, FuncRef, Function, GlobalValue, Inst, InstructionData,
-    JumpTable, Opcode, SigRef, StackSlot, StackSlotKind, Type, Value, ValueDef, ValueList,
-    ValueLoc,
+    types, ArgumentLoc, ArgumentPurpose, Block, Constant, FuncRef, Function, GlobalValue, Inst,
+    InstructionData, JumpTable, Opcode, SigRef, StackSlot, StackSlotKind, Type, Value, ValueDef,
+    ValueList, ValueLoc,
 };
 use crate::isa::TargetIsa;
 use crate::iterators::IteratorExtras;
@@ -1473,7 +1473,8 @@ impl<'a> Verifier<'a> {
                             ),
                         ));
                     }
-                    if slot.size != abi.value_type.bytes() {
+                    if abi.purpose == ArgumentPurpose::StructArgument(slot.size) {
+                    } else if slot.size != abi.value_type.bytes() {
                         return errors.fatal((
                             inst,
                             self.context(inst),
@@ -1984,6 +1985,20 @@ impl<'a> Verifier<'a> {
                     AnyEntity::Function,
                     format!("Return value at position {} has an invalid type", i),
                 ))
+            });
+
+        self.func
+            .signature
+            .returns
+            .iter()
+            .enumerate()
+            .for_each(|(i, ret)| {
+                if let ArgumentPurpose::StructArgument(_) = ret.purpose {
+                    errors.report((
+                        AnyEntity::Function,
+                        format!("Return value at position {} can't be an struct argument", i),
+                    ))
+                }
             });
 
         if errors.has_error() {
