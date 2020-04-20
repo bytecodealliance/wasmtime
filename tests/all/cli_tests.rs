@@ -130,7 +130,7 @@ fn timeout_in_start() -> Result<()> {
         "run",
         wasm.path().to_str().unwrap(),
         "--wasm-timeout",
-        "1",
+        "1ms",
         "--disable-cache",
     ])?;
     assert!(!output.status.success());
@@ -151,7 +151,7 @@ fn timeout_in_invoke() -> Result<()> {
         "run",
         wasm.path().to_str().unwrap(),
         "--wasm-timeout",
-        "1",
+        "1ms",
         "--disable-cache",
     ])?;
     assert!(!output.status.success());

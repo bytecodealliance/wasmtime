@@ -41,6 +41,16 @@ fn parse_map_dirs(s: &str) -> Result<(String, String)> {
     Ok((parts[0].into(), parts[1].into()))
 }
 
+fn parse_dur(s: &str) -> Result<Duration> {
+    // assume an integer without a unit specified is a number of seconds ...
+    if let Ok(val) = s.parse() {
+        return Ok(Duration::from_secs(val));
+    }
+    // ... otherwise try to parse it with units such as `3s` or `300ms`
+    let dur = humantime::parse_duration(s)?;
+    Ok(dur)
+}
+
 /// Runs a WebAssembly module
 #[derive(StructOpt)]
 #[structopt(name = "run", setting = AppSettings::TrailingVarArg)]
@@ -82,9 +92,13 @@ pub struct RunCommand {
     )]
     preloads: Vec<PathBuf>,
 
-    /// Maximum execution time of wasm code before timing out
-    #[structopt(long = "wasm-timeout")]
-    wasm_timeout: Option<u64>,
+    /// Maximum execution time of wasm code before timing out (1, 2s, 100ms, etc)
+    #[structopt(
+        long = "wasm-timeout",
+        value_name = "TIME",
+        parse(try_from_str = parse_dur),
+    )]
+    wasm_timeout: Option<Duration>,
 
     // NOTE: this must come last for trailing varargs
     /// The arguments to pass to the module
@@ -237,7 +251,7 @@ impl RunCommand {
         if let Some(timeout) = self.wasm_timeout {
             let handle = store.interrupt_handle()?;
             thread::spawn(move || {
-                thread::sleep(Duration::from_secs(timeout));
+                thread::sleep(timeout);
                 handle.interrupt();
             });
         }

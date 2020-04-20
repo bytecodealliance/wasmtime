@@ -63,7 +63,7 @@ cfg_if::cfg_if! {
             // we don't want to run on the small sigaltstack, but rather the
             // much larger main stack.
             //
-            // The consequence of this is tha programs using Wasmtime which
+            // The consequence of this is that programs using Wasmtime which
             // overrun the native stack will not print out a nice message
             // saying that they're out of stack. Instead they'll simply
             // segfault and/or sigbus depending on the platform. Note though
