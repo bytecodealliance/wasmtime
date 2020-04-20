@@ -374,7 +374,7 @@ impl Table {
 
     /// Returns the current size of this table.
     pub fn size(&self) -> u32 {
-        unsafe { (&*self.wasmtime_export.definition).current_elements }
+        unsafe { (*self.wasmtime_export.definition).current_elements }
     }
 
     /// Grows the size of this table by `delta` more elements, initialization

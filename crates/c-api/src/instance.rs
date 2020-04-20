@@ -146,10 +146,10 @@ pub extern "C" fn wasm_instance_exports(instance: &wasm_instance_t, out: &mut wa
         instance
             .exports()
             .map(|e| match e.external {
-                Extern::Func(f) => ExternHost::Func(HostRef::new(f.clone())),
-                Extern::Global(f) => ExternHost::Global(HostRef::new(f.clone())),
-                Extern::Memory(f) => ExternHost::Memory(HostRef::new(f.clone())),
-                Extern::Table(f) => ExternHost::Table(HostRef::new(f.clone())),
+                Extern::Func(f) => ExternHost::Func(HostRef::new(f)),
+                Extern::Global(f) => ExternHost::Global(HostRef::new(f)),
+                Extern::Memory(f) => ExternHost::Memory(HostRef::new(f)),
+                Extern::Table(f) => ExternHost::Table(HostRef::new(f)),
             })
             .collect()
     });

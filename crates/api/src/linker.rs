@@ -283,7 +283,7 @@ impl Linker {
         let items = self
             .iter()
             .filter(|(m, _, _)| *m == module)
-            .map(|(_, name, item)| (name.to_string(), item.clone()))
+            .map(|(_, name, item)| (name.to_string(), item))
             .collect::<Vec<_>>();
         for (name, item) in items {
             self.define(as_module, &name, item)?;

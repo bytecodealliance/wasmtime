@@ -297,7 +297,7 @@ pub unsafe extern "C" fn wasi_instance_new(
         })),
         Err(e) => {
             *trap = Box::into_raw(Box::new(wasm_trap_t {
-                trap: HostRef::new(Trap::new(e.to_string())),
+                trap: HostRef::new(Trap::new(e)),
             }));
 
             None

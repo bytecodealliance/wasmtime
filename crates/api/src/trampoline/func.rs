@@ -212,7 +212,7 @@ pub fn create_handle_with_function(
 
     let pointer_type = isa.pointer_type();
     let sig = match ft.get_wasmtime_signature(pointer_type) {
-        Some(sig) => sig.clone(),
+        Some(sig) => sig,
         None => bail!("not a supported core wasm signature {:?}", ft),
     };
 
@@ -276,7 +276,7 @@ pub unsafe fn create_handle_with_raw_function(
 
     let pointer_type = isa.pointer_type();
     let sig = match ft.get_wasmtime_signature(pointer_type) {
-        Some(sig) => sig.clone(),
+        Some(sig) => sig,
         None => bail!("not a supported core wasm signature {:?}", ft),
     };
 
