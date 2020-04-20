@@ -462,18 +462,18 @@ impl<'module> ImportType<'module> {
     }
 
     /// Returns the module name that this import is expected to come from.
-    pub fn module(&'module self) -> &'module str {
+    pub fn module(&self) -> &'module str {
         self.module
     }
 
     /// Returns the field name of the module that this import is expected to
     /// come from.
-    pub fn name(&'module self) -> &'module str {
+    pub fn name(&self) -> &'module str {
         self.name
     }
 
     /// Returns the expected type of this import.
-    pub fn ty(&'module self) -> ExternType {
+    pub fn ty(&self) -> ExternType {
         self.ty.extern_type()
     }
 }
@@ -512,13 +512,13 @@ impl<'module> ExportType<'module> {
         ExportType { name, ty }
     }
 
-    /// Returns the name by which this export is known by.
-    pub fn name(&'module self) -> &'module str {
+    /// Returns the name by which this export is known.
+    pub fn name(&self) -> &'module str {
         self.name
     }
 
     /// Returns the type of this export.
-    pub fn ty(&'module self) -> ExternType {
+    pub fn ty(&self) -> ExternType {
         self.ty.extern_type()
     }
 }
