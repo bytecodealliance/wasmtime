@@ -145,7 +145,7 @@ pub extern "C" fn wasm_instance_exports(instance: &wasm_instance_t, out: &mut wa
         let instance = &instance.instance.borrow();
         instance
             .exports()
-            .map(|e| match e.external {
+            .map(|e| match e.into_extern() {
                 Extern::Func(f) => ExternHost::Func(HostRef::new(f)),
                 Extern::Global(f) => ExternHost::Global(HostRef::new(f)),
                 Extern::Memory(f) => ExternHost::Memory(HostRef::new(f)),

@@ -166,7 +166,7 @@ impl Linker {
         if !item.comes_from_same_store(&self.store) {
             bail!("all linker items must be from the same store");
         }
-        self.insert(module, name, item.ty(), item)?;
+        self.insert(module, name, item)?;
         Ok(self)
     }
 
@@ -265,7 +265,7 @@ impl Linker {
             bail!("all linker items must be from the same store");
         }
         for export in instance.exports() {
-            self.insert(module_name, export.name, export.ty(), export.external)?;
+            self.insert(module_name, export.name(), export.into_extern())?;
         }
         Ok(self)
     }
@@ -291,8 +291,8 @@ impl Linker {
         Ok(())
     }
 
-    fn insert(&mut self, module: &str, name: &str, ty: ExternType, item: Extern) -> Result<()> {
-        let key = self.import_key(module, name, ty);
+    fn insert(&mut self, module: &str, name: &str, item: Extern) -> Result<()> {
+        let key = self.import_key(module, name, item.ty());
         match self.map.entry(key) {
             Entry::Occupied(o) if !self.allow_shadowing => bail!(
                 "import of `{}::{}` with kind {:?} defined twice",

@@ -259,7 +259,7 @@ mod tests {
 
         // instance2 which calls 'instance1.read'
         let module2 = Module::new(&store, WAT2)?;
-        let instance2 = Instance::new(&module2, &[instance1_read.external])?;
+        let instance2 = Instance::new(&module2, &[instance1_read.into_extern()])?;
         // since 'instance2.run' calls 'instance1.read' we need to set up the signal handler to handle
         // SIGSEGV originating from within the memory of instance1
         unsafe {

@@ -167,10 +167,8 @@ impl Instance {
             .exports()
             .map(move |(name, entity_index)| {
                 let export = instance_handle.lookup_by_declaration(entity_index);
-                Export {
-                    name,
-                    external: Extern::from_wasmtime_export(store, instance_handle.clone(), export),
-                }
+                let extern_ = Extern::from_wasmtime_export(export, store, instance_handle.clone());
+                Export::new(name, extern_)
             })
     }
 
@@ -183,9 +181,9 @@ impl Instance {
     pub fn get_export(&self, name: &str) -> Option<Extern> {
         let export = self.instance_handle.lookup(&name)?;
         Some(Extern::from_wasmtime_export(
+            export,
             self.module.store(),
             self.instance_handle.clone(),
-            export,
         ))
     }
 

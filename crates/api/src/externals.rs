@@ -91,11 +91,11 @@ impl Extern {
     }
 
     pub(crate) fn from_wasmtime_export(
+        wasmtime_export: wasmtime_runtime::Export,
         store: &Store,
         instance_handle: InstanceHandle,
-        export: wasmtime_runtime::Export,
     ) -> Extern {
-        match export {
+        match wasmtime_export {
             wasmtime_runtime::Export::Function(f) => {
                 Extern::Func(Func::from_wasmtime_function(f, store, instance_handle))
             }
@@ -901,35 +901,55 @@ pub unsafe trait MemoryCreator: Send + Sync {
 #[derive(Clone)]
 pub struct Export<'instance> {
     /// The name of the export.
-    pub name: &'instance str,
+    name: &'instance str,
 
-    /// The value of the export.
-    pub external: Extern,
+    /// The definition of the export.
+    definition: Extern,
 }
 
 impl<'instance> Export<'instance> {
-    /// Shorthand for `self.external.into_func()`.
-    pub fn into_func(self) -> Option<Func> {
-        self.external.into_func()
+    /// Creates a new export which is exported with the given `name` and has the
+    /// given `definition`.
+    pub(crate) fn new(name: &'instance str, definition: Extern) -> Export<'instance> {
+        Export { name, definition }
     }
 
-    /// Shorthand for `self.external.into_table()`.
-    pub fn into_table(self) -> Option<Table> {
-        self.external.into_table()
+    /// Returns the name by which this export is known.
+    pub fn name(&self) -> &'instance str {
+        self.name
     }
 
-    /// Shorthand for `self.external.into_memory()`.
-    pub fn into_memory(self) -> Option<Memory> {
-        self.external.into_memory()
-    }
-
-    /// Shorthand for `self.external.into_global()`.
-    pub fn into_global(self) -> Option<Global> {
-        self.external.into_global()
-    }
-
-    /// Shorthand for `self.external.ty()`.
+    /// Return the `ExternType` of this export.
     pub fn ty(&self) -> ExternType {
-        self.external.ty()
+        self.definition.ty()
+    }
+
+    /// Consume this `Export` and return the contained `Extern`.
+    pub fn into_extern(self) -> Extern {
+        self.definition
+    }
+
+    /// Consume this `Export` and return the contained `Func`, if it's a function,
+    /// or `None` otherwise.
+    pub fn into_func(self) -> Option<Func> {
+        self.definition.into_func()
+    }
+
+    /// Consume this `Export` and return the contained `Table`, if it's a table,
+    /// or `None` otherwise.
+    pub fn into_table(self) -> Option<Table> {
+        self.definition.into_table()
+    }
+
+    /// Consume this `Export` and return the contained `Memory`, if it's a memory,
+    /// or `None` otherwise.
+    pub fn into_memory(self) -> Option<Memory> {
+        self.definition.into_memory()
+    }
+
+    /// Consume this `Export` and return the contained `Global`, if it's a global,
+    /// or `None` otherwise.
+    pub fn into_global(self) -> Option<Global> {
+        self.definition.into_global()
     }
 }

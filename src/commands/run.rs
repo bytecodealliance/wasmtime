@@ -230,7 +230,7 @@ impl RunCommand {
         // If a function to invoke was given, invoke it.
         if let Some(name) = self.invoke.as_ref() {
             self.invoke_export(instance, name)?;
-        } else if instance.exports().any(|export| export.name.is_empty()) {
+        } else if instance.exports().any(|export| export.name().is_empty()) {
             // Launch the default command export.
             self.invoke_export(instance, "")?;
         } else {
