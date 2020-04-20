@@ -54,6 +54,21 @@ cfg_if::cfg_if! {
             };
 
             // Allow handling OOB with signals on all architectures
+            //
+            // Note that this is overriding the Rust standard library's signal
+            // handler. The standard library's signal handler, however, only
+            // serves the purpose of printing out that a stack overflow has
+            // happened when it happens. Doing so requires the `SA_ONSTACK`
+            // flag, though, which we're specifically avoiding here because
+            // we don't want to run on the small sigaltstack, but rather the
+            // much larger main stack.
+            //
+            // The consequence of this is tha programs using Wasmtime which
+            // overrun the native stack will not print out a nice message
+            // saying that they're out of stack. Instead they'll simply
+            // segfault and/or sigbus depending on the platform. Note though
+            // that this isn't undefined behavior, but the stack protection
+            // mechanisms in Rust will guarantee a segfault.
             register(&mut PREV_SIGSEGV, libc::SIGSEGV);
 
             // Handle `unreachable` instructions which execute `ud2` right now
