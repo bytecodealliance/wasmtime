@@ -65,14 +65,14 @@ impl Handle for Stdio {
         };
         Ok(nread)
     }
-    fn write_vectored(&self, iovs: &[io::IoSlice], isatty: bool) -> Result<usize> {
+    fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
         let nwritten = match self {
             Self::In { .. } => return Err(Errno::Badf),
             Self::Out { .. } => {
                 // lock for the duration of the scope
                 let stdout = io::stdout();
                 let mut stdout = stdout.lock();
-                let nwritten = if isatty {
+                let nwritten = if self.is_tty() {
                     SandboxedTTYWriter::new(&mut stdout).write_vectored(&iovs)?
                 } else {
                     stdout.write_vectored(&iovs)?

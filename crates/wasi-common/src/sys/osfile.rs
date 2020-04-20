@@ -1,7 +1,6 @@
 use super::sys_impl::oshandle::OsHandle;
 use super::{fd, AsFile};
 use crate::handle::{Handle, HandleRights};
-use crate::sandboxed_tty_writer::SandboxedTTYWriter;
 use crate::wasi::{types, Errno, Result};
 use std::any::Any;
 use std::cell::Cell;
@@ -115,7 +114,7 @@ impl Handle for OsFile {
         let mut fd: &File = &self.as_file();
         let cur_pos = fd.seek(SeekFrom::Current(0))?;
         fd.seek(SeekFrom::Start(offset))?;
-        let nwritten = self.write_vectored(&buf, false)?;
+        let nwritten = self.write_vectored(&buf)?;
         fd.seek(SeekFrom::Start(cur_pos))?;
         Ok(nwritten)
     }
@@ -131,13 +130,8 @@ impl Handle for OsFile {
         self.as_file().sync_all()?;
         Ok(())
     }
-    fn write_vectored(&self, iovs: &[io::IoSlice], isatty: bool) -> Result<usize> {
-        let mut file: &File = &self.as_file();
-        let nwritten = if isatty {
-            SandboxedTTYWriter::new(&mut file).write_vectored(&iovs)?
-        } else {
-            file.write_vectored(&iovs)?
-        };
+    fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
+        let nwritten = self.as_file().write_vectored(&iovs)?;
         Ok(nwritten)
     }
 }

@@ -73,9 +73,9 @@ impl Handle for OsOther {
         let nread = self.as_file().read_vectored(iovs)?;
         Ok(nread)
     }
-    fn write_vectored(&self, iovs: &[io::IoSlice], isatty: bool) -> Result<usize> {
+    fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
         let mut fd: &File = &self.as_file();
-        let nwritten = if isatty {
+        let nwritten = if self.is_tty() {
             SandboxedTTYWriter::new(&mut fd).write_vectored(&iovs)?
         } else {
             fd.write_vectored(iovs)?

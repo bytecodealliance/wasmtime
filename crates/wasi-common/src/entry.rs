@@ -1,5 +1,5 @@
 use crate::handle::{Handle, HandleRights};
-use crate::wasi::types::{Filetype, Rights};
+use crate::wasi::types::Filetype;
 use crate::wasi::{Errno, Result};
 use std::ops::Deref;
 use std::path::PathBuf;
@@ -89,17 +89,5 @@ impl Entry {
             );
             Err(Errno::Notcapable)
         }
-    }
-
-    // TODO we should probably have a separate struct representing
-    // char device
-    /// Test whether this descriptor is considered a tty within WASI.
-    /// Note that since WASI itself lacks an `isatty` syscall and relies
-    /// on a conservative approximation, we use the same approximation here.
-    pub(crate) fn isatty(&self) -> bool {
-        let file_type = self.handle.get_file_type();
-        let rights = self.handle.get_rights();
-        let required_rights = HandleRights::from_base(Rights::FD_SEEK | Rights::FD_TELL);
-        file_type == Filetype::CharacterDevice && rights.contains(&required_rights)
     }
 }

@@ -438,10 +438,9 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         }
         let required_rights = HandleRights::from_base(types::Rights::FD_WRITE);
         let entry = self.get_entry(fd)?;
-        let isatty = entry.isatty();
         let host_nwritten = entry
             .as_handle(&required_rights)?
-            .write_vectored(&slices, isatty)?
+            .write_vectored(&slices)?
             .try_into()?;
         Ok(host_nwritten)
     }

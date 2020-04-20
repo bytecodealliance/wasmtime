@@ -61,6 +61,15 @@ pub(crate) trait Handle {
     fn is_directory(&self) -> bool {
         self.get_file_type() == types::Filetype::Directory
     }
+    /// Test whether this descriptor is considered a tty within WASI.
+    /// Note that since WASI itself lacks an `isatty` syscall and relies
+    /// on a conservative approximation, we use the same approximation here.
+    fn is_tty(&self) -> bool {
+        let file_type = self.get_file_type();
+        let rights = self.get_rights();
+        let required_rights = HandleRights::from_base(Rights::FD_SEEK | Rights::FD_TELL);
+        file_type == types::Filetype::CharacterDevice && rights.contains(&required_rights)
+    }
     // TODO perhaps should be a separate trait?
     // FdOps
     fn advise(
@@ -118,7 +127,7 @@ pub(crate) trait Handle {
     fn sync(&self) -> Result<()> {
         Ok(())
     }
-    fn write_vectored(&self, _iovs: &[io::IoSlice], _isatty: bool) -> Result<usize> {
+    fn write_vectored(&self, _iovs: &[io::IoSlice]) -> Result<usize> {
         Err(Errno::Badf)
     }
     // TODO perhaps should be a separate trait?

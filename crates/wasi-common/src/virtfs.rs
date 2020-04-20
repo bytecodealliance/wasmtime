@@ -282,11 +282,7 @@ impl Handle for InMemoryFile {
 
         Ok(self.cursor.get())
     }
-    fn write_vectored(&self, iovs: &[io::IoSlice], isatty: bool) -> Result<usize> {
-        if isatty {
-            unimplemented!("writes to virtual tty");
-        }
-
+    fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
         trace!("write_vectored(iovs={:?})", iovs);
         let mut data = self.data.borrow_mut();
 
