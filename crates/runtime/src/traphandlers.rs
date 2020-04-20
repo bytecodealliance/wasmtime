@@ -39,10 +39,15 @@ cfg_if::cfg_if! {
                 // SA_SIGINFO gives us access to information like the program
                 // counter from where the fault happened.
                 //
+                // SA_ONSTACK allows us to handle signals on an alternate stack,
+                // so that the handler can run in response to running out of
+                // stack space on the main stack. Rust installs an alternate
+                // stack with sigaltstack, so we rely on that.
+                //
                 // SA_NODEFER allows us to reenter the signal handler if we
                 // crash while handling the signal, and fall through to the
                 // Breakpad handler by testing handlingSegFault.
-                handler.sa_flags = libc::SA_SIGINFO | libc::SA_NODEFER;
+                handler.sa_flags = libc::SA_SIGINFO | libc::SA_NODEFER | libc::SA_ONSTACK;
                 handler.sa_sigaction = trap_handler as usize;
                 libc::sigemptyset(&mut handler.sa_mask);
                 if libc::sigaction(signal, &handler, slot.as_mut_ptr()) != 0 {
@@ -54,21 +59,6 @@ cfg_if::cfg_if! {
             };
 
             // Allow handling OOB with signals on all architectures
-            //
-            // Note that this is overriding the Rust standard library's signal
-            // handler. The standard library's signal handler, however, only
-            // serves the purpose of printing out that a stack overflow has
-            // happened when it happens. Doing so requires the `SA_ONSTACK`
-            // flag, though, which we're specifically avoiding here because
-            // we don't want to run on the small sigaltstack, but rather the
-            // much larger main stack.
-            //
-            // The consequence of this is that programs using Wasmtime which
-            // overrun the native stack will not print out a nice message
-            // saying that they're out of stack. Instead they'll simply
-            // segfault and/or sigbus depending on the platform. Note though
-            // that this isn't undefined behavior, but the stack protection
-            // mechanisms in Rust will guarantee a segfault.
             register(&mut PREV_SIGSEGV, libc::SIGSEGV);
 
             // Handle `unreachable` instructions which execute `ud2` right now
@@ -376,6 +366,10 @@ pub unsafe fn catch_traps<F>(
 where
     F: FnMut(),
 {
+    // Ensure that we have our sigaltstack installed.
+    #[cfg(unix)]
+    setup_unix_sigaltstack()?;
+
     return CallThreadState::new(vmctx).with(max_wasm_stack, |cx| {
         RegisterSetjmp(
             cx.jmp_buf.as_ptr(),
@@ -663,5 +657,114 @@ mod tls {
             let p = ptr.get();
             unsafe { closure(if p.is_null() { None } else { Some(&*p) }) }
         })
+    }
+}
+
+/// A module for registering a custom alternate signal stack (sigaltstack).
+///
+/// Rust's libstd installs an alternate stack with size `SIGSTKSZ`, which is not
+/// always large enough for our signal handling code. Override it by creating
+/// and registering our own alternate stack that is large enough and has a guard
+/// page.
+#[cfg(unix)]
+fn setup_unix_sigaltstack() -> Result<(), Trap> {
+    use std::cell::RefCell;
+    use std::convert::TryInto;
+    use std::ptr::null_mut;
+
+    thread_local! {
+        /// Thread-local state is lazy-initialized on the first time it's used,
+        /// and dropped when the thread exits.
+        static TLS: RefCell<Tls> = RefCell::new(Tls::None);
+    }
+
+    /// The size of the sigaltstack (not including the guard, which will be
+    /// added). Make this large enough to run our signal handlers.
+    const MIN_STACK_SIZE: usize = 16 * 4096;
+
+    enum Tls {
+        None,
+        Allocated {
+            mmap_ptr: *mut libc::c_void,
+            mmap_size: usize,
+        },
+        BigEnough,
+    }
+
+    return TLS.with(|slot| unsafe {
+        let mut slot = slot.borrow_mut();
+        match *slot {
+            Tls::None => {}
+            // already checked
+            _ => return Ok(()),
+        }
+
+        // Check to see if the existing sigaltstack, if it exists, is big
+        // enough. If so we don't need to allocate our own.
+        let mut old_stack = mem::zeroed();
+        let r = libc::sigaltstack(ptr::null(), &mut old_stack);
+        assert_eq!(r, 0, "learning about sigaltstack failed");
+        if old_stack.ss_flags & libc::SS_DISABLE == 0 && old_stack.ss_size >= MIN_STACK_SIZE {
+            *slot = Tls::BigEnough;
+            return Ok(());
+        }
+
+        // ... but failing that we need to allocate our own, so do all that
+        // here.
+        let page_size: usize = libc::sysconf(libc::_SC_PAGESIZE).try_into().unwrap();
+        let guard_size = page_size;
+        let alloc_size = guard_size + MIN_STACK_SIZE;
+
+        let ptr = libc::mmap(
+            null_mut(),
+            alloc_size,
+            libc::PROT_NONE,
+            libc::MAP_PRIVATE | libc::MAP_ANON,
+            -1,
+            0,
+        );
+        if ptr == libc::MAP_FAILED {
+            return Err(Trap::oom());
+        }
+
+        // Prepare the stack with readable/writable memory and then register it
+        // with `sigaltstack`.
+        let stack_ptr = (ptr as usize + guard_size) as *mut libc::c_void;
+        let r = libc::mprotect(
+            stack_ptr,
+            MIN_STACK_SIZE,
+            libc::PROT_READ | libc::PROT_WRITE,
+        );
+        assert_eq!(r, 0, "mprotect to configure memory for sigaltstack failed");
+        let new_stack = libc::stack_t {
+            ss_sp: stack_ptr,
+            ss_flags: 0,
+            ss_size: MIN_STACK_SIZE,
+        };
+        let r = libc::sigaltstack(&new_stack, ptr::null_mut());
+        assert_eq!(r, 0, "registering new sigaltstack failed");
+
+        *slot = Tls::Allocated {
+            mmap_ptr: ptr,
+            mmap_size: alloc_size,
+        };
+        Ok(())
+    });
+
+    impl Drop for Tls {
+        fn drop(&mut self) {
+            let (ptr, size) = match self {
+                Tls::Allocated {
+                    mmap_ptr,
+                    mmap_size,
+                } => (*mmap_ptr, *mmap_size),
+                _ => return,
+            };
+            unsafe {
+                // Deallocate the stack memory.
+                let r = libc::munmap(ptr, size);
+                debug_assert_eq!(r, 0, "munmap failed during thread shutdown");
+            }
+        }
     }
 }
