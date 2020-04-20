@@ -2,6 +2,8 @@
 
 use crate::{init_file_per_thread_logger, CommonOptions};
 use anyhow::{bail, Context as _, Result};
+use std::thread;
+use std::time::Duration;
 use std::{
     ffi::{OsStr, OsString},
     fs::File,
@@ -80,6 +82,10 @@ pub struct RunCommand {
     )]
     preloads: Vec<PathBuf>,
 
+    /// Maximum execution time of wasm code before timing out
+    #[structopt(long = "wasm-timeout")]
+    wasm_timeout: Option<u64>,
+
     // NOTE: this must come last for trailing varargs
     /// The arguments to pass to the module
     #[structopt(value_name = "ARGS")]
@@ -96,7 +102,10 @@ impl RunCommand {
             pretty_env_logger::init();
         }
 
-        let config = self.common.config()?;
+        let mut config = self.common.config()?;
+        if self.wasm_timeout.is_some() {
+            config.interruptable(true);
+        }
         let engine = Engine::new(&config);
         let store = Store::new(&engine);
 
@@ -225,6 +234,13 @@ impl RunCommand {
     }
 
     fn handle_module(&self, store: &Store, module_registry: &ModuleRegistry) -> Result<()> {
+        if let Some(timeout) = self.wasm_timeout {
+            let handle = store.interrupt_handle()?;
+            thread::spawn(move || {
+                thread::sleep(Duration::from_secs(timeout));
+                handle.interrupt();
+            });
+        }
         let instance = Self::instantiate_module(store, module_registry, &self.module)?;
 
         // If a function to invoke was given, invoke it.

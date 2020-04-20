@@ -1,6 +1,6 @@
 //! Support for compiling with Cranelift.
 
-// # How does wasm prevent stack overflow?
+// # How does Wasmtime prevent stack overflow?
 //
 // A few locations throughout the codebase link to this file to explain
 // interrupts and stack overflow. To start off, let's take a look at stack
@@ -15,10 +15,10 @@
 // prologue check to all JIT functions for how much native stack is remaining.
 // The `VMContext` pointer is the first argument to all functions, and the first
 // field of this structure is `*const VMInterrupts` and the first field of that
-// is the stack limit. Note that the stack limit in this case means "if %rsp
-// goes below this, trap". Each JIT function which consumes stack space or
-// isn't a leaf function starts off by loading the stack limit, checking it
-// against %rsp, and optionally traps.
+// is the stack limit. Note that the stack limit in this case means "if the
+// stack pointer goes below this, trap". Each JIT function which consumes stack
+// space or isn't a leaf function starts off by loading the stack limit,
+// checking it against the stack pointer, and optionally traps.
 //
 // This manual check allows the embedder (us) to give wasm a relatively precise
 // amount of stack allocation. Using this scheme we reserve a chunk of stack
@@ -41,7 +41,7 @@
 // size of wasm, see the implementation in `traphandlers.rs` in the
 // `update_stack_limit` function.
 //
-// # How is wasm interrupted?
+// # How is Wasmtime interrupted?
 //
 // Ok so given all that background of stack checks, the next thing we want to
 // build on top of this is the ability to *interrupt* executing wasm code. This
@@ -69,9 +69,9 @@
 // sentinel value that's impossible to be the real stack limit, then we
 // interrupt the loop and trap. To implement interrupts of functions, we
 // actually do the same thing where the magical sentinel value we use here is
-// automatically considered as considering all %rsp values as "you ran over
-// your stack". This means that with a write of a magical value to one location
-// we can interrupt both loops and function bodies.
+// automatically considered as considering all stack pointer values as "you ran
+// over your stack". This means that with a write of a magical value to one
+// location we can interrupt both loops and function bodies.
 //
 // The "magical value" here is `usize::max_value() - N`. We reserve
 // `usize::max_value()` for "the stack limit isn't set yet" and so -N is
