@@ -15,10 +15,10 @@ use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, Va
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
-    AbiParam, ArgumentExtension, ArgumentLoc, Block, Constant, ConstantData, ExtFuncData,
-    ExternalName, FuncRef, Function, GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle,
-    JumpTable, JumpTableData, MemFlags, Opcode, SigRef, Signature, StackSlot, StackSlotData,
-    StackSlotKind, Table, TableData, Type, Value, ValueLoc,
+    AbiParam, ArgumentExtension, ArgumentLoc, ArgumentPurpose, Block, Constant, ConstantData,
+    ExtFuncData, ExternalName, FuncRef, Function, GlobalValue, GlobalValueData, Heap, HeapData,
+    HeapStyle, JumpTable, JumpTableData, MemFlags, Opcode, SigRef, Signature, StackSlot,
+    StackSlotData, StackSlotKind, Table, TableData, Type, Value, ValueLoc,
 };
 use cranelift_codegen::isa::{self, CallConv, Encoding, RegUnit, TargetIsa};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -1423,6 +1423,14 @@ impl<'a> Parser<'a> {
             match s {
                 "uext" => arg.extension = ArgumentExtension::Uext,
                 "sext" => arg.extension = ArgumentExtension::Sext,
+                "sarg" => {
+                    self.consume();
+                    self.match_token(Token::LPar, "expected '(' to begin sarg size")?;
+                    let size = self.match_uimm32("expected byte-size in sarg decl")?;
+                    self.match_token(Token::RPar, "expected ')' to end sarg size")?;
+                    arg.purpose = ArgumentPurpose::StructArgument(size.into());
+                    continue;
+                }
                 _ => {
                     if let Ok(purpose) = s.parse() {
                         arg.purpose = purpose;

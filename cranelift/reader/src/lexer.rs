@@ -329,6 +329,7 @@ impl<'a> Lexer<'a> {
                 .unwrap_or_else(|| match text {
                     "iflags" => Token::Type(types::IFLAGS),
                     "fflags" => Token::Type(types::FFLAGS),
+                    "sarg__" => Token::Type(types::SARG__),
                     _ => Token::Identifier(text),
                 }),
             loc,
@@ -620,7 +621,7 @@ mod tests {
         let mut lex = Lexer::new(
             "v0 v00 vx01 block1234567890 block5234567890 v1x vx1 vxvx4 \
              function0 function b1 i32x4 f32x5 \
-             iflags fflags iflagss",
+             iflags fflags sarg__ iflagss",
         );
         assert_eq!(
             lex.next(),
@@ -643,6 +644,7 @@ mod tests {
         assert_eq!(lex.next(), token(Token::Identifier("f32x5"), 1));
         assert_eq!(lex.next(), token(Token::Type(types::IFLAGS), 1));
         assert_eq!(lex.next(), token(Token::Type(types::FFLAGS), 1));
+        assert_eq!(lex.next(), token(Token::Type(types::SARG__), 1));
         assert_eq!(lex.next(), token(Token::Identifier("iflagss"), 1));
         assert_eq!(lex.next(), None);
     }

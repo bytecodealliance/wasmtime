@@ -282,6 +282,9 @@ pub enum ArgumentPurpose {
     /// A normal user program value passed to or from a function.
     Normal,
 
+    /// A C struct passed as argument.
+    StructArgument(u32),
+
     /// Struct return pointer.
     ///
     /// When a function needs to return more data than will fit in registers, the caller passes a
@@ -334,21 +337,19 @@ pub enum ArgumentPurpose {
     StackLimit,
 }
 
-/// Text format names of the `ArgumentPurpose` variants.
-static PURPOSE_NAMES: [&str; 8] = [
-    "normal",
-    "sret",
-    "link",
-    "fp",
-    "csr",
-    "vmctx",
-    "sigid",
-    "stack_limit",
-];
-
 impl fmt::Display for ArgumentPurpose {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(PURPOSE_NAMES[*self as usize])
+        f.write_str(match self {
+            Self::Normal => "normal",
+            Self::StructArgument(size) => return write!(f, "sarg({})", size),
+            Self::StructReturn => "sret",
+            Self::Link => "link",
+            Self::FramePointer => "fp",
+            Self::CalleeSaved => "csr",
+            Self::VMContext => "vmctx",
+            Self::SignatureId => "sigid",
+            Self::StackLimit => "stack_limit",
+        })
     }
 }
 
@@ -364,6 +365,13 @@ impl FromStr for ArgumentPurpose {
             "vmctx" => Ok(Self::VMContext),
             "sigid" => Ok(Self::SignatureId),
             "stack_limit" => Ok(Self::StackLimit),
+            _ if s.starts_with("sarg(") => {
+                if !s.ends_with(")") {
+                    return Err(());
+                }
+                let size: u32 = s["sarg(".len()..s.len() - 1].parse().map_err(|_| ())?;
+                Ok(Self::StructArgument(size))
+            }
             _ => Err(()),
         }
     }
@@ -436,16 +444,17 @@ mod tests {
     #[test]
     fn argument_purpose() {
         let all_purpose = [
-            ArgumentPurpose::Normal,
-            ArgumentPurpose::StructReturn,
-            ArgumentPurpose::Link,
-            ArgumentPurpose::FramePointer,
-            ArgumentPurpose::CalleeSaved,
-            ArgumentPurpose::VMContext,
-            ArgumentPurpose::SignatureId,
-            ArgumentPurpose::StackLimit,
+            (ArgumentPurpose::Normal, "normal"),
+            (ArgumentPurpose::StructReturn, "sret"),
+            (ArgumentPurpose::Link, "link"),
+            (ArgumentPurpose::FramePointer, "fp"),
+            (ArgumentPurpose::CalleeSaved, "csr"),
+            (ArgumentPurpose::VMContext, "vmctx"),
+            (ArgumentPurpose::SignatureId, "sigid"),
+            (ArgumentPurpose::StackLimit, "stack_limit"),
+            (ArgumentPurpose::StructArgument(42), "sarg(42)"),
         ];
-        for (&e, &n) in all_purpose.iter().zip(PURPOSE_NAMES.iter()) {
+        for &(e, n) in &all_purpose {
             assert_eq!(e.to_string(), n);
             assert_eq!(Ok(e), n.parse());
         }

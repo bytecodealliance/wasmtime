@@ -1863,6 +1863,31 @@ pub(crate) fn define(
         .can_load(true),
     );
 
+    let Sarg = &TypeVar::new(
+        "Sarg",
+        "Any scalar or vector type with as most 128 lanes",
+        TypeSetBuilder::new()
+            .specials(vec![crate::cdsl::types::SpecialType::StructArgument])
+            .build(),
+    );
+    let sarg__ = &Operand::new("sarg__", Sarg);
+
+    // FIXME remove once the old style codegen backends are removed.
+    ig.push(
+        Inst::new(
+            "dummy_sarg__",
+            r#"
+        This creates a sarg__
+
+        This instruction is internal and should not be created by
+        Cranelift users.
+        "#,
+            &formats.nullary,
+        )
+        .operands_in(vec![])
+        .operands_out(vec![sarg__]),
+    );
+
     let src = &Operand::new("src", &imm.regunit);
     let dst = &Operand::new("dst", &imm.regunit);
 

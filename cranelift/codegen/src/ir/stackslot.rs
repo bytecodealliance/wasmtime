@@ -287,7 +287,12 @@ impl StackSlots {
 
     /// Create a stack slot representing an incoming function argument.
     pub fn make_incoming_arg(&mut self, ty: Type, offset: StackOffset) -> StackSlot {
-        let mut data = StackSlotData::new(StackSlotKind::IncomingArg, ty.bytes());
+        self.make_incoming_struct_arg(ty.bytes(), offset)
+    }
+
+    /// Create a stack slot representing an incoming struct function argument.
+    pub fn make_incoming_struct_arg(&mut self, size: u32, offset: StackOffset) -> StackSlot {
+        let mut data = StackSlotData::new(StackSlotKind::IncomingArg, size);
         debug_assert!(offset <= StackOffset::max_value() - data.size as StackOffset);
         data.offset = Some(offset);
         self.push(data)
@@ -301,8 +306,11 @@ impl StackSlots {
     /// The requested offset is relative to this function's stack pointer immediately before making
     /// the call.
     pub fn get_outgoing_arg(&mut self, ty: Type, offset: StackOffset) -> StackSlot {
-        let size = ty.bytes();
+        self.get_outgoing_struct_arg(ty.bytes(), offset)
+    }
 
+    /// FIXME
+    pub fn get_outgoing_struct_arg(&mut self, size: u32, offset: StackOffset) -> StackSlot {
         // Look for an existing outgoing stack slot with the same offset and size.
         let inspos = match self.outgoing.binary_search_by_key(&(offset, size), |&ss| {
             (self[ss].offset.unwrap(), self[ss].size)

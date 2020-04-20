@@ -1270,6 +1270,12 @@ pub(crate) fn define<'shared>(
         );
     }
 
+    recipes.add_recipe(
+        EncodingRecipeBuilder::new("dummy_sarg__", &formats.nullary, 0)
+            .operands_out(vec![Stack::new(gpr)])
+            .emit(""),
+    );
+
     // XX+rd id with Abs4 function relocation.
     recipes.add_template_recipe(
         EncodingRecipeBuilder::new("fnaddr4", &formats.func_addr, 4)
