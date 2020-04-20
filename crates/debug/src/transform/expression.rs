@@ -322,7 +322,7 @@ where
     while !pc.is_empty() {
         let next = buf[pc.offset_from(&expr.0).into_u64() as usize];
         need_deref = true;
-        if next == 0xED {
+        if next == 0xEB {
             // WebAssembly DWARF extension
             pc.read_u8()?;
             let ty = pc.read_uleb128()?;
