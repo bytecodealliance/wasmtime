@@ -25,7 +25,6 @@ cfg-if = "0.1.9"
 log = "0.4"
 filetime = "0.2.7"
 lazy_static = "1.4.0"
-num = { version = "0.2.0", default-features = false }
 wig = { path = "wig", version = "0.15.0" }
 wiggle = { path = "../wiggle", default-features = false, version = "0.15.0" }
 

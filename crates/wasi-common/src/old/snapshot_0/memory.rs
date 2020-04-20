@@ -10,10 +10,31 @@
 #![allow(unused)]
 use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
 use crate::old::snapshot_0::{host, wasi32};
-use num::PrimInt;
 use std::convert::TryFrom;
 use std::mem::{align_of, size_of};
 use std::{ptr, slice};
+
+pub(crate) trait FromLe {
+    fn from_le(bits: Self) -> Self;
+}
+
+fn from_le<T: FromLe>(bits: T) -> T {
+    FromLe::from_le(bits)
+}
+
+macro_rules! impl_from_le {
+    ($($i:ident)*) => ($(
+        impl FromLe for $i {
+            fn from_le(bits: Self) -> Self {
+                <$i>::from_le(bits)
+            }
+        }
+    )*)
+}
+impl_from_le! {
+    i8 i16 i32 i64 isize
+    u8 u16 u32 u64 usize
+}
 
 fn dec_ptr(memory: &[u8], ptr: wasi32::uintptr_t, len: usize) -> WasiResult<*const u8> {
     // check for overflow
@@ -70,16 +91,13 @@ fn enc_raw_byref<T>(memory: &mut [u8], ptr: wasi32::uintptr_t, t: T) -> WasiResu
 
 pub(crate) fn dec_int_byref<T>(memory: &[u8], ptr: wasi32::uintptr_t) -> WasiResult<T>
 where
-    T: PrimInt,
+    T: FromLe,
 {
-    dec_raw_byref::<T>(memory, ptr).map(|i| PrimInt::from_le(i))
+    dec_raw_byref::<T>(memory, ptr).map(|i| FromLe::from_le(i))
 }
 
-pub(crate) fn enc_int_byref<T>(memory: &mut [u8], ptr: wasi32::uintptr_t, t: T) -> WasiResult<()>
-where
-    T: PrimInt,
-{
-    enc_raw_byref::<T>(memory, ptr, PrimInt::to_le(t))
+pub(crate) fn enc_int_byref<T>(memory: &mut [u8], ptr: wasi32::uintptr_t, t: T) -> WasiResult<()> {
+    enc_raw_byref::<T>(memory, ptr, t)
 }
 
 fn check_slice_of<T>(ptr: wasi32::uintptr_t, len: wasi32::size_t) -> WasiResult<(usize, usize)> {
@@ -175,7 +193,7 @@ pub(crate) fn enc_slice_of_wasi32_uintptr(
     let mut output_iter = raw_slice_for_enc::<wasi32::uintptr_t>(memory, slice, ptr)?.into_iter();
 
     for p in slice {
-        *output_iter.next().unwrap() = PrimInt::to_le(*p);
+        *output_iter.next().unwrap() = p.to_le();
     }
 
     Ok(())
@@ -195,7 +213,7 @@ macro_rules! dec_enc_scalar {
             ptr: wasi32::uintptr_t,
             x: wasi::$ty,
         ) -> WasiResult<()> {
-            enc_int_byref::<wasi::$ty>(memory, ptr, x)
+            enc_int_byref::<wasi::$ty>(memory, ptr, x.to_le())
         }
     };
 }
@@ -210,8 +228,8 @@ pub(crate) fn dec_ciovec_slice(
     raw_slice
         .iter()
         .map(|raw_iov| {
-            let len = dec_usize(PrimInt::from_le(raw_iov.buf_len));
-            let buf = PrimInt::from_le(raw_iov.buf);
+            let len = dec_usize(from_le(raw_iov.buf_len));
+            let buf = from_le(raw_iov.buf);
             Ok(host::__wasi_ciovec_t {
                 buf: dec_ptr(memory, buf, len)? as *const u8,
                 buf_len: len,
@@ -230,8 +248,8 @@ pub(crate) fn dec_iovec_slice(
     raw_slice
         .iter()
         .map(|raw_iov| {
-            let len = dec_usize(PrimInt::from_le(raw_iov.buf_len));
-            let buf = PrimInt::from_le(raw_iov.buf);
+            let len = dec_usize(from_le(raw_iov.buf_len));
+            let buf = from_le(raw_iov.buf);
             Ok(host::__wasi_iovec_t {
                 buf: dec_ptr(memory, buf, len)? as *mut u8,
                 buf_len: len,
@@ -256,14 +274,14 @@ pub(crate) fn dec_filestat_byref(
     let raw = dec_raw_byref::<wasi::__wasi_filestat_t>(memory, filestat_ptr)?;
 
     Ok(wasi::__wasi_filestat_t {
-        dev: PrimInt::from_le(raw.dev),
-        ino: PrimInt::from_le(raw.ino),
-        filetype: PrimInt::from_le(raw.filetype),
-        nlink: PrimInt::from_le(raw.nlink),
-        size: PrimInt::from_le(raw.size),
-        atim: PrimInt::from_le(raw.atim),
-        mtim: PrimInt::from_le(raw.mtim),
-        ctim: PrimInt::from_le(raw.ctim),
+        dev: from_le(raw.dev),
+        ino: from_le(raw.ino),
+        filetype: from_le(raw.filetype),
+        nlink: from_le(raw.nlink),
+        size: from_le(raw.size),
+        atim: from_le(raw.atim),
+        mtim: from_le(raw.mtim),
+        ctim: from_le(raw.ctim),
     })
 }
 
@@ -273,14 +291,14 @@ pub(crate) fn enc_filestat_byref(
     filestat: wasi::__wasi_filestat_t,
 ) -> WasiResult<()> {
     let raw = wasi::__wasi_filestat_t {
-        dev: PrimInt::to_le(filestat.dev),
-        ino: PrimInt::to_le(filestat.ino),
-        filetype: PrimInt::to_le(filestat.filetype),
-        nlink: PrimInt::to_le(filestat.nlink),
-        size: PrimInt::to_le(filestat.size),
-        atim: PrimInt::to_le(filestat.atim),
-        mtim: PrimInt::to_le(filestat.mtim),
-        ctim: PrimInt::to_le(filestat.ctim),
+        dev: filestat.dev.to_le(),
+        ino: filestat.ino.to_le(),
+        filetype: filestat.filetype.to_le(),
+        nlink: filestat.nlink.to_le(),
+        size: filestat.size.to_le(),
+        atim: filestat.atim.to_le(),
+        mtim: filestat.mtim.to_le(),
+        ctim: filestat.ctim.to_le(),
     };
 
     enc_raw_byref::<wasi::__wasi_filestat_t>(memory, filestat_ptr, raw)
@@ -293,10 +311,10 @@ pub(crate) fn dec_fdstat_byref(
     let raw = dec_raw_byref::<wasi::__wasi_fdstat_t>(memory, fdstat_ptr)?;
 
     Ok(wasi::__wasi_fdstat_t {
-        fs_filetype: PrimInt::from_le(raw.fs_filetype),
-        fs_flags: PrimInt::from_le(raw.fs_flags),
-        fs_rights_base: PrimInt::from_le(raw.fs_rights_base),
-        fs_rights_inheriting: PrimInt::from_le(raw.fs_rights_inheriting),
+        fs_filetype: from_le(raw.fs_filetype),
+        fs_flags: from_le(raw.fs_flags),
+        fs_rights_base: from_le(raw.fs_rights_base),
+        fs_rights_inheriting: from_le(raw.fs_rights_inheriting),
     })
 }
 
@@ -306,10 +324,10 @@ pub(crate) fn enc_fdstat_byref(
     fdstat: wasi::__wasi_fdstat_t,
 ) -> WasiResult<()> {
     let raw = wasi::__wasi_fdstat_t {
-        fs_filetype: PrimInt::to_le(fdstat.fs_filetype),
-        fs_flags: PrimInt::to_le(fdstat.fs_flags),
-        fs_rights_base: PrimInt::to_le(fdstat.fs_rights_base),
-        fs_rights_inheriting: PrimInt::to_le(fdstat.fs_rights_inheriting),
+        fs_filetype: fdstat.fs_filetype.to_le(),
+        fs_flags: fdstat.fs_flags.to_le(),
+        fs_rights_base: fdstat.fs_rights_base.to_le(),
+        fs_rights_inheriting: fdstat.fs_rights_inheriting.to_le(),
     };
 
     enc_raw_byref::<wasi::__wasi_fdstat_t>(memory, fdstat_ptr, raw)
@@ -333,12 +351,12 @@ pub(crate) fn dec_prestat_byref(
 ) -> WasiResult<host::__wasi_prestat_t> {
     let raw = dec_raw_byref::<wasi32::__wasi_prestat_t>(memory, prestat_ptr)?;
 
-    match PrimInt::from_le(raw.tag) {
+    match from_le(raw.tag) {
         wasi::__WASI_PREOPENTYPE_DIR => Ok(host::__wasi_prestat_t {
             tag: wasi::__WASI_PREOPENTYPE_DIR,
             u: host::__wasi_prestat_u_t {
                 dir: host::__wasi_prestat_dir_t {
-                    pr_name_len: dec_usize(PrimInt::from_le(unsafe { raw.u.dir.pr_name_len })),
+                    pr_name_len: dec_usize(from_le(unsafe { raw.u.dir.pr_name_len })),
                 },
             },
         }),
@@ -353,7 +371,7 @@ pub(crate) fn enc_prestat_byref(
 ) -> WasiResult<()> {
     let raw = match prestat.tag {
         wasi::__WASI_PREOPENTYPE_DIR => Ok(wasi32::__wasi_prestat_t {
-            tag: PrimInt::to_le(wasi::__WASI_PREOPENTYPE_DIR),
+            tag: wasi::__WASI_PREOPENTYPE_DIR.to_le(),
             u: wasi32::__wasi_prestat_u_t {
                 dir: wasi32::__wasi_prestat_dir_t {
                     pr_name_len: enc_usize(unsafe { prestat.u.dir.pr_name_len }),
@@ -382,7 +400,7 @@ pub(crate) fn enc_usize_byref(
     usize_ptr: wasi32::uintptr_t,
     host_usize: usize,
 ) -> WasiResult<()> {
-    enc_int_byref::<wasi32::size_t>(memory, usize_ptr, enc_usize(host_usize))
+    enc_int_byref::<wasi32::size_t>(memory, usize_ptr, enc_usize(host_usize).to_le())
 }
 
 dec_enc_scalar!(__wasi_whence_t, dec_whence_byref, enc_whence_byref);
@@ -413,31 +431,29 @@ pub(crate) fn dec_subscriptions(
     raw_input_slice
         .into_iter()
         .map(|raw_subscription| {
-            let userdata = PrimInt::from_le(raw_subscription.userdata);
-            let tag = PrimInt::from_le(raw_subscription.u.tag);
+            let userdata = from_le(raw_subscription.userdata);
+            let tag = from_le(raw_subscription.u.tag);
             let raw_u = raw_subscription.u.u;
             let u = match tag {
                 wasi::__WASI_EVENTTYPE_CLOCK => wasi::__wasi_subscription_u_u_t {
                     clock: unsafe {
                         wasi::__wasi_subscription_clock_t {
-                            identifier: PrimInt::from_le(raw_u.clock.identifier),
-                            id: PrimInt::from_le(raw_u.clock.id),
-                            timeout: PrimInt::from_le(raw_u.clock.timeout),
-                            precision: PrimInt::from_le(raw_u.clock.precision),
-                            flags: PrimInt::from_le(raw_u.clock.flags),
+                            identifier: from_le(raw_u.clock.identifier),
+                            id: from_le(raw_u.clock.id),
+                            timeout: from_le(raw_u.clock.timeout),
+                            precision: from_le(raw_u.clock.precision),
+                            flags: from_le(raw_u.clock.flags),
                         }
                     },
                 },
                 wasi::__WASI_EVENTTYPE_FD_READ => wasi::__wasi_subscription_u_u_t {
                     fd_read: wasi::__wasi_subscription_fd_readwrite_t {
-                        file_descriptor: PrimInt::from_le(unsafe { raw_u.fd_read.file_descriptor }),
+                        file_descriptor: from_le(unsafe { raw_u.fd_read.file_descriptor }),
                     },
                 },
                 wasi::__WASI_EVENTTYPE_FD_WRITE => wasi::__wasi_subscription_u_u_t {
                     fd_write: wasi::__wasi_subscription_fd_readwrite_t {
-                        file_descriptor: PrimInt::from_le(unsafe {
-                            raw_u.fd_write.file_descriptor
-                        }),
+                        file_descriptor: from_le(unsafe { raw_u.fd_write.file_descriptor }),
                     },
                 },
                 _ => return Err(WasiError::EINVAL),
@@ -463,11 +479,11 @@ pub(crate) fn enc_events(
         *raw_output_iter
             .next()
             .expect("the number of events cannot exceed the number of subscriptions") = {
-            let userdata = PrimInt::to_le(event.userdata);
-            let error = PrimInt::to_le(event.error);
-            let r#type = PrimInt::to_le(event.r#type);
-            let flags = PrimInt::to_le(event.fd_readwrite.flags);
-            let nbytes = PrimInt::to_le(event.fd_readwrite.nbytes);
+            let userdata = event.userdata.to_le();
+            let error = event.error.to_le();
+            let r#type = event.r#type.to_le();
+            let flags = event.fd_readwrite.flags.to_le();
+            let nbytes = event.fd_readwrite.nbytes.to_le();
             wasi::__wasi_event_t {
                 userdata,
                 error,
