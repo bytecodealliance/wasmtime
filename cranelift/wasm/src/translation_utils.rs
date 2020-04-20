@@ -68,7 +68,7 @@ pub struct ElemIndex(u32);
 entity_impl!(ElemIndex);
 
 /// WebAssembly global.
-#[derive(Debug, Clone, Copy, Hash)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub struct Global {
     /// The type of the value stored in the global.
     pub ty: ir::Type,
@@ -79,7 +79,7 @@ pub struct Global {
 }
 
 /// Globals are initialized via the `const` operators or by referring to another import.
-#[derive(Debug, Clone, Copy, Hash)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum GlobalInit {
     /// An `i32.const`.
     I32Const(i32),
@@ -102,7 +102,7 @@ pub enum GlobalInit {
 }
 
 /// WebAssembly table.
-#[derive(Debug, Clone, Copy, Hash)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub struct Table {
     /// The type of data stored in elements of the table.
     pub ty: TableElementType,
@@ -113,7 +113,7 @@ pub struct Table {
 }
 
 /// WebAssembly table element. Can be a function or a scalar type.
-#[derive(Debug, Clone, Copy, Hash)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum TableElementType {
     /// A scalar type.
     Val(ir::Type),
@@ -122,7 +122,7 @@ pub enum TableElementType {
 }
 
 /// WebAssembly linear memory.
-#[derive(Debug, Clone, Copy, Hash)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub struct Memory {
     /// The minimum number of pages in the memory.
     pub minimum: u32,

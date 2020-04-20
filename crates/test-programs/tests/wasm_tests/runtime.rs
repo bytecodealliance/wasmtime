@@ -51,7 +51,6 @@ pub fn instantiate(
     let module = Module::new(&store, &data).context("failed to create wasm module")?;
     let imports = module
         .imports()
-        .iter()
         .map(|i| {
             let field_name = i.name();
             if let Some(export) = snapshot1.get_export(field_name) {
@@ -60,7 +59,7 @@ pub fn instantiate(
                 bail!(
                     "import {} was not found in module {}",
                     field_name,
-                    i.module(),
+                    i.module()
                 )
             }
         })
@@ -71,13 +70,10 @@ pub fn instantiate(
         bin_name,
     ))?;
 
-    let export = instance
+    instance
         .get_export("_start")
         .context("expected a _start export")?
-        .clone();
-
-    export
-        .func()
+        .into_func()
         .context("expected export to be a func")?
         .call(&[])?;
 

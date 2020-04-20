@@ -35,8 +35,7 @@ fn main() -> Result<()> {
     // Next we poke around a bit to extract the `run` function from the module.
     println!("Extracting export...");
     let run = instance
-        .get_export("run")
-        .and_then(|e| e.func())
+        .get_func("run")
         .ok_or(anyhow::format_err!("failed to find `run` function export"))?
         .get0::<()>()?;
 

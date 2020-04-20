@@ -1,65 +1,11 @@
 use crate::frame_info::GlobalFrameInfoRegistration;
 use crate::runtime::Store;
-use crate::types::{
-    ExportType, ExternType, FuncType, GlobalType, ImportType, Limits, MemoryType, Mutability,
-    TableType, ValType,
-};
-use anyhow::{bail, Error, Result};
+use crate::types::{EntityType, ExportType, ImportType};
+use anyhow::{Error, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use wasmparser::{validate, ExternalKind, ImportSectionEntryType, ModuleReader, SectionCode};
+use wasmparser::validate;
 use wasmtime_jit::CompiledModule;
-
-fn into_memory_type(mt: wasmparser::MemoryType) -> Result<MemoryType> {
-    if mt.shared {
-        bail!("shared memories are not supported yet");
-    }
-    Ok(MemoryType::new(Limits::new(
-        mt.limits.initial,
-        mt.limits.maximum,
-    )))
-}
-
-fn into_global_type(gt: wasmparser::GlobalType) -> GlobalType {
-    let mutability = if gt.mutable {
-        Mutability::Var
-    } else {
-        Mutability::Const
-    };
-    GlobalType::new(into_valtype(&gt.content_type), mutability)
-}
-
-// `into_valtype` is used for `map` which requires `&T`.
-#[allow(clippy::trivially_copy_pass_by_ref)]
-fn into_valtype(ty: &wasmparser::Type) -> ValType {
-    use wasmparser::Type::*;
-    match ty {
-        I32 => ValType::I32,
-        I64 => ValType::I64,
-        F32 => ValType::F32,
-        F64 => ValType::F64,
-        V128 => ValType::V128,
-        AnyFunc => ValType::FuncRef,
-        AnyRef => ValType::AnyRef,
-        _ => unimplemented!("types in into_valtype"),
-    }
-}
-
-fn into_func_type(mt: wasmparser::FuncType) -> FuncType {
-    assert_eq!(mt.form, wasmparser::Type::Func);
-    let params = mt.params.iter().map(into_valtype).collect::<Vec<_>>();
-    let returns = mt.returns.iter().map(into_valtype).collect::<Vec<_>>();
-    FuncType::new(params.into_boxed_slice(), returns.into_boxed_slice())
-}
-
-fn into_table_type(tt: wasmparser::TableType) -> TableType {
-    assert!(
-        tt.element_type == wasmparser::Type::AnyFunc || tt.element_type == wasmparser::Type::AnyRef
-    );
-    let ty = into_valtype(&tt.element_type);
-    let limits = Limits::new(tt.limits.initial, tt.limits.maximum);
-    TableType::new(ty, limits)
-}
 
 /// A compiled WebAssembly module, ready to be instantiated.
 ///
@@ -134,8 +80,6 @@ pub struct Module {
 
 struct ModuleInner {
     store: Store,
-    imports: Box<[ImportType]>,
-    exports: Box<[ExportType]>,
     compiled: CompiledModule,
     frame_info_registration: Mutex<Option<Option<Arc<GlobalFrameInfoRegistration>>>>,
 }
@@ -332,9 +276,7 @@ impl Module {
     /// be somewhat valid for decoding purposes, and the basics of decoding can
     /// still fail.
     pub unsafe fn from_binary_unchecked(store: &Store, binary: &[u8]) -> Result<Module> {
-        let mut ret = Module::compile(store, binary)?;
-        ret.read_imports_and_exports(binary)?;
-        Ok(ret)
+        Module::compile(store, binary)
     }
 
     /// Validates `binary` input data as a WebAssembly binary given the
@@ -372,8 +314,6 @@ impl Module {
         Ok(Module {
             inner: Arc::new(ModuleInner {
                 store: store.clone(),
-                imports: Box::new([]),
-                exports: Box::new([]),
                 compiled,
                 frame_info_registration: Mutex::new(None),
             }),
@@ -451,7 +391,7 @@ impl Module {
     /// "#;
     /// let module = Module::new(&store, wat)?;
     /// assert_eq!(module.imports().len(), 1);
-    /// let import = &module.imports()[0];
+    /// let import = module.imports().next().unwrap();
     /// assert_eq!(import.module(), "host");
     /// assert_eq!(import.name(), "foo");
     /// match import.ty() {
@@ -461,8 +401,17 @@ impl Module {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn imports(&self) -> &[ImportType] {
-        &self.inner.imports
+    pub fn imports<'module>(
+        &'module self,
+    ) -> impl ExactSizeIterator<Item = ImportType<'module>> + 'module {
+        let module = self.inner.compiled.module_ref();
+        module
+            .imports
+            .iter()
+            .map(move |(module_name, name, entity_index)| {
+                let r#type = EntityType::new(entity_index, module);
+                ImportType::new(module_name, name, r#type)
+            })
     }
 
     /// Returns the list of exports that this [`Module`] has and will be
@@ -482,7 +431,7 @@ impl Module {
     /// # fn main() -> anyhow::Result<()> {
     /// # let store = Store::default();
     /// let module = Module::new(&store, "(module)")?;
-    /// assert!(module.exports().is_empty());
+    /// assert!(module.exports().next().is_none());
     /// # Ok(())
     /// # }
     /// ```
@@ -502,14 +451,15 @@ impl Module {
     /// let module = Module::new(&store, wat)?;
     /// assert_eq!(module.exports().len(), 2);
     ///
-    /// let foo = &module.exports()[0];
+    /// let mut exports = module.exports();
+    /// let foo = exports.next().unwrap();
     /// assert_eq!(foo.name(), "foo");
     /// match foo.ty() {
     ///     ExternType::Func(_) => { /* ... */ }
     ///     _ => panic!("unexpected export type!"),
     /// }
     ///
-    /// let memory = &module.exports()[1];
+    /// let memory = exports.next().unwrap();
     /// assert_eq!(memory.name(), "memory");
     /// match memory.ty() {
     ///     ExternType::Memory(_) => { /* ... */ }
@@ -518,148 +468,19 @@ impl Module {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn exports(&self) -> &[ExportType] {
-        &self.inner.exports
+    pub fn exports<'module>(
+        &'module self,
+    ) -> impl ExactSizeIterator<Item = ExportType<'module>> + 'module {
+        let module = self.inner.compiled.module_ref();
+        module.exports.iter().map(move |(name, entity_index)| {
+            let r#type = EntityType::new(entity_index, module);
+            ExportType::new(name, r#type)
+        })
     }
 
     /// Returns the [`Store`] that this [`Module`] was compiled into.
     pub fn store(&self) -> &Store {
         &self.inner.store
-    }
-
-    fn read_imports_and_exports(&mut self, binary: &[u8]) -> Result<()> {
-        let inner = Arc::get_mut(&mut self.inner).unwrap();
-        let mut reader = ModuleReader::new(binary)?;
-        let mut imports = Vec::new();
-        let mut exports = Vec::new();
-        let mut memories = Vec::new();
-        let mut tables = Vec::new();
-        let mut func_sig = Vec::new();
-        let mut sigs = Vec::new();
-        let mut globals = Vec::new();
-        while !reader.eof() {
-            let section = reader.read()?;
-            match section.code {
-                SectionCode::Memory => {
-                    let section = section.get_memory_section_reader()?;
-                    memories.reserve_exact(section.get_count() as usize);
-                    for entry in section {
-                        memories.push(into_memory_type(entry?)?);
-                    }
-                }
-                SectionCode::Type => {
-                    let section = section.get_type_section_reader()?;
-                    sigs.reserve_exact(section.get_count() as usize);
-                    for entry in section {
-                        sigs.push(into_func_type(entry?));
-                    }
-                }
-                SectionCode::Function => {
-                    let section = section.get_function_section_reader()?;
-                    func_sig.reserve_exact(section.get_count() as usize);
-                    for entry in section {
-                        func_sig.push(entry?);
-                    }
-                }
-                SectionCode::Global => {
-                    let section = section.get_global_section_reader()?;
-                    globals.reserve_exact(section.get_count() as usize);
-                    for entry in section {
-                        globals.push(into_global_type(entry?.ty));
-                    }
-                }
-                SectionCode::Table => {
-                    let section = section.get_table_section_reader()?;
-                    tables.reserve_exact(section.get_count() as usize);
-                    for entry in section {
-                        tables.push(into_table_type(entry?))
-                    }
-                }
-                SectionCode::Import => {
-                    let section = section.get_import_section_reader()?;
-                    imports.reserve_exact(section.get_count() as usize);
-                    for entry in section {
-                        let entry = entry?;
-                        let r#type = match entry.ty {
-                            ImportSectionEntryType::Function(index) => {
-                                func_sig.push(index);
-                                let sig = &sigs[index as usize];
-                                ExternType::Func(sig.clone())
-                            }
-                            ImportSectionEntryType::Table(tt) => {
-                                let table = into_table_type(tt);
-                                tables.push(table.clone());
-                                ExternType::Table(table)
-                            }
-                            ImportSectionEntryType::Memory(mt) => {
-                                let memory = into_memory_type(mt)?;
-                                memories.push(memory.clone());
-                                ExternType::Memory(memory)
-                            }
-                            ImportSectionEntryType::Global(gt) => {
-                                let global = into_global_type(gt);
-                                globals.push(global.clone());
-                                ExternType::Global(global)
-                            }
-                        };
-                        imports.push(ImportType::new(entry.module, entry.field, r#type));
-                    }
-                }
-                SectionCode::Export => {
-                    let section = section.get_export_section_reader()?;
-                    exports.reserve_exact(section.get_count() as usize);
-                    for entry in section {
-                        let entry = entry?;
-                        let r#type = match entry.kind {
-                            ExternalKind::Function => {
-                                let sig_index = func_sig[entry.index as usize] as usize;
-                                let sig = &sigs[sig_index];
-                                ExternType::Func(sig.clone())
-                            }
-                            ExternalKind::Table => {
-                                ExternType::Table(tables[entry.index as usize].clone())
-                            }
-                            ExternalKind::Memory => {
-                                ExternType::Memory(memories[entry.index as usize].clone())
-                            }
-                            ExternalKind::Global => {
-                                ExternType::Global(globals[entry.index as usize].clone())
-                            }
-                        };
-                        exports.push(ExportType::new(entry.field, r#type));
-                    }
-                }
-                SectionCode::Custom {
-                    name: "webidl-bindings",
-                    ..
-                }
-                | SectionCode::Custom {
-                    name: "wasm-interface-types",
-                    ..
-                } => {
-                    bail!(
-                        "\
-support for interface types has temporarily been removed from `wasmtime`
-
-for more information about this temoprary you can read on the issue online:
-
-    https://github.com/bytecodealliance/wasmtime/issues/1271
-
-and for re-adding support for interface types you can see this issue:
-
-    https://github.com/bytecodealliance/wasmtime/issues/677
-"
-                    );
-                }
-                _ => {
-                    // skip other sections
-                }
-            }
-        }
-
-        inner.imports = imports.into();
-        inner.exports = exports.into();
-        Ok(())
     }
 
     /// Register this module's stack frame information into the global scope.

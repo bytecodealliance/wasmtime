@@ -30,16 +30,16 @@ pub struct TableElements {
     pub elements: Box<[FuncIndex]>,
 }
 
-/// An entity to export.
+/// An index of an entity.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Export {
-    /// Function export.
+pub enum EntityIndex {
+    /// Function index.
     Function(FuncIndex),
-    /// Table export.
+    /// Table index.
     Table(TableIndex),
-    /// Memory export.
+    /// Memory index.
     Memory(MemoryIndex),
-    /// Global export.
+    /// Global index.
     Global(GlobalIndex),
 }
 
@@ -150,21 +150,11 @@ pub struct Module {
     /// function.
     pub local: ModuleLocal,
 
-    /// Names of imported functions, as well as the index of the import that
-    /// performed this import.
-    pub imported_funcs: PrimaryMap<FuncIndex, (String, String, u32)>,
-
-    /// Names of imported tables.
-    pub imported_tables: PrimaryMap<TableIndex, (String, String, u32)>,
-
-    /// Names of imported memories.
-    pub imported_memories: PrimaryMap<MemoryIndex, (String, String, u32)>,
-
-    /// Names of imported globals.
-    pub imported_globals: PrimaryMap<GlobalIndex, (String, String, u32)>,
+    /// All import records, in the order they are declared in the module.
+    pub imports: Vec<(String, String, EntityIndex)>,
 
     /// Exported entities.
-    pub exports: IndexMap<String, Export>,
+    pub exports: IndexMap<String, EntityIndex>,
 
     /// The module "start" function, if present.
     pub start_func: Option<FuncIndex>,
@@ -226,10 +216,7 @@ impl Module {
         Self {
             id: NEXT_ID.fetch_add(1, SeqCst),
             name: None,
-            imported_funcs: PrimaryMap::new(),
-            imported_tables: PrimaryMap::new(),
-            imported_memories: PrimaryMap::new(),
-            imported_globals: PrimaryMap::new(),
+            imports: Vec::new(),
             exports: IndexMap::new(),
             start_func: None,
             table_elements: Vec::new(),
@@ -343,5 +330,10 @@ impl ModuleLocal {
     /// Test whether the given global index is for an imported global.
     pub fn is_imported_global(&self, index: GlobalIndex) -> bool {
         index.index() < self.num_imported_globals
+    }
+
+    /// Convenience method for looking up the signature of a function.
+    pub fn func_signature(&self, func_index: FuncIndex) -> &ir::Signature {
+        &self.signatures[self.functions[func_index]]
     }
 }

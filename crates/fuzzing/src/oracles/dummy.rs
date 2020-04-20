@@ -6,19 +6,20 @@ use wasmtime::{
 };
 
 /// Create a set of dummy functions/globals/etc for the given imports.
-pub fn dummy_imports(store: &Store, import_tys: &[ImportType]) -> Result<Vec<Extern>, Trap> {
-    let mut imports = Vec::with_capacity(import_tys.len());
-    for imp in import_tys {
-        imports.push(match imp.ty() {
-            ExternType::Func(func_ty) => Extern::Func(dummy_func(&store, func_ty.clone())),
-            ExternType::Global(global_ty) => {
-                Extern::Global(dummy_global(&store, global_ty.clone())?)
-            }
-            ExternType::Table(table_ty) => Extern::Table(dummy_table(&store, table_ty.clone())?),
-            ExternType::Memory(mem_ty) => Extern::Memory(dummy_memory(&store, mem_ty.clone())),
-        });
-    }
-    Ok(imports)
+pub fn dummy_imports<'module>(
+    store: &Store,
+    import_tys: impl Iterator<Item = ImportType<'module>>,
+) -> Result<Vec<Extern>, Trap> {
+    import_tys
+        .map(|imp| {
+            Ok(match imp.ty() {
+                ExternType::Func(func_ty) => Extern::Func(dummy_func(&store, func_ty)),
+                ExternType::Global(global_ty) => Extern::Global(dummy_global(&store, global_ty)?),
+                ExternType::Table(table_ty) => Extern::Table(dummy_table(&store, table_ty)?),
+                ExternType::Memory(mem_ty) => Extern::Memory(dummy_memory(&store, mem_ty)),
+            })
+        })
+        .collect()
 }
 
 /// Construct a dummy function for the given function type

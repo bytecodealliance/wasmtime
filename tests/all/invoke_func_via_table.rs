@@ -17,9 +17,7 @@ fn test_invoke_func_via_table() -> Result<()> {
     let instance = Instance::new(&module, &[]).context("> Error instantiating module!")?;
 
     let f = instance
-        .get_export("table")
-        .unwrap()
-        .table()
+        .get_table("table")
         .unwrap()
         .get(0)
         .unwrap()

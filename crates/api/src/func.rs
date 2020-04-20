@@ -38,7 +38,7 @@ use wasmtime_runtime::{ExportFunction, VMTrampoline};
 /// let store = Store::default();
 /// let module = Module::new(&store, r#"(module (func (export "foo")))"#)?;
 /// let instance = Instance::new(&module, &[])?;
-/// let foo = instance.exports()[0].func().expect("export wasn't a function");
+/// let foo = instance.get_func("foo").expect("export wasn't a function");
 ///
 /// // Work with `foo` as a `Func` at this point, such as calling it
 /// // dynamically...
@@ -88,7 +88,7 @@ use wasmtime_runtime::{ExportFunction, VMTrampoline};
 ///     "#,
 /// )?;
 /// let instance = Instance::new(&module, &[add.into()])?;
-/// let call_add_twice = instance.exports()[0].func().expect("export wasn't a function");
+/// let call_add_twice = instance.get_func("call_add_twice").expect("export wasn't a function");
 /// let call_add_twice = call_add_twice.get0::<i32>()?;
 ///
 /// assert_eq!(call_add_twice()?, 10);
@@ -138,7 +138,6 @@ pub struct Func {
     store: Store,
     instance: InstanceHandle,
     export: ExportFunction,
-    ty: FuncType,
     trampoline: VMTrampoline,
 }
 
@@ -149,15 +148,16 @@ macro_rules! getters {
     )*) => ($(
         $(#[$doc])*
         #[allow(non_snake_case)]
-        pub fn $name<'a, $($args,)* R>(&'a self)
-            -> anyhow::Result<impl Fn($($args,)*) -> Result<R, Trap> + 'a>
+        pub fn $name<$($args,)* R>(&self)
+            -> anyhow::Result<impl Fn($($args,)*) -> Result<R, Trap>>
         where
             $($args: WasmTy,)*
             R: WasmTy,
         {
             // Verify all the paramers match the expected parameters, and that
             // there are no extra parameters...
-            let mut params = self.ty().params().iter().cloned();
+            let ty = self.ty();
+            let mut params = ty.params().iter().cloned();
             let n = 0;
             $(
                 let n = n + 1;
@@ -167,14 +167,18 @@ macro_rules! getters {
             ensure!(params.next().is_none(), "Type mismatch: too many arguments (expected {})", n);
 
             // ... then do the same for the results...
-            let mut results = self.ty().results().iter().cloned();
+            let mut results = ty.results().iter().cloned();
             R::matches(&mut results)
                 .context("Type mismatch in return type")?;
             ensure!(results.next().is_none(), "Type mismatch: too many return values (expected 1)");
 
+            // Pass the instance into the closure so that we keep it live for the lifetime
+            // of the closure. Pass the export in so that we can call it.
+            let instance = self.instance.clone();
+            let export = self.export.clone();
+
             // ... and then once we've passed the typechecks we can hand out our
             // object since our `transmute` below should be safe!
-            let f = self.wasmtime_function();
             Ok(move |$($args: $args),*| -> Result<R, Trap> {
                 unsafe {
                     let fnptr = mem::transmute::<
@@ -184,12 +188,17 @@ macro_rules! getters {
                             *mut VMContext,
                             $($args,)*
                         ) -> R,
-                    >(f.address);
+                    >(export.address);
                     let mut ret = None;
                     $(let $args = $args.into_abi();)*
-                    wasmtime_runtime::catch_traps(f.vmctx, || {
-                        ret = Some(fnptr(f.vmctx, ptr::null_mut(), $($args,)*));
+                    wasmtime_runtime::catch_traps(export.vmctx, || {
+                        ret = Some(fnptr(export.vmctx, ptr::null_mut(), $($args,)*));
                     }).map_err(Trap::from_jit)?;
+
+                    // We're holding this handle just to ensure that the instance stays
+                    // live while we call into it.
+                    drop(&instance);
+
                     Ok(ret.unwrap())
                 }
             })
@@ -272,7 +281,6 @@ impl Func {
             crate::trampoline::generate_func_export(&ty, func, store).expect("generated func");
         Func {
             store: store.clone(),
-            ty,
             instance,
             export,
             trampoline,
@@ -340,7 +348,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&module, &[add.into()])?;
-    /// let foo = instance.exports()[0].func().unwrap().get2::<i32, i32, i32>()?;
+    /// let foo = instance.get_func("foo").unwrap().get2::<i32, i32, i32>()?;
     /// assert_eq!(foo(1, 2)?, 3);
     /// # Ok(())
     /// # }
@@ -371,7 +379,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&module, &[add.into()])?;
-    /// let foo = instance.exports()[0].func().unwrap().get2::<i32, i32, i32>()?;
+    /// let foo = instance.get_func("foo").unwrap().get2::<i32, i32, i32>()?;
     /// assert_eq!(foo(1, 2)?, 3);
     /// assert!(foo(i32::max_value(), 1).is_err());
     /// # Ok(())
@@ -404,7 +412,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&module, &[debug.into()])?;
-    /// let foo = instance.exports()[0].func().unwrap().get0::<()>()?;
+    /// let foo = instance.get_func("foo").unwrap().get0::<()>()?;
     /// foo()?;
     /// # Ok(())
     /// # }
@@ -460,7 +468,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&module, &[log_str.into()])?;
-    /// let foo = instance.exports()[0].func().unwrap().get0::<()>()?;
+    /// let foo = instance.get_func("foo").unwrap().get0::<()>()?;
     /// foo()?;
     /// # Ok(())
     /// # }
@@ -470,18 +478,42 @@ impl Func {
     }
 
     /// Returns the underlying wasm type that this `Func` has.
-    pub fn ty(&self) -> &FuncType {
-        &self.ty
+    pub fn ty(&self) -> FuncType {
+        // Signatures should always be registered in the store's registry of
+        // shared signatures, so we should be able to unwrap safely here.
+        let sig = self
+            .store
+            .compiler()
+            .signatures()
+            .lookup(self.export.signature)
+            .expect("failed to lookup signature");
+
+        // This is only called with `Export::Function`, and since it's coming
+        // from wasmtime_runtime itself we should support all the types coming
+        // out of it, so assert such here.
+        FuncType::from_wasmtime_signature(&sig).expect("core wasm signature should be supported")
     }
 
     /// Returns the number of parameters that this function takes.
     pub fn param_arity(&self) -> usize {
-        self.ty.params().len()
+        let sig = self
+            .store
+            .compiler()
+            .signatures()
+            .lookup(self.export.signature)
+            .expect("failed to lookup signature");
+        sig.params.len()
     }
 
     /// Returns the number of results this function produces.
     pub fn result_arity(&self) -> usize {
-        self.ty.results().len()
+        let sig = self
+            .store
+            .compiler()
+            .signatures()
+            .lookup(self.export.signature)
+            .expect("failed to lookup signature");
+        sig.returns.len()
     }
 
     /// Invokes this function with the `params` given, returning the results and
@@ -499,18 +531,19 @@ impl Func {
         // this function. This involves checking to make sure we have the right
         // number and types of arguments as well as making sure everything is
         // from the same `Store`.
-        if self.ty.params().len() != params.len() {
+        let my_ty = self.ty();
+        if my_ty.params().len() != params.len() {
             bail!(
                 "expected {} arguments, got {}",
-                self.ty.params().len(),
+                my_ty.params().len(),
                 params.len()
             );
         }
 
-        let mut values_vec = vec![0; max(params.len(), self.ty.results().len())];
+        let mut values_vec = vec![0; max(params.len(), my_ty.results().len())];
 
         // Store the argument values into `values_vec`.
-        let param_tys = self.ty.params().iter();
+        let param_tys = my_ty.params().iter();
         for ((arg, slot), ty) in params.iter().zip(&mut values_vec).zip(param_tys) {
             if arg.ty() != *ty {
                 bail!("argument type mismatch");
@@ -538,8 +571,8 @@ impl Func {
         }
 
         // Load the return values out of `values_vec`.
-        let mut results = Vec::with_capacity(self.ty.results().len());
-        for (index, ty) in self.ty.results().iter().enumerate() {
+        let mut results = Vec::with_capacity(my_ty.results().len());
+        for (index, ty) in my_ty.results().iter().enumerate() {
             unsafe {
                 let ptr = values_vec.as_ptr().add(index);
                 results.push(Val::read_value_from(ptr, ty));
@@ -558,20 +591,6 @@ impl Func {
         store: &Store,
         instance: InstanceHandle,
     ) -> Self {
-        // Signatures should always be registered in the store's registry of
-        // shared signatures, so we should be able to unwrap safely here.
-        let sig = store
-            .compiler()
-            .signatures()
-            .lookup(export.signature)
-            .expect("failed to lookup signature");
-
-        // This is only called with `Export::Function`, and since it's coming
-        // from wasmtime_runtime itself we should support all the types coming
-        // out of it, so assert such here.
-        let ty = FuncType::from_wasmtime_signature(sig)
-            .expect("core wasm signature should be supported");
-
         // Each function signature in a module should have a trampoline stored
         // on that module as well, so unwrap the result here since otherwise
         // it's a bug in wasmtime.
@@ -583,7 +602,6 @@ impl Func {
             instance,
             export,
             trampoline,
-            ty,
             store: store.clone(),
         }
     }
@@ -1095,7 +1113,6 @@ macro_rules! impl_into_func {
                     .expect("failed to generate export");
                     Func {
                         store: store.clone(),
-                        ty,
                         instance,
                         export,
                         trampoline,

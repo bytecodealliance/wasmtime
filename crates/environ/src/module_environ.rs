@@ -1,5 +1,5 @@
 use crate::func_environ::FuncEnvironment;
-use crate::module::{Export, MemoryPlan, Module, TableElements, TablePlan};
+use crate::module::{EntityIndex, MemoryPlan, Module, TableElements, TablePlan};
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
@@ -8,7 +8,7 @@ use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
     self, translate_module, DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex,
     Memory, MemoryIndex, ModuleTranslationState, SignatureIndex, Table, TableIndex,
-    TargetEnvironment, WasmResult,
+    TargetEnvironment, WasmError, WasmResult,
 };
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -57,7 +57,6 @@ impl<'data> ModuleTranslation<'data> {
 pub struct ModuleEnvironment<'data> {
     /// The result to be filled in.
     result: ModuleTranslation<'data>,
-    imports: u32,
 }
 
 impl<'data> ModuleEnvironment<'data> {
@@ -72,7 +71,6 @@ impl<'data> ModuleEnvironment<'data> {
                 tunables: tunables.clone(),
                 module_translation: None,
             },
-            imports: 0,
         }
     }
 
@@ -89,7 +87,7 @@ impl<'data> ModuleEnvironment<'data> {
         Ok(self.result)
     }
 
-    fn declare_export(&mut self, export: Export, name: &str) -> WasmResult<()> {
+    fn declare_export(&mut self, export: EntityIndex, name: &str) -> WasmResult<()> {
         self.result
             .module
             .exports
@@ -123,6 +121,14 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         Ok(())
     }
 
+    fn reserve_imports(&mut self, num: u32) -> WasmResult<()> {
+        Ok(self
+            .result
+            .module
+            .imports
+            .reserve_exact(usize::try_from(num).unwrap()))
+    }
+
     fn declare_func_import(
         &mut self,
         sig_index: SignatureIndex,
@@ -131,37 +137,33 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     ) -> WasmResult<()> {
         debug_assert_eq!(
             self.result.module.local.functions.len(),
-            self.result.module.imported_funcs.len(),
+            self.result.module.local.num_imported_funcs,
             "Imported functions must be declared first"
         );
-        self.result.module.local.functions.push(sig_index);
-
-        self.result.module.imported_funcs.push((
-            String::from(module),
-            String::from(field),
-            self.imports,
+        let func_index = self.result.module.local.functions.push(sig_index);
+        self.result.module.imports.push((
+            module.to_owned(),
+            field.to_owned(),
+            EntityIndex::Function(func_index),
         ));
         self.result.module.local.num_imported_funcs += 1;
-        self.imports += 1;
         Ok(())
     }
 
     fn declare_table_import(&mut self, table: Table, module: &str, field: &str) -> WasmResult<()> {
         debug_assert_eq!(
             self.result.module.local.table_plans.len(),
-            self.result.module.imported_tables.len(),
+            self.result.module.local.num_imported_tables,
             "Imported tables must be declared first"
         );
         let plan = TablePlan::for_table(table, &self.result.tunables);
-        self.result.module.local.table_plans.push(plan);
-
-        self.result.module.imported_tables.push((
-            String::from(module),
-            String::from(field),
-            self.imports,
+        let table_index = self.result.module.local.table_plans.push(plan);
+        self.result.module.imports.push((
+            module.to_owned(),
+            field.to_owned(),
+            EntityIndex::Table(table_index),
         ));
         self.result.module.local.num_imported_tables += 1;
-        self.imports += 1;
         Ok(())
     }
 
@@ -173,19 +175,20 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     ) -> WasmResult<()> {
         debug_assert_eq!(
             self.result.module.local.memory_plans.len(),
-            self.result.module.imported_memories.len(),
+            self.result.module.local.num_imported_memories,
             "Imported memories must be declared first"
         );
+        if memory.shared {
+            return Err(WasmError::Unsupported("shared memories".to_owned()));
+        }
         let plan = MemoryPlan::for_memory(memory, &self.result.tunables);
-        self.result.module.local.memory_plans.push(plan);
-
-        self.result.module.imported_memories.push((
-            String::from(module),
-            String::from(field),
-            self.imports,
+        let memory_index = self.result.module.local.memory_plans.push(plan);
+        self.result.module.imports.push((
+            module.to_owned(),
+            field.to_owned(),
+            EntityIndex::Memory(memory_index),
         ));
         self.result.module.local.num_imported_memories += 1;
-        self.imports += 1;
         Ok(())
     }
 
@@ -197,26 +200,16 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     ) -> WasmResult<()> {
         debug_assert_eq!(
             self.result.module.local.globals.len(),
-            self.result.module.imported_globals.len(),
+            self.result.module.local.num_imported_globals,
             "Imported globals must be declared first"
         );
-        self.result.module.local.globals.push(global);
-
-        self.result.module.imported_globals.push((
-            String::from(module),
-            String::from(field),
-            self.imports,
+        let global_index = self.result.module.local.globals.push(global);
+        self.result.module.imports.push((
+            module.to_owned(),
+            field.to_owned(),
+            EntityIndex::Global(global_index),
         ));
         self.result.module.local.num_imported_globals += 1;
-        self.imports += 1;
-        Ok(())
-    }
-
-    fn finish_imports(&mut self) -> WasmResult<()> {
-        self.result.module.imported_funcs.shrink_to_fit();
-        self.result.module.imported_tables.shrink_to_fit();
-        self.result.module.imported_memories.shrink_to_fit();
-        self.result.module.imported_globals.shrink_to_fit();
         Ok(())
     }
 
@@ -262,6 +255,9 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn declare_memory(&mut self, memory: Memory) -> WasmResult<()> {
+        if memory.shared {
+            return Err(WasmError::Unsupported("shared memories".to_owned()));
+        }
         let plan = MemoryPlan::for_memory(memory, &self.result.tunables);
         self.result.module.local.memory_plans.push(plan);
         Ok(())
@@ -290,19 +286,19 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn declare_func_export(&mut self, func_index: FuncIndex, name: &str) -> WasmResult<()> {
-        self.declare_export(Export::Function(func_index), name)
+        self.declare_export(EntityIndex::Function(func_index), name)
     }
 
     fn declare_table_export(&mut self, table_index: TableIndex, name: &str) -> WasmResult<()> {
-        self.declare_export(Export::Table(table_index), name)
+        self.declare_export(EntityIndex::Table(table_index), name)
     }
 
     fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &str) -> WasmResult<()> {
-        self.declare_export(Export::Memory(memory_index), name)
+        self.declare_export(EntityIndex::Memory(memory_index), name)
     }
 
     fn declare_global_export(&mut self, global_index: GlobalIndex, name: &str) -> WasmResult<()> {
-        self.declare_export(Export::Global(global_index), name)
+        self.declare_export(EntityIndex::Global(global_index), name)
     }
 
     fn declare_start_func(&mut self, func_index: FuncIndex) -> WasmResult<()> {
@@ -420,6 +416,27 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             .func_names
             .insert(func_index, name.to_string());
         Ok(())
+    }
+
+    fn custom_section(&mut self, name: &'data str, _data: &'data [u8]) -> WasmResult<()> {
+        match name {
+            "webidl-bindings" | "wasm-interface-types" => Err(WasmError::Unsupported(
+                "\
+Support for interface types has temporarily been removed from `wasmtime`.
+
+For more information about this temoprary you can read on the issue online:
+
+    https://github.com/bytecodealliance/wasmtime/issues/1271
+
+and for re-adding support for interface types you can see this issue:
+
+    https://github.com/bytecodealliance/wasmtime/issues/677
+"
+                .to_owned(),
+            )),
+            // skip other sections
+            _ => Ok(()),
+        }
     }
 }
 

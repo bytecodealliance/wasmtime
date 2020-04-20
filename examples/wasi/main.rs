@@ -33,10 +33,7 @@ fn main() -> Result<()> {
     // Instance our module with the imports we've created, then we can run the
     // standard wasi `_start` function.
     let instance = Instance::new(&module, &imports)?;
-    let start = instance
-        .get_export("_start")
-        .and_then(|e| e.func())
-        .unwrap();
+    let start = instance.get_func("_start").unwrap();
     let start = start.get0::<()>()?;
     start()?;
     Ok(())

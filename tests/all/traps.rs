@@ -17,9 +17,7 @@ fn test_trap_return() -> Result<()> {
     let hello_func = Func::new(&store, hello_type, |_, _, _| Err(Trap::new("test 123")));
 
     let instance = Instance::new(&module, &[hello_func.into()])?;
-    let run_func = instance.exports()[0]
-        .func()
-        .expect("expected function export");
+    let run_func = instance.get_func("run").expect("expected function export");
 
     let e = run_func
         .call(&[])
@@ -44,9 +42,7 @@ fn test_trap_trace() -> Result<()> {
 
     let module = Module::new(&store, wat)?;
     let instance = Instance::new(&module, &[])?;
-    let run_func = instance.exports()[0]
-        .func()
-        .expect("expected function export");
+    let run_func = instance.get_func("run").expect("expected function export");
 
     let e = run_func
         .call(&[])
@@ -91,9 +87,7 @@ fn test_trap_trace_cb() -> Result<()> {
 
     let module = Module::new(&store, wat)?;
     let instance = Instance::new(&module, &[fn_func.into()])?;
-    let run_func = instance.exports()[0]
-        .func()
-        .expect("expected function export");
+    let run_func = instance.get_func("run").expect("expected function export");
 
     let e = run_func
         .call(&[])
@@ -123,9 +117,7 @@ fn test_trap_stack_overflow() -> Result<()> {
 
     let module = Module::new(&store, wat)?;
     let instance = Instance::new(&module, &[])?;
-    let run_func = instance.exports()[0]
-        .func()
-        .expect("expected function export");
+    let run_func = instance.get_func("run").expect("expected function export");
 
     let e = run_func
         .call(&[])
@@ -159,9 +151,7 @@ fn trap_display_pretty() -> Result<()> {
 
     let module = Module::new(&store, wat)?;
     let instance = Instance::new(&module, &[])?;
-    let run_func = instance.exports()[0]
-        .func()
-        .expect("expected function export");
+    let run_func = instance.get_func("bar").expect("expected function export");
 
     let e = run_func.call(&[]).err().expect("error calling function");
     assert_eq!(
@@ -192,7 +182,7 @@ fn trap_display_multi_module() -> Result<()> {
 
     let module = Module::new(&store, wat)?;
     let instance = Instance::new(&module, &[])?;
-    let bar = instance.exports()[0].clone();
+    let bar = instance.get_export("bar").unwrap();
 
     let wat = r#"
         (module $b
@@ -203,9 +193,7 @@ fn trap_display_multi_module() -> Result<()> {
     "#;
     let module = Module::new(&store, wat)?;
     let instance = Instance::new(&module, &[bar])?;
-    let bar2 = instance.exports()[0]
-        .func()
-        .expect("expected function export");
+    let bar2 = instance.get_func("bar2").expect("expected function export");
 
     let e = bar2.call(&[]).err().expect("error calling function");
     assert_eq!(
@@ -268,14 +256,14 @@ fn rust_panic_import() -> Result<()> {
             Func::wrap(&store, || panic!("this is another panic")).into(),
         ],
     )?;
-    let func = instance.exports()[0].func().unwrap().clone();
+    let func = instance.get_func("foo").unwrap();
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
         drop(func.call(&[]));
     }))
     .unwrap_err();
     assert_eq!(err.downcast_ref::<&'static str>(), Some(&"this is a panic"));
 
-    let func = instance.exports()[1].func().unwrap().clone();
+    let func = instance.get_func("bar").unwrap();
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
         drop(func.call(&[]));
     }))
@@ -333,7 +321,7 @@ fn mismatched_arguments() -> Result<()> {
 
     let module = Module::new(&store, &binary)?;
     let instance = Instance::new(&module, &[])?;
-    let func = instance.exports()[0].func().unwrap().clone();
+    let func = instance.get_func("foo").unwrap();
     assert_eq!(
         func.call(&[]).unwrap_err().to_string(),
         "expected 1 arguments, got 0"
@@ -417,7 +405,7 @@ fn present_after_module_drop() -> Result<()> {
     let store = Store::default();
     let module = Module::new(&store, r#"(func (export "foo") unreachable)"#)?;
     let instance = Instance::new(&module, &[])?;
-    let func = instance.exports()[0].func().unwrap().clone();
+    let func = instance.get_func("foo").unwrap();
 
     println!("asserting before we drop modules");
     assert_trap(func.call(&[]).unwrap_err().downcast()?);

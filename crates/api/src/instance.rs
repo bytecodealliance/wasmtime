@@ -1,18 +1,19 @@
-use crate::externals::Extern;
+use crate::externals::{Export, Extern, Global, Memory, Table};
+use crate::func::Func;
 use crate::module::Module;
 use crate::runtime::{Config, Store};
 use crate::trap::Trap;
 use anyhow::{bail, Error, Result};
 use std::any::Any;
 use wasmtime_jit::{CompiledModule, Resolver};
-use wasmtime_runtime::{Export, InstanceHandle, InstantiationError, SignatureRegistry};
+use wasmtime_runtime::{InstanceHandle, InstantiationError, SignatureRegistry};
 
 struct SimpleResolver<'a> {
     imports: &'a [Extern],
 }
 
 impl Resolver for SimpleResolver<'_> {
-    fn resolve(&mut self, idx: u32, _name: &str, _field: &str) -> Option<Export> {
+    fn resolve(&mut self, idx: u32, _name: &str, _field: &str) -> Option<wasmtime_runtime::Export> {
         self.imports
             .get(idx as usize)
             .map(|i| i.get_wasmtime_export())
@@ -68,7 +69,6 @@ fn instantiate(
 pub struct Instance {
     pub(crate) instance_handle: InstanceHandle,
     module: Module,
-    exports: Box<[Extern]>,
 }
 
 impl Instance {
@@ -145,20 +145,9 @@ impl Instance {
             Box::new(info),
         )?;
 
-        let mut exports = Vec::with_capacity(module.exports().len());
-        for export in module.exports() {
-            let name = export.name().to_string();
-            let export = instance_handle.lookup(&name).expect("export");
-            exports.push(Extern::from_wasmtime_export(
-                store,
-                instance_handle.clone(),
-                export,
-            ));
-        }
         Ok(Instance {
             instance_handle,
             module: module.clone(),
-            exports: exports.into_boxed_slice(),
         })
     }
 
@@ -170,24 +159,19 @@ impl Instance {
         self.module.store()
     }
 
-    /// Returns the associated [`Module`] that this `Instance` instantiated.
-    ///
-    /// The corresponding [`Module`] here is a static version of this `Instance`
-    /// which can be used to learn information such as naming information about
-    /// various functions.
-    pub fn module(&self) -> &Module {
-        &self.module
-    }
-
     /// Returns the list of exported items from this [`Instance`].
-    ///
-    /// Note that the exports here do not have names associated with them,
-    /// they're simply the values that are exported. To learn the value of each
-    /// export you'll need to consult [`Module::exports`]. The list returned
-    /// here maps 1:1 with the list that [`Module::exports`] returns, and
-    /// [`ExportType`](crate::ExportType) contains the name of each export.
-    pub fn exports(&self) -> &[Extern] {
-        &self.exports
+    pub fn exports<'instance>(
+        &'instance self,
+    ) -> impl ExactSizeIterator<Item = Export<'instance>> + 'instance {
+        let instance_handle = &self.instance_handle;
+        let store = self.module.store();
+        self.instance_handle
+            .exports()
+            .map(move |(name, entity_index)| {
+                let export = instance_handle.lookup_by_declaration(entity_index);
+                let extern_ = Extern::from_wasmtime_export(export, store, instance_handle.clone());
+                Export::new(name, extern_)
+            })
     }
 
     /// Looks up an exported [`Extern`] value by name.
@@ -196,14 +180,45 @@ impl Instance {
     /// the value, if found.
     ///
     /// Returns `None` if there was no export named `name`.
-    pub fn get_export(&self, name: &str) -> Option<&Extern> {
-        let (i, _) = self
-            .module
-            .exports()
-            .iter()
-            .enumerate()
-            .find(|(_, e)| e.name() == name)?;
-        Some(&self.exports()[i])
+    pub fn get_export(&self, name: &str) -> Option<Extern> {
+        let export = self.instance_handle.lookup(&name)?;
+        Some(Extern::from_wasmtime_export(
+            export,
+            self.module.store(),
+            self.instance_handle.clone(),
+        ))
+    }
+
+    /// Looks up an exported [`Func`] value by name.
+    ///
+    /// Returns `None` if there was no export named `name`, or if there was but
+    /// it wasn't a function.
+    pub fn get_func(&self, name: &str) -> Option<Func> {
+        self.get_export(name)?.into_func()
+    }
+
+    /// Looks up an exported [`Table`] value by name.
+    ///
+    /// Returns `None` if there was no export named `name`, or if there was but
+    /// it wasn't a table.
+    pub fn get_table(&self, name: &str) -> Option<Table> {
+        self.get_export(name)?.into_table()
+    }
+
+    /// Looks up an exported [`Memory`] value by name.
+    ///
+    /// Returns `None` if there was no export named `name`, or if there was but
+    /// it wasn't a memory.
+    pub fn get_memory(&self, name: &str) -> Option<Memory> {
+        self.get_export(name)?.into_memory()
+    }
+
+    /// Looks up an exported [`Global`] value by name.
+    ///
+    /// Returns `None` if there was no export named `name`, or if there was but
+    /// it wasn't a global.
+    pub fn get_global(&self, name: &str) -> Option<Global> {
+        self.get_export(name)?.into_global()
     }
 
     #[doc(hidden)]

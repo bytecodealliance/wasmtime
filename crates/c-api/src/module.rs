@@ -46,13 +46,11 @@ pub extern "C" fn wasmtime_module_new(
     handle_result(Module::from_binary(store, binary), |module| {
         let imports = module
             .imports()
-            .iter()
-            .map(|i| wasm_importtype_t::new(i.clone()))
+            .map(|i| wasm_importtype_t::new(i.module().to_owned(), i.name().to_owned(), i.ty()))
             .collect::<Vec<_>>();
         let exports = module
             .exports()
-            .iter()
-            .map(|e| wasm_exporttype_t::new(e.clone()))
+            .map(|e| wasm_exporttype_t::new(e.name().to_owned(), e.ty()))
             .collect::<Vec<_>>();
         let module = Box::new(wasm_module_t {
             module: HostRef::new(module),

@@ -190,7 +190,7 @@ impl RunCommand {
         store: &Store,
         module_registry: &ModuleRegistry,
         path: &Path,
-    ) -> Result<(Instance, Module)> {
+    ) -> Result<Instance> {
         // Read the wasm module binary either as `*.wat` or a raw binary
         let data = wat::parse_file(path)?;
 
@@ -199,7 +199,6 @@ impl RunCommand {
         // Resolve import using module_registry.
         let imports = module
             .imports()
-            .iter()
             .map(|i| {
                 let export = match i.module() {
                     "wasi_snapshot_preview1" => {
@@ -222,20 +221,16 @@ impl RunCommand {
         let instance = Instance::new(&module, &imports)
             .context(format!("failed to instantiate {:?}", path))?;
 
-        Ok((instance, module))
+        Ok(instance)
     }
 
     fn handle_module(&self, store: &Store, module_registry: &ModuleRegistry) -> Result<()> {
-        let (instance, module) = Self::instantiate_module(store, module_registry, &self.module)?;
+        let instance = Self::instantiate_module(store, module_registry, &self.module)?;
 
         // If a function to invoke was given, invoke it.
         if let Some(name) = self.invoke.as_ref() {
             self.invoke_export(instance, name)?;
-        } else if module
-            .exports()
-            .iter()
-            .any(|export| export.name().is_empty())
-        {
+        } else if instance.exports().any(|export| export.name().is_empty()) {
             // Launch the default command export.
             self.invoke_export(instance, "")?;
         } else {
@@ -248,19 +243,16 @@ impl RunCommand {
     }
 
     fn invoke_export(&self, instance: Instance, name: &str) -> Result<()> {
-        let pos = instance
-            .module()
-            .exports()
-            .iter()
-            .enumerate()
-            .find(|(_, e)| e.name() == name);
-        let (ty, export) = match pos {
-            Some((i, ty)) => match (ty.ty(), &instance.exports()[i]) {
-                (wasmtime::ExternType::Func(ty), wasmtime::Extern::Func(f)) => (ty, f),
-                _ => bail!("export of `{}` wasn't a function", name),
-            },
-            None => bail!("failed to find export of `{}` in module", name),
+        let func = if let Some(export) = instance.get_export(name) {
+            if let Some(func) = export.into_func() {
+                func
+            } else {
+                bail!("export of `{}` wasn't a function", name)
+            }
+        } else {
+            bail!("failed to find export of `{}` in module", name)
         };
+        let ty = func.ty();
         if ty.params().len() > 0 {
             eprintln!(
                 "warning: using `--invoke` with a function that takes arguments \
@@ -288,7 +280,7 @@ impl RunCommand {
 
         // Invoke the function and then afterwards print all the results that came
         // out, if there are any.
-        let results = export
+        let results = func
             .call(&values)
             .with_context(|| format!("failed to invoke `{}`", name))?;
         if !results.is_empty() {

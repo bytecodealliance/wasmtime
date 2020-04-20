@@ -7,6 +7,7 @@ use std::fs::File;
 use std::os::raw::{c_char, c_int};
 use std::path::{Path, PathBuf};
 use std::slice;
+use std::str;
 use wasi_common::{
     old::snapshot_0::WasiCtxBuilder as WasiSnapshot0CtxBuilder, preopen_dir,
     WasiCtxBuilder as WasiPreview1CtxBuilder,
@@ -296,7 +297,7 @@ pub unsafe extern "C" fn wasi_instance_new(
         })),
         Err(e) => {
             *trap = Box::into_raw(Box::new(wasm_trap_t {
-                trap: HostRef::new(Trap::new(e.to_string())),
+                trap: HostRef::new(Trap::new(e)),
             }));
 
             None
@@ -312,26 +313,26 @@ pub extern "C" fn wasi_instance_bind_import<'a>(
     instance: &'a mut wasi_instance_t,
     import: &wasm_importtype_t,
 ) -> Option<&'a wasm_extern_t> {
-    let module = import.ty.module();
-    let name = import.ty.name();
+    let module = &import.module;
+    let name = str::from_utf8(import.name.as_bytes()).ok()?;
 
     let export = match &instance.wasi {
         WasiInstance::Preview1(wasi) => {
             if module != "wasi_snapshot_preview1" {
                 return None;
             }
-            wasi.get_export(name)?
+            wasi.get_export(&name)?
         }
         WasiInstance::Snapshot0(wasi) => {
             if module != "wasi_unstable" {
                 return None;
             }
 
-            wasi.get_export(name)?
+            wasi.get_export(&name)?
         }
     };
 
-    if export.ty() != import.ty.ty().func()? {
+    if &export.ty() != import.ty.func()? {
         return None;
     }
 

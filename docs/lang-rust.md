@@ -74,10 +74,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // The `Instance` gives us access to various exported functions and items,
     // which we access here to pull out our `answer` exported function and
     // run it.
-    let answer = instance.get_export("answer")
-        .expect("export named `answer` not found")
-        .func()
-        .expect("export `answer` was not a function");
+    let answer = instance.get_func("answer")
+        .expect("`answer` was not an exported function");
 
     // There's a few ways we can call the `answer` `Func` value. The easiest
     // is to statically assert its signature with `get0` (in this case asserting

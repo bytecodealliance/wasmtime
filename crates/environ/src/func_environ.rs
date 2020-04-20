@@ -906,8 +906,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: FuncIndex,
     ) -> WasmResult<ir::FuncRef> {
-        let sigidx = self.module.functions[index];
-        let signature = func.import_signature(self.module.signatures[sigidx].clone());
+        let sig = self.module.func_signature(index);
+        let signature = func.import_signature(sig.clone());
         let name = get_func_name(index);
         Ok(func.import_function(ir::ExtFuncData {
             name,

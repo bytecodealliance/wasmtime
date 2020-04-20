@@ -269,14 +269,14 @@ fn get_from_module() -> anyhow::Result<()> {
         "#,
     )?;
     let instance = Instance::new(&module, &[])?;
-    let f0 = instance.get_export("f0").unwrap().func().unwrap();
+    let f0 = instance.get_func("f0").unwrap();
     assert!(f0.get0::<()>().is_ok());
     assert!(f0.get0::<i32>().is_err());
-    let f1 = instance.get_export("f1").unwrap().func().unwrap();
+    let f1 = instance.get_func("f1").unwrap();
     assert!(f1.get0::<()>().is_err());
     assert!(f1.get1::<i32, ()>().is_ok());
     assert!(f1.get1::<i32, f32>().is_err());
-    let f2 = instance.get_export("f2").unwrap().func().unwrap();
+    let f2 = instance.get_func("f2").unwrap();
     assert!(f2.get0::<()>().is_err());
     assert!(f2.get0::<i32>().is_ok());
     assert!(f2.get1::<i32, ()>().is_err());

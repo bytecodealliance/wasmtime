@@ -169,30 +169,13 @@ pub fn differential_execution(
             }
         };
 
-        let funcs = module
-            .exports()
-            .iter()
-            .filter_map(|e| {
-                if let ExternType::Func(_) = e.ty() {
-                    Some(e.name())
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
-        for name in funcs {
+        for (name, f) in instance.exports().filter_map(|e| {
+            let name = e.name();
+            e.into_func().map(|f| (name, f))
+        }) {
             // Always call the hang limit initializer first, so that we don't
             // infinite loop when calling another export.
             init_hang_limit(&instance);
-
-            let f = match instance
-                .get_export(&name)
-                .expect("instance should have export from module")
-            {
-                Extern::Func(f) => f.clone(),
-                _ => panic!("export should be a function"),
-            };
 
             let ty = f.ty();
             let params = match dummy::dummy_values(ty.params()) {
@@ -378,8 +361,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
 
                 let funcs = instance
                     .exports()
-                    .iter()
-                    .filter_map(|e| match e {
+                    .filter_map(|e| match e.into_extern() {
                         Extern::Func(f) => Some(f.clone()),
                         _ => None,
                     })

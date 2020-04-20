@@ -47,7 +47,7 @@ let wat = r#"
 "#;
 let module = Module::new(&store, wat)?;
 let instance = Instance::new(&module, &[])?;
-let add = instance.get_export("add").and_then(|f| f.func()).unwrap();
+let add = instance.get_func("add").unwrap();
 let add = add.get2::<i32, i32, i32>()?;
 println!("1 + 2 = {}", add(1, 2)?);
 # Ok(())
