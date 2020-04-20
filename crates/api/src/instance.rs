@@ -160,7 +160,9 @@ impl Instance {
     }
 
     /// Returns the list of exported items from this [`Instance`].
-    pub fn exports<'me>(&'me self) -> impl ExactSizeIterator<Item = Export> + 'me {
+    pub fn exports<'instance>(
+        &'instance self,
+    ) -> impl ExactSizeIterator<Item = Export<'instance>> + 'instance {
         let instance_handle = &self.instance_handle;
         let store = self.module.store();
         self.instance_handle
