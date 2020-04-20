@@ -444,7 +444,7 @@ impl CallThreadState {
                     debug_assert_eq!(ret, 0);
                     let maybe_interrupted = unsafe {
                         (*self.vmctx).instance().interrupts.stack_limit.load(SeqCst)
-                            == wasmtime_environ::INTERRUPTED as usize
+                            == wasmtime_environ::INTERRUPTED
                     };
                     Err(Trap::Jit {
                         pc,
@@ -508,7 +508,7 @@ impl CallThreadState {
                 // done.
                 true
             }
-            Err(n) if n == wasmtime_environ::INTERRUPTED as usize => {
+            Err(n) if n == wasmtime_environ::INTERRUPTED => {
                 // This means that an interrupt happened before we actually
                 // called this function, which means that we're now
                 // considered interrupted. Be sure to consume this interrupt

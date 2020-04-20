@@ -629,7 +629,7 @@ impl VMInterrupts {
     /// Flag that an interrupt should occur
     pub fn interrupt(&self) {
         self.stack_limit
-            .store(wasmtime_environ::INTERRUPTED as usize, SeqCst);
+            .store(wasmtime_environ::INTERRUPTED, SeqCst);
     }
 }
 

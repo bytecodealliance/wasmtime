@@ -1274,7 +1274,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             interrupt_ptr,
             i32::from(self.offsets.vminterrupts_stack_limit()),
         );
-        let interrupted_sentinel = pos.ins().iconst(pointer_type, i64::from(INTERRUPTED));
+        // Note that the cast to `isize` happens first to allow sign-extension,
+        // if necessary, to `i64`.
+        let interrupted_sentinel = pos.ins().iconst(pointer_type, INTERRUPTED as isize as i64);
         let cmp = pos
             .ins()
             .icmp(IntCC::Equal, interrupt, interrupted_sentinel);
