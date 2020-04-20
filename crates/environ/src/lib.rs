@@ -25,6 +25,7 @@
 )]
 
 mod address_map;
+mod cache;
 mod compilation;
 mod data_structures;
 mod func_environ;
@@ -33,34 +34,22 @@ mod module_environ;
 mod tunables;
 mod vmoffsets;
 
-mod cache;
-
-pub mod cranelift;
-#[cfg(feature = "lightbeam")]
-pub mod lightbeam;
-
 pub use crate::address_map::{
     FunctionAddressMap, InstructionAddressMap, ModuleAddressMap, ModuleMemoryOffset,
     ModuleVmctxInfo, ValueLabelsRanges,
 };
 pub use crate::cache::create_new_config as cache_create_new_config;
-pub use crate::cache::CacheConfig;
+pub use crate::cache::{CacheConfig, ModuleCacheDataTupleType, ModuleCacheEntry};
 pub use crate::compilation::{
-    Compilation, CompileError, CompiledFunction, Compiler, Relocation, RelocationTarget,
-    Relocations, TrapInformation, Traps,
+    Compilation, CompileError, CompiledFunction, Relocation, RelocationTarget, Relocations,
+    TrapInformation, Traps,
 };
-pub use crate::cranelift::Cranelift;
 pub use crate::data_structures::*;
-pub use crate::func_environ::BuiltinFunctionIndex;
-#[cfg(feature = "lightbeam")]
-pub use crate::lightbeam::Lightbeam;
+pub use crate::func_environ::*;
 pub use crate::module::{
     Export, MemoryPlan, MemoryStyle, Module, ModuleLocal, TableElements, TablePlan, TableStyle,
 };
-pub use crate::module_environ::{
-    translate_signature, DataInitializer, DataInitializerLocation, FunctionBodyData,
-    ModuleEnvironment, ModuleTranslation,
-};
+pub use crate::module_environ::*;
 pub use crate::tunables::Tunables;
 pub use crate::vmoffsets::{TargetSharedSignatureIndex, VMOffsets};
 

@@ -69,12 +69,7 @@ members = [
 
 [features]
 default = ["jitdump", "wasmtime/wat"]
-lightbeam = [
-    "wasmtime-environ/lightbeam",
-    "wasmtime-jit/lightbeam",
-    "wasmtime-wast/lightbeam",
-    "wasmtime/lightbeam",
-]
+lightbeam = ["wasmtime/lightbeam"]
 jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
 

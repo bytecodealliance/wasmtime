@@ -2,8 +2,10 @@
 
 use crate::code_memory::CodeMemory;
 use crate::instantiate::SetupError;
+use crate::module_environ::ModuleTranslation;
 use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::ir::InstBuilder;
+use cranelift_codegen::isa;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
@@ -14,9 +16,9 @@ use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
 use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex};
 use wasmtime_environ::{
-    CacheConfig, CompileError, CompiledFunction, Compiler as _C, ModuleAddressMap,
-    ModuleMemoryOffset, ModuleTranslation, ModuleVmctxInfo, Relocation, RelocationTarget,
-    Relocations, Traps, Tunables, VMOffsets,
+    CacheConfig, CompileError, CompiledFunction, ModuleAddressMap, ModuleCacheDataTupleType,
+    ModuleMemoryOffset, ModuleVmctxInfo, Relocation, RelocationTarget, Relocations, Traps,
+    Tunables, VMOffsets,
 };
 use wasmtime_runtime::{
     InstantiationError, SignatureRegistry, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
@@ -48,28 +50,20 @@ pub struct Compiler {
     isa: Box<dyn TargetIsa>,
     code_memory: CodeMemory,
     signatures: SignatureRegistry,
-    strategy: CompilationStrategy,
+    backend: Box<dyn Backend>,
     cache_config: CacheConfig,
     tunables: Tunables,
 }
 
-impl Compiler {
-    /// Construct a new `Compiler`.
-    pub fn new(
-        isa: Box<dyn TargetIsa>,
-        strategy: CompilationStrategy,
-        cache_config: CacheConfig,
-        tunables: Tunables,
-    ) -> Self {
-        Self {
-            isa,
-            code_memory: CodeMemory::new(),
-            signatures: SignatureRegistry::new(),
-            strategy,
-            cache_config,
-            tunables,
-        }
-    }
+/// An implementation of a compiler from parsed WebAssembly module to native code.
+pub trait Backend: Send + Sync {
+    /// Compile a parsed module with the given `TargetIsa`.
+    fn compile_module(
+        &self,
+        translation: &ModuleTranslation,
+        isa: &dyn isa::TargetIsa,
+        cache_config: &CacheConfig,
+    ) -> Result<ModuleCacheDataTupleType, CompileError>;
 }
 
 #[allow(missing_docs)]
@@ -85,6 +79,32 @@ pub struct Compilation {
 }
 
 impl Compiler {
+    /// Construct a new `Compiler`.
+    pub fn new(
+        isa: Box<dyn TargetIsa>,
+        strategy: CompilationStrategy,
+        cache_config: CacheConfig,
+        tunables: Tunables,
+    ) -> Self {
+        let backend = match strategy {
+            // For now, interpret `Auto` as `Cranelift` since that's the most stable
+            // implementation.
+            CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
+                Box::new(crate::cranelift::Cranelift) as Box<dyn Backend>
+            }
+            #[cfg(feature = "lightbeam")]
+            CompilationStrategy::Lightbeam => Box::new(crate::lightbeam::Lightbeam),
+        };
+        Self {
+            isa,
+            code_memory: CodeMemory::new(),
+            signatures: SignatureRegistry::new(),
+            backend,
+            cache_config,
+            tunables,
+        }
+    }
+
     /// Return the target's frontend configuration settings.
     pub fn frontend_config(&self) -> TargetFrontendConfig {
         self.isa.frontend_config()
@@ -101,26 +121,9 @@ impl Compiler {
         translation: &ModuleTranslation,
         debug_data: Option<DebugInfoData>,
     ) -> Result<Compilation, SetupError> {
-        let (compilation, relocations, address_transform, value_ranges, stack_slots, traps) =
-            match self.strategy {
-                // For now, interpret `Auto` as `Cranelift` since that's the most stable
-                // implementation.
-                CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
-                    wasmtime_environ::cranelift::Cranelift::compile_module(
-                        translation,
-                        &*self.isa,
-                        &self.cache_config,
-                    )
-                }
-                #[cfg(feature = "lightbeam")]
-                CompilationStrategy::Lightbeam => {
-                    wasmtime_environ::lightbeam::Lightbeam::compile_module(
-                        translation,
-                        &*self.isa,
-                        &self.cache_config,
-                    )
-                }
-            }
+        let (compilation, relocations, address_transform, value_ranges, stack_slots, traps) = self
+            .backend
+            .compile_module(translation, &*self.isa, &self.cache_config)
             .map_err(SetupError::Compile)?;
 
         // Allocate all of the compiled functions into executable memory,

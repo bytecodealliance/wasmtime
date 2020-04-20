@@ -3,14 +3,11 @@ use faerie::Artifact;
 use target_lexicon::Triple;
 use wasmtime::Strategy;
 use wasmtime_debug::{emit_debugsections, read_debuginfo};
-#[cfg(feature = "lightbeam")]
-use wasmtime_environ::Lightbeam;
 use wasmtime_environ::{
     entity::EntityRef, settings, settings::Configurable, wasm::DefinedMemoryIndex,
-    wasm::MemoryIndex, CacheConfig, Compiler, Cranelift, ModuleEnvironment, ModuleMemoryOffset,
-    ModuleVmctxInfo, Tunables, VMOffsets,
+    wasm::MemoryIndex, CacheConfig, ModuleMemoryOffset, ModuleVmctxInfo, Tunables, VMOffsets,
 };
-use wasmtime_jit::native;
+use wasmtime_jit::{native, Backend, ModuleEnvironment};
 use wasmtime_obj::emit_module;
 
 /// Creates object file from binary wasm data.
@@ -67,10 +64,12 @@ pub fn compile_to_obj(
     let (compilation, relocations, address_transform, value_ranges, stack_slots, _traps) =
         match strategy {
             Strategy::Auto | Strategy::Cranelift => {
-                Cranelift::compile_module(&translation, &*isa, cache_config)
+                wasmtime_jit::Cranelift.compile_module(&translation, &*isa, cache_config)
             }
             #[cfg(feature = "lightbeam")]
-            Strategy::Lightbeam => Lightbeam::compile_module(&translation, &*isa, cache_config),
+            Strategy::Lightbeam => {
+                wasmtime_jit::Lightbeam.compile_module(&translation, &*isa, cache_config)
+            }
             #[cfg(not(feature = "lightbeam"))]
             Strategy::Lightbeam => bail!("lightbeam support not enabled"),
             other => bail!("unsupported compilation strategy {:?}", other),

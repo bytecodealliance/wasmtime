@@ -1,23 +1,23 @@
 //! Support for compiling with Lightbeam.
 
-use crate::cache::ModuleCacheDataTupleType;
-use crate::compilation::{Compilation, CompileError, Traps};
-use crate::func_environ::FuncEnvironment;
-use crate::ModuleTranslation;
-// TODO: Put this in `compilation`
-use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
 use crate::cranelift::RelocSink;
-use crate::CacheConfig;
+use crate::func_environ::FuncEnvironment;
+use crate::module_environ::ModuleTranslation;
 use cranelift_codegen::isa;
 use cranelift_entity::{PrimaryMap, SecondaryMap};
+use wasmtime_environ::{
+    CacheConfig, Compilation, CompileError, ModuleAddressMap, ModuleCacheDataTupleType, Traps,
+    ValueLabelsRanges,
+};
 
 /// A compiler that compiles a WebAssembly module with Lightbeam, directly translating the Wasm file.
 pub struct Lightbeam;
 
-impl crate::compilation::Compiler for Lightbeam {
+impl crate::compiler::Backend for Lightbeam {
     /// Compile the module using Lightbeam, producing a compilation result with
     /// associated relocations.
     fn compile_module(
+        &self,
         translation: &ModuleTranslation,
         isa: &dyn isa::TargetIsa,
         _cache_config: &CacheConfig,

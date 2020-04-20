@@ -6,6 +6,7 @@
 use crate::compiler::Compiler;
 use crate::imports::resolve_imports;
 use crate::link::link_module;
+use crate::module_environ::ModuleEnvironment;
 use crate::resolver::Resolver;
 use std::any::Any;
 use std::collections::HashMap;
@@ -17,8 +18,7 @@ use wasmtime_debug::read_debuginfo;
 use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
 use wasmtime_environ::{
-    CompileError, DataInitializer, DataInitializerLocation, Module, ModuleAddressMap,
-    ModuleEnvironment, Traps,
+    CompileError, DataInitializer, DataInitializerLocation, Module, ModuleAddressMap, Traps,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{

@@ -1,12 +1,7 @@
 //! Support for compiling with Cranelift.
 
-use crate::address_map::{FunctionAddressMap, InstructionAddressMap};
-use crate::cache::{ModuleCacheDataTupleType, ModuleCacheEntry};
-use crate::compilation::{
-    Compilation, CompileError, CompiledFunction, Relocation, RelocationTarget, TrapInformation,
-};
 use crate::func_environ::{get_func_name, FuncEnvironment};
-use crate::{CacheConfig, FunctionBodyData, ModuleLocal, ModuleTranslation, Tunables};
+use crate::module_environ::{FunctionBodyData, ModuleTranslation};
 use cranelift_codegen::ir::{self, ExternalName};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{binemit, isa, Context};
@@ -14,6 +9,11 @@ use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, ModuleTranslationState};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::hash::{Hash, Hasher};
+use wasmtime_environ::{
+    CacheConfig, Compilation, CompileError, CompiledFunction, FunctionAddressMap,
+    InstructionAddressMap, ModuleCacheDataTupleType, ModuleCacheEntry, ModuleLocal, Relocation,
+    RelocationTarget, TrapInformation, Tunables,
+};
 
 /// Implementation of a relocation sink that just saves all the information for later
 pub struct RelocSink {
@@ -160,10 +160,11 @@ fn get_function_address_map<'data>(
 /// optimizing it and then translating to assembly.
 pub struct Cranelift;
 
-impl crate::compilation::Compiler for Cranelift {
+impl crate::compiler::Backend for Cranelift {
     /// Compile the module using Cranelift, producing a compilation result with
     /// associated relocations.
     fn compile_module(
+        &self,
         translation: &ModuleTranslation,
         isa: &dyn isa::TargetIsa,
         cache_config: &CacheConfig,

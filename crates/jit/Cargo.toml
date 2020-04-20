@@ -30,12 +30,13 @@ anyhow = "1.0"
 cfg-if = "0.1.9"
 log = "0.4"
 gimli = { version = "0.20.0", default-features = false, features = ["write"] }
+lightbeam = { path = "../lightbeam", optional = true, version = "0.15.0" }
+rayon = "1.2.1"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.8", features = ["winnt", "impl-default"] }
 
 [features]
-lightbeam = ["wasmtime-environ/lightbeam"]
 jitdump = ["wasmtime-profiling/jitdump"]
 vtune = ["wasmtime-profiling/vtune"]
 

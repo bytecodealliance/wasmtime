@@ -19,6 +19,7 @@ mod worker;
 pub use config::{create_new_config, CacheConfig};
 use worker::Worker;
 
+/// Entires loaded from teh cache
 pub struct ModuleCacheEntry<'config>(Option<ModuleCacheEntryInner<'config>>);
 
 struct ModuleCacheEntryInner<'config> {
@@ -50,6 +51,7 @@ pub type ModuleCacheDataTupleType = (
 struct Sha256Hasher(Sha256);
 
 impl<'config> ModuleCacheEntry<'config> {
+    /// Creates a new cache entry for the given compiler/config
     pub fn new<'data>(compiler_name: &str, cache_config: &'config CacheConfig) -> Self {
         if cache_config.enabled() {
             Self(Some(ModuleCacheEntryInner::new(
@@ -66,6 +68,10 @@ impl<'config> ModuleCacheEntry<'config> {
         Self(Some(inner))
     }
 
+    /// Fetches the value from the cache.
+    ///
+    /// The `state` provided is passed to `compute` if the cache entry for
+    /// `state` cannot be found.
     pub fn get_data<T: Hash, E>(
         &self,
         state: T,
