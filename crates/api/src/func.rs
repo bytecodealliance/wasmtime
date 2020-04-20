@@ -174,14 +174,8 @@ macro_rules! getters {
 
             // Pass the instance into the closure so that we keep it live for the lifetime
             // of the closure. Pass the export in so that we can call it.
-            struct ClosureState {
-                _instance: InstanceHandle,
-                export: ExportFunction
-            }
-            let closure = ClosureState {
-                _instance: self.instance.clone(),
-                export: self.export.clone()
-            };
+            let instance = self.instance.clone();
+            let export = self.export.clone();
 
             // ... and then once we've passed the typechecks we can hand out our
             // object since our `transmute` below should be safe!
@@ -194,12 +188,17 @@ macro_rules! getters {
                             *mut VMContext,
                             $($args,)*
                         ) -> R,
-                    >(closure.export.address);
+                    >(export.address);
                     let mut ret = None;
                     $(let $args = $args.into_abi();)*
-                    wasmtime_runtime::catch_traps(closure.export.vmctx, || {
-                        ret = Some(fnptr(closure.export.vmctx, ptr::null_mut(), $($args,)*));
+                    wasmtime_runtime::catch_traps(export.vmctx, || {
+                        ret = Some(fnptr(export.vmctx, ptr::null_mut(), $($args,)*));
                     }).map_err(Trap::from_jit)?;
+
+                    // We're holding this handle just to ensure that the instance stays
+                    // live while we call into it.
+                    drop(&instance);
+
                     Ok(ret.unwrap())
                 }
             })
