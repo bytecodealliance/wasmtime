@@ -2134,7 +2134,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
             // FIMM Vtmp1, u32::MAX or u64::MAX or i32::MAX or i64::MAX
             // FMIN Vtmp2, Vin, Vtmp1
             // FIMM Vtmp1, 0 or 0 or i32::MIN or i64::MIN
-            // FMAX Vtmp2, Vtmp2, Vtmp
+            // FMAX Vtmp2, Vtmp2, Vtmp1
             // (if signed) FIMM Vtmp1, 0
             // FCMP Vin, Vin
             // FCSEL Vtmp2, Vtmp1, Vtmp2, NE  // on NaN, select 0
