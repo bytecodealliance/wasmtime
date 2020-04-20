@@ -42,8 +42,7 @@ impl StdioExt for Stdio {
 }
 
 fn get_rights(file: &File) -> io::Result<HandleRights> {
-    use yanix::fcntl;
-    use yanix::file::{isatty, OFlag};
+    use yanix::file::isatty;
     let (base, inheriting) = {
         if unsafe { isatty(file.as_raw_fd())? } {
             (types::Rights::tty_base(), types::Rights::tty_base())
@@ -54,13 +53,5 @@ fn get_rights(file: &File) -> io::Result<HandleRights> {
             )
         }
     };
-    let mut rights = HandleRights::new(base, inheriting);
-    let flags = unsafe { fcntl::get_status_flags(file.as_raw_fd())? };
-    let accmode = flags & OFlag::ACCMODE;
-    if accmode == OFlag::RDONLY {
-        rights.base &= !types::Rights::FD_WRITE;
-    } else if accmode == OFlag::WRONLY {
-        rights.base &= !types::Rights::FD_READ;
-    }
-    Ok(rights)
+    Ok(HandleRights::new(base, inheriting))
 }
