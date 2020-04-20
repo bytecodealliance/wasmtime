@@ -1,4 +1,6 @@
-use wasmtime::Trap;
+use anyhow::Result;
+use std::fs::File;
+use wasmtime::{Linker, Store, Trap};
 
 pub mod old;
 
@@ -27,4 +29,39 @@ fn wasi_proc_exit(status: i32) -> Result<(), Trap> {
             "exit with invalid exit status outside of [0..126)",
         ))
     }
+}
+
+/// Creates a new [`Linker`], similar to `Linker::new`, and initializes it
+/// with WASI exports.
+pub fn wasi_linker(
+    store: &Store,
+    preopen_dirs: &[(String, File)],
+    argv: &[String],
+    vars: &[(String, String)],
+) -> Result<Linker> {
+    let mut linker = Linker::new(store);
+
+    let mut cx = WasiCtxBuilder::new();
+    cx.inherit_stdio().args(argv).envs(vars);
+
+    for (name, file) in preopen_dirs {
+        cx.preopened_dir(file.try_clone()?, name);
+    }
+
+    let cx = cx.build()?;
+    let wasi = Wasi::new(linker.store(), cx);
+    wasi.add_to_linker(&mut linker)?;
+
+    let mut cx = old::snapshot_0::WasiCtxBuilder::new();
+    cx.inherit_stdio().args(argv).envs(vars);
+
+    for (name, file) in preopen_dirs {
+        cx.preopened_dir(file.try_clone()?, name);
+    }
+
+    let cx = cx.build()?;
+    let wasi = old::snapshot_0::Wasi::new(linker.store(), cx);
+    wasi.add_to_linker(&mut linker)?;
+
+    Ok(linker)
 }

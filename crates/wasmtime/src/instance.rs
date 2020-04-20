@@ -51,9 +51,7 @@ fn instantiate(
             )
             .map_err(|e| -> Error {
                 match e {
-                    InstantiationError::StartTrap(trap) | InstantiationError::Trap(trap) => {
-                        Trap::from_runtime(trap).into()
-                    }
+                    InstantiationError::Trap(trap) => Trap::from_runtime(trap).into(),
                     other => other.into(),
                 }
             })?;
@@ -102,6 +100,54 @@ pub struct Instance {
 
 impl Instance {
     /// Creates a new [`Instance`] from the previously compiled [`Module`] and
+    /// list of `imports` specified, similar to `Instance::new`, and performs
+    /// [WASI ABI initialization]:
+    ///  - If the module is a command, the `_start` function is run and `None`
+    ///    is returned.
+    ///  - If the module is a reactor, the `_initialize` function is run and
+    ///    the initialized `Instance` is returned.
+    ///
+    /// [WASI ABI initialization]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
+    pub fn new_wasi_abi(module: &Module, imports: &[Extern]) -> Result<Option<Instance>, Error> {
+        let instance = Instance::new(module, imports)?;
+
+        // Invoke the WASI start function of the instance, if one is present.
+        let command_start = instance.get_export("_start");
+        let reactor_start = instance.get_export("_initialize");
+        match (command_start, reactor_start) {
+            (Some(command_start), None) => {
+                if let Some(func) = command_start.into_func() {
+                    func.get0::<()>()?()?;
+
+                    // For commands, we consume the instance after running the program.
+                    Ok(None)
+                } else {
+                    bail!("_start must be a function".to_owned())
+                }
+            }
+            (None, Some(reactor_start)) => {
+                if let Some(func) = reactor_start.into_func() {
+                    func.get0::<()>()?()?;
+
+                    // For reactors, we return the instance after running the initialization.
+                    Ok(Some(instance))
+                } else {
+                    bail!("_initialize must be a function".to_owned())
+                }
+            }
+            (None, None) => {
+                // Treat modules which don't declare themselves as commands or reactors as
+                // reactors which have no initialization to do.
+                Ok(Some(instance))
+            }
+            (Some(_), Some(_)) => {
+                // Module declares to be both a command and a reactor.
+                bail!("Program cannot be both a command and a reactor".to_owned())
+            }
+        }
+    }
+
+    /// Creates a new [`Instance`] from the previously compiled [`Module`] and
     /// list of `imports` specified.
     ///
     /// This method instantiates the `module` provided with the `imports`,
@@ -110,6 +156,10 @@ impl Instance {
     /// specified below), but if successful the `start` function will be
     /// automatically run (if provided) and then the [`Instance`] will be
     /// returned.
+    ///
+    /// Note that this function does not perform `WASI` ABI initialization
+    /// (eg. it does not run the `_start` or `_initialize` functions). To
+    /// perform them, use `new_wasi_abi` instead.
     ///
     /// ## Providing Imports
     ///

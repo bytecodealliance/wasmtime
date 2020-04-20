@@ -1330,8 +1330,4 @@ pub enum InstantiationError {
     /// A trap ocurred during instantiation, after linking.
     #[error("Trap occurred during instantiation")]
     Trap(Trap),
-
-    /// A trap occurred while running the wasm start function.
-    #[error("Trap occurred while invoking start function")]
-    StartTrap(Trap),
 }

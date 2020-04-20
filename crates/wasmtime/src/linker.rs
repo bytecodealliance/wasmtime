@@ -66,6 +66,9 @@ impl Linker {
     /// linker will be connected with `store` and must come from the same
     /// `store`.
     ///
+    /// To create a new [`Linker`] prepopulated with WASI APIs, see
+    /// [`wasi_linker`](wasmtime_wasi::wasi_linker).
+    ///
     /// # Examples
     ///
     /// ```
@@ -338,6 +341,20 @@ impl Linker {
         idx
     }
 
+    /// Attempts to instantiate the `module` provided, similar to
+    /// `Linker::instantiate`, and performs [WASI ABI initialization]:
+    ///  - If the module is a command, the `_start` function is run and `None`
+    ///    is returned.
+    ///  - If the module is a reactor, the `_initialize` function is run and
+    ///    the initialized `Instance` is returned.
+    ///
+    /// [WASI ABI initialization]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
+    pub fn instantiate_wasi_abi(&self, module: &Module) -> Result<Option<Instance>> {
+        let imports = self.compute_imports(module)?;
+
+        Instance::new_wasi_abi(module, &imports)
+    }
+
     /// Attempts to instantiate the `module` provided.
     ///
     /// This method will attempt to assemble a list of imports that correspond
@@ -376,7 +393,14 @@ impl Linker {
     /// # }
     /// ```
     pub fn instantiate(&self, module: &Module) -> Result<Instance> {
+        let imports = self.compute_imports(module)?;
+
+        Instance::new(module, &imports)
+    }
+
+    fn compute_imports(&self, module: &Module) -> Result<Vec<Extern>> {
         let mut imports = Vec::new();
+
         for import in module.imports() {
             if let Some(item) = self.get(&import) {
                 imports.push(item);
@@ -413,7 +437,7 @@ impl Linker {
             )
         }
 
-        Instance::new(module, &imports)
+        Ok(imports)
     }
 
     /// Returns the [`Store`] that this linker is connected to.

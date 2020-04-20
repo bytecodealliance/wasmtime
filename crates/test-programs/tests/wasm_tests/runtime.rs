@@ -65,17 +65,14 @@ pub fn instantiate(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let instance = Instance::new(&module, &imports).context(format!(
+    let instance = Instance::new_wasi_abi(&module, &imports).context(format!(
         "error while instantiating Wasm module '{}'",
         bin_name,
     ))?;
 
-    instance
-        .get_export("_start")
-        .context("expected a _start export")?
-        .into_func()
-        .context("expected export to be a func")?
-        .call(&[])?;
+    if instance.is_some() {
+        bail!("expected module to be a command with a \"_start\" function")
+    }
 
     Ok(())
 }
