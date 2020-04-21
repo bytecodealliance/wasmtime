@@ -2090,6 +2090,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
             // MOV Xtmp1, Dinput0
             // MOV Xtmp2, Dinput1
             // AND Xtmp2, 0x8000_0000_0000_0000
+            // BIC Xtmp1, 0x8000_0000_0000_0000
             // ORR Xtmp1, Xtmp1, Xtmp2
             // MOV Doutput, Xtmp1
 
@@ -2123,6 +2124,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
                 alu_op,
                 rd: tmp2,
                 rn: tmp2.to_reg(),
+                imml: imml.clone(),
+            });
+            let alu_op = choose_32_64(ty, ALUOp::AndNot32, ALUOp::AndNot64);
+            ctx.emit(Inst::AluRRImmLogic {
+                alu_op,
+                rd: tmp1,
+                rn: tmp1.to_reg(),
                 imml,
             });
             let alu_op = choose_32_64(ty, ALUOp::Orr32, ALUOp::Orr64);
@@ -2197,7 +2205,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
             // FIMM Vtmp1, u32::MAX or u64::MAX or i32::MAX or i64::MAX
             // FMIN Vtmp2, Vin, Vtmp1
             // FIMM Vtmp1, 0 or 0 or i32::MIN or i64::MIN
-            // FMAX Vtmp2, Vtmp2, Vtmp
+            // FMAX Vtmp2, Vtmp2, Vtmp1
+            // (if signed) FIMM Vtmp1, 0
             // FCMP Vin, Vin
             // FCSEL Vtmp2, Vtmp1, Vtmp2, NE  // on NaN, select 0
             // convert Rout, Vtmp2
@@ -2258,6 +2267,19 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
                 rn: rtmp2.to_reg(),
                 rm: rtmp1.to_reg(),
             });
+            if out_signed {
+                if in_bits == 32 {
+                    ctx.emit(Inst::LoadFpuConst32 {
+                        rd: rtmp1,
+                        const_data: 0.0,
+                    });
+                } else {
+                    ctx.emit(Inst::LoadFpuConst64 {
+                        rd: rtmp1,
+                        const_data: 0.0,
+                    });
+                }
+            }
             if in_bits == 32 {
                 ctx.emit(Inst::FpuCmp32 { rn: rn, rm: rn });
                 ctx.emit(Inst::FpuCSel32 {
