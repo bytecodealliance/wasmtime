@@ -20,7 +20,7 @@ where
     // This lowers the CL IR.
     let mut vcode = Lower::new(f, abi).lower(b);
 
-    let universe = &B::MInst::reg_universe();
+    let universe = &B::MInst::reg_universe(vcode.flags());
 
     debug!("vcode from lowering: \n{}", vcode.show_rru(Some(universe)));
 

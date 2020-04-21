@@ -52,7 +52,7 @@ impl MachBackend for AArch64Backend {
         let frame_size = vcode.frame_size();
 
         let disasm = if want_disasm {
-            Some(vcode.show_rru(Some(&create_reg_universe())))
+            Some(vcode.show_rru(Some(&create_reg_universe(flags))))
         } else {
             None
         };
@@ -77,7 +77,7 @@ impl MachBackend for AArch64Backend {
     }
 
     fn reg_universe(&self) -> RealRegUniverse {
-        create_reg_universe()
+        create_reg_universe(&self.flags)
     }
 }
 

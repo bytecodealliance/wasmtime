@@ -1935,9 +1935,16 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
             }
         }
 
-        Opcode::GetPinnedReg
-        | Opcode::SetPinnedReg
-        | Opcode::Spill
+        Opcode::GetPinnedReg => {
+            let rd = output_to_reg(ctx, outputs[0]);
+            ctx.emit(Inst::GetPinnedReg { rd });
+        }
+        Opcode::SetPinnedReg => {
+            let rm = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
+            ctx.emit(Inst::SetPinnedReg { rm });
+        }
+
+        Opcode::Spill
         | Opcode::Fill
         | Opcode::FillNop
         | Opcode::Regmove
