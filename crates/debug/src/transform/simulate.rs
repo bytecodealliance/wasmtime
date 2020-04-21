@@ -228,17 +228,16 @@ fn generate_vars(
                 };
 
             let loc_list_id = {
-                let expr = CompiledExpression::from_label(*label);
-                let mut locs = Vec::new();
-                for (begin, length, data) in
-                    expr.build_with_locals(scope_ranges, addr_tr, Some(frame_info), isa)?
-                {
-                    locs.push(write::Location::StartLength {
-                        begin,
-                        length,
-                        data,
-                    });
-                }
+                let locs = CompiledExpression::from_label(*label)
+                    .build_with_locals(scope_ranges, addr_tr, Some(frame_info), isa)
+                    .map(|i| {
+                        i.map(|(begin, length, data)| write::Location::StartLength {
+                            begin,
+                            length,
+                            data,
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
                 unit.locations.add(write::LocationList(locs))
             };
 

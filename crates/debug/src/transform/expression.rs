@@ -218,27 +218,65 @@ impl CompiledExpression {
         None
     }
 
-    pub fn build_with_locals(
-        &self,
-        scope: &[(u64, u64)], // wasm ranges
-        addr_tr: &AddressTransform,
-        frame_info: Option<&FunctionFrameInfo>,
-        isa: &dyn TargetIsa,
-    ) -> Result<Vec<(write::Address, u64, write::Expression)>> {
+    pub fn build_with_locals<'a>(
+        &'a self,
+        scope: &'a [(u64, u64)], // wasm ranges
+        addr_tr: &'a AddressTransform,
+        frame_info: Option<&'a FunctionFrameInfo>,
+        isa: &'a dyn TargetIsa,
+    ) -> impl Iterator<Item = Result<(write::Address, u64, write::Expression)>> + 'a {
+        enum BuildWithLocalsResult<'a> {
+            Empty,
+            Simple(
+                Box<dyn Iterator<Item = (write::Address, u64)> + 'a>,
+                Vec<u8>,
+            ),
+            Ranges(
+                Box<dyn Iterator<Item = Result<(DefinedFuncIndex, usize, usize, Vec<u8>)>> + 'a>,
+            ),
+        }
+        impl Iterator for BuildWithLocalsResult<'_> {
+            type Item = Result<(write::Address, u64, write::Expression)>;
+            fn next(&mut self) -> Option<Self::Item> {
+                match self {
+                    BuildWithLocalsResult::Empty => None,
+                    BuildWithLocalsResult::Simple(it, code) => it
+                        .next()
+                        .map(|(addr, len)| Ok((addr, len, write::Expression(code.to_vec())))),
+                    BuildWithLocalsResult::Ranges(it) => it.next().map(|r| {
+                        r.map(|(func_index, start, end, code_buf)| {
+                            (
+                                write::Address::Symbol {
+                                    symbol: func_index.index(),
+                                    addend: start as i64,
+                                },
+                                (end - start) as u64,
+                                write::Expression(code_buf),
+                            )
+                        })
+                    }),
+                }
+            }
+        }
+
         if scope.is_empty() {
-            return Ok(vec![]);
+            return BuildWithLocalsResult::Empty;
         }
 
         // If it a simple DWARF code, no need in locals processing. Just translate
         // the scope ranges.
         if let [CompiledExpressionPart::Code(code)] = self.parts.as_slice() {
-            let result_scope = scope
-                .iter()
-                .map(|(wasm_start, wasm_end)| addr_tr.translate_ranges(*wasm_start, *wasm_end))
-                .flatten()
-                .map(|(addr, len)| (addr, len, write::Expression(code.to_vec())))
-                .collect();
-            return Ok(result_scope);
+            return BuildWithLocalsResult::Simple(
+                Box::new(
+                    scope
+                        .iter()
+                        .map(move |(wasm_start, wasm_end)| {
+                            addr_tr.translate_ranges(*wasm_start, *wasm_end)
+                        })
+                        .flatten(),
+                ),
+                code.clone(),
+            );
         }
 
         let vmctx_label = get_vmctx_value_label();
@@ -258,70 +296,63 @@ impl CompiledExpression {
         }
         let ranges = ranges_builder.into_ranges();
 
-        let result = ranges
-            .into_iter()
-            .map(
-                |CachedValueLabelRange {
-                     func_index,
-                     start,
-                     end,
-                     label_location,
-                 }| {
-                    // build expression
-                    let mut code_buf = Vec::new();
-                    macro_rules! deref {
-                        () => {
-                            if let (Some(vmctx_loc), Some(frame_info)) =
-                                (label_location.get(&vmctx_label), frame_info)
-                            {
-                                if !append_memory_deref(&mut code_buf, frame_info, *vmctx_loc, isa)?
+        return BuildWithLocalsResult::Ranges(Box::new(
+            ranges
+                .into_iter()
+                .map(
+                    move |CachedValueLabelRange {
+                              func_index,
+                              start,
+                              end,
+                              label_location,
+                          }| {
+                        // build expression
+                        let mut code_buf = Vec::new();
+                        macro_rules! deref {
+                            () => {
+                                if let (Some(vmctx_loc), Some(frame_info)) =
+                                    (label_location.get(&vmctx_label), frame_info)
                                 {
-                                    return Ok(None);
-                                }
-                            } else {
-                                return Ok(None);
-                            };
-                        };
-                    }
-                    for part in &self.parts {
-                        match part {
-                            CompiledExpressionPart::Code(c) => {
-                                code_buf.extend_from_slice(c.as_slice())
-                            }
-                            CompiledExpressionPart::Local { label, trailing } => {
-                                let loc = *label_location.get(&label).context("label_location")?;
-                                if let Some(expr) = translate_loc(loc, frame_info, isa, *trailing)?
-                                {
-                                    code_buf.extend_from_slice(&expr)
+                                    if !append_memory_deref(
+                                        &mut code_buf,
+                                        frame_info,
+                                        *vmctx_loc,
+                                        isa,
+                                    )? {
+                                        return Ok(None);
+                                    }
                                 } else {
                                     return Ok(None);
-                                }
-                            }
-                            CompiledExpressionPart::Deref => deref!(),
+                                };
+                            };
                         }
-                    }
-                    if self.need_deref {
-                        deref!();
-                    }
-                    Ok(Some((func_index, start, end, code_buf)))
-                },
-            )
-            .filter_map(Result::transpose)
-            .map(|r| {
-                r.map(|(func_index, start, end, code_buf)| {
-                    (
-                        write::Address::Symbol {
-                            symbol: func_index.index(),
-                            addend: start as i64,
-                        },
-                        (end - start) as u64,
-                        write::Expression(code_buf),
-                    )
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        Ok(result)
+                        for part in &self.parts {
+                            match part {
+                                CompiledExpressionPart::Code(c) => {
+                                    code_buf.extend_from_slice(c.as_slice())
+                                }
+                                CompiledExpressionPart::Local { label, trailing } => {
+                                    let loc =
+                                        *label_location.get(&label).context("label_location")?;
+                                    if let Some(expr) =
+                                        translate_loc(loc, frame_info, isa, *trailing)?
+                                    {
+                                        code_buf.extend_from_slice(&expr)
+                                    } else {
+                                        return Ok(None);
+                                    }
+                                }
+                                CompiledExpressionPart::Deref => deref!(),
+                            }
+                        }
+                        if self.need_deref {
+                            deref!();
+                        }
+                        Ok(Some((func_index, start, end, code_buf)))
+                    },
+                )
+                .filter_map(Result::transpose),
+        ));
     }
 }
 

@@ -149,27 +149,36 @@ where
                     } else {
                         None
                     };
-                let mut result = None;
+
+                let mut result: Option<Vec<_>> = None;
                 while let Some(loc) = locs.next()? {
                     if let Some(expr) = compile_expression(&loc.data, unit_encoding, frame_base)? {
-                        if result.is_none() {
-                            result = Some(Vec::new());
-                        }
-                        for (start, len, expr) in expr.build_with_locals(
-                            &[(loc.range.begin, loc.range.end)],
-                            addr_tr,
-                            frame_info,
-                            isa,
-                        )? {
-                            if len == 0 {
+                        let chunk = expr
+                            .build_with_locals(
+                                &[(loc.range.begin, loc.range.end)],
+                                addr_tr,
+                                frame_info,
+                                isa,
+                            )
+                            .filter(|i| {
                                 // Ignore empty range
-                                continue;
-                            }
-                            result.as_mut().unwrap().push(write::Location::StartLength {
-                                begin: start,
-                                length: len,
-                                data: expr,
-                            });
+                                if let Ok((_, 0, _)) = i {
+                                    false
+                                } else {
+                                    true
+                                }
+                            })
+                            .map(|i| {
+                                i.map(|(start, len, expr)| write::Location::StartLength {
+                                    begin: start,
+                                    length: len,
+                                    data: expr,
+                                })
+                            })
+                            .collect::<Result<Vec<_>, _>>()?;
+                        match &mut result {
+                            Some(r) => r.extend(chunk),
+                            x @ None => *x = Some(chunk),
                         }
                     } else {
                         // FIXME _expr contains invalid expression
@@ -199,8 +208,9 @@ where
                     } else {
                         // Conversion to loclist is required.
                         if let Some(scope_ranges) = scope_ranges {
-                            let exprs =
-                                expr.build_with_locals(scope_ranges, addr_tr, frame_info, isa)?;
+                            let exprs = expr
+                                .build_with_locals(scope_ranges, addr_tr, frame_info, isa)
+                                .collect::<Result<Vec<_>, _>>()?;
                             if exprs.is_empty() {
                                 continue;
                             }
