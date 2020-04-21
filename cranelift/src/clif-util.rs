@@ -24,6 +24,7 @@ mod bugpoint;
 mod cat;
 mod compile;
 mod disasm;
+mod interpret;
 mod print_cfg;
 mod run;
 mod utils;
@@ -180,6 +181,13 @@ fn main() {
                 .arg(add_debug_flag()),
         )
         .subcommand(
+            SubCommand::with_name("interpret")
+                .about("Interpret CLIF code")
+                .arg(add_verbose_flag())
+                .arg(add_input_file_arg())
+                .arg(add_debug_flag()),
+        )
+        .subcommand(
             SubCommand::with_name("cat")
                 .about("Outputs .clif file")
                 .arg(add_input_file_arg())
@@ -234,6 +242,14 @@ fn main() {
         ("run", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
             run::run(
+                get_vec(rest_cmd.values_of("file")),
+                rest_cmd.is_present("verbose"),
+            )
+            .map(|_time| ())
+        }
+        ("interpret", Some(rest_cmd)) => {
+            handle_debug_flag(rest_cmd.is_present("debug"));
+            interpret::run(
                 get_vec(rest_cmd.values_of("file")),
                 rest_cmd.is_present("verbose"),
             )
