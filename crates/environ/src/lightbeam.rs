@@ -26,7 +26,11 @@ impl crate::compilation::Compiler for Lightbeam {
             return Err(CompileError::DebugInfoNotSupported);
         }
 
-        let env = FuncEnvironment::new(isa.frontend_config(), &translation.module.local);
+        let env = FuncEnvironment::new(
+            isa.frontend_config(),
+            &translation.module.local,
+            &translation.tunables,
+        );
         let mut relocations = PrimaryMap::new();
         let mut codegen_session: lightbeam::CodeGenSession<_> =
             lightbeam::CodeGenSession::new(translation.function_body_inputs.len() as u32, &env);

@@ -285,6 +285,11 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 config.as_mut().unwrap().debug_info(b);
             }
 
+            ApiCall::ConfigInterruptable(b) => {
+                log::trace!("enabling interruption");
+                config.as_mut().unwrap().interruptable(b);
+            }
+
             ApiCall::EngineNew => {
                 log::trace!("creating engine");
                 assert!(engine.is_none());

@@ -392,6 +392,8 @@ pub enum AnyEntity {
     Heap(Heap),
     /// A table.
     Table(Table),
+    /// A function's stack limit
+    StackLimit,
 }
 
 impl fmt::Display for AnyEntity {
@@ -409,6 +411,7 @@ impl fmt::Display for AnyEntity {
             Self::SigRef(r) => r.fmt(f),
             Self::Heap(r) => r.fmt(f),
             Self::Table(r) => r.fmt(f),
+            Self::StackLimit => write!(f, "stack_limit"),
         }
     }
 }

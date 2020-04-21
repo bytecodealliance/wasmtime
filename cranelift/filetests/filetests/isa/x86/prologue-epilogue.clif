@@ -1,6 +1,7 @@
 test compile
 set opt_level=speed_and_size
 set is_pic
+set enable_probestack=false
 target x86_64 haswell
 
 ; An empty function.
@@ -244,7 +245,7 @@ block0(v0: i64):
 ; nextln: 
 ; nextln: block0(v0: i64 [%rdi], v4: i64 [%rbp]):
 ; nextln:     v1 = copy v0
-; nextln:     v2 = iadd_imm v1, 16
+; nextln:     v2 = iadd_imm v1, 176
 ; nextln:     v3 = ifcmp_sp v2
 ; nextln:     trapif uge v3, stk_ovf
 ; nextln:     x86_push v4
@@ -253,4 +254,61 @@ block0(v0: i64):
 ; nextln:     adjust_sp_up_imm 176
 ; nextln:     v5 = x86_pop.i64
 ; nextln:     return v5
+; nextln: }
+
+function %big_stack_limit(i64 stack_limit) {
+    ss0 = explicit_slot 40000
+block0(v0: i64):
+    return
+}
+
+; check: function %big_stack_limit(i64 stack_limit [%rdi], i64 fp [%rbp]) -> i64 fp [%rbp] fast {
+; nextln:     ss0 = explicit_slot 40000, offset -40016
+; nextln:     ss1 = incoming_arg 16, offset -16
+; nextln: 
+; nextln: block0(v0: i64 [%rdi], v5: i64 [%rbp]):
+; nextln:     v1 = copy v0
+; nextln:     v2 = ifcmp_sp v1
+; nextln:     trapif uge v2, stk_ovf
+; nextln:     v3 = iadd_imm v1, 0x9c40
+; nextln:     v4 = ifcmp_sp v3
+; nextln:     trapif uge v4, stk_ovf
+; nextln:     x86_push v5
+; nextln:     copy_special %rsp -> %rbp
+; nextln:     adjust_sp_down_imm 0x9c40
+; nextln:     adjust_sp_up_imm 0x9c40
+; nextln:     v6 = x86_pop.i64
+; nextln:     return v6
+; nextln: }
+
+function %limit_preamble(i64 vmctx) {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+4
+    stack_limit = gv2
+    ss0 = explicit_slot 20
+block0(v0: i64):
+    return
+}
+
+; check: function %limit_preamble(i64 vmctx [%rdi], i64 fp [%rbp]) -> i64 fp [%rbp] fast {
+; nextln:     ss0 = explicit_slot 20, offset -36
+; nextln:     ss1 = incoming_arg 16, offset -16
+; nextln:     gv0 = vmctx
+; nextln:     gv1 = load.i64 notrap aligned gv0
+; nextln:     gv2 = load.i64 notrap aligned gv1+4
+; nextln:     stack_limit = gv2
+; nextln: 
+; nextln: block0(v0: i64 [%rdi], v5: i64 [%rbp]):
+; nextln:     v1 = load.i64 notrap aligned v0
+; nextln:     v2 = load.i64 notrap aligned v1+4
+; nextln:     v3 = iadd_imm v2, 32
+; nextln:     v4 = ifcmp_sp v3
+; nextln:     trapif uge v4, stk_ovf
+; nextln:     x86_push v5
+; nextln:     copy_special %rsp -> %rbp
+; nextln:     adjust_sp_down_imm 32
+; nextln:     adjust_sp_up_imm 32
+; nextln:     v6 = x86_pop.i64
+; nextln:     return v6
 ; nextln: }

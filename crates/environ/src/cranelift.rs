@@ -1,5 +1,90 @@
 //! Support for compiling with Cranelift.
 
+// # How does Wasmtime prevent stack overflow?
+//
+// A few locations throughout the codebase link to this file to explain
+// interrupts and stack overflow. To start off, let's take a look at stack
+// overflow. Wasm code is well-defined to have stack overflow being recoverable
+// and raising a trap, so we need to handle this somehow! There's also an added
+// constraint where as an embedder you frequently are running host-provided
+// code called from wasm. WebAssembly and native code currently share the same
+// call stack, so you want to make sure that your host-provided code will have
+// enough call-stack available to it.
+//
+// Given all that, the way that stack overflow is handled is by adding a
+// prologue check to all JIT functions for how much native stack is remaining.
+// The `VMContext` pointer is the first argument to all functions, and the first
+// field of this structure is `*const VMInterrupts` and the first field of that
+// is the stack limit. Note that the stack limit in this case means "if the
+// stack pointer goes below this, trap". Each JIT function which consumes stack
+// space or isn't a leaf function starts off by loading the stack limit,
+// checking it against the stack pointer, and optionally traps.
+//
+// This manual check allows the embedder (us) to give wasm a relatively precise
+// amount of stack allocation. Using this scheme we reserve a chunk of stack
+// for wasm code relative from where wasm code was called. This ensures that
+// native code called by wasm should have native stack space to run, and the
+// numbers of stack spaces here should all be configurable for various
+// embeddings.
+//
+// Note that we do not consider each thread's stack guard page here. It's
+// considered that if you hit that you still abort the whole program. This
+// shouldn't happen most of the time because wasm is always stack-bound and
+// it's up to the embedder to bound its own native stack.
+//
+// So all-in-all, that's how we implement stack checks. Note that stack checks
+// cannot be disabled because it's a feature of core wasm semantics. This means
+// that all functions almost always have a stack check prologue, and it's up to
+// us to optimize away that cost as much as we can.
+//
+// For more information about the tricky bits of managing the reserved stack
+// size of wasm, see the implementation in `traphandlers.rs` in the
+// `update_stack_limit` function.
+//
+// # How is Wasmtime interrupted?
+//
+// Ok so given all that background of stack checks, the next thing we want to
+// build on top of this is the ability to *interrupt* executing wasm code. This
+// is useful to ensure that wasm always executes within a particular time slice
+// or otherwise doesn't consume all CPU resources on a system. There are two
+// major ways that interrupts are required:
+//
+// * Loops - likely immediately apparent but it's easy to write an infinite
+//   loop in wasm, so we need the ability to interrupt loops.
+// * Function entries - somewhat more subtle, but imagine a module where each
+//   function calls the next function twice. This creates 2^n calls pretty
+//   quickly, so a pretty small module can export a function with no loops
+//   that takes an extremely long time to call.
+//
+// In many cases if an interrupt comes in you want to interrupt host code as
+// well, but we're explicitly not considering that here. We're hoping that
+// interrupting host code is largely left to the embedder (e.g. figuring out
+// how to interrupt blocking syscalls) and they can figure that out. The purpose
+// of this feature is to basically only give the ability to interrupt
+// currently-executing wasm code (or triggering an interrupt as soon as wasm
+// reenters itself).
+//
+// To implement interruption of loops we insert code at the head of all loops
+// which checks the stack limit counter. If the counter matches a magical
+// sentinel value that's impossible to be the real stack limit, then we
+// interrupt the loop and trap. To implement interrupts of functions, we
+// actually do the same thing where the magical sentinel value we use here is
+// automatically considered as considering all stack pointer values as "you ran
+// over your stack". This means that with a write of a magical value to one
+// location we can interrupt both loops and function bodies.
+//
+// The "magical value" here is `usize::max_value() - N`. We reserve
+// `usize::max_value()` for "the stack limit isn't set yet" and so -N is
+// then used for "you got interrupted". We do a bit of patching afterwards to
+// translate a stack overflow into an interrupt trap if we see that an
+// interrupt happened. Note that `N` here is a medium-size-ish nonzero value
+// chosen in coordination with the cranelift backend. Currently it's 32k. The
+// value of N is basically a threshold in the backend for "anything less than
+// this requires only one branch in the prologue, any stack size bigger requires
+// two branches". Naturally we want most functions to have one branch, but we
+// also need to actually catch stack overflow, so for now 32k is chosen and it's
+// assume no valid stack pointer will ever be `usize::max_value() - 32k`.
+
 use crate::address_map::{FunctionAddressMap, InstructionAddressMap};
 use crate::cache::{ModuleCacheDataTupleType, ModuleCacheEntry};
 use crate::compilation::{
@@ -13,6 +98,7 @@ use cranelift_codegen::{binemit, isa, Context};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, ModuleTranslationState};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 
 /// Implementation of a relocation sink that just saves all the information for later
@@ -208,12 +294,47 @@ fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError
                 context.func.collect_debug_info();
             }
 
+            let mut func_env = FuncEnvironment::new(isa.frontend_config(), env.local, env.tunables);
+
+            // We use these as constant offsets below in
+            // `stack_limit_from_arguments`, so assert their values here. This
+            // allows the closure below to get coerced to a function pointer, as
+            // needed by `ir::Function`.
+            //
+            // Otherwise our stack limit is specially calculated from the vmctx
+            // argument, where we need to load the `*const VMInterrupts`
+            // pointer, and then from that pointer we need to load the stack
+            // limit itself. Note that manual register allocation is needed here
+            // too due to how late in the process this codegen happens.
+            //
+            // For more information about interrupts and stack checks, see the
+            // top of this file.
+            let vmctx = context
+                .func
+                .create_global_value(ir::GlobalValueData::VMContext);
+            let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
+                base: vmctx,
+                offset: i32::try_from(func_env.offsets.vmctx_interrupts())
+                    .unwrap()
+                    .into(),
+                global_type: isa.pointer_type(),
+                readonly: true,
+            });
+            let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
+                base: interrupts_ptr,
+                offset: i32::try_from(func_env.offsets.vminterrupts_stack_limit())
+                    .unwrap()
+                    .into(),
+                global_type: isa.pointer_type(),
+                readonly: false,
+            });
+            context.func.stack_limit = Some(stack_limit);
             func_translator.translate(
                 env.module_translation.0,
                 input.data,
                 input.module_offset,
                 &mut context.func,
-                &mut FuncEnvironment::new(isa.frontend_config(), env.local),
+                &mut func_env,
             )?;
 
             let mut code_buf: Vec<u8> = Vec::new();

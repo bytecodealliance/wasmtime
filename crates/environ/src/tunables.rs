@@ -12,6 +12,14 @@ pub struct Tunables {
 
     /// Whether or not to generate DWARF debug information.
     pub debug_info: bool,
+
+    /// Whether or not to enable the ability to interrupt wasm code dynamically.
+    ///
+    /// More info can be found about the implementation in
+    /// crates/environ/src/cranelift.rs. Note that you can't interrupt host
+    /// calls and interrupts are implemented through the `VMInterrupts`
+    /// structure, or `InterruptHandle` in the `wasmtime` crate.
+    pub interruptable: bool,
 }
 
 impl Default for Tunables {
@@ -44,6 +52,7 @@ impl Default for Tunables {
             dynamic_memory_offset_guard_size: 0x1_0000,
 
             debug_info: false,
+            interruptable: false,
         }
     }
 }

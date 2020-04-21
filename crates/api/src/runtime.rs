@@ -1,6 +1,6 @@
 use crate::externals::MemoryCreator;
 use crate::trampoline::MemoryCreatorProxy;
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::cell::RefCell;
 use std::cmp::min;
 use std::fmt;
@@ -9,11 +9,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 use wasmparser::{OperatorValidatorConfig, ValidatingParserConfig};
 use wasmtime_environ::settings::{self, Configurable};
-use wasmtime_environ::CacheConfig;
-use wasmtime_environ::Tunables;
+use wasmtime_environ::{CacheConfig, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
-use wasmtime_runtime::{debug_builtins, RuntimeMemoryCreator};
+use wasmtime_runtime::{debug_builtins, RuntimeMemoryCreator, VMInterrupts};
 
 // Runtime Environment
 
@@ -33,6 +32,7 @@ pub struct Config {
     pub(crate) cache_config: CacheConfig,
     pub(crate) profiler: Arc<dyn ProfilingAgent>,
     pub(crate) memory_creator: Option<MemoryCreatorProxy>,
+    pub(crate) max_wasm_stack: usize,
 }
 
 impl Config {
@@ -66,6 +66,11 @@ impl Config {
             .set("opt_level", "speed")
             .expect("should be valid flag");
 
+        // We don't use probestack as a stack limit mechanism
+        flags
+            .set("enable_probestack", "false")
+            .expect("should be valid flag");
+
         Config {
             tunables,
             validating_config: ValidatingParserConfig {
@@ -82,6 +87,7 @@ impl Config {
             cache_config: CacheConfig::new_cache_disabled(),
             profiler: Arc::new(NullProfilerAgent),
             memory_creator: None,
+            max_wasm_stack: 1 << 20,
         }
     }
 
@@ -91,6 +97,37 @@ impl Config {
     /// By default this option is `false`.
     pub fn debug_info(&mut self, enable: bool) -> &mut Self {
         self.tunables.debug_info = enable;
+        self
+    }
+
+    /// Configures whether functions and loops will be interruptable via the
+    /// [`Store::interrupt_handle`] method.
+    ///
+    /// For more information see the documentation on
+    /// [`Store::interrupt_handle`].
+    ///
+    /// By default this option is `false`.
+    pub fn interruptable(&mut self, enable: bool) -> &mut Self {
+        self.tunables.interruptable = enable;
+        self
+    }
+
+    /// Configures the maximum amount of native stack space available to
+    /// executing WebAssembly code.
+    ///
+    /// WebAssembly code currently executes on the native call stack for its own
+    /// call frames. WebAssembly, however, also has well-defined semantics on
+    /// stack overflow. This is intended to be a knob which can help configure
+    /// how much native stack space a wasm module is allowed to consume. Note
+    /// that the number here is not super-precise, but rather wasm will take at
+    /// most "pretty close to this much" stack space.
+    ///
+    /// If a wasm call (or series of nested wasm calls) take more stack space
+    /// than the `size` specified then a stack overflow trap will be raised.
+    ///
+    /// By default this option is 1 MB.
+    pub fn max_wasm_stack(&mut self, size: usize) -> &mut Self {
+        self.max_wasm_stack = size;
         self
     }
 
@@ -552,6 +589,97 @@ impl Store {
     pub fn same(a: &Store, b: &Store) -> bool {
         Rc::ptr_eq(&a.inner, &b.inner)
     }
+
+    /// Creates an [`InterruptHandle`] which can be used to interrupt the
+    /// execution of instances within this `Store`.
+    ///
+    /// An [`InterruptHandle`] handle is a mechanism of ensuring that guest code
+    /// doesn't execute for too long. For example it's used to prevent wasm
+    /// programs for executing infinitely in infinite loops or recursive call
+    /// chains.
+    ///
+    /// The [`InterruptHandle`] type is sendable to other threads so you can
+    /// interact with it even while the thread with this `Store` is executing
+    /// wasm code.
+    ///
+    /// There's one method on an interrupt handle:
+    /// [`InterruptHandle::interrupt`]. This method is used to generate an
+    /// interrupt and cause wasm code to exit "soon".
+    ///
+    /// ## When are interrupts delivered?
+    ///
+    /// The term "interrupt" here refers to one of two different behaviors that
+    /// are interrupted in wasm:
+    ///
+    /// * The head of every loop in wasm has a check to see if it's interrupted.
+    /// * The prologue of every function has a check to see if it's interrupted.
+    ///
+    /// This interrupt mechanism makes no attempt to signal interrupts to
+    /// native code. For example if a host function is blocked, then sending
+    /// an interrupt will not interrupt that operation.
+    ///
+    /// Interrupts are consumed as soon as possible when wasm itself starts
+    /// executing. This means that if you interrupt wasm code then it basically
+    /// guarantees that the next time wasm is executing on the target thread it
+    /// will return quickly (either normally if it were already in the process
+    /// of returning or with a trap from the interrupt). Once an interrupt
+    /// trap is generated then an interrupt is consumed, and further execution
+    /// will not be interrupted (unless another interrupt is set).
+    ///
+    /// When implementing interrupts you'll want to ensure that the delivery of
+    /// interrupts into wasm code is also handled in your host imports and
+    /// functionality. Host functions need to either execute for bounded amounts
+    /// of time or you'll need to arrange for them to be interrupted as well.
+    ///
+    /// ## Return Value
+    ///
+    /// This function returns a `Result` since interrupts are not always
+    /// enabled. Interrupts are enabled via the [`Config::interruptable`]
+    /// method, and if this store's [`Config`] hasn't been configured to enable
+    /// interrupts then an error is returned.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use anyhow::Result;
+    /// # use wasmtime::*;
+    /// # fn main() -> Result<()> {
+    /// // Enable interruptable code via `Config` and then create an interrupt
+    /// // handle which we'll use later to interrupt running code.
+    /// let engine = Engine::new(Config::new().interruptable(true));
+    /// let store = Store::new(&engine);
+    /// let interrupt_handle = store.interrupt_handle()?;
+    ///
+    /// // Compile and instantiate a small example with an infinite loop.
+    /// let module = Module::new(&store, r#"
+    ///     (func (export "run") (loop br 0))
+    /// "#)?;
+    /// let instance = Instance::new(&module, &[])?;
+    /// let run = instance
+    ///     .get_func("run")
+    ///     .ok_or(anyhow::format_err!("failed to find `run` function export"))?
+    ///     .get0::<()>()?;
+    ///
+    /// // Spin up a thread to send us an interrupt in a second
+    /// std::thread::spawn(move || {
+    ///     std::thread::sleep(std::time::Duration::from_secs(1));
+    ///     interrupt_handle.interrupt();
+    /// });
+    ///
+    /// let trap = run().unwrap_err();
+    /// assert!(trap.message().contains("wasm trap: interrupt"));
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
+        if self.engine().config.tunables.interruptable {
+            Ok(InterruptHandle {
+                interrupts: self.compiler().interrupts().clone(),
+            })
+        } else {
+            bail!("interrupts aren't enabled for this `Store`")
+        }
+    }
 }
 
 impl Default for Store {
@@ -560,10 +688,32 @@ impl Default for Store {
     }
 }
 
+/// A threadsafe handle used to interrupt instances executing within a
+/// particular `Store`.
+///
+/// This structure is created by the [`Store::interrupt_handle`] method.
+pub struct InterruptHandle {
+    interrupts: Arc<VMInterrupts>,
+}
+
+impl InterruptHandle {
+    /// Flags that execution within this handle's original [`Store`] should be
+    /// interrupted.
+    ///
+    /// This will not immediately interrupt execution of wasm modules, but
+    /// rather it will interrupt wasm execution of loop headers and wasm
+    /// execution of function entries. For more information see
+    /// [`Store::interrupt_handle`].
+    pub fn interrupt(&self) {
+        self.interrupts.interrupt()
+    }
+}
+
 fn _assert_send_sync() {
     fn _assert<T: Send + Sync>() {}
     _assert::<Engine>();
     _assert::<Config>();
+    _assert::<InterruptHandle>();
 }
 
 #[cfg(test)]

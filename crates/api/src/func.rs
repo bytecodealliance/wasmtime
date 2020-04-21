@@ -176,6 +176,7 @@ macro_rules! getters {
             // of the closure. Pass the export in so that we can call it.
             let instance = self.instance.clone();
             let export = self.export.clone();
+            let max_wasm_stack = self.store.engine().config().max_wasm_stack;
 
             // ... and then once we've passed the typechecks we can hand out our
             // object since our `transmute` below should be safe!
@@ -191,7 +192,7 @@ macro_rules! getters {
                     >(export.address);
                     let mut ret = None;
                     $(let $args = $args.into_abi();)*
-                    wasmtime_runtime::catch_traps(export.vmctx, || {
+                    wasmtime_runtime::catch_traps(export.vmctx, max_wasm_stack, || {
                         ret = Some(fnptr(export.vmctx, ptr::null_mut(), $($args,)*));
                     }).map_err(Trap::from_jit)?;
 
@@ -558,14 +559,18 @@ impl Func {
 
         // Call the trampoline.
         if let Err(error) = unsafe {
-            wasmtime_runtime::catch_traps(self.export.vmctx, || {
-                (self.trampoline)(
-                    self.export.vmctx,
-                    ptr::null_mut(),
-                    self.export.address,
-                    values_vec.as_mut_ptr(),
-                )
-            })
+            wasmtime_runtime::catch_traps(
+                self.export.vmctx,
+                self.store.engine().config().max_wasm_stack,
+                || {
+                    (self.trampoline)(
+                        self.export.vmctx,
+                        ptr::null_mut(),
+                        self.export.address,
+                        values_vec.as_mut_ptr(),
+                    )
+                },
+            )
         } {
             return Err(Trap::from_jit(error).into());
         }

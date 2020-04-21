@@ -2,6 +2,8 @@
 
 use crate::{init_file_per_thread_logger, CommonOptions};
 use anyhow::{bail, Context as _, Result};
+use std::thread;
+use std::time::Duration;
 use std::{
     ffi::{OsStr, OsString},
     fs::File,
@@ -37,6 +39,16 @@ fn parse_map_dirs(s: &str) -> Result<(String, String)> {
         bail!("must contain exactly one double colon ('::')");
     }
     Ok((parts[0].into(), parts[1].into()))
+}
+
+fn parse_dur(s: &str) -> Result<Duration> {
+    // assume an integer without a unit specified is a number of seconds ...
+    if let Ok(val) = s.parse() {
+        return Ok(Duration::from_secs(val));
+    }
+    // ... otherwise try to parse it with units such as `3s` or `300ms`
+    let dur = humantime::parse_duration(s)?;
+    Ok(dur)
 }
 
 /// Runs a WebAssembly module
@@ -80,6 +92,14 @@ pub struct RunCommand {
     )]
     preloads: Vec<PathBuf>,
 
+    /// Maximum execution time of wasm code before timing out (1, 2s, 100ms, etc)
+    #[structopt(
+        long = "wasm-timeout",
+        value_name = "TIME",
+        parse(try_from_str = parse_dur),
+    )]
+    wasm_timeout: Option<Duration>,
+
     // NOTE: this must come last for trailing varargs
     /// The arguments to pass to the module
     #[structopt(value_name = "ARGS")]
@@ -96,7 +116,10 @@ impl RunCommand {
             pretty_env_logger::init();
         }
 
-        let config = self.common.config()?;
+        let mut config = self.common.config()?;
+        if self.wasm_timeout.is_some() {
+            config.interruptable(true);
+        }
         let engine = Engine::new(&config);
         let store = Store::new(&engine);
 
@@ -225,6 +248,13 @@ impl RunCommand {
     }
 
     fn handle_module(&self, store: &Store, module_registry: &ModuleRegistry) -> Result<()> {
+        if let Some(timeout) = self.wasm_timeout {
+            let handle = store.interrupt_handle()?;
+            thread::spawn(move || {
+                thread::sleep(timeout);
+                handle.interrupt();
+            });
+        }
         let instance = Self::instantiate_module(store, module_registry, &self.module)?;
 
         // If a function to invoke was given, invoke it.

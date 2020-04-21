@@ -9,6 +9,7 @@ use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use std::collections::HashMap;
+use std::sync::Arc;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
@@ -19,7 +20,8 @@ use wasmtime_environ::{
     Relocations, Traps, Tunables, VMOffsets,
 };
 use wasmtime_runtime::{
-    InstantiationError, SignatureRegistry, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
+    InstantiationError, SignatureRegistry, VMFunctionBody, VMInterrupts, VMSharedSignatureIndex,
+    VMTrampoline,
 };
 
 /// Select which kind of compilation to use.
@@ -51,6 +53,7 @@ pub struct Compiler {
     strategy: CompilationStrategy,
     cache_config: CacheConfig,
     tunables: Tunables,
+    interrupts: Arc<VMInterrupts>,
 }
 
 impl Compiler {
@@ -68,6 +71,7 @@ impl Compiler {
             strategy,
             cache_config,
             tunables,
+            interrupts: Arc::new(VMInterrupts::default()),
         }
     }
 }
@@ -93,6 +97,11 @@ impl Compiler {
     /// Return the tunables in use by this engine.
     pub fn tunables(&self) -> &Tunables {
         &self.tunables
+    }
+
+    /// Return the handle by which to interrupt instances
+    pub fn interrupts(&self) -> &Arc<VMInterrupts> {
+        &self.interrupts
     }
 
     /// Compile the given function bodies.
