@@ -6,9 +6,10 @@ use cranelift_codegen::settings::{self, FlagsOrIsa};
 use cranelift_reader::{parse_options, Location, ParseError, ParseOptionError};
 use std::fs::File;
 use std::io::{self, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use target_lexicon::Triple;
+use walkdir::WalkDir;
 
 /// Read an entire file into a string.
 pub fn read_to_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
@@ -104,4 +105,27 @@ pub fn parse_sets_and_triple(
         }
         Ok(OwnedFlagsOrIsa::Flags(settings::Flags::new(flag_builder)))
     }
+}
+
+/// Iterate over all of the files passed as arguments, recursively iterating through directories.
+pub fn iterate_files(files: Vec<String>) -> impl Iterator<Item = PathBuf> {
+    files
+        .into_iter()
+        .flat_map(WalkDir::new)
+        .filter(|f| match f {
+            Ok(d) => {
+                // Filter out hidden files (starting with .).
+                !d.file_name().to_str().map_or(false, |s| s.starts_with('.'))
+                    // Filter out directories.
+                    && !d.file_type().is_dir()
+            }
+            Err(e) => {
+                println!("Unable to read file: {}", e);
+                false
+            }
+        })
+        .map(|f| {
+            f.expect("this should not happen: we have already filtered out the errors")
+                .into_path()
+        })
 }
