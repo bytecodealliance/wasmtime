@@ -612,7 +612,10 @@ pub enum Inst {
         cond: Cond,
     },
 
-    /// A machine call instruction.
+    /// A machine call instruction. N.B.: this allows only a +/- 128MB offset (it uses a relocation
+    /// of type `Reloc::Arm64Call`); if the destination distance is not `RelocDistance::Near`, the
+    /// code should use a `LoadExtName` / `CallInd` sequence instead, allowing an arbitrary 64-bit
+    /// target.
     Call {
         dest: ExternalName,
         uses: Set<Reg>,

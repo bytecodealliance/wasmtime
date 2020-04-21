@@ -1233,7 +1233,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
 
         Opcode::FuncAddr => {
             let rd = output_to_reg(ctx, outputs[0]);
-            let extname = ctx.call_target(insn).unwrap().clone();
+            let (extname, _) = ctx.call_target(insn).unwrap();
+            let extname = extname.clone();
             let loc = ctx.srcloc(insn);
             ctx.emit(Inst::LoadExtName {
                 rd,
@@ -1249,7 +1250,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
 
         Opcode::SymbolValue => {
             let rd = output_to_reg(ctx, outputs[0]);
-            let (extname, offset) = ctx.symbol_value(insn).unwrap();
+            let (extname, _, offset) = ctx.symbol_value(insn).unwrap();
             let extname = extname.clone();
             let loc = ctx.srcloc(insn);
             ctx.emit(Inst::LoadExtName {
@@ -1264,12 +1265,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
             let loc = ctx.srcloc(insn);
             let (abi, inputs) = match op {
                 Opcode::Call => {
-                    let extname = ctx.call_target(insn).unwrap();
+                    let (extname, dist) = ctx.call_target(insn).unwrap();
                     let extname = extname.clone();
                     let sig = ctx.call_sig(insn).unwrap();
                     assert!(inputs.len() == sig.params.len());
                     assert!(outputs.len() == sig.returns.len());
-                    (AArch64ABICall::from_func(sig, &extname, loc), &inputs[..])
+                    (
+                        AArch64ABICall::from_func(sig, &extname, dist, loc),
+                        &inputs[..],
+                    )
                 }
                 Opcode::CallIndirect => {
                     let ptr = input_to_reg(ctx, inputs[0], NarrowValueMode::ZeroExtend64);

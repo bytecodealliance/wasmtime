@@ -5,6 +5,7 @@ use cranelift_codegen::binemit::{
     Addend, CodeOffset, Reloc, RelocSink, Stackmap, StackmapSink, TrapSink,
 };
 use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings};
 use cranelift_module::{
     Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleNamespace,
@@ -40,7 +41,11 @@ impl SimpleJITBuilder {
     /// floating point instructions, and for stack probes. If you don't know what to use for this
     /// argument, use `cranelift_module::default_libcall_names()`.
     pub fn new(libcall_names: Box<dyn Fn(ir::LibCall) -> String>) -> Self {
-        let flag_builder = settings::builder();
+        let mut flag_builder = settings::builder();
+        // On at least AArch64, "colocated" calls use shorter-range relocations,
+        // which might not reach all definitions; we can't handle that here, so
+        // we require long-range relocation types.
+        flag_builder.set("use_colocated_libcalls", "false").unwrap();
         let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
             panic!("host machine is not supported: {}", msg);
         });

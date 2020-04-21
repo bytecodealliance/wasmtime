@@ -3,6 +3,7 @@
 use crate::ir::immediates::{Imm64, Offset32};
 use crate::ir::{ExternalName, GlobalValue, Type};
 use crate::isa::TargetIsa;
+use crate::machinst::RelocDistance;
 use core::fmt;
 
 /// Information about a global value declaration.
@@ -62,6 +63,10 @@ pub enum GlobalValueData {
         /// Will this symbol be defined nearby, such that it will always be a certain distance
         /// away, after linking? If so, references to it can avoid going through a GOT. Note that
         /// symbols meant to be preemptible cannot be colocated.
+        ///
+        /// If `true`, some backends may use relocation forms that have limited range: for example,
+        /// a +/- 2^27-byte range on AArch64. See the documentation for
+        /// [`RelocDistance`](machinst::RelocDistance) for more details.
         colocated: bool,
 
         /// Does this symbol refer to a thread local storage value?
@@ -83,6 +88,20 @@ impl GlobalValueData {
         match *self {
             Self::VMContext { .. } | Self::Symbol { .. } => isa.pointer_type(),
             Self::IAddImm { global_type, .. } | Self::Load { global_type, .. } => global_type,
+        }
+    }
+
+    /// If this global references a symbol, return an estimate of the relocation distance,
+    /// based on the `colocated` flag.
+    pub fn maybe_reloc_distance(&self) -> Option<RelocDistance> {
+        match self {
+            &GlobalValueData::Symbol {
+                colocated: true, ..
+            } => Some(RelocDistance::Near),
+            &GlobalValueData::Symbol {
+                colocated: false, ..
+            } => Some(RelocDistance::Far),
+            _ => None,
         }
     }
 }

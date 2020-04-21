@@ -7,6 +7,7 @@
 
 use crate::ir::{ArgumentLoc, ExternalName, SigRef, Type};
 use crate::isa::{CallConv, RegInfo, RegUnit};
+use crate::machinst::RelocDistance;
 use alloc::vec::Vec;
 use core::fmt;
 use core::str::FromStr;
@@ -366,6 +367,16 @@ pub struct ExtFuncData {
     /// Will this function be defined nearby, such that it will always be a certain distance away,
     /// after linking? If so, references to it can avoid going through a GOT or PLT. Note that
     /// symbols meant to be preemptible cannot be considered colocated.
+    ///
+    /// If `true`, some backends may use relocation forms that have limited range. The exact
+    /// distance depends on the code model in use. Currently on AArch64, for example, Cranelift
+    /// uses a custom code model supporting up to +/- 128MB displacements. If it is unknown how
+    /// far away the target will be, it is best not to set the `colocated` flag; in general, this
+    /// flag is best used when the target is known to be in the same unit of code generation, such
+    /// as a Wasm module.
+    ///
+    /// See the documentation for [`RelocDistance`](machinst::RelocDistance) for more details. A
+    /// `colocated` flag value of `true` implies `RelocDistance::Near`.
     pub colocated: bool,
 }
 
@@ -375,6 +386,17 @@ impl fmt::Display for ExtFuncData {
             write!(f, "colocated ")?;
         }
         write!(f, "{} {}", self.name, self.signature)
+    }
+}
+
+impl ExtFuncData {
+    /// Return an estimate of the distance to the referred-to function symbol.
+    pub fn reloc_distance(&self) -> RelocDistance {
+        if self.colocated {
+            RelocDistance::Near
+        } else {
+            RelocDistance::Far
+        }
     }
 }
 

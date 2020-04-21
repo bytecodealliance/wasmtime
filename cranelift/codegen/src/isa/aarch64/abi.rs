@@ -1061,7 +1061,7 @@ impl ABIBody for AArch64ABIBody {
 }
 
 enum CallDest {
-    ExtName(ir::ExternalName),
+    ExtName(ir::ExternalName, RelocDistance),
     Reg(Reg),
 }
 
@@ -1102,6 +1102,7 @@ impl AArch64ABICall {
     pub fn from_func(
         sig: &ir::Signature,
         extname: &ir::ExternalName,
+        dist: RelocDistance,
         loc: ir::SourceLoc,
     ) -> AArch64ABICall {
         let sig = ABISig::from_func_sig(sig);
@@ -1110,7 +1111,7 @@ impl AArch64ABICall {
             sig,
             uses,
             defs,
-            dest: CallDest::ExtName(extname.clone()),
+            dest: CallDest::ExtName(extname.clone(), dist),
             loc,
             opcode: ir::Opcode::Call,
         }
@@ -1207,13 +1208,28 @@ impl ABICall for AArch64ABICall {
     fn gen_call(&self) -> Vec<Inst> {
         let (uses, defs) = (self.uses.clone(), self.defs.clone());
         match &self.dest {
-            &CallDest::ExtName(ref name) => vec![Inst::Call {
+            &CallDest::ExtName(ref name, RelocDistance::Near) => vec![Inst::Call {
                 dest: name.clone(),
                 uses,
                 defs,
                 loc: self.loc,
                 opcode: self.opcode,
             }],
+            &CallDest::ExtName(ref name, RelocDistance::Far) => vec![
+                Inst::LoadExtName {
+                    rd: writable_spilltmp_reg(),
+                    name: name.clone(),
+                    offset: 0,
+                    srcloc: self.loc,
+                },
+                Inst::CallInd {
+                    rn: spilltmp_reg(),
+                    uses,
+                    defs,
+                    loc: self.loc,
+                    opcode: self.opcode,
+                },
+            ],
             &CallDest::Reg(reg) => vec![Inst::CallInd {
                 rn: reg,
                 uses,

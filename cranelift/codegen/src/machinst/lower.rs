@@ -67,12 +67,15 @@ pub trait LowerCtx {
     fn bb_param(&self, bb: Block, idx: usize) -> Reg;
     /// Get the register for a return value.
     fn retval(&self, idx: usize) -> Writable<Reg>;
-    /// Get the target for a call instruction, as an `ExternalName`.
-    fn call_target<'b>(&'b self, ir_inst: Inst) -> Option<&'b ExternalName>;
+    /// Get the target for a call instruction, as an `ExternalName`. Returns a tuple
+    /// providing this name and the "relocation distance", i.e., whether the backend
+    /// can assume the target will be "nearby" (within some small offset) or an
+    /// arbitrary address. (This comes from the `colocated` bit in the CLIF.)
+    fn call_target<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance)>;
     /// Get the signature for a call or call-indirect instruction.
     fn call_sig<'b>(&'b self, ir_inst: Inst) -> Option<&'b Signature>;
-    /// Get the symbol name and offset for a symbol_value instruction.
-    fn symbol_value<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, i64)>;
+    /// Get the symbol name, relocation distance estimate, and offset for a symbol_value instruction.
+    fn symbol_value<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance, i64)>;
     /// Returns the memory flags of a given memory access.
     fn memflags(&self, ir_inst: Inst) -> Option<MemFlags>;
     /// Get the source location for a given instruction.
@@ -120,6 +123,18 @@ pub struct Lower<'func, I: VCodeInst> {
 
     /// Next virtual register number to allocate.
     next_vreg: u32,
+}
+
+/// Notion of "relocation distance". This gives an estimate of how far away a symbol will be from a
+/// reference.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RelocDistance {
+    /// Target of relocation is "nearby". The threshold for this is fuzzy but should be interpreted
+    /// as approximately "within the compiled output of one module"; e.g., within AArch64's +/-
+    /// 128MB offset. If unsure, use `Far` instead.
+    Near,
+    /// Target of relocation could be anywhere in the address space.
+    Far,
 }
 
 fn alloc_vreg(
@@ -647,13 +662,17 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         Writable::from_reg(self.retval_regs[idx].0)
     }
 
-    /// Get the target for a call instruction, as an `ExternalName`.
-    fn call_target<'b>(&'b self, ir_inst: Inst) -> Option<&'b ExternalName> {
+    /// Get the target for a call instruction, as an `ExternalName`. Returns a tuple
+    /// providing this name and the "relocation distance", i.e., whether the backend
+    /// can assume the target will be "nearby" (within some small offset) or an
+    /// arbitrary address. (This comes from the `colocated` bit in the CLIF.)
+    fn call_target<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance)> {
         match &self.f.dfg[ir_inst] {
             &InstructionData::Call { func_ref, .. }
             | &InstructionData::FuncAddr { func_ref, .. } => {
                 let funcdata = &self.f.dfg.ext_funcs[func_ref];
-                Some(&funcdata.name)
+                let dist = funcdata.reloc_distance();
+                Some((&funcdata.name, dist))
             }
             _ => None,
         }
@@ -670,8 +689,8 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         }
     }
 
-    /// Get the symbol name and offset for a symbol_value instruction.
-    fn symbol_value<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, i64)> {
+    /// Get the symbol name, relocation distance estimate, and offset for a symbol_value instruction.
+    fn symbol_value<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance, i64)> {
         match &self.f.dfg[ir_inst] {
             &InstructionData::UnaryGlobalValue { global_value, .. } => {
                 let gvdata = &self.f.global_values[global_value];
@@ -682,7 +701,8 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
                         ..
                     } => {
                         let offset = offset.bits();
-                        Some((name, offset))
+                        let dist = gvdata.maybe_reloc_distance().unwrap();
+                        Some((name, dist, offset))
                     }
                     _ => None,
                 }

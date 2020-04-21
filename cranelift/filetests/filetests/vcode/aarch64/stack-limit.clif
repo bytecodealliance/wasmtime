@@ -45,7 +45,8 @@ block0(v0: i64):
 ; nextln:     subs xzr, sp, x0
 ; nextln:     b.hs 8
 ; nextln:     udf
-; nextln:     bl 0
+; nextln:     ldr x15
+; nextln:     blr x15
 ; nextln:     mov sp, fp
 ; nextln:     ldp fp, lr, [sp], #16
 ; nextln:     ret
@@ -68,7 +69,8 @@ block0(v0: i64):
 ; nextln:     subs xzr, sp, x15
 ; nextln:     b.hs 8
 ; nextln:     udf
-; nextln:     bl 0
+; nextln:     ldr x15
+; nextln:     blr x15
 ; nextln:     mov sp, fp
 ; nextln:     ldp fp, lr, [sp], #16
 ; nextln:     ret
