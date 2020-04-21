@@ -9,6 +9,7 @@ pub(super) fn define_handle(
     name: &witx::Id,
     h: &witx::HandleDatatype,
 ) -> TokenStream {
+    let rt = names.runtime_mod();
     let ident = names.type_(name);
     let size = h.mem_size_align().size as u32;
     let align = h.mem_size_align().align as usize;
@@ -52,7 +53,7 @@ pub(super) fn define_handle(
             }
         }
 
-        impl<'a> wiggle::GuestType<'a> for #ident {
+        impl<'a> #rt::GuestType<'a> for #ident {
             fn guest_size() -> u32 {
                 #size
             }
@@ -61,18 +62,18 @@ pub(super) fn define_handle(
                 #align
             }
 
-            fn read(location: &wiggle::GuestPtr<'a, #ident>) -> Result<#ident, wiggle::GuestError> {
+            fn read(location: &#rt::GuestPtr<'a, #ident>) -> Result<#ident, #rt::GuestError> {
                 Ok(#ident(u32::read(&location.cast())?))
             }
 
-            fn write(location: &wiggle::GuestPtr<'_, Self>, val: Self) -> Result<(), wiggle::GuestError> {
+            fn write(location: &#rt::GuestPtr<'_, Self>, val: Self) -> Result<(), #rt::GuestError> {
                 u32::write(&location.cast(), val.0)
             }
         }
 
-        unsafe impl<'a> wiggle::GuestTypeTransparent<'a> for #ident {
+        unsafe impl<'a> #rt::GuestTypeTransparent<'a> for #ident {
             #[inline]
-            fn validate(_location: *mut #ident) -> Result<(), wiggle::GuestError> {
+            fn validate(_location: *mut #ident) -> Result<(), #rt::GuestError> {
                 // All bit patterns accepted
                 Ok(())
             }

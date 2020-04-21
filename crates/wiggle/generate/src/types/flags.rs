@@ -6,6 +6,7 @@ use quote::quote;
 use std::convert::TryFrom;
 
 pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDatatype) -> TokenStream {
+    let rt = names.runtime_mod();
     let ident = names.type_(&name);
     let repr = int_repr_tokens(f.repr);
     let abi_repr = atom_token(match f.repr {
@@ -116,10 +117,10 @@ pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDataty
         }
 
         impl ::std::convert::TryFrom<#repr> for #ident {
-            type Error = wiggle::GuestError;
-            fn try_from(value: #repr) -> Result<Self, wiggle::GuestError> {
+            type Error = #rt::GuestError;
+            fn try_from(value: #repr) -> Result<Self, #rt::GuestError> {
                 if #repr::from(!#ident::all()) & value != 0 {
-                    Err(wiggle::GuestError::InvalidFlagValue(stringify!(#ident)))
+                    Err(#rt::GuestError::InvalidFlagValue(stringify!(#ident)))
                 } else {
                     Ok(#ident(value))
                 }
@@ -127,8 +128,8 @@ pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDataty
         }
 
         impl ::std::convert::TryFrom<#abi_repr> for #ident {
-            type Error = wiggle::GuestError;
-            fn try_from(value: #abi_repr) -> Result<#ident, wiggle::GuestError> {
+            type Error = #rt::GuestError;
+            fn try_from(value: #abi_repr) -> Result<#ident, #rt::GuestError> {
                 #ident::try_from(value as #repr)
             }
         }
@@ -145,7 +146,7 @@ pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDataty
             }
         }
 
-        impl<'a> wiggle::GuestType<'a> for #ident {
+        impl<'a> #rt::GuestType<'a> for #ident {
             fn guest_size() -> u32 {
                 #repr::guest_size()
             }
@@ -154,21 +155,21 @@ pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDataty
                 #repr::guest_align()
             }
 
-            fn read(location: &wiggle::GuestPtr<#ident>) -> Result<#ident, wiggle::GuestError> {
+            fn read(location: &#rt::GuestPtr<#ident>) -> Result<#ident, #rt::GuestError> {
                 use std::convert::TryFrom;
                 let reprval = #repr::read(&location.cast())?;
                 let value = #ident::try_from(reprval)?;
                 Ok(value)
             }
 
-            fn write(location: &wiggle::GuestPtr<'_, #ident>, val: Self) -> Result<(), wiggle::GuestError> {
+            fn write(location: &#rt::GuestPtr<'_, #ident>, val: Self) -> Result<(), #rt::GuestError> {
                 let val: #repr = #repr::from(val);
                 #repr::write(&location.cast(), val)
             }
         }
-        unsafe impl <'a> wiggle::GuestTypeTransparent<'a> for #ident {
+        unsafe impl<'a> #rt::GuestTypeTransparent<'a> for #ident {
             #[inline]
-            fn validate(location: *mut #ident) -> Result<(), wiggle::GuestError> {
+            fn validate(location: *mut #ident) -> Result<(), #rt::GuestError> {
                 use std::convert::TryFrom;
                 // Validate value in memory using #ident::try_from(reprval)
                 let reprval = unsafe { (location as *mut #repr).read() };

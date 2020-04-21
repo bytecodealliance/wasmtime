@@ -10,6 +10,7 @@ pub(super) fn define_struct(
     name: &witx::Id,
     s: &witx::StructDatatype,
 ) -> TokenStream {
+    let rt = names.runtime_mod();
     let ident = names.type_(name);
     let size = s.mem_size_align().size as u32;
     let align = s.mem_size_align().align as usize;
@@ -23,7 +24,7 @@ pub(super) fn define_struct(
                 witx::Type::Builtin(builtin) => names.builtin_type(*builtin, quote!('a)),
                 witx::Type::Pointer(pointee) | witx::Type::ConstPointer(pointee) => {
                     let pointee_type = names.type_ref(&pointee, quote!('a));
-                    quote!(wiggle::GuestPtr<'a, #pointee_type>)
+                    quote!(#rt::GuestPtr<'a, #pointee_type>)
                 }
                 _ => unimplemented!("other anonymous struct members"),
             },
@@ -39,20 +40,20 @@ pub(super) fn define_struct(
             witx::TypeRef::Name(nt) => {
                 let type_ = names.type_(&nt.name);
                 quote! {
-                    let #name = <#type_ as wiggle::GuestType>::read(&#location)?;
+                    let #name = <#type_ as #rt::GuestType>::read(&#location)?;
                 }
             }
             witx::TypeRef::Value(ty) => match &**ty {
                 witx::Type::Builtin(builtin) => {
                     let type_ = names.builtin_type(*builtin, anon_lifetime());
                     quote! {
-                    let #name = <#type_ as wiggle::GuestType>::read(&#location)?;
+                    let #name = <#type_ as #rt::GuestType>::read(&#location)?;
                     }
                 }
                 witx::Type::Pointer(pointee) | witx::Type::ConstPointer(pointee) => {
                     let pointee_type = names.type_ref(&pointee, anon_lifetime());
                     quote! {
-                        let #name = <wiggle::GuestPtr::<#pointee_type> as wiggle::GuestType>::read(&#location)?;
+                        let #name = <#rt::GuestPtr::<#pointee_type> as #rt::GuestType>::read(&#location)?;
                     }
                 }
                 _ => unimplemented!("other anonymous struct members"),
@@ -64,7 +65,7 @@ pub(super) fn define_struct(
         let name = names.struct_member(&ml.member.name);
         let offset = ml.offset as u32;
         quote! {
-            wiggle::GuestType::write(
+            #rt::GuestType::write(
                 &location.cast::<u8>().add(#offset)?.cast(),
                 val.#name,
             )?;
@@ -91,9 +92,9 @@ pub(super) fn define_struct(
         });
 
         quote! {
-            unsafe impl<'a> wiggle::GuestTypeTransparent<'a> for #ident {
+            unsafe impl<'a> #rt::GuestTypeTransparent<'a> for #ident {
                 #[inline]
-                fn validate(location: *mut #ident) -> Result<(), wiggle::GuestError> {
+                fn validate(location: *mut #ident) -> Result<(), #rt::GuestError> {
                     #(#member_validate)*
                     Ok(())
                 }
@@ -109,7 +110,7 @@ pub(super) fn define_struct(
             #(#member_decls),*
         }
 
-        impl<'a> wiggle::GuestType<'a> for #ident #struct_lifetime {
+        impl<'a> #rt::GuestType<'a> for #ident #struct_lifetime {
             fn guest_size() -> u32 {
                 #size
             }
@@ -118,12 +119,12 @@ pub(super) fn define_struct(
                 #align
             }
 
-            fn read(location: &wiggle::GuestPtr<'a, Self>) -> Result<Self, wiggle::GuestError> {
+            fn read(location: &#rt::GuestPtr<'a, Self>) -> Result<Self, #rt::GuestError> {
                 #(#member_reads)*
                 Ok(#ident { #(#member_names),* })
             }
 
-            fn write(location: &wiggle::GuestPtr<'_, Self>, val: Self) -> Result<(), wiggle::GuestError> {
+            fn write(location: &#rt::GuestPtr<'_, Self>, val: Self) -> Result<(), #rt::GuestError> {
                 #(#member_writes)*
                 Ok(())
             }
