@@ -24,12 +24,7 @@ fn host_always_has_some_stack() -> anyhow::Result<()> {
     )?;
     let func = Func::wrap(&store, test_host_stack);
     let instance = Instance::new(&module, &[func.into()])?;
-    let foo = instance
-        .get_export("foo")
-        .unwrap()
-        .func()
-        .unwrap()
-        .get0::<()>()?;
+    let foo = instance.get_func("foo").unwrap().get0::<()>()?;
 
     // Make sure that our function traps and the trap says that the call stack
     // has been exhausted.

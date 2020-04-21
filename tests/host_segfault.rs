@@ -46,7 +46,7 @@ fn main() {
             let store = Store::default();
             let module = Module::new(&store, "(module)").unwrap();
             let _instance = Instance::new(&module, &[]).unwrap();
-            overrun_the_stack();
+            println!("stack overrun: {}", overrun_the_stack());
         }),
     ];
     match env::var(VAR_NAME) {
@@ -92,7 +92,11 @@ fn runtest(name: &str) {
             desc
         );
     } else if name.contains("overrun the stack") {
-        assert!(stderr.contains("thread 'main' has overflowed its stack"));
+        assert!(
+            stderr.contains("thread 'main' has overflowed its stack"),
+            "bad stderr: {}",
+            stderr
+        );
     } else {
         panic!("\n\nexpected a segfault on `{}`\n{}\n\n", name, desc);
     }

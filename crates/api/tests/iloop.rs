@@ -27,12 +27,7 @@ fn loops_interruptable() -> anyhow::Result<()> {
     let store = interruptable_store();
     let module = Module::new(&store, r#"(func (export "loop") (loop br 0))"#)?;
     let instance = Instance::new(&module, &[])?;
-    let iloop = instance
-        .get_export("loop")
-        .unwrap()
-        .func()
-        .unwrap()
-        .get0::<()>()?;
+    let iloop = instance.get_func("loop").unwrap().get0::<()>()?;
     store.interrupt_handle()?.interrupt();
     let trap = iloop().unwrap_err();
     assert!(trap.message().contains("wasm trap: interrupt"));
@@ -45,12 +40,7 @@ fn functions_interruptable() -> anyhow::Result<()> {
     let module = hugely_recursive_module(&store)?;
     let func = Func::wrap(&store, || {});
     let instance = Instance::new(&module, &[func.into()])?;
-    let iloop = instance
-        .get_export("loop")
-        .unwrap()
-        .func()
-        .unwrap()
-        .get0::<()>()?;
+    let iloop = instance.get_func("loop").unwrap().get0::<()>()?;
     store.interrupt_handle()?.interrupt();
     let trap = iloop().unwrap_err();
     assert!(
@@ -97,12 +87,7 @@ fn loop_interrupt_from_afar() -> anyhow::Result<()> {
 
     // Enter the infinitely looping function and assert that our interrupt
     // handle does indeed actually interrupt the function.
-    let iloop = instance
-        .get_export("loop")
-        .unwrap()
-        .func()
-        .unwrap()
-        .get0::<()>()?;
+    let iloop = instance.get_func("loop").unwrap().get0::<()>()?;
     let trap = iloop().unwrap_err();
     thread.join().unwrap();
     assert!(
@@ -138,12 +123,7 @@ fn function_interrupt_from_afar() -> anyhow::Result<()> {
 
     // Enter the infinitely looping function and assert that our interrupt
     // handle does indeed actually interrupt the function.
-    let iloop = instance
-        .get_export("loop")
-        .unwrap()
-        .func()
-        .unwrap()
-        .get0::<()>()?;
+    let iloop = instance.get_func("loop").unwrap().get0::<()>()?;
     let trap = iloop().unwrap_err();
     thread.join().unwrap();
     assert!(
