@@ -607,7 +607,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
 
                 if let Some(srcloc) = srcloc {
                     // Register the offset at which the actual load instruction starts.
-                    sink.add_trap(srcloc, TrapCode::OutOfBounds);
+                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
 
                 match &mem {
@@ -741,7 +741,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
 
                 if let Some(srcloc) = srcloc {
                     // Register the offset at which the actual load instruction starts.
-                    sink.add_trap(srcloc, TrapCode::OutOfBounds);
+                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
 
                 match &mem {
