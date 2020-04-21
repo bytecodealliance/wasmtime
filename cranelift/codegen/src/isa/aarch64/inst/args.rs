@@ -525,4 +525,11 @@ impl InstSize {
             InstSize::Size64
         }
     }
+
+    pub fn sf_bit(&self) -> u32 {
+        match self {
+            InstSize::Size32 => 0,
+            InstSize::Size64 => 1,
+        }
+    }
 }

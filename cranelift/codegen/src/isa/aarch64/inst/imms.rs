@@ -11,6 +11,55 @@ use regalloc::RealRegUniverse;
 use core::convert::TryFrom;
 use std::string::String;
 
+/// An immediate that represents the NZCV flags.
+#[derive(Clone, Copy, Debug)]
+pub struct NZCV {
+    /// The negative condition flag.
+    n: bool,
+    /// The zero condition flag.
+    z: bool,
+    /// The carry condition flag.
+    c: bool,
+    /// The overflow condition flag.
+    v: bool,
+}
+
+impl NZCV {
+    pub fn new(n: bool, z: bool, c: bool, v: bool) -> NZCV {
+        NZCV { n, z, c, v }
+    }
+
+    /// Bits for encoding.
+    pub fn bits(&self) -> u32 {
+        (u32::from(self.n) << 3)
+            | (u32::from(self.z) << 2)
+            | (u32::from(self.c) << 1)
+            | u32::from(self.v)
+    }
+}
+
+/// An unsigned 5-bit immediate.
+#[derive(Clone, Copy, Debug)]
+pub struct UImm5 {
+    /// The value.
+    value: u8,
+}
+
+impl UImm5 {
+    pub fn maybe_from_u8(value: u8) -> Option<UImm5> {
+        if value < 32 {
+            Some(UImm5 { value })
+        } else {
+            None
+        }
+    }
+
+    /// Bits for encoding.
+    pub fn bits(&self) -> u32 {
+        u32::from(self.value)
+    }
+}
+
 /// A signed, scaled 7-bit offset.
 #[derive(Clone, Copy, Debug)]
 pub struct SImm7Scaled {
@@ -480,6 +529,25 @@ impl MoveWideConst {
     /// Returns the value that this constant represents.
     pub fn value(&self) -> u64 {
         (self.bits as u64) << (16 * self.shift)
+    }
+}
+
+impl ShowWithRRU for NZCV {
+    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+        let fmt = |c: char, v| if v { c.to_ascii_uppercase() } else { c };
+        format!(
+            "#{}{}{}{}",
+            fmt('n', self.n),
+            fmt('z', self.z),
+            fmt('c', self.c),
+            fmt('v', self.v)
+        )
+    }
+}
+
+impl ShowWithRRU for UImm5 {
+    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+        format!("#{}", self.value)
     }
 }
 
