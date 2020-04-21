@@ -42,6 +42,7 @@ mod test_cat;
 mod test_compile;
 mod test_dce;
 mod test_domtree;
+mod test_interpret;
 mod test_legalizer;
 mod test_licm;
 mod test_postopt;
@@ -122,23 +123,24 @@ fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<dyn subtest::
         "binemit" => test_binemit::subtest(parsed),
         "cat" => test_cat::subtest(parsed),
         "compile" => test_compile::subtest(parsed),
-        "rodata" => test_rodata::subtest(parsed),
         "dce" => test_dce::subtest(parsed),
         "domtree" => test_domtree::subtest(parsed),
+        "interpret" => test_interpret::subtest(parsed),
         "legalizer" => test_legalizer::subtest(parsed),
         "licm" => test_licm::subtest(parsed),
         "postopt" => test_postopt::subtest(parsed),
-        "simple_preopt" => test_simple_preopt::subtest(parsed),
+        "preopt" => test_preopt::subtest(parsed),
         "print-cfg" => test_print_cfg::subtest(parsed),
         "regalloc" => test_regalloc::subtest(parsed),
+        "rodata" => test_rodata::subtest(parsed),
         "run" => test_run::subtest(parsed),
+        "safepoint" => test_safepoint::subtest(parsed),
         "shrink" => test_shrink::subtest(parsed),
         "simple-gvn" => test_simple_gvn::subtest(parsed),
+        "simple_preopt" => test_simple_preopt::subtest(parsed),
+        "unwind" => test_unwind::subtest(parsed),
         "vcode" => test_vcode::subtest(parsed),
         "verifier" => test_verifier::subtest(parsed),
-        "preopt" => test_preopt::subtest(parsed),
-        "safepoint" => test_safepoint::subtest(parsed),
-        "unwind" => test_unwind::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),
     }
 }

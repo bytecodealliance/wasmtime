@@ -1,0 +1,64 @@
+test interpret
+
+; A non-recursive fibonacci implementation.
+function %fibonacci(i32) -> i32 {
+block0(v0: i32):
+    v1 = icmp_imm ule v0, 2
+    v2 = iconst.i32 1
+    brnz v1, block3(v2) ; handle base case, n <= 2
+    fallthrough block1(v0, v2)
+
+block1(v4: i32, v5:i32):
+    v6 = iconst.i32 1
+    v7 = irsub_imm v4, 2
+    fallthrough block2(v7, v5, v6)
+
+block2(v10: i32, v11: i32, v12: i32): ; params: n, fib(n-1), fib(n-2)
+    v13 = iadd v11, v12
+    v14 = irsub_imm v10, 1
+    v15 = icmp_imm eq v14, 0
+    brnz v15, block3(v13)
+    jump block2(v14, v13, v11)
+
+block3(v20: i32): ; early return and end of loop
+    return v20
+}
+; run: %fibonacci(0) == 1
+; run: %fibonacci(1) == 1
+; run: %fibonacci(2) == 1
+; run: %fibonacci(3) == 2
+; run: %fibonacci(4) == 3
+; run: %fibonacci(5) == 5
+; run: %fibonacci(6) == 8
+; run: %fibonacci(10) == 55
+
+
+; A recursive fibonacci implementation.
+function %fibonacci_recursive(i32) -> i32 {
+    fn0 = %fibonacci_recursive(i32) -> i32
+
+block0(v0: i32):
+    v1 = icmp_imm ule v0, 2
+    brnz v1, block2
+    fallthrough block1(v0)
+
+block1(v10: i32):
+    v11 = irsub_imm v10, 1
+    v12 = call fn0(v11)
+    v13 = irsub_imm v10, 2
+    v14 = call fn0(v13)
+    v15 = iadd v12, v14
+    return v15
+
+block2:
+    v20 = iconst.i32 1
+    return v20
+}
+; run: %fibonacci_recurs(0) == 1
+; run: %fibonacci_recurs(1) == 1
+; run: %fibonacci_recurs(2) == 1
+; run: %fibonacci_recurs(3) == 2
+; run: %fibonacci_recurs(4) == 3
+; run: %fibonacci_recurs(5) == 5
+; run: %fibonacci_recurs(6) == 8
+; run: %fibonacci_recurs(10) == 55

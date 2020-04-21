@@ -404,6 +404,7 @@ dependencies = [
  "byteorder",
  "cranelift-codegen",
  "cranelift-frontend",
+ "cranelift-interpreter",
  "cranelift-native",
  "cranelift-preopt",
  "cranelift-reader",
@@ -427,6 +428,21 @@ dependencies = [
  "log",
  "smallvec",
  "target-lexicon",
+]
+
+[[package]]
+name = "cranelift-interpreter"
+version = "0.1.0"
+dependencies = [
+ "cranelift-codegen",
+ "cranelift-entity",
+ "cranelift-frontend",
+ "cranelift-reader",
+ "hashbrown 0.7.2",
+ "log",
+ "pretty_env_logger",
+ "thiserror",
+ "walkdir",
 ]
 
 [[package]]
