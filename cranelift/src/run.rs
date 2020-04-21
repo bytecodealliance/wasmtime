@@ -98,7 +98,7 @@ fn run_file_contents(file_contents: String) -> Result<(), String> {
                 parse_run_command(comment.text, &func.signature).map_err(|e| e.to_string())?
             {
                 let compiled_fn = compiler.compile(func.clone()).map_err(|e| e.to_string())?;
-                command.run(|args| compiled_fn.call(args))?;
+                command.run(|_, args| Ok(compiled_fn.call(args)))?;
             }
         }
     }

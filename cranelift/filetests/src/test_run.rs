@@ -59,7 +59,7 @@ impl SubTest for TestRun {
                 let compiled_fn = compiler
                     .compile(func.clone().into_owned())
                     .map_err(|e| e.to_string())?;
-                command.run(|args| compiled_fn.call(args))?;
+                command.run(|_, args| Ok(compiled_fn.call(args)))?;
             }
         }
         Ok(())

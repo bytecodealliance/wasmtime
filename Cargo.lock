@@ -474,6 +474,7 @@ version = "0.63.0"
 dependencies = [
  "cranelift-codegen",
  "target-lexicon",
+ "thiserror",
 ]
 
 [[package]]
