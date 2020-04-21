@@ -257,6 +257,15 @@ fn enc_cset(rd: Writable<Reg>, cond: Cond) -> u32 {
         | (cond.invert().bits() << 12)
 }
 
+fn enc_ccmp_imm(size: InstSize, rn: Reg, imm: UImm5, nzcv: NZCV, cond: Cond) -> u32 {
+    0b0_1_1_11010010_00000_0000_10_00000_0_0000
+        | size.sf_bit() << 31
+        | imm.bits() << 16
+        | cond.bits() << 12
+        | machreg_to_gpr(rn) << 5
+        | nzcv.bits()
+}
+
 fn enc_vecmov(is_16b: bool, rd: Writable<Reg>, rn: Reg) -> u32 {
     debug_assert!(!is_16b); // to be supported later.
     0b00001110_101_00000_00011_1_00000_00000
@@ -830,6 +839,15 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
             }
             &Inst::CSet { rd, cond } => {
                 sink.put4(enc_cset(rd, cond));
+            }
+            &Inst::CCmpImm {
+                size,
+                rn,
+                imm,
+                nzcv,
+                cond,
+            } => {
+                sink.put4(enc_ccmp_imm(size, rn, imm, nzcv, cond));
             }
             &Inst::FpuMove64 { rd, rn } => {
                 sink.put4(enc_vecmov(/* 16b = */ false, rd, rn));
@@ -1422,6 +1440,17 @@ mod test {
         insns.push((
             Inst::AluRRR {
                 alu_op: ALUOp::SubS32,
+                rd: writable_zero_reg(),
+                rn: xreg(2),
+                rm: xreg(3),
+            },
+            "5F00036B",
+            // TODO: Display as cmp
+            "subs wzr, w2, w3",
+        ));
+        insns.push((
+            Inst::AluRRR {
+                alu_op: ALUOp::SubS32,
                 rd: writable_xreg(1),
                 rn: xreg(2),
                 rm: xreg(3),
@@ -1458,6 +1487,17 @@ mod test {
             },
             "A40006AB",
             "adds x4, x5, x6",
+        ));
+        insns.push((
+            Inst::AluRRImm12 {
+                alu_op: ALUOp::AddS64,
+                rd: writable_zero_reg(),
+                rn: xreg(5),
+                imm12: Imm12::maybe_from_u64(1).unwrap(),
+            },
+            "BF0400B1",
+            // TODO: Display as cmn.
+            "adds xzr, x5, #1",
         ));
         insns.push((
             Inst::AluRRR {
@@ -3052,6 +3092,28 @@ mod test {
             },
             "EFB79F9A",
             "cset x15, ge",
+        ));
+        insns.push((
+            Inst::CCmpImm {
+                size: InstSize::Size64,
+                rn: xreg(22),
+                imm: UImm5::maybe_from_u8(5).unwrap(),
+                nzcv: NZCV::new(false, false, true, true),
+                cond: Cond::Eq,
+            },
+            "C30A45FA",
+            "ccmp x22, #5, #nzCV, eq",
+        ));
+        insns.push((
+            Inst::CCmpImm {
+                size: InstSize::Size32,
+                rn: xreg(3),
+                imm: UImm5::maybe_from_u8(30).unwrap(),
+                nzcv: NZCV::new(true, true, true, true),
+                cond: Cond::Gt,
+            },
+            "6FC85E7A",
+            "ccmp w3, #30, #NZCV, gt",
         ));
         insns.push((
             Inst::MovToVec64 {

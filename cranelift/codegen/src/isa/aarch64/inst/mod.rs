@@ -436,6 +436,15 @@ pub enum Inst {
         cond: Cond,
     },
 
+    /// A conditional comparison with an immediate.
+    CCmpImm {
+        size: InstSize,
+        rn: Reg,
+        imm: UImm5,
+        nzcv: NZCV,
+        cond: Cond,
+    },
+
     /// FPU move. Note that this is distinct from a vector-register
     /// move; moving just 64 bits seems to be significantly faster.
     FpuMove64 {
@@ -958,6 +967,9 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::CSet { rd, .. } => {
             collector.add_def(rd);
         }
+        &Inst::CCmpImm { rn, .. } => {
+            collector.add_use(rn);
+        }
         &Inst::FpuMove64 { rd, rn } => {
             collector.add_def(rd);
             collector.add_use(rn);
@@ -1387,6 +1399,9 @@ fn aarch64_map_regs(
         }
         &mut Inst::CSet { ref mut rd, .. } => {
             map_wr(d, rd);
+        }
+        &mut Inst::CCmpImm { ref mut rn, .. } => {
+            map(u, rn);
         }
         &mut Inst::FpuMove64 {
             ref mut rd,
@@ -2176,6 +2191,19 @@ impl ShowWithRRU for Inst {
                 let rd = rd.to_reg().show_rru(mb_rru);
                 let cond = cond.show_rru(mb_rru);
                 format!("cset {}, {}", rd, cond)
+            }
+            &Inst::CCmpImm {
+                size,
+                rn,
+                imm,
+                nzcv,
+                cond,
+            } => {
+                let rn = show_ireg_sized(rn, mb_rru, size);
+                let imm = imm.show_rru(mb_rru);
+                let nzcv = nzcv.show_rru(mb_rru);
+                let cond = cond.show_rru(mb_rru);
+                format!("ccmp {}, {}, {}, {}", rn, imm, nzcv, cond)
             }
             &Inst::FpuMove64 { rd, rn } => {
                 let rd = rd.to_reg().show_rru(mb_rru);
