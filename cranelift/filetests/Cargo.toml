@@ -12,6 +12,7 @@ edition = "2018"
 [dependencies]
 cranelift-codegen = { path = "../codegen", version = "0.63.0", features = ["testing_hooks"] }
 cranelift-frontend = { path = "../frontend", version = "0.63.0" }
+cranelift-interpreter = { path = "../interpreter", version = "*" }
 cranelift-native = { path = "../native", version = "0.63.0" }
 cranelift-reader = { path = "../reader", version = "0.63.0" }
 cranelift-preopt = { path = "../preopt", version = "0.63.0" }
