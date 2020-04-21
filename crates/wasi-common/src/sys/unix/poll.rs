@@ -1,9 +1,6 @@
 use crate::entry::EntryHandle;
 use crate::poll::{ClockEventData, FdEventData};
-use crate::sys::osdir::OsDir;
 use crate::sys::osfile::OsFile;
-use crate::sys::osother::OsOther;
-use crate::sys::stdio::Stdio;
 use crate::sys::AsFile;
 use crate::wasi::{types, Errno, Result};
 use std::io;
@@ -32,18 +29,7 @@ pub(crate) fn oneoff(
                 // events we filtered before. If we get something else here, the code has a serious bug.
                 _ => unreachable!(),
             };
-            let fd = if let Some(file) = event.handle.as_any().downcast_ref::<OsFile>() {
-                file.as_raw_fd()
-            } else if let Some(dir) = event.handle.as_any().downcast_ref::<OsDir>() {
-                dir.as_raw_fd()
-            } else if let Some(stdio) = event.handle.as_any().downcast_ref::<Stdio>() {
-                stdio.as_raw_fd()
-            } else if let Some(other) = event.handle.as_any().downcast_ref::<OsOther>() {
-                other.as_raw_fd()
-            } else {
-                panic!("can poll FdEvent for OS resources only")
-            };
-            unsafe { PollFd::new(fd, flags) }
+            unsafe { PollFd::new(event.handle.as_file().as_raw_fd(), flags) }
         })
         .collect();
 
@@ -97,16 +83,9 @@ fn handle_fd_event(
             let meta = file.as_file().metadata()?;
             let len = meta.len();
             let host_offset = unsafe { tell(file.as_raw_fd())? };
-            Ok(len - host_offset)
-        } else if let Some(dir) = handle.as_any().downcast_ref::<OsDir>() {
-            unsafe { Ok(fionread(dir.as_raw_fd())?.into()) }
-        } else if let Some(stdio) = handle.as_any().downcast_ref::<Stdio>() {
-            unsafe { Ok(fionread(stdio.as_raw_fd())?.into()) }
-        } else if let Some(other) = handle.as_any().downcast_ref::<OsOther>() {
-            unsafe { Ok(fionread(other.as_raw_fd())?.into()) }
-        } else {
-            panic!("can poll FdEvent for OS resources only")
+            return Ok(len - host_offset);
         }
+        Ok(unsafe { fionread(handle.as_file().as_raw_fd())?.into() })
     }
 
     for (fd_event, poll_fd) in ready_events {

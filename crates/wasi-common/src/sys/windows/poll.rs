@@ -145,42 +145,16 @@ fn handle_timeout_event(timeout_event: ClockEventData, events: &mut Vec<types::E
 
 fn handle_rw_event(event: FdEventData, out_events: &mut Vec<types::Event>) {
     let handle = &event.handle;
-    let size = if let Some(file) = handle.as_any().downcast_ref::<OsFile>() {
-        if event.r#type == types::Eventtype::FdRead {
-            file.as_file()
-                .metadata()
-                .map(|m| m.len())
-                .map_err(Into::into)
-        } else {
-            // The spec is unclear what nbytes should actually be for __WASI_EVENTTYPE_FD_WRITE and
-            // the implementation on Unix just returns 0 here, so it's probably fine
-            // to do the same on Windows for now.
-            // cf. https://github.com/WebAssembly/WASI/issues/148
-            Ok(0)
-        }
-    } else if let Some(dir) = handle.as_any().downcast_ref::<OsDir>() {
-        if event.r#type == types::Eventtype::FdRead {
-            dir.as_file()
-                .metadata()
-                .map(|m| m.len())
-                .map_err(Into::into)
-        } else {
-            // The spec is unclear what nbytes should actually be for __WASI_EVENTTYPE_FD_WRITE and
-            // the implementation on Unix just returns 0 here, so it's probably fine
-            // to do the same on Windows for now.
-            // cf. https://github.com/WebAssembly/WASI/issues/148
-            Ok(0)
-        }
-    } else if let Some(stdio) = handle.as_any().downcast_ref::<Stdio>() {
+    let size = if let Some(stdio) = handle.as_any().downcast_ref::<Stdio>() {
         match stdio {
             // We return the only universally correct lower bound, see the comment later in the function.
             Stdio::In { .. } => Ok(1),
             // On Unix, ioctl(FIONREAD) will return 0 for stdout/stderr. Emulate the same behavior on Windows.
             Stdio::Out { .. } | Stdio::Err { .. } => Ok(0),
         }
-    } else if let Some(other) = handle.as_any().downcast_ref::<OsOther>() {
+    } else {
         if event.r#type == types::Eventtype::FdRead {
-            other
+            handle
                 .as_file()
                 .metadata()
                 .map(|m| m.len())
@@ -192,10 +166,7 @@ fn handle_rw_event(event: FdEventData, out_events: &mut Vec<types::Event>) {
             // cf. https://github.com/WebAssembly/WASI/issues/148
             Ok(0)
         }
-    } else {
-        panic!("can poll FdEvent for OS resources only")
     };
-
     let new_event = make_rw_event(&event, size);
     out_events.push(new_event);
 }

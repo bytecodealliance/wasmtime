@@ -6,14 +6,7 @@ use crate::wasi::{types, RightsExt};
 use std::convert::TryFrom;
 use std::fs::File;
 use std::io;
-use std::ops::Deref;
-use std::os::windows::prelude::{AsRawHandle, FromRawHandle, IntoRawHandle, RawHandle};
-
-impl AsRawHandle for OsOther {
-    fn as_raw_handle(&self) -> RawHandle {
-        self.deref().as_raw_handle()
-    }
-}
+use std::os::windows::prelude::{FromRawHandle, IntoRawHandle};
 
 impl TryFrom<File> for OsOther {
     type Error = io::Error;

@@ -33,10 +33,27 @@ use std::convert::TryFrom;
 use std::fs::File;
 use std::io;
 use std::mem::ManuallyDrop;
+use stdio::Stdio;
 use sys_impl::get_file_type;
 
 pub(crate) trait AsFile {
     fn as_file(&self) -> ManuallyDrop<File>;
+}
+
+impl AsFile for dyn Handle + 'static {
+    fn as_file(&self) -> ManuallyDrop<File> {
+        if let Some(file) = self.as_any().downcast_ref::<OsFile>() {
+            file.as_file()
+        } else if let Some(dir) = self.as_any().downcast_ref::<OsDir>() {
+            dir.as_file()
+        } else if let Some(stdio) = self.as_any().downcast_ref::<Stdio>() {
+            stdio.as_file()
+        } else if let Some(other) = self.as_any().downcast_ref::<OsOther>() {
+            other.as_file()
+        } else {
+            panic!("non-OS resource cannot be made into a File")
+        }
+    }
 }
 
 impl TryFrom<File> for Box<dyn Handle> {

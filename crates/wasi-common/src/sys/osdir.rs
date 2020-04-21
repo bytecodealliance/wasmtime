@@ -97,7 +97,7 @@ impl Handle for OsDir {
     ) -> Result<()> {
         let new_handle = match new_handle.as_any().downcast_ref::<Self>() {
             None => {
-                error!("Tried to link OS resource with Virtual");
+                error!("Tried to link with handle that's not an OsDir");
                 return Err(Errno::Badf);
             }
             Some(handle) => handle,
@@ -116,7 +116,7 @@ impl Handle for OsDir {
     fn rename(&self, old_path: &str, new_handle: Box<dyn Handle>, new_path: &str) -> Result<()> {
         let new_handle = match new_handle.as_any().downcast_ref::<Self>() {
             None => {
-                error!("Tried to link OS resource with Virtual");
+                error!("Tried to rename with handle that's not an OsDir");
                 return Err(Errno::Badf);
             }
             Some(handle) => handle,
