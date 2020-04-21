@@ -385,7 +385,6 @@ where
                         // Add frame base expressions.
                         flush_code_chunk!();
                         parts.extend_from_slice(&frame_base.unwrap().parts);
-                        need_deref = frame_base.unwrap().need_deref;
                     }
                     if let Some(CompiledExpressionPart::Local { trailing, .. }) = parts.last_mut() {
                         // Reset local trailing flag.
@@ -402,6 +401,8 @@ where
                 | Operation::PlusConstant { .. }
                 | Operation::Piece { .. } => (),
                 Operation::StackValue => {
+                    need_deref = false;
+
                     // Find extra stack_value, that follow wasm-local operators,
                     // and mark such locals with special flag.
                     if let (Some(CompiledExpressionPart::Local { trailing, .. }), true) =
@@ -409,8 +410,6 @@ where
                     {
                         *trailing = true;
                         continue;
-                    } else {
-                        need_deref = false;
                     }
                 }
                 Operation::Deref { .. } => {
@@ -595,7 +594,7 @@ mod tests {
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
             .expect("expression");
-        assert_eq!(format!("{:?}", ce), "CompiledExpression { parts: [Local { label: val20, trailing: true }], need_deref: true }");
+        assert_eq!(format!("{:?}", ce), "CompiledExpression { parts: [Local { label: val20, trailing: true }], need_deref: false }");
 
         //  DW_OP_WASM_location 0x0 +1, DW_OP_plus_uconst 0x10, DW_OP_stack_value
         let e = expression!(0xed, 0x00, 0x01, 0x23, 0x10, 0x9f);
