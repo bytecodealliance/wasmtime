@@ -4,7 +4,7 @@ use crate::binemit::{CodeOffset, Reloc};
 use crate::ir::constant::ConstantData;
 use crate::ir::types::*;
 use crate::ir::TrapCode;
-use crate::isa::aarch64::inst::*;
+use crate::isa::aarch64::{inst::regs::PINNED_REG, inst::*};
 
 use regalloc::{Reg, RegClass, Writable};
 
@@ -1325,6 +1325,20 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 }
                 _ => unimplemented!("{:?}", mem),
             },
+            &Inst::GetPinnedReg { rd } => {
+                let inst = Inst::Mov {
+                    rd,
+                    rm: xreg(PINNED_REG),
+                };
+                inst.emit(sink);
+            }
+            &Inst::SetPinnedReg { rm } => {
+                let inst = Inst::Mov {
+                    rd: Writable::from_reg(xreg(PINNED_REG)),
+                    rm,
+                };
+                inst.emit(sink);
+            }
         }
     }
 }
@@ -1333,6 +1347,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
 mod test {
     use super::*;
     use crate::isa::test_utils;
+    use crate::settings;
 
     #[test]
     fn test_aarch64_binemit() {
@@ -4136,7 +4151,7 @@ mod test {
             "frintn d23, d24",
         ));
 
-        let rru = create_reg_universe();
+        let rru = create_reg_universe(&settings::Flags::new(settings::builder()));
         for (insn, expected_encoding, expected_printing) in insns {
             println!(
                 "AArch64: {:?}, {}, {}",

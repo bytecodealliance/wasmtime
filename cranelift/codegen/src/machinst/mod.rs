@@ -102,6 +102,7 @@ use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, Type};
 use crate::result::CodegenResult;
 use crate::settings::Flags;
+
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt::Debug;
@@ -189,7 +190,7 @@ pub trait MachInst: Clone + Debug {
     fn with_block_offsets(&mut self, my_offset: CodeOffset, targets: &[CodeOffset]);
 
     /// Get the register universe for this backend.
-    fn reg_universe() -> RealRegUniverse;
+    fn reg_universe(flags: &Flags) -> RealRegUniverse;
 
     /// Align a basic block offset (from start of function).  By default, no
     /// alignment occurs.

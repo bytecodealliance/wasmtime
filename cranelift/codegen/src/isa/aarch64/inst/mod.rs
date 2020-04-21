@@ -7,6 +7,7 @@ use crate::binemit::CodeOffset;
 use crate::ir::types::{B1, B16, B32, B64, B8, F32, F64, FFLAGS, I16, I32, I64, I8, IFLAGS};
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
+use crate::settings;
 
 use regalloc::Map as RegallocMap;
 use regalloc::{RealReg, RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
@@ -723,6 +724,16 @@ pub enum Inst {
         rd: Writable<Reg>,
         mem: MemArg,
     },
+
+    /// Sets the value of the pinned register to the given register target.
+    GetPinnedReg {
+        rd: Writable<Reg>,
+    },
+
+    /// Writes the value of the given source register to the pinned register.
+    SetPinnedReg {
+        rm: Reg,
+    },
 }
 
 fn count_zero_half_words(mut value: u64) -> usize {
@@ -1110,6 +1121,12 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         }
         &Inst::LoadAddr { rd, mem: _ } => {
             collector.add_def(rd);
+        }
+        &Inst::GetPinnedReg { rd } => {
+            collector.add_def(rd);
+        }
+        &Inst::SetPinnedReg { rm } => {
+            collector.add_use(rm);
         }
     }
 }
@@ -1675,6 +1692,12 @@ fn aarch64_map_regs(
             map_wr(d, rd);
             map_mem(u, mem);
         }
+        &mut Inst::GetPinnedReg { ref mut rd } => {
+            map_wr(d, rd);
+        }
+        &mut Inst::SetPinnedReg { ref mut rm } => {
+            map(u, rm);
+        }
     }
 }
 
@@ -1865,8 +1888,8 @@ impl MachInst for Inst {
         }
     }
 
-    fn reg_universe() -> RealRegUniverse {
-        create_reg_universe()
+    fn reg_universe(flags: &settings::Flags) -> RealRegUniverse {
+        create_reg_universe(flags)
     }
 }
 
@@ -2617,6 +2640,14 @@ impl ShowWithRRU for Inst {
                 }
                 _ => unimplemented!("{:?}", mem),
             },
+            &Inst::GetPinnedReg { rd } => {
+                let rd = rd.show_rru(mb_rru);
+                format!("get_pinned_reg {}", rd)
+            }
+            &Inst::SetPinnedReg { rm } => {
+                let rm = rm.show_rru(mb_rru);
+                format!("set_pinned_reg {}", rm)
+            }
         }
     }
 }

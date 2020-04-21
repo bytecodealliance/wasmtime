@@ -3,9 +3,9 @@
 use crate::ir;
 use crate::ir::types;
 use crate::ir::types::*;
-use crate::ir::StackSlot;
+use crate::ir::{ArgumentExtension, StackSlot};
 use crate::isa;
-use crate::isa::aarch64::inst::*;
+use crate::isa::aarch64::{self, inst::*};
 use crate::machinst::*;
 use crate::settings;
 
@@ -58,7 +58,7 @@ static BALDRDASH_JIT_CALLEE_SAVED_GPR: &[bool] = &[
     /* 24 = */ false, false, false, false,
     // There should be 28, the pseudo stack pointer in this list, however the wasm stubs trash it
     // gladly right now.
-    /* 28 = */ false, false, true /* x30 = FP */, true /* x31 = SP */
+    /* 28 = */ false, false, true /* x30 = FP */, false /* x31 = SP */
 ];
 
 #[rustfmt::skip]
@@ -105,6 +105,7 @@ fn compute_arg_locs(call_conv: isa::CallConv, params: &[ir::AbiParam]) -> (Vec<A
     let mut next_vreg = 0;
     let mut next_stack: u64 = 0;
     let mut ret = vec![];
+
     for param in params {
         // Validate "purpose".
         match &param.purpose {
@@ -137,7 +138,7 @@ fn compute_arg_locs(call_conv: isa::CallConv, params: &[ir::AbiParam]) -> (Vec<A
                     _ => panic!("Unsupported vector-reg argument type"),
                 };
                 // Align.
-                assert!(size.is_power_of_two());
+                debug_assert!(size.is_power_of_two());
                 next_stack = (next_stack + size - 1) & !(size - 1);
                 ret.push(ABIArg::Stack(next_stack as i64, param.value_type));
                 next_stack += size;
@@ -159,7 +160,7 @@ impl ABISig {
         let (rets, _) = compute_arg_locs(sig.call_conv, &sig.returns);
 
         // Verify that there are no return values on the stack.
-        assert!(rets.iter().all(|a| match a {
+        debug_assert!(rets.iter().all(|a| match a {
             &ABIArg::Stack(..) => false,
             _ => true,
         }));
@@ -175,20 +176,22 @@ impl ABISig {
 
 /// AArch64 ABI object for a function body.
 pub struct AArch64ABIBody {
-    /// signature: arg and retval regs
+    /// Signature: arg and retval regs.
     sig: ABISig,
-    /// offsets to each stackslot
+    /// Offsets to each stackslot.
     stackslots: Vec<u32>,
-    /// total stack size of all stackslots
+    /// Total stack size of all stackslots.
     stackslots_size: u32,
-    /// clobbered registers, from regalloc.
+    /// Clobbered registers, from regalloc.
     clobbered: Set<Writable<RealReg>>,
-    /// total number of spillslots, from regalloc.
+    /// Total number of spillslots, from regalloc.
     spillslots: Option<usize>,
     /// Total frame size.
     frame_size: Option<u32>,
     /// Calling convention this function expects.
     call_conv: isa::CallConv,
+    /// The settings controlling this function's compilation.
+    flags: settings::Flags,
 }
 
 fn in_int_reg(ty: ir::Type) -> bool {
@@ -208,14 +211,14 @@ fn in_vec_reg(ty: ir::Type) -> bool {
 
 impl AArch64ABIBody {
     /// Create a new body ABI instance.
-    pub fn new(f: &ir::Function) -> Self {
+    pub fn new(f: &ir::Function, flags: settings::Flags) -> Self {
         debug!("AArch64 ABI: func signature {:?}", f.signature);
 
         let sig = ABISig::from_func_sig(&f.signature);
 
         let call_conv = f.signature.call_conv;
         // Only these calling conventions are supported.
-        assert!(
+        debug_assert!(
             call_conv == isa::CallConv::SystemV
                 || call_conv == isa::CallConv::Fast
                 || call_conv == isa::CallConv::Cold
@@ -231,7 +234,7 @@ impl AArch64ABIBody {
             let off = stack_offset;
             stack_offset += data.size;
             stack_offset = (stack_offset + 7) & !7;
-            assert_eq!(stackslot.as_u32() as usize, stackslots.len());
+            debug_assert_eq!(stackslot.as_u32() as usize, stackslots.len());
             stackslots.push(off);
         }
 
@@ -243,6 +246,20 @@ impl AArch64ABIBody {
             spillslots: None,
             frame_size: None,
             call_conv,
+            flags,
+        }
+    }
+
+    /// Returns the size of a function call frame (including return address and FP) for this
+    /// function's body.
+    fn frame_size(&self) -> i64 {
+        if self.call_conv.extends_baldrdash() {
+            let num_words = self.flags.baldrdash_prologue_words() as i64;
+            debug_assert!(num_words > 0, "baldrdash must set baldrdash_prologue_words");
+            debug_assert_eq!(num_words % 2, 0, "stack must be 16-aligned");
+            num_words * 8
+        } else {
+            16 // frame pointer + return address.
         }
     }
 }
@@ -314,17 +331,11 @@ fn is_callee_save(call_conv: isa::CallConv, r: RealReg) -> bool {
         match r.get_class() {
             RegClass::I64 => {
                 let enc = r.get_hw_encoding();
-                if BALDRDASH_JIT_CALLEE_SAVED_GPR[enc] {
-                    return true;
-                }
-                // Otherwise, fall through to preserve native ABI registers.
+                return BALDRDASH_JIT_CALLEE_SAVED_GPR[enc];
             }
             RegClass::V128 => {
                 let enc = r.get_hw_encoding();
-                if BALDRDASH_JIT_CALLEE_SAVED_FPU[enc] {
-                    return true;
-                }
-                // Otherwise, fall through to preserve native ABI registers.
+                return BALDRDASH_JIT_CALLEE_SAVED_FPU[enc];
             }
             _ => unimplemented!("baldrdash callee saved on non-i64 reg classes"),
         };
@@ -415,6 +426,10 @@ fn get_caller_saves_set(call_conv: isa::CallConv) -> Set<Writable<Reg>> {
 impl ABIBody for AArch64ABIBody {
     type I = Inst;
 
+    fn flags(&self) -> &settings::Flags {
+        &self.flags
+    }
+
     fn liveins(&self) -> Set<RealReg> {
         let mut set: Set<RealReg> = Set::empty();
         for &arg in &self.sig.args {
@@ -450,15 +465,71 @@ impl ABIBody for AArch64ABIBody {
     fn gen_copy_arg_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Inst {
         match &self.sig.args[idx] {
             &ABIArg::Reg(r, ty) => Inst::gen_move(into_reg, r.to_reg(), ty),
-            &ABIArg::Stack(off, ty) => load_stack(off + 16, into_reg, ty),
+            &ABIArg::Stack(off, ty) => load_stack(off + self.frame_size(), into_reg, ty),
         }
     }
 
-    fn gen_copy_reg_to_retval(&self, idx: usize, from_reg: Reg) -> Inst {
+    fn gen_copy_reg_to_retval(
+        &self,
+        idx: usize,
+        from_reg: Writable<Reg>,
+        ext: ArgumentExtension,
+    ) -> Vec<Inst> {
+        let mut ret = Vec::new();
         match &self.sig.rets[idx] {
-            &ABIArg::Reg(r, ty) => Inst::gen_move(Writable::from_reg(r.to_reg()), from_reg, ty),
-            &ABIArg::Stack(off, ty) => store_stack(off + 16, from_reg, ty),
+            &ABIArg::Reg(r, ty) => {
+                let from_bits = aarch64::lower::ty_bits(ty) as u8;
+                let dest_reg = Writable::from_reg(r.to_reg());
+                match (ext, from_bits) {
+                    (ArgumentExtension::Uext, n) if n < 64 => {
+                        ret.push(Inst::Extend {
+                            rd: dest_reg,
+                            rn: from_reg.to_reg(),
+                            signed: false,
+                            from_bits,
+                            to_bits: 64,
+                        });
+                    }
+                    (ArgumentExtension::Sext, n) if n < 64 => {
+                        ret.push(Inst::Extend {
+                            rd: dest_reg,
+                            rn: from_reg.to_reg(),
+                            signed: true,
+                            from_bits,
+                            to_bits: 64,
+                        });
+                    }
+                    _ => ret.push(Inst::gen_move(dest_reg, from_reg.to_reg(), ty)),
+                };
+            }
+            &ABIArg::Stack(off, ty) => {
+                let from_bits = aarch64::lower::ty_bits(ty) as u8;
+                // Trash the from_reg; it should be its last use.
+                match (ext, from_bits) {
+                    (ArgumentExtension::Uext, n) if n < 64 => {
+                        ret.push(Inst::Extend {
+                            rd: from_reg,
+                            rn: from_reg.to_reg(),
+                            signed: false,
+                            from_bits,
+                            to_bits: 64,
+                        });
+                    }
+                    (ArgumentExtension::Sext, n) if n < 64 => {
+                        ret.push(Inst::Extend {
+                            rd: from_reg,
+                            rn: from_reg.to_reg(),
+                            signed: true,
+                            from_bits,
+                            to_bits: 64,
+                        });
+                    }
+                    _ => {}
+                };
+                ret.push(store_stack(off + self.frame_size(), from_reg.to_reg(), ty))
+            }
         }
+        ret
     }
 
     fn gen_ret(&self) -> Inst {
@@ -527,7 +598,7 @@ impl ABIBody for AArch64ABIBody {
         store_stack(fp_off, from_reg, ty)
     }
 
-    fn gen_prologue(&mut self, flags: &settings::Flags) -> Vec<Inst> {
+    fn gen_prologue(&mut self) -> Vec<Inst> {
         let mut insts = vec![];
         if !self.call_conv.extends_baldrdash() {
             // stp fp (x29), lr (x30), [sp, #-16]!
@@ -555,10 +626,10 @@ impl ABIBody for AArch64ABIBody {
         let mut total_stacksize = self.stackslots_size + 8 * self.spillslots.unwrap() as u32;
         if self.call_conv.extends_baldrdash() {
             debug_assert!(
-                !flags.enable_probestack(),
+                !self.flags.enable_probestack(),
                 "baldrdash does not expect cranelift to emit stack probes"
             );
-            total_stacksize += flags.baldrdash_prologue_words() as u32 * 8;
+            total_stacksize += self.flags.baldrdash_prologue_words() as u32 * 8;
         }
         let total_stacksize = (total_stacksize + 15) & !15; // 16-align the stack.
 
@@ -635,7 +706,7 @@ impl ABIBody for AArch64ABIBody {
         insts
     }
 
-    fn gen_epilogue(&self, _flags: &settings::Flags) -> Vec<Inst> {
+    fn gen_epilogue(&self) -> Vec<Inst> {
         let mut insts = vec![];
 
         // Restore clobbered registers.
