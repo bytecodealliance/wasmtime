@@ -258,55 +258,68 @@ impl CompiledExpression {
         }
         let ranges = ranges_builder.into_ranges();
 
-        let mut result = Vec::new();
-        'range: for CachedValueLabelRange {
-            func_index,
-            start,
-            end,
-            label_location,
-        } in ranges
-        {
-            // build expression
-            let mut code_buf = Vec::new();
-            macro_rules! deref {
-                () => {
-                    if let (Some(vmctx_loc), Some(frame_info)) =
-                        (label_location.get(&vmctx_label), frame_info)
-                    {
-                        if !append_memory_deref(&mut code_buf, frame_info, *vmctx_loc, isa)? {
-                            continue 'range;
-                        }
-                    } else {
-                        continue 'range;
-                    };
-                };
-            }
-            for part in &self.parts {
-                match part {
-                    CompiledExpressionPart::Code(c) => code_buf.extend_from_slice(c.as_slice()),
-                    CompiledExpressionPart::Local { label, trailing } => {
-                        let loc = *label_location.get(&label).context("label_location")?;
-                        if let Some(expr) = translate_loc(loc, frame_info, isa, *trailing)? {
-                            code_buf.extend_from_slice(&expr)
-                        } else {
-                            continue 'range;
+        let result = ranges
+            .into_iter()
+            .map(
+                |CachedValueLabelRange {
+                     func_index,
+                     start,
+                     end,
+                     label_location,
+                 }| {
+                    // build expression
+                    let mut code_buf = Vec::new();
+                    macro_rules! deref {
+                        () => {
+                            if let (Some(vmctx_loc), Some(frame_info)) =
+                                (label_location.get(&vmctx_label), frame_info)
+                            {
+                                if !append_memory_deref(&mut code_buf, frame_info, *vmctx_loc, isa)?
+                                {
+                                    return Ok(None);
+                                }
+                            } else {
+                                return Ok(None);
+                            };
+                        };
+                    }
+                    for part in &self.parts {
+                        match part {
+                            CompiledExpressionPart::Code(c) => {
+                                code_buf.extend_from_slice(c.as_slice())
+                            }
+                            CompiledExpressionPart::Local { label, trailing } => {
+                                let loc = *label_location.get(&label).context("label_location")?;
+                                if let Some(expr) = translate_loc(loc, frame_info, isa, *trailing)?
+                                {
+                                    code_buf.extend_from_slice(&expr)
+                                } else {
+                                    return Ok(None);
+                                }
+                            }
+                            CompiledExpressionPart::Deref => deref!(),
                         }
                     }
-                    CompiledExpressionPart::Deref => deref!(),
-                }
-            }
-            if self.need_deref {
-                deref!();
-            }
-            result.push((
-                write::Address::Symbol {
-                    symbol: func_index.index(),
-                    addend: start as i64,
+                    if self.need_deref {
+                        deref!();
+                    }
+                    Ok(Some((func_index, start, end, code_buf)))
                 },
-                (end - start) as u64,
-                write::Expression(code_buf),
-            ));
-        }
+            )
+            .filter_map(Result::transpose)
+            .map(|r| {
+                r.map(|(func_index, start, end, code_buf)| {
+                    (
+                        write::Address::Symbol {
+                            symbol: func_index.index(),
+                            addend: start as i64,
+                        },
+                        (end - start) as u64,
+                        write::Expression(code_buf),
+                    )
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         Ok(result)
     }
@@ -544,16 +557,12 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
         }
     }
 
-    fn remove_incomplete_ranges(&mut self) {
+    pub fn into_ranges(self) -> impl Iterator<Item = CachedValueLabelRange> {
         // Ranges with not-enough labels are discarded.
         let processed_labels_len = self.processed_labels.len();
         self.ranges
-            .retain(|r| r.label_location.len() == processed_labels_len);
-    }
-
-    pub fn into_ranges(mut self) -> Vec<CachedValueLabelRange> {
-        self.remove_incomplete_ranges();
-        self.ranges
+            .into_iter()
+            .filter(move |r| r.label_location.len() == processed_labels_len)
     }
 }
 
