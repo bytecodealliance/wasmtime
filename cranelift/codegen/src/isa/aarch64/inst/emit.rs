@@ -347,6 +347,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     ALUOp::AddS64 => 0b10101011_000,
                     ALUOp::SubS32 => 0b01101011_000,
                     ALUOp::SubS64 => 0b11101011_000,
+                    ALUOp::SubS64XR => 0b11101011_001,
                     ALUOp::SDiv64 => 0b10011010_110,
                     ALUOp::UDiv64 => 0b10011010_110,
                     ALUOp::RotR32 | ALUOp::Lsr32 | ALUOp::Asr32 | ALUOp::Lsl32 => 0b00011010_110,
@@ -369,12 +370,16 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     ALUOp::Lsr32 | ALUOp::Lsr64 => 0b001001,
                     ALUOp::Asr32 | ALUOp::Asr64 => 0b001010,
                     ALUOp::Lsl32 | ALUOp::Lsl64 => 0b001000,
+                    ALUOp::SubS64XR => 0b011000,
                     _ => 0b000000,
                 };
                 debug_assert_ne!(writable_stack_reg(), rd);
-                // The stack pointer is the zero register in this context, so this might be an
-                // indication that something is wrong.
-                debug_assert_ne!(stack_reg(), rn);
+                // The stack pointer is the zero register if this instruction
+                // doesn't have access to extended registers, so this might be
+                // an indication that something is wrong.
+                if alu_op != ALUOp::SubS64XR {
+                    debug_assert_ne!(stack_reg(), rn);
+                }
                 debug_assert_ne!(stack_reg(), rm);
                 sink.put4(enc_arith_rrr(top11, bit15_10, rd, rn, rm));
             }
@@ -2147,6 +2152,17 @@ mod test {
             },
             "6A5D0CEB",
             "subs x10, x11, x12, LSL 23",
+        ));
+
+        insns.push((
+            Inst::AluRRR {
+                alu_op: ALUOp::SubS64XR,
+                rd: writable_zero_reg(),
+                rn: stack_reg(),
+                rm: xreg(12),
+            },
+            "FF632CEB",
+            "subs xzr, sp, x12",
         ));
 
         insns.push((

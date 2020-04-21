@@ -171,7 +171,6 @@ fn write_testsuite_tests(
 
 /// Ignore tests that aren't supported yet.
 fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
-    let target = env::var("TARGET").unwrap();
     match strategy {
         #[cfg(feature = "lightbeam")]
         "Lightbeam" => match (testsuite, testname) {
@@ -207,16 +206,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 // See https://github.com/bytecodealliance/wasmtime/pull/1216.
                 #[cfg(windows)]
                 return true;
-            }
-
-            // FIXME(#1569) stack protection isn't implemented yet and these
-            // tests segfault.
-            ("spec_testsuite", "skip_stack_guard_page")
-            | ("spec_testsuite", "stack")
-            | ("misc_testsuite", "stack_overflow")
-                if target.contains("aarch64") =>
-            {
-                return true
             }
 
             _ => {}

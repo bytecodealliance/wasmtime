@@ -66,6 +66,8 @@ pub enum ALUOp {
     SubS32,
     /// Sub, setting flags
     SubS64,
+    /// Sub, setting flags, using extended registers
+    SubS64XR,
     /// Multiply-add
     MAdd32,
     /// Multiply-add
@@ -1931,6 +1933,7 @@ impl ShowWithRRU for Inst {
                 ALUOp::AddS64 => ("adds", InstSize::Size64),
                 ALUOp::SubS32 => ("subs", InstSize::Size32),
                 ALUOp::SubS64 => ("subs", InstSize::Size64),
+                ALUOp::SubS64XR => ("subs", InstSize::Size64),
                 ALUOp::MAdd32 => ("madd", InstSize::Size32),
                 ALUOp::MAdd64 => ("madd", InstSize::Size64),
                 ALUOp::MSub32 => ("msub", InstSize::Size32),
