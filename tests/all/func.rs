@@ -74,7 +74,9 @@ fn signatures_match() {
 
     let f = Func::wrap(&store, || {});
     assert_eq!(f.ty().params(), &[]);
+    assert_eq!(f.param_arity(), 0);
     assert_eq!(f.ty().results(), &[]);
+    assert_eq!(f.result_arity(), 0);
 
     let f = Func::wrap(&store, || -> i32 { loop {} });
     assert_eq!(f.ty().params(), &[]);

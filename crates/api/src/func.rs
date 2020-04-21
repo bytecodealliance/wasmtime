@@ -502,7 +502,7 @@ impl Func {
             .signatures()
             .lookup(self.export.signature)
             .expect("failed to lookup signature");
-        sig.params.len()
+        sig.params.len() - 2 // skip the two vmctx leading parameters
     }
 
     /// Returns the number of results this function produces.
