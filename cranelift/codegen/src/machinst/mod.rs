@@ -218,7 +218,7 @@ pub enum MachTerminator<'a> {
 /// A trait describing the ability to encode a MachInst into binary machine code.
 pub trait MachInstEmit<O: MachSectionOutput> {
     /// Emit the instruction.
-    fn emit(&self, code: &mut O);
+    fn emit(&self, code: &mut O, flags: &Flags);
 }
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine

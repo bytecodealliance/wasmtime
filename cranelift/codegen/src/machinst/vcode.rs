@@ -468,6 +468,8 @@ impl<I: VCodeInst> VCode<I> {
             }
         }
 
+        let flags = self.abi.flags();
+
         // Compute block offsets.
         let mut code_section = MachSectionSize::new(0);
         let mut block_offsets = vec![0; self.num_blocks()];
@@ -476,7 +478,7 @@ impl<I: VCodeInst> VCode<I> {
             block_offsets[block as usize] = code_section.offset;
             let (start, end) = self.block_ranges[block as usize];
             for iix in start..end {
-                self.insts[iix as usize].emit(&mut code_section);
+                self.insts[iix as usize].emit(&mut code_section, flags);
             }
         }
 
@@ -495,7 +497,7 @@ impl<I: VCodeInst> VCode<I> {
             for iix in start..end {
                 self.insts[iix as usize]
                     .with_block_offsets(code_section.offset, &self.final_block_offsets[..]);
-                self.insts[iix as usize].emit(&mut code_section);
+                self.insts[iix as usize].emit(&mut code_section, flags);
             }
         }
     }
@@ -509,18 +511,19 @@ impl<I: VCodeInst> VCode<I> {
         let code_idx = sections.add_section(0, self.code_size);
         let code_section = sections.get_section(code_idx);
 
+        let flags = self.abi.flags();
         for &block in &self.final_block_order {
             let new_offset = I::align_basic_block(code_section.cur_offset_from_start());
             while new_offset > code_section.cur_offset_from_start() {
                 // Pad with NOPs up to the aligned block offset.
                 let nop = I::gen_nop((new_offset - code_section.cur_offset_from_start()) as usize);
-                nop.emit(code_section);
+                nop.emit(code_section, flags);
             }
             assert_eq!(code_section.cur_offset_from_start(), new_offset);
 
             let (start, end) = self.block_ranges[block as usize];
             for iix in start..end {
-                self.insts[iix as usize].emit(code_section);
+                self.insts[iix as usize].emit(code_section, flags);
             }
         }
 
