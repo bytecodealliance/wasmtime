@@ -264,9 +264,8 @@ impl AArch64ABIBody {
     }
 }
 
-fn load_stack(fp_offset: i64, into_reg: Writable<Reg>, ty: Type) -> Inst {
+fn load_stack_from_fp(fp_offset: i64, into_reg: Writable<Reg>, ty: Type) -> Inst {
     let mem = MemArg::FPOffset(fp_offset);
-
     match ty {
         types::B1
         | types::B8
@@ -291,13 +290,11 @@ fn load_stack(fp_offset: i64, into_reg: Writable<Reg>, ty: Type) -> Inst {
             mem,
             srcloc: None,
         },
-        _ => unimplemented!("load_stack({})", ty),
+        _ => unimplemented!("load_stack_from_fp({})", ty),
     }
 }
 
-fn store_stack(fp_offset: i64, from_reg: Reg, ty: Type) -> Inst {
-    let mem = MemArg::FPOffset(fp_offset);
-
+fn store_stack(mem: MemArg, from_reg: Reg, ty: Type) -> Inst {
     match ty {
         types::B1
         | types::B8
@@ -465,7 +462,7 @@ impl ABIBody for AArch64ABIBody {
     fn gen_copy_arg_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Inst {
         match &self.sig.args[idx] {
             &ABIArg::Reg(r, ty) => Inst::gen_move(into_reg, r.to_reg(), ty),
-            &ABIArg::Stack(off, ty) => load_stack(off + self.frame_size(), into_reg, ty),
+            &ABIArg::Stack(off, ty) => load_stack_from_fp(off + self.frame_size(), into_reg, ty),
         }
     }
 
@@ -526,7 +523,11 @@ impl ABIBody for AArch64ABIBody {
                     }
                     _ => {}
                 };
-                ret.push(store_stack(off + self.frame_size(), from_reg.to_reg(), ty))
+                ret.push(store_stack(
+                    MemArg::FPOffset(off + self.frame_size()),
+                    from_reg.to_reg(),
+                    ty,
+                ))
             }
         }
         ret
@@ -558,14 +559,14 @@ impl ABIBody for AArch64ABIBody {
         // Offset from beginning of stackslot area, which is at FP - stackslots_size.
         let stack_off = self.stackslots[slot.as_u32() as usize] as i64;
         let fp_off: i64 = -(self.stackslots_size as i64) + stack_off + (offset as i64);
-        load_stack(fp_off, into_reg, ty)
+        load_stack_from_fp(fp_off, into_reg, ty)
     }
 
     fn store_stackslot(&self, slot: StackSlot, offset: u32, ty: Type, from_reg: Reg) -> Inst {
         // Offset from beginning of stackslot area, which is at FP - stackslots_size.
         let stack_off = self.stackslots[slot.as_u32() as usize] as i64;
         let fp_off: i64 = -(self.stackslots_size as i64) + stack_off + (offset as i64);
-        store_stack(fp_off, from_reg, ty)
+        store_stack(MemArg::FPOffset(fp_off), from_reg, ty)
     }
 
     fn stackslot_addr(&self, slot: StackSlot, offset: u32, into_reg: Writable<Reg>) -> Inst {
@@ -587,7 +588,7 @@ impl ABIBody for AArch64ABIBody {
         let islot = slot.get() as i64;
         let ty_size = self.get_spillslot_size(into_reg.to_reg().get_class(), ty) * 8;
         let fp_off: i64 = -(self.stackslots_size as i64) - (8 * islot) - ty_size as i64;
-        load_stack(fp_off, into_reg, ty)
+        load_stack_from_fp(fp_off, into_reg, ty)
     }
 
     // Store to a spillslot.
@@ -595,7 +596,7 @@ impl ABIBody for AArch64ABIBody {
         let islot = slot.get() as i64;
         let ty_size = self.get_spillslot_size(from_reg.get_class(), ty) * 8;
         let fp_off: i64 = -(self.stackslots_size as i64) - (8 * islot) - ty_size as i64;
-        store_stack(fp_off, from_reg, ty)
+        store_stack(MemArg::FPOffset(fp_off), from_reg, ty)
     }
 
     fn gen_prologue(&mut self) -> Vec<Inst> {
@@ -929,11 +930,7 @@ impl ABICall for AArch64ABICall {
     fn gen_copy_reg_to_arg(&self, idx: usize, from_reg: Reg) -> Inst {
         match &self.sig.args[idx] {
             &ABIArg::Reg(reg, ty) => Inst::gen_move(Writable::from_reg(reg.to_reg()), from_reg, ty),
-            &ABIArg::Stack(off, _) => Inst::Store64 {
-                rd: from_reg,
-                mem: MemArg::SPOffset(off),
-                srcloc: None,
-            },
+            &ABIArg::Stack(off, ty) => store_stack(MemArg::SPOffset(off), from_reg, ty),
         }
     }
 
