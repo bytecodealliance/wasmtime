@@ -597,20 +597,6 @@ impl AddressTransform {
         let map = &self.map[index];
         (map.wasm_start, map.wasm_end)
     }
-
-    pub fn convert_to_code_range(
-        &self,
-        addr: write::Address,
-        len: u64,
-    ) -> (GeneratedAddress, GeneratedAddress) {
-        let start = if let write::Address::Symbol { addend, .. } = addr {
-            // TODO subtract self.map[symbol].offset ?
-            addend as GeneratedAddress
-        } else {
-            unreachable!();
-        };
-        (start, start + len as GeneratedAddress)
-    }
 }
 
 #[cfg(test)]

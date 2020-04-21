@@ -229,13 +229,15 @@ impl CompiledExpression {
             return Ok(vec![]);
         }
 
+        // If it a simple DWARF code, no need in locals processing. Just translate
+        // the scope ranges.
         if let [CompiledExpressionPart::Code(code)] = self.parts.as_slice() {
-            let mut result_scope = Vec::new();
-            for s in scope {
-                for (addr, len) in addr_tr.translate_ranges(s.0, s.1) {
-                    result_scope.push((addr, len, write::Expression(code.to_vec())));
-                }
-            }
+            let result_scope = scope
+                .iter()
+                .map(|(wasm_start, wasm_end)| addr_tr.translate_ranges(*wasm_start, *wasm_end))
+                .flatten()
+                .map(|(addr, len)| (addr, len, write::Expression(code.to_vec())))
+                .collect();
             return Ok(result_scope);
         }
 
@@ -244,7 +246,7 @@ impl CompiledExpression {
         // Some locals are present, preparing and divided ranges based on the scope
         // and frame_info data.
         let mut ranges_builder = ValueLabelRangesBuilder::new(scope, addr_tr, frame_info);
-        for p in &self.parts {
+        for p in self.parts.iter() {
             match p {
                 CompiledExpressionPart::Code(_) => (),
                 CompiledExpressionPart::Local { label, .. } => ranges_builder.process_label(*label),
@@ -254,8 +256,7 @@ impl CompiledExpression {
         if self.need_deref {
             ranges_builder.process_label(vmctx_label);
         }
-        ranges_builder.remove_incomplete_ranges();
-        let ranges = ranges_builder.ranges;
+        let ranges = ranges_builder.into_ranges();
 
         let mut result = Vec::new();
         'range: for CachedValueLabelRange {
@@ -267,6 +268,19 @@ impl CompiledExpression {
         {
             // build expression
             let mut code_buf = Vec::new();
+            macro_rules! deref {
+                () => {
+                    if let (Some(vmctx_loc), Some(frame_info)) =
+                        (label_location.get(&vmctx_label), frame_info)
+                    {
+                        if !append_memory_deref(&mut code_buf, frame_info, *vmctx_loc, isa)? {
+                            continue 'range;
+                        }
+                    } else {
+                        continue 'range;
+                    };
+                };
+            }
             for part in &self.parts {
                 match part {
                     CompiledExpressionPart::Code(c) => code_buf.extend_from_slice(c.as_slice()),
@@ -278,29 +292,11 @@ impl CompiledExpression {
                             continue 'range;
                         }
                     }
-                    CompiledExpressionPart::Deref => {
-                        if let (Some(vmctx_loc), Some(frame_info)) =
-                            (label_location.get(&vmctx_label), frame_info)
-                        {
-                            if !append_memory_deref(&mut code_buf, frame_info, *vmctx_loc, isa)? {
-                                continue 'range;
-                            }
-                        } else {
-                            continue 'range;
-                        };
-                    }
+                    CompiledExpressionPart::Deref => deref!(),
                 }
             }
             if self.need_deref {
-                if let (Some(vmctx_loc), Some(frame_info)) =
-                    (label_location.get(&vmctx_label), frame_info)
-                {
-                    if !append_memory_deref(&mut code_buf, frame_info, *vmctx_loc, isa)? {
-                        continue 'range;
-                    }
-                } else {
-                    continue 'range;
-                };
+                deref!();
             }
             result.push((
                 write::Address::Symbol {
@@ -454,34 +450,30 @@ struct CachedValueLabelRange {
 
 struct ValueLabelRangesBuilder<'a, 'b> {
     ranges: Vec<CachedValueLabelRange>,
-    addr_tr: &'a AddressTransform,
     frame_info: Option<&'a FunctionFrameInfo<'b>>,
     processed_labels: HashSet<ValueLabel>,
 }
 
 impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
-    fn new(
+    pub fn new(
         scope: &[(u64, u64)], // wasm ranges
         addr_tr: &'a AddressTransform,
         frame_info: Option<&'a FunctionFrameInfo<'b>>,
     ) -> Self {
         let mut ranges = Vec::new();
-        for s in scope {
-            if let Some((func_index, tr)) = addr_tr.translate_ranges_raw(s.0, s.1) {
-                for (start, end) in tr {
-                    ranges.push(CachedValueLabelRange {
-                        func_index,
-                        start,
-                        end,
-                        label_location: HashMap::new(),
-                    })
-                }
+        for (wasm_start, wasm_end) in scope {
+            if let Some((func_index, tr)) = addr_tr.translate_ranges_raw(*wasm_start, *wasm_end) {
+                ranges.extend(tr.into_iter().map(|(start, end)| CachedValueLabelRange {
+                    func_index,
+                    start,
+                    end,
+                    label_location: HashMap::new(),
+                }));
             }
         }
         ranges.sort_unstable_by(|a, b| a.start.cmp(&b.start));
         ValueLabelRangesBuilder {
             ranges,
-            addr_tr,
             frame_info,
             processed_labels: HashSet::new(),
         }
@@ -493,68 +485,61 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
         }
         self.processed_labels.insert(label);
 
-        let value_ranges = if let Some(frame_info) = self.frame_info {
-            &frame_info.value_ranges
-        } else {
-            return;
+        let value_ranges = match self.frame_info.and_then(|fi| fi.value_ranges.get(&label)) {
+            Some(value_ranges) => value_ranges,
+            None => {
+                return;
+            }
         };
 
         let ranges = &mut self.ranges;
-        if let Some(local_ranges) = value_ranges.get(&label) {
-            for local_range in local_ranges {
-                let wasm_start = local_range.start;
-                let wasm_end = local_range.end;
-                let loc = local_range.loc;
-                // Find all native ranges for the value label ranges.
-                for (addr, len) in self
-                    .addr_tr
-                    .translate_ranges(wasm_start as u64, wasm_end as u64)
-                {
-                    let (range_start, range_end) = self.addr_tr.convert_to_code_range(addr, len);
-                    if range_start == range_end {
-                        continue;
-                    }
-                    assert_lt!(range_start, range_end);
-                    // Find acceptable scope of ranges to intersect with.
-                    let i = match ranges.binary_search_by(|s| s.start.cmp(&range_start)) {
-                        Ok(i) => i,
-                        Err(i) => {
-                            if i > 0 && range_start < ranges[i - 1].end {
-                                i - 1
-                            } else {
-                                i
-                            }
-                        }
-                    };
-                    let j = match ranges.binary_search_by(|s| s.start.cmp(&range_end)) {
-                        Ok(i) | Err(i) => i,
-                    };
-                    // Starting for the end, intersect (range_start..range_end) with
-                    // self.ranges array.
-                    for i in (i..j).rev() {
-                        if range_end <= ranges[i].start || ranges[i].end <= range_start {
-                            continue;
-                        }
-                        if range_end < ranges[i].end {
-                            // Cutting some of the range from the end.
-                            let mut tail = ranges[i].clone();
-                            ranges[i].end = range_end;
-                            tail.start = range_end;
-                            ranges.insert(i + 1, tail);
-                        }
-                        assert_le!(ranges[i].end, range_end);
-                        if range_start <= ranges[i].start {
-                            ranges[i].label_location.insert(label, loc);
-                            continue;
-                        }
-                        // Cutting some of the range from the start.
-                        let mut tail = ranges[i].clone();
-                        ranges[i].end = range_start;
-                        tail.start = range_start;
-                        tail.label_location.insert(label, loc);
-                        ranges.insert(i + 1, tail);
+        for value_range in value_ranges {
+            let range_start = value_range.start as usize;
+            let range_end = value_range.end as usize;
+            let loc = value_range.loc;
+            if range_start == range_end {
+                continue;
+            }
+            assert_lt!(range_start, range_end);
+
+            // Find acceptable scope of ranges to intersect with.
+            let i = match ranges.binary_search_by(|s| s.start.cmp(&range_start)) {
+                Ok(i) => i,
+                Err(i) => {
+                    if i > 0 && range_start < ranges[i - 1].end {
+                        i - 1
+                    } else {
+                        i
                     }
                 }
+            };
+            let j = match ranges.binary_search_by(|s| s.start.cmp(&range_end)) {
+                Ok(i) | Err(i) => i,
+            };
+            // Starting for the end, intersect (range_start..range_end) with
+            // self.ranges array.
+            for i in (i..j).rev() {
+                if range_end <= ranges[i].start || ranges[i].end <= range_start {
+                    continue;
+                }
+                if range_end < ranges[i].end {
+                    // Cutting some of the range from the end.
+                    let mut tail = ranges[i].clone();
+                    ranges[i].end = range_end;
+                    tail.start = range_end;
+                    ranges.insert(i + 1, tail);
+                }
+                assert_le!(ranges[i].end, range_end);
+                if range_start <= ranges[i].start {
+                    ranges[i].label_location.insert(label, loc);
+                    continue;
+                }
+                // Cutting some of the range from the start.
+                let mut tail = ranges[i].clone();
+                ranges[i].end = range_start;
+                tail.start = range_start;
+                tail.label_location.insert(label, loc);
+                ranges.insert(i + 1, tail);
             }
         }
     }
@@ -564,6 +549,11 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
         let processed_labels_len = self.processed_labels.len();
         self.ranges
             .retain(|r| r.label_location.len() == processed_labels_len);
+    }
+
+    pub fn into_ranges(mut self) -> Vec<CachedValueLabelRange> {
+        self.remove_incomplete_ranges();
+        self.ranges
     }
 }
 
