@@ -569,6 +569,7 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
 #[cfg(test)]
 mod tests {
     use super::compile_expression;
+    use super::{AddressTransform, FunctionFrameInfo, ValueLabel, ValueLabelsRanges};
     use gimli::{self, Encoding, EndianSlice, Expression, RunTimeEndian};
 
     macro_rules! expression {
@@ -611,5 +612,130 @@ mod tests {
             .expect("non-error")
             .expect("expression");
         assert_eq!(format!("{:?}", ce), "CompiledExpression { parts: [Local { label: val3, trailing: false }, Code([35, 18])], need_deref: true }");
+    }
+
+    fn create_mock_address_transform() -> AddressTransform {
+        use crate::read_debuginfo::WasmFileInfo;
+        use wasmtime_environ::entity::PrimaryMap;
+        use wasmtime_environ::ir::SourceLoc;
+        use wasmtime_environ::{FunctionAddressMap, InstructionAddressMap};
+        let mut module_map = PrimaryMap::new();
+        let code_section_offset: u32 = 100;
+        module_map.push(FunctionAddressMap {
+            instructions: vec![
+                InstructionAddressMap {
+                    srcloc: SourceLoc::new(code_section_offset + 12),
+                    code_offset: 5,
+                    code_len: 3,
+                },
+                InstructionAddressMap {
+                    srcloc: SourceLoc::new(code_section_offset + 17),
+                    code_offset: 15,
+                    code_len: 8,
+                },
+            ],
+            start_srcloc: SourceLoc::new(code_section_offset + 10),
+            end_srcloc: SourceLoc::new(code_section_offset + 20),
+            body_offset: 0,
+            body_len: 30,
+        });
+        let fi = WasmFileInfo {
+            code_section_offset: code_section_offset.into(),
+            funcs: Box::new([]),
+            imported_func_count: 0,
+            path: None,
+        };
+        AddressTransform::new(&module_map, &fi)
+    }
+
+    fn create_mock_value_ranges() -> (ValueLabelsRanges, (ValueLabel, ValueLabel, ValueLabel)) {
+        use std::collections::HashMap;
+        use wasmtime_environ::entity::EntityRef;
+        use wasmtime_environ::ir::{ValueLoc, ValueLocRange};
+        let mut value_ranges = HashMap::new();
+        let value_0 = ValueLabel::new(0);
+        let value_1 = ValueLabel::new(1);
+        let value_2 = ValueLabel::new(2);
+        value_ranges.insert(
+            value_0,
+            vec![ValueLocRange {
+                loc: ValueLoc::Unassigned,
+                start: 0,
+                end: 25,
+            }],
+        );
+        value_ranges.insert(
+            value_1,
+            vec![ValueLocRange {
+                loc: ValueLoc::Unassigned,
+                start: 5,
+                end: 30,
+            }],
+        );
+        value_ranges.insert(
+            value_2,
+            vec![
+                ValueLocRange {
+                    loc: ValueLoc::Unassigned,
+                    start: 0,
+                    end: 10,
+                },
+                ValueLocRange {
+                    loc: ValueLoc::Unassigned,
+                    start: 20,
+                    end: 30,
+                },
+            ],
+        );
+        (value_ranges, (value_0, value_1, value_2))
+    }
+
+    #[test]
+    fn test_debug_value_range_builder() {
+        use super::ValueLabelRangesBuilder;
+        use wasmtime_environ::entity::EntityRef;
+        use wasmtime_environ::ir::StackSlots;
+        use wasmtime_environ::wasm::DefinedFuncIndex;
+        use wasmtime_environ::ModuleMemoryOffset;
+
+        let addr_tr = create_mock_address_transform();
+        let stack_slots = StackSlots::new();
+        let (value_ranges, value_labels) = create_mock_value_ranges();
+        let fi = FunctionFrameInfo {
+            memory_offset: ModuleMemoryOffset::None,
+            stack_slots: &stack_slots,
+            value_ranges: &value_ranges,
+        };
+
+        // No value labels, testing if entire function range coming through.
+        let builder = ValueLabelRangesBuilder::new(&[(10, 20)], &addr_tr, Some(&fi));
+        let ranges = builder.into_ranges().collect::<Vec<_>>();
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges[0].func_index, DefinedFuncIndex::new(0));
+        assert_eq!(ranges[0].start, 0);
+        assert_eq!(ranges[0].end, 30);
+
+        // Two labels (val0@0..25 and val1@5..30), their common lifetime intersect at 5..25.
+        let mut builder = ValueLabelRangesBuilder::new(&[(10, 20)], &addr_tr, Some(&fi));
+        builder.process_label(value_labels.0);
+        builder.process_label(value_labels.1);
+        let ranges = builder.into_ranges().collect::<Vec<_>>();
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges[0].start, 5);
+        assert_eq!(ranges[0].end, 25);
+
+        // Adds val2 with complex lifetime @0..10 and @20..30 to the previous test, and
+        // also narrows range.
+        let mut builder = ValueLabelRangesBuilder::new(&[(11, 17)], &addr_tr, Some(&fi));
+        builder.process_label(value_labels.0);
+        builder.process_label(value_labels.1);
+        builder.process_label(value_labels.2);
+        let ranges = builder.into_ranges().collect::<Vec<_>>();
+        // Result is two ranges @5..10 and @20..23
+        assert_eq!(ranges.len(), 2);
+        assert_eq!(ranges[0].start, 5);
+        assert_eq!(ranges[0].end, 10);
+        assert_eq!(ranges[1].start, 20);
+        assert_eq!(ranges[1].end, 23);
     }
 }
