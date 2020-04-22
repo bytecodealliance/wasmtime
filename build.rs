@@ -237,23 +237,17 @@ fn should_panic(testsuite: &str, testname: &str) -> bool {
     }
     match (testsuite, testname) {
         // FIXME(#1521)
-        ("bulk_memory_operations", "imports")
-        | ("misc_testsuite", "func_400_params")
+        ("misc_testsuite", "func_400_params")
         | ("misc_testsuite", "misc_traps")
         | ("simd", _)
         | ("multi_value", "call")
-        | ("spec_testsuite", "address")
-        | ("spec_testsuite", "align")
         | ("spec_testsuite", "call")
         | ("spec_testsuite", "conversions")
         | ("spec_testsuite", "f32_bitwise")
         | ("spec_testsuite", "float_misc")
         | ("spec_testsuite", "i32")
         | ("spec_testsuite", "i64")
-        | ("spec_testsuite", "imports")
         | ("spec_testsuite", "int_exprs")
-        | ("spec_testsuite", "memory_grow")
-        | ("spec_testsuite", "memory_trap")
         | ("spec_testsuite", "traps") => true,
 
         _ => false,
