@@ -4,7 +4,7 @@ use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs};
 use super::{DebugInputContext, Reader, TransformError};
 use anyhow::{bail, Error};
-use gimli::{write, AttributeValue, DebugLineOffset, DebugStr, DebuggingInformationEntry};
+use gimli::{write, AttributeValue, DebugAddrBase, DebugLineOffset, DebugStr, DebuggingInformationEntry};
 use wasmtime_environ::isa::TargetIsa;
 
 pub(crate) enum FileAttributeContext<'a> {
@@ -79,6 +79,11 @@ where
             }
 
             AttributeValue::Addr(u) => {
+                let addr = addr_tr.translate(u).unwrap_or(write::Address::Constant(0));
+                write::AttributeValue::Address(addr)
+            }
+            AttributeValue::DebugAddrIndex(i) => {
+		let u = context.debug_addr.get_address(4, DebugAddrBase(8), i)?;
                 let addr = addr_tr.translate(u).unwrap_or(write::Address::Constant(0));
                 write::AttributeValue::Address(addr)
             }

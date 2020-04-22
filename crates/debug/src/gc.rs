@@ -1,7 +1,7 @@
 use crate::transform::AddressTransform;
 use gimli::constants;
 use gimli::read;
-use gimli::{Reader, UnitSectionOffset};
+use gimli::{DebugAddrBase, Reader, UnitSectionOffset};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
@@ -169,6 +169,9 @@ fn has_valid_code_range<R: Reader<Offset = usize>>(
                 return Ok(false);
             } else if let Some(low_pc) = die.attr_value(constants::DW_AT_low_pc)? {
                 if let read::AttributeValue::Addr(a) = low_pc {
+                    return Ok(at.can_translate_address(a));
+                } else if let read::AttributeValue::DebugAddrIndex(i) = low_pc {
+		    let a = dwarf.debug_addr.get_address(4, DebugAddrBase(8), i)?;
                     return Ok(at.can_translate_address(a));
                 }
             }
