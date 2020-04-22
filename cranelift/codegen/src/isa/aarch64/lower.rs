@@ -2151,8 +2151,125 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
                 (true, 64, 64) => FpuToIntOp::F64ToI64,
                 _ => panic!("Unknown input/output-bits combination"),
             };
+
             let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
             let rd = output_to_reg(ctx, outputs[0]);
+
+            // First, check the output: it's important to carry the NaN conversion before the
+            // in-bounds conversion, per wasm semantics.
+
+            // Check that the input is not a NaN.
+            if in_bits == 32 {
+                ctx.emit(Inst::FpuCmp32 { rn, rm: rn });
+            } else {
+                ctx.emit(Inst::FpuCmp64 { rn, rm: rn });
+            }
+            ctx.emit(Inst::CondBrLowered {
+                target: BranchTarget::ResolvedOffset(8),
+                kind: CondBrKind::Cond(lower_fp_condcode(FloatCC::Ordered)),
+            });
+            let trap_info = (ctx.srcloc(insn), TrapCode::BadConversionToInteger);
+            ctx.emit(Inst::Udf { trap_info });
+
+            let tmp = ctx.tmp(RegClass::V128, I128);
+
+            // Check that the input is in range, with "truncate towards zero" semantics. This means
+            // we allow values that are slightly out of range:
+            // - for signed conversions, we allow values strictly greater than INT_MIN-1 (when this
+            // can be represented), and strictly less than INT_MAX+1 (when this can be
+            // represented).
+            // - for unsigned conversions, we allow values strictly greater than -1, and strictly
+            // less than UINT_MAX+1 (when this can be represented).
+
+            if in_bits == 32 {
+                // From float32.
+                let (low_bound, low_cond, high_bound) = match (signed, out_bits) {
+                    (true, 32) => (
+                        i32::min_value() as f32, // I32_MIN - 1 isn't precisely representable as a f32.
+                        FloatCC::GreaterThanOrEqual,
+                        i32::max_value() as f32 + 1.,
+                    ),
+                    (true, 64) => (
+                        i64::min_value() as f32, // I64_MIN - 1 isn't precisely representable as a f32.
+                        FloatCC::GreaterThanOrEqual,
+                        i64::max_value() as f32 + 1.,
+                    ),
+                    (false, 32) => (-1., FloatCC::GreaterThan, u32::max_value() as f32 + 1.),
+                    (false, 64) => (-1., FloatCC::GreaterThan, u64::max_value() as f32 + 1.),
+                    _ => panic!("Unknown input/output-bits combination"),
+                };
+
+                // >= low_bound
+                lower_constant_f32(ctx, tmp, low_bound);
+                ctx.emit(Inst::FpuCmp32 {
+                    rn,
+                    rm: tmp.to_reg(),
+                });
+                ctx.emit(Inst::CondBrLowered {
+                    target: BranchTarget::ResolvedOffset(8),
+                    kind: CondBrKind::Cond(lower_fp_condcode(low_cond)),
+                });
+                let trap_info = (ctx.srcloc(insn), TrapCode::IntegerOverflow);
+                ctx.emit(Inst::Udf { trap_info });
+
+                // <= high_bound
+                lower_constant_f32(ctx, tmp, high_bound);
+                ctx.emit(Inst::FpuCmp32 {
+                    rn,
+                    rm: tmp.to_reg(),
+                });
+                ctx.emit(Inst::CondBrLowered {
+                    target: BranchTarget::ResolvedOffset(8),
+                    kind: CondBrKind::Cond(lower_fp_condcode(FloatCC::LessThan)),
+                });
+                let trap_info = (ctx.srcloc(insn), TrapCode::IntegerOverflow);
+                ctx.emit(Inst::Udf { trap_info });
+            } else {
+                // From float64.
+                let (low_bound, low_cond, high_bound) = match (signed, out_bits) {
+                    (true, 32) => (
+                        i32::min_value() as f64 - 1.,
+                        FloatCC::GreaterThan,
+                        i32::max_value() as f64 + 1.,
+                    ),
+                    (true, 64) => (
+                        i64::min_value() as f64, // I64_MIN - 1 is not precisely representable as an i64.
+                        FloatCC::GreaterThanOrEqual,
+                        i64::max_value() as f64 + 1.,
+                    ),
+                    (false, 32) => (-1., FloatCC::GreaterThan, u32::max_value() as f64 + 1.),
+                    (false, 64) => (-1., FloatCC::GreaterThan, u64::max_value() as f64 + 1.),
+                    _ => panic!("Unknown input/output-bits combination"),
+                };
+
+                // >= low_bound
+                lower_constant_f64(ctx, tmp, low_bound);
+                ctx.emit(Inst::FpuCmp64 {
+                    rn,
+                    rm: tmp.to_reg(),
+                });
+                ctx.emit(Inst::CondBrLowered {
+                    target: BranchTarget::ResolvedOffset(8),
+                    kind: CondBrKind::Cond(lower_fp_condcode(low_cond)),
+                });
+                let trap_info = (ctx.srcloc(insn), TrapCode::IntegerOverflow);
+                ctx.emit(Inst::Udf { trap_info });
+
+                // <= high_bound
+                lower_constant_f64(ctx, tmp, high_bound);
+                ctx.emit(Inst::FpuCmp64 {
+                    rn,
+                    rm: tmp.to_reg(),
+                });
+                ctx.emit(Inst::CondBrLowered {
+                    target: BranchTarget::ResolvedOffset(8),
+                    kind: CondBrKind::Cond(lower_fp_condcode(FloatCC::LessThan)),
+                });
+                let trap_info = (ctx.srcloc(insn), TrapCode::IntegerOverflow);
+                ctx.emit(Inst::Udf { trap_info });
+            };
+
+            // Do the conversion.
             ctx.emit(Inst::FpuToInt { op, rd, rn });
         }
 
