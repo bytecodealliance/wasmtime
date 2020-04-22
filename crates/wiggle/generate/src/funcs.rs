@@ -13,6 +13,7 @@ pub fn define_func(
     let funcname = func.name.as_str();
 
     let ident = names.func(&func.name);
+    let rt = names.runtime_mod();
     let ctx_type = names.ctx_type();
     let coretype = func.core_type();
 
@@ -23,7 +24,7 @@ pub fn define_func(
     });
 
     let abi_args = quote!(
-            ctx: &#ctx_type, memory: &dyn wiggle::GuestMemory,
+            ctx: &#ctx_type, memory: &dyn #rt::GuestMemory,
             #(#params),*
     );
     let abi_ret = if let Some(ret) = &coretype.ret {
@@ -64,7 +65,7 @@ pub fn define_func(
             let err_typename = names.type_ref(&tref, anon_lifetime());
             let err_method = names.guest_error_conversion_method(&tref);
             quote! {
-                let e = wiggle::GuestError::InFunc { funcname: #funcname, location: #location, err: Box::new(e.into()) };
+                let e = #rt::GuestError::InFunc { funcname: #funcname, location: #location, err: Box::new(e.into()) };
                 let err: #err_typename = GuestErrorConversion::#err_method(ctx, e); // XXX replace with conversion method on trait!
                 return #abi_ret::from(err);
             }
@@ -139,7 +140,7 @@ pub fn define_func(
     let success = if let Some(ref err_type) = err_type {
         let err_typename = names.type_ref(&err_type, anon_lifetime());
         quote! {
-            let success:#err_typename = wiggle::GuestErrorType::success();
+            let success:#err_typename = #rt::GuestErrorType::success();
             #[cfg(feature = "trace_log")]
             {
                 log::trace!("     | errno={}", success);
@@ -185,6 +186,7 @@ fn marshal_arg(
     param: &witx::InterfaceFuncParam,
     error_handling: TokenStream,
 ) -> TokenStream {
+    let rt = names.runtime_mod();
     let tref = &param.tref;
     let interface_typename = names.type_ref(&tref, anon_lifetime());
 
@@ -208,7 +210,7 @@ fn marshal_arg(
         let arg_name = names.func_ptr_binding(&param.name);
         let name = names.func_param(&param.name);
         quote! {
-            let #name = match wiggle::GuestPtr::<#pointee_type>::new(memory, #arg_name as u32).read() {
+            let #name = match #rt::GuestPtr::<#pointee_type>::new(memory, #arg_name as u32).read() {
                 Ok(r) => r,
                 Err(e) => {
                     #error_handling
@@ -254,7 +256,7 @@ fn marshal_arg(
                 let len_name = names.func_len_binding(&param.name);
                 let name = names.func_param(&param.name);
                 quote! {
-                    let #name = wiggle::GuestPtr::<#lifetime, str>::new(memory, (#ptr_name as u32, #len_name as u32));
+                    let #name = #rt::GuestPtr::<#lifetime, str>::new(memory, (#ptr_name as u32, #len_name as u32));
                 }
             }
         },
@@ -262,7 +264,7 @@ fn marshal_arg(
             let pointee_type = names.type_ref(pointee, anon_lifetime());
             let name = names.func_param(&param.name);
             quote! {
-                let #name = wiggle::GuestPtr::<#pointee_type>::new(memory, #name as u32);
+                let #name = #rt::GuestPtr::<#pointee_type>::new(memory, #name as u32);
             }
         }
         witx::Type::Struct(_) => read_conversion,
@@ -272,7 +274,7 @@ fn marshal_arg(
             let len_name = names.func_len_binding(&param.name);
             let name = names.func_param(&param.name);
             quote! {
-                let #name = wiggle::GuestPtr::<[#pointee_type]>::new(memory, (#ptr_name as u32, #len_name as u32));
+                let #name = #rt::GuestPtr::<[#pointee_type]>::new(memory, (#ptr_name as u32, #len_name as u32));
             }
         }
         witx::Type::Union(_u) => read_conversion,
@@ -292,6 +294,7 @@ fn marshal_result<F>(
 where
     F: Fn(&str) -> TokenStream,
 {
+    let rt = names.runtime_mod();
     let tref = &result.tref;
 
     let write_val_to_ptr = {
@@ -300,7 +303,7 @@ where
         let ptr_name = names.func_ptr_binding(&result.name);
         let ptr_err_handling = error_handling(&format!("{}:result_ptr_mut", result.name.as_str()));
         let pre = quote! {
-            let #ptr_name = wiggle::GuestPtr::<#pointee_type>::new(memory, #ptr_name as u32);
+            let #ptr_name = #rt::GuestPtr::<#pointee_type>::new(memory, #ptr_name as u32);
         };
         // trait binding returns func_param name.
         let val_name = names.func_param(&result.name);

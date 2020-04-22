@@ -16,17 +16,17 @@ pub use module_trait::define_module_trait;
 pub use names::Names;
 pub use types::define_datatype;
 
-pub fn generate(doc: &witx::Document, config: &Config) -> TokenStream {
+pub fn generate(doc: &witx::Document, names: &Names) -> TokenStream {
     // TODO at some point config should grow more ability to configure name
     // overrides.
-    let names = Names::new(&config.ctx.name);
+    let rt = names.runtime_mod();
 
     let types = doc.typenames().map(|t| define_datatype(&names, &t));
 
     let guest_error_methods = doc.error_types().map(|t| {
         let typename = names.type_ref(&t, anon_lifetime());
         let err_method = names.guest_error_conversion_method(&t);
-        quote!(fn #err_method(&self, e: wiggle::GuestError) -> #typename;)
+        quote!(fn #err_method(&self, e: #rt::GuestError) -> #typename;)
     });
     let guest_error_conversion = quote! {
         pub trait GuestErrorConversion {
@@ -53,26 +53,24 @@ pub fn generate(doc: &witx::Document, config: &Config) -> TokenStream {
         )
     });
 
-    let metadata = if config.emit_metadata {
-        let doc_text = &format!("{}", doc);
-        quote! {
-            pub mod metadata {
-                pub const DOC_TEXT: &str = #doc_text;
-                pub fn document() -> wiggle::witx::Document {
-                    wiggle::witx::parse(DOC_TEXT).unwrap()
-                }
-            }
-        }
-    } else {
-        quote!()
-    };
-
     quote!(
         pub mod types {
             #(#types)*
             #guest_error_conversion
         }
         #(#modules)*
-        #metadata
     )
+}
+
+pub fn generate_metadata(doc: &witx::Document, names: &Names) -> TokenStream {
+    let rt = names.runtime_mod();
+    let doc_text = &format!("{}", doc);
+    quote! {
+        pub mod metadata {
+            pub const DOC_TEXT: &str = #doc_text;
+            pub fn document() -> #rt::witx::Document {
+                #rt::witx::parse(DOC_TEXT).unwrap()
+            }
+        }
+    }
 }

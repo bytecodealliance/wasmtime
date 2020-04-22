@@ -5,6 +5,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 pub(super) fn define_int(names: &Names, name: &witx::Id, i: &witx::IntDatatype) -> TokenStream {
+    let rt = names.runtime_mod();
     let ident = names.type_(&name);
     let repr = int_repr_tokens(i.repr);
     let abi_repr = atom_token(match i.repr {
@@ -37,15 +38,15 @@ pub(super) fn define_int(names: &Names, name: &witx::Id, i: &witx::IntDatatype) 
         }
 
         impl ::std::convert::TryFrom<#repr> for #ident {
-            type Error = wiggle::GuestError;
-            fn try_from(value: #repr) -> Result<Self, wiggle::GuestError> {
+            type Error = #rt::GuestError;
+            fn try_from(value: #repr) -> Result<Self, #rt::GuestError> {
                 Ok(#ident(value))
             }
         }
 
         impl ::std::convert::TryFrom<#abi_repr> for #ident {
-            type Error = wiggle::GuestError;
-            fn try_from(value: #abi_repr) -> Result<#ident, wiggle::GuestError> {
+            type Error = #rt::GuestError;
+            fn try_from(value: #abi_repr) -> Result<#ident, #rt::GuestError> {
                 #ident::try_from(value as #repr)
             }
         }
@@ -62,7 +63,7 @@ pub(super) fn define_int(names: &Names, name: &witx::Id, i: &witx::IntDatatype) 
             }
         }
 
-        impl<'a> wiggle::GuestType<'a> for #ident {
+        impl<'a> #rt::GuestType<'a> for #ident {
             fn guest_size() -> u32 {
                 #repr::guest_size()
             }
@@ -71,19 +72,19 @@ pub(super) fn define_int(names: &Names, name: &witx::Id, i: &witx::IntDatatype) 
                 #repr::guest_align()
             }
 
-            fn read(location: &wiggle::GuestPtr<'a, #ident>) -> Result<#ident, wiggle::GuestError> {
+            fn read(location: &#rt::GuestPtr<'a, #ident>) -> Result<#ident, #rt::GuestError> {
                 Ok(#ident(#repr::read(&location.cast())?))
 
             }
 
-            fn write(location: &wiggle::GuestPtr<'_, #ident>, val: Self) -> Result<(), wiggle::GuestError> {
+            fn write(location: &#rt::GuestPtr<'_, #ident>, val: Self) -> Result<(), #rt::GuestError> {
                 #repr::write(&location.cast(), val.0)
             }
         }
 
-        unsafe impl<'a> wiggle::GuestTypeTransparent<'a> for #ident {
+        unsafe impl<'a> #rt::GuestTypeTransparent<'a> for #ident {
             #[inline]
-            fn validate(_location: *mut #ident) -> Result<(), wiggle::GuestError> {
+            fn validate(_location: *mut #ident) -> Result<(), #rt::GuestError> {
                 // All bit patterns accepted
                 Ok(())
             }

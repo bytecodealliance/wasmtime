@@ -2366,6 +2366,7 @@ dependencies = [
 name = "wiggle-macro"
 version = "0.15.0"
 dependencies = [
+ "quote",
  "syn",
  "wiggle",
  "wiggle-generate",

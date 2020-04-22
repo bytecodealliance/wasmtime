@@ -1,6 +1,7 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
+use quote::quote;
 use syn::parse_macro_input;
 
 /// This macro expands to a set of `pub` Rust modules:
@@ -94,11 +95,15 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR env var"),
     );
 
-    #[cfg(feature = "wiggle_metadata")]
-    {
-        config.emit_metadata = true;
-    }
-
     let doc = witx::load(&config.witx.paths).expect("loading witx");
-    TokenStream::from(wiggle_generate::generate(&doc, &config))
+    let names = wiggle_generate::Names::new(&config.ctx.name, quote!(wiggle));
+
+    let code = wiggle_generate::generate(&doc, &names);
+    let metadata = if cfg!(feature = "wiggle_metadata") {
+        wiggle_generate::generate_metadata(&doc, &names)
+    } else {
+        quote!()
+    };
+
+    TokenStream::from(quote! { #code #metadata })
 }

@@ -12,7 +12,6 @@ use syn::{
 pub struct Config {
     pub witx: WitxConf,
     pub ctx: CtxConf,
-    pub emit_metadata: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -60,7 +59,6 @@ impl Config {
             ctx: ctx
                 .take()
                 .ok_or_else(|| Error::new(err_loc, "`ctx` field required"))?,
-            emit_metadata: false,
         })
     }
 }

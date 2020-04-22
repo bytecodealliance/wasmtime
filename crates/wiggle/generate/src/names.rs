@@ -7,16 +7,21 @@ use crate::lifetimes::LifetimeExt;
 
 pub struct Names {
     ctx_type: Ident,
+    runtime_mod: TokenStream,
 }
 
 impl Names {
-    pub fn new(ctx_type: &Ident) -> Names {
+    pub fn new(ctx_type: &Ident, runtime_mod: TokenStream) -> Names {
         Names {
             ctx_type: ctx_type.clone(),
+            runtime_mod,
         }
     }
     pub fn ctx_type(&self) -> Ident {
         self.ctx_type.clone()
+    }
+    pub fn runtime_mod(&self) -> TokenStream {
+        self.runtime_mod.clone()
     }
     pub fn type_(&self, id: &Id) -> TokenStream {
         let ident = format_ident!("{}", id.as_str().to_camel_case());
@@ -24,7 +29,10 @@ impl Names {
     }
     pub fn builtin_type(&self, b: BuiltinType, lifetime: TokenStream) -> TokenStream {
         match b {
-            BuiltinType::String => quote!(wiggle::GuestPtr<#lifetime, str>),
+            BuiltinType::String => {
+                let rt = self.runtime_mod();
+                quote!(#rt::GuestPtr<#lifetime, str>)
+            }
             BuiltinType::U8 => quote!(u8),
             BuiltinType::U16 => quote!(u16),
             BuiltinType::U32 => quote!(u32),
@@ -61,12 +69,14 @@ impl Names {
             TypeRef::Value(ty) => match &**ty {
                 Type::Builtin(builtin) => self.builtin_type(*builtin, lifetime.clone()),
                 Type::Pointer(pointee) | Type::ConstPointer(pointee) => {
+                    let rt = self.runtime_mod();
                     let pointee_type = self.type_ref(&pointee, lifetime.clone());
-                    quote!(wiggle::GuestPtr<#lifetime, #pointee_type>)
+                    quote!(#rt::GuestPtr<#lifetime, #pointee_type>)
                 }
                 Type::Array(pointee) => {
+                    let rt = self.runtime_mod();
                     let pointee_type = self.type_ref(&pointee, lifetime.clone());
-                    quote!(wiggle::GuestPtr<#lifetime, [#pointee_type]>)
+                    quote!(#rt::GuestPtr<#lifetime, [#pointee_type]>)
                 }
                 _ => unimplemented!("anonymous type ref {:?}", tref),
             },
