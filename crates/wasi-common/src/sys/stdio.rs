@@ -8,8 +8,11 @@ use std::cell::Cell;
 use std::io::{self, Read, Write};
 
 pub(crate) trait StdioExt: Sized {
+    /// Create `Stdio` from `io::stdin`.
     fn stdin() -> io::Result<Box<dyn Handle>>;
+    /// Create `Stdio` from `io::stdout`.
     fn stdout() -> io::Result<Box<dyn Handle>>;
+    /// Create `Stdio` from `io::stderr`.
     fn stderr() -> io::Result<Box<dyn Handle>>;
 }
 

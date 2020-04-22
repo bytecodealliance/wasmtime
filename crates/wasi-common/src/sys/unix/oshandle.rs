@@ -5,8 +5,6 @@ use std::io;
 use std::mem::ManuallyDrop;
 use std::os::unix::prelude::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
-pub(crate) use super::sys_impl::oshandle::*;
-
 #[derive(Debug)]
 pub(crate) struct OsHandle(Cell<RawFd>);
 

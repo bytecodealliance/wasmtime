@@ -1,11 +1,12 @@
-use super::oshandle::{OsDirHandle, OsHandle};
+use super::oshandle::OsHandle;
 use crate::handle::HandleRights;
-use crate::sys::osdir::OsDir;
 use crate::wasi::{types, RightsExt};
 use std::convert::TryFrom;
 use std::fs::File;
 use std::io;
 use std::os::unix::prelude::{AsRawFd, FromRawFd, IntoRawFd};
+
+pub(crate) use super::sys_impl::osdir::OsDir;
 
 impl TryFrom<File> for OsDir {
     type Error = io::Error;
@@ -13,8 +14,7 @@ impl TryFrom<File> for OsDir {
     fn try_from(file: File) -> io::Result<Self> {
         let rights = get_rights(&file)?;
         let handle = unsafe { OsHandle::from_raw_fd(file.into_raw_fd()) };
-        let handle = OsDirHandle::new(handle)?;
-        Ok(Self::new(rights, handle))
+        Self::new(rights, handle)
     }
 }
 

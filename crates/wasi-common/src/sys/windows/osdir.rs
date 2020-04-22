@@ -1,11 +1,24 @@
-use super::oshandle::{OsDirHandle, OsHandle};
+use super::oshandle::OsHandle;
 use crate::handle::HandleRights;
-use crate::sys::osdir::OsDir;
 use crate::wasi::{types, RightsExt};
+use std::cell::Cell;
 use std::convert::TryFrom;
 use std::fs::File;
 use std::io;
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle, IntoRawHandle};
+
+#[derive(Debug)]
+pub(crate) struct OsDir {
+    pub(crate) rights: Cell<HandleRights>,
+    pub(crate) handle: OsHandle,
+}
+
+impl OsDir {
+    pub(crate) fn new(rights: HandleRights, handle: OsHandle) -> io::Result<Self> {
+        let rights = Cell::new(rights);
+        Ok(Self { rights, handle })
+    }
+}
 
 impl TryFrom<File> for OsDir {
     type Error = io::Error;
@@ -13,8 +26,7 @@ impl TryFrom<File> for OsDir {
     fn try_from(file: File) -> io::Result<Self> {
         let rights = get_rights(&file)?;
         let handle = unsafe { OsHandle::from_raw_handle(file.into_raw_handle()) };
-        let handle = OsDirHandle::new(handle)?;
-        Ok(Self::new(rights, handle))
+        Self::new(rights, handle)
     }
 }
 

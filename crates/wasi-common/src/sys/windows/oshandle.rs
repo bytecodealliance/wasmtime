@@ -3,14 +3,13 @@ use std::cell::Cell;
 use std::fs::File;
 use std::io;
 use std::mem::ManuallyDrop;
-use std::ops::Deref;
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle, IntoRawHandle, RawHandle};
 
 #[derive(Debug)]
 pub(crate) struct OsHandle(Cell<RawHandle>);
 
 impl OsHandle {
-    /// Tries clone `self`.
+    /// Tries cloning `self`.
     pub(crate) fn try_clone(&self) -> io::Result<Self> {
         let handle = self.as_file().try_clone()?;
         Ok(Self(Cell::new(handle.into_raw_handle())))
@@ -53,28 +52,5 @@ impl IntoRawHandle for OsHandle {
         // We need to prevent dropping of the OsFile
         let wrapped = ManuallyDrop::new(self);
         wrapped.0.get()
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct OsDirHandle(OsHandle);
-
-impl OsDirHandle {
-    /// Consumes the spcified `OsHandle`.
-    pub(crate) fn new(handle: OsHandle) -> io::Result<Self> {
-        Ok(Self(handle))
-    }
-    /// Tries clone `self`.
-    pub(crate) fn try_clone(&self) -> io::Result<Self> {
-        let handle = self.0.try_clone()?;
-        Self::new(handle)
-    }
-}
-
-impl Deref for OsDirHandle {
-    type Target = OsHandle;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }

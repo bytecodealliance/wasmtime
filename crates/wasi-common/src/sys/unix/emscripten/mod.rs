@@ -1,5 +1,5 @@
-#[path = "../linux/oshandle.rs"]
-pub(crate) mod oshandle;
+#[path = "../linux/osdir.rs"]
+pub(crate) mod osdir;
 #[path = "../linux/path.rs"]
 pub(crate) mod path;
 

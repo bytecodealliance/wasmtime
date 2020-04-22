@@ -54,7 +54,7 @@ pub(crate) fn readdir<'a>(
 
     // Get an instance of `Dir`; this is host-specific due to intricasies
     // of managing a dir stream between Linux and BSD *nixes
-    let mut dir = dirfd.dir_stream()?;
+    let mut dir = dirfd.stream_ptr()?;
 
     // Seek if needed. Unless cookie is wasi::__WASI_DIRCOOKIE_START,
     // new items may not be returned to the caller.

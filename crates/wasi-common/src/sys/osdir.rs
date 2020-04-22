@@ -1,28 +1,19 @@
-use super::sys_impl::oshandle::OsDirHandle;
+use super::sys_impl::oshandle::OsHandle;
 use super::{fd, path, AsFile};
 use crate::handle::{Handle, HandleRights};
 use crate::wasi::{types, Errno, Result};
 use log::{debug, error};
 use std::any::Any;
-use std::cell::Cell;
 use std::io;
 use std::ops::Deref;
 
-#[derive(Debug)]
-pub(crate) struct OsDir {
-    rights: Cell<HandleRights>,
-    handle: OsDirHandle,
-}
-
-impl OsDir {
-    pub(super) fn new(rights: HandleRights, handle: OsDirHandle) -> Self {
-        let rights = Cell::new(rights);
-        Self { rights, handle }
-    }
-}
+// TODO could this be cleaned up?
+// The actual `OsDir` struct is OS-dependent, therefore we delegate
+// its definition to OS-specific modules.
+pub(crate) use super::sys_impl::osdir::OsDir;
 
 impl Deref for OsDir {
-    type Target = OsDirHandle;
+    type Target = OsHandle;
 
     fn deref(&self) -> &Self::Target {
         &self.handle
@@ -35,8 +26,8 @@ impl Handle for OsDir {
     }
     fn try_clone(&self) -> io::Result<Box<dyn Handle>> {
         let handle = self.handle.try_clone()?;
-        let rights = self.rights.clone();
-        Ok(Box::new(Self { rights, handle }))
+        let new = Self::new(self.rights.get(), handle)?;
+        Ok(Box::new(new))
     }
     fn get_file_type(&self) -> types::Filetype {
         types::Filetype::Directory
