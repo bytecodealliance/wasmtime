@@ -227,6 +227,9 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
     false
 }
 
+/// Determine whether to add a should_panic attribute. These tests currently
+/// panic because of unfinished backend implementation work; we will remove them
+/// from this list as we finish the implementation
 fn should_panic(testsuite: &str, testname: &str) -> bool {
     let target = env::var("TARGET").unwrap();
     if !target.contains("aarch64") {
