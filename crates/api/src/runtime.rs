@@ -12,7 +12,9 @@ use wasmtime_environ::settings::{self, Configurable};
 use wasmtime_environ::{CacheConfig, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
-use wasmtime_runtime::{debug_builtins, InstanceHandle, RuntimeMemoryCreator, VMInterrupts};
+use wasmtime_runtime::{
+    debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, VMInterrupts,
+};
 
 // Runtime Environment
 
@@ -557,6 +559,7 @@ pub(crate) struct StoreInner {
     engine: Engine,
     compiler: RefCell<Compiler>,
     instances: RefCell<Vec<InstanceHandle>>,
+    signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
 }
 
 impl Store {
@@ -574,6 +577,7 @@ impl Store {
                 engine: engine.clone(),
                 compiler: RefCell::new(compiler),
                 instances: RefCell::new(Vec::new()),
+                signal_handler: RefCell::new(None),
             }),
         }
     }
@@ -623,6 +627,16 @@ impl Store {
 
     pub(crate) fn weak(&self) -> Weak<StoreInner> {
         Rc::downgrade(&self.inner)
+    }
+
+    pub(crate) fn signal_handler(&self) -> std::cell::Ref<'_, Option<Box<SignalHandler<'static>>>> {
+        self.inner.signal_handler.borrow()
+    }
+
+    pub(crate) fn signal_handler_mut(
+        &self,
+    ) -> std::cell::RefMut<'_, Option<Box<SignalHandler<'static>>>> {
+        self.inner.signal_handler.borrow_mut()
     }
 
     /// Returns whether the stores `a` and `b` refer to the same underlying

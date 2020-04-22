@@ -8,7 +8,7 @@ use crate::jit_int::GdbJitImageRegistration;
 use crate::memory::{DefaultMemoryCreator, RuntimeLinearMemory, RuntimeMemoryCreator};
 use crate::table::Table;
 use crate::traphandlers;
-use crate::traphandlers::{catch_traps, Trap};
+use crate::traphandlers::Trap;
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport,
     VMGlobalDefinition, VMGlobalImport, VMInterrupts, VMMemoryDefinition, VMMemoryImport,
@@ -19,7 +19,7 @@ use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::alloc::{self, Layout};
 use std::any::Any;
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::rc::Rc;
@@ -32,34 +32,6 @@ use wasmtime_environ::wasm::{
     ElemIndex, FuncIndex, GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
 use wasmtime_environ::{ir, DataInitializer, EntityIndex, Module, TableElements, VMOffsets};
-
-cfg_if::cfg_if! {
-    if #[cfg(unix)] {
-        pub type SignalHandler = dyn Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool;
-
-        impl InstanceHandle {
-            /// Set a custom signal handler
-            pub fn set_signal_handler<H>(&self, handler: H)
-            where
-                H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
-            {
-                self.instance().signal_handler.set(Some(Box::new(handler)));
-            }
-        }
-    } else if #[cfg(target_os = "windows")] {
-        pub type SignalHandler = dyn Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool;
-
-        impl InstanceHandle {
-            /// Set a custom signal handler
-            pub fn set_signal_handler<H>(&self, handler: H)
-            where
-                H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool,
-            {
-                self.instance().signal_handler.set(Some(Box::new(handler)));
-            }
-        }
-    }
-}
 
 /// A WebAssembly instance.
 ///
@@ -98,9 +70,6 @@ pub(crate) struct Instance {
 
     /// Optional image of JIT'ed code for debugger registration.
     dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
-
-    /// Handler run when `SIGBUS`, `SIGFPE`, `SIGILL`, or `SIGSEGV` are caught by the instance thread.
-    pub(crate) signal_handler: Cell<Option<Box<SignalHandler>>>,
 
     /// Externally allocated data indicating how this instance will be
     /// interrupted.
@@ -375,58 +344,6 @@ impl Instance {
     #[inline]
     pub fn host_state(&self) -> &dyn Any {
         &*self.host_state
-    }
-
-    /// Invoke the WebAssembly start function of the instance, if one is present.
-    fn invoke_start_function(&self, max_wasm_stack: usize) -> Result<(), InstantiationError> {
-        let start_index = match self.module.start_func {
-            Some(idx) => idx,
-            None => return Ok(()),
-        };
-
-        self.invoke_function_index(start_index, max_wasm_stack)
-            .map_err(InstantiationError::StartTrap)
-    }
-
-    fn invoke_function_index(
-        &self,
-        callee_index: FuncIndex,
-        max_wasm_stack: usize,
-    ) -> Result<(), Trap> {
-        let (callee_address, callee_vmctx) =
-            match self.module.local.defined_func_index(callee_index) {
-                Some(defined_index) => {
-                    let body = *self
-                        .finished_functions
-                        .get(defined_index)
-                        .expect("function index is out of bounds");
-                    (body as *const _, self.vmctx_ptr())
-                }
-                None => {
-                    assert_lt!(callee_index.index(), self.module.local.num_imported_funcs);
-                    let import = self.imported_function(callee_index);
-                    (import.body, import.vmctx)
-                }
-            };
-
-        self.invoke_function(callee_vmctx, callee_address, max_wasm_stack)
-    }
-
-    fn invoke_function(
-        &self,
-        callee_vmctx: *mut VMContext,
-        callee_address: *const VMFunctionBody,
-        max_wasm_stack: usize,
-    ) -> Result<(), Trap> {
-        // Make the call.
-        unsafe {
-            catch_traps(callee_vmctx, max_wasm_stack, || {
-                mem::transmute::<
-                    *const VMFunctionBody,
-                    unsafe extern "C" fn(*mut VMContext, *mut VMContext),
-                >(callee_address)(callee_vmctx, self.vmctx_ptr())
-            })
-        }
     }
 
     /// Return the offset from the vmctx pointer to its containing Instance.
@@ -908,7 +825,6 @@ impl InstanceHandle {
                 trampolines,
                 dbg_jit_registration,
                 host_state,
-                signal_handler: Cell::new(None),
                 interrupts,
                 vmctx: VMContext {},
             };
@@ -988,7 +904,6 @@ impl InstanceHandle {
     pub unsafe fn initialize(
         &self,
         is_bulk_memory: bool,
-        max_wasm_stack: usize,
         data_initializers: &[DataInitializer<'_>],
     ) -> Result<(), InstantiationError> {
         // Check initializer bounds before initializing anything. Only do this
@@ -1005,8 +920,6 @@ impl InstanceHandle {
         initialize_tables(self.instance())?;
         initialize_memories(self.instance(), data_initializers)?;
 
-        // And finally, invoke the start function.
-        self.instance().invoke_start_function(max_wasm_stack)?;
         Ok(())
     }
 

@@ -178,7 +178,6 @@ macro_rules! getters {
             // of the closure. Pass the export in so that we can call it.
             let instance = self.instance.clone();
             let export = self.export.clone();
-            let max_wasm_stack = self.store().engine().config().max_wasm_stack;
 
             // ... and then once we've passed the typechecks we can hand out our
             // object since our `transmute` below should be safe!
@@ -194,13 +193,9 @@ macro_rules! getters {
                     >(export.address);
                     let mut ret = None;
                     $(let $args = $args.into_abi();)*
-                    wasmtime_runtime::catch_traps(export.vmctx, max_wasm_stack, || {
+                    catch_traps(export.vmctx, &instance.store, || {
                         ret = Some(fnptr(export.vmctx, ptr::null_mut(), $($args,)*));
-                    }).map_err(Trap::from_jit)?;
-
-                    // We're holding this handle just to ensure that the instance stays
-                    // live while we call into it.
-                    drop(&instance);
+                    })?;
 
                     Ok(ret.unwrap())
                 }
@@ -562,22 +557,14 @@ impl Func {
         }
 
         // Call the trampoline.
-        if let Err(error) = unsafe {
-            wasmtime_runtime::catch_traps(
+        catch_traps(self.export.vmctx, &self.instance.store, || unsafe {
+            (self.trampoline)(
                 self.export.vmctx,
-                self.instance.store.engine().config().max_wasm_stack,
-                || {
-                    (self.trampoline)(
-                        self.export.vmctx,
-                        ptr::null_mut(),
-                        self.export.address,
-                        values_vec.as_mut_ptr(),
-                    )
-                },
+                ptr::null_mut(),
+                self.export.address,
+                values_vec.as_mut_ptr(),
             )
-        } {
-            return Err(Trap::from_jit(error).into());
-        }
+        })?;
 
         // Load the return values out of `values_vec`.
         let mut results = Vec::with_capacity(my_ty.results().len());
@@ -743,6 +730,24 @@ impl Func {
 impl fmt::Debug for Func {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Func")
+    }
+}
+
+pub(crate) fn catch_traps(
+    vmctx: *mut VMContext,
+    store: &Store,
+    closure: impl FnMut(),
+) -> Result<(), Trap> {
+    let signalhandler = store.signal_handler();
+    unsafe {
+        wasmtime_runtime::catch_traps(
+            vmctx,
+            store.engine().config().max_wasm_stack,
+            |addr| store.compiler().is_in_jit_code(addr),
+            signalhandler.as_deref(),
+            closure,
+        )
+        .map_err(Trap::from_jit)
     }
 }
 

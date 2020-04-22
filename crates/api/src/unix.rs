@@ -9,10 +9,10 @@
 //! throughout the `wasmtime` crate with extra functionality that's only
 //! available on Unix.
 
-use crate::Instance;
+use crate::Store;
 
-/// Extensions for the [`Instance`] type only available on Unix.
-pub trait InstanceExt {
+/// Extensions for the [`Store`] type only available on Unix.
+pub trait StoreExt {
     // TODO: needs more docs?
     /// The signal handler must be
     /// [async-signal-safe](http://man7.org/linux/man-pages/man7/signal-safety.7.html).
@@ -21,11 +21,11 @@ pub trait InstanceExt {
         H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool;
 }
 
-impl InstanceExt for Instance {
+impl StoreExt for Store {
     unsafe fn set_signal_handler<H>(&self, handler: H)
     where
         H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
     {
-        self.handle.set_signal_handler(handler);
+        *self.signal_handler_mut() = Some(Box::new(handler));
     }
 }
