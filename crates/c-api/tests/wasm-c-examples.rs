@@ -55,6 +55,7 @@ fn run_c_example(name: &'static str, expected_out: &str) {
         .arg("-lpthread")
         .arg("-ldl")
         .arg("-lm")
+        .arg("-lrt")
         .current_dir(&examples_dir)
         .arg("-o")
         .arg(c_examples_dir.join(name))

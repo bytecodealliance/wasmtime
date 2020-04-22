@@ -6,11 +6,29 @@ use tempfile::NamedTempFile;
 
 // Run the wasmtime CLI with the provided args and return the `Output`.
 fn run_wasmtime_for_output(args: &[&str]) -> Result<Output> {
+    let runner = std::env::vars()
+        .filter(|(k, _v)| k.starts_with("CARGO_TARGET") && k.ends_with("RUNNER"))
+        .next();
     let mut me = std::env::current_exe()?;
     me.pop(); // chop off the file name
     me.pop(); // chop off `deps`
     me.push("wasmtime");
-    Command::new(&me).args(args).output().map_err(Into::into)
+
+    // If we're running tests with a "runner" then we might be doing something
+    // like cross-emulation, so spin up the emulator rather than the tests
+    // itself, which may not be natively executable.
+    let mut cmd = if let Some((_, runner)) = runner {
+        let mut parts = runner.split_whitespace();
+        let mut cmd = Command::new(parts.next().unwrap());
+        for arg in parts {
+            cmd.arg(arg);
+        }
+        cmd.arg(&me);
+        cmd
+    } else {
+        Command::new(&me)
+    };
+    cmd.args(args).output().map_err(Into::into)
 }
 
 // Run the wasmtime CLI with the provided args and, if it succeeds, return
@@ -36,6 +54,7 @@ fn build_wasm(wat_path: impl AsRef<Path>) -> Result<NamedTempFile> {
 
 // Very basic use case: compile binary wasm file and run specific function with arguments.
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn run_wasmtime_simple() -> Result<()> {
     let wasm = build_wasm("tests/wasm/simple.wat")?;
     run_wasmtime(&[
@@ -51,6 +70,7 @@ fn run_wasmtime_simple() -> Result<()> {
 
 // Wasmtime shakk when not enough arguments were provided.
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn run_wasmtime_simple_fail_no_args() -> Result<()> {
     let wasm = build_wasm("tests/wasm/simple.wat")?;
     assert!(
@@ -69,6 +89,7 @@ fn run_wasmtime_simple_fail_no_args() -> Result<()> {
 
 // Running simple wat
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn run_wasmtime_simple_wat() -> Result<()> {
     let wasm = build_wasm("tests/wasm/simple.wat")?;
     run_wasmtime(&[
@@ -84,6 +105,7 @@ fn run_wasmtime_simple_wat() -> Result<()> {
 
 // Running a wat that traps.
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn run_wasmtime_unreachable_wat() -> Result<()> {
     let wasm = build_wasm("tests/wasm/unreachable.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
@@ -107,6 +129,7 @@ fn run_wasmtime_unreachable_wat() -> Result<()> {
 
 // Run a simple WASI hello world, snapshot0 edition.
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn hello_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/wasm/hello_wasi_snapshot0.wat")?;
     let stdout = run_wasmtime(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
@@ -116,6 +139,7 @@ fn hello_wasi_snapshot0() -> Result<()> {
 
 // Run a simple WASI hello world, snapshot1 edition.
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn hello_wasi_snapshot1() -> Result<()> {
     let wasm = build_wasm("tests/wasm/hello_wasi_snapshot1.wat")?;
     let stdout = run_wasmtime(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;

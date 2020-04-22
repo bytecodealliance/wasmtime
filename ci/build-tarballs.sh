@@ -9,12 +9,15 @@
 # the second argument is the name of the github actions platform which is where
 # we source binaries from. The final third argument is ".exe" on Windows to
 # handle executable extensions right.
+#
+# Usage: build-tarballs.sh PLATFORM [.exe]
+
+# where PLATFORM is e.g. x86_64-linux, aarch64-linux, ...
 
 set -ex
 
 platform=$1
-src=$2
-exe=$3
+exe=$2
 
 rm -rf tmp
 mkdir tmp
@@ -33,12 +36,12 @@ mktarball() {
 bin_pkgname=wasmtime-$TAG-$platform
 mkdir tmp/$bin_pkgname
 cp LICENSE README.md tmp/$bin_pkgname
-mv bins-$src/wasmtime$exe tmp/$bin_pkgname
+mv bins-$platform/wasmtime$exe tmp/$bin_pkgname
 chmod +x tmp/$bin_pkgname/wasmtime$exe
 mktarball $bin_pkgname
 
 if [ "$exe" = ".exe" ]; then
-  mv bins-$src/installer.msi dist/$bin_pkgname.msi
+  mv bins-$platform/installer.msi dist/$bin_pkgname.msi
 fi
 
 # Create tarball of API libraries
@@ -47,7 +50,7 @@ mkdir tmp/$api_pkgname
 mkdir tmp/$api_pkgname/lib
 mkdir tmp/$api_pkgname/include
 cp LICENSE README.md tmp/$api_pkgname
-mv bins-$src/* tmp/$api_pkgname/lib
+mv bins-$platform/* tmp/$api_pkgname/lib
 cp crates/c-api/wasm-c-api/include/wasm.h tmp/$api_pkgname/include
 cp crates/c-api/include/{wasmtime,wasi}.h tmp/$api_pkgname/include
 mktarball $api_pkgname

@@ -316,10 +316,15 @@ functions must have the signature `() -> bNN` where `bNN` is some sort of
 boolean, e.g. `b1` or `b32`. A `true` value is interpreted as a successful
 test execution, whereas a `false` value is interpreted as a failed test.
 
+Currently a `target` is required but is only used to indicate whether the host
+platform can run the test, and currently only the architecture is filtered. The
+host platform's native target will be used to actually compile the test.
+
 Example:
 
 ```
     test run
+    target x86_64
 
     function %trivial_test() -> b1 {
     ebb0:

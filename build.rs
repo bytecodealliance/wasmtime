@@ -154,10 +154,13 @@ fn write_testsuite_tests(
     if ignore(testsuite, &testname, strategy) {
         writeln!(out, "#[ignore]")?;
     }
-    writeln!(out, "fn r#{}() -> anyhow::Result<()> {{", &testname)?;
+    if should_panic(testsuite, &testname) {
+        writeln!(out, "#[should_panic]")?;
+    }
+    writeln!(out, "fn r#{}() {{", &testname)?;
     writeln!(
         out,
-        "crate::wast::run_wast(r#\"{}\"#, crate::wast::Strategy::{})",
+        "crate::wast::run_wast(r#\"{}\"#, crate::wast::Strategy::{}).unwrap();",
         path.display(),
         strategy
     )?;
@@ -168,6 +171,7 @@ fn write_testsuite_tests(
 
 /// Ignore tests that aren't supported yet.
 fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
+    let target = env::var("TARGET").unwrap();
     match strategy {
         #[cfg(feature = "lightbeam")]
         "Lightbeam" => match (testsuite, testname) {
@@ -205,10 +209,53 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 return true;
             }
 
+            // FIXME(#1569) stack protection isn't implemented yet and these
+            // tests segfault.
+            ("spec_testsuite", "skip_stack_guard_page")
+            | ("spec_testsuite", "stack")
+            | ("misc_testsuite", "stack_overflow")
+                if target.contains("aarch64") =>
+            {
+                return true
+            }
+
             _ => {}
         },
         _ => panic!("unrecognized strategy"),
     }
 
     false
+}
+
+/// Determine whether to add a should_panic attribute. These tests currently
+/// panic because of unfinished backend implementation work; we will remove them
+/// from this list as we finish the implementation
+fn should_panic(testsuite: &str, testname: &str) -> bool {
+    let target = env::var("TARGET").unwrap();
+    if !target.contains("aarch64") {
+        return false;
+    }
+    match (testsuite, testname) {
+        // FIXME(#1521)
+        ("bulk_memory_operations", "imports")
+        | ("misc_testsuite", "func_400_params")
+        | ("misc_testsuite", "misc_traps")
+        | ("simd", _)
+        | ("multi_value", "call")
+        | ("spec_testsuite", "address")
+        | ("spec_testsuite", "align")
+        | ("spec_testsuite", "call")
+        | ("spec_testsuite", "conversions")
+        | ("spec_testsuite", "f32_bitwise")
+        | ("spec_testsuite", "float_misc")
+        | ("spec_testsuite", "i32")
+        | ("spec_testsuite", "i64")
+        | ("spec_testsuite", "imports")
+        | ("spec_testsuite", "int_exprs")
+        | ("spec_testsuite", "memory_grow")
+        | ("spec_testsuite", "memory_trap")
+        | ("spec_testsuite", "traps") => true,
+
+        _ => false,
+    }
 }

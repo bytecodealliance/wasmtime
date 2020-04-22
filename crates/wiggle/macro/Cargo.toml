@@ -12,6 +12,7 @@ include = ["src/**/*", "LICENSE"]
 
 [lib]
 proc-macro = true
+test = false
 
 [dependencies]
 wiggle-generate = { path = "../generate", version = "0.15.0" }

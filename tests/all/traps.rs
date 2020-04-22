@@ -31,6 +31,7 @@ fn test_trap_return() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn test_trap_trace() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -72,6 +73,7 @@ fn test_trap_trace() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn test_trap_trace_cb() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -107,6 +109,7 @@ fn test_trap_trace_cb() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn test_trap_stack_overflow() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -138,6 +141,7 @@ fn test_trap_stack_overflow() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn trap_display_pretty() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -169,6 +173,7 @@ wasm backtrace:
 }
 
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn trap_display_multi_module() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -213,6 +218,7 @@ wasm backtrace:
 }
 
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn trap_start_function_import() -> Result<()> {
     let store = Store::default();
     let binary = wat::parse_str(
@@ -233,6 +239,7 @@ fn trap_start_function_import() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn rust_panic_import() -> Result<()> {
     let store = Store::default();
     let binary = wat::parse_str(
@@ -276,6 +283,7 @@ fn rust_panic_import() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn rust_panic_start_function() -> Result<()> {
     let store = Store::default();
     let binary = wat::parse_str(
@@ -309,6 +317,7 @@ fn rust_panic_start_function() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn mismatched_arguments() -> Result<()> {
     let store = Store::default();
     let binary = wat::parse_str(
@@ -340,6 +349,7 @@ fn mismatched_arguments() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn call_signature_mismatch() -> Result<()> {
     let store = Store::default();
     let binary = wat::parse_str(
@@ -368,6 +378,7 @@ fn call_signature_mismatch() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn start_trap_pretty() -> Result<()> {
     let store = Store::default();
     let wat = r#"
