@@ -171,7 +171,7 @@ fn has_valid_code_range<R: Reader<Offset = usize>>(
                 if let read::AttributeValue::Addr(a) = low_pc {
                     return Ok(at.can_translate_address(a));
                 } else if let read::AttributeValue::DebugAddrIndex(i) = low_pc {
-		    let a = dwarf.debug_addr.get_address(4, DebugAddrBase(8), i)?;
+                    let a = dwarf.debug_addr.get_address(4, DebugAddrBase(8), i)?;
                     return Ok(at.can_translate_address(a));
                 }
             }

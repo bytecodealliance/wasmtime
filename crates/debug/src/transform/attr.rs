@@ -65,10 +65,9 @@ where
     let mut attrs = entry.attrs();
     while let Some(attr) = attrs.next()? {
         let attr_value = match attr.value() {
-            AttributeValue::Addr(_) if attr.name() == gimli::DW_AT_low_pc => {
-                continue;
-            }
-            AttributeValue::DebugAddrIndex(_) if attr.name() == gimli::DW_AT_low_pc => {
+            AttributeValue::Addr(_) | AttributeValue::DebugAddrIndex(_)
+                if attr.name() == gimli::DW_AT_low_pc =>
+            {
                 continue;
             }
             AttributeValue::Udata(_) if attr.name() == gimli::DW_AT_high_pc => {
