@@ -200,10 +200,6 @@ mod wasi_tests {
         if #[cfg(not(windows))] {
             /// Ignore tests that aren't supported yet.
             fn ignore(testsuite: &str, name: &str) -> bool {
-                let target = env::var("TARGET").unwrap();
-                if target.contains("aarch64") {
-                    return true; // FIXME(#1521)
-                }
                 if testsuite == "wasi-tests" {
                     match name {
                         // TODO: virtfs files cannot be poll_oneoff'd yet
