@@ -83,7 +83,7 @@ where
                 write::AttributeValue::Address(addr)
             }
             AttributeValue::DebugAddrIndex(i) => {
-		let u = context.debug_addr.get_address(4, DebugAddrBase(8), i)?;
+                let u = context.debug_addr.get_address(4, DebugAddrBase(8), i)?;
                 let addr = addr_tr.translate(u).unwrap_or(write::Address::Constant(0));
                 write::AttributeValue::Address(addr)
             }
