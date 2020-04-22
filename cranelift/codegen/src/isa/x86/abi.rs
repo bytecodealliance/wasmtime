@@ -685,21 +685,32 @@ fn insert_common_prologue(
     fpr_slot: Option<&StackSlot>,
     isa: &dyn TargetIsa,
 ) {
-    if stack_size > 0 {
-        // Check if there is a special stack limit parameter. If so insert stack check.
-        if let Some(stack_limit_arg) = pos.func.special_param(ArgumentPurpose::StackLimit) {
-            // Total stack size is the size of all stack area used by the function, including
-            // pushed CSRs, frame pointer.
-            // Also, the size of a return address, implicitly pushed by a x86 `call` instruction,
-            // also should be accounted for.
-            // If any FPR are present, count them as well as necessary alignment space.
-            // TODO: Check if the function body actually contains a `call` instruction.
-            let mut total_stack_size =
-                (csrs.iter(GPR).len() + 1 + 1) as i64 * (isa.pointer_bytes() as isize) as i64;
-
-            total_stack_size += csrs.iter(FPR).len() as i64 * types::F64X2.bytes() as i64;
-
-            insert_stack_check(pos, total_stack_size, stack_limit_arg);
+    // If this is a leaf function with zero stack, then there's no need to
+    // insert a stack check since it can't overflow anything and
+    // forward-progress is guarantee so long as loop are handled anyway.
+    //
+    // If this has a stack size it could stack overflow, or if it isn't a leaf
+    // it could be part of a long call chain which we need to check anyway.
+    //
+    // First we look for the stack limit as a special argument to the function,
+    // and failing that we see if a custom stack limit factory has been provided
+    // which will be used to likely calculate the stack limit from the arguments
+    // or perhaps constants.
+    if stack_size > 0 || !pos.func.is_leaf() {
+        let scratch = ir::ValueLoc::Reg(RU::rax as RegUnit);
+        let stack_limit_arg = match pos.func.special_param(ArgumentPurpose::StackLimit) {
+            Some(arg) => {
+                let copy = pos.ins().copy(arg);
+                pos.func.locations[copy] = scratch;
+                Some(copy)
+            }
+            None => pos
+                .func
+                .stack_limit
+                .map(|gv| interpret_gv(pos, gv, scratch)),
+        };
+        if let Some(stack_limit_arg) = stack_limit_arg {
+            insert_stack_check(pos, stack_size, stack_limit_arg);
         }
     }
 
@@ -811,16 +822,76 @@ fn insert_common_prologue(
     );
 }
 
+/// Inserts code necessary to calculate `gv`.
+///
+/// Note that this is typically done with `ins().global_value(...)` but that
+/// requires legalization to run to encode it, and we're running super late
+/// here in the backend where legalization isn't possible. To get around this
+/// we manually interpret the `gv` specified and do register allocation for
+/// intermediate values.
+///
+/// This is an incomplete implementation of loading `GlobalValue` values to get
+/// compared to the stack pointer, but currently it serves enough functionality
+/// to get this implemented in `wasmtime` itself. This'll likely get expanded a
+/// bit over time!
+fn interpret_gv(pos: &mut EncCursor, gv: ir::GlobalValue, scratch: ir::ValueLoc) -> ir::Value {
+    match pos.func.global_values[gv] {
+        ir::GlobalValueData::VMContext => pos
+            .func
+            .special_param(ir::ArgumentPurpose::VMContext)
+            .expect("no vmcontext parameter found"),
+        ir::GlobalValueData::Load {
+            base,
+            offset,
+            global_type,
+            readonly: _,
+        } => {
+            let base = interpret_gv(pos, base, scratch);
+            let ret = pos
+                .ins()
+                .load(global_type, ir::MemFlags::trusted(), base, offset);
+            pos.func.locations[ret] = scratch;
+            return ret;
+        }
+        ref other => panic!("global value for stack limit not supported: {}", other),
+    }
+}
+
 /// Insert a check that generates a trap if the stack pointer goes
 /// below a value in `stack_limit_arg`.
 fn insert_stack_check(pos: &mut EncCursor, stack_size: i64, stack_limit_arg: ir::Value) {
     use crate::ir::condcodes::IntCC;
 
+    // Our stack pointer, after subtracting `stack_size`, must not be below
+    // `stack_limit_arg`. To do this we're going to add `stack_size` to
+    // `stack_limit_arg` and see if the stack pointer is below that. The
+    // `stack_size + stack_limit_arg` computation might overflow, however, due
+    // to how stack limits may be loaded and set externally to trigger a trap.
+    //
+    // To handle this we'll need an extra comparison to see if the stack
+    // pointer is already below `stack_limit_arg`. Most of the time this
+    // isn't necessary though since the stack limit which triggers a trap is
+    // likely a sentinel somewhere around `usize::max_value()`. In that case
+    // only conditionally emit this pre-flight check. That way most functions
+    // only have the one comparison, but are also guaranteed that if we add
+    // `stack_size` to `stack_limit_arg` is won't overflow.
+    //
+    // This does mean that code generators which use this stack check
+    // functionality need to ensure that values stored into the stack limit
+    // will never overflow if this threshold is added.
+    if stack_size >= 32 * 1024 {
+        let cflags = pos.ins().ifcmp_sp(stack_limit_arg);
+        pos.func.locations[cflags] = ir::ValueLoc::Reg(RU::rflags as RegUnit);
+        pos.ins().trapif(
+            IntCC::UnsignedGreaterThanOrEqual,
+            cflags,
+            ir::TrapCode::StackOverflow,
+        );
+    }
+
     // Copy `stack_limit_arg` into a %rax and use it for calculating
     // a SP threshold.
-    let stack_limit_copy = pos.ins().copy(stack_limit_arg);
-    pos.func.locations[stack_limit_copy] = ir::ValueLoc::Reg(RU::rax as RegUnit);
-    let sp_threshold = pos.ins().iadd_imm(stack_limit_copy, stack_size);
+    let sp_threshold = pos.ins().iadd_imm(stack_limit_arg, stack_size);
     pos.func.locations[sp_threshold] = ir::ValueLoc::Reg(RU::rax as RegUnit);
 
     // If the stack pointer currently reaches the SP threshold or below it then after opening

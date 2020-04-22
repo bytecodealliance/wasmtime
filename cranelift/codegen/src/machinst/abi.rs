@@ -1,6 +1,6 @@
 //! ABI definitions.
 
-use crate::ir::StackSlot;
+use crate::ir::{ArgumentExtension, StackSlot};
 use crate::machinst::*;
 use crate::settings;
 
@@ -11,6 +11,9 @@ use regalloc::{Reg, Set, SpillSlot, Writable};
 pub trait ABIBody {
     /// The instruction type for the ISA associated with this ABI.
     type I: VCodeInst;
+
+    /// Get the settings controlling this function's compilation.
+    fn flags(&self) -> &settings::Flags;
 
     /// Get the liveins of the function.
     fn liveins(&self) -> Set<RealReg>;
@@ -31,9 +34,13 @@ pub trait ABIBody {
     /// register.
     fn gen_copy_arg_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Self::I;
 
-    /// Generate an instruction which copies a source register to a return
-    /// value slot.
-    fn gen_copy_reg_to_retval(&self, idx: usize, from_reg: Reg) -> Self::I;
+    /// Generate an instruction which copies a source register to a return value slot.
+    fn gen_copy_reg_to_retval(
+        &self,
+        idx: usize,
+        from_reg: Writable<Reg>,
+        ext: ArgumentExtension,
+    ) -> Vec<Self::I>;
 
     /// Generate a return instruction.
     fn gen_ret(&self) -> Self::I;
@@ -82,13 +89,13 @@ pub trait ABIBody {
     /// `store_retval`, and spillslot accesses.)  `self` is mutable so that we
     /// can store information in it which will be useful when creating the
     /// epilogue.
-    fn gen_prologue(&mut self, flags: &settings::Flags) -> Vec<Self::I>;
+    fn gen_prologue(&mut self) -> Vec<Self::I>;
 
     /// Generate an epilogue, post-regalloc. Note that this must generate the
     /// actual return instruction (rather than emitting this in the lowering
     /// logic), because the epilogue code comes before the return and the two are
     /// likely closely related.
-    fn gen_epilogue(&self, flags: &settings::Flags) -> Vec<Self::I>;
+    fn gen_epilogue(&self) -> Vec<Self::I>;
 
     /// Returns the full frame size for the given function, after prologue emission has run. This
     /// comprises the spill space, incoming argument space, alignment padding, etc.

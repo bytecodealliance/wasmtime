@@ -90,7 +90,7 @@ fn interposition() -> Result<()> {
         )?;
     }
     let instance = linker.instantiate(&module)?;
-    let func = instance.get_export("export").unwrap().func().unwrap();
+    let func = instance.get_func("export").unwrap();
     let func = func.get0::<i32>()?;
     assert_eq!(func()?, 112);
     Ok(())

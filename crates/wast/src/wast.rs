@@ -66,7 +66,7 @@ impl WastContext {
         }
     }
 
-    fn get_export(&self, module: Option<&str>, name: &str) -> Result<&Extern> {
+    fn get_export(&self, module: Option<&str>, name: &str) -> Result<Extern> {
         match module {
             Some(module) => self.linker.get_one_by_name(module, name),
             None => self
@@ -156,7 +156,7 @@ impl WastContext {
     ) -> Result<Outcome> {
         let func = self
             .get_export(instance_name, field)?
-            .func()
+            .into_func()
             .ok_or_else(|| anyhow!("no function named `{}`", field))?;
         Ok(match func.call(args) {
             Ok(result) => Outcome::Ok(result.into()),
@@ -168,7 +168,7 @@ impl WastContext {
     fn get(&mut self, instance_name: Option<&str>, field: &str) -> Result<Outcome> {
         let global = self
             .get_export(instance_name, field)?
-            .global()
+            .into_global()
             .ok_or_else(|| anyhow!("no global named `{}`", field))?;
         Ok(Outcome::Ok(vec![global.get()]))
     }

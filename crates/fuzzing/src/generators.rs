@@ -106,6 +106,7 @@ pub struct Config {
     debug_info: bool,
     canonicalize_nans: bool,
     spectest: usize,
+    interruptable: bool,
 }
 
 impl Config {
@@ -115,7 +116,8 @@ impl Config {
         cfg.debug_info(self.debug_info)
             .cranelift_nan_canonicalization(self.canonicalize_nans)
             .cranelift_debug_verifier(self.debug_verifier)
-            .cranelift_opt_level(self.opt_level.to_wasmtime());
+            .cranelift_opt_level(self.opt_level.to_wasmtime())
+            .interruptable(self.interruptable);
         return cfg;
     }
 }

@@ -4,7 +4,7 @@ use crate::binemit::{CodeOffset, Reloc};
 use crate::ir::constant::ConstantData;
 use crate::ir::types::*;
 use crate::ir::TrapCode;
-use crate::isa::aarch64::inst::*;
+use crate::isa::aarch64::{inst::regs::PINNED_REG, inst::*};
 
 use regalloc::{Reg, RegClass, Writable};
 
@@ -257,6 +257,15 @@ fn enc_cset(rd: Writable<Reg>, cond: Cond) -> u32 {
         | (cond.invert().bits() << 12)
 }
 
+fn enc_ccmp_imm(size: InstSize, rn: Reg, imm: UImm5, nzcv: NZCV, cond: Cond) -> u32 {
+    0b0_1_1_11010010_00000_0000_10_00000_0_0000
+        | size.sf_bit() << 31
+        | imm.bits() << 16
+        | cond.bits() << 12
+        | machreg_to_gpr(rn) << 5
+        | nzcv.bits()
+}
+
 fn enc_vecmov(is_16b: bool, rd: Writable<Reg>, rn: Reg) -> u32 {
     debug_assert!(!is_16b); // to be supported later.
     0b00001110_101_00000_00011_1_00000_00000
@@ -306,7 +315,7 @@ fn enc_fround(top22: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
 }
 
 impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
-    fn emit(&self, sink: &mut O) {
+    fn emit(&self, sink: &mut O, flags: &settings::Flags) {
         match self {
             &Inst::AluRRR { alu_op, rd, rn, rm } => {
                 let top11 = match alu_op {
@@ -573,7 +582,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 let (mem_insts, mem) = mem_finalize(sink.cur_offset_from_start(), mem);
 
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink);
+                    inst.emit(sink, flags);
                 }
 
                 // ldst encoding helpers take Reg, not Writable<Reg>.
@@ -716,7 +725,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 let (mem_insts, mem) = mem_finalize(sink.cur_offset_from_start(), mem);
 
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink);
+                    inst.emit(sink, flags);
                 }
 
                 let op = match self {
@@ -831,6 +840,15 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
             &Inst::CSet { rd, cond } => {
                 sink.put4(enc_cset(rd, cond));
             }
+            &Inst::CCmpImm {
+                size,
+                rn,
+                imm,
+                nzcv,
+                cond,
+            } => {
+                sink.put4(enc_ccmp_imm(size, rn, imm, nzcv, cond));
+            }
             &Inst::FpuMove64 { rd, rn } => {
                 sink.put4(enc_vecmov(/* 16b = */ false, rd, rn));
             }
@@ -931,11 +949,11 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     mem: MemArg::Label(MemLabel::PCRel(8)),
                     srcloc: None,
                 };
-                inst.emit(sink);
+                inst.emit(sink, flags);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(8),
                 };
-                inst.emit(sink);
+                inst.emit(sink, flags);
                 sink.put4(const_data.to_bits());
             }
             &Inst::LoadFpuConst64 { rd, const_data } => {
@@ -944,11 +962,11 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     mem: MemArg::Label(MemLabel::PCRel(8)),
                     srcloc: None,
                 };
-                inst.emit(sink);
+                inst.emit(sink, flags);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(12),
                 };
-                inst.emit(sink);
+                inst.emit(sink, flags);
                 sink.put8(const_data.to_bits());
             }
             &Inst::FpuCSel32 { rd, rn, rm, cond } => {
@@ -1035,7 +1053,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 if top22 != 0 {
                     sink.put4(enc_extend(top22, rd, rn));
                 } else {
-                    Inst::mov32(rd, rn).emit(sink);
+                    Inst::mov32(rd, rn).emit(sink, flags);
                 }
             }
             &Inst::Extend {
@@ -1058,7 +1076,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     rn: zero_reg(),
                     rm: rd.to_reg(),
                 };
-                sub_inst.emit(sink);
+                sub_inst.emit(sink, flags);
             }
             &Inst::Extend {
                 rd,
@@ -1199,13 +1217,13 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 // Save index in a tmp (the live range of ridx only goes to start of this
                 // sequence; rtmp1 or rtmp2 may overwrite it).
                 let inst = Inst::gen_move(rtmp2, ridx, I64);
-                inst.emit(sink);
+                inst.emit(sink, flags);
                 // Load address of jump table
                 let inst = Inst::Adr {
                     rd: rtmp1,
                     label: MemLabel::PCRel(16),
                 };
-                inst.emit(sink);
+                inst.emit(sink, flags);
                 // Load value out of jump table
                 let inst = Inst::SLoad32 {
                     rd: rtmp2,
@@ -1217,7 +1235,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     ),
                     srcloc: None, // can't cause a user trap.
                 };
-                inst.emit(sink);
+                inst.emit(sink, flags);
                 // Add base of jump table to jump-table-sourced block offset
                 let inst = Inst::AluRRR {
                     alu_op: ALUOp::Add64,
@@ -1225,14 +1243,14 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     rn: rtmp1.to_reg(),
                     rm: rtmp2.to_reg(),
                 };
-                inst.emit(sink);
+                inst.emit(sink, flags);
                 // Branch to computed address. (`targets` here is only used for successor queries
                 // and is not needed for emission.)
                 let inst = Inst::IndirectBr {
                     rn: rtmp1.to_reg(),
                     targets: vec![],
                 };
-                inst.emit(sink);
+                inst.emit(sink, flags);
                 // Emit jump table (table of 32-bit offsets).
                 for target in targets {
                     let off = target.as_offset_words() * 4;
@@ -1248,11 +1266,11 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     mem: MemArg::Label(MemLabel::PCRel(8)),
                     srcloc: None, // can't cause a user trap.
                 };
-                inst.emit(sink);
+                inst.emit(sink, flags);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(12),
                 };
-                inst.emit(sink);
+                inst.emit(sink, flags);
                 sink.put8(const_data);
             }
             &Inst::LoadExtName {
@@ -1266,13 +1284,17 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     mem: MemArg::Label(MemLabel::PCRel(8)),
                     srcloc: None, // can't cause a user trap.
                 };
-                inst.emit(sink);
+                inst.emit(sink, flags);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(12),
                 };
-                inst.emit(sink);
+                inst.emit(sink, flags);
                 sink.add_reloc(srcloc, Reloc::Abs8, name, offset);
-                sink.put8(0);
+                if flags.emit_all_ones_funcaddrs() {
+                    sink.put8(u64::max_value());
+                } else {
+                    sink.put8(0);
+                }
             }
             &Inst::LoadAddr { rd, ref mem } => match *mem {
                 MemArg::FPOffset(fp_off) => {
@@ -1289,12 +1311,12 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                             imm12,
                             rn: fp_reg(),
                         };
-                        inst.emit(sink);
+                        inst.emit(sink, flags);
                     } else {
                         let const_insts =
                             Inst::load_constant(rd, u64::try_from(fp_off.abs()).unwrap());
                         for inst in const_insts {
-                            inst.emit(sink);
+                            inst.emit(sink, flags);
                         }
                         let inst = Inst::AluRRR {
                             alu_op,
@@ -1302,11 +1324,25 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                             rn: fp_reg(),
                             rm: rd.to_reg(),
                         };
-                        inst.emit(sink);
+                        inst.emit(sink, flags);
                     }
                 }
                 _ => unimplemented!("{:?}", mem),
             },
+            &Inst::GetPinnedReg { rd } => {
+                let inst = Inst::Mov {
+                    rd,
+                    rm: xreg(PINNED_REG),
+                };
+                inst.emit(sink, flags);
+            }
+            &Inst::SetPinnedReg { rm } => {
+                let inst = Inst::Mov {
+                    rd: Writable::from_reg(xreg(PINNED_REG)),
+                    rm,
+                };
+                inst.emit(sink, flags);
+            }
         }
     }
 }
@@ -1315,9 +1351,11 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
 mod test {
     use super::*;
     use crate::isa::test_utils;
+    use crate::settings;
 
     #[test]
     fn test_aarch64_binemit() {
+        let flags = settings::Flags::new(settings::builder());
         let mut insns = Vec::<(Inst, &str, &str)>::new();
 
         // N.B.: the architecture is little-endian, so when transcribing the 32-bit
@@ -1422,6 +1460,17 @@ mod test {
         insns.push((
             Inst::AluRRR {
                 alu_op: ALUOp::SubS32,
+                rd: writable_zero_reg(),
+                rn: xreg(2),
+                rm: xreg(3),
+            },
+            "5F00036B",
+            // TODO: Display as cmp
+            "subs wzr, w2, w3",
+        ));
+        insns.push((
+            Inst::AluRRR {
+                alu_op: ALUOp::SubS32,
                 rd: writable_xreg(1),
                 rn: xreg(2),
                 rm: xreg(3),
@@ -1458,6 +1507,17 @@ mod test {
             },
             "A40006AB",
             "adds x4, x5, x6",
+        ));
+        insns.push((
+            Inst::AluRRImm12 {
+                alu_op: ALUOp::AddS64,
+                rd: writable_zero_reg(),
+                rn: xreg(5),
+                imm12: Imm12::maybe_from_u64(1).unwrap(),
+            },
+            "BF0400B1",
+            // TODO: Display as cmn.
+            "adds xzr, x5, #1",
         ));
         insns.push((
             Inst::AluRRR {
@@ -3054,6 +3114,28 @@ mod test {
             "cset x15, ge",
         ));
         insns.push((
+            Inst::CCmpImm {
+                size: InstSize::Size64,
+                rn: xreg(22),
+                imm: UImm5::maybe_from_u8(5).unwrap(),
+                nzcv: NZCV::new(false, false, true, true),
+                cond: Cond::Eq,
+            },
+            "C30A45FA",
+            "ccmp x22, #5, #nzCV, eq",
+        ));
+        insns.push((
+            Inst::CCmpImm {
+                size: InstSize::Size32,
+                rn: xreg(3),
+                imm: UImm5::maybe_from_u8(30).unwrap(),
+                nzcv: NZCV::new(true, true, true, true),
+                cond: Cond::Gt,
+            },
+            "6FC85E7A",
+            "ccmp w3, #30, #NZCV, gt",
+        ));
+        insns.push((
             Inst::MovToVec64 {
                 rd: writable_vreg(20),
                 rn: xreg(21),
@@ -4074,7 +4156,7 @@ mod test {
             "frintn d23, d24",
         ));
 
-        let rru = create_reg_universe();
+        let rru = create_reg_universe(&settings::Flags::new(settings::builder()));
         for (insn, expected_encoding, expected_printing) in insns {
             println!(
                 "AArch64: {:?}, {}, {}",
@@ -4088,7 +4170,7 @@ mod test {
             // Check the encoding is as expected.
             let text_size = {
                 let mut code_sec = MachSectionSize::new(0);
-                insn.emit(&mut code_sec);
+                insn.emit(&mut code_sec, &flags);
                 code_sec.size()
             };
 
@@ -4096,7 +4178,7 @@ mod test {
             let mut sections = MachSections::new();
             let code_idx = sections.add_section(0, text_size);
             let code_sec = sections.get_section(code_idx);
-            insn.emit(code_sec);
+            insn.emit(code_sec, &flags);
             sections.emit(&mut sink);
             let actual_encoding = &sink.stringify();
             assert_eq!(expected_encoding, actual_encoding);

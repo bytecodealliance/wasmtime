@@ -10,6 +10,6 @@ pub extern "C" fn wasmtime_wat2wasm(
         Err(_) => return bad_utf8(),
     };
     handle_result(wat::parse_str(wat).map_err(|e| e.into()), |bytes| {
-        ret.set_buffer(bytes.into())
+        ret.set_buffer(bytes)
     })
 }

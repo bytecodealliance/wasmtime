@@ -50,11 +50,18 @@ impl Trap {
                     .downcast()
                     .expect("only `Trap` user errors are supported")
             }
-            wasmtime_runtime::Trap::Jit { pc, backtrace } => {
-                let code = info
+            wasmtime_runtime::Trap::Jit {
+                pc,
+                backtrace,
+                maybe_interrupted,
+            } => {
+                let mut code = info
                     .lookup_trap_info(pc)
                     .map(|info| info.trap_code)
                     .unwrap_or(TrapCode::StackOverflow);
+                if maybe_interrupted && code == TrapCode::StackOverflow {
+                    code = TrapCode::Interrupt;
+                }
                 Trap::new_wasm(&info, Some(pc), code, backtrace)
             }
             wasmtime_runtime::Trap::Wasm {

@@ -122,3 +122,45 @@ fn hello_wasi_snapshot1() -> Result<()> {
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
 }
+
+#[test]
+fn timeout_in_start() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/iloop-start.wat")?;
+    let output = run_wasmtime_for_output(&[
+        "run",
+        wasm.path().to_str().unwrap(),
+        "--wasm-timeout",
+        "1ms",
+        "--disable-cache",
+    ])?;
+    assert!(!output.status.success());
+    assert_eq!(output.stdout, b"");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("wasm trap: interrupt"),
+        "bad stderr: {}",
+        stderr
+    );
+    Ok(())
+}
+
+#[test]
+fn timeout_in_invoke() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/iloop-invoke.wat")?;
+    let output = run_wasmtime_for_output(&[
+        "run",
+        wasm.path().to_str().unwrap(),
+        "--wasm-timeout",
+        "1ms",
+        "--disable-cache",
+    ])?;
+    assert!(!output.status.success());
+    assert_eq!(output.stdout, b"");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("wasm trap: interrupt"),
+        "bad stderr: {}",
+        stderr
+    );
+    Ok(())
+}

@@ -358,6 +358,15 @@ impl<'a> Context<'a> {
         Ok(())
     }
 
+    // Configure the stack limit of the current function.
+    fn add_stack_limit(&mut self, limit: GlobalValue, loc: Location) -> ParseResult<()> {
+        if self.function.stack_limit.is_some() {
+            return err!(loc, "stack limit defined twice");
+        }
+        self.function.stack_limit = Some(limit);
+        Ok(())
+    }
+
     // Resolve a reference to a constant.
     fn check_constant(&self, c: Constant, loc: Location) -> ParseResult<()> {
         if !self.map.contains_constant(c) {
@@ -596,6 +605,15 @@ impl<'a> Parser<'a> {
             }
         }
         err!(self.loc, "expected constant number: const«n»")
+    }
+
+    // Match and consume a stack limit token
+    fn match_stack_limit(&mut self) -> ParseResult<()> {
+        if let Some(Token::Identifier("stack_limit")) = self.token() {
+            self.consume();
+            return Ok(());
+        }
+        err!(self.loc, "expected identifier: stack_limit")
     }
 
     // Match and consume a block reference.
@@ -1455,6 +1473,7 @@ impl<'a> Parser<'a> {
     //                   * function-decl
     //                   * signature-decl
     //                   * jump-table-decl
+    //                   * stack-limit-decl
     //
     // The parsed decls are added to `ctx` rather than returned.
     fn parse_preamble(&mut self, ctx: &mut Context) -> ParseResult<()> {
@@ -1502,6 +1521,11 @@ impl<'a> Parser<'a> {
                     self.start_gathering_comments();
                     self.parse_constant_decl()
                         .and_then(|(c, v)| ctx.add_constant(c, v, self.loc))
+                }
+                Some(Token::Identifier("stack_limit")) => {
+                    self.start_gathering_comments();
+                    self.parse_stack_limit_decl()
+                        .and_then(|gv| ctx.add_stack_limit(gv, self.loc))
                 }
                 // More to come..
                 _ => return Ok(()),
@@ -1905,6 +1929,28 @@ impl<'a> Parser<'a> {
         self.claim_gathered_comments(name);
 
         Ok((name, data))
+    }
+
+    // Parse a stack limit decl
+    //
+    // stack-limit-decl ::= * StackLimit "=" GlobalValue(gv)
+    fn parse_stack_limit_decl(&mut self) -> ParseResult<GlobalValue> {
+        self.match_stack_limit()?;
+        self.match_token(Token::Equal, "expected '=' in stack limit decl")?;
+        let limit = match self.token() {
+            Some(Token::GlobalValue(base_num)) => match GlobalValue::with_number(base_num) {
+                Some(gv) => gv,
+                None => return err!(self.loc, "invalid global value number for stack limit"),
+            },
+            _ => return err!(self.loc, "expected global value"),
+        };
+        self.consume();
+
+        // Collect any trailing comments.
+        self.token();
+        self.claim_gathered_comments(AnyEntity::StackLimit);
+
+        Ok(limit)
     }
 
     // Parse a function body, add contents to `ctx`.

@@ -4,7 +4,7 @@ use crate::Store;
 use crate::{Limits, MemoryType};
 use anyhow::Result;
 use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::{wasm, MemoryPlan, Module, WASM_PAGE_SIZE};
+use wasmtime_environ::{wasm, EntityIndex, MemoryPlan, Module, WASM_PAGE_SIZE};
 use wasmtime_runtime::{
     InstanceHandle, RuntimeLinearMemory, RuntimeMemoryCreator, VMMemoryDefinition,
 };
@@ -23,10 +23,9 @@ pub fn create_handle_with_memory(store: &Store, memory: &MemoryType) -> Result<I
 
     let memory_plan = wasmtime_environ::MemoryPlan::for_memory(memory, &tunable);
     let memory_id = module.local.memory_plans.push(memory_plan);
-    module.exports.insert(
-        "memory".to_string(),
-        wasmtime_environ::Export::Memory(memory_id),
-    );
+    module
+        .exports
+        .insert("memory".to_string(), EntityIndex::Memory(memory_id));
 
     create_handle(
         module,

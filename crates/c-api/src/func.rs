@@ -246,7 +246,7 @@ fn _wasmtime_func_call(
 
 #[no_mangle]
 pub extern "C" fn wasm_func_type(f: &wasm_func_t) -> Box<wasm_functype_t> {
-    Box::new(wasm_functype_t::new(f.func().borrow().ty().clone()))
+    Box::new(wasm_functype_t::new(f.func().borrow().ty()))
 }
 
 #[no_mangle]
@@ -272,10 +272,10 @@ pub unsafe extern "C" fn wasmtime_caller_export_get(
     let name = str::from_utf8(name.as_slice()).ok()?;
     let export = caller.caller.get_export(name)?;
     let which = match export {
-        Extern::Func(f) => ExternHost::Func(HostRef::new(f.clone())),
-        Extern::Global(g) => ExternHost::Global(HostRef::new(g.clone())),
-        Extern::Memory(m) => ExternHost::Memory(HostRef::new(m.clone())),
-        Extern::Table(t) => ExternHost::Table(HostRef::new(t.clone())),
+        Extern::Func(f) => ExternHost::Func(HostRef::new(f)),
+        Extern::Global(g) => ExternHost::Global(HostRef::new(g)),
+        Extern::Memory(m) => ExternHost::Memory(HostRef::new(m)),
+        Extern::Table(t) => ExternHost::Table(HostRef::new(t)),
     };
     Some(Box::new(wasm_extern_t { which }))
 }

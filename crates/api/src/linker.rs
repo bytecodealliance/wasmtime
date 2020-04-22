@@ -166,7 +166,7 @@ impl Linker {
         if !item.comes_from_same_store(&self.store) {
             bail!("all linker items must be from the same store");
         }
-        self.insert(module, name, &item.ty(), item)?;
+        self.insert(module, name, item)?;
         Ok(self)
     }
 
@@ -264,8 +264,8 @@ impl Linker {
         if !Store::same(&self.store, instance.store()) {
             bail!("all linker items must be from the same store");
         }
-        for (export, item) in instance.module().exports().iter().zip(instance.exports()) {
-            self.insert(module_name, export.name(), export.ty(), item.clone())?;
+        for export in instance.exports() {
+            self.insert(module_name, export.name(), export.into_extern())?;
         }
         Ok(self)
     }
@@ -283,7 +283,7 @@ impl Linker {
         let items = self
             .iter()
             .filter(|(m, _, _)| *m == module)
-            .map(|(_, name, item)| (name.to_string(), item.clone()))
+            .map(|(_, name, item)| (name.to_string(), item))
             .collect::<Vec<_>>();
         for (name, item) in items {
             self.define(as_module, &name, item)?;
@@ -291,8 +291,8 @@ impl Linker {
         Ok(())
     }
 
-    fn insert(&mut self, module: &str, name: &str, ty: &ExternType, item: Extern) -> Result<()> {
-        let key = self.import_key(module, name, ty);
+    fn insert(&mut self, module: &str, name: &str, item: Extern) -> Result<()> {
+        let key = self.import_key(module, name, item.ty());
         match self.map.entry(key) {
             Entry::Occupied(o) if !self.allow_shadowing => bail!(
                 "import of `{}::{}` with kind {:?} defined twice",
@@ -310,7 +310,7 @@ impl Linker {
         Ok(())
     }
 
-    fn import_key(&mut self, module: &str, name: &str, ty: &ExternType) -> ImportKey {
+    fn import_key(&mut self, module: &str, name: &str, ty: ExternType) -> ImportKey {
         ImportKey {
             module: self.intern_str(module),
             name: self.intern_str(name),
@@ -318,10 +318,10 @@ impl Linker {
         }
     }
 
-    fn import_kind(&self, ty: &ExternType) -> ImportKind {
+    fn import_kind(&self, ty: ExternType) -> ImportKind {
         match ty {
-            ExternType::Func(f) => ImportKind::Func(f.clone()),
-            ExternType::Global(f) => ImportKind::Global(f.clone()),
+            ExternType::Func(f) => ImportKind::Func(f),
+            ExternType::Global(f) => ImportKind::Global(f),
             ExternType::Memory(_) => ImportKind::Memory,
             ExternType::Table(_) => ImportKind::Table,
         }
@@ -378,8 +378,8 @@ impl Linker {
     pub fn instantiate(&self, module: &Module) -> Result<Instance> {
         let mut imports = Vec::new();
         for import in module.imports() {
-            if let Some(item) = self.get(import) {
-                imports.push(item.clone());
+            if let Some(item) = self.get(&import) {
+                imports.push(item);
                 continue;
             }
 
@@ -429,23 +429,27 @@ impl Linker {
     ///
     /// Note that multiple `Extern` items may be defined for the same
     /// module/name pair.
-    pub fn iter(&self) -> impl Iterator<Item = (&str, &str, &Extern)> {
-        self.map
-            .iter()
-            .map(move |(key, item)| (&*self.strings[key.module], &*self.strings[key.name], item))
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &str, Extern)> {
+        self.map.iter().map(move |(key, item)| {
+            (
+                &*self.strings[key.module],
+                &*self.strings[key.name],
+                item.clone(),
+            )
+        })
     }
 
     /// Looks up a value in this `Linker` which matches the `import` type
     /// provided.
     ///
     /// Returns `None` if no match was found.
-    pub fn get(&self, import: &ImportType) -> Option<&Extern> {
+    pub fn get(&self, import: &ImportType) -> Option<Extern> {
         let key = ImportKey {
             module: *self.string2idx.get(import.module())?,
             name: *self.string2idx.get(import.name())?,
             kind: self.import_kind(import.ty()),
         };
-        self.map.get(&key)
+        self.map.get(&key).cloned()
     }
 
     /// Returns all items defined for the `module` and `name` pair.
@@ -468,10 +472,10 @@ impl Linker {
     /// Returns the single item defined for the `module` and `name` pair.
     ///
     /// Unlike the similar [`Linker::get_by_name`] method this function returns
-    /// a single `&Extern` item. If the `module` and `name` pair isn't defined
+    /// a single `Extern` item. If the `module` and `name` pair isn't defined
     /// in this linker then an error is returned. If more than one value exists
     /// for the `module` and `name` pairs, then an error is returned as well.
-    pub fn get_one_by_name(&self, module: &str, name: &str) -> Result<&Extern> {
+    pub fn get_one_by_name(&self, module: &str, name: &str) -> Result<Extern> {
         let mut items = self.get_by_name(module, name);
         let ret = items
             .next()
@@ -479,6 +483,6 @@ impl Linker {
         if items.next().is_some() {
             bail!("too many items named `{}` in `{}`", name, module);
         }
-        Ok(ret)
+        Ok(ret.clone())
     }
 }

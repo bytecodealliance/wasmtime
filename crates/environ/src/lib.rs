@@ -55,14 +55,14 @@ pub use crate::func_environ::BuiltinFunctionIndex;
 #[cfg(feature = "lightbeam")]
 pub use crate::lightbeam::Lightbeam;
 pub use crate::module::{
-    Export, MemoryPlan, MemoryStyle, Module, ModuleLocal, TableElements, TablePlan, TableStyle,
+    EntityIndex, MemoryPlan, MemoryStyle, Module, ModuleLocal, TableElements, TablePlan, TableStyle,
 };
 pub use crate::module_environ::{
     translate_signature, DataInitializer, DataInitializerLocation, FunctionBodyData,
     ModuleEnvironment, ModuleTranslation,
 };
 pub use crate::tunables::Tunables;
-pub use crate::vmoffsets::{TargetSharedSignatureIndex, VMOffsets};
+pub use crate::vmoffsets::{TargetSharedSignatureIndex, VMOffsets, INTERRUPTED};
 
 /// WebAssembly page sizes are defined to be 64KiB.
 pub const WASM_PAGE_SIZE: u32 = 0x10000;

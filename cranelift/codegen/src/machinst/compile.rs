@@ -2,7 +2,6 @@
 
 use crate::ir::Function;
 use crate::machinst::*;
-use crate::settings;
 use crate::timing;
 
 use log::debug;
@@ -14,7 +13,6 @@ pub fn compile<B: LowerBackend>(
     f: &Function,
     b: &B,
     abi: Box<dyn ABIBody<I = B::MInst>>,
-    flags: &settings::Flags,
 ) -> VCode<B::MInst>
 where
     B::MInst: ShowWithRRU,
@@ -22,7 +20,7 @@ where
     // This lowers the CL IR.
     let mut vcode = Lower::new(f, abi).lower(b);
 
-    let universe = &B::MInst::reg_universe();
+    let universe = &B::MInst::reg_universe(vcode.flags());
 
     debug!("vcode from lowering: \n{}", vcode.show_rru(Some(universe)));
 
@@ -47,7 +45,7 @@ where
 
     // Reorder vcode into final order and copy out final instruction sequence
     // all at once. This also inserts prologues/epilogues.
-    vcode.replace_insns_from_regalloc(result, flags);
+    vcode.replace_insns_from_regalloc(result);
 
     vcode.remove_redundant_branches();
 

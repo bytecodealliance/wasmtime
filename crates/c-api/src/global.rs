@@ -71,7 +71,7 @@ pub extern "C" fn wasm_global_as_extern(g: &wasm_global_t) -> &wasm_extern_t {
 
 #[no_mangle]
 pub extern "C" fn wasm_global_type(g: &wasm_global_t) -> Box<wasm_globaltype_t> {
-    let globaltype = g.global().borrow().ty().clone();
+    let globaltype = g.global().borrow().ty();
     Box::new(wasm_globaltype_t::new(globaltype))
 }
 

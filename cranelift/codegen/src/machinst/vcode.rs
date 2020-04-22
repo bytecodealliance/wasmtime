@@ -299,6 +299,11 @@ impl<I: VCodeInst> VCode<I> {
         }
     }
 
+    /// Returns the flags controlling this function's compilation.
+    pub fn flags(&self) -> &settings::Flags {
+        self.abi.flags()
+    }
+
     /// Get the IR-level type of a VReg.
     pub fn vreg_type(&self, vreg: VirtualReg) -> Type {
         self.vreg_types[vreg.get_index()]
@@ -329,11 +334,7 @@ impl<I: VCodeInst> VCode<I> {
     /// Take the results of register allocation, with a sequence of
     /// instructions including spliced fill/reload/move instructions, and replace
     /// the VCode with them.
-    pub fn replace_insns_from_regalloc(
-        &mut self,
-        result: RegAllocResult<Self>,
-        flags: &settings::Flags,
-    ) {
+    pub fn replace_insns_from_regalloc(&mut self, result: RegAllocResult<Self>) {
         self.final_block_order = compute_final_block_order(self);
 
         // Record the spillslot count and clobbered registers for the ABI/stack
@@ -355,7 +356,7 @@ impl<I: VCodeInst> VCode<I> {
 
             if *block == self.entry {
                 // Start with the prologue.
-                final_insns.extend(self.abi.gen_prologue(flags).into_iter());
+                final_insns.extend(self.abi.gen_prologue().into_iter());
             }
 
             for i in start..end {
@@ -371,7 +372,7 @@ impl<I: VCodeInst> VCode<I> {
                 // with the epilogue.
                 let is_ret = insn.is_term() == MachTerminator::Ret;
                 if is_ret {
-                    final_insns.extend(self.abi.gen_epilogue(flags).into_iter());
+                    final_insns.extend(self.abi.gen_epilogue().into_iter());
                 } else {
                     final_insns.push(insn.clone());
                 }
@@ -467,6 +468,8 @@ impl<I: VCodeInst> VCode<I> {
             }
         }
 
+        let flags = self.abi.flags();
+
         // Compute block offsets.
         let mut code_section = MachSectionSize::new(0);
         let mut block_offsets = vec![0; self.num_blocks()];
@@ -475,7 +478,7 @@ impl<I: VCodeInst> VCode<I> {
             block_offsets[block as usize] = code_section.offset;
             let (start, end) = self.block_ranges[block as usize];
             for iix in start..end {
-                self.insts[iix as usize].emit(&mut code_section);
+                self.insts[iix as usize].emit(&mut code_section, flags);
             }
         }
 
@@ -494,7 +497,7 @@ impl<I: VCodeInst> VCode<I> {
             for iix in start..end {
                 self.insts[iix as usize]
                     .with_block_offsets(code_section.offset, &self.final_block_offsets[..]);
-                self.insts[iix as usize].emit(&mut code_section);
+                self.insts[iix as usize].emit(&mut code_section, flags);
             }
         }
     }
@@ -508,18 +511,19 @@ impl<I: VCodeInst> VCode<I> {
         let code_idx = sections.add_section(0, self.code_size);
         let code_section = sections.get_section(code_idx);
 
+        let flags = self.abi.flags();
         for &block in &self.final_block_order {
             let new_offset = I::align_basic_block(code_section.cur_offset_from_start());
             while new_offset > code_section.cur_offset_from_start() {
                 // Pad with NOPs up to the aligned block offset.
                 let nop = I::gen_nop((new_offset - code_section.cur_offset_from_start()) as usize);
-                nop.emit(code_section);
+                nop.emit(code_section, flags);
             }
             assert_eq!(code_section.cur_offset_from_start(), new_offset);
 
             let (start, end) = self.block_ranges[block as usize];
             for iix in start..end {
-                self.insts[iix as usize].emit(code_section);
+                self.insts[iix as usize].emit(code_section, flags);
             }
         }
 

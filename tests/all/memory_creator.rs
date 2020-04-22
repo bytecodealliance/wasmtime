@@ -169,15 +169,7 @@ mod not_for_windows {
 
         assert_eq!(*mem_creator.num_created_memories.lock().unwrap(), 2);
 
-        assert_eq!(
-            instance2
-                .get_export("memory")
-                .unwrap()
-                .memory()
-                .unwrap()
-                .size(),
-            2
-        );
+        assert_eq!(instance2.get_memory("memory").unwrap().size(), 2);
 
         // we take the lock outside the assert, so it won't get poisoned on assert failure
         let tot_pages = *mem_creator.num_total_pages.lock().unwrap();

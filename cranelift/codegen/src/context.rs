@@ -180,7 +180,7 @@ impl Context {
         }
 
         if let Some(backend) = isa.get_mach_backend() {
-            let result = backend.compile_function(&mut self.func, self.want_disasm)?;
+            let result = backend.compile_function(&self.func, self.want_disasm)?;
             let info = result.code_info();
             self.mach_compile_result = Some(result);
             Ok(info)

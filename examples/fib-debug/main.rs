@@ -22,8 +22,7 @@ fn main() -> Result<()> {
 
     // Invoke `fib` export
     let fib = instance
-        .get_export("fib")
-        .and_then(|e| e.func())
+        .get_func("fib")
         .ok_or(anyhow::format_err!("failed to find `fib` function export"))?
         .get1::<i32, i32>()?;
     println!("fib(6) = {}", fib(6)?);

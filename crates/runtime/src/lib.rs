@@ -47,8 +47,8 @@ pub use crate::traphandlers::resume_panic;
 pub use crate::traphandlers::{catch_traps, raise_lib_trap, raise_user_trap, Trap};
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
-    VMTableDefinition, VMTableImport, VMTrampoline,
+    VMGlobalImport, VMInterrupts, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport,
+    VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMTrampoline,
 };
 
 /// Version number of this crate.

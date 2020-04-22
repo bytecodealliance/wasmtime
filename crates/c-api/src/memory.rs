@@ -51,7 +51,7 @@ pub extern "C" fn wasm_memory_as_extern(m: &wasm_memory_t) -> &wasm_extern_t {
 
 #[no_mangle]
 pub extern "C" fn wasm_memory_type(m: &wasm_memory_t) -> Box<wasm_memorytype_t> {
-    let ty = m.memory().borrow().ty().clone();
+    let ty = m.memory().borrow().ty();
     Box::new(wasm_memorytype_t::new(ty))
 }
 

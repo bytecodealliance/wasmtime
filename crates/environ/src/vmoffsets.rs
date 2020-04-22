@@ -1,6 +1,21 @@
 //! Offsets and sizes of various structs in wasmtime-runtime's vmcontext
 //! module.
 
+// Currently the `VMContext` allocation by field looks like this:
+//
+// struct VMContext {
+//      interrupts: *const VMInterrupts,
+//      signature_ids: [VMSharedSignatureIndex; module.num_signature_ids],
+//      imported_functions: [VMFunctionImport; module.num_imported_functions],
+//      imported_tables: [VMTableImport; module.num_imported_tables],
+//      imported_memories: [VMMemoryImport; module.num_imported_memories],
+//      imported_globals: [VMGlobalImport; module.num_imported_globals],
+//      tables: [VMTableDefinition; module.num_defined_tables],
+//      memories: [VMMemoryDefinition; module.num_defined_memories],
+//      globals: [VMGlobalDefinition; module.num_defined_globals],
+//      builtins: VMBuiltinFunctionsArray,
+// }
+
 use crate::module::ModuleLocal;
 use crate::BuiltinFunctionIndex;
 use cranelift_codegen::ir;
@@ -10,6 +25,11 @@ use cranelift_wasm::{
 };
 use more_asserts::assert_lt;
 use std::convert::TryFrom;
+
+/// Sentinel value indicating that wasm has been interrupted.
+// Note that this has a bit of an odd definition. See the `insert_stack_check`
+// function in `cranelift/codegen/src/isa/x86/abi.rs` for more information
+pub const INTERRUPTED: usize = usize::max_value() - 32 * 1024;
 
 #[cfg(target_pointer_width = "32")]
 fn cast_to_u32(sz: usize) -> u32 {
@@ -226,6 +246,14 @@ impl VMOffsets {
     }
 }
 
+/// Offsets for `VMInterrupts`.
+impl VMOffsets {
+    /// Return the offset of the `stack_limit` field of `VMInterrupts`
+    pub fn vminterrupts_stack_limit(&self) -> u8 {
+        0
+    }
+}
+
 /// Offsets for `VMCallerCheckedAnyfunc`.
 impl VMOffsets {
     /// The offset of the `func_ptr` field.
@@ -253,9 +281,16 @@ impl VMOffsets {
 
 /// Offsets for `VMContext`.
 impl VMOffsets {
+    /// Return the offset to the `VMInterrupts` structure
+    pub fn vmctx_interrupts(&self) -> u32 {
+        0
+    }
+
     /// The offset of the `signature_ids` array.
     pub fn vmctx_signature_ids_begin(&self) -> u32 {
-        0
+        self.vmctx_interrupts()
+            .checked_add(u32::from(self.pointer_size))
+            .unwrap()
     }
 
     /// The offset of the `tables` array.

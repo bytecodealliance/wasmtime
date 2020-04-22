@@ -3,6 +3,7 @@
 
 use crate::instance::Instance;
 use std::any::Any;
+use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::{ptr, u32};
 use wasmtime_environ::BuiltinFunctionIndex;
 
@@ -609,6 +610,52 @@ impl VMInvokeArgument {
     /// Create a new invocation argument filled with zeroes
     pub fn new() -> Self {
         Self([0; 16])
+    }
+}
+
+/// Structure used to control interrupting wasm code, currently with only one
+/// atomic flag internally used.
+#[derive(Debug)]
+#[repr(C)]
+pub struct VMInterrupts {
+    /// Current stack limit of the wasm module.
+    ///
+    /// This is used to control both stack overflow as well as interrupting wasm
+    /// modules. For more information see `crates/environ/src/cranelift.rs`.
+    pub stack_limit: AtomicUsize,
+}
+
+impl VMInterrupts {
+    /// Flag that an interrupt should occur
+    pub fn interrupt(&self) {
+        self.stack_limit
+            .store(wasmtime_environ::INTERRUPTED, SeqCst);
+    }
+}
+
+impl Default for VMInterrupts {
+    fn default() -> VMInterrupts {
+        VMInterrupts {
+            stack_limit: AtomicUsize::new(usize::max_value()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_vminterrupts {
+    use super::VMInterrupts;
+    use memoffset::offset_of;
+    use std::mem::size_of;
+    use wasmtime_environ::{Module, VMOffsets};
+
+    #[test]
+    fn check_vminterrupts_interrupted_offset() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module.local);
+        assert_eq!(
+            offset_of!(VMInterrupts, stack_limit),
+            usize::from(offsets.vminterrupts_stack_limit())
+        );
     }
 }
 

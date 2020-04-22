@@ -34,7 +34,7 @@ impl Extern {
     /// Returns the underlying `Func`, if this external is a function.
     ///
     /// Returns `None` if this is not a function.
-    pub fn func(&self) -> Option<&Func> {
+    pub fn into_func(self) -> Option<Func> {
         match self {
             Extern::Func(func) => Some(func),
             _ => None,
@@ -44,7 +44,7 @@ impl Extern {
     /// Returns the underlying `Global`, if this external is a global.
     ///
     /// Returns `None` if this is not a global.
-    pub fn global(&self) -> Option<&Global> {
+    pub fn into_global(self) -> Option<Global> {
         match self {
             Extern::Global(global) => Some(global),
             _ => None,
@@ -54,7 +54,7 @@ impl Extern {
     /// Returns the underlying `Table`, if this external is a table.
     ///
     /// Returns `None` if this is not a table.
-    pub fn table(&self) -> Option<&Table> {
+    pub fn into_table(self) -> Option<Table> {
         match self {
             Extern::Table(table) => Some(table),
             _ => None,
@@ -64,7 +64,7 @@ impl Extern {
     /// Returns the underlying `Memory`, if this external is a memory.
     ///
     /// Returns `None` if this is not a memory.
-    pub fn memory(&self) -> Option<&Memory> {
+    pub fn into_memory(self) -> Option<Memory> {
         match self {
             Extern::Memory(memory) => Some(memory),
             _ => None,
@@ -74,10 +74,10 @@ impl Extern {
     /// Returns the type associated with this `Extern`.
     pub fn ty(&self) -> ExternType {
         match self {
-            Extern::Func(ft) => ExternType::Func(ft.ty().clone()),
-            Extern::Memory(ft) => ExternType::Memory(ft.ty().clone()),
-            Extern::Table(tt) => ExternType::Table(tt.ty().clone()),
-            Extern::Global(gt) => ExternType::Global(gt.ty().clone()),
+            Extern::Func(ft) => ExternType::Func(ft.ty()),
+            Extern::Memory(ft) => ExternType::Memory(ft.ty()),
+            Extern::Table(tt) => ExternType::Table(tt.ty()),
+            Extern::Global(gt) => ExternType::Global(gt.ty()),
         }
     }
 
@@ -91,11 +91,11 @@ impl Extern {
     }
 
     pub(crate) fn from_wasmtime_export(
+        wasmtime_export: wasmtime_runtime::Export,
         store: &Store,
         instance_handle: InstanceHandle,
-        export: wasmtime_runtime::Export,
     ) -> Extern {
-        match export {
+        match wasmtime_export {
             wasmtime_runtime::Export::Function(f) => {
                 Extern::Func(Func::from_wasmtime_function(f, store, instance_handle))
             }
@@ -164,7 +164,6 @@ impl From<Table> for Extern {
 #[derive(Clone)]
 pub struct Global {
     store: Store,
-    ty: GlobalType,
     wasmtime_export: wasmtime_runtime::ExportGlobal,
     wasmtime_handle: InstanceHandle,
 }
@@ -191,27 +190,44 @@ impl Global {
         let (wasmtime_handle, wasmtime_export) = generate_global_export(store, &ty, val)?;
         Ok(Global {
             store: store.clone(),
-            ty,
             wasmtime_export,
             wasmtime_handle,
         })
     }
 
     /// Returns the underlying type of this `global`.
-    pub fn ty(&self) -> &GlobalType {
-        &self.ty
+    pub fn ty(&self) -> GlobalType {
+        // The original export is coming from wasmtime_runtime itself we should
+        // support all the types coming out of it, so assert such here.
+        GlobalType::from_wasmtime_global(&self.wasmtime_export.global)
+            .expect("core wasm global type should be supported")
+    }
+
+    /// Returns the value type of this `global`.
+    pub fn val_type(&self) -> ValType {
+        ValType::from_wasmtime_type(self.wasmtime_export.global.ty)
+            .expect("core wasm type should be supported")
+    }
+
+    /// Returns the underlying mutability of this `global`.
+    pub fn mutability(&self) -> Mutability {
+        if self.wasmtime_export.global.mutability {
+            Mutability::Var
+        } else {
+            Mutability::Const
+        }
     }
 
     /// Returns the current [`Val`] of this global.
     pub fn get(&self) -> Val {
         unsafe {
             let definition = &mut *self.wasmtime_export.definition;
-            match self.ty().content() {
+            match self.val_type() {
                 ValType::I32 => Val::from(*definition.as_i32()),
                 ValType::I64 => Val::from(*definition.as_i64()),
                 ValType::F32 => Val::F32(*definition.as_u32()),
                 ValType::F64 => Val::F64(*definition.as_u64()),
-                _ => unimplemented!("Global::get for {:?}", self.ty().content()),
+                ty => unimplemented!("Global::get for {:?}", ty),
             }
         }
     }
@@ -223,15 +239,12 @@ impl Global {
     /// Returns an error if this global has a different type than `Val`, or if
     /// it's not a mutable global.
     pub fn set(&self, val: Val) -> Result<()> {
-        if self.ty().mutability() != Mutability::Var {
+        if self.mutability() != Mutability::Var {
             bail!("immutable global cannot be set");
         }
-        if val.ty() != *self.ty().content() {
-            bail!(
-                "global of type {:?} cannot be set to {:?}",
-                self.ty().content(),
-                val.ty()
-            );
+        let ty = self.val_type();
+        if val.ty() != ty {
+            bail!("global of type {:?} cannot be set to {:?}", ty, val.ty());
         }
         if !val.comes_from_same_store(&self.store) {
             bail!("cross-`Store` values are not supported");
@@ -254,13 +267,8 @@ impl Global {
         store: &Store,
         wasmtime_handle: InstanceHandle,
     ) -> Global {
-        // The original export is coming from wasmtime_runtime itself we should
-        // support all the types coming out of it, so assert such here.
-        let ty = GlobalType::from_wasmtime_global(&wasmtime_export.global)
-            .expect("core wasm global type should be supported");
         Global {
             store: store.clone(),
-            ty: ty,
             wasmtime_export,
             wasmtime_handle,
         }
@@ -285,7 +293,6 @@ impl Global {
 #[derive(Clone)]
 pub struct Table {
     store: Store,
-    ty: TableType,
     wasmtime_handle: InstanceHandle,
     wasmtime_export: wasmtime_runtime::ExportTable,
 }
@@ -326,7 +333,6 @@ impl Table {
 
         Ok(Table {
             store: store.clone(),
-            ty,
             wasmtime_handle,
             wasmtime_export,
         })
@@ -334,8 +340,8 @@ impl Table {
 
     /// Returns the underlying type of this table, including its element type as
     /// well as the maximum/minimum lower bounds.
-    pub fn ty(&self) -> &TableType {
-        &self.ty
+    pub fn ty(&self) -> TableType {
+        TableType::from_wasmtime_table(&self.wasmtime_export.table.table)
     }
 
     fn wasmtime_table_index(&self) -> wasm::DefinedTableIndex {
@@ -368,7 +374,7 @@ impl Table {
 
     /// Returns the current size of this table.
     pub fn size(&self) -> u32 {
-        unsafe { (&*self.wasmtime_export.definition).current_elements }
+        unsafe { (*self.wasmtime_export.definition).current_elements }
     }
 
     /// Grows the size of this table by `delta` more elements, initialization
@@ -432,10 +438,8 @@ impl Table {
         store: &Store,
         wasmtime_handle: wasmtime_runtime::InstanceHandle,
     ) -> Table {
-        let ty = TableType::from_wasmtime_table(&wasmtime_export.table.table);
         Table {
             store: store.clone(),
-            ty,
             wasmtime_handle,
             wasmtime_export,
         }
@@ -651,7 +655,6 @@ impl Table {
 #[derive(Clone)]
 pub struct Memory {
     store: Store,
-    ty: MemoryType,
     wasmtime_handle: InstanceHandle,
     wasmtime_export: wasmtime_runtime::ExportMemory,
 }
@@ -684,7 +687,6 @@ impl Memory {
             generate_memory_export(store, &ty).expect("generated memory");
         Memory {
             store: store.clone(),
-            ty,
             wasmtime_handle,
             wasmtime_export,
         }
@@ -700,14 +702,14 @@ impl Memory {
     /// let store = Store::default();
     /// let module = Module::new(&store, "(module (memory (export \"mem\") 1))")?;
     /// let instance = Instance::new(&module, &[])?;
-    /// let memory = instance.get_export("mem").unwrap().memory().unwrap();
+    /// let memory = instance.get_memory("mem").unwrap();
     /// let ty = memory.ty();
     /// assert_eq!(ty.limits().min(), 1);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn ty(&self) -> &MemoryType {
-        &self.ty
+    pub fn ty(&self) -> MemoryType {
+        MemoryType::from_wasmtime_memory(&self.wasmtime_export.memory.memory)
     }
 
     /// Returns this memory as a slice view that can be read natively in Rust.
@@ -812,7 +814,7 @@ impl Memory {
     /// let store = Store::default();
     /// let module = Module::new(&store, "(module (memory (export \"mem\") 1 2))")?;
     /// let instance = Instance::new(&module, &[])?;
-    /// let memory = instance.get_export("mem").unwrap().memory().unwrap();
+    /// let memory = instance.get_memory("mem").unwrap();
     ///
     /// assert_eq!(memory.size(), 1);
     /// assert_eq!(memory.grow(1)?, 1);
@@ -838,10 +840,8 @@ impl Memory {
         store: &Store,
         wasmtime_handle: wasmtime_runtime::InstanceHandle,
     ) -> Memory {
-        let ty = MemoryType::from_wasmtime_memory(&wasmtime_export.memory.memory);
         Memory {
             store: store.clone(),
-            ty: ty,
             wasmtime_handle,
             wasmtime_export,
         }
@@ -889,4 +889,67 @@ pub unsafe trait LinearMemory {
 pub unsafe trait MemoryCreator: Send + Sync {
     /// Create new LinearMemory
     fn new_memory(&self, ty: MemoryType) -> Result<Box<dyn LinearMemory>, String>;
+}
+
+// Exports
+
+/// An exported WebAssembly value.
+///
+/// This type is primarily accessed from the
+/// [`Instance::exports`](crate::Instance::exports) accessor and describes what
+/// names and items are exported from a wasm instance.
+#[derive(Clone)]
+pub struct Export<'instance> {
+    /// The name of the export.
+    name: &'instance str,
+
+    /// The definition of the export.
+    definition: Extern,
+}
+
+impl<'instance> Export<'instance> {
+    /// Creates a new export which is exported with the given `name` and has the
+    /// given `definition`.
+    pub(crate) fn new(name: &'instance str, definition: Extern) -> Export<'instance> {
+        Export { name, definition }
+    }
+
+    /// Returns the name by which this export is known.
+    pub fn name(&self) -> &'instance str {
+        self.name
+    }
+
+    /// Return the `ExternType` of this export.
+    pub fn ty(&self) -> ExternType {
+        self.definition.ty()
+    }
+
+    /// Consume this `Export` and return the contained `Extern`.
+    pub fn into_extern(self) -> Extern {
+        self.definition
+    }
+
+    /// Consume this `Export` and return the contained `Func`, if it's a function,
+    /// or `None` otherwise.
+    pub fn into_func(self) -> Option<Func> {
+        self.definition.into_func()
+    }
+
+    /// Consume this `Export` and return the contained `Table`, if it's a table,
+    /// or `None` otherwise.
+    pub fn into_table(self) -> Option<Table> {
+        self.definition.into_table()
+    }
+
+    /// Consume this `Export` and return the contained `Memory`, if it's a memory,
+    /// or `None` otherwise.
+    pub fn into_memory(self) -> Option<Memory> {
+        self.definition.into_memory()
+    }
+
+    /// Consume this `Export` and return the contained `Global`, if it's a global,
+    /// or `None` otherwise.
+    pub fn into_global(self) -> Option<Global> {
+        self.definition.into_global()
+    }
 }

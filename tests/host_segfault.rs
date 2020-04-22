@@ -24,6 +24,15 @@ fn segfault() -> ! {
     }
 }
 
+fn overrun_the_stack() -> usize {
+    let mut a = [0u8; 1024];
+    if a.as_mut_ptr() as usize == 1 {
+        return 1;
+    } else {
+        return a.as_mut_ptr() as usize + overrun_the_stack();
+    }
+}
+
 fn main() {
     let tests: &[(&str, fn())] = &[
         ("normal segfault", || segfault()),
@@ -32,6 +41,12 @@ fn main() {
             let module = Module::new(&store, "(module)").unwrap();
             let _instance = Instance::new(&module, &[]).unwrap();
             segfault();
+        }),
+        ("make instance then overrun the stack", || {
+            let store = Store::default();
+            let module = Module::new(&store, "(module)").unwrap();
+            let _instance = Instance::new(&module, &[]).unwrap();
+            println!("stack overrun: {}", overrun_the_stack());
         }),
     ];
     match env::var(VAR_NAME) {
@@ -75,6 +90,12 @@ fn runtest(name: &str) {
             "failed to find confirmation in test `{}`\n{}",
             name,
             desc
+        );
+    } else if name.contains("overrun the stack") {
+        assert!(
+            stderr.contains("thread 'main' has overflowed its stack"),
+            "bad stderr: {}",
+            stderr
         );
     } else {
         panic!("\n\nexpected a segfault on `{}`\n{}\n\n", name, desc);

@@ -107,6 +107,11 @@ pub trait FuncWriter {
             self.write_entity_definition(w, func, cref.into(), cval)?;
         }
 
+        if let Some(limit) = func.stack_limit {
+            any = true;
+            self.write_entity_definition(w, func, AnyEntity::StackLimit, &limit)?;
+        }
+
         Ok(any)
     }
 
