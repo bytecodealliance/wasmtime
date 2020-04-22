@@ -17,7 +17,9 @@
 //! See the main module comment in `mod.rs` for more details on the VCode-based
 //! backend pipeline.
 
+use crate::entity::SecondaryMap;
 use crate::ir;
+use crate::ir::SourceLoc;
 use crate::machinst::*;
 use crate::settings;
 
@@ -58,6 +60,10 @@ pub struct VCode<I: VCodeInst> {
 
     /// Lowered machine instructions in order corresponding to the original IR.
     insts: Vec<I>,
+
+    /// Source locations for each instruction. (`SourceLoc` is a `u32`, so it is
+    /// reasonable to keep one of these per instruction.)
+    srclocs: Vec<SourceLoc>,
 
     /// Entry block.
     entry: BlockIndex,
@@ -115,13 +121,16 @@ pub struct VCodeBuilder<I: VCodeInst> {
 
     /// Current basic block instructions, in reverse order (because blocks are
     /// built bottom-to-top).
-    bb_insns: SmallVec<[I; 32]>,
+    bb_insns: SmallVec<[(I, SourceLoc); 32]>,
 
     /// Current IR-inst instructions, in forward order.
-    ir_inst_insns: SmallVec<[I; 4]>,
+    ir_inst_insns: SmallVec<[(I, SourceLoc); 4]>,
 
     /// Start of succs for the current block in the concatenated succs list.
     succ_start: usize,
+
+    /// Current source location.
+    cur_srcloc: SourceLoc,
 }
 
 impl<I: VCodeInst> VCodeBuilder<I> {
@@ -133,6 +142,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             bb_insns: SmallVec::new(),
             ir_inst_insns: SmallVec::new(),
             succ_start: 0,
+            cur_srcloc: SourceLoc::default(),
         }
     }
 
@@ -179,8 +189,8 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     /// End the current IR instruction. Must be called after pushing any
     /// instructions and prior to ending the basic block.
     pub fn end_ir_inst(&mut self) {
-        while let Some(i) = self.ir_inst_insns.pop() {
-            self.bb_insns.push(i);
+        while let Some(pair) = self.ir_inst_insns.pop() {
+            self.bb_insns.push(pair);
         }
     }
 
@@ -191,8 +201,9 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         let block_num = self.vcode.block_ranges.len() as BlockIndex;
         // Push the instructions.
         let start_idx = self.vcode.insts.len() as InsnIndex;
-        while let Some(i) = self.bb_insns.pop() {
+        while let Some((i, loc)) = self.bb_insns.pop() {
             self.vcode.insts.push(i);
+            self.vcode.srclocs.push(loc);
         }
         let end_idx = self.vcode.insts.len() as InsnIndex;
         // Add the instruction index range to the list of blocks.
@@ -224,7 +235,12 @@ impl<I: VCodeInst> VCodeBuilder<I> {
                 }
             }
         }
-        self.ir_inst_insns.push(insn);
+        self.ir_inst_insns.push((insn, self.cur_srcloc));
+    }
+
+    /// Set the current source location.
+    pub fn set_srcloc(&mut self, srcloc: SourceLoc) {
+        self.cur_srcloc = srcloc;
     }
 
     /// Build the final VCode.
@@ -286,6 +302,7 @@ impl<I: VCodeInst> VCode<I> {
             liveouts: abi.liveouts(),
             vreg_types: vec![],
             insts: vec![],
+            srclocs: vec![],
             entry: 0,
             block_ranges: vec![],
             block_succ_range: vec![],
@@ -349,6 +366,7 @@ impl<I: VCodeInst> VCode<I> {
             block_ranges(result.target_map.elems(), result.insns.len());
         let mut final_insns = vec![];
         let mut final_block_ranges = vec![(0, 0); self.num_blocks()];
+        let mut final_srclocs = vec![];
 
         for block in &self.final_block_order {
             let (start, end) = block_ranges[*block as usize];
@@ -356,7 +374,10 @@ impl<I: VCodeInst> VCode<I> {
 
             if *block == self.entry {
                 // Start with the prologue.
-                final_insns.extend(self.abi.gen_prologue().into_iter());
+                let prologue = self.abi.gen_prologue();
+                let len = prologue.len();
+                final_insns.extend(prologue.into_iter());
+                final_srclocs.extend(iter::repeat(SourceLoc::default()).take(len));
             }
 
             for i in start..end {
@@ -368,13 +389,27 @@ impl<I: VCodeInst> VCode<I> {
                     continue;
                 }
 
+                // Is there a srcloc associated with this insn? Look it up based on original
+                // instruction index (if new insn corresponds to some original insn, i.e., is not
+                // an inserted load/spill/move).
+                let orig_iix = result.orig_insn_map[InstIx::new(i as u32)];
+                let srcloc = if orig_iix.is_invalid() {
+                    SourceLoc::default()
+                } else {
+                    self.srclocs[orig_iix.get() as usize]
+                };
+
                 // Whenever encountering a return instruction, replace it
                 // with the epilogue.
                 let is_ret = insn.is_term() == MachTerminator::Ret;
                 if is_ret {
-                    final_insns.extend(self.abi.gen_epilogue().into_iter());
+                    let epilogue = self.abi.gen_epilogue();
+                    let len = epilogue.len();
+                    final_insns.extend(epilogue.into_iter());
+                    final_srclocs.extend(iter::repeat(srcloc).take(len));
                 } else {
                     final_insns.push(insn.clone());
+                    final_srclocs.push(srcloc);
                 }
             }
 
@@ -382,7 +417,10 @@ impl<I: VCodeInst> VCode<I> {
             final_block_ranges[*block as usize] = (final_start, final_end);
         }
 
+        debug_assert!(final_insns.len() == final_srclocs.len());
+
         self.insts = final_insns;
+        self.srclocs = final_srclocs;
         self.block_ranges = final_block_ranges;
     }
 
@@ -512,6 +550,7 @@ impl<I: VCodeInst> VCode<I> {
         let code_section = sections.get_section(code_idx);
 
         let flags = self.abi.flags();
+        let mut cur_srcloc = SourceLoc::default();
         for &block in &self.final_block_order {
             let new_offset = I::align_basic_block(code_section.cur_offset_from_start());
             while new_offset > code_section.cur_offset_from_start() {
@@ -523,7 +562,23 @@ impl<I: VCodeInst> VCode<I> {
 
             let (start, end) = self.block_ranges[block as usize];
             for iix in start..end {
+                let srcloc = self.srclocs[iix as usize];
+                if srcloc != cur_srcloc {
+                    if !cur_srcloc.is_default() {
+                        code_section.end_srcloc();
+                    }
+                    if !srcloc.is_default() {
+                        code_section.start_srcloc(srcloc);
+                    }
+                    cur_srcloc = srcloc;
+                }
+
                 self.insts[iix as usize].emit(code_section, flags);
+            }
+
+            if !cur_srcloc.is_default() {
+                code_section.end_srcloc();
+                cur_srcloc = SourceLoc::default();
             }
         }
 

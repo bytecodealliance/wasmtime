@@ -97,7 +97,6 @@
 //! ```
 
 use crate::binemit::{CodeInfo, CodeOffset};
-use crate::entity::SecondaryMap;
 use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, Type};
 use crate::result::CodegenResult;

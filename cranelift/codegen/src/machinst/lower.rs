@@ -345,6 +345,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                             "lower_branch_group: targets = {:?} branches = {:?}",
                             targets, branches
                         );
+                        self.vcode.set_srcloc(self.srcloc(branches[0]));
                         backend.lower_branch_group(
                             &mut self,
                             &branches[..],
@@ -361,6 +362,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     let num_uses = self.num_uses[inst];
                     let side_effect = has_side_effect(self.f, inst);
                     if side_effect || num_uses > 0 {
+                        self.vcode.set_srcloc(self.srcloc(inst));
                         backend.lower(&mut self, inst);
                         self.vcode.end_ir_inst();
                     } else {
@@ -389,6 +391,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     "lower_branch_group: targets = {:?} branches = {:?}",
                     targets, branches
                 );
+                self.vcode.set_srcloc(self.srcloc(branches[0]));
                 backend.lower_branch_group(&mut self, &branches[..], &targets[..], fallthrough);
                 self.vcode.end_ir_inst();
                 branches.clear();
