@@ -404,8 +404,8 @@ impl Config {
         self
     }
 
-    /// Configures the maximum size where a linear memory is considered static,
-    /// above which it'll be considered dynamic.
+    /// Configures the maximum size, in bytes, where a linear memory is
+    /// considered static, above which it'll be considered dynamic.
     ///
     /// This function configures the threshold for wasm memories whether they're
     /// implemented as a dynamically relocatable chunk of memory or a statically
@@ -488,8 +488,8 @@ impl Config {
         self
     }
 
-    /// Configures the size of the guard region used at the end of a static
-    /// memory's address space reservation.
+    /// Configures the size, in bytes, of the guard region used at the end of a
+    /// static memory's address space reservation.
     ///
     /// All WebAssembly loads/stores are bounds-checked and generate a trap if
     /// they're out-of-bounds. Loads and stores are often very performance
@@ -543,8 +543,8 @@ impl Config {
         self
     }
 
-    /// Configures the size of the guard region used at the end of a dynamic
-    /// memory's address space reservation.
+    /// Configures the size, in bytes, of the guard region used at the end of a
+    /// dynamic memory's address space reservation.
     ///
     /// For the difference between static and dynamic memories, see the
     /// [`Config::static_memory_maximum_size`]
@@ -576,8 +576,9 @@ impl Config {
 
 fn round_up_to_pages(val: u64) -> u64 {
     let page_size = region::page::size() as u64;
+    debug_assert!(page_size.is_power_of_two());
     val.checked_add(page_size - 1)
-        .map(|val| val / page_size * page_size)
+        .map(|val| val & !(page_size - 1))
         .unwrap_or(u64::max_value() / page_size + 1)
 }
 

@@ -1722,7 +1722,7 @@ fn get_heap_addr(
     //
     // If we have a guard page, however, then we can perform a further
     // optimization of the generated code by only checking multiples of the
-    // offset-guard size to be more CSE-friendly. Knowing that we have a least
+    // offset-guard size to be more CSE-friendly. Knowing that we have at least
     // 1 page of a guard page we're then able to disregard the `width` of the
     // access because we assume bytes are accessed first-to-last and if we
     // happen to straddle a page boundary at least one byte will trap.

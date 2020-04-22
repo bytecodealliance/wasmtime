@@ -870,7 +870,7 @@ pub unsafe trait LinearMemory {
 /// Note that this is a relatively new and experimental feature and it is recommended
 /// to be familiar with wasmtime runtime code to use it.
 pub unsafe trait MemoryCreator: Send + Sync {
-    /// Create new LinearMemory object from the specified parameters.
+    /// Create a new `LinearMemory` object from the specified parameters.
     ///
     /// The type of memory being created is specified by `ty` which indicates
     /// both the minimum and maximum size, in wasm pages.
@@ -880,9 +880,10 @@ pub unsafe trait MemoryCreator: Send + Sync {
     /// than the implementation is free to allocate memory as it sees fit. If
     /// the value is `Some`, however, then the implementation is expected to
     /// reserve that many bytes for the memory's allocation, plus the guard
-    /// size at the end. In this case `grow` should never move the base pointer
-    /// and the maximum size of `ty` is guaranteed to fit within
-    /// `reserved_size`.
+    /// size at the end. Note that this reservation need only be a virtual
+    /// memory reservation, physical memory does not need to be allocated
+    /// immediately. In this case `grow` should never move the base pointer and
+    /// the maximum size of `ty` is guaranteed to fit within `reserved_size`.
     ///
     /// The `guard_size` parameter indicates how many bytes of space, after the
     /// memory allocation, is expected to be unmapped. JIT code will elide

@@ -153,16 +153,16 @@ struct CommonOptions {
     )]
     opt_level: wasmtime::OptLevel,
 
-    /// Maximum size of wasm memory before it becomes dynamically relocatable
-    /// instead of up-front-reserved.
+    /// Maximum size in bytes of wasm memory before it becomes dynamically
+    /// relocatable instead of up-front-reserved.
     #[structopt(long)]
     static_memory_maximum_size: Option<u64>,
 
-    /// Size of the guard region after static memories are allocated.
+    /// Byte size of the guard region after static memories are allocated.
     #[structopt(long)]
     static_memory_guard_size: Option<u64>,
 
-    /// Size of the guard region after dynamic memories are allocated.
+    /// Byte size of the guard region after dynamic memories are allocated.
     #[structopt(long)]
     dynamic_memory_guard_size: Option<u64>,
 }
