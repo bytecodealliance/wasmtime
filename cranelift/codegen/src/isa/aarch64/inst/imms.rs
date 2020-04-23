@@ -4,6 +4,7 @@
 #[allow(dead_code)]
 use crate::ir::types::*;
 use crate::ir::Type;
+use crate::isa::aarch64::inst::InstSize;
 use crate::machinst::*;
 
 use regalloc::RealRegUniverse;
@@ -233,6 +234,8 @@ pub struct ImmLogic {
     pub r: u8,
     /// `R` field: rotate amount.
     pub s: u8,
+    /// Was this constructed for a 32-bit or 64-bit instruction?
+    pub size: InstSize,
 }
 
 impl ImmLogic {
@@ -243,6 +246,7 @@ impl ImmLogic {
         if ty != I64 && ty != I32 {
             return None;
         }
+        let inst_size = InstSize::from_ty(ty);
 
         let original_value = value;
 
@@ -423,11 +427,8 @@ impl ImmLogic {
             n: out_n != 0,
             r: r as u8,
             s: s as u8,
+            size: inst_size,
         })
-    }
-
-    pub fn from_raw(value: u64, n: bool, r: u8, s: u8) -> ImmLogic {
-        ImmLogic { n, r, s, value }
     }
 
     /// Returns bits ready for encoding: (N:1, R:6, S:6)
@@ -443,7 +444,7 @@ impl ImmLogic {
     /// Return an immediate for the bitwise-inverted value.
     pub fn invert(&self) -> ImmLogic {
         // For every ImmLogical immediate, the inverse can also be encoded.
-        Self::maybe_from_u64(!self.value, I64).unwrap()
+        Self::maybe_from_u64(!self.value, self.size.to_ty()).unwrap()
     }
 }
 
@@ -613,7 +614,8 @@ mod test {
                 value: 1,
                 n: true,
                 r: 0,
-                s: 0
+                s: 0,
+                size: InstSize::Size64,
             }),
             ImmLogic::maybe_from_u64(1, I64)
         );
@@ -623,7 +625,8 @@ mod test {
                 value: 2,
                 n: true,
                 r: 63,
-                s: 0
+                s: 0,
+                size: InstSize::Size64,
             }),
             ImmLogic::maybe_from_u64(2, I64)
         );
@@ -637,7 +640,8 @@ mod test {
                 value: 248,
                 n: true,
                 r: 61,
-                s: 4
+                s: 4,
+                size: InstSize::Size64,
             }),
             ImmLogic::maybe_from_u64(248, I64)
         );
@@ -649,7 +653,8 @@ mod test {
                 value: 1920,
                 n: true,
                 r: 57,
-                s: 3
+                s: 3,
+                size: InstSize::Size64,
             }),
             ImmLogic::maybe_from_u64(1920, I64)
         );
@@ -659,7 +664,8 @@ mod test {
                 value: 0x7ffe,
                 n: true,
                 r: 63,
-                s: 13
+                s: 13,
+                size: InstSize::Size64,
             }),
             ImmLogic::maybe_from_u64(0x7ffe, I64)
         );
@@ -669,7 +675,8 @@ mod test {
                 value: 0x30000,
                 n: true,
                 r: 48,
-                s: 1
+                s: 1,
+                size: InstSize::Size64,
             }),
             ImmLogic::maybe_from_u64(0x30000, I64)
         );
@@ -679,7 +686,8 @@ mod test {
                 value: 0x100000,
                 n: true,
                 r: 44,
-                s: 0
+                s: 0,
+                size: InstSize::Size64,
             }),
             ImmLogic::maybe_from_u64(0x100000, I64)
         );
@@ -689,7 +697,8 @@ mod test {
                 value: u64::max_value() - 1,
                 n: true,
                 r: 63,
-                s: 62
+                s: 62,
+                size: InstSize::Size64,
             }),
             ImmLogic::maybe_from_u64(u64::max_value() - 1, I64)
         );
@@ -699,7 +708,8 @@ mod test {
                 value: 0xaaaaaaaaaaaaaaaa,
                 n: false,
                 r: 1,
-                s: 60
+                s: 60,
+                size: InstSize::Size64,
             }),
             ImmLogic::maybe_from_u64(0xaaaaaaaaaaaaaaaa, I64)
         );
@@ -709,7 +719,8 @@ mod test {
                 value: 0x8181818181818181,
                 n: false,
                 r: 1,
-                s: 49
+                s: 49,
+                size: InstSize::Size64,
             }),
             ImmLogic::maybe_from_u64(0x8181818181818181, I64)
         );
@@ -719,7 +730,8 @@ mod test {
                 value: 0xffc3ffc3ffc3ffc3,
                 n: false,
                 r: 10,
-                s: 43
+                s: 43,
+                size: InstSize::Size64,
             }),
             ImmLogic::maybe_from_u64(0xffc3ffc3ffc3ffc3, I64)
         );
@@ -729,7 +741,8 @@ mod test {
                 value: 0x100000001,
                 n: false,
                 r: 0,
-                s: 0
+                s: 0,
+                size: InstSize::Size64,
             }),
             ImmLogic::maybe_from_u64(0x100000001, I64)
         );
@@ -739,7 +752,8 @@ mod test {
                 value: 0x1111111111111111,
                 n: false,
                 r: 0,
-                s: 56
+                s: 56,
+                size: InstSize::Size64,
             }),
             ImmLogic::maybe_from_u64(0x1111111111111111, I64)
         );

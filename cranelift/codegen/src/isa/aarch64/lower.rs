@@ -2105,19 +2105,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
             ctx.emit(Inst::MovFromVec64 { rd: tmp1, rn: rn });
             ctx.emit(Inst::MovFromVec64 { rd: tmp2, rn: rm });
             let imml = if bits == 32 {
-                ImmLogic::from_raw(
-                    /* value = */ 0x8000_0000,
-                    /* n = */ false,
-                    /* r = */ 1,
-                    /* s = */ 0,
-                )
+                ImmLogic::maybe_from_u64(0x8000_0000, I32).unwrap()
             } else {
-                ImmLogic::from_raw(
-                    /* value = */ 0x8000_0000_0000_0000,
-                    /* n = */ true,
-                    /* r = */ 1,
-                    /* s = */ 0,
-                )
+                ImmLogic::maybe_from_u64(0x8000_0000_0000_0000, I64).unwrap()
             };
             let alu_op = choose_32_64(ty, ALUOp::And32, ALUOp::And64);
             ctx.emit(Inst::AluRRImmLogic {

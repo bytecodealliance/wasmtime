@@ -243,8 +243,6 @@ fn should_panic(testsuite: &str, testname: &str) -> bool {
         | ("multi_value", "call")
         | ("spec_testsuite", "call")
         | ("spec_testsuite", "conversions")
-        | ("spec_testsuite", "f32_bitwise")
-        | ("spec_testsuite", "float_misc")
         | ("spec_testsuite", "i32")
         | ("spec_testsuite", "i64")
         | ("spec_testsuite", "int_exprs")
