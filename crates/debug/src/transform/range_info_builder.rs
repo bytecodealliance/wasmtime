@@ -15,7 +15,7 @@ pub(crate) enum RangeInfoBuilder {
 
 impl RangeInfoBuilder {
     pub(crate) fn from<R>(
-	unit: &Unit<R, R::Offset>,
+        unit: &Unit<R, R::Offset>,
         entry: &DebuggingInformationEntry<R>,
         context: &DebugInputContext<R>,
         cu_low_pc: u64,
@@ -48,7 +48,7 @@ impl RangeInfoBuilder {
     }
 
     pub(crate) fn from_ranges_ref<R>(
-	unit: &Unit<R, R::Offset>,
+        unit: &Unit<R, R::Offset>,
         ranges: RangeListsOffset,
         context: &DebugInputContext<R>,
         cu_low_pc: u64,
@@ -56,7 +56,7 @@ impl RangeInfoBuilder {
     where
         R: Reader,
     {
-	let unit_encoding = unit.encoding();
+        let unit_encoding = unit.encoding();
         let mut ranges = context.rnglists.ranges(
             ranges,
             unit_encoding,
@@ -80,7 +80,7 @@ impl RangeInfoBuilder {
     }
 
     pub(crate) fn from_subprogram_die<R>(
-	unit: &Unit<R, R::Offset>,
+        unit: &Unit<R, R::Offset>,
         entry: &DebuggingInformationEntry<R>,
         context: &DebugInputContext<R>,
         addr_tr: &AddressTransform,
@@ -89,11 +89,13 @@ impl RangeInfoBuilder {
     where
         R: Reader,
     {
-	let unit_encoding = unit.encoding();
+        let unit_encoding = unit.encoding();
         let addr =
             if let Some(AttributeValue::Addr(addr)) = entry.attr_value(gimli::DW_AT_low_pc)? {
                 addr
-            } else if let Some(AttributeValue::DebugAddrIndex(i)) = entry.attr_value(gimli::DW_AT_low_pc)? {
+            } else if let Some(AttributeValue::DebugAddrIndex(i)) =
+                entry.attr_value(gimli::DW_AT_low_pc)?
+            {
                 context.debug_addr.get_address(4, unit.addr_base, i)?
             } else if let Some(AttributeValue::RangeListsRef(r)) =
                 entry.attr_value(gimli::DW_AT_ranges)?

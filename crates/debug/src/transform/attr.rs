@@ -4,9 +4,7 @@ use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs};
 use super::{DebugInputContext, Reader, TransformError};
 use anyhow::{bail, Error};
-use gimli::{
-    write, AttributeValue, DebugLineOffset, DebugStr, DebuggingInformationEntry, Unit
-};
+use gimli::{write, AttributeValue, DebugLineOffset, DebugStr, DebuggingInformationEntry, Unit};
 use wasmtime_environ::isa::TargetIsa;
 
 pub(crate) enum FileAttributeContext<'a> {
@@ -115,8 +113,7 @@ where
                 write::AttributeValue::StringRef(out_strings.add(s))
             }
             AttributeValue::RangeListsRef(r) => {
-                let range_info =
-                    RangeInfoBuilder::from_ranges_ref(unit, r, context, cu_low_pc)?;
+                let range_info = RangeInfoBuilder::from_ranges_ref(unit, r, context, cu_low_pc)?;
                 let range_list_id = range_info.build_ranges(addr_tr, &mut out_unit.ranges);
                 write::AttributeValue::RangeListRef(range_list_id)
             }
@@ -127,7 +124,7 @@ where
                     unit_encoding,
                     low_pc,
                     &context.debug_addr,
-                    unit.addr_base
+                    unit.addr_base,
                 )?;
                 let frame_base = if let FileAttributeContext::Children(_, frame_base) = file_context
                 {
@@ -258,9 +255,12 @@ where
                 continue;
             }
             AttributeValue::DebugAddrBase(offset) => {
-
                 if offset.0 != unit.addr_base.0 {
-                    bail!("Unexpected (unit.addr_base: {}) DebugAddrBase: {}", unit.addr_base.0, offset.0)
+                    bail!(
+                        "Unexpected (unit.addr_base: {}) DebugAddrBase: {}",
+                        unit.addr_base.0,
+                        offset.0
+                    )
                 }
                 continue;
             }
