@@ -74,6 +74,8 @@ unsafe fn check_rights(orig_fd: wasi::Fd, link_fd: wasi::Fd) {
     fdstats_assert_eq(orig_fdstat, link_fdstat);
 }
 
+// Extra calls of fd_close are needed for Windows, which will not remove
+// the directory until all handles are closed.
 unsafe fn test_path_link(dir_fd: wasi::Fd) {
     // Create a file
     let file_fd = create_or_open(dir_fd, "file", wasi::OFLAGS_CREAT);
@@ -81,17 +83,20 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
     // Create a link in the same directory and compare rights
     wasi::path_link(dir_fd, 0, "file", dir_fd, "link")
         .expect("creating a link in the same directory");
-    let mut link_fd = open_link(dir_fd, "link");
+    let link_fd = open_link(dir_fd, "link");
     check_rights(file_fd, link_fd);
+    wasi::fd_close(link_fd).expect("Closing link_fd"); // needed for Windows
     wasi::path_unlink_file(dir_fd, "link").expect("removing a link");
 
     // Create a link in a different directory and compare rights
     wasi::path_create_directory(dir_fd, "subdir").expect("creating a subdirectory");
     let subdir_fd = create_or_open(dir_fd, "subdir", wasi::OFLAGS_DIRECTORY);
     wasi::path_link(dir_fd, 0, "file", subdir_fd, "link").expect("creating a link in subdirectory");
-    link_fd = open_link(subdir_fd, "link");
+    let link_fd = open_link(subdir_fd, "link");
     check_rights(file_fd, link_fd);
     wasi::path_unlink_file(subdir_fd, "link").expect("removing a link");
+    wasi::fd_close(subdir_fd).expect("Closing subdir_fd"); // needed for Windows
+    wasi::fd_close(link_fd).expect("Closing link_fd"); // needed for Windows
     wasi::path_remove_directory(dir_fd, "subdir").expect("removing a subdirectory");
 
     // Create a link to a path that already exists
@@ -188,7 +193,7 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
         "link",
     )
     .expect("creating a link to a file following symlinks");
-    link_fd = open_link(dir_fd, "link");
+    let link_fd = open_link(dir_fd, "link");
     check_rights(file_fd, link_fd);
     wasi::path_unlink_file(dir_fd, "link").expect("removing a link");
     wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");

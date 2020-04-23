@@ -2,6 +2,22 @@ test legalizer
 set enable_simd
 target x86_64 skylake
 
+function %ushr_i8x16() -> i8x16 {
+block0:
+    v0 = iconst.i32 1
+    v1 = vconst.i8x16 [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15]
+    v2 = ushr v1, v0
+    ; check:  v3 = bitcast.i64x2 v0
+    ; nextln: v4 = raw_bitcast.i16x8 v1
+    ; nextln: v5 = x86_psrl v4, v3
+    ; nextln: v6 = raw_bitcast.i8x16 v5
+    ; nextln: v7 = const_addr.i64 const1
+    ; nextln: v8 = ishl_imm v0, 4
+    ; nextln: v9 = load_complex.i8x16 v7+v8
+    ; nextln: v2 = band v6, v9
+    return v2
+}
+
 function %ishl_i32x4() -> i32x4 {
 block0:
     v0 = iconst.i32 1

@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-native"
-version = "0.61.0"
+version = "0.62.0"
 authors = ["The Cranelift Project Developers"]
 description = "Support for targeting the host with Cranelift"
 documentation = "https://docs.rs/cranelift-native"
@@ -11,7 +11,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../codegen", version = "0.61.0", default-features = false }
+cranelift-codegen = { path = "../codegen", version = "0.62.0", default-features = false }
 target-lexicon = "0.10"
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]

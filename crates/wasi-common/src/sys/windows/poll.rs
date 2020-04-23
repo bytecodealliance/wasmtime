@@ -1,11 +1,11 @@
-use crate::entry::Descriptor;
+use super::super::oshandle::OsHandle;
 use crate::poll::{ClockEventData, FdEventData};
+use crate::sys::oshandle::AsFile;
 use crate::wasi::{types, Errno, Result};
 use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
 use std::convert::TryInto;
 use std::os::windows::io::AsRawHandle;
-use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::Mutex;
 use std::thread;
@@ -141,10 +141,18 @@ fn handle_timeout_event(timeout_event: ClockEventData, events: &mut Vec<types::E
 }
 
 fn handle_rw_event(event: FdEventData, out_events: &mut Vec<types::Event>) {
-    let size = match &*event.descriptor.borrow() {
-        Descriptor::OsHandle(os_handle) => {
+    let handle = event
+        .handle
+        .as_any()
+        .downcast_ref::<OsHandle>()
+        .expect("can poll FdEvent for OS resources only");
+    let size = match handle {
+        OsHandle::OsFile(file) => {
             if event.r#type == types::Eventtype::FdRead {
-                os_handle.metadata().map(|m| m.len()).map_err(Into::into)
+                file.as_file()
+                    .metadata()
+                    .map(|m| m.len())
+                    .map_err(Into::into)
             } else {
                 // The spec is unclear what nbytes should actually be for __WASI_EVENTTYPE_FD_WRITE and
                 // the implementation on Unix just returns 0 here, so it's probably fine
@@ -154,12 +162,9 @@ fn handle_rw_event(event: FdEventData, out_events: &mut Vec<types::Event>) {
             }
         }
         // We return the only universally correct lower bound, see the comment later in the function.
-        Descriptor::Stdin => Ok(1),
+        OsHandle::Stdin => Ok(1),
         // On Unix, ioctl(FIONREAD) will return 0 for stdout/stderr. Emulate the same behavior on Windows.
-        Descriptor::Stdout | Descriptor::Stderr => Ok(0),
-        Descriptor::VirtualFile(_) => {
-            panic!("virtual files do not get rw events");
-        }
+        OsHandle::Stdout | OsHandle::Stderr => Ok(0),
     };
 
     let new_event = make_rw_event(&event, size);
@@ -201,21 +206,21 @@ pub(crate) fn oneoff(
     let mut pipe_events = vec![];
 
     for event in fd_events {
-        let descriptor = Rc::clone(&event.descriptor);
-        match &*descriptor.borrow() {
-            Descriptor::Stdin if event.r#type == types::Eventtype::FdRead => {
-                stdin_events.push(event)
-            }
+        let handle = event
+            .handle
+            .as_any()
+            .downcast_ref::<OsHandle>()
+            .expect("can poll FdEvent for OS resources only");
+        match handle {
+            OsHandle::Stdin if event.r#type == types::Eventtype::FdRead => stdin_events.push(event),
             // stdout/stderr are always considered ready to write because there seems to
             // be no way of checking if a write to stdout would block.
             //
             // If stdin is polled for anything else then reading, then it is also
             // considered immediately ready, following the behavior on Linux.
-            Descriptor::Stdin | Descriptor::Stderr | Descriptor::Stdout => {
-                immediate_events.push(event)
-            }
-            Descriptor::OsHandle(os_handle) => {
-                let ftype = unsafe { winx::file::get_file_type(os_handle.as_raw_handle()) }?;
+            OsHandle::Stdin | OsHandle::Stderr | OsHandle::Stdout => immediate_events.push(event),
+            OsHandle::OsFile(file) => {
+                let ftype = unsafe { winx::file::get_file_type(file.as_raw_handle()) }?;
                 if ftype.is_unknown() || ftype.is_char() {
                     debug!("poll_oneoff: unsupported file type: {:?}", ftype);
                     handle_error_event(event, Errno::Notsup, events);
@@ -226,9 +231,6 @@ pub(crate) fn oneoff(
                 } else {
                     unreachable!();
                 }
-            }
-            Descriptor::VirtualFile(_) => {
-                panic!("virtual files do not get rw events");
             }
         };
     }

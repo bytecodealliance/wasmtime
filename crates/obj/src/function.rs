@@ -11,7 +11,7 @@ pub fn declare_functions(
     module: &Module,
     relocations: &Relocations,
 ) -> Result<()> {
-    for i in 0..module.imported_funcs.len() {
+    for i in 0..module.local.num_imported_funcs {
         let string_name = format!("_wasm_function_{}", i);
         obj.declare(string_name, Decl::function_import())?;
     }
@@ -32,7 +32,7 @@ pub fn emit_functions(
 ) -> Result<()> {
     debug_assert!(
         module.start_func.is_none()
-            || module.start_func.unwrap().index() >= module.imported_funcs.len(),
+            || module.start_func.unwrap().index() >= module.local.num_imported_funcs,
         "imported start functions not supported yet"
     );
 

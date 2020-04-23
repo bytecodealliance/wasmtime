@@ -21,12 +21,11 @@
     )
 )]
 
-mod clock;
 mod ctx;
 mod entry;
-mod fd;
 mod fdpool;
 pub mod fs;
+mod handle;
 pub mod old;
 mod path;
 mod poll;
@@ -36,6 +35,6 @@ mod sys;
 mod virtfs;
 pub mod wasi;
 
-pub use ctx::{WasiCtx, WasiCtxBuilder};
+pub use ctx::{WasiCtx, WasiCtxBuilder, WasiCtxBuilderError};
 pub use sys::preopen_dir;
 pub use virtfs::{FileContents, VirtualDirEntry};

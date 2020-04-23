@@ -42,7 +42,6 @@ mod test_cat;
 mod test_compile;
 mod test_dce;
 mod test_domtree;
-mod test_fde;
 mod test_legalizer;
 mod test_licm;
 mod test_postopt;
@@ -56,6 +55,7 @@ mod test_shrink;
 mod test_simple_gvn;
 mod test_simple_preopt;
 mod test_unwind;
+mod test_vcode;
 mod test_verifier;
 
 /// The result of running the test in a file.
@@ -134,11 +134,11 @@ fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<dyn subtest::
         "run" => test_run::subtest(parsed),
         "shrink" => test_shrink::subtest(parsed),
         "simple-gvn" => test_simple_gvn::subtest(parsed),
+        "vcode" => test_vcode::subtest(parsed),
         "verifier" => test_verifier::subtest(parsed),
         "preopt" => test_preopt::subtest(parsed),
         "safepoint" => test_safepoint::subtest(parsed),
         "unwind" => test_unwind::subtest(parsed),
-        "fde" => test_fde::subtest(parsed),
         _ => Err(format!("unknown test command '{}'", parsed.command)),
     }
 }

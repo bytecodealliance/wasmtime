@@ -1,5 +1,4 @@
 use super::address_transform::AddressTransform;
-use super::map_reg::map_reg;
 use anyhow::{Context, Error, Result};
 use gimli::{self, write, Expression, Operation, Reader, ReaderOffset, X86_64};
 use more_asserts::{assert_le, assert_lt};
@@ -79,7 +78,7 @@ fn translate_loc(
     use gimli::write::Writer;
     Ok(match loc {
         ValueLoc::Reg(reg) => {
-            let machine_reg = map_reg(isa, reg)?.0 as u8;
+            let machine_reg = isa.map_dwarf_register(reg)? as u8;
             Some(if machine_reg < 32 {
                 vec![gimli::constants::DW_OP_reg0.0 + machine_reg]
             } else {
@@ -120,8 +119,8 @@ fn append_memory_deref(
     // FIXME for imported memory
     match vmctx_loc {
         ValueLoc::Reg(vmctx_reg) => {
-            let reg = map_reg(isa, vmctx_reg)?;
-            writer.write_u8(gimli::constants::DW_OP_breg0.0 + reg.0 as u8)?;
+            let reg = isa.map_dwarf_register(vmctx_reg)? as u8;
+            writer.write_u8(gimli::constants::DW_OP_breg0.0 + reg)?;
             let memory_offset = match frame_info.vmctx_memory_offset() {
                 Some(offset) => offset,
                 None => {
@@ -333,7 +332,14 @@ where
                 return Ok(None);
             }
             let index = pc.read_sleb128()?;
-            pc.read_u8()?; // consume 159
+            if pc.read_u8()? != 159 {
+                // FIXME The following operator is not DW_OP_stack_value, e.g. :
+                // DW_AT_location  (0x00000ea5:
+                //   [0x00001e19, 0x00001e26): DW_OP_WASM_location 0x0 +1, DW_OP_plus_uconst 0x10, DW_OP_stack_value
+                //   [0x00001e5a, 0x00001e72): DW_OP_WASM_location 0x0 +20, DW_OP_stack_value
+                // )
+                return Ok(None);
+            }
             if !code_chunk.is_empty() {
                 parts.push(CompiledExpressionPart::Code(code_chunk));
                 code_chunk = Vec::new();

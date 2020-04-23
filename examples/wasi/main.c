@@ -21,11 +21,11 @@ to tweak the `-lpthread` and such annotations.
 #include <stdlib.h>
 #include <wasm.h>
 #include <wasi.h>
+#include <wasmtime.h>
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
-static void print_trap(wasm_trap_t *trap);
-static void read_wat_file(wasm_engine_t *engine, wasm_byte_vec_t *bytes, const char *file);
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
 
 int main() {
   int ret = 0;
@@ -34,7 +34,6 @@ int main() {
   assert(engine != NULL);
   wasm_store_t *store = wasm_store_new(engine);
   assert(store != NULL);
-
 
   wasm_byte_vec_t wasm;
   // Load our input file to parse it next
@@ -54,8 +53,10 @@ int main() {
   fclose(file);
 
   // Compile our modules
-  wasm_module_t *module = wasm_module_new(store, &wasm);
-  assert(module != NULL);
+  wasm_module_t *module = NULL;
+  wasmtime_error_t *error = wasmtime_module_new(store, &wasm, &module);
+  if (!module)
+    exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&wasm);
 
   // Instantiate wasi
@@ -68,10 +69,8 @@ int main() {
   wasi_config_inherit_stderr(wasi_config);
   wasm_trap_t *trap = NULL;
   wasi_instance_t *wasi = wasi_instance_new(store, "wasi_snapshot_preview1", wasi_config, &trap);
-  if (wasi == NULL) {
-    print_trap(trap);
-    exit(1);
-  }
+  if (wasi == NULL)
+    exit_with_error("failed to instantiate WASI", NULL, trap);
 
   // Create import list for our module using wasi
   wasm_importtype_vec_t import_types;
@@ -87,15 +86,14 @@ int main() {
       exit(1);
     }
   }
-  wasm_importtype_vec_delete(&import_types);
 
   // Instantiate the module
-  wasm_instance_t *instance = wasm_instance_new(store, module, imports, &trap);
-  if (instance == NULL) {
-    print_trap(trap);
-    exit(1);
-  }
+  wasm_instance_t *instance = NULL;
+  error = wasmtime_instance_new(module, imports, import_types.size, &instance, &trap);
+  if (instance == NULL)
+    exit_with_error("failed to instantiate", error, trap);
   free(imports);
+  wasm_importtype_vec_delete(&import_types);
 
   // Lookup our `_start` export function
   wasm_extern_vec_t externs;
@@ -111,11 +109,9 @@ int main() {
   assert(start_extern);
   wasm_func_t *start = wasm_extern_as_func(start_extern);
   assert(start != NULL);
-  trap = wasm_func_call(start, NULL, NULL);
-  if (trap != NULL) {
-    print_trap(trap);
-    exit(1);
-  }
+  error = wasmtime_func_call(start, NULL, 0, NULL, 0, &trap);
+  if (error != NULL || trap != NULL)
+    exit_with_error("failed to call `_start`", error, trap);
 
   // Clean up after ourselves at this point
   wasm_exporttype_vec_delete(&exports);
@@ -127,12 +123,17 @@ int main() {
   return 0;
 }
 
-static void print_trap(wasm_trap_t *trap) {
-  assert(trap != NULL);
-  wasm_message_t message;
-  wasm_trap_message(trap, &message);
-  fprintf(stderr, "failed to instantiate module %.*s\n", (int) message.size, message.data);
-  wasm_byte_vec_delete(&message);
-  wasm_trap_delete(trap);
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+  fprintf(stderr, "error: %s\n", message);
+  wasm_byte_vec_t error_message;
+  if (error != NULL) {
+    wasmtime_error_message(error, &error_message);
+    wasmtime_error_delete(error);
+  } else {
+    wasm_trap_message(trap, &error_message);
+    wasm_trap_delete(trap);
+  }
+  fprintf(stderr, "%.*s\n", (int) error_message.size, error_message.data);
+  wasm_byte_vec_delete(&error_message);
+  exit(1);
 }
-

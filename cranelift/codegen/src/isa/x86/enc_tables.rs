@@ -6,7 +6,7 @@ use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
-use crate::ir::{self, Function, Inst, InstBuilder};
+use crate::ir::{self, Function, Inst, InstBuilder, MemFlags};
 use crate::isa::constraints::*;
 use crate::isa::enc_tables::*;
 use crate::isa::encoding::base_size;
@@ -15,8 +15,6 @@ use crate::isa::RegUnit;
 use crate::isa::{self, TargetIsa};
 use crate::predicates;
 use crate::regalloc::RegDiversions;
-
-use cranelift_codegen_shared::isa::x86::EncodingBits;
 
 include!(concat!(env!("OUT_DIR"), "/encoding-x86.rs"));
 include!(concat!(env!("OUT_DIR"), "/legalize-x86.rs"));
@@ -132,11 +130,26 @@ fn size_plus_maybe_sib_or_offset_inreg1_plus_rex_prefix_for_inreg0_inreg1(
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
-        || test_input(0, inst, divert, func, is_extended_reg)
+    // No need to check for REX.W in `needs_rex` because `infer_rex().w()` is not allowed.
+    let needs_rex = test_input(0, inst, divert, func, is_extended_reg)
         || test_input(1, inst, divert, func, is_extended_reg);
     size_plus_maybe_sib_or_offset_for_inreg_1(sizing, enc, inst, divert, func)
         + if needs_rex { 1 } else { 0 }
+}
+
+/// Calculates the size while inferring if the first and second input registers (inreg0, inreg1)
+/// require a dynamic REX prefix and if the second input register (inreg1) requires a SIB.
+fn size_plus_maybe_sib_inreg1_plus_rex_prefix_for_inreg0_inreg1(
+    sizing: &RecipeSizing,
+    enc: Encoding,
+    inst: Inst,
+    divert: &RegDiversions,
+    func: &Function,
+) -> u8 {
+    // No need to check for REX.W in `needs_rex` because `infer_rex().w()` is not allowed.
+    let needs_rex = test_input(0, inst, divert, func, is_extended_reg)
+        || test_input(1, inst, divert, func, is_extended_reg);
+    size_plus_maybe_sib_for_inreg_1(sizing, enc, inst, divert, func) + if needs_rex { 1 } else { 0 }
 }
 
 /// Calculates the size while inferring if the first input register (inreg0) and first output
@@ -149,11 +162,27 @@ fn size_plus_maybe_sib_or_offset_for_inreg_0_plus_rex_prefix_for_inreg0_outreg0(
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
-        || test_input(0, inst, divert, func, is_extended_reg)
+    // No need to check for REX.W in `needs_rex` because `infer_rex().w()` is not allowed.
+    let needs_rex = test_input(0, inst, divert, func, is_extended_reg)
         || test_result(0, inst, divert, func, is_extended_reg);
     size_plus_maybe_sib_or_offset_for_inreg_0(sizing, enc, inst, divert, func)
         + if needs_rex { 1 } else { 0 }
+}
+
+/// Calculates the size while inferring if the first input register (inreg0) and first output
+/// register (outreg0) require a dynamic REX and if the first input register (inreg0) requires a
+/// SIB.
+fn size_plus_maybe_sib_for_inreg_0_plus_rex_prefix_for_inreg0_outreg0(
+    sizing: &RecipeSizing,
+    enc: Encoding,
+    inst: Inst,
+    divert: &RegDiversions,
+    func: &Function,
+) -> u8 {
+    // No need to check for REX.W in `needs_rex` because `infer_rex().w()` is not allowed.
+    let needs_rex = test_input(0, inst, divert, func, is_extended_reg)
+        || test_result(0, inst, divert, func, is_extended_reg);
+    size_plus_maybe_sib_for_inreg_0(sizing, enc, inst, divert, func) + if needs_rex { 1 } else { 0 }
 }
 
 /// Infers whether a dynamic REX prefix will be emitted, for use with one input reg.
@@ -163,39 +192,39 @@ fn size_plus_maybe_sib_or_offset_for_inreg_0_plus_rex_prefix_for_inreg0_outreg0(
 ///  2. Registers are used that require REX.R or REX.B bits for encoding.
 fn size_with_inferred_rex_for_inreg0(
     sizing: &RecipeSizing,
-    enc: Encoding,
+    _enc: Encoding,
     inst: Inst,
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
-        || test_input(0, inst, divert, func, is_extended_reg);
+    // No need to check for REX.W in `needs_rex` because `infer_rex().w()` is not allowed.
+    let needs_rex = test_input(0, inst, divert, func, is_extended_reg);
     sizing.base_size + if needs_rex { 1 } else { 0 }
 }
 
 /// Infers whether a dynamic REX prefix will be emitted, based on the second operand.
 fn size_with_inferred_rex_for_inreg1(
     sizing: &RecipeSizing,
-    enc: Encoding,
+    _enc: Encoding,
     inst: Inst,
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
-        || test_input(1, inst, divert, func, is_extended_reg);
+    // No need to check for REX.W in `needs_rex` because `infer_rex().w()` is not allowed.
+    let needs_rex = test_input(1, inst, divert, func, is_extended_reg);
     sizing.base_size + if needs_rex { 1 } else { 0 }
 }
 
 /// Infers whether a dynamic REX prefix will be emitted, based on the third operand.
 fn size_with_inferred_rex_for_inreg2(
     sizing: &RecipeSizing,
-    enc: Encoding,
+    _: Encoding,
     inst: Inst,
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
-        || test_input(2, inst, divert, func, is_extended_reg);
+    // No need to check for REX.W in `needs_rex` because `infer_rex().w()` is not allowed.
+    let needs_rex = test_input(2, inst, divert, func, is_extended_reg);
     sizing.base_size + if needs_rex { 1 } else { 0 }
 }
 
@@ -206,13 +235,13 @@ fn size_with_inferred_rex_for_inreg2(
 ///  2. Registers are used that require REX.R or REX.B bits for encoding.
 fn size_with_inferred_rex_for_inreg0_inreg1(
     sizing: &RecipeSizing,
-    enc: Encoding,
+    _enc: Encoding,
     inst: Inst,
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
-        || test_input(0, inst, divert, func, is_extended_reg)
+    // No need to check for REX.W in `needs_rex` because `infer_rex().w()` is not allowed.
+    let needs_rex = test_input(0, inst, divert, func, is_extended_reg)
         || test_input(1, inst, divert, func, is_extended_reg);
     sizing.base_size + if needs_rex { 1 } else { 0 }
 }
@@ -221,13 +250,13 @@ fn size_with_inferred_rex_for_inreg0_inreg1(
 /// input register and a single output register.
 fn size_with_inferred_rex_for_inreg0_outreg0(
     sizing: &RecipeSizing,
-    enc: Encoding,
+    _enc: Encoding,
     inst: Inst,
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
-        || test_input(0, inst, divert, func, is_extended_reg)
+    // No need to check for REX.W in `needs_rex` because `infer_rex().w()` is not allowed.
+    let needs_rex = test_input(0, inst, divert, func, is_extended_reg)
         || test_result(0, inst, divert, func, is_extended_reg);
     sizing.base_size + if needs_rex { 1 } else { 0 }
 }
@@ -235,13 +264,13 @@ fn size_with_inferred_rex_for_inreg0_outreg0(
 /// Infers whether a dynamic REX prefix will be emitted, based on a single output register.
 fn size_with_inferred_rex_for_outreg0(
     sizing: &RecipeSizing,
-    enc: Encoding,
+    _enc: Encoding,
     inst: Inst,
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
-        || test_result(0, inst, divert, func, is_extended_reg);
+    // No need to check for REX.W in `needs_rex` because `infer_rex().w()` is not allowed.
+    let needs_rex = test_result(0, inst, divert, func, is_extended_reg);
     sizing.base_size + if needs_rex { 1 } else { 0 }
 }
 
@@ -250,13 +279,13 @@ fn size_with_inferred_rex_for_outreg0(
 /// CMOV uses 3 inputs, with the REX is inferred from reg1 and reg2.
 fn size_with_inferred_rex_for_cmov(
     sizing: &RecipeSizing,
-    enc: Encoding,
+    _enc: Encoding,
     inst: Inst,
     divert: &RegDiversions,
     func: &Function,
 ) -> u8 {
-    let needs_rex = (EncodingBits::from(enc.bits()).rex_w() != 0)
-        || test_input(1, inst, divert, func, is_extended_reg)
+    // No need to check for REX.W in `needs_rex` because `infer_rex().w()` is not allowed.
+    let needs_rex = test_input(1, inst, divert, func, is_extended_reg)
         || test_input(2, inst, divert, func, is_extended_reg);
     sizing.base_size + if needs_rex { 1 } else { 0 }
 }
@@ -1286,6 +1315,73 @@ fn convert_ineg(
         pos.func.dfg.replace(inst).isub(zero_value, arg);
     } else {
         unreachable!()
+    }
+}
+
+// Unsigned shift masks for i8x16 shift.
+static USHR_MASKS: [u8; 128] = [
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f,
+    0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f,
+    0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f,
+    0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f,
+    0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07,
+    0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
+    0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+];
+
+// Convert a vector unsigned right shift. x86 has implementations for i16x8 and up (see `x86_pslr`),
+// but for i8x16 we translate the shift to a i16x8 shift and mask off the upper bits. This same
+// conversion could be provided in the CDSL if we could use varargs there (TODO); i.e. `load_complex`
+// has a varargs field that we can't modify with the CDSL in legalize.rs.
+fn convert_ushr(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    isa: &dyn TargetIsa,
+) {
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    if let ir::InstructionData::Binary {
+        opcode: ir::Opcode::Ushr,
+        args: [arg0, arg1],
+    } = pos.func.dfg[inst]
+    {
+        // Note that for Wasm, the bounding of the shift index has happened during translation
+        let arg0_type = pos.func.dfg.value_type(arg0);
+        let arg1_type = pos.func.dfg.value_type(arg1);
+        assert!(!arg1_type.is_vector() && arg1_type.is_int());
+
+        // TODO it may be more clear to use scalar_to_vector here; the current issue is that
+        // scalar_to_vector has the restriction that the vector produced has a matching lane size
+        // (e.g. i32 -> i32x4) whereas bitcast allows moving any-to-any conversions (e.g. i32 ->
+        // i64x2). This matters because for some reason x86_psrl only allows i64x2 as the shift
+        // index type--this could be relaxed since it is not really meaningful.
+        let shift_index = pos.ins().bitcast(I64X2, arg1);
+
+        if arg0_type == I8X16 {
+            // First, shift the vector using an I16X8 shift.
+            let bitcasted = pos.ins().raw_bitcast(I16X8, arg0);
+            let shifted = pos.ins().x86_psrl(bitcasted, shift_index);
+            let shifted = pos.ins().raw_bitcast(I8X16, shifted);
+
+            // Then, fixup the even lanes that have incorrect upper bits. This uses the 128 mask
+            // bytes as a table that we index into. It is a substantial code-size increase but
+            // reduces the instruction count slightly.
+            let masks = pos.func.dfg.constants.insert(USHR_MASKS.as_ref().into());
+            let mask_address = pos.ins().const_addr(isa.pointer_type(), masks);
+            let mask_offset = pos.ins().ishl_imm(arg1, 4);
+            let mask =
+                pos.ins()
+                    .load_complex(arg0_type, MemFlags::new(), &[mask_address, mask_offset], 0);
+            pos.func.dfg.replace(inst).band(shifted, mask);
+        } else if arg0_type.is_vector() {
+            // x86 has encodings for these shifts.
+            pos.func.dfg.replace(inst).x86_psrl(arg0, shift_index);
+        } else {
+            unreachable!()
+        }
     }
 }
 

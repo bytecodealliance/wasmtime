@@ -1,7 +1,7 @@
 use crate::module::{MemoryPlan, MemoryStyle, ModuleLocal, TableStyle};
 use crate::vmoffsets::VMOffsets;
-use crate::WASM_PAGE_SIZE;
-use cranelift_codegen::cursor::{Cursor, FuncCursor};
+use crate::{Tunables, INTERRUPTED, WASM_PAGE_SIZE};
+use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
@@ -140,13 +140,16 @@ pub struct FuncEnvironment<'module_environment> {
     data_drop_sig: Option<ir::SigRef>,
 
     /// Offsets to struct fields accessed by JIT code.
-    offsets: VMOffsets,
+    pub(crate) offsets: VMOffsets,
+
+    tunables: &'module_environment Tunables,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
     pub fn new(
         target_config: TargetFrontendConfig,
         module: &'module_environment ModuleLocal,
+        tunables: &'module_environment Tunables,
     ) -> Self {
         Self {
             target_config,
@@ -162,6 +165,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             memory_init_sig: None,
             data_drop_sig: None,
             offsets: VMOffsets::new(target_config.pointer_bytes(), module),
+            tunables,
         }
     }
 
@@ -267,8 +271,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     AbiParam::new(I32),
                     // Number of elements to copy.
                     AbiParam::new(I32),
-                    // Source location.
-                    AbiParam::new(I32),
                 ],
                 returns: vec![],
                 call_conv: self.target_config.default_call_conv,
@@ -307,8 +309,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     // Source index within segment.
                     AbiParam::new(I32),
                     // Number of elements to initialize.
-                    AbiParam::new(I32),
-                    // Source location.
                     AbiParam::new(I32),
                 ],
                 returns: vec![],
@@ -367,8 +367,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     AbiParam::new(I32),
                     // Length.
                     AbiParam::new(I32),
-                    // Source location.
-                    AbiParam::new(I32),
                 ],
                 returns: vec![],
                 call_conv: self.target_config.default_call_conv,
@@ -411,8 +409,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     // Value.
                     AbiParam::new(I32),
                     // Length.
-                    AbiParam::new(I32),
-                    // Source location.
                     AbiParam::new(I32),
                 ],
                 returns: vec![],
@@ -458,8 +454,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     // Source index within the data segment.
                     AbiParam::new(I32),
                     // Length.
-                    AbiParam::new(I32),
-                    // Source location.
                     AbiParam::new(I32),
                 ],
                 returns: vec![],
@@ -520,6 +514,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 }
 
+// TODO: This is necessary as if Lightbeam used `FuncEnvironment` directly it would cause
+//       a circular dependency graph. We should extract common types out into a separate
+//       crate that Lightbeam can use but until then we need this trait.
 #[cfg(feature = "lightbeam")]
 impl lightbeam::ModuleContext for FuncEnvironment<'_> {
     type Signature = ir::Signature;
@@ -926,8 +923,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: FuncIndex,
     ) -> WasmResult<ir::FuncRef> {
-        let sigidx = self.module.functions[index];
-        let signature = func.import_signature(self.module.signatures[sigidx].clone());
+        let sig = self.module.func_signature(index);
+        let signature = func.import_signature(sig.clone());
         let name = get_func_name(index);
         Ok(func.import_function(ir::ExtFuncData {
             name,
@@ -1112,13 +1109,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
 
-        let src_loc = pos.srcloc();
-        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
-
         pos.ins().call_indirect(
             func_sig,
             func_addr,
-            &[vmctx, memory_index_arg, dst, src, len, src_loc_arg],
+            &[vmctx, memory_index_arg, dst, src, len],
         );
 
         Ok(())
@@ -1140,13 +1134,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
 
-        let src_loc = pos.srcloc();
-        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
-
         pos.ins().call_indirect(
             func_sig,
             func_addr,
-            &[vmctx, memory_index_arg, dst, val, len, src_loc_arg],
+            &[vmctx, memory_index_arg, dst, val, len],
         );
 
         Ok(())
@@ -1166,23 +1157,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let memory_index_arg = pos.ins().iconst(I32, memory_index.index() as i64);
         let seg_index_arg = pos.ins().iconst(I32, seg_index as i64);
-        let src_loc = pos.srcloc();
-        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
 
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
 
         pos.ins().call_indirect(
             func_sig,
             func_addr,
-            &[
-                vmctx,
-                memory_index_arg,
-                seg_index_arg,
-                dst,
-                src,
-                len,
-                src_loc_arg,
-            ],
+            &[vmctx, memory_index_arg, seg_index_arg, dst, src, len],
         );
 
         Ok(())
@@ -1225,9 +1206,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let dst_table_index_arg = pos.ins().iconst(I32, dst_table_index_arg as i64);
         let src_table_index_arg = pos.ins().iconst(I32, src_table_index_arg as i64);
 
-        let src_loc = pos.srcloc();
-        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
-
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
 
         pos.ins().call_indirect(
@@ -1240,7 +1218,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 dst,
                 src,
                 len,
-                src_loc_arg,
             ],
         );
 
@@ -1263,23 +1240,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let table_index_arg = pos.ins().iconst(I32, table_index_arg as i64);
         let seg_index_arg = pos.ins().iconst(I32, seg_index as i64);
 
-        let src_loc = pos.srcloc();
-        let src_loc_arg = pos.ins().iconst(I32, src_loc.bits() as i64);
-
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
 
         pos.ins().call_indirect(
             func_sig,
             func_addr,
-            &[
-                vmctx,
-                table_index_arg,
-                seg_index_arg,
-                dst,
-                src,
-                len,
-                src_loc_arg,
-            ],
+            &[vmctx, table_index_arg, seg_index_arg, dst, src, len],
         );
 
         Ok(())
@@ -1295,6 +1261,39 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         pos.ins()
             .call_indirect(func_sig, func_addr, &[vmctx, elem_index_arg]);
 
+        Ok(())
+    }
+
+    fn translate_loop_header(&mut self, mut pos: FuncCursor) -> WasmResult<()> {
+        if !self.tunables.interruptable {
+            return Ok(());
+        }
+
+        // Start out each loop with a check to the interupt flag to allow
+        // interruption of long or infinite loops.
+        //
+        // For more information about this see comments in
+        // `crates/environ/src/cranelift.rs`
+        let vmctx = self.vmctx(&mut pos.func);
+        let pointer_type = self.pointer_type();
+        let base = pos.ins().global_value(pointer_type, vmctx);
+        let offset = i32::try_from(self.offsets.vmctx_interrupts()).unwrap();
+        let interrupt_ptr = pos
+            .ins()
+            .load(pointer_type, ir::MemFlags::trusted(), base, offset);
+        let interrupt = pos.ins().load(
+            pointer_type,
+            ir::MemFlags::trusted(),
+            interrupt_ptr,
+            i32::from(self.offsets.vminterrupts_stack_limit()),
+        );
+        // Note that the cast to `isize` happens first to allow sign-extension,
+        // if necessary, to `i64`.
+        let interrupted_sentinel = pos.ins().iconst(pointer_type, INTERRUPTED as isize as i64);
+        let cmp = pos
+            .ins()
+            .icmp(IntCC::Equal, interrupt, interrupted_sentinel);
+        pos.ins().trapnz(cmp, ir::TrapCode::Interrupt);
         Ok(())
     }
 }

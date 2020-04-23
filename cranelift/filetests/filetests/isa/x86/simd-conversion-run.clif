@@ -1,5 +1,6 @@
 test run
 set enable_simd
+target x86_64
 
 function %fcvt_from_sint() -> b1 {
 block0:

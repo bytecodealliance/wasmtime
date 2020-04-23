@@ -29,26 +29,26 @@ mod memory;
 mod mmap;
 mod sig_registry;
 mod table;
-mod trap_registry;
 mod traphandlers;
 mod vmcontext;
 
+pub mod debug_builtins;
 pub mod libcalls;
 
 pub use crate::export::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{InstanceHandle, InstantiationError, LinkError};
 pub use crate::jit_int::GdbJitImageRegistration;
+pub use crate::memory::{RuntimeLinearMemory, RuntimeMemoryCreator};
 pub use crate::mmap::Mmap;
 pub use crate::sig_registry::SignatureRegistry;
 pub use crate::table::Table;
-pub use crate::trap_registry::{TrapDescription, TrapRegistration, TrapRegistry};
 pub use crate::traphandlers::resume_panic;
 pub use crate::traphandlers::{catch_traps, raise_lib_trap, raise_user_trap, Trap};
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
-    VMTableDefinition, VMTableImport, VMTrampoline,
+    VMGlobalImport, VMInterrupts, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport,
+    VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMTrampoline,
 };
 
 /// Version number of this crate.

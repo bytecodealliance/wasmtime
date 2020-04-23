@@ -23,22 +23,20 @@
 
 mod code_memory;
 mod compiler;
-mod function_table;
 mod imports;
 mod instantiate;
 mod link;
 mod resolver;
-mod target_tunables;
+mod unwind;
 
 pub mod native;
 pub mod trampoline;
 
 pub use crate::code_memory::CodeMemory;
 pub use crate::compiler::{make_trampoline, Compilation, CompilationStrategy, Compiler};
-pub use crate::instantiate::{instantiate, CompiledModule, SetupError};
+pub use crate::instantiate::{CompiledModule, SetupError};
 pub use crate::link::link_module;
 pub use crate::resolver::{NullResolver, Resolver};
-pub use crate::target_tunables::target_tunables;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

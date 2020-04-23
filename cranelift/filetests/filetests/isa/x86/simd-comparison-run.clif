@@ -1,5 +1,6 @@
 test run
 set enable_simd
+target x86_64
 
 function %icmp_eq_i8x16() -> b8 {
 block0:

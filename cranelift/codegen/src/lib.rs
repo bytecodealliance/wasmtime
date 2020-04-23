@@ -39,6 +39,13 @@
     )
 )]
 #![no_std]
+// Various bits and pieces of this crate might only be used for one platform or
+// another, but it's not really too useful to learn about that all the time. On
+// CI we build at least one version of this crate with `--features all-arch`
+// which means we'll always detect truly dead code, otherwise if this is only
+// built for one platform we don't have to worry too much about trimming
+// everything down.
+#![cfg_attr(not(feature = "all-arch"), allow(dead_code))]
 
 #[allow(unused_imports)] // #[macro_use] is required for no_std
 #[macro_use]
@@ -71,6 +78,7 @@ pub mod flowgraph;
 pub mod ir;
 pub mod isa;
 pub mod loop_analysis;
+pub mod machinst;
 pub mod print_errors;
 pub mod settings;
 pub mod timing;
@@ -86,10 +94,12 @@ mod context;
 mod dce;
 mod divconst_magic_numbers;
 mod fx;
+mod inst_predicates;
 mod iterators;
 mod legalizer;
 mod licm;
 mod nan_canonicalization;
+mod num_uses;
 mod partition_slice;
 mod postopt;
 mod predicates;

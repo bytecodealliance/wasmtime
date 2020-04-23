@@ -8,6 +8,8 @@
 
 #define own
 
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
+
 int main(int argc, const char* argv[]) {
   // Configuring engine to support generating of DWARF info.
   // lldb can be used to attach to the program and observe
@@ -40,11 +42,10 @@ int main(int argc, const char* argv[]) {
 
   // Compile.
   printf("Compiling module...\n");
-  own wasm_module_t* module = wasm_module_new(store, &binary);
-  if (!module) {
-    printf("> Error compiling module!\n");
-    return 1;
-  }
+  wasm_module_t *module = NULL;
+  wasmtime_error_t* error = wasmtime_module_new(store, &binary, &module);
+  if (!module)
+    exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&binary);
 
   // Figure out which export is the `fib` export
@@ -68,12 +69,12 @@ int main(int argc, const char* argv[]) {
 
   // Instantiate.
   printf("Instantiating module...\n");
-  own wasm_instance_t* instance =
-    wasm_instance_new(store, module, NULL, NULL);
-  if (!instance) {
-    printf("> Error instantiating module!\n");
-    return 1;
-  }
+  wasm_instance_t* instance = NULL;
+  wasm_trap_t *trap = NULL;
+  error = wasmtime_instance_new(module, NULL, 0, &instance, &trap);
+  if (error != NULL || trap != NULL)
+    exit_with_error("failed to instantiate", error, trap);
+  wasm_module_delete(module);
 
   // Extract export.
   printf("Extracting export...\n");
@@ -84,23 +85,21 @@ int main(int argc, const char* argv[]) {
     return 1;
   }
   // Getting second export (first is memory).
-  const wasm_func_t* run_func = wasm_extern_as_func(exports.data[fib_idx]);
+  wasm_func_t* run_func = wasm_extern_as_func(exports.data[fib_idx]);
   if (run_func == NULL) {
     printf("> Error accessing export!\n");
     return 1;
   }
 
-  wasm_module_delete(module);
   wasm_instance_delete(instance);
 
   // Call.
   printf("Calling fib...\n");
   wasm_val_t params[1] = { {.kind = WASM_I32, .of = {.i32 = 6}} };
   wasm_val_t results[1];
-  if (wasm_func_call(run_func, params, results)) {
-    printf("> Error calling function!\n");
-    return 1;
-  }
+  error = wasmtime_func_call(run_func, params, 1, results, 1, &trap);
+  if (error != NULL || trap != NULL)
+    exit_with_error("failed to call function", error, trap);
 
   wasm_extern_vec_delete(&exports);
 
@@ -116,3 +115,15 @@ int main(int argc, const char* argv[]) {
   return 0;
 }
 
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+  fprintf(stderr, "error: %s\n", message);
+  wasm_byte_vec_t error_message;
+  if (error != NULL) {
+    wasmtime_error_message(error, &error_message);
+  } else {
+    wasm_trap_message(trap, &error_message);
+  }
+  fprintf(stderr, "%.*s\n", (int) error_message.size, error_message.data);
+  wasm_byte_vec_delete(&error_message);
+  exit(1);
+}

@@ -2,6 +2,8 @@
 
 use crate::{init_file_per_thread_logger, CommonOptions};
 use anyhow::{bail, Context as _, Result};
+use std::thread;
+use std::time::Duration;
 use std::{
     ffi::{OsStr, OsString},
     fs::File,
@@ -37,6 +39,16 @@ fn parse_map_dirs(s: &str) -> Result<(String, String)> {
         bail!("must contain exactly one double colon ('::')");
     }
     Ok((parts[0].into(), parts[1].into()))
+}
+
+fn parse_dur(s: &str) -> Result<Duration> {
+    // assume an integer without a unit specified is a number of seconds ...
+    if let Ok(val) = s.parse() {
+        return Ok(Duration::from_secs(val));
+    }
+    // ... otherwise try to parse it with units such as `3s` or `300ms`
+    let dur = humantime::parse_duration(s)?;
+    Ok(dur)
 }
 
 /// Runs a WebAssembly module
@@ -80,6 +92,14 @@ pub struct RunCommand {
     )]
     preloads: Vec<PathBuf>,
 
+    /// Maximum execution time of wasm code before timing out (1, 2s, 100ms, etc)
+    #[structopt(
+        long = "wasm-timeout",
+        value_name = "TIME",
+        parse(try_from_str = parse_dur),
+    )]
+    wasm_timeout: Option<Duration>,
+
     // NOTE: this must come last for trailing varargs
     /// The arguments to pass to the module
     #[structopt(value_name = "ARGS")]
@@ -96,7 +116,10 @@ impl RunCommand {
             pretty_env_logger::init();
         }
 
-        let config = self.common.config()?;
+        let mut config = self.common.config()?;
+        if self.wasm_timeout.is_some() {
+            config.interruptable(true);
+        }
         let engine = Engine::new(&config);
         let store = Store::new(&engine);
 
@@ -190,7 +213,7 @@ impl RunCommand {
         store: &Store,
         module_registry: &ModuleRegistry,
         path: &Path,
-    ) -> Result<(Instance, Module)> {
+    ) -> Result<Instance> {
         // Read the wasm module binary either as `*.wat` or a raw binary
         let data = wat::parse_file(path)?;
 
@@ -199,7 +222,6 @@ impl RunCommand {
         // Resolve import using module_registry.
         let imports = module
             .imports()
-            .iter()
             .map(|i| {
                 let export = match i.module() {
                     "wasi_snapshot_preview1" => {
@@ -222,20 +244,23 @@ impl RunCommand {
         let instance = Instance::new(&module, &imports)
             .context(format!("failed to instantiate {:?}", path))?;
 
-        Ok((instance, module))
+        Ok(instance)
     }
 
     fn handle_module(&self, store: &Store, module_registry: &ModuleRegistry) -> Result<()> {
-        let (instance, module) = Self::instantiate_module(store, module_registry, &self.module)?;
+        if let Some(timeout) = self.wasm_timeout {
+            let handle = store.interrupt_handle()?;
+            thread::spawn(move || {
+                thread::sleep(timeout);
+                handle.interrupt();
+            });
+        }
+        let instance = Self::instantiate_module(store, module_registry, &self.module)?;
 
         // If a function to invoke was given, invoke it.
         if let Some(name) = self.invoke.as_ref() {
             self.invoke_export(instance, name)?;
-        } else if module
-            .exports()
-            .iter()
-            .any(|export| export.name().is_empty())
-        {
+        } else if instance.exports().any(|export| export.name().is_empty()) {
             // Launch the default command export.
             self.invoke_export(instance, "")?;
         } else {
@@ -248,19 +273,16 @@ impl RunCommand {
     }
 
     fn invoke_export(&self, instance: Instance, name: &str) -> Result<()> {
-        let pos = instance
-            .module()
-            .exports()
-            .iter()
-            .enumerate()
-            .find(|(_, e)| e.name() == name);
-        let (ty, export) = match pos {
-            Some((i, ty)) => match (ty.ty(), &instance.exports()[i]) {
-                (wasmtime::ExternType::Func(ty), wasmtime::Extern::Func(f)) => (ty, f),
-                _ => bail!("export of `{}` wasn't a function", name),
-            },
-            None => bail!("failed to find export of `{}` in module", name),
+        let func = if let Some(export) = instance.get_export(name) {
+            if let Some(func) = export.into_func() {
+                func
+            } else {
+                bail!("export of `{}` wasn't a function", name)
+            }
+        } else {
+            bail!("failed to find export of `{}` in module", name)
         };
+        let ty = func.ty();
         if ty.params().len() > 0 {
             eprintln!(
                 "warning: using `--invoke` with a function that takes arguments \
@@ -288,7 +310,7 @@ impl RunCommand {
 
         // Invoke the function and then afterwards print all the results that came
         // out, if there are any.
-        let results = export
+        let results = func
             .call(&values)
             .with_context(|| format!("failed to invoke `{}`", name))?;
         if !results.is_empty() {

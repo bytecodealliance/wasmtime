@@ -382,6 +382,8 @@ pub enum AnyEntity {
     GlobalValue(GlobalValue),
     /// A jump table.
     JumpTable(JumpTable),
+    /// A constant.
+    Constant(Constant),
     /// An external function.
     FuncRef(FuncRef),
     /// A function call signature.
@@ -390,6 +392,8 @@ pub enum AnyEntity {
     Heap(Heap),
     /// A table.
     Table(Table),
+    /// A function's stack limit
+    StackLimit,
 }
 
 impl fmt::Display for AnyEntity {
@@ -402,10 +406,12 @@ impl fmt::Display for AnyEntity {
             Self::StackSlot(r) => r.fmt(f),
             Self::GlobalValue(r) => r.fmt(f),
             Self::JumpTable(r) => r.fmt(f),
+            Self::Constant(r) => r.fmt(f),
             Self::FuncRef(r) => r.fmt(f),
             Self::SigRef(r) => r.fmt(f),
             Self::Heap(r) => r.fmt(f),
             Self::Table(r) => r.fmt(f),
+            Self::StackLimit => write!(f, "stack_limit"),
         }
     }
 }
@@ -449,6 +455,12 @@ impl From<GlobalValue> for AnyEntity {
 impl From<JumpTable> for AnyEntity {
     fn from(r: JumpTable) -> Self {
         Self::JumpTable(r)
+    }
+}
+
+impl From<Constant> for AnyEntity {
+    fn from(r: Constant) -> Self {
+        Self::Constant(r)
     }
 }
 

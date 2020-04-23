@@ -24,9 +24,23 @@ pub(crate) fn init_fuzzing() {
     INIT.call_once(|| {
         let _ = env_logger::try_init();
 
-        rayon::ThreadPoolBuilder::new()
+        let _ = rayon::ThreadPoolBuilder::new()
             .num_threads(1)
-            .build_global()
-            .expect("should only initialize the rayon thread pool once!");
+            .build_global();
     })
+}
+
+/// Create default fuzzing config with given strategy
+pub(crate) fn fuzz_default_config(
+    strategy: wasmtime::Strategy,
+) -> anyhow::Result<wasmtime::Config> {
+    init_fuzzing();
+    let mut config = wasmtime::Config::new();
+    config
+        .cranelift_debug_verifier(true)
+        .cranelift_nan_canonicalization(true)
+        .wasm_multi_value(true)
+        .wasm_bulk_memory(true)
+        .strategy(strategy)?;
+    Ok(config)
 }

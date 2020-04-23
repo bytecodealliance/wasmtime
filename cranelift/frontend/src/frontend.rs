@@ -1262,13 +1262,15 @@ block0:
         assert_eq!(
             func.display(None).to_string(),
             "function %sample() -> i8x16, b8x16, f32x4 system_v {
+    const0 = 0x00000000000000000000000000000000
+
 block0:
     v5 = f32const 0.0
     v6 = splat.f32x4 v5
     v2 -> v6
-    v4 = vconst.b8x16 0x00
+    v4 = vconst.b8x16 const0
     v1 -> v4
-    v3 = vconst.i8x16 0x00
+    v3 = vconst.i8x16 const0
     v0 -> v3
     return v0, v1, v2
 }

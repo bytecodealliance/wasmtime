@@ -43,10 +43,15 @@ fn pick_compilation_strategy(cranelift: bool, lightbeam: bool) -> Result<Strateg
     })
 }
 
-fn pick_profiling_strategy(jitdump: bool) -> Result<ProfilingStrategy> {
-    Ok(match jitdump {
-        true => ProfilingStrategy::JitDump,
-        false => ProfilingStrategy::None,
+fn pick_profiling_strategy(jitdump: bool, vtune: bool) -> Result<ProfilingStrategy> {
+    Ok(match (jitdump, vtune) {
+        (true, false) => ProfilingStrategy::JitDump,
+        (false, true) => ProfilingStrategy::VTune,
+        (true, true) => {
+            println!("Can't enable --jitdump and --vtune at the same time. Profiling not enabled.");
+            ProfilingStrategy::None
+        }
+        _ => ProfilingStrategy::None,
     })
 }
 
@@ -128,8 +133,12 @@ struct CommonOptions {
     lightbeam: bool,
 
     /// Generate jitdump file (supported on --features=profiling build)
-    #[structopt(long)]
+    #[structopt(long, conflicts_with = "vtune")]
     jitdump: bool,
+
+    /// Generate vtune (supported on --features=vtune build)
+    #[structopt(long, conflicts_with = "jitdump")]
+    vtune: bool,
 
     /// Run optimization passes on translated functions, on by default
     #[structopt(short = "O", long)]
@@ -158,7 +167,7 @@ impl CommonOptions {
             .wasm_threads(self.enable_threads || self.enable_all)
             .cranelift_opt_level(self.opt_level())
             .strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?
-            .profiler(pick_profiling_strategy(self.jitdump)?)?;
+            .profiler(pick_profiling_strategy(self.jitdump, self.vtune)?)?;
         if !self.disable_cache {
             match &self.config {
                 Some(path) => {

@@ -1,12 +1,13 @@
 use crate::{wasm_externtype_t, wasm_name_t};
 use once_cell::unsync::OnceCell;
-use std::str;
-use wasmtime::ImportType;
+use wasmtime::ExternType;
 
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_importtype_t {
-    pub(crate) ty: ImportType,
+    pub(crate) module: String,
+    pub(crate) name: String,
+    pub(crate) ty: ExternType,
     module_cache: OnceCell<wasm_name_t>,
     name_cache: OnceCell<wasm_name_t>,
     type_cache: OnceCell<wasm_externtype_t>,
@@ -15,8 +16,10 @@ pub struct wasm_importtype_t {
 wasmtime_c_api_macros::declare_ty!(wasm_importtype_t);
 
 impl wasm_importtype_t {
-    pub(crate) fn new(ty: ImportType) -> wasm_importtype_t {
+    pub(crate) fn new(module: String, name: String, ty: ExternType) -> wasm_importtype_t {
         wasm_importtype_t {
+            module,
+            name,
             ty,
             module_cache: OnceCell::new(),
             name_cache: OnceCell::new(),
@@ -33,26 +36,25 @@ pub extern "C" fn wasm_importtype_new(
 ) -> Option<Box<wasm_importtype_t>> {
     let module = module.take();
     let name = name.take();
-    let module = str::from_utf8(&module).ok()?;
-    let name = str::from_utf8(&name).ok()?;
-    let ty = ImportType::new(module, name, ty.ty());
-    Some(Box::new(wasm_importtype_t::new(ty)))
+    let module = String::from_utf8(module).ok()?;
+    let name = String::from_utf8(name).ok()?;
+    Some(Box::new(wasm_importtype_t::new(module, name, ty.ty())))
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_importtype_module(it: &wasm_importtype_t) -> &wasm_name_t {
     it.module_cache
-        .get_or_init(|| wasm_name_t::from_name(&it.ty.module()))
+        .get_or_init(|| wasm_name_t::from_name(it.module.clone()))
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_importtype_name(it: &wasm_importtype_t) -> &wasm_name_t {
     it.name_cache
-        .get_or_init(|| wasm_name_t::from_name(&it.ty.name()))
+        .get_or_init(|| wasm_name_t::from_name(it.name.clone()))
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_importtype_type(it: &wasm_importtype_t) -> &wasm_externtype_t {
     it.type_cache
-        .get_or_init(|| wasm_externtype_t::new(it.ty.ty().clone()))
+        .get_or_init(|| wasm_externtype_t::new(it.ty.clone()))
 }

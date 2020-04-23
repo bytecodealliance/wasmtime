@@ -6,6 +6,7 @@ use quote::quote;
 use witx::Layout;
 
 pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDatatype) -> TokenStream {
+    let rt = names.runtime_mod();
     let ident = names.type_(name);
     let size = u.mem_size_align().size as u32;
     let align = u.mem_size_align().align as usize;
@@ -33,7 +34,7 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
             quote! {
                 #tagname::#variantname => {
                     let variant_ptr = location.cast::<u8>().add(#contents_offset)?;
-                    let variant_val = <#varianttype as wiggle::GuestType>::read(&variant_ptr.cast())?;
+                    let variant_val = <#varianttype as #rt::GuestType>::read(&variant_ptr.cast())?;
                     Ok(#ident::#variantname(variant_val))
                 }
             }
@@ -53,7 +54,7 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
                 #ident::#variantname(contents) => {
                     #write_tag
                     let variant_ptr = location.cast::<u8>().add(#contents_offset)?;
-                    <#varianttype as wiggle::GuestType>::write(&variant_ptr.cast(), contents)?;
+                    <#varianttype as #rt::GuestType>::write(&variant_ptr.cast(), contents)?;
                 }
             }
         } else {
@@ -77,7 +78,7 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
             #(#variants),*
         }
 
-        impl<'a> wiggle::GuestType<'a> for #ident #enum_lifetime {
+        impl<'a> #rt::GuestType<'a> for #ident #enum_lifetime {
             fn guest_size() -> u32 {
                 #size
             }
@@ -86,8 +87,8 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
                 #align
             }
 
-            fn read(location: &wiggle::GuestPtr<'a, Self>)
-                -> Result<Self, wiggle::GuestError>
+            fn read(location: &#rt::GuestPtr<'a, Self>)
+                -> Result<Self, #rt::GuestError>
             {
                 let tag = location.cast().read()?;
                 match tag {
@@ -96,8 +97,8 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
 
             }
 
-            fn write(location: &wiggle::GuestPtr<'_, Self>, val: Self)
-                -> Result<(), wiggle::GuestError>
+            fn write(location: &#rt::GuestPtr<'_, Self>, val: Self)
+                -> Result<(), #rt::GuestError>
             {
                 match val {
                     #(#write_variant)*

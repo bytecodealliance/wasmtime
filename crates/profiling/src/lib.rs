@@ -15,7 +15,18 @@ cfg_if::cfg_if! {
     }
 }
 
+cfg_if::cfg_if! {
+    if #[cfg(all(feature = "vtune", target_os = "linux"))] {
+        #[path = "vtune_linux.rs"]
+        mod vtune;
+    } else {
+        #[path = "vtune_disabled.rs"]
+        mod vtune;
+    }
+}
+
 pub use crate::jitdump::JitDumpAgent;
+pub use crate::vtune::VTuneAgent;
 
 /// Common interface for profiling tools.
 pub trait ProfilingAgent: Send + Sync + 'static {

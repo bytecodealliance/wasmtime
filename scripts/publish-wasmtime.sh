@@ -24,7 +24,6 @@ for cargo_toml in \
     crates/wiggle/generate/Cargo.toml \
     crates/wiggle/macro/Cargo.toml \
     crates/wiggle/Cargo.toml \
-    crates/wiggle/test-helper/Cargo.toml \
     crates/wasi-common/Cargo.toml \
     crates/lightbeam/Cargo.toml \
     crates/environ/Cargo.toml \
@@ -54,4 +53,4 @@ for cargo_toml in \
     echo sleep 20
 done
 
-echo echo git tag v$(grep "version =" Cargo.toml | head -n 1 | cut -d '"' -f 2)
+echo git tag v$(grep "version =" Cargo.toml | head -n 1 | cut -d '"' -f 2)

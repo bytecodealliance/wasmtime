@@ -3,6 +3,7 @@
 
 use crate::instance::Instance;
 use std::any::Any;
+use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::{ptr, u32};
 use wasmtime_environ::BuiltinFunctionIndex;
 
@@ -612,6 +613,52 @@ impl VMInvokeArgument {
     }
 }
 
+/// Structure used to control interrupting wasm code, currently with only one
+/// atomic flag internally used.
+#[derive(Debug)]
+#[repr(C)]
+pub struct VMInterrupts {
+    /// Current stack limit of the wasm module.
+    ///
+    /// This is used to control both stack overflow as well as interrupting wasm
+    /// modules. For more information see `crates/environ/src/cranelift.rs`.
+    pub stack_limit: AtomicUsize,
+}
+
+impl VMInterrupts {
+    /// Flag that an interrupt should occur
+    pub fn interrupt(&self) {
+        self.stack_limit
+            .store(wasmtime_environ::INTERRUPTED, SeqCst);
+    }
+}
+
+impl Default for VMInterrupts {
+    fn default() -> VMInterrupts {
+        VMInterrupts {
+            stack_limit: AtomicUsize::new(usize::max_value()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_vminterrupts {
+    use super::VMInterrupts;
+    use memoffset::offset_of;
+    use std::mem::size_of;
+    use wasmtime_environ::{Module, VMOffsets};
+
+    #[test]
+    fn check_vminterrupts_interrupted_offset() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module.local);
+        assert_eq!(
+            offset_of!(VMInterrupts, stack_limit),
+            usize::from(offsets.vminterrupts_stack_limit())
+        );
+    }
+}
+
 /// The VM "context", which is pointed to by the `vmctx` arg in Cranelift.
 /// This has information about globals, memories, tables, and other runtime
 /// state associated with the current instance.
@@ -632,6 +679,7 @@ impl VMContext {
     /// This is unsafe because it doesn't work on just any `VMContext`, it must
     /// be a `VMContext` allocated as part of an `Instance`.
     #[allow(clippy::cast_ptr_alignment)]
+    #[inline]
     pub(crate) unsafe fn instance(&self) -> &Instance {
         &*((self as *const Self as *mut u8).offset(-Instance::vmctx_offset()) as *const Instance)
     }
@@ -641,6 +689,7 @@ impl VMContext {
     /// # Safety
     /// This is unsafe because it doesn't work on just any `VMContext`, it must
     /// be a `VMContext` allocated as part of an `Instance`.
+    #[inline]
     pub unsafe fn host_state(&self) -> &dyn Any {
         self.instance().host_state()
     }

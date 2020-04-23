@@ -1,6 +1,6 @@
 use proptest::prelude::*;
 use std::convert::TryFrom;
-use wiggle::{GuestError, GuestMemory};
+use wiggle::GuestMemory;
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
@@ -8,7 +8,7 @@ wiggle::from_witx!({
     ctx: WasiCtx,
 });
 
-impl_errno!(types::Errno);
+impl_errno!(types::Errno, types::GuestErrorConversion);
 
 impl<'a> ints::Ints for WasiCtx<'a> {
     fn cookie_cutter(&self, init_cookie: types::Cookie) -> Result<types::Bool, types::Errno> {

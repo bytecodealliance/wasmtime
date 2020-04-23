@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle::{GuestError, GuestMemory, GuestPtr};
+use wiggle::{GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
@@ -7,7 +7,7 @@ wiggle::from_witx!({
     ctx: WasiCtx,
 });
 
-impl_errno!(types::Errno);
+impl_errno!(types::Errno, types::GuestErrorConversion);
 
 impl<'a> structs::Structs for WasiCtx<'a> {
     fn sum_of_pair(&self, an_pair: &types::PairInts) -> Result<i64, types::Errno> {

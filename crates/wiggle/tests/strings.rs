@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle::{GuestBorrows, GuestError, GuestMemory, GuestPtr};
+use wiggle::{GuestBorrows, GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, MemAreas, WasiCtx};
 
 wiggle::from_witx!({
@@ -7,7 +7,7 @@ wiggle::from_witx!({
     ctx: WasiCtx,
 });
 
-impl_errno!(types::Errno);
+impl_errno!(types::Errno, types::GuestErrorConversion);
 
 impl<'a> strings::Strings for WasiCtx<'a> {
     fn hello_string(&self, a_string: &GuestPtr<str>) -> Result<u32, types::Errno> {

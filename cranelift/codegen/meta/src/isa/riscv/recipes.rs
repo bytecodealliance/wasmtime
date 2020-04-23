@@ -205,7 +205,8 @@ pub(crate) fn define(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> RecipeG
 
     recipes.push(EncodingRecipeBuilder::new("UJcall", &formats.call, 4).emit(
         r#"
-                    sink.reloc_external(Reloc::RiscvCall,
+                    sink.reloc_external(func.srclocs[inst],
+                                        Reloc::RiscvCall,
                                         &func.dfg.ext_funcs[func_ref].name,
                                         0);
                     // rd=%x1 is the standard link register.

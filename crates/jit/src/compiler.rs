@@ -2,29 +2,26 @@
 
 use crate::code_memory::CodeMemory;
 use crate::instantiate::SetupError;
-use crate::target_tunables::target_tunables;
 use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::ir::InstBuilder;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
-use cranelift_wasm::ModuleTranslationState;
 use std::collections::HashMap;
-use std::convert::TryFrom;
+use std::sync::Arc;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
 use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex};
-use wasmtime_environ::RelocationTarget;
 use wasmtime_environ::{
-    CacheConfig, CompileError, CompiledFunction, CompiledFunctionUnwindInfo, Compiler as _C,
-    FunctionBodyData, Module, ModuleMemoryOffset, ModuleVmctxInfo, Relocation, Relocations, Traps,
-    Tunables, VMOffsets,
+    CacheConfig, CompileError, CompiledFunction, Compiler as _C, ModuleAddressMap,
+    ModuleMemoryOffset, ModuleTranslation, ModuleVmctxInfo, Relocation, RelocationTarget,
+    Relocations, Traps, Tunables, VMOffsets,
 };
 use wasmtime_runtime::{
-    InstantiationError, SignatureRegistry, TrapRegistration, TrapRegistry, VMFunctionBody,
-    VMSharedSignatureIndex, VMTrampoline,
+    InstantiationError, SignatureRegistry, VMFunctionBody, VMInterrupts, VMSharedSignatureIndex,
+    VMTrampoline,
 };
 
 /// Select which kind of compilation to use.
@@ -51,12 +48,12 @@ pub enum CompilationStrategy {
 /// TODO: Consider using cranelift-module.
 pub struct Compiler {
     isa: Box<dyn TargetIsa>,
-
     code_memory: CodeMemory,
-    trap_registry: TrapRegistry,
     signatures: SignatureRegistry,
     strategy: CompilationStrategy,
     cache_config: CacheConfig,
+    tunables: Tunables,
+    interrupts: Arc<VMInterrupts>,
 }
 
 impl Compiler {
@@ -65,14 +62,16 @@ impl Compiler {
         isa: Box<dyn TargetIsa>,
         strategy: CompilationStrategy,
         cache_config: CacheConfig,
+        tunables: Tunables,
     ) -> Self {
         Self {
             isa,
             code_memory: CodeMemory::new(),
             signatures: SignatureRegistry::new(),
             strategy,
-            trap_registry: TrapRegistry::default(),
             cache_config,
+            tunables,
+            interrupts: Arc::new(VMInterrupts::default()),
         }
     }
 }
@@ -85,7 +84,8 @@ pub struct Compilation {
     pub trampoline_relocations: HashMap<VMSharedSignatureIndex, Vec<Relocation>>,
     pub jt_offsets: PrimaryMap<DefinedFuncIndex, ir::JumpTableOffsets>,
     pub dbg_image: Option<Vec<u8>>,
-    pub trap_registration: TrapRegistration,
+    pub traps: Traps,
+    pub address_transform: ModuleAddressMap,
 }
 
 impl Compiler {
@@ -95,52 +95,42 @@ impl Compiler {
     }
 
     /// Return the tunables in use by this engine.
-    pub fn tunables(&self) -> Tunables {
-        target_tunables(self.isa.triple())
+    pub fn tunables(&self) -> &Tunables {
+        &self.tunables
+    }
+
+    /// Return the handle by which to interrupt instances
+    pub fn interrupts(&self) -> &Arc<VMInterrupts> {
+        &self.interrupts
     }
 
     /// Compile the given function bodies.
     pub(crate) fn compile<'data>(
         &mut self,
-        module: &Module,
-        module_translation: &ModuleTranslationState,
-        function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
+        translation: &ModuleTranslation,
         debug_data: Option<DebugInfoData>,
     ) -> Result<Compilation, SetupError> {
-        let (
-            compilation,
-            relocations,
-            address_transform,
-            value_ranges,
-            stack_slots,
-            traps,
-            frame_layouts,
-        ) = match self.strategy {
-            // For now, interpret `Auto` as `Cranelift` since that's the most stable
-            // implementation.
-            CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
-                wasmtime_environ::cranelift::Cranelift::compile_module(
-                    module,
-                    module_translation,
-                    function_body_inputs,
-                    &*self.isa,
-                    debug_data.is_some(),
-                    &self.cache_config,
-                )
+        let (compilation, relocations, address_transform, value_ranges, stack_slots, traps) =
+            match self.strategy {
+                // For now, interpret `Auto` as `Cranelift` since that's the most stable
+                // implementation.
+                CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
+                    wasmtime_environ::cranelift::Cranelift::compile_module(
+                        translation,
+                        &*self.isa,
+                        &self.cache_config,
+                    )
+                }
+                #[cfg(feature = "lightbeam")]
+                CompilationStrategy::Lightbeam => {
+                    wasmtime_environ::lightbeam::Lightbeam::compile_module(
+                        translation,
+                        &*self.isa,
+                        &self.cache_config,
+                    )
+                }
             }
-            #[cfg(feature = "lightbeam")]
-            CompilationStrategy::Lightbeam => {
-                wasmtime_environ::lightbeam::Lightbeam::compile_module(
-                    module,
-                    module_translation,
-                    function_body_inputs,
-                    &*self.isa,
-                    debug_data.is_some(),
-                    &self.cache_config,
-                )
-            }
-        }
-        .map_err(SetupError::Compile)?;
+            .map_err(SetupError::Compile)?;
 
         // Allocate all of the compiled functions into executable memory,
         // copying over their contents.
@@ -152,11 +142,6 @@ impl Compiler {
                 )))
             })?;
 
-        // Create a registration value for all traps in our allocated
-        // functions. This registration will allow us to map a trapping PC
-        // value to what the trap actually means if it came from JIT code.
-        let trap_registration = register_traps(&finished_functions, &traps, &self.trap_registry);
-
         // Eagerly generate a entry trampoline for every type signature in the
         // module. This should be "relatively lightweight" for most modules and
         // guarantees that all functions (including indirect ones through
@@ -164,7 +149,7 @@ impl Compiler {
         let mut cx = FunctionBuilderContext::new();
         let mut trampolines = HashMap::new();
         let mut trampoline_relocations = HashMap::new();
-        for sig in module.local.signatures.values() {
+        for sig in translation.module.local.signatures.values() {
             let index = self.signatures.register(sig);
             if trampolines.contains_key(&index) {
                 continue;
@@ -190,7 +175,7 @@ impl Compiler {
         // Translate debug info (DWARF) only if at least one function is present.
         let dbg_image = if debug_data.is_some() && !finished_functions.is_empty() {
             let target_config = self.isa.frontend_config();
-            let ofs = VMOffsets::new(target_config.pointer_bytes(), &module.local);
+            let ofs = VMOffsets::new(target_config.pointer_bytes(), &translation.module.local);
 
             let mut funcs = Vec::new();
             for (i, allocated) in finished_functions.into_iter() {
@@ -218,8 +203,8 @@ impl Compiler {
                 &module_vmctx_info,
                 &address_transform,
                 &value_ranges,
-                &frame_layouts,
                 &funcs,
+                &compilation,
             )
             .map_err(SetupError::DebugInfo)?;
             Some(bytes)
@@ -236,23 +221,19 @@ impl Compiler {
             trampoline_relocations,
             jt_offsets,
             dbg_image,
-            trap_registration,
+            traps,
+            address_transform,
         })
     }
 
     /// Make memory containing compiled code executable.
     pub(crate) fn publish_compiled_code(&mut self) {
-        self.code_memory.publish();
+        self.code_memory.publish(self.isa.as_ref());
     }
 
     /// Shared signature registry.
     pub fn signatures(&self) -> &SignatureRegistry {
         &self.signatures
-    }
-
-    /// Shared registration of trap information
-    pub fn trap_registry(&self) -> &TrapRegistry {
-        &self.trap_registry
     }
 }
 
@@ -284,7 +265,6 @@ pub fn make_trampoline(
 
     let mut context = Context::new();
     context.func = ir::Function::with_name_signature(ir::ExternalName::user(0, 0), wrapper_sig);
-    context.func.collect_frame_layout_info();
 
     {
         let mut builder = FunctionBuilder::new(&mut context.func, fn_builder_ctx);
@@ -363,7 +343,13 @@ pub fn make_trampoline(
             )))
         })?;
 
-    let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context);
+    let unwind_info = context.create_unwind_info(isa).map_err(|error| {
+        SetupError::Compile(CompileError::Codegen(pretty_error(
+            &context.func,
+            Some(isa),
+            error,
+        )))
+    })?;
 
     let ptr = code_memory
         .allocate_for_function(&CompiledFunction {
@@ -383,6 +369,10 @@ fn allocate_functions(
     code_memory: &mut CodeMemory,
     compilation: &wasmtime_environ::Compilation,
 ) -> Result<PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>, String> {
+    if compilation.is_empty() {
+        return Ok(PrimaryMap::new());
+    }
+
     let fat_ptrs = code_memory.allocate_for_compilation(compilation)?;
 
     // Second, create a PrimaryMap from result vector of pointers.
@@ -391,27 +381,8 @@ fn allocate_functions(
         let fat_ptr: *mut [VMFunctionBody] = fat_ptrs[i];
         result.push(fat_ptr);
     }
-    Ok(result)
-}
 
-fn register_traps(
-    allocated_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-    traps: &Traps,
-    registry: &TrapRegistry,
-) -> TrapRegistration {
-    let traps =
-        allocated_functions
-            .values()
-            .zip(traps.values())
-            .flat_map(|(func_addr, func_traps)| {
-                func_traps.iter().map(move |trap_desc| {
-                    let func_addr = *func_addr as *const u8 as usize;
-                    let offset = usize::try_from(trap_desc.code_offset).unwrap();
-                    let trap_addr = func_addr + offset;
-                    (trap_addr, trap_desc.source_loc, trap_desc.trap_code)
-                })
-            });
-    registry.register_traps(traps)
+    Ok(result)
 }
 
 /// We don't expect trampoline compilation to produce many relocations, so
@@ -434,6 +405,7 @@ impl binemit::RelocSink for RelocSink {
     fn reloc_external(
         &mut self,
         offset: binemit::CodeOffset,
+        _srcloc: ir::SourceLoc,
         reloc: binemit::Reloc,
         name: &ir::ExternalName,
         addend: binemit::Addend,

@@ -1,6 +1,6 @@
 [package]
 name = "run-examples"
-version = "0.14.0"
+version = "0.15.0"
 authors = ["The Wasmtime Project Developers"]
 edition = "2018"
 publish = false

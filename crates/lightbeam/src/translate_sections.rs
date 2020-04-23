@@ -86,6 +86,7 @@ impl binemit::RelocSink for UnimplementedRelocSink {
     fn reloc_external(
         &mut self,
         _: binemit::CodeOffset,
+        _: ir::SourceLoc,
         _: binemit::Reloc,
         _: &ir::ExternalName,
         _: binemit::Addend,

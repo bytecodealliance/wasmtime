@@ -1,22 +1,104 @@
 //! Support for compiling with Cranelift.
 
+// # How does Wasmtime prevent stack overflow?
+//
+// A few locations throughout the codebase link to this file to explain
+// interrupts and stack overflow. To start off, let's take a look at stack
+// overflow. Wasm code is well-defined to have stack overflow being recoverable
+// and raising a trap, so we need to handle this somehow! There's also an added
+// constraint where as an embedder you frequently are running host-provided
+// code called from wasm. WebAssembly and native code currently share the same
+// call stack, so you want to make sure that your host-provided code will have
+// enough call-stack available to it.
+//
+// Given all that, the way that stack overflow is handled is by adding a
+// prologue check to all JIT functions for how much native stack is remaining.
+// The `VMContext` pointer is the first argument to all functions, and the first
+// field of this structure is `*const VMInterrupts` and the first field of that
+// is the stack limit. Note that the stack limit in this case means "if the
+// stack pointer goes below this, trap". Each JIT function which consumes stack
+// space or isn't a leaf function starts off by loading the stack limit,
+// checking it against the stack pointer, and optionally traps.
+//
+// This manual check allows the embedder (us) to give wasm a relatively precise
+// amount of stack allocation. Using this scheme we reserve a chunk of stack
+// for wasm code relative from where wasm code was called. This ensures that
+// native code called by wasm should have native stack space to run, and the
+// numbers of stack spaces here should all be configurable for various
+// embeddings.
+//
+// Note that we do not consider each thread's stack guard page here. It's
+// considered that if you hit that you still abort the whole program. This
+// shouldn't happen most of the time because wasm is always stack-bound and
+// it's up to the embedder to bound its own native stack.
+//
+// So all-in-all, that's how we implement stack checks. Note that stack checks
+// cannot be disabled because it's a feature of core wasm semantics. This means
+// that all functions almost always have a stack check prologue, and it's up to
+// us to optimize away that cost as much as we can.
+//
+// For more information about the tricky bits of managing the reserved stack
+// size of wasm, see the implementation in `traphandlers.rs` in the
+// `update_stack_limit` function.
+//
+// # How is Wasmtime interrupted?
+//
+// Ok so given all that background of stack checks, the next thing we want to
+// build on top of this is the ability to *interrupt* executing wasm code. This
+// is useful to ensure that wasm always executes within a particular time slice
+// or otherwise doesn't consume all CPU resources on a system. There are two
+// major ways that interrupts are required:
+//
+// * Loops - likely immediately apparent but it's easy to write an infinite
+//   loop in wasm, so we need the ability to interrupt loops.
+// * Function entries - somewhat more subtle, but imagine a module where each
+//   function calls the next function twice. This creates 2^n calls pretty
+//   quickly, so a pretty small module can export a function with no loops
+//   that takes an extremely long time to call.
+//
+// In many cases if an interrupt comes in you want to interrupt host code as
+// well, but we're explicitly not considering that here. We're hoping that
+// interrupting host code is largely left to the embedder (e.g. figuring out
+// how to interrupt blocking syscalls) and they can figure that out. The purpose
+// of this feature is to basically only give the ability to interrupt
+// currently-executing wasm code (or triggering an interrupt as soon as wasm
+// reenters itself).
+//
+// To implement interruption of loops we insert code at the head of all loops
+// which checks the stack limit counter. If the counter matches a magical
+// sentinel value that's impossible to be the real stack limit, then we
+// interrupt the loop and trap. To implement interrupts of functions, we
+// actually do the same thing where the magical sentinel value we use here is
+// automatically considered as considering all stack pointer values as "you ran
+// over your stack". This means that with a write of a magical value to one
+// location we can interrupt both loops and function bodies.
+//
+// The "magical value" here is `usize::max_value() - N`. We reserve
+// `usize::max_value()` for "the stack limit isn't set yet" and so -N is
+// then used for "you got interrupted". We do a bit of patching afterwards to
+// translate a stack overflow into an interrupt trap if we see that an
+// interrupt happened. Note that `N` here is a medium-size-ish nonzero value
+// chosen in coordination with the cranelift backend. Currently it's 32k. The
+// value of N is basically a threshold in the backend for "anything less than
+// this requires only one branch in the prologue, any stack size bigger requires
+// two branches". Naturally we want most functions to have one branch, but we
+// also need to actually catch stack overflow, so for now 32k is chosen and it's
+// assume no valid stack pointer will ever be `usize::max_value() - 32k`.
+
 use crate::address_map::{FunctionAddressMap, InstructionAddressMap};
 use crate::cache::{ModuleCacheDataTupleType, ModuleCacheEntry};
 use crate::compilation::{
-    Compilation, CompileError, CompiledFunction, CompiledFunctionUnwindInfo, Relocation,
-    RelocationTarget, TrapInformation,
+    Compilation, CompileError, CompiledFunction, Relocation, RelocationTarget, TrapInformation,
 };
-use crate::frame_layout::FrameLayout;
 use crate::func_environ::{get_func_name, FuncEnvironment};
-use crate::module::{Module, ModuleLocal};
-use crate::module_environ::FunctionBodyData;
-use crate::CacheConfig;
+use crate::{CacheConfig, FunctionBodyData, ModuleLocal, ModuleTranslation, Tunables};
 use cranelift_codegen::ir::{self, ExternalName};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{binemit, isa, Context};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, ModuleTranslationState};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 
 /// Implementation of a relocation sink that just saves all the information for later
@@ -41,6 +123,7 @@ impl binemit::RelocSink for RelocSink {
     fn reloc_external(
         &mut self,
         offset: binemit::CodeOffset,
+        _srcloc: ir::SourceLoc,
         reloc: binemit::Reloc,
         name: &ExternalName,
         addend: binemit::Addend,
@@ -132,15 +215,19 @@ fn get_function_address_map<'data>(
     let mut blocks = func.layout.blocks().collect::<Vec<_>>();
     blocks.sort_by_key(|block| func.offsets[*block]); // Ensure inst offsets always increase
 
-    let encinfo = isa.encoding_info();
-    for block in blocks {
-        for (offset, inst, size) in func.inst_offsets(block, &encinfo) {
-            let srcloc = func.srclocs[inst];
-            instructions.push(InstructionAddressMap {
-                srcloc,
-                code_offset: offset as usize,
-                code_len: size as usize,
-            });
+    // FIXME(#1523): New backend does not support debug info or instruction-address mapping
+    // yet.
+    if !isa.get_mach_backend().is_some() {
+        let encinfo = isa.encoding_info();
+        for block in blocks {
+            for (offset, inst, size) in func.inst_offsets(block, &encinfo) {
+                let srcloc = func.srclocs[inst];
+                instructions.push(InstructionAddressMap {
+                    srcloc,
+                    code_offset: offset as usize,
+                    code_len: size as usize,
+                });
+            }
         }
     }
 
@@ -159,38 +246,6 @@ fn get_function_address_map<'data>(
     }
 }
 
-fn get_frame_layout(
-    context: &Context,
-    isa: &dyn isa::TargetIsa,
-) -> (
-    Box<[ir::FrameLayoutChange]>,
-    Box<[(usize, ir::FrameLayoutChange)]>,
-) {
-    let func = &context.func;
-    assert!(func.frame_layout.is_some(), "expected func.frame_layout");
-
-    let mut blocks = func.layout.blocks().collect::<Vec<_>>();
-    blocks.sort_by_key(|b| func.offsets[*b]); // Ensure inst offsets always increase
-
-    let encinfo = isa.encoding_info();
-    let mut last_offset = 0;
-    let mut commands = Vec::new();
-    for b in blocks {
-        for (offset, inst, size) in func.inst_offsets(b, &encinfo) {
-            if let Some(cmds) = func.frame_layout.as_ref().unwrap().instructions.get(&inst) {
-                let address_offset = (offset + size) as usize;
-                assert!(last_offset < address_offset);
-                for cmd in cmds.iter() {
-                    commands.push((address_offset, cmd.clone()));
-                }
-                last_offset = address_offset;
-            }
-        }
-    }
-    let initial = func.frame_layout.as_ref().unwrap().initial.clone();
-    (initial, commands.into_boxed_slice())
-}
-
 /// A compiler that compiles a WebAssembly module with Cranelift, translating the Wasm to Cranelift IR,
 /// optimizing it and then translating to assembly.
 pub struct Cranelift;
@@ -199,72 +254,91 @@ impl crate::compilation::Compiler for Cranelift {
     /// Compile the module using Cranelift, producing a compilation result with
     /// associated relocations.
     fn compile_module(
-        module: &Module,
-        module_translation: &ModuleTranslationState,
-        function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'_>>,
+        translation: &ModuleTranslation,
         isa: &dyn isa::TargetIsa,
-        generate_debug_info: bool,
         cache_config: &CacheConfig,
     ) -> Result<ModuleCacheDataTupleType, CompileError> {
         let cache_entry = ModuleCacheEntry::new("cranelift", cache_config);
 
         let data = cache_entry.get_data(
-            (
-                &module.local,
-                HashedModuleTranslationState(module_translation),
-                function_body_inputs,
-                Isa(isa),
-                generate_debug_info,
-            ),
+            CompileEnv {
+                local: &translation.module.local,
+                module_translation: HashedModuleTranslationState(
+                    translation.module_translation.as_ref().unwrap(),
+                ),
+                function_body_inputs: &translation.function_body_inputs,
+                isa: Isa(isa),
+                tunables: &translation.tunables,
+            },
             compile,
         )?;
         Ok(data.into_tuple())
     }
 }
 
-fn compile(
-    (
-        module,
-        HashedModuleTranslationState(module_translation),
-        function_body_inputs,
-        Isa(isa),
-        generate_debug_info,
-    ): (
-        &ModuleLocal,
-        HashedModuleTranslationState<'_>,
-        PrimaryMap<DefinedFuncIndex, FunctionBodyData<'_>>,
-        Isa<'_, '_>,
-        bool,
-    ),
-) -> Result<ModuleCacheDataTupleType, CompileError> {
-    let mut functions = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut relocations = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut address_transforms = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut value_ranges = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut stack_slots = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut traps = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut frame_layouts = PrimaryMap::with_capacity(function_body_inputs.len());
+fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError> {
+    let Isa(isa) = env.isa;
+    let mut functions = PrimaryMap::with_capacity(env.function_body_inputs.len());
+    let mut relocations = PrimaryMap::with_capacity(env.function_body_inputs.len());
+    let mut address_transforms = PrimaryMap::with_capacity(env.function_body_inputs.len());
+    let mut value_ranges = PrimaryMap::with_capacity(env.function_body_inputs.len());
+    let mut stack_slots = PrimaryMap::with_capacity(env.function_body_inputs.len());
+    let mut traps = PrimaryMap::with_capacity(env.function_body_inputs.len());
 
-    function_body_inputs
+    env.function_body_inputs
         .into_iter()
         .collect::<Vec<(DefinedFuncIndex, &FunctionBodyData<'_>)>>()
         .par_iter()
         .map_init(FuncTranslator::new, |func_translator, (i, input)| {
-            let func_index = module.func_index(*i);
+            let func_index = env.local.func_index(*i);
             let mut context = Context::new();
             context.func.name = get_func_name(func_index);
-            context.func.signature = module.signatures[module.functions[func_index]].clone();
-            context.func.collect_frame_layout_info();
-            if generate_debug_info {
+            context.func.signature = env.local.func_signature(func_index).clone();
+            if env.tunables.debug_info {
                 context.func.collect_debug_info();
             }
 
+            let mut func_env = FuncEnvironment::new(isa.frontend_config(), env.local, env.tunables);
+
+            // We use these as constant offsets below in
+            // `stack_limit_from_arguments`, so assert their values here. This
+            // allows the closure below to get coerced to a function pointer, as
+            // needed by `ir::Function`.
+            //
+            // Otherwise our stack limit is specially calculated from the vmctx
+            // argument, where we need to load the `*const VMInterrupts`
+            // pointer, and then from that pointer we need to load the stack
+            // limit itself. Note that manual register allocation is needed here
+            // too due to how late in the process this codegen happens.
+            //
+            // For more information about interrupts and stack checks, see the
+            // top of this file.
+            let vmctx = context
+                .func
+                .create_global_value(ir::GlobalValueData::VMContext);
+            let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
+                base: vmctx,
+                offset: i32::try_from(func_env.offsets.vmctx_interrupts())
+                    .unwrap()
+                    .into(),
+                global_type: isa.pointer_type(),
+                readonly: true,
+            });
+            let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
+                base: interrupts_ptr,
+                offset: i32::try_from(func_env.offsets.vminterrupts_stack_limit())
+                    .unwrap()
+                    .into(),
+                global_type: isa.pointer_type(),
+                readonly: false,
+            });
+            context.func.stack_limit = Some(stack_limit);
             func_translator.translate(
-                module_translation,
+                env.module_translation.0,
                 input.data,
                 input.module_offset,
                 &mut context.func,
-                &mut FuncEnvironment::new(isa.frontend_config(), module),
+                &mut func_env,
             )?;
 
             let mut code_buf: Vec<u8> = Vec::new();
@@ -283,27 +357,13 @@ fn compile(
                     CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
                 })?;
 
-            let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context);
+            let unwind_info = context.create_unwind_info(isa).map_err(|error| {
+                CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
+            })?;
 
-            let address_transform = if generate_debug_info {
-                let body_len = code_buf.len();
-                Some(get_function_address_map(&context, input, body_len, isa))
-            } else {
-                None
-            };
+            let address_transform = get_function_address_map(&context, input, code_buf.len(), isa);
 
-            let frame_layout = if generate_debug_info {
-                let (initial_commands, commands) = get_frame_layout(&context, isa);
-                Some(FrameLayout {
-                    call_conv: context.func.signature.call_conv,
-                    initial_commands,
-                    commands,
-                })
-            } else {
-                None
-            };
-
-            let ranges = if generate_debug_info {
+            let ranges = if env.tunables.debug_info {
                 let ranges = context.build_value_labels_ranges(isa).map_err(|error| {
                     CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
                 })?;
@@ -317,7 +377,6 @@ fn compile(
                 context.func.jt_offsets,
                 reloc_sink.func_relocs,
                 address_transform,
-                frame_layout,
                 ranges,
                 context.func.stack_slots,
                 trap_sink.traps,
@@ -332,7 +391,6 @@ fn compile(
                 func_jt_offsets,
                 relocs,
                 address_transform,
-                frame_layout,
                 ranges,
                 sss,
                 function_traps,
@@ -344,15 +402,10 @@ fn compile(
                     unwind_info,
                 });
                 relocations.push(relocs);
-                if let Some(address_transform) = address_transform {
-                    address_transforms.push(address_transform);
-                }
+                address_transforms.push(address_transform);
                 value_ranges.push(ranges.unwrap_or_default());
                 stack_slots.push(sss);
                 traps.push(function_traps);
-                if let Some(frame_layout) = frame_layout {
-                    frame_layouts.push(frame_layout);
-                }
             },
         );
 
@@ -365,8 +418,16 @@ fn compile(
         value_ranges,
         stack_slots,
         traps,
-        frame_layouts,
     ))
+}
+
+#[derive(Hash)]
+struct CompileEnv<'a> {
+    local: &'a ModuleLocal,
+    module_translation: HashedModuleTranslationState<'a>,
+    function_body_inputs: &'a PrimaryMap<DefinedFuncIndex, FunctionBodyData<'a>>,
+    isa: Isa<'a, 'a>,
+    tunables: &'a Tunables,
 }
 
 /// This is a wrapper struct to hash the specific bits of `TargetIsa` that
@@ -377,6 +438,7 @@ struct Isa<'a, 'b>(&'a (dyn isa::TargetIsa + 'b));
 impl Hash for Isa<'_, '_> {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
         self.0.triple().hash(hasher);
+        self.0.frontend_config().hash(hasher);
 
         // TODO: if this `to_string()` is too expensive then we should upstream
         // a native hashing ability of flags into cranelift itself, but

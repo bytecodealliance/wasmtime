@@ -54,7 +54,7 @@ pub unsafe extern "C" fn wasm_table_new(
 
 #[no_mangle]
 pub extern "C" fn wasm_table_type(t: &wasm_table_t) -> Box<wasm_tabletype_t> {
-    let ty = t.table().borrow().ty().clone();
+    let ty = t.table().borrow().ty();
     Box::new(wasm_tabletype_t::new(ty))
 }
 

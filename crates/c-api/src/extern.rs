@@ -41,10 +41,10 @@ pub extern "C" fn wasm_extern_kind(e: &wasm_extern_t) -> wasm_externkind_t {
 #[no_mangle]
 pub extern "C" fn wasm_extern_type(e: &wasm_extern_t) -> Box<wasm_externtype_t> {
     let ty = match &e.which {
-        ExternHost::Func(f) => ExternType::Func(f.borrow().ty().clone()),
-        ExternHost::Global(f) => ExternType::Global(f.borrow().ty().clone()),
-        ExternHost::Table(f) => ExternType::Table(f.borrow().ty().clone()),
-        ExternHost::Memory(f) => ExternType::Memory(f.borrow().ty().clone()),
+        ExternHost::Func(f) => ExternType::Func(f.borrow().ty()),
+        ExternHost::Global(f) => ExternType::Global(f.borrow().ty()),
+        ExternHost::Table(f) => ExternType::Table(f.borrow().ty()),
+        ExternHost::Memory(f) => ExternType::Memory(f.borrow().ty()),
     };
     Box::new(wasm_externtype_t::new(ty))
 }

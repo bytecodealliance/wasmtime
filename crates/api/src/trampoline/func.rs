@@ -10,9 +10,7 @@ use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::isa::TargetIsa;
-use wasmtime_environ::{
-    ir, settings, CompiledFunction, CompiledFunctionUnwindInfo, Export, Module,
-};
+use wasmtime_environ::{ir, settings, CompiledFunction, EntityIndex, Module};
 use wasmtime_jit::trampoline::ir::{
     ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind,
 };
@@ -112,7 +110,6 @@ fn make_trampoline(
 
     let mut context = Context::new();
     context.func = Function::with_name_signature(ExternalName::user(0, 0), signature.clone());
-    context.func.collect_frame_layout_info();
 
     let ss = context.func.create_stack_slot(StackSlotData::new(
         StackSlotKind::ExplicitSlot,
@@ -188,7 +185,10 @@ fn make_trampoline(
         .map_err(|error| pretty_error(&context.func, Some(isa), error))
         .expect("compile_and_emit");
 
-    let unwind_info = CompiledFunctionUnwindInfo::new(isa, &context);
+    let unwind_info = context
+        .create_unwind_info(isa)
+        .map_err(|error| pretty_error(&context.func, Some(isa), error))
+        .expect("create unwind information");
 
     code_memory
         .allocate_for_function(&CompiledFunction {
@@ -212,7 +212,7 @@ pub fn create_handle_with_function(
 
     let pointer_type = isa.pointer_type();
     let sig = match ft.get_wasmtime_signature(pointer_type) {
-        Some(sig) => sig.clone(),
+        Some(sig) => sig,
         None => bail!("not a supported core wasm signature {:?}", ft),
     };
 
@@ -228,7 +228,7 @@ pub fn create_handle_with_function(
     let func_id = module.local.functions.push(sig_id);
     module
         .exports
-        .insert("trampoline".to_string(), Export::Function(func_id));
+        .insert("trampoline".to_string(), EntityIndex::Function(func_id));
     let trampoline = make_trampoline(isa.as_ref(), &mut code_memory, &mut fn_builder_ctx, &sig);
     finished_functions.push(trampoline);
 
@@ -249,7 +249,7 @@ pub fn create_handle_with_function(
     // Next up we wrap everything up into an `InstanceHandle` by publishing our
     // code memory (makes it executable) and ensuring all our various bits of
     // state make it into the instance constructors.
-    code_memory.publish();
+    code_memory.publish(isa.as_ref());
     let trampoline_state = TrampolineState { func, code_memory };
     create_handle(
         module,
@@ -276,7 +276,7 @@ pub unsafe fn create_handle_with_raw_function(
 
     let pointer_type = isa.pointer_type();
     let sig = match ft.get_wasmtime_signature(pointer_type) {
-        Some(sig) => sig.clone(),
+        Some(sig) => sig,
         None => bail!("not a supported core wasm signature {:?}", ft),
     };
 
@@ -288,7 +288,7 @@ pub unsafe fn create_handle_with_raw_function(
     let func_id = module.local.functions.push(sig_id);
     module
         .exports
-        .insert("trampoline".to_string(), Export::Function(func_id));
+        .insert("trampoline".to_string(), EntityIndex::Function(func_id));
     finished_functions.push(func);
     let sig_id = store.compiler().signatures().register(&sig);
     trampolines.insert(sig_id, trampoline);

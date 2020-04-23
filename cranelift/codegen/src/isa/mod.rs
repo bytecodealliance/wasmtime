@@ -48,6 +48,7 @@ pub use crate::isa::call_conv::CallConv;
 pub use crate::isa::constraints::{
     BranchRange, ConstraintKind, OperandConstraint, RecipeConstraints,
 };
+pub use crate::isa::enc_tables::Encodings;
 pub use crate::isa::encoding::{base_size, EncInfo, Encoding};
 pub use crate::isa::registers::{regs_overlap, RegClass, RegClassIndex, RegInfo, RegUnit};
 pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
@@ -55,7 +56,9 @@ pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
 use crate::binemit;
 use crate::flowgraph;
 use crate::ir;
-use crate::isa::enc_tables::Encodings;
+#[cfg(feature = "unwind")]
+use crate::isa::unwind::systemv::RegisterMappingError;
+use crate::machinst::MachBackend;
 use crate::regalloc;
 use crate::result::CodegenResult;
 use crate::settings;
@@ -78,7 +81,10 @@ mod x86;
 mod arm32;
 
 #[cfg(feature = "arm64")]
-mod arm64;
+mod aarch64;
+
+#[cfg(feature = "unwind")]
+pub mod unwind;
 
 mod call_conv;
 mod constraints;
@@ -86,6 +92,9 @@ mod enc_tables;
 mod encoding;
 pub mod registers;
 mod stack;
+
+#[cfg(test)]
+mod test_utils;
 
 /// Returns a builder that can create a corresponding `TargetIsa`
 /// or `Err(LookupError::SupportDisabled)` if not enabled.
@@ -111,7 +120,7 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
             isa_builder!(x86, "x86", triple)
         }
         Architecture::Arm { .. } => isa_builder!(arm32, "arm32", triple),
-        Architecture::Aarch64 { .. } => isa_builder!(arm64, "arm64", triple),
+        Architecture::Aarch64 { .. } => isa_builder!(aarch64, "arm64", triple),
         _ => Err(LookupError::Unsupported),
     }
 }
@@ -170,7 +179,7 @@ pub type Legalize =
 
 /// This struct provides information that a frontend may need to know about a target to
 /// produce Cranelift IR for the target.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash)]
 pub struct TargetFrontendConfig {
     /// The default calling convention of the target.
     pub default_call_conv: CallConv,
@@ -253,6 +262,12 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     /// Get a data structure describing the registers in this ISA.
     fn register_info(&self) -> RegInfo;
+
+    #[cfg(feature = "unwind")]
+    /// Map a Cranelift register to its corresponding DWARF register.
+    fn map_dwarf_register(&self, _: RegUnit) -> Result<u16, RegisterMappingError> {
+        Err(RegisterMappingError::UnsupportedArchitecture)
+    }
 
     /// Returns an iterator over legal encodings for the instruction.
     fn legal_encodings<'a>(
@@ -379,16 +394,30 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// IntCC condition for Unsigned Subtraction Overflow (Borrow/Carry).
     fn unsigned_sub_overflow_condition(&self) -> ir::condcodes::IntCC;
 
-    /// Emit unwind information for the given function.
+    /// Creates unwind information for the function.
     ///
-    /// Only some calling conventions (e.g. Windows fastcall) will have unwind information.
-    fn emit_unwind_info(
+    /// Returns `None` if there is no unwind information for the function.
+    #[cfg(feature = "unwind")]
+    fn create_unwind_info(
         &self,
         _func: &ir::Function,
-        _kind: binemit::FrameUnwindKind,
-        _sink: &mut dyn binemit::FrameUnwindSink,
-    ) {
-        // No-op by default
+    ) -> CodegenResult<Option<unwind::UnwindInfo>> {
+        // By default, an ISA has no unwind information
+        Ok(None)
+    }
+
+    /// Creates a new System V Common Information Entry for the ISA.
+    ///
+    /// Returns `None` if the ISA does not support System V unwind information.
+    #[cfg(feature = "unwind")]
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        // By default, an ISA cannot create a System V CIE
+        None
+    }
+
+    /// Get the new-style MachBackend, if this is an adapter around one.
+    fn get_mach_backend(&self) -> Option<&dyn MachBackend> {
+        None
     }
 }
 

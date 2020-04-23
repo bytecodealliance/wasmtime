@@ -100,6 +100,5 @@ fn new_module_cache_data() -> Result<ModuleCacheDataTupleType, ()> {
         PrimaryMap::new(),
         PrimaryMap::new(),
         PrimaryMap::new(),
-        PrimaryMap::new(),
     ))
 }

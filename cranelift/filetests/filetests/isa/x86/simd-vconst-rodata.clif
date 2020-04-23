@@ -37,3 +37,13 @@ block11:
 }
 
 ; sameln: [1, 2, 3, 4, 5, 6, 7, 8, 9, A, B, C, D, E, F, 10]
+
+function %vconst_preamble() -> b16x8 {
+const42 = i32x4 [0 1 2 3]
+const43 = i32x4 [4 5 6 7]
+block0:
+    v0 = vconst.b16x8 const42
+    return v0
+}
+
+; sameln: [0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 0, 7, 0, 0, 0]

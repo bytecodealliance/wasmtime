@@ -1,14 +1,18 @@
-use anyhow::Result;
+use crate::externals::MemoryCreator;
+use crate::trampoline::MemoryCreatorProxy;
+use anyhow::{bail, Result};
 use std::cell::RefCell;
+use std::cmp::min;
 use std::fmt;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 use wasmparser::{OperatorValidatorConfig, ValidatingParserConfig};
 use wasmtime_environ::settings::{self, Configurable};
-use wasmtime_environ::CacheConfig;
+use wasmtime_environ::{CacheConfig, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
-use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent};
+use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
+use wasmtime_runtime::{debug_builtins, RuntimeMemoryCreator, VMInterrupts};
 
 // Runtime Environment
 
@@ -23,16 +27,27 @@ use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent};
 pub struct Config {
     pub(crate) flags: settings::Builder,
     pub(crate) validating_config: ValidatingParserConfig,
-    pub(crate) debug_info: bool,
+    pub(crate) tunables: Tunables,
     pub(crate) strategy: CompilationStrategy,
     pub(crate) cache_config: CacheConfig,
     pub(crate) profiler: Arc<dyn ProfilingAgent>,
+    pub(crate) memory_creator: Option<MemoryCreatorProxy>,
+    pub(crate) max_wasm_stack: usize,
 }
 
 impl Config {
     /// Creates a new configuration object with the default configuration
     /// specified.
     pub fn new() -> Config {
+        let mut tunables = Tunables::default();
+        if cfg!(windows) {
+            // For now, use a smaller footprint on Windows so that we don't
+            // don't outstrip the paging file.
+            tunables.static_memory_bound = min(tunables.static_memory_bound, 0x100);
+            tunables.static_memory_offset_guard_size =
+                min(tunables.static_memory_offset_guard_size, 0x10000);
+        }
+
         let mut flags = settings::builder();
 
         // There are two possible traps for division, and this way
@@ -51,8 +66,13 @@ impl Config {
             .set("opt_level", "speed")
             .expect("should be valid flag");
 
+        // We don't use probestack as a stack limit mechanism
+        flags
+            .set("enable_probestack", "false")
+            .expect("should be valid flag");
+
         Config {
-            debug_info: false,
+            tunables,
             validating_config: ValidatingParserConfig {
                 operator_config: OperatorValidatorConfig {
                     enable_threads: false,
@@ -66,6 +86,8 @@ impl Config {
             strategy: CompilationStrategy::Auto,
             cache_config: CacheConfig::new_cache_disabled(),
             profiler: Arc::new(NullProfilerAgent),
+            memory_creator: None,
+            max_wasm_stack: 1 << 20,
         }
     }
 
@@ -74,7 +96,38 @@ impl Config {
     ///
     /// By default this option is `false`.
     pub fn debug_info(&mut self, enable: bool) -> &mut Self {
-        self.debug_info = enable;
+        self.tunables.debug_info = enable;
+        self
+    }
+
+    /// Configures whether functions and loops will be interruptable via the
+    /// [`Store::interrupt_handle`] method.
+    ///
+    /// For more information see the documentation on
+    /// [`Store::interrupt_handle`].
+    ///
+    /// By default this option is `false`.
+    pub fn interruptable(&mut self, enable: bool) -> &mut Self {
+        self.tunables.interruptable = enable;
+        self
+    }
+
+    /// Configures the maximum amount of native stack space available to
+    /// executing WebAssembly code.
+    ///
+    /// WebAssembly code currently executes on the native call stack for its own
+    /// call frames. WebAssembly, however, also has well-defined semantics on
+    /// stack overflow. This is intended to be a knob which can help configure
+    /// how much native stack space a wasm module is allowed to consume. Note
+    /// that the number here is not super-precise, but rather wasm will take at
+    /// most "pretty close to this much" stack space.
+    ///
+    /// If a wasm call (or series of nested wasm calls) take more stack space
+    /// than the `size` specified then a stack overflow trap will be raised.
+    ///
+    /// By default this option is 1 MB.
+    pub fn max_wasm_stack(&mut self, size: usize) -> &mut Self {
+        self.max_wasm_stack = size;
         self
     }
 
@@ -227,6 +280,7 @@ impl Config {
     pub fn profiler(&mut self, profile: ProfilingStrategy) -> Result<&mut Self> {
         self.profiler = match profile {
             ProfilingStrategy::JitDump => Arc::new(JitDumpAgent::new()?) as Arc<dyn ProfilingAgent>,
+            ProfilingStrategy::VTune => Arc::new(VTuneAgent::new()?) as Arc<dyn ProfilingAgent>,
             ProfilingStrategy::None => Arc::new(NullProfilerAgent),
         };
         Ok(self)
@@ -263,6 +317,22 @@ impl Config {
         };
         self.flags
             .set("opt_level", val)
+            .expect("should be valid flag");
+        self
+    }
+
+    /// Configures whether Cranelift should perform a NaN-canonicalization pass.
+    ///
+    /// When Cranelift is used as a code generation backend this will configure
+    /// it to replace NaNs with a single canonical value. This is useful for users
+    /// requiring entirely deterministic WebAssembly computation.
+    /// This is not required by the WebAssembly spec, so it is not enabled by default.
+    ///
+    /// The default value for this is `false`
+    pub fn cranelift_nan_canonicalization(&mut self, enable: bool) -> &mut Self {
+        let val = if enable { "true" } else { "false" };
+        self.flags
+            .set("enable_nan_canonicalization", val)
             .expect("should be valid flag");
         self
     }
@@ -309,6 +379,12 @@ impl Config {
         self.cache_config = wasmtime_environ::CacheConfig::from_file(None)?;
         Ok(self)
     }
+
+    /// Sets a custom memory creator
+    pub fn with_host_memory(&mut self, mem_creator: Arc<dyn MemoryCreator>) -> &mut Self {
+        self.memory_creator = Some(MemoryCreatorProxy { mem_creator });
+        self
+    }
 }
 
 impl Default for Config {
@@ -321,7 +397,7 @@ impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let features = &self.validating_config.operator_config;
         f.debug_struct("Config")
-            .field("debug_info", &self.debug_info)
+            .field("debug_info", &self.tunables.debug_info)
             .field("strategy", &self.strategy)
             .field("wasm_threads", &features.enable_threads)
             .field("wasm_reference_types", &features.enable_reference_types)
@@ -388,6 +464,9 @@ pub enum ProfilingStrategy {
     /// Collect profiling info for "jitdump" file format, used with `perf` on
     /// Linux.
     JitDump,
+
+    /// Collect profiling info using the "ittapi", used with `VTune` on Linux.
+    VTune,
 }
 
 // Engine
@@ -423,6 +502,7 @@ impl Engine {
     /// Creates a new [`Engine`] with the specified compilation and
     /// configuration settings.
     pub fn new(config: &Config) -> Engine {
+        debug_builtins::ensure_exported();
         Engine {
             config: Arc::new(config.clone()),
         }
@@ -472,6 +552,7 @@ impl Store {
             isa,
             engine.config.strategy,
             engine.config.cache_config.clone(),
+            engine.config.tunables.clone(),
         );
         Store {
             inner: Rc::new(StoreInner {
@@ -484,6 +565,11 @@ impl Store {
     /// Returns the [`Engine`] that this store is associated with.
     pub fn engine(&self) -> &Engine {
         &self.inner.engine
+    }
+
+    /// Returns an optional reference to a ['RuntimeMemoryCreator']
+    pub(crate) fn memory_creator(&self) -> Option<&dyn RuntimeMemoryCreator> {
+        self.engine().config.memory_creator.as_ref().map(|x| x as _)
     }
 
     pub(crate) fn compiler(&self) -> std::cell::Ref<'_, Compiler> {
@@ -503,6 +589,97 @@ impl Store {
     pub fn same(a: &Store, b: &Store) -> bool {
         Rc::ptr_eq(&a.inner, &b.inner)
     }
+
+    /// Creates an [`InterruptHandle`] which can be used to interrupt the
+    /// execution of instances within this `Store`.
+    ///
+    /// An [`InterruptHandle`] handle is a mechanism of ensuring that guest code
+    /// doesn't execute for too long. For example it's used to prevent wasm
+    /// programs for executing infinitely in infinite loops or recursive call
+    /// chains.
+    ///
+    /// The [`InterruptHandle`] type is sendable to other threads so you can
+    /// interact with it even while the thread with this `Store` is executing
+    /// wasm code.
+    ///
+    /// There's one method on an interrupt handle:
+    /// [`InterruptHandle::interrupt`]. This method is used to generate an
+    /// interrupt and cause wasm code to exit "soon".
+    ///
+    /// ## When are interrupts delivered?
+    ///
+    /// The term "interrupt" here refers to one of two different behaviors that
+    /// are interrupted in wasm:
+    ///
+    /// * The head of every loop in wasm has a check to see if it's interrupted.
+    /// * The prologue of every function has a check to see if it's interrupted.
+    ///
+    /// This interrupt mechanism makes no attempt to signal interrupts to
+    /// native code. For example if a host function is blocked, then sending
+    /// an interrupt will not interrupt that operation.
+    ///
+    /// Interrupts are consumed as soon as possible when wasm itself starts
+    /// executing. This means that if you interrupt wasm code then it basically
+    /// guarantees that the next time wasm is executing on the target thread it
+    /// will return quickly (either normally if it were already in the process
+    /// of returning or with a trap from the interrupt). Once an interrupt
+    /// trap is generated then an interrupt is consumed, and further execution
+    /// will not be interrupted (unless another interrupt is set).
+    ///
+    /// When implementing interrupts you'll want to ensure that the delivery of
+    /// interrupts into wasm code is also handled in your host imports and
+    /// functionality. Host functions need to either execute for bounded amounts
+    /// of time or you'll need to arrange for them to be interrupted as well.
+    ///
+    /// ## Return Value
+    ///
+    /// This function returns a `Result` since interrupts are not always
+    /// enabled. Interrupts are enabled via the [`Config::interruptable`]
+    /// method, and if this store's [`Config`] hasn't been configured to enable
+    /// interrupts then an error is returned.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use anyhow::Result;
+    /// # use wasmtime::*;
+    /// # fn main() -> Result<()> {
+    /// // Enable interruptable code via `Config` and then create an interrupt
+    /// // handle which we'll use later to interrupt running code.
+    /// let engine = Engine::new(Config::new().interruptable(true));
+    /// let store = Store::new(&engine);
+    /// let interrupt_handle = store.interrupt_handle()?;
+    ///
+    /// // Compile and instantiate a small example with an infinite loop.
+    /// let module = Module::new(&store, r#"
+    ///     (func (export "run") (loop br 0))
+    /// "#)?;
+    /// let instance = Instance::new(&module, &[])?;
+    /// let run = instance
+    ///     .get_func("run")
+    ///     .ok_or(anyhow::format_err!("failed to find `run` function export"))?
+    ///     .get0::<()>()?;
+    ///
+    /// // Spin up a thread to send us an interrupt in a second
+    /// std::thread::spawn(move || {
+    ///     std::thread::sleep(std::time::Duration::from_secs(1));
+    ///     interrupt_handle.interrupt();
+    /// });
+    ///
+    /// let trap = run().unwrap_err();
+    /// assert!(trap.message().contains("wasm trap: interrupt"));
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
+        if self.engine().config.tunables.interruptable {
+            Ok(InterruptHandle {
+                interrupts: self.compiler().interrupts().clone(),
+            })
+        } else {
+            bail!("interrupts aren't enabled for this `Store`")
+        }
+    }
 }
 
 impl Default for Store {
@@ -511,10 +688,32 @@ impl Default for Store {
     }
 }
 
+/// A threadsafe handle used to interrupt instances executing within a
+/// particular `Store`.
+///
+/// This structure is created by the [`Store::interrupt_handle`] method.
+pub struct InterruptHandle {
+    interrupts: Arc<VMInterrupts>,
+}
+
+impl InterruptHandle {
+    /// Flags that execution within this handle's original [`Store`] should be
+    /// interrupted.
+    ///
+    /// This will not immediately interrupt execution of wasm modules, but
+    /// rather it will interrupt wasm execution of loop headers and wasm
+    /// execution of function entries. For more information see
+    /// [`Store::interrupt_handle`].
+    pub fn interrupt(&self) {
+        self.interrupts.interrupt()
+    }
+}
+
 fn _assert_send_sync() {
     fn _assert<T: Send + Sync>() {}
     _assert::<Engine>();
     _assert::<Config>();
+    _assert::<InterruptHandle>();
 }
 
 #[cfg(test)]
@@ -524,6 +723,7 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
+    #[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
     fn cache_accounts_for_opt_level() -> Result<()> {
         let td = TempDir::new()?;
         let config_path = td.path().join("config.toml");

@@ -28,6 +28,7 @@ originally
 #include <wasm.h>
 #include <wasmtime.h>
 
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
 
 wasm_memory_t* get_export_memory(const wasm_extern_vec_t* exports, size_t i) {
   if (exports->size <= i || !wasm_extern_as_memory(exports->data[i])) {
@@ -53,21 +54,25 @@ void check(bool success) {
   }
 }
 
-void check_call(wasm_func_t* func, wasm_val_t args[], int32_t expected) {
+void check_call(wasm_func_t* func, wasm_val_t args[], size_t num_args, int32_t expected) {
   wasm_val_t results[1];
-  if (wasm_func_call(func, args, results) || results[0].of.i32 != expected) {
+  wasm_trap_t *trap = NULL;
+  wasmtime_error_t *error = wasmtime_func_call(func, args, num_args, results, 1, &trap);
+  if (error != NULL || trap != NULL)
+    exit_with_error("failed to call function", error, trap);
+  if (results[0].of.i32 != expected) {
     printf("> Error on result\n");
     exit(1);
   }
 }
 
 void check_call0(wasm_func_t* func, int32_t expected) {
-  check_call(func, NULL, expected);
+  check_call(func, NULL, 0, expected);
 }
 
 void check_call1(wasm_func_t* func, int32_t arg, int32_t expected) {
   wasm_val_t args[] = { {.kind = WASM_I32, .of = {.i32 = arg}} };
-  check_call(func, args, expected);
+  check_call(func, args, 1, expected);
 }
 
 void check_call2(wasm_func_t* func, int32_t arg1, int32_t arg2, int32_t expected) {
@@ -75,14 +80,14 @@ void check_call2(wasm_func_t* func, int32_t arg1, int32_t arg2, int32_t expected
     {.kind = WASM_I32, .of = {.i32 = arg1}},
     {.kind = WASM_I32, .of = {.i32 = arg2}}
   };
-  check_call(func, args, expected);
+  check_call(func, args, 2, expected);
 }
 
-void check_ok(wasm_func_t* func, wasm_val_t args[]) {
-  if (wasm_func_call(func, args, NULL)) {
-    printf("> Error on result, expected empty\n");
-    exit(1);
-  }
+void check_ok(wasm_func_t* func, wasm_val_t args[], size_t num_args) {
+  wasm_trap_t *trap = NULL;
+  wasmtime_error_t *error = wasmtime_func_call(func, args, num_args, NULL, 0, &trap);
+  if (error != NULL || trap != NULL)
+    exit_with_error("failed to call function", error, trap);
 }
 
 void check_ok2(wasm_func_t* func, int32_t arg1, int32_t arg2) {
@@ -90,13 +95,17 @@ void check_ok2(wasm_func_t* func, int32_t arg1, int32_t arg2) {
     {.kind = WASM_I32, .of = {.i32 = arg1}},
     {.kind = WASM_I32, .of = {.i32 = arg2}}
   };
-  check_ok(func, args);
+  check_ok(func, args, 2);
 }
 
-void check_trap(wasm_func_t* func, wasm_val_t args[]) {
+void check_trap(wasm_func_t* func, wasm_val_t args[], size_t num_args, size_t num_results) {
   wasm_val_t results[1];
-  wasm_trap_t* trap = wasm_func_call(func, args, results);
-  if (! trap) {
+  assert(num_results <= 1);
+  wasm_trap_t *trap = NULL;
+  wasmtime_error_t *error = wasmtime_func_call(func, args, num_args, results, num_results, &trap);
+  if (error != NULL)
+    exit_with_error("failed to call function", error, NULL);
+  if (trap == NULL) {
     printf("> Error on result, expected trap\n");
     exit(1);
   }
@@ -105,7 +114,7 @@ void check_trap(wasm_func_t* func, wasm_val_t args[]) {
 
 void check_trap1(wasm_func_t* func, int32_t arg) {
   wasm_val_t args[1] = { {.kind = WASM_I32, .of = {.i32 = arg}} };
-  check_trap(func, args);
+  check_trap(func, args, 1, 1);
 }
 
 void check_trap2(wasm_func_t* func, int32_t arg1, int32_t arg2) {
@@ -113,7 +122,7 @@ void check_trap2(wasm_func_t* func, int32_t arg1, int32_t arg2) {
     {.kind = WASM_I32, .of = {.i32 = arg1}},
     {.kind = WASM_I32, .of = {.i32 = arg2}}
   };
-  check_trap(func, args);
+  check_trap(func, args, 2, 0);
 }
 
 int main(int argc, const char* argv[]) {
@@ -140,30 +149,27 @@ int main(int argc, const char* argv[]) {
   fclose(file);
 
   // Parse the wat into the binary wasm format
-  wasm_byte_vec_t binary, error;
-  if (wasmtime_wat2wasm(&wat, &binary, &error) == 0) {
-    fprintf(stderr, "failed to parse wat %.*s\n", (int) error.size, error.data);
-    return 1;
-  }
+  wasm_byte_vec_t binary;
+  wasmtime_error_t *error = wasmtime_wat2wasm(&wat, &binary);
+  if (error != NULL)
+    exit_with_error("failed to parse wat", error, NULL);
   wasm_byte_vec_delete(&wat);
 
   // Compile.
   printf("Compiling module...\n");
-  wasm_module_t* module = wasm_module_new(store, &binary);
-  if (!module) {
-    printf("> Error compiling module!\n");
-    return 1;
-  }
-
+  wasm_module_t* module = NULL;
+  error = wasmtime_module_new(store, &binary, &module);
+  if (error)
+    exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&binary);
 
   // Instantiate.
   printf("Instantiating module...\n");
-  wasm_instance_t* instance = wasm_instance_new(store, module, NULL, NULL);
-  if (!instance) {
-    printf("> Error instantiating module!\n");
-    return 1;
-  }
+  wasm_instance_t* instance = NULL;
+  wasm_trap_t *trap = NULL;
+  error = wasmtime_instance_new(module, NULL, 0, &instance, &trap);
+  if (!instance)
+    exit_with_error("failed to instantiate", error, trap);
 
   // Extract export.
   printf("Extracting exports...\n");
@@ -245,4 +251,19 @@ int main(int argc, const char* argv[]) {
   // All done.
   printf("Done.\n");
   return 0;
+}
+
+static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
+  fprintf(stderr, "error: %s\n", message);
+  wasm_byte_vec_t error_message;
+  if (error != NULL) {
+    wasmtime_error_message(error, &error_message);
+    wasmtime_error_delete(error);
+  } else {
+    wasm_trap_message(trap, &error_message);
+    wasm_trap_delete(trap);
+  }
+  fprintf(stderr, "%.*s\n", (int) error_message.size, error_message.data);
+  wasm_byte_vec_delete(&error_message);
+  exit(1);
 }

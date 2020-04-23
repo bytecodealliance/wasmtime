@@ -86,6 +86,30 @@ Hello, world!
 [Cranelift]: https://github.com/bytecodealliance/wasmtime/blob/master/cranelift/README.md
 [embedded]: https://bytecodealliance.github.io/wasmtime/embed.html
 
+## Language Support
+
+You can use Wasmtime from a variety of different languages through embeddings of
+the implementation:
+
+* **[Rust]** - the [`wasmtime` crate]
+* **[C]** - the [`wasm.h`], [`wasi.h`], and [`wasmtime.h`] headers
+* **[Python]** - the [`wasmtime` PyPI package]
+* **[.NET]** - the [`Wasmtime` NuGet package]
+* **[Go]** - the [wasmtime-go repository]
+
+[Rust]: https://bytecodealliance.github.io/wasmtime/lang-rust.html
+[C]: https://bytecodealliance.github.io/wasmtime/examples-c-embed.html
+[`wasmtime` crate]: https://crates.io/crates/wasmtime
+[`wasm.h`]: https://github.com/WebAssembly/wasm-c-api/blob/master/include/wasm.h
+[`wasi.h`]: https://github.com/bytecodealliance/wasmtime/blob/master/crates/c-api/include/wasi.h
+[`wasmtime.h`]: https://github.com/bytecodealliance/wasmtime/blob/master/crates/c-api/include/wasmtime.h
+[Python]: https://bytecodealliance.github.io/wasmtime/lang-python.html
+[`wasmtime` PyPI package]: https://pypi.org/project/wasmtime/
+[.NET]: https://bytecodealliance.github.io/wasmtime/lang-dotnet.html
+[`Wasmtime` NuGet package]: https://www.nuget.org/packages/Wasmtime
+[Go]: https://bytecodealliance.github.io/wasmtime/lang-go.html
+[wasmtime-go repository]: https://pkg.go.dev/github.com/bytecodealliance/wasmtime-go
+
 ## Documentation
 
 [📚 Read the Wasmtime guide here! 📚][guide]

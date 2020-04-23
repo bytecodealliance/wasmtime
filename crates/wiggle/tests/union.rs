@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle::{GuestError, GuestMemory, GuestType};
+use wiggle::{GuestMemory, GuestType};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
@@ -7,7 +7,7 @@ wiggle::from_witx!({
     ctx: WasiCtx,
 });
 
-impl_errno!(types::Errno);
+impl_errno!(types::Errno, types::GuestErrorConversion);
 
 // Avoid panics on overflow
 fn mult_lose_overflow(a: i32, b: u32) -> i32 {

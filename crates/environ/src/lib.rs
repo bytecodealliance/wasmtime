@@ -27,7 +27,6 @@
 mod address_map;
 mod compilation;
 mod data_structures;
-mod frame_layout;
 mod func_environ;
 mod module;
 mod module_environ;
@@ -47,25 +46,23 @@ pub use crate::address_map::{
 pub use crate::cache::create_new_config as cache_create_new_config;
 pub use crate::cache::CacheConfig;
 pub use crate::compilation::{
-    Compilation, CompileError, CompiledFunction, CompiledFunctionUnwindInfo,
-    CompiledFunctionUnwindInfoReloc, Compiler, Relocation, RelocationTarget, Relocations,
-    TrapInformation, Traps,
+    Compilation, CompileError, CompiledFunction, Compiler, Relocation, RelocationTarget,
+    Relocations, TrapInformation, Traps,
 };
 pub use crate::cranelift::Cranelift;
 pub use crate::data_structures::*;
-pub use crate::frame_layout::{FrameLayout, FrameLayoutChange, FrameLayouts};
 pub use crate::func_environ::BuiltinFunctionIndex;
 #[cfg(feature = "lightbeam")]
 pub use crate::lightbeam::Lightbeam;
 pub use crate::module::{
-    Export, MemoryPlan, MemoryStyle, Module, ModuleLocal, TableElements, TablePlan, TableStyle,
+    EntityIndex, MemoryPlan, MemoryStyle, Module, ModuleLocal, TableElements, TablePlan, TableStyle,
 };
 pub use crate::module_environ::{
     translate_signature, DataInitializer, DataInitializerLocation, FunctionBodyData,
     ModuleEnvironment, ModuleTranslation,
 };
 pub use crate::tunables::Tunables;
-pub use crate::vmoffsets::{TargetSharedSignatureIndex, VMOffsets};
+pub use crate::vmoffsets::{TargetSharedSignatureIndex, VMOffsets, INTERRUPTED};
 
 /// WebAssembly page sizes are defined to be 64KiB.
 pub const WASM_PAGE_SIZE: u32 = 0x10000;

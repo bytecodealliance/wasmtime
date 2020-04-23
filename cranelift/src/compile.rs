@@ -49,42 +49,42 @@ fn handle_module(
 
     // If we have an isa from the command-line, use that. Otherwise if the
     // file contains a unique isa, use that.
-    let isa = if let Some(isa) = fisa.isa {
-        isa
-    } else if let Some(isa) = test_file.isa_spec.unique_isa() {
-        isa
-    } else {
+    let isa = fisa.isa.or(test_file.isa_spec.unique_isa());
+
+    if isa.is_none() {
         return Err(String::from("compilation requires a target isa"));
     };
 
     for (func, _) in test_file.functions {
-        let mut context = Context::new();
-        context.func = func;
-
         let mut relocs = PrintRelocs::new(flag_print);
         let mut traps = PrintTraps::new(flag_print);
         let mut stackmaps = PrintStackmaps::new(flag_print);
-        let mut mem = vec![];
 
-        // Compile and encode the result to machine code.
-        let code_info = context
-            .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stackmaps)
-            .map_err(|err| pretty_error(&context.func, Some(isa), err))?;
+        if let Some(isa) = isa {
+            let mut context = Context::new();
+            context.func = func;
+            let mut mem = vec![];
 
-        if flag_print {
-            println!("{}", context.func.display(isa));
-        }
+            // Compile and encode the result to machine code.
+            let code_info = context
+                .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stackmaps)
+                .map_err(|err| pretty_error(&context.func, Some(isa), err))?;
 
-        if flag_disasm {
-            print_all(
-                isa,
-                &mem,
-                code_info.code_size,
-                code_info.jumptables_size + code_info.rodata_size,
-                &relocs,
-                &traps,
-                &stackmaps,
-            )?;
+            if flag_print {
+                println!("{}", context.func.display(isa));
+            }
+
+            if flag_disasm {
+                print_all(
+                    isa,
+                    &mem,
+                    code_info.code_size,
+                    code_info.jumptables_size + code_info.rodata_size,
+                    &relocs,
+                    &traps,
+                    &stackmaps,
+                )?;
+            }
         }
     }
 

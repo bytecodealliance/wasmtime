@@ -6,7 +6,6 @@ pub mod dfg;
 pub mod entities;
 mod extfunc;
 mod extname;
-mod framelayout;
 pub mod function;
 mod globalvalue;
 mod heap;
@@ -40,7 +39,6 @@ pub use crate::ir::extfunc::{
     AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData, Signature,
 };
 pub use crate::ir::extname::ExternalName;
-pub use crate::ir::framelayout::{FrameLayout, FrameLayoutChange, FrameLayoutChanges};
 pub use crate::ir::function::{DisplayFunctionAnnotations, Function};
 pub use crate::ir::globalvalue::GlobalValueData;
 pub use crate::ir::heap::{HeapData, HeapStyle};

@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle::{GuestError, GuestMemory, GuestType};
+use wiggle::{GuestMemory, GuestType};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 const FD_VAL: u32 = 123;
@@ -9,7 +9,7 @@ wiggle::from_witx!({
     ctx: WasiCtx,
 });
 
-impl_errno!(types::Errno);
+impl_errno!(types::Errno, types::GuestErrorConversion);
 
 impl<'a> handle_examples::HandleExamples for WasiCtx<'a> {
     fn fd_create(&self) -> Result<types::Fd, types::Errno> {

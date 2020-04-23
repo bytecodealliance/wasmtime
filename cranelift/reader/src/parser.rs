@@ -3,6 +3,7 @@
 use crate::error::{Location, ParseError, ParseResult};
 use crate::isaspec;
 use crate::lexer::{LexError, Lexer, LocatedError, LocatedToken, Token};
+use crate::run_command::{Comparison, DataValue, Invocation, RunCommand};
 use crate::sourcemap::SourceMap;
 use crate::testcommand::TestCommand;
 use crate::testfile::{Comment, Details, Feature, TestFile};
@@ -14,10 +15,10 @@ use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, Va
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
-    AbiParam, ArgumentExtension, ArgumentLoc, Block, ConstantData, ExtFuncData, ExternalName,
-    FuncRef, Function, GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle, JumpTable,
-    JumpTableData, MemFlags, Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind,
-    Table, TableData, Type, Value, ValueLoc,
+    AbiParam, ArgumentExtension, ArgumentLoc, Block, Constant, ConstantData, ExtFuncData,
+    ExternalName, FuncRef, Function, GlobalValue, GlobalValueData, Heap, HeapData, HeapStyle,
+    JumpTable, JumpTableData, MemFlags, Opcode, SigRef, Signature, StackSlot, StackSlotData,
+    StackSlotKind, Table, TableData, Type, Value, ValueLoc,
 };
 use cranelift_codegen::isa::{self, CallConv, Encoding, RegUnit, TargetIsa};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -111,6 +112,13 @@ pub fn parse_test<'a>(text: &'a str, options: ParseOptions<'a>) -> ParseResult<T
         preamble_comments,
         functions,
     })
+}
+
+/// Parse the entire `text` as a run command.
+pub fn parse_run_command<'a>(text: &str, signature: &Signature) -> ParseResult<RunCommand> {
+    let _tt = timing::parse_text();
+    let mut parser = Parser::new(text);
+    parser.parse_run_command(signature)
 }
 
 pub struct Parser<'a> {
@@ -338,6 +346,36 @@ impl<'a> Context<'a> {
         }
     }
 
+    // Allocate a new constant.
+    fn add_constant(
+        &mut self,
+        constant: Constant,
+        data: ConstantData,
+        loc: Location,
+    ) -> ParseResult<()> {
+        self.map.def_constant(constant, loc)?;
+        self.function.dfg.constants.set(constant, data);
+        Ok(())
+    }
+
+    // Configure the stack limit of the current function.
+    fn add_stack_limit(&mut self, limit: GlobalValue, loc: Location) -> ParseResult<()> {
+        if self.function.stack_limit.is_some() {
+            return err!(loc, "stack limit defined twice");
+        }
+        self.function.stack_limit = Some(limit);
+        Ok(())
+    }
+
+    // Resolve a reference to a constant.
+    fn check_constant(&self, c: Constant, loc: Location) -> ParseResult<()> {
+        if !self.map.contains_constant(c) {
+            err!(loc, "undefined constant {}", c)
+        } else {
+            Ok(())
+        }
+    }
+
     // Allocate a new block.
     fn add_block(&mut self, block: Block, loc: Location) -> ParseResult<Block> {
         self.map.def_block(block, loc)?;
@@ -558,6 +596,26 @@ impl<'a> Parser<'a> {
         err!(self.loc, "expected jump table number: jt«n»")
     }
 
+    // Match and consume a constant reference.
+    fn match_constant(&mut self) -> ParseResult<Constant> {
+        if let Some(Token::Constant(c)) = self.token() {
+            self.consume();
+            if let Some(c) = Constant::with_number(c) {
+                return Ok(c);
+            }
+        }
+        err!(self.loc, "expected constant number: const«n»")
+    }
+
+    // Match and consume a stack limit token
+    fn match_stack_limit(&mut self) -> ParseResult<()> {
+        if let Some(Token::Identifier("stack_limit")) = self.token() {
+            self.consume();
+            return Ok(());
+        }
+        err!(self.loc, "expected identifier: stack_limit")
+    }
+
     // Match and consume a block reference.
     fn match_block(&mut self, err_msg: &str) -> ParseResult<Block> {
         if let Some(Token::Block(block)) = self.token() {
@@ -613,8 +671,20 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Match and consume either a hexadecimal Uimm128 immediate (e.g. 0x000102...) or its literal list form (e.g. [0 1 2...])
-    fn match_constant_data(&mut self, controlling_type: Type) -> ParseResult<ConstantData> {
+    // Match and consume a sequence of immediate bytes (uimm8); e.g. [0x42 0x99 0x32]
+    fn match_constant_data(&mut self) -> ParseResult<ConstantData> {
+        self.match_token(Token::LBracket, "expected an opening left bracket")?;
+        let mut data = ConstantData::default();
+        while !self.optional(Token::RBracket) {
+            data = data.append(self.match_uimm8("expected a sequence of bytes (uimm8)")?);
+        }
+        Ok(data)
+    }
+
+    // Match and consume either a hexadecimal Uimm128 immediate (e.g. 0x000102...) or its literal
+    // list form (e.g. [0 1 2...]). For convenience, since uimm128 values are stored in the
+    // `ConstantPool`, this returns `ConstantData`.
+    fn match_uimm128(&mut self, controlling_type: Type) -> ParseResult<ConstantData> {
         let expected_size = controlling_type.bytes() as usize;
         let constant_data = if self.optional(Token::LBracket) {
             // parse using a list of values, e.g. vconst.i32x4 [0 1 2 3]
@@ -683,6 +753,49 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Match and consume an i8 immediate.
+    fn match_imm8(&mut self, err_msg: &str) -> ParseResult<i8> {
+        if let Some(Token::Integer(text)) = self.token() {
+            self.consume();
+            let negative = text.starts_with('-');
+            let positive = text.starts_with('+');
+            let text = if negative || positive {
+                // Strip sign prefix.
+                &text[1..]
+            } else {
+                text
+            };
+
+            // Parse the text value; the lexer gives us raw text that looks like an integer.
+            let value = if text.starts_with("0x") {
+                // Skip underscores.
+                let text = text.replace("_", "");
+                // Parse it as a i8 in hexadecimal form.
+                u8::from_str_radix(&text[2..], 16)
+                    .map_err(|_| self.error("unable to parse i8 as a hexadecimal immediate"))?
+            } else {
+                // Parse it as a i8 to check for overflow and other issues.
+                text.parse()
+                    .map_err(|_| self.error("expected i8 decimal immediate"))?
+            };
+
+            // Apply sign if necessary.
+            let signed = if negative {
+                let value = value.wrapping_neg() as i8;
+                if value > 0 {
+                    return Err(self.error("negative number too small"));
+                }
+                value
+            } else {
+                value as i8
+            };
+
+            Ok(signed)
+        } else {
+            err!(self.loc, err_msg)
+        }
+    }
+
     // Match and consume a signed 16-bit immediate.
     fn match_imm16(&mut self, err_msg: &str) -> ParseResult<i16> {
         if let Some(Token::Integer(text)) = self.token() {
@@ -695,27 +808,32 @@ impl<'a> Parser<'a> {
             } else {
                 text
             };
-            let mut value;
-            // Lexer just gives us raw text that looks like an integer.
-            if text.starts_with("0x") {
+
+            // Parse the text value; the lexer gives us raw text that looks like an integer.
+            let value = if text.starts_with("0x") {
                 // Skip underscores.
                 let text = text.replace("_", "");
                 // Parse it as a i16 in hexadecimal form.
-                value = u16::from_str_radix(&text[2..], 16)
-                    .map_err(|_| self.error("unable to parse i16 as a hexadecimal immediate"))?;
+                u16::from_str_radix(&text[2..], 16)
+                    .map_err(|_| self.error("unable to parse i16 as a hexadecimal immediate"))?
             } else {
                 // Parse it as a i16 to check for overflow and other issues.
-                value = text
-                    .parse()
-                    .map_err(|_| self.error("expected i16 decimal immediate"))?;
-            }
-            if negative {
-                value = Ok(value.wrapping_neg())?;
-                if value as i16 > 0 {
+                text.parse()
+                    .map_err(|_| self.error("expected i16 decimal immediate"))?
+            };
+
+            // Apply sign if necessary.
+            let signed = if negative {
+                let value = value.wrapping_neg() as i16;
+                if value > 0 {
                     return Err(self.error("negative number too small"));
                 }
-            }
-            Ok(value as i16)
+                value
+            } else {
+                value as i16
+            };
+
+            Ok(signed)
         } else {
             err!(self.loc, err_msg)
         }
@@ -734,27 +852,32 @@ impl<'a> Parser<'a> {
             } else {
                 text
             };
-            let mut value;
-            // Lexer just gives us raw text that looks like an integer.
-            if text.starts_with("0x") {
+
+            // Parse the text value; the lexer gives us raw text that looks like an integer.
+            let value = if text.starts_with("0x") {
                 // Skip underscores.
                 let text = text.replace("_", "");
                 // Parse it as a i32 in hexadecimal form.
-                value = u32::from_str_radix(&text[2..], 16)
-                    .map_err(|_| self.error("unable to parse i32 as a hexadecimal immediate"))?;
+                u32::from_str_radix(&text[2..], 16)
+                    .map_err(|_| self.error("unable to parse i32 as a hexadecimal immediate"))?
             } else {
                 // Parse it as a i32 to check for overflow and other issues.
-                value = text
-                    .parse()
-                    .map_err(|_| self.error("expected i32 decimal immediate"))?;
-            }
-            if negative {
-                value = Ok(value.wrapping_neg())?;
-                if value as i32 > 0 {
+                text.parse()
+                    .map_err(|_| self.error("expected i32 decimal immediate"))?
+            };
+
+            // Apply sign if necessary.
+            let signed = if negative {
+                let value = value.wrapping_neg() as i32;
+                if value > 0 {
                     return Err(self.error("negative number too small"));
                 }
-            }
-            Ok(value as i32)
+                value
+            } else {
+                value as i32
+            };
+
+            Ok(signed)
         } else {
             err!(self.loc, err_msg)
         }
@@ -1350,6 +1473,7 @@ impl<'a> Parser<'a> {
     //                   * function-decl
     //                   * signature-decl
     //                   * jump-table-decl
+    //                   * stack-limit-decl
     //
     // The parsed decls are added to `ctx` rather than returned.
     fn parse_preamble(&mut self, ctx: &mut Context) -> ParseResult<()> {
@@ -1392,6 +1516,16 @@ impl<'a> Parser<'a> {
                     self.start_gathering_comments();
                     self.parse_jump_table_decl()
                         .and_then(|(jt, dat)| ctx.add_jt(jt, dat, self.loc))
+                }
+                Some(Token::Constant(..)) => {
+                    self.start_gathering_comments();
+                    self.parse_constant_decl()
+                        .and_then(|(c, v)| ctx.add_constant(c, v, self.loc))
+                }
+                Some(Token::Identifier("stack_limit")) => {
+                    self.start_gathering_comments();
+                    self.parse_stack_limit_decl()
+                        .and_then(|gv| ctx.add_stack_limit(gv, self.loc))
                 }
                 // More to come..
                 _ => return Ok(()),
@@ -1775,6 +1909,48 @@ impl<'a> Parser<'a> {
         self.claim_gathered_comments(jt);
 
         Ok((jt, data))
+    }
+
+    // Parse a constant decl.
+    //
+    // constant-decl ::= * Constant(c) "=" ty? "[" literal {"," literal} "]"
+    fn parse_constant_decl(&mut self) -> ParseResult<(Constant, ConstantData)> {
+        let name = self.match_constant()?;
+        self.match_token(Token::Equal, "expected '=' in constant decl")?;
+        let data = if let Some(Token::Type(_)) = self.token() {
+            let ty = self.match_type("expected type of constant")?;
+            self.match_uimm128(ty)
+        } else {
+            self.match_constant_data()
+        }?;
+
+        // Collect any trailing comments.
+        self.token();
+        self.claim_gathered_comments(name);
+
+        Ok((name, data))
+    }
+
+    // Parse a stack limit decl
+    //
+    // stack-limit-decl ::= * StackLimit "=" GlobalValue(gv)
+    fn parse_stack_limit_decl(&mut self) -> ParseResult<GlobalValue> {
+        self.match_stack_limit()?;
+        self.match_token(Token::Equal, "expected '=' in stack limit decl")?;
+        let limit = match self.token() {
+            Some(Token::GlobalValue(base_num)) => match GlobalValue::with_number(base_num) {
+                Some(gv) => gv,
+                None => return err!(self.loc, "invalid global value number for stack limit"),
+            },
+            _ => return err!(self.loc, "expected global value"),
+        };
+        self.consume();
+
+        // Collect any trailing comments.
+        self.token();
+        self.claim_gathered_comments(AnyEntity::StackLimit);
+
+        Ok(limit)
     }
 
     // Parse a function body, add contents to `ctx`.
@@ -2339,6 +2515,160 @@ impl<'a> Parser<'a> {
         Ok(args)
     }
 
+    /// Parse a CLIF run command.
+    ///
+    /// run-command ::= "run" [":" invocation comparison expected]
+    ///               \ "print" [":" invocation]
+    fn parse_run_command(&mut self, sig: &Signature) -> ParseResult<RunCommand> {
+        // skip semicolon
+        match self.token() {
+            Some(Token::Identifier("run")) => {
+                self.consume();
+                if self.optional(Token::Colon) {
+                    let invocation = self.parse_run_invocation(sig)?;
+                    let comparison = self.parse_run_comparison()?;
+                    let expected = self.parse_run_returns(sig)?;
+                    Ok(RunCommand::Run(invocation, comparison, expected))
+                } else if sig.params.is_empty()
+                    && sig.returns.len() == 1
+                    && sig.returns[0].value_type.is_bool()
+                {
+                    // To match the existing run behavior that does not require an explicit
+                    // invocation, we create an invocation from a function like `() -> b*` and
+                    // compare it to `true`.
+                    let invocation = Invocation::new("default", vec![]);
+                    let expected = vec![DataValue::B(true)];
+                    let comparison = Comparison::Equals;
+                    Ok(RunCommand::Run(invocation, comparison, expected))
+                } else {
+                    Err(self.error("unable to parse the run command"))
+                }
+            }
+            Some(Token::Identifier("print")) => {
+                self.consume();
+                if self.optional(Token::Colon) {
+                    Ok(RunCommand::Print(self.parse_run_invocation(sig)?))
+                } else if sig.params.is_empty() {
+                    // To allow printing of functions like `() -> *`, we create a no-arg invocation.
+                    let invocation = Invocation::new("default", vec![]);
+                    Ok(RunCommand::Print(invocation))
+                } else {
+                    Err(self.error("unable to parse the print command"))
+                }
+            }
+            _ => Err(self.error("expected a 'run:' or 'print:' command")),
+        }
+    }
+
+    /// Parse the invocation of a CLIF function.
+    ///
+    /// This is different from parsing a CLIF `call`; it is used in parsing run commands like
+    /// `run: %fn(42, 4.2) == false`.
+    ///
+    /// invocation ::= name "(" [data-value-list] ")"
+    fn parse_run_invocation(&mut self, sig: &Signature) -> ParseResult<Invocation> {
+        if let Some(Token::Name(name)) = self.token() {
+            self.consume();
+            self.match_token(
+                Token::LPar,
+                "expected invocation parentheses, e.g. %fn(...)",
+            )?;
+
+            let args = self.parse_data_value_list(
+                &sig.params.iter().map(|a| a.value_type).collect::<Vec<_>>(),
+            )?;
+
+            self.match_token(
+                Token::RPar,
+                "expected invocation parentheses, e.g. %fn(...)",
+            )?;
+            Ok(Invocation::new(name, args))
+        } else {
+            Err(self.error("expected a function name, e.g. %my_fn"))
+        }
+    }
+
+    /// Parse a comparison operator for run commands.
+    ///
+    /// comparison ::= "==" | "!="
+    fn parse_run_comparison(&mut self) -> ParseResult<Comparison> {
+        if self.optional(Token::Equal) {
+            self.match_token(Token::Equal, "expected another =")?;
+            Ok(Comparison::Equals)
+        } else if self.optional(Token::Not) {
+            self.match_token(Token::Equal, "expected a =")?;
+            Ok(Comparison::NotEquals)
+        } else {
+            Err(self.error("unable to parse a valid comparison operator"))
+        }
+    }
+
+    /// Parse the expected return values of a run invocation.
+    ///
+    /// expected ::= "[" "]"
+    ///            | data-value
+    ///            | "[" data-value-list "]"
+    fn parse_run_returns(&mut self, sig: &Signature) -> ParseResult<Vec<DataValue>> {
+        if sig.returns.len() != 1 {
+            self.match_token(Token::LBracket, "expected a left bracket [")?;
+        }
+
+        let returns = self
+            .parse_data_value_list(&sig.returns.iter().map(|a| a.value_type).collect::<Vec<_>>())?;
+
+        if sig.returns.len() != 1 {
+            self.match_token(Token::RBracket, "expected a right bracket ]")?;
+        }
+        Ok(returns)
+    }
+
+    /// Parse a comma-separated list of data values.
+    ///
+    /// data-value-list ::= [data-value {"," data-value-list}]
+    fn parse_data_value_list(&mut self, types: &[Type]) -> ParseResult<Vec<DataValue>> {
+        let mut values = vec![];
+        for ty in types.iter().take(1) {
+            values.push(self.parse_data_value(*ty)?);
+        }
+        for ty in types.iter().skip(1) {
+            self.match_token(
+                Token::Comma,
+                "expected a comma between invocation arguments",
+            )?;
+            values.push(self.parse_data_value(*ty)?);
+        }
+        Ok(values)
+    }
+
+    /// Parse a data value; e.g. `42`, `4.2`, `true`.
+    ///
+    /// data-value-list ::= [data-value {"," data-value-list}]
+    fn parse_data_value(&mut self, ty: Type) -> ParseResult<DataValue> {
+        let dv = match ty {
+            I8 => DataValue::from(self.match_imm8("expected a i8")?),
+            I16 => DataValue::from(self.match_imm16("expected an i16")?),
+            I32 => DataValue::from(self.match_imm32("expected an i32")?),
+            I64 => DataValue::from(Into::<i64>::into(self.match_imm64("expected an i64")?)),
+            F32 => DataValue::from(f32::from_bits(self.match_ieee32("expected an f32")?.bits())),
+            F64 => DataValue::from(f64::from_bits(self.match_ieee64("expected an f64")?.bits())),
+            _ if ty.is_vector() => {
+                let as_vec = self.match_uimm128(ty)?.into_vec();
+                if as_vec.len() == 16 {
+                    let mut as_array = [0; 16];
+                    as_array.copy_from_slice(&as_vec[..16]);
+                    DataValue::from(as_array)
+                } else {
+                    return Err(self.error("only 128-bit vectors are currently supported"));
+                }
+            }
+            _ if ty.is_bool() && !ty.is_vector() => {
+                DataValue::from(self.match_bool("expected a boolean")?)
+            }
+            _ => return Err(self.error(&format!("don't know how to parse data values of: {}", ty))),
+        };
+        Ok(dv)
+    }
+
     // Parse the operands following the instruction opcode.
     // This depends on the format of the opcode.
     fn parse_inst_operands(
@@ -2368,6 +2698,28 @@ impl<'a> Parser<'a> {
                 opcode,
                 imm: self.match_bool("expected immediate boolean operand")?,
             },
+            InstructionFormat::UnaryConst => {
+                let constant_handle = if let Some(Token::Constant(_)) = self.token() {
+                    // If handed a `const?`, use that.
+                    let c = self.match_constant()?;
+                    ctx.check_constant(c, self.loc)?;
+                    c
+                } else if let Some(controlling_type) = explicit_control_type {
+                    // If an explicit control type is present, we expect a sized value and insert
+                    // it in the constant pool.
+                    let uimm128 = self.match_uimm128(controlling_type)?;
+                    ctx.function.dfg.constants.insert(uimm128)
+                } else {
+                    return err!(
+                        self.loc,
+                        "Expected either a const entity or a typed value, e.g. inst.i32x4 [...]"
+                    );
+                };
+                InstructionData::UnaryConst {
+                    opcode,
+                    constant_handle,
+                }
+            }
             InstructionFormat::UnaryGlobalValue => {
                 let gv = self.match_gv("expected global value")?;
                 ctx.check_gv(gv, self.loc)?;
@@ -2538,29 +2890,12 @@ impl<'a> Parser<'a> {
                 let lane = self.match_uimm8("expected lane number")?;
                 InstructionData::ExtractLane { opcode, lane, arg }
             }
-            InstructionFormat::UnaryConst => match explicit_control_type {
-                None => {
-                    return err!(
-                        self.loc,
-                        "Expected {:?} to have a controlling type variable, e.g. inst.i32x4",
-                        opcode
-                    )
-                }
-                Some(controlling_type) => {
-                    let uimm128 = self.match_constant_data(controlling_type)?;
-                    let constant_handle = ctx.function.dfg.constants.insert(uimm128);
-                    InstructionData::UnaryConst {
-                        opcode,
-                        constant_handle,
-                    }
-                }
-            },
             InstructionFormat::Shuffle => {
                 let a = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let b = self.match_value("expected SSA value second operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let uimm128 = self.match_constant_data(I8X16)?;
+                let uimm128 = self.match_uimm128(I8X16)?;
                 let mask = ctx.function.dfg.immediates.push(uimm128);
                 InstructionData::Shuffle {
                     opcode,
@@ -3475,5 +3810,89 @@ mod tests {
             c.into_vec(),
             [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
         )
+    }
+
+    #[test]
+    fn parse_unbounded_constants() {
+        // Unlike match_uimm128, match_constant_data can parse byte sequences of any size:
+        assert_eq!(
+            Parser::new("[0 1]").match_constant_data().unwrap(),
+            vec![0, 1].into()
+        );
+
+        // Only parse byte literals:
+        assert!(Parser::new("[256]").match_constant_data().is_err());
+    }
+
+    #[test]
+    fn parse_run_commands() {
+        // Helper for creating signatures.
+        fn sig(ins: &[Type], outs: &[Type]) -> Signature {
+            let mut sig = Signature::new(CallConv::Fast);
+            for i in ins {
+                sig.params.push(AbiParam::new(*i));
+            }
+            for o in outs {
+                sig.returns.push(AbiParam::new(*o));
+            }
+            sig
+        }
+
+        // Helper for parsing run commands.
+        fn parse(text: &str, sig: &Signature) -> ParseResult<RunCommand> {
+            Parser::new(text).parse_run_command(sig)
+        }
+
+        // Check that we can parse and display the same set of run commands.
+        fn assert_roundtrip(text: &str, sig: &Signature) {
+            assert_eq!(parse(text, sig).unwrap().to_string(), text);
+        }
+        assert_roundtrip("run: %fn0() == 42", &sig(&[], &[I32]));
+        assert_roundtrip(
+            "run: %fn0(8, 16, 32, 64) == true",
+            &sig(&[I8, I16, I32, I64], &[B8]),
+        );
+        assert_roundtrip(
+            "run: %my_func(true) == 0x0f0e0d0c0b0a09080706050403020100",
+            &sig(&[B32], &[I8X16]),
+        );
+
+        // Verify that default invocations are created when not specified.
+        assert_eq!(
+            parse("run", &sig(&[], &[B32])).unwrap().to_string(),
+            "run: %default() == true"
+        );
+        assert_eq!(
+            parse("print", &sig(&[], &[F32X4, I16X8]))
+                .unwrap()
+                .to_string(),
+            "print: %default()"
+        );
+
+        // Demonstrate some unparseable cases.
+        assert!(parse("print", &sig(&[I32], &[B32])).is_err());
+        assert!(parse("run", &sig(&[], &[I32])).is_err());
+        assert!(parse("print:", &sig(&[], &[])).is_err());
+        assert!(parse("run: ", &sig(&[], &[])).is_err());
+    }
+
+    #[test]
+    fn parse_data_values() {
+        fn parse(text: &str, ty: Type) -> DataValue {
+            Parser::new(text).parse_data_value(ty).unwrap()
+        }
+
+        assert_eq!(parse("8", I8).to_string(), "8");
+        assert_eq!(parse("16", I16).to_string(), "16");
+        assert_eq!(parse("32", I32).to_string(), "32");
+        assert_eq!(parse("64", I64).to_string(), "64");
+        assert_eq!(parse("0x32.32", F32).to_string(), "0x1.919000p5");
+        assert_eq!(parse("0x64.64", F64).to_string(), "0x1.9190000000000p6");
+        assert_eq!(parse("true", B1).to_string(), "true");
+        assert_eq!(parse("false", B64).to_string(), "false");
+        assert_eq!(
+            parse("[0 1 2 3]", I32X4).to_string(),
+            "0x00000003000000020000000100000000"
+        );
     }
 }

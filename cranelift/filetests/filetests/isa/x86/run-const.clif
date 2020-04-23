@@ -1,4 +1,5 @@
 test run
+target x86_64
 
 function %test_compare_i32() -> b1 {
 block0:

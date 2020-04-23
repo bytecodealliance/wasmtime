@@ -11,17 +11,17 @@ wiggle::from_witx!({
 pub use types::Errno;
 pub type Result<T> = std::result::Result<T, Errno>;
 
-impl<'a> wiggle::GuestErrorType<'a> for Errno {
-    type Context = WasiCtx;
-
+impl wiggle::GuestErrorType for Errno {
     fn success() -> Self {
         Self::Success
     }
+}
 
-    fn from_error(e: wiggle::GuestError, _ctx: &Self::Context) -> Self {
+impl types::GuestErrorConversion for WasiCtx {
+    fn into_errno(&self, e: wiggle::GuestError) -> Errno {
         eprintln!("Guest error: {:?}", e);
         // TODO proper error mapping
-        Self::Inval
+        Errno::Inval
     }
 }
 

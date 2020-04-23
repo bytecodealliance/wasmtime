@@ -1,79 +1,51 @@
-use crate::sys::dev_null;
-use crate::sys::entry::{descriptor_as_oshandle, determine_type_and_access_rights, OsHandle};
-use crate::virtfs::VirtualFile;
+use crate::handle::Handle;
 use crate::wasi::types::{Filetype, Rights};
 use crate::wasi::{Errno, Result};
-use std::cell::{Cell, RefCell};
-use std::marker::PhantomData;
-use std::mem::ManuallyDrop;
+use std::cell::Cell;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::{fmt, fs, io};
+use std::{fmt, io};
 
-pub(crate) enum Descriptor {
-    OsHandle(OsHandle),
-    VirtualFile(Box<dyn VirtualFile>),
-    Stdin,
-    Stdout,
-    Stderr,
-}
+pub(crate) struct EntryHandle(Rc<dyn Handle>);
 
-impl From<OsHandle> for Descriptor {
-    fn from(handle: OsHandle) -> Self {
-        Self::OsHandle(handle)
+impl EntryHandle {
+    pub(crate) fn new<T: Handle + 'static>(handle: T) -> Self {
+        Self(Rc::new(handle))
+    }
+
+    pub(crate) fn get(&self) -> Self {
+        Self(Rc::clone(&self.0))
     }
 }
 
-impl From<Box<dyn VirtualFile>> for Descriptor {
-    fn from(virt: Box<dyn VirtualFile>) -> Self {
-        Self::VirtualFile(virt)
+impl From<Box<dyn Handle>> for EntryHandle {
+    fn from(handle: Box<dyn Handle>) -> Self {
+        Self(handle.into())
     }
 }
 
-impl fmt::Debug for Descriptor {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::OsHandle(handle) => write!(f, "{:?}", handle),
-            Self::VirtualFile(_) => write!(f, "VirtualFile"),
-            Self::Stdin => write!(f, "Stdin"),
-            Self::Stdout => write!(f, "Stdout"),
-            Self::Stderr => write!(f, "Stderr"),
-        }
-    }
-}
-
-impl Descriptor {
-    /// Return an `OsHandle`, which may be a stream or socket file descriptor.
-    pub(crate) fn as_os_handle<'descriptor>(&'descriptor self) -> OsHandleRef<'descriptor> {
-        descriptor_as_oshandle(self)
-    }
-}
-
-/// This allows an `OsHandle` to be temporarily borrowed from a
-/// `Descriptor`. The `Descriptor` continues to own the resource,
-/// and `OsHandleRef`'s lifetime parameter ensures that it doesn't
-/// outlive the `Descriptor`.
-pub(crate) struct OsHandleRef<'descriptor> {
-    handle: ManuallyDrop<OsHandle>,
-    _ref: PhantomData<&'descriptor Descriptor>,
-}
-
-impl<'descriptor> OsHandleRef<'descriptor> {
-    pub(crate) fn new(handle: ManuallyDrop<OsHandle>) -> Self {
-        OsHandleRef {
-            handle,
-            _ref: PhantomData,
-        }
-    }
-}
-
-impl<'descriptor> Deref for OsHandleRef<'descriptor> {
-    type Target = fs::File;
+impl Deref for EntryHandle {
+    type Target = dyn Handle;
 
     fn deref(&self) -> &Self::Target {
-        &self.handle
+        &*self.0
     }
+}
+
+/// An abstraction struct serving as a wrapper for a host `Descriptor` object which requires
+/// certain rights `rights` in order to be accessed correctly.
+///
+/// Here, the `descriptor` field stores the host `Descriptor` object (such as a file descriptor, or
+/// stdin handle), and accessing it can only be done via the provided `Entry::as_descriptor` method
+/// which require a set of base and inheriting rights to be specified, verifying whether the stored
+/// `Descriptor` object is valid for the rights specified.
+pub(crate) struct Entry {
+    pub(crate) file_type: Filetype,
+    handle: EntryHandle,
+    pub(crate) rights: Cell<EntryRights>,
+    pub(crate) preopen_path: Option<PathBuf>,
+    // TODO: directories
 }
 
 /// Represents rights of an `Entry` entity, either already held or
@@ -123,78 +95,16 @@ impl fmt::Display for EntryRights {
     }
 }
 
-/// An abstraction struct serving as a wrapper for a host `Descriptor` object which requires
-/// certain rights `rights` in order to be accessed correctly.
-///
-/// Here, the `descriptor` field stores the host `Descriptor` object (such as a file descriptor, or
-/// stdin handle), and accessing it can only be done via the provided `Entry::as_descriptor` method
-/// which require a set of base and inheriting rights to be specified, verifying whether the stored
-/// `Descriptor` object is valid for the rights specified.
-#[derive(Debug)]
-pub(crate) struct Entry {
-    pub(crate) file_type: Filetype,
-    descriptor: Rc<RefCell<Descriptor>>,
-    pub(crate) rights: Cell<EntryRights>,
-    pub(crate) preopen_path: Option<PathBuf>,
-    // TODO: directories
-}
-
 impl Entry {
-    pub(crate) fn from(file: Descriptor) -> io::Result<Self> {
-        match file {
-            Descriptor::OsHandle(handle) => unsafe { determine_type_and_access_rights(&handle) }
-                .map(|(file_type, rights)| Self {
-                    file_type,
-                    descriptor: Rc::new(RefCell::new(handle.into())),
-                    rights: Cell::new(rights),
-                    preopen_path: None,
-                }),
-            Descriptor::VirtualFile(virt) => {
-                let file_type = virt.get_file_type();
-                let rights = EntryRights::new(virt.get_rights_base(), virt.get_rights_inheriting());
-
-                Ok(Self {
-                    file_type,
-                    descriptor: Rc::new(RefCell::new(virt.into())),
-                    rights: Cell::new(rights),
-                    preopen_path: None,
-                })
-            }
-            Descriptor::Stdin | Descriptor::Stdout | Descriptor::Stderr => {
-                panic!("implementation error, stdin/stdout/stderr Entry must not be constructed from Entry::from");
-            }
-        }
-    }
-
-    pub(crate) fn duplicate_stdin() -> io::Result<Self> {
-        unsafe { determine_type_and_access_rights(&io::stdin()) }.map(|(file_type, rights)| Self {
+    pub(crate) fn from(handle: EntryHandle) -> io::Result<Self> {
+        let file_type = handle.get_file_type()?;
+        let rights = handle.get_rights()?;
+        Ok(Self {
             file_type,
-            descriptor: Rc::new(RefCell::new(Descriptor::Stdin)),
+            handle,
             rights: Cell::new(rights),
             preopen_path: None,
         })
-    }
-
-    pub(crate) fn duplicate_stdout() -> io::Result<Self> {
-        unsafe { determine_type_and_access_rights(&io::stdout()) }.map(|(file_type, rights)| Self {
-            file_type,
-            descriptor: Rc::new(RefCell::new(Descriptor::Stdout)),
-            rights: Cell::new(rights),
-            preopen_path: None,
-        })
-    }
-
-    pub(crate) fn duplicate_stderr() -> io::Result<Self> {
-        unsafe { determine_type_and_access_rights(&io::stderr()) }.map(|(file_type, rights)| Self {
-            file_type,
-            descriptor: Rc::new(RefCell::new(Descriptor::Stderr)),
-            rights: Cell::new(rights),
-            preopen_path: None,
-        })
-    }
-
-    pub(crate) fn null() -> io::Result<Self> {
-        Self::from(OsHandle::from(dev_null()?).into())
     }
 
     /// Convert this `Entry` into a host `Descriptor` object provided the specified
@@ -205,9 +115,9 @@ impl Entry {
     /// `EntryRights` structure is a subset of rights attached to this `Entry`. The check is
     /// performed using `Entry::validate_rights` method. If the check fails, `Errno::Notcapable`
     /// is returned.
-    pub(crate) fn as_descriptor(&self, rights: &EntryRights) -> Result<Rc<RefCell<Descriptor>>> {
+    pub(crate) fn as_handle(&self, rights: &EntryRights) -> Result<EntryHandle> {
         self.validate_rights(rights)?;
-        Ok(Rc::clone(&self.descriptor))
+        Ok(self.handle.get())
     }
 
     /// Check if this `Entry` object satisfies the specified `EntryRights`; i.e., if

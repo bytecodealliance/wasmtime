@@ -15,18 +15,7 @@ pub mod dummy;
 use dummy::dummy_imports;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
-
-fn fuzz_default_config(strategy: Strategy) -> Config {
-    crate::init_fuzzing();
-    let mut config = Config::new();
-    config
-        .cranelift_debug_verifier(true)
-        .wasm_multi_value(true)
-        .wasm_bulk_memory(true)
-        .strategy(strategy)
-        .expect("failed to enable lightbeam");
-    return config;
-}
+use wasmtime_wast::WastContext;
 
 fn log_wasm(wasm: &[u8]) {
     static CNT: AtomicUsize = AtomicUsize::new(0);
@@ -51,7 +40,7 @@ fn log_wasm(wasm: &[u8]) {
 ///
 /// You can control which compiler is used via passing a `Strategy`.
 pub fn instantiate(wasm: &[u8], strategy: Strategy) {
-    instantiate_with_config(wasm, fuzz_default_config(strategy));
+    instantiate_with_config(wasm, crate::fuzz_default_config(strategy).unwrap());
 }
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
@@ -98,7 +87,7 @@ pub fn instantiate_with_config(wasm: &[u8], config: Config) {
 pub fn compile(wasm: &[u8], strategy: Strategy) {
     crate::init_fuzzing();
 
-    let engine = Engine::new(&fuzz_default_config(strategy));
+    let engine = Engine::new(&crate::fuzz_default_config(strategy).unwrap());
     let store = Store::new(&engine);
     log_wasm(wasm);
     let _ = Module::new(&store, wasm);
@@ -180,37 +169,20 @@ pub fn differential_execution(
             }
         };
 
-        let funcs = module
-            .exports()
-            .iter()
-            .filter_map(|e| {
-                if let ExternType::Func(_) = e.ty() {
-                    Some(e.name())
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
-        for name in funcs {
+        for (name, f) in instance.exports().filter_map(|e| {
+            let name = e.name();
+            e.into_func().map(|f| (name, f))
+        }) {
             // Always call the hang limit initializer first, so that we don't
             // infinite loop when calling another export.
             init_hang_limit(&instance);
-
-            let f = match instance
-                .get_export(&name)
-                .expect("instance should have export from module")
-            {
-                Extern::Func(f) => f.clone(),
-                _ => panic!("export should be a function"),
-            };
 
             let ty = f.ty();
             let params = match dummy::dummy_values(ty.params()) {
                 Ok(p) => p,
                 Err(_) => continue,
             };
-            let this_result = f.call(&params);
+            let this_result = f.call(&params).map_err(|e| e.downcast::<Trap>().unwrap());
 
             let existing_result = export_func_results
                 .entry(name.to_string())
@@ -313,6 +285,11 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 config.as_mut().unwrap().debug_info(b);
             }
 
+            ApiCall::ConfigInterruptable(b) => {
+                log::trace!("enabling interruption");
+                config.as_mut().unwrap().interruptable(b);
+            }
+
             ApiCall::EngineNew => {
                 log::trace!("creating engine");
                 assert!(engine.is_none());
@@ -389,8 +366,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
 
                 let funcs = instance
                     .exports()
-                    .iter()
-                    .filter_map(|e| match e {
+                    .filter_map(|e| match e.into_extern() {
                         Extern::Func(f) => Some(f.clone()),
                         _ => None,
                     })
@@ -411,4 +387,16 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
             }
         }
     }
+}
+
+/// Executes the wast `test` spectest with the `config` specified.
+///
+/// Ensures that spec tests pass regardless of the `Config`.
+pub fn spectest(config: crate::generators::Config, test: crate::generators::SpecTest) {
+    let store = Store::new(&Engine::new(&config.to_wasmtime()));
+    let mut wast_context = WastContext::new(store);
+    wast_context.register_spectest().unwrap();
+    wast_context
+        .run_buffer(test.file, test.contents.as_bytes())
+        .unwrap();
 }

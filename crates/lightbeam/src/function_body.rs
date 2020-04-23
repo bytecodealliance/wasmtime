@@ -1,9 +1,9 @@
-#[cfg(debug_assertions)]
-use crate::backend::{Registers, ValueLocation};
 use crate::backend::{
-    ret_locs, BlockCallingConvention, BrAction, CodeGenSession, Label,  Target,
+    ret_locs, BlockCallingConvention, BrAction, CodeGenSession, Label, Target,
     VirtualCallingConvention,
 };
+#[cfg(debug_assertions)]
+use crate::backend::{Registers, ValueLocation};
 use crate::{
     error::Error,
     microwasm::*,
@@ -401,17 +401,20 @@ where
                 Operator::End(Targets { targets, default }) => {
                     in_block = false;
 
-                    let target_labels = targets.iter().map(|t| {
-                        let block = &blocks[&t.target];
-                        Target {
-                            target: block.label,
-                            action: if block.is_next {
-                                BrAction::Continue
-                            } else {
-                                BrAction::Jump
+                    let target_labels = targets
+                        .iter()
+                        .map(|t| {
+                            let block = &blocks[&t.target];
+                            Target {
+                                target: block.label,
+                                action: if block.is_next {
+                                    BrAction::Continue
+                                } else {
+                                    BrAction::Jump
+                                },
                             }
-                        }
-                    }).collect::<Vec<_>>();
+                        })
+                        .collect::<Vec<_>>();
                     let default_label = {
                         let block = &blocks[&default.target];
                         Target {
@@ -420,7 +423,7 @@ where
                                 BrAction::Continue
                             } else {
                                 BrAction::Jump
-                            }
+                            },
                         }
                     };
 

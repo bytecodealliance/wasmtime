@@ -28,10 +28,15 @@ pub fn verify_flags(
     errors: &mut VerifierErrors,
 ) -> VerifierStepResult<()> {
     let _tt = timing::verify_flags();
+    let encinfo = if isa.is_none() || isa.unwrap().get_mach_backend().is_some() {
+        None
+    } else {
+        Some(isa.unwrap().encoding_info())
+    };
     let mut verifier = FlagsVerifier {
         func,
         cfg,
-        encinfo: isa.map(|isa| isa.encoding_info()),
+        encinfo,
         livein: SecondaryMap::new(),
     };
     verifier.check(errors)

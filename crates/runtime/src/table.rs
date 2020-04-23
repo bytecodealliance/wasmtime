@@ -100,7 +100,6 @@ impl Table {
         dst_index: u32,
         src_index: u32,
         len: u32,
-        source_loc: ir::SourceLoc,
     ) -> Result<(), Trap> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-copy
 
@@ -111,7 +110,7 @@ impl Table {
                 .checked_add(len)
                 .map_or(true, |m| m > dst_table.size())
         {
-            return Err(Trap::wasm(source_loc, ir::TrapCode::TableOutOfBounds));
+            return Err(Trap::wasm(ir::TrapCode::TableOutOfBounds));
         }
 
         let srcs = src_index..src_index + len;

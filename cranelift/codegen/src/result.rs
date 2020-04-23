@@ -30,6 +30,11 @@ pub enum CodegenError {
     /// is exceeded, compilation fails.
     #[error("Code for function is too large")]
     CodeTooLarge,
+
+    /// A failure to map Cranelift register representation to a DWARF register representation.
+    #[cfg(feature = "unwind")]
+    #[error("Register mapping error")]
+    RegisterMappingError(crate::isa::unwind::systemv::RegisterMappingError),
 }
 
 /// A convenient alias for a `Result` that uses `CodegenError` as the error type.

@@ -902,8 +902,8 @@ fn branch_order(pos: &mut FuncCursor, cfg: &mut ControlFlowGraph, block: Block, 
             _ => return,
         };
 
-    let cond_args = { cond_inst_args.as_slice(&pos.func.dfg.value_lists).to_vec() };
-    let term_args = { term_inst_args.as_slice(&pos.func.dfg.value_lists).to_vec() };
+    let cond_args = cond_inst_args.as_slice(&pos.func.dfg.value_lists).to_vec();
+    let term_args = term_inst_args.as_slice(&pos.func.dfg.value_lists).to_vec();
 
     match kind {
         BranchOrderKind::BrnzToBrz(cond_arg) => {

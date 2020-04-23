@@ -57,6 +57,11 @@ impl Imm64 {
     pub fn wrapping_neg(self) -> Self {
         Self(self.0.wrapping_neg())
     }
+
+    /// Return bits of this immediate.
+    pub fn bits(&self) -> i64 {
+        self.0
+    }
 }
 
 impl Into<i64> for Imm64 {

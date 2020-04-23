@@ -1,24 +1,27 @@
 use heck::{CamelCase, ShoutySnakeCase, SnakeCase};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
-use witx::{AtomType, BuiltinType, Id, TypeRef};
+use witx::{AtomType, BuiltinType, Id, Type, TypeRef};
 
 use crate::lifetimes::LifetimeExt;
-use crate::Config;
 
-#[derive(Debug, Clone)]
 pub struct Names {
-    config: Config,
+    ctx_type: Ident,
+    runtime_mod: TokenStream,
 }
 
 impl Names {
-    pub fn new(config: &Config) -> Names {
+    pub fn new(ctx_type: &Ident, runtime_mod: TokenStream) -> Names {
         Names {
-            config: config.clone(),
+            ctx_type: ctx_type.clone(),
+            runtime_mod,
         }
     }
     pub fn ctx_type(&self) -> Ident {
-        self.config.ctx.name.clone()
+        self.ctx_type.clone()
+    }
+    pub fn runtime_mod(&self) -> TokenStream {
+        self.runtime_mod.clone()
     }
     pub fn type_(&self, id: &Id) -> TokenStream {
         let ident = format_ident!("{}", id.as_str().to_camel_case());
@@ -26,7 +29,10 @@ impl Names {
     }
     pub fn builtin_type(&self, b: BuiltinType, lifetime: TokenStream) -> TokenStream {
         match b {
-            BuiltinType::String => quote!(wiggle::GuestPtr<#lifetime, str>),
+            BuiltinType::String => {
+                let rt = self.runtime_mod();
+                quote!(#rt::GuestPtr<#lifetime, str>)
+            }
             BuiltinType::U8 => quote!(u8),
             BuiltinType::U16 => quote!(u16),
             BuiltinType::U32 => quote!(u32),
@@ -61,14 +67,16 @@ impl Names {
                 }
             }
             TypeRef::Value(ty) => match &**ty {
-                witx::Type::Builtin(builtin) => self.builtin_type(*builtin, lifetime.clone()),
-                witx::Type::Pointer(pointee) | witx::Type::ConstPointer(pointee) => {
+                Type::Builtin(builtin) => self.builtin_type(*builtin, lifetime.clone()),
+                Type::Pointer(pointee) | Type::ConstPointer(pointee) => {
+                    let rt = self.runtime_mod();
                     let pointee_type = self.type_ref(&pointee, lifetime.clone());
-                    quote!(wiggle::GuestPtr<#lifetime, #pointee_type>)
+                    quote!(#rt::GuestPtr<#lifetime, #pointee_type>)
                 }
-                witx::Type::Array(pointee) => {
+                Type::Array(pointee) => {
+                    let rt = self.runtime_mod();
                     let pointee_type = self.type_ref(&pointee, lifetime.clone());
-                    quote!(wiggle::GuestPtr<#lifetime, [#pointee_type]>)
+                    quote!(#rt::GuestPtr<#lifetime, [#pointee_type]>)
                 }
                 _ => unimplemented!("anonymous type ref {:?}", tref),
             },
@@ -140,5 +148,29 @@ impl Names {
     /// For when you need a {name}_len binding for passing an array:
     pub fn func_len_binding(&self, id: &Id) -> Ident {
         format_ident!("{}_len", id.as_str().to_snake_case())
+    }
+
+    pub fn guest_error_conversion_method(&self, tref: &TypeRef) -> Ident {
+        match tref {
+            TypeRef::Name(nt) => format_ident!("into_{}", nt.name.as_str().to_snake_case()),
+            TypeRef::Value(ty) => match &**ty {
+                Type::Builtin(b) => match b {
+                    BuiltinType::String => unreachable!("error type must be atom"),
+                    BuiltinType::U8 => format_ident!("into_u8"),
+                    BuiltinType::U16 => format_ident!("into_u16"),
+                    BuiltinType::U32 => format_ident!("into_u32"),
+                    BuiltinType::U64 => format_ident!("into_u64"),
+                    BuiltinType::S8 => format_ident!("into_i8"),
+                    BuiltinType::S16 => format_ident!("into_i16"),
+                    BuiltinType::S32 => format_ident!("into_i32"),
+                    BuiltinType::S64 => format_ident!("into_i64"),
+                    BuiltinType::F32 => format_ident!("into_f32"),
+                    BuiltinType::F64 => format_ident!("into_f64"),
+                    BuiltinType::Char8 => format_ident!("into_char8"),
+                    BuiltinType::USize => format_ident!("into_usize"),
+                },
+                _ => panic!("unexpected anonymous error type: {:?}", ty),
+            },
+        }
     }
 }

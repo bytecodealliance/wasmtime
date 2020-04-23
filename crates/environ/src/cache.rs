@@ -1,6 +1,5 @@
 use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
 use crate::compilation::{Compilation, Relocations, Traps};
-use crate::frame_layout::FrameLayouts;
 use cranelift_codegen::ir;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::DefinedFuncIndex;
@@ -36,7 +35,6 @@ pub struct ModuleCacheData {
     value_ranges: ValueLabelsRanges,
     stack_slots: PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
     traps: Traps,
-    frame_layouts: FrameLayouts,
 }
 
 /// A type alias over the module cache data as a tuple.
@@ -47,7 +45,6 @@ pub type ModuleCacheDataTupleType = (
     ValueLabelsRanges,
     PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
     Traps,
-    FrameLayouts,
 );
 
 struct Sha256Hasher(Sha256);
@@ -207,7 +204,6 @@ impl ModuleCacheData {
             value_ranges: data.3,
             stack_slots: data.4,
             traps: data.5,
-            frame_layouts: data.6,
         }
     }
 
@@ -219,7 +215,6 @@ impl ModuleCacheData {
             self.value_ranges,
             self.stack_slots,
             self.traps,
-            self.frame_layouts,
         )
     }
 }

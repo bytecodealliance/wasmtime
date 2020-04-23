@@ -39,10 +39,10 @@ pub(crate) fn create_handle(
     unsafe {
         Ok(InstanceHandle::new(
             Arc::new(module),
-            store.compiler().trap_registry().register_traps(Vec::new()),
             finished_functions.into_boxed_slice(),
             trampolines,
             imports,
+            store.memory_creator(),
             &data_initializers,
             signatures.into_boxed_slice(),
             None,
@@ -53,6 +53,8 @@ pub(crate) fn create_handle(
                 .operator_config
                 .enable_bulk_memory,
             state,
+            store.compiler().interrupts().clone(),
+            store.engine().config().max_wasm_stack,
         )?)
     }
 }

@@ -1,3 +1,4 @@
+use crate::{bad_utf8, handle_result, wasmtime_error_t};
 use crate::{wasm_extern_t, wasm_store_t, ExternHost};
 use crate::{wasm_instance_t, wasm_module_t, wasm_name_t, wasm_trap_t};
 use std::str;
@@ -32,15 +33,15 @@ pub extern "C" fn wasmtime_linker_define(
     module: &wasm_name_t,
     name: &wasm_name_t,
     item: &wasm_extern_t,
-) -> bool {
+) -> Option<Box<wasmtime_error_t>> {
     let linker = &mut linker.linker;
     let module = match str::from_utf8(module.as_slice()) {
         Ok(s) => s,
-        Err(_) => return false,
+        Err(_) => return bad_utf8(),
     };
     let name = match str::from_utf8(name.as_slice()) {
         Ok(s) => s,
-        Err(_) => return false,
+        Err(_) => return bad_utf8(),
     };
     let item = match &item.which {
         ExternHost::Func(e) => Extern::Func(e.borrow().clone()),
@@ -48,7 +49,7 @@ pub extern "C" fn wasmtime_linker_define(
         ExternHost::Global(e) => Extern::Global(e.borrow().clone()),
         ExternHost::Memory(e) => Extern::Memory(e.borrow().clone()),
     };
-    linker.define(module, name, item).is_ok()
+    handle_result(linker.define(module, name, item), |_linker| ())
 }
 
 #[cfg(feature = "wasi")]
@@ -56,9 +57,9 @@ pub extern "C" fn wasmtime_linker_define(
 pub extern "C" fn wasmtime_linker_define_wasi(
     linker: &mut wasmtime_linker_t,
     instance: &crate::wasi_instance_t,
-) -> bool {
+) -> Option<Box<wasmtime_error_t>> {
     let linker = &mut linker.linker;
-    instance.add_to_linker(linker).is_ok()
+    handle_result(instance.add_to_linker(linker), |_linker| ())
 }
 
 #[no_mangle]
@@ -66,22 +67,25 @@ pub extern "C" fn wasmtime_linker_define_instance(
     linker: &mut wasmtime_linker_t,
     name: &wasm_name_t,
     instance: &wasm_instance_t,
-) -> bool {
+) -> Option<Box<wasmtime_error_t>> {
     let linker = &mut linker.linker;
     let name = match str::from_utf8(name.as_slice()) {
         Ok(s) => s,
-        Err(_) => return false,
+        Err(_) => return bad_utf8(),
     };
-    linker.instance(name, &instance.instance.borrow()).is_ok()
+    handle_result(
+        linker.instance(name, &instance.instance.borrow()),
+        |_linker| (),
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_linker_instantiate(
     linker: &wasmtime_linker_t,
     module: &wasm_module_t,
-    trap: Option<&mut *mut wasm_trap_t>,
-) -> Option<Box<wasm_instance_t>> {
-    let linker = &linker.linker;
-    let result = linker.instantiate(&module.module.borrow());
-    super::instance::handle_instantiate(result, trap)
+    instance_ptr: &mut *mut wasm_instance_t,
+    trap_ptr: &mut *mut wasm_trap_t,
+) -> Option<Box<wasmtime_error_t>> {
+    let result = linker.linker.instantiate(&module.module.borrow());
+    super::instance::handle_instantiate(result, instance_ptr, trap_ptr)
 }

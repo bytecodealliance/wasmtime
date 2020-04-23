@@ -357,7 +357,6 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
     let x86_pshufd = x86_instructions.by_name("x86_pshufd");
     let x86_psll = x86_instructions.by_name("x86_psll");
     let x86_psra = x86_instructions.by_name("x86_psra");
-    let x86_psrl = x86_instructions.by_name("x86_psrl");
     let x86_ptest = x86_instructions.by_name("x86_ptest");
 
     let imm = &shared.imm;
@@ -493,16 +492,6 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
         narrow.legalize(
             def!(a = ishl(x, y)),
             vec![def!(b = bitcast(y)), def!(a = x86_psll(x, b))],
-        );
-    }
-
-    // SIMD shift right (logical)
-    for ty in &[I16, I32, I64] {
-        let ushr = ushr.bind(vector(*ty, sse_vector_size));
-        let bitcast = bitcast.bind(vector(I64, sse_vector_size));
-        narrow.legalize(
-            def!(a = ushr(x, y)),
-            vec![def!(b = bitcast(y)), def!(a = x86_psrl(x, b))],
         );
     }
 
@@ -695,6 +684,7 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
     narrow.custom_legalize(extractlane, "convert_extractlane");
     narrow.custom_legalize(insertlane, "convert_insertlane");
     narrow.custom_legalize(ineg, "convert_ineg");
+    narrow.custom_legalize(ushr, "convert_ushr");
 
     narrow.build_and_add_to(&mut shared.transform_groups);
 }

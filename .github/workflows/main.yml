@@ -16,6 +16,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+    - run: rustup component add rustfmt
     - run: cargo fmt --all -- --check
 
   # Build `mdBook` documentation for `wasmtime`, and upload it as a temporary
@@ -224,17 +225,15 @@ jobs:
     - run: cargo run -p run-examples
 
     # Build and test all features except for lightbeam
-    - run: cargo test --features test-programs/test_programs --all --exclude lightbeam --exclude wasmtime-c-api -- --nocapture
+    - run: cargo test --features test-programs/test_programs --all --exclude lightbeam -- --nocapture
       env:
         RUST_BACKTRACE: 1
-        RUSTFLAGS: "-D warnings"
 
     # Test debug (DWARF) related functionality.
     - run: cargo test test_debug_dwarf_ -- --ignored --nocapture --test-threads 1
       if: matrix.os == 'ubuntu-latest'
       env:
         RUST_BACKTRACE: 1
-        RUSTFLAGS: "-D warnings"
 
     # Build and test lightbeam if we're using the nightly toolchain. Note that
     # Lightbeam tests fail right now, but we don't want to block on that.
@@ -242,16 +241,6 @@ jobs:
       if: matrix.rust == 'nightly'
     - run: cargo test --package lightbeam -- --nocapture
       if: matrix.rust == 'nightly'
-      continue-on-error: true
-      env:
-        RUST_BACKTRACE: 1
-
-    # Build and test c-api examples. Skipping testing on Windows due to
-    # GNU make dependency when executing the wasm-c-api examples.
-    - run: cargo build --package wasmtime-c-api
-      if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
-    - run: cargo test --package wasmtime-c-api -- --nocapture --test-threads 1
-      if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
       continue-on-error: true
       env:
         RUST_BACKTRACE: 1
@@ -269,102 +258,6 @@ jobs:
     - run: cd cranelift/codegen && cargo build --features all-arch
     - run: ci/ensure_deterministic_build.sh
 
-  # Builds a Python wheel (package) for Windows/Mac/Linux. Note that we're
-  # careful to create binary-compatible releases here to old releases of
-  # Windows/Mac/Linux. This will also build wheels for Python 3.6, 3.7 and 3.8.
-  wheels:
-    name: Python Wheel
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    steps:
-    - uses: actions/checkout@v1
-      with:
-        submodules: true
-    - uses: ./.github/actions/install-rust
-      with:
-        toolchain: nightly-2020-01-06
-    - uses: ./.github/actions/binary-compatible-builds
-    - run: mkdir crates/misc/py/wheelhouse
-      shell: bash
-
-    # Install Python & dependencies needed for our `setup.py` scripts
-    - name: Setup Python 3.6
-      uses: actions/setup-python@v1
-      with:
-        python-version: '3.6'
-        architecture: x64
-    - run: $CENTOS pip3 install setuptools wheel setuptools-rust
-      shell: bash
-    - run: (cd crates/misc/py && $CENTOS $python setup.py bdist_wheel)
-      shell: bash
-
-    # Clear the build directory between building different wheels for different
-    # Python versions to ensure that we don't package dynamic libraries twice by
-    # accident.
-    - run: $CENTOS rm -rf crates/misc/py/build
-      shell: bash
-
-    # Set up Python 3.7 (and build it on Linux), reinstall dependencies, then
-    # rebuild our wheels
-    - name: Setup Python 3.7
-      uses: actions/setup-python@v1
-      with:
-        python-version: '3.7'
-        architecture: x64
-      if: matrix.os != 'ubuntu-latest'
-    - name: Build Python 3.7
-      run: $CENTOS sh ci/setup_centos6_python3.sh 3.7.3
-      if: matrix.os == 'ubuntu-latest'
-    - run: $CENTOS pip3 install setuptools wheel setuptools-rust auditwheel
-      shell: bash
-    - run: (cd crates/misc/py && $CENTOS $python setup.py bdist_wheel)
-      shell: bash
-
-    # Clear the build directory between building different wheels for different
-    # Python versions to ensure that we don't package dynamic libraries twice by
-    # accident.
-    - run: $CENTOS rm -rf crates/misc/py/build
-      shell: bash
-
-    # Set up Python 3.8 (and build it on Linux), reinstall dependencies, then
-    # rebuild our wheels
-    - name: Setup Python 3.8
-      uses: actions/setup-python@v1
-      with:
-        python-version: '3.8'
-        architecture: x64
-      if: matrix.os != 'ubuntu-latest'
-    - name: Build Python 3.8
-      run: $CENTOS sh ci/setup_centos6_python3.sh 3.8.0
-      if: matrix.os == 'ubuntu-latest'
-    - run: $CENTOS pip3 install setuptools wheel setuptools-rust auditwheel
-      shell: bash
-    - run: (cd crates/misc/py && $CENTOS $python setup.py bdist_wheel)
-      shell: bash
-
-    # Move `dist/*.whl` into `wheelhouse/` so we can deploy them, but on Linux we
-    # need to run an `auditwheel` command as well to turn these into "manylinux"
-    # wheels to run across a number of distributions.
-    - run: cp crates/misc/py/dist/*.whl crates/misc/py/wheelhouse/
-      shell: bash
-      if: matrix.os != 'ubuntu-latest'
-    - run: |
-        set -e
-        cd crates/misc/py
-        for whl in dist/*.whl; do
-            $CENTOS auditwheel repair "$whl" -w wheelhouse/
-        done
-      shell: bash
-      if: matrix.os == 'ubuntu-latest'
-
-    # Upload this for the publishing stage of pipelines
-    - uses: actions/upload-artifact@v1
-      with:
-        name: wheels-${{ matrix.os }}
-        path: crates/misc/py/wheelhouse
-
   # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds on
   # Windows/Mac/Linux, and artifacts are uploaded after the build is finished.
   # Note that we also run tests here to test exactly what we're deploying.
@@ -373,13 +266,52 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+        - build: x86_64-linux
+          os: ubuntu-latest
+        - build: x86_64-macos
+          os: macos-latest
+        - build: x86_64-windows
+          os: windows-latest
+        - build: aarch64-linux
+          os: ubuntu-latest
+          rust: stable
+          target: aarch64-unknown-linux-gnu
+          gcc_package: gcc-aarch64-linux-gnu
+          gcc: aarch64-linux-gnu-gcc
+          qemu: qemu-aarch64 -L /usr/aarch64-linux-gnu
+          qemu_target: aarch64-linux-user
     steps:
     - uses: actions/checkout@v1
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
     - uses: ./.github/actions/binary-compatible-builds
+      if: matrix.target == ''
+
+    - name: Install cross-compilation tools
+      run: |
+        set -ex
+        sudo apt-get update
+        sudo apt-get install -y ${{ matrix.gcc_package }}
+
+        # Download and build qemu from source since the most recent release is
+        # way faster at arm emulation than the current version github actions'
+        # ubuntu image uses. Disable as much as we can to get it to build
+        # quickly.
+        curl https://download.qemu.org/qemu-4.2.0.tar.xz | tar xJf -
+        cd qemu-4.2.0
+        ./configure --target-list=${{ matrix.qemu_target }} --prefix=$HOME/qemu --disable-tools --disable-slirp --disable-fdt --disable-capstone --disable-docs
+        make -j$(nproc) install
+
+        # Configure Cargo for cross compilation and tell it how it can run
+        # cross executables
+        upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
+        echo ::set-env name=CARGO_TARGET_${upcase}_RUNNER::$HOME/qemu/bin/${{ matrix.qemu }}
+        echo ::set-env name=CARGO_TARGET_${upcase}_LINKER::${{ matrix.gcc }}
+        echo ::set-env name=CARGO_BUILD_TARGET::${{ matrix.target }}
+        rustup target add ${{ matrix.target }}
+      if: matrix.target != ''
 
     # Install wasm32-wasi target in order to build wasi-common's integration
     # tests
@@ -392,7 +324,7 @@ jobs:
     - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
       shell: bash
     # Test what we just built
-    - run: $CENTOS cargo test --features test-programs/test_programs --release --all --exclude lightbeam --exclude wasmtime --exclude wasmtime-c-api --exclude wasmtime-fuzzing
+    - run: $CENTOS cargo test --features test-programs/test_programs --release --all --exclude lightbeam
       shell: bash
       env:
         RUST_BACKTRACE: 1
@@ -411,14 +343,18 @@ jobs:
 
     # Move binaries to dist folder
     - run: cp target/release/wasmtime dist
-      if: matrix.os != 'windows-latest'
+      if: matrix.os != 'windows-latest' && matrix.target == ''
+    - run: cp target/${{ matrix.target }}/release/wasmtime dist
+      if: matrix.os != 'windows-latest' && matrix.target != ''
     - run: cp target/release/wasmtime.exe dist
       shell: bash
       if: matrix.os == 'windows-latest'
 
     # Move libwasmtime dylib to dist folder
     - run: cp target/release/libwasmtime.{so,a} dist
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-latest' && matrix.target == ''
+    - run: cp target/${{ matrix.target }}/release/libwasmtime.{so,a} dist
+      if: matrix.os == 'ubuntu-latest' && matrix.target != ''
     - run: cp target/release/libwasmtime.{dylib,a} dist
       if: matrix.os == 'macos-latest'
     - run: cp target/release/wasmtime.{dll,lib,dll.lib} dist
@@ -436,54 +372,8 @@ jobs:
 
     - uses: actions/upload-artifact@v1
       with:
-        name: bins-${{ matrix.os }}
+        name: bins-${{ matrix.build }}
         path: dist
-
-  # Build and test the .NET bindings
-  dotnet:
-    name: Test Wasmtime for .NET bindings
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        build: [linux-debug, linux-release, macos-debug, macos-release, windows-debug, windows-release]
-        include:
-          - build: linux-debug
-            os: ubuntu-latest
-            config: debug
-          - build: linux-release
-            os: ubuntu-latest
-            config: release
-          - build: macos-debug
-            os: macos-latest
-            config: debug
-          - build: macos-release
-            os: macos-latest
-            config: release
-          - build: windows-debug
-            os: windows-latest
-            config: debug
-          - build: windows-release
-            os: windows-latest
-            config: release
-    steps:
-    - uses: actions/checkout@v1
-      with:
-        submodules: true
-    - uses: ./.github/actions/install-rust
-    - uses: ./.github/actions/binary-compatible-builds
-    - run: rustup target add wasm32-wasi
-    - uses: actions/setup-dotnet@v1
-      with:
-        dotnet-version: '3.0.101'
-    - name: Test
-      run: |
-        cd crates/misc/dotnet/tests
-        dotnet test -c ${{ matrix.config }}
-    - name: Create package
-      run: |
-        cd crates/misc/dotnet/src
-        dotnet pack -c ${{ matrix.config }}
-      if: matrix.os == 'macos-latest' # Currently the pack target only supports macOS
 
   # Consumes all published artifacts from all the previous build steps, creates
   # a bunch of tarballs for all of them, and then publishes the tarballs
@@ -491,7 +381,7 @@ jobs:
   # github releases and/or tags for pushes.
   publish:
     name: Publish
-    needs: [doc_book, doc_api, wheels, build]
+    needs: [doc_book, doc_api, build]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
@@ -510,30 +400,22 @@ jobs:
       uses: actions/download-artifact@v1
       with:
         name: doc-api
-    - name: Download macOS Wheel
+    - name: Download x86_64 macOS binaries
       uses: actions/download-artifact@v1
       with:
-        name: wheels-macos-latest
-    - name: Download macOS binaries
+        name: bins-x86_64-macos
+    - name: Download x86_64 Linux binaries
       uses: actions/download-artifact@v1
       with:
-        name: bins-macos-latest
-    - name: Download Linux Wheel
+        name: bins-x86_64-linux
+    - name: Download AArch64 Linux binaries
       uses: actions/download-artifact@v1
       with:
-        name: wheels-ubuntu-latest
-    - name: Download Linux binaries
+        name: bins-aarch64-linux
+    - name: Download x86_64 Windows binaries
       uses: actions/download-artifact@v1
       with:
-        name: bins-ubuntu-latest
-    - name: Download Windows Wheel
-      uses: actions/download-artifact@v1
-      with:
-        name: wheels-windows-latest
-    - name: Download Windows binaries
-      uses: actions/download-artifact@v1
-      with:
-        name: bins-windows-latest
+        name: bins-x86_64-windows
 
     - name: Assemble gh-pages
       run: |
@@ -565,9 +447,10 @@ jobs:
     # Assemble all the build artifacts into tarballs and zip archives.
     - name: Assemble tarballs
       run: |
-        ./ci/build-tarballs.sh x86_64-linux ubuntu-latest
-        ./ci/build-tarballs.sh x86_64-windows windows-latest .exe
-        ./ci/build-tarballs.sh x86_64-macos macos-latest
+        ./ci/build-tarballs.sh x86_64-linux
+        ./ci/build-tarballs.sh x86_64-windows .exe
+        ./ci/build-tarballs.sh x86_64-macos
+        ./ci/build-tarballs.sh aarch64-linux
 
     # Upload all assembled tarballs as an artifact of the github action run, so
     # that way even PRs can inspect the output.
@@ -585,14 +468,6 @@ jobs:
     - run: |
         mkdir -p tmp/whl
         find dist/ -name '*.whl' -type f -exec cp '{}' tmp/whl -v \;
-
-    - name: Publish Python wheels on Pypi
-      uses: pypa/gh-action-pypi-publish@37e305e7413032d8422456179fee28fac7d25187
-      if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags/v')
-      with:
-        user: __token__
-        password: ${{ secrets.pypi_password }}
-        packages_dir: tmp/whl
 
     # ... and if this was an actual push (tag or `master`) then we publish a
     # new release. This'll automatically publish a tag release or update `dev`

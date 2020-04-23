@@ -6,6 +6,7 @@ use quote::quote;
 
 pub(super) fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype) -> TokenStream {
     let ident = names.type_(&name);
+    let rt = names.runtime_mod();
 
     let repr = int_repr_tokens(e.repr);
     let abi_repr = atom_token(match e.repr {
@@ -46,18 +47,18 @@ pub(super) fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype
         }
 
         impl ::std::convert::TryFrom<#repr> for #ident {
-            type Error = wiggle::GuestError;
-            fn try_from(value: #repr) -> Result<#ident, wiggle::GuestError> {
+            type Error = #rt::GuestError;
+            fn try_from(value: #repr) -> Result<#ident, #rt::GuestError> {
                 match value as usize {
                     #(#tryfrom_repr_cases),*,
-                    _ => Err(wiggle::GuestError::InvalidEnumValue(stringify!(#ident))),
+                    _ => Err( #rt::GuestError::InvalidEnumValue(stringify!(#ident))),
                 }
             }
         }
 
         impl ::std::convert::TryFrom<#abi_repr> for #ident {
-            type Error = wiggle::GuestError;
-            fn try_from(value: #abi_repr) -> Result<#ident, wiggle::GuestError> {
+            type Error = #rt::GuestError;
+            fn try_from(value: #abi_repr) -> Result<#ident, #rt::GuestError> {
                 #ident::try_from(value as #repr)
             }
         }
@@ -76,7 +77,7 @@ pub(super) fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype
             }
         }
 
-        impl<'a> wiggle::GuestType<'a> for #ident {
+        impl<'a> #rt::GuestType<'a> for #ident {
             fn guest_size() -> u32 {
                 #repr::guest_size()
             }
@@ -85,23 +86,23 @@ pub(super) fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype
                 #repr::guest_align()
             }
 
-            fn read(location: &wiggle::GuestPtr<#ident>) -> Result<#ident, wiggle::GuestError> {
+            fn read(location: & #rt::GuestPtr<#ident>) -> Result<#ident, #rt::GuestError> {
                 use std::convert::TryFrom;
                 let reprval = #repr::read(&location.cast())?;
                 let value = #ident::try_from(reprval)?;
                 Ok(value)
             }
 
-            fn write(location: &wiggle::GuestPtr<'_, #ident>, val: Self)
-                -> Result<(), wiggle::GuestError>
+            fn write(location: & #rt::GuestPtr<'_, #ident>, val: Self)
+                -> Result<(), #rt::GuestError>
             {
                 #repr::write(&location.cast(), #repr::from(val))
             }
         }
 
-        unsafe impl <'a> wiggle::GuestTypeTransparent<'a> for #ident {
+        unsafe impl <'a> #rt::GuestTypeTransparent<'a> for #ident {
             #[inline]
-            fn validate(location: *mut #ident) -> Result<(), wiggle::GuestError> {
+            fn validate(location: *mut #ident) -> Result<(), #rt::GuestError> {
                 use std::convert::TryFrom;
                 // Validate value in memory using #ident::try_from(reprval)
                 let reprval = unsafe { (location as *mut #repr).read() };

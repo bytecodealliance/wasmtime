@@ -2,19 +2,18 @@
 
 #![allow(clippy::cast_ptr_alignment)]
 
-use crate::frame::get_debug_frame_bytes;
 use anyhow::Error;
 use faerie::{Artifact, Decl};
+use gimli::write::{Address, FrameTable};
 use more_asserts::assert_gt;
 use target_lexicon::BinaryFormat;
-use wasmtime_environ::isa::TargetIsa;
-use wasmtime_environ::{FrameLayouts, ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
+use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
+use wasmtime_environ::{Compilation, ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
 
 pub use crate::read_debuginfo::{read_debuginfo, DebugInfoData, WasmFileInfo};
 pub use crate::transform::transform_dwarf;
 pub use crate::write_debuginfo::{emit_dwarf, ResolvedSymbol, SymbolResolver};
 
-mod frame;
 mod gc;
 mod read_debuginfo;
 mod transform;
@@ -28,6 +27,29 @@ impl SymbolResolver for FunctionRelocResolver {
     }
 }
 
+fn create_frame_table<'a>(
+    isa: &dyn TargetIsa,
+    infos: impl Iterator<Item = &'a Option<UnwindInfo>>,
+) -> Option<FrameTable> {
+    let mut table = FrameTable::default();
+
+    let cie_id = table.add_cie(isa.create_systemv_cie()?);
+
+    for (i, info) in infos.enumerate() {
+        if let Some(UnwindInfo::SystemV(info)) = info {
+            table.add_fde(
+                cie_id,
+                info.to_fde(Address::Symbol {
+                    symbol: i,
+                    addend: 0,
+                }),
+            );
+        }
+    }
+
+    Some(table)
+}
+
 pub fn emit_debugsections(
     obj: &mut Artifact,
     vmctx_info: &ModuleVmctxInfo,
@@ -35,21 +57,13 @@ pub fn emit_debugsections(
     debuginfo_data: &DebugInfoData,
     at: &ModuleAddressMap,
     ranges: &ValueLabelsRanges,
-    frame_layouts: &FrameLayouts,
+    compilation: &Compilation,
 ) -> Result<(), Error> {
     let resolver = FunctionRelocResolver {};
     let dwarf = transform_dwarf(isa, debuginfo_data, at, vmctx_info, ranges)?;
+    let frame_table = create_frame_table(isa, compilation.into_iter().map(|f| &f.unwind_info));
 
-    let max = at.values().map(|v| v.body_len).fold(0, usize::max);
-    let mut funcs_bodies = Vec::with_capacity(max as usize);
-    funcs_bodies.resize(max as usize, 0);
-    let funcs = at
-        .values()
-        .map(|v| (::std::ptr::null(), v.body_len))
-        .collect::<Vec<(*const u8, usize)>>();
-    let frames = get_debug_frame_bytes(&funcs, isa, frame_layouts)?;
-
-    emit_dwarf(obj, dwarf, &resolver, frames)?;
+    emit_dwarf(obj, dwarf, &resolver, frame_table)?;
     Ok(())
 }
 
@@ -70,8 +84,8 @@ pub fn emit_debugsections_image(
     vmctx_info: &ModuleVmctxInfo,
     at: &ModuleAddressMap,
     ranges: &ValueLabelsRanges,
-    frame_layouts: &FrameLayouts,
     funcs: &[(*const u8, usize)],
+    compilation: &Compilation,
 ) -> Result<Vec<u8>, Error> {
     let func_offsets = &funcs
         .iter()
@@ -93,8 +107,8 @@ pub fn emit_debugsections_image(
     let body = unsafe { std::slice::from_raw_parts(segment_body.0, segment_body.1) };
     obj.declare_with("all", Decl::function(), body.to_vec())?;
 
-    let frames = get_debug_frame_bytes(funcs, isa, frame_layouts)?;
-    emit_dwarf(&mut obj, dwarf, &resolver, frames)?;
+    let frame_table = create_frame_table(isa, compilation.into_iter().map(|f| &f.unwind_info));
+    emit_dwarf(&mut obj, dwarf, &resolver, frame_table)?;
 
     // LLDB is too "magical" about mach-o, generating elf
     let mut bytes = obj.emit_as(BinaryFormat::Elf)?;

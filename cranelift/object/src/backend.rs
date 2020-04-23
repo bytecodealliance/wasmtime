@@ -13,7 +13,9 @@ use cranelift_module::{
 use object::write::{
     Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
 };
-use object::{RelocationEncoding, RelocationKind, SymbolFlags, SymbolKind, SymbolScope};
+use object::{
+    RelocationEncoding, RelocationKind, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
+};
 use std::collections::HashMap;
 use std::mem;
 use target_lexicon::{BinaryFormat, PointerWidth};
@@ -380,6 +382,15 @@ impl Backend for ObjectBackend {
             }
         }
 
+        // Indicate that this object has a non-executable stack.
+        if self.object.format() == BinaryFormat::Elf {
+            self.object.add_section(
+                vec![],
+                ".note.GNU-stack".as_bytes().to_vec(),
+                SectionKind::Linker,
+            );
+        }
+
         ObjectProduct {
             object: self.object,
             functions: self.functions,
@@ -519,6 +530,7 @@ impl RelocSink for ObjectRelocSink {
     fn reloc_external(
         &mut self,
         offset: CodeOffset,
+        _srcloc: ir::SourceLoc,
         reloc: Reloc,
         name: &ir::ExternalName,
         mut addend: Addend,

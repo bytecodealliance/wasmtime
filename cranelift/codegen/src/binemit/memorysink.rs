@@ -16,7 +16,7 @@
 use super::{Addend, CodeInfo, CodeOffset, CodeSink, Reloc};
 use crate::binemit::stackmap::Stackmap;
 use crate::ir::entities::Value;
-use crate::ir::{ConstantOffset, ExternalName, Function, JumpTable, SourceLoc, TrapCode};
+use crate::ir::{ConstantOffset, ExternalName, Function, JumpTable, Opcode, SourceLoc, TrapCode};
 use crate::isa::TargetIsa;
 use core::ptr::write_unaligned;
 
@@ -78,13 +78,24 @@ pub trait RelocSink {
     fn reloc_block(&mut self, _: CodeOffset, _: Reloc, _: CodeOffset);
 
     /// Add a relocation referencing an external symbol at the current offset.
-    fn reloc_external(&mut self, _: CodeOffset, _: Reloc, _: &ExternalName, _: Addend);
+    fn reloc_external(
+        &mut self,
+        _: CodeOffset,
+        _: SourceLoc,
+        _: Reloc,
+        _: &ExternalName,
+        _: Addend,
+    );
 
     /// Add a relocation referencing a constant.
     fn reloc_constant(&mut self, _: CodeOffset, _: Reloc, _: ConstantOffset);
 
     /// Add a relocation referencing a jump table.
     fn reloc_jt(&mut self, _: CodeOffset, _: Reloc, _: JumpTable);
+
+    /// Track a call site whose return address is the given CodeOffset, for the given opcode. Does
+    /// nothing in general, only useful for certain embedders (SpiderMonkey).
+    fn add_call_site(&mut self, _: Opcode, _: CodeOffset, _: SourceLoc) {}
 }
 
 /// A trait for receiving trap codes and offsets.
@@ -132,9 +143,15 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
         self.relocs.reloc_block(ofs, rel, block_offset);
     }
 
-    fn reloc_external(&mut self, rel: Reloc, name: &ExternalName, addend: Addend) {
+    fn reloc_external(
+        &mut self,
+        srcloc: SourceLoc,
+        rel: Reloc,
+        name: &ExternalName,
+        addend: Addend,
+    ) {
         let ofs = self.offset();
-        self.relocs.reloc_external(ofs, rel, name, addend);
+        self.relocs.reloc_external(ofs, srcloc, rel, name, addend);
     }
 
     fn reloc_constant(&mut self, rel: Reloc, constant_offset: ConstantOffset) {
@@ -170,6 +187,15 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
         let stackmap = Stackmap::from_values(&val_list, func, isa);
         self.stackmaps.add_stackmap(ofs, stackmap);
     }
+
+    fn add_call_site(&mut self, opcode: Opcode, loc: SourceLoc) {
+        debug_assert!(
+            opcode.is_call(),
+            "adding call site info for a non-call instruction."
+        );
+        let ret_addr = self.offset();
+        self.relocs.add_call_site(opcode, ret_addr, loc);
+    }
 }
 
 /// A `RelocSink` implementation that does nothing, which is convenient when
@@ -177,10 +203,18 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
 pub struct NullRelocSink {}
 
 impl RelocSink for NullRelocSink {
-    fn reloc_block(&mut self, _: u32, _: Reloc, _: u32) {}
-    fn reloc_external(&mut self, _: u32, _: Reloc, _: &ExternalName, _: i64) {}
+    fn reloc_block(&mut self, _: CodeOffset, _: Reloc, _: CodeOffset) {}
+    fn reloc_external(
+        &mut self,
+        _: CodeOffset,
+        _: SourceLoc,
+        _: Reloc,
+        _: &ExternalName,
+        _: Addend,
+    ) {
+    }
     fn reloc_constant(&mut self, _: CodeOffset, _: Reloc, _: ConstantOffset) {}
-    fn reloc_jt(&mut self, _: u32, _: Reloc, _: JumpTable) {}
+    fn reloc_jt(&mut self, _: CodeOffset, _: Reloc, _: JumpTable) {}
 }
 
 /// A `TrapSink` implementation that does nothing, which is convenient when

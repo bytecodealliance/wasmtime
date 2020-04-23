@@ -417,6 +417,30 @@ pub static PMINUD: [u8; 4] = [0x66, 0x0f, 0x38, 0x3b];
 /// xmm1 (SSE4.1).
 pub static PMINUW: [u8; 4] = [0x66, 0x0f, 0x38, 0x3a];
 
+/// Sign extend 8 packed 8-bit integers in the low 8 bytes of xmm2/m64 to 8 packed 16-bit
+/// integers in xmm1 (SSE4.1).
+pub static PMOVSXBW: [u8; 4] = [0x66, 0x0f, 0x38, 0x20];
+
+/// Sign extend 4 packed 16-bit integers in the low 8 bytes of xmm2/m64 to 4 packed 32-bit
+/// integers in xmm1 (SSE4.1).
+pub static PMOVSXWD: [u8; 4] = [0x66, 0x0f, 0x38, 0x23];
+
+/// Sign extend 2 packed 32-bit integers in the low 8 bytes of xmm2/m64 to 2 packed 64-bit
+/// integers in xmm1.
+pub static PMOVSXDQ: [u8; 4] = [0x66, 0x0f, 0x38, 0x25];
+
+/// Zero extend 8 packed 8-bit integers in the low 8 bytes of xmm2/m64 to 8 packed 16-bit
+/// integers in xmm1 (SSE4.1).
+pub static PMOVZXBW: [u8; 4] = [0x66, 0x0f, 0x38, 0x30];
+
+/// Zero extend 4 packed 16-bit integers in the low 8 bytes of xmm2/m64 to 4 packed 32-bit
+/// integers in xmm1 (SSE4.1).
+pub static PMOVZXWD: [u8; 4] = [0x66, 0x0f, 0x38, 0x33];
+
+/// Zero extend 2 packed 32-bit integers in the low 8 bytes of xmm2/m64 to 2 packed 64-bit
+/// integers in xmm1.
+pub static PMOVZXDQ: [u8; 4] = [0x66, 0x0f, 0x38, 0x35];
+
 /// Multiply the packed signed word integers in xmm1 and xmm2/m128, and store the low 16 bits of
 /// the results in xmm1 (SSE2).
 pub static PMULLW: [u8; 3] = [0x66, 0x0f, 0xd5];
