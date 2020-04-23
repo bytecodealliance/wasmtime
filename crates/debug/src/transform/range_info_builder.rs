@@ -1,7 +1,7 @@
 use super::address_transform::AddressTransform;
 use super::{DebugInputContext, Reader};
 use anyhow::Error;
-use gimli::{write, AttributeValue, DebuggingInformationEntry, RangeListsOffset};
+use gimli::{write, AttributeValue, DebugAddrBase, DebuggingInformationEntry, RangeListsOffset};
 use more_asserts::assert_lt;
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::wasm::DefinedFuncIndex;
@@ -30,6 +30,10 @@ impl RangeInfoBuilder {
         let low_pc =
             if let Some(AttributeValue::Addr(addr)) = entry.attr_value(gimli::DW_AT_low_pc)? {
                 addr
+            } else if let Some(AttributeValue::DebugAddrIndex(i)) =
+                entry.attr_value(gimli::DW_AT_low_pc)?
+            {
+                context.debug_addr.get_address(4, DebugAddrBase(8), i)?
             } else {
                 return Ok(RangeInfoBuilder::Undefined);
             };

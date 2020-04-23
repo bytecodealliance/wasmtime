@@ -4,7 +4,9 @@ use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs};
 use super::{DebugInputContext, Reader, TransformError};
 use anyhow::{bail, Error};
-use gimli::{write, AttributeValue, DebugAddrBase, DebugLineOffset, DebugStr, DebuggingInformationEntry};
+use gimli::{
+    write, AttributeValue, DebugAddrBase, DebugLineOffset, DebugStr, DebuggingInformationEntry,
+};
 use wasmtime_environ::isa::TargetIsa;
 
 pub(crate) enum FileAttributeContext<'a> {
@@ -52,11 +54,6 @@ where
 
     let range_info = if let Some(subprogram_range_builder) = subprogram_range_builder {
         subprogram_range_builder
-    } else if entry.tag() == gimli::DW_TAG_compile_unit {
-        // FIXME currently address_transform operate on a single func range,
-        // once it is fixed we can properly set DW_AT_ranges attribute.
-        // Using for now DW_AT_low_pc = 0.
-        RangeInfoBuilder::Position(0)
     } else {
         RangeInfoBuilder::from(entry, context, unit_encoding, cu_low_pc)?
     };
