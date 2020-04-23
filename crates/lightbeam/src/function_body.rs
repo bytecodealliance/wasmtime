@@ -1,8 +1,8 @@
 #[cfg(debug_assertions)]
-use crate::backend::Registers;
+use crate::backend::{Registers, ValueLocation};
 use crate::backend::{
     ret_locs, BlockCallingConvention, BrAction, CodeGenSession, Label,  Target,
-    ValueLocation, VirtualCallingConvention,
+    VirtualCallingConvention,
 };
 use crate::{
     error::Error,
@@ -221,8 +221,6 @@ where
                 () => {};
             }
 
-            println!("{}", op);
-
             assertions!();
 
             struct DisassemblyOpFormatter<Label>(WithLoc<Operator<Label>>);
@@ -426,12 +424,12 @@ where
                         }
                     };
 
-                    ctx.end_block(target_labels, default_label, |ctx, mut selector| {
+                    ctx.end_block(target_labels, default_label, |ctx| {
                         let (mut cc_and_to_drop, mut max_num_callers, params) = {
                             let def = blocks.get_mut(&default.target).unwrap();
-    
+
                             def.actual_num_callers = def.actual_num_callers.saturating_add(1);
-    
+
                             (
                                 def.calling_convention.clone().map(|cc| (cc, default.to_drop.clone())),
                                 def.num_callers,
@@ -477,16 +475,9 @@ where
                             );
                         }
 
-                        let temp: Result<
-                            Either<BlockCallingConvention, VirtualCallingConvention>,
-                            Error,
-                        > = cc_and_to_drop
-                            .map(|(cc, to_drop)| match cc {
+                        let (cc, selector) = match cc_and_to_drop {
+                             Some((cc, to_drop)) => match cc {
                                 Left(cc) => {
-                                    if cc.arguments.iter().any(|loc| ValueLocation::from(*loc) == selector) {
-                                        selector = ctx.push_physical(selector)?.into();
-                                    }
-
                                     let (end, count) = to_drop.as_ref().map(|to_drop| {
                                         (*to_drop.end() as usize, to_drop.clone().count())
                                     }).unwrap_or_default();
@@ -507,24 +498,31 @@ where
                                                 .cloned()
                                                 .map(Some)
                                         )
+                                        .chain(std::iter::once(None))
                                         .collect::<Vec<_>>();
 
-                                    let tmp = ctx.serialize_block_args(locs, cc.stack_depth)?;
-                                    Ok(Left(tmp))
-                                }
-                                Right(cc) => Ok(Right(cc)),
-                            })
-                            .unwrap_or_else(|| {
+                                    let mut tmp = ctx.serialize_block_args(locs, cc.stack_depth)?;
+
+                                    let selector = tmp.arguments.pop().unwrap().into();
+
+                                    (Left(tmp), selector)
+                                },
+                                Right(cc) => {
+                                    (Right(cc), ctx.pop()?)
+                                },
+                            },
+                            None => {
                                 if max_num_callers.map(|callers| callers <= 1).unwrap_or(false) {
-                                    Ok(Right(ctx.virtual_calling_convention()))
+                                    let selector = ctx.pop()?;
+                                    (Right(ctx.virtual_calling_convention()), selector)
                                 } else {
-                                    let tmp = ctx.serialize_args(params)?;
-                                    Ok(Left(tmp))
+                                    let mut tmp = ctx.serialize_args(params + 1)?;
+
+                                    let selector = tmp.arguments.pop().unwrap().into();
+
+                                    (Left(tmp), selector)
                                 }
-                            });
-                        let cc = match temp.unwrap() {
-                            Right(rr) => Right(rr),
-                            Left(l) => Left(l),
+                            }
                         };
 
                         for target in targets.iter().chain(std::iter::once(&default)).unique() {
@@ -536,6 +534,8 @@ where
                                     Right(cc) => drop_elements(&mut cc.stack, to_drop),
                                 }
                             }
+
+                            debug_assert!(block.calling_convention.is_none() || block.calling_convention.as_ref() == Some(&cc));
 
                             debug_assert_eq!(
                                 match &cc {

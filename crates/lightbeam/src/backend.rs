@@ -1457,7 +1457,7 @@ macro_rules! cmp_i64 {
                         let i = i.as_i64().unwrap();
                         if let Some(i) = i.try_into().ok() {
                             dynasm!(self.asm
-                                    ; cmp Rq(lreg.rq().unwrap()), i
+                                ; cmp Rq(lreg.rq().unwrap()), i
                             );
                         } else {
                             let rreg = self.put_into_register(I32, &mut right)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
@@ -2567,7 +2567,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     if_true
                 };
 
-                self.set_stack_depth(depth)?;
                 if target.action == BrAction::Jump {
                     self.br(target.target);
                 }
@@ -2593,7 +2592,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let offset = self.adjusted_offset(o);
 
                 dynasm!(self.asm
-                    ; test DWORD [rsp + offset], DWORD std::i32::MAX
+                    ; cmp DWORD [rsp + offset], 0
                 );
 
                 cc::NOT_EQUAL
@@ -2637,7 +2636,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         &mut self,
         targets: I,
         default: Target,
-        pass_args: impl FnOnce(&mut Self, ValueLocation) -> Result<(ValueLocation, StackDepth), Error>,
+        pass_args: impl FnOnce(&mut Self) -> Result<(ValueLocation, StackDepth), Error>,
     ) -> Result<(), Error>
     where
         I: IntoIterator<Item = Target>,
@@ -2646,8 +2645,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let mut targets = targets.into_iter();
         let count = targets.len();
 
-        let selector = self.pop()?;
-        let (mut selector, depth) = pass_args(self, selector)?;
+        let (mut selector, depth) = pass_args(self)?;
 
         match (count, selector) {
             (0, _) => {
@@ -2659,12 +2657,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     self.br(default.target);
                 }
             }
-            (1, _) => {
-                let only_target = targets.next().expect("Invalid `ExactSizeIterator` impl");
-                debug_assert!(targets.next().is_none(), "Invalid `ExactSizeIterator` impl");
-
-                self.br_if(selector, default, only_target, depth)?;
-            }
             (_, ValueLocation::Immediate(imm)) => {
                 let target = usize::try_from(imm.as_bytes())
                     .ok()
@@ -2674,15 +2666,87 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 self.set_stack_depth(depth)?;
 
                 if target.action == BrAction::Jump {
-                    match target.target {
-                        BrTarget::Label(label) => self.br(label),
-                        BrTarget::Return => {
-                            self.ret();
-                        }
+                    self.br(target.target);
+                }
+            }
+            (1, _) | (_, ValueLocation::Cond(_)) => {
+                // We know that `count` is > 0 because the `0, _` case is before this one.
+                let if_false = targets.next().expect("Invalid `ExactSizeIterator` impl");
+                let if_true = targets.next().unwrap_or(default);
+
+                self.br_if(selector, if_true, if_false, depth)?;
+            }
+            (_, ValueLocation::Reg(GPR::Rq(rq))) => {
+                self.set_stack_depth(depth)?;
+
+                for (i, target) in targets.enumerate() {
+                    let i: u32 = i
+                        .try_into()
+                        .map_err(|_| error("Number of `br_table` targets overflowed `u32`"))?;
+                    let label = self.target_to_label(target.target);
+                    dynasm!(self.asm
+                        ; cmp Rd(rq), i as i32
+                        ; je =>label.0
+                    );
+                }
+
+                if default.action == BrAction::Jump {
+                    self.br(default.target);
+                }
+            }
+            // Arbitrary choice of maximum of 16 targets before switching to jump table
+            (count, ValueLocation::Stack(_)) | (count, ValueLocation::Reg(GPR::Rx(_)))
+                if count < 16 =>
+            {
+                if let Some(reg) = self.take_reg(GPRType::Rq) {
+                    self.copy_value(selector, CCLoc::Reg(reg))?;
+
+                    self.set_stack_depth(depth)?;
+
+                    for (i, target) in targets.enumerate() {
+                        let i: u32 = i
+                            .try_into()
+                            .map_err(|_| error("Number of `br_table` targets overflowed `u32`"))?;
+                        let label = self.target_to_label(target.target);
+                        dynasm!(self.asm
+                            ; cmp Rd(reg.rq().unwrap()), i as i32
+                            ; je =>label.0
+                        );
+                    }
+
+                    if default.action == BrAction::Jump {
+                        self.br(default.target);
+                    }
+
+                    self.free_value(ValueLocation::Reg(reg))?;
+                } else {
+                    self.set_stack_depth(depth)?;
+
+                    let o = if let ValueLocation::Stack(o) = selector {
+                        o
+                    } else {
+                        unimplemented!()
+                    };
+
+                    let offset = self.adjusted_offset(o);
+
+                    for (i, target) in targets.enumerate() {
+                        let i: u32 = i
+                            .try_into()
+                            .map_err(|_| error("Number of `br_table` targets overflowed `u32`"))?;
+                        let label = self.target_to_label(target.target);
+                        dynasm!(self.asm
+                            ; cmp DWORD [rsp + offset], i as i32
+                            ; je =>label.0
+                        );
+                    }
+
+                    if default.action == BrAction::Jump {
+                        self.br(default.target);
                     }
                 }
             }
-            (_, _) => {
+            (count, _) => {
                 let (selector_reg, saved_selector) =
                     match self.put_into_temp_register(GPRType::Rq, &mut selector)? {
                         Some(r) => (r, None),
@@ -2693,8 +2757,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                             )),
                         ),
                     };
-
-                self.set_stack_depth(depth)?;
 
                 let (tmp, saved_tmp) = if let Some(reg) = self.take_or_free_reg(I64) {
                     (reg, None)
@@ -2729,6 +2791,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 if let Some(saved) = saved_selector {
                     self.copy_value(saved, CCLoc::Reg(selector_reg))?;
                 }
+
+                self.set_stack_depth(depth)?;
 
                 dynasm!(self.asm
                     ; jmp Rq(selector_reg.rq().unwrap())
@@ -2814,23 +2878,24 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         for loc in params.rev() {
             if let Some(loc) = loc {
-                if loc
-                    .reg()
-                    .map(|reg| self.block_state.regs.is_free(reg))
-                    .unwrap_or(true)
-                {
-                    if let CCLoc::Reg(reg) = loc {
-                        self.block_state.regs.mark_used(reg);
-                    }
+                if let Some(reg) = loc.reg().filter(|reg| self.block_state.regs.is_free(*reg)) {
+                    self.block_state.regs.mark_used(reg);
 
                     self.pop_into(loc)?;
                 } else {
-                    pending.push((self.pop()?, loc));
+                    let src = self.pop()?;
+                    if src != ValueLocation::from(loc) {
+                        pending.push((src, loc));
+                    }
                 }
 
                 out.push(Either::Left(loc));
             } else {
-                out.push(Either::Right(self.pop()?));
+                let mut loc = self.pop()?;
+
+                // TODO: Handle CondCode etc.
+                self.put_into_temp_location(None, &mut loc)?;
+                out.push(Either::Right(loc));
             }
         }
 
@@ -2843,6 +2908,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 self.push(*loc)?;
             }
         }
+
+        let mut last_len = None;
 
         while !pending.is_empty() {
             let start_len = pending.len();
@@ -2867,41 +2934,85 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 }
             }
 
+            if last_len == Some(pending.len()) {
+                return Err(error(
+                    "BUG: Making no progress allocating locations for block calling convention",
+                ));
+            }
+
             if pending.len() == start_len {
-                if let Some(reg) = pending.iter().find_map(|(src, dst)| {
-                    if let ValueLocation::Reg(reg) = src {
-                        Some(Either::Left(*reg))
-                    } else if let CCLoc::Reg(reg) = dst {
-                        Some(Either::Right(*reg))
-                    } else {
-                        None
-                    }
-                }) {
-                    match reg {
-                        Either::Left(src) => {
-                            let new_src = self.push_physical(ValueLocation::Reg(src))?.into();
-                            for (old_src, _) in pending.iter_mut() {
-                                if *old_src == ValueLocation::Reg(src) {
-                                    *old_src = new_src;
-                                }
+                let mut stack = mem::take(&mut self.block_state.stack);
+                let mut stack_borrow = &mut stack[..];
+
+                while let Some((cur, rest)) = stack_borrow.split_first_mut() {
+                    if pending
+                        .iter()
+                        .any(|(_, dst)| Some(dst.reg().unwrap()) == cur.reg())
+                    {
+                        let old = *cur;
+
+                        self.block_state.regs.mark_used(cur.reg().unwrap());
+                        let new = self.put_into_temp_location(None, &mut { old })?.into();
+                        self.block_state.regs.release(cur.reg().unwrap())?;
+
+                        *cur = new;
+
+                        for cur in &mut *rest {
+                            if *cur == old {
+                                self.free_value(*cur)?;
+                                *cur = new;
                             }
                         }
-                        Either::Right(dst) => {
-                            self.save_regs(iter::once(dst))?;
+
+                        for (src, _) in &mut pending {
+                            if *src == ValueLocation::from(old) {
+                                *src = new;
+                            }
                         }
                     }
+
+                    stack_borrow = rest;
                 }
+
+                let mut pending_borrow = &mut pending[..];
+
+                while let Some((cur, rest)) = pending_borrow.split_first_mut() {
+                    let (src, _) = cur;
+                    if let Some(reg) = src.reg().filter(|r| !self.block_state.regs.is_free(*r)) {
+                        let old = *src;
+
+                        self.block_state.regs.mark_used(reg);
+                        let new = self.put_into_temp_location(None, src)?.into();
+                        self.block_state.regs.release(reg)?;
+
+                        for (src, _) in &mut *rest {
+                            if *src == ValueLocation::from(old) {
+                                *src = new;
+                            }
+                        }
+                    }
+
+                    pending_borrow = rest;
+                }
+
+                self.block_state.stack = stack;
             }
+
+            last_len = Some(start_len);
         }
 
-        let out = out
+        let mut out = out
             .into_iter()
-            .rev()
             .map(|loc| match loc {
                 Either::Left(ccloc) => Ok(ccloc),
-                Either::Right(mut val) => self.put_into_temp_location(None, &mut val),
+                Either::Right(_) => {
+                    let mut loc = self.pop()?;
+                    self.put_into_temp_location(None, &mut loc)
+                }
             })
             .collect::<Result<Vec<_>, _>>()?;
+
+        out.reverse();
 
         let max_stack_depth = out
             .iter()
@@ -3530,7 +3641,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Ok(())
     }
 
-    fn pop(&mut self) -> Result<ValueLocation, Error> {
+    pub fn pop(&mut self) -> Result<ValueLocation, Error> {
         match self.block_state.stack.pop() {
             Some(v) => Ok(v),
             None => Err(error("Stack is empty - pop impossible".to_string())),
@@ -6401,7 +6512,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         match self
             .labels
             .define(&LabelValue::Ret)
-            .expect("PROGRAMMER ERROR: Could not get label directly after defining it")
+            .expect("BUG: Could not get label directly after defining it")
         {
             Ok(UndefinedLabel { label, align }) => {
                 dynasm!(self.asm
@@ -6452,7 +6563,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let function_start: u32 = self.func_starts[self.current_function as usize]
             .0
             .expect(
-                "PROGRAMMER ERROR: We failed to get the offset of the start of the current \
+                "BUG: We failed to get the offset of the start of the current \
                 function - this should be impossible as we set this value when we enter the \
                 function",
             )
@@ -6464,7 +6575,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 .expect("Assembly offset overflowed u32")
                 .checked_sub(function_start)
                 .expect(
-                    "PROGRAMMER ERROR: We're trying to emit a trap with an assembly offset less \
+                    "BUG: We're trying to emit a trap with an assembly offset less \
                     than the offset of the start of the function",
                 ),
             self.source_loc,
