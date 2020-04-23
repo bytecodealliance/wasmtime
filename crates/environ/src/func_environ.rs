@@ -514,6 +514,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 }
 
+// TODO: This is necessary as if Lightbeam used `FuncEnvironment` directly it would cause
+//       a circular dependency graph. We should extract common types out into a separate
+//       crate that Lightbeam can use but until then we need this trait.
 #[cfg(feature = "lightbeam")]
 impl lightbeam::ModuleContext for FuncEnvironment<'_> {
     type Signature = ir::Signature;
