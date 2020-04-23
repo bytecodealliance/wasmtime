@@ -132,9 +132,14 @@ pub trait ABICall {
     /// Get the number of arguments expected.
     fn num_args(&self) -> usize;
 
-    /// Save the clobbered registers.
     /// Copy an argument value from a source register, prior to the call.
-    fn gen_copy_reg_to_arg(&self, idx: usize, from_reg: Reg) -> Self::I;
+    fn gen_copy_reg_to_arg(
+        &self,
+        idx: usize,
+        from_reg: Reg,
+        tmp1: Writable<Reg>,
+        tmp2: Writable<Reg>,
+    ) -> Vec<Self::I>;
 
     /// Copy a return value into a destination register, after the call returns.
     fn gen_copy_retval_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Self::I;

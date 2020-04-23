@@ -35,6 +35,14 @@ pub fn mem_finalize(insn_off: CodeOffset, mem: &MemArg) -> (Vec<Inst>, MemArg) {
                 let mem = MemArg::Unscaled(basereg, simm9);
                 (vec![], mem)
             } else {
+                // In an addition, x31 is the zero register, not sp; we have only one temporary
+                // so we can't do the proper add here.
+                debug_assert_ne!(
+                    basereg,
+                    stack_reg(),
+                    "should have diverted SP before mem_finalize"
+                );
+
                 let tmp = writable_spilltmp_reg();
                 let mut const_insts = Inst::load_constant(tmp, off as u64);
                 let add_inst = Inst::AluRRR {
@@ -363,7 +371,11 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     ALUOp::Lsl32 | ALUOp::Lsl64 => 0b001000,
                     _ => 0b000000,
                 };
-                assert_ne!(writable_stack_reg(), rd);
+                debug_assert_ne!(writable_stack_reg(), rd);
+                // The stack pointer is the zero register in this context, so this might be an
+                // indication that something is wrong.
+                debug_assert_ne!(stack_reg(), rn);
+                debug_assert_ne!(stack_reg(), rm);
                 sink.put4(enc_arith_rrr(top11, bit15_10, rd, rn, rm));
             }
             &Inst::AluRRRR {
@@ -818,11 +830,25 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
             &Inst::Mov { rd, rm } => {
                 assert!(rd.to_reg().get_class() == rm.get_class());
                 assert!(rm.get_class() == RegClass::I64);
+
                 // MOV to SP is interpreted as MOV to XZR instead. And our codegen
                 // should never MOV to XZR.
-                assert!(machreg_to_gpr(rd.to_reg()) != 31);
-                // Encoded as ORR rd, rm, zero.
-                sink.put4(enc_arith_rrr(0b10101010_000, 0b000_000, rd, zero_reg(), rm));
+                assert!(rd.to_reg() != stack_reg());
+
+                if rm == stack_reg() {
+                    // We can't use ORR here, so use an `add rd, sp, #0` instead.
+                    let imm12 = Imm12::maybe_from_u64(0).unwrap();
+                    sink.put4(enc_arith_rr_imm12(
+                        0b100_10001,
+                        imm12.shift_bits(),
+                        imm12.imm_bits(),
+                        rm,
+                        rd,
+                    ));
+                } else {
+                    // Encoded as ORR rd, rm, zero.
+                    sink.put4(enc_arith_rrr(0b10101010_000, 0b000_000, rd, zero_reg(), rm));
+                }
             }
             &Inst::Mov32 { rd, rm } => {
                 // MOV to SP is interpreted as MOV to XZR instead. And our codegen

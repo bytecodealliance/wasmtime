@@ -295,6 +295,10 @@ fn load_stack_from_fp(fp_offset: i64, into_reg: Writable<Reg>, ty: Type) -> Inst
 }
 
 fn store_stack(mem: MemArg, from_reg: Reg, ty: Type) -> Inst {
+    debug_assert!(match &mem {
+        MemArg::SPOffset(off) => SImm9::maybe_from_i64(*off).is_some(),
+        _ => true,
+    });
     match ty {
         types::B1
         | types::B8
@@ -320,6 +324,49 @@ fn store_stack(mem: MemArg, from_reg: Reg, ty: Type) -> Inst {
             srcloc: None,
         },
         _ => unimplemented!("store_stack({})", ty),
+    }
+}
+
+fn store_stack_fp(fp_offset: i64, from_reg: Reg, ty: Type) -> Inst {
+    store_stack(MemArg::FPOffset(fp_offset), from_reg, ty)
+}
+
+fn store_stack_sp(
+    sp_offset: i64,
+    from_reg: Reg,
+    ty: Type,
+    tmp1: Writable<Reg>,
+    tmp2: Writable<Reg>,
+) -> Vec<Inst> {
+    if SImm9::maybe_from_i64(sp_offset).is_some() {
+        vec![store_stack(MemArg::SPOffset(sp_offset), from_reg, ty)]
+    } else {
+        // mem_finalize will try to generate an add, but in an addition, x31 is the zero register,
+        // not sp! So we have to synthesize the full add here.
+        let mut result = Vec::new();
+        // tmp1 := sp
+        result.push(Inst::Mov {
+            rd: tmp1,
+            rm: stack_reg(),
+        });
+        // tmp2 := offset
+        for inst in Inst::load_constant(tmp2, sp_offset as u64) {
+            result.push(inst);
+        }
+        // tmp1 := add tmp1, tmp2
+        result.push(Inst::AluRRR {
+            alu_op: ALUOp::Add64,
+            rd: tmp1,
+            rn: tmp1.to_reg(),
+            rm: tmp2.to_reg(),
+        });
+        // Actual store.
+        result.push(store_stack(
+            MemArg::Unscaled(tmp1.to_reg(), SImm9::maybe_from_i64(0).unwrap()),
+            from_reg,
+            ty,
+        ));
+        result
     }
 }
 
@@ -523,8 +570,8 @@ impl ABIBody for AArch64ABIBody {
                     }
                     _ => {}
                 };
-                ret.push(store_stack(
-                    MemArg::FPOffset(off + self.frame_size()),
+                ret.push(store_stack_fp(
+                    off + self.frame_size(),
                     from_reg.to_reg(),
                     ty,
                 ))
@@ -566,7 +613,7 @@ impl ABIBody for AArch64ABIBody {
         // Offset from beginning of stackslot area, which is at FP - stackslots_size.
         let stack_off = self.stackslots[slot.as_u32() as usize] as i64;
         let fp_off: i64 = -(self.stackslots_size as i64) + stack_off + (offset as i64);
-        store_stack(MemArg::FPOffset(fp_off), from_reg, ty)
+        store_stack_fp(fp_off, from_reg, ty)
     }
 
     fn stackslot_addr(&self, slot: StackSlot, offset: u32, into_reg: Writable<Reg>) -> Inst {
@@ -596,7 +643,7 @@ impl ABIBody for AArch64ABIBody {
         let islot = slot.get() as i64;
         let ty_size = self.get_spillslot_size(from_reg.get_class(), ty) * 8;
         let fp_off: i64 = -(self.stackslots_size as i64) - (8 * islot) - ty_size as i64;
-        store_stack(MemArg::FPOffset(fp_off), from_reg, ty)
+        store_stack_fp(fp_off, from_reg, ty)
     }
 
     fn gen_prologue(&mut self) -> Vec<Inst> {
@@ -927,10 +974,20 @@ impl ABICall for AArch64ABICall {
         adjust_stack(self.sig.stack_arg_space as u64, /* is_sub = */ false)
     }
 
-    fn gen_copy_reg_to_arg(&self, idx: usize, from_reg: Reg) -> Inst {
+    fn gen_copy_reg_to_arg(
+        &self,
+        idx: usize,
+        from_reg: Reg,
+        tmp1: Writable<Reg>,
+        tmp2: Writable<Reg>,
+    ) -> Vec<Inst> {
         match &self.sig.args[idx] {
-            &ABIArg::Reg(reg, ty) => Inst::gen_move(Writable::from_reg(reg.to_reg()), from_reg, ty),
-            &ABIArg::Stack(off, ty) => store_stack(MemArg::SPOffset(off), from_reg, ty),
+            &ABIArg::Reg(reg, ty) => vec![Inst::gen_move(
+                Writable::from_reg(reg.to_reg()),
+                from_reg,
+                ty,
+            )],
+            &ABIArg::Stack(off, ty) => store_stack_sp(off, from_reg, ty, tmp1, tmp2),
         }
     }
 

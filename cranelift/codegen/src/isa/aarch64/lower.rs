@@ -595,6 +595,20 @@ fn lower_address<C: LowerCtx<I = Inst>>(
     // Add each addend to the address.
     for addend in addends {
         let reg = input_to_reg(ctx, *addend, NarrowValueMode::ZeroExtend64);
+
+        // In an addition, the stack register is the zero register, so divert it to another
+        // register just before doing the actual add.
+        let reg = if reg == stack_reg() {
+            let tmp = ctx.tmp(RegClass::I64, I64);
+            ctx.emit(Inst::Mov {
+                rd: tmp,
+                rm: stack_reg(),
+            });
+            tmp.to_reg()
+        } else {
+            reg
+        };
+
         ctx.emit(Inst::AluRRR {
             alu_op: ALUOp::Add64,
             rd: addr.clone(),
@@ -1968,9 +1982,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
                 ctx.emit(inst);
             }
             assert!(inputs.len() == abi.num_args());
+            let tmp1 = ctx.tmp(RegClass::I64, I64);
+            let tmp2 = ctx.tmp(RegClass::I64, I64);
             for (i, input) in inputs.iter().enumerate() {
                 let arg_reg = input_to_reg(ctx, *input, NarrowValueMode::None);
-                ctx.emit(abi.gen_copy_reg_to_arg(i, arg_reg));
+                for inst in abi.gen_copy_reg_to_arg(i, arg_reg, tmp1, tmp2) {
+                    ctx.emit(inst);
+                }
             }
             for inst in abi.gen_call().into_iter() {
                 ctx.emit(inst);
