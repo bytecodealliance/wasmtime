@@ -2297,35 +2297,41 @@ impl ShowWithRRU for Inst {
             }
             &Inst::FpuLoad32 { rd, ref mem, .. } => {
                 let rd = show_freg_sized(rd.to_reg(), mb_rru, InstSize::Size32);
-                let mem = mem.show_rru_sized(mb_rru, /* size = */ 4);
-                format!("ldr {}, {}", rd, mem)
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let mem = mem.show_rru(mb_rru);
+                format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuLoad64 { rd, ref mem, .. } => {
                 let rd = show_freg_sized(rd.to_reg(), mb_rru, InstSize::Size64);
-                let mem = mem.show_rru_sized(mb_rru, /* size = */ 8);
-                format!("ldr {}, {}", rd, mem)
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let mem = mem.show_rru(mb_rru);
+                format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuLoad128 { rd, ref mem, .. } => {
                 let rd = rd.to_reg().show_rru(mb_rru);
                 let rd = "q".to_string() + &rd[1..];
-                let mem = mem.show_rru_sized(mb_rru, /* size = */ 8);
-                format!("ldr {}, {}", rd, mem)
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let mem = mem.show_rru(mb_rru);
+                format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore32 { rd, ref mem, .. } => {
                 let rd = show_freg_sized(rd, mb_rru, InstSize::Size32);
-                let mem = mem.show_rru_sized(mb_rru, /* size = */ 4);
-                format!("str {}, {}", rd, mem)
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let mem = mem.show_rru(mb_rru);
+                format!("{}str {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore64 { rd, ref mem, .. } => {
                 let rd = show_freg_sized(rd, mb_rru, InstSize::Size64);
-                let mem = mem.show_rru_sized(mb_rru, /* size = */ 8);
-                format!("str {}, {}", rd, mem)
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let mem = mem.show_rru(mb_rru);
+                format!("{}str {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore128 { rd, ref mem, .. } => {
                 let rd = rd.show_rru(mb_rru);
                 let rd = "q".to_string() + &rd[1..];
-                let mem = mem.show_rru_sized(mb_rru, /* size = */ 8);
-                format!("str {}, {}", rd, mem)
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let mem = mem.show_rru(mb_rru);
+                format!("{}str {}, {}", mem_str, rd, mem)
             }
             &Inst::LoadFpuConst32 { rd, const_data } => {
                 let rd = show_freg_sized(rd.to_reg(), mb_rru, InstSize::Size32);
