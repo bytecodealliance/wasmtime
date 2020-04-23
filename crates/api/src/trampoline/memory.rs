@@ -6,9 +6,7 @@ use crate::{Limits, MemoryType};
 use anyhow::Result;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::{wasm, EntityIndex, MemoryPlan, MemoryStyle, Module, WASM_PAGE_SIZE};
-use wasmtime_runtime::{
-    InstanceHandle, RuntimeLinearMemory, RuntimeMemoryCreator, VMMemoryDefinition,
-};
+use wasmtime_runtime::{RuntimeLinearMemory, RuntimeMemoryCreator, VMMemoryDefinition};
 
 use std::sync::Arc;
 

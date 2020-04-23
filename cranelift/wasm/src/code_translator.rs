@@ -1723,9 +1723,12 @@ fn get_heap_addr(
     // If we have a guard page, however, then we can perform a further
     // optimization of the generated code by only checking multiples of the
     // offset-guard size to be more CSE-friendly. Knowing that we have at least
-    // 1 page of a guard page we're then able to disregard the `width` of the
-    // access because we assume bytes are accessed first-to-last and if we
-    // happen to straddle a page boundary at least one byte will trap.
+    // 1 page of a guard page we're then able to disregard the `width` since we
+    // know it's always less than one page. Our bounds check will be for the
+    // first byte which will either succeed and be guaranteed to fault if it's
+    // actually out of bounds, or the bounds check itself will fail. In any case
+    // we assert that the width is reasonably small for now so this assumption
+    // can be adjusted in the future if we get larger widths.
     //
     // Put another way we can say, where `y < offset_guard_size`:
     //
@@ -1759,6 +1762,7 @@ fn get_heap_addr(
     let adjusted_offset = if offset_guard_size == 0 {
         u64::from(offset) + u64::from(width)
     } else {
+        assert!(width < 1024);
         cmp::max(u64::from(offset) / offset_guard_size * offset_guard_size, 1)
     };
     debug_assert!(adjusted_offset > 0); // want to bounds check at least 1 byte
