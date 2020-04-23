@@ -561,7 +561,7 @@ where
                     })?;
                 }
                 Operator::Swap(depth) => ctx.swap(depth),
-                Operator::Pick(depth) => ctx.pick(depth),
+                Operator::Pick(depth) => ctx.pick(depth)?,
                 Operator::Eq(I32) => ctx.i32_eq()?,
                 Operator::Eqz(Size::_32) => ctx.i32_eqz()?,
                 Operator::Ne(I32) => ctx.i32_neq()?,

@@ -1861,7 +1861,7 @@ macro_rules! binop {
 
             if let Some(i1) = left.$imm_fn() {
                 if let Some(i0) = right.$imm_fn() {
-                    self.block_state.stack.push(ValueLocation::Immediate($const_fallback(i1, i0).into()));
+                    self.push(ValueLocation::Immediate($const_fallback(i1, i0).into()))?;
                     return Ok(());
                 }
             }
@@ -2323,7 +2323,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 break Some(gpr);
             }
 
-            if self.free_reg(r) == Ok(false) {
+            if self.free_reg(r) != Ok(true) {
                 break None;
             }
         }
@@ -3628,10 +3628,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         if let Some(mut top) = self.block_state.stack.pop() {
             if let ValueLocation::Cond(_) = top {
-                match self.put_into_register(I32, &mut top) {
-                    Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
-                };
+                self.put_into_temp_location(I32, &mut top)?;
             }
 
             self.block_state.stack.push(top);
@@ -5890,13 +5887,14 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Ok(())
     }
 
-    pub fn pick(&mut self, depth: u32) {
+    pub fn pick(&mut self, depth: u32) -> Result<(), Error> {
         let idx = self.block_state.stack.len() - 1 - depth as usize;
         let v = self.block_state.stack[idx];
         if let ValueLocation::Reg(r) = v {
             self.block_state.regs.mark_used(r);
         }
-        self.block_state.stack.push(v);
+
+        self.push(v)
     }
 
     pub fn const_(&mut self, imm: Value) -> Result<(), Error> {
