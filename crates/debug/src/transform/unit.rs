@@ -8,7 +8,7 @@ use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_inf
 use super::{DebugInputContext, Reader, TransformError};
 use anyhow::{Context, Error};
 use gimli::write;
-use gimli::{AttributeValue, DebuggingInformationEntry, Unit};
+use gimli::{AttributeValue, DebugAddrBase, DebuggingInformationEntry, Unit};
 use std::collections::HashSet;
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::DefinedFuncIndex;
@@ -270,6 +270,10 @@ where
                     entry.attr_value(gimli::DW_AT_low_pc)?
                 {
                     addr
+                } else if let Some(AttributeValue::DebugAddrIndex(i)) =
+                    entry.attr_value(gimli::DW_AT_low_pc)?
+                {
+                    context.debug_addr.get_address(4, DebugAddrBase(8), i)?
                 } else {
                     // FIXME? return Err(TransformError("No low_pc for unit header").into());
                     0

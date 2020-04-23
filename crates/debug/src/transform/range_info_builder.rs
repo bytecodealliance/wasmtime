@@ -91,6 +91,8 @@ impl RangeInfoBuilder {
         let addr =
             if let Some(AttributeValue::Addr(addr)) = entry.attr_value(gimli::DW_AT_low_pc)? {
                 addr
+            } else if let Some(AttributeValue::DebugAddrIndex(i)) = entry.attr_value(gimli::DW_AT_low_pc)? {
+                context.debug_addr.get_address(4, DebugAddrBase(8), i)?
             } else if let Some(AttributeValue::RangeListsRef(r)) =
                 entry.attr_value(gimli::DW_AT_ranges)?
             {
