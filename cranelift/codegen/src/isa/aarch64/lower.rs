@@ -1038,9 +1038,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
             ctx.emit(alu_inst_immshift(alu_op, rd, rn, rm));
         }
 
-        Opcode::Rotr => {
-            // For a 32-bit or 64-bit rotate-right, we can use the ROR
-            // instruction directly.
+        Opcode::Rotr | Opcode::Rotl => {
+            // aarch64 doesn't have a left-rotate instruction, but a left rotation of K places is
+            // effectively a right rotation of N - K places, if N is the integer's bit size. We
+            // implement left rotations with this trick.
+            //
+            // For a 32-bit or 64-bit rotate-right, we can use the ROR instruction directly.
             //
             // For a < 32-bit rotate-right, we synthesize this as:
             //
@@ -1049,9 +1052,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
             //       =>
             //
             //    zero-extend rn, <32-or-64>
-            //    sub tmp1, rm, <bitwidth>
+            //    and tmp_masked_rm, rm, <bitwidth - 1>
+            //    sub tmp1, tmp_masked_rm, <bitwidth>
             //    sub tmp1, zero, tmp1  ; neg
-            //    lsr tmp2, rn, rm
+            //    lsr tmp2, rn, tmp_masked_rm
             //    lsl rd, rn, tmp1
             //    orr rd, rd, tmp2
             //
@@ -1062,13 +1066,16 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
             //    lsl rd, rn, <bitwidth - shiftimm>
             //    orr rd, rd, tmp2
 
+            let is_rotl = op == Opcode::Rotl;
+
             let ty = ty.unwrap();
-            let bits = ty_bits(ty);
+            let ty_bits_size = ty_bits(ty) as u8;
+
             let rd = output_to_reg(ctx, outputs[0]);
             let rn = input_to_reg(
                 ctx,
                 inputs[0],
-                if bits <= 32 {
+                if ty_bits_size <= 32 {
                     NarrowValueMode::ZeroExtend32
                 } else {
                     NarrowValueMode::ZeroExtend64
@@ -1076,20 +1083,80 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
             );
             let rm = input_to_reg_immshift(ctx, inputs[1]);
 
-            if bits == 32 || bits == 64 {
+            if ty_bits_size == 32 || ty_bits_size == 64 {
                 let alu_op = choose_32_64(ty, ALUOp::RotR32, ALUOp::RotR64);
-                ctx.emit(alu_inst_immshift(alu_op, rd, rn, rm));
+                match rm {
+                    ResultRegImmShift::ImmShift(mut immshift) => {
+                        if is_rotl {
+                            immshift.imm = ty_bits_size.wrapping_sub(immshift.value());
+                        }
+                        immshift.imm &= ty_bits_size - 1;
+                        ctx.emit(Inst::AluRRImmShift {
+                            alu_op,
+                            rd,
+                            rn,
+                            immshift,
+                        });
+                    }
+
+                    ResultRegImmShift::Reg(rm) => {
+                        let rm = if is_rotl {
+                            // Really ty_bits_size - rn, but the upper bits of the result are
+                            // ignored (because of the implicit masking done by the instruction),
+                            // so this is equivalent to negating the input.
+                            let alu_op = choose_32_64(ty, ALUOp::Sub32, ALUOp::Sub64);
+                            let tmp = ctx.tmp(RegClass::I64, ty);
+                            ctx.emit(Inst::AluRRR {
+                                alu_op,
+                                rd: tmp,
+                                rn: zero_reg(),
+                                rm,
+                            });
+                            tmp.to_reg()
+                        } else {
+                            rm
+                        };
+                        ctx.emit(Inst::AluRRR { alu_op, rd, rn, rm });
+                    }
+                }
             } else {
-                assert!(bits < 32);
+                debug_assert!(ty_bits_size < 32);
+
                 match rm {
                     ResultRegImmShift::Reg(reg) => {
+                        let reg = if is_rotl {
+                            // Really ty_bits_size - rn, but the upper bits of the result are
+                            // ignored (because of the implicit masking done by the instruction),
+                            // so this is equivalent to negating the input.
+                            let tmp = ctx.tmp(RegClass::I64, I32);
+                            ctx.emit(Inst::AluRRR {
+                                alu_op: ALUOp::Sub32,
+                                rd: tmp,
+                                rn: zero_reg(),
+                                rm: reg,
+                            });
+                            tmp.to_reg()
+                        } else {
+                            reg
+                        };
+
+                        // Explicitly mask the rotation count.
+                        let tmp_masked_rm = ctx.tmp(RegClass::I64, I32);
+                        ctx.emit(Inst::AluRRImmLogic {
+                            alu_op: ALUOp::And32,
+                            rd: tmp_masked_rm,
+                            rn: reg,
+                            imml: ImmLogic::maybe_from_u64((ty_bits_size - 1) as u64, I32).unwrap(),
+                        });
+                        let tmp_masked_rm = tmp_masked_rm.to_reg();
+
                         let tmp1 = ctx.tmp(RegClass::I64, I32);
                         let tmp2 = ctx.tmp(RegClass::I64, I32);
                         ctx.emit(Inst::AluRRImm12 {
                             alu_op: ALUOp::Sub32,
                             rd: tmp1,
-                            rn: reg,
-                            imm12: Imm12::maybe_from_u64(bits as u64).unwrap(),
+                            rn: tmp_masked_rm,
+                            imm12: Imm12::maybe_from_u64(ty_bits_size as u64).unwrap(),
                         });
                         ctx.emit(Inst::AluRRR {
                             alu_op: ALUOp::Sub32,
@@ -1100,144 +1167,54 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
                         ctx.emit(Inst::AluRRR {
                             alu_op: ALUOp::Lsr32,
                             rd: tmp2,
-                            rn: rn,
-                            rm: reg,
+                            rn,
+                            rm: tmp_masked_rm,
                         });
                         ctx.emit(Inst::AluRRR {
                             alu_op: ALUOp::Lsl32,
-                            rd: rd,
-                            rn: rn,
+                            rd,
+                            rn,
                             rm: tmp1.to_reg(),
                         });
                         ctx.emit(Inst::AluRRR {
                             alu_op: ALUOp::Orr32,
-                            rd: rd,
+                            rd,
                             rn: rd.to_reg(),
                             rm: tmp2.to_reg(),
                         });
                     }
-                    ResultRegImmShift::ImmShift(immshift) => {
+
+                    ResultRegImmShift::ImmShift(mut immshift) => {
+                        if is_rotl {
+                            immshift.imm = ty_bits_size.wrapping_sub(immshift.value());
+                        }
+                        immshift.imm &= ty_bits_size - 1;
+
                         let tmp1 = ctx.tmp(RegClass::I64, I32);
-                        let amt = immshift.value();
-                        assert!(amt <= bits as u8);
-                        let opp_shift = ImmShift::maybe_from_u64(bits as u64 - amt as u64).unwrap();
                         ctx.emit(Inst::AluRRImmShift {
                             alu_op: ALUOp::Lsr32,
                             rd: tmp1,
-                            rn: rn,
-                            immshift: immshift,
+                            rn,
+                            immshift: immshift.clone(),
                         });
+
+                        let amount = immshift.value() & (ty_bits_size - 1);
+                        let opp_shift =
+                            ImmShift::maybe_from_u64(ty_bits_size as u64 - amount as u64).unwrap();
                         ctx.emit(Inst::AluRRImmShift {
                             alu_op: ALUOp::Lsl32,
-                            rd: rd,
-                            rn: rn,
+                            rd,
+                            rn,
                             immshift: opp_shift,
                         });
+
                         ctx.emit(Inst::AluRRR {
                             alu_op: ALUOp::Orr32,
-                            rd: rd,
+                            rd,
                             rn: rd.to_reg(),
                             rm: tmp1.to_reg(),
                         });
                     }
-                }
-            }
-        }
-
-        Opcode::Rotl => {
-            // AArch64 does not have a ROL instruction, so we always synthesize
-            // this as:
-            //
-            //    rotl rd, rn, rm
-            //
-            //       =>
-            //
-            //    zero-extend rn, <32-or-64>
-            //    sub tmp1, rm, <bitwidth>
-            //    sub tmp1, zero, tmp1  ; neg
-            //    lsl tmp2, rn, rm
-            //    lsr rd, rn, tmp1
-            //    orr rd, rd, tmp2
-            //
-            // For a constant amount, we can instead do:
-            //
-            //    zero-extend rn, <32-or-64>
-            //    lsl tmp2, rn, #<shiftimm>
-            //    lsr rd, rn, #<bitwidth - shiftimm>
-            //    orr rd, rd, tmp2
-
-            let ty = ty.unwrap();
-            let bits = ty_bits(ty);
-            let rd = output_to_reg(ctx, outputs[0]);
-            let rn = input_to_reg(
-                ctx,
-                inputs[0],
-                if bits <= 32 {
-                    NarrowValueMode::ZeroExtend32
-                } else {
-                    NarrowValueMode::ZeroExtend64
-                },
-            );
-            let rm = input_to_reg_immshift(ctx, inputs[1]);
-
-            match rm {
-                ResultRegImmShift::Reg(reg) => {
-                    let tmp1 = ctx.tmp(RegClass::I64, I32);
-                    let tmp2 = ctx.tmp(RegClass::I64, I64);
-                    ctx.emit(Inst::AluRRImm12 {
-                        alu_op: ALUOp::Sub32,
-                        rd: tmp1,
-                        rn: reg,
-                        imm12: Imm12::maybe_from_u64(bits as u64).unwrap(),
-                    });
-                    ctx.emit(Inst::AluRRR {
-                        alu_op: ALUOp::Sub32,
-                        rd: tmp1,
-                        rn: zero_reg(),
-                        rm: tmp1.to_reg(),
-                    });
-                    ctx.emit(Inst::AluRRR {
-                        alu_op: choose_32_64(ty, ALUOp::Lsl32, ALUOp::Lsl64),
-                        rd: tmp2,
-                        rn: rn,
-                        rm: reg,
-                    });
-                    ctx.emit(Inst::AluRRR {
-                        alu_op: choose_32_64(ty, ALUOp::Lsr32, ALUOp::Lsr64),
-                        rd: rd,
-                        rn: rn,
-                        rm: tmp1.to_reg(),
-                    });
-                    ctx.emit(Inst::AluRRR {
-                        alu_op: choose_32_64(ty, ALUOp::Orr32, ALUOp::Orr64),
-                        rd: rd,
-                        rn: rd.to_reg(),
-                        rm: tmp2.to_reg(),
-                    });
-                }
-                ResultRegImmShift::ImmShift(immshift) => {
-                    let tmp1 = ctx.tmp(RegClass::I64, I64);
-                    let amt = immshift.value();
-                    assert!(amt <= bits as u8);
-                    let opp_shift = ImmShift::maybe_from_u64(bits as u64 - amt as u64).unwrap();
-                    ctx.emit(Inst::AluRRImmShift {
-                        alu_op: choose_32_64(ty, ALUOp::Lsl32, ALUOp::Lsl64),
-                        rd: tmp1,
-                        rn: rn,
-                        immshift: immshift,
-                    });
-                    ctx.emit(Inst::AluRRImmShift {
-                        alu_op: choose_32_64(ty, ALUOp::Lsr32, ALUOp::Lsr64),
-                        rd: rd,
-                        rn: rn,
-                        immshift: opp_shift,
-                    });
-                    ctx.emit(Inst::AluRRR {
-                        alu_op: choose_32_64(ty, ALUOp::Orr32, ALUOp::Orr64),
-                        rd: rd,
-                        rn: rd.to_reg(),
-                        rm: tmp1.to_reg(),
-                    });
                 }
             }
         }
