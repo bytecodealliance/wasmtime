@@ -8,7 +8,7 @@ use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_inf
 use super::{DebugInputContext, Reader, TransformError};
 use anyhow::{Context, Error};
 use gimli::write;
-use gimli::{AttributeValue, DebugAddrBase, DebuggingInformationEntry, Unit};
+use gimli::{AttributeValue, DebuggingInformationEntry, Unit};
 use std::collections::HashSet;
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::DefinedFuncIndex;
@@ -273,18 +273,18 @@ where
                 } else if let Some(AttributeValue::DebugAddrIndex(i)) =
                     entry.attr_value(gimli::DW_AT_low_pc)?
                 {
-                    context.debug_addr.get_address(4, DebugAddrBase(8), i)?
+                    context.debug_addr.get_address(4, unit.addr_base, i)?
                 } else {
                     // FIXME? return Err(TransformError("No low_pc for unit header").into());
                     0
                 };
 
                 clone_die_attributes(
+                    &unit,
                     entry,
                     context,
                     addr_tr,
                     None,
-                    unit.encoding(),
                     comp_unit,
                     root_id,
                     None,
@@ -347,9 +347,9 @@ where
         current_value_range.update(new_stack_len);
         let range_builder = if entry.tag() == gimli::DW_TAG_subprogram {
             let range_builder = RangeInfoBuilder::from_subprogram_die(
+		&unit,
                 entry,
                 context,
-                unit.encoding(),
                 addr_tr,
                 cu_low_pc,
             )?;
@@ -371,7 +371,7 @@ where
             let ranges = entry.attr_value(gimli::DW_AT_ranges)?;
             if high_pc.is_some() || ranges.is_some() {
                 let range_builder =
-                    RangeInfoBuilder::from(entry, context, unit.encoding(), cu_low_pc)?;
+                    RangeInfoBuilder::from(&unit, entry, context, cu_low_pc)?;
                 current_scope_ranges.push(new_stack_len, range_builder.get_ranges(addr_tr));
                 Some(range_builder)
             } else {
@@ -421,11 +421,11 @@ where
         die_ref_map.insert(entry.offset(), die_id);
 
         clone_die_attributes(
+            &unit,
             entry,
             context,
             addr_tr,
             current_value_range.top(),
-            unit.encoding(),
             &mut comp_unit,
             die_id,
             range_builder,

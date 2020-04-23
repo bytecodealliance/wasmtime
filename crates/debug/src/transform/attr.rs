@@ -5,7 +5,7 @@ use super::refs::{PendingDebugInfoRefs, PendingUnitRefs};
 use super::{DebugInputContext, Reader, TransformError};
 use anyhow::{bail, Error};
 use gimli::{
-    write, AttributeValue, DebugAddrBase, DebugLineOffset, DebugStr, DebuggingInformationEntry,
+    write, AttributeValue, DebugLineOffset, DebugStr, DebuggingInformationEntry, Unit
 };
 use wasmtime_environ::isa::TargetIsa;
 
@@ -30,11 +30,11 @@ fn is_exprloc_to_loclist_allowed(attr_name: gimli::constants::DwAt) -> bool {
 }
 
 pub(crate) fn clone_die_attributes<'a, R>(
+    unit: &Unit<R, R::Offset>,
     entry: &DebuggingInformationEntry<R>,
     context: &DebugInputContext<R>,
     addr_tr: &'a AddressTransform,
     frame_info: Option<&FunctionFrameInfo>,
-    unit_encoding: gimli::Encoding,
     out_unit: &mut write::Unit,
     current_scope_id: write::UnitEntryId,
     subprogram_range_builder: Option<RangeInfoBuilder>,
@@ -51,11 +51,12 @@ where
 {
     let _tag = &entry.tag();
     let endian = gimli::RunTimeEndian::Little;
+    let unit_encoding = unit.encoding();
 
     let range_info = if let Some(subprogram_range_builder) = subprogram_range_builder {
         subprogram_range_builder
     } else {
-        RangeInfoBuilder::from(entry, context, unit_encoding, cu_low_pc)?
+        RangeInfoBuilder::from(unit, entry, context, cu_low_pc)?
     };
     range_info.build(addr_tr, out_unit, current_scope_id);
 
@@ -82,7 +83,7 @@ where
                 write::AttributeValue::Address(addr)
             }
             AttributeValue::DebugAddrIndex(i) => {
-                let u = context.debug_addr.get_address(4, DebugAddrBase(8), i)?;
+                let u = context.debug_addr.get_address(4, unit.addr_base, i)?;
                 let addr = addr_tr.translate(u).unwrap_or(write::Address::Constant(0));
                 write::AttributeValue::Address(addr)
             }
@@ -115,7 +116,7 @@ where
             }
             AttributeValue::RangeListsRef(r) => {
                 let range_info =
-                    RangeInfoBuilder::from_ranges_ref(r, context, unit_encoding, cu_low_pc)?;
+                    RangeInfoBuilder::from_ranges_ref(unit, r, context, cu_low_pc)?;
                 let range_list_id = range_info.build_ranges(addr_tr, &mut out_unit.ranges);
                 write::AttributeValue::RangeListRef(range_list_id)
             }
@@ -126,7 +127,7 @@ where
                     unit_encoding,
                     low_pc,
                     &context.debug_addr,
-                    context.debug_addr_base,
+                    unit.addr_base
                 )?;
                 let frame_base = if let FileAttributeContext::Children(_, frame_base) = file_context
                 {
@@ -257,8 +258,9 @@ where
                 continue;
             }
             AttributeValue::DebugAddrBase(offset) => {
-                if offset.0 != 8 {
-                    bail!("Unexpected (8) DebugAddrBase: {}", offset.0)
+
+                if offset.0 != unit.addr_base.0 {
+                    bail!("Unexpected (unit.addr_base: {}) DebugAddrBase: {}", unit.addr_base.0, offset.0)
                 }
                 continue;
             }
