@@ -237,11 +237,7 @@ fn should_panic(testsuite: &str, testname: &str) -> bool {
     }
     match (testsuite, testname) {
         // FIXME(#1521)
-        ("misc_testsuite", "func_400_params")
-        | ("simd", _)
-        | ("multi_value", "call")
-        | ("spec_testsuite", "call") => true,
-
+        ("simd", _) => true,
         _ => false,
     }
 }
