@@ -154,9 +154,6 @@ fn write_testsuite_tests(
     if ignore(testsuite, &testname, strategy) {
         writeln!(out, "#[ignore]")?;
     }
-    if should_panic(testsuite, &testname) {
-        writeln!(out, "#[should_panic]")?;
-    }
     writeln!(out, "fn r#{}() {{", &testname)?;
     writeln!(
         out,
@@ -183,6 +180,10 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             _ => (),
         },
         "Cranelift" => match (testsuite, testname) {
+            // All simd tests are known to fail on aarch64 for now, it's going
+            // to be a big chunk of work to implement them all there!
+            ("simd", _) if target.contains("aarch64") => return true,
+
             ("simd", "simd_bit_shift") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16Shl
             ("simd", "simd_conversions") => return true, // FIXME Unsupported feature: proposed SIMD operator I16x8NarrowI32x4S
             ("simd", "simd_f32x4") => return true, // FIXME expected V128(F32x4([CanonicalNan, CanonicalNan, Value(Float32 { bits: 0 }), Value(Float32 { bits: 0 })])), got V128(18428729675200069632)
@@ -214,19 +215,4 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
     }
 
     false
-}
-
-/// Determine whether to add a should_panic attribute. These tests currently
-/// panic because of unfinished backend implementation work; we will remove them
-/// from this list as we finish the implementation
-fn should_panic(testsuite: &str, testname: &str) -> bool {
-    let target = env::var("TARGET").unwrap();
-    if !target.contains("aarch64") {
-        return false;
-    }
-    match (testsuite, testname) {
-        // FIXME(#1521)
-        ("simd", _) => true,
-        _ => false,
-    }
 }
