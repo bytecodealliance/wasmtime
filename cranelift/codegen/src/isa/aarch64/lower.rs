@@ -917,6 +917,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
             } else {
                 NarrowValueMode::ZeroExtend64
             };
+            // TODO: Add SDiv32 to implement 32-bit directly, rather
+            // than extending the input.
             let div_op = if is_signed {
                 ALUOp::SDiv64
             } else {
@@ -925,16 +927,19 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
 
             let rd = output_to_reg(ctx, outputs[0]);
             let rn = input_to_reg(ctx, inputs[0], narrow_mode);
-            if !is_rem {
-                let rm = input_to_reg(ctx, inputs[1], narrow_mode);
-                ctx.emit(Inst::AluRRR {
-                    alu_op: div_op,
-                    rd,
-                    rn,
-                    rm,
-                });
-            } else {
-                let rm = input_to_reg(ctx, inputs[1], narrow_mode);
+            let rm = input_to_reg(ctx, inputs[1], narrow_mode);
+            // The div instruction does not trap on divide by zero or signed overflow
+            // so checks are inserted below.
+            //
+            //   div rd, rn, rm
+            ctx.emit(Inst::AluRRR {
+                alu_op: div_op,
+                rd,
+                rn,
+                rm,
+            });
+
+            if is_rem {
                 // Remainder (rn % rm) is implemented as:
                 //
                 //   tmp = rn / rm
@@ -943,13 +948,20 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
                 // use 'rd' for tmp and you have:
                 //
                 //   div rd, rn, rm       ; rd = rn / rm
+                //   cbnz rm, #8          ; branch over trap
+                //   udf                  ; divide by zero
                 //   msub rd, rd, rm, rn  ; rd = rn - rd * rm
-                ctx.emit(Inst::AluRRR {
-                    alu_op: div_op,
-                    rd,
-                    rn,
-                    rm,
+
+                // Check for divide by 0.
+                let branch_size = 8;
+                ctx.emit(Inst::CondBrLowered {
+                    target: BranchTarget::ResolvedOffset(branch_size),
+                    kind: CondBrKind::NotZero(rm),
                 });
+
+                let trap_info = (ctx.srcloc(insn), TrapCode::IntegerDivisionByZero);
+                ctx.emit(Inst::Udf { trap_info });
+
                 ctx.emit(Inst::AluRRRR {
                     alu_op: ALUOp::MSub64,
                     rd: rd,
@@ -957,6 +969,65 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
                     rm: rm,
                     ra: rn,
                 });
+            } else {
+                if div_op == ALUOp::SDiv64 {
+                    //   cbz rm, #20
+                    //   cmn rm, 1
+                    //   ccmp rn, 1, #nzcv, eq
+                    //   b.vc 12
+                    //   udf ; signed overflow
+                    //   udf ; divide by zero
+
+                    // Check for divide by 0.
+                    let branch_size = 20;
+                    ctx.emit(Inst::CondBrLowered {
+                        target: BranchTarget::ResolvedOffset(branch_size),
+                        kind: CondBrKind::Zero(rm),
+                    });
+
+                    // Check for signed overflow. The only case is min_value / -1.
+                    let ty = ty.unwrap();
+                    // The following checks must be done in 32-bit or 64-bit, depending
+                    // on the input type. Even though the initial div instruction is
+                    // always done in 64-bit currently.
+                    let size = InstSize::from_ty(ty);
+                    // Check RHS is -1.
+                    ctx.emit(Inst::AluRRImm12 {
+                        alu_op: choose_32_64(ty, ALUOp::AddS32, ALUOp::AddS64),
+                        rd: writable_zero_reg(),
+                        rn: rm,
+                        imm12: Imm12::maybe_from_u64(1).unwrap(),
+                    });
+                    // Check LHS is min_value, by subtracting 1 and branching if
+                    // there is overflow.
+                    ctx.emit(Inst::CCmpImm {
+                        size,
+                        rn,
+                        imm: UImm5::maybe_from_u8(1).unwrap(),
+                        nzcv: NZCV::new(false, false, false, false),
+                        cond: Cond::Eq,
+                    });
+                    ctx.emit(Inst::CondBrLowered {
+                        target: BranchTarget::ResolvedOffset(12),
+                        kind: CondBrKind::Cond(Cond::Vc),
+                    });
+
+                    let trap_info = (ctx.srcloc(insn), TrapCode::IntegerOverflow);
+                    ctx.emit(Inst::Udf { trap_info });
+                } else {
+                    //   cbnz rm, #8
+                    //   udf ; divide by zero
+
+                    // Check for divide by 0.
+                    let branch_size = 8;
+                    ctx.emit(Inst::CondBrLowered {
+                        target: BranchTarget::ResolvedOffset(branch_size),
+                        kind: CondBrKind::NotZero(rm),
+                    });
+                }
+
+                let trap_info = (ctx.srcloc(insn), TrapCode::IntegerDivisionByZero);
+                ctx.emit(Inst::Udf { trap_info });
             }
         }
 
