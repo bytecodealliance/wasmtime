@@ -15,7 +15,11 @@ use wasmtime_environ::isa::TargetIsa;
 #[derive(Debug)]
 pub(crate) enum FileAttributeContext<'a> {
     Root(Option<DebugLineOffset>),
-    Children(&'a Vec<write::FileId>, u64, Option<&'a CompiledExpression<'a>>),
+    Children(
+        &'a Vec<write::FileId>,
+        u64,
+        Option<&'a CompiledExpression<'a>>,
+    ),
 }
 
 fn is_exprloc_to_loclist_allowed(attr_name: gimli::constants::DwAt) -> bool {
@@ -141,12 +145,12 @@ where
                     &context.debug_addr,
                     unit.addr_base,
                 )?;
-                let frame_base = if let FileAttributeContext::Children(_, _, frame_base) = file_context
-                {
-                    frame_base
-                } else {
-                    None
-                };
+                let frame_base =
+                    if let FileAttributeContext::Children(_, _, frame_base) = file_context {
+                        frame_base
+                    } else {
+                        None
+                    };
                 let mut result = None;
                 while let Some(loc) = locs.next()? {
                     if let Some(expr) =
@@ -183,12 +187,12 @@ where
                 write::AttributeValue::LocationListRef(list_id)
             }
             AttributeValue::Exprloc(ref expr) => {
-                let frame_base = if let FileAttributeContext::Children(_, _, frame_base) = file_context
-                {
-                    frame_base
-                } else {
-                    None
-                };
+                let frame_base =
+                    if let FileAttributeContext::Children(_, _, frame_base) = file_context {
+                        frame_base
+                    } else {
+                        None
+                    };
                 if let Some(expr) = compile_expression(expr, unit_encoding, frame_base, isa)? {
                     if expr.is_simple() {
                         if let Some(expr) = expr.build() {

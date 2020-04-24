@@ -90,7 +90,7 @@ where
     );
     if let Ok(program) = program {
         let header = program.header();
-	let index_base = if header.version() < 5 { 1 } else { 0 };
+        let index_base = if header.version() < 5 { 1 } else { 0 };
         assert_le!(header.version(), 5, "not supported 6");
         let line_encoding = LineEncoding {
             minimum_instruction_length: header.minimum_instruction_length(),
