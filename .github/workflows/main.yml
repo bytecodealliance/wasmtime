@@ -269,10 +269,17 @@ jobs:
         include:
         - build: x86_64-linux
           os: ubuntu-latest
+          rust: stable
         - build: x86_64-macos
           os: macos-latest
+          rust: stable
         - build: x86_64-windows
           os: windows-latest
+          rust: stable
+        - build: x86_64-mingw
+          os: windows-latest
+          target: x86_64-pc-windows-gnu
+          rust: nightly     # needs rust-lang/rust#69351 to ride to stable
         - build: aarch64-linux
           os: ubuntu-latest
           rust: stable
@@ -286,8 +293,17 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+      with:
+        toolchain: ${{ matrix.rust }}
     - uses: ./.github/actions/binary-compatible-builds
       if: matrix.target == ''
+
+    - name: Configure Cargo target
+      run: |
+        echo ::set-env name=CARGO_BUILD_TARGET::${{ matrix.target }}
+        rustup target add ${{ matrix.target }}
+      shell: bash
+      if: matrix.target != ''
 
     - name: Install cross-compilation tools
       run: |
@@ -309,9 +325,7 @@ jobs:
         upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
         echo ::set-env name=CARGO_TARGET_${upcase}_RUNNER::$HOME/qemu/bin/${{ matrix.qemu }}
         echo ::set-env name=CARGO_TARGET_${upcase}_LINKER::${{ matrix.gcc }}
-        echo ::set-env name=CARGO_BUILD_TARGET::${{ matrix.target }}
-        rustup target add ${{ matrix.target }}
-      if: matrix.target != ''
+      if: matrix.target != '' && matrix.os == 'ubuntu-latest'
 
     # Install wasm32-wasi target in order to build wasi-common's integration
     # tests
@@ -348,7 +362,10 @@ jobs:
       if: matrix.os != 'windows-latest' && matrix.target != ''
     - run: cp target/release/wasmtime.exe dist
       shell: bash
-      if: matrix.os == 'windows-latest'
+      if: matrix.build == 'x86_64-windows'
+    - run: cp target/x86_64-pc-windows-gnu/release/wasmtime.exe dist
+      shell: bash
+      if: matrix.build == 'x86_64-mingw'
 
     # Move libwasmtime dylib to dist folder
     - run: cp target/release/libwasmtime.{so,a} dist
@@ -359,7 +376,10 @@ jobs:
       if: matrix.os == 'macos-latest'
     - run: cp target/release/wasmtime.{dll,lib,dll.lib} dist
       shell: bash
-      if: matrix.os == 'windows-latest'
+      if: matrix.build == 'x86_64-windows'
+    - run: cp target/x86_64-pc-windows-gnu/release/{wasmtime.dll,libwasmtime.a} dist
+      shell: bash
+      if: matrix.build == 'x86_64-mingw'
 
     # Make a Windows MSI installer if we're on Windows
     - run: |
@@ -368,7 +388,7 @@ jobs:
         "$WIX/bin/light" -out dist/installer.msi target/wasmtime.wixobj -ext WixUtilExtension
         rm dist/installer.wixpdb
       shell: bash
-      if: matrix.os == 'windows-latest'
+      if: matrix.build == 'x86_64-windows'
 
     - uses: actions/upload-artifact@v1
       with:
@@ -416,6 +436,10 @@ jobs:
       uses: actions/download-artifact@v1
       with:
         name: bins-x86_64-windows
+    - name: Download x86_64 Windows MinGW binaries
+      uses: actions/download-artifact@v1
+      with:
+        name: bins-x86_64-mingw
 
     - name: Assemble gh-pages
       run: |
@@ -449,6 +473,7 @@ jobs:
       run: |
         ./ci/build-tarballs.sh x86_64-linux
         ./ci/build-tarballs.sh x86_64-windows .exe
+        ./ci/build-tarballs.sh x86_64-mingw .exe
         ./ci/build-tarballs.sh x86_64-macos
         ./ci/build-tarballs.sh aarch64-linux
 
