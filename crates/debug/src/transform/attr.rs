@@ -275,21 +275,13 @@ where
             }
             AttributeValue::DebugAddrBase(offset) => {
                 if offset.0 != unit.addr_base.0 {
-                    bail!(
-                        "Unexpected (unit.addr_base: {}) DebugAddrBase: {}",
-                        unit.addr_base.0,
-                        offset.0
-                    )
+                    return Err(TransformError("unexpected DebugAddrBase value").into());
                 }
                 continue;
             }
             AttributeValue::DebugStrOffsetsBase(offset) => {
                 if offset.0 != unit.str_offsets_base.0 {
-                    bail!(
-                        "Unexpected (unit.str_offsets_base: {}) DebugStrOffsetsBase: {}",
-                        unit.str_offsets_base.0,
-                        offset.0
-                    )
+                    return Err(TransformError("unexpected DebugStrOffsetsBase value").into());
                 }
                 continue;
             }
