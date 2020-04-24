@@ -8,8 +8,6 @@ use gimli::{
     write, AttributeValue, DebugLineOffset, DebugLineStr, DebugStr, DebugStrOffsets,
     DebuggingInformationEntry, Unit,
 };
-use std::io;
-use std::io::prelude::*;
 use wasmtime_environ::isa::TargetIsa;
 
 #[derive(Debug)]
