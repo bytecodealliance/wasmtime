@@ -255,6 +255,8 @@ where
                 addr_tr,
                 out_encoding,
                 context.debug_str,
+                context.debug_str_offsets,
+                context.debug_line_str,
                 context.debug_line,
                 out_strings,
             )?;

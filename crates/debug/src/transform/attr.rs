@@ -4,7 +4,10 @@ use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs};
 use super::{DebugInputContext, Reader, TransformError};
 use anyhow::{bail, Error};
-use gimli::{write, AttributeValue, DebugLineOffset, DebugStr, DebuggingInformationEntry, Unit};
+use gimli::{
+    write, AttributeValue, DebugLineOffset, DebugLineStr, DebugStr, DebugStrOffsets,
+    DebuggingInformationEntry, Unit,
+};
 use wasmtime_environ::isa::TargetIsa;
 
 pub(crate) enum FileAttributeContext<'a> {
@@ -109,6 +112,15 @@ where
                 }
             }
             AttributeValue::DebugStrRef(str_offset) => {
+                let s = context.debug_str.get_str(str_offset)?.to_slice()?.to_vec();
+                write::AttributeValue::StringRef(out_strings.add(s))
+            }
+            AttributeValue::DebugStrOffsetsIndex(i) => {
+                let str_offset = context.debug_str_offsets.get_str_offset(
+                    gimli::Format::Dwarf32,
+                    unit.str_offsets_base,
+                    i,
+                )?;
                 let s = context.debug_str.get_str(str_offset)?.to_slice()?.to_vec();
                 write::AttributeValue::StringRef(out_strings.add(s))
             }
@@ -264,6 +276,16 @@ where
                 }
                 continue;
             }
+            AttributeValue::DebugStrOffsetsBase(offset) => {
+                if offset.0 != unit.str_offsets_base.0 {
+                    bail!(
+                        "Unexpected (unit.str_offsets_base: {}) DebugStrOffsetsBase: {}",
+                        unit.str_offsets_base.0,
+                        offset.0
+                    )
+                }
+                continue;
+            }
             a => bail!("Unexpected attribute: {:?}", a),
         };
         let current_scope = out_unit.get_mut(current_scope_id);
@@ -275,7 +297,10 @@ where
 pub(crate) fn clone_attr_string<R>(
     attr_value: &AttributeValue<R>,
     form: gimli::DwForm,
+    unit: &Unit<R, R::Offset>,
     debug_str: &DebugStr<R>,
+    debug_str_offsets: &DebugStrOffsets<R>,
+    debug_line_str: &DebugLineStr<R>,
     out_strings: &mut write::StringTable,
 ) -> Result<write::LineString, Error>
 where
@@ -284,6 +309,17 @@ where
     let content = match attr_value {
         AttributeValue::DebugStrRef(str_offset) => {
             debug_str.get_str(*str_offset)?.to_slice()?.to_vec()
+        }
+        AttributeValue::DebugStrOffsetsIndex(i) => {
+            let str_offset = debug_str_offsets.get_str_offset(
+                gimli::Format::Dwarf32,
+                unit.str_offsets_base,
+                *i,
+            )?;
+            debug_str.get_str(str_offset)?.to_slice()?.to_vec()
+        }
+        AttributeValue::DebugLineStrRef(str_offset) => {
+            debug_line_str.get_str(*str_offset)?.to_slice()?.to_vec()
         }
         AttributeValue::String(b) => b.to_slice()?.to_vec(),
         v => bail!("Unexpected attribute value: {:?}", v),

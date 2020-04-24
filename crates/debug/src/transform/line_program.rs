@@ -3,7 +3,8 @@ use super::attr::clone_attr_string;
 use super::{Reader, TransformError};
 use anyhow::{Context, Error};
 use gimli::{
-    write, DebugLine, DebugLineOffset, DebugStr, DebuggingInformationEntry, LineEncoding, Unit,
+    write, DebugLine, DebugLineOffset, DebugLineStr, DebugStr, DebugStrOffsets,
+    DebuggingInformationEntry, LineEncoding, Unit,
 };
 use more_asserts::assert_le;
 use wasmtime_environ::entity::EntityRef;
@@ -46,6 +47,8 @@ pub(crate) fn clone_line_program<R>(
     addr_tr: &AddressTransform,
     out_encoding: gimli::Encoding,
     debug_str: &DebugStr<R>,
+    debug_str_offsets: &DebugStrOffsets<R>,
+    debug_line_str: &DebugLineStr<R>,
     debug_line: &DebugLine<R>,
     out_strings: &mut write::StringTable,
 ) -> Result<(write::LineProgram, DebugLineOffset, Vec<write::FileId>), Error>
@@ -63,13 +66,19 @@ where
     let out_comp_dir = clone_attr_string(
         comp_dir.as_ref().context("comp_dir")?,
         gimli::DW_FORM_strp,
+        unit,
         debug_str,
+        debug_str_offsets,
+        debug_line_str,
         out_strings,
     )?;
     let out_comp_name = clone_attr_string(
         comp_name.as_ref().context("comp_name")?,
         gimli::DW_FORM_strp,
+        unit,
         debug_str,
+        debug_str_offsets,
+        debug_line_str,
         out_strings,
     )?;
 
@@ -102,7 +111,10 @@ where
             let dir_id = out_program.add_directory(clone_attr_string(
                 dir_attr,
                 gimli::DW_FORM_string,
+                unit,
                 debug_str,
+                debug_str_offsets,
+                debug_line_str,
                 out_strings,
             )?);
             dirs.push(dir_id);
@@ -114,7 +126,10 @@ where
                 clone_attr_string(
                     &file_entry.path_name(),
                     gimli::DW_FORM_string,
+                    unit,
                     debug_str,
+                    debug_str_offsets,
+                    debug_line_str,
                     out_strings,
                 )?,
                 dir_id,

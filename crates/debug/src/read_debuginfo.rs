@@ -66,11 +66,10 @@ fn convert_sections<'a>(sections: HashMap<&str, &'a [u8]>) -> Result<Dwarf<'a>> 
         endian,
     ));
 
-    if sections.contains_key(".debug_line_str") {
-        bail!("Unexpected .debug_line_str");
-    }
-
-    let debug_line_str = DebugLineStr::from(EndianSlice::new(EMPTY_SECTION, endian));
+    let debug_line_str = DebugLineStr::from(EndianSlice::new(
+        sections.get(".debug_line_str").unwrap_or(&EMPTY_SECTION),
+        endian,
+    ));
     let debug_str_sup = DebugStr::from(EndianSlice::new(EMPTY_SECTION, endian));
 
     let debug_ranges = match sections.get(".debug_ranges") {
@@ -93,11 +92,10 @@ fn convert_sections<'a>(sections: HashMap<&str, &'a [u8]>) -> Result<Dwarf<'a>> 
     };
     let locations = LocationLists::new(debug_loc, debug_loclists);
 
-    if sections.contains_key(".debug_str_offsets") {
-        bail!("Unexpected .debug_str_offsets");
-    }
-
-    let debug_str_offsets = DebugStrOffsets::from(EndianSlice::new(EMPTY_SECTION, endian));
+    let debug_str_offsets = DebugStrOffsets::from(EndianSlice::new(
+        sections.get(".debug_str_offsets").unwrap_or(&EMPTY_SECTION),
+        endian,
+    ));
 
     if sections.contains_key(".debug_types") {
         bail!("Unexpected .debug_types");

@@ -4,7 +4,10 @@ use self::unit::clone_unit;
 use crate::gc::build_dependencies;
 use crate::DebugInfoData;
 use anyhow::Error;
-use gimli::{write, DebugAddr, DebugLine, DebugStr, LocationLists, RangeLists, UnitSectionOffset};
+use gimli::{
+    write, DebugAddr, DebugLine, DebugLineStr, DebugStr, DebugStrOffsets, LocationLists,
+    RangeLists, UnitSectionOffset,
+};
 use std::collections::HashSet;
 use thiserror::Error;
 use wasmtime_environ::isa::TargetIsa;
@@ -35,6 +38,8 @@ where
     R: Reader,
 {
     debug_str: &'a DebugStr<R>,
+    debug_str_offsets: &'a DebugStrOffsets<R>,
+    debug_line_str: &'a DebugLineStr<R>,
     debug_line: &'a DebugLine<R>,
     debug_addr: &'a DebugAddr<R>,
     rnglists: &'a RangeLists<R>,
@@ -54,6 +59,8 @@ pub fn transform_dwarf(
 
     let context = DebugInputContext {
         debug_str: &di.dwarf.debug_str,
+        debug_str_offsets: &di.dwarf.debug_str_offsets,
+        debug_line_str: &di.dwarf.debug_line_str,
         debug_line: &di.dwarf.debug_line,
         debug_addr: &di.dwarf.debug_addr,
         rnglists: &di.dwarf.ranges,
