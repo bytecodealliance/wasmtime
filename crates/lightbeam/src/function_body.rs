@@ -876,7 +876,7 @@ where
 
     ctx.epilogue();
 
-    mem::replace(&mut session.op_offset_map, op_offset_map);
+    let _ = mem::replace(&mut session.op_offset_map, op_offset_map);
 
     Ok(())
 }
