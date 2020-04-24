@@ -225,12 +225,12 @@ jobs:
     - run: cargo run -p run-examples
 
     # Build and test all features except for lightbeam
-    - run: cargo test --features test-programs/test_programs --all --exclude lightbeam -- --nocapture
+    - run: cargo test --features test-programs/test_programs --all --exclude lightbeam
       env:
         RUST_BACKTRACE: 1
 
     # Test debug (DWARF) related functionality.
-    - run: cargo test test_debug_dwarf_ -- --ignored --nocapture --test-threads 1
+    - run: cargo test test_debug_dwarf_ -- --ignored --test-threads 1
       if: matrix.os == 'ubuntu-latest'
       env:
         RUST_BACKTRACE: 1
@@ -239,7 +239,7 @@ jobs:
     # Lightbeam tests fail right now, but we don't want to block on that.
     - run: cargo build --package lightbeam
       if: matrix.rust == 'nightly'
-    - run: cargo test --package lightbeam -- --nocapture
+    - run: cargo test --package lightbeam
       if: matrix.rust == 'nightly'
       continue-on-error: true
       env:
