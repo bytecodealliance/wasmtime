@@ -133,12 +133,11 @@ pub trait ABICall {
     fn num_args(&self) -> usize;
 
     /// Copy an argument value from a source register, prior to the call.
-    fn gen_copy_reg_to_arg(
+    fn gen_copy_reg_to_arg<C: LowerCtx<I = Self::I>>(
         &self,
+        ctx: &mut C,
         idx: usize,
         from_reg: Reg,
-        tmp1: Writable<Reg>,
-        tmp2: Writable<Reg>,
     ) -> Vec<Self::I>;
 
     /// Copy a return value into a destination register, after the call returns.

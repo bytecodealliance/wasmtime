@@ -331,18 +331,19 @@ fn store_stack_fp(fp_offset: i64, from_reg: Reg, ty: Type) -> Inst {
     store_stack(MemArg::FPOffset(fp_offset), from_reg, ty)
 }
 
-fn store_stack_sp(
+fn store_stack_sp<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
     sp_offset: i64,
     from_reg: Reg,
     ty: Type,
-    tmp1: Writable<Reg>,
-    tmp2: Writable<Reg>,
 ) -> Vec<Inst> {
     if SImm9::maybe_from_i64(sp_offset).is_some() {
         vec![store_stack(MemArg::SPOffset(sp_offset), from_reg, ty)]
     } else {
         // mem_finalize will try to generate an add, but in an addition, x31 is the zero register,
         // not sp! So we have to synthesize the full add here.
+        let tmp1 = ctx.tmp(RegClass::I64, I64);
+        let tmp2 = ctx.tmp(RegClass::I64, I64);
         let mut result = Vec::new();
         // tmp1 := sp
         result.push(Inst::Mov {
@@ -974,12 +975,11 @@ impl ABICall for AArch64ABICall {
         adjust_stack(self.sig.stack_arg_space as u64, /* is_sub = */ false)
     }
 
-    fn gen_copy_reg_to_arg(
+    fn gen_copy_reg_to_arg<C: LowerCtx<I = Self::I>>(
         &self,
+        ctx: &mut C,
         idx: usize,
         from_reg: Reg,
-        tmp1: Writable<Reg>,
-        tmp2: Writable<Reg>,
     ) -> Vec<Inst> {
         match &self.sig.args[idx] {
             &ABIArg::Reg(reg, ty) => vec![Inst::gen_move(
@@ -987,7 +987,7 @@ impl ABICall for AArch64ABICall {
                 from_reg,
                 ty,
             )],
-            &ABIArg::Stack(off, ty) => store_stack_sp(off, from_reg, ty, tmp1, tmp2),
+            &ABIArg::Stack(off, ty) => store_stack_sp(ctx, off, from_reg, ty),
         }
     }
 
