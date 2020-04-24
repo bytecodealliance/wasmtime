@@ -1,0 +1,190 @@
+test vcode
+target aarch64
+
+function %foo() {
+block0:
+    return
+}
+
+function %stack_limit_leaf_zero(i64 stack_limit) {
+block0(v0: i64):
+    return
+}
+
+; check:      stp fp, lr, [sp, #-16]!
+; nextln:     mov fp, sp
+; nextln:     mov sp, fp
+; nextln:     ldp fp, lr, [sp], #16
+; nextln:     ret
+
+function %stack_limit_gv_leaf_zero(i64 vmctx) {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+4
+    stack_limit = gv2
+block0(v0: i64):
+    return
+}
+
+; check:      stp fp, lr, [sp, #-16]!
+; nextln:     mov fp, sp
+; nextln:     mov sp, fp
+; nextln:     ldp fp, lr, [sp], #16
+; nextln:     ret
+
+
+function %stack_limit_call_zero(i64 stack_limit) {
+    fn0 = %foo()
+block0(v0: i64):
+    call fn0()
+    return
+}
+
+; check:      stp fp, lr, [sp, #-16]!
+; nextln:     mov fp, sp
+; nextln:     subs xzr, sp, x0
+; nextln:     b.hs 8
+; nextln:     udf
+; nextln:     bl 0
+; nextln:     mov sp, fp
+; nextln:     ldp fp, lr, [sp], #16
+; nextln:     ret
+
+function %stack_limit_gv_call_zero(i64 vmctx) {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+4
+    stack_limit = gv2
+    fn0 = %foo()
+block0(v0: i64):
+    call fn0()
+    return
+}
+
+; check:      stp fp, lr, [sp, #-16]!
+; nextln:     mov fp, sp
+; nextln:     ldr x15, [x0]
+; nextln:     ldr x15, [x15, #4]
+; nextln:     subs xzr, sp, x15
+; nextln:     b.hs 8
+; nextln:     udf
+; nextln:     bl 0
+; nextln:     mov sp, fp
+; nextln:     ldp fp, lr, [sp], #16
+; nextln:     ret
+
+
+function %stack_limit(i64 stack_limit) {
+    ss0 = explicit_slot 168
+block0(v0: i64):
+    return
+}
+
+; check:      stp fp, lr, [sp, #-16]!
+; nextln:     mov fp, sp
+; nextln:     add x15, x0, #176
+; nextln:     subs xzr, sp, x15
+; nextln:     b.hs 8
+; nextln:     udf
+; nextln:     sub sp, sp, #176
+; nextln:     mov sp, fp
+; nextln:     ldp fp, lr, [sp], #16
+; nextln:     ret
+
+function %huge_stack_limit(i64 stack_limit) {
+    ss0 = explicit_slot 400000
+block0(v0: i64):
+    return
+}
+
+; check:      stp fp, lr, [sp, #-16]!
+; nextln:     mov fp, sp
+; nextln:     subs xzr, sp, x0
+; nextln:     b.hs 8
+; nextln:     udf
+; nextln:     movz x16, #6784
+; nextln:     movk x16, #6, LSL #16
+; nextln:     add x15, x0, x16, UXTX
+; nextln:     subs xzr, sp, x15
+; nextln:     b.hs 8
+; nextln:     udf
+; nextln:     ldr x15, 8 ; b 12 ; data 400000
+; nextln:     sub sp, sp, x15, UXTX
+; nextln:     mov sp, fp
+; nextln:     ldp fp, lr, [sp], #16
+; nextln:     ret
+
+function %limit_preamble(i64 vmctx) {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+4
+    stack_limit = gv2
+    ss0 = explicit_slot 20
+block0(v0: i64):
+    return
+}
+
+; check:      stp fp, lr, [sp, #-16]!
+; nextln:     mov fp, sp
+; nextln:     ldr x15, [x0]
+; nextln:     ldr x15, [x15, #4]
+; nextln:     add x15, x15, #32
+; nextln:     subs xzr, sp, x15
+; nextln:     b.hs 8
+; nextln:     udf
+; nextln:     sub sp, sp, #32
+; nextln:     mov sp, fp
+; nextln:     ldp fp, lr, [sp], #16
+; nextln:     ret
+
+function %limit_preamble_huge(i64 vmctx) {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+4
+    stack_limit = gv2
+    ss0 = explicit_slot 400000
+block0(v0: i64):
+    return
+}
+
+; check:      stp fp, lr, [sp, #-16]!
+; nextln:     mov fp, sp
+; nextln:     ldr x15, [x0]
+; nextln:     ldr x15, [x15, #4]
+; nextln:     subs xzr, sp, x15
+; nextln:     b.hs 8
+; nextln:     udf
+; nextln:     movz x16, #6784
+; nextln:     movk x16, #6, LSL #16
+; nextln:     add x15, x15, x16, UXTX
+; nextln:     subs xzr, sp, x15
+; nextln:     b.hs 8
+; nextln:     udf
+; nextln:     ldr x15, 8 ; b 12 ; data 400000
+; nextln:     sub sp, sp, x15, UXTX
+; nextln:     mov sp, fp
+; nextln:     ldp fp, lr, [sp], #16
+; nextln:     ret
+
+function %limit_preamble_huge_offset(i64 vmctx) {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+400000
+    stack_limit = gv1
+    ss0 = explicit_slot 20
+block0(v0: i64):
+    return
+}
+
+; check:      stp fp, lr, [sp, #-16]!
+; nextln:     mov fp, sp
+; nextln:     movz x15, #6784
+; nextln:     movk x15, #6, LSL #16
+; nextln:     ldr x15, [x0, x15]
+; nextln:     add x15, x15, #32
+; nextln:     subs xzr, sp, x15
+; nextln:     b.hs 8
+; nextln:     udf
+; nextln:     sub sp, sp, #32
+; nextln:     mov sp, fp
+; nextln:     ldp fp, lr, [sp], #16
+; nextln:     ret

@@ -111,6 +111,7 @@ fn compute_arg_locs(call_conv: isa::CallConv, params: &[ir::AbiParam]) -> (Vec<A
         match &param.purpose {
             &ir::ArgumentPurpose::VMContext
             | &ir::ArgumentPurpose::Normal
+            | &ir::ArgumentPurpose::StackLimit
             | &ir::ArgumentPurpose::SignatureId => {}
             _ => panic!(
                 "Unsupported argument purpose {:?} in signature: {:?}",
@@ -192,6 +193,20 @@ pub struct AArch64ABIBody {
     call_conv: isa::CallConv,
     /// The settings controlling this function's compilation.
     flags: settings::Flags,
+    /// Whether or not this function is a "leaf", meaning it calls no other
+    /// functions
+    is_leaf: bool,
+    /// If this function has a stack limit specified, then `Reg` is where the
+    /// stack limit will be located after the instructions specified have been
+    /// executed.
+    ///
+    /// Note that this is intended for insertion into the prologue, if
+    /// present. Also note that because the instructions here execute in the
+    /// prologue this happens after legalization/register allocation/etc so we
+    /// need to be extremely careful with each instruction. The instructions are
+    /// manually register-allocated and carefully only use caller-saved
+    /// registers and keep nothing live after this sequence of instructions.
+    stack_limit: Option<(Reg, Vec<Inst>)>,
 }
 
 fn in_int_reg(ty: ir::Type) -> bool {
@@ -206,6 +221,85 @@ fn in_vec_reg(ty: ir::Type) -> bool {
     match ty {
         types::F32 | types::F64 => true,
         _ => false,
+    }
+}
+
+/// Generates the instructions necessary for the `gv` to be materialized into a
+/// register.
+///
+/// This function will return a register that will contain the result of
+/// evaluating `gv`. It will also return any instructions necessary to calculate
+/// the value of the register.
+///
+/// Note that global values are typically lowered to instructions via the
+/// standard legalization pass. Unfortunately though prologue generation happens
+/// so late in the pipeline that we can't use these legalization passes to
+/// generate the instructions for `gv`. As a result we duplicate some lowering
+/// of `gv` here and support only some global values. This is similar to what
+/// the x86 backend does for now, and hopefully this can be somewhat cleaned up
+/// in the future too!
+///
+/// Also note that this function will make use of `writable_spilltmp_reg()` as a
+/// temporary register to store values in if necessary. Currently after we write
+/// to this register there's guaranteed to be no spilled values between where
+/// it's used, because we're not participating in register allocation anyway!
+fn gen_stack_limit(f: &ir::Function, abi: &ABISig, gv: ir::GlobalValue) -> (Reg, Vec<Inst>) {
+    let mut insts = Vec::new();
+    let reg = generate_gv(f, abi, gv, &mut insts);
+    return (reg, insts);
+
+    fn generate_gv(
+        f: &ir::Function,
+        abi: &ABISig,
+        gv: ir::GlobalValue,
+        insts: &mut Vec<Inst>,
+    ) -> Reg {
+        match f.global_values[gv] {
+            // Return the direct register the vmcontext is in
+            ir::GlobalValueData::VMContext => {
+                get_special_purpose_param_register(f, abi, ir::ArgumentPurpose::VMContext)
+                    .expect("no vmcontext parameter found")
+            }
+            // Load our base value into a register, then load from that register
+            // in to a temporary register.
+            ir::GlobalValueData::Load {
+                base,
+                offset,
+                global_type: _,
+                readonly: _,
+            } => {
+                let base = generate_gv(f, abi, base, insts);
+                let into_reg = writable_spilltmp_reg();
+                let mem = if let Some(offset) =
+                    UImm12Scaled::maybe_from_i64(offset.into(), ir::types::I8)
+                {
+                    MemArg::UnsignedOffset(base, offset)
+                } else {
+                    let offset: i64 = offset.into();
+                    insts.extend(Inst::load_constant(into_reg, offset as u64));
+                    MemArg::RegReg(base, into_reg.to_reg())
+                };
+                insts.push(Inst::ULoad64 {
+                    rd: into_reg,
+                    mem,
+                    srcloc: None,
+                });
+                return into_reg.to_reg();
+            }
+            ref other => panic!("global value for stack limit not supported: {}", other),
+        }
+    }
+}
+
+fn get_special_purpose_param_register(
+    f: &ir::Function,
+    abi: &ABISig,
+    purpose: ir::ArgumentPurpose,
+) -> Option<Reg> {
+    let idx = f.signature.special_param_index(purpose)?;
+    match abi.args[idx] {
+        ABIArg::Reg(reg, _) => Some(reg.to_reg()),
+        ABIArg::Stack(..) => None,
     }
 }
 
@@ -238,6 +332,15 @@ impl AArch64ABIBody {
             stackslots.push(off);
         }
 
+        // Figure out what instructions, if any, will be needed to check the
+        // stack limit. This can either be specified as a special-purpose
+        // argument or as a global value which often calculates the stack limit
+        // from the arguments.
+        let stack_limit =
+            get_special_purpose_param_register(f, &sig, ir::ArgumentPurpose::StackLimit)
+                .map(|reg| (reg, Vec::new()))
+                .or_else(|| f.stack_limit.map(|gv| gen_stack_limit(f, &sig, gv)));
+
         Self {
             sig,
             stackslots,
@@ -247,6 +350,8 @@ impl AArch64ABIBody {
             frame_size: None,
             call_conv,
             flags,
+            is_leaf: f.is_leaf(),
+            stack_limit,
         }
     }
 
@@ -260,6 +365,97 @@ impl AArch64ABIBody {
             num_words * 8
         } else {
             16 // frame pointer + return address.
+        }
+    }
+
+    /// Inserts instructions necessary for checking the stack limit into the
+    /// prologue.
+    ///
+    /// This function will generate instructions necessary for perform a stack
+    /// check at the header of a function. The stack check is intended to trap
+    /// if the stack pointer goes below a particular threshold, preventing stack
+    /// overflow in wasm or other code. The `stack_limit` argument here is the
+    /// register which holds the threshold below which we're supposed to trap.
+    /// This function is known to allocate `stack_size` bytes and we'll push
+    /// instructions onto `insts`.
+    ///
+    /// Note that the instructions generated here are special because this is
+    /// happening so late in the pipeline (e.g. after register allocation). This
+    /// means that we need to do manual register allocation here and also be
+    /// careful to not clobber any callee-saved or argument registers. For now
+    /// this routine makes do with the `writable_spilltmp_reg` as one temporary
+    /// register, and a second register of `x16` which is caller-saved. This
+    /// should be fine for us since no spills should happen in this sequence of
+    /// instructions, so our register won't get accidentally clobbered.
+    ///
+    /// No values can be live after the prologue, but in this case that's ok
+    /// because we just need to perform a stack check before progressing with
+    /// the rest of the function.
+    fn insert_stack_check(&self, stack_limit: Reg, stack_size: u32, insts: &mut Vec<Inst>) {
+        // With no explicit stack allocated we can just emit the simple check of
+        // the stack registers against the stack limit register, and trap if
+        // it's out of bounds.
+        if stack_size == 0 {
+            return push_check(stack_limit, insts);
+        }
+
+        // Note that the 32k stack size here is pretty special. See the
+        // documentation in x86/abi.rs for why this is here. The general idea is
+        // that we're protecting against overflow in the addition that happens
+        // below.
+        if stack_size >= 32 * 1024 {
+            push_check(stack_limit, insts);
+        }
+
+        // Add the `stack_size` to `stack_limit`, placing the result in
+        // `scratch`.
+        //
+        // Note though that `stack_limit`'s register may be the same as
+        // `scratch`. If our stack size doesn't fit into an immediate this
+        // means we need a second scratch register for loading the stack size
+        // into a register. We use `x16` here since it's caller-saved and we're
+        // in the function prologue and nothing else is allocated to it yet.
+        let scratch = writable_spilltmp_reg();
+        let stack_size = u64::from(stack_size);
+        if let Some(imm12) = Imm12::maybe_from_u64(stack_size) {
+            insts.push(Inst::AluRRImm12 {
+                alu_op: ALUOp::Add64,
+                rd: scratch,
+                rn: stack_limit,
+                imm12,
+            });
+        } else {
+            let scratch2 = 16;
+            insts.extend(Inst::load_constant(
+                Writable::from_reg(xreg(scratch2)),
+                stack_size.into(),
+            ));
+            insts.push(Inst::AluRRRExtend {
+                alu_op: ALUOp::Add64,
+                rd: scratch,
+                rn: stack_limit,
+                rm: xreg(scratch2),
+                extendop: ExtendOp::UXTX,
+            });
+        }
+        push_check(scratch.to_reg(), insts);
+
+        fn push_check(stack_limit: Reg, insts: &mut Vec<Inst>) {
+            insts.push(Inst::AluRRR {
+                alu_op: ALUOp::SubS64XR,
+                rd: writable_zero_reg(),
+                rn: stack_reg(),
+                rm: stack_limit,
+            });
+            insts.push(Inst::CondBrLowered {
+                target: BranchTarget::ResolvedOffset(8),
+                // Here `Hs` == "higher or same" when interpreting the two
+                // operands as unsigned integers.
+                kind: CondBrKind::Cond(Cond::Hs),
+            });
+            insts.push(Inst::Udf {
+                trap_info: (ir::SourceLoc::default(), ir::TrapCode::StackOverflow),
+            });
         }
     }
 }
@@ -682,31 +878,41 @@ impl ABIBody for AArch64ABIBody {
         }
         let total_stacksize = (total_stacksize + 15) & !15; // 16-align the stack.
 
-        if !self.call_conv.extends_baldrdash() && total_stacksize > 0 {
-            // sub sp, sp, #total_stacksize
-            if let Some(imm12) = Imm12::maybe_from_u64(total_stacksize as u64) {
-                let sub_inst = Inst::AluRRImm12 {
-                    alu_op: ALUOp::Sub64,
-                    rd: writable_stack_reg(),
-                    rn: stack_reg(),
-                    imm12,
-                };
-                insts.push(sub_inst);
-            } else {
-                let tmp = writable_spilltmp_reg();
-                let const_inst = Inst::LoadConst64 {
-                    rd: tmp,
-                    const_data: total_stacksize as u64,
-                };
-                let sub_inst = Inst::AluRRRExtend {
-                    alu_op: ALUOp::Sub64,
-                    rd: writable_stack_reg(),
-                    rn: stack_reg(),
-                    rm: tmp.to_reg(),
-                    extendop: ExtendOp::UXTX,
-                };
-                insts.push(const_inst);
-                insts.push(sub_inst);
+        if !self.call_conv.extends_baldrdash() {
+            // Leaf functions with zero stack don't need a stack check if one's
+            // specified, otherwise always insert the stack check.
+            if total_stacksize > 0 || !self.is_leaf {
+                if let Some((reg, stack_limit_load)) = &self.stack_limit {
+                    insts.extend_from_slice(stack_limit_load);
+                    self.insert_stack_check(*reg, total_stacksize, &mut insts);
+                }
+            }
+            if total_stacksize > 0 {
+                // sub sp, sp, #total_stacksize
+                if let Some(imm12) = Imm12::maybe_from_u64(total_stacksize as u64) {
+                    let sub_inst = Inst::AluRRImm12 {
+                        alu_op: ALUOp::Sub64,
+                        rd: writable_stack_reg(),
+                        rn: stack_reg(),
+                        imm12,
+                    };
+                    insts.push(sub_inst);
+                } else {
+                    let tmp = writable_spilltmp_reg();
+                    let const_inst = Inst::LoadConst64 {
+                        rd: tmp,
+                        const_data: total_stacksize as u64,
+                    };
+                    let sub_inst = Inst::AluRRRExtend {
+                        alu_op: ALUOp::Sub64,
+                        rd: writable_stack_reg(),
+                        rn: stack_reg(),
+                        rm: tmp.to_reg(),
+                        extendop: ExtendOp::UXTX,
+                    };
+                    insts.push(const_inst);
+                    insts.push(sub_inst);
+                }
             }
         }
 
