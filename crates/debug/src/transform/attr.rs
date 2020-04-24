@@ -8,11 +8,14 @@ use gimli::{
     write, AttributeValue, DebugLineOffset, DebugLineStr, DebugStr, DebugStrOffsets,
     DebuggingInformationEntry, Unit,
 };
+use std::io;
+use std::io::prelude::*;
 use wasmtime_environ::isa::TargetIsa;
 
+#[derive(Debug)]
 pub(crate) enum FileAttributeContext<'a> {
     Root(Option<DebugLineOffset>),
-    Children(&'a Vec<write::FileId>, Option<&'a CompiledExpression<'a>>),
+    Children(&'a Vec<write::FileId>, u64, Option<&'a CompiledExpression<'a>>),
 }
 
 fn is_exprloc_to_loclist_allowed(attr_name: gimli::constants::DwAt) -> bool {
@@ -105,8 +108,8 @@ where
                 }
             }
             AttributeValue::FileIndex(i) => {
-                if let FileAttributeContext::Children(file_map, _) = file_context {
-                    write::AttributeValue::FileIndex(Some(file_map[(i - 1) as usize]))
+                if let FileAttributeContext::Children(file_map, index_base, _) = file_context {
+                    write::AttributeValue::FileIndex(Some(file_map[(i - index_base) as usize]))
                 } else {
                     return Err(TransformError("unexpected file index attribute").into());
                 }
@@ -138,7 +141,7 @@ where
                     &context.debug_addr,
                     unit.addr_base,
                 )?;
-                let frame_base = if let FileAttributeContext::Children(_, frame_base) = file_context
+                let frame_base = if let FileAttributeContext::Children(_, _, frame_base) = file_context
                 {
                     frame_base
                 } else {
@@ -180,7 +183,7 @@ where
                 write::AttributeValue::LocationListRef(list_id)
             }
             AttributeValue::Exprloc(ref expr) => {
-                let frame_base = if let FileAttributeContext::Children(_, frame_base) = file_context
+                let frame_base = if let FileAttributeContext::Children(_, _, frame_base) = file_context
                 {
                     frame_base
                 } else {
