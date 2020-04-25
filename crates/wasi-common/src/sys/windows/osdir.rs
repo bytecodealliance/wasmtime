@@ -8,7 +8,7 @@ use std::io;
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle, IntoRawHandle};
 
 #[derive(Debug)]
-pub(crate) struct OsDir {
+pub struct OsDir {
     pub(crate) rights: Cell<HandleRights>,
     pub(crate) handle: RawOsHandle,
 }

@@ -9,7 +9,7 @@ use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::ops::Deref;
 
 #[derive(Debug)]
-pub(crate) struct OsFile {
+pub struct OsFile {
     rights: Cell<HandleRights>,
     handle: RawOsHandle,
 }

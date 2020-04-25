@@ -6,7 +6,7 @@ use std::io;
 use yanix::dir::Dir;
 
 #[derive(Debug)]
-pub(crate) struct OsDir {
+pub struct OsDir {
     pub(crate) rights: Cell<HandleRights>,
     pub(crate) handle: RawOsHandle,
 }

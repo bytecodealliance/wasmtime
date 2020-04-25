@@ -1,7 +1,8 @@
 use anyhow::Context;
+use std::convert::TryFrom;
 use std::fs::File;
 use std::path::Path;
-use wasi_common::VirtualDirEntry;
+use wasi_common::{OsOther, VirtualDirEntry};
 use wasmtime::{Linker, Module, Store};
 
 #[derive(Clone, Copy, Debug)]
@@ -46,7 +47,9 @@ pub fn instantiate(
     // where `stdin` is never ready to be read. In some CI systems, however,
     // stdin is closed which causes tests to fail.
     let (reader, _writer) = os_pipe::pipe()?;
-    builder.stdin(reader_to_file(reader));
+    let file = reader_to_file(reader);
+    let handle = OsOther::try_from(file).context("failed to create OsOther from PipeReader")?;
+    builder.stdin(handle);
     let snapshot1 = wasmtime_wasi::Wasi::new(&store, builder.build()?);
 
     let mut linker = Linker::new(&store);

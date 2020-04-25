@@ -6,37 +6,48 @@ use std::io::{self, SeekFrom};
 
 /// Represents rights of a `Handle`, either already held or required.
 #[derive(Debug, Copy, Clone)]
-pub(crate) struct HandleRights {
+pub struct HandleRights {
     pub(crate) base: Rights,
     pub(crate) inheriting: Rights,
 }
 
 impl HandleRights {
-    pub(crate) fn new(base: Rights, inheriting: Rights) -> Self {
+    /// Creates new `HandleRights` instance from `base` and `inheriting` rights.
+    pub fn new(base: Rights, inheriting: Rights) -> Self {
         Self { base, inheriting }
     }
 
-    /// Create new `HandleRights` instance from `base` rights only, keeping
+    /// Creates new `HandleRights` instance from `base` rights only, keeping
     /// `inheriting` set to none.
-    pub(crate) fn from_base(base: Rights) -> Self {
+    pub fn from_base(base: Rights) -> Self {
         Self {
             base,
             inheriting: Rights::empty(),
         }
     }
 
-    /// Create new `HandleRights` instance with both `base` and `inheriting`
+    /// Creates new `HandleRights` instance with both `base` and `inheriting`
     /// rights set to none.
-    pub(crate) fn empty() -> Self {
+    pub fn empty() -> Self {
         Self {
             base: Rights::empty(),
             inheriting: Rights::empty(),
         }
     }
 
-    /// Check if `other` is a subset of those rights.
-    pub(crate) fn contains(&self, other: &Self) -> bool {
+    /// Checks if `other` is a subset of those rights.
+    pub fn contains(&self, other: &Self) -> bool {
         self.base.contains(&other.base) && self.inheriting.contains(&other.inheriting)
+    }
+
+    /// Returns base rights.
+    pub fn base(&self) -> Rights {
+        self.base
+    }
+
+    /// Returns inheriting rights.
+    pub fn inheriting(&self) -> Rights {
+        self.inheriting
     }
 }
 
@@ -50,7 +61,8 @@ impl fmt::Display for HandleRights {
     }
 }
 
-pub(crate) trait Handle {
+// TODO docs
+pub trait Handle {
     fn as_any(&self) -> &dyn Any;
     fn try_clone(&self) -> io::Result<Box<dyn Handle>>;
     fn get_file_type(&self) -> types::Filetype;

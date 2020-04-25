@@ -6,7 +6,7 @@ use std::mem::ManuallyDrop;
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle, IntoRawHandle, RawHandle};
 
 #[derive(Debug)]
-pub(crate) struct RawOsHandle(Cell<RawHandle>);
+pub struct RawOsHandle(Cell<RawHandle>);
 
 impl RawOsHandle {
     /// Tries cloning `self`.

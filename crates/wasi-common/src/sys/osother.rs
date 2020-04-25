@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::ops::Deref;
 
-pub(crate) trait OsOtherExt {
+pub trait OsOtherExt {
     /// Create `OsOther` as `dyn Handle` from null device.
     fn from_null() -> io::Result<Box<dyn Handle>>;
 }
@@ -21,7 +21,7 @@ pub(crate) trait OsOtherExt {
 /// pipe should be encapsulated within this instance _and not_ `OsFile` which represents a regular
 /// OS file.
 #[derive(Debug)]
-pub(crate) struct OsOther {
+pub struct OsOther {
     file_type: Filetype,
     rights: Cell<HandleRights>,
     handle: RawOsHandle,
