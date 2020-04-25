@@ -10,6 +10,7 @@ use regalloc::{Reg, RegClass, Writable};
 
 use alloc::vec::Vec;
 use core::convert::TryFrom;
+use log::debug;
 
 /// Memory label/reference finalization: convert a MemLabel to a PC-relative
 /// offset, possibly emitting relocation(s) as necessary.
@@ -23,33 +24,44 @@ pub fn memlabel_finalize(_insn_off: CodeOffset, label: &MemLabel) -> i32 {
 /// generic arbitrary stack offset) into real addressing modes, possibly by
 /// emitting some helper instructions that come immediately before the use
 /// of this amode.
-pub fn mem_finalize(insn_off: CodeOffset, mem: &MemArg) -> (Vec<Inst>, MemArg) {
+pub fn mem_finalize(insn_off: CodeOffset, mem: &MemArg, state: &EmitState) -> (Vec<Inst>, MemArg) {
     match mem {
-        &MemArg::SPOffset(off) | &MemArg::FPOffset(off) => {
+        &MemArg::SPOffset(off) | &MemArg::FPOffset(off) | &MemArg::NominalSPOffset(off) => {
             let basereg = match mem {
-                &MemArg::SPOffset(..) => stack_reg(),
+                &MemArg::SPOffset(..) | &MemArg::NominalSPOffset(..) => stack_reg(),
                 &MemArg::FPOffset(..) => fp_reg(),
                 _ => unreachable!(),
             };
+            let adj = match mem {
+                &MemArg::NominalSPOffset(..) => {
+                    debug!(
+                        "mem_finalize: nominal SP offset {} + adj {} -> {}",
+                        off,
+                        state.virtual_sp_offset,
+                        off + state.virtual_sp_offset
+                    );
+                    state.virtual_sp_offset
+                }
+                _ => 0,
+            };
+            let off = off + adj;
+
             if let Some(simm9) = SImm9::maybe_from_i64(off) {
                 let mem = MemArg::Unscaled(basereg, simm9);
                 (vec![], mem)
             } else {
-                // In an addition, x31 is the zero register, not sp; we have only one temporary
-                // so we can't do the proper add here.
-                debug_assert_ne!(
-                    basereg,
-                    stack_reg(),
-                    "should have diverted SP before mem_finalize"
-                );
-
                 let tmp = writable_spilltmp_reg();
                 let mut const_insts = Inst::load_constant(tmp, off as u64);
-                let add_inst = Inst::AluRRR {
+                // N.B.: we must use AluRRRExtend because AluRRR uses the "shifted register" form
+                // (AluRRRShift) instead, which interprets register 31 as the zero reg, not SP. SP
+                // is a valid base (for SPOffset) which we must handle here.
+                // Also, SP needs to be the first arg, not second.
+                let add_inst = Inst::AluRRRExtend {
                     alu_op: ALUOp::Add64,
                     rd: tmp,
-                    rn: tmp.to_reg(),
-                    rm: basereg,
+                    rn: basereg,
+                    rm: tmp.to_reg(),
+                    extendop: ExtendOp::UXTX,
                 };
                 const_insts.push(add_inst);
                 (const_insts.to_vec(), MemArg::reg(tmp.to_reg()))
@@ -322,8 +334,16 @@ fn enc_fround(top22: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
     (top22 << 10) | (machreg_to_vec(rn) << 5) | machreg_to_vec(rd.to_reg())
 }
 
+/// State carried between emissions of a sequence of instructions.
+#[derive(Default, Clone, Debug)]
+pub struct EmitState {
+    virtual_sp_offset: i64,
+}
+
 impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
-    fn emit(&self, sink: &mut O, flags: &settings::Flags) {
+    type State = EmitState;
+
+    fn emit(&self, sink: &mut O, flags: &settings::Flags, state: &mut EmitState) {
         match self {
             &Inst::AluRRR { alu_op, rd, rn, rm } => {
                 let top11 = match alu_op {
@@ -596,10 +616,10 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 ref mem,
                 srcloc,
             } => {
-                let (mem_insts, mem) = mem_finalize(sink.cur_offset_from_start(), mem);
+                let (mem_insts, mem) = mem_finalize(sink.cur_offset_from_start(), mem, state);
 
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink, flags);
+                    inst.emit(sink, flags, state);
                 }
 
                 // ldst encoding helpers take Reg, not Writable<Reg>.
@@ -697,9 +717,9 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                         sink.put4(enc_ldst_simm9(op, simm9, 0b01, reg.to_reg(), rd));
                     }
                     // Eliminated by `mem_finalize()` above.
-                    &MemArg::SPOffset(..) | &MemArg::FPOffset(..) => {
-                        panic!("Should not see stack-offset here!")
-                    }
+                    &MemArg::SPOffset(..)
+                    | &MemArg::FPOffset(..)
+                    | &MemArg::NominalSPOffset(..) => panic!("Should not see stack-offset here!"),
                 }
             }
 
@@ -739,10 +759,10 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 ref mem,
                 srcloc,
             } => {
-                let (mem_insts, mem) = mem_finalize(sink.cur_offset_from_start(), mem);
+                let (mem_insts, mem) = mem_finalize(sink.cur_offset_from_start(), mem, state);
 
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink, flags);
+                    inst.emit(sink, flags, state);
                 }
 
                 let op = match self {
@@ -794,9 +814,9 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                         sink.put4(enc_ldst_simm9(op, simm9, 0b01, reg.to_reg(), rd));
                     }
                     // Eliminated by `mem_finalize()` above.
-                    &MemArg::SPOffset(..) | &MemArg::FPOffset(..) => {
-                        panic!("Should not see stack-offset here!")
-                    }
+                    &MemArg::SPOffset(..)
+                    | &MemArg::FPOffset(..)
+                    | &MemArg::NominalSPOffset(..) => panic!("Should not see stack-offset here!"),
                 }
             }
 
@@ -980,11 +1000,11 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     mem: MemArg::Label(MemLabel::PCRel(8)),
                     srcloc: None,
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(8),
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 sink.put4(const_data.to_bits());
             }
             &Inst::LoadFpuConst64 { rd, const_data } => {
@@ -993,11 +1013,11 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     mem: MemArg::Label(MemLabel::PCRel(8)),
                     srcloc: None,
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(12),
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 sink.put8(const_data.to_bits());
             }
             &Inst::FpuCSel32 { rd, rn, rm, cond } => {
@@ -1084,7 +1104,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 if top22 != 0 {
                     sink.put4(enc_extend(top22, rd, rn));
                 } else {
-                    Inst::mov32(rd, rn).emit(sink, flags);
+                    Inst::mov32(rd, rn).emit(sink, flags, state);
                 }
             }
             &Inst::Extend {
@@ -1107,7 +1127,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     rn: zero_reg(),
                     rm: rd.to_reg(),
                 };
-                sub_inst.emit(sink, flags);
+                sub_inst.emit(sink, flags, state);
             }
             &Inst::Extend {
                 rd,
@@ -1248,13 +1268,13 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 // Save index in a tmp (the live range of ridx only goes to start of this
                 // sequence; rtmp1 or rtmp2 may overwrite it).
                 let inst = Inst::gen_move(rtmp2, ridx, I64);
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 // Load address of jump table
                 let inst = Inst::Adr {
                     rd: rtmp1,
                     label: MemLabel::PCRel(16),
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 // Load value out of jump table
                 let inst = Inst::SLoad32 {
                     rd: rtmp2,
@@ -1266,7 +1286,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     ),
                     srcloc: None, // can't cause a user trap.
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 // Add base of jump table to jump-table-sourced block offset
                 let inst = Inst::AluRRR {
                     alu_op: ALUOp::Add64,
@@ -1274,14 +1294,14 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     rn: rtmp1.to_reg(),
                     rm: rtmp2.to_reg(),
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 // Branch to computed address. (`targets` here is only used for successor queries
                 // and is not needed for emission.)
                 let inst = Inst::IndirectBr {
                     rn: rtmp1.to_reg(),
                     targets: vec![],
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 // Emit jump table (table of 32-bit offsets).
                 for target in targets {
                     let off = target.as_offset_words() * 4;
@@ -1297,11 +1317,11 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     mem: MemArg::Label(MemLabel::PCRel(8)),
                     srcloc: None, // can't cause a user trap.
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(12),
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 sink.put8(const_data);
             }
             &Inst::LoadExtName {
@@ -1315,11 +1335,11 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     mem: MemArg::Label(MemLabel::PCRel(8)),
                     srcloc: None, // can't cause a user trap.
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(12),
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 sink.add_reloc(srcloc, Reloc::Abs8, name, offset);
                 if flags.emit_all_ones_funcaddrs() {
                     sink.put8(u64::max_value());
@@ -1327,52 +1347,81 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     sink.put8(0);
                 }
             }
-            &Inst::LoadAddr { rd, ref mem } => match *mem {
-                MemArg::FPOffset(fp_off) => {
-                    let alu_op = if fp_off < 0 {
-                        ALUOp::Sub64
-                    } else {
-                        ALUOp::Add64
-                    };
-                    if let Some(imm12) = Imm12::maybe_from_u64(u64::try_from(fp_off.abs()).unwrap())
-                    {
-                        let inst = Inst::AluRRImm12 {
-                            alu_op,
-                            rd,
-                            imm12,
-                            rn: fp_reg(),
-                        };
-                        inst.emit(sink, flags);
-                    } else {
-                        let const_insts =
-                            Inst::load_constant(rd, u64::try_from(fp_off.abs()).unwrap());
-                        for inst in const_insts {
-                            inst.emit(sink, flags);
-                        }
-                        let inst = Inst::AluRRR {
-                            alu_op,
-                            rd,
-                            rn: fp_reg(),
-                            rm: rd.to_reg(),
-                        };
-                        inst.emit(sink, flags);
-                    }
+            &Inst::LoadAddr { rd, ref mem } => {
+                let (mem_insts, mem) = mem_finalize(sink.cur_offset_from_start(), mem, state);
+                for inst in mem_insts.into_iter() {
+                    inst.emit(sink, flags, state);
                 }
-                _ => unimplemented!("{:?}", mem),
-            },
+
+                let (reg, offset) = match mem {
+                    MemArg::Unscaled(r, simm9) => (r, simm9.value()),
+                    MemArg::UnsignedOffset(r, uimm12scaled) => (r, uimm12scaled.value() as i32),
+                    _ => panic!("Unsupported case for LoadAddr: {:?}", mem),
+                };
+                let abs_offset = if offset < 0 {
+                    -offset as u64
+                } else {
+                    offset as u64
+                };
+                let alu_op = if offset < 0 {
+                    ALUOp::Sub64
+                } else {
+                    ALUOp::Add64
+                };
+
+                if offset == 0 {
+                    let mov = Inst::mov(rd, reg);
+                    mov.emit(sink, flags, state);
+                } else if let Some(imm12) = Imm12::maybe_from_u64(abs_offset) {
+                    let add = Inst::AluRRImm12 {
+                        alu_op,
+                        rd,
+                        rn: reg,
+                        imm12,
+                    };
+                    add.emit(sink, flags, state);
+                } else {
+                    // Use `tmp2` here: `reg` may be `spilltmp` if the `MemArg` on this instruction
+                    // was initially an `SPOffset`. Assert that `tmp2` is truly free to use. Note
+                    // that no other instructions will be inserted here (we're emitting directly),
+                    // and a live range of `tmp2` should not span this instruction, so this use
+                    // should otherwise be correct.
+                    debug_assert!(rd.to_reg() != tmp2_reg());
+                    debug_assert!(reg != tmp2_reg());
+                    let tmp = writable_tmp2_reg();
+                    for insn in Inst::load_constant(tmp, abs_offset).into_iter() {
+                        insn.emit(sink, flags, state);
+                    }
+                    let add = Inst::AluRRR {
+                        alu_op,
+                        rd,
+                        rn: reg,
+                        rm: tmp.to_reg(),
+                    };
+                    add.emit(sink, flags, state);
+                }
+            }
             &Inst::GetPinnedReg { rd } => {
                 let inst = Inst::Mov {
                     rd,
                     rm: xreg(PINNED_REG),
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
             }
             &Inst::SetPinnedReg { rm } => {
                 let inst = Inst::Mov {
                     rd: Writable::from_reg(xreg(PINNED_REG)),
                     rm,
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
+            }
+            &Inst::VirtualSPOffsetAdj { offset } => {
+                debug!(
+                    "virtual sp offset adjusted by {} -> {}",
+                    offset,
+                    state.virtual_sp_offset + offset
+                );
+                state.virtual_sp_offset += offset;
             }
         }
     }

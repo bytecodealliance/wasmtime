@@ -513,12 +513,13 @@ impl<I: VCodeInst> VCode<I> {
         // Compute block offsets.
         let mut code_section = MachSectionSize::new(0);
         let mut block_offsets = vec![0; self.num_blocks()];
+        let mut state = Default::default();
         for &block in &self.final_block_order {
             code_section.offset = I::align_basic_block(code_section.offset);
             block_offsets[block as usize] = code_section.offset;
             let (start, end) = self.block_ranges[block as usize];
             for iix in start..end {
-                self.insts[iix as usize].emit(&mut code_section, flags);
+                self.insts[iix as usize].emit(&mut code_section, flags, &mut state);
             }
         }
 
@@ -531,13 +532,14 @@ impl<I: VCodeInst> VCode<I> {
         // it (so forward references are now possible), and (ii) mutates the
         // instructions.
         let mut code_section = MachSectionSize::new(0);
+        let mut state = Default::default();
         for &block in &self.final_block_order {
             code_section.offset = I::align_basic_block(code_section.offset);
             let (start, end) = self.block_ranges[block as usize];
             for iix in start..end {
                 self.insts[iix as usize]
                     .with_block_offsets(code_section.offset, &self.final_block_offsets[..]);
-                self.insts[iix as usize].emit(&mut code_section, flags);
+                self.insts[iix as usize].emit(&mut code_section, flags, &mut state);
             }
         }
     }
@@ -550,6 +552,7 @@ impl<I: VCodeInst> VCode<I> {
         let mut sections = MachSections::new();
         let code_idx = sections.add_section(0, self.code_size);
         let code_section = sections.get_section(code_idx);
+        let mut state = Default::default();
 
         let flags = self.abi.flags();
         let mut cur_srcloc = None;
@@ -558,7 +561,7 @@ impl<I: VCodeInst> VCode<I> {
             while new_offset > code_section.cur_offset_from_start() {
                 // Pad with NOPs up to the aligned block offset.
                 let nop = I::gen_nop((new_offset - code_section.cur_offset_from_start()) as usize);
-                nop.emit(code_section, flags);
+                nop.emit(code_section, flags, &mut Default::default());
             }
             assert_eq!(code_section.cur_offset_from_start(), new_offset);
 
@@ -573,7 +576,7 @@ impl<I: VCodeInst> VCode<I> {
                     cur_srcloc = Some(srcloc);
                 }
 
-                self.insts[iix as usize].emit(code_section, flags);
+                self.insts[iix as usize].emit(code_section, flags, &mut state);
             }
 
             if cur_srcloc.is_some() {

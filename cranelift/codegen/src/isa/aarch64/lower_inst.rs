@@ -1291,7 +1291,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
             assert!(inputs.len() == abi.num_args());
             for (i, input) in inputs.iter().enumerate() {
                 let arg_reg = input_to_reg(ctx, *input, NarrowValueMode::None);
-                for inst in abi.gen_copy_reg_to_arg(ctx, i, arg_reg) {
+                for inst in abi.gen_copy_reg_to_arg(i, arg_reg) {
                     ctx.emit(inst);
                 }
             }

@@ -1313,8 +1313,8 @@ fn test_aarch64_binemit() {
             mem: MemArg::FPOffset(32768),
             srcloc: None,
         },
-        "0F0090D2EF011D8BE10140F9",
-        "movz x15, #32768 ; add x15, x15, fp ; ldr x1, [x15]",
+        "100090D2B063308B010240F9",
+        "movz x16, #32768 ; add x16, fp, x16, UXTX ; ldr x1, [x16]",
     ));
     insns.push((
         Inst::ULoad64 {
@@ -1322,8 +1322,8 @@ fn test_aarch64_binemit() {
             mem: MemArg::FPOffset(-32768),
             srcloc: None,
         },
-        "EFFF8F92EF011D8BE10140F9",
-        "movn x15, #32767 ; add x15, x15, fp ; ldr x1, [x15]",
+        "F0FF8F92B063308B010240F9",
+        "movn x16, #32767 ; add x16, fp, x16, UXTX ; ldr x1, [x16]",
     ));
     insns.push((
         Inst::ULoad64 {
@@ -1331,8 +1331,8 @@ fn test_aarch64_binemit() {
             mem: MemArg::FPOffset(1048576), // 2^20
             srcloc: None,
         },
-        "0F02A0D2EF011D8BE10140F9",
-        "movz x15, #16, LSL #16 ; add x15, x15, fp ; ldr x1, [x15]",
+        "1002A0D2B063308B010240F9",
+        "movz x16, #16, LSL #16 ; add x16, fp, x16, UXTX ; ldr x1, [x16]",
     ));
     insns.push((
         Inst::ULoad64 {
@@ -1340,8 +1340,8 @@ fn test_aarch64_binemit() {
             mem: MemArg::FPOffset(1048576 + 1), // 2^20 + 1
             srcloc: None,
         },
-        "2F0080D20F02A0F2EF011D8BE10140F9",
-        "movz x15, #1 ; movk x15, #16, LSL #16 ; add x15, x15, fp ; ldr x1, [x15]",
+        "300080D21002A0F2B063308B010240F9",
+        "movz x16, #1 ; movk x16, #16, LSL #16 ; add x16, fp, x16, UXTX ; ldr x1, [x16]",
     ));
 
     insns.push((
@@ -2794,7 +2794,7 @@ fn test_aarch64_binemit() {
         // Check the encoding is as expected.
         let text_size = {
             let mut code_sec = MachSectionSize::new(0);
-            insn.emit(&mut code_sec, &flags);
+            insn.emit(&mut code_sec, &flags, &mut Default::default());
             code_sec.size()
         };
 
@@ -2802,7 +2802,7 @@ fn test_aarch64_binemit() {
         let mut sections = MachSections::new();
         let code_idx = sections.add_section(0, text_size);
         let code_sec = sections.get_section(code_idx);
-        insn.emit(code_sec, &flags);
+        insn.emit(code_sec, &flags, &mut Default::default());
         sections.emit(&mut sink);
         let actual_encoding = &sink.stringify();
         assert_eq!(expected_encoding, actual_encoding);

@@ -13,7 +13,6 @@ use regalloc::{RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
 use regalloc::{RegUsageCollector, RegUsageMapper, Set};
 
 use alloc::vec::Vec;
-use core::convert::TryFrom;
 use smallvec::{smallvec, SmallVec};
 use std::string::{String, ToString};
 
@@ -741,6 +740,12 @@ pub enum Inst {
     SetPinnedReg {
         rm: Reg,
     },
+
+    /// Marker, no-op in generated code: SP "virtual offset" is adjusted. This
+    /// controls MemArg::NominalSPOffset args are lowered.
+    VirtualSPOffsetAdj {
+        offset: i64,
+    },
 }
 
 fn count_zero_half_words(mut value: u64) -> usize {
@@ -876,7 +881,7 @@ fn memarg_regs(memarg: &MemArg, collector: &mut RegUsageCollector) {
         &MemArg::FPOffset(..) => {
             collector.add_use(fp_reg());
         }
-        &MemArg::SPOffset(..) => {
+        &MemArg::SPOffset(..) | &MemArg::NominalSPOffset(..) => {
             collector.add_use(stack_reg());
         }
     }
@@ -1135,6 +1140,7 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::SetPinnedReg { rm } => {
             collector.add_use(rm);
         }
+        &Inst::VirtualSPOffsetAdj { .. } => {}
     }
 }
 
@@ -1186,7 +1192,9 @@ fn aarch64_map_regs(inst: &mut Inst, mapper: &RegUsageMapper) {
             &mut MemArg::Label(..) => {}
             &mut MemArg::PreIndexed(ref mut r, ..) => map_mod(m, r),
             &mut MemArg::PostIndexed(ref mut r, ..) => map_mod(m, r),
-            &mut MemArg::FPOffset(..) | &mut MemArg::SPOffset(..) => {}
+            &mut MemArg::FPOffset(..)
+            | &mut MemArg::SPOffset(..)
+            | &mut MemArg::NominalSPOffset(..) => {}
         };
     }
 
@@ -1706,6 +1714,7 @@ fn aarch64_map_regs(inst: &mut Inst, mapper: &RegUsageMapper) {
         &mut Inst::SetPinnedReg { ref mut rm } => {
             map_use(mapper, rm);
         }
+        &mut Inst::VirtualSPOffsetAdj { .. } => {}
     }
 }
 
@@ -1904,7 +1913,7 @@ impl MachInst for Inst {
 // Pretty-printing of instructions.
 
 fn mem_finalize_for_show(mem: &MemArg, mb_rru: Option<&RealRegUniverse>) -> (String, MemArg) {
-    let (mem_insts, mem) = mem_finalize(0, mem);
+    let (mem_insts, mem) = mem_finalize(0, mem, &mut Default::default());
     let mut mem_str = mem_insts
         .into_iter()
         .map(|inst| inst.show_rru(mb_rru))
@@ -2618,42 +2627,58 @@ impl ShowWithRRU for Inst {
                 let rd = rd.show_rru(mb_rru);
                 format!("ldr {}, 8 ; b 12 ; data {:?} + {}", rd, name, offset)
             }
-            &Inst::LoadAddr { rd, ref mem } => match *mem {
-                MemArg::FPOffset(fp_off) => {
-                    let alu_op = if fp_off < 0 {
-                        ALUOp::Sub64
-                    } else {
-                        ALUOp::Add64
-                    };
-                    if let Some(imm12) = Imm12::maybe_from_u64(u64::try_from(fp_off.abs()).unwrap())
-                    {
-                        let inst = Inst::AluRRImm12 {
-                            alu_op,
-                            rd,
-                            imm12,
-                            rn: fp_reg(),
-                        };
-                        inst.show_rru(mb_rru)
-                    } else {
-                        let mut res = String::new();
-                        let const_insts =
-                            Inst::load_constant(rd, u64::try_from(fp_off.abs()).unwrap());
-                        for inst in const_insts {
-                            res.push_str(&inst.show_rru(mb_rru));
-                            res.push_str("; ");
-                        }
-                        let inst = Inst::AluRRR {
-                            alu_op,
-                            rd,
-                            rn: fp_reg(),
-                            rm: rd.to_reg(),
-                        };
-                        res.push_str(&inst.show_rru(mb_rru));
-                        res
-                    }
+            &Inst::LoadAddr { rd, ref mem } => {
+                // TODO: we really should find a better way to avoid duplication of
+                // this logic between `emit()` and `show_rru()` -- a separate 1-to-N
+                // expansion stage (i.e., legalization, but without the slow edit-in-place
+                // of the existing legalization framework).
+                let (mem_insts, mem) = mem_finalize(0, mem, &EmitState::default());
+                let mut ret = String::new();
+                for inst in mem_insts.into_iter() {
+                    ret.push_str(&inst.show_rru(mb_rru));
                 }
-                _ => unimplemented!("{:?}", mem),
-            },
+                let (reg, offset) = match mem {
+                    MemArg::Unscaled(r, simm9) => (r, simm9.value()),
+                    MemArg::UnsignedOffset(r, uimm12scaled) => (r, uimm12scaled.value() as i32),
+                    _ => panic!("Unsupported case for LoadAddr: {:?}", mem),
+                };
+                let abs_offset = if offset < 0 {
+                    -offset as u64
+                } else {
+                    offset as u64
+                };
+                let alu_op = if offset < 0 {
+                    ALUOp::Sub64
+                } else {
+                    ALUOp::Add64
+                };
+
+                if offset == 0 {
+                    let mov = Inst::mov(rd, reg);
+                    ret.push_str(&mov.show_rru(mb_rru));
+                } else if let Some(imm12) = Imm12::maybe_from_u64(abs_offset) {
+                    let add = Inst::AluRRImm12 {
+                        alu_op,
+                        rd,
+                        rn: reg,
+                        imm12,
+                    };
+                    ret.push_str(&add.show_rru(mb_rru));
+                } else {
+                    let tmp = writable_spilltmp_reg();
+                    for inst in Inst::load_constant(tmp, abs_offset).into_iter() {
+                        ret.push_str(&inst.show_rru(mb_rru));
+                    }
+                    let add = Inst::AluRRR {
+                        alu_op,
+                        rd,
+                        rn: reg,
+                        rm: tmp.to_reg(),
+                    };
+                    ret.push_str(&add.show_rru(mb_rru));
+                }
+                ret
+            }
             &Inst::GetPinnedReg { rd } => {
                 let rd = rd.show_rru(mb_rru);
                 format!("get_pinned_reg {}", rd)
@@ -2662,6 +2687,7 @@ impl ShowWithRRU for Inst {
                 let rm = rm.show_rru(mb_rru);
                 format!("set_pinned_reg {}", rm)
             }
+            &Inst::VirtualSPOffsetAdj { offset } => format!("virtual_sp_offset_adjust {}", offset),
         }
     }
 }

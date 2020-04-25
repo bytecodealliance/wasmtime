@@ -134,6 +134,11 @@ impl SImm9 {
     pub fn bits(&self) -> u32 {
         (self.value as u32) & 0x1ff
     }
+
+    /// Signed value of immediate.
+    pub fn value(&self) -> i32 {
+        self.value as i32
+    }
 }
 
 /// An unsigned, scaled 12-bit offset.
@@ -171,6 +176,11 @@ impl UImm12Scaled {
     /// Encoded bits.
     pub fn bits(&self) -> u32 {
         (self.value as u32 / self.scale_ty.bytes()) & 0xfff
+    }
+
+    /// Value after scaling.
+    pub fn value(&self) -> u32 {
+        self.value as u32 * self.scale_ty.bytes()
     }
 }
 
