@@ -8,6 +8,10 @@ use std::rc::Rc;
 pub(crate) struct EntryHandle(Rc<dyn Handle>);
 
 impl EntryHandle {
+    pub(crate) fn new<T: Handle + 'static>(handle: T) -> Self {
+        Self(Rc::new(handle))
+    }
+
     pub(crate) fn get(&self) -> Self {
         Self(Rc::clone(&self.0))
     }

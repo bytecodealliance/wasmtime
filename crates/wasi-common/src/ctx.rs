@@ -1,7 +1,8 @@
 use crate::entry::{Entry, EntryHandle};
 use crate::fdpool::FdPool;
 use crate::handle::Handle;
-use crate::sys::osfile::{OsFile, OsFileExt};
+use crate::sys::osdir::OsDir;
+use crate::sys::osother::{OsOther, OsOtherExt};
 use crate::sys::stdio::{Stdio, StdioExt};
 use crate::virtfs::{VirtualDir, VirtualDirEntry};
 use crate::wasi::types;
@@ -120,9 +121,9 @@ pub struct WasiCtxBuilder {
 impl WasiCtxBuilder {
     /// Builder for a new `WasiCtx`.
     pub fn new() -> Self {
-        let stdin = Some(PendingEntry::Thunk(OsFile::from_null));
-        let stdout = Some(PendingEntry::Thunk(OsFile::from_null));
-        let stderr = Some(PendingEntry::Thunk(OsFile::from_null));
+        let stdin = Some(PendingEntry::Thunk(OsOther::from_null));
+        let stdout = Some(PendingEntry::Thunk(OsOther::from_null));
+        let stderr = Some(PendingEntry::Thunk(OsOther::from_null));
 
         Self {
             stdin,
@@ -253,7 +254,7 @@ impl WasiCtxBuilder {
     pub fn preopened_dir<P: AsRef<Path>>(&mut self, dir: File, guest_path: P) -> &mut Self {
         self.preopens.as_mut().unwrap().push((
             guest_path.as_ref().to_owned(),
-            <Box<dyn Handle>>::try_from(dir).expect("valid handle"),
+            Box::new(OsDir::try_from(dir).expect("valid OsDir handle")),
         ));
         self
     }
@@ -345,8 +346,8 @@ impl WasiCtxBuilder {
                         .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?
                 }
                 PendingEntry::File(f) => {
-                    let handle = <Box<dyn Handle>>::try_from(f)?;
-                    let handle = EntryHandle::from(handle);
+                    let handle = OsOther::try_from(f)?;
+                    let handle = EntryHandle::new(handle);
                     let entry = Entry::new(handle);
                     entries
                         .insert(entry)

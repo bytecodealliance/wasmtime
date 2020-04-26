@@ -8,11 +8,6 @@ use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::ops::Deref;
 
-pub(crate) trait OsFileExt {
-    /// Create `OsFile` as `dyn Handle` from null device.
-    fn from_null() -> io::Result<Box<dyn Handle>>;
-}
-
 #[derive(Debug)]
 pub(crate) struct OsFile {
     rights: Cell<HandleRights>,

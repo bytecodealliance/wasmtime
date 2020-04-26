@@ -12,6 +12,10 @@ impl TryFrom<File> for OsDir {
     type Error = io::Error;
 
     fn try_from(file: File) -> io::Result<Self> {
+        let ft = file.metadata()?.file_type();
+        if !ft.is_dir() {
+            return Err(io::Error::from_raw_os_error(libc::EINVAL));
+        }
         let rights = get_rights(&file)?;
         let handle = unsafe { OsHandle::from_raw_fd(file.into_raw_fd()) };
         Self::new(rights, handle)
