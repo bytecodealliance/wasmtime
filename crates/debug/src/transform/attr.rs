@@ -62,6 +62,9 @@ where
     let range_info = if let Some(subprogram_range_builder) = subprogram_range_builder {
         subprogram_range_builder
     } else {
+        // FIXME for CU: currently address_transform operate on a single
+        // function range, and when CU spans multiple ranges the
+        // transformation may be incomplete.
         RangeInfoBuilder::from(unit, entry, context, cu_low_pc)?
     };
     range_info.build(addr_tr, out_unit, current_scope_id);
