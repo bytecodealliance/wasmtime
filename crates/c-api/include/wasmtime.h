@@ -61,6 +61,8 @@ WASMTIME_CONFIG_PROP(void, cranelift_debug_verifier, bool)
 WASMTIME_CONFIG_PROP(void, cranelift_opt_level, wasmtime_opt_level_t)
 WASMTIME_CONFIG_PROP(wasmtime_error_t*, profiler, wasmtime_profiling_strategy_t)
 
+WASM_API_EXTERN wasmtime_error_t* wasmtime_config_cache_config_load(wasm_config_t*, const char*);
+
 ///////////////////////////////////////////////////////////////////////////////
 
 // Converts from the text format of WebAssembly to to the binary format.
