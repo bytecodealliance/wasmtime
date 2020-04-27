@@ -249,17 +249,18 @@ where
     let (mut comp_unit, unit_id, file_map, file_index_base, cu_low_pc, wp_die_id, vmctx_die_id) =
         if let Some((depth_delta, entry)) = entries.next_dfs()? {
             assert_eq!(depth_delta, 0);
-            let (out_line_program, debug_line_offset, file_map, file_index_base) = clone_line_program(
-                &unit,
-                entry,
-                addr_tr,
-                out_encoding,
-                context.debug_str,
-                context.debug_str_offsets,
-                context.debug_line_str,
-                context.debug_line,
-                out_strings,
-            )?;
+            let (out_line_program, debug_line_offset, file_map, file_index_base) =
+                clone_line_program(
+                    &unit,
+                    entry,
+                    addr_tr,
+                    out_encoding,
+                    context.debug_str,
+                    context.debug_str_offsets,
+                    context.debug_line_str,
+                    context.debug_line,
+                    out_strings,
+                )?;
 
             if entry.tag() == gimli::DW_TAG_compile_unit {
                 let unit_id = out_units.add(write::Unit::new(out_encoding, out_line_program));
