@@ -83,6 +83,9 @@ where
             AttributeValue::Exprloc(_) if attr.name() == gimli::DW_AT_frame_base => {
                 continue;
             }
+            AttributeValue::DebugAddrBase(_) | AttributeValue::DebugStrOffsetsBase(_) => {
+                continue;
+            }
 
             AttributeValue::Addr(u) => {
                 let addr = addr_tr.translate(u).unwrap_or(write::Address::Constant(0));
@@ -110,8 +113,8 @@ where
                 }
             }
             AttributeValue::FileIndex(i) => {
-                if let FileAttributeContext::Children(file_map, index_base, _) = file_context {
-                    write::AttributeValue::FileIndex(Some(file_map[(i - index_base) as usize]))
+                if let FileAttributeContext::Children(file_map, file_index_base, _) = file_context {
+                    write::AttributeValue::FileIndex(Some(file_map[(i - file_index_base) as usize]))
                 } else {
                     return Err(TransformError("unexpected file index attribute").into());
                 }
@@ -269,18 +272,6 @@ where
             }
             AttributeValue::DebugInfoRef(offset) => {
                 pending_di_refs.insert(current_scope_id, attr.name(), offset);
-                continue;
-            }
-            AttributeValue::DebugAddrBase(offset) => {
-                if offset.0 != unit.addr_base.0 {
-                    return Err(TransformError("unexpected DebugAddrBase value").into());
-                }
-                continue;
-            }
-            AttributeValue::DebugStrOffsetsBase(offset) => {
-                if offset.0 != unit.str_offsets_base.0 {
-                    return Err(TransformError("unexpected DebugStrOffsetsBase value").into());
-                }
                 continue;
             }
             a => bail!("Unexpected attribute: {:?}", a),

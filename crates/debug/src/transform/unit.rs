@@ -246,10 +246,10 @@ where
 
     // Iterate over all of this compilation unit's entries.
     let mut entries = unit.entries();
-    let (mut comp_unit, unit_id, file_map, index_base, cu_low_pc, wp_die_id, vmctx_die_id) =
+    let (mut comp_unit, unit_id, file_map, file_index_base, cu_low_pc, wp_die_id, vmctx_die_id) =
         if let Some((depth_delta, entry)) = entries.next_dfs()? {
             assert_eq!(depth_delta, 0);
-            let (out_line_program, debug_line_offset, file_map, index_base) = clone_line_program(
+            let (out_line_program, debug_line_offset, file_map, file_index_base) = clone_line_program(
                 &unit,
                 entry,
                 addr_tr,
@@ -307,7 +307,7 @@ where
                     comp_unit,
                     unit_id,
                     file_map,
-                    index_base,
+                    file_index_base,
                     cu_low_pc,
                     wp_die_id,
                     vmctx_die_id,
@@ -431,7 +431,7 @@ where
             out_strings,
             &mut pending_die_refs,
             &mut pending_di_refs,
-            FileAttributeContext::Children(&file_map, index_base, current_frame_base.top()),
+            FileAttributeContext::Children(&file_map, file_index_base, current_frame_base.top()),
             isa,
         )?;
 

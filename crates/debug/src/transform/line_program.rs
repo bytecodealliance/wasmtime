@@ -90,7 +90,7 @@ where
     );
     if let Ok(program) = program {
         let header = program.header();
-        let index_base = if header.version() < 5 { 1 } else { 0 };
+        let file_index_base = if header.version() < 5 { 1 } else { 0 };
         assert_le!(header.version(), 5, "not supported 6");
         let line_encoding = LineEncoding {
             minimum_instruction_length: header.minimum_instruction_length(),
@@ -254,7 +254,7 @@ where
                         };
                         out_program.row().address_offset = address_offset;
                         out_program.row().op_index = *op_index;
-                        out_program.row().file = files[(file_index - index_base) as usize];
+                        out_program.row().file = files[(file_index - file_index_base) as usize];
                         out_program.row().line = *line;
                         out_program.row().column = *column;
                         out_program.row().discriminator = *discriminator;
@@ -271,7 +271,7 @@ where
             let end_addr = (map.offset + map.len - 1) as u64;
             out_program.end_sequence(end_addr);
         }
-        Ok((out_program, offset, files, index_base))
+        Ok((out_program, offset, files, file_index_base))
     } else {
         Err(TransformError("Valid line program not found").into())
     }
