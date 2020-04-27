@@ -170,6 +170,9 @@ fn has_valid_code_range<R: Reader<Offset = usize>>(
             } else if let Some(low_pc) = die.attr_value(constants::DW_AT_low_pc)? {
                 if let read::AttributeValue::Addr(a) = low_pc {
                     return Ok(at.can_translate_address(a));
+                } else if let read::AttributeValue::DebugAddrIndex(i) = low_pc {
+                    let a = dwarf.debug_addr.get_address(4, unit.addr_base, i)?;
+                    return Ok(at.can_translate_address(a));
                 }
             }
         }

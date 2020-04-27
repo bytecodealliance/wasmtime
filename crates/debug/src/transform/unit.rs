@@ -246,18 +246,21 @@ where
 
     // Iterate over all of this compilation unit's entries.
     let mut entries = unit.entries();
-    let (mut comp_unit, unit_id, file_map, cu_low_pc, wp_die_id, vmctx_die_id) =
+    let (mut comp_unit, unit_id, file_map, file_index_base, cu_low_pc, wp_die_id, vmctx_die_id) =
         if let Some((depth_delta, entry)) = entries.next_dfs()? {
             assert_eq!(depth_delta, 0);
-            let (out_line_program, debug_line_offset, file_map) = clone_line_program(
-                &unit,
-                entry,
-                addr_tr,
-                out_encoding,
-                context.debug_str,
-                context.debug_line,
-                out_strings,
-            )?;
+            let (out_line_program, debug_line_offset, file_map, file_index_base) =
+                clone_line_program(
+                    &unit,
+                    entry,
+                    addr_tr,
+                    out_encoding,
+                    context.debug_str,
+                    context.debug_str_offsets,
+                    context.debug_line_str,
+                    context.debug_line,
+                    out_strings,
+                )?;
 
             if entry.tag() == gimli::DW_TAG_compile_unit {
                 let unit_id = out_units.add(write::Unit::new(out_encoding, out_line_program));
@@ -270,17 +273,21 @@ where
                     entry.attr_value(gimli::DW_AT_low_pc)?
                 {
                     addr
+                } else if let Some(AttributeValue::DebugAddrIndex(i)) =
+                    entry.attr_value(gimli::DW_AT_low_pc)?
+                {
+                    context.debug_addr.get_address(4, unit.addr_base, i)?
                 } else {
                     // FIXME? return Err(TransformError("No low_pc for unit header").into());
                     0
                 };
 
                 clone_die_attributes(
+                    &unit,
                     entry,
                     context,
                     addr_tr,
                     None,
-                    unit.encoding(),
                     comp_unit,
                     root_id,
                     None,
@@ -301,6 +308,7 @@ where
                     comp_unit,
                     unit_id,
                     file_map,
+                    file_index_base,
                     cu_low_pc,
                     wp_die_id,
                     vmctx_die_id,
@@ -342,13 +350,8 @@ where
         current_scope_ranges.update(new_stack_len);
         current_value_range.update(new_stack_len);
         let range_builder = if entry.tag() == gimli::DW_TAG_subprogram {
-            let range_builder = RangeInfoBuilder::from_subprogram_die(
-                entry,
-                context,
-                unit.encoding(),
-                addr_tr,
-                cu_low_pc,
-            )?;
+            let range_builder =
+                RangeInfoBuilder::from_subprogram_die(&unit, entry, context, addr_tr, cu_low_pc)?;
             if let RangeInfoBuilder::Function(func_index) = range_builder {
                 if let Some(frame_info) =
                     get_function_frame_info(module_info, func_index, value_ranges)
@@ -366,8 +369,7 @@ where
             let high_pc = entry.attr_value(gimli::DW_AT_high_pc)?;
             let ranges = entry.attr_value(gimli::DW_AT_ranges)?;
             if high_pc.is_some() || ranges.is_some() {
-                let range_builder =
-                    RangeInfoBuilder::from(entry, context, unit.encoding(), cu_low_pc)?;
+                let range_builder = RangeInfoBuilder::from(&unit, entry, context, cu_low_pc)?;
                 current_scope_ranges.push(new_stack_len, range_builder.get_ranges(addr_tr));
                 Some(range_builder)
             } else {
@@ -417,11 +419,11 @@ where
         die_ref_map.insert(entry.offset(), die_id);
 
         clone_die_attributes(
+            &unit,
             entry,
             context,
             addr_tr,
             current_value_range.top(),
-            unit.encoding(),
             &mut comp_unit,
             die_id,
             range_builder,
@@ -430,7 +432,7 @@ where
             out_strings,
             &mut pending_die_refs,
             &mut pending_di_refs,
-            FileAttributeContext::Children(&file_map, current_frame_base.top()),
+            FileAttributeContext::Children(&file_map, file_index_base, current_frame_base.top()),
             isa,
         )?;
 

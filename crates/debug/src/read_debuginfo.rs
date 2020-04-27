@@ -61,47 +61,41 @@ fn convert_sections<'a>(sections: HashMap<&str, &'a [u8]>) -> Result<Dwarf<'a>> 
         sections.get(".debug_line").unwrap_or(&EMPTY_SECTION),
         endian,
     );
+    let debug_addr = DebugAddr::from(EndianSlice::new(
+        sections.get(".debug_addr").unwrap_or(&EMPTY_SECTION),
+        endian,
+    ));
 
-    if sections.contains_key(".debug_addr") {
-        bail!("Unexpected .debug_addr");
-    }
-
-    let debug_addr = DebugAddr::from(EndianSlice::new(EMPTY_SECTION, endian));
-
-    if sections.contains_key(".debug_line_str") {
-        bail!("Unexpected .debug_line_str");
-    }
-
-    let debug_line_str = DebugLineStr::from(EndianSlice::new(EMPTY_SECTION, endian));
+    let debug_line_str = DebugLineStr::from(EndianSlice::new(
+        sections.get(".debug_line_str").unwrap_or(&EMPTY_SECTION),
+        endian,
+    ));
     let debug_str_sup = DebugStr::from(EndianSlice::new(EMPTY_SECTION, endian));
-
-    if sections.contains_key(".debug_rnglists") {
-        bail!("Unexpected .debug_rnglists");
-    }
 
     let debug_ranges = match sections.get(".debug_ranges") {
         Some(section) => DebugRanges::new(section, endian),
         None => DebugRanges::new(EMPTY_SECTION, endian),
     };
-    let debug_rnglists = DebugRngLists::new(EMPTY_SECTION, endian);
+    let debug_rnglists = match sections.get(".debug_rnglists") {
+        Some(section) => DebugRngLists::new(section, endian),
+        None => DebugRngLists::new(EMPTY_SECTION, endian),
+    };
     let ranges = RangeLists::new(debug_ranges, debug_rnglists);
-
-    if sections.contains_key(".debug_loclists") {
-        bail!("Unexpected .debug_loclists");
-    }
 
     let debug_loc = match sections.get(".debug_loc") {
         Some(section) => DebugLoc::new(section, endian),
         None => DebugLoc::new(EMPTY_SECTION, endian),
     };
-    let debug_loclists = DebugLocLists::new(EMPTY_SECTION, endian);
+    let debug_loclists = match sections.get(".debug_loclists") {
+        Some(section) => DebugLocLists::new(section, endian),
+        None => DebugLocLists::new(EMPTY_SECTION, endian),
+    };
     let locations = LocationLists::new(debug_loc, debug_loclists);
 
-    if sections.contains_key(".debug_str_offsets") {
-        bail!("Unexpected .debug_str_offsets");
-    }
-
-    let debug_str_offsets = DebugStrOffsets::from(EndianSlice::new(EMPTY_SECTION, endian));
+    let debug_str_offsets = DebugStrOffsets::from(EndianSlice::new(
+        sections.get(".debug_str_offsets").unwrap_or(&EMPTY_SECTION),
+        endian,
+    ));
 
     if sections.contains_key(".debug_types") {
         bail!("Unexpected .debug_types");
