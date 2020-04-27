@@ -1178,7 +1178,8 @@ impl<'a> Parser<'a> {
                         self.consume_line().trim().split_whitespace(),
                         &mut flag_builder,
                         self.loc,
-                    )?;
+                    )
+                    .map_err(|err| ParseError::from(err))?;
                 }
                 "target" => {
                     let loc = self.loc;
