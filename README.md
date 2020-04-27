@@ -84,7 +84,7 @@ Hello, world!
   standards process all along the way too.
 
 [Cranelift]: https://github.com/bytecodealliance/wasmtime/blob/master/cranelift/README.md
-[embedded]: https://bytecodealliance.github.io/wasmtime/embed.html
+[embedded]: https://bytecodealliance.github.io/wasmtime/lang.html
 
 ## Language Support
 
