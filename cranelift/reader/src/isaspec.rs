@@ -6,7 +6,7 @@
 //! If a test case file contains `isa` commands, the tests will only be run against the specified
 //! ISAs. If the file contains no `isa` commands, the tests will be run against all supported ISAs.
 
-use crate::error::{Location, ParseResult};
+use crate::error::{Location, ParseError};
 use crate::testcommand::TestOption;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::{Configurable, Flags, SetError};
@@ -34,12 +34,49 @@ impl IsaSpec {
     }
 }
 
+/// An error type returned by `parse_options`.
+pub enum ParseOptionError {
+    /// A generic ParseError.
+    Generic(ParseError),
+
+    /// An unknown flag was used, with the given name at the given location.
+    UnknownFlag {
+        /// Location where the flag was given.
+        loc: Location,
+        /// Name of the unknown flag.
+        name: String,
+    },
+}
+
+impl From<ParseOptionError> for ParseError {
+    fn from(err: ParseOptionError) -> Self {
+        match err {
+            ParseOptionError::Generic(err) => err,
+            ParseOptionError::UnknownFlag { loc, name } => Self {
+                location: loc,
+                message: format!("unknown setting '{}'", name),
+                is_warning: false,
+            },
+        }
+    }
+}
+
+macro_rules! option_err {
+    ( $loc:expr, $fmt:expr, $( $arg:expr ),+ ) => {
+        Err($crate::ParseOptionError::Generic($crate::ParseError {
+            location: $loc.clone(),
+            message: format!( $fmt, $( $arg ),+ ),
+            is_warning: false,
+        }))
+    };
+}
+
 /// Parse an iterator of command line options and apply them to `config`.
 pub fn parse_options<'a, I>(
     iter: I,
     config: &mut dyn Configurable,
     loc: Location,
-) -> ParseResult<()>
+) -> Result<(), ParseOptionError>
 where
     I: Iterator<Item = &'a str>,
 {
@@ -47,15 +84,21 @@ where
         match opt {
             TestOption::Flag(name) => match config.enable(name) {
                 Ok(_) => {}
-                Err(SetError::BadName(name)) => return err!(loc, "unknown flag '{}'", name),
-                Err(_) => return err!(loc, "not a boolean flag: '{}'", opt),
+                Err(SetError::BadName(name)) => {
+                    return Err(ParseOptionError::UnknownFlag { loc, name })
+                }
+                Err(_) => return option_err!(loc, "not a boolean flag: '{}'", opt),
             },
             TestOption::Value(name, value) => match config.set(name, value) {
                 Ok(_) => {}
-                Err(SetError::BadName(name)) => return err!(loc, "unknown setting '{}'", name),
-                Err(SetError::BadType) => return err!(loc, "invalid setting type: '{}'", opt),
+                Err(SetError::BadName(name)) => {
+                    return Err(ParseOptionError::UnknownFlag { loc, name })
+                }
+                Err(SetError::BadType) => {
+                    return option_err!(loc, "invalid setting type: '{}'", opt)
+                }
                 Err(SetError::BadValue(expected)) => {
-                    return err!(
+                    return option_err!(
                         loc,
                         "invalid setting value for '{}', expected {}",
                         opt,

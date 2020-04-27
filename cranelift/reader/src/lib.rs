@@ -27,7 +27,7 @@
 )]
 
 pub use crate::error::{Location, ParseError, ParseResult};
-pub use crate::isaspec::{parse_options, IsaSpec};
+pub use crate::isaspec::{parse_options, IsaSpec, ParseOptionError};
 pub use crate::parser::{parse_functions, parse_run_command, parse_test, ParseOptions};
 pub use crate::run_command::{Comparison, DataValue, Invocation, RunCommand};
 pub use crate::sourcemap::SourceMap;
