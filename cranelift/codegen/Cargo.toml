@@ -58,10 +58,12 @@ x86 = []
 arm32 = []
 arm64 = []
 riscv = []
+x64 = [] # New work-in-progress codegen backend for x86_64 based on the new isel.
 
 # Option to enable all architectures.
 all-arch = [
     "x86",
+    "x64",
     "arm32",
     "arm64",
     "riscv"
