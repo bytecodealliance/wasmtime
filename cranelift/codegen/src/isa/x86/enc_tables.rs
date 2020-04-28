@@ -1318,6 +1318,39 @@ fn convert_ineg(
     }
 }
 
+fn expand_dword_to_xmm<'f>(
+    pos: &mut FuncCursor<'_>,
+    arg: ir::Value,
+    arg_type: ir::Type,
+) -> ir::Value {
+    if arg_type == I64 {
+        let (arg_lo, arg_hi) = pos.ins().isplit(arg);
+        let arg = pos.ins().scalar_to_vector(I32X4, arg_lo);
+        let arg = pos.ins().insertlane(arg, 1, arg_hi);
+        let arg = pos.ins().raw_bitcast(I64X2, arg);
+        arg
+    } else {
+        pos.ins().bitcast(I64X2, arg)
+    }
+}
+
+fn contract_dword_from_xmm<'f>(
+    pos: &mut FuncCursor<'f>,
+    inst: ir::Inst,
+    ret: ir::Value,
+    ret_type: ir::Type,
+) {
+    if ret_type == I64 {
+        let ret = pos.ins().raw_bitcast(I32X4, ret);
+        let ret_lo = pos.ins().extractlane(ret, 0);
+        let ret_hi = pos.ins().extractlane(ret, 1);
+        pos.func.dfg.replace(inst).iconcat(ret_lo, ret_hi);
+    } else {
+        let ret = pos.ins().extractlane(ret, 0);
+        pos.func.dfg.replace(inst).ireduce(ret_type, ret);
+    }
+}
+
 // Masks for i8x16 unsigned right shift.
 static USHR_MASKS: [u8; 128] = [
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -1379,7 +1412,14 @@ fn convert_ushr(
         } else if arg0_type.is_vector() {
             // x86 has encodings for these shifts.
             pos.func.dfg.replace(inst).x86_psrl(arg0, shift_index);
+        } else if arg0_type == I64 {
+            // 64 bit shifts need to be legalized on x86_32.
+            let value = expand_dword_to_xmm(&mut pos, arg0, arg0_type);
+            let amount = expand_dword_to_xmm(&mut pos, arg1, arg1_type);
+            let shifted = pos.ins().x86_psrl(value, amount);
+            contract_dword_from_xmm(&mut pos, inst, shifted, arg0_type);
         } else {
+            // Everything else should be already legal.
             unreachable!()
         }
     }
@@ -1446,7 +1486,14 @@ fn convert_ishl(
         } else if arg0_type.is_vector() {
             // x86 has encodings for these shifts.
             pos.func.dfg.replace(inst).x86_psll(arg0, shift_index);
+        } else if arg0_type == I64 {
+            // 64 bit shifts need to be legalized on x86_32.
+            let value = expand_dword_to_xmm(&mut pos, arg0, arg0_type);
+            let amount = expand_dword_to_xmm(&mut pos, arg1, arg1_type);
+            let shifted = pos.ins().x86_psll(value, amount);
+            contract_dword_from_xmm(&mut pos, inst, shifted, arg0_type);
         } else {
+            // Everything else should be already legal.
             unreachable!()
         }
     }

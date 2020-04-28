@@ -37,6 +37,8 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let imul = insts.by_name("imul");
     let ineg = insts.by_name("ineg");
     let isub = insts.by_name("isub");
+    let ishl = insts.by_name("ishl");
+    let ireduce = insts.by_name("ireduce");
     let popcnt = insts.by_name("popcnt");
     let sdiv = insts.by_name("sdiv");
     let selectif = insts.by_name("selectif");
@@ -45,6 +47,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let tls_value = insts.by_name("tls_value");
     let udiv = insts.by_name("udiv");
     let umulhi = insts.by_name("umulhi");
+    let ushr = insts.by_name("ushr");
     let ushr_imm = insts.by_name("ushr_imm");
     let urem = insts.by_name("urem");
 
@@ -54,6 +57,32 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let x86_smulx = x86_instructions.by_name("x86_smulx");
 
     let imm = &shared.imm;
+
+    // Shift by a 64-bit amount is equivalent to a shift by that amount mod 32, so we can reduce
+    // the size of the shift amount. This is useful for x86_32, where an I64 shift amount is
+    // not encodable.
+    let a = var("a");
+    let x = var("x");
+    let y = var("y");
+    let z = var("z");
+
+    for &ty in &[I8, I16, I32] {
+        let ishl_by_i64 = ishl.bind(ty).bind(I64);
+        let ireduce = ireduce.bind(I32);
+        group.legalize(
+            def!(a = ishl_by_i64(x, y)),
+            vec![def!(z = ireduce(y)), def!(a = ishl(x, z))],
+        );
+    }
+
+    for &ty in &[I8, I16, I32] {
+        let ushr_by_i64 = ushr.bind(ty).bind(I64);
+        let ireduce = ireduce.bind(I32);
+        group.legalize(
+            def!(a = ushr_by_i64(x, y)),
+            vec![def!(z = ireduce(y)), def!(a = ishl(x, z))],
+        );
+    }
 
     // Division and remainder.
     //
