@@ -649,6 +649,14 @@ fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
 
     // Add CSRs to function signature
     let reg_type = ir::Type::int(u16::from(pointer_width.bits())).unwrap();
+    if isa.pointer_bits() == 32 {
+        let sp_arg = ir::AbiParam::special_reg(
+            reg_type,
+            ir::ArgumentPurpose::CalleeSaved,
+            RU::rsp as RegUnit,
+        );
+        func.signature.params.push(sp_arg);
+    }
     let fp_arg = ir::AbiParam::special_reg(
         reg_type,
         ir::ArgumentPurpose::FramePointer,
@@ -685,6 +693,17 @@ fn insert_common_prologue(
     fpr_slot: Option<&StackSlot>,
     isa: &dyn TargetIsa,
 ) {
+    // On X86-32 all parameters, including vmctx, are passed on stack, and we need
+    // to extract vmctx from the stack before we can save the frame pointer.
+    let sp = if isa.pointer_bits() == 32 {
+        let block = pos.current_block().expect("missing block under cursor");
+        let sp = pos.func.dfg.append_block_param(block, reg_type);
+        pos.func.locations[sp] = ir::ValueLoc::Reg(RU::rsp as RegUnit);
+        Some(sp)
+    } else {
+        None
+    };
+
     // If this is a leaf function with zero stack, then there's no need to
     // insert a stack check since it can't overflow anything and
     // forward-progress is guarantee so long as loop are handled anyway.
@@ -707,7 +726,7 @@ fn insert_common_prologue(
             None => pos
                 .func
                 .stack_limit
-                .map(|gv| interpret_gv(pos, gv, scratch)),
+                .map(|gv| interpret_gv(pos, gv, sp, scratch)),
         };
         if let Some(stack_limit_arg) = stack_limit_arg {
             insert_stack_check(pos, stack_size, stack_limit_arg);
@@ -834,19 +853,55 @@ fn insert_common_prologue(
 /// compared to the stack pointer, but currently it serves enough functionality
 /// to get this implemented in `wasmtime` itself. This'll likely get expanded a
 /// bit over time!
-fn interpret_gv(pos: &mut EncCursor, gv: ir::GlobalValue, scratch: ir::ValueLoc) -> ir::Value {
+fn interpret_gv(
+    pos: &mut EncCursor,
+    gv: ir::GlobalValue,
+    sp: Option<ir::Value>,
+    scratch: ir::ValueLoc,
+) -> ir::Value {
     match pos.func.global_values[gv] {
-        ir::GlobalValueData::VMContext => pos
-            .func
-            .special_param(ir::ArgumentPurpose::VMContext)
-            .expect("no vmcontext parameter found"),
+        ir::GlobalValueData::VMContext => {
+            let vmctx_index = pos
+                .func
+                .signature
+                .special_param_index(ir::ArgumentPurpose::VMContext)
+                .expect("no vmcontext parameter found");
+            match pos.func.signature.params[vmctx_index] {
+                AbiParam {
+                    location: ArgumentLoc::Reg(_),
+                    ..
+                } => {
+                    let entry = pos.func.layout.entry_block().unwrap();
+                    pos.func.dfg.block_params(entry)[vmctx_index]
+                }
+                AbiParam {
+                    location: ArgumentLoc::Stack(offset),
+                    value_type,
+                    ..
+                } => {
+                    let offset =
+                        offset + i32::from(pos.isa.pointer_bytes() * (1 + vmctx_index as u8));
+                    // The following access can be marked `trusted` because it is a load of an argument. We
+                    // know it is safe because it was safe to write it in preparing this function call.
+                    let ret =
+                        pos.ins()
+                            .load(value_type, ir::MemFlags::trusted(), sp.unwrap(), offset);
+                    pos.func.locations[ret] = scratch;
+                    return ret;
+                }
+                AbiParam {
+                    location: ArgumentLoc::Unassigned,
+                    ..
+                } => unreachable!(),
+            }
+        }
         ir::GlobalValueData::Load {
             base,
             offset,
             global_type,
             readonly: _,
         } => {
-            let base = interpret_gv(pos, base, scratch);
+            let base = interpret_gv(pos, base, sp, scratch);
             let ret = pos
                 .ins()
                 .load(global_type, ir::MemFlags::trusted(), base, offset);
