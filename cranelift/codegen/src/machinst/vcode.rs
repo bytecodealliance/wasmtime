@@ -25,7 +25,9 @@ use crate::settings;
 
 use regalloc::Function as RegallocFunction;
 use regalloc::Set as RegallocSet;
-use regalloc::{BlockIx, InstIx, Range, RegAllocResult, RegClass, RegUsageCollector};
+use regalloc::{
+    BlockIx, InstIx, Range, RegAllocResult, RegClass, RegUsageCollector, RegUsageMapper,
+};
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -647,16 +649,16 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         insn.get_regs(collector)
     }
 
-    fn map_regs(
-        insn: &mut I,
-        pre_map: &RegallocMap<VirtualReg, RealReg>,
-        post_map: &RegallocMap<VirtualReg, RealReg>,
-    ) {
-        insn.map_regs(pre_map, post_map);
+    fn map_regs(insn: &mut I, mapper: &RegUsageMapper) {
+        insn.map_regs(mapper);
     }
 
     fn is_move(&self, insn: &I) -> Option<(Writable<Reg>, Reg)> {
         insn.is_move()
+    }
+
+    fn get_vreg_count_estimate(&self) -> Option<usize> {
+        Some(self.vreg_types.len())
     }
 
     fn get_spillslot_size(&self, regclass: RegClass, vreg: VirtualReg) -> u32 {

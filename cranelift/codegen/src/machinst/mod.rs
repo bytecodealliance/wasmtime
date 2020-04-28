@@ -105,9 +105,10 @@ use crate::settings::Flags;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt::Debug;
-use regalloc::Map as RegallocMap;
 use regalloc::RegUsageCollector;
-use regalloc::{RealReg, RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
+use regalloc::{
+    RealReg, RealRegUniverse, Reg, RegClass, RegUsageMapper, SpillSlot, VirtualReg, Writable,
+};
 use std::string::String;
 use target_lexicon::Triple;
 
@@ -136,11 +137,7 @@ pub trait MachInst: Clone + Debug {
 
     /// Map virtual registers to physical registers using the given virt->phys
     /// maps corresponding to the program points prior to, and after, this instruction.
-    fn map_regs(
-        &mut self,
-        pre_map: &RegallocMap<VirtualReg, RealReg>,
-        post_map: &RegallocMap<VirtualReg, RealReg>,
-    );
+    fn map_regs(&mut self, maps: &RegUsageMapper);
 
     /// If this is a simple move, return the (source, destination) tuple of registers.
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)>;
