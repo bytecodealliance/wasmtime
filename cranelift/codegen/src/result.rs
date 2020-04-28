@@ -1,6 +1,7 @@
 //! Result and error types representing the outcome of compiling a function.
 
 use crate::verifier::VerifierErrors;
+use std::string::String;
 use thiserror::Error;
 
 /// A compilation error.
@@ -30,6 +31,12 @@ pub enum CodegenError {
     /// is exceeded, compilation fails.
     #[error("Code for function is too large")]
     CodeTooLarge,
+
+    /// Something is not supported by the code generator. This might be an indication that a
+    /// feature is used without explicitly enabling it, or that something is temporarily
+    /// unsupported by a given target backend.
+    #[error("Unsupported feature: {0}")]
+    Unsupported(String),
 
     /// A failure to map Cranelift register representation to a DWARF register representation.
     #[cfg(feature = "unwind")]

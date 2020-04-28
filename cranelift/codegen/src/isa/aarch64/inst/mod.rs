@@ -7,7 +7,7 @@ use crate::binemit::CodeOffset;
 use crate::ir::types::{B1, B16, B32, B64, B8, F32, F64, FFLAGS, I16, I32, I64, I8, IFLAGS};
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
-use crate::settings;
+use crate::{settings, CodegenError, CodegenResult};
 
 use regalloc::Map as RegallocMap;
 use regalloc::{RealReg, RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
@@ -1787,12 +1787,15 @@ impl MachInst for Inst {
         None
     }
 
-    fn rc_for_type(ty: Type) -> RegClass {
+    fn rc_for_type(ty: Type) -> CodegenResult<RegClass> {
         match ty {
-            I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 => RegClass::I64,
-            F32 | F64 => RegClass::V128,
-            IFLAGS | FFLAGS => RegClass::I64,
-            _ => panic!("Unexpected SSA-value type: {}", ty),
+            I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 => Ok(RegClass::I64),
+            F32 | F64 => Ok(RegClass::V128),
+            IFLAGS | FFLAGS => Ok(RegClass::I64),
+            _ => Err(CodegenError::Unsupported(format!(
+                "Unexpected SSA-value type: {}",
+                ty
+            ))),
         }
     }
 
