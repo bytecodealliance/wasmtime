@@ -1,4 +1,6 @@
 use crate::{handle_result, wasmtime_error_t};
+use std::ffi::CStr;
+use std::os::raw::c_char;
 use wasmtime::{Config, OptLevel, ProfilingStrategy, Strategy};
 
 #[repr(C)]
@@ -125,4 +127,22 @@ pub extern "C" fn wasmtime_config_profiler_set(
         WASMTIME_PROFILING_STRATEGY_JITDUMP => ProfilingStrategy::JitDump,
     });
     handle_result(result, |_cfg| {})
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_config_cache_config_load(
+    c: &mut wasm_config_t,
+    filename: *const c_char,
+) -> Option<Box<wasmtime_error_t>> {
+    handle_result(
+        if filename.is_null() {
+            c.config.cache_config_load_default()
+        } else {
+            match CStr::from_ptr(filename).to_str() {
+                Ok(s) => c.config.cache_config_load(s),
+                Err(e) => Err(e.into()),
+            }
+        },
+        |_cfg| {},
+    )
 }
