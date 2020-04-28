@@ -7,14 +7,13 @@ function %indir_udiv32(i32) -> i32 {
 block0(v0: i32):
     v1 = iconst.i32 7
     v2 = udiv v0, v1
-    ; check: iconst.i32 7
-    ; check: iconst.i32 0x2492_4925
-    ; check: umulhi v0, v3
-    ; check: isub v0, v4
-    ; check: ushr_imm v5, 1
-    ; check: iadd v6, v4
-    ; check: v8 = ushr_imm v7, 2
-    ; check: v2 -> v8
+    ; check:  v4 = iconst.i32 0x2492_4925
+    ; nextln: v5 = umulhi v0, v4
+    ; nextln: v6 = isub v0, v5
+    ; nextln: v7 = ushr_imm v6, 1
+    ; nextln: v8 = iadd v7, v5
+    ; nextln: v9 = ushr_imm v8, 2
+    ; nextln: v2 -> v9
     return v2
 }
 
@@ -22,13 +21,12 @@ function %indir_sdiv32(i32) -> i32 {
 block0(v0: i32):
     v1 = iconst.i32 -17
     v2 = sdiv v0, v1
-    ; check: iconst.i32 -17
-    ; check: iconst.i32 0xffff_ffff_8787_8787
-    ; check: smulhi v0, v3
-    ; check: sshr_imm v4, 3
-    ; check: ushr_imm v5, 31
-    ; check: v7 = iadd v5, v6
-    ; check: v2 -> v7
+    ; check:  v4 = iconst.i32 0xffff_ffff_8787_8787
+    ; nextln: v5 = smulhi v0, v4
+    ; nextln: v6 = sshr_imm v5, 3
+    ; nextln: v7 = ushr_imm v6, 31
+    ; nextln: v8 = iadd v6, v7
+    ; nextln: v2 -> v8
     return v2
 }
 
@@ -36,11 +34,10 @@ function %indir_udiv64(i64) -> i64 {
 block0(v0: i64):
     v1 = iconst.i64 1337
     v2 = udiv v0, v1
-    ; check: iconst.i64 1337
-    ; check: iconst.i64 0xc411_9d95_2866_a139
-    ; check: umulhi v0, v3
-    ; check: v5 = ushr_imm v4, 10
-    ; check: v2 -> v5
+    ; check:  v4 = iconst.i64 0xc411_9d95_2866_a139
+    ; nextln: v5 = umulhi v0, v4
+    ; nextln: v6 = ushr_imm v5, 10
+    ; nextln: v2 -> v6
     return v2
 }
 
@@ -48,12 +45,11 @@ function %indir_sdiv64(i64) -> i64 {
 block0(v0: i64):
     v1 = iconst.i64 -90210
     v2 = sdiv v0, v1
-    ; check: iconst.i64 0xffff_ffff_fffe_9f9e
-    ; check: iconst.i64 0xd181_4ee8_939c_b8bb
-    ; check: smulhi v0, v3
-    ; check: sshr_imm v4, 14
-    ; check: ushr_imm v5, 63
-    ; check: v7 = iadd v5, v6
-    ; check: v2 -> v7
+    ; check:  v4 = iconst.i64 0xd181_4ee8_939c_b8bb
+    ; nextln: v5 = smulhi v0, v4
+    ; nextln: v6 = sshr_imm v5, 14
+    ; nextln: v7 = ushr_imm v6, 63
+    ; nextln: v8 = iadd v6, v7
+    ; nextln: v2 -> v8
     return v2
 }

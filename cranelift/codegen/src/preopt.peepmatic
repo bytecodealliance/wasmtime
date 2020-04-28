@@ -178,8 +178,8 @@
 
 ;; Division and remainder by constants.
 ;;
-;; Note that this section is incomplete, and a bunch of related optimizations
-;; are still hand-coded in `simple_preopt.rs`.
+;; TODO: this section is incomplete, and a bunch of related optimizations are
+;; still hand-coded in `simple_preopt.rs`.
 
 ;; (Division by one is handled above.)
 

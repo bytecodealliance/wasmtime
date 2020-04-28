@@ -44,6 +44,37 @@ block0(v0: i32):
 ; nextln:     return v3
 ; nextln: }
 
+function %ifcmp_imm(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 2
+    v2 = ifcmp v0, v1
+    brif eq v2, block1
+    jump block2
+
+block1:
+    v3 = iconst.i32 1
+    return v3
+
+block2:
+    v4 = iconst.i32 2
+    return v4
+}
+; sameln: function %ifcmp_imm
+; nextln: block0(v0: i32):
+; nextln:     v1 = iconst.i32 2
+; nextln:     v2 = ifcmp_imm v0, 2
+; nextln:     brif eq v2, block1
+; nextln:     jump block2
+; nextln: 
+; nextln: block1:
+; nextln:     v3 = iconst.i32 1
+; nextln:     return v3
+; nextln: 
+; nextln: block2:
+; nextln:     v4 = iconst.i32 2
+; nextln:     return v4
+; nextln: }
+
 function %brz_bint(i32) {
 block0(v0: i32):
     v3 = icmp_imm slt v0, 0

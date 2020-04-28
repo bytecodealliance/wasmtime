@@ -24,6 +24,7 @@ gimli = { version = "0.20.0", default-features = false, features = ["write"], op
 smallvec = { version = "1.0.0" }
 thiserror = "1.0.4"
 byteorder = { version = "1.3.2", default-features = false }
+peepmatic-runtime = { path = "../peepmatic/crates/runtime" }
 regalloc = "0.0.23"
 # It is a goal of the cranelift-codegen crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary
@@ -32,6 +33,7 @@ regalloc = "0.0.23"
 
 [build-dependencies]
 cranelift-codegen-meta = { path = "meta", version = "0.63.0" }
+peepmatic = { path = "../peepmatic", optional = true }
 
 [features]
 default = ["std", "unwind"]
@@ -71,6 +73,10 @@ all-arch = [
 
 # For dependent crates that want to serialize some parts of cranelift
 enable-serde = ["serde"]
+
+# Recompile our optimizations that are written in the peepmatic DSL into a
+# compact finite-state transducer automaton.
+rebuild-peephole-optimizers = ["peepmatic"]
 
 [badges]
 maintenance = { status = "experimental" }

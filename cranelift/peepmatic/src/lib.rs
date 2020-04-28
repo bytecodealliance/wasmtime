@@ -160,6 +160,6 @@ mod tests {
 
     #[test]
     fn compile_preopt() {
-        assert_compiles("examples/preopt.peepmatic");
+        assert_compiles("../codegen/src/preopt.peepmatic");
     }
 }

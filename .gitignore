@@ -14,3 +14,4 @@ docs/book
 rusty-tags.*
 tags
 target
+.z3-trace

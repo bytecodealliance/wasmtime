@@ -308,6 +308,30 @@ impl Function {
         // function, assume it is not a leaf.
         self.dfg.signatures.is_empty()
     }
+
+    /// Replace the `dst` instruction's data with the `src` instruction's data
+    /// and then remove `src`.
+    ///
+    /// `src` and its result values should not be used at all, as any uses would
+    /// be left dangling after calling this method.
+    ///
+    /// `src` and `dst` must have the same number of resulting values, and
+    /// `src`'s i^th value must have the same type as `dst`'s i^th value.
+    pub fn transplant_inst(&mut self, dst: Inst, src: Inst) {
+        debug_assert_eq!(
+            self.dfg.inst_results(dst).len(),
+            self.dfg.inst_results(src).len()
+        );
+        debug_assert!(self
+            .dfg
+            .inst_results(dst)
+            .iter()
+            .zip(self.dfg.inst_results(src))
+            .all(|(a, b)| self.dfg.value_type(*a) == self.dfg.value_type(*b)));
+
+        self.dfg[dst] = self.dfg[src].clone();
+        self.layout.remove_inst(src);
+    }
 }
 
 /// Additional annotations for function display.

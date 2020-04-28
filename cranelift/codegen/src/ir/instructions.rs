@@ -11,9 +11,7 @@ use core::fmt::{self, Display, Formatter};
 use core::ops::{Deref, DerefMut};
 use core::str::FromStr;
 
-use crate::ir;
-use crate::ir::types;
-use crate::ir::{Block, FuncRef, JumpTable, SigRef, Type, Value};
+use crate::ir::{self, trapcode::TrapCode, types, Block, FuncRef, JumpTable, SigRef, Type, Value};
 use crate::isa;
 
 use crate::bitset::BitSet;
@@ -254,6 +252,30 @@ impl InstructionData {
                 debug_assert!(!self.opcode().is_branch());
                 None
             }
+        }
+    }
+
+    /// If this is a trapping instruction, get its trap code. Otherwise, return
+    /// `None`.
+    pub fn trap_code(&self) -> Option<TrapCode> {
+        match *self {
+            Self::CondTrap { code, .. }
+            | Self::FloatCondTrap { code, .. }
+            | Self::IntCondTrap { code, .. }
+            | Self::Trap { code, .. } => Some(code),
+            _ => None,
+        }
+    }
+
+    /// If this is a trapping instruction, get an exclusive reference to its
+    /// trap code. Otherwise, return `None`.
+    pub fn trap_code_mut(&mut self) -> Option<&mut TrapCode> {
+        match self {
+            Self::CondTrap { code, .. }
+            | Self::FloatCondTrap { code, .. }
+            | Self::IntCondTrap { code, .. }
+            | Self::Trap { code, .. } => Some(code),
+            _ => None,
         }
     }
 

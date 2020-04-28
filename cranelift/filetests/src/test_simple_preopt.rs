@@ -38,6 +38,7 @@ impl SubTest for TestSimplePreopt {
             .preopt(isa)
             .map_err(|e| pretty_error(&comp_ctx.func, context.isa, Into::into(e)))?;
         let text = &comp_ctx.func.display(isa).to_string();
+        log::debug!("After simple_preopt:\n{}", text);
         run_filecheck(&text, context)
     }
 }

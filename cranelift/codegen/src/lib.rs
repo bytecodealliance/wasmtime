@@ -101,6 +101,7 @@ mod licm;
 mod nan_canonicalization;
 mod num_uses;
 mod partition_slice;
+mod peepmatic;
 mod postopt;
 mod predicates;
 mod redundant_reload_remover;

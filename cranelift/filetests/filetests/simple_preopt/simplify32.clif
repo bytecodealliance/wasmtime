@@ -58,4 +58,3 @@ block0(v0: i64):
 ; nextln:     v2 = iadd v0, v1
 ; nextln:     return v2
 ; nextln: }
-
