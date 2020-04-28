@@ -331,7 +331,7 @@ where
                 // TODO support wasm globals?
                 return Ok(None);
             }
-            let index = pc.read_sleb128()?;
+            let index = pc.read_uleb128()?;
             if pc.read_u8()? != 159 {
                 // FIXME The following operator is not DW_OP_stack_value, e.g. :
                 // DW_AT_location  (0x00000ea5:
