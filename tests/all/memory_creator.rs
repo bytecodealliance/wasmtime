@@ -175,9 +175,9 @@ mod not_for_windows {
         let tot_pages = *mem_creator.num_total_pages.lock().unwrap();
         assert_eq!(tot_pages, 4);
 
-        drop(instance1);
+        drop((instance1, instance2, store, module));
         let tot_pages = *mem_creator.num_total_pages.lock().unwrap();
-        assert_eq!(tot_pages, 2);
+        assert_eq!(tot_pages, 0);
 
         Ok(())
     }

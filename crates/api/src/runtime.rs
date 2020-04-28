@@ -4,15 +4,16 @@ use anyhow::{bail, Result};
 use std::cell::RefCell;
 use std::cmp::min;
 use std::fmt;
+use std::ops::Deref;
 use std::path::Path;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use wasmparser::{OperatorValidatorConfig, ValidatingParserConfig};
 use wasmtime_environ::settings::{self, Configurable};
 use wasmtime_environ::{CacheConfig, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
-use wasmtime_runtime::{debug_builtins, RuntimeMemoryCreator, VMInterrupts};
+use wasmtime_runtime::{debug_builtins, InstanceHandle, RuntimeMemoryCreator, VMInterrupts};
 
 // Runtime Environment
 
@@ -535,13 +536,18 @@ impl Engine {
 /// ocnfiguration (see [`Config`] for more information).
 #[derive(Clone)]
 pub struct Store {
-    // FIXME(#777) should be `Arc` and this type should be thread-safe
     inner: Rc<StoreInner>,
 }
 
-struct StoreInner {
+pub(crate) struct StoreInner {
     engine: Engine,
     compiler: RefCell<Compiler>,
+    instances: RefCell<Vec<InstanceHandle>>,
+}
+
+pub struct StoreInstanceHandle {
+    pub(crate) store: Store,
+    handle: InstanceHandle,
 }
 
 impl Store {
@@ -558,8 +564,13 @@ impl Store {
             inner: Rc::new(StoreInner {
                 engine: engine.clone(),
                 compiler: RefCell::new(compiler),
+                instances: RefCell::new(Vec::new()),
             }),
         }
+    }
+
+    pub(crate) fn from_inner(inner: Rc<StoreInner>) -> Store {
+        Store { inner }
     }
 
     /// Returns the [`Engine`] that this store is associated with.
@@ -578,6 +589,31 @@ impl Store {
 
     pub(crate) fn compiler_mut(&self) -> std::cell::RefMut<'_, Compiler> {
         self.inner.compiler.borrow_mut()
+    }
+
+    pub(crate) unsafe fn add_instance(&self, handle: InstanceHandle) -> StoreInstanceHandle {
+        self.inner.instances.borrow_mut().push(handle.clone());
+        StoreInstanceHandle {
+            store: self.clone(),
+            handle,
+        }
+    }
+
+    pub(crate) fn existing_instance_handle(&self, handle: InstanceHandle) -> StoreInstanceHandle {
+        debug_assert!(self
+            .inner
+            .instances
+            .borrow()
+            .iter()
+            .any(|i| i.vmctx_ptr() == handle.vmctx_ptr()));
+        StoreInstanceHandle {
+            store: self.clone(),
+            handle,
+        }
+    }
+
+    pub(crate) fn weak(&self) -> Weak<StoreInner> {
+        Rc::downgrade(&self.inner)
     }
 
     /// Returns whether the stores `a` and `b` refer to the same underlying
@@ -685,6 +721,34 @@ impl Store {
 impl Default for Store {
     fn default() -> Store {
         Store::new(&Engine::default())
+    }
+}
+
+impl Drop for StoreInner {
+    fn drop(&mut self) {
+        for instance in self.instances.get_mut().iter() {
+            unsafe {
+                instance.dealloc();
+            }
+        }
+    }
+}
+
+impl Clone for StoreInstanceHandle {
+    fn clone(&self) -> StoreInstanceHandle {
+        StoreInstanceHandle {
+            store: self.store.clone(),
+            // Note should be safe because the lifetime of the instance handle
+            // is tied to the `Store` which this is paired with.
+            handle: unsafe { self.handle.clone() },
+        }
+    }
+}
+
+impl Deref for StoreInstanceHandle {
+    type Target = InstanceHandle;
+    fn deref(&self) -> &InstanceHandle {
+        &self.handle
     }
 }
 

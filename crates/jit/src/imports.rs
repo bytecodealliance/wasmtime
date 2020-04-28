@@ -2,14 +2,13 @@
 
 use crate::resolver::Resolver;
 use more_asserts::assert_ge;
-use std::collections::HashSet;
 use std::convert::TryInto;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::{Global, GlobalInit, Memory, Table, TableElementType};
 use wasmtime_environ::{EntityIndex, MemoryPlan, MemoryStyle, Module, TablePlan};
 use wasmtime_runtime::{
-    Export, Imports, InstanceHandle, LinkError, SignatureRegistry, VMFunctionImport,
-    VMGlobalImport, VMMemoryImport, VMTableImport,
+    Export, Imports, LinkError, SignatureRegistry, VMFunctionImport, VMGlobalImport,
+    VMMemoryImport, VMTableImport,
 };
 
 /// This function allows to match all imports of a `Module` with concrete definitions provided by
@@ -21,8 +20,6 @@ pub fn resolve_imports(
     signatures: &SignatureRegistry,
     resolver: &mut dyn Resolver,
 ) -> Result<Imports, LinkError> {
-    let mut dependencies = HashSet::new();
-
     let mut function_imports = PrimaryMap::with_capacity(module.local.num_imported_funcs);
     let mut table_imports = PrimaryMap::with_capacity(module.local.num_imported_tables);
     let mut memory_imports = PrimaryMap::with_capacity(module.local.num_imported_memories);
@@ -45,7 +42,6 @@ pub fn resolve_imports(
                         module_name, field_name, signature, import_signature
                     )));
                 }
-                dependencies.insert(unsafe { InstanceHandle::from_vmctx(f.vmctx) });
                 function_imports.push(VMFunctionImport {
                     body: f.address,
                     vmctx: f.vmctx,
@@ -73,7 +69,6 @@ pub fn resolve_imports(
                         module_name, field_name,
                     )));
                 }
-                dependencies.insert(unsafe { InstanceHandle::from_vmctx(t.vmctx) });
                 table_imports.push(VMTableImport {
                     from: t.definition,
                     vmctx: t.vmctx,
@@ -115,7 +110,6 @@ pub fn resolve_imports(
                 }
                 assert_ge!(m.memory.offset_guard_size, import_memory.offset_guard_size);
 
-                dependencies.insert(unsafe { InstanceHandle::from_vmctx(m.vmctx) });
                 memory_imports.push(VMMemoryImport {
                     from: m.definition,
                     vmctx: m.vmctx,
@@ -143,7 +137,6 @@ pub fn resolve_imports(
                         module_name, field_name
                     )));
                 }
-                dependencies.insert(unsafe { InstanceHandle::from_vmctx(g.vmctx) });
                 global_imports.push(VMGlobalImport { from: g.definition });
             }
             (EntityIndex::Global(_), Some(_)) => {
@@ -162,7 +155,6 @@ pub fn resolve_imports(
     }
 
     Ok(Imports::new(
-        dependencies,
         function_imports,
         table_imports,
         memory_imports,

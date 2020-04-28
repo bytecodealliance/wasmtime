@@ -12,6 +12,7 @@ use self::func::create_handle_with_function;
 use self::global::create_global;
 use self::memory::create_handle_with_memory;
 use self::table::create_handle_with_table;
+use crate::runtime::StoreInstanceHandle;
 use crate::{FuncType, GlobalType, MemoryType, Store, TableType, Trap, Val};
 use anyhow::Result;
 use std::any::Any;
@@ -22,7 +23,7 @@ pub fn generate_func_export(
     func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
     store: &Store,
 ) -> Result<(
-    wasmtime_runtime::InstanceHandle,
+    StoreInstanceHandle,
     wasmtime_runtime::ExportFunction,
     VMTrampoline,
 )> {
@@ -42,10 +43,7 @@ pub unsafe fn generate_raw_func_export(
     trampoline: VMTrampoline,
     store: &Store,
     state: Box<dyn Any>,
-) -> Result<(
-    wasmtime_runtime::InstanceHandle,
-    wasmtime_runtime::ExportFunction,
-)> {
+) -> Result<(StoreInstanceHandle, wasmtime_runtime::ExportFunction)> {
     let instance = func::create_handle_with_raw_function(ft, func, trampoline, store, state)?;
     match instance.lookup("trampoline").expect("trampoline export") {
         wasmtime_runtime::Export::Function(f) => Ok((instance, f)),
@@ -57,10 +55,7 @@ pub fn generate_global_export(
     store: &Store,
     gt: &GlobalType,
     val: Val,
-) -> Result<(
-    wasmtime_runtime::InstanceHandle,
-    wasmtime_runtime::ExportGlobal,
-)> {
+) -> Result<(StoreInstanceHandle, wasmtime_runtime::ExportGlobal)> {
     let instance = create_global(store, gt, val)?;
     match instance.lookup("global").expect("global export") {
         wasmtime_runtime::Export::Global(g) => Ok((instance, g)),
@@ -71,10 +66,7 @@ pub fn generate_global_export(
 pub fn generate_memory_export(
     store: &Store,
     m: &MemoryType,
-) -> Result<(
-    wasmtime_runtime::InstanceHandle,
-    wasmtime_runtime::ExportMemory,
-)> {
+) -> Result<(StoreInstanceHandle, wasmtime_runtime::ExportMemory)> {
     let instance = create_handle_with_memory(store, m)?;
     match instance.lookup("memory").expect("memory export") {
         wasmtime_runtime::Export::Memory(m) => Ok((instance, m)),
@@ -85,10 +77,7 @@ pub fn generate_memory_export(
 pub fn generate_table_export(
     store: &Store,
     t: &TableType,
-) -> Result<(
-    wasmtime_runtime::InstanceHandle,
-    wasmtime_runtime::ExportTable,
-)> {
+) -> Result<(StoreInstanceHandle, wasmtime_runtime::ExportTable)> {
     let instance = create_handle_with_table(store, t)?;
     match instance.lookup("table").expect("table export") {
         wasmtime_runtime::Export::Table(t) => Ok((instance, t)),

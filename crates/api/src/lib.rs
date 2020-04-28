@@ -30,7 +30,9 @@ pub use crate::instance::Instance;
 pub use crate::linker::*;
 pub use crate::module::Module;
 pub use crate::r#ref::{AnyRef, HostRef};
-pub use crate::runtime::*;
+pub use crate::runtime::{
+    Config, Engine, InterruptHandle, OptLevel, ProfilingStrategy, Store, Strategy,
+};
 pub use crate::trap::Trap;
 pub use crate::types::*;
 pub use crate::values::*;

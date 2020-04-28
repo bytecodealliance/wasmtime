@@ -204,21 +204,11 @@ impl CompiledModule {
     /// See `InstanceHandle::new`
     pub unsafe fn instantiate(
         &self,
-        is_bulk_memory: bool,
         resolver: &mut dyn Resolver,
         sig_registry: &SignatureRegistry,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
-        max_wasm_stack: usize,
         host_state: Box<dyn Any>,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let data_initializers = self
-            .data_initializers
-            .iter()
-            .map(|init| DataInitializer {
-                location: init.location.clone(),
-                data: &*init.data,
-            })
-            .collect::<Vec<_>>();
         let imports = resolve_imports(&self.module, &sig_registry, resolver)?;
         InstanceHandle::new(
             Arc::clone(&self.module),
@@ -226,14 +216,22 @@ impl CompiledModule {
             self.trampolines.clone(),
             imports,
             mem_creator,
-            &data_initializers,
             self.signatures.clone(),
             self.dbg_jit_registration.as_ref().map(|r| Rc::clone(&r)),
-            is_bulk_memory,
             host_state,
             self.interrupts.clone(),
-            max_wasm_stack,
         )
+    }
+
+    /// Returns data initializers to pass to `InstanceHandle::initialize`
+    pub fn data_initializers(&self) -> Vec<DataInitializer<'_>> {
+        self.data_initializers
+            .iter()
+            .map(|init| DataInitializer {
+                location: init.location.clone(),
+                data: &*init.data,
+            })
+            .collect()
     }
 
     /// Return a reference-counting pointer to a module.
