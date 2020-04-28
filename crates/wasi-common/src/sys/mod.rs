@@ -37,11 +37,11 @@ use stdio::Stdio;
 use sys_impl::get_file_type;
 
 pub(crate) trait AsFile {
-    fn as_file(&self) -> ManuallyDrop<File>;
+    fn as_file(&self) -> io::Result<ManuallyDrop<File>>;
 }
 
 impl AsFile for dyn Handle + 'static {
-    fn as_file(&self) -> ManuallyDrop<File> {
+    fn as_file(&self) -> io::Result<ManuallyDrop<File>> {
         if let Some(file) = self.as_any().downcast_ref::<OsFile>() {
             file.as_file()
         } else if let Some(dir) = self.as_any().downcast_ref::<OsDir>() {
@@ -51,7 +51,8 @@ impl AsFile for dyn Handle + 'static {
         } else if let Some(other) = self.as_any().downcast_ref::<OsOther>() {
             other.as_file()
         } else {
-            panic!("non-OS resource cannot be made into a File")
+            log::error!("tried to make std::fs::File from non-OS handle");
+            Err(io::Error::from_raw_os_error(libc::EBADF))
         }
     }
 }

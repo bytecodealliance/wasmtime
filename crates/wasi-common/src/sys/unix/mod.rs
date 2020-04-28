@@ -40,9 +40,9 @@ use yanix::file::{AtFlag, OFlag};
 pub(crate) use sys_impl::*;
 
 impl<T: AsRawFd> AsFile for T {
-    fn as_file(&self) -> ManuallyDrop<File> {
+    fn as_file(&self) -> io::Result<ManuallyDrop<File>> {
         let file = unsafe { File::from_raw_fd(self.as_raw_fd()) };
-        ManuallyDrop::new(file)
+        Ok(ManuallyDrop::new(file))
     }
 }
 

@@ -21,9 +21,9 @@ use winapi::shared::winerror;
 use winx::file::{CreationDisposition, Flags};
 
 impl<T: AsRawHandle> AsFile for T {
-    fn as_file(&self) -> ManuallyDrop<File> {
+    fn as_file(&self) -> io::Result<ManuallyDrop<File>> {
         let file = unsafe { File::from_raw_handle(self.as_raw_handle()) };
-        ManuallyDrop::new(file)
+        Ok(ManuallyDrop::new(file))
     }
 }
 
@@ -35,7 +35,7 @@ pub(crate) fn get_file_type(file: &File) -> io::Result<types::Filetype> {
         types::Filetype::CharacterDevice
     } else if file_type.is_disk() {
         // disk file: file, dir or disk device
-        let file = file.as_file();
+        let file = file.as_file()?;
         let meta = file.metadata()?;
         if meta.is_dir() {
             types::Filetype::Directory

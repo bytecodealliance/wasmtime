@@ -156,7 +156,7 @@ fn handle_rw_event(event: FdEventData, out_events: &mut Vec<types::Event>) {
         if event.r#type == types::Eventtype::FdRead {
             handle
                 .as_file()
-                .metadata()
+                .and_then(|f| f.metadata())
                 .map(|m| m.len())
                 .map_err(Into::into)
         } else {
@@ -235,7 +235,8 @@ pub(crate) fn oneoff(
                 handle_error_event(event, Errno::Notsup, events);
             }
         } else {
-            panic!("can poll FdEvent for OS resources only");
+            log::error!("can poll FdEvent for OS resources only");
+            return Err(Errno::Badf);
         }
     }
 

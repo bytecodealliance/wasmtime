@@ -40,16 +40,16 @@ impl Handle for OsDir {
     }
     // FdOps
     fn fdstat_get(&self) -> Result<types::Fdflags> {
-        fd::fdstat_get(&self.as_file())
+        fd::fdstat_get(&*self.as_file()?)
     }
     fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<()> {
-        if let Some(new_file) = fd::fdstat_set_flags(&self.as_file(), fdflags)? {
+        if let Some(new_file) = fd::fdstat_set_flags(&*self.as_file()?, fdflags)? {
             self.handle.update_from(new_file);
         }
         Ok(())
     }
     fn filestat_get(&self) -> Result<types::Filestat> {
-        fd::filestat_get(&self.as_file())
+        fd::filestat_get(&*self.as_file()?)
     }
     fn filestat_set_times(
         &self,
@@ -57,7 +57,7 @@ impl Handle for OsDir {
         mtim: types::Timestamp,
         fst_flags: types::Fstflags,
     ) -> Result<()> {
-        fd::filestat_set_times(&self.as_file(), atim, mtim, fst_flags)
+        fd::filestat_set_times(&*self.as_file()?, atim, mtim, fst_flags)
     }
     fn readdir<'a>(
         &'a self,

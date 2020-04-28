@@ -50,10 +50,10 @@ impl Handle for Stdio {
     }
     // FdOps
     fn fdstat_get(&self) -> Result<types::Fdflags> {
-        fd::fdstat_get(&self.as_file())
+        fd::fdstat_get(&*self.as_file()?)
     }
     fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<()> {
-        if let Some(_) = fd::fdstat_set_flags(&self.as_file(), fdflags)? {
+        if let Some(_) = fd::fdstat_set_flags(&*self.as_file()?, fdflags)? {
             // OK, this means we should somehow update the underlying os handle,
             // and we can't do that with `std::io::std{in, out, err}`, so we'll
             // panic for now.

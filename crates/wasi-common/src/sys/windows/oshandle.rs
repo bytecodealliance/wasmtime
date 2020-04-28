@@ -11,7 +11,7 @@ pub(crate) struct OsHandle(Cell<RawHandle>);
 impl OsHandle {
     /// Tries cloning `self`.
     pub(crate) fn try_clone(&self) -> io::Result<Self> {
-        let handle = self.as_file().try_clone()?;
+        let handle = self.as_file()?.try_clone()?;
         Ok(Self(Cell::new(handle.into_raw_handle())))
     }
     /// Consumes `other` taking the ownership of the underlying

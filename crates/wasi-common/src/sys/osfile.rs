@@ -57,7 +57,7 @@ impl Handle for OsFile {
         fd::advise(self, advice, offset, len)
     }
     fn allocate(&self, offset: types::Filesize, len: types::Filesize) -> Result<()> {
-        let fd = self.as_file();
+        let fd = self.as_file()?;
         let metadata = fd.metadata()?;
         let current_size = metadata.len();
         let wanted_size = offset.checked_add(len).ok_or(Errno::TooBig)?;
@@ -71,23 +71,23 @@ impl Handle for OsFile {
         Ok(())
     }
     fn datasync(&self) -> Result<()> {
-        self.as_file().sync_data()?;
+        self.as_file()?.sync_data()?;
         Ok(())
     }
     fn fdstat_get(&self) -> Result<types::Fdflags> {
-        fd::fdstat_get(&self.as_file())
+        fd::fdstat_get(&*self.as_file()?)
     }
     fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<()> {
-        if let Some(new_handle) = fd::fdstat_set_flags(&self.as_file(), fdflags)? {
+        if let Some(new_handle) = fd::fdstat_set_flags(&*self.as_file()?, fdflags)? {
             self.handle.update_from(new_handle);
         }
         Ok(())
     }
     fn filestat_get(&self) -> Result<types::Filestat> {
-        fd::filestat_get(&self.as_file())
+        fd::filestat_get(&*self.as_file()?)
     }
     fn filestat_set_size(&self, size: types::Filesize) -> Result<()> {
-        self.as_file().set_len(size)?;
+        self.as_file()?.set_len(size)?;
         Ok(())
     }
     fn filestat_set_times(
@@ -96,10 +96,10 @@ impl Handle for OsFile {
         mtim: types::Timestamp,
         fst_flags: types::Fstflags,
     ) -> Result<()> {
-        fd::filestat_set_times(&self.as_file(), atim, mtim, fst_flags)
+        fd::filestat_set_times(&*self.as_file()?, atim, mtim, fst_flags)
     }
     fn preadv(&self, buf: &mut [io::IoSliceMut], offset: u64) -> Result<usize> {
-        let mut fd: &File = &self.as_file();
+        let mut fd: &File = &*self.as_file()?;
         let cur_pos = fd.seek(SeekFrom::Current(0))?;
         fd.seek(SeekFrom::Start(offset))?;
         let nread = self.read_vectored(buf)?;
@@ -107,7 +107,7 @@ impl Handle for OsFile {
         Ok(nread)
     }
     fn pwritev(&self, buf: &[io::IoSlice], offset: u64) -> Result<usize> {
-        let mut fd: &File = &self.as_file();
+        let mut fd: &File = &*self.as_file()?;
         let cur_pos = fd.seek(SeekFrom::Current(0))?;
         fd.seek(SeekFrom::Start(offset))?;
         let nwritten = self.write_vectored(&buf)?;
@@ -115,19 +115,19 @@ impl Handle for OsFile {
         Ok(nwritten)
     }
     fn read_vectored(&self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
-        let nread = self.as_file().read_vectored(iovs)?;
+        let nread = self.as_file()?.read_vectored(iovs)?;
         Ok(nread)
     }
     fn seek(&self, offset: SeekFrom) -> Result<u64> {
-        let pos = self.as_file().seek(offset)?;
+        let pos = self.as_file()?.seek(offset)?;
         Ok(pos)
     }
     fn sync(&self) -> Result<()> {
-        self.as_file().sync_all()?;
+        self.as_file()?.sync_all()?;
         Ok(())
     }
     fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
-        let nwritten = self.as_file().write_vectored(&iovs)?;
+        let nwritten = self.as_file()?.write_vectored(&iovs)?;
         Ok(nwritten)
     }
 }

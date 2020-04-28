@@ -66,20 +66,20 @@ impl Handle for OsOther {
     }
     // FdOps
     fn fdstat_get(&self) -> Result<types::Fdflags> {
-        fd::fdstat_get(&self.as_file())
+        fd::fdstat_get(&*self.as_file()?)
     }
     fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<()> {
-        if let Some(handle) = fd::fdstat_set_flags(&self.as_file(), fdflags)? {
+        if let Some(handle) = fd::fdstat_set_flags(&*self.as_file()?, fdflags)? {
             self.handle.update_from(handle);
         }
         Ok(())
     }
     fn read_vectored(&self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
-        let nread = self.as_file().read_vectored(iovs)?;
+        let nread = self.as_file()?.read_vectored(iovs)?;
         Ok(nread)
     }
     fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
-        let mut fd: &File = &self.as_file();
+        let mut fd: &File = &*self.as_file()?;
         let nwritten = if self.is_tty() {
             SandboxedTTYWriter::new(&mut fd).write_vectored(&iovs)?
         } else {

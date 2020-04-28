@@ -128,7 +128,7 @@ pub(crate) fn readdir(
     use winx::file::get_file_path;
 
     let cookie = cookie.try_into()?;
-    let path = get_file_path(&dirfd.as_file())?;
+    let path = get_file_path(&*dirfd.as_file()?)?;
     // std::fs::ReadDir doesn't return . and .., so we need to emulate it
     let path = Path::new(&path);
     // The directory /.. is the same as / on Unix (at least on ext4), so emulate this behavior too

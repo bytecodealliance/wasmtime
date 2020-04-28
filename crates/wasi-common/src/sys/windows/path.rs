@@ -38,7 +38,7 @@ fn concatenate<P: AsRef<Path>>(file: &OsDir, path: P) -> Result<PathBuf> {
         return Err(Errno::Notcapable);
     }
 
-    let dir_path = get_file_path(&file.as_file())?;
+    let dir_path = get_file_path(&*file.as_file()?)?;
     // concatenate paths
     let mut out_path = PathBuf::from(dir_path);
     out_path.push(path.as_ref());
@@ -127,7 +127,7 @@ pub(crate) fn readlinkat(dirfd: &OsDir, s_path: &str) -> Result<String> {
             // we need to strip the prefix from the absolute path
             // as otherwise we will error out since WASI is not capable
             // of dealing with absolute paths
-            let dir_path = get_file_path(&dirfd.as_file())?;
+            let dir_path = get_file_path(&*dirfd.as_file()?)?;
             let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
             let target_path = target_path
                 .strip_prefix(dir_path)
@@ -295,7 +295,7 @@ pub(crate) fn readlink(dirfd: &OsDir, path: &str, buf: &mut [u8]) -> Result<usiz
     // we need to strip the prefix from the absolute path
     // as otherwise we will error out since WASI is not capable
     // of dealing with absolute paths
-    let dir_path = get_file_path(&dirfd.as_file())?;
+    let dir_path = get_file_path(&*dirfd.as_file()?)?;
     let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
     let target_path = target_path
         .strip_prefix(dir_path)
