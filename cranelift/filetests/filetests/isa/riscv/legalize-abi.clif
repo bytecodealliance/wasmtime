@@ -22,8 +22,8 @@ function %split_call_arg(i32) {
 block0(v0: i32):
     v1 = uextend.i64 v0
     call fn1(v1)
-    ; check: $(v1l=$V), $(v1h=$V) = isplit v1
-    ; check: call fn1($v1l, $v1h)
+    ; check: $(v1h=$V) = iconst.i32 0
+    ; check: call fn1(v0, $v1h)
     call fn2(v0, v1)
     ; check: call fn2(v0, $V, $V)
     return

@@ -213,8 +213,8 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     // embedded as part of arguments), so use a custom legalization for now.
     narrow.custom_legalize(iconst, "narrow_iconst");
 
-    {
-        let inst = uextend.bind(I128).bind(I64);
+    for &(ty, ty_half) in &[(I128, I64), (I64, I32)] {
+        let inst = uextend.bind(ty).bind(ty_half);
         narrow.legalize(
             def!(a = inst(x)),
             vec![
@@ -224,12 +224,12 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
         );
     }
 
-    {
-        let inst = sextend.bind(I128).bind(I64);
+    for &(ty, ty_half, shift) in &[(I128, I64, 63), (I64, I32, 31)] {
+        let inst = sextend.bind(ty).bind(ty_half);
         narrow.legalize(
             def!(a = inst(x)),
             vec![
-                def!(ah = sshr_imm(x, Literal::constant(&imm.imm64, 63))), // splat sign bit to whole number
+                def!(ah = sshr_imm(x, Literal::constant(&imm.imm64, shift))), // splat sign bit to whole number
                 def!(a = iconcat(x, ah)),
             ],
         );
