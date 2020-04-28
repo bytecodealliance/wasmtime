@@ -163,8 +163,9 @@ pub trait MachInst: Clone + Debug {
     /// (e.g., add directly from or directly to memory), like x86.
     fn maybe_direct_reload(&self, reg: VirtualReg, slot: SpillSlot) -> Option<Self>;
 
-    /// Determine a register class to store the given CraneLift type.
-    fn rc_for_type(ty: Type) -> RegClass;
+    /// Determine a register class to store the given Cranelift type.
+    /// May return an error if the type isn't supported by this backend.
+    fn rc_for_type(ty: Type) -> CodegenResult<RegClass>;
 
     /// Generate a jump to another target. Used during lowering of
     /// control flow.

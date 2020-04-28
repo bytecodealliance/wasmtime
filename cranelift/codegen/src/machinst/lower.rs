@@ -10,7 +10,7 @@ use crate::ir::{
     MemFlags, Opcode, Signature, SourceLoc, Type, Value, ValueDef,
 };
 use crate::machinst::{ABIBody, BlockIndex, VCode, VCodeBuilder, VCodeInst};
-use crate::num_uses::NumUses;
+use crate::{num_uses::NumUses, CodegenResult};
 
 use regalloc::{Reg, RegClass, Set, VirtualReg, Writable};
 
@@ -144,7 +144,7 @@ enum GenerateReturn {
 
 impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Prepare a new lowering context for the given IR function.
-    pub fn new(f: &'func Function, abi: Box<dyn ABIBody<I = I>>) -> Lower<'func, I> {
+    pub fn new(f: &'func Function, abi: Box<dyn ABIBody<I = I>>) -> CodegenResult<Lower<'func, I>> {
         let mut vcode = VCodeBuilder::new(abi);
 
         let num_uses = NumUses::compute(f).take_uses();
@@ -164,7 +164,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for param in f.dfg.block_params(bb) {
                 let vreg = alloc_vreg(
                     &mut value_regs,
-                    I::rc_for_type(f.dfg.value_type(*param)),
+                    I::rc_for_type(f.dfg.value_type(*param))?,
                     *param,
                     &mut next_vreg,
                 );
@@ -174,7 +174,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 for result in f.dfg.inst_results(inst) {
                     let vreg = alloc_vreg(
                         &mut value_regs,
-                        I::rc_for_type(f.dfg.value_type(*result)),
+                        I::rc_for_type(f.dfg.value_type(*result))?,
                         *result,
                         &mut next_vreg,
                     );
@@ -188,20 +188,20 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         for ret in &f.signature.returns {
             let v = next_vreg;
             next_vreg += 1;
-            let regclass = I::rc_for_type(ret.value_type);
+            let regclass = I::rc_for_type(ret.value_type)?;
             let vreg = Reg::new_virtual(regclass, v);
             retval_regs.push((vreg, ret.extension));
             vcode.set_vreg_type(vreg.as_virtual_reg().unwrap(), ret.value_type);
         }
 
-        Lower {
+        Ok(Lower {
             f,
             vcode,
             num_uses,
             value_regs,
             retval_regs,
             next_vreg,
-        }
+        })
     }
 
     fn gen_arg_setup(&mut self) {
@@ -267,7 +267,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     /// Lower the function.
-    pub fn lower<B: LowerBackend<MInst = I>>(mut self, backend: &B) -> VCode<I> {
+    pub fn lower<B: LowerBackend<MInst = I>>(mut self, backend: &B) -> CodegenResult<VCode<I>> {
         // Find all reachable blocks.
         let bbs = self.find_reachable_bbs();
 
@@ -421,13 +421,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             );
 
             // Create a temporary for each block parameter.
-            let phi_classes: Vec<(Type, RegClass)> = self
+            let phi_classes: Vec<Type> = self
                 .f
                 .dfg
                 .block_params(orig_block)
                 .iter()
                 .map(|p| self.f.dfg.value_type(*p))
-                .map(|ty| (ty, I::rc_for_type(ty)))
                 .collect();
 
             // FIXME sewardj 2020Feb29: use SmallVec
@@ -455,28 +454,27 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             if !Set::<Reg>::from_vec(src_regs.clone()).intersects(&Set::<Reg>::from_vec(
                 dst_regs.iter().map(|r| r.to_reg()).collect(),
             )) {
-                for (dst_reg, (src_reg, (ty, _))) in
+                for (dst_reg, (src_reg, ty)) in
                     dst_regs.iter().zip(src_regs.iter().zip(phi_classes))
                 {
                     self.vcode.push(I::gen_move(*dst_reg, *src_reg, ty));
                 }
             } else {
                 // There's some overlap, so play safe and copy via temps.
-
-                let tmp_regs: Vec<Writable<Reg>> = phi_classes
-                    .iter()
-                    .map(|&(ty, rc)| self.tmp(rc, ty)) // borrows `self` mutably.
-                    .collect();
+                let mut tmp_regs = Vec::with_capacity(phi_classes.len());
+                for &ty in &phi_classes {
+                    tmp_regs.push(self.tmp(I::rc_for_type(ty)?, ty));
+                }
 
                 debug!("phi_temps = {:?}", tmp_regs);
                 debug_assert!(tmp_regs.len() == src_regs.len());
 
-                for (tmp_reg, (src_reg, &(ty, _))) in
+                for (tmp_reg, (src_reg, &ty)) in
                     tmp_regs.iter().zip(src_regs.iter().zip(phi_classes.iter()))
                 {
                     self.vcode.push(I::gen_move(*tmp_reg, *src_reg, ty));
                 }
-                for (dst_reg, (tmp_reg, &(ty, _))) in
+                for (dst_reg, (tmp_reg, &ty)) in
                     dst_regs.iter().zip(tmp_regs.iter().zip(phi_classes.iter()))
                 {
                     self.vcode.push(I::gen_move(*dst_reg, tmp_reg.to_reg(), ty));
@@ -495,7 +493,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         }
 
         // Now that we've emitted all instructions into the VCodeBuilder, let's build the VCode.
-        self.vcode.build()
+        Ok(self.vcode.build())
     }
 
     /// Reduce the use-count of an IR instruction. Use this when, e.g., isel incorporates the

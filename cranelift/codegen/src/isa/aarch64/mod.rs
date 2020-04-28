@@ -34,7 +34,11 @@ impl AArch64Backend {
 
     /// This performs lowering to VCode, register-allocates the code, computes block layout and
     /// finalizes branches. The result is ready for binary emission.
-    fn compile_vcode(&self, func: &Function, flags: settings::Flags) -> VCode<inst::Inst> {
+    fn compile_vcode(
+        &self,
+        func: &Function,
+        flags: settings::Flags,
+    ) -> CodegenResult<VCode<inst::Inst>> {
         let abi = Box::new(abi::AArch64ABIBody::new(func, flags));
         compile::compile::<AArch64Backend>(func, self, abi)
     }
@@ -47,7 +51,7 @@ impl MachBackend for AArch64Backend {
         want_disasm: bool,
     ) -> CodegenResult<MachCompileResult> {
         let flags = self.flags();
-        let vcode = self.compile_vcode(func, flags.clone());
+        let vcode = self.compile_vcode(func, flags.clone())?;
         let sections = vcode.emit();
         let frame_size = vcode.frame_size();
 
