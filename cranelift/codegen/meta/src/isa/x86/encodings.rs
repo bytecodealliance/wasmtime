@@ -1493,8 +1493,13 @@ fn define_alu(
     for &(inst, rrr) in &[(rotl, 0), (rotr, 1), (ishl, 4), (ushr, 5), (sshr, 7)] {
         // Cannot use enc_i32_i64 for this pattern because instructions require
         // to bind any.
+        e.enc32(inst.bind(I32).bind(I8), rec_rc.opcodes(&ROTATE_CL).rrr(rrr));
         e.enc32(
-            inst.bind(I32).bind(Any),
+            inst.bind(I32).bind(I16),
+            rec_rc.opcodes(&ROTATE_CL).rrr(rrr),
+        );
+        e.enc32(
+            inst.bind(I32).bind(I32),
             rec_rc.opcodes(&ROTATE_CL).rrr(rrr),
         );
         e.enc64(
