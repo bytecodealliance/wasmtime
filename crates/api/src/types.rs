@@ -222,7 +222,7 @@ impl FuncType {
     /// or `None` if one of the types/results wasn't supported or compatible
     /// with cranelift.
     pub(crate) fn get_wasmtime_signature(&self, pointer_type: ir::Type) -> Option<ir::Signature> {
-        use wasmtime_environ::ir::{types, AbiParam, ArgumentPurpose, Signature};
+        use wasmtime_environ::ir::{AbiParam, ArgumentPurpose, Signature};
         use wasmtime_jit::native;
         let call_conv = native::call_conv();
         let mut params = self
@@ -235,7 +235,10 @@ impl FuncType {
             .iter()
             .map(|p| p.get_wasmtime_type().map(AbiParam::new))
             .collect::<Option<Vec<_>>>()?;
-        params.insert(0, AbiParam::special(types::I64, ArgumentPurpose::VMContext));
+        params.insert(
+            0,
+            AbiParam::special(pointer_type, ArgumentPurpose::VMContext),
+        );
         params.insert(1, AbiParam::new(pointer_type));
 
         Some(Signature {
