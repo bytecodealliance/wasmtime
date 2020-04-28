@@ -35,7 +35,6 @@ pub(crate) fn get_file_type(file: &File) -> io::Result<types::Filetype> {
         types::Filetype::CharacterDevice
     } else if file_type.is_disk() {
         // disk file: file, dir or disk device
-        let file = file.as_file()?;
         let meta = file.metadata()?;
         if meta.is_dir() {
             types::Filetype::Directory
