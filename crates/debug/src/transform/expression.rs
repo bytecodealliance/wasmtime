@@ -270,10 +270,9 @@ impl CompiledExpression {
                 Box::new(
                     scope
                         .iter()
-                        .map(move |(wasm_start, wasm_end)| {
+                        .flat_map(move |(wasm_start, wasm_end)| {
                             addr_tr.translate_ranges(*wasm_start, *wasm_end)
                         })
-                        .flatten(),
                 ),
                 code.clone(),
             );
@@ -560,7 +559,7 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
             let j = match ranges.binary_search_by(|s| s.start.cmp(&range_end)) {
                 Ok(i) | Err(i) => i,
             };
-            // Starting for the end, intersect (range_start..range_end) with
+            // Starting from the end, intersect (range_start..range_end) with
             // self.ranges array.
             for i in (i..j).rev() {
                 if range_end <= ranges[i].start || ranges[i].end <= range_start {
