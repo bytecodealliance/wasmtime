@@ -20,13 +20,15 @@ fn test_import_calling_export() {
     let module = Module::new(&store, WAT).expect("failed to create module");
 
     let other = Rc::new(RefCell::new(None::<Func>));
-    let other2 = other.clone();
+    let other2 = Rc::downgrade(&other);
 
     let callback_func = Func::new(
         &store,
         FuncType::new(Box::new([]), Box::new([])),
         move |_, _, _| {
             other2
+                .upgrade()
+                .unwrap()
                 .borrow()
                 .as_ref()
                 .expect("expected a function ref")
