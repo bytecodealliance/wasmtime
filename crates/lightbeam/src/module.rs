@@ -182,7 +182,7 @@ impl ExecutableModule {
     ) -> Result<T, ExecutionError> {
         let module = &self.module;
 
-        if func_idx as usize >= module.ctx.func_ty_indicies.len() {
+        if func_idx as usize >= module.ctx.func_ty_indices.len() {
             return Err(ExecutionError::FuncIndexOutOfBounds);
         }
 
@@ -249,7 +249,7 @@ impl VmCtx {
 #[derive(Default, Debug)]
 pub struct SimpleContext {
     types: Vec<FuncType>,
-    func_ty_indicies: Vec<u32>,
+    func_ty_indices: Vec<u32>,
 }
 
 pub const WASM_PAGE_SIZE: usize = 65_536;
@@ -393,7 +393,7 @@ impl ModuleContext for SimpleContext {
     }
 
     fn func_type_index(&self, func_idx: u32) -> u32 {
-        self.func_ty_indicies[func_idx as usize]
+        self.func_ty_indices[func_idx as usize]
     }
 
     fn defined_global_index(&self, _index: u32) -> Option<u32> {
@@ -539,7 +539,7 @@ pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
 
     if let SectionCode::Function = section.code {
         let functions = section.get_function_section_reader()?;
-        output.ctx.func_ty_indicies = translate_sections::function(functions)?;
+        output.ctx.func_ty_indices = translate_sections::function(functions)?;
 
         reader.skip_custom_sections()?;
         if reader.eof() {
