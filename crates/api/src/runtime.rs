@@ -145,6 +145,11 @@ impl Config {
     ///
     /// This is `false` by default.
     ///
+    /// > **Note**: Wasmtime does not implement everything for the wasm threads
+    /// > spec at this time, so bugs, panics, and possibly segfaults should be
+    /// > expected. This should not be enabled in a production setting right
+    /// > now.
+    ///
     /// [threads]: https://github.com/webassembly/threads
     pub fn wasm_threads(&mut self, enable: bool) -> &mut Self {
         self.validating_config.operator_config.enable_threads = enable;
@@ -169,6 +174,11 @@ impl Config {
     /// also enable the bulk memory feature.
     ///
     /// This is `false` by default.
+    ///
+    /// > **Note**: Wasmtime does not implement everything for the reference
+    /// > types proposal spec at this time, so bugs, panics, and possibly
+    /// > segfaults should be expected. This should not be enabled in a
+    /// > production setting right now.
     ///
     /// [proposal]: https://github.com/webassembly/reference-types
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
@@ -195,6 +205,11 @@ impl Config {
     /// operators being in a module.
     ///
     /// This is `false` by default.
+    ///
+    /// > **Note**: Wasmtime does not implement everything for the wasm simd
+    /// > spec at this time, so bugs, panics, and possibly segfaults should be
+    /// > expected. This should not be enabled in a production setting right
+    /// > now.
     ///
     /// [proposal]: https://github.com/webassembly/simd
     pub fn wasm_simd(&mut self, enable: bool) -> &mut Self {
