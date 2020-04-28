@@ -61,6 +61,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let cls = insts.by_name("cls");
     let clz = insts.by_name("clz");
     let ctz = insts.by_name("ctz");
+    let copy = insts.by_name("copy");
     let fabs = insts.by_name("fabs");
     let f32const = insts.by_name("f32const");
     let f64const = insts.by_name("f64const");
@@ -626,6 +627,14 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
         widen.legalize(
             def!(brnz.ty(x, block, vararg)),
             vec![def!(a = uextend.I32(x)), def!(brnz(a, block, vararg))],
+        );
+    }
+
+    for &(ty_half, ty) in &[(I64, I128), (I32, I64)] {
+        let inst = ireduce.bind(ty_half).bind(ty);
+        expand.legalize(
+            def!(a = inst(x)),
+            vec![def!((b, c) = isplit(x)), def!(a = copy(b))],
         );
     }
 
