@@ -94,9 +94,14 @@ fn apply_reloc(
             write_unaligned(reloc_address as *mut u32, reloc_delta_u32);
         },
         #[cfg(target_pointer_width = "32")]
-        Reloc::X86CallPCRel4 => {
-            // ignore
-        }
+        Reloc::X86CallPCRel4 => unsafe {
+            let reloc_address = body.add(r.offset as usize) as usize;
+            let reloc_addend = r.addend as isize;
+            let reloc_delta_u32 = (target_func_address as u32)
+                .wrapping_sub(reloc_address as u32)
+                .wrapping_add(reloc_addend as u32);
+            write_unaligned(reloc_address as *mut u32, reloc_delta_u32);
+        },
         Reloc::X86PCRelRodata4 => {
             // ignore
         }
