@@ -42,9 +42,22 @@ impl ExpressionWriter {
         self.write_u8(op.0 as u8)
     }
 
-    pub fn write_op_reg(&mut self, op: gimli::DwOp, reg: u16) -> write::Result<()> {
-        assert!(reg < 32);
-        self.write_u8(op.0 as u8 + reg as u8)
+    pub fn write_op_reg(&mut self, reg: u16) -> write::Result<()> {
+        if reg < 32 {
+            self.write_u8(gimli::constants::DW_OP_reg0.0 as u8 + reg as u8)
+        } else {
+            self.write_op(gimli::constants::DW_OP_regx)?;
+            self.write_uleb128(reg.into())
+        }
+    }
+
+    pub fn write_op_breg(&mut self, reg: u16) -> write::Result<()> {
+        if reg < 32 {
+            self.write_u8(gimli::constants::DW_OP_breg0.0 as u8 + reg as u8)
+        } else {
+            self.write_op(gimli::constants::DW_OP_bregx)?;
+            self.write_uleb128(reg.into())
+        }
     }
 
     pub fn write_u8(&mut self, b: u8) -> write::Result<()> {
@@ -64,7 +77,7 @@ impl ExpressionWriter {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum CompiledExpressionPart {
     // Untranslated DWARF expression.
     Code(Vec<u8>),
@@ -72,11 +85,11 @@ enum CompiledExpressionPart {
     // The trailing field denotes that the operator was last in sequence,
     // and it is the DWARF location (not a pointer).
     Local { label: ValueLabel, trailing: bool },
-    // Deference is needed.
+    // Dereference is needed.
     Deref,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CompiledExpression {
     parts: Vec<CompiledExpressionPart>,
     need_deref: bool,
@@ -110,24 +123,14 @@ fn translate_loc(
         ValueLoc::Reg(reg) if add_stack_value => {
             let machine_reg = isa.map_dwarf_register(reg)?;
             let mut writer = ExpressionWriter::new();
-            if machine_reg < 32 {
-                writer.write_op_reg(gimli::constants::DW_OP_reg0, machine_reg)?;
-            } else {
-                writer.write_op(gimli::constants::DW_OP_regx)?;
-                writer.write_uleb128(machine_reg.into())?;
-            }
+            writer.write_op_reg(machine_reg)?;
             Some(writer.into_vec())
         }
         ValueLoc::Reg(reg) => {
             assert!(!add_stack_value);
             let machine_reg = isa.map_dwarf_register(reg)?;
             let mut writer = ExpressionWriter::new();
-            if machine_reg < 32 {
-                writer.write_op_reg(gimli::constants::DW_OP_breg0, machine_reg)?;
-            } else {
-                writer.write_op(gimli::constants::DW_OP_bregx)?;
-                writer.write_uleb128(machine_reg.into())?;
-            }
+            writer.write_op_breg(machine_reg)?;
             writer.write_sleb128(0)?;
             Some(writer.into_vec())
         }
@@ -135,7 +138,7 @@ fn translate_loc(
             if let Some(frame_info) = frame_info {
                 if let Some(ss_offset) = frame_info.stack_slots[ss].offset {
                     let mut writer = ExpressionWriter::new();
-                    writer.write_op_reg(gimli::constants::DW_OP_breg0, X86_64::RBP.0)?;
+                    writer.write_op_breg(X86_64::RBP.0)?;
                     writer.write_sleb128(ss_offset as i64 + X86_64_STACK_OFFSET)?;
                     if !add_stack_value {
                         writer.write_op(gimli::constants::DW_OP_deref)?;
@@ -171,7 +174,7 @@ fn append_memory_deref(
         }
         ValueLoc::Stack(ss) => {
             if let Some(ss_offset) = frame_info.stack_slots[ss].offset {
-                writer.write_op_reg(gimli::constants::DW_OP_breg0, X86_64::RBP.0)?;
+                writer.write_op_breg(X86_64::RBP.0)?;
                 writer.write_sleb128(ss_offset as i64 + X86_64_STACK_OFFSET)?;
                 writer.write_op(gimli::constants::DW_OP_deref)?;
                 writer.write_op(gimli::constants::DW_OP_consts)?;
@@ -615,19 +618,45 @@ mod tests {
 
     #[test]
     fn test_debug_parse_expressions() {
+        use super::{CompiledExpression, CompiledExpressionPart};
+        use wasmtime_environ::entity::EntityRef;
+
+        let (val1, val3, val20) = (ValueLabel::new(1), ValueLabel::new(3), ValueLabel::new(20));
+
         // DW_OP_WASM_location 0x0 +20, DW_OP_stack_value
         let e = expression!(0xed, 0x00, 0x14, 0x9f);
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
             .expect("expression");
-        assert_eq!(format!("{:?}", ce), "CompiledExpression { parts: [Local { label: val20, trailing: true }], need_deref: false }");
+        assert_eq!(
+            ce,
+            CompiledExpression {
+                parts: vec![CompiledExpressionPart::Local {
+                    label: val20,
+                    trailing: true
+                }],
+                need_deref: false
+            }
+        );
 
         //  DW_OP_WASM_location 0x0 +1, DW_OP_plus_uconst 0x10, DW_OP_stack_value
         let e = expression!(0xed, 0x00, 0x01, 0x23, 0x10, 0x9f);
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
             .expect("expression");
-        assert_eq!(format!("{:?}", ce), "CompiledExpression { parts: [Local { label: val1, trailing: false }, Code([35, 16, 159])], need_deref: false }");
+        assert_eq!(
+            ce,
+            CompiledExpression {
+                parts: vec![
+                    CompiledExpressionPart::Local {
+                        label: val1,
+                        trailing: false
+                    },
+                    CompiledExpressionPart::Code(vec![35, 16, 159])
+                ],
+                need_deref: false
+            }
+        );
 
         // Frame base: DW_OP_WASM_location 0x0 +3, DW_OP_stack_value
         let e = expression!(0xed, 0x00, 0x03, 0x9f);
@@ -637,7 +666,19 @@ mod tests {
         let ce = compile_expression(&e, DWARF_ENCODING, fe.as_ref())
             .expect("non-error")
             .expect("expression");
-        assert_eq!(format!("{:?}", ce), "CompiledExpression { parts: [Local { label: val3, trailing: false }, Code([35, 18])], need_deref: true }");
+        assert_eq!(
+            ce,
+            CompiledExpression {
+                parts: vec![
+                    CompiledExpressionPart::Local {
+                        label: val3,
+                        trailing: false
+                    },
+                    CompiledExpressionPart::Code(vec![35, 18])
+                ],
+                need_deref: true
+            }
+        );
     }
 
     fn create_mock_address_transform() -> AddressTransform {
