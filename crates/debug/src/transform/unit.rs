@@ -432,7 +432,11 @@ where
             out_strings,
             &mut pending_die_refs,
             &mut pending_di_refs,
-            FileAttributeContext::Children(&file_map, file_index_base, current_frame_base.top()),
+            FileAttributeContext::Children {
+                file_map: &file_map,
+                file_index_base,
+                frame_base: current_frame_base.top(),
+            },
             isa,
         )?;
 

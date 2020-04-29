@@ -13,7 +13,11 @@ use wasmtime_environ::isa::TargetIsa;
 #[derive(Debug)]
 pub(crate) enum FileAttributeContext<'a> {
     Root(Option<DebugLineOffset>),
-    Children(&'a Vec<write::FileId>, u64, Option<&'a CompiledExpression>),
+    Children {
+        file_map: &'a [write::FileId],
+        file_index_base: u64,
+        frame_base: Option<&'a CompiledExpression>,
+    },
 }
 
 fn is_exprloc_to_loclist_allowed(attr_name: gimli::constants::DwAt) -> bool {
@@ -110,7 +114,12 @@ where
                 }
             }
             AttributeValue::FileIndex(i) => {
-                if let FileAttributeContext::Children(file_map, file_index_base, _) = file_context {
+                if let FileAttributeContext::Children {
+                    file_map,
+                    file_index_base,
+                    ..
+                } = file_context
+                {
                     write::AttributeValue::FileIndex(Some(file_map[(i - file_index_base) as usize]))
                 } else {
                     return Err(TransformError("unexpected file index attribute").into());
@@ -144,7 +153,7 @@ where
                     unit.addr_base,
                 )?;
                 let frame_base =
-                    if let FileAttributeContext::Children(_, _, frame_base) = file_context {
+                    if let FileAttributeContext::Children { frame_base, .. } = file_context {
                         frame_base
                     } else {
                         None
@@ -193,7 +202,7 @@ where
             }
             AttributeValue::Exprloc(ref expr) => {
                 let frame_base =
-                    if let FileAttributeContext::Children(_, _, frame_base) = file_context {
+                    if let FileAttributeContext::Children { frame_base, .. } = file_context {
                         frame_base
                     } else {
                         None
