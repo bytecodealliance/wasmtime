@@ -1,7 +1,7 @@
 #![allow(clippy::float_cmp)]
 
 use self::registers::*;
-use crate::error::Error;
+use crate::error::{Error, error};
 use crate::microwasm::{BrTarget, Ieee32, Ieee64, SignlessType, Type, Value, F32, F64, I32, I64};
 use crate::module::{ModuleContext, Signature};
 use crate::Sinks;
@@ -54,28 +54,6 @@ mod magic {
 }
 
 use magic::BuiltinFunctionIndex;
-
-fn error_nopanic(inner: impl Into<String>) -> Error {
-    Error::Microwasm(inner.into())
-}
-
-// For debugging, we have the option to panic when we hit an error so we can see the backtrace,
-// as well as inspect state in `rr` or `gdb`.
-#[cfg(debug_assertions)]
-#[allow(unreachable_code)]
-fn error(inner: impl Into<String> + Display) -> Error {
-    panic!(
-        "`panic_on_error` feature enabled in `lightbeam`, this should be used for debugging \
-        ONLY: {}",
-        inner,
-    );
-    error_nopanic(inner)
-}
-
-#[cfg(not(debug_assertions))]
-fn error(inner: impl Into<String> + Display) -> Error {
-    error_nopanic(inner)
-}
 
 /// Size of a pointer on the target in bytes.
 const WORD_SIZE: u32 = 8;

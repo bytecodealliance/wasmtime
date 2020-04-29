@@ -1,6 +1,29 @@
 use capstone;
+use std::fmt::Display;
 use thiserror::Error;
 use wasmparser::BinaryReaderError;
+
+pub fn error_nopanic(inner: impl Into<String>) -> Error {
+    Error::Microwasm(inner.into())
+}
+
+// For debugging, we have the option to panic when we hit an error so we can see the backtrace,
+// as well as inspect state in `rr` or `gdb`.
+#[cfg(debug_assertions)]
+#[allow(unreachable_code)]
+pub fn error(inner: impl Into<String> + Display) -> Error {
+    panic!(
+        "`panic_on_error` feature enabled in `lightbeam`, this should be used for debugging \
+        ONLY: {}",
+        inner,
+    );
+    error_nopanic(inner)
+}
+
+#[cfg(not(debug_assertions))]
+pub fn error(inner: impl Into<String> + Display) -> Error {
+    error_nopanic(inner)
+}
 
 #[derive(Error, PartialEq, Eq, Clone, Debug)]
 pub enum Error {

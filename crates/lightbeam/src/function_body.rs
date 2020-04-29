@@ -1,11 +1,11 @@
 #[cfg(debug_assertions)]
 use crate::backend::Registers;
-use crate::backend::{
-    ret_locs, BlockCallingConvention, BrAction, CodeGenSession, Label, Target, ValueLocation,
-    VirtualCallingConvention,
-};
 use crate::{
-    error::Error,
+    backend::{
+        ret_locs, BlockCallingConvention, BrAction, CodeGenSession, Label, Target, ValueLocation,
+        VirtualCallingConvention,
+    },
+    error::{error, Error},
     microwasm::*,
     module::{ModuleContext, SigType, Signature},
 };
@@ -84,7 +84,7 @@ where
     )?
     .flat_map(|ops| match ops {
         Ok(ops) => Left(ops.into_iter().map(Ok)),
-        Err(e) => Right(iter::once(Err(Error::Microwasm(e.to_string())))),
+        Err(e) => Right(iter::once(Err(e))),
     });
 
     translate(session, sinks, func_idx, microwasm_conv)?;
@@ -165,14 +165,6 @@ where
         while let Some(op_offset) = body.next() {
             let WithLoc { op, offset } = op_offset?;
 
-            println!(
-                "{}",
-                DisassemblyOpFormatter(WithLoc {
-                    op: op.clone(),
-                    offset
-                })
-            );
-
             ctx.set_source_loc(offset);
             ctx.sinks.offsets.offset(offset, ctx.asm.offset().0);
 
@@ -182,11 +174,7 @@ where
             })) = body.peek()
             {
                 let block = match blocks.get_mut(&BrTarget::Label(label.clone())) {
-                    None => {
-                        return Err(Error::Microwasm(
-                            "Label defined before being declared".to_string(),
-                        ))
-                    }
+                    None => return Err(error("Label defined before being declared")),
                     Some(o) => o,
                 };
                 block.is_next = true;
@@ -268,13 +256,11 @@ where
 
             if let Operator::Start(_) = &op {
                 if in_block {
-                    return Err(Error::Microwasm(
-                        "New block started without previous block ending".to_string(),
-                    ));
+                    return Err(error("New block started without previous block ending"));
                 }
             } else {
                 if !in_block {
-                    return Err(Error::Microwasm("Operator not in block".to_string()));
+                    return Err(error("Operator not in block"));
                 }
             }
 
@@ -300,9 +286,8 @@ where
                             //       Microwasm generated from Wasm.
                             if block.actual_num_callers == 0 {
                                 if block.calling_convention.is_some() {
-                                    return Err(Error::Microwasm(
-                                        "Block marked unreachable but has been jumped to before"
-                                            .to_string(),
+                                    return Err(error(
+                                        "Block marked unreachable but has been jumped to before",
                                     ));
                                 }
 
@@ -315,14 +300,13 @@ where
                                     }?;
 
                                     match skipped {
-                                        Operator::End(..) => {
+                                        Operator::End(..) | Operator::Unreachable => {
                                             in_block = false;
                                             break;
                                         }
                                         Operator::Start(..) => {
-                                            return Err(Error::Microwasm(
-                                                "New block started without previous block ending"
-                                                    .to_string(),
+                                            return Err(error(
+                                                "New block started without previous block ending",
                                             ));
                                         }
                                         Operator::Declare {
@@ -363,9 +347,7 @@ where
                                     ctx.set_state(virt.clone())?;
                                 }
                                 None => {
-                                    return Err(Error::Microwasm(
-                                        "No calling convention to apply".to_string(),
-                                    ));
+                                    return Err(error("No calling convention to apply"));
                                 }
                             }
 
@@ -381,9 +363,7 @@ where
                             entry.remove_entry();
                         }
                     } else {
-                        return Err(Error::Microwasm(
-                            "Label defined before being declared".to_string(),
-                        ));
+                        return Err(error("Label defined before being declared"));
                     }
                 }
                 Operator::Declare {
@@ -511,7 +491,7 @@ where
                                     for locs in block_locs.zip(cur_locs) {
                                         match locs {
                                             (Some(block_loc), Some(cur_loc)) if block_loc != cur_loc => {
-                                                return Err(Error::Microwasm(
+                                                return Err(error(
                                                     format!(
                                                         "Can't pass different params to different elems of \
                                                         `br_table` yet (expected {:?}, got {:?})",
@@ -912,7 +892,7 @@ where
                     table_index,
                 } => {
                     if table_index != 0 {
-                        return Err(Error::Microwasm("table_index not equal to 0".to_string()));
+                        return Err(error("table_index not equal to 0"));
                     }
 
                     let callee_ty = module_context.signature(type_index);
