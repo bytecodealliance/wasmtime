@@ -26,6 +26,6 @@ impl InstanceExt for Instance {
     where
         H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
     {
-        self.instance_handle.clone().set_signal_handler(handler);
+        self.handle.set_signal_handler(handler);
     }
 }

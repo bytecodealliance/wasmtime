@@ -1,17 +1,19 @@
 use super::create_handle::create_handle;
 use crate::externals::{LinearMemory, MemoryCreator};
+use crate::trampoline::StoreInstanceHandle;
 use crate::Store;
 use crate::{Limits, MemoryType};
 use anyhow::Result;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::{wasm, EntityIndex, MemoryPlan, Module, WASM_PAGE_SIZE};
-use wasmtime_runtime::{
-    InstanceHandle, RuntimeLinearMemory, RuntimeMemoryCreator, VMMemoryDefinition,
-};
+use wasmtime_runtime::{RuntimeLinearMemory, RuntimeMemoryCreator, VMMemoryDefinition};
 
 use std::sync::Arc;
 
-pub fn create_handle_with_memory(store: &Store, memory: &MemoryType) -> Result<InstanceHandle> {
+pub fn create_handle_with_memory(
+    store: &Store,
+    memory: &MemoryType,
+) -> Result<StoreInstanceHandle> {
     let mut module = Module::new();
 
     let memory = wasm::Memory {

@@ -1,6 +1,7 @@
 //! Support for a calling of an imported function.
 
 use super::create_handle::create_handle;
+use crate::trampoline::StoreInstanceHandle;
 use crate::{FuncType, Store, Trap};
 use anyhow::{bail, Result};
 use std::any::Any;
@@ -203,7 +204,7 @@ pub fn create_handle_with_function(
     ft: &FuncType,
     func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
     store: &Store,
-) -> Result<(InstanceHandle, VMTrampoline)> {
+) -> Result<(StoreInstanceHandle, VMTrampoline)> {
     let isa = {
         let isa_builder = native::builder();
         let flag_builder = settings::builder();
@@ -267,7 +268,7 @@ pub unsafe fn create_handle_with_raw_function(
     trampoline: VMTrampoline,
     store: &Store,
     state: Box<dyn Any>,
-) -> Result<InstanceHandle> {
+) -> Result<StoreInstanceHandle> {
     let isa = {
         let isa_builder = native::builder();
         let flag_builder = settings::builder();

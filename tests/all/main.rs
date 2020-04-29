@@ -15,4 +15,5 @@ mod memory_creator;
 mod name;
 mod stack_overflow;
 mod traps;
+mod use_after_drop;
 mod wast;

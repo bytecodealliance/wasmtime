@@ -1,12 +1,12 @@
 use super::create_handle::create_handle;
+use crate::trampoline::StoreInstanceHandle;
 use crate::Store;
 use crate::{TableType, ValType};
 use anyhow::{bail, Result};
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::{wasm, EntityIndex, Module};
-use wasmtime_runtime::InstanceHandle;
 
-pub fn create_handle_with_table(store: &Store, table: &TableType) -> Result<InstanceHandle> {
+pub fn create_handle_with_table(store: &Store, table: &TableType) -> Result<StoreInstanceHandle> {
     let mut module = Module::new();
 
     let table = wasm::Table {

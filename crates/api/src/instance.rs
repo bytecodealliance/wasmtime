@@ -1,12 +1,9 @@
-use crate::externals::{Export, Extern, Global, Memory, Table};
-use crate::func::Func;
-use crate::module::Module;
-use crate::runtime::{Config, Store};
-use crate::trap::Trap;
+use crate::trampoline::StoreInstanceHandle;
+use crate::{Export, Extern, Func, Global, Memory, Module, Store, Table, Trap};
 use anyhow::{bail, Error, Result};
 use std::any::Any;
 use wasmtime_jit::{CompiledModule, Resolver};
-use wasmtime_runtime::{InstanceHandle, InstantiationError, SignatureRegistry};
+use wasmtime_runtime::{InstantiationError, SignatureRegistry};
 
 struct SimpleResolver<'a> {
     imports: &'a [Extern],
@@ -21,22 +18,35 @@ impl Resolver for SimpleResolver<'_> {
 }
 
 fn instantiate(
-    config: &Config,
+    store: &Store,
     compiled_module: &CompiledModule,
     imports: &[Extern],
     sig_registry: &SignatureRegistry,
     host: Box<dyn Any>,
-) -> Result<InstanceHandle, Error> {
+) -> Result<StoreInstanceHandle, Error> {
     let mut resolver = SimpleResolver { imports };
     unsafe {
-        let instance = compiled_module
-            .instantiate(
+        let config = store.engine().config();
+        let instance = compiled_module.instantiate(
+            &mut resolver,
+            sig_registry,
+            config.memory_creator.as_ref().map(|a| a as _),
+            host,
+        )?;
+
+        // After we've created the `InstanceHandle` we still need to run
+        // initialization to set up data/elements/etc. We do this after adding
+        // the `InstanceHandle` to the store though. This is required for safety
+        // because the start function (for example) may trap, but element
+        // initializers may have run which placed elements into other instance's
+        // tables. This means that from this point on, regardless of whether
+        // initialization is successful, we need to keep the instance alive.
+        let instance = store.add_instance(instance);
+        instance
+            .initialize(
                 config.validating_config.operator_config.enable_bulk_memory,
-                &mut resolver,
-                sig_registry,
-                config.memory_creator.as_ref().map(|a| a as _),
                 config.max_wasm_stack,
-                host,
+                &compiled_module.data_initializers(),
             )
             .map_err(|e| -> Error {
                 match e {
@@ -68,7 +78,7 @@ fn instantiate(
 /// call any code or execute anything!
 #[derive(Clone)]
 pub struct Instance {
-    pub(crate) instance_handle: InstanceHandle,
+    pub(crate) handle: StoreInstanceHandle,
     module: Module,
 }
 
@@ -137,9 +147,8 @@ impl Instance {
         }
 
         let info = module.register_frame_info();
-        let config = store.engine().config();
-        let instance_handle = instantiate(
-            config,
+        let handle = instantiate(
+            store,
             module.compiled_module(),
             imports,
             store.compiler().signatures(),
@@ -147,7 +156,7 @@ impl Instance {
         )?;
 
         Ok(Instance {
-            instance_handle,
+            handle,
             module: module.clone(),
         })
     }
@@ -164,15 +173,11 @@ impl Instance {
     pub fn exports<'instance>(
         &'instance self,
     ) -> impl ExactSizeIterator<Item = Export<'instance>> + 'instance {
-        let instance_handle = &self.instance_handle;
-        let store = self.module.store();
-        self.instance_handle
-            .exports()
-            .map(move |(name, entity_index)| {
-                let export = instance_handle.lookup_by_declaration(entity_index);
-                let extern_ = Extern::from_wasmtime_export(export, store, instance_handle.clone());
-                Export::new(name, extern_)
-            })
+        self.handle.exports().map(move |(name, entity_index)| {
+            let export = self.handle.lookup_by_declaration(entity_index);
+            let extern_ = Extern::from_wasmtime_export(export, self.handle.clone());
+            Export::new(name, extern_)
+        })
     }
 
     /// Looks up an exported [`Extern`] value by name.
@@ -182,12 +187,8 @@ impl Instance {
     ///
     /// Returns `None` if there was no export named `name`.
     pub fn get_export(&self, name: &str) -> Option<Extern> {
-        let export = self.instance_handle.lookup(&name)?;
-        Some(Extern::from_wasmtime_export(
-            export,
-            self.module.store(),
-            self.instance_handle.clone(),
-        ))
+        let export = self.handle.lookup(&name)?;
+        Some(Extern::from_wasmtime_export(export, self.handle.clone()))
     }
 
     /// Looks up an exported [`Func`] value by name.
@@ -220,10 +221,5 @@ impl Instance {
     /// it wasn't a global.
     pub fn get_global(&self, name: &str) -> Option<Global> {
         self.get_export(name)?.into_global()
-    }
-
-    #[doc(hidden)]
-    pub fn handle(&self) -> &InstanceHandle {
-        &self.instance_handle
     }
 }

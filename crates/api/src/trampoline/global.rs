@@ -1,12 +1,12 @@
 use super::create_handle::create_handle;
+use crate::trampoline::StoreInstanceHandle;
 use crate::Store;
 use crate::{GlobalType, Mutability, Val};
 use anyhow::{bail, Result};
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::{wasm, EntityIndex, Module};
-use wasmtime_runtime::InstanceHandle;
 
-pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<InstanceHandle> {
+pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<StoreInstanceHandle> {
     let global = wasm::Global {
         ty: match gt.content().get_wasmtime_type() {
             Some(t) => t,

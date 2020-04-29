@@ -1,7 +1,8 @@
-use crate::trampoline::{generate_global_export, generate_memory_export, generate_table_export};
+use crate::trampoline::{
+    generate_global_export, generate_memory_export, generate_table_export, StoreInstanceHandle,
+};
 use crate::values::{from_checked_anyfunc, into_checked_anyfunc, Val};
-use crate::Mutability;
-use crate::{ExternType, GlobalType, MemoryType, TableType, ValType};
+use crate::{ExternType, GlobalType, MemoryType, Mutability, TableType, ValType};
 use crate::{Func, Store, Trap};
 use anyhow::{anyhow, bail, Result};
 use std::slice;
@@ -92,21 +93,20 @@ impl Extern {
 
     pub(crate) fn from_wasmtime_export(
         wasmtime_export: wasmtime_runtime::Export,
-        store: &Store,
-        instance_handle: InstanceHandle,
+        instance: StoreInstanceHandle,
     ) -> Extern {
         match wasmtime_export {
             wasmtime_runtime::Export::Function(f) => {
-                Extern::Func(Func::from_wasmtime_function(f, store, instance_handle))
+                Extern::Func(Func::from_wasmtime_function(f, instance))
             }
             wasmtime_runtime::Export::Memory(m) => {
-                Extern::Memory(Memory::from_wasmtime_memory(m, store, instance_handle))
+                Extern::Memory(Memory::from_wasmtime_memory(m, instance))
             }
             wasmtime_runtime::Export::Global(g) => {
-                Extern::Global(Global::from_wasmtime_global(g, store, instance_handle))
+                Extern::Global(Global::from_wasmtime_global(g, instance))
             }
             wasmtime_runtime::Export::Table(t) => {
-                Extern::Table(Table::from_wasmtime_table(t, store, instance_handle))
+                Extern::Table(Table::from_wasmtime_table(t, instance))
             }
         }
     }
@@ -114,9 +114,9 @@ impl Extern {
     pub(crate) fn comes_from_same_store(&self, store: &Store) -> bool {
         let my_store = match self {
             Extern::Func(f) => f.store(),
-            Extern::Global(g) => &g.store,
-            Extern::Memory(m) => &m.store,
-            Extern::Table(t) => &t.store,
+            Extern::Global(g) => &g.instance.store,
+            Extern::Memory(m) => &m.instance.store,
+            Extern::Table(t) => &t.instance.store,
         };
         Store::same(my_store, store)
     }
@@ -163,9 +163,8 @@ impl From<Table> for Extern {
 /// instances are equivalent in their functionality.
 #[derive(Clone)]
 pub struct Global {
-    store: Store,
+    instance: StoreInstanceHandle,
     wasmtime_export: wasmtime_runtime::ExportGlobal,
-    wasmtime_handle: InstanceHandle,
 }
 
 impl Global {
@@ -187,11 +186,10 @@ impl Global {
         if val.ty() != *ty.content() {
             bail!("value provided does not match the type of this global");
         }
-        let (wasmtime_handle, wasmtime_export) = generate_global_export(store, &ty, val)?;
+        let (instance, wasmtime_export) = generate_global_export(store, &ty, val)?;
         Ok(Global {
-            store: store.clone(),
+            instance,
             wasmtime_export,
-            wasmtime_handle,
         })
     }
 
@@ -246,7 +244,7 @@ impl Global {
         if val.ty() != ty {
             bail!("global of type {:?} cannot be set to {:?}", ty, val.ty());
         }
-        if !val.comes_from_same_store(&self.store) {
+        if !val.comes_from_same_store(&self.instance.store) {
             bail!("cross-`Store` values are not supported");
         }
         unsafe {
@@ -264,13 +262,11 @@ impl Global {
 
     pub(crate) fn from_wasmtime_global(
         wasmtime_export: wasmtime_runtime::ExportGlobal,
-        store: &Store,
-        wasmtime_handle: InstanceHandle,
+        instance: StoreInstanceHandle,
     ) -> Global {
         Global {
-            store: store.clone(),
+            instance,
             wasmtime_export,
-            wasmtime_handle,
         }
     }
 }
@@ -292,18 +288,17 @@ impl Global {
 /// instances are equivalent in their functionality.
 #[derive(Clone)]
 pub struct Table {
-    store: Store,
-    wasmtime_handle: InstanceHandle,
+    instance: StoreInstanceHandle,
     wasmtime_export: wasmtime_runtime::ExportTable,
 }
 
 fn set_table_item(
-    handle: &InstanceHandle,
+    instance: &InstanceHandle,
     table_index: wasm::DefinedTableIndex,
     item_index: u32,
     item: wasmtime_runtime::VMCallerCheckedAnyfunc,
 ) -> Result<()> {
-    handle
+    instance
         .table_set(table_index, item_index, item)
         .map_err(|()| anyhow!("table element index out of bounds"))
 }
@@ -322,18 +317,17 @@ impl Table {
     /// Returns an error if `init` does not match the element type of the table.
     pub fn new(store: &Store, ty: TableType, init: Val) -> Result<Table> {
         let item = into_checked_anyfunc(init, store)?;
-        let (wasmtime_handle, wasmtime_export) = generate_table_export(store, &ty)?;
+        let (instance, wasmtime_export) = generate_table_export(store, &ty)?;
 
         // Initialize entries with the init value.
         let definition = unsafe { &*wasmtime_export.definition };
-        let index = wasmtime_handle.table_index(definition);
+        let index = instance.table_index(definition);
         for i in 0..definition.current_elements {
-            set_table_item(&wasmtime_handle, index, i, item.clone())?;
+            set_table_item(&instance, index, i, item.clone())?;
         }
 
         Ok(Table {
-            store: store.clone(),
-            wasmtime_handle,
+            instance,
             wasmtime_export,
         })
     }
@@ -345,10 +339,7 @@ impl Table {
     }
 
     fn wasmtime_table_index(&self) -> wasm::DefinedTableIndex {
-        unsafe {
-            self.wasmtime_handle
-                .table_index(&*self.wasmtime_export.definition)
-        }
+        unsafe { self.instance.table_index(&*self.wasmtime_export.definition) }
     }
 
     /// Returns the table element value at `index`.
@@ -356,8 +347,8 @@ impl Table {
     /// Returns `None` if `index` is out of bounds.
     pub fn get(&self, index: u32) -> Option<Val> {
         let table_index = self.wasmtime_table_index();
-        let item = self.wasmtime_handle.table_get(table_index, index)?;
-        Some(from_checked_anyfunc(item, &self.store))
+        let item = self.instance.table_get(table_index, index)?;
+        Some(from_checked_anyfunc(item, &self.instance.store))
     }
 
     /// Writes the `val` provided into `index` within this table.
@@ -368,8 +359,8 @@ impl Table {
     /// the right type to be stored in this table.
     pub fn set(&self, index: u32, val: Val) -> Result<()> {
         let table_index = self.wasmtime_table_index();
-        let item = into_checked_anyfunc(val, &self.store)?;
-        set_table_item(&self.wasmtime_handle, table_index, index, item)
+        let item = into_checked_anyfunc(val, &self.instance.store)?;
+        set_table_item(&self.instance, table_index, index, item)
     }
 
     /// Returns the current size of this table.
@@ -387,12 +378,11 @@ impl Table {
     /// error if `init` is not of the right type.
     pub fn grow(&self, delta: u32, init: Val) -> Result<u32> {
         let index = self.wasmtime_table_index();
-        let item = into_checked_anyfunc(init, &self.store)?;
-        if let Some(len) = self.wasmtime_handle.clone().table_grow(index, delta) {
-            let mut wasmtime_handle = self.wasmtime_handle.clone();
+        let item = into_checked_anyfunc(init, &self.instance.store)?;
+        if let Some(len) = self.instance.table_grow(index, delta) {
             for i in 0..delta {
                 let i = len - (delta - i);
-                set_table_item(&mut wasmtime_handle, index, i, item.clone())?;
+                set_table_item(&self.instance, index, i, item.clone())?;
             }
             Ok(len)
         } else {
@@ -414,7 +404,7 @@ impl Table {
         src_index: u32,
         len: u32,
     ) -> Result<()> {
-        if !Store::same(&dst_table.store, &src_table.store) {
+        if !Store::same(&dst_table.instance.store, &src_table.instance.store) {
             bail!("cross-`Store` table copies are not supported");
         }
 
@@ -423,10 +413,10 @@ impl Table {
         // come from different modules.
 
         let dst_table_index = dst_table.wasmtime_table_index();
-        let dst_table = dst_table.wasmtime_handle.get_defined_table(dst_table_index);
+        let dst_table = dst_table.instance.get_defined_table(dst_table_index);
 
         let src_table_index = src_table.wasmtime_table_index();
-        let src_table = src_table.wasmtime_handle.get_defined_table(src_table_index);
+        let src_table = src_table.instance.get_defined_table(src_table_index);
 
         runtime::Table::copy(dst_table, src_table, dst_index, src_index, len)
             .map_err(Trap::from_jit)?;
@@ -435,12 +425,10 @@ impl Table {
 
     pub(crate) fn from_wasmtime_table(
         wasmtime_export: wasmtime_runtime::ExportTable,
-        store: &Store,
-        wasmtime_handle: wasmtime_runtime::InstanceHandle,
+        instance: StoreInstanceHandle,
     ) -> Table {
         Table {
-            store: store.clone(),
-            wasmtime_handle,
+            instance,
             wasmtime_export,
         }
     }
@@ -654,8 +642,7 @@ impl Table {
 /// [open an issue]: https://github.com/bytecodealliance/wasmtime/issues/new
 #[derive(Clone)]
 pub struct Memory {
-    store: Store,
-    wasmtime_handle: InstanceHandle,
+    instance: StoreInstanceHandle,
     wasmtime_export: wasmtime_runtime::ExportMemory,
 }
 
@@ -683,11 +670,10 @@ impl Memory {
     /// # }
     /// ```
     pub fn new(store: &Store, ty: MemoryType) -> Memory {
-        let (wasmtime_handle, wasmtime_export) =
+        let (instance, wasmtime_export) =
             generate_memory_export(store, &ty).expect("generated memory");
         Memory {
-            store: store.clone(),
-            wasmtime_handle,
+            instance,
             wasmtime_export,
         }
     }
@@ -827,22 +813,19 @@ impl Memory {
     /// ```
     pub fn grow(&self, delta: u32) -> Result<u32> {
         let index = self
-            .wasmtime_handle
+            .instance
             .memory_index(unsafe { &*self.wasmtime_export.definition });
-        self.wasmtime_handle
-            .clone()
+        self.instance
             .memory_grow(index, delta)
             .ok_or_else(|| anyhow!("failed to grow memory"))
     }
 
     pub(crate) fn from_wasmtime_memory(
         wasmtime_export: wasmtime_runtime::ExportMemory,
-        store: &Store,
-        wasmtime_handle: wasmtime_runtime::InstanceHandle,
+        instance: StoreInstanceHandle,
     ) -> Memory {
         Memory {
-            store: store.clone(),
-            wasmtime_handle,
+            instance,
             wasmtime_export,
         }
     }

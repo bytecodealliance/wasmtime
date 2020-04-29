@@ -26,6 +26,6 @@ impl InstanceExt for Instance {
     where
         H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool,
     {
-        self.instance_handle.clone().set_signal_handler(handler);
+        self.handle.set_signal_handler(handler);
     }
 }
