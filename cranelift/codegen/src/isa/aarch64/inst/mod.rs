@@ -1721,9 +1721,6 @@ impl MachInst for Inst {
 
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
         match self {
-            // TODO a regalloc assertion is triggered if we don't have this, see also #1586 on
-            // wasmtime, as well as https://github.com/bytecodealliance/regalloc.rs/issues/52.
-            &Inst::Mov { rm, .. } if rm == stack_reg() => None,
             &Inst::Mov { rd, rm } => Some((rd, rm)),
             &Inst::FpuMove64 { rd, rn } => Some((rd, rn)),
             _ => None,
