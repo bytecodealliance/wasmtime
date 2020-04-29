@@ -16,6 +16,23 @@ pub(crate) trait StdioExt: Sized {
     fn stderr() -> io::Result<Box<dyn Handle>>;
 }
 
+// The reason we have a separate Stdio type is to correctly facilitate redirects on Windows.
+// To elaborate further, in POSIX, we can get a stdio handle by opening a specific fd {0,1,2}.
+// On Windows however, we need to issue a syscall that's separate from standard Windows "open"
+// to get a console handle, and this is GetStdHandle. This is exactly what Rust does and what
+// is wrapped inside their Stdio object in the libstd. We wrap it here as well because of this
+// nuance on Windows:
+//
+//      The standard handles of a process may be redirected by a call to SetStdHandle, in which
+//      case GetStdHandle returns the redirected handle.
+//
+// The MSDN also says this however:
+//
+//      If the standard handles have been redirected, you can specify the CONIN$ value in a call
+//      to the CreateFile function to get a handle to a console's input buffer. Similarly, you
+//      can specify the CONOUT$ value to get a handle to a console's active screen buffer.
+//
+// TODO it might worth re-investigating the suitability of this type on Windows.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub(crate) enum Stdio {
@@ -75,11 +92,7 @@ impl Handle for Stdio {
                 // lock for the duration of the scope
                 let stdout = io::stdout();
                 let mut stdout = stdout.lock();
-                let nwritten = if self.is_tty() {
-                    SandboxedTTYWriter::new(&mut stdout).write_vectored(&iovs)?
-                } else {
-                    stdout.write_vectored(&iovs)?
-                };
+                let nwritten = SandboxedTTYWriter::new(&mut stdout).write_vectored(&iovs)?;
                 stdout.flush()?;
                 nwritten
             }
