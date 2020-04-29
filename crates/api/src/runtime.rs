@@ -1,10 +1,9 @@
 use crate::externals::MemoryCreator;
-use crate::trampoline::MemoryCreatorProxy;
+use crate::trampoline::{MemoryCreatorProxy, StoreInstanceHandle};
 use anyhow::{bail, Result};
 use std::cell::RefCell;
 use std::cmp::min;
 use std::fmt;
-use std::ops::Deref;
 use std::path::Path;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
@@ -545,11 +544,6 @@ pub(crate) struct StoreInner {
     instances: RefCell<Vec<InstanceHandle>>,
 }
 
-pub struct StoreInstanceHandle {
-    pub(crate) store: Store,
-    handle: InstanceHandle,
-}
-
 impl Store {
     /// Creates a new store to be associated with the given [`Engine`].
     pub fn new(engine: &Engine) -> Store {
@@ -731,24 +725,6 @@ impl Drop for StoreInner {
                 instance.dealloc();
             }
         }
-    }
-}
-
-impl Clone for StoreInstanceHandle {
-    fn clone(&self) -> StoreInstanceHandle {
-        StoreInstanceHandle {
-            store: self.store.clone(),
-            // Note should be safe because the lifetime of the instance handle
-            // is tied to the `Store` which this is paired with.
-            handle: unsafe { self.handle.clone() },
-        }
-    }
-}
-
-impl Deref for StoreInstanceHandle {
-    type Target = InstanceHandle;
-    fn deref(&self) -> &InstanceHandle {
-        &self.handle
     }
 }
 

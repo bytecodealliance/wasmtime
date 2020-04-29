@@ -1,7 +1,7 @@
 //! Support for a calling of an imported function.
 
 use super::create_handle::create_handle;
-use crate::runtime::StoreInstanceHandle;
+use crate::trampoline::StoreInstanceHandle;
 use crate::{FuncType, Store, Trap};
 use anyhow::{bail, Result};
 use std::any::Any;

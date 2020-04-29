@@ -1,4 +1,5 @@
-use crate::runtime::{StoreInner, StoreInstanceHandle};
+use crate::runtime::StoreInner;
+use crate::trampoline::StoreInstanceHandle;
 use crate::{Extern, FuncType, Memory, Store, Trap, Val, ValType};
 use anyhow::{bail, ensure, Context as _, Result};
 use std::cmp::max;

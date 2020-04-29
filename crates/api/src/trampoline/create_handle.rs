@@ -1,6 +1,7 @@
 //! Support for a calling of an imported function.
 
-use crate::runtime::{Store, StoreInstanceHandle};
+use crate::trampoline::StoreInstanceHandle;
+use crate::Store;
 use anyhow::Result;
 use std::any::Any;
 use std::collections::HashMap;

@@ -1,8 +1,5 @@
-use crate::externals::{Export, Extern, Global, Memory, Table};
-use crate::func::Func;
-use crate::module::Module;
-use crate::runtime::{Store, StoreInstanceHandle};
-use crate::trap::Trap;
+use crate::trampoline::StoreInstanceHandle;
+use crate::{Export, Extern, Func, Global, Memory, Module, Store, Table, Trap};
 use anyhow::{bail, Error, Result};
 use std::any::Any;
 use wasmtime_jit::{CompiledModule, Resolver};
@@ -37,7 +34,7 @@ fn instantiate(
             host,
         )?;
 
-        // After we've created the `InstnaceHandle` we still need to run
+        // After we've created the `InstanceHandle` we still need to run
         // initialization to set up data/elements/etc. We do this after adding
         // the `InstanceHandle` to the store though. This is required for safety
         // because the start function (for example) may trap, but element

@@ -1,8 +1,8 @@
-use crate::runtime::StoreInstanceHandle;
-use crate::trampoline::{generate_global_export, generate_memory_export, generate_table_export};
+use crate::trampoline::{
+    generate_global_export, generate_memory_export, generate_table_export, StoreInstanceHandle,
+};
 use crate::values::{from_checked_anyfunc, into_checked_anyfunc, Val};
-use crate::Mutability;
-use crate::{ExternType, GlobalType, MemoryType, TableType, ValType};
+use crate::{ExternType, GlobalType, MemoryType, Mutability, TableType, ValType};
 use crate::{Func, Store, Trap};
 use anyhow::{anyhow, bail, Result};
 use std::slice;

@@ -1,5 +1,5 @@
 use super::create_handle::create_handle;
-use crate::runtime::StoreInstanceHandle;
+use crate::trampoline::StoreInstanceHandle;
 use crate::Store;
 use crate::{TableType, ValType};
 use anyhow::{bail, Result};

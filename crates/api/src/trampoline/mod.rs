@@ -12,11 +12,38 @@ use self::func::create_handle_with_function;
 use self::global::create_global;
 use self::memory::create_handle_with_memory;
 use self::table::create_handle_with_table;
-use crate::runtime::StoreInstanceHandle;
 use crate::{FuncType, GlobalType, MemoryType, Store, TableType, Trap, Val};
 use anyhow::Result;
 use std::any::Any;
-use wasmtime_runtime::{VMContext, VMFunctionBody, VMTrampoline};
+use std::ops::Deref;
+use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody, VMTrampoline};
+
+/// A wrapper around `wasmtime_runtime::InstanceHandle` which pairs it with the
+/// `Store` that it's rooted within. The instance is deallocated when `Store` is
+/// deallocated, so this is a safe handle in terms of memory management for the
+/// `Store`.
+pub struct StoreInstanceHandle {
+    pub store: Store,
+    pub handle: InstanceHandle,
+}
+
+impl Clone for StoreInstanceHandle {
+    fn clone(&self) -> StoreInstanceHandle {
+        StoreInstanceHandle {
+            store: self.store.clone(),
+            // Note should be safe because the lifetime of the instance handle
+            // is tied to the `Store` which this is paired with.
+            handle: unsafe { self.handle.clone() },
+        }
+    }
+}
+
+impl Deref for StoreInstanceHandle {
+    type Target = InstanceHandle;
+    fn deref(&self) -> &InstanceHandle {
+        &self.handle
+    }
+}
 
 pub fn generate_func_export(
     ft: &FuncType,
