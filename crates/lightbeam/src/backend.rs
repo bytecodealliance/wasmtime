@@ -4,51 +4,53 @@ use self::registers::*;
 use crate::error::Error;
 use crate::microwasm::{BrTarget, Ieee32, Ieee64, SignlessType, Type, Value, F32, F64, I32, I64};
 use crate::module::ModuleContext;
-use cranelift_codegen::{binemit, ir};
+use cranelift_codegen::{
+    binemit,
+    ir::{self, SourceLoc, TrapCode},
+};
 use dynasm::dynasm;
 use dynasmrt::x64::Assembler;
 use dynasmrt::{AssemblyOffset, DynamicLabel, DynasmApi, DynasmLabelApi, ExecutableBuffer};
-use either::Either;
-
 use std::{
-    any::{Any, TypeId},
     cmp::Ordering,
-    collections::HashMap,
     convert::{TryFrom, TryInto},
     fmt::Display,
-    iter::{self, FromIterator},
-    mem,
-    ops::RangeInclusive,
+    hash::Hash,
+    iter, mem,
+    ops::{Deref, RangeInclusive},
 };
+// use wasmtime_environ::BuiltinFunctionIndex;
 
-// TODO: Get rid of this! It's a total hack.
 mod magic {
-    use cranelift_codegen::ir;
+    /// An index type for builtin functions.
+    pub struct BuiltinFunctionIndex(u32);
 
-    /// Compute an `ir::ExternalName` for the `memory.grow` libcall for
-    /// 32-bit locally-defined memories.
-    pub fn get_memory32_grow_name() -> ir::ExternalName {
-        ir::ExternalName::user(1, 0)
-    }
+    impl BuiltinFunctionIndex {
+        /// Returns an index for wasm's `memory.grow` builtin function.
+        pub const fn get_memory32_grow_index() -> Self {
+            Self(0)
+        }
+        /// Returns an index for wasm's imported `memory.grow` builtin function.
+        pub const fn get_imported_memory32_grow_index() -> Self {
+            Self(1)
+        }
+        /// Returns an index for wasm's `memory.size` builtin function.
+        pub const fn get_memory32_size_index() -> Self {
+            Self(2)
+        }
+        /// Returns an index for wasm's imported `memory.size` builtin function.
+        pub const fn get_imported_memory32_size_index() -> Self {
+            Self(3)
+        }
 
-    /// Compute an `ir::ExternalName` for the `memory.grow` libcall for
-    /// 32-bit imported memories.
-    pub fn get_imported_memory32_grow_name() -> ir::ExternalName {
-        ir::ExternalName::user(1, 1)
-    }
-
-    /// Compute an `ir::ExternalName` for the `memory.size` libcall for
-    /// 32-bit locally-defined memories.
-    pub fn get_memory32_size_name() -> ir::ExternalName {
-        ir::ExternalName::user(1, 2)
-    }
-
-    /// Compute an `ir::ExternalName` for the `memory.size` libcall for
-    /// 32-bit imported memories.
-    pub fn get_imported_memory32_size_name() -> ir::ExternalName {
-        ir::ExternalName::user(1, 3)
+        /// Return the index as an u32 number.
+        pub const fn index(&self) -> u32 {
+            self.0
+        }
     }
 }
+
+use magic::BuiltinFunctionIndex;
 
 /// Size of a pointer on the target in bytes.
 const WORD_SIZE: u32 = 8;
@@ -105,35 +107,85 @@ impl GPR {
     }
 }
 
-pub fn arg_locs(types: impl IntoIterator<Item = SignlessType>) -> Result<Vec<CCLoc>, Error> {
-    let types = types.into_iter();
-    let mut out = Vec::with_capacity(types.size_hint().0);
+fn arg_locs<I: IntoIterator<Item = SignlessType>>(
+    types: I,
+) -> impl ExactSizeIterator<Item = CCLoc> + DoubleEndedIterator + Clone
+where
+    I::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+{
     // TODO: VmCtx is in the first register
     let mut int_gpr_iter = INTEGER_ARGS_IN_GPRS.iter();
     let mut float_gpr_iter = FLOAT_ARGS_IN_GPRS.iter();
     let mut stack_idx = 0;
 
-    for ty in types {
-        match ty {
-            I32 | I64 => out.push(int_gpr_iter.next().map(|&r| CCLoc::Reg(r)).unwrap_or_else(
-                || {
-                    let out = CCLoc::Stack(stack_idx);
-                    stack_idx += 1;
-                    out
-                },
-            )),
-            F32 | F64 => match float_gpr_iter.next() {
-                None => {
-                    return Err(Error::Microwasm(
-                        "Float args on stack not yet supported".to_string(),
-                    ))
-                }
-                Some(val) => out.push(CCLoc::Reg(*val)),
-            },
+    types
+        .into_iter()
+        .map(move |ty| {
+            match ty {
+                I32 | I64 => int_gpr_iter.next(),
+                F32 | F64 => float_gpr_iter.next(),
+            }
+            .map(|&r| CCLoc::Reg(r))
+            .unwrap_or_else(|| {
+                let out = CCLoc::Stack(stack_idx);
+                stack_idx += 1;
+                out
+            })
+        })
+        // Since we only advance the iterators based on the values in `types`,
+        // we can't do this lazily.
+        .collect::<Vec<_>>()
+        .into_iter()
+}
+
+fn arg_locs_skip_caller_vmctx<I: IntoIterator<Item = SignlessType>>(
+    types: I,
+) -> impl ExactSizeIterator<Item = CCLoc> + DoubleEndedIterator + Clone
+where
+    I::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+{
+    #[derive(Debug, Clone)]
+    struct WithInt<I> {
+        caller_vmctx_ty: Option<SignlessType>,
+        iter: I,
+    }
+
+    impl<I> Iterator for WithInt<I>
+    where
+        I: Iterator<Item = SignlessType>,
+    {
+        type Item = SignlessType;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            self.caller_vmctx_ty.take().or_else(|| self.iter.next())
+        }
+
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            let ty_len = if self.caller_vmctx_ty.is_some() { 1 } else { 0 };
+            let (lower, upper) = self.iter.size_hint();
+
+            (lower + ty_len, upper.map(|u| u + ty_len))
         }
     }
 
-    Ok(out)
+    impl<I> DoubleEndedIterator for WithInt<I>
+    where
+        I: DoubleEndedIterator<Item = SignlessType>,
+    {
+        fn next_back(&mut self) -> Option<Self::Item> {
+            self.iter
+                .next_back()
+                .or_else(|| self.caller_vmctx_ty.take())
+        }
+    }
+
+    impl<I> ExactSizeIterator for WithInt<I> where I: ExactSizeIterator<Item = SignlessType> {}
+
+    arg_locs(WithInt {
+        caller_vmctx_ty: Some(I32),
+        iter: types.into_iter(),
+    })
+    .skip(1)
 }
 
 pub fn ret_locs(types: impl IntoIterator<Item = SignlessType>) -> Result<Vec<CCLoc>, Error> {
@@ -361,20 +413,40 @@ impl Registers {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BlockCallingConvention {
+pub struct BlockCallingConvention<I = Vec<CCLoc>> {
     pub stack_depth: StackDepth,
-    pub arguments: Vec<CCLoc>,
+    pub arguments: I,
 }
 
-impl BlockCallingConvention {
-    pub fn function_start(args: impl IntoIterator<Item = CCLoc>) -> Self {
+impl<I> BlockCallingConvention<I> {
+    pub fn function_start(arguments: I) -> Self {
         BlockCallingConvention {
             // We start and return the function with stack depth 1 since we must
             // allow space for the saved return address.
             stack_depth: StackDepth(1),
-            arguments: Vec::from_iter(args),
+            arguments,
         }
     }
+}
+
+impl<T: Copy + 'static, I: Deref> BlockCallingConvention<I>
+where
+    for<'a> &'a I::Target: IntoIterator<Item = &'a T>,
+{
+    pub fn as_ref(&self) -> BlockCallingConvention<impl Iterator<Item = T> + '_> {
+        BlockCallingConvention {
+            // We start and return the function with stack depth 1 since we must
+            // allow space for the saved return address.
+            stack_depth: self.stack_depth.clone(),
+            arguments: self.arguments.into_iter().copied(),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum FunctionDefLocation {
+    SameModule,
+    PossiblyExternal,
 }
 
 // TODO: Combine this with `ValueLocation`?
@@ -391,7 +463,7 @@ impl CCLoc {
         match other {
             ValueLocation::Reg(reg) => Some(CCLoc::Reg(reg)),
             ValueLocation::Stack(offset) => Some(CCLoc::Stack(offset)),
-            _ => None,
+            ValueLocation::Cond(_) | ValueLocation::Immediate(_) => None,
         }
     }
 }
@@ -511,33 +583,29 @@ impl ValueLocation {
 // TODO: This assumes only system-v calling convention.
 // In system-v calling convention the first 6 arguments are passed via registers.
 // All rest arguments are passed on the stack.
-const INTEGER_ARGS_IN_GPRS: &[GPR] = &[RSI, RDX, RCX, R8, R9];
+// Usually system-v uses rdi and rsi, but rdi is used for the vmctx and rsi is used for the _caller_ vmctx
+const INTEGER_ARGS_IN_GPRS: &[GPR] = &[GPR::Rq(CALLER_VMCTX), RDX, RCX, R8, R9];
 const INTEGER_RETURN_GPRS: &[GPR] = &[RAX, RDX];
 const FLOAT_ARGS_IN_GPRS: &[GPR] = &[XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7];
 const FLOAT_RETURN_GPRS: &[GPR] = &[XMM0, XMM1];
 // List of scratch registers taken from https://wiki.osdev.org/System_V_ABI
 const SCRATCH_REGS: &[GPR] = &[
-    RSI, RDX, RCX, R8, R9, RAX, R10, R11, XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7, XMM8,
-    XMM9, XMM10, XMM11, XMM12, XMM13, XMM14, XMM15,
+    RDX, RCX, R8, R9, RAX, R10, R11, XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7, XMM8, XMM9,
+    XMM10, XMM11, XMM12, XMM13, XMM14, XMM15,
 ];
 const VMCTX: RegId = rq::RDI;
-
-#[must_use]
-#[derive(Debug, Clone)]
-pub struct FunctionEnd {
-    should_generate_epilogue: bool,
-}
+const CALLER_VMCTX: RegId = rq::RSI;
 
 pub struct CodeGenSession<'module, M> {
     assembler: Assembler,
     pub module_context: &'module M,
     pub op_offset_map: Vec<(AssemblyOffset, Box<dyn Display + Send + Sync>)>,
-    labels: Labels,
     func_starts: Vec<(Option<AssemblyOffset>, DynamicLabel)>,
+    pointer_type: SignlessType,
 }
 
 impl<'module, M> CodeGenSession<'module, M> {
-    pub fn new(func_count: u32, module_context: &'module M) -> Self {
+    pub fn new(func_count: u32, module_context: &'module M, pointer_type: SignlessType) -> Self {
         let mut assembler = Assembler::new().unwrap();
         let func_starts = iter::repeat_with(|| (None, assembler.new_dynamic_label()))
             .take(func_count as usize)
@@ -546,10 +614,18 @@ impl<'module, M> CodeGenSession<'module, M> {
         CodeGenSession {
             assembler,
             op_offset_map: Default::default(),
-            labels: Default::default(),
             func_starts,
             module_context,
+            pointer_type,
         }
+    }
+
+    pub fn offset(&self) -> usize {
+        self.assembler.offset().0
+    }
+
+    pub fn pointer_type(&self) -> SignlessType {
+        self.pointer_type
     }
 
     pub fn new_context<'this>(
@@ -570,29 +646,16 @@ impl<'module, M> CodeGenSession<'module, M> {
             asm: &mut self.assembler,
             current_function: func_idx,
             reloc_sink,
+            pointer_type: self.pointer_type,
+            source_loc: Default::default(),
             func_starts: &self.func_starts,
-            labels: &mut self.labels,
             block_state: Default::default(),
             module_context: self.module_context,
+            labels: Default::default(),
         }
     }
 
-    fn finalize(&mut self) {
-        let mut values = self.labels.values_mut().collect::<Vec<_>>();
-        values.sort_unstable_by_key(|(_, align, _)| *align);
-        for (label, align, func) in values {
-            if let Some(mut func) = func.take() {
-                dynasm!(self.assembler
-                    ; .align *align as usize
-                );
-                self.assembler.dynamic_label(label.0);
-                func(&mut self.assembler);
-            }
-        }
-    }
-
-    pub fn into_translated_code_section(mut self) -> Result<TranslatedCodeSection, Error> {
-        self.finalize();
+    pub fn into_translated_code_section(self) -> Result<TranslatedCodeSection, Error> {
         let exec_buf = self
             .assembler
             .finalize()
@@ -671,37 +734,65 @@ pub struct BlockState {
 
 type Stack = Vec<ValueLocation>;
 
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-enum LabelValue {
-    I32(i32),
-    I64(i64),
-}
+mod labels {
+    use super::Label;
+    use std::collections::HashMap;
 
-impl From<Value> for LabelValue {
-    fn from(other: Value) -> LabelValue {
-        match other {
-            Value::I32(v) => LabelValue::I32(v),
-            Value::I64(v) => LabelValue::I64(v),
-            Value::F32(v) => LabelValue::I32(v.to_bits() as _),
-            Value::F64(v) => LabelValue::I64(v.to_bits() as _),
+    pub struct LabelInfo {
+        pub label: Label,
+        pub align: u32,
+        pub inner: LabelValue,
+    }
+
+    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    pub enum LabelValue {
+        Ret,
+        I32(i32),
+        I64(i64),
+    }
+
+    #[derive(Default)]
+    pub struct Labels {
+        map: HashMap<LabelValue, LabelInfo>,
+    }
+
+    impl Labels {
+        pub fn drain(&mut self) -> impl Iterator<Item = LabelInfo> + '_ {
+            self.map.drain().map(|(_, info)| info)
+        }
+
+        pub fn insert(
+            &mut self,
+            l: impl FnOnce() -> Label,
+            align: u32,
+            label: LabelValue,
+        ) -> Label {
+            let val = self.map.entry(label).or_insert_with(move || LabelInfo {
+                label: l(),
+                align,
+                inner: label,
+            });
+
+            val.align = val.align.max(align);
+
+            val.label
         }
     }
 }
 
-type Labels = HashMap<
-    (u32, Either<TypeId, (LabelValue, Option<LabelValue>)>),
-    (Label, u32, Option<Box<dyn FnMut(&mut Assembler)>>),
->;
+use labels::{LabelInfo, LabelValue, Labels};
 
 pub struct Context<'this, M> {
     pub asm: &'this mut Assembler,
+    pointer_type: SignlessType,
+    source_loc: SourceLoc,
     reloc_sink: &'this mut dyn binemit::RelocSink,
     module_context: &'this M,
     current_function: u32,
     func_starts: &'this Vec<(Option<AssemblyOffset>, DynamicLabel)>,
     /// Each push and pop on the value stack increments or decrements this value by 1 respectively.
     pub block_state: BlockState,
-    labels: &'this mut Labels,
+    labels: Labels,
 }
 
 /// Label in code.
@@ -709,7 +800,7 @@ pub struct Context<'this, M> {
 pub struct Label(DynamicLabel);
 
 /// Offset from starting value of SP counted in words.
-#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct StackDepth(u32);
 
 impl StackDepth {
@@ -732,7 +823,7 @@ macro_rules! int_div {
 
             if let (Some(dividend), Some(divisor)) = (dividend.$imm_fn(), divisor.$imm_fn()) {
                 if divisor == 0 {
-                    self.trap();
+                    self.trap(TrapCode::IntegerDivisionByZero);
                     self.push(ValueLocation::Immediate((0 as $unsigned_ty).into()))?;
                 } else {
                     self.push(ValueLocation::Immediate(
@@ -760,7 +851,9 @@ macro_rules! int_div {
                         ValueLocation::Reg(div)
                     }
                 }
-                _ => div,
+                ValueLocation::Stack(_) |
+                ValueLocation::Cond(_) |
+                ValueLocation::Immediate(_) => div,
             };
 
             self.cleanup_gprs(saved);
@@ -777,7 +870,7 @@ macro_rules! int_div {
 
             if let (Some(dividend), Some(divisor)) = (dividend.$imm_fn(), divisor.$imm_fn()) {
                 if divisor == 0 {
-                    self.trap();
+                    self.trap(TrapCode::IntegerDivisionByZero);
                     self.push(ValueLocation::Immediate((0 as $signed_ty).into()))?;
                 } else {
                     self.push(ValueLocation::Immediate(
@@ -805,7 +898,9 @@ macro_rules! int_div {
                         ValueLocation::Reg(div)
                     }
                 }
-                _ => div,
+                ValueLocation::Stack(_) |
+                ValueLocation::Cond(_) |
+                ValueLocation::Immediate(_) => div,
             };
 
             self.cleanup_gprs(saved);
@@ -820,7 +915,7 @@ macro_rules! int_div {
 
             if let (Some(dividend), Some(divisor)) = (dividend.$imm_fn(), divisor.$imm_fn()) {
                 if divisor == 0 {
-                    self.trap();
+                    self.trap(TrapCode::IntegerDivisionByZero);
                     self.push(ValueLocation::Immediate((0 as $unsigned_ty).into()))?;
                 } else {
                     self.push(ValueLocation::Immediate(
@@ -847,7 +942,9 @@ macro_rules! int_div {
                         ValueLocation::Reg(rem)
                     }
                 }
-                _ => rem,
+                ValueLocation::Stack(_) |
+                ValueLocation::Cond(_) |
+                ValueLocation::Immediate(_) => rem,
             };
 
             self.cleanup_gprs(saved);
@@ -862,7 +959,7 @@ macro_rules! int_div {
 
             if let (Some(dividend), Some(divisor)) = (dividend.$imm_fn(), divisor.$imm_fn()) {
                 if divisor == 0 {
-                    self.trap();
+                    self.trap(TrapCode::IntegerDivisionByZero);
                     self.push(ValueLocation::Immediate((0 as $signed_ty).into()))?;
                 } else {
                     self.push(ValueLocation::Immediate((dividend % divisor).into()))?;
@@ -886,10 +983,7 @@ macro_rules! int_div {
                     false
                 }
                 ValueLocation::Reg(_) => {
-                    let reg = match self.put_into_register(GPRType::Rq, &mut divisor) {
-                        Err(e) => return Err(e),
-                        Ok(o) => o.unwrap(),
-                    };
+                    let reg = self.put_into_register(GPRType::Rq, &mut divisor)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
                     dynasm!(self.asm
                         ; cmp $reg_ty(reg.rq().unwrap()), -1
@@ -938,7 +1032,9 @@ macro_rules! int_div {
                         ValueLocation::Reg(rem)
                     }
                 }
-                _ => rem,
+                ValueLocation::Stack(_) |
+                ValueLocation::Cond(_) |
+                ValueLocation::Immediate(_) => rem,
             };
 
             self.cleanup_gprs(saved);
@@ -994,10 +1090,7 @@ macro_rules! unop {
                     ValueLocation::Reg(temp)
                 }
                 ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                    let reg = match self.put_into_register(GPRType::Rq, &mut val) {
-                        Err(e) => return Err(e),
-                        Ok(o) => o.unwrap(),
-                    };
+                    let reg = self.put_into_register(GPRType::Rq, &mut val)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
                     let temp = self.take_reg(Type::for_::<$typ>()).unwrap();
                     dynasm!(self.asm
                         ; $instr $reg_ty(temp.rq().unwrap()), $reg_ty(reg.rq().unwrap())
@@ -1044,10 +1137,7 @@ macro_rules! conversion {
                     ValueLocation::Reg(temp)
                 }
                 ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                    let reg = match self.put_into_register(Type::for_::<$in_typ>(), &mut val)  {
-                        Err(e) => return Err(e),
-                        Ok(o) => o.unwrap(),
-                    };
+                    let reg = self.put_into_register(Type::for_::<$in_typ>(), &mut val)? .ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
                     let temp = self.take_reg(Type::for_::<$out_typ>()).unwrap();
 
                     dynasm!(self.asm
@@ -1076,10 +1166,7 @@ macro_rules! shift {
             if let Some(imm) = count.immediate() {
                 if let Some(imm) = imm.as_int() {
                     if let Ok(imm) = i8::try_from(imm) {
-                        let reg = match self.put_into_temp_register($ty, &mut val) {
-                            Err(e) => return Err(e),
-                            Ok(o) => o.unwrap(),
-                        };
+                        let reg = self.put_into_temp_register($ty, &mut val)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
                         dynasm!(self.asm
                             ; $instr $reg_ty(reg.rq().unwrap()), imm
@@ -1115,10 +1202,7 @@ macro_rules! shift {
 
                     match other {
                         ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                            let gpr = match self.put_into_register(I32, &mut count) {
-                                Err(e) => return Err(e),
-                                Ok(o) => o.unwrap(),
-                            };
+                            let gpr = self.put_into_register(I32, &mut count)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
                             dynasm!(self.asm
                                 ; mov cl, Rb(gpr.rq().unwrap())
                             );
@@ -1144,10 +1228,7 @@ macro_rules! shift {
             self.block_state.regs.mark_used(RCX);
             count = ValueLocation::Reg(RCX);
 
-            let reg = match self.put_into_temp_register($ty, &mut val) {
-                Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
-            };
+            let reg = self.put_into_temp_register($ty, &mut val)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
             dynasm!(self.asm
                 ; $instr $reg_ty(reg.rq().unwrap()), cl
@@ -1185,10 +1266,7 @@ macro_rules! cmp_i32 {
                         ValueLocation::Cond($reverse_flags)
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                        let rreg = match self.put_into_register(I32, &mut right) {
-                            Err(e) => return Err(e),
-                            Ok(o) => o.unwrap(),
-                        };
+                        let rreg = self.put_into_register(I32, &mut right)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
                         dynasm!(self.asm
                             ; cmp Rd(rreg.rq().unwrap()), i
                         );
@@ -1205,10 +1283,7 @@ macro_rules! cmp_i32 {
                     }
                 }
             } else {
-                let lreg = match self.put_into_register(I32, &mut left) {
-                    Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
-                };
+                let lreg = self.put_into_register(I32, &mut left)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
                 match right {
                     ValueLocation::Stack(offset) => {
@@ -1218,10 +1293,7 @@ macro_rules! cmp_i32 {
                         );
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                        let rreg = match self.put_into_register(I32, &mut right) {
-                            Err(e) => return Err(e),
-                            Ok(o) => o.unwrap(),
-                        };
+                        let rreg = self.put_into_register(I32, &mut right)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
                         dynasm!(self.asm
                             ; cmp Rd(lreg.rq().unwrap()), Rd(rreg.rq().unwrap())
@@ -1261,10 +1333,7 @@ macro_rules! cmp_i64 {
                                 ; cmp QWORD [rsp + offset], i
                             );
                         } else {
-                            let lreg = match self.put_into_register(I32, &mut left) {
-                                Err(e) => return Err(e),
-                                Ok(o) => o.unwrap(),
-                            };
+                            let lreg = self.put_into_register(I32, &mut left)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
                             dynasm!(self.asm
                                 ; cmp QWORD [rsp + offset], Rq(lreg.rq().unwrap())
@@ -1273,20 +1342,14 @@ macro_rules! cmp_i64 {
                         ValueLocation::Cond($reverse_flags)
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                        let rreg = match self.put_into_register(I32, &mut right) {
-                            Err(e) => return Err(e),
-                            Ok(o) => o.unwrap(),
-                        };
+                        let rreg = self.put_into_register(I32, &mut right)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
                         if let Some(i) = i.try_into().ok() {
                             dynasm!(self.asm
                                 ; cmp Rq(rreg.rq().unwrap()), i
                             );
                         } else {
-                            let lreg = match self.put_into_register(I32, &mut left) {
-                                Err(e) => return Err(e),
-                                Ok(o) => o.unwrap(),
-                            };
+                            let lreg = self.put_into_register(I32, &mut left)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
                             dynasm!(self.asm
                                 ; cmp Rq(rreg.rq().unwrap()), Rq(lreg.rq().unwrap())
@@ -1305,10 +1368,7 @@ macro_rules! cmp_i64 {
                     }
                 }
             } else {
-                let lreg = match self.put_into_register(I64, &mut left) {
-                    Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
-                };
+                let lreg = self.put_into_register(I64, &mut left)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
                 match right {
                     ValueLocation::Stack(offset) => {
@@ -1318,10 +1378,7 @@ macro_rules! cmp_i64 {
                         );
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                        let rreg = match self.put_into_register(I32, &mut right) {
-                            Err(e) => return Err(e),
-                            Ok(o) => o.unwrap(),
-                        };
+                        let rreg = self.put_into_register(I32, &mut right)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
                         dynasm!(self.asm
                             ; cmp Rq(lreg.rq().unwrap()), Rq(rreg.rq().unwrap())
@@ -1334,10 +1391,7 @@ macro_rules! cmp_i64 {
                                     ; cmp Rq(lreg.rq().unwrap()), i
                             );
                         } else {
-                            let rreg = match self.put_into_register(I32, &mut right) {
-                                Err(e) => return Err(e),
-                                Ok(o) => o.unwrap(),
-                            };
+                            let rreg = self.put_into_register(I32, &mut right)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
                             dynasm!(self.asm
                                 ; cmp Rq(lreg.rq().unwrap()), Rq(rreg.rq().unwrap())
@@ -1395,14 +1449,8 @@ macro_rules! eq_float {
                 _ =>  (right, left)
             };
 
-            let lreg = match self.put_into_temp_register(GPRType::Rx, &mut left) {
-                Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
-            };
-            let rreg = match self.put_into_register(GPRType::Rx, &mut right) {
-                Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
-            };
+            let lreg = self.put_into_temp_register(GPRType::Rx, &mut left)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
+            let rreg = self.put_into_register(GPRType::Rx, &mut right)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
             let out = self.take_reg(I32).unwrap();
 
@@ -1449,14 +1497,8 @@ macro_rules! minmax_float {
                 _ =>  (right, left)
             };
 
-            let lreg = match self.put_into_temp_register(GPRType::Rx, &mut left) {
-                Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
-            };
-            let rreg = match self.put_into_register(GPRType::Rx, &mut right) {
-                Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
-            };
+            let lreg = self.put_into_temp_register(GPRType::Rx, &mut left)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
+            let rreg = self.put_into_register(GPRType::Rx, &mut right)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
             dynasm!(self.asm
                 ; $cmpinstr Rx(lreg.rx().unwrap()), Rx(rreg.rx().unwrap())
@@ -1504,10 +1546,7 @@ macro_rules! cmp_float {
                 ValueLocation::Immediate(0i32.into())
             }
         } else {
-            let lreg = match this.put_into_register(GPRType::Rx, left) {
-                Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
-            };
+            let lreg = this.put_into_register(GPRType::Rx, left)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
             let result = this.take_reg(I32).unwrap();
 
@@ -1522,10 +1561,7 @@ macro_rules! cmp_float {
                     );
                 }
                 right => {
-                    let rreg = match this.put_into_register(GPRType::Rx, right) {
-                        Err(e) => return Err(e),
-                        Ok(o) => o.unwrap(),
-                    };
+                    let rreg = this.put_into_register(GPRType::Rx, right)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
                     dynasm!(this.asm
                         ; xor Rq(result.rq().unwrap()), Rq(result.rq().unwrap())
@@ -1762,18 +1798,12 @@ macro_rules! binop {
             }
 
             let (mut left, mut right) = $map_op(left, right);
-            let lreg = match self.put_into_temp_register($ty, &mut left) {
-                Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
-            };
+            let lreg = self.put_into_temp_register($ty, &mut left)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
             match right {
                 ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                     // This handles the case where we (for example) have a float in an `Rq` reg
-                    let right_reg = match self.put_into_register($ty, &mut right) {
-                        Err(e) => return Err(e),
-                        Ok(o) => o.unwrap(),
-                    };
+                    let right_reg = self.put_into_register($ty, &mut right)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
                     dynasm!(self.asm
                         ; $instr $reg_ty(lreg.$reg_fn().unwrap()), $reg_ty(right_reg.$reg_fn().unwrap())
@@ -1790,7 +1820,7 @@ macro_rules! binop {
                         $direct_imm(&mut *self, lreg, i);
                     } else {
                         let scratch = self.take_reg($ty).unwrap();
-                        self.immediate_to_reg(scratch, i);
+                        self.immediate_to_reg(scratch, i)?;
 
                         dynasm!(self.asm
                             ; $instr $reg_ty(lreg.$reg_fn().unwrap()), $reg_ty(scratch.$reg_fn().unwrap())
@@ -1838,7 +1868,6 @@ macro_rules! load {
                 let vmctx = GPR::Rq(VMCTX);
 
                 if ctx.module_context.emit_memory_bounds_check() {
-                    let trap_label = ctx.trap_label();
                     let addr_reg = match runtime_offset {
                         Ok(imm) => {
                             let addr_reg = ctx.take_reg(I64).unwrap();
@@ -1849,11 +1878,7 @@ macro_rules! load {
                         }
                         Err(gpr) => {
                             if offset == 0 {
-                                match ctx.clone_to_register(I32, ValueLocation::Reg(gpr)) {
-                                    Err(e) => return Err(e),
-                                    Ok(o) => o.unwrap(),
-                                }
-
+                                ctx.clone_to_register(I32, ValueLocation::Reg(gpr))?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
                             } else if offset > 0 {
                                 let addr_reg = ctx.take_reg(I64).unwrap();
                                 dynasm!(ctx.asm
@@ -1874,12 +1899,12 @@ macro_rules! load {
                         }
                     };
                     dynasm!(ctx.asm
-                        ; cmp [
+                        ; cmp Rq(addr_reg.rq().unwrap()), [
                             Rq(reg.unwrap_or(vmctx).rq().unwrap()) +
                                 mem_offset +
                                 ctx.module_context.vmmemory_definition_current_length() as i32
-                        ], Rq(addr_reg.rq().unwrap())
-                        ; jna =>trap_label.0
+                        ]
+                        ;; ctx.trap_if(cc::GE_U, TrapCode::HeapOutOfBounds)
                     );
                     ctx.block_state.regs.release(addr_reg)?;
                 }
@@ -1909,10 +1934,7 @@ macro_rules! load {
                     load_to_reg(self, temp, (offset as _, Ok(i.as_i32().unwrap())))?;
                 }
                 mut base => {
-                    let gpr = match self.put_into_register(I32, &mut base) {
-                        Err(e) => return Err(e),
-                        Ok(o) => o.unwrap(),
-                    };
+                    let gpr = self.put_into_register(I32, &mut base)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
                     load_to_reg(self, temp, (offset as _, Err(gpr)))?;
                     self.free_value(base)?;
                 }
@@ -2026,7 +2048,6 @@ macro_rules! store {
                 let vmctx = GPR::Rq(VMCTX);
 
                 if ctx.module_context.emit_memory_bounds_check() {
-                    let trap_label = ctx.trap_label();
                     let addr_reg = match runtime_offset {
                         Ok(imm) => {
                             let addr_reg = ctx.take_reg(I64).unwrap();
@@ -2037,10 +2058,7 @@ macro_rules! store {
                         }
                         Err(gpr) => {
                             if offset == 0 {
-                                match ctx.clone_to_register(I32, ValueLocation::Reg(gpr)) {
-                                    Err(e) => return Err(e),
-                                    Ok(o) => o.unwrap(),
-                                }
+                                ctx.clone_to_register(I32, ValueLocation::Reg(gpr))?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
 
                             } else if offset > 0 {
                                 let addr_reg = ctx.take_reg(I64).unwrap();
@@ -2067,7 +2085,7 @@ macro_rules! store {
                                 mem_offset +
                                 ctx.module_context.vmmemory_definition_current_length() as i32
                         ]
-                        ; jae =>trap_label.0
+                        ;; ctx.trap_if(cc::GE_U, TrapCode::HeapOutOfBounds)
                     );
                     ctx.block_state.regs.release(addr_reg)?;
                 }
@@ -2098,10 +2116,7 @@ macro_rules! store {
 
             // `store_from_reg` frees `src`
             // TODO: Would it be better to free it outside `store_from_reg`?
-            let src_reg = match self.put_into_register(None, &mut src) {
-                Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
-            };
+            let src_reg = self.put_into_register(None, &mut src)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
 
             match base {
@@ -2109,10 +2124,7 @@ macro_rules! store {
                     store_from_reg(self, src_reg, (offset as i32, Ok(i.as_i32().unwrap())))?
                 }
                 mut base => {
-                    let gpr = match self.put_into_register(I32, &mut base) {
-                        Err(e) => return Err(e),
-                        Ok(o) => o.unwrap(),
-                    };
+                    let gpr = self.put_into_register(I32, &mut base)?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
                     store_from_reg(self, src_reg, (offset as i32, Err(gpr)))?;
                     self.free_value(base)?;
                 }
@@ -2125,10 +2137,7 @@ macro_rules! store {
             $name,
             $int_reg_ty,
             |ctx: &mut Context<_>, mem_ptr_reg: GPR, runtime_offset: Result<i32, GPR>, offset: i32, src| -> Result<GPR, Error> {
-                let src_reg = match ctx.put_into_temp_register(GPRType::Rq, &mut ValueLocation::Reg(src)) {
-                    Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
-                };
+                let src_reg = ctx.put_into_temp_register(GPRType::Rq, &mut ValueLocation::Reg(src))?.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
                 match runtime_offset {
                     Ok(imm) => {
@@ -2231,24 +2240,20 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         }
     }
 
+    pub fn set_source_loc(&mut self, loc: SourceLoc) {
+        self.source_loc = loc;
+    }
+
     pub fn virtual_calling_convention(&self) -> VirtualCallingConvention {
         VirtualCallingConvention {
             stack: self.block_state.stack.clone(),
-            depth: self.block_state.depth,
+            depth: self.block_state.depth.clone(),
         }
     }
 
     /// Create a new undefined label.
     pub fn create_label(&mut self) -> Label {
         Label(self.asm.new_dynamic_label())
-    }
-
-    pub fn define_host_fn(&mut self, host_fn: *const u8) {
-        dynasm!(self.asm
-            ; mov rax, QWORD host_fn as i64
-            ; call rax
-            ; ret
-        );
     }
 
     fn adjusted_offset(&self, offset: i32) -> i32 {
@@ -2332,10 +2337,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             return Ok(());
         }
 
-        let reg = match self.put_into_register(I32, &mut val) {
-            Err(e) => return Err(e),
-            Ok(o) => o.unwrap(),
-        };
+        let reg = self
+            .put_into_register(I32, &mut val)?
+            .ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
         let out = self.take_reg(I32).unwrap();
 
@@ -2366,10 +2370,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             return Ok(());
         }
 
-        let reg = match self.put_into_register(I64, &mut val) {
-            Err(e) => return Err(e),
-            Ok(o) => o.unwrap(),
-        };
+        let reg = self
+            .put_into_register(I64, &mut val)?
+            .ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
         let out = self.take_reg(I64).unwrap();
 
@@ -2428,18 +2431,16 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         pass_args: impl FnOnce(&mut Self) -> Result<(), Error>,
     ) -> Result<(), Error> {
         let mut val = self.pop()?;
-        let label = target
-            .into()
-            .label()
-            .copied()
-            .unwrap_or_else(|| self.ret_label());
+        let label = self.target_to_label(target.into());
 
         let cond = match val {
             ValueLocation::Cond(cc) => !cc,
             _ => {
                 let predicate = match self.put_into_register(I32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 dynasm!(self.asm
@@ -2455,6 +2456,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         pass_args(self)?;
 
         self.br_on_cond_code(label, cond);
+
         Ok(())
     }
 
@@ -2466,18 +2468,16 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         pass_args: impl FnOnce(&mut Self) -> Result<(), Error>,
     ) -> Result<(), Error> {
         let mut val = self.pop()?;
-        let label = target
-            .into()
-            .label()
-            .copied()
-            .unwrap_or_else(|| self.ret_label());
+        let label = self.target_to_label(target.into());
 
         let cond = match val {
             ValueLocation::Cond(cc) => cc,
             _ => {
                 let predicate = match self.put_into_register(I32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 dynasm!(self.asm
@@ -2493,6 +2493,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         pass_args(self)?;
 
         self.br_on_cond_code(label, cond);
+
         Ok(())
     }
 
@@ -2515,7 +2516,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     ) -> Result<(), Error>
     where
         I: IntoIterator<Item = Option<BrTarget<Label>>>,
-        I::IntoIter: ExactSizeIterator,
+        I::IntoIter: ExactSizeIterator + DoubleEndedIterator,
     {
         let mut targets = targets.into_iter();
         let count = targets.len();
@@ -2567,7 +2568,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     (out_reg, true)
                 };
 
-                self.immediate_to_reg(tmp, (count as u32).into());
+                self.immediate_to_reg(tmp, (count as u32).into())?;
                 dynasm!(self.asm
                     ; cmp Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
                     ; cmova Rq(selector_reg.rq().unwrap()), Rq(tmp.rq().unwrap())
@@ -2608,14 +2609,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
 
             if let Some(def) = default {
-                match def {
-                    BrTarget::Label(label) => dynasm!(self.asm
-                        ; jmp =>label.0
-                    ),
-                    BrTarget::Return => dynasm!(self.asm
-                        ; ret
-                    ),
-                }
+                self.br(def);
             }
 
             self.define_label(end_label);
@@ -2675,7 +2669,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 {
                     // TODO: This would be made simpler and more efficient with a proper SSE
                     //       representation.
-                    self.save_regs(&[r], ..)?;
+                    self.save_regs(std::iter::once(r))?;
                 }
 
                 self.block_state.regs.mark_used(r);
@@ -2687,7 +2681,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
     pub fn pass_block_args(&mut self, cc: &BlockCallingConvention) -> Result<(), Error> {
         self.do_pass_block_args(cc)?;
-        self.set_stack_depth(cc.stack_depth)?;
+        self.set_stack_depth(cc.stack_depth.clone())?;
         Ok(())
     }
 
@@ -2713,10 +2707,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         out_args.reverse();
 
-        self.set_stack_depth(cc.stack_depth)?;
+        self.set_stack_depth(cc.stack_depth.clone())?;
 
         Ok(BlockCallingConvention {
-            stack_depth: cc.stack_depth,
+            stack_depth: cc.stack_depth.clone(),
             arguments: out_args,
         })
     }
@@ -2739,7 +2733,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         out.reverse();
 
         Ok(BlockCallingConvention {
-            stack_depth: self.block_state.depth,
+            stack_depth: self.block_state.depth.clone(),
             arguments: out,
         })
     }
@@ -2809,10 +2803,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 (Some(reg), 0)
             });
 
-        let val_reg = match self.put_into_register(GPRType::Rq, &mut val) {
-            Err(e) => return Err(e),
-            Ok(o) => o.unwrap(),
-        };
+        let val_reg = self
+            .put_into_register(GPRType::Rq, &mut val)?
+            .ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
         let vmctx = GPR::Rq(VMCTX);
 
         // We always use `Rq` (even for floats) since the globals are not necessarily aligned to 128 bits
@@ -2830,7 +2823,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Ok(())
     }
 
-    fn immediate_to_reg(&mut self, reg: GPR, val: Value) {
+    fn immediate_to_reg(&mut self, reg: GPR, val: Value) -> Result<(), Error> {
         match reg {
             GPR::Rq(r) => {
                 let val = val.as_bytes();
@@ -2844,13 +2837,18 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     );
                 }
             }
-            GPR::Rx(r) => {
-                let label = self.aligned_label(16, LabelValue::from(val));
-                dynasm!(self.asm
-                    ; movq Rx(r), [=>label.0]
-                );
+            reg @ GPR::Rx(_) => {
+                let tmp = self
+                    .take_reg(GPRType::Rq)
+                    .ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
+                self.immediate_to_reg(tmp, val)?;
+                let tmp = ValueLocation::Reg(tmp);
+                self.copy_value(tmp, CCLoc::Reg(reg))?;
+                self.free_value(tmp)?;
             }
         }
+
+        Ok(())
     }
 
     // The `&` and `&mut` aren't necessary (`ValueLocation` is copy) but it ensures that we don't get
@@ -2861,9 +2859,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             (ValueLocation::Cond(cond), CCLoc::Stack(o)) => {
                 let offset = self.adjusted_offset(o);
 
-                dynasm!(self.asm
-                    ; mov QWORD [rsp + offset], DWORD 0
-                );
+                self.copy_value(ValueLocation::Immediate(0u64.into()), dst)?;
 
                 match cond {
                     cc::EQUAL => dynasm!(self.asm
@@ -2900,9 +2896,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
             (ValueLocation::Cond(cond), CCLoc::Reg(reg)) => match reg {
                 GPR::Rq(r) => {
-                    dynasm!(self.asm
-                        ; mov Rq(r), 0
-                    );
+                    self.copy_value(ValueLocation::Immediate(0u64.into()), dst)?;
 
                     match cond {
                         cc::EQUAL => dynasm!(self.asm
@@ -2989,11 +2983,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 // TODO: Floats
                 let i = i.as_bytes();
                 let out_offset = self.adjusted_offset(out_offset);
-                if (i as u64) <= u32::max_value() as u64 {
-                    dynasm!(self.asm
-                        ; mov DWORD [rsp + out_offset], i as i32
-                    );
-                } else if let Some(scratch) = self.take_reg(I64) {
+                if let Some(scratch) = self.take_reg(I64) {
                     dynasm!(self.asm
                         ; mov Rq(scratch.rq().unwrap()), QWORD i
                         ; mov [rsp + out_offset], Rq(scratch.rq().unwrap())
@@ -3056,7 +3046,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
             (ValueLocation::Immediate(i), CCLoc::Reg(out_reg)) => {
                 // TODO: Floats
-                self.immediate_to_reg(out_reg, i);
+                self.immediate_to_reg(out_reg, i)?;
             }
         }
         Ok(())
@@ -3083,14 +3073,17 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Ok(())
     }
 
-    pub fn apply_cc(&mut self, cc: &BlockCallingConvention) -> Result<(), Error> {
-        let stack = cc.arguments.iter();
+    pub fn apply_cc(
+        &mut self,
+        cc: BlockCallingConvention<impl IntoIterator<Item = CCLoc>>,
+    ) -> Result<(), Error> {
+        let stack = cc.arguments.into_iter();
 
         self.block_state.stack = Vec::with_capacity(stack.size_hint().0);
         self.block_state.regs = Registers::new();
         self.block_state.regs.release_scratch_register()?;
 
-        for &elem in stack {
+        for elem in stack {
             if let CCLoc::Reg(r) = elem {
                 self.block_state.regs.mark_used(r);
             }
@@ -3160,7 +3153,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             if let ValueLocation::Cond(_) = top {
                 match self.put_into_register(I32, &mut top) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
             }
 
@@ -3272,16 +3267,12 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         ty: impl Into<Option<GPRType>>,
         val: &mut ValueLocation,
     ) -> Result<CCLoc, Error> {
-        match val {
-            _ => {
-                if let Some(gpr) = self.put_into_temp_register(ty, val)? {
-                    Ok(CCLoc::Reg(gpr))
-                } else {
-                    let out = CCLoc::Stack(self.push_physical(*val)?.stack().unwrap());
-                    *val = out.into();
-                    Ok(out)
-                }
-            }
+        if let Some(gpr) = self.put_into_temp_register(ty, val)? {
+            Ok(CCLoc::Reg(gpr))
+        } else {
+            let out = CCLoc::Stack(self.push_physical(*val)?.stack().unwrap());
+            *val = out.into();
+            Ok(out)
         }
     }
 
@@ -3323,7 +3314,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let reg = match self.put_into_temp_register(GPRType::Rx, &mut val) {
                 Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
+                Ok(o) => {
+                    o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                }
             };
             let const_label = self.aligned_label(16, LabelValue::I32(SIGN_MASK_F32 as i32));
 
@@ -3348,7 +3341,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let reg = match self.put_into_temp_register(GPRType::Rx, &mut val) {
                 Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
+                Ok(o) => {
+                    o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                }
             };
             let const_label = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
 
@@ -3373,7 +3368,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let reg = match self.put_into_temp_register(GPRType::Rx, &mut val) {
                 Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
+                Ok(o) => {
+                    o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                }
             };
             let const_label = self.aligned_label(16, LabelValue::I32(REST_MASK_F32 as i32));
 
@@ -3398,7 +3395,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let reg = match self.put_into_temp_register(GPRType::Rx, &mut val) {
                 Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
+                Ok(o) => {
+                    o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                }
             };
 
             let const_label = self.aligned_label(16, LabelValue::I64(REST_MASK_F64 as i64));
@@ -3424,7 +3423,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let reg = match self.put_into_temp_register(GPRType::Rx, &mut val) {
                 Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
+                Ok(o) => {
+                    o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                }
             };
 
             dynasm!(self.asm
@@ -3448,7 +3449,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let reg = match self.put_into_temp_register(GPRType::Rx, &mut val) {
                 Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
+                Ok(o) => {
+                    o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                }
             };
 
             dynasm!(self.asm
@@ -3476,11 +3479,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let lreg = match self.put_into_temp_register(GPRType::Rx, &mut left) {
                 Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
+                Ok(o) => {
+                    o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                }
             };
             let rreg = match self.put_into_register(GPRType::Rx, &mut right) {
                 Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
+                Ok(o) => {
+                    o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                }
             };
 
             let sign_mask = self.aligned_label(16, LabelValue::I32(SIGN_MASK_F32 as i32));
@@ -3515,11 +3522,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let lreg = match self.put_into_temp_register(GPRType::Rx, &mut left) {
                 Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
+                Ok(o) => {
+                    o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                }
             };
             let rreg = match self.put_into_register(GPRType::Rx, &mut right) {
                 Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
+                Ok(o) => {
+                    o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                }
             };
 
             let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
@@ -3573,7 +3584,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let reg = match self.put_into_register(GPRType::Rq, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 let temp = self.take_reg(I32).unwrap();
@@ -3634,7 +3647,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let reg = match self.put_into_register(GPRType::Rq, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
                 let temp = self.take_reg(I64).unwrap();
 
@@ -3692,7 +3707,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let reg = match self.put_into_register(GPRType::Rq, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
                 let temp = self.take_reg(I32).unwrap();
 
@@ -3748,7 +3765,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let reg = match self.put_into_register(GPRType::Rq, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
                 let temp = self.take_reg(I64).unwrap();
 
@@ -3818,37 +3837,43 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.free_value(val)?;
         let new_reg = self.take_reg(I64).unwrap();
 
-        let out = if let ValueLocation::Immediate(imm) = val {
-            self.block_state.regs.release(new_reg)?;
-            ValueLocation::Immediate((imm.as_i32().unwrap() as i64).into())
-        } else {
-            match val {
-                ValueLocation::Reg(GPR::Rx(rxreg)) => {
-                    dynasm!(self.asm
-                        ; movd Rd(new_reg.rq().unwrap()), Rx(rxreg)
-                        ; movsxd Rq(new_reg.rq().unwrap()), Rd(new_reg.rq().unwrap())
-                    );
-                }
-                ValueLocation::Reg(GPR::Rq(rqreg)) => {
-                    dynasm!(self.asm
-                        ; movsxd Rq(new_reg.rq().unwrap()), Rd(rqreg)
-                    );
-                }
-                ValueLocation::Stack(offset) => {
-                    let offset = self.adjusted_offset(offset);
+        let out = match val {
+            ValueLocation::Reg(GPR::Rx(rxreg)) => {
+                dynasm!(self.asm
+                    ; movd Rd(new_reg.rq().unwrap()), Rx(rxreg)
+                    ; movsxd Rq(new_reg.rq().unwrap()), Rd(new_reg.rq().unwrap())
+                );
 
-                    dynasm!(self.asm
-                        ; movsxd Rq(new_reg.rq().unwrap()), DWORD [rsp + offset]
-                    );
-                }
-                _ => {
-                    return Err(Error::Microwasm(
-                        "i32_extend_s unreachable code".to_string(),
-                    ))
-                }
+                ValueLocation::Reg(new_reg)
             }
+            ValueLocation::Reg(GPR::Rq(rqreg)) => {
+                dynasm!(self.asm
+                    ; movsxd Rq(new_reg.rq().unwrap()), Rd(rqreg)
+                );
 
-            ValueLocation::Reg(new_reg)
+                ValueLocation::Reg(new_reg)
+            }
+            ValueLocation::Stack(offset) => {
+                let offset = self.adjusted_offset(offset);
+
+                dynasm!(self.asm
+                    ; movsxd Rq(new_reg.rq().unwrap()), DWORD [rsp + offset]
+                );
+
+                ValueLocation::Reg(new_reg)
+            }
+            // `CondCode` can only be 0 or 1, so sign-extension is always the same as
+            // zero-extension
+            val @ ValueLocation::Cond(_) => {
+                self.copy_value(val, CCLoc::Reg(new_reg))?;
+
+                ValueLocation::Reg(new_reg)
+            }
+            ValueLocation::Immediate(imm) => {
+                self.block_state.regs.release(new_reg)?;
+
+                ValueLocation::Immediate((imm.as_i32().unwrap() as i64).into())
+            }
         };
 
         self.push(out)?;
@@ -3880,6 +3905,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         as_f64,
         |a: Ieee64| Ieee32::from_bits((f64::from_bits(a.to_bits()) as f32).to_bits())
     );
+
     pub fn i32_truncate_f32_s(&mut self) -> Result<(), Error> {
         let mut val = self.pop()?;
 
@@ -3890,7 +3916,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(F32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
                 let temp = self.take_reg(I32).unwrap();
 
@@ -3898,18 +3926,19 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let float_cmp_mask =
                     self.aligned_label(16, LabelValue::I32(0xCF00_0000_u32 as i32));
                 let zero = self.aligned_label(16, LabelValue::I32(0));
-                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; cvttss2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; cmp Rd(temp.rq().unwrap()), [=>sign_mask.0]
                     ; jne >ret
                     ; ucomiss Rx(reg.rx().unwrap()), Rx(reg.rx().unwrap())
-                    ; jp =>trap_label.0
+                    ; jp >trap
                     ; ucomiss Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
-                    ; jnae =>trap_label.0
+                    ; jnae >trap
                     ; ucomiss Rx(reg.rx().unwrap()), [=>zero.0]
-                    ; jnb =>trap_label.0
+                    ; jb >ret
+                ; trap:
+                    ;; self.trap(TrapCode::BadConversionToInteger)
                 ; ret:
                 );
 
@@ -3933,7 +3962,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_temp_register(F32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 let temp = self.take_reg(I32).unwrap();
@@ -3941,22 +3972,24 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
                 let float_cmp_mask =
                     self.aligned_label(16, LabelValue::I32(0x4F00_0000_u32 as i32));
-                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; ucomiss Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
                     ; jae >else_
-                    ; jp =>trap_label.0
+                    ; jp >trap
                     ; cvttss2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; test Rd(temp.rq().unwrap()), Rd(temp.rq().unwrap())
-                    ; js =>trap_label.0
+                    ; js >trap
                     ; jmp >ret
                 ; else_:
                     ; subss Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
                     ; cvttss2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; test Rd(temp.rq().unwrap()), Rd(temp.rq().unwrap())
-                    ; js =>trap_label.0
+                    ; js >trap
                     ; add Rq(temp.rq().unwrap()), [=>sign_mask.0]
+                    ; jmp >ret
+                ; trap:
+                    ;; self.trap(TrapCode::BadConversionToInteger)
                 ; ret:
                 );
 
@@ -3980,7 +4013,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(F32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 let temp = self.take_reg(I32).unwrap();
@@ -3989,18 +4024,19 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let float_cmp_mask =
                     self.aligned_label(16, LabelValue::I64(0xC1E0_0000_0020_0000_u64 as i64));
                 let zero = self.aligned_label(16, LabelValue::I64(0));
-                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; cvttsd2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; cmp Rd(temp.rq().unwrap()), [=>sign_mask.0]
                     ; jne >ret
                     ; ucomisd Rx(reg.rx().unwrap()), Rx(reg.rx().unwrap())
-                    ; jp =>trap_label.0
+                    ; jp >trap
                     ; ucomisd Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
-                    ; jna =>trap_label.0
+                    ; jna >trap
                     ; ucomisd Rx(reg.rx().unwrap()), [=>zero.0]
-                    ; jnb =>trap_label.0
+                    ; jb >ret
+                ; trap:
+                    ;; self.trap(TrapCode::BadConversionToInteger)
                 ; ret:
                 );
 
@@ -4024,7 +4060,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_temp_register(F32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 let temp = self.take_reg(I32).unwrap();
@@ -4032,22 +4070,24 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let sign_mask = self.aligned_label(4, LabelValue::I32(SIGN_MASK_F32 as i32));
                 let float_cmp_mask =
                     self.aligned_label(16, LabelValue::I64(0x41E0_0000_0000_0000_u64 as i64));
-                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; ucomisd Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
                     ; jae >else_
-                    ; jp =>trap_label.0
+                    ; jp >trap
                     ; cvttsd2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; test Rd(temp.rq().unwrap()), Rd(temp.rq().unwrap())
-                    ; js =>trap_label.0
+                    ; js >trap
                     ; jmp >ret
                 ; else_:
                     ; subsd Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
                     ; cvttsd2si Rd(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; test Rd(temp.rq().unwrap()), Rd(temp.rq().unwrap())
-                    ; js =>trap_label.0
+                    ; js >trap
                     ; add Rq(temp.rq().unwrap()), [=>sign_mask.0]
+                    ; jmp >ret
+                ; trap:
+                    ;; self.trap(TrapCode::BadConversionToInteger)
                 ; ret:
                 );
 
@@ -4120,7 +4160,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_temp_register(F32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 let temp = self.take_reg(I32).unwrap();
@@ -4129,18 +4171,19 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let float_cmp_mask =
                     self.aligned_label(16, LabelValue::I32(0xDF00_0000_u32 as i32));
                 let zero = self.aligned_label(16, LabelValue::I64(0));
-                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; cvttss2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; cmp Rq(temp.rq().unwrap()), [=>sign_mask.0]
                     ; jne >ret
                     ; ucomiss Rx(reg.rx().unwrap()), Rx(reg.rx().unwrap())
-                    ; jp =>trap_label.0
+                    ; jp >trap
                     ; ucomiss Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
-                    ; jnae =>trap_label.0
+                    ; jnae >trap
                     ; ucomiss Rx(reg.rx().unwrap()), [=>zero.0]
-                    ; jnb =>trap_label.0
+                    ; jb >ret
+                ; trap:
+                    ;; self.trap(TrapCode::BadConversionToInteger)
                 ; ret:
                 );
 
@@ -4164,7 +4207,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(F32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 let temp = self.take_reg(I32).unwrap();
@@ -4173,18 +4218,19 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let float_cmp_mask =
                     self.aligned_label(16, LabelValue::I64(0xC3E0_0000_0000_0000_u64 as i64));
                 let zero = self.aligned_label(16, LabelValue::I64(0));
-                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; cvttsd2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; cmp Rq(temp.rq().unwrap()), [=>sign_mask.0]
                     ; jne >ret
                     ; ucomisd Rx(reg.rx().unwrap()), Rx(reg.rx().unwrap())
-                    ; jp =>trap_label.0
+                    ; jp >trap
                     ; ucomisd Rx(reg.rx().unwrap()), [=>float_cmp_mask.0]
-                    ; jnae =>trap_label.0
+                    ; jnae >trap
                     ; ucomisd Rx(reg.rx().unwrap()), [=>zero.0]
-                    ; jnb =>trap_label.0
+                    ; jb >ret
+                ; trap:
+                    ;; self.trap(TrapCode::BadConversionToInteger)
                 ; ret:
                 );
 
@@ -4208,28 +4254,32 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(F32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 let temp = self.take_reg(I64).unwrap();
                 let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
                 let u64_trunc_f32_const = self.aligned_label(16, LabelValue::I32(0x5F00_0000_i32));
-                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; comiss Rx(reg.rx().unwrap()), [=>u64_trunc_f32_const.0]
                     ; jae >large
-                    ; jp =>trap_label.0
+                    ; jp >trap
                     ; cvttss2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; test Rq(temp.rq().unwrap()), Rq(temp.rq().unwrap())
-                    ; js =>trap_label.0
+                    ; js >trap
                     ; jmp >cont
                 ; large:
                     ; subss Rx(reg.rx().unwrap()), [=>u64_trunc_f32_const.0]
                     ; cvttss2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; test Rq(temp.rq().unwrap()), Rq(temp.rq().unwrap())
-                    ; js =>trap_label.0
+                    ; js >trap
                     ; add Rq(temp.rq().unwrap()), [=>sign_mask.0]
+                    ; jmp >cont
+                ; trap:
+                    ;; self.trap(TrapCode::BadConversionToInteger)
                 ; cont:
                 );
 
@@ -4253,7 +4303,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(F64, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 let temp = self.take_reg(I64).unwrap();
@@ -4261,22 +4313,24 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
                 let u64_trunc_f64_const =
                     self.aligned_label(16, LabelValue::I64(0x43E0_0000_0000_0000_i64));
-                let trap_label = self.trap_label();
 
                 dynasm!(self.asm
                     ; comisd Rx(reg.rx().unwrap()), [=>u64_trunc_f64_const.0]
                     ; jnb >large
-                    ; jp =>trap_label.0
+                    ; jp >trap
                     ; cvttsd2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; cmp Rq(temp.rq().unwrap()), 0
-                    ; jge >cont
-                    ; jmp =>trap_label.0
+                    ; jl >trap
+                    ; jmp >cont
                 ; large:
                     ; subsd Rx(reg.rx().unwrap()), [=>u64_trunc_f64_const.0]
                     ; cvttsd2si Rq(temp.rq().unwrap()), Rx(reg.rx().unwrap())
                     ; cmp Rq(temp.rq().unwrap()), 0
-                    ; jnge =>trap_label.0
+                    ; jnge >trap
                     ; add Rq(temp.rq().unwrap()), [=>sign_mask.0]
+                    ; jmp >cont
+                ; trap:
+                    ;; self.trap(TrapCode::BadConversionToInteger)
                 ; cont:
                 );
 
@@ -4300,7 +4354,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(I32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 let temp = self.take_reg(F32).unwrap();
@@ -4330,7 +4386,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(I32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 let temp = self.take_reg(F64).unwrap();
@@ -4360,7 +4418,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(I64, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 let out = self.take_reg(F32).unwrap();
@@ -4403,7 +4463,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(I64, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 let out = self.take_reg(F32).unwrap();
@@ -4558,7 +4620,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             &ir::ExternalName::LibCall(ir::LibCall::CeilF32),
             iter::once(F32),
             iter::once(F32),
-            true,
+            FunctionDefLocation::PossiblyExternal,
         )?;
         Ok(())
     }
@@ -4568,7 +4630,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             &ir::ExternalName::LibCall(ir::LibCall::FloorF32),
             iter::once(F32),
             iter::once(F32),
-            true,
+            FunctionDefLocation::PossiblyExternal,
         )?;
         Ok(())
     }
@@ -4578,7 +4640,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             &ir::ExternalName::LibCall(ir::LibCall::NearestF32),
             iter::once(F32),
             iter::once(F32),
-            true,
+            FunctionDefLocation::PossiblyExternal,
         )?;
         Ok(())
     }
@@ -4588,7 +4650,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             &ir::ExternalName::LibCall(ir::LibCall::TruncF32),
             iter::once(F32),
             iter::once(F32),
-            true,
+            FunctionDefLocation::PossiblyExternal,
         )?;
         Ok(())
     }
@@ -4629,7 +4691,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             &ir::ExternalName::LibCall(ir::LibCall::CeilF64),
             iter::once(F64),
             iter::once(F64),
-            true,
+            FunctionDefLocation::PossiblyExternal,
         )?;
         Ok(())
     }
@@ -4639,7 +4701,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             &ir::ExternalName::LibCall(ir::LibCall::FloorF64),
             iter::once(F64),
             iter::once(F64),
-            true,
+            FunctionDefLocation::PossiblyExternal,
         )?;
         Ok(())
     }
@@ -4649,7 +4711,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             &ir::ExternalName::LibCall(ir::LibCall::NearestF64),
             iter::once(F64),
             iter::once(F64),
-            true,
+            FunctionDefLocation::PossiblyExternal,
         )?;
         Ok(())
     }
@@ -4659,7 +4721,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             &ir::ExternalName::LibCall(ir::LibCall::TruncF64),
             iter::once(F64),
             iter::once(F64),
-            true,
+            FunctionDefLocation::PossiblyExternal,
         )?;
         Ok(())
     }
@@ -4877,7 +4939,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Immediate(_) | ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let r = match this.put_into_register(I32, divisor) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 dynasm!(this.asm
@@ -4913,7 +4977,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Immediate(_) | ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let r = match this.put_into_register(I32, divisor) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 dynasm!(this.asm
@@ -4949,7 +5015,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Immediate(_) | ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let r = match this.put_into_register(I64, divisor) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
                 dynasm!(this.asm
                     ; xor rdx, rdx
@@ -4984,7 +5052,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Immediate(_) | ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let r = match this.put_into_register(I64, divisor) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 dynasm!(this.asm
@@ -5026,11 +5096,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let rreg = match self.put_into_register(I32, &mut right) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
                 let lreg = match self.put_into_temp_register(I32, &mut left) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 dynasm!(self.asm
@@ -5043,7 +5117,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                 let lreg = match self.put_into_temp_register(I32, &mut left) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 dynasm!(self.asm
@@ -5054,7 +5130,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Immediate(i) => {
                 let lreg = match self.put_into_register(I32, &mut left) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 let new_reg = self.take_reg(I32).unwrap();
@@ -5101,11 +5179,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let rreg = match self.put_into_register(I64, &mut right) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
                 let lreg = match self.put_into_temp_register(I64, &mut left) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 dynasm!(self.asm
@@ -5118,7 +5200,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                 let lreg = match self.put_into_temp_register(I64, &mut left) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
 
                 dynasm!(self.asm
@@ -5131,10 +5215,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 if let Ok(i) = i.try_into() {
                     let new_reg = self.take_reg(I64).unwrap();
 
-                    let lreg = match self.put_into_register(I64, &mut left) {
-                        Err(e) => return Err(e),
-                        Ok(o) => o.unwrap(),
-                    };
+                    let lreg = self
+                        .put_into_register(I64, &mut left)?
+                        .ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
                     dynasm!(self.asm
                         ; imul Rq(new_reg.rq().unwrap()), Rq(lreg.rq().unwrap()), i
@@ -5144,14 +5227,12 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                     ValueLocation::Reg(new_reg)
                 } else {
-                    let rreg = match self.put_into_register(I64, &mut right) {
-                        Err(e) => return Err(e),
-                        Ok(o) => o.unwrap(),
-                    };
-                    let lreg = match self.put_into_temp_register(I64, &mut left) {
-                        Err(e) => return Err(e),
-                        Ok(o) => o.unwrap(),
-                    };
+                    let rreg = self
+                        .put_into_register(I64, &mut right)?
+                        .ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
+                    let lreg = self
+                        .put_into_temp_register(I64, &mut left)?
+                        .ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
                     dynasm!(self.asm
                         ; imul Rq(lreg.rq().unwrap()), Rq(rreg.rq().unwrap())
@@ -5301,7 +5382,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let cond_reg = match self.put_into_register(I32, &mut cond) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.unwrap(),
+                    Ok(o) => {
+                        o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                    }
                 };
                 dynasm!(self.asm
                     ; test Rd(cond_reg.rq().unwrap()), Rd(cond_reg.rq().unwrap())
@@ -5317,7 +5400,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let gpr = match self.put_into_register(I32, &mut else_) {
                 Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
+                Ok(o) => {
+                    o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                }
             };
             CCLoc::Reg(gpr)
         };
@@ -5327,7 +5412,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let gpr = match self.put_into_register(I32, &mut then) {
                 Err(e) => return Err(e),
-                Ok(o) => o.unwrap(),
+                Ok(o) => {
+                    o.ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?
+                }
             };
             CCLoc::Reg(gpr)
         };
@@ -5375,27 +5462,37 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Ok(())
     }
 
-    fn relocated_function_call(
+    fn relocated_function_call<
+        A: IntoIterator<Item = SignlessType>,
+        R: IntoIterator<Item = SignlessType>,
+    >(
         &mut self,
         name: &cranelift_codegen::ir::ExternalName,
-        args: impl IntoIterator<Item = SignlessType>,
-        rets: impl IntoIterator<Item = SignlessType>,
-        preserve_vmctx: bool,
-    ) -> Result<(), Error> {
-        let locs = arg_locs(args)?;
+        args: A,
+        rets: R,
+        func_def_loc: FunctionDefLocation,
+    ) -> Result<(), Error>
+    where
+        A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+        R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+    {
+        let locs = arg_locs_skip_caller_vmctx(args);
 
-        self.save_volatile(..locs.len())?;
-
-        if preserve_vmctx {
+        let saved_vmctx = if func_def_loc == FunctionDefLocation::PossiblyExternal {
             dynasm!(self.asm
-                ; push Rq(VMCTX)
+                ; mov Rq(CALLER_VMCTX), Rq(VMCTX)
             );
-            self.block_state.depth.reserve(1);
-        }
+            self.block_state.regs.mark_used(GPR::Rq(CALLER_VMCTX));
+            self.block_state.regs.mark_used(GPR::Rq(VMCTX));
+            Some(self.push_physical(ValueLocation::Reg(GPR::Rq(VMCTX)))?)
+        } else {
+            None
+        };
 
-        let depth = self.block_state.depth;
+        self.save_volatile()?;
 
         self.pass_outgoing_args(&locs)?;
+
         // 2 bytes for the 64-bit `mov` opcode + register ident, the rest is the immediate
         self.reloc_sink.reloc_external(
             (self.asm.offset().0
@@ -5411,6 +5508,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             0,
         );
         let temp = self.take_reg(I64).unwrap();
+
         dynasm!(self.asm
             ; mov Rq(temp.rq().unwrap()), QWORD 0xDEAD_BEEF_DEAD_BEEF_u64 as i64
             ; call Rq(temp.rq().unwrap())
@@ -5423,14 +5521,65 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         self.push_function_returns(rets)?;
 
-        if preserve_vmctx {
-            self.set_stack_depth(depth)?;
-
-            dynasm!(self.asm
-                ; pop Rq(VMCTX)
-            );
-            self.block_state.depth.free(1);
+        if func_def_loc == FunctionDefLocation::PossiblyExternal {
+            let saved_vmctx = saved_vmctx.unwrap();
+            self.block_state.regs.release(GPR::Rq(CALLER_VMCTX))?;
+            self.copy_value(saved_vmctx, CCLoc::Reg(GPR::Rq(VMCTX)))?;
+            self.free_value(saved_vmctx)?;
         }
+
+        Ok(())
+    }
+
+    fn builtin_function_call<
+        A: IntoIterator<Item = SignlessType>,
+        R: IntoIterator<Item = SignlessType>,
+    >(
+        &mut self,
+        i: BuiltinFunctionIndex,
+        args: A,
+        rets: R,
+    ) -> Result<(), Error>
+    where
+        A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+        R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+    {
+        let locs = arg_locs(args);
+
+        dynasm!(self.asm
+            ; push Rq(VMCTX)
+        );
+        self.block_state.depth.reserve(1);
+        let depth = self.block_state.depth.clone();
+
+        self.save_volatile()?;
+
+        self.block_state.regs.release(GPR::Rq(CALLER_VMCTX))?;
+        self.pass_outgoing_args(&locs)?;
+
+        let temp = self.take_reg(I64).unwrap();
+        dynasm!(self.asm
+            ; mov Rq(temp.rq().unwrap()), [
+                Rq(VMCTX) + self.module_context.vmctx_builtin_function(i.index()) as i32
+            ]
+            ; call Rq(temp.rq().unwrap())
+        );
+
+        self.block_state.regs.release(temp)?;
+
+        for i in locs {
+            self.free_value(i.into())?;
+        }
+        self.block_state.regs.mark_used(GPR::Rq(CALLER_VMCTX));
+
+        self.push_function_returns(rets)?;
+
+        self.set_stack_depth(depth)?;
+        dynasm!(self.asm
+            ; pop Rq(VMCTX)
+        );
+        self.block_state.depth.free(1);
+
         Ok(())
     }
 
@@ -5439,19 +5588,17 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let memory_index = 0;
         if let Some(defined_memory_index) = self.module_context.defined_memory_index(memory_index) {
             self.push(ValueLocation::Immediate(defined_memory_index.into()))?;
-            self.relocated_function_call(
-                &magic::get_memory32_size_name(),
-                iter::once(I32),
-                iter::once(I32),
-                true,
+            self.builtin_function_call(
+                BuiltinFunctionIndex::get_memory32_size_index(),
+                [self.pointer_type].iter().copied(),
+                [self.pointer_type].iter().copied(),
             )?;
         } else {
             self.push(ValueLocation::Immediate(memory_index.into()))?;
-            self.relocated_function_call(
-                &magic::get_imported_memory32_size_name(),
-                iter::once(I32),
-                iter::once(I32),
-                true,
+            self.builtin_function_call(
+                BuiltinFunctionIndex::get_imported_memory32_size_index(),
+                [self.pointer_type].iter().copied(),
+                [self.pointer_type].iter().copied(),
             )?;
         }
         Ok(())
@@ -5462,19 +5609,17 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let memory_index = 0;
         if let Some(defined_memory_index) = self.module_context.defined_memory_index(memory_index) {
             self.push(ValueLocation::Immediate(defined_memory_index.into()))?;
-            self.relocated_function_call(
-                &magic::get_memory32_grow_name(),
-                iter::once(I32).chain(iter::once(I32)),
-                iter::once(I32),
-                true,
+            self.builtin_function_call(
+                BuiltinFunctionIndex::get_memory32_grow_index(),
+                [self.pointer_type, self.pointer_type].iter().copied(),
+                [self.pointer_type].iter().copied(),
             )?;
         } else {
             self.push(ValueLocation::Immediate(memory_index.into()))?;
-            self.relocated_function_call(
-                &magic::get_imported_memory32_grow_name(),
-                iter::once(I32).chain(iter::once(I32)),
-                iter::once(I32),
-                true,
+            self.builtin_function_call(
+                BuiltinFunctionIndex::get_imported_memory32_grow_index(),
+                [self.pointer_type, self.pointer_type].iter().copied(),
+                [self.pointer_type].iter().copied(),
             )?;
         }
         Ok(())
@@ -5484,41 +5629,30 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     // TODO: This inefficiently duplicates registers but it's not really possible
     //       to double up stack space right now.
     /// Saves volatile (i.e. caller-saved) registers before a function call, if they are used.
-    fn save_volatile(&mut self, _bounds: impl std::ops::RangeBounds<usize>) -> Result<(), Error> {
-        self.save_regs(SCRATCH_REGS, ..)?;
+    fn save_volatile(&mut self) -> Result<(), Error> {
+        self.save_regs(SCRATCH_REGS.iter().copied())?;
         Ok(())
     }
 
-    fn save_regs<I>(
-        &mut self,
-        regs: &I,
-        bounds: impl std::ops::RangeBounds<usize>,
-    ) -> Result<(), Error>
+    fn save_regs<I>(&mut self, to_save: I) -> Result<(), Error>
     where
-        for<'a> &'a I: IntoIterator<Item = &'a GPR>,
-        I: ?Sized,
+        I: IntoIterator<Item = GPR>,
+        I::IntoIter: Clone,
     {
-        use std::ops::Bound::*;
+        // TODO: We can filter out registers that are already marked free, but just to ensure
+        //       that this doesn't fail when confronted with the `memory_grow`/`memory_size`
+        //       weirdness.
+        let to_save = to_save.into_iter();
+        if to_save.clone().count() == 0 {
+            return Ok(());
+        }
 
         let mut stack = mem::replace(&mut self.block_state.stack, vec![]);
-        let (start, end) = (
-            match bounds.end_bound() {
-                Unbounded => 0,
-                Included(v) => stack.len().saturating_sub(1 + v),
-                Excluded(v) => stack.len().saturating_sub(*v),
-            },
-            match bounds.start_bound() {
-                Unbounded => stack.len(),
-                Included(v) => stack.len().saturating_sub(*v),
-                Excluded(v) => stack.len().saturating_sub(1 + v),
-            },
-        );
-
-        let mut slice = &mut stack[start..end];
+        let mut slice = &mut stack[..];
 
         while let Some((first, rest)) = slice.split_first_mut() {
             if let ValueLocation::Reg(vreg) = *first {
-                if regs.into_iter().any(|r| *r == vreg) {
+                if to_save.clone().any(|r| r == vreg) {
                     let old = *first;
                     *first = self.push_physical(old)?;
                     for val in &mut *rest {
@@ -5533,20 +5667,23 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             slice = rest;
         }
 
-        let _ = mem::replace(&mut self.block_state.stack, stack);
+        mem::replace(&mut self.block_state.stack, stack);
+
         Ok(())
     }
 
     /// Write the arguments to the callee to the registers and the stack using the SystemV
     /// calling convention.
-    fn pass_outgoing_args(&mut self, out_locs: &[CCLoc]) -> Result<(), Error> {
-        // TODO: Do alignment here
+    fn pass_outgoing_args(
+        &mut self,
+        out_locs: &(impl ExactSizeIterator<Item = CCLoc> + DoubleEndedIterator + Clone),
+    ) -> Result<(), Error> {
         let total_stack_space = out_locs
-            .iter()
-            .flat_map(|&l| {
+            .clone()
+            .flat_map(|l| {
                 if let CCLoc::Stack(offset) = l {
-                    if offset > 0 {
-                        Some(offset as u32)
+                    if offset >= 0 {
+                        Some(offset as u32 + 1)
                     } else {
                         None
                     }
@@ -5556,16 +5693,19 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             })
             .max()
             .unwrap_or(0);
-        let mut depth = self.block_state.depth.0 + total_stack_space;
+        let original_depth = self.block_state.depth.clone();
+        let mut needed_depth = original_depth.clone();
+        needed_depth.reserve(total_stack_space);
 
-        if depth & 1 != 0 {
-            self.set_stack_depth(StackDepth(self.block_state.depth.0 + 1))?;
-            depth += 1;
+        if needed_depth.0 & 1 != 0 {
+            needed_depth.reserve(1);
         }
+
+        self.set_stack_depth(needed_depth.clone())?;
 
         let mut pending = Vec::<(ValueLocation, CCLoc)>::with_capacity(out_locs.len());
 
-        for &loc in out_locs.iter().rev() {
+        for loc in out_locs.clone().rev() {
             let val = self.pop()?;
 
             pending.push((val, loc));
@@ -5576,14 +5716,19 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
             for (src, dst) in mem::replace(&mut pending, vec![]) {
                 if src != ValueLocation::from(dst) {
-                    if let CCLoc::Reg(r) = dst {
-                        if !self.block_state.regs.is_free(r) {
-                            pending.push((src, dst));
-                            continue;
-                        }
+                    let dst = match dst {
+                        CCLoc::Reg(r) => {
+                            if !self.block_state.regs.is_free(r) {
+                                pending.push((src, dst));
+                                continue;
+                            }
 
-                        self.block_state.regs.mark_used(r);
-                    }
+                            self.block_state.regs.mark_used(r);
+
+                            dst
+                        }
+                        CCLoc::Stack(offset) => CCLoc::Stack(offset - needed_depth.0 as i32),
+                    };
 
                     self.copy_value(src, dst)?;
                     self.free_value(src)?;
@@ -5607,7 +5752,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                             "Programmer error: We shouldn't need to push \
                              intermediate args if we don't have any argument sources in registers"
                                 .to_string(),
-                        ))
+                        ));
                     }
                     Some(val) => *val,
                 };
@@ -5620,7 +5765,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         }
 
-        self.set_stack_depth(StackDepth(depth))?;
+        // We do this a second time just in case we had to use `push_physical` to resolve cycles in
+        // `pending`
+        self.set_stack_depth(needed_depth)?;
+
         Ok(())
     }
 
@@ -5638,42 +5786,60 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Ok(())
     }
 
-    pub fn call_indirect(
+    fn trap_if(&mut self, ccode: CondCode, trap_code: TrapCode) {
+        let label = self.create_label();
+        self.br_on_cond_code(label, !ccode);
+        self.trap(trap_code);
+        self.define_label(label);
+    }
+
+    pub fn call_indirect<
+        A: IntoIterator<Item = SignlessType>,
+        R: IntoIterator<Item = SignlessType>,
+    >(
         &mut self,
         type_id: u32,
-        arg_types: impl IntoIterator<Item = SignlessType>,
-        return_types: impl IntoIterator<Item = SignlessType>,
-    ) -> Result<(), Error> {
-        let locs = arg_locs(arg_types)?;
+        arg_types: A,
+        return_types: R,
+    ) -> Result<(), Error>
+    where
+        A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+        R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+    {
+        dynasm!(self.asm
+            ; push Rq(VMCTX)
+        );
+        self.block_state.depth.reserve(1);
+        let depth = self.block_state.depth.clone();
 
-        for &loc in &locs {
+        let locs = arg_locs_skip_caller_vmctx(arg_types);
+
+        for loc in locs.clone() {
             if let CCLoc::Reg(r) = loc {
                 self.block_state.regs.mark_used(r);
             }
         }
 
         let mut callee = self.pop()?;
-        let callee_reg = match self.put_into_temp_register(I32, &mut callee) {
-            Err(e) => return Err(e),
-            Ok(o) => o.unwrap(),
-        };
+        let callee_reg = self
+            .put_into_temp_register(I32, &mut callee)?
+            .ok_or_else(|| Error::Microwasm("Ran out of free registers".to_string()))?;
 
-        for &loc in &locs {
+        self.save_volatile()?;
+
+        for loc in locs.clone() {
             if let CCLoc::Reg(r) = loc {
                 self.block_state.regs.release(r)?;
             }
         }
 
-        self.save_volatile(..locs.len())?;
-        dynasm!(self.asm
-            ; push Rq(VMCTX)
-        );
-        self.block_state.depth.reserve(1);
-        let depth = self.block_state.depth;
-
         self.pass_outgoing_args(&locs)?;
 
-        let fail = self.trap_label().0;
+        dynasm!(self.asm
+            ; mov Rq(CALLER_VMCTX), Rq(VMCTX)
+        );
+        self.block_state.regs.mark_used(GPR::Rq(CALLER_VMCTX));
+
         let table_index = 0;
         let reg_offset = self
             .module_context
@@ -5699,14 +5865,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         });
 
         let temp0 = self.take_reg(I64).unwrap();
-
         dynasm!(self.asm
             ; cmp Rd(callee_reg.rq().unwrap()), [
                 Rq(reg.unwrap_or(vmctx).rq().unwrap()) +
                     offset +
                     self.module_context.vmtable_definition_current_elements() as i32
             ]
-            ; jae =>fail
+            ;; self.trap_if(cc::GE_U, TrapCode::TableOutOfBounds)
             ; imul
                 Rd(callee_reg.rq().unwrap()),
                 Rd(callee_reg.rq().unwrap()),
@@ -5735,7 +5900,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     Rq(callee_reg.rq().unwrap()) +
                     self.module_context.vmcaller_checked_anyfunc_type_index() as i32
             ], Rd(temp1.rq().unwrap())
-            ; jne =>fail
+            ;; self.trap_if(cc::NOT_EQUAL, TrapCode::BadSignature)
             ; mov Rq(VMCTX), [
                 Rq(temp0.rq().unwrap()) +
                     Rq(callee_reg.rq().unwrap()) +
@@ -5748,6 +5913,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ]
         );
 
+        self.block_state.regs.release(GPR::Rq(CALLER_VMCTX))?;
         self.block_state.regs.release(temp0)?;
         self.block_state.regs.release(temp1)?;
         self.free_value(callee)?;
@@ -5763,6 +5929,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ; pop Rq(VMCTX)
         );
         self.block_state.depth.free(1);
+
         Ok(())
     }
 
@@ -5772,31 +5939,42 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     /// Call a function with the given index
-    pub fn call_direct(
+    pub fn call_direct<A: IntoIterator<Item = SignlessType>, R: IntoIterator<Item = SignlessType>>(
         &mut self,
         index: u32,
-        arg_types: impl IntoIterator<Item = SignlessType>,
-        return_types: impl IntoIterator<Item = SignlessType>,
-    ) -> Result<(), Error> {
+        arg_types: A,
+        return_types: R,
+    ) -> Result<(), Error>
+    where
+        A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+        R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+    {
         self.relocated_function_call(
             &ir::ExternalName::user(0, index),
             arg_types,
             return_types,
-            false,
+            FunctionDefLocation::SameModule,
         )?;
         Ok(())
     }
 
-    /// Call a function with the given index
-    pub fn call_direct_self(
+    /// Recursively call the same function again
+    pub fn call_direct_self<
+        A: IntoIterator<Item = SignlessType>,
+        R: IntoIterator<Item = SignlessType>,
+    >(
         &mut self,
         defined_index: u32,
-        arg_types: impl IntoIterator<Item = SignlessType>,
-        return_types: impl IntoIterator<Item = SignlessType>,
-    ) -> Result<(), Error> {
-        let locs = arg_locs(arg_types)?;
+        arg_types: A,
+        return_types: R,
+    ) -> Result<(), Error>
+    where
+        A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+        R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+    {
+        let locs = arg_locs_skip_caller_vmctx(arg_types);
 
-        self.save_volatile(..locs.len())?;
+        self.save_volatile()?;
 
         let (_, label) = self.func_starts[defined_index as usize];
 
@@ -5814,21 +5992,29 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     /// Call a function with the given index
-    pub fn call_direct_imported(
+    pub fn call_direct_imported<
+        A: IntoIterator<Item = SignlessType>,
+        R: IntoIterator<Item = SignlessType>,
+    >(
         &mut self,
         index: u32,
-        arg_types: impl IntoIterator<Item = SignlessType>,
-        return_types: impl IntoIterator<Item = SignlessType>,
-    ) -> Result<(), Error> {
-        let locs = arg_locs(arg_types)?;
+        arg_types: A,
+        return_types: R,
+    ) -> Result<(), Error>
+    where
+        A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+        R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+    {
+        let locs = arg_locs_skip_caller_vmctx(arg_types);
 
         dynasm!(self.asm
-            ; push Rq(VMCTX)
+            ; mov Rq(CALLER_VMCTX), Rq(VMCTX)
         );
-        self.block_state.depth.reserve(1);
-        let depth = self.block_state.depth;
+        self.block_state.regs.mark_used(GPR::Rq(CALLER_VMCTX));
+        self.block_state.regs.mark_used(GPR::Rq(VMCTX));
+        let saved_vmctx = self.push_physical(ValueLocation::Reg(GPR::Rq(VMCTX)))?;
 
-        self.save_volatile(..locs.len())?;
+        self.save_volatile()?;
         self.pass_outgoing_args(&locs)?;
 
         let callee = self.take_reg(I64).unwrap();
@@ -5851,25 +6037,26 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         self.push_function_returns(return_types)?;
 
-        self.set_stack_depth(depth)?;
-        dynasm!(self.asm
-            ; pop Rq(VMCTX)
-        );
-        self.block_state.depth.free(1);
+        self.block_state.regs.release(GPR::Rq(CALLER_VMCTX))?;
+        self.copy_value(saved_vmctx, CCLoc::Reg(GPR::Rq(VMCTX)))?;
+        self.free_value(saved_vmctx)?;
+
         Ok(())
     }
 
     // TODO: Reserve space to store RBX, RBP, and R12..R15 so we can use them
     //       as scratch registers
     /// Writes the function prologue and stores the arguments as locals
-    pub fn start_function(
+    pub fn start_function<P: IntoIterator<Item = SignlessType>>(
         &mut self,
-        params: impl IntoIterator<Item = SignlessType>,
-    ) -> Result<(), Error> {
-        let i_locs = arg_locs(params)?;
-        let locs = Vec::from_iter(i_locs);
-
-        self.apply_cc(&BlockCallingConvention::function_start(locs))?;
+        params: P,
+    ) -> Result<(), Error>
+    where
+        P::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+    {
+        self.apply_cc(BlockCallingConvention::function_start(
+            arg_locs_skip_caller_vmctx(params),
+        ))?;
         Ok(())
     }
 
@@ -5879,52 +6066,62 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         );
     }
 
-    pub fn epilogue(&mut self) {}
+    pub fn epilogue(&mut self) {
+        for LabelInfo {
+            label,
+            align,
+            inner,
+        } in self.labels.drain()
+        {
+            match inner {
+                LabelValue::I32(val) => {
+                    dynasm!(self.asm
+                        ; .align align as usize
+                        ;; self.asm.dynamic_label(label.0)
+                        ; .dword val
+                    );
+                }
+                LabelValue::I64(val) => {
+                    dynasm!(self.asm
+                        ; .align align as usize
+                        ;; self.asm.dynamic_label(label.0)
+                        ; .qword val
+                    );
+                }
+                LabelValue::Ret => {
+                    dynasm!(self.asm
+                        ; .align align as usize
+                        ;; self.asm.dynamic_label(label.0)
+                        ; ret
+                    );
+                }
+            }
+        }
+    }
 
-    pub fn trap(&mut self) {
-        let trap_label = self.trap_label();
+    pub fn trap(&mut self, _trap_id: TrapCode) {
+        // TODO: Emit trap info by writing the trap ID and current source location to a
+        //       `binemit::TrapSink`.
         dynasm!(self.asm
-            ; jmp =>trap_label.0
+            ; ud2
         );
     }
 
-    pub fn trap_label(&mut self) -> Label {
-        self.label(|asm: &mut Assembler| {
-            dynasm!(asm
-                ; ud2
-            );
-        })
-    }
-
     pub fn ret_label(&mut self) -> Label {
-        self.label(|asm: &mut Assembler| {
-            dynasm!(asm
-                ; ret
-            );
-        })
+        #[derive(Copy, Clone, Hash)]
+        struct RetLabel;
+
+        self.label(LabelValue::Ret)
     }
 
-    fn label<F>(&mut self, fun: F) -> Label
-    where
-        F: IntoLabel,
-    {
-        self.aligned_label(1, fun)
+    fn label(&mut self, label: LabelValue) -> Label {
+        self.aligned_label(1, label)
     }
 
-    fn aligned_label<F>(&mut self, align: u32, fun: F) -> Label
-    where
-        F: IntoLabel,
-    {
-        let key = fun.key();
-        if let Some((label, _, _)) = self.labels.get(&(align, key)) {
-            return *label;
-        }
-
-        let label = self.create_label();
+    fn aligned_label(&mut self, align: u32, label: LabelValue) -> Label {
+        let asm = &mut self.asm;
         self.labels
-            .insert((align, key), (label, align, Some(fun.callback())));
-
-        label
+            .insert(|| Label(asm.new_dynamic_label()), align, label)
     }
 
     fn target_to_label(&mut self, target: BrTarget<Label>) -> Label {
@@ -5932,74 +6129,5 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             BrTarget::Label(label) => label,
             BrTarget::Return => self.ret_label(),
         }
-    }
-}
-
-trait IntoLabel {
-    fn key(&self) -> Either<TypeId, (LabelValue, Option<LabelValue>)>;
-    fn callback(self) -> Box<dyn FnMut(&mut Assembler)>;
-}
-
-impl<F> IntoLabel for F
-where
-    F: FnMut(&mut Assembler) + Any,
-{
-    fn key(&self) -> Either<TypeId, (LabelValue, Option<LabelValue>)> {
-        Either::Left(TypeId::of::<Self>())
-    }
-
-    fn callback(self) -> Box<dyn FnMut(&mut Assembler)> {
-        Box::new(self)
-    }
-}
-
-fn const_value(val: LabelValue) -> impl FnMut(&mut Assembler) {
-    move |asm| match val {
-        LabelValue::I32(val) => dynasm!(asm
-            ; .dword val
-        ),
-        LabelValue::I64(val) => dynasm!(asm
-            ; .qword val
-        ),
-    }
-}
-
-fn const_values(a: LabelValue, b: LabelValue) -> impl FnMut(&mut Assembler) {
-    move |asm| {
-        match a {
-            LabelValue::I32(val) => dynasm!(asm
-                ; .dword val
-            ),
-            LabelValue::I64(val) => dynasm!(asm
-                ; .qword val
-            ),
-        }
-
-        match b {
-            LabelValue::I32(val) => dynasm!(asm
-                ; .dword val
-            ),
-            LabelValue::I64(val) => dynasm!(asm
-                ; .qword val
-            ),
-        }
-    }
-}
-
-impl IntoLabel for LabelValue {
-    fn key(&self) -> Either<TypeId, (LabelValue, Option<LabelValue>)> {
-        Either::Right((*self, None))
-    }
-    fn callback(self) -> Box<dyn FnMut(&mut Assembler)> {
-        Box::new(const_value(self))
-    }
-}
-
-impl IntoLabel for (LabelValue, LabelValue) {
-    fn key(&self) -> Either<TypeId, (LabelValue, Option<LabelValue>)> {
-        Either::Right((self.0, Some(self.1)))
-    }
-    fn callback(self) -> Box<dyn FnMut(&mut Assembler)> {
-        Box::new(const_values(self.0, self.1))
     }
 }

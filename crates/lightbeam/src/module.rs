@@ -300,8 +300,9 @@ impl Signature for CraneliftSignature {
         // TODO: We want to instead add the `VMContext` to the signature used by
         //       cranelift, removing the special-casing from the internals.
         assert_eq!(self.params[0].purpose, ir::ArgumentPurpose::VMContext);
+        // `self.params[1]` should be caller vmctx
         assert_eq!(self.call_conv, isa::CallConv::SystemV);
-        &self.params[1..]
+        &self.params[2..]
     }
 
     fn returns(&self) -> &[Self::Type] {
@@ -332,6 +333,7 @@ pub trait ModuleContext {
     type Signature: Signature;
     type GlobalType: SigType;
 
+    fn vmctx_builtin_function(&self, index: u32) -> u32;
     fn vmctx_vmglobal_definition(&self, index: u32) -> u32;
     fn vmctx_vmglobal_import_from(&self, index: u32) -> u32;
     fn vmctx_vmmemory_import_from(&self, memory_index: u32) -> u32;
@@ -422,6 +424,10 @@ impl ModuleContext for SimpleContext {
 
     fn defined_table_index(&self, index: u32) -> Option<u32> {
         Some(index)
+    }
+
+    fn vmctx_builtin_function(&self, _index: u32) -> u32 {
+        unimplemented!()
     }
 
     fn vmctx_vmfunction_import_body(&self, _func_index: u32) -> u32 {

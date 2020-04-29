@@ -176,8 +176,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("multi_value", _) => return true,
             ("reference_types", _) => return true,
             ("bulk_memory_operations", _) => return true,
-            // Lightbeam doesn't support float arguments on the stack.
-            ("spec_testsuite", "call") => return true,
             _ => (),
         },
         "Cranelift" => match (testsuite, testname) {

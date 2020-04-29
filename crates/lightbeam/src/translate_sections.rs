@@ -1,6 +1,5 @@
-use crate::backend::{CodeGenSession, TranslatedCodeSection};
+use crate::backend::TranslatedCodeSection;
 use crate::error::Error;
-use crate::function_body;
 use crate::module::SimpleContext;
 use cranelift_codegen::{binemit, ir};
 use wasmparser::{
@@ -106,20 +105,13 @@ impl binemit::RelocSink for UnimplementedRelocSink {
 
 /// Parses the Code section of the wasm module.
 pub fn code(
-    code: CodeSectionReader,
-    translation_ctx: &SimpleContext,
+    _code: CodeSectionReader,
+    _translation_ctx: &SimpleContext,
 ) -> Result<TranslatedCodeSection, Error> {
-    let func_count = code.get_count();
-    let mut session = CodeGenSession::new(func_count, translation_ctx);
-
-    for (idx, body) in code.into_iter().enumerate() {
-        let body = body?;
-        let mut relocs = UnimplementedRelocSink;
-
-        function_body::translate_wasm(&mut session, &mut relocs, idx as u32, &body)?;
-    }
-
-    Ok(session.into_translated_code_section()?)
+    // TODO: Remove the Lightbeam harness entirely, this is just to make this compile.
+    //       We do all our testing through Wasmtime now, there's no reason to duplicate
+    //       writing a WebAssembly environment in Lightbeam too.
+    unimplemented!("Incomplete migration to wasm-reader");
 }
 
 /// Parses the Data section of the wasm module.
