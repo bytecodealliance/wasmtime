@@ -267,13 +267,9 @@ impl CompiledExpression {
         // the scope ranges.
         if let [CompiledExpressionPart::Code(code)] = self.parts.as_slice() {
             return BuildWithLocalsResult::Simple(
-                Box::new(
-                    scope
-                        .iter()
-                        .flat_map(move |(wasm_start, wasm_end)| {
-                            addr_tr.translate_ranges(*wasm_start, *wasm_end)
-                        })
-                ),
+                Box::new(scope.iter().flat_map(move |(wasm_start, wasm_end)| {
+                    addr_tr.translate_ranges(*wasm_start, *wasm_end)
+                })),
                 code.clone(),
             );
         }
