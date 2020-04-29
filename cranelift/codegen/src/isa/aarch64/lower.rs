@@ -3,7 +3,7 @@
 //! TODO: opportunities for better code generation:
 //!
 //! - Smarter use of addressing modes. Recognize a+SCALE*b patterns; recognize
-//!   and incorporate sign/zero extension on indicies. Recognize pre/post-index
+//!   and incorporate sign/zero extension on indices. Recognize pre/post-index
 //!   opportunities.
 //!
 //! - Floating-point immediates (FIMM instruction).

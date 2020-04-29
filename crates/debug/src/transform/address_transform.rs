@@ -39,7 +39,7 @@ struct Position {
 }
 
 /// Mapping of continuous range of source location to its generated
-/// code. The positions are always in accending order for search.
+/// code. The positions are always in ascending order for search.
 #[derive(Debug)]
 struct Range {
     wasm_start: WasmAddress,
@@ -226,7 +226,7 @@ fn build_function_addr_map(
 // The iterator returns generated addresses sorted by RangeIndex.
 struct TransformRangeStartIter<'a> {
     addr: WasmAddress,
-    indicies: &'a [RangeIndex],
+    indices: &'a [RangeIndex],
     ranges: &'a [Range],
 }
 
@@ -249,7 +249,7 @@ impl<'a> TransformRangeStartIter<'a> {
         if let Some(range_indices) = found {
             TransformRangeStartIter {
                 addr,
-                indicies: range_indices,
+                indices: range_indices,
                 ranges: &func.lookup.ranges,
             }
         } else {
@@ -261,10 +261,10 @@ impl<'a> TransformRangeStartIter<'a> {
 impl<'a> Iterator for TransformRangeStartIter<'a> {
     type Item = (GeneratedAddress, RangeIndex);
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some((first, tail)) = self.indicies.split_first() {
+        if let Some((first, tail)) = self.indices.split_first() {
             let range_index = *first;
             let range = &self.ranges[range_index];
-            self.indicies = tail;
+            self.indices = tail;
             let address = match range
                 .positions
                 .binary_search_by(|a| a.wasm_pos.cmp(&self.addr))
@@ -289,7 +289,7 @@ impl<'a> Iterator for TransformRangeStartIter<'a> {
 // The iterator returns generated addresses sorted by RangeIndex.
 struct TransformRangeEndIter<'a> {
     addr: WasmAddress,
-    indicies: &'a [RangeIndex],
+    indices: &'a [RangeIndex],
     ranges: &'a [Range],
 }
 
@@ -312,7 +312,7 @@ impl<'a> TransformRangeEndIter<'a> {
         if let Some(range_indices) = found {
             TransformRangeEndIter {
                 addr,
-                indicies: range_indices,
+                indices: range_indices,
                 ranges: &func.lookup.ranges,
             }
         } else {
@@ -324,10 +324,10 @@ impl<'a> TransformRangeEndIter<'a> {
 impl<'a> Iterator for TransformRangeEndIter<'a> {
     type Item = (GeneratedAddress, RangeIndex);
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some((first, tail)) = self.indicies.split_first() {
+        while let Some((first, tail)) = self.indices.split_first() {
             let range_index = *first;
             let range = &self.ranges[range_index];
-            self.indicies = tail;
+            self.indices = tail;
             if range.wasm_start >= self.addr {
                 continue;
             }
