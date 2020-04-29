@@ -1,9 +1,9 @@
+#[cfg(debug_assertions)]
+use crate::backend::Registers;
 use crate::backend::{
-    ret_locs, BlockCallingConvention, BrAction, CodeGenSession, Label, Target,
+    ret_locs, BlockCallingConvention, BrAction, CodeGenSession, Label, Target, ValueLocation,
     VirtualCallingConvention,
 };
-#[cfg(debug_assertions)]
-use crate::backend::{Registers, ValueLocation};
 use crate::{
     error::Error,
     microwasm::*,
@@ -17,7 +17,7 @@ use itertools::{
 };
 #[cfg(debug_assertions)]
 use more_asserts::assert_ge;
-use std::{collections::HashMap, fmt, hash::Hash, iter, mem};
+use std::{collections::HashMap, fmt, hash::Hash, iter, mem, ops::RangeInclusive};
 use wasmparser::FunctionBody;
 
 #[derive(Debug)]
@@ -164,6 +164,14 @@ where
 
         while let Some(op_offset) = body.next() {
             let WithLoc { op, offset } = op_offset?;
+
+            println!(
+                "{}",
+                DisassemblyOpFormatter(WithLoc {
+                    op: op.clone(),
+                    offset
+                })
+            );
 
             ctx.set_source_loc(offset);
             ctx.sinks.offsets.offset(offset, ctx.asm.offset().0);
@@ -445,6 +453,50 @@ where
                             )
                         };
 
+                        fn cc_to_param_locs(params: u32, cc: &Either<BlockCallingConvention, VirtualCallingConvention>, to_drop: Option<RangeInclusive<u32>>) -> impl Iterator<Item = Option<ValueLocation>> + '_ {
+                            let (end, count) = to_drop.as_ref().map(|to_drop| {
+                                (*to_drop.end() as usize, to_drop.clone().count())
+                            }).unwrap_or_default();
+                            let len =match cc {
+                                Left(cc) => cc.arguments.len(),
+                                Right(cc) => cc.stack.len(),
+                            };
+                            let end = len.saturating_sub(end + 1);
+
+                            let extra = (params as usize)
+                                .checked_sub(len + count)
+                                .unwrap();
+
+                            std::iter::repeat(None)
+                                .take(extra)
+                                .chain(
+                                    cc.as_ref()
+                                        .map_left(|cc| {
+                                            cc.arguments[..end].iter()
+                                                .cloned()
+                                                .map(ValueLocation::from)
+                                        })
+                                        .map_right(|cc| {
+                                            cc.stack[..end].iter().cloned()
+                                        })
+                                        .map(Some)
+                                )
+                                .chain(std::iter::repeat(None).take(count))
+                                .chain(
+                                    cc.as_ref()
+                                        .map_left(|cc| {
+                                            cc.arguments[end..].iter()
+                                                .cloned()
+                                                .map(ValueLocation::from)
+                                        })
+                                        .map_right(|cc| {
+                                            cc.stack[end..].iter().cloned()
+                                        })
+                                        .map(Some)
+                                )
+                                .chain(std::iter::once(None))
+                        }
+
                         for target in targets.iter().unique() {
                             let block = blocks.get_mut(&target.target).unwrap();
                             // Although performance is slightly worse if we miscount this to be too high,
@@ -453,10 +505,23 @@ where
 
                             if let Some(block_cc) = &block.calling_convention {
                                 if let Some((cc, to_drop)) = &cc_and_to_drop {
-                                    if cc != block_cc || to_drop != &target.to_drop {
-                                        return Err(Error::Microwasm(
-                                            "Can't pass different params to different elements of `br_table` yet"
-                                                .to_string()));
+                                    let block_locs = cc_to_param_locs(params, &block_cc, target.to_drop.clone());
+                                    let cur_locs = cc_to_param_locs(params, cc, to_drop.clone());
+
+                                    for locs in block_locs.zip(cur_locs) {
+                                        match locs {
+                                            (Some(block_loc), Some(cur_loc)) if block_loc != cur_loc => {
+                                                return Err(Error::Microwasm(
+                                                    format!(
+                                                        "Can't pass different params to different elems of \
+                                                        `br_table` yet (expected {:?}, got {:?})",
+                                                        block_loc,
+                                                        cur_loc,
+                                                    )
+                                                ));
+                                            }
+                                            _ => {}
+                                        }
                                     }
                                 }
 
@@ -560,7 +625,7 @@ where
                         ))
                     })?;
                 }
-                Operator::Swap(depth) => ctx.swap(depth),
+                Operator::Swap(depth) => ctx.swap(depth)?,
                 Operator::Pick(depth) => ctx.pick(depth)?,
                 Operator::Eq(I32) => ctx.i32_eq()?,
                 Operator::Eqz(Size::_32) => ctx.i32_eqz()?,

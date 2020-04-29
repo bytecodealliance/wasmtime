@@ -6372,9 +6372,20 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Ok(())
     }
 
-    pub fn swap(&mut self, depth: u32) {
+    pub fn swap(&mut self, depth: u32) -> Result<(), Error> {
         let last = self.block_state.stack.len() - 1;
+
+        if let Some(mut top) = self.block_state.stack.pop() {
+            if let ValueLocation::Cond(_) = top {
+                self.put_into_temp_location(I32, &mut top)?;
+            }
+
+            self.block_state.stack.push(top);
+        }
+
         self.block_state.stack.swap(last, last - depth as usize);
+
+        Ok(())
     }
 
     /// Call a function with the given index

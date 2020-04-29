@@ -1,9 +1,7 @@
 #![cfg_attr(test, feature(test))]
 #![feature(proc_macro_hygiene)]
 
-#[cfg(test)]
-extern crate test;
-
+mod alloc;
 mod backend;
 mod disassemble;
 mod error;
@@ -11,9 +9,6 @@ mod function_body;
 pub mod microwasm;
 mod module;
 mod translate_sections;
-
-#[cfg(test)]
-mod benches;
 
 pub use crate::backend::CodeGenSession;
 pub use crate::function_body::{
