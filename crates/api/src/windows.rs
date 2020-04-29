@@ -9,10 +9,10 @@
 //! throughout the `wasmtime` crate with extra functionality that's only
 //! available on Windows.
 
-use crate::Instance;
+use crate::Store;
 
-/// Extensions for the [`Instance`] type only available on Windows.
-pub trait InstanceExt {
+/// Extensions for the [`Store`] type only available on Windows.
+pub trait StoreExt {
     /// Configures a custom signal handler to execute.
     ///
     /// TODO: needs more documentation.
@@ -21,11 +21,11 @@ pub trait InstanceExt {
         H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool;
 }
 
-impl InstanceExt for Instance {
+impl StoreExt for Store {
     unsafe fn set_signal_handler<H>(&self, handler: H)
     where
         H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool,
     {
-        self.handle.set_signal_handler(handler);
+        *self.signal_handler_mut() = Some(Box::new(handler));
     }
 }

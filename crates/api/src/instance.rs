@@ -2,8 +2,10 @@ use crate::trampoline::StoreInstanceHandle;
 use crate::{Export, Extern, Func, Global, Memory, Module, Store, Table, Trap};
 use anyhow::{bail, Error, Result};
 use std::any::Any;
+use std::mem;
+use wasmtime_environ::EntityIndex;
 use wasmtime_jit::{CompiledModule, Resolver};
-use wasmtime_runtime::{InstantiationError, SignatureRegistry};
+use wasmtime_runtime::{InstantiationError, SignatureRegistry, VMContext, VMFunctionBody};
 
 struct SimpleResolver<'a> {
     imports: &'a [Extern],
@@ -45,7 +47,6 @@ fn instantiate(
         instance
             .initialize(
                 config.validating_config.operator_config.enable_bulk_memory,
-                config.max_wasm_stack,
                 &compiled_module.data_initializers(),
             )
             .map_err(|e| -> Error {
@@ -56,6 +57,23 @@ fn instantiate(
                     other => other.into(),
                 }
             })?;
+
+        // If a start function is present, now that we've got our compiled
+        // instance we can invoke it. Make sure we use all the trap-handling
+        // configuration in `store` as well.
+        if let Some(start) = instance.module().start_func {
+            let f = match instance.lookup_by_declaration(&EntityIndex::Function(start)) {
+                wasmtime_runtime::Export::Function(f) => f,
+                _ => unreachable!(), // valid modules shouldn't hit this
+            };
+            super::func::catch_traps(instance.vmctx_ptr(), store, || {
+                mem::transmute::<
+                    *const VMFunctionBody,
+                    unsafe extern "C" fn(*mut VMContext, *mut VMContext),
+                >(f.address)(f.vmctx, instance.vmctx_ptr())
+            })?;
+        }
+
         Ok(instance)
     }
 }

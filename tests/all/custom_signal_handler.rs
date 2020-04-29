@@ -3,7 +3,7 @@ mod tests {
     use anyhow::Result;
     use std::rc::Rc;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use wasmtime::unix::InstanceExt;
+    use wasmtime::unix::StoreExt;
     use wasmtime::*;
 
     const WAT1: &str = r#"
@@ -96,7 +96,7 @@ mod tests {
 
         let (base, length) = set_up_memory(&instance);
         unsafe {
-            instance.set_signal_handler(move |signum, siginfo, _| {
+            store.set_signal_handler(move |signum, siginfo, _| {
                 handle_sigsegv(base, length, signum, siginfo)
             });
         }
@@ -161,7 +161,7 @@ mod tests {
         unsafe {
             let (base1, length1) = set_up_memory(&instance1);
 
-            instance1.set_signal_handler({
+            store.set_signal_handler({
                 let instance1_handler_triggered = instance1_handler_triggered.clone();
                 move |_signum, _siginfo, _context| {
                     // Remove protections so the execution may resume
@@ -174,31 +174,6 @@ mod tests {
                     println!(
                         "Hello from instance1 signal handler! {}",
                         instance1_handler_triggered.load(Ordering::SeqCst)
-                    );
-                    true
-                }
-            });
-        }
-
-        let instance2 = Instance::new(&module, &[]).expect("failed to instantiate module");
-        let instance2_handler_triggered = Rc::new(AtomicBool::new(false));
-
-        unsafe {
-            let (base2, length2) = set_up_memory(&instance2);
-
-            instance2.set_signal_handler({
-                let instance2_handler_triggered = instance2_handler_triggered.clone();
-                move |_signum, _siginfo, _context| {
-                    // Remove protections so the execution may resume
-                    libc::mprotect(
-                        base2 as *mut libc::c_void,
-                        length2,
-                        libc::PROT_READ | libc::PROT_WRITE,
-                    );
-                    instance2_handler_triggered.store(true, Ordering::SeqCst);
-                    println!(
-                        "Hello from instance2 signal handler! {}",
-                        instance2_handler_triggered.load(Ordering::SeqCst)
                     );
                     true
                 }
@@ -220,6 +195,31 @@ mod tests {
                 true,
                 "instance1 signal handler has been triggered"
             );
+        }
+
+        let instance2 = Instance::new(&module, &[]).expect("failed to instantiate module");
+        let instance2_handler_triggered = Rc::new(AtomicBool::new(false));
+
+        unsafe {
+            let (base2, length2) = set_up_memory(&instance2);
+
+            store.set_signal_handler({
+                let instance2_handler_triggered = instance2_handler_triggered.clone();
+                move |_signum, _siginfo, _context| {
+                    // Remove protections so the execution may resume
+                    libc::mprotect(
+                        base2 as *mut libc::c_void,
+                        length2,
+                        libc::PROT_READ | libc::PROT_WRITE,
+                    );
+                    instance2_handler_triggered.store(true, Ordering::SeqCst);
+                    println!(
+                        "Hello from instance2 signal handler! {}",
+                        instance2_handler_triggered.load(Ordering::SeqCst)
+                    );
+                    true
+                }
+            });
         }
 
         // And then instance2
@@ -249,7 +249,7 @@ mod tests {
         let instance1 = Instance::new(&module1, &[])?;
         let (base1, length1) = set_up_memory(&instance1);
         unsafe {
-            instance1.set_signal_handler(move |signum, siginfo, _| {
+            store.set_signal_handler(move |signum, siginfo, _| {
                 println!("instance1");
                 handle_sigsegv(base1, length1, signum, siginfo)
             });
@@ -264,7 +264,7 @@ mod tests {
         // since 'instance2.run' calls 'instance1.read' we need to set up the signal handler to handle
         // SIGSEGV originating from within the memory of instance1
         unsafe {
-            instance2.set_signal_handler(move |signum, siginfo, _| {
+            store.set_signal_handler(move |signum, siginfo, _| {
                 handle_sigsegv(base1, length1, signum, siginfo)
             });
         }
