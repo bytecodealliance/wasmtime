@@ -550,7 +550,7 @@ impl<I: VCodeInst> VCode<I> {
         let code_section = sections.get_section(code_idx);
 
         let flags = self.abi.flags();
-        let mut cur_srcloc = SourceLoc::default();
+        let mut cur_srcloc = None;
         for &block in &self.final_block_order {
             let new_offset = I::align_basic_block(code_section.cur_offset_from_start());
             while new_offset > code_section.cur_offset_from_start() {
@@ -563,22 +563,20 @@ impl<I: VCodeInst> VCode<I> {
             let (start, end) = self.block_ranges[block as usize];
             for iix in start..end {
                 let srcloc = self.srclocs[iix as usize];
-                if srcloc != cur_srcloc {
-                    if !cur_srcloc.is_default() {
+                if cur_srcloc != Some(srcloc) {
+                    if cur_srcloc.is_some() {
                         code_section.end_srcloc();
                     }
-                    if !srcloc.is_default() {
-                        code_section.start_srcloc(srcloc);
-                    }
-                    cur_srcloc = srcloc;
+                    code_section.start_srcloc(srcloc);
+                    cur_srcloc = Some(srcloc);
                 }
 
                 self.insts[iix as usize].emit(code_section, flags);
             }
 
-            if !cur_srcloc.is_default() {
+            if cur_srcloc.is_some() {
                 code_section.end_srcloc();
-                cur_srcloc = SourceLoc::default();
+                cur_srcloc = None;
             }
         }
 

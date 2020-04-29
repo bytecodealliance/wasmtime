@@ -94,11 +94,7 @@ impl GlobalFrameInfo {
         // the function, because otherwise something is buggy along the way and
         // not accounting for all the instructions. This isn't super critical
         // though so we can omit this check in release mode.
-        //
-        // FIXME(#1521) aarch64 instruction info isn't quite up-to-par yet.
-        if !cfg!(target_arch = "aarch64") {
-            debug_assert!(pos.is_some(), "failed to find instruction for {:x}", pc);
-        }
+        debug_assert!(pos.is_some(), "failed to find instruction for {:x}", pc);
 
         let instr = match pos {
             Some(pos) => func.instr_map.instructions[pos].srcloc,
