@@ -17,6 +17,7 @@ use target_lexicon::{Aarch64Architecture, Architecture, Triple};
 mod abi;
 mod inst;
 mod lower;
+mod lower_inst;
 
 use inst::create_reg_universe;
 
