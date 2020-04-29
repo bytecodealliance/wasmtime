@@ -26,6 +26,9 @@ pub use self::args::*;
 pub mod emit;
 pub use self::emit::*;
 
+#[cfg(test)]
+mod emit_tests;
+
 //=============================================================================
 // Instructions (top level): definition
 
