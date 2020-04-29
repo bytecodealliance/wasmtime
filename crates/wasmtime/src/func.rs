@@ -247,21 +247,52 @@ impl Func {
             // We have a dynamic guarantee that `values_vec` has the right
             // number of arguments and the right types of arguments. As a result
             // we should be able to safely run through them all and read them.
-            let mut args = Vec::with_capacity(ty_clone.params().len());
-            let store = Store::upgrade(&store_weak).unwrap();
+            const STACK_ARGS: usize = 3;
+            const STACK_RETURNS: usize = 1;
+
+            let use_heap_args = ty_clone.params().len() > STACK_ARGS;
+            let mut stack_args: [Val; STACK_ARGS] = [Val::null(), Val::null(), Val::null()];
+            let mut heap_args = Vec::with_capacity(if use_heap_args {
+                ty_clone.params().len()
+            } else {
+                0
+            });
+
             for (i, ty) in ty_clone.params().iter().enumerate() {
                 unsafe {
-                    args.push(Val::read_value_from(&store, values_vec.add(i), ty));
+                    let val = Val::read_value_from(values_vec.add(i), ty);
+                    if use_heap_args {
+                        heap_args.push(val);
+                    } else {
+                        stack_args[i] = val;
+                    }
                 }
             }
-            let mut returns = vec![Val::null(); ty_clone.results().len()];
+
+            let args = if use_heap_args {
+                heap_args.as_slice()
+            } else {
+                &stack_args[0..ty_clone.params().len()]
+            };
+
+            let use_heap_returns = ty_clone.results().len() > STACK_RETURNS;
+            let mut stack_returns: [Val; STACK_RETURNS] = [Val::null()];
+            let mut heap_returns;
+
+            let returns = if use_heap_returns {
+                heap_returns = vec![Val::null(); ty_clone.results().len()];
+                heap_returns.as_mut_slice()
+            } else {
+                &mut stack_returns[0..ty_clone.results().len()]
+            };
+
             func(
                 Caller {
                     store: &store_weak,
                     caller_vmctx,
                 },
-                &args,
-                &mut returns,
+                args,
+                returns,
             )?;
 
             // Unlike our arguments we need to dynamically check that the return
