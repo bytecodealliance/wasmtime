@@ -50,7 +50,16 @@ impl ConcurrentRunner {
 
         heartbeat_thread(reply_tx.clone());
 
-        let handles = (0..num_cpus::get())
+        let num_threads = std::env::var("CRANELIFT_FILETESTS_THREADS")
+            .ok()
+            .map(|s| {
+                use std::str::FromStr;
+                let n = usize::from_str(&s).unwrap();
+                assert!(n > 0);
+                n
+            })
+            .unwrap_or_else(|| num_cpus::get());
+        let handles = (0..num_threads)
             .map(|num| worker_thread(num, request_mutex.clone(), reply_tx.clone()))
             .collect();
 
