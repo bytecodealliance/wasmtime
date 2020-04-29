@@ -972,6 +972,22 @@ pub trait IntoFunc<Params, Results> {
 /// the caller's memory until interface types has been fully standardized and
 /// implemented.
 pub struct Caller<'a> {
+    // Note that this is a `Weak` pointer instead of a `&'a Store`,
+    // intentionally so. This allows us to break an `Rc` cycle which would
+    // otherwise look like this:
+    //
+    // * A `Store` object ...
+    // * ... owns all `InstanceHandle` objects ...
+    // * ... which are created in `Func::wrap` with custom host data ...
+    // * ... where the custom host data needs to point to `Store` to be stored
+    //   here
+    //
+    // This `Rc` cycle means that we would never actually reclaim any memory or
+    // deallocate any instances. To break this cycle we use a weak pointer here
+    // which points back to `Store`. A `Caller` should only ever be usable
+    // when the original `Store` is alive, however, so this should always be an
+    // upgrade-able pointer. Alternative solutions or other ideas to break this
+    // cycle would be most welcome!
     store: &'a Weak<StoreInner>,
     caller_vmctx: *mut VMContext,
 }
