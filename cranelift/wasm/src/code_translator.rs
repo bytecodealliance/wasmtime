@@ -39,6 +39,8 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
+use std::cmp;
+use std::convert::TryFrom;
 use std::vec::Vec;
 use wasmparser::{MemoryImmediate, Operator};
 
@@ -655,42 +657,42 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I16x8Load8x8S {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            let (flags, base, offset) = prepare_load(*offset, builder, state, environ)?;
+            let (flags, base, offset) = prepare_load(*offset, 8, builder, state, environ)?;
             let loaded = builder.ins().sload8x8(flags, base, offset);
             state.push1(loaded);
         }
         Operator::I16x8Load8x8U {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            let (flags, base, offset) = prepare_load(*offset, builder, state, environ)?;
+            let (flags, base, offset) = prepare_load(*offset, 8, builder, state, environ)?;
             let loaded = builder.ins().uload8x8(flags, base, offset);
             state.push1(loaded);
         }
         Operator::I32x4Load16x4S {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            let (flags, base, offset) = prepare_load(*offset, builder, state, environ)?;
+            let (flags, base, offset) = prepare_load(*offset, 8, builder, state, environ)?;
             let loaded = builder.ins().sload16x4(flags, base, offset);
             state.push1(loaded);
         }
         Operator::I32x4Load16x4U {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            let (flags, base, offset) = prepare_load(*offset, builder, state, environ)?;
+            let (flags, base, offset) = prepare_load(*offset, 8, builder, state, environ)?;
             let loaded = builder.ins().uload16x4(flags, base, offset);
             state.push1(loaded);
         }
         Operator::I64x2Load32x2S {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            let (flags, base, offset) = prepare_load(*offset, builder, state, environ)?;
+            let (flags, base, offset) = prepare_load(*offset, 8, builder, state, environ)?;
             let loaded = builder.ins().sload32x2(flags, base, offset);
             state.push1(loaded);
         }
         Operator::I64x2Load32x2U {
             memarg: MemoryImmediate { flags: _, offset },
         } => {
-            let (flags, base, offset) = prepare_load(*offset, builder, state, environ)?;
+            let (flags, base, offset) = prepare_load(*offset, 8, builder, state, environ)?;
             let loaded = builder.ins().uload32x2(flags, base, offset);
             state.push1(loaded);
         }
@@ -1701,25 +1703,70 @@ fn get_heap_addr(
     heap: ir::Heap,
     addr32: ir::Value,
     offset: u32,
+    width: u32,
     addr_ty: Type,
     builder: &mut FunctionBuilder,
 ) -> (ir::Value, i32) {
-    use core::cmp::min;
-
-    let mut adjusted_offset = u64::from(offset);
     let offset_guard_size: u64 = builder.func.heaps[heap].offset_guard_size.into();
 
-    // Generate `heap_addr` instructions that are friendly to CSE by checking offsets that are
-    // multiples of the offset-guard size. Add one to make sure that we check the pointer itself
-    // is in bounds.
-    if offset_guard_size != 0 {
-        adjusted_offset = adjusted_offset / offset_guard_size * offset_guard_size;
-    }
-
-    // For accesses on the outer skirts of the offset-guard pages, we expect that we get a trap
-    // even if the access goes beyond the offset-guard pages. This is because the first byte
-    // pointed to is inside the offset-guard pages.
-    let check_size = min(u64::from(u32::MAX), 1 + adjusted_offset) as u32;
+    // How exactly the bounds check is performed here and what it's performed
+    // on is a bit tricky. Generally we want to rely on access violations (e.g.
+    // segfaults) to generate traps since that means we don't have to bounds
+    // check anything explicitly.
+    //
+    // If we don't have a guard page of unmapped memory, though, then we can't
+    // rely on this trapping behavior through segfaults. Instead we need to
+    // bounds-check the entire memory access here which is everything from
+    // `addr32 + offset` to `addr32 + offset + width` (not inclusive). In this
+    // scenario our adjusted offset that we're checking is `offset + width`.
+    //
+    // If we have a guard page, however, then we can perform a further
+    // optimization of the generated code by only checking multiples of the
+    // offset-guard size to be more CSE-friendly. Knowing that we have at least
+    // 1 page of a guard page we're then able to disregard the `width` since we
+    // know it's always less than one page. Our bounds check will be for the
+    // first byte which will either succeed and be guaranteed to fault if it's
+    // actually out of bounds, or the bounds check itself will fail. In any case
+    // we assert that the width is reasonably small for now so this assumption
+    // can be adjusted in the future if we get larger widths.
+    //
+    // Put another way we can say, where `y < offset_guard_size`:
+    //
+    //      n * offset_guard_size + y = offset
+    //
+    // We'll then pass `n * offset_guard_size` as the bounds check value. If
+    // this traps then our `offset` would have trapped anyway. If this check
+    // passes we know
+    //
+    //      addr32 + n * offset_guard_size < bound
+    //
+    // which means
+    //
+    //      addr32 + n * offset_guard_size + y < bound + offset_guard_size
+    //
+    // because `y < offset_guard_size`, which then means:
+    //
+    //      addr32 + offset < bound + offset_guard_size
+    //
+    // Since we know that that guard size bytes are all unmapped we're
+    // guaranteed that `offset` and the `width` bytes after it are either
+    // in-bounds or will hit the guard page, meaning we'll get the desired
+    // semantics we want.
+    //
+    // As one final comment on the bits with the guard size here, another goal
+    // of this is to hit an optimization in `heap_addr` where if the heap size
+    // minus the offset is >= 4GB then bounds checks are 100% eliminated. This
+    // means that with huge guard regions (e.g. our 2GB default) most adjusted
+    // offsets we're checking here are zero. This means that we'll hit the fast
+    // path and emit zero conditional traps for bounds checks
+    let adjusted_offset = if offset_guard_size == 0 {
+        u64::from(offset) + u64::from(width)
+    } else {
+        assert!(width < 1024);
+        cmp::max(u64::from(offset) / offset_guard_size * offset_guard_size, 1)
+    };
+    debug_assert!(adjusted_offset > 0); // want to bounds check at least 1 byte
+    let check_size = u32::try_from(adjusted_offset).unwrap_or(u32::MAX);
     let base = builder.ins().heap_addr(addr_ty, heap, addr32, check_size);
 
     // Native load/store instructions take a signed `Offset32` immediate, so adjust the base
@@ -1736,6 +1783,7 @@ fn get_heap_addr(
 /// Prepare for a load; factors out common functionality between load and load_extend operations.
 fn prepare_load<FE: FuncEnvironment + ?Sized>(
     offset: u32,
+    loaded_bytes: u32,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
     environ: &mut FE,
@@ -1744,7 +1792,14 @@ fn prepare_load<FE: FuncEnvironment + ?Sized>(
 
     // We don't yet support multiple linear memories.
     let heap = state.get_heap(builder.func, 0, environ)?;
-    let (base, offset) = get_heap_addr(heap, addr32, offset, environ.pointer_type(), builder);
+    let (base, offset) = get_heap_addr(
+        heap,
+        addr32,
+        offset,
+        loaded_bytes,
+        environ.pointer_type(),
+        builder,
+    );
 
     // Note that we don't set `is_aligned` here, even if the load instruction's
     // alignment immediate says it's aligned, because WebAssembly's immediate
@@ -1763,7 +1818,13 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
-    let (flags, base, offset) = prepare_load(offset, builder, state, environ)?;
+    let (flags, base, offset) = prepare_load(
+        offset,
+        mem_op_size(opcode, result_ty),
+        builder,
+        state,
+        environ,
+    )?;
     let (load, dfg) = builder.ins().Load(opcode, result_ty, flags, offset, base);
     state.push1(dfg.first_result(load));
     Ok(())
@@ -1782,13 +1843,30 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
 
     // We don't yet support multiple linear memories.
     let heap = state.get_heap(builder.func, 0, environ)?;
-    let (base, offset) = get_heap_addr(heap, addr32, offset, environ.pointer_type(), builder);
+    let (base, offset) = get_heap_addr(
+        heap,
+        addr32,
+        offset,
+        mem_op_size(opcode, val_ty),
+        environ.pointer_type(),
+        builder,
+    );
     // See the comments in `translate_load` about the flags.
     let flags = MemFlags::new();
     builder
         .ins()
         .Store(opcode, val_ty, flags, offset.into(), val, base);
     Ok(())
+}
+
+fn mem_op_size(opcode: ir::Opcode, ty: Type) -> u32 {
+    match opcode {
+        ir::Opcode::Istore8 | ir::Opcode::Sload8 | ir::Opcode::Uload8 => 1,
+        ir::Opcode::Istore16 | ir::Opcode::Sload16 | ir::Opcode::Uload16 => 2,
+        ir::Opcode::Istore32 | ir::Opcode::Sload32 | ir::Opcode::Uload32 => 4,
+        ir::Opcode::Store | ir::Opcode::Load => ty.bytes(),
+        _ => panic!("unknown size of mem op for {:?}", opcode),
+    }
 }
 
 fn translate_icmp(cc: IntCC, builder: &mut FunctionBuilder, state: &mut FuncTranslationState) {

@@ -2,7 +2,8 @@ use crate::externals::MemoryCreator;
 use crate::trampoline::{MemoryCreatorProxy, StoreInstanceHandle};
 use anyhow::{bail, Result};
 use std::cell::RefCell;
-use std::cmp::min;
+use std::cmp;
+use std::convert::TryFrom;
 use std::fmt;
 use std::path::Path;
 use std::rc::{Rc, Weak};
@@ -45,9 +46,9 @@ impl Config {
         if cfg!(windows) {
             // For now, use a smaller footprint on Windows so that we don't
             // don't outstrip the paging file.
-            tunables.static_memory_bound = min(tunables.static_memory_bound, 0x100);
+            tunables.static_memory_bound = cmp::min(tunables.static_memory_bound, 0x100);
             tunables.static_memory_offset_guard_size =
-                min(tunables.static_memory_offset_guard_size, 0x10000);
+                cmp::min(tunables.static_memory_offset_guard_size, 0x10000);
         }
 
         let mut flags = settings::builder();
@@ -402,6 +403,183 @@ impl Config {
         self.memory_creator = Some(MemoryCreatorProxy { mem_creator });
         self
     }
+
+    /// Configures the maximum size, in bytes, where a linear memory is
+    /// considered static, above which it'll be considered dynamic.
+    ///
+    /// This function configures the threshold for wasm memories whether they're
+    /// implemented as a dynamically relocatable chunk of memory or a statically
+    /// located chunk of memory. The `max_size` parameter here is the size, in
+    /// bytes, where if the maximum size of a linear memory is below `max_size`
+    /// then it will be statically allocated with enough space to never have to
+    /// move. If the maximum size of a linear memory is larger than `max_size`
+    /// then wasm memory will be dynamically located and may move in memory
+    /// through growth operations.
+    ///
+    /// Specifying a `max_size` of 0 means that all memories will be dynamic and
+    /// may be relocated through `memory.grow`. Also note that if any wasm
+    /// memory's maximum size is below `max_size` then it will still reserve
+    /// `max_size` bytes in the virtual memory space.
+    ///
+    /// ## Static vs Dynamic Memory
+    ///
+    /// Linear memories represent contiguous arrays of bytes, but they can also
+    /// be grown through the API and wasm instructions. When memory is grown if
+    /// space hasn't been preallocated then growth may involve relocating the
+    /// base pointer in memory. Memories in Wasmtime are classified in two
+    /// different ways:
+    ///
+    /// * **static** - these memories preallocate all space necessary they'll
+    ///   ever need, meaning that the base pointer of these memories is never
+    ///   moved. Static memories may take more virtual memory space because of
+    ///   pre-reserving space for memories.
+    ///
+    /// * **dynamic** - these memories are not preallocated and may move during
+    ///   growth operations. Dynamic memories consume less virtual memory space
+    ///   because they don't need to preallocate space for future growth.
+    ///
+    /// Static memories can be optimized better in JIT code because once the
+    /// base address is loaded in a function it's known that we never need to
+    /// reload it because it never changes, `memory.grow` is generally a pretty
+    /// fast operation because the wasm memory is never relocated, and under
+    /// some conditions bounds checks can be elided on memory accesses.
+    ///
+    /// Dynamic memories can't be quite as heavily optimized because the base
+    /// address may need to be reloaded more often, they may require relocating
+    /// lots of data on `memory.grow`, and dynamic memories require
+    /// unconditional bounds checks on all memory accesses.
+    ///
+    /// ## Should you use static or dynamic memory?
+    ///
+    /// In general you probably don't need to change the value of this property.
+    /// The defaults here are optimized for each target platform to consume a
+    /// reasonable amount of physical memory while also generating speedy
+    /// machine code.
+    ///
+    /// One of the main reasons you may want to configure this today is if your
+    /// environment can't reserve virtual memory space for each wasm linear
+    /// memory. On 64-bit platforms wasm memories require a 6GB reservation by
+    /// default, and system limits may prevent this in some scenarios. In this
+    /// case you may wish to force memories to be allocated dynamically meaning
+    /// that the virtual memory footprint of creating a wasm memory should be
+    /// exactly what's used by the wasm itself.
+    ///
+    /// For 32-bit memories a static memory must contain at least 4GB of
+    /// reserved address space plus a guard page to elide any bounds checks at
+    /// all. Smaller static memories will use similar bounds checks as dynamic
+    /// memories.
+    ///
+    /// ## Default
+    ///
+    /// The default value for this property depends on the host platform. For
+    /// 64-bit platforms there's lots of address space available, so the default
+    /// configured here is 4GB. WebAssembly linear memories currently max out at
+    /// 4GB which means that on 64-bit platforms Wasmtime by default always uses
+    /// a static memory. This, coupled with a sufficiently sized guard region,
+    /// should produce the fastest JIT code on 64-bit platforms, but does
+    /// require a large address space reservation for each wasm memory.
+    ///
+    /// For 32-bit platforms this value defaults to 1GB. This means that wasm
+    /// memories whose maximum size is less than 1GB will be allocated
+    /// statically, otherwise they'll be considered dynamic.
+    pub fn static_memory_maximum_size(&mut self, max_size: u64) -> &mut Self {
+        let max_pages = max_size / u64::from(wasmtime_environ::WASM_PAGE_SIZE);
+        self.tunables.static_memory_bound = u32::try_from(max_pages).unwrap_or(u32::max_value());
+        self
+    }
+
+    /// Configures the size, in bytes, of the guard region used at the end of a
+    /// static memory's address space reservation.
+    ///
+    /// All WebAssembly loads/stores are bounds-checked and generate a trap if
+    /// they're out-of-bounds. Loads and stores are often very performance
+    /// critical, so we want the bounds check to be as fast as possible!
+    /// Accelerating these memory accesses is the motivation for a guard after a
+    /// memory allocation.
+    ///
+    /// Memories (both static and dynamic) can be configured with a guard at the
+    /// end of them which consists of unmapped virtual memory. This unmapped
+    /// memory will trigger a memory access violation (e.g. segfault) if
+    /// accessed. This allows JIT code to elide bounds checks if it can prove
+    /// that an access, if out of bounds, would hit the guard region. This means
+    /// that having such a guard of unmapped memory can remove the need for
+    /// bounds checks in JIT code.
+    ///
+    /// For the difference between static and dynamic memories, see the
+    /// [`Config::static_memory_maximum_size`].
+    ///
+    /// ## How big should the guard be?
+    ///
+    /// In general, like with configuring `static_memory_maximum_size`, you
+    /// probably don't want to change this value from the defaults. Otherwise,
+    /// though, the size of the guard region affects the number of bounds checks
+    /// needed for generated wasm code. More specifically, loads/stores with
+    /// immediate offsets will generate bounds checks based on how big the guard
+    /// page is.
+    ///
+    /// For 32-bit memories a 4GB static memory is required to even start
+    /// removing bounds checks. A 4GB guard size will guarantee that the module
+    /// has zero bounds checks for memory accesses. A 2GB guard size will
+    /// eliminate all bounds checks with an immediate offset less than 2GB. A
+    /// guard size of zero means that all memory accesses will still have bounds
+    /// checks.
+    ///
+    /// ## Default
+    ///
+    /// The default value for this property is 2GB on 64-bit platforms. This
+    /// allows eliminating almost all bounds checks on loads/stores with an
+    /// immediate offset of less than 2GB. On 32-bit platforms this defaults to
+    /// 64KB.
+    ///
+    /// ## Static vs Dynamic Guard Size
+    ///
+    /// Note that for now the static memory guard size must be at least as large
+    /// as the dynamic memory guard size, so configuring this property to be
+    /// smaller than the dynamic memory guard size will have no effect.
+    pub fn static_memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
+        let guard_size = round_up_to_pages(guard_size);
+        let guard_size = cmp::max(guard_size, self.tunables.dynamic_memory_offset_guard_size);
+        self.tunables.static_memory_offset_guard_size = guard_size;
+        self
+    }
+
+    /// Configures the size, in bytes, of the guard region used at the end of a
+    /// dynamic memory's address space reservation.
+    ///
+    /// For the difference between static and dynamic memories, see the
+    /// [`Config::static_memory_maximum_size`]
+    ///
+    /// For more information about what a guard is, see the documentation on
+    /// [`Config::static_memory_guard_size`].
+    ///
+    /// Note that the size of the guard region for dynamic memories is not super
+    /// critical for performance. Making it reasonably-sized can improve
+    /// generated code slightly, but for maximum performance you'll want to lean
+    /// towards static memories rather than dynamic anyway.
+    ///
+    /// Also note that the dynamic memory guard size must be smaller than the
+    /// static memory guard size, so if a large dynamic memory guard is
+    /// specified then the static memory guard size will also be automatically
+    /// increased.
+    ///
+    /// ## Default
+    ///
+    /// This value defaults to 64KB.
+    pub fn dynamic_memory_guard_size(&mut self, guard_size: u64) -> &mut Self {
+        let guard_size = round_up_to_pages(guard_size);
+        self.tunables.dynamic_memory_offset_guard_size = guard_size;
+        self.tunables.static_memory_offset_guard_size =
+            cmp::max(guard_size, self.tunables.static_memory_offset_guard_size);
+        self
+    }
+}
+
+fn round_up_to_pages(val: u64) -> u64 {
+    let page_size = region::page::size() as u64;
+    debug_assert!(page_size.is_power_of_two());
+    val.checked_add(page_size - 1)
+        .map(|val| val & !(page_size - 1))
+        .unwrap_or(u64::max_value() / page_size + 1)
 }
 
 impl Default for Config {

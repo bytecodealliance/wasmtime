@@ -870,8 +870,59 @@ pub unsafe trait LinearMemory {
 /// Note that this is a relatively new and experimental feature and it is recommended
 /// to be familiar with wasmtime runtime code to use it.
 pub unsafe trait MemoryCreator: Send + Sync {
-    /// Create new LinearMemory
-    fn new_memory(&self, ty: MemoryType) -> Result<Box<dyn LinearMemory>, String>;
+    /// Create a new `LinearMemory` object from the specified parameters.
+    ///
+    /// The type of memory being created is specified by `ty` which indicates
+    /// both the minimum and maximum size, in wasm pages.
+    ///
+    /// The `reserved_size` value indicates the expected size of the
+    /// reservation that is to be made for this memory. If this value is `None`
+    /// than the implementation is free to allocate memory as it sees fit. If
+    /// the value is `Some`, however, then the implementation is expected to
+    /// reserve that many bytes for the memory's allocation, plus the guard
+    /// size at the end. Note that this reservation need only be a virtual
+    /// memory reservation, physical memory does not need to be allocated
+    /// immediately. In this case `grow` should never move the base pointer and
+    /// the maximum size of `ty` is guaranteed to fit within `reserved_size`.
+    ///
+    /// The `guard_size` parameter indicates how many bytes of space, after the
+    /// memory allocation, is expected to be unmapped. JIT code will elide
+    /// bounds checks based on the `guard_size` provided, so for JIT code to
+    /// work correctly the memory returned will need to be properly guarded with
+    /// `guard_size` bytes left unmapped after the base allocation.
+    ///
+    /// Note that the `reserved_size` and `guard_size` options are tuned from
+    /// the various [`Config`](crate::Config) methods about memory
+    /// sizes/guards. Additionally these two values are guaranteed to be
+    /// multiples of the system page size.
+    fn new_memory(
+        &self,
+        ty: MemoryType,
+        reserved_size: Option<u64>,
+        guard_size: u64,
+    ) -> Result<Box<dyn LinearMemory>, String>;
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+
+    // Assert that creating a memory via `Memory::new` respects the limits/tunables
+    // in `Config`.
+    #[test]
+    fn respect_tunables() {
+        let mut cfg = Config::new();
+        cfg.static_memory_maximum_size(0)
+            .dynamic_memory_guard_size(0);
+        let store = Store::new(&Engine::new(&cfg));
+        let ty = MemoryType::new(Limits::new(1, None));
+        let mem = Memory::new(&store, ty);
+        assert_eq!(mem.wasmtime_export.memory.offset_guard_size, 0);
+        match mem.wasmtime_export.memory.style {
+            wasmtime_environ::MemoryStyle::Dynamic => {}
+            other => panic!("unexpected style {:?}", other),
+        }
+    }
 }
 
 // Exports

@@ -5,7 +5,7 @@ use crate::Store;
 use crate::{Limits, MemoryType};
 use anyhow::Result;
 use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::{wasm, EntityIndex, MemoryPlan, Module, WASM_PAGE_SIZE};
+use wasmtime_environ::{wasm, EntityIndex, MemoryPlan, MemoryStyle, Module, WASM_PAGE_SIZE};
 use wasmtime_runtime::{RuntimeLinearMemory, RuntimeMemoryCreator, VMMemoryDefinition};
 
 use std::sync::Arc;
@@ -21,9 +21,9 @@ pub fn create_handle_with_memory(
         maximum: memory.limits().max(),
         shared: false, // TODO
     };
-    let tunable = Default::default();
 
-    let memory_plan = wasmtime_environ::MemoryPlan::for_memory(memory, &tunable);
+    let memory_plan =
+        wasmtime_environ::MemoryPlan::for_memory(memory, &store.engine().config().tunables);
     let memory_id = module.local.memory_plans.push(memory_plan);
     module
         .exports
@@ -67,8 +67,12 @@ pub(crate) struct MemoryCreatorProxy {
 impl RuntimeMemoryCreator for MemoryCreatorProxy {
     fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn RuntimeLinearMemory>, String> {
         let ty = MemoryType::new(Limits::new(plan.memory.minimum, plan.memory.maximum));
+        let reserved_size = match plan.style {
+            MemoryStyle::Static { bound } => Some(bound.into()),
+            MemoryStyle::Dynamic => None,
+        };
         self.mem_creator
-            .new_memory(ty)
+            .new_memory(ty, reserved_size, plan.offset_guard_size)
             .map(|mem| Box::new(LinearMemoryProxy { mem }) as Box<dyn RuntimeLinearMemory>)
     }
 }
