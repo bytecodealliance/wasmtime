@@ -4,9 +4,8 @@ use crate::handle::Handle;
 use crate::sys::osdir::OsDir;
 use crate::sys::osother::{OsOther, OsOtherExt};
 use crate::sys::stdio::{Stderr, StderrExt, Stdin, StdinExt, Stdout, StdoutExt};
-use crate::virtfs::{VirtualDir, VirtualDirEntry};
-use crate::wasi::types;
-use crate::wasi::{Errno, Result};
+use crate::virtfs::{FileContents, InMemoryFile, VirtualDir, VirtualDirEntry};
+use crate::wasi::{types, Errno, Result};
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -48,6 +47,7 @@ type WasiCtxBuilderResult<T> = std::result::Result<T, WasiCtxBuilderError>;
 enum PendingEntry {
     Thunk(fn() -> io::Result<Box<dyn Handle>>),
     OsHandle(File),
+    Virtual(Box<dyn FileContents>),
 }
 
 impl std::fmt::Debug for PendingEntry {
@@ -59,6 +59,7 @@ impl std::fmt::Debug for PendingEntry {
                 f as *const fn() -> io::Result<Box<dyn Handle>>
             ),
             Self::OsHandle(f) => write!(fmt, "PendingEntry::OsHandle({:?})", f),
+            Self::Virtual(_) => write!(fmt, "PendingEntry::Virtual(...)"),
         }
     }
 }
@@ -247,21 +248,39 @@ impl WasiCtxBuilder {
         self
     }
 
-    /// Provide a File to use as stdin
+    /// Provide a File to use as stdin.
     pub fn stdin(&mut self, file: File) -> &mut Self {
         self.stdin = Some(PendingEntry::OsHandle(file));
         self
     }
 
-    /// Provide a File to use as stdout
+    /// Provide a File to use as stdout.
     pub fn stdout(&mut self, file: File) -> &mut Self {
         self.stdout = Some(PendingEntry::OsHandle(file));
         self
     }
 
-    /// Provide a File to use as stderr
+    /// Provide a File to use as stderr.
     pub fn stderr(&mut self, file: File) -> &mut Self {
         self.stderr = Some(PendingEntry::OsHandle(file));
+        self
+    }
+
+    /// Provide a virtual file to use as stdin.
+    pub fn stdin_virt(&mut self, file: Box<dyn FileContents>) -> &mut Self {
+        self.stdin = Some(PendingEntry::Virtual(file));
+        self
+    }
+
+    /// Provide a virtual file to use as stdout.
+    pub fn stdout_virt(&mut self, file: Box<dyn FileContents>) -> &mut Self {
+        self.stdout = Some(PendingEntry::Virtual(file));
+        self
+    }
+
+    /// Provide a virtual file to use as stderr.
+    pub fn stderr_virt(&mut self, file: Box<dyn FileContents>) -> &mut Self {
+        self.stderr = Some(PendingEntry::Virtual(file));
         self
     }
 
@@ -360,23 +379,15 @@ impl WasiCtxBuilder {
             self.stderr.take().unwrap(),
         ] {
             log::debug!("WasiCtx inserting entry {:?}", pending);
-            let fd = match pending {
-                PendingEntry::Thunk(f) => {
-                    let handle = EntryHandle::from(f()?);
-                    let entry = Entry::new(handle);
-                    entries
-                        .insert(entry)
-                        .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?
-                }
-                PendingEntry::OsHandle(f) => {
-                    let handle = OsOther::try_from(f)?;
-                    let handle = EntryHandle::new(handle);
-                    let entry = Entry::new(handle);
-                    entries
-                        .insert(entry)
-                        .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?
-                }
+            let handle = match pending {
+                PendingEntry::Thunk(f) => EntryHandle::from(f()?),
+                PendingEntry::OsHandle(f) => EntryHandle::new(OsOther::try_from(f)?),
+                PendingEntry::Virtual(f) => EntryHandle::new(InMemoryFile::new(f)),
             };
+            let entry = Entry::new(handle);
+            let fd = entries
+                .insert(entry)
+                .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
             log::debug!("WasiCtx inserted at {:?}", fd);
         }
         // Then add the preopen entries.
