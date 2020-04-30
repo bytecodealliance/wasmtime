@@ -2,11 +2,28 @@
 
 --------------------------------------------------------------------------------
 
-## 0.16.0
+## 0.17.0
 
 Unreleased
 
 ### Added
+
+### Changed
+
+### Fixed
+
+--------------------------------------------------------------------------------
+
+## 0.16.0
+
+Released 2020-04-29.
+
+### Added
+
+* The `Instance` struct has new accessors, `get_func`, `get_table`,
+  `get_memory`, and `get_global` for quickly looking up exported
+  functions, tables, memories, and globals by name.
+  [#1524](https://github.com/bytecodealliance/wasmtime/pull/1524)
 
 * The C API has a number of new `wasmtime_*` functions which return error
   objects to get detailed error information when an API fails.
@@ -22,12 +39,21 @@ Unreleased
 * APIs for looking up values in a `Linker` have been added.
   [#1480](https://github.com/bytecodealliance/wasmtime/pull/1480)
 
+* Preliminary support for AArch64, also known as ARM64.
+  [#1581](https://github.com/bytecodealliance/wasmtime/pull/1581)
+
 [go-bindings]: https://github.com/bytecodealliance/wasmtime-go
 
 ### Changed
 
+* `Instance::exports` now returns `Export` objects which contain
+  the `name`s of the exports in addition to their `Extern` definitions,
+  so it's no longer necessary to use `Module::exports` to obtain the
+  export names.
+  [#1524](https://github.com/bytecodealliance/wasmtime/pull/1524)
+
 * The `Func::call` API has changed its error type from `Trap` to `anyhow::Error`
-  to distinguish between wasm traps and runtiem violations (like the wrong
+  to distinguish between wasm traps and runtime violations (like the wrong
   number of parameters).
   [#1467](https://github.com/bytecodealliance/wasmtime/pull/1467)
 
