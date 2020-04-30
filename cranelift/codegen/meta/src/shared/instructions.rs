@@ -1174,6 +1174,20 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
+            "uload8x8_complex",
+            r#"
+        Load an 8x8 vector (64 bits) from memory at ``sum(args) + Offset`` and zero-extend into an 
+        i16x8 vector.
+        "#,
+            &formats.load_complex,
+        )
+        .operands_in(vec![MemFlags, args, Offset])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
+    ig.push(
+        Inst::new(
             "sload8x8",
             r#"
         Load an 8x8 vector (64 bits) from memory at ``p + Offset`` and sign-extend into an i16x8 
@@ -1182,6 +1196,20 @@ pub(crate) fn define(
             &formats.load,
         )
         .operands_in(vec![MemFlags, p, Offset])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "sload8x8_complex",
+            r#"
+        Load an 8x8 vector (64 bits) from memory at ``sum(args) + Offset`` and sign-extend into an 
+        i16x8 vector.
+        "#,
+            &formats.load_complex,
+        )
+        .operands_in(vec![MemFlags, args, Offset])
         .operands_out(vec![a])
         .can_load(true),
     );
@@ -1201,12 +1229,26 @@ pub(crate) fn define(
         Inst::new(
             "uload16x4",
             r#"
-        Load an 16x4 vector (64 bits) from memory at ``p + Offset`` and zero-extend into an i32x4 
+        Load a 16x4 vector (64 bits) from memory at ``p + Offset`` and zero-extend into an i32x4 
         vector.
         "#,
             &formats.load,
         )
         .operands_in(vec![MemFlags, p, Offset])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "uload16x4_complex",
+            r#"
+        Load a 16x4 vector (64 bits) from memory at ``sum(args) + Offset`` and zero-extend into an 
+        i32x4 vector.
+        "#,
+            &formats.load_complex,
+        )
+        .operands_in(vec![MemFlags, args, Offset])
         .operands_out(vec![a])
         .can_load(true),
     );
@@ -1221,6 +1263,20 @@ pub(crate) fn define(
             &formats.load,
         )
         .operands_in(vec![MemFlags, p, Offset])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "sload16x4_complex",
+            r#"
+        Load a 16x4 vector (64 bits) from memory at ``sum(args) + Offset`` and sign-extend into an 
+        i32x4 vector.
+        "#,
+            &formats.load_complex,
+        )
+        .operands_in(vec![MemFlags, args, Offset])
         .operands_out(vec![a])
         .can_load(true),
     );
@@ -1252,6 +1308,20 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
+            "uload32x2_complex",
+            r#"
+        Load a 32x2 vector (64 bits) from memory at ``sum(args) + Offset`` and zero-extend into an 
+        i64x2 vector.
+        "#,
+            &formats.load_complex,
+        )
+        .operands_in(vec![MemFlags, args, Offset])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
+    ig.push(
+        Inst::new(
             "sload32x2",
             r#"
         Load a 32x2 vector (64 bits) from memory at ``p + Offset`` and sign-extend into an i64x2 
@@ -1260,6 +1330,20 @@ pub(crate) fn define(
             &formats.load,
         )
         .operands_in(vec![MemFlags, p, Offset])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "sload32x2_complex",
+            r#"
+        Load a 32x2 vector (64 bits) from memory at ``sum(args) + Offset`` and sign-extend into an 
+        i64x2 vector.
+        "#,
+            &formats.load_complex,
+        )
+        .operands_in(vec![MemFlags, args, Offset])
         .operands_out(vec![a])
         .can_load(true),
     );
