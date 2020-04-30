@@ -1607,8 +1607,11 @@ fn define_simd(
     let sadd_sat = shared.by_name("sadd_sat");
     let scalar_to_vector = shared.by_name("scalar_to_vector");
     let sload8x8 = shared.by_name("sload8x8");
+    let sload8x8_complex = shared.by_name("sload8x8_complex");
     let sload16x4 = shared.by_name("sload16x4");
+    let sload16x4_complex = shared.by_name("sload16x4_complex");
     let sload32x2 = shared.by_name("sload32x2");
+    let sload32x2_complex = shared.by_name("sload32x2_complex");
     let spill = shared.by_name("spill");
     let sqrt = shared.by_name("sqrt");
     let sshr_imm = shared.by_name("sshr_imm");
@@ -1617,8 +1620,11 @@ fn define_simd(
     let store_complex = shared.by_name("store_complex");
     let uadd_sat = shared.by_name("uadd_sat");
     let uload8x8 = shared.by_name("uload8x8");
+    let uload8x8_complex = shared.by_name("uload8x8_complex");
     let uload16x4 = shared.by_name("uload16x4");
+    let uload16x4_complex = shared.by_name("uload16x4_complex");
     let uload32x2 = shared.by_name("uload32x2");
+    let uload32x2_complex = shared.by_name("uload32x2_complex");
     let ushr_imm = shared.by_name("ushr_imm");
     let usub_sat = shared.by_name("usub_sat");
     let vconst = shared.by_name("vconst");
@@ -1980,6 +1986,35 @@ fn define_simd(
             let template = recipe.opcodes(*opcodes);
             e.enc_both_inferred_maybe_isap(inst.clone().bind(I32), template.clone(), isap);
             e.enc64_maybe_isap(inst.bind(I64), template.infer_rex(), isap);
+        }
+    }
+
+    // SIMD load extend (complex addressing)
+    let is_load_complex_length_two =
+        InstructionPredicate::new_length_equals(&*formats.load_complex, 2);
+    for (inst, opcodes) in &[
+        (uload8x8_complex, &PMOVZXBW),
+        (uload16x4_complex, &PMOVZXWD),
+        (uload32x2_complex, &PMOVZXDQ),
+        (sload8x8_complex, &PMOVSXBW),
+        (sload16x4_complex, &PMOVSXWD),
+        (sload32x2_complex, &PMOVSXDQ),
+    ] {
+        for recipe in &[
+            rec_fldWithIndex,
+            rec_fldWithIndexDisp8,
+            rec_fldWithIndexDisp32,
+        ] {
+            let template = recipe.opcodes(*opcodes);
+            let predicate = |encoding: EncodingBuilder| {
+                encoding
+                    .isa_predicate(use_sse41_simd)
+                    .inst_predicate(is_load_complex_length_two.clone())
+            };
+            e.enc32_func(inst.clone(), template.clone(), predicate);
+            // No infer_rex calculator for these recipes; place REX version first as in enc_x86_64.
+            e.enc64_func(inst.clone(), template.rex(), predicate);
+            e.enc64_func(inst.clone(), template, predicate);
         }
     }
 

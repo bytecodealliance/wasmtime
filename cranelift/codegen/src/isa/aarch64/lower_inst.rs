@@ -1354,11 +1354,17 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
         | Opcode::ScalarToVector
         | Opcode::Swizzle
         | Opcode::Uload8x8
+        | Opcode::Uload8x8Complex
         | Opcode::Sload8x8
+        | Opcode::Sload8x8Complex
         | Opcode::Uload16x4
+        | Opcode::Uload16x4Complex
         | Opcode::Sload16x4
+        | Opcode::Sload16x4Complex
         | Opcode::Uload32x2
-        | Opcode::Sload32x2 => {
+        | Opcode::Uload32x2Complex
+        | Opcode::Sload32x2
+        | Opcode::Sload32x2Complex => {
             // TODO
             panic!("Vector ops not implemented.");
         }
