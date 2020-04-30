@@ -13,11 +13,11 @@ use wasmtime_environ::isa::TargetIsa;
 #[derive(Debug)]
 pub(crate) enum FileAttributeContext<'a> {
     Root(Option<DebugLineOffset>),
-    Children(
-        &'a Vec<write::FileId>,
-        u64,
-        Option<&'a CompiledExpression<'a>>,
-    ),
+    Children {
+        file_map: &'a [write::FileId],
+        file_index_base: u64,
+        frame_base: Option<&'a CompiledExpression>,
+    },
 }
 
 fn is_exprloc_to_loclist_allowed(attr_name: gimli::constants::DwAt) -> bool {
@@ -55,8 +55,6 @@ pub(crate) fn clone_die_attributes<'a, R>(
 where
     R: Reader,
 {
-    let _tag = &entry.tag();
-    let endian = gimli::RunTimeEndian::Little;
     let unit_encoding = unit.encoding();
 
     let range_info = if let Some(subprogram_range_builder) = subprogram_range_builder {
@@ -116,7 +114,12 @@ where
                 }
             }
             AttributeValue::FileIndex(i) => {
-                if let FileAttributeContext::Children(file_map, file_index_base, _) = file_context {
+                if let FileAttributeContext::Children {
+                    file_map,
+                    file_index_base,
+                    ..
+                } = file_context
+                {
                     write::AttributeValue::FileIndex(Some(file_map[(i - file_index_base) as usize]))
                 } else {
                     return Err(TransformError("unexpected file index attribute").into());
@@ -150,34 +153,41 @@ where
                     unit.addr_base,
                 )?;
                 let frame_base =
-                    if let FileAttributeContext::Children(_, _, frame_base) = file_context {
+                    if let FileAttributeContext::Children { frame_base, .. } = file_context {
                         frame_base
                     } else {
                         None
                     };
-                let mut result = None;
+
+                let mut result: Option<Vec<_>> = None;
                 while let Some(loc) = locs.next()? {
-                    if let Some(expr) =
-                        compile_expression(&loc.data, unit_encoding, frame_base, isa)?
-                    {
-                        if result.is_none() {
-                            result = Some(Vec::new());
-                        }
-                        for (start, len, expr) in expr.build_with_locals(
-                            &[(loc.range.begin, loc.range.end)],
-                            addr_tr,
-                            frame_info,
-                            endian,
-                        )? {
-                            if len == 0 {
+                    if let Some(expr) = compile_expression(&loc.data, unit_encoding, frame_base)? {
+                        let chunk = expr
+                            .build_with_locals(
+                                &[(loc.range.begin, loc.range.end)],
+                                addr_tr,
+                                frame_info,
+                                isa,
+                            )
+                            .filter(|i| {
                                 // Ignore empty range
-                                continue;
-                            }
-                            result.as_mut().unwrap().push(write::Location::StartLength {
-                                begin: start,
-                                length: len,
-                                data: expr,
-                            });
+                                if let Ok((_, 0, _)) = i {
+                                    false
+                                } else {
+                                    true
+                                }
+                            })
+                            .map(|i| {
+                                i.map(|(start, len, expr)| write::Location::StartLength {
+                                    begin: start,
+                                    length: len,
+                                    data: expr,
+                                })
+                            })
+                            .collect::<Result<Vec<_>, _>>()?;
+                        match &mut result {
+                            Some(r) => r.extend(chunk),
+                            x @ None => *x = Some(chunk),
                         }
                     } else {
                         // FIXME _expr contains invalid expression
@@ -192,12 +202,12 @@ where
             }
             AttributeValue::Exprloc(ref expr) => {
                 let frame_base =
-                    if let FileAttributeContext::Children(_, _, frame_base) = file_context {
+                    if let FileAttributeContext::Children { frame_base, .. } = file_context {
                         frame_base
                     } else {
                         None
                     };
-                if let Some(expr) = compile_expression(expr, unit_encoding, frame_base, isa)? {
+                if let Some(expr) = compile_expression(expr, unit_encoding, frame_base)? {
                     if expr.is_simple() {
                         if let Some(expr) = expr.build() {
                             write::AttributeValue::Exprloc(expr)
@@ -207,8 +217,9 @@ where
                     } else {
                         // Conversion to loclist is required.
                         if let Some(scope_ranges) = scope_ranges {
-                            let exprs =
-                                expr.build_with_locals(scope_ranges, addr_tr, frame_info, endian)?;
+                            let exprs = expr
+                                .build_with_locals(scope_ranges, addr_tr, frame_info, isa)
+                                .collect::<Result<Vec<_>, _>>()?;
                             if exprs.is_empty() {
                                 continue;
                             }
