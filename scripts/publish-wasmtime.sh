@@ -35,7 +35,6 @@ for cargo_toml in \
     crates/api/Cargo.toml \
     crates/wasi/Cargo.toml \
     crates/wast/Cargo.toml \
-    crates/misc/py/Cargo.toml \
     crates/misc/rust/macro/Cargo.toml \
     crates/misc/rust/Cargo.toml \
     Cargo.toml \
@@ -50,7 +49,7 @@ for cargo_toml in \
 
     # Sleep for a few seconds to allow the server to update the index.
     # https://internals.rust-lang.org/t/changes-to-how-crates-io-handles-index-updates/9608
-    echo sleep 20
+    echo sleep 30
 done
 
 echo git tag v$(grep "version =" Cargo.toml | head -n 1 | cut -d '"' -f 2)

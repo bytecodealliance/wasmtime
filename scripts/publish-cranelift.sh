@@ -36,7 +36,7 @@ do
 
     # Sleep for a few seconds to allow the server to update the index.
     # https://internals.rust-lang.org/t/changes-to-how-crates-io-handles-index-updates/9608
-    echo sleep 20
+    echo sleep 30
 done
 
 echo git tag cranelift-v$(grep version cranelift/Cargo.toml | head -n 1 | cut -d '"' -f 2)
