@@ -142,6 +142,31 @@ pub(crate) fn input_to_shiftimm<C: LowerCtx<I = Inst>>(
     input_to_const(ctx, input).and_then(ShiftOpShiftImm::maybe_from_shift)
 }
 
+pub(crate) fn output_to_const_f128<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    out: InsnOutput,
+) -> Option<u128> {
+    if out.output > 0 {
+        None
+    } else {
+        let inst_data = ctx.data(out.insn);
+
+        match inst_data {
+            &InstructionData::UnaryConst {
+                opcode: _,
+                constant_handle,
+            } => {
+                let mut bytes = [0u8; 16];
+                let c = ctx.get_constant_data(constant_handle).clone().into_vec();
+                assert_eq!(c.len(), 16);
+                bytes.copy_from_slice(&c);
+                Some(u128::from_le_bytes(bytes))
+            }
+            _ => None,
+        }
+    }
+}
+
 /// How to handle narrow values loaded into registers; see note on `narrow_mode`
 /// parameter to `input_to_*` below.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -588,6 +613,14 @@ pub(crate) fn lower_constant_f64<C: LowerCtx<I = Inst>>(
     ctx.emit(Inst::load_fp_constant64(rd, value));
 }
 
+pub(crate) fn lower_constant_f128<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    rd: Writable<Reg>,
+    value: u128,
+) {
+    ctx.emit(Inst::load_fp_constant128(rd, value));
+}
+
 pub(crate) fn lower_condcode(cc: IntCC) -> Cond {
     match cc {
         IntCC::Equal => Cond::Eq,
@@ -679,6 +712,7 @@ pub fn ty_bits(ty: Type) -> usize {
         B64 | I64 | F64 => 64,
         B128 | I128 => 128,
         IFLAGS | FFLAGS => 32,
+        I8X16 => 128,
         _ => panic!("ty_bits() on unknown type: {:?}", ty),
     }
 }
@@ -686,7 +720,7 @@ pub fn ty_bits(ty: Type) -> usize {
 pub(crate) fn ty_is_int(ty: Type) -> bool {
     match ty {
         B1 | B8 | I8 | B16 | I16 | B32 | I32 | B64 | I64 => true,
-        F32 | F64 | B128 | I128 => false,
+        F32 | F64 | B128 | I128 | I8X16 => false,
         IFLAGS | FFLAGS => panic!("Unexpected flags type"),
         _ => panic!("ty_is_int() on unknown type: {:?}", ty),
     }

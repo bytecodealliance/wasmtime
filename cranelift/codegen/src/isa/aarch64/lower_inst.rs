@@ -875,6 +875,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 (32, _, true) => Inst::FpuLoad32 { rd, mem, srcloc },
                 (64, _, false) => Inst::ULoad64 { rd, mem, srcloc },
                 (64, _, true) => Inst::FpuLoad64 { rd, mem, srcloc },
+                (128, _, _) => Inst::FpuLoad128 { rd, mem, srcloc },
                 _ => panic!("Unsupported size in load"),
             });
         }
@@ -914,6 +915,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 (32, true) => Inst::FpuStore32 { rd, mem, srcloc },
                 (64, false) => Inst::Store64 { rd, mem, srcloc },
                 (64, true) => Inst::FpuStore64 { rd, mem, srcloc },
+                (128, _) => Inst::FpuStore128 { rd, mem, srcloc },
                 _ => panic!("Unsupported size in store"),
             });
         }
@@ -1342,8 +1344,13 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("Branch opcode reached non-branch lowering logic!");
         }
 
-        Opcode::Vconst
-        | Opcode::Shuffle
+        Opcode::Vconst => {
+            let value = output_to_const_f128(ctx, outputs[0]).unwrap();
+            let rd = output_to_reg(ctx, outputs[0]);
+            lower_constant_f128(ctx, rd, value);
+        }
+
+        Opcode::Shuffle
         | Opcode::Vsplit
         | Opcode::Vconcat
         | Opcode::Vselect

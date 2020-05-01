@@ -295,8 +295,8 @@ fn enc_ccmp_imm(size: InstSize, rn: Reg, imm: UImm5, nzcv: NZCV, cond: Cond) -> 
 }
 
 fn enc_vecmov(is_16b: bool, rd: Writable<Reg>, rn: Reg) -> u32 {
-    debug_assert!(!is_16b); // to be supported later.
     0b00001110_101_00000_00011_1_00000_00000
+        | ((is_16b as u32) << 30)
         | machreg_to_vec(rd.to_reg())
         | (machreg_to_vec(rn) << 16)
         | (machreg_to_vec(rn) << 5)
@@ -918,6 +918,9 @@ impl MachInstEmit for Inst {
             &Inst::FpuMove64 { rd, rn } => {
                 sink.put4(enc_vecmov(/* 16b = */ false, rd, rn));
             }
+            &Inst::FpuMove128 { rd, rn } => {
+                sink.put4(enc_vecmov(/* 16b = */ true, rd, rn));
+            }
             &Inst::FpuRR { fpu_op, rd, rn } => {
                 let top22 = match fpu_op {
                     FPUOp1::Abs32 => 0b000_11110_00_1_000001_10000,
@@ -1072,6 +1075,22 @@ impl MachInstEmit for Inst {
                 };
                 inst.emit(sink, flags, state);
                 sink.put8(const_data.to_bits());
+            }
+            &Inst::LoadFpuConst128 { rd, const_data } => {
+                let inst = Inst::FpuLoad128 {
+                    rd,
+                    mem: MemArg::Label(MemLabel::PCRel(8)),
+                    srcloc: None,
+                };
+                inst.emit(sink, flags, state);
+                let inst = Inst::Jump {
+                    dest: BranchTarget::ResolvedOffset(20),
+                };
+                inst.emit(sink, flags, state);
+
+                for i in const_data.to_le_bytes().iter() {
+                    sink.put1(*i);
+                }
             }
             &Inst::FpuCSel32 { rd, rn, rm, cond } => {
                 sink.put4(enc_fcsel(rd, rn, rm, cond, InstSize::Size32));
