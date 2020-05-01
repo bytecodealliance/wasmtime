@@ -74,6 +74,15 @@ run will also have the RISC-V specific flag `supports_m` disabled.
 The filetests are run automatically as part of `cargo test`, and they can
 also be run manually with the `clif-util test` command.
 
+By default, the test runner will spawn a thread pool with as many threads as
+there are logical CPUs. You can explicitly control how many threads are spawned
+via the `CRANELIFT_FILETESTS_THREADS` environment variable. For example, to
+limit the test runner to a single thread, use:
+
+```
+$ CRANELIFT_FILETESTS_THREADS=1 clif-util test path/to/file.clif
+```
+
 ### Filecheck
 
 Many of the test commands described below use *filecheck* to verify their
