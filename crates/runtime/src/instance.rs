@@ -7,7 +7,6 @@ use crate::imports::Imports;
 use crate::jit_int::GdbJitImageRegistration;
 use crate::memory::{DefaultMemoryCreator, RuntimeLinearMemory, RuntimeMemoryCreator};
 use crate::table::Table;
-use crate::traphandlers;
 use crate::traphandlers::Trap;
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport,
@@ -885,10 +884,6 @@ impl InstanceHandle {
             VMBuiltinFunctionsArray::initialized(),
         );
         *instance.interrupts() = &*instance.interrupts;
-
-        // Ensure that our signal handlers are ready for action.
-        // TODO: Move these calls out of `InstanceHandle`.
-        traphandlers::init();
 
         // Perform infallible initialization in this constructor, while fallible
         // initialization is deferred to the `initialize` method.

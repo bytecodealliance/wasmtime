@@ -743,6 +743,13 @@ pub(crate) struct StoreInner {
 impl Store {
     /// Creates a new store to be associated with the given [`Engine`].
     pub fn new(engine: &Engine) -> Store {
+        // Ensure that wasmtime_runtime's signal handlers are configured. Note
+        // that at the `Store` level it means we should perform this
+        // once-per-thread. Platforms like Unix, however, only require this
+        // once-per-program. In any case this is safe to call many times and
+        // each one that's not relevant just won't do anything.
+        wasmtime_runtime::init_traps();
+
         let isa = native::builder().finish(settings::Flags::new(engine.config.flags.clone()));
         let compiler = Compiler::new(
             isa,
