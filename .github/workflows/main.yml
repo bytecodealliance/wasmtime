@@ -164,6 +164,41 @@ jobs:
             | xargs cargo fuzz run differential --release --debug-assertions --features binaryen
       env:
         RUST_BACKTRACE: 1
+    - run: |
+        find fuzz/corpus/peepmatic_compile -type f \
+            | shuf \
+            | head -n 10000 \
+            | xargs cargo fuzz run peepmatic_compile --release --debug-assertions --features binaryen
+      env:
+        RUST_BACKTRACE: 1
+    - run: |
+        find fuzz/corpus/peepmatic_fst_differential -type f \
+            | shuf \
+            | head -n 10000 \
+            | xargs cargo fuzz run peepmatic_fst_differential --release --debug-assertions --features binaryen
+      env:
+        RUST_BACKTRACE: 1
+    - run: |
+        find fuzz/corpus/peepmatic_interp -type f \
+            | shuf \
+            | head -n 5000 \
+            | xargs cargo fuzz run peepmatic_interp --release --debug-assertions --features binaryen
+      env:
+        RUST_BACKTRACE: 1
+    - run: |
+        find fuzz/corpus/peepmatic_parser -type f \
+            | shuf \
+            | head -n 10000 \
+            | xargs cargo fuzz run peepmatic_parser --release --debug-assertions --features binaryen
+      env:
+        RUST_BACKTRACE: 1
+    - run: |
+        find fuzz/corpus/peepmatic_simple_automata -type f \
+            | shuf \
+            | head -n 1000 \
+            | xargs cargo fuzz run peepmatic_simple_automata --release --debug-assertions --features binaryen
+      env:
+        RUST_BACKTRACE: 1
 
   # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
   # channels of Rust as well as macOS/Linux/Windows.
