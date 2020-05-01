@@ -54,7 +54,7 @@ block0(v0: i32):
     br_table v0, block4, jt0
 
 block4:
-    trap oob
+    trap heap_oob
 
 block1:
     return

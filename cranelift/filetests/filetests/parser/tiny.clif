@@ -223,7 +223,7 @@ function %cond_traps(i32) {
 block0(v0: i32):
     trapz v0, stk_ovf
     v1 = ifcmp_imm v0, 5
-    trapif ugt v1, oob
+    trapif ugt v1, heap_oob
     v2 = bitcast.f32 v1
     v3 = ffcmp v2, v2
     trapff uno v3, int_ovf
@@ -233,7 +233,7 @@ block0(v0: i32):
 ; nextln: block0(v0: i32):
 ; nextln:     trapz v0, stk_ovf
 ; nextln:     v1 = ifcmp_imm v0, 5
-; nextln:     trapif ugt v1, oob
+; nextln:     trapif ugt v1, heap_oob
 ; nextln:     v2 = bitcast.f32 v1
 ; nextln:     v3 = ffcmp v2, v2
 ; nextln:     trapff uno v3, int_ovf

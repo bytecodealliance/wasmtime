@@ -85,7 +85,6 @@ impl Trap {
             StackOverflow => "call stack exhausted",
             HeapOutOfBounds => "out of bounds memory access",
             TableOutOfBounds => "undefined element: out of bounds table access",
-            OutOfBounds => "out of bounds",
             IndirectCallToNull => "uninitialized element",
             BadSignature => "indirect call type mismatch",
             IntegerOverflow => "integer overflow",
