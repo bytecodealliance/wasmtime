@@ -970,7 +970,6 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    #[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
     fn cache_accounts_for_opt_level() -> Result<()> {
         let td = TempDir::new()?;
         let config_path = td.path().join("config.toml");
@@ -1018,15 +1017,18 @@ mod tests {
         assert_eq!(store.engine().config.cache_config.cache_hits(), 1);
         assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
 
-        let mut cfg = Config::new();
-        cfg.debug_info(true).cache_config_load(&config_path)?;
-        let store = Store::new(&Engine::new(&cfg));
-        Module::new(&store, "(module (func))")?;
-        assert_eq!(store.engine().config.cache_config.cache_hits(), 0);
-        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
-        Module::new(&store, "(module (func))")?;
-        assert_eq!(store.engine().config.cache_config.cache_hits(), 1);
-        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+        // FIXME(#1523) need debuginfo on aarch64 before we run this test there
+        if !cfg!(target_arch = "aarch64") {
+            let mut cfg = Config::new();
+            cfg.debug_info(true).cache_config_load(&config_path)?;
+            let store = Store::new(&Engine::new(&cfg));
+            Module::new(&store, "(module (func))")?;
+            assert_eq!(store.engine().config.cache_config.cache_hits(), 0);
+            assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+            Module::new(&store, "(module (func))")?;
+            assert_eq!(store.engine().config.cache_config.cache_hits(), 1);
+            assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+        }
 
         Ok(())
     }
