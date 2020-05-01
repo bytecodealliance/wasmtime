@@ -320,13 +320,21 @@ Cranelift IR right before binary machine code emission.
 
 Compile and execute a function.
 
-Add a `; run` directive after each function that should be executed. These
-functions must have the signature `() -> bNN` where `bNN` is some sort of
-boolean, e.g. `b1` or `b32`. A `true` value is interpreted as a successful
-test execution, whereas a `false` value is interpreted as a failed test.
+This test command allows several directives:
+ - to print the result of running a function to stdout, add a `print` 
+ directive and call the preceding function with arguments (see `%foo` in
+ the example below); remember to enable `--nocapture` if running these 
+ tests through Cargo
+ - to check the result of a function, add a `run` directive and call the
+ preceding function with a comparison (`==` or `!=`) (see `%bar` below)
+ - for backwards compatibility, to check the result of a function with a
+ `() -> b*` signature, only the `run` directive is required, with no 
+ invocation or comparison (see `%baz` below);  a `true` value is 
+ interpreted as a successful test execution, whereas a `false` value is 
+ interpreted as a failed test.
 
 Currently a `target` is required but is only used to indicate whether the host
-platform can run the test, and currently only the architecture is filtered. The
+platform can run the test and currently only the architecture is filtered. The
 host platform's native target will be used to actually compile the test.
 
 Example:
@@ -335,8 +343,25 @@ Example:
     test run
     target x86_64
 
-    function %trivial_test() -> b1 {
-    ebb0:
+    ; how to print the results of a function
+    function %foo() -> i32 {
+    block0:
+        v0 = iconst.i32 42
+        return v0
+    }
+    ; print: %foo()
+
+    ; how to check the results of a function
+    function %bar(i32) -> i32 {
+    block0(v0:i32):
+        v1 = iadd_imm v0, 1
+        return v1
+    }
+    ; run: %bar(1) == 2
+
+    ; legacy method of checking the results of a function
+    function %baz() -> b1 {
+    block0:
         v0 = bconst.b1 true
         return v0
     }
