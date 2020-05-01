@@ -1,6 +1,6 @@
 use crate::runtime::StoreInner;
 use crate::trampoline::StoreInstanceHandle;
-use crate::{Extern, FuncType, Memory, Store, Trap, Val, ValType};
+use crate::{error, Extern, FuncType, Memory, Store, Trap, Val, ValType};
 use anyhow::{bail, ensure, Context as _, Result};
 use std::cmp::max;
 use std::fmt;
@@ -8,8 +8,8 @@ use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::rc::Weak;
+use wasmtime_runtime::{raise_user_trap, wasi_proc_exit, ExportFunction, VMTrampoline};
 use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
-use wasmtime_runtime::{ExportFunction, VMTrampoline};
 
 /// A WebAssembly function which can be called.
 ///
@@ -151,7 +151,7 @@ macro_rules! getters {
         $(#[$doc])*
         #[allow(non_snake_case)]
         pub fn $name<$($args,)* R>(&self)
-            -> anyhow::Result<impl Fn($($args,)*) -> Result<R, Trap>>
+            -> anyhow::Result<impl Fn($($args,)*) -> Result<R>>
         where
             $($args: WasmTy,)*
             R: WasmTy,
@@ -181,7 +181,7 @@ macro_rules! getters {
 
             // ... and then once we've passed the typechecks we can hand out our
             // object since our `transmute` below should be safe!
-            Ok(move |$($args: $args),*| -> Result<R, Trap> {
+            Ok(move |$($args: $args),*| -> Result<R> {
                 unsafe {
                     let fnptr = mem::transmute::<
                         *const VMFunctionBody,
@@ -474,6 +474,46 @@ impl Func {
         func.into_func(store)
     }
 
+    /// Creates a new `Func` for a function which performs a program exit,
+    /// unwinding the stack up the point where wasm was most recently entered.
+    pub fn exit_func(store: &Store) -> Func {
+        unsafe extern "C" fn trampoline(
+            callee_vmctx: *mut VMContext,
+            caller_vmctx: *mut VMContext,
+            ptr: *const VMFunctionBody,
+            args: *mut u128,
+        ) {
+            let ptr = mem::transmute::<
+                *const VMFunctionBody,
+                unsafe extern "C" fn(*mut VMContext, *mut VMContext, i32) -> !,
+            >(ptr);
+
+            let mut next = args as *const u128;
+            let status = i32::load(&mut next);
+            ptr(callee_vmctx, caller_vmctx, status)
+        }
+
+        let mut args = Vec::new();
+        <i32 as WasmTy>::push(&mut args);
+        let ret = Vec::new();
+        let ty = FuncType::new(args.into(), ret.into());
+        let (instance, export) = unsafe {
+            crate::trampoline::generate_raw_func_export(
+                &ty,
+                std::slice::from_raw_parts_mut(wasi_proc_exit as *mut _, 0),
+                trampoline,
+                store,
+                Box::new(()),
+            )
+            .expect("failed to generate export")
+        };
+        Func {
+            instance,
+            export,
+            trampoline,
+        }
+    }
+
     /// Returns the underlying wasm type that this `Func` has.
     pub fn ty(&self) -> FuncType {
         // Signatures should always be registered in the store's registry of
@@ -737,7 +777,7 @@ pub(crate) fn catch_traps(
     vmctx: *mut VMContext,
     store: &Store,
     closure: impl FnMut(),
-) -> Result<(), Trap> {
+) -> Result<()> {
     let signalhandler = store.signal_handler();
     unsafe {
         wasmtime_runtime::catch_traps(
@@ -747,7 +787,7 @@ pub(crate) fn catch_traps(
             signalhandler.as_deref(),
             closure,
         )
-        .map_err(Trap::from_jit)
+        .map_err(error::from_runtime)
     }
 }
 
@@ -941,7 +981,7 @@ unsafe impl<T: WasmTy> WasmRet for Result<T, Trap> {
         }
 
         fn handle_trap(trap: Trap) -> ! {
-            unsafe { wasmtime_runtime::raise_user_trap(Box::new(trap)) }
+            unsafe { raise_user_trap(trap.into()) }
         }
     }
 
@@ -1133,9 +1173,9 @@ macro_rules! impl_into_func {
                 R::push(&mut ret);
                 let ty = FuncType::new(_args.into(), ret.into());
                 let store_weak = store.weak();
-                unsafe {
-					let trampoline = trampoline::<$($args,)* R>;
-                    let (instance, export) = crate::trampoline::generate_raw_func_export(
+                let trampoline = trampoline::<$($args,)* R>;
+                let (instance, export) = unsafe {
+                    crate::trampoline::generate_raw_func_export(
                         &ty,
                         std::slice::from_raw_parts_mut(
                             shim::<F, $($args,)* R> as *mut _,
@@ -1145,12 +1185,12 @@ macro_rules! impl_into_func {
                         store,
                         Box::new((self, store_weak)),
                     )
-                    .expect("failed to generate export");
-                    Func {
-                        instance,
-                        export,
-                        trampoline,
-                    }
+                    .expect("failed to generate export")
+                };
+                Func {
+                    instance,
+                    export,
+                    trampoline,
                 }
             }
         }

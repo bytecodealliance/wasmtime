@@ -46,6 +46,14 @@ pub fn define_struct(args: TokenStream) -> TokenStream {
             linker_add.push(quote! {
                 linker.define(#module_name, #name, self.#name_ident.clone())?;
             });
+            // `proc_exit` is special; it's essentially an unwinding primitive,
+            // so we implement it in the runtime rather than in wasi-common.
+            if name == "proc_exit" {
+                ctor_externs.push(quote! {
+                    let #name_ident = wasmtime::Func::exit_func(store);
+                });
+                continue;
+            }
 
             let mut shim_arg_decls = Vec::new();
             let mut params = Vec::new();
@@ -291,6 +299,14 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
             linker_add.push(quote! {
                 linker.define(#module_name, #name, self.#name_ident.clone())?;
             });
+            // `proc_exit` is special; it's essentially an unwinding primitive,
+            // so we implement it in the runtime rather than in wasi-common.
+            if name == "proc_exit" {
+                ctor_externs.push(quote! {
+                    let #name_ident = wasmtime::Func::exit_func(store);
+                });
+                continue;
+            }
 
             let mut shim_arg_decls = Vec::new();
             let mut params = Vec::new();

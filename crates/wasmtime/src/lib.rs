@@ -10,6 +10,8 @@
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 
+mod error;
+mod exit;
 mod externals;
 mod frame_info;
 mod func;
@@ -23,6 +25,7 @@ mod trap;
 mod types;
 mod values;
 
+pub use crate::exit::Exit;
 pub use crate::externals::*;
 pub use crate::frame_info::FrameInfo;
 pub use crate::func::*;

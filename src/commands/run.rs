@@ -12,7 +12,7 @@ use std::{
 };
 use structopt::{clap::AppSettings, StructOpt};
 use wasi_common::preopen_dir;
-use wasmtime::{Engine, Instance, Module, Store, Trap, Val, ValType};
+use wasmtime::{Engine, Exit, Instance, Module, Store, Trap, Val, ValType};
 use wasmtime_wasi::{old::snapshot_0::Wasi as WasiSnapshot0, Wasi};
 
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
@@ -142,6 +142,17 @@ impl RunCommand {
         {
             Ok(()) => (),
             Err(e) => {
+                // If the program exited because of a non-zero exit status, print
+                // a message and exit.
+                if let Some(exit) = e.downcast_ref::<Exit>() {
+                    eprintln!("Error: {}", exit);
+                    if cfg!(unix) {
+                        // On Unix, if it's a normal exit status, return it.
+                        process::exit(exit.status().get());
+                    }
+                    process::exit(1);
+                }
+
                 // If the program exited because of a trap, return an error code
                 // to the outside environment indicating a more severe problem
                 // than a simple failure.

@@ -2,11 +2,13 @@
 //! signalhandling mechanisms.
 
 use crate::VMContext;
+use anyhow::Error;
 use backtrace::Backtrace;
 use std::any::Any;
 use std::cell::Cell;
-use std::error::Error;
+use std::fmt;
 use std::io;
+use std::num::NonZeroI32;
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::Once;
@@ -271,7 +273,7 @@ fn real_init() {
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
-pub unsafe fn raise_user_trap(data: Box<dyn Error + Send + Sync>) -> ! {
+pub unsafe fn raise_user_trap(data: Error) -> ! {
     tls::with(|info| info.unwrap().unwind_with(UnwindReason::UserTrap(data)))
 }
 
@@ -305,7 +307,7 @@ pub unsafe fn resume_panic(payload: Box<dyn Any + Send>) -> ! {
 #[derive(Debug)]
 pub enum Trap {
     /// A user-raised trap through `raise_user_trap`.
-    User(Box<dyn Error + Send + Sync>),
+    User(Error),
 
     /// A trap raised from jit code
     Jit {
@@ -331,6 +333,12 @@ pub enum Trap {
     OOM {
         /// Native stack backtrace at the time the OOM occurred
         backtrace: Backtrace,
+    },
+
+    /// A program exit was requested with a non-zero exit status.
+    Exit {
+        /// The exit status
+        status: NonZeroI32,
     },
 }
 
@@ -403,9 +411,10 @@ pub struct CallThreadState<'a> {
 enum UnwindReason {
     None,
     Panic(Box<dyn Any + Send>),
-    UserTrap(Box<dyn Error + Send + Sync>),
+    UserTrap(Error),
     LibTrap(Trap),
     JitTrap { backtrace: Backtrace, pc: usize },
+    Exit { status: i32 },
 }
 
 impl<'a> CallThreadState<'a> {
@@ -452,6 +461,13 @@ impl<'a> CallThreadState<'a> {
                     backtrace,
                     maybe_interrupted,
                 })
+            }
+            UnwindReason::Exit { status } => {
+                if let Some(status) = NonZeroI32::new(status) {
+                    Err(Trap::Exit { status })
+                } else {
+                    Ok(())
+                }
             }
             UnwindReason::Panic(panic) => {
                 debug_assert_eq!(ret, 0);
@@ -779,3 +795,40 @@ fn setup_unix_sigaltstack() -> Result<(), Trap> {
         }
     }
 }
+
+/// Perform a program exit by unwinding the stack to the point where wasm
+/// as most recently entered, carrying an exit status value.
+///
+/// This is implemented in `wasmtime_runtime` rather than with the rest of the WASI
+/// functions as it's essentially an unwinding operation.
+///
+/// # Safety
+///
+/// Only safe to call when wasm code is on the stack, aka `catch_traps` must
+/// have been previously called. Additionally no Rust destructors can be on the
+/// stack. They will be skipped and not executed.
+pub unsafe extern "C" fn wasi_proc_exit(
+    _vmctx: *mut VMContext,
+    _caller_vmctx: *mut VMContext,
+    status: i32,
+) -> ! {
+    // Check that the status is within WASI's range.
+    if status >= 0 && status < 126 {
+        tls::with(|info| info.unwrap().unwind_with(UnwindReason::Exit { status }))
+    } else {
+        raise_user_trap(InvalidWASIExitStatus {}.into())
+    }
+}
+
+/// An error type for indicating an exit was requested using an exit status outside
+/// of WASI's valid range of [0..126].
+#[derive(Debug)]
+pub struct InvalidWASIExitStatus {}
+
+impl fmt::Display for InvalidWASIExitStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid WASI exit status; values must be in [0..126]")
+    }
+}
+
+impl std::error::Error for InvalidWASIExitStatus {}

@@ -905,7 +905,7 @@ impl Store {
     /// });
     ///
     /// let trap = run().unwrap_err();
-    /// assert!(trap.message().contains("wasm trap: interrupt"));
+    /// assert!(trap.to_string().contains("wasm trap: interrupt"));
     /// # Ok(())
     /// # }
     /// ```

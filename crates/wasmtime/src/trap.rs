@@ -34,47 +34,7 @@ impl Trap {
         Trap::new_with_trace(&info, None, message.into(), Backtrace::new_unresolved())
     }
 
-    pub(crate) fn from_jit(jit: wasmtime_runtime::Trap) -> Self {
-        let info = FRAME_INFO.read().unwrap();
-        match jit {
-            wasmtime_runtime::Trap::User(error) => {
-                // Since we're the only one using the wasmtime internals (in
-                // theory) we should only see user errors which were originally
-                // created from our own `Trap` type (see the trampoline module
-                // with functions).
-                //
-                // If this unwrap trips for someone we'll need to tweak the
-                // return type of this function to probably be `anyhow::Error`
-                // or something like that.
-                *error
-                    .downcast()
-                    .expect("only `Trap` user errors are supported")
-            }
-            wasmtime_runtime::Trap::Jit {
-                pc,
-                backtrace,
-                maybe_interrupted,
-            } => {
-                let mut code = info
-                    .lookup_trap_info(pc)
-                    .map(|info| info.trap_code)
-                    .unwrap_or(TrapCode::StackOverflow);
-                if maybe_interrupted && code == TrapCode::StackOverflow {
-                    code = TrapCode::Interrupt;
-                }
-                Trap::new_wasm(&info, Some(pc), code, backtrace)
-            }
-            wasmtime_runtime::Trap::Wasm {
-                trap_code,
-                backtrace,
-            } => Trap::new_wasm(&info, None, trap_code, backtrace),
-            wasmtime_runtime::Trap::OOM { backtrace } => {
-                Trap::new_with_trace(&info, None, "out of memory".to_string(), backtrace)
-            }
-        }
-    }
-
-    fn new_wasm(
+    pub(crate) fn new_wasm(
         info: &GlobalFrameInfo,
         trap_pc: Option<usize>,
         code: TrapCode,
@@ -98,7 +58,7 @@ impl Trap {
         Trap::new_with_trace(info, trap_pc, msg, backtrace)
     }
 
-    fn new_with_trace(
+    pub(crate) fn new_with_trace(
         info: &GlobalFrameInfo,
         trap_pc: Option<usize>,
         message: String,
