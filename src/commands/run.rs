@@ -146,11 +146,12 @@ impl RunCommand {
                 // a message and exit.
                 if let Some(exit) = e.downcast_ref::<Exit>() {
                     eprintln!("Error: {}", exit);
-                    if cfg!(unix) {
-                        // On Unix, if it's a normal exit status, return it.
-                        process::exit(exit.status().get());
+                    // On Windows, exit status 3 indicates an abort (see below),
+                    // so just return 1 indicating a non-zero status.
+                    if cfg!(windows) {
+                        process::exit(1);
                     }
-                    process::exit(1);
+                    process::exit(exit.status().get());
                 }
 
                 // If the program exited because of a trap, return an error code

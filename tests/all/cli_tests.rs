@@ -188,7 +188,11 @@ fn timeout_in_invoke() -> Result<()> {
 fn exit125_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/wasm/exit125_wasi_snapshot0.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
-    assert_eq!(output.status.code().unwrap(), 125);
+    if cfg!(windows) {
+        assert_eq!(output.status.code().unwrap(), 1);
+    } else {
+        assert_eq!(output.status.code().unwrap(), 125);
+    }
     Ok(())
 }
 
@@ -197,7 +201,11 @@ fn exit125_wasi_snapshot0() -> Result<()> {
 fn exit125_wasi_snapshot1() -> Result<()> {
     let wasm = build_wasm("tests/wasm/exit125_wasi_snapshot1.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
-    assert_eq!(output.status.code().unwrap(), 125);
+    if cfg!(windows) {
+        assert_eq!(output.status.code().unwrap(), 1);
+    } else {
+        assert_eq!(output.status.code().unwrap(), 125);
+    }
     Ok(())
 }
 
