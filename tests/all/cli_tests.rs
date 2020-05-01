@@ -102,7 +102,6 @@ fn run_wasmtime_simple_wat() -> Result<()> {
 
 // Running a wat that traps.
 #[test]
-#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1521)
 fn run_wasmtime_unreachable_wat() -> Result<()> {
     let wasm = build_wasm("tests/wasm/unreachable.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
