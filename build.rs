@@ -183,7 +183,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             // to be a big chunk of work to implement them all there!
             ("simd", _) if target.contains("aarch64") => return true,
 
-            ("simd", "simd_bit_shift") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16Shl
             ("simd", "simd_conversions") => return true, // FIXME Unsupported feature: proposed SIMD operator I16x8NarrowI32x4S
             ("simd", "simd_f32x4") => return true, // FIXME expected V128(F32x4([CanonicalNan, CanonicalNan, Value(Float32 { bits: 0 }), Value(Float32 { bits: 0 })])), got V128(18428729675200069632)
             ("simd", "simd_f64x2") => return true, // FIXME expected V128(F64x2([Value(Float64 { bits: 9221120237041090560 }), Value(Float64 { bits: 0 })])), got V128(0)
