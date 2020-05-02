@@ -84,6 +84,20 @@ block0:
     return v2
 }
 
+function %sshr_i64x2() -> i64x2 {
+block0:
+    v0 = iconst.i32 1
+    v1 = vconst.i64x2 [1 2]
+    v2 = sshr v1, v0
+    ; check:  v3 = x86_pextr v1, 0
+    ; nextln: v4 = sshr v3, v0
+    ; nextln: v5 = x86_pinsr v1, 0, v4
+    ; nextln: v6 = x86_pextr v1, 1
+    ; nextln: v7 = sshr v6, v0
+    ; nextln: v2 = x86_pinsr v5, 1, v7
+    return v2
+}
+
 function %bitselect_i16x8() -> i16x8 {
 block0:
     v0 = vconst.i16x8 [0 0 0 0 0 0 0 0]

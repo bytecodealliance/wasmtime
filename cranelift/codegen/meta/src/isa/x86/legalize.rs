@@ -493,8 +493,8 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
         );
     }
 
-    // SIMD shift right (arithmetic)
-    for ty in &[I16, I32, I64] {
+    // SIMD shift right (arithmetic, i16x8 and i32x4)
+    for ty in &[I16, I32] {
         let sshr = sshr.bind(vector(*ty, sse_vector_size));
         let bitcast_i64x2 = bitcast.bind(vector(I64, sse_vector_size));
         narrow.legalize(
@@ -502,6 +502,7 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
             vec![def!(b = bitcast_i64x2(y)), def!(a = x86_psra(x, b))],
         );
     }
+    // SIMD shift right (arithmetic, i8x16)
     {
         let sshr = sshr.bind(vector(I8, sse_vector_size));
         let bitcast_i64x2 = bitcast.bind(vector(I64, sse_vector_size));
@@ -523,6 +524,25 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
                 def!(h = x86_psra(g, b)),
                 // Re-pack the vector.
                 def!(z = x86_packss(e, h)),
+            ],
+        );
+    }
+    // SIMD shift right (arithmetic, i64x2)
+    {
+        let sshr_vector = sshr.bind(vector(I64, sse_vector_size));
+        let sshr_scalar_lane0 = sshr.bind(I64);
+        let sshr_scalar_lane1 = sshr.bind(I64);
+        narrow.legalize(
+            def!(z = sshr_vector(x, y)),
+            vec![
+                // Use scalar operations to shift the first lane.
+                def!(a = extractlane(x, uimm8_zero)),
+                def!(b = sshr_scalar_lane0(a, y)),
+                def!(c = insertlane(x, uimm8_zero, b)),
+                // Do the same for the second lane.
+                def!(d = extractlane(x, uimm8_one)),
+                def!(e = sshr_scalar_lane1(d, y)),
+                def!(z = insertlane(c, uimm8_one, e)),
             ],
         );
     }
