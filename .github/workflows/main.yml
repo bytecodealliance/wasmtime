@@ -200,6 +200,20 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
+  rebuild_peephole_optimizers:
+    name: Rebuild Peephole Optimizers
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        submodules: true
+    - name: Build
+      run: |
+        cd cranelift && cargo build --features 'cranelift-codegen/rebuild-peephole-optimizers'
+    - name: Test
+      run: |
+        cd cranelift && cargo test --features 'cranelift-codegen/rebuild-peephole-optimizers'
+
   # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
   # channels of Rust as well as macOS/Linux/Windows.
   test:
