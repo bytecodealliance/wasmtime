@@ -47,7 +47,7 @@ type WasiCtxBuilderResult<T> = std::result::Result<T, WasiCtxBuilderError>;
 
 enum PendingEntry {
     Thunk(fn() -> io::Result<Box<dyn Handle>>),
-    File(File),
+    OsHandle(File),
 }
 
 impl std::fmt::Debug for PendingEntry {
@@ -58,7 +58,7 @@ impl std::fmt::Debug for PendingEntry {
                 "PendingEntry::Thunk({:p})",
                 f as *const fn() -> io::Result<Box<dyn Handle>>
             ),
-            Self::File(f) => write!(fmt, "PendingEntry::File({:?})", f),
+            Self::OsHandle(f) => write!(fmt, "PendingEntry::OsHandle({:?})", f),
         }
     }
 }
@@ -234,19 +234,19 @@ impl WasiCtxBuilder {
 
     /// Provide a File to use as stdin
     pub fn stdin(&mut self, file: File) -> &mut Self {
-        self.stdin = Some(PendingEntry::File(file));
+        self.stdin = Some(PendingEntry::OsHandle(file));
         self
     }
 
     /// Provide a File to use as stdout
     pub fn stdout(&mut self, file: File) -> &mut Self {
-        self.stdout = Some(PendingEntry::File(file));
+        self.stdout = Some(PendingEntry::OsHandle(file));
         self
     }
 
     /// Provide a File to use as stderr
     pub fn stderr(&mut self, file: File) -> &mut Self {
-        self.stderr = Some(PendingEntry::File(file));
+        self.stderr = Some(PendingEntry::OsHandle(file));
         self
     }
 
@@ -345,7 +345,7 @@ impl WasiCtxBuilder {
                         .insert(entry)
                         .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?
                 }
-                PendingEntry::File(f) => {
+                PendingEntry::OsHandle(f) => {
                     let handle = OsOther::try_from(f)?;
                     let handle = EntryHandle::new(handle);
                     let entry = Entry::new(handle);
