@@ -145,6 +145,16 @@ block0:
 }
 ; run
 
+function %sshr_i64x2(i64x2, i32) -> i64x2 {
+block0(v0:i64x2, v1:i32):
+    v2 = sshr v0, v1
+    return v2
+}
+; run: %sshr_i64x2([1 -1], 0) == [1 -1]
+; run: %sshr_i64x2([1 -1], 1) == [0 -1] ; note the -1 shift result
+; run: %sshr_i64x2([2 -2], 1) == [1 -1]
+; run: %sshr_i64x2([0x80000000_00000000 0x7FFFFFFF_FFFFFFFF], 63) == [0xFFFFFFFF_FFFFFFFF 0]
+
 function %bitselect_i8x16() -> b1 {
 block0:
     v0 = vconst.i8x16 [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 255]  ; the selector vector
