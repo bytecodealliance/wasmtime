@@ -1402,7 +1402,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I8x16Shl | Operator::I16x8Shl | Operator::I32x4Shl | Operator::I64x2Shl => {
             let (a, b) = state.pop2();
             let bitcast_a = optionally_bitcast_vector(a, type_of(op), builder);
-            let bitwidth = i64::from(builder.func.dfg.value_type(a).bits());
+            let bitwidth = i64::from(type_of(op).lane_bits());
             // The spec expects to shift with `b mod lanewidth`; so, e.g., for 16 bit lane-width
             // we do `b AND 15`; this means fewer instructions than `iconst + urem`.
             let b_mod_bitwidth = builder.ins().band_imm(b, bitwidth - 1);
@@ -1411,16 +1411,16 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I8x16ShrU | Operator::I16x8ShrU | Operator::I32x4ShrU | Operator::I64x2ShrU => {
             let (a, b) = state.pop2();
             let bitcast_a = optionally_bitcast_vector(a, type_of(op), builder);
-            let bitwidth = i64::from(builder.func.dfg.value_type(a).bits());
+            let bitwidth = i64::from(type_of(op).lane_bits());
             // The spec expects to shift with `b mod lanewidth`; so, e.g., for 16 bit lane-width
             // we do `b AND 15`; this means fewer instructions than `iconst + urem`.
             let b_mod_bitwidth = builder.ins().band_imm(b, bitwidth - 1);
             state.push1(builder.ins().ushr(bitcast_a, b_mod_bitwidth))
         }
-        Operator::I8x16ShrS | Operator::I16x8ShrS | Operator::I32x4ShrS => {
+        Operator::I8x16ShrS | Operator::I16x8ShrS | Operator::I32x4ShrS | Operator::I64x2ShrS => {
             let (a, b) = state.pop2();
             let bitcast_a = optionally_bitcast_vector(a, type_of(op), builder);
-            let bitwidth = i64::from(builder.func.dfg.value_type(a).bits());
+            let bitwidth = i64::from(type_of(op).lane_bits());
             // The spec expects to shift with `b mod lanewidth`; so, e.g., for 16 bit lane-width
             // we do `b AND 15`; this means fewer instructions than `iconst + urem`.
             let b_mod_bitwidth = builder.ins().band_imm(b, bitwidth - 1);
@@ -1544,7 +1544,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::I8x16Mul
         | Operator::I64x2Mul
-        | Operator::I64x2ShrS
         | Operator::I32x4TruncSatF32x4S
         | Operator::I32x4TruncSatF32x4U
         | Operator::I64x2TruncSatF64x2S
