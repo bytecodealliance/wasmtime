@@ -3,7 +3,7 @@ use crate::fdpool::FdPool;
 use crate::handle::Handle;
 use crate::sys::osdir::OsDir;
 use crate::sys::osother::{OsOther, OsOtherExt};
-use crate::sys::stdio::{Stdio, StdioExt};
+use crate::sys::stdio::{Stderr, StderrExt, Stdin, StdinExt, Stdout, StdoutExt};
 use crate::virtfs::{VirtualDir, VirtualDirEntry};
 use crate::wasi::types;
 use crate::wasi::{Errno, Result};
@@ -170,27 +170,27 @@ impl WasiCtxBuilder {
 
     /// Inherit stdin from the host process.
     pub fn inherit_stdin(&mut self) -> &mut Self {
-        self.stdin = Some(PendingEntry::Thunk(Stdio::stdin));
+        self.stdin = Some(PendingEntry::Thunk(Stdin::stdin));
         self
     }
 
     /// Inherit stdout from the host process.
     pub fn inherit_stdout(&mut self) -> &mut Self {
-        self.stdout = Some(PendingEntry::Thunk(Stdio::stdout));
+        self.stdout = Some(PendingEntry::Thunk(Stdout::stdout));
         self
     }
 
-    /// Inherit stdout from the host process.
+    /// Inherit stderr from the host process.
     pub fn inherit_stderr(&mut self) -> &mut Self {
-        self.stderr = Some(PendingEntry::Thunk(Stdio::stderr));
+        self.stderr = Some(PendingEntry::Thunk(Stderr::stderr));
         self
     }
 
     /// Inherit the stdin, stdout, and stderr streams from the host process.
     pub fn inherit_stdio(&mut self) -> &mut Self {
-        self.stdin = Some(PendingEntry::Thunk(Stdio::stdin));
-        self.stdout = Some(PendingEntry::Thunk(Stdio::stdout));
-        self.stderr = Some(PendingEntry::Thunk(Stdio::stderr));
+        self.stdin = Some(PendingEntry::Thunk(Stdin::stdin));
+        self.stdout = Some(PendingEntry::Thunk(Stdout::stdout));
+        self.stderr = Some(PendingEntry::Thunk(Stderr::stderr));
         self
     }
 

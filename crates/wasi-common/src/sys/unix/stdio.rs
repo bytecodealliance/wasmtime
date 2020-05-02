@@ -1,5 +1,5 @@
 use crate::handle::{Handle, HandleRights};
-use crate::sys::stdio::{Stdio, StdioExt};
+use crate::sys::stdio::{Stderr, StderrExt, Stdin, StdinExt, Stdout, StdoutExt};
 use crate::wasi::{types, RightsExt};
 use std::cell::Cell;
 use std::fs::File;
@@ -7,37 +7,51 @@ use std::io;
 use std::mem::ManuallyDrop;
 use std::os::unix::prelude::{AsRawFd, FromRawFd, RawFd};
 
-impl AsRawFd for Stdio {
+impl AsRawFd for Stdin {
     fn as_raw_fd(&self) -> RawFd {
-        match self {
-            Self::In { .. } => io::stdin().as_raw_fd(),
-            Self::Out { .. } => io::stdout().as_raw_fd(),
-            Self::Err { .. } => io::stderr().as_raw_fd(),
-        }
+        io::stdin().as_raw_fd()
     }
 }
 
-impl StdioExt for Stdio {
+impl AsRawFd for Stdout {
+    fn as_raw_fd(&self) -> RawFd {
+        io::stdout().as_raw_fd()
+    }
+}
+
+impl AsRawFd for Stderr {
+    fn as_raw_fd(&self) -> RawFd {
+        io::stderr().as_raw_fd()
+    }
+}
+
+impl StdinExt for Stdin {
     fn stdin() -> io::Result<Box<dyn Handle>> {
         let file = unsafe { File::from_raw_fd(io::stdin().as_raw_fd()) };
         let file = ManuallyDrop::new(file);
         let rights = get_rights(&file)?;
         let rights = Cell::new(rights);
-        Ok(Box::new(Self::In { rights }))
+        Ok(Box::new(Self { rights }))
     }
+}
+
+impl StdoutExt for Stdout {
     fn stdout() -> io::Result<Box<dyn Handle>> {
         let file = unsafe { File::from_raw_fd(io::stdout().as_raw_fd()) };
         let file = ManuallyDrop::new(file);
         let rights = get_rights(&file)?;
         let rights = Cell::new(rights);
-        Ok(Box::new(Self::Out { rights }))
+        Ok(Box::new(Self { rights }))
     }
+}
+
+impl StderrExt for Stderr {
     fn stderr() -> io::Result<Box<dyn Handle>> {
         let file = unsafe { File::from_raw_fd(io::stderr().as_raw_fd()) };
         let file = ManuallyDrop::new(file);
         let rights = get_rights(&file)?;
         let rights = Cell::new(rights);
-        Ok(Box::new(Self::Err { rights }))
+        Ok(Box::new(Self { rights }))
     }
 }
 

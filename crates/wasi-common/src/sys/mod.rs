@@ -33,7 +33,7 @@ use std::convert::TryFrom;
 use std::fs::File;
 use std::io;
 use std::mem::ManuallyDrop;
-use stdio::Stdio;
+use stdio::{Stderr, Stdin, Stdout};
 use sys_impl::get_file_type;
 
 pub(crate) trait AsFile {
@@ -46,8 +46,12 @@ impl AsFile for dyn Handle + 'static {
             file.as_file()
         } else if let Some(dir) = self.as_any().downcast_ref::<OsDir>() {
             dir.as_file()
-        } else if let Some(stdio) = self.as_any().downcast_ref::<Stdio>() {
-            stdio.as_file()
+        } else if let Some(stdin) = self.as_any().downcast_ref::<Stdin>() {
+            stdin.as_file()
+        } else if let Some(stdout) = self.as_any().downcast_ref::<Stdout>() {
+            stdout.as_file()
+        } else if let Some(stderr) = self.as_any().downcast_ref::<Stderr>() {
+            stderr.as_file()
         } else if let Some(other) = self.as_any().downcast_ref::<OsOther>() {
             other.as_file()
         } else {

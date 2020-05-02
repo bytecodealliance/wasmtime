@@ -3,7 +3,7 @@ use crate::poll::{ClockEventData, FdEventData};
 use crate::sys::osdir::OsDir;
 use crate::sys::osfile::OsFile;
 use crate::sys::osother::OsOther;
-use crate::sys::stdio::Stdio;
+use crate::sys::stdio::{Stderr, Stdin, Stdout};
 use crate::sys::AsFile;
 use crate::wasi::{types, Errno, Result};
 use lazy_static::lazy_static;
@@ -145,13 +145,15 @@ fn handle_timeout_event(timeout_event: ClockEventData, events: &mut Vec<types::E
 
 fn handle_rw_event(event: FdEventData, out_events: &mut Vec<types::Event>) {
     let handle = &event.handle;
-    let size = if let Some(stdio) = handle.as_any().downcast_ref::<Stdio>() {
-        match stdio {
-            // We return the only universally correct lower bound, see the comment later in the function.
-            Stdio::In { .. } => Ok(1),
-            // On Unix, ioctl(FIONREAD) will return 0 for stdout/stderr. Emulate the same behavior on Windows.
-            Stdio::Out { .. } | Stdio::Err { .. } => Ok(0),
-        }
+    let size = if let Some(_) = handle.as_any().downcast_ref::<Stdin>() {
+        // We return the only universally correct lower bound, see the comment later in the function.
+        Ok(1)
+    } else if let Some(_) = handle.as_any().downcast_ref::<Stdout>() {
+        // On Unix, ioctl(FIONREAD) will return 0 for stdout. Emulate the same behavior on Windows.
+        Ok(0)
+    } else if let Some(_) = handle.as_any().downcast_ref::<Stderr>() {
+        // On Unix, ioctl(FIONREAD) will return 0 for stdout/stderr. Emulate the same behavior on Windows.
+        Ok(0)
     } else {
         if event.r#type == types::Eventtype::FdRead {
             handle
@@ -211,18 +213,22 @@ pub(crate) fn oneoff(
             immediate_events.push(event);
         } else if let Some(_) = handle.as_any().downcast_ref::<OsDir>() {
             immediate_events.push(event);
-        } else if let Some(stdio) = handle.as_any().downcast_ref::<Stdio>() {
-            match stdio {
-                Stdio::In { .. } if event.r#type == types::Eventtype::FdRead => {
-                    stdin_events.push(event)
-                }
-                // stdout/stderr are always considered ready to write because there seems to
-                // be no way of checking if a write to stdout would block.
-                //
-                // If stdin is polled for anything else then reading, then it is also
-                // considered immediately ready, following the behavior on Linux.
-                _ => immediate_events.push(event),
-            };
+        } else if let Some(_) = handle.as_any().downcast_ref::<Stdin>() {
+            stdin_events.push(event);
+        } else if let Some(_) = handle.as_any().downcast_ref::<Stdout>() {
+            // stdout are always considered ready to write because there seems to
+            // be no way of checking if a write to stdout would block.
+            //
+            // If stdin is polled for anything else then reading, then it is also
+            // considered immediately ready, following the behavior on Linux.
+            immediate_events.push(event);
+        } else if let Some(_) = handle.as_any().downcast_ref::<Stderr>() {
+            // stderr are always considered ready to write because there seems to
+            // be no way of checking if a write to stdout would block.
+            //
+            // If stdin is polled for anything else then reading, then it is also
+            // considered immediately ready, following the behavior on Linux.
+            immediate_events.push(event);
         } else if let Some(other) = handle.as_any().downcast_ref::<OsOther>() {
             if other.get_file_type() == types::Filetype::SocketStream {
                 // We map pipe to SocketStream
