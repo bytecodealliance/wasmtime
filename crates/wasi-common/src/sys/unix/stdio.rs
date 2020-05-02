@@ -26,14 +26,14 @@ impl StdioExt for Stdio {
         Ok(Box::new(Self::In { rights }))
     }
     fn stdout() -> io::Result<Box<dyn Handle>> {
-        let file = unsafe { File::from_raw_fd(io::stdin().as_raw_fd()) };
+        let file = unsafe { File::from_raw_fd(io::stdout().as_raw_fd()) };
         let file = ManuallyDrop::new(file);
         let rights = get_rights(&file)?;
         let rights = Cell::new(rights);
         Ok(Box::new(Self::Out { rights }))
     }
     fn stderr() -> io::Result<Box<dyn Handle>> {
-        let file = unsafe { File::from_raw_fd(io::stdin().as_raw_fd()) };
+        let file = unsafe { File::from_raw_fd(io::stderr().as_raw_fd()) };
         let file = ManuallyDrop::new(file);
         let rights = get_rights(&file)?;
         let rights = Cell::new(rights);
