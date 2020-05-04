@@ -15,6 +15,11 @@ pub(crate) trait OsOtherExt {
     fn from_null() -> io::Result<Box<dyn Handle>>;
 }
 
+/// `OsOther` is something of a catch-all for everything not covered with the specific handle
+/// types (`OsFile`, `OsDir`, `Stdio`). It currently encapsulates handles such as OS pipes,
+/// sockets, streams, etc. As such, when redirecting stdio within `WasiCtxBuilder`, the redirected
+/// pipe should be encapsulated within this instance _and not_ `OsFile` which represents a regular
+/// OS file.
 #[derive(Debug)]
 pub(crate) struct OsOther {
     file_type: Filetype,
