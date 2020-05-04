@@ -32,6 +32,7 @@ pub(crate) trait StdinExt: Sized {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Stdin {
+    pub(crate) file_type: Filetype,
     pub(crate) rights: Cell<HandleRights>,
 }
 
@@ -43,7 +44,7 @@ impl Handle for Stdin {
         Ok(Box::new(self.clone()))
     }
     fn get_file_type(&self) -> Filetype {
-        Filetype::CharacterDevice
+        self.file_type
     }
     fn get_rights(&self) -> HandleRights {
         self.rights.get()
@@ -77,6 +78,7 @@ pub(crate) trait StdoutExt: Sized {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Stdout {
+    pub(crate) file_type: Filetype,
     pub(crate) rights: Cell<HandleRights>,
 }
 
@@ -88,7 +90,7 @@ impl Handle for Stdout {
         Ok(Box::new(self.clone()))
     }
     fn get_file_type(&self) -> Filetype {
-        Filetype::CharacterDevice
+        self.file_type
     }
     fn get_rights(&self) -> HandleRights {
         self.rights.get()
@@ -113,7 +115,11 @@ impl Handle for Stdout {
         // lock for the duration of the scope
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
-        let nwritten = SandboxedTTYWriter::new(&mut stdout).write_vectored(&iovs)?;
+        let nwritten = if self.is_tty() {
+            SandboxedTTYWriter::new(&mut stdout).write_vectored(&iovs)?
+        } else {
+            stdout.write_vectored(iovs)?
+        };
         stdout.flush()?;
         Ok(nwritten)
     }
@@ -126,6 +132,7 @@ pub(crate) trait StderrExt: Sized {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Stderr {
+    pub(crate) file_type: Filetype,
     pub(crate) rights: Cell<HandleRights>,
 }
 
@@ -137,7 +144,7 @@ impl Handle for Stderr {
         Ok(Box::new(self.clone()))
     }
     fn get_file_type(&self) -> Filetype {
-        Filetype::CharacterDevice
+        self.file_type
     }
     fn get_rights(&self) -> HandleRights {
         self.rights.get()

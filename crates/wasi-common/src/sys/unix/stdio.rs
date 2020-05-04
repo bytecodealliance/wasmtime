@@ -1,6 +1,6 @@
-use crate::handle::{Handle, HandleRights};
+use super::{get_file_type, get_rights};
+use crate::handle::Handle;
 use crate::sys::stdio::{Stderr, StderrExt, Stdin, StdinExt, Stdout, StdoutExt};
-use crate::wasi::{types, RightsExt};
 use std::cell::Cell;
 use std::fs::File;
 use std::io;
@@ -29,9 +29,10 @@ impl StdinExt for Stdin {
     fn stdin() -> io::Result<Box<dyn Handle>> {
         let file = unsafe { File::from_raw_fd(io::stdin().as_raw_fd()) };
         let file = ManuallyDrop::new(file);
-        let rights = get_rights(&file)?;
+        let file_type = get_file_type(&file)?;
+        let rights = get_rights(&file, &file_type)?;
         let rights = Cell::new(rights);
-        Ok(Box::new(Self { rights }))
+        Ok(Box::new(Self { file_type, rights }))
     }
 }
 
@@ -39,9 +40,10 @@ impl StdoutExt for Stdout {
     fn stdout() -> io::Result<Box<dyn Handle>> {
         let file = unsafe { File::from_raw_fd(io::stdout().as_raw_fd()) };
         let file = ManuallyDrop::new(file);
-        let rights = get_rights(&file)?;
+        let file_type = get_file_type(&file)?;
+        let rights = get_rights(&file, &file_type)?;
         let rights = Cell::new(rights);
-        Ok(Box::new(Self { rights }))
+        Ok(Box::new(Self { file_type, rights }))
     }
 }
 
@@ -49,23 +51,9 @@ impl StderrExt for Stderr {
     fn stderr() -> io::Result<Box<dyn Handle>> {
         let file = unsafe { File::from_raw_fd(io::stderr().as_raw_fd()) };
         let file = ManuallyDrop::new(file);
-        let rights = get_rights(&file)?;
+        let file_type = get_file_type(&file)?;
+        let rights = get_rights(&file, &file_type)?;
         let rights = Cell::new(rights);
-        Ok(Box::new(Self { rights }))
+        Ok(Box::new(Self { file_type, rights }))
     }
-}
-
-fn get_rights(file: &File) -> io::Result<HandleRights> {
-    use yanix::file::isatty;
-    let (base, inheriting) = {
-        if unsafe { isatty(file.as_raw_fd())? } {
-            (types::Rights::tty_base(), types::Rights::tty_base())
-        } else {
-            (
-                types::Rights::character_device_base(),
-                types::Rights::character_device_inheriting(),
-            )
-        }
-    };
-    Ok(HandleRights::new(base, inheriting))
 }

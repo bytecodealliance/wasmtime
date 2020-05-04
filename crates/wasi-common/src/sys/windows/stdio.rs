@@ -1,9 +1,11 @@
-use crate::handle::{Handle, HandleRights};
+use super::{get_file_type, get_rights};
+use crate::handle::Handle;
 use crate::sys::stdio::{Stderr, StderrExt, Stdin, StdinExt, Stdout, StdoutExt};
-use crate::wasi::{types, RightsExt};
 use std::cell::Cell;
+use std::fs::File;
 use std::io;
-use std::os::windows::prelude::{AsRawHandle, RawHandle};
+use std::mem::ManuallyDrop;
+use std::os::windows::prelude::{AsRawHandle, FromRawHandle, RawHandle};
 
 impl AsRawHandle for Stdin {
     fn as_raw_handle(&self) -> RawHandle {
@@ -25,29 +27,33 @@ impl AsRawHandle for Stderr {
 
 impl StdinExt for Stdin {
     fn stdin() -> io::Result<Box<dyn Handle>> {
-        let rights = get_rights()?;
+        let file = unsafe { File::from_raw_handle(io::stdin().as_raw_handle()) };
+        let file = ManuallyDrop::new(file);
+        let file_type = get_file_type(&file)?;
+        let rights = get_rights(&file_type)?;
         let rights = Cell::new(rights);
-        Ok(Box::new(Self { rights }))
+        Ok(Box::new(Self { file_type, rights }))
     }
 }
 
 impl StdoutExt for Stdout {
     fn stdout() -> io::Result<Box<dyn Handle>> {
-        let rights = get_rights()?;
+        let file = unsafe { File::from_raw_handle(io::stdin().as_raw_handle()) };
+        let file = ManuallyDrop::new(file);
+        let file_type = get_file_type(&file)?;
+        let rights = get_rights(&file_type)?;
         let rights = Cell::new(rights);
-        Ok(Box::new(Self { rights }))
+        Ok(Box::new(Self { file_type, rights }))
     }
 }
 
 impl StderrExt for Stderr {
     fn stderr() -> io::Result<Box<dyn Handle>> {
-        let rights = get_rights()?;
+        let file = unsafe { File::from_raw_handle(io::stdin().as_raw_handle()) };
+        let file = ManuallyDrop::new(file);
+        let file_type = get_file_type(&file)?;
+        let rights = get_rights(&file_type)?;
         let rights = Cell::new(rights);
-        Ok(Box::new(Self { rights }))
+        Ok(Box::new(Self { file_type, rights }))
     }
-}
-
-fn get_rights() -> io::Result<HandleRights> {
-    let rights = HandleRights::new(types::Rights::tty_base(), types::Rights::tty_base());
-    Ok(rights)
 }
