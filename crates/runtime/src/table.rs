@@ -46,7 +46,8 @@ impl Table {
     /// Returns `None` if table can't be grown by the specified amount
     /// of elements.
     pub fn grow(&self, delta: u32) -> Option<u32> {
-        let new_len = match self.size().checked_add(delta) {
+        let size = self.size();
+        let new_len = match size.checked_add(delta) {
             Some(len) => {
                 if let Some(max) = self.maximum {
                     if len > max {
@@ -63,7 +64,7 @@ impl Table {
             usize::try_from(new_len).unwrap(),
             VMCallerCheckedAnyfunc::default(),
         );
-        Some(new_len)
+        Some(size)
     }
 
     /// Get reference to the specified element.

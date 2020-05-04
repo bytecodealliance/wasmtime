@@ -371,6 +371,8 @@ impl Table {
     /// Grows the size of this table by `delta` more elements, initialization
     /// all new elements to `init`.
     ///
+    /// Returns the previous size of this table if successful.
+    ///
     /// # Errors
     ///
     /// Returns an error if the table cannot be grown by `delta`, for example
@@ -381,8 +383,7 @@ impl Table {
         let item = into_checked_anyfunc(init, &self.instance.store)?;
         if let Some(len) = self.instance.table_grow(index, delta) {
             for i in 0..delta {
-                let i = len - (delta - i);
-                set_table_item(&self.instance, index, i, item.clone())?;
+                set_table_item(&self.instance, index, len + i, item.clone())?;
             }
             Ok(len)
         } else {
