@@ -14,6 +14,7 @@ mod linker;
 mod memory_creator;
 mod name;
 mod stack_overflow;
+mod table;
 mod traps;
 mod use_after_drop;
 mod wast;

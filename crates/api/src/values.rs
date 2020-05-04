@@ -216,7 +216,7 @@ pub(crate) fn from_checked_anyfunc(
     store: &Store,
 ) -> Val {
     if item.type_index == wasmtime_runtime::VMSharedSignatureIndex::default() {
-        Val::AnyRef(AnyRef::Null);
+        return Val::AnyRef(AnyRef::Null);
     }
     let instance_handle = unsafe { wasmtime_runtime::InstanceHandle::from_vmctx(item.vmctx) };
     let export = wasmtime_runtime::ExportFunction {
