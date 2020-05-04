@@ -34,7 +34,7 @@ impl RunCommand {
         match self {
             RunCommand::Print(invoke) => {
                 let actual = invoke_fn(&invoke.args);
-                println!("{:?} -> {:?}", invoke, actual)
+                println!("{} -> {}", invoke, DisplayDataValues(&actual))
             }
             RunCommand::Run(invoke, compare, expected) => {
                 let actual = invoke_fn(&invoke.args);
@@ -43,7 +43,8 @@ impl RunCommand {
                     Comparison::NotEquals => *expected != actual,
                 };
                 if !matched {
-                    return Err(format!("Failed test: {:?}, actual: {:?}", self, actual));
+                    let actual = DisplayDataValues(&actual);
+                    return Err(format!("Failed test: {}, actual: {}", self, actual));
                 }
             }
         }
@@ -56,14 +57,8 @@ impl Display for RunCommand {
         match self {
             RunCommand::Print(invocation) => write!(f, "print: {}", invocation),
             RunCommand::Run(invocation, comparison, expected) => {
-                write!(f, "run: {} {} ", invocation, comparison)?;
-                if expected.len() == 1 {
-                    write!(f, "{}", expected[0])
-                } else {
-                    write!(f, "[")?;
-                    write_data_value_list(f, expected)?;
-                    write!(f, "]")
-                }
+                let expected = DisplayDataValues(expected);
+                write!(f, "run: {} {} {}", invocation, comparison, expected)
             }
         }
     }
@@ -125,6 +120,14 @@ impl DataValue {
             DataValue::V128(_) => ir::types::I8X16,
         }
     }
+
+    /// Return true if the value is a vector (i.e. `DataValue::V128`).
+    pub fn is_vector(&self) -> bool {
+        match self {
+            DataValue::V128(_) => true,
+            _ => false,
+        }
+    }
 }
 
 /// Helper for creating [From] implementations for [DataValue]
@@ -159,6 +162,24 @@ impl Display for DataValue {
             DataValue::F64(dv) => write!(f, "{}", Ieee64::from(*dv)),
             // Again, for syntax consistency, use ConstantData, which in this case displays as hex.
             DataValue::V128(dv) => write!(f, "{}", ConstantData::from(&dv[..])),
+        }
+    }
+}
+
+/// Helper structure for printing bracket-enclosed vectors of [DataValue]s.
+/// - for empty vectors, display `[]`
+/// - for single item vectors, display `42`, e.g.
+/// - for multiple item vectors, display `[42, 43, 44]`, e.g.
+struct DisplayDataValues<'a>(&'a [DataValue]);
+
+impl<'a> Display for DisplayDataValues<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.0.len() == 1 {
+            write!(f, "{}", self.0[0])
+        } else {
+            write!(f, "[")?;
+            write_data_value_list(f, &self.0)?;
+            write!(f, "]")
         }
     }
 }

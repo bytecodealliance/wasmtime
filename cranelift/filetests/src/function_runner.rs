@@ -189,9 +189,8 @@ impl UnboxedValues {
 
         // Store the argument values into `values_vec`.
         for ((arg, slot), param) in arguments.iter().zip(&mut values_vec).zip(&signature.params) {
-            assert_eq!(
-                arg.ty(),
-                param.value_type,
+            assert!(
+                arg.ty() == param.value_type || arg.is_vector(),
                 "argument type mismatch: {} != {}",
                 arg.ty(),
                 param.value_type
