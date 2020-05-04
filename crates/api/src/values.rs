@@ -34,7 +34,7 @@ pub enum Val {
     FuncRef(Func),
 
     /// A 128-bit number
-    V128(u128),
+    V128([u8; 16]),
 }
 
 macro_rules! accessors {
@@ -86,7 +86,7 @@ impl Val {
             Val::I64(i) => ptr::write(p as *mut i64, *i),
             Val::F32(u) => ptr::write(p as *mut u32, *u),
             Val::F64(u) => ptr::write(p as *mut u64, *u),
-            Val::V128(b) => ptr::write(p as *mut u128, *b),
+            Val::V128(b) => ptr::write(p as *mut [u8; 16], *b),
             _ => unimplemented!("Val::write_value_to"),
         }
     }
@@ -97,7 +97,7 @@ impl Val {
             ValType::I64 => Val::I64(ptr::read(p as *const i64)),
             ValType::F32 => Val::F32(ptr::read(p as *const u32)),
             ValType::F64 => Val::F64(ptr::read(p as *const u64)),
-            ValType::V128 => Val::V128(ptr::read(p as *const u128)),
+            ValType::V128 => Val::V128(ptr::read(p as *const [u8; 16])),
             _ => unimplemented!("Val::read_value_from"),
         }
     }
@@ -109,7 +109,7 @@ impl Val {
         (F32(f32) f32 unwrap_f32 f32::from_bits(*e))
         (F64(f64) f64 unwrap_f64 f64::from_bits(*e))
         (FuncRef(&Func) funcref unwrap_funcref e)
-        (V128(u128) v128 unwrap_v128 *e)
+        (V128([u8; 16]) v128 unwrap_v128 *e)
     }
 
     /// Attempt to access the underlying value of this `Val`, returning

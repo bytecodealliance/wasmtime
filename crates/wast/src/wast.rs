@@ -1,5 +1,6 @@
 use crate::spectest::link_spectest;
 use anyhow::{anyhow, bail, Context as _, Result};
+use std::convert::TryInto;
 use std::path::Path;
 use std::str;
 use wasmtime::*;
@@ -18,7 +19,7 @@ fn runtime_value(v: &wast::Expression<'_>) -> Result<Val> {
         I64Const(x) => Val::I64(*x),
         F32Const(x) => Val::F32(x.bits),
         F64Const(x) => Val::F64(x.bits),
-        V128Const(x) => Val::V128(u128::from_le_bytes(x.to_le_bytes())),
+        V128Const(x) => Val::V128(x.to_le_bytes()),
         other => bail!("couldn't convert {:?} to a runtime value", other),
     })
 }
@@ -358,21 +359,22 @@ fn is_matching_assert_invalid_error_message(expected: &str, actual: &str) -> boo
         || (expected.contains("out of bounds") && actual.contains("does not fit"))
 }
 
-fn extract_lane_as_i8(bytes: u128, lane: usize) -> i8 {
-    (bytes >> (lane * 8)) as i8
+/// Create functions for extracting the lanes of a V128.
+macro_rules! extract_lane {
+    ( $extract_lane_function_name:ident, $lane_type:ty, $lane_bytes:expr ) => {
+        fn $extract_lane_function_name(bytes: [u8; 16], lane: usize) -> $lane_type {
+            <$lane_type>::from_le_bytes(
+                bytes[lane * $lane_bytes..lane * $lane_bytes + $lane_bytes]
+                    .try_into()
+                    .unwrap(),
+            )
+        }
+    };
 }
-
-fn extract_lane_as_i16(bytes: u128, lane: usize) -> i16 {
-    (bytes >> (lane * 16)) as i16
-}
-
-fn extract_lane_as_i32(bytes: u128, lane: usize) -> i32 {
-    (bytes >> (lane * 32)) as i32
-}
-
-fn extract_lane_as_i64(bytes: u128, lane: usize) -> i64 {
-    (bytes >> (lane * 64)) as i64
-}
+extract_lane!(extract_lane_as_i8, i8, 1);
+extract_lane!(extract_lane_as_i16, i16, 2);
+extract_lane!(extract_lane_as_i32, i32, 4);
+extract_lane!(extract_lane_as_i64, i64, 8);
 
 fn is_canonical_f32_nan(bits: u32) -> bool {
     (bits & 0x7fff_ffff) == 0x7fc0_0000
@@ -425,7 +427,7 @@ fn f64_matches(actual: u64, expected: &wast::NanPattern<wast::Float64>) -> bool 
     }
 }
 
-fn v128_matches(actual: u128, expected: &wast::V128Pattern) -> bool {
+fn v128_matches(actual: [u8; 16], expected: &wast::V128Pattern) -> bool {
     match expected {
         wast::V128Pattern::I8x16(b) => b
             .iter()

@@ -328,7 +328,7 @@ impl RunCommand {
                 Val::F64(f) => println!("{}", f),
                 Val::AnyRef(_) => println!("<anyref>"),
                 Val::FuncRef(_) => println!("<anyref>"),
-                Val::V128(i) => println!("{}", i),
+                Val::V128(i) => println!("{:?}", i),
             }
         }
 
