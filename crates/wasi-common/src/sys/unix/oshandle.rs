@@ -1,59 +1,40 @@
-use crate::sys::AsFile;
-use std::cell::Cell;
 use std::fs::File;
 use std::io;
-use std::mem::ManuallyDrop;
 use std::os::unix::prelude::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 #[derive(Debug)]
-pub(crate) struct OsHandle(Cell<RawFd>);
+pub(crate) struct RawOsHandle(File);
 
-impl OsHandle {
+impl RawOsHandle {
     /// Tries clone `self`.
     pub(crate) fn try_clone(&self) -> io::Result<Self> {
-        let fd = self.as_file()?.try_clone()?;
-        Ok(Self(Cell::new(fd.into_raw_fd())))
+        let fd = self.0.try_clone()?;
+        Ok(unsafe { Self::from_raw_fd(fd.into_raw_fd()) })
     }
     /// Consumes `other` taking the ownership of the underlying
     /// `RawFd` file descriptor.
     ///
     /// Note that the state of `Dir` stream pointer *will* not be carried
     /// across from `other` to `self`.
-    pub(crate) fn update_from(&self, other: Self) {
-        let new_fd = other.into_raw_fd();
-        let old_fd = self.0.get();
-        self.0.set(new_fd);
-        // We need to remember to close the old_fd.
-        unsafe {
-            File::from_raw_fd(old_fd);
-        }
+    pub(crate) fn update_from(&self, _other: Self) {
+        panic!("RawOsHandle::update_from should never be issued on Unix!")
     }
 }
 
-impl Drop for OsHandle {
-    fn drop(&mut self) {
-        unsafe {
-            File::from_raw_fd(self.as_raw_fd());
-        }
-    }
-}
-
-impl AsRawFd for OsHandle {
+impl AsRawFd for RawOsHandle {
     fn as_raw_fd(&self) -> RawFd {
-        self.0.get()
+        self.0.as_raw_fd()
     }
 }
 
-impl FromRawFd for OsHandle {
-    unsafe fn from_raw_fd(fd: RawFd) -> Self {
-        Self(Cell::new(fd))
-    }
-}
-
-impl IntoRawFd for OsHandle {
+impl IntoRawFd for RawOsHandle {
     fn into_raw_fd(self) -> RawFd {
-        // We need to prevent dropping of self
-        let wrapped = ManuallyDrop::new(self);
-        wrapped.0.get()
+        self.0.into_raw_fd()
+    }
+}
+
+impl FromRawFd for RawOsHandle {
+    unsafe fn from_raw_fd(raw: RawFd) -> Self {
+        Self(File::from_raw_fd(raw))
     }
 }

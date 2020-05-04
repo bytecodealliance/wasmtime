@@ -1,4 +1,4 @@
-use super::oshandle::OsHandle;
+use super::oshandle::RawOsHandle;
 use crate::handle::HandleRights;
 use crate::sys::osfile::OsFile;
 use crate::wasi::{types, RightsExt};
@@ -16,7 +16,7 @@ impl TryFrom<File> for OsFile {
             return Err(io::Error::from_raw_os_error(libc::EINVAL));
         }
         let rights = get_rights(&file)?;
-        let handle = unsafe { OsHandle::from_raw_handle(file.into_raw_handle()) };
+        let handle = unsafe { RawOsHandle::from_raw_handle(file.into_raw_handle()) };
         Ok(Self::new(rights, handle))
     }
 }

@@ -1,4 +1,4 @@
-use super::sys_impl::oshandle::OsHandle;
+use super::sys_impl::oshandle::RawOsHandle;
 use super::{fd, AsFile};
 use crate::handle::{Handle, HandleRights};
 use crate::wasi::{types, Errno, Result};
@@ -11,18 +11,18 @@ use std::ops::Deref;
 #[derive(Debug)]
 pub(crate) struct OsFile {
     rights: Cell<HandleRights>,
-    handle: OsHandle,
+    handle: RawOsHandle,
 }
 
 impl OsFile {
-    pub(super) fn new(rights: HandleRights, handle: OsHandle) -> Self {
+    pub(super) fn new(rights: HandleRights, handle: RawOsHandle) -> Self {
         let rights = Cell::new(rights);
         Self { rights, handle }
     }
 }
 
 impl Deref for OsFile {
-    type Target = OsHandle;
+    type Target = RawOsHandle;
 
     fn deref(&self) -> &Self::Target {
         &self.handle

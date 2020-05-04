@@ -1,5 +1,5 @@
 use super::file_serial_no;
-use super::oshandle::OsHandle;
+use super::oshandle::RawOsHandle;
 use crate::path;
 use crate::sys::osdir::OsDir;
 use crate::sys::osfile::OsFile;
@@ -41,7 +41,10 @@ pub(crate) fn fdstat_get(file: &File) -> Result<types::Fdflags> {
 // handle came from `CreateFile`, but the Rust's libstd will use `GetStdHandle`
 // rather than `CreateFile`. Relevant discussion can be found in:
 // https://github.com/rust-lang/rust/issues/40490
-pub(crate) fn fdstat_set_flags(file: &File, fdflags: types::Fdflags) -> Result<Option<OsHandle>> {
+pub(crate) fn fdstat_set_flags(
+    file: &File,
+    fdflags: types::Fdflags,
+) -> Result<Option<RawOsHandle>> {
     let handle = file.as_raw_handle();
     let access_mode = winx::file::query_access_information(handle)?;
     let new_access_mode = file_access_mode_from_fdflags(
@@ -51,7 +54,7 @@ pub(crate) fn fdstat_set_flags(file: &File, fdflags: types::Fdflags) -> Result<O
             | access_mode.contains(AccessMode::FILE_APPEND_DATA),
     );
     unsafe {
-        Ok(Some(OsHandle::from_raw_handle(winx::file::reopen_file(
+        Ok(Some(RawOsHandle::from_raw_handle(winx::file::reopen_file(
             handle,
             new_access_mode,
             fdflags.into(),

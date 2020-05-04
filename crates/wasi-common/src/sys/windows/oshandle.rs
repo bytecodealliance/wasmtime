@@ -6,9 +6,9 @@ use std::mem::ManuallyDrop;
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle, IntoRawHandle, RawHandle};
 
 #[derive(Debug)]
-pub(crate) struct OsHandle(Cell<RawHandle>);
+pub(crate) struct RawOsHandle(Cell<RawHandle>);
 
-impl OsHandle {
+impl RawOsHandle {
     /// Tries cloning `self`.
     pub(crate) fn try_clone(&self) -> io::Result<Self> {
         let handle = self.as_file()?.try_clone()?;
@@ -27,7 +27,7 @@ impl OsHandle {
     }
 }
 
-impl Drop for OsHandle {
+impl Drop for RawOsHandle {
     fn drop(&mut self) {
         unsafe {
             File::from_raw_handle(self.as_raw_handle());
@@ -35,19 +35,19 @@ impl Drop for OsHandle {
     }
 }
 
-impl AsRawHandle for OsHandle {
+impl AsRawHandle for RawOsHandle {
     fn as_raw_handle(&self) -> RawHandle {
         self.0.get()
     }
 }
 
-impl FromRawHandle for OsHandle {
+impl FromRawHandle for RawOsHandle {
     unsafe fn from_raw_handle(handle: RawHandle) -> Self {
         Self(Cell::new(handle))
     }
 }
 
-impl IntoRawHandle for OsHandle {
+impl IntoRawHandle for RawOsHandle {
     fn into_raw_handle(self) -> RawHandle {
         // We need to prevent dropping of the OsFile
         let wrapped = ManuallyDrop::new(self);

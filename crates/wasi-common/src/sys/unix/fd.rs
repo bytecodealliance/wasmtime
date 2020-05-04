@@ -1,4 +1,4 @@
-use super::oshandle::OsHandle;
+use super::oshandle::RawOsHandle;
 use crate::sys::osdir::OsDir;
 use crate::sys::osfile::OsFile;
 use crate::wasi::{self, types, Result};
@@ -11,7 +11,7 @@ pub(crate) fn fdstat_get(fd: &File) -> Result<types::Fdflags> {
     Ok(fdflags.into())
 }
 
-pub(crate) fn fdstat_set_flags(fd: &File, fdflags: types::Fdflags) -> Result<Option<OsHandle>> {
+pub(crate) fn fdstat_set_flags(fd: &File, fdflags: types::Fdflags) -> Result<Option<RawOsHandle>> {
     unsafe { yanix::fcntl::set_status_flags(fd.as_raw_fd(), fdflags.into())? };
     // We return None here to signal that the operation succeeded on the original
     // file descriptor and mutating the original WASI Descriptor is thus unnecessary.

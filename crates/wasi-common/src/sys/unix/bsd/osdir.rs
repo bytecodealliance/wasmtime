@@ -1,5 +1,5 @@
 use crate::handle::HandleRights;
-use crate::sys::sys_impl::oshandle::OsHandle;
+use crate::sys::sys_impl::oshandle::RawOsHandle;
 use crate::wasi::Result;
 use std::cell::{Cell, RefCell, RefMut};
 use std::io;
@@ -8,7 +8,7 @@ use yanix::dir::Dir;
 #[derive(Debug)]
 pub(crate) struct OsDir {
     pub(crate) rights: Cell<HandleRights>,
-    pub(crate) handle: OsHandle,
+    pub(crate) handle: RawOsHandle,
     // When the client makes a `fd_readdir` syscall on this descriptor,
     // we will need to cache the `libc::DIR` pointer manually in order
     // to be able to seek on it later. While on Linux, this is handled
@@ -23,7 +23,7 @@ pub(crate) struct OsDir {
 }
 
 impl OsDir {
-    pub(crate) fn new(rights: HandleRights, handle: OsHandle) -> io::Result<Self> {
+    pub(crate) fn new(rights: HandleRights, handle: RawOsHandle) -> io::Result<Self> {
         let rights = Cell::new(rights);
         // We need to duplicate the handle, because `opendir(3)`:
         //     Upon successful return from fdopendir(), the file descriptor is under

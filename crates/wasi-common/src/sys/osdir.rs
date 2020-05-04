@@ -1,4 +1,4 @@
-use super::sys_impl::oshandle::OsHandle;
+use super::sys_impl::oshandle::RawOsHandle;
 use super::{fd, path, AsFile};
 use crate::handle::{Handle, HandleRights};
 use crate::wasi::{types, Errno, Result};
@@ -13,7 +13,7 @@ use std::ops::Deref;
 pub(crate) use super::sys_impl::osdir::OsDir;
 
 impl Deref for OsDir {
-    type Target = OsHandle;
+    type Target = RawOsHandle;
 
     fn deref(&self) -> &Self::Target {
         &self.handle

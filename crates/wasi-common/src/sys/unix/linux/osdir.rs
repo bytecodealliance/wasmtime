@@ -1,5 +1,5 @@
 use crate::handle::HandleRights;
-use crate::sys::sys_impl::oshandle::OsHandle;
+use crate::sys::sys_impl::oshandle::RawOsHandle;
 use crate::wasi::Result;
 use std::cell::Cell;
 use std::io;
@@ -8,11 +8,11 @@ use yanix::dir::Dir;
 #[derive(Debug)]
 pub(crate) struct OsDir {
     pub(crate) rights: Cell<HandleRights>,
-    pub(crate) handle: OsHandle,
+    pub(crate) handle: RawOsHandle,
 }
 
 impl OsDir {
-    pub(crate) fn new(rights: HandleRights, handle: OsHandle) -> io::Result<Self> {
+    pub(crate) fn new(rights: HandleRights, handle: RawOsHandle) -> io::Result<Self> {
         let rights = Cell::new(rights);
         Ok(Self { rights, handle })
     }

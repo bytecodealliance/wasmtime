@@ -1,4 +1,4 @@
-use super::oshandle::OsHandle;
+use super::oshandle::RawOsHandle;
 use crate::handle::HandleRights;
 use crate::wasi::{types, RightsExt};
 use std::cell::Cell;
@@ -10,11 +10,11 @@ use std::os::windows::prelude::{AsRawHandle, FromRawHandle, IntoRawHandle};
 #[derive(Debug)]
 pub(crate) struct OsDir {
     pub(crate) rights: Cell<HandleRights>,
-    pub(crate) handle: OsHandle,
+    pub(crate) handle: RawOsHandle,
 }
 
 impl OsDir {
-    pub(crate) fn new(rights: HandleRights, handle: OsHandle) -> io::Result<Self> {
+    pub(crate) fn new(rights: HandleRights, handle: RawOsHandle) -> io::Result<Self> {
         let rights = Cell::new(rights);
         Ok(Self { rights, handle })
     }
@@ -29,7 +29,7 @@ impl TryFrom<File> for OsDir {
             return Err(io::Error::from_raw_os_error(libc::EINVAL));
         }
         let rights = get_rights(&file)?;
-        let handle = unsafe { OsHandle::from_raw_handle(file.into_raw_handle()) };
+        let handle = unsafe { RawOsHandle::from_raw_handle(file.into_raw_handle()) };
         Self::new(rights, handle)
     }
 }

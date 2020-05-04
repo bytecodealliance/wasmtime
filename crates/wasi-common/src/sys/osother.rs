@@ -1,4 +1,4 @@
-use super::sys_impl::oshandle::OsHandle;
+use super::sys_impl::oshandle::RawOsHandle;
 use super::{fd, AsFile};
 use crate::handle::{Handle, HandleRights};
 use crate::sandboxed_tty_writer::SandboxedTTYWriter;
@@ -19,11 +19,11 @@ pub(crate) trait OsOtherExt {
 pub(crate) struct OsOther {
     file_type: Filetype,
     rights: Cell<HandleRights>,
-    handle: OsHandle,
+    handle: RawOsHandle,
 }
 
 impl OsOther {
-    pub(super) fn new(file_type: Filetype, rights: HandleRights, handle: OsHandle) -> Self {
+    pub(super) fn new(file_type: Filetype, rights: HandleRights, handle: RawOsHandle) -> Self {
         let rights = Cell::new(rights);
         Self {
             file_type,
@@ -34,7 +34,7 @@ impl OsOther {
 }
 
 impl Deref for OsOther {
-    type Target = OsHandle;
+    type Target = RawOsHandle;
 
     fn deref(&self) -> &Self::Target {
         &self.handle
