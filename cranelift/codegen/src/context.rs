@@ -31,6 +31,7 @@ use crate::result::CodegenResult;
 use crate::settings::{FlagsOrIsa, OptLevel};
 use crate::simple_gvn::do_simple_gvn;
 use crate::simple_preopt::do_preopt;
+use crate::sink_constants::do_sink_constants;
 use crate::timing;
 use crate::unreachable_code::eliminate_unreachable_code;
 use crate::value_label::{build_value_labels_ranges, ComparableSourceLoc, ValueLabelsRanges};
@@ -180,6 +181,8 @@ impl Context {
         }
 
         if let Some(backend) = isa.get_mach_backend() {
+            // New backend/regalloc has better codegen if constants are def'd right at use.
+            do_sink_constants(&mut self.func);
             let result = backend.compile_function(&self.func, self.want_disasm)?;
             let info = result.code_info();
             self.mach_compile_result = Some(result);

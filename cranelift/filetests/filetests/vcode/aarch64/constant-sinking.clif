@@ -1,0 +1,52 @@
+test vcode
+target aarch64
+
+function %f(b1) {
+block0(v0: b1):
+  v1 = iconst.i64 0
+  v2 = f32const 0x2.0
+  v3 = f64const 0x3.0
+  v4 = bconst.b1 true
+  brnz v0, block1
+  jump block2
+
+block1:
+  v5 = iconst.i32 4
+  jump block3(v5)
+
+block2:
+  v6 = iconst.i32 5
+  jump block3(v6)
+
+block3(v7: i32):
+  store.f32 v2, v1
+  store.f64 v3, v1
+  v8 = bint.i64 v4
+  store.i64 v8, v1
+  store.i32 v7, v1
+  return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: and w0, w0, #1
+; nextln: cbnz x0, 12
+; check: movz x0, #5
+; nextln: b 8
+; check: movz x0, #4
+; nextln: nop-zero-len
+; check: ldr s0, pc+8 ; b 8 ; data.f32 2
+; nextln: movz x1, #0
+; nextln: str s0, [x1]
+; nextln: ldr d0, pc+8 ; b 12 ; data.f64 3
+; nextln: movz x1, #0
+; nextln: str d0, [x1]
+; nextln: movz x1, #1
+; nextln: and w1, w1, #1
+; nextln: movz x2, #0
+; nextln: stur x1, [x2]
+; nextln: movz x1, #0
+; nextln: stur w0, [x1]
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
