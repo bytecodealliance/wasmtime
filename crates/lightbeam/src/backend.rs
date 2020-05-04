@@ -1,10 +1,12 @@
 #![allow(clippy::float_cmp)]
 
 use self::registers::*;
-use crate::error::{Error, error};
-use crate::microwasm::{BrTarget, Ieee32, Ieee64, SignlessType, Type, Value, F32, F64, I32, I64};
-use crate::module::{ModuleContext, Signature};
-use crate::Sinks;
+use crate::{
+    error::{error, Error},
+    microwasm::{BrTarget, Ieee32, Ieee64, SignlessType, Type, Value, F32, F64, I32, I64},
+    module::{ModuleContext, Signature},
+    Sinks,
+};
 use cranelift_codegen::{
     binemit,
     ir::{self, SourceLoc, TrapCode},
