@@ -208,26 +208,6 @@ fn const_to_value<'a>(builder: impl InstBuilder<'a>, c: Constant, root: Inst) ->
     }
 }
 
-fn part_to_inst(pos: &mut FuncCursor, root: Inst, part: Part<ValueOrInst>) -> Option<Inst> {
-    match part {
-        Part::Instruction(ValueOrInst::Inst(inst)) => Some(inst),
-        Part::Instruction(ValueOrInst::Value(v)) => {
-            let inst = pos.func.dfg.value_def(v).inst()?;
-            if pos.func.dfg.inst_results(inst).len() == 1 {
-                Some(inst)
-            } else {
-                None
-            }
-        }
-        Part::Constant(c) => {
-            let v = const_to_value(pos.ins(), c, root);
-            let inst = pos.func.dfg.value_def(v).unwrap_inst();
-            Some(inst)
-        }
-        Part::ConditionCode(_) => None,
-    }
-}
-
 fn part_to_value(pos: &mut FuncCursor, root: Inst, part: Part<ValueOrInst>) -> Option<Value> {
     match part {
         Part::Instruction(ValueOrInst::Inst(inst)) => {
@@ -454,14 +434,30 @@ impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
         new: Part<ValueOrInst>,
     ) -> ValueOrInst {
         log::trace!("replace {:?} with {:?}", old, new);
-        let old_inst = old.unwrap_inst();
+        let old_inst = old.resolve_inst(&pos.func.dfg).unwrap();
 
         // Try to convert `new` to an instruction, because we prefer replacing
         // an old instruction with a new one wholesale. However, if the
         // replacement cannot be converted to an instruction (e.g. the
         // right-hand side is a block/function parameter value) then we change
         // the old instruction's result to an alias of the new value.
-        match part_to_inst(pos, old_inst, new) {
+        let new_inst = match new {
+            Part::Instruction(ValueOrInst::Inst(inst)) => Some(inst),
+            Part::Instruction(ValueOrInst::Value(_)) => {
+                // Do not try and follow the value definition. If we transplant
+                // this value's instruction, and there are other uses of this
+                // value, then we could mess up ordering between instructions.
+                None
+            }
+            Part::Constant(c) => {
+                let v = const_to_value(pos.ins(), c, old_inst);
+                let inst = pos.func.dfg.value_def(v).unwrap_inst();
+                Some(inst)
+            }
+            Part::ConditionCode(_) => None,
+        };
+
+        match new_inst {
             Some(new_inst) => {
                 pos.func.transplant_inst(old_inst, new_inst);
                 debug_assert_eq!(pos.current_inst(), Some(old_inst));
@@ -528,7 +524,7 @@ impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
     ) -> ValueOrInst {
         log::trace!("make_inst_1: {:?}({:?})", operator, a);
 
-        let root = root.unwrap_inst();
+        let root = root.resolve_inst(&pos.func.dfg).unwrap();
         match operator {
             Operator::AdjustSpDown => {
                 let a = part_to_value(pos, root, a).unwrap();
@@ -541,12 +537,14 @@ impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
             }
             Operator::Bconst => {
                 let c = a.unwrap_constant();
-                const_to_value(pos.ins(), c, root).into()
+                let val = const_to_value(pos.ins(), c, root);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Bint => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let ty = peepmatic_ty_to_ir_ty(r#type, &pos.func.dfg, root);
-                pos.ins().bint(ty, a).into()
+                let val = pos.ins().bint(ty, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Brnz => {
                 let a = part_to_value(pos, root, a).unwrap();
@@ -571,17 +569,20 @@ impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
             }
             Operator::Iconst => {
                 let a = a.unwrap_constant();
-                const_to_value(pos.ins(), a, root).into()
+                let val = const_to_value(pos.ins(), a, root);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Ireduce => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let ty = peepmatic_ty_to_ir_ty(r#type, &pos.func.dfg, root);
-                pos.ins().ireduce(ty, a).into()
+                let val = pos.ins().ireduce(ty, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Sextend => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let ty = peepmatic_ty_to_ir_ty(r#type, &pos.func.dfg, root);
-                pos.ins().sextend(ty, a).into()
+                let val = pos.ins().sextend(ty, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Trapnz => {
                 let a = part_to_value(pos, root, a).unwrap();
@@ -604,7 +605,8 @@ impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
             Operator::Uextend => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let ty = peepmatic_ty_to_ir_ty(r#type, &pos.func.dfg, root);
-                pos.ins().uextend(ty, a).into()
+                let val = pos.ins().uextend(ty, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             _ => unreachable!(),
         }
@@ -621,167 +623,199 @@ impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
     ) -> ValueOrInst {
         log::trace!("make_inst_2: {:?}({:?}, {:?})", operator, a, b);
 
-        let root = root.unwrap_inst();
+        let root = root.resolve_inst(&pos.func.dfg).unwrap();
         match operator {
             Operator::Band => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().band(a, b).into()
+                let val = pos.ins().band(a, b);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::BandImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().band_imm(b, a).into()
+                let val = pos.ins().band_imm(b, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Bor => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().bor(a, b).into()
+                let val = pos.ins().bor(a, b);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::BorImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().bor_imm(b, a).into()
+                let val = pos.ins().bor_imm(b, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Bxor => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().bxor(a, b).into()
+                let val = pos.ins().bxor(a, b);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::BxorImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().bxor_imm(b, a).into()
+                let val = pos.ins().bxor_imm(b, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Iadd => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().iadd(a, b).into()
+                let val = pos.ins().iadd(a, b);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::IaddImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().iadd_imm(b, a).into()
+                let val = pos.ins().iadd_imm(b, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Ifcmp => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().ifcmp(a, b).into()
+                let val = pos.ins().ifcmp(a, b);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::IfcmpImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().ifcmp_imm(b, a).into()
+                let val = pos.ins().ifcmp_imm(b, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Imul => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().imul(a, b).into()
+                let val = pos.ins().imul(a, b);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::ImulImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().imul_imm(b, a).into()
+                let val = pos.ins().imul_imm(b, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::IrsubImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().irsub_imm(b, a).into()
+                let val = pos.ins().irsub_imm(b, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Ishl => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().ishl(a, b).into()
+                let val = pos.ins().ishl(a, b);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::IshlImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().ishl_imm(b, a).into()
+                let val = pos.ins().ishl_imm(b, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Isub => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().isub(a, b).into()
+                let val = pos.ins().isub(a, b);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Rotl => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().rotl(a, b).into()
+                let val = pos.ins().rotl(a, b);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::RotlImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().rotl_imm(b, a).into()
+                let val = pos.ins().rotl_imm(b, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Rotr => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().rotr(a, b).into()
+                let val = pos.ins().rotr(a, b);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::RotrImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().rotr_imm(b, a).into()
+                let val = pos.ins().rotr_imm(b, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Sdiv => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().sdiv(a, b).into()
+                let val = pos.ins().sdiv(a, b);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::SdivImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().sdiv_imm(b, a).into()
+                let val = pos.ins().sdiv_imm(b, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Srem => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().srem(a, b).into()
+                let val = pos.ins().srem(a, b);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::SremImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().srem_imm(b, a).into()
+                let val = pos.ins().srem_imm(b, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Sshr => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().sshr(a, b).into()
+                let val = pos.ins().sshr(a, b);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::SshrImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().sshr_imm(b, a).into()
+                let val = pos.ins().sshr_imm(b, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Udiv => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().udiv(a, b).into()
+                let val = pos.ins().udiv(a, b);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::UdivImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().udiv_imm(b, a).into()
+                let val = pos.ins().udiv_imm(b, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Urem => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().urem(a, b).into()
+                let val = pos.ins().urem(a, b);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::UremImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().urem_imm(b, a).into()
+                let val = pos.ins().urem_imm(b, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Ushr => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().ushr(a, b).into()
+                let val = pos.ins().ushr(a, b);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::UshrImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
-                pos.ins().ushr_imm(b, a).into()
+                let val = pos.ins().ushr_imm(b, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             _ => unreachable!(),
         }
@@ -799,27 +833,30 @@ impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
     ) -> ValueOrInst {
         log::trace!("make_inst_3: {:?}({:?}, {:?}, {:?})", operator, a, b, c);
 
-        let root = root.unwrap_inst();
+        let root = root.resolve_inst(&pos.func.dfg).unwrap();
         match operator {
             Operator::Icmp => {
                 let cond = a.unwrap_condition_code();
                 let cond = peepmatic_to_intcc(cond);
                 let b = part_to_value(pos, root, b).unwrap();
                 let c = part_to_value(pos, root, c).unwrap();
-                pos.ins().icmp(cond, b, c).into()
+                let val = pos.ins().icmp(cond, b, c);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::IcmpImm => {
                 let cond = a.unwrap_condition_code();
                 let cond = peepmatic_to_intcc(cond);
                 let imm = part_to_imm64(pos, b);
                 let c = part_to_value(pos, root, c).unwrap();
-                pos.ins().icmp_imm(cond, c, imm).into()
+                let val = pos.ins().icmp_imm(cond, c, imm);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Select => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let c = part_to_value(pos, root, c).unwrap();
-                pos.ins().select(a, b, c).into()
+                let val = pos.ins().select(a, b, c);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             _ => unreachable!(),
         }
