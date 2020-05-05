@@ -5667,7 +5667,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             slice = rest;
         }
 
-        mem::replace(&mut self.block_state.stack, stack);
+        self.block_state.stack = stack;
 
         Ok(())
     }
