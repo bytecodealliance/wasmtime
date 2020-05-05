@@ -44,7 +44,8 @@ impl Table {
     /// Grow table by the specified amount of elements.
     ///
     /// Returns `None` if table can't be grown by the specified amount
-    /// of elements.
+    /// of elements. Returns the previous size of the table if growth is
+    /// successful.
     pub fn grow(&self, delta: u32) -> Option<u32> {
         let size = self.size();
         let new_len = match size.checked_add(delta) {
