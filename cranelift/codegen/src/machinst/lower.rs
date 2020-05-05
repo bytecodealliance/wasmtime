@@ -332,6 +332,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     GenerateReturn::Yes
                 } else {
                     debug_assert!(last_insn_opcode == Opcode::FallthroughReturn);
+                    self.vcode.set_fallthrough_return_block(*bb);
                     GenerateReturn::No
                 };
                 self.gen_retval_setup(gen_ret);
