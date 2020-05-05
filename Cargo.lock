@@ -1105,7 +1105,6 @@ dependencies = [
  "memoffset",
  "more-asserts",
  "quickcheck",
- "smallvec",
  "staticvec",
  "thiserror",
  "typemap",
@@ -2146,6 +2145,7 @@ dependencies = [
  "wasmtime-runtime",
  "wasmtime-wasi",
  "wasmtime-wast",
+ "wast 14.0.0",
  "wat",
 ]
 

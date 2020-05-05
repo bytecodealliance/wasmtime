@@ -2,6 +2,18 @@ use std::path::Path;
 use wasmtime::{Config, Engine, OptLevel, Store, Strategy};
 use wasmtime_wast::WastContext;
 
+macro_rules! mk_test {
+    ($(#[$attrs:meta])* $name:ident, $path:expr, $strategy:expr) => {
+        #[test]
+        $(#[$attrs])*
+        fn $name() {
+            use wasmtime::Strategy;
+
+            crate::wast::run_wast($path, $strategy).unwrap();
+        }
+    };
+}
+
 include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
 
 // Each of the tests included from `wast_testsuite_tests` will call this
@@ -26,7 +38,7 @@ fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
         .wasm_reference_types(reftypes)
         .wasm_multi_value(multi_val)
         .strategy(strategy)?
-        .cranelift_debug_verifier(true);
+        .cranelift_debug_verifier(cfg!(debug_assertions));
 
     // FIXME: https://github.com/bytecodealliance/wasmtime/issues/1186
     if simd {
@@ -37,5 +49,6 @@ fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
     let mut wast_context = WastContext::new(store);
     wast_context.register_spectest()?;
     wast_context.run_file(wast)?;
+
     Ok(())
 }
