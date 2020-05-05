@@ -11,7 +11,8 @@ block0(v0: i64):
 
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
-; nextln:  bl 0
+; nextln:  ldr x15, 8 ; b 12 ; data
+; nextln:  blr x15
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
