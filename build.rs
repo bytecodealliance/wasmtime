@@ -192,6 +192,11 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", "simd_load") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16Shl
             ("simd", "simd_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16ShrS
 
+            // not parsed in wasmparser yet
+            ("simd", "simd_i32x4_arith2") => return true,
+            ("simd", "simd_i16x8_arith2") => return true,
+            ("simd", "simd_i8x16_arith2") => return true,
+
             // waiting for the upstream spec to get updated with new binary
             // encodings of operations and for that to propagate to the
             // testsuite repo.
@@ -203,6 +208,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
 
             ("misc_testsuite", "export_large_signature")
             | ("spec_testsuite", "call")
+            | ("spec_testsuite", "func")
             | ("multi_value", "call")
             | ("multi_value", "func") => {
                 // FIXME These involves functions with very large stack frames that Cranelift currently

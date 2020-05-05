@@ -11,11 +11,8 @@ use anyhow::{format_err, Result};
 use wasmtime::*;
 
 fn main() -> Result<()> {
-    // Configure our `Store`, but be sure to use a `Config` that enables the
-    // wasm multi-value feature since it's not stable yet.
     println!("Initializing...");
-    let engine = Engine::new(Config::new().wasm_multi_value(true));
-    let store = Store::new(&engine);
+    let store = Store::default();
 
     // Compile.
     println!("Compiling module...");

@@ -53,8 +53,7 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
             use #root::wasmtime::{Config, Extern, Engine, Store, Instance, Module};
             use #root::anyhow::{bail, format_err};
 
-            let engine = Engine::new(Config::new().wasm_multi_value(true));
-            let store = Store::new(&engine);
+            let store = Store::default();
 
             let data = #root::wasmtime_interface_types::ModuleData::new(bytes.as_ref())?;
 

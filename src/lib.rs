@@ -114,7 +114,7 @@ struct CommonOptions {
 
     /// Enable support for multi-value functions
     #[structopt(long)]
-    enable_multi_value: bool,
+    enable_multi_value: Option<bool>,
 
     /// Enable support for Wasm threads
     #[structopt(long)]
@@ -176,7 +176,7 @@ impl CommonOptions {
             .wasm_bulk_memory(self.enable_bulk_memory || self.enable_all)
             .wasm_simd(self.enable_simd || self.enable_all)
             .wasm_reference_types(self.enable_reference_types || self.enable_all)
-            .wasm_multi_value(self.enable_multi_value || self.enable_all)
+            .wasm_multi_value(self.enable_multi_value.unwrap_or(true) || self.enable_all)
             .wasm_threads(self.enable_threads || self.enable_all)
             .cranelift_opt_level(self.opt_level())
             .strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?
