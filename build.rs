@@ -192,6 +192,11 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", "simd_load") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16Shl
             ("simd", "simd_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16ShrS
 
+            // waiting for the upstream spec to get updated with new binary
+            // encodings of operations and for that to propagate to the
+            // testsuite repo.
+            ("simd", "simd_const") => return true,
+
             // Still working on implementing these. See #929.
             ("reference_types", "table_copy_on_imported_tables") => return false,
             ("reference_types", _) => return true,
