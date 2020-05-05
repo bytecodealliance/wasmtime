@@ -2801,13 +2801,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     fn check_block_depth_inbounds(&mut self, depth: StackDepth) -> Result<(), Error> {
         let old_depth = mem::replace(&mut self.block_state.depth, depth);
 
-        let out = if self.block_state.stack.iter().all(|v| {
+        let block_depth_is_inbounds = self.block_state.stack.iter().all(|v| {
             if let ValueLocation::Stack(o) = v {
                 self.adjusted_offset(*o) >= 0
             } else {
                 true
             }
-        }) {
+        });
+
+        let out = if block_depth_is_inbounds {
             Ok(())
         } else {
             Err(error(format!(
@@ -2945,7 +2947,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                         }
 
                         for (src, _) in &mut pending {
-                            if *src == ValueLocation::from(old) {
+                            if *src == old {
                                 *src = new;
                             }
                         }
@@ -2966,7 +2968,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                         self.block_state.regs.release(reg)?;
 
                         for (src, _) in &mut *rest {
-                            if *src == ValueLocation::from(old) {
+                            if *src == old {
                                 *src = new;
                             }
                         }
@@ -3064,7 +3066,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         debug_assert_le!(out_cc.stack_depth.0, stack_depth.0);
 
-        out_cc.stack_depth = stack_depth.clone();
+        out_cc.stack_depth = stack_depth;
 
         Ok(out_cc)
     }
@@ -6113,8 +6115,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             })
             .max()
             .unwrap_or(0);
-        let original_depth = self.block_state.depth.clone();
-        let mut needed_depth = original_depth.clone();
+        let mut needed_depth = self.block_state.depth.clone();
         needed_depth.reserve(total_stack_space);
 
         if needed_depth.0 & 1 != 0 {

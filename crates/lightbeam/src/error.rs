@@ -1,4 +1,3 @@
-use capstone;
 use std::fmt::Display;
 use thiserror::Error;
 use wasmparser::BinaryReaderError;

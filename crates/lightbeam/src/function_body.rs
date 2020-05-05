@@ -54,7 +54,7 @@ pub struct Sinks<'a> {
 }
 
 impl Sinks<'_> {
-    pub fn reborrow<'a>(&'a mut self) -> Sinks<'a> {
+    pub fn reborrow(&mut self) -> Sinks<'_> {
         Sinks {
             relocs: &mut *self.relocs,
             traps: &mut *self.traps,
@@ -160,6 +160,7 @@ where
             },
         );
 
+        #[cfg_attr(not(debug_assertions), allow(unused_variables))]
         let mut in_block = true;
 
         while let Some(op_offset) = body.next() {
@@ -254,26 +255,22 @@ where
                 })),
             ));
 
-            if let Operator::Start(_) = &op {
-                if in_block {
-                    return Err(error("New block started without previous block ending"));
-                }
-            } else {
-                if !in_block {
-                    return Err(error("Operator not in block"));
-                }
-            }
-
             match op {
                 Operator::Unreachable => {
-                    in_block = false;
+                    #[cfg_attr(not(debug_assertions), allow(unused_assignments))]
+                    {
+                        in_block = false;
+                    }
 
                     ctx.trap(ir::TrapCode::UnreachableCodeReached);
                 }
                 Operator::Start(label) => {
                     use std::collections::hash_map::Entry;
 
-                    in_block = true;
+                    #[cfg_attr(not(debug_assertions), allow(unused_assignments))]
+                    {
+                        in_block = true;
+                    }
 
                     if let Entry::Occupied(mut entry) = blocks.entry(BrTarget::Label(label.clone()))
                     {
@@ -301,7 +298,13 @@ where
 
                                     match skipped {
                                         Operator::End(..) | Operator::Unreachable => {
-                                            in_block = false;
+                                            #[cfg_attr(
+                                                not(debug_assertions),
+                                                allow(unused_assignments)
+                                            )]
+                                            {
+                                                in_block = false;
+                                            }
                                             break;
                                         }
                                         Operator::Start(..) => {
@@ -351,7 +354,7 @@ where
                                 }
                             }
 
-                            ctx.define_label(block.label.label().unwrap().clone());
+                            ctx.define_label(*block.label.label().unwrap());
 
                             ctx.shrink_stack_to_fit()?;
 
@@ -387,7 +390,10 @@ where
                     );
                 }
                 Operator::End(Targets { targets, default }) => {
-                    in_block = false;
+                    #[cfg_attr(not(debug_assertions), allow(unused_assignments))]
+                    {
+                        in_block = false;
+                    }
 
                     let target_labels = targets
                         .iter()

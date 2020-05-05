@@ -4,7 +4,6 @@ use crate::{
 };
 use cranelift_codegen::ir::SourceLoc;
 use itertools::Either;
-use smallvec::{smallvec, SmallVec};
 use std::{
     convert::TryInto,
     fmt,
@@ -340,7 +339,7 @@ impl SignlessType {
 
 #[derive(Debug, Clone)]
 pub struct Targets<L> {
-    pub targets: SmallVec<[BrTargetDrop<L>; 1]>,
+    pub targets: Vec<BrTargetDrop<L>>,
     pub default: BrTargetDrop<L>,
 }
 
@@ -974,8 +973,8 @@ impl From<SignlessType> for SigT {
 
 #[derive(Debug)]
 pub struct OpSig {
-    input: SmallVec<[SigT; 3]>,
-    output: SmallVec<[SigT; 3]>,
+    input: Vec<SigT>,
+    output: Vec<SigT>,
 }
 
 impl fmt::Display for OpSig {
@@ -1014,8 +1013,8 @@ impl OpSig {
         I1: IntoIterator<Item = SigT>,
     {
         OpSig {
-            input: SmallVec::from_iter(input),
-            output: SmallVec::from_iter(output),
+            input: Vec::from_iter(input),
+            output: Vec::from_iter(output),
         }
     }
 
@@ -1486,7 +1485,6 @@ where
     fn next(
         &mut self,
     ) -> Result<Option<impl ExactSizeIterator<Item = WithLoc<OperatorFromWasm>> + '_>, Error> {
-        use derive_more::From;
         use iter_enum::{ExactSizeIterator, Iterator};
         use staticvec::staticvec;
 
@@ -1508,7 +1506,7 @@ where
             fn next(&mut self) -> Option<Self::Item> {
                 self.iter.next().map(|op| WithLoc {
                     op,
-                    offset: self.source_loc.clone(),
+                    offset: self.source_loc,
                 })
             }
 
@@ -1541,29 +1539,25 @@ where
         impl ExactSizeIterator for Consts {}
 
         fn consts(consts: Vec<Value>) -> Output {
-            fn impl_trait_hack(consts: Vec<Value>) -> Consts {
-                Consts {
-                    inner: consts.into_iter(),
-                }
-            }
-
-            Output::Consts(impl_trait_hack(consts))
+            Output::Consts(Consts {
+                inner: consts.into_iter(),
+            })
         }
 
-        fn vec(vals: SmallVec<[OperatorFromWasm; 5]>) -> Output {
+        fn vec(vals: Vec<OperatorFromWasm>) -> Output {
             Output::Vec(vals.into_iter())
         }
 
         fn iter(vals: impl IntoIterator<Item = OperatorFromWasm>) -> Output {
-            Output::Vec(SmallVec::from_iter(vals.into_iter()).into_iter())
+            vec(vals.into_iter().collect())
         }
 
         fn none() -> Output {
-            Output::None(std::iter::empty())
+            iter(iter::empty())
         }
 
         fn one(op: OperatorFromWasm) -> Output {
-            Output::One(std::iter::once(op))
+            iter(iter::once(op))
         }
 
         fn end_if(
@@ -1571,17 +1565,15 @@ where
             else_: BrTargetDrop<WasmLabel>,
         ) -> OperatorFromWasm {
             Operator::End(Targets {
-                targets: [else_.into()].into(),
-                default: then.into(),
+                targets: [else_].into(),
+                default: then,
             })
         }
 
-        #[derive(From, Iterator, ExactSizeIterator)]
+        #[derive(Iterator, ExactSizeIterator)]
         enum Output {
             Consts(Consts),
-            Vec(smallvec::IntoIter<[OperatorFromWasm; 5]>),
-            None(std::iter::Empty<OperatorFromWasm>),
-            One(std::iter::Once<OperatorFromWasm>),
+            Vec(<Vec<OperatorFromWasm> as IntoIterator>::IntoIter),
         }
 
         macro_rules! to_drop {
@@ -1681,7 +1673,7 @@ where
                             } = block.kind
                             {
                                 break (
-                                    vec(smallvec![
+                                    vec(vec![
                                         Operator::Start((block.id, NameTag::Else)),
                                         Operator::Const(0i32.into()),
                                         Operator::End(BrTarget::Label(end_label).into()),
@@ -1761,7 +1753,7 @@ where
                 let block_param_type_wasm = self.block_params_with_wasm_type(ty)?;
                 let label = (id, NameTag::Header);
 
-                vec(smallvec![
+                vec(vec![
                     Operator::loop_(self.block_params(), label),
                     Operator::end_wasm_block(block_param_type_wasm.collect(), (id, NameTag::End)),
                     Operator::Const(0i32.into()),
@@ -1786,7 +1778,7 @@ where
                     (id, NameTag::Else),
                     (id, NameTag::End),
                 );
-                vec(smallvec![
+                vec(vec![
                     Operator::block(self.block_params(), then),
                     Operator::block(self.block_params(), else_),
                     Operator::end_wasm_block(block_param_type_wasm.collect(), end),
@@ -1845,25 +1837,23 @@ where
                         Operator::End(BrTarget::Label(end).into()),
                         Operator::Start(end),
                     ]))
+                } else if self.control_frames.is_empty() {
+                    self.is_done = true;
+
+                    iter(staticvec![
+                        Operator::Const(0i32.into()),
+                        Operator::End(BrTarget::Return.into()),
+                    ])
+                } else if block.needs_end_label() {
+                    let label = (block.id, NameTag::End);
+
+                    iter(to_drop.map(Operator::Drop).into_iter().chain(staticvec![
+                        Operator::Const(0i32.into()),
+                        Operator::End(BrTarget::Label(label).into()),
+                        Operator::Start(label)
+                    ]))
                 } else {
-                    if self.control_frames.is_empty() {
-                        self.is_done = true;
-
-                        iter(staticvec![
-                            Operator::Const(0i32.into()),
-                            Operator::End(BrTarget::Return.into()),
-                        ])
-                    } else if block.needs_end_label() {
-                        let label = (block.id, NameTag::End);
-
-                        iter(to_drop.map(Operator::Drop).into_iter().chain(staticvec![
-                            Operator::Const(0i32.into()),
-                            Operator::End(BrTarget::Label(label).into()),
-                            Operator::Start(label)
-                        ]))
-                    } else {
-                        iter(to_drop.map(Operator::Drop).into_iter())
-                    }
+                    iter(to_drop.map(Operator::Drop).into_iter())
                 }
             }
             WasmOperator::Br { relative_depth } => {
@@ -1885,7 +1875,7 @@ where
                 let block = &mut self.control_frames[relative_depth as _];
                 block.mark_branched_to();
 
-                vec(smallvec![
+                vec(vec![
                     Operator::block(params, label),
                     end_if(
                         BrTargetDrop {
@@ -1903,7 +1893,7 @@ where
                 let control_frames = &mut self.control_frames;
                 let stack = &self.stack;
                 let targets = targets
-                    .into_iter()
+                    .iter()
                     .map(|&depth| {
                         control_frames[depth as _].mark_branched_to();
                         let block = &control_frames[depth as _];
@@ -1964,7 +1954,7 @@ where
                 let depth = depth
                     .try_into()
                     .map_err(|_| Error::Microwasm("LocalSet - Local out of range".into()))?;
-                vec(smallvec![Operator::Swap(depth), Operator::Drop(0..=0)])
+                vec(vec![Operator::Swap(depth), Operator::Drop(0..=0)])
             }
             WasmOperator::LocalTee { local_index } => {
                 let depth = self
@@ -1974,7 +1964,7 @@ where
                 let depth = depth
                     .try_into()
                     .map_err(|_| Error::Microwasm("LocalTee - Local out of range".into()))?;
-                vec(smallvec![
+                vec(vec![
                     Operator::Pick(0),
                     Operator::Swap(depth),
                     Operator::Drop(0..=0),
@@ -2321,7 +2311,7 @@ impl<M: ModuleContext> Iterator for MicrowasmConv<'_, M>
 where
     for<'any> &'any M::Signature: Into<OpSig>,
 {
-    type Item = Result<SmallVec<[WithLoc<OperatorFromWasm>; 1]>, Error>;
+    type Item = Result<Vec<WithLoc<OperatorFromWasm>>, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.next() {

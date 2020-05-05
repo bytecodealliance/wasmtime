@@ -1,7 +1,6 @@
 #![cfg_attr(test, feature(test))]
 #![feature(proc_macro_hygiene)]
 
-mod alloc;
 mod backend;
 mod disassemble;
 mod error;
