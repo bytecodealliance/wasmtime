@@ -2145,6 +2145,7 @@ dependencies = [
  "wasmtime-runtime",
  "wasmtime-wasi",
  "wasmtime-wast",
+ "wast 14.0.0",
  "wat",
 ]
 
