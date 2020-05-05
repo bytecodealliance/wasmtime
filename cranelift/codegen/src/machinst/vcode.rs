@@ -18,8 +18,7 @@
 //! backend pipeline.
 
 use crate::entity::SecondaryMap;
-use crate::ir;
-use crate::ir::SourceLoc;
+use crate::ir::{self, Block, SourceLoc};
 use crate::machinst::*;
 use crate::settings;
 
@@ -101,6 +100,9 @@ pub struct VCode<I: VCodeInst> {
 
     /// ABI object.
     abi: Box<dyn ABIBody<I = I>>,
+
+    /// The block targeted by fallthrough_returns, if there's one.
+    pub fallthrough_return_block: Option<BlockIndex>,
 }
 
 /// A builder for a VCode function body. This builder is designed for the
@@ -151,6 +153,16 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     /// Access the ABI object.
     pub fn abi(&mut self) -> &mut dyn ABIBody<I = I> {
         &mut *self.vcode.abi
+    }
+
+    /// Set the fallthrough_return target block for this function. There must be at most once per
+    /// function.
+    pub fn set_fallthrough_return_block(&mut self, bb: Block) {
+        debug_assert!(
+            self.vcode.fallthrough_return_block.is_none(),
+            "a function must have at most one fallthrough-return instruction"
+        );
+        self.vcode.fallthrough_return_block = Some(self.bb_to_bindex(bb));
     }
 
     /// Set the type of a VReg.
@@ -315,6 +327,7 @@ impl<I: VCodeInst> VCode<I> {
             final_block_offsets: vec![],
             code_size: 0,
             abi,
+            fallthrough_return_block: None,
         }
     }
 
