@@ -27,6 +27,7 @@ cranelift-filetests = { path = "filetests", version = "0.63.0" }
 cranelift-module = { path = "module", version = "0.63.0" }
 cranelift-faerie = { path = "faerie", version = "0.63.0" }
 cranelift-object = { path = "object", version = "0.63.0" }
+cranelift-simplecompiler = { path = "simplecompiler", version = "0.63.0" }
 cranelift-simplejit = { path = "simplejit", version = "0.63.0" }
 cranelift-preopt = { path = "preopt", version = "0.63.0" }
 cranelift = { path = "umbrella", version = "0.63.0" }

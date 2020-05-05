@@ -23,7 +23,7 @@ use thiserror::Error;
 /// "outside-of-function" functionality, see `cranelift_simplejit::backend::SimpleJITBackend`.
 ///
 /// ```
-/// use cranelift_filetests::SingleFunctionCompiler;
+/// use cranelift_simplecompiler::SingleFunctionCompiler;
 /// use cranelift_reader::parse_functions;
 ///
 /// let code = "test run \n function %add(i32, i32) -> i32 {  block0(v0:i32, v1:i32):  v2 = iadd v0, v1  return v2 }".into();
@@ -124,7 +124,7 @@ impl Trampoline {
 /// function through the use of a [Trampoline].
 ///
 /// ```
-/// use cranelift_filetests::SingleFunctionCompiler;
+/// use cranelift_simplecompiler::SingleFunctionCompiler;
 /// use cranelift_reader::{parse_functions, DataValue};
 ///
 /// let code = "test run \n function %add(i32, i32) -> i32 {  block0(v0:i32, v1:i32):  v2 = iadd v0, v1  return v2 }".into();

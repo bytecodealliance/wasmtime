@@ -2,9 +2,9 @@
 
 use crate::utils::{iterate_files, read_to_string};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
-use cranelift_filetests::SingleFunctionCompiler;
 use cranelift_native::builder as host_isa_builder;
 use cranelift_reader::{parse_run_command, parse_test, Details, IsaSpec, ParseOptions};
+use cranelift_simplecompiler::SingleFunctionCompiler;
 use std::path::PathBuf;
 use target_lexicon::Triple;
 

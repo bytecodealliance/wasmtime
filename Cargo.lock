@@ -416,6 +416,7 @@ dependencies = [
  "cranelift-native",
  "cranelift-preopt",
  "cranelift-reader",
+ "cranelift-simplecompiler",
  "file-per-thread-logger",
  "filecheck",
  "gimli",
@@ -515,6 +516,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "cranelift-simplecompiler"
+version = "0.63.0"
+dependencies = [
+ "cranelift-codegen",
+ "cranelift-frontend",
+ "cranelift-native",
+ "cranelift-reader",
+ "log",
+ "memmap",
+ "thiserror",
+]
+
+[[package]]
 name = "cranelift-simplejit"
 version = "0.63.0"
 dependencies = [
@@ -552,6 +566,7 @@ dependencies = [
  "cranelift-preopt",
  "cranelift-reader",
  "cranelift-serde",
+ "cranelift-simplecompiler",
  "cranelift-simplejit",
  "cranelift-wasm",
  "file-per-thread-logger",

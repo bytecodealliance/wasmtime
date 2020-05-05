@@ -2,11 +2,11 @@
 //!
 //! The `run` test command compiles each function on the host machine and executes it
 
-use crate::function_runner::SingleFunctionCompiler;
 use crate::subtest::{Context, SubTest, SubtestResult};
 use cranelift_codegen::ir;
 use cranelift_reader::parse_run_command;
 use cranelift_reader::TestCommand;
+use cranelift_simplecompiler::SingleFunctionCompiler;
 use log::trace;
 use std::borrow::Cow;
 use target_lexicon::Architecture;

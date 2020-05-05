@@ -23,7 +23,6 @@
     )
 )]
 
-pub use crate::function_runner::SingleFunctionCompiler;
 use crate::runner::TestRunner;
 use cranelift_codegen::timing;
 use cranelift_reader::TestCommand;
@@ -31,7 +30,6 @@ use std::path::Path;
 use std::time;
 
 mod concurrent;
-mod function_runner;
 mod match_directive;
 mod runner;
 mod runone;
