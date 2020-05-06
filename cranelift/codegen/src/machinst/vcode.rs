@@ -29,7 +29,7 @@ use regalloc::{
 };
 
 use alloc::boxed::Box;
-use alloc::vec::Vec;
+use alloc::{borrow::Cow, vec::Vec};
 use log::debug;
 use smallvec::SmallVec;
 use std::fmt;
@@ -78,7 +78,7 @@ pub struct VCode<I: VCodeInst> {
     /// Block successor lists, concatenated into one Vec. The `block_succ_range`
     /// list of tuples above gives (start, end) ranges within this list that
     /// correspond to each basic block's successors.
-    block_succs: Vec<BlockIndex>,
+    block_succs: Vec<BlockIx>,
 
     /// Block indices by IR block.
     block_by_bb: SecondaryMap<ir::Block, BlockIndex>,
@@ -237,15 +237,15 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         match insn.is_term() {
             MachTerminator::None | MachTerminator::Ret => {}
             MachTerminator::Uncond(target) => {
-                self.vcode.block_succs.push(target);
+                self.vcode.block_succs.push(BlockIx::new(target));
             }
             MachTerminator::Cond(true_branch, false_branch) => {
-                self.vcode.block_succs.push(true_branch);
-                self.vcode.block_succs.push(false_branch);
+                self.vcode.block_succs.push(BlockIx::new(true_branch));
+                self.vcode.block_succs.push(BlockIx::new(false_branch));
             }
             MachTerminator::Indirect(targets) => {
                 for target in targets {
-                    self.vcode.block_succs.push(*target);
+                    self.vcode.block_succs.push(BlockIx::new(*target));
                 }
             }
         }
@@ -358,7 +358,7 @@ impl<I: VCodeInst> VCode<I> {
     }
 
     /// Get the successors for a block.
-    pub fn succs(&self, block: BlockIndex) -> &[BlockIndex] {
+    pub fn succs(&self, block: BlockIndex) -> &[BlockIx] {
         let (start, end) = self.block_succ_range[block as usize];
         &self.block_succs[start..end]
     }
@@ -489,8 +489,8 @@ impl<I: VCodeInst> VCode<I> {
 
         // Rewrite successor information based on the block-rewrite map.
         for succ in &mut self.block_succs {
-            let new_succ = block_rewrites[*succ as usize];
-            *succ = new_succ;
+            let new_succ = block_rewrites[succ.get() as usize];
+            *succ = BlockIx::new(new_succ);
         }
     }
 
@@ -643,13 +643,9 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         Range::new(InstIx::new(start), (end - start) as usize)
     }
 
-    fn block_succs(&self, block: BlockIx) -> Vec<BlockIx> {
+    fn block_succs(&self, block: BlockIx) -> Cow<[BlockIx]> {
         let (start, end) = self.block_succ_range[block.get() as usize];
-        self.block_succs[start..end]
-            .iter()
-            .cloned()
-            .map(BlockIx::new)
-            .collect()
+        Cow::Borrowed(&self.block_succs[start..end])
     }
 
     fn is_ret(&self, insn: InstIx) -> bool {
@@ -721,7 +717,7 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
         for block in 0..self.num_blocks() {
             writeln!(f, "Block {}:", block,)?;
             for succ in self.succs(block as BlockIndex) {
-                writeln!(f, "  (successor: Block {})", succ)?;
+                writeln!(f, "  (successor: Block {})", succ.get())?;
             }
             let (start, end) = self.block_ranges[block];
             writeln!(f, "  (instruction range: {} .. {})", start, end)?;
@@ -783,7 +779,7 @@ impl<I: VCodeInst + ShowWithRRU> ShowWithRRU for VCode<I> {
                 write!(&mut s, "  (original IR block: {})\n", bb).unwrap();
             }
             for succ in self.succs(block as BlockIndex) {
-                write!(&mut s, "  (successor: Block {})\n", succ).unwrap();
+                write!(&mut s, "  (successor: Block {})\n", succ.get()).unwrap();
             }
             let (start, end) = self.block_ranges[block];
             write!(&mut s, "  (instruction range: {} .. {})\n", start, end).unwrap();

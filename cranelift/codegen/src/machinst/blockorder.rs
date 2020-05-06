@@ -22,8 +22,8 @@ impl BlockRPO {
     fn visit<I: VCodeInst>(&mut self, vcode: &VCode<I>, block: BlockIndex) {
         self.visited[block as usize] = true;
         for succ in vcode.succs(block) {
-            if !self.visited[*succ as usize] {
-                self.visit(vcode, *succ);
+            if !self.visited[succ.get() as usize] {
+                self.visit(vcode, succ.get());
             }
         }
         if Some(block) != vcode.fallthrough_return_block {
