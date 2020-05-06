@@ -12,17 +12,8 @@ use cranelift_reader::{parse_test, IsaSpec, ParseOptions};
 use log::info;
 use std::borrow::Cow;
 use std::fs;
-use std::io::{self, Read};
 use std::path::Path;
 use std::time;
-
-/// Read an entire file into a string.
-fn read_to_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
-    let mut file = fs::File::open(path)?;
-    let mut buffer = String::new();
-    file.read_to_string(&mut buffer)?;
-    Ok(buffer)
-}
 
 /// Load `path` and run the test in it.
 ///
@@ -31,7 +22,7 @@ pub fn run(path: &Path, passes: Option<&[String]>, target: Option<&str>) -> Test
     let _tt = timing::process_file();
     info!("---\nFile: {}", path.to_string_lossy());
     let started = time::Instant::now();
-    let buffer = read_to_string(path).map_err(|e| e.to_string())?;
+    let buffer = fs::read_to_string(path).map_err(|e| e.to_string())?;
     let options = ParseOptions {
         target,
         passes,

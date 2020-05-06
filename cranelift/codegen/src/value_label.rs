@@ -18,9 +18,9 @@ use serde::{Deserialize, Serialize};
 pub struct ValueLocRange {
     /// The ValueLoc containing a ValueLabel during this range.
     pub loc: ValueLoc,
-    /// The start of the range.
+    /// The start of the range. It is an offset in the generated code.
     pub start: u32,
-    /// The end of the range.
+    /// The end of the range. It is an offset in the generated code.
     pub end: u32,
 }
 

@@ -193,6 +193,24 @@ impl TypeVar {
                     "can't double 256 lanes"
                 );
             }
+            DerivedFunc::SplitLanes => {
+                assert!(
+                    ts.ints.is_empty() || *ts.ints.iter().min().unwrap() > 8,
+                    "can't halve all integer types"
+                );
+                assert!(
+                    ts.floats.is_empty() || *ts.floats.iter().min().unwrap() > 32,
+                    "can't halve all float types"
+                );
+                assert!(
+                    ts.bools.is_empty() || *ts.bools.iter().min().unwrap() > 8,
+                    "can't halve all boolean types"
+                );
+                assert!(
+                    *ts.lanes.iter().max().unwrap() < MAX_LANES,
+                    "can't double 256 lanes"
+                );
+            }
             DerivedFunc::LaneOf | DerivedFunc::AsBool => { /* no particular assertions */ }
         }
 
@@ -226,6 +244,9 @@ impl TypeVar {
     }
     pub fn double_vector(&self) -> TypeVar {
         self.derived(DerivedFunc::DoubleVector)
+    }
+    pub fn split_lanes(&self) -> TypeVar {
+        self.derived(DerivedFunc::SplitLanes)
     }
 
     /// Constrain the range of types this variable can assume to a subset of those in the typeset
@@ -333,6 +354,7 @@ pub(crate) enum DerivedFunc {
     DoubleWidth,
     HalfVector,
     DoubleVector,
+    SplitLanes,
 }
 
 impl DerivedFunc {
@@ -344,6 +366,7 @@ impl DerivedFunc {
             DerivedFunc::DoubleWidth => "double_width",
             DerivedFunc::HalfVector => "half_vector",
             DerivedFunc::DoubleVector => "double_vector",
+            DerivedFunc::SplitLanes => "split_lanes",
         }
     }
 
@@ -438,6 +461,7 @@ impl TypeSet {
             DerivedFunc::DoubleWidth => self.double_width(),
             DerivedFunc::HalfVector => self.half_vector(),
             DerivedFunc::DoubleVector => self.double_vector(),
+            DerivedFunc::SplitLanes => self.half_width().double_vector(),
         }
     }
 
@@ -577,6 +601,7 @@ impl TypeSet {
             DerivedFunc::DoubleWidth => self.half_width(),
             DerivedFunc::HalfVector => self.double_vector(),
             DerivedFunc::DoubleVector => self.half_vector(),
+            DerivedFunc::SplitLanes => self.half_vector().double_width(),
         }
     }
 

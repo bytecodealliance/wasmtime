@@ -153,9 +153,6 @@ fn write_testsuite_tests(
     if ignore(testsuite, &testname, strategy) {
         writeln!(out, "#[ignore]")?;
     }
-    if should_panic(testsuite, &testname) {
-        writeln!(out, "#[should_panic]")?;
-    }
     writeln!(
         out,
         "r#{}, r#\"{}\"#, Strategy::{}",
@@ -181,6 +178,10 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             _ => (),
         },
         "Cranelift" => match (testsuite, testname) {
+            // All simd tests are known to fail on aarch64 for now, it's going
+            // to be a big chunk of work to implement them all there!
+            ("simd", _) if target.contains("aarch64") => return true,
+
             ("simd", "simd_bit_shift") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16Shl
             ("simd", "simd_conversions") => return true, // FIXME Unsupported feature: proposed SIMD operator I16x8NarrowI32x4S
             ("simd", "simd_f32x4") => return true, // FIXME expected V128(F32x4([CanonicalNan, CanonicalNan, Value(Float32 { bits: 0 }), Value(Float32 { bits: 0 })])), got V128(18428729675200069632)
@@ -206,47 +207,10 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 return true;
             }
 
-            // FIXME(#1569) stack protection isn't implemented yet and these
-            // tests segfault.
-            ("spec_testsuite", "skip_stack_guard_page")
-            | ("spec_testsuite", "stack")
-            | ("misc_testsuite", "stack_overflow")
-                if target.contains("aarch64") =>
-            {
-                return true
-            }
-
             _ => {}
         },
         _ => panic!("unrecognized strategy"),
     }
 
     false
-}
-
-/// Determine whether to add a should_panic attribute. These tests currently
-/// panic because of unfinished backend implementation work; we will remove them
-/// from this list as we finish the implementation
-fn should_panic(testsuite: &str, testname: &str) -> bool {
-    let target = env::var("TARGET").unwrap();
-    if !target.contains("aarch64") {
-        return false;
-    }
-    match (testsuite, testname) {
-        // FIXME(#1521)
-        ("misc_testsuite", "func_400_params")
-        | ("misc_testsuite", "misc_traps")
-        | ("simd", _)
-        | ("multi_value", "call")
-        | ("spec_testsuite", "call")
-        | ("spec_testsuite", "conversions")
-        | ("spec_testsuite", "f32_bitwise")
-        | ("spec_testsuite", "float_misc")
-        | ("spec_testsuite", "i32")
-        | ("spec_testsuite", "i64")
-        | ("spec_testsuite", "int_exprs")
-        | ("spec_testsuite", "traps") => true,
-
-        _ => false,
-    }
 }

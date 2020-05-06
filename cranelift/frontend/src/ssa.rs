@@ -372,7 +372,7 @@ impl SSABuilder {
         mem::replace(&mut self.side_effects, SideEffects::new())
     }
 
-    /// Completes the global value numbering for all `Block`s in `func`.
+    /// Completes the global value numbering for all unsealed `Block`s in `func`.
     ///
     /// It's more efficient to seal `Block`s as soon as possible, during
     /// translation, but for frontends where this is impractical to do, this
@@ -383,7 +383,9 @@ impl SSABuilder {
         // and creation of new blocks, however such new blocks are sealed on
         // the fly, so we don't need to account for them here.
         for block in self.ssa_blocks.keys() {
-            self.seal_one_block(block, func);
+            if !self.is_sealed(block) {
+                self.seal_one_block(block, func);
+            }
         }
         mem::replace(&mut self.side_effects, SideEffects::new())
     }

@@ -99,7 +99,6 @@ fn loop_interrupt_from_afar() -> anyhow::Result<()> {
 }
 
 #[test]
-#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1569)
 fn function_interrupt_from_afar() -> anyhow::Result<()> {
     // Create an instance which calls an imported function on each iteration of
     // the loop so we can count the number of loop iterations we've executed so

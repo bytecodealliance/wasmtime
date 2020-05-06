@@ -97,7 +97,6 @@
 //! ```
 
 use crate::binemit::{CodeInfo, CodeOffset};
-use crate::entity::SecondaryMap;
 use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, Type};
 use crate::result::CodegenResult;
@@ -106,9 +105,10 @@ use crate::settings::Flags;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt::Debug;
-use regalloc::Map as RegallocMap;
 use regalloc::RegUsageCollector;
-use regalloc::{RealReg, RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
+use regalloc::{
+    RealReg, RealRegUniverse, Reg, RegClass, RegUsageMapper, SpillSlot, VirtualReg, Writable,
+};
 use std::string::String;
 use target_lexicon::Triple;
 
@@ -137,11 +137,7 @@ pub trait MachInst: Clone + Debug {
 
     /// Map virtual registers to physical registers using the given virt->phys
     /// maps corresponding to the program points prior to, and after, this instruction.
-    fn map_regs(
-        &mut self,
-        pre_map: &RegallocMap<VirtualReg, RealReg>,
-        post_map: &RegallocMap<VirtualReg, RealReg>,
-    );
+    fn map_regs(&mut self, maps: &RegUsageMapper);
 
     /// If this is a simple move, return the (source, destination) tuple of registers.
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)>;
@@ -164,8 +160,9 @@ pub trait MachInst: Clone + Debug {
     /// (e.g., add directly from or directly to memory), like x86.
     fn maybe_direct_reload(&self, reg: VirtualReg, slot: SpillSlot) -> Option<Self>;
 
-    /// Determine a register class to store the given CraneLift type.
-    fn rc_for_type(ty: Type) -> RegClass;
+    /// Determine a register class to store the given Cranelift type.
+    /// May return an error if the type isn't supported by this backend.
+    fn rc_for_type(ty: Type) -> CodegenResult<RegClass>;
 
     /// Generate a jump to another target. Used during lowering of
     /// control flow.

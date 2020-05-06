@@ -6,6 +6,7 @@
 use crate::binemit::CodeOffset;
 use crate::ir::Type;
 use crate::isa::aarch64::inst::*;
+use crate::isa::aarch64::lower::ty_bits;
 
 use regalloc::{RealRegUniverse, Reg, Writable};
 
@@ -523,6 +524,19 @@ impl InstSize {
             InstSize::Size32
         } else {
             InstSize::Size64
+        }
+    }
+
+    /// Convert from an integer type into the smallest size that fits.
+    pub fn from_ty(ty: Type) -> InstSize {
+        Self::from_bits(ty_bits(ty))
+    }
+
+    /// Convert to I32 or I64.
+    pub fn to_ty(self) -> Type {
+        match self {
+            InstSize::Size32 => I32,
+            InstSize::Size64 => I64,
         }
     }
 

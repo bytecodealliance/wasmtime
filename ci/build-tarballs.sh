@@ -40,7 +40,7 @@ mv bins-$platform/wasmtime$exe tmp/$bin_pkgname
 chmod +x tmp/$bin_pkgname/wasmtime$exe
 mktarball $bin_pkgname
 
-if [ "$exe" = ".exe" ]; then
+if [ -f bins-$platform/installer.msi ]; then
   mv bins-$platform/installer.msi dist/$bin_pkgname.msi
 fi
 

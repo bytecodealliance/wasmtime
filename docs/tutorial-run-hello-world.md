@@ -17,7 +17,7 @@ You can find more information about installing the Wasmtime CLI in the
 There are a number of ways to run a `.wasm` file with Wasmtime. In this
 tutorial, we'll be using the CLI, Wasmtime can also be embedded in your
 applications. More information on this can be found in the
-[Embedding Wasmtime section](./embed.md).
+[Embedding Wasmtime section](./lang.md).
 
 If you've built the `hello-world.wasm` file (the instructions for doing so are in the
 [previous section](./tutorial-create-hello-world.md)),

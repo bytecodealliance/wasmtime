@@ -3,7 +3,8 @@ use super::attr::clone_attr_string;
 use super::{Reader, TransformError};
 use anyhow::{Context, Error};
 use gimli::{
-    write, DebugLine, DebugLineOffset, DebugStr, DebuggingInformationEntry, LineEncoding, Unit,
+    write, DebugLine, DebugLineOffset, DebugLineStr, DebugStr, DebugStrOffsets,
+    DebuggingInformationEntry, LineEncoding, Unit,
 };
 use more_asserts::assert_le;
 use wasmtime_environ::entity::EntityRef;
@@ -46,9 +47,11 @@ pub(crate) fn clone_line_program<R>(
     addr_tr: &AddressTransform,
     out_encoding: gimli::Encoding,
     debug_str: &DebugStr<R>,
+    debug_str_offsets: &DebugStrOffsets<R>,
+    debug_line_str: &DebugLineStr<R>,
     debug_line: &DebugLine<R>,
     out_strings: &mut write::StringTable,
-) -> Result<(write::LineProgram, DebugLineOffset, Vec<write::FileId>), Error>
+) -> Result<(write::LineProgram, DebugLineOffset, Vec<write::FileId>, u64), Error>
 where
     R: Reader,
 {
@@ -63,13 +66,19 @@ where
     let out_comp_dir = clone_attr_string(
         comp_dir.as_ref().context("comp_dir")?,
         gimli::DW_FORM_strp,
+        unit,
         debug_str,
+        debug_str_offsets,
+        debug_line_str,
         out_strings,
     )?;
     let out_comp_name = clone_attr_string(
         comp_name.as_ref().context("comp_name")?,
         gimli::DW_FORM_strp,
+        unit,
         debug_str,
+        debug_str_offsets,
+        debug_line_str,
         out_strings,
     )?;
 
@@ -81,7 +90,8 @@ where
     );
     if let Ok(program) = program {
         let header = program.header();
-        assert_le!(header.version(), 4, "not supported 5");
+        let file_index_base = if header.version() < 5 { 1 } else { 0 };
+        assert_le!(header.version(), 5, "not supported 6");
         let line_encoding = LineEncoding {
             minimum_instruction_length: header.minimum_instruction_length(),
             maximum_operations_per_instruction: header.maximum_operations_per_instruction(),
@@ -102,7 +112,10 @@ where
             let dir_id = out_program.add_directory(clone_attr_string(
                 dir_attr,
                 gimli::DW_FORM_string,
+                unit,
                 debug_str,
+                debug_str_offsets,
+                debug_line_str,
                 out_strings,
             )?);
             dirs.push(dir_id);
@@ -114,7 +127,10 @@ where
                 clone_attr_string(
                     &file_entry.path_name(),
                     gimli::DW_FORM_string,
+                    unit,
                     debug_str,
+                    debug_str_offsets,
+                    debug_line_str,
                     out_strings,
                 )?,
                 dir_id,
@@ -238,7 +254,7 @@ where
                         };
                         out_program.row().address_offset = address_offset;
                         out_program.row().op_index = *op_index;
-                        out_program.row().file = files[(file_index - 1) as usize];
+                        out_program.row().file = files[(file_index - file_index_base) as usize];
                         out_program.row().line = *line;
                         out_program.row().column = *column;
                         out_program.row().discriminator = *discriminator;
@@ -255,7 +271,7 @@ where
             let end_addr = (map.offset + map.len - 1) as u64;
             out_program.end_sequence(end_addr);
         }
-        Ok((out_program, offset, files))
+        Ok((out_program, offset, files, file_index_base))
     } else {
         Err(TransformError("Valid line program not found").into())
     }

@@ -7,11 +7,10 @@ use crate::binemit::CodeOffset;
 use crate::ir::types::{B1, B16, B32, B64, B8, F32, F64, FFLAGS, I16, I32, I64, I8, IFLAGS};
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
-use crate::settings;
+use crate::{settings, CodegenError, CodegenResult};
 
-use regalloc::Map as RegallocMap;
-use regalloc::{RealReg, RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
-use regalloc::{RegUsageCollector, Set};
+use regalloc::{RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
+use regalloc::{RegUsageCollector, RegUsageMapper, Set};
 
 use alloc::vec::Vec;
 use core::convert::TryFrom;
@@ -26,6 +25,9 @@ pub mod args;
 pub use self::args::*;
 pub mod emit;
 pub use self::emit::*;
+
+#[cfg(test)]
+mod emit_tests;
 
 //=============================================================================
 // Instructions (top level): definition
@@ -66,6 +68,8 @@ pub enum ALUOp {
     SubS32,
     /// Sub, setting flags
     SubS64,
+    /// Sub, setting flags, using extended registers
+    SubS64XR,
     /// Multiply-add
     MAdd32,
     /// Multiply-add
@@ -1134,69 +1138,70 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
 //=============================================================================
 // Instructions: map_regs
 
-fn aarch64_map_regs(
-    inst: &mut Inst,
-    pre_map: &RegallocMap<VirtualReg, RealReg>,
-    post_map: &RegallocMap<VirtualReg, RealReg>,
-) {
-    fn map(m: &RegallocMap<VirtualReg, RealReg>, r: &mut Reg) {
+fn aarch64_map_regs(inst: &mut Inst, mapper: &RegUsageMapper) {
+    fn map_use(m: &RegUsageMapper, r: &mut Reg) {
         if r.is_virtual() {
-            let new = m.get(&r.to_virtual_reg()).cloned().unwrap().to_reg();
+            let new = m.get_use(r.to_virtual_reg()).unwrap().to_reg();
             *r = new;
         }
     }
 
-    fn map_wr(m: &RegallocMap<VirtualReg, RealReg>, r: &mut Writable<Reg>) {
-        let mut reg = r.to_reg();
-        map(m, &mut reg);
-        *r = Writable::from_reg(reg);
+    fn map_def(m: &RegUsageMapper, r: &mut Writable<Reg>) {
+        if r.to_reg().is_virtual() {
+            let new = m.get_def(r.to_reg().to_virtual_reg()).unwrap().to_reg();
+            *r = Writable::from_reg(new);
+        }
     }
 
-    fn map_mem(u: &RegallocMap<VirtualReg, RealReg>, mem: &mut MemArg) {
+    fn map_mod(m: &RegUsageMapper, r: &mut Writable<Reg>) {
+        if r.to_reg().is_virtual() {
+            let new = m.get_mod(r.to_reg().to_virtual_reg()).unwrap().to_reg();
+            *r = Writable::from_reg(new);
+        }
+    }
+
+    fn map_mem(m: &RegUsageMapper, mem: &mut MemArg) {
         // N.B.: we take only the pre-map here, but this is OK because the
         // only addressing modes that update registers (pre/post-increment on
         // AArch64) both read and write registers, so they are "mods" rather
         // than "defs", so must be the same in both the pre- and post-map.
         match mem {
-            &mut MemArg::Unscaled(ref mut reg, ..) => map(u, reg),
-            &mut MemArg::UnsignedOffset(ref mut reg, ..) => map(u, reg),
+            &mut MemArg::Unscaled(ref mut reg, ..) => map_use(m, reg),
+            &mut MemArg::UnsignedOffset(ref mut reg, ..) => map_use(m, reg),
             &mut MemArg::RegReg(ref mut r1, ref mut r2) => {
-                map(u, r1);
-                map(u, r2);
+                map_use(m, r1);
+                map_use(m, r2);
             }
             &mut MemArg::RegScaled(ref mut r1, ref mut r2, ..) => {
-                map(u, r1);
-                map(u, r2);
+                map_use(m, r1);
+                map_use(m, r2);
             }
             &mut MemArg::RegScaledExtended(ref mut r1, ref mut r2, ..) => {
-                map(u, r1);
-                map(u, r2);
+                map_use(m, r1);
+                map_use(m, r2);
             }
             &mut MemArg::Label(..) => {}
-            &mut MemArg::PreIndexed(ref mut r, ..) => map_wr(u, r),
-            &mut MemArg::PostIndexed(ref mut r, ..) => map_wr(u, r),
+            &mut MemArg::PreIndexed(ref mut r, ..) => map_mod(m, r),
+            &mut MemArg::PostIndexed(ref mut r, ..) => map_mod(m, r),
             &mut MemArg::FPOffset(..) | &mut MemArg::SPOffset(..) => {}
         };
     }
 
-    fn map_pairmem(u: &RegallocMap<VirtualReg, RealReg>, mem: &mut PairMemArg) {
+    fn map_pairmem(m: &RegUsageMapper, mem: &mut PairMemArg) {
         match mem {
-            &mut PairMemArg::SignedOffset(ref mut reg, ..) => map(u, reg),
-            &mut PairMemArg::PreIndexed(ref mut reg, ..) => map_wr(u, reg),
-            &mut PairMemArg::PostIndexed(ref mut reg, ..) => map_wr(u, reg),
+            &mut PairMemArg::SignedOffset(ref mut reg, ..) => map_use(m, reg),
+            &mut PairMemArg::PreIndexed(ref mut reg, ..) => map_def(m, reg),
+            &mut PairMemArg::PostIndexed(ref mut reg, ..) => map_def(m, reg),
         }
     }
 
-    fn map_br(u: &RegallocMap<VirtualReg, RealReg>, br: &mut CondBrKind) {
+    fn map_br(m: &RegUsageMapper, br: &mut CondBrKind) {
         match br {
-            &mut CondBrKind::Zero(ref mut reg) => map(u, reg),
-            &mut CondBrKind::NotZero(ref mut reg) => map(u, reg),
+            &mut CondBrKind::Zero(ref mut reg) => map_use(m, reg),
+            &mut CondBrKind::NotZero(ref mut reg) => map_use(m, reg),
             &mut CondBrKind::Cond(..) => {}
         };
     }
-
-    let u = pre_map; // For brevity below.
-    let d = post_map;
 
     match inst {
         &mut Inst::AluRRR {
@@ -1205,9 +1210,9 @@ fn aarch64_map_regs(
             ref mut rm,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
-            map(u, rm);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+            map_use(mapper, rm);
         }
         &mut Inst::AluRRRR {
             ref mut rd,
@@ -1216,34 +1221,34 @@ fn aarch64_map_regs(
             ref mut ra,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
-            map(u, rm);
-            map(u, ra);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+            map_use(mapper, rm);
+            map_use(mapper, ra);
         }
         &mut Inst::AluRRImm12 {
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
         }
         &mut Inst::AluRRImmLogic {
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
         }
         &mut Inst::AluRRImmShift {
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
         }
         &mut Inst::AluRRRShift {
             ref mut rd,
@@ -1251,9 +1256,9 @@ fn aarch64_map_regs(
             ref mut rm,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
-            map(u, rm);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+            map_use(mapper, rm);
         }
         &mut Inst::AluRRRExtend {
             ref mut rd,
@@ -1261,65 +1266,65 @@ fn aarch64_map_regs(
             ref mut rm,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
-            map(u, rm);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+            map_use(mapper, rm);
         }
         &mut Inst::BitRR {
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
         }
         &mut Inst::ULoad8 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map_wr(d, rd);
-            map_mem(u, mem);
+            map_def(mapper, rd);
+            map_mem(mapper, mem);
         }
         &mut Inst::SLoad8 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map_wr(d, rd);
-            map_mem(u, mem);
+            map_def(mapper, rd);
+            map_mem(mapper, mem);
         }
         &mut Inst::ULoad16 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map_wr(d, rd);
-            map_mem(u, mem);
+            map_def(mapper, rd);
+            map_mem(mapper, mem);
         }
         &mut Inst::SLoad16 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map_wr(d, rd);
-            map_mem(u, mem);
+            map_def(mapper, rd);
+            map_mem(mapper, mem);
         }
         &mut Inst::ULoad32 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map_wr(d, rd);
-            map_mem(u, mem);
+            map_def(mapper, rd);
+            map_mem(mapper, mem);
         }
         &mut Inst::SLoad32 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map_wr(d, rd);
-            map_mem(u, mem);
+            map_def(mapper, rd);
+            map_mem(mapper, mem);
         }
 
         &mut Inst::ULoad64 {
@@ -1327,40 +1332,40 @@ fn aarch64_map_regs(
             ref mut mem,
             ..
         } => {
-            map_wr(d, rd);
-            map_mem(u, mem);
+            map_def(mapper, rd);
+            map_mem(mapper, mem);
         }
         &mut Inst::Store8 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map(u, rd);
-            map_mem(u, mem);
+            map_use(mapper, rd);
+            map_mem(mapper, mem);
         }
         &mut Inst::Store16 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map(u, rd);
-            map_mem(u, mem);
+            map_use(mapper, rd);
+            map_mem(mapper, mem);
         }
         &mut Inst::Store32 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map(u, rd);
-            map_mem(u, mem);
+            map_use(mapper, rd);
+            map_mem(mapper, mem);
         }
         &mut Inst::Store64 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map(u, rd);
-            map_mem(u, mem);
+            map_use(mapper, rd);
+            map_mem(mapper, mem);
         }
 
         &mut Inst::StoreP64 {
@@ -1368,41 +1373,41 @@ fn aarch64_map_regs(
             ref mut rt2,
             ref mut mem,
         } => {
-            map(u, rt);
-            map(u, rt2);
-            map_pairmem(u, mem);
+            map_use(mapper, rt);
+            map_use(mapper, rt2);
+            map_pairmem(mapper, mem);
         }
         &mut Inst::LoadP64 {
             ref mut rt,
             ref mut rt2,
             ref mut mem,
         } => {
-            map_wr(d, rt);
-            map_wr(d, rt2);
-            map_pairmem(u, mem);
+            map_def(mapper, rt);
+            map_def(mapper, rt2);
+            map_pairmem(mapper, mem);
         }
         &mut Inst::Mov {
             ref mut rd,
             ref mut rm,
         } => {
-            map_wr(d, rd);
-            map(u, rm);
+            map_def(mapper, rd);
+            map_use(mapper, rm);
         }
         &mut Inst::Mov32 {
             ref mut rd,
             ref mut rm,
         } => {
-            map_wr(d, rd);
-            map(u, rm);
+            map_def(mapper, rd);
+            map_use(mapper, rm);
         }
         &mut Inst::MovZ { ref mut rd, .. } => {
-            map_wr(d, rd);
+            map_def(mapper, rd);
         }
         &mut Inst::MovN { ref mut rd, .. } => {
-            map_wr(d, rd);
+            map_def(mapper, rd);
         }
         &mut Inst::MovK { ref mut rd, .. } => {
-            map_wr(d, rd);
+            map_def(mapper, rd);
         }
         &mut Inst::CSel {
             ref mut rd,
@@ -1410,30 +1415,30 @@ fn aarch64_map_regs(
             ref mut rm,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
-            map(u, rm);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+            map_use(mapper, rm);
         }
         &mut Inst::CSet { ref mut rd, .. } => {
-            map_wr(d, rd);
+            map_def(mapper, rd);
         }
         &mut Inst::CCmpImm { ref mut rn, .. } => {
-            map(u, rn);
+            map_use(mapper, rn);
         }
         &mut Inst::FpuMove64 {
             ref mut rd,
             ref mut rn,
         } => {
-            map_wr(d, rd);
-            map(u, rn);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
         }
         &mut Inst::FpuRR {
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
         }
         &mut Inst::FpuRRR {
             ref mut rd,
@@ -1441,9 +1446,9 @@ fn aarch64_map_regs(
             ref mut rm,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
-            map(u, rm);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+            map_use(mapper, rm);
         }
         &mut Inst::FpuRRRR {
             ref mut rd,
@@ -1452,94 +1457,94 @@ fn aarch64_map_regs(
             ref mut ra,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
-            map(u, rm);
-            map(u, ra);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+            map_use(mapper, rm);
+            map_use(mapper, ra);
         }
         &mut Inst::FpuCmp32 {
             ref mut rn,
             ref mut rm,
         } => {
-            map(u, rn);
-            map(u, rm);
+            map_use(mapper, rn);
+            map_use(mapper, rm);
         }
         &mut Inst::FpuCmp64 {
             ref mut rn,
             ref mut rm,
         } => {
-            map(u, rn);
-            map(u, rm);
+            map_use(mapper, rn);
+            map_use(mapper, rm);
         }
         &mut Inst::FpuLoad32 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map_wr(d, rd);
-            map_mem(u, mem);
+            map_def(mapper, rd);
+            map_mem(mapper, mem);
         }
         &mut Inst::FpuLoad64 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map_wr(d, rd);
-            map_mem(u, mem);
+            map_def(mapper, rd);
+            map_mem(mapper, mem);
         }
         &mut Inst::FpuLoad128 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map_wr(d, rd);
-            map_mem(u, mem);
+            map_def(mapper, rd);
+            map_mem(mapper, mem);
         }
         &mut Inst::FpuStore32 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map(u, rd);
-            map_mem(u, mem);
+            map_use(mapper, rd);
+            map_mem(mapper, mem);
         }
         &mut Inst::FpuStore64 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map(u, rd);
-            map_mem(u, mem);
+            map_use(mapper, rd);
+            map_mem(mapper, mem);
         }
         &mut Inst::FpuStore128 {
             ref mut rd,
             ref mut mem,
             ..
         } => {
-            map(u, rd);
-            map_mem(u, mem);
+            map_use(mapper, rd);
+            map_mem(mapper, mem);
         }
         &mut Inst::LoadFpuConst32 { ref mut rd, .. } => {
-            map_wr(d, rd);
+            map_def(mapper, rd);
         }
         &mut Inst::LoadFpuConst64 { ref mut rd, .. } => {
-            map_wr(d, rd);
+            map_def(mapper, rd);
         }
         &mut Inst::FpuToInt {
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
         }
         &mut Inst::IntToFpu {
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
         }
         &mut Inst::FpuCSel32 {
             ref mut rd,
@@ -1547,9 +1552,9 @@ fn aarch64_map_regs(
             ref mut rm,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
-            map(u, rm);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+            map_use(mapper, rm);
         }
         &mut Inst::FpuCSel64 {
             ref mut rd,
@@ -1557,31 +1562,31 @@ fn aarch64_map_regs(
             ref mut rm,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
-            map(u, rm);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+            map_use(mapper, rm);
         }
         &mut Inst::FpuRound {
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
         }
         &mut Inst::MovToVec64 {
             ref mut rd,
             ref mut rn,
         } => {
-            map_wr(d, rd);
-            map(u, rn);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
         }
         &mut Inst::MovFromVec64 {
             ref mut rd,
             ref mut rn,
         } => {
-            map_wr(d, rd);
-            map(u, rn);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
         }
         &mut Inst::VecRRR {
             ref mut rd,
@@ -1589,26 +1594,26 @@ fn aarch64_map_regs(
             ref mut rm,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
-            map(u, rm);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+            map_use(mapper, rm);
         }
         &mut Inst::MovToNZCV { ref mut rn } => {
-            map(u, rn);
+            map_use(mapper, rn);
         }
         &mut Inst::MovFromNZCV { ref mut rd } => {
-            map_wr(d, rd);
+            map_def(mapper, rd);
         }
         &mut Inst::CondSet { ref mut rd, .. } => {
-            map_wr(d, rd);
+            map_def(mapper, rd);
         }
         &mut Inst::Extend {
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_wr(d, rd);
-            map(u, rn);
+            map_def(mapper, rd);
+            map_use(mapper, rn);
         }
         &mut Inst::Jump { .. } => {}
         &mut Inst::Call {
@@ -1619,12 +1624,12 @@ fn aarch64_map_regs(
             // TODO: add `map_mut()` to regalloc.rs's Set.
             let new_uses = uses.map(|r| {
                 let mut r = *r;
-                map(u, &mut r);
+                map_use(mapper, &mut r);
                 r
             });
             let new_defs = defs.map(|r| {
                 let mut r = *r;
-                map_wr(d, &mut r);
+                map_def(mapper, &mut r);
                 r
             });
             *uses = new_uses;
@@ -1640,33 +1645,33 @@ fn aarch64_map_regs(
             // TODO: add `map_mut()` to regalloc.rs's Set.
             let new_uses = uses.map(|r| {
                 let mut r = *r;
-                map(u, &mut r);
+                map_use(mapper, &mut r);
                 r
             });
             let new_defs = defs.map(|r| {
                 let mut r = *r;
-                map_wr(d, &mut r);
+                map_def(mapper, &mut r);
                 r
             });
             *uses = new_uses;
             *defs = new_defs;
-            map(u, rn);
+            map_use(mapper, rn);
         }
         &mut Inst::CondBr { ref mut kind, .. } => {
-            map_br(u, kind);
+            map_br(mapper, kind);
         }
         &mut Inst::CondBrLowered { ref mut kind, .. } => {
-            map_br(u, kind);
+            map_br(mapper, kind);
         }
         &mut Inst::CondBrLoweredCompound { ref mut kind, .. } => {
-            map_br(u, kind);
+            map_br(mapper, kind);
         }
         &mut Inst::IndirectBr { ref mut rn, .. } => {
-            map(u, rn);
+            map_use(mapper, rn);
         }
         &mut Inst::Nop0 | &mut Inst::Nop4 | &mut Inst::Brk | &mut Inst::Udf { .. } => {}
         &mut Inst::Adr { ref mut rd, .. } => {
-            map_wr(d, rd);
+            map_def(mapper, rd);
         }
         &mut Inst::Word4 { .. } | &mut Inst::Word8 { .. } => {}
         &mut Inst::JTSequence {
@@ -1675,28 +1680,28 @@ fn aarch64_map_regs(
             ref mut rtmp2,
             ..
         } => {
-            map(u, ridx);
-            map_wr(d, rtmp1);
-            map_wr(d, rtmp2);
+            map_use(mapper, ridx);
+            map_def(mapper, rtmp1);
+            map_def(mapper, rtmp2);
         }
         &mut Inst::LoadConst64 { ref mut rd, .. } => {
-            map_wr(d, rd);
+            map_def(mapper, rd);
         }
         &mut Inst::LoadExtName { ref mut rd, .. } => {
-            map_wr(d, rd);
+            map_def(mapper, rd);
         }
         &mut Inst::LoadAddr {
             ref mut rd,
             ref mut mem,
         } => {
-            map_wr(d, rd);
-            map_mem(u, mem);
+            map_def(mapper, rd);
+            map_mem(mapper, mem);
         }
         &mut Inst::GetPinnedReg { ref mut rd } => {
-            map_wr(d, rd);
+            map_def(mapper, rd);
         }
         &mut Inst::SetPinnedReg { ref mut rm } => {
-            map(u, rm);
+            map_use(mapper, rm);
         }
     }
 }
@@ -1709,12 +1714,8 @@ impl MachInst for Inst {
         aarch64_get_regs(self, collector)
     }
 
-    fn map_regs(
-        &mut self,
-        pre_map: &RegallocMap<VirtualReg, RealReg>,
-        post_map: &RegallocMap<VirtualReg, RealReg>,
-    ) {
-        aarch64_map_regs(self, pre_map, post_map);
+    fn map_regs(&mut self, mapper: &RegUsageMapper) {
+        aarch64_map_regs(self, mapper);
     }
 
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
@@ -1782,12 +1783,15 @@ impl MachInst for Inst {
         None
     }
 
-    fn rc_for_type(ty: Type) -> RegClass {
+    fn rc_for_type(ty: Type) -> CodegenResult<RegClass> {
         match ty {
-            I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 => RegClass::I64,
-            F32 | F64 => RegClass::V128,
-            IFLAGS | FFLAGS => RegClass::I64,
-            _ => panic!("Unexpected SSA-value type: {}", ty),
+            I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 => Ok(RegClass::I64),
+            F32 | F64 => Ok(RegClass::V128),
+            IFLAGS | FFLAGS => Ok(RegClass::I64),
+            _ => Err(CodegenError::Unsupported(format!(
+                "Unexpected SSA-value type: {}",
+                ty
+            ))),
         }
     }
 
@@ -1928,6 +1932,7 @@ impl ShowWithRRU for Inst {
                 ALUOp::AddS64 => ("adds", InstSize::Size64),
                 ALUOp::SubS32 => ("subs", InstSize::Size32),
                 ALUOp::SubS64 => ("subs", InstSize::Size64),
+                ALUOp::SubS64XR => ("subs", InstSize::Size64),
                 ALUOp::MAdd32 => ("madd", InstSize::Size32),
                 ALUOp::MAdd64 => ("madd", InstSize::Size64),
                 ALUOp::MSub32 => ("msub", InstSize::Size32),
@@ -2297,35 +2302,41 @@ impl ShowWithRRU for Inst {
             }
             &Inst::FpuLoad32 { rd, ref mem, .. } => {
                 let rd = show_freg_sized(rd.to_reg(), mb_rru, InstSize::Size32);
-                let mem = mem.show_rru_sized(mb_rru, /* size = */ 4);
-                format!("ldr {}, {}", rd, mem)
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let mem = mem.show_rru(mb_rru);
+                format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuLoad64 { rd, ref mem, .. } => {
                 let rd = show_freg_sized(rd.to_reg(), mb_rru, InstSize::Size64);
-                let mem = mem.show_rru_sized(mb_rru, /* size = */ 8);
-                format!("ldr {}, {}", rd, mem)
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let mem = mem.show_rru(mb_rru);
+                format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuLoad128 { rd, ref mem, .. } => {
                 let rd = rd.to_reg().show_rru(mb_rru);
                 let rd = "q".to_string() + &rd[1..];
-                let mem = mem.show_rru_sized(mb_rru, /* size = */ 8);
-                format!("ldr {}, {}", rd, mem)
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let mem = mem.show_rru(mb_rru);
+                format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore32 { rd, ref mem, .. } => {
                 let rd = show_freg_sized(rd, mb_rru, InstSize::Size32);
-                let mem = mem.show_rru_sized(mb_rru, /* size = */ 4);
-                format!("str {}, {}", rd, mem)
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let mem = mem.show_rru(mb_rru);
+                format!("{}str {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore64 { rd, ref mem, .. } => {
                 let rd = show_freg_sized(rd, mb_rru, InstSize::Size64);
-                let mem = mem.show_rru_sized(mb_rru, /* size = */ 8);
-                format!("str {}, {}", rd, mem)
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let mem = mem.show_rru(mb_rru);
+                format!("{}str {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore128 { rd, ref mem, .. } => {
                 let rd = rd.show_rru(mb_rru);
                 let rd = "q".to_string() + &rd[1..];
-                let mem = mem.show_rru_sized(mb_rru, /* size = */ 8);
-                format!("str {}, {}", rd, mem)
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let mem = mem.show_rru(mb_rru);
+                format!("{}str {}, {}", mem_str, rd, mem)
             }
             &Inst::LoadFpuConst32 { rd, const_data } => {
                 let rd = show_freg_sized(rd.to_reg(), mb_rru, InstSize::Size32);

@@ -14,12 +14,12 @@ pub fn compile<B: LowerBackend>(
     f: &Function,
     b: &B,
     abi: Box<dyn ABIBody<I = B::MInst>>,
-) -> VCode<B::MInst>
+) -> CodegenResult<VCode<B::MInst>>
 where
     B::MInst: ShowWithRRU,
 {
     // This lowers the CL IR.
-    let mut vcode = Lower::new(f, abi).lower(b);
+    let mut vcode = Lower::new(f, abi)?.lower(b)?;
 
     let universe = &B::MInst::reg_universe(vcode.flags());
 
@@ -62,5 +62,5 @@ where
         vcode.show_rru(Some(universe))
     );
 
-    vcode
+    Ok(vcode)
 }

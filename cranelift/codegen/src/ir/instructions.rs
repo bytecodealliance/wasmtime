@@ -518,6 +518,9 @@ enum OperandConstraint {
 
     /// This operand is `ctrlType.double_vector()`.
     DoubleVector,
+
+    /// This operand is `ctrlType.split_lanes()`.
+    SplitLanes,
 }
 
 impl OperandConstraint {
@@ -544,6 +547,11 @@ impl OperandConstraint {
                     .expect("invalid type for half_vector"),
             ),
             DoubleVector => Bound(ctrl_type.by(2).expect("invalid type for double_vector")),
+            SplitLanes => Bound(
+                ctrl_type
+                    .split_lanes()
+                    .expect("invalid type for split_lanes"),
+            ),
         }
     }
 }

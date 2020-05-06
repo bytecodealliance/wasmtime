@@ -1,41 +1,10 @@
-function u0:0(i64, i64, i64) system_v {
+function u0:0() system_v {
     sig0 = (i64, i64, i16, i64, i64, i64, i64, i64) system_v
     fn0 = u0:95 sig0
 
-block0(v0: i64, v1: i64, v2: i64):
-    v113 -> v1
-    v124 -> v1
-    v136 -> v1
-    v148 -> v1
-    v160 -> v1
-    v185 -> v1
-    v222 -> v1
-    v237 -> v1
-    v241 -> v1
-    v256 -> v1
-    v262 -> v1
+block0:
+    v0 = iconst.i64 0
     v105 = iconst.i64 0
-    trap user0
-
-block99(v804: i64, v1035: i64, v1037: i64, v1039: i64, v1044: i64, v1052: i16, v1057: i64):
-    v817 -> v1035
-    v830 -> v1037
-    v844 -> v1039
-    v857 -> v1039
-    v939 -> v1039
-    v1042 -> v1039
-    v1050 -> v1039
-    v908 -> v1044
-    v917 -> v1044
-    v921 -> v1044
-    v1043 -> v1044
-    v960 -> v1052
-    v990 -> v1052
-    v1051 -> v1052
-    v1055 -> v1052
-    v963 -> v1057
-    v1056 -> v1057
-    v1060 -> v1057
     trap user0
 
 block101:
@@ -72,5 +41,13 @@ block114:
 block117:
     v987 = iconst.i64 0
     call fn0(v0, v105, v1052, v883, v829, v987, v951, v842)
+    trap user0
+
+block120:
+    v1052 = iconst.i16 0
+    v960 -> v1052
+    v990 -> v1052
+    v1051 -> v1052
+    v1055 -> v1052
     trap user0
 }

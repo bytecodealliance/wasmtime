@@ -1,5 +1,5 @@
 use std::path::Path;
-use wasmtime::{Config, Engine, OptLevel, Store, Strategy};
+use wasmtime::{Config, Engine, Store, Strategy};
 use wasmtime_wast::WastContext;
 
 macro_rules! mk_test {
@@ -39,11 +39,6 @@ fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
         .wasm_multi_value(multi_val)
         .strategy(strategy)?
         .cranelift_debug_verifier(cfg!(debug_assertions));
-
-    // FIXME: https://github.com/bytecodealliance/wasmtime/issues/1186
-    if simd {
-        cfg.cranelift_opt_level(OptLevel::None);
-    }
 
     let store = Store::new(&Engine::new(&cfg));
     let mut wast_context = WastContext::new(store);

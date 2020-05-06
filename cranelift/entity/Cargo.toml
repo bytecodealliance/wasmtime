@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-entity"
-version = "0.62.0"
+version = "0.63.0"
 description = "Data structures using entity references as mapping keys"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-entity"

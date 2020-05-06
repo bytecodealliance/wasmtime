@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-rust"
-version = "0.15.0"
+version = "0.16.0"
 authors = ["Alex Crichton <alex@alexcrichton.com>"]
 description = "Rust extension for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -15,9 +15,9 @@ test = false
 doctest = false
 
 [dependencies]
-wasmtime-rust-macro = { path = "./macro", version = "0.15.0" }
-wasmtime-wasi = { path = "../../wasi", version = "0.15.0" }
-wasmtime = { path = "../../api", version = "0.15.0" }
+wasmtime-rust-macro = { path = "./macro", version = "0.16.0" }
+wasmtime-wasi = { path = "../../wasi", version = "0.16.0" }
+wasmtime = { path = "../../api", version = "0.16.0" }
 anyhow = "1.0.19"
 
 [badges]

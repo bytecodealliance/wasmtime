@@ -114,7 +114,9 @@ fn static_addr(
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
-    // Start with the bounds check. Trap if `offset + access_size > bound`.
+    // The goal here is to trap if `offset + access_size > bound`.
+    //
+    // This first case is a trivial case where we can easily trap.
     if access_size > bound {
         // This will simply always trap since `offset >= 0`.
         pos.ins().trap(ir::TrapCode::HeapOutOfBounds);
@@ -129,11 +131,21 @@ fn static_addr(
         return;
     }
 
-    // Check `offset > limit` which is now known non-negative.
+    // After the trivial case is done we're now mostly interested in trapping
+    // if `offset > bound - access_size`. We know `bound - access_size` here is
+    // non-negative from the above comparison.
+    //
+    // If we can know `bound - access_size >= 4GB` then with a 32-bit offset
+    // we're guaranteed:
+    //
+    //      bound - access_size >= 4GB > offset
+    //
+    // or, in other words, `offset < bound - access_size`, meaning we can't trap
+    // for any value of `offset`.
+    //
+    // With that we have an optimization here where with 32-bit offsets and
+    // `bound - access_size >= 4GB` we can omit a bounds check.
     let limit = bound - access_size;
-
-    // We may be able to omit the check entirely for 32-bit offsets if the heap bound is 4 GB or
-    // more.
     if offset_ty != ir::types::I32 || limit < 0xffff_ffff {
         let oob = if limit & 1 == 1 {
             // Prefer testing `offset >= limit - 1` when limit is odd because an even number is

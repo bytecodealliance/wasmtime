@@ -64,6 +64,10 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     a32.legalize_default(narrow_flags);
     t32.legalize_default(narrow_flags);
 
+    // Make sure that the expand code is used, thus generated.
+    let expand = shared_defs.transform_groups.by_name("expand");
+    a32.legalize_monomorphic(expand);
+
     let cpu_modes = vec![a32, t32];
 
     // TODO implement arm32 recipes.

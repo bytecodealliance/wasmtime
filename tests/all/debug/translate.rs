@@ -41,17 +41,51 @@ check:      DW_AT_name	("fib")
 # Accepts one parameter
 check:      DW_TAG_formal_parameter
 check:        DW_AT_name	("n")
-check:        DW_AT_decl_line	(5)
-# Has four locals: i, t, a, b
-check:      DW_TAG_variable
-check:        DW_AT_name	("i")
-check:        DW_AT_decl_line	(6)
+check:        DW_AT_decl_line	(8)
+# Has four locals: t, a, b, i
 check:      DW_TAG_variable
 check:        DW_AT_name	("t")
+check:        DW_AT_decl_line	(9)
 check:      DW_TAG_variable
 check:        DW_AT_name	("a")
 check:      DW_TAG_variable
 check:        DW_AT_name	("b")
+check:      DW_TAG_variable
+check:        DW_AT_name	("i")
+check:        DW_AT_decl_line	(10)
+    "##,
+    )
+}
+
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
+fn test_debug_dwarf5_translate() -> Result<()> {
+    check_wasm(
+        "tests/debug/testsuite/fib-wasm-dwarf5.wasm",
+        r##"
+check: DW_TAG_compile_unit
+# We have "fib" function
+check: DW_TAG_subprogram
+check:      DW_AT_name	("fib")
+# Accepts one parameter
+check:      DW_TAG_formal_parameter
+check:        DW_AT_name	("n")
+check:        DW_AT_decl_line	(8)
+# Has four locals: t, a, b, i
+check:      DW_TAG_variable
+check:        DW_AT_name	("t")
+check:        DW_AT_decl_line	(9)
+check:      DW_TAG_variable
+check:        DW_AT_name	("a")
+check:      DW_TAG_variable
+check:        DW_AT_name	("b")
+check:      DW_TAG_variable
+check:        DW_AT_name	("i")
+check:        DW_AT_decl_line	(10)
     "##,
     )
 }

@@ -21,6 +21,12 @@ impl CodeMemoryEntry {
         let registry = ManuallyDrop::new(UnwindRegistry::new(mmap.as_ptr() as usize));
         Ok(Self { mmap, registry })
     }
+
+    fn contains(&self, addr: usize) -> bool {
+        let start = self.mmap.as_ptr() as usize;
+        let end = start + self.mmap.len();
+        start <= addr && addr < end
+    }
 }
 
 impl Drop for CodeMemoryEntry {
@@ -235,5 +241,13 @@ impl CodeMemory {
         self.position = 0;
 
         Ok(())
+    }
+
+    /// Returns whether any published segment of this code memory contains
+    /// `addr`.
+    pub fn published_contains(&self, addr: usize) -> bool {
+        self.entries[..self.published]
+            .iter()
+            .any(|entry| entry.contains(addr))
     }
 }

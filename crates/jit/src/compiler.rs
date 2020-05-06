@@ -235,6 +235,12 @@ impl Compiler {
     pub fn signatures(&self) -> &SignatureRegistry {
         &self.signatures
     }
+
+    /// Returns whether or not the given address falls within the JIT code
+    /// managed by the compiler
+    pub fn is_in_jit_code(&self, addr: usize) -> bool {
+        self.code_memory.published_contains(addr)
+    }
 }
 
 /// Create a trampoline for invoking a function.

@@ -152,6 +152,19 @@ struct CommonOptions {
         default_value = "2",
     )]
     opt_level: wasmtime::OptLevel,
+
+    /// Maximum size in bytes of wasm memory before it becomes dynamically
+    /// relocatable instead of up-front-reserved.
+    #[structopt(long)]
+    static_memory_maximum_size: Option<u64>,
+
+    /// Byte size of the guard region after static memories are allocated.
+    #[structopt(long)]
+    static_memory_guard_size: Option<u64>,
+
+    /// Byte size of the guard region after dynamic memories are allocated.
+    #[structopt(long)]
+    dynamic_memory_guard_size: Option<u64>,
 }
 
 impl CommonOptions {
@@ -177,6 +190,15 @@ impl CommonOptions {
                     config.cache_config_load_default()?;
                 }
             }
+        }
+        if let Some(max) = self.static_memory_maximum_size {
+            config.static_memory_maximum_size(max);
+        }
+        if let Some(size) = self.static_memory_guard_size {
+            config.static_memory_guard_size(size);
+        }
+        if let Some(size) = self.dynamic_memory_guard_size {
+            config.dynamic_memory_guard_size(size);
         }
         Ok(config)
     }

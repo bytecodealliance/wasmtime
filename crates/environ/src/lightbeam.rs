@@ -6,9 +6,7 @@ use crate::func_environ::FuncEnvironment;
 use crate::CacheConfig;
 use crate::ModuleTranslation;
 // TODO: Put this in `compilation`
-use crate::address_map::{
-    ModuleAddressMap, ValueLabelsRanges,
-};
+use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
 use crate::cranelift::{RelocSink, TrapSink};
 use cranelift_codegen::isa;
 use cranelift_entity::{PrimaryMap, SecondaryMap};
@@ -56,7 +54,7 @@ impl crate::compilation::Compiler for Lightbeam {
                     offsets: &mut NullOffsetSink,
                 },
                 i.as_u32(),
-                wasmparser::FunctionBody::new(function_body.module_offset, function_body.data),
+                wasmparser::FunctionBody::new(0, function_body.data),
             )
             .map_err(|e| CompileError::Codegen(format!("Failed to translate function: {}", e)))?;
 

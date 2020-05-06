@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-wasi"
-version = "0.15.0"
+version = "0.16.0"
 authors = ["The Cranelift Project Developers"]
 description = "WASI API support for Wasmtime"
 documentation = "https://docs.rs/wasmtime-wasi"
@@ -14,11 +14,11 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0"
 log = { version = "0.4.8", default-features = false }
-wasi-common = { path = "../wasi-common", version = "0.15.0" }
-wasmtime = { path = "../api", version = "0.15.0", default-features = false }
-wasmtime-runtime = { path = "../runtime", version = "0.15.0" }
-wig = { path = "../wasi-common/wig", version = "0.15.0" }
-wiggle = { path = "../wiggle", version = "0.15.0" }
+wasi-common = { path = "../wasi-common", version = "0.16.0" }
+wasmtime = { path = "../api", version = "0.16.0", default-features = false }
+wasmtime-runtime = { path = "../runtime", version = "0.16.0" }
+wig = { path = "../wasi-common/wig", version = "0.16.0" }
+wiggle = { path = "../wiggle", version = "0.16.0" }
 
 [badges]
 maintenance = { status = "actively-developed" }

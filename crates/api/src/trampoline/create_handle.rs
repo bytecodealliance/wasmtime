@@ -1,9 +1,10 @@
 //! Support for a calling of an imported function.
 
-use crate::runtime::Store;
+use crate::trampoline::StoreInstanceHandle;
+use crate::Store;
 use anyhow::Result;
 use std::any::Any;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::DefinedFuncIndex;
@@ -18,15 +19,13 @@ pub(crate) fn create_handle(
     finished_functions: PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
     trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
     state: Box<dyn Any>,
-) -> Result<InstanceHandle> {
+) -> Result<StoreInstanceHandle> {
     let imports = Imports::new(
-        HashSet::new(),
         PrimaryMap::new(),
         PrimaryMap::new(),
         PrimaryMap::new(),
         PrimaryMap::new(),
     );
-    let data_initializers = Vec::new();
 
     // Compute indices into the shared signature table.
     let signatures = module
@@ -37,24 +36,17 @@ pub(crate) fn create_handle(
         .collect::<PrimaryMap<_, _>>();
 
     unsafe {
-        Ok(InstanceHandle::new(
+        let handle = InstanceHandle::new(
             Arc::new(module),
             finished_functions.into_boxed_slice(),
             trampolines,
             imports,
             store.memory_creator(),
-            &data_initializers,
             signatures.into_boxed_slice(),
             None,
-            store
-                .engine()
-                .config()
-                .validating_config
-                .operator_config
-                .enable_bulk_memory,
             state,
             store.compiler().interrupts().clone(),
-            store.engine().config().max_wasm_stack,
-        )?)
+        )?;
+        Ok(store.add_instance(handle))
     }
 }

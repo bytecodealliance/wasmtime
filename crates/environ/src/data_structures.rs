@@ -5,7 +5,7 @@ pub mod ir {
         types, AbiParam, ArgumentPurpose, Signature, SourceLoc, StackSlots, TrapCode, Type,
         ValueLabel, ValueLoc,
     };
-    pub use cranelift_codegen::ValueLabelsRanges;
+    pub use cranelift_codegen::{ValueLabelsRanges, ValueLocRange};
 }
 
 pub mod settings {

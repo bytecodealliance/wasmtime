@@ -22,7 +22,7 @@ pub fn layout_vmcontext(
     let out_len = ofs.size_of_vmctx() as usize;
     let mut out = vec![0; out_len];
 
-    // Assign unique indicies to unique signatures.
+    // Assign unique indices to unique signatures.
     let mut signature_registry = HashMap::new();
     let mut signature_registry_len = signature_registry.len();
     for (index, sig) in module.local.signatures.iter() {

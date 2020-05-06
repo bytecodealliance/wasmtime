@@ -108,7 +108,14 @@ mod not_for_windows {
     }
 
     unsafe impl MemoryCreator for CustomMemoryCreator {
-        fn new_memory(&self, ty: MemoryType) -> Result<Box<dyn LinearMemory>, String> {
+        fn new_memory(
+            &self,
+            ty: MemoryType,
+            reserved_size: Option<u64>,
+            guard_size: u64,
+        ) -> Result<Box<dyn LinearMemory>, String> {
+            assert_eq!(guard_size, 0);
+            assert!(reserved_size.is_none());
             let max = ty.limits().max().unwrap_or(WASM_MAX_PAGES);
             unsafe {
                 let mem = Box::new(CustomMemory::new(
@@ -122,14 +129,19 @@ mod not_for_windows {
         }
     }
 
+    fn config() -> (Store, Arc<CustomMemoryCreator>) {
+        let mem_creator = Arc::new(CustomMemoryCreator::new());
+        let mut config = Config::new();
+        config
+            .with_host_memory(mem_creator.clone())
+            .static_memory_maximum_size(0)
+            .dynamic_memory_guard_size(0);
+        (Store::new(&Engine::new(&config)), mem_creator)
+    }
+
     #[test]
     fn host_memory() -> anyhow::Result<()> {
-        let mem_creator = Arc::new(CustomMemoryCreator::new());
-        let mut config = Config::default();
-        config.with_host_memory(mem_creator.clone());
-        let engine = Engine::new(&config);
-        let store = Store::new(&engine);
-
+        let (store, mem_creator) = config();
         let module = Module::new(
             &store,
             r#"
@@ -147,12 +159,7 @@ mod not_for_windows {
 
     #[test]
     fn host_memory_grow() -> anyhow::Result<()> {
-        let mem_creator = Arc::new(CustomMemoryCreator::new());
-        let mut config = Config::default();
-        config.with_host_memory(mem_creator.clone());
-        let engine = Engine::new(&config);
-        let store = Store::new(&engine);
-
+        let (store, mem_creator) = config();
         let module = Module::new(
             &store,
             r#"
@@ -175,9 +182,9 @@ mod not_for_windows {
         let tot_pages = *mem_creator.num_total_pages.lock().unwrap();
         assert_eq!(tot_pages, 4);
 
-        drop(instance1);
+        drop((instance1, instance2, store, module));
         let tot_pages = *mem_creator.num_total_pages.lock().unwrap();
-        assert_eq!(tot_pages, 2);
+        assert_eq!(tot_pages, 0);
 
         Ok(())
     }

@@ -689,6 +689,12 @@ fn define_moves(e: &mut PerCpuModeEncodings, shared_defs: &SharedDefinitions, r:
             }
         }
     }
+    for (to, from) in &[(I16, B16), (I32, B32), (I64, B64)] {
+        e.enc_both(
+            bint.bind(*to).bind(*from),
+            rec_urm_noflags_abcd.opcodes(&MOVZX_BYTE),
+        );
+    }
 
     // Copy Special
     // For x86-64, only define REX forms for now, since we can't describe the
@@ -1601,8 +1607,11 @@ fn define_simd(
     let sadd_sat = shared.by_name("sadd_sat");
     let scalar_to_vector = shared.by_name("scalar_to_vector");
     let sload8x8 = shared.by_name("sload8x8");
+    let sload8x8_complex = shared.by_name("sload8x8_complex");
     let sload16x4 = shared.by_name("sload16x4");
+    let sload16x4_complex = shared.by_name("sload16x4_complex");
     let sload32x2 = shared.by_name("sload32x2");
+    let sload32x2_complex = shared.by_name("sload32x2_complex");
     let spill = shared.by_name("spill");
     let sqrt = shared.by_name("sqrt");
     let sshr_imm = shared.by_name("sshr_imm");
@@ -1611,14 +1620,18 @@ fn define_simd(
     let store_complex = shared.by_name("store_complex");
     let uadd_sat = shared.by_name("uadd_sat");
     let uload8x8 = shared.by_name("uload8x8");
+    let uload8x8_complex = shared.by_name("uload8x8_complex");
     let uload16x4 = shared.by_name("uload16x4");
+    let uload16x4_complex = shared.by_name("uload16x4_complex");
     let uload32x2 = shared.by_name("uload32x2");
+    let uload32x2_complex = shared.by_name("uload32x2_complex");
     let ushr_imm = shared.by_name("ushr_imm");
     let usub_sat = shared.by_name("usub_sat");
     let vconst = shared.by_name("vconst");
     let x86_insertps = x86.by_name("x86_insertps");
     let x86_movlhps = x86.by_name("x86_movlhps");
     let x86_movsd = x86.by_name("x86_movsd");
+    let x86_packss = x86.by_name("x86_packss");
     let x86_pextr = x86.by_name("x86_pextr");
     let x86_pinsr = x86.by_name("x86_pinsr");
     let x86_pmaxs = x86.by_name("x86_pmaxs");
@@ -1631,6 +1644,8 @@ fn define_simd(
     let x86_psra = x86.by_name("x86_psra");
     let x86_psrl = x86.by_name("x86_psrl");
     let x86_ptest = x86.by_name("x86_ptest");
+    let x86_punpckh = x86.by_name("x86_punpckh");
+    let x86_punpckl = x86.by_name("x86_punpckl");
 
     // Shorthands for recipes.
     let rec_evex_reg_vvvv_rm_128 = r.template("evex_reg_vvvv_rm_128");
@@ -1781,6 +1796,30 @@ fn define_simd(
             // x86_64.
             e.enc64_maybe_isap(instruction, template.rex().w(), Some(use_sse41_simd));
         }
+    }
+
+    // SIMD packing/unpacking
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
+        let (high, low) = match ty.lane_bits() {
+            8 => (&PUNPCKHBW, &PUNPCKLBW),
+            16 => (&PUNPCKHWD, &PUNPCKLWD),
+            32 => (&PUNPCKHDQ, &PUNPCKLDQ),
+            64 => (&PUNPCKHQDQ, &PUNPCKLQDQ),
+            _ => panic!("invalid size for SIMD packing/unpacking"),
+        };
+
+        e.enc_both_inferred(
+            x86_punpckh.bind(vector(ty, sse_vector_size)),
+            rec_fa.opcodes(high),
+        );
+        e.enc_both_inferred(
+            x86_punpckl.bind(vector(ty, sse_vector_size)),
+            rec_fa.opcodes(low),
+        );
+    }
+    for (ty, opcodes) in &[(I16, &PACKSSWB), (I32, &PACKSSDW)] {
+        let x86_packss = x86_packss.bind(vector(*ty, sse_vector_size));
+        e.enc_both_inferred(x86_packss, rec_fa.opcodes(*opcodes));
     }
 
     // SIMD bitcast all 128-bit vectors to each other (for legalizing splat.x16x8).
@@ -1947,6 +1986,35 @@ fn define_simd(
             let template = recipe.opcodes(*opcodes);
             e.enc_both_inferred_maybe_isap(inst.clone().bind(I32), template.clone(), isap);
             e.enc64_maybe_isap(inst.bind(I64), template.infer_rex(), isap);
+        }
+    }
+
+    // SIMD load extend (complex addressing)
+    let is_load_complex_length_two =
+        InstructionPredicate::new_length_equals(&*formats.load_complex, 2);
+    for (inst, opcodes) in &[
+        (uload8x8_complex, &PMOVZXBW),
+        (uload16x4_complex, &PMOVZXWD),
+        (uload32x2_complex, &PMOVZXDQ),
+        (sload8x8_complex, &PMOVSXBW),
+        (sload16x4_complex, &PMOVSXWD),
+        (sload32x2_complex, &PMOVSXDQ),
+    ] {
+        for recipe in &[
+            rec_fldWithIndex,
+            rec_fldWithIndexDisp8,
+            rec_fldWithIndexDisp32,
+        ] {
+            let template = recipe.opcodes(*opcodes);
+            let predicate = |encoding: EncodingBuilder| {
+                encoding
+                    .isa_predicate(use_sse41_simd)
+                    .inst_predicate(is_load_complex_length_two.clone())
+            };
+            e.enc32_func(inst.clone(), template.clone(), predicate);
+            // No infer_rex calculator for these recipes; place REX version first as in enc_x86_64.
+            e.enc64_func(inst.clone(), template.rex(), predicate);
+            e.enc64_func(inst.clone(), template, predicate);
         }
     }
 

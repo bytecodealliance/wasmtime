@@ -7,8 +7,7 @@ use crate::imports::Imports;
 use crate::jit_int::GdbJitImageRegistration;
 use crate::memory::{DefaultMemoryCreator, RuntimeLinearMemory, RuntimeMemoryCreator};
 use crate::table::Table;
-use crate::traphandlers;
-use crate::traphandlers::{catch_traps, Trap};
+use crate::traphandlers::Trap;
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport,
     VMGlobalDefinition, VMGlobalImport, VMInterrupts, VMMemoryDefinition, VMMemoryImport,
@@ -19,8 +18,8 @@ use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::alloc::{self, Layout};
 use std::any::Any;
-use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, HashSet};
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -33,47 +32,11 @@ use wasmtime_environ::wasm::{
 };
 use wasmtime_environ::{ir, DataInitializer, EntityIndex, Module, TableElements, VMOffsets};
 
-cfg_if::cfg_if! {
-    if #[cfg(unix)] {
-        pub type SignalHandler = dyn Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool;
-
-        impl InstanceHandle {
-            /// Set a custom signal handler
-            pub fn set_signal_handler<H>(&mut self, handler: H)
-            where
-                H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
-            {
-                self.instance().signal_handler.set(Some(Box::new(handler)));
-            }
-        }
-    } else if #[cfg(target_os = "windows")] {
-        pub type SignalHandler = dyn Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool;
-
-        impl InstanceHandle {
-            /// Set a custom signal handler
-            pub fn set_signal_handler<H>(&mut self, handler: H)
-            where
-                H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool,
-            {
-                self.instance().signal_handler.set(Some(Box::new(handler)));
-            }
-        }
-    }
-}
-
 /// A WebAssembly instance.
 ///
 /// This is repr(C) to ensure that the vmctx field is last.
 #[repr(C)]
 pub(crate) struct Instance {
-    /// The number of references to this `Instance`.
-    refcount: Cell<usize>,
-
-    /// `Instance`s from which this `Instance` imports. These won't
-    /// create reference cycles because wasm instances can't cyclically
-    /// import from each other.
-    dependencies: HashSet<InstanceHandle>,
-
     /// The `Module` this `Instance` was instantiated from.
     module: Arc<Module>,
 
@@ -106,9 +69,6 @@ pub(crate) struct Instance {
 
     /// Optional image of JIT'ed code for debugger registration.
     dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
-
-    /// Handler run when `SIGBUS`, `SIGFPE`, `SIGILL`, or `SIGSEGV` are caught by the instance thread.
-    pub(crate) signal_handler: Cell<Option<Box<SignalHandler>>>,
 
     /// Externally allocated data indicating how this instance will be
     /// interrupted.
@@ -383,58 +343,6 @@ impl Instance {
     #[inline]
     pub fn host_state(&self) -> &dyn Any {
         &*self.host_state
-    }
-
-    /// Invoke the WebAssembly start function of the instance, if one is present.
-    fn invoke_start_function(&self, max_wasm_stack: usize) -> Result<(), InstantiationError> {
-        let start_index = match self.module.start_func {
-            Some(idx) => idx,
-            None => return Ok(()),
-        };
-
-        self.invoke_function_index(start_index, max_wasm_stack)
-            .map_err(InstantiationError::StartTrap)
-    }
-
-    fn invoke_function_index(
-        &self,
-        callee_index: FuncIndex,
-        max_wasm_stack: usize,
-    ) -> Result<(), Trap> {
-        let (callee_address, callee_vmctx) =
-            match self.module.local.defined_func_index(callee_index) {
-                Some(defined_index) => {
-                    let body = *self
-                        .finished_functions
-                        .get(defined_index)
-                        .expect("function index is out of bounds");
-                    (body as *const _, self.vmctx_ptr())
-                }
-                None => {
-                    assert_lt!(callee_index.index(), self.module.local.num_imported_funcs);
-                    let import = self.imported_function(callee_index);
-                    (import.body, import.vmctx)
-                }
-            };
-
-        self.invoke_function(callee_vmctx, callee_address, max_wasm_stack)
-    }
-
-    fn invoke_function(
-        &self,
-        callee_vmctx: *mut VMContext,
-        callee_address: *const VMFunctionBody,
-        max_wasm_stack: usize,
-    ) -> Result<(), Trap> {
-        // Make the call.
-        unsafe {
-            catch_traps(callee_vmctx, max_wasm_stack, || {
-                mem::transmute::<
-                    *const VMFunctionBody,
-                    unsafe extern "C" fn(*mut VMContext, *mut VMContext),
-                >(callee_address)(callee_vmctx, self.vmctx_ptr())
-            })
-        }
     }
 
     /// Return the offset from the vmctx pointer to its containing Instance.
@@ -878,13 +786,10 @@ impl InstanceHandle {
         trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
         imports: Imports,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
-        data_initializers: &[DataInitializer<'_>],
         vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
-        is_bulk_memory: bool,
         host_state: Box<dyn Any>,
         interrupts: Arc<VMInterrupts>,
-        max_wasm_stack: usize,
     ) -> Result<Self, InstantiationError> {
         let tables = create_tables(&module);
         let memories = create_memories(&module, mem_creator.unwrap_or(&DefaultMemoryCreator {}))?;
@@ -909,8 +814,6 @@ impl InstanceHandle {
 
         let handle = {
             let instance = Instance {
-                refcount: Cell::new(1),
-                dependencies: imports.dependencies,
                 module,
                 offsets,
                 memories,
@@ -921,7 +824,6 @@ impl InstanceHandle {
                 trampolines,
                 dbg_jit_registration,
                 host_state,
-                signal_handler: Cell::new(None),
                 interrupts,
                 vmctx: VMContext {},
             };
@@ -983,30 +885,37 @@ impl InstanceHandle {
         );
         *instance.interrupts() = &*instance.interrupts;
 
+        // Perform infallible initialization in this constructor, while fallible
+        // initialization is deferred to the `initialize` method.
+        initialize_passive_elements(instance);
+        initialize_globals(instance);
+
+        Ok(handle)
+    }
+
+    /// Finishes the instantiation process started by `Instance::new`.
+    ///
+    /// Only safe to call immediately after instantiation.
+    pub unsafe fn initialize(
+        &self,
+        is_bulk_memory: bool,
+        data_initializers: &[DataInitializer<'_>],
+    ) -> Result<(), InstantiationError> {
         // Check initializer bounds before initializing anything. Only do this
         // when bulk memory is disabled, since the bulk memory proposal changes
         // instantiation such that the intermediate results of failed
         // initializations are visible.
         if !is_bulk_memory {
-            check_table_init_bounds(instance)?;
-            check_memory_init_bounds(instance, data_initializers)?;
+            check_table_init_bounds(self.instance())?;
+            check_memory_init_bounds(self.instance(), data_initializers)?;
         }
 
-        // Apply the initializers.
-        initialize_tables(instance)?;
-        initialize_passive_elements(instance);
-        initialize_memories(instance, data_initializers)?;
-        initialize_globals(instance);
+        // Apply fallible initializers. Note that this can "leak" state even if
+        // it fails.
+        initialize_tables(self.instance())?;
+        initialize_memories(self.instance(), data_initializers)?;
 
-        // Ensure that our signal handlers are ready for action.
-        // TODO: Move these calls out of `InstanceHandle`.
-        traphandlers::init();
-
-        // The WebAssembly spec specifies that the start function is
-        // invoked automatically at instantiation time.
-        instance.invoke_start_function(max_wasm_stack)?;
-
-        Ok(handle)
+        Ok(())
     }
 
     /// Create a new `InstanceHandle` pointing at the instance
@@ -1017,7 +926,6 @@ impl InstanceHandle {
     /// be a `VMContext` allocated as part of an `Instance`.
     pub unsafe fn from_vmctx(vmctx: *mut VMContext) -> Self {
         let instance = (&mut *vmctx).instance();
-        instance.refcount.set(instance.refcount.get() + 1);
         Self {
             instance: instance as *const Instance as *mut Instance,
         }
@@ -1130,30 +1038,29 @@ impl InstanceHandle {
     pub(crate) fn instance(&self) -> &Instance {
         unsafe { &*(self.instance as *const Instance) }
     }
-}
 
-impl Clone for InstanceHandle {
-    fn clone(&self) -> Self {
-        let instance = self.instance();
-        instance.refcount.set(instance.refcount.get() + 1);
-        Self {
+    /// Returns a clone of this instance.
+    ///
+    /// This is unsafe because the returned handle here is just a cheap clone
+    /// of the internals, there's no lifetime tracking around its validity.
+    /// You'll need to ensure that the returned handles all go out of scope at
+    /// the same time.
+    pub unsafe fn clone(&self) -> InstanceHandle {
+        InstanceHandle {
             instance: self.instance,
         }
     }
-}
 
-impl Drop for InstanceHandle {
-    fn drop(&mut self) {
+    /// Deallocates memory associated with this instance.
+    ///
+    /// Note that this is unsafe because there might be other handles to this
+    /// `InstanceHandle` elsewhere, and there's nothing preventing usage of
+    /// this handle after this function is called.
+    pub unsafe fn dealloc(&self) {
         let instance = self.instance();
-        let count = instance.refcount.get();
-        instance.refcount.set(count - 1);
-        if count == 1 {
-            let layout = instance.alloc_layout();
-            unsafe {
-                ptr::drop_in_place(self.instance);
-                alloc::dealloc(self.instance.cast(), layout);
-            }
-        }
+        let layout = instance.alloc_layout();
+        ptr::drop_in_place(self.instance);
+        alloc::dealloc(self.instance.cast(), layout);
     }
 }
 

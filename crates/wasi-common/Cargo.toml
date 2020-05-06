@@ -1,6 +1,6 @@
 [package]
 name = "wasi-common"
-version = "0.15.0"
+version = "0.16.0"
 authors = ["The Wasmtime Project Developers"]
 description = "WASI implementation in Rust"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -12,9 +12,9 @@ edition = "2018"
 include = ["src/**/*", "LICENSE", "WASI/phases", "build.rs"]
 
 # This doesn't actually link to a native library, but it allows us to set env
-# vars like `DEP_WASI_COMMON_15_*` for crates that have build scripts and depend
+# vars like `DEP_WASI_COMMON_16_*` for crates that have build scripts and depend
 # on this crate, allowing other crates to use the same witx files.
-links = "wasi-common-15"
+links = "wasi-common-16"
 
 [dependencies]
 anyhow = "1.0"
@@ -25,14 +25,14 @@ cfg-if = "0.1.9"
 log = "0.4"
 filetime = "0.2.7"
 lazy_static = "1.4.0"
-wig = { path = "wig", version = "0.15.0" }
-wiggle = { path = "../wiggle", default-features = false, version = "0.15.0" }
+wig = { path = "wig", version = "0.16.0" }
+wiggle = { path = "../wiggle", default-features = false, version = "0.16.0" }
 
 [target.'cfg(unix)'.dependencies]
-yanix = { path = "yanix", version = "0.15.0" }
+yanix = { path = "yanix", version = "0.16.0" }
 
 [target.'cfg(windows)'.dependencies]
-winx = { path = "winx", version = "0.15.0" }
+winx = { path = "winx", version = "0.16.0" }
 winapi = "0.3"
 cpu-time = "1.0"
 
