@@ -6,7 +6,7 @@ use crate::settings;
 use crate::timing;
 
 use log::debug;
-use regalloc::{allocate_registers, RegAllocAlgorithm};
+use regalloc::{allocate_registers_with_opts, Algorithm, Options};
 
 /// Compile the given function down to VCode with allocated registers, ready
 /// for binary emission.
@@ -26,16 +26,25 @@ where
     debug!("vcode from lowering: \n{}", vcode.show_rru(Some(universe)));
 
     // Perform register allocation.
-    let algorithm = match vcode.flags().regalloc() {
-        settings::Regalloc::Backtracking => RegAllocAlgorithm::Backtracking,
-        settings::Regalloc::BacktrackingChecked => RegAllocAlgorithm::BacktrackingChecked,
-        settings::Regalloc::ExperimentalLinearScan => RegAllocAlgorithm::LinearScan,
+    let (run_checker, algorithm) = match vcode.flags().regalloc() {
+        settings::Regalloc::Backtracking => (false, Algorithm::Backtracking(Default::default())),
+        settings::Regalloc::BacktrackingChecked => {
+            (true, Algorithm::Backtracking(Default::default()))
+        }
+        settings::Regalloc::ExperimentalLinearScan => {
+            (false, Algorithm::LinearScan(Default::default()))
+        }
     };
 
     let result = {
         let _tt = timing::regalloc();
-        allocate_registers(
-            &mut vcode, algorithm, universe, /*request_block_annotations=*/ false,
+        allocate_registers_with_opts(
+            &mut vcode,
+            universe,
+            Options {
+                run_checker,
+                algorithm,
+            },
         )
         .map_err(|err| {
             debug!(
