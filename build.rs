@@ -153,7 +153,6 @@ fn write_testsuite_tests(
     if ignore(testsuite, &testname, strategy) {
         writeln!(out, "#[ignore]")?;
     }
-    writeln!(out, "fn r#{}() {{", &testname)?;
     writeln!(
         out,
         "r#{}, r#\"{}\"#, Strategy::{}",
