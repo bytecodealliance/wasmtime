@@ -1179,44 +1179,40 @@ impl AArch64ABICall {
     }
 }
 
-fn adjust_stack(amount: u64, is_sub: bool) -> Vec<Inst> {
-    if amount > 0 {
-        let sp_adjustment = if is_sub {
-            amount as i64
-        } else {
-            -(amount as i64)
-        };
-        let adj_meta_insn = Inst::VirtualSPOffsetAdj {
-            offset: sp_adjustment,
-        };
+fn adjust_stack<C: LowerCtx<I = Inst>>(ctx: &mut C, amount: u64, is_sub: bool) {
+    if amount == 0 {
+        return;
+    }
 
-        let alu_op = if is_sub { ALUOp::Sub64 } else { ALUOp::Add64 };
-        if let Some(imm12) = Imm12::maybe_from_u64(amount) {
-            vec![
-                adj_meta_insn,
-                Inst::AluRRImm12 {
-                    alu_op,
-                    rd: writable_stack_reg(),
-                    rn: stack_reg(),
-                    imm12,
-                },
-            ]
-        } else {
-            let const_load = Inst::LoadConst64 {
-                rd: writable_spilltmp_reg(),
-                const_data: amount,
-            };
-            let adj = Inst::AluRRRExtend {
-                alu_op,
-                rd: writable_stack_reg(),
-                rn: stack_reg(),
-                rm: spilltmp_reg(),
-                extendop: ExtendOp::UXTX,
-            };
-            vec![adj_meta_insn, const_load, adj]
-        }
+    let sp_adjustment = if is_sub {
+        amount as i64
     } else {
-        vec![]
+        -(amount as i64)
+    };
+    ctx.emit(Inst::VirtualSPOffsetAdj {
+        offset: sp_adjustment,
+    });
+
+    let alu_op = if is_sub { ALUOp::Sub64 } else { ALUOp::Add64 };
+    if let Some(imm12) = Imm12::maybe_from_u64(amount) {
+        ctx.emit(Inst::AluRRImm12 {
+            alu_op,
+            rd: writable_stack_reg(),
+            rn: stack_reg(),
+            imm12,
+        })
+    } else {
+        ctx.emit(Inst::LoadConst64 {
+            rd: writable_spilltmp_reg(),
+            const_data: amount,
+        });
+        ctx.emit(Inst::AluRRRExtend {
+            alu_op,
+            rd: writable_stack_reg(),
+            rn: stack_reg(),
+            rm: spilltmp_reg(),
+            extendop: ExtendOp::UXTX,
+        });
     }
 }
 
@@ -1227,64 +1223,82 @@ impl ABICall for AArch64ABICall {
         self.sig.args.len()
     }
 
-    fn gen_stack_pre_adjust(&self) -> Vec<Inst> {
-        adjust_stack(self.sig.stack_arg_space as u64, /* is_sub = */ true)
+    fn emit_stack_pre_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
+        adjust_stack(
+            ctx,
+            self.sig.stack_arg_space as u64,
+            /* is_sub = */ true,
+        )
     }
 
-    fn gen_stack_post_adjust(&self) -> Vec<Inst> {
-        adjust_stack(self.sig.stack_arg_space as u64, /* is_sub = */ false)
+    fn emit_stack_post_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
+        adjust_stack(
+            ctx,
+            self.sig.stack_arg_space as u64,
+            /* is_sub = */ false,
+        )
     }
 
-    fn gen_copy_reg_to_arg(&self, idx: usize, from_reg: Reg) -> Vec<Inst> {
+    fn emit_copy_reg_to_arg<C: LowerCtx<I = Self::I>>(
+        &self,
+        ctx: &mut C,
+        idx: usize,
+        from_reg: Reg,
+    ) {
         match &self.sig.args[idx] {
-            &ABIArg::Reg(reg, ty) => vec![Inst::gen_move(
+            &ABIArg::Reg(reg, ty) => ctx.emit(Inst::gen_move(
                 Writable::from_reg(reg.to_reg()),
                 from_reg,
                 ty,
-            )],
-            &ABIArg::Stack(off, ty) => vec![store_stack(MemArg::SPOffset(off), from_reg, ty)],
+            )),
+            &ABIArg::Stack(off, ty) => ctx.emit(store_stack(MemArg::SPOffset(off), from_reg, ty)),
         }
     }
 
-    fn gen_copy_retval_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Inst {
+    fn emit_copy_retval_to_reg<C: LowerCtx<I = Self::I>>(
+        &self,
+        ctx: &mut C,
+        idx: usize,
+        into_reg: Writable<Reg>,
+    ) {
         match &self.sig.rets[idx] {
-            &ABIArg::Reg(reg, ty) => Inst::gen_move(into_reg, reg.to_reg(), ty),
+            &ABIArg::Reg(reg, ty) => ctx.emit(Inst::gen_move(into_reg, reg.to_reg(), ty)),
             _ => unimplemented!(),
         }
     }
 
-    fn gen_call(&self) -> Vec<Inst> {
+    fn emit_call<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
         let (uses, defs) = (self.uses.clone(), self.defs.clone());
         match &self.dest {
-            &CallDest::ExtName(ref name, RelocDistance::Near) => vec![Inst::Call {
+            &CallDest::ExtName(ref name, RelocDistance::Near) => ctx.emit(Inst::Call {
                 dest: name.clone(),
                 uses,
                 defs,
                 loc: self.loc,
                 opcode: self.opcode,
-            }],
-            &CallDest::ExtName(ref name, RelocDistance::Far) => vec![
-                Inst::LoadExtName {
+            }),
+            &CallDest::ExtName(ref name, RelocDistance::Far) => {
+                ctx.emit(Inst::LoadExtName {
                     rd: writable_spilltmp_reg(),
                     name: name.clone(),
                     offset: 0,
                     srcloc: self.loc,
-                },
-                Inst::CallInd {
+                });
+                ctx.emit(Inst::CallInd {
                     rn: spilltmp_reg(),
                     uses,
                     defs,
                     loc: self.loc,
                     opcode: self.opcode,
-                },
-            ],
-            &CallDest::Reg(reg) => vec![Inst::CallInd {
+                });
+            }
+            &CallDest::Reg(reg) => ctx.emit(Inst::CallInd {
                 rn: reg,
                 uses,
                 defs,
                 loc: self.loc,
                 opcode: self.opcode,
-            }],
+            }),
         }
     }
 }
