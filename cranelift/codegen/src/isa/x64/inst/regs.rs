@@ -78,52 +78,53 @@ pub(crate) fn r11() -> Reg {
 fn fpr(enc: u8, index: u8) -> Reg {
     Reg::new_real(RegClass::V128, enc, index)
 }
-fn xmm0() -> Reg {
+
+pub(crate) fn xmm0() -> Reg {
     fpr(0, 14)
 }
-fn xmm1() -> Reg {
+pub(crate) fn xmm1() -> Reg {
     fpr(1, 15)
 }
-fn xmm2() -> Reg {
+pub(crate) fn xmm2() -> Reg {
     fpr(2, 16)
 }
-fn xmm3() -> Reg {
+pub(crate) fn xmm3() -> Reg {
     fpr(3, 17)
 }
-fn xmm4() -> Reg {
+pub(crate) fn xmm4() -> Reg {
     fpr(4, 18)
 }
-fn xmm5() -> Reg {
+pub(crate) fn xmm5() -> Reg {
     fpr(5, 19)
 }
-fn xmm6() -> Reg {
+pub(crate) fn xmm6() -> Reg {
     fpr(6, 20)
 }
-fn xmm7() -> Reg {
+pub(crate) fn xmm7() -> Reg {
     fpr(7, 21)
 }
-fn xmm8() -> Reg {
+pub(crate) fn xmm8() -> Reg {
     fpr(8, 22)
 }
-fn xmm9() -> Reg {
+pub(crate) fn xmm9() -> Reg {
     fpr(9, 23)
 }
-fn xmm10() -> Reg {
+pub(crate) fn xmm10() -> Reg {
     fpr(10, 24)
 }
-fn xmm11() -> Reg {
+pub(crate) fn xmm11() -> Reg {
     fpr(11, 25)
 }
-fn xmm12() -> Reg {
+pub(crate) fn xmm12() -> Reg {
     fpr(12, 26)
 }
-fn xmm13() -> Reg {
+pub(crate) fn xmm13() -> Reg {
     fpr(13, 27)
 }
-fn xmm14() -> Reg {
+pub(crate) fn xmm14() -> Reg {
     fpr(14, 28)
 }
-fn xmm15() -> Reg {
+pub(crate) fn xmm15() -> Reg {
     fpr(15, 29)
 }
 

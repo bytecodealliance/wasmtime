@@ -144,7 +144,7 @@ impl RM {
     // Constructors.
 
     pub(crate) fn reg(reg: Reg) -> Self {
-        debug_assert!(reg.get_class() == RegClass::I64);
+        debug_assert!(reg.get_class() == RegClass::I64 || reg.get_class() == RegClass::V128);
         RM::R { reg }
     }
 
@@ -205,8 +205,75 @@ impl fmt::Debug for RMI_R_Op {
     }
 }
 
-/// These indicate ways of extending (widening) a value, using the Intel naming:
-/// B(yte) = u8, W(ord) = u16, L(ong)word = u32, Q(uad)word = u64
+/// Some scalar SSE operations requiring 2 operands r/m and r
+/// Each instruction is prefixed with the SSE version that introduced
+/// the particular instructions.
+/// TODO: Below only includes scalar operations. To be seen if packed will
+/// be added here.
+#[derive(Clone, PartialEq)]
+pub enum SSE_Op {
+    SSE_Addss,
+    SSE2_Addsd,
+    SSE_Comiss,
+    SSE2_Comisd,
+    SSE2_Cvtsd2ss,
+    SSE2_Cvtsd2si,
+    SSE_Cvtsi2ss,
+    SSE2_Cvtsi2sd,
+    SSE_Cvtss2si,
+    SSE2_Cvtss2sd,
+    SSE_Cvttss2si,
+    SSE2_Cvttsd2si,
+    SSE_Divss,
+    SSE2_Divsd,
+    SSE_Maxss,
+    SSE2_Maxsd,
+    SSE_Minss,
+    SSE2_Minsd,
+    SSE_Movss,
+    SSE2_Movsd,
+    SSE_Mulss,
+    SSE2_Mulsd,
+    SSE_Rcpss,
+    SSE41_Roundss,
+    SSE41_Roundsd,
+    SSE_Rsqrtss,
+    SSE_Sqrtss,
+    SSE2_Sqrtsd,
+    SSE_Subss,
+    SSE2_Subsd,
+    SSE_Ucomiss,
+    SSE2_Ucomisd,
+}
+
+/// Some SSE operations requiring 3 operands i, r/m, and r
+#[derive(Clone, PartialEq)]
+pub enum SSE_RMI_Op {
+    SSE_Cmpss,
+    SSE2_Cmpsd,
+    SSE41_Insertps,
+}
+
+impl SSE_Op {
+    pub(crate) fn to_string(&self) -> String {
+        match self {
+            SSE_Op::SSE_Addss => "addss".to_string(),
+            SSE_Op::SSE_Subss => "subss".to_string(),
+            SSE_Op::SSE_Movss => "movss".to_string(),
+            SSE_Op::SSE2_Movsd => "movsd".to_string(),
+            _ => "unimplemented sse_op".to_string(),
+        }
+    }
+}
+
+impl fmt::Debug for SSE_Op {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "{}", self.to_string())
+    }
+}
+
+/// These indicate ways of extending (widening) a value, using the Intel
+/// naming: B(yte) = u8, W(ord) = u16, L(ong)word = u32, Q(uad)word = u64
 #[derive(Clone, PartialEq)]
 pub enum ExtMode {
     /// Byte -> Longword.

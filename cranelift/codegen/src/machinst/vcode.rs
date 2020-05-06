@@ -136,9 +136,14 @@ impl<I: VCodeInst> VCodeBuilder<I> {
 
     /// Set the type of a VReg.
     pub fn set_vreg_type(&mut self, vreg: VirtualReg, ty: Type) {
-        while self.vcode.vreg_types.len() <= vreg.get_index() {
-            self.vcode.vreg_types.push(ir::types::I8); // Default type.
+        if self.vcode.vreg_types.len() <= vreg.get_index() {
+            self.vcode.vreg_types.resize(
+                self.vcode.vreg_types.len()
+                    + ((vreg.get_index() + 1) - self.vcode.vreg_types.len()),
+                ir::types::I8,
+            )
         }
+
         self.vcode.vreg_types[vreg.get_index()] = ty;
     }
 
