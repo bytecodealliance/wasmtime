@@ -27,6 +27,7 @@ use crate::nan_canonicalization::do_nan_canonicalization;
 use crate::postopt::do_postopt;
 use crate::redundant_reload_remover::RedundantReloadRemover;
 use crate::regalloc;
+use crate::remove_constant_phis::do_remove_constant_phis;
 use crate::result::CodegenResult;
 use crate::settings::{FlagsOrIsa, OptLevel};
 use crate::simple_gvn::do_simple_gvn;
@@ -179,6 +180,8 @@ impl Context {
             self.dce(isa)?;
         }
 
+        self.remove_constant_phis(isa)?;
+
         if let Some(backend) = isa.get_mach_backend() {
             let result = backend.compile_function(&self.func, self.want_disasm)?;
             let info = result.code_info();
@@ -288,6 +291,16 @@ impl Context {
     /// Perform dead-code elimination on the function.
     pub fn dce<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CodegenResult<()> {
         do_dce(&mut self.func, &mut self.domtree);
+        self.verify_if(fisa)?;
+        Ok(())
+    }
+
+    /// Perform constant-phi removal on the function.
+    pub fn remove_constant_phis<'a, FOI: Into<FlagsOrIsa<'a>>>(
+        &mut self,
+        fisa: FOI,
+    ) -> CodegenResult<()> {
+        do_remove_constant_phis(&mut self.func, &mut self.domtree);
         self.verify_if(fisa)?;
         Ok(())
     }

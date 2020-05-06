@@ -105,6 +105,7 @@ mod postopt;
 mod predicates;
 mod redundant_reload_remover;
 mod regalloc;
+mod remove_constant_phis;
 mod result;
 mod scoped_hash_map;
 mod simple_gvn;
