@@ -38,7 +38,7 @@ fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
         .wasm_reference_types(reftypes)
         .wasm_multi_value(multi_val)
         .strategy(strategy)?
-        .cranelift_debug_verifier(cfg!(debug_assertions));
+        .cranelift_debug_verifier(true);
 
     let store = Store::new(&Engine::new(&cfg));
     let mut wast_context = WastContext::new(store);
