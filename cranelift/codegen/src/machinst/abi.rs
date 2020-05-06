@@ -135,19 +135,29 @@ pub trait ABICall {
     /// Get the number of arguments expected.
     fn num_args(&self) -> usize;
 
-    /// Copy an argument value from a source register, prior to the call.
-    fn gen_copy_reg_to_arg(&self, idx: usize, from_reg: Reg) -> Vec<Self::I>;
+    /// Emit a copy of an argument value from a source register, prior to the call.
+    fn emit_copy_reg_to_arg<C: LowerCtx<I = Self::I>>(
+        &self,
+        ctx: &mut C,
+        idx: usize,
+        from_reg: Reg,
+    );
 
-    /// Copy a return value into a destination register, after the call returns.
-    fn gen_copy_retval_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Self::I;
+    /// Emit a copy a return value into a destination register, after the call returns.
+    fn emit_copy_retval_to_reg<C: LowerCtx<I = Self::I>>(
+        &self,
+        ctx: &mut C,
+        idx: usize,
+        into_reg: Writable<Reg>,
+    );
 
-    /// Pre-adjust the stack, prior to argument copies and call.
-    fn gen_stack_pre_adjust(&self) -> Vec<Self::I>;
+    /// Emit code to pre-adjust the stack, prior to argument copies and call.
+    fn emit_stack_pre_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C);
 
-    /// Post-adjust the satck, after call return and return-value copies.
-    fn gen_stack_post_adjust(&self) -> Vec<Self::I>;
+    /// Emit code to post-adjust the satck, after call return and return-value copies.
+    fn emit_stack_post_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C);
 
-    /// Generate the call itself.
+    /// Emit the call itself.
     ///
     /// The returned instruction should have proper use- and def-sets according
     /// to the argument registers, return-value registers, and clobbered
@@ -157,5 +167,5 @@ pub trait ABICall {
     /// registers are also logically defs, but should never be read; their
     /// values are "defined" (to the regalloc) but "undefined" in every other
     /// sense.)
-    fn gen_call(&self) -> Vec<Self::I>;
+    fn emit_call<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C);
 }
