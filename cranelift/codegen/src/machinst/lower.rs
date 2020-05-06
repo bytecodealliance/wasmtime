@@ -260,7 +260,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 let b = queue.pop_front().unwrap();
                 ret.push(b);
                 let mut succs: SmallVec<[Block; 16]> = SmallVec::new();
-                for inst in self.f.layout.block_insts(b) {
+                for inst in self.f.layout.block_likely_branches(b) {
                     if self.f.dfg[inst].opcode().is_branch() {
                         visit_branch_targets(self.f, b, inst, |succ| {
                             succs.push(succ);
@@ -292,9 +292,18 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // Allocate a separate BlockIndex for each control-flow instruction so that we can create
         // the edge blocks later. Each entry for a control-flow inst is the edge block; the list
         // has (control flow inst, edge block, orig block) tuples.
-        let mut edge_blocks_by_inst: SecondaryMap<Inst, Vec<BlockIndex>> =
-            SecondaryMap::with_default(vec![]);
-        let mut edge_blocks: Vec<(Inst, BlockIndex, Block)> = vec![];
+        //
+        // In general, a given inst may have only one target, except for jump tables which have
+        // more. But SmallVec may store inline more than the spec'd number, so ask for slightly
+        // more.
+        let mut edge_blocks_by_inst: SecondaryMap<Inst, SmallVec<[BlockIndex; 2]>> =
+            SecondaryMap::with_default(SmallVec::new());
+
+        // Each basic block may at most have two edge blocks, since it may have a most two branch
+        // instructions. If we omit jump tables, we can model that 50% of branches are direct jumps
+        // (1 successor), and 50% are tests (2 successors). A distribution of edge_blocks per block
+        // matches this rough estimate that there are 1.5 edge block per block.
+        let mut edge_blocks: Vec<(Inst, BlockIndex, Block)> = Vec::with_capacity(bbs.len() * 3 / 2);
 
         debug!("about to lower function: {:?}", self.f);
         debug!("bb map: {:?}", self.vcode.blocks_by_bb());
@@ -302,9 +311,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // Work backward (reverse block order, reverse through each block), skipping insns with zero
         // uses.
         for bb in bbs.iter().rev() {
-            for inst in self.f.layout.block_insts(*bb) {
-                let op = self.f.dfg[inst].opcode();
-                if op.is_branch() {
+            for inst in self.f.layout.block_likely_branches(*bb) {
+                if self.f.dfg[inst].opcode().is_branch() {
                     // Find the original target.
                     let mut add_succ = |next_bb| {
                         let edge_block = next_bindex;
@@ -373,17 +381,14 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                         targets.clear();
                     }
 
-                    // Only codegen an instruction if it either has a side
-                    // effect, or has at least one use of one of its results.
-                    let num_uses = self.num_uses[inst];
-                    let side_effect = has_side_effect(self.f, inst);
-                    if side_effect || num_uses > 0 {
+                    // Only codegen an instruction if it either has a side effect, or has at least
+                    // one use of one of its results.
+                    if self.num_uses[inst] > 0 || has_side_effect(self.f, inst) {
                         self.vcode.set_srcloc(self.srcloc(inst));
                         backend.lower(&mut self, inst);
                         self.vcode.end_ir_inst();
                     } else {
-                        // If we're skipping the instruction, we need to dec-ref
-                        // its arguments.
+                        // If we're skipping the instruction, we need to dec-ref its arguments.
                         for arg in self.f.dfg.inst_args(inst) {
                             let val = self.f.dfg.resolve_aliases(*arg);
                             match self.f.dfg.value_def(val) {
