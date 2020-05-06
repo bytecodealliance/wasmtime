@@ -356,6 +356,8 @@ fn is_matching_assert_invalid_error_message(expected: &str, actual: &str) -> boo
         // `elem.wast` and `proposals/bulk-memory-operations/elem.wast` disagree
         // on the expected error message for the same error.
         || (expected.contains("out of bounds") && actual.contains("does not fit"))
+        // slight difference in error messages
+        || (expected.contains("unknown elem segment") && actual.contains("unknown element segment"))
 }
 
 fn extract_lane_as_i8(bytes: u128, lane: usize) -> i8 {

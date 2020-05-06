@@ -18,13 +18,10 @@ fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
     // by reference types.
     let reftypes = simd || wast.iter().any(|s| s == "reference-types");
 
-    let multi_val = wast.iter().any(|s| s == "multi-value");
-
     let mut cfg = Config::new();
     cfg.wasm_simd(simd)
         .wasm_bulk_memory(bulk_mem)
         .wasm_reference_types(reftypes)
-        .wasm_multi_value(multi_val)
         .strategy(strategy)?
         .cranelift_debug_verifier(true);
 

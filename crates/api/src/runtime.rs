@@ -82,7 +82,7 @@ impl Config {
                     enable_reference_types: false,
                     enable_bulk_memory: false,
                     enable_simd: false,
-                    enable_multi_value: false,
+                    enable_multi_value: true,
                 },
             },
             flags,
@@ -247,16 +247,10 @@ impl Config {
     /// Configures whether the WebAssembly multi-value proposal will
     /// be enabled for compilation.
     ///
-    /// The [WebAssembly multi-value proposal][proposal] is not
-    /// currently fully standardized and is undergoing development.
-    /// Additionally the support in wasmtime itself is still being worked on.
-    /// Support for this feature can be enabled through this method for
-    /// appropriate wasm modules.
-    ///
     /// This feature gates functions and blocks returning multiple values in a
     /// module, for example.
     ///
-    /// This is `false` by default.
+    /// This is `true` by default.
     ///
     /// [proposal]: https://github.com/webassembly/multi-value
     pub fn wasm_multi_value(&mut self, enable: bool) -> &mut Self {
