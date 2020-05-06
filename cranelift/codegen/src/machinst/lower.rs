@@ -327,6 +327,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
         }
 
+        // Temporary vectors whose memory is reused in the loop below.
+        let mut branches: SmallVec<[Inst; 2]> = SmallVec::new();
+        let mut targets: SmallVec<[BlockIndex; 2]> = SmallVec::new();
+
         for bb in bbs.iter() {
             debug!("lowering bb: {}", bb);
 
@@ -348,9 +352,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
 
             // Find the branches at the end first, and process those, if any.
-            let mut branches: SmallVec<[Inst; 2]> = SmallVec::new();
-            let mut targets: SmallVec<[BlockIndex; 2]> = SmallVec::new();
-
             for inst in self.f.layout.block_insts(*bb).rev() {
                 debug!("lower: inst {}", inst);
                 if edge_blocks_by_inst[inst].len() > 0 {
@@ -434,6 +435,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
         }
 
+        // Temporary vectors whose memory is reused in the loop below.
+        // TODO accomodate changes in regalloc.rs to use small vecs here?
+        let mut src_regs = Vec::new();
+        let mut dst_regs = Vec::new();
+
         // Now create the edge blocks, with phi lowering (block parameter copies).
         for (inst, edge_block, orig_block) in edge_blocks.into_iter() {
             debug!(
@@ -450,13 +456,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 .map(|p| self.f.dfg.value_type(*p))
                 .collect();
 
-            // FIXME sewardj 2020Feb29: use SmallVec
-            let mut src_regs = vec![];
-            let mut dst_regs = vec![];
-
             // Create all of the phi uses (reads) from jump args to temps.
-
             // Round up all the source and destination regs
+            src_regs.clear();
+            dst_regs.clear();
             for (i, arg) in self.f.dfg.inst_variable_args(inst).iter().enumerate() {
                 let arg = self.f.dfg.resolve_aliases(*arg);
                 debug!("jump arg {} is {}", i, arg);
