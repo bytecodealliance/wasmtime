@@ -72,6 +72,7 @@ use alloc::vec::Vec;
 
 use regalloc::{RealReg, Reg, RegClass, Set, SpillSlot, Writable};
 
+use core::mem;
 use log::{debug, trace};
 
 /// A location for an argument or return value.
@@ -1267,8 +1268,11 @@ impl ABICall for AArch64ABICall {
         }
     }
 
-    fn emit_call<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
-        let (uses, defs) = (self.uses.clone(), self.defs.clone());
+    fn emit_call<C: LowerCtx<I = Self::I>>(&mut self, ctx: &mut C) {
+        let (uses, defs) = (
+            mem::replace(&mut self.uses, Set::empty()),
+            mem::replace(&mut self.defs, Set::empty()),
+        );
         match &self.dest {
             &CallDest::ExtName(ref name, RelocDistance::Near) => ctx.emit(Inst::Call {
                 dest: name.clone(),

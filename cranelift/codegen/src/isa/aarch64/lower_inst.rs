@@ -1263,7 +1263,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
 
         Opcode::Call | Opcode::CallIndirect => {
             let loc = ctx.srcloc(insn);
-            let (abi, inputs) = match op {
+            let (mut abi, inputs) = match op {
                 Opcode::Call => {
                     let (extname, dist) = ctx.call_target(insn).unwrap();
                     let extname = extname.clone();
