@@ -214,8 +214,10 @@ pub enum MachTerminator<'a> {
 
 /// A trait describing the ability to encode a MachInst into binary machine code.
 pub trait MachInstEmit<O: MachSectionOutput> {
+    /// Persistent state carried across `emit` invocations.
+    type State: Default + Clone + Debug;
     /// Emit the instruction.
-    fn emit(&self, code: &mut O, flags: &Flags);
+    fn emit(&self, code: &mut O, flags: &Flags, state: &mut Self::State);
 }
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine

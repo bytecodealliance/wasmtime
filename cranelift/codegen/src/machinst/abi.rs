@@ -98,7 +98,10 @@ pub trait ABIBody {
     fn gen_epilogue(&self) -> Vec<Self::I>;
 
     /// Returns the full frame size for the given function, after prologue emission has run. This
-    /// comprises the spill space, incoming argument space, alignment padding, etc.
+    /// comprises the spill slots and stack-storage slots (but not storage for clobbered callee-save
+    /// registers, arguments pushed at callsites within this function, or other ephemeral pushes).
+    /// This is used for ABI variants where the client generates prologue/epilogue code, as in
+    /// Baldrdash (SpiderMonkey integration).
     fn frame_size(&self) -> u32;
 
     /// Get the spill-slot size.
@@ -133,12 +136,7 @@ pub trait ABICall {
     fn num_args(&self) -> usize;
 
     /// Copy an argument value from a source register, prior to the call.
-    fn gen_copy_reg_to_arg<C: LowerCtx<I = Self::I>>(
-        &self,
-        ctx: &mut C,
-        idx: usize,
-        from_reg: Reg,
-    ) -> Vec<Self::I>;
+    fn gen_copy_reg_to_arg(&self, idx: usize, from_reg: Reg) -> Vec<Self::I>;
 
     /// Copy a return value into a destination register, after the call returns.
     fn gen_copy_retval_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Self::I;

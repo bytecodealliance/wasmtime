@@ -112,7 +112,9 @@ pub enum MemLabel {
 /// A memory argument to load/store, encapsulating the possible addressing modes.
 #[derive(Clone, Debug)]
 pub enum MemArg {
-    Label(MemLabel),
+    //
+    // Real ARM64 addressing modes:
+    //
     /// "post-indexed" mode as per AArch64 docs: postincrement reg after address computation.
     PostIndexed(Writable<Reg>, SImm9),
     /// "pre-indexed" mode as per AArch64 docs: preincrement reg before address computation.
@@ -137,11 +139,31 @@ pub enum MemArg {
     /// Scaled (by size of a type) unsigned 12-bit immediate offset from reg.
     UnsignedOffset(Reg, UImm12Scaled),
 
-    /// Offset from the stack pointer. Lowered into a real amode at emission.
+    //
+    // virtual addressing modes that are lowered at emission time:
+    //
+    /// Reference to a "label": e.g., a symbol.
+    Label(MemLabel),
+
+    /// Offset from the stack pointer.
     SPOffset(i64),
 
-    /// Offset from the frame pointer. Lowered into a real amode at emission.
+    /// Offset from the frame pointer.
     FPOffset(i64),
+
+    /// Offset from the "nominal stack pointer", which is where the real SP is
+    /// just after stack and spill slots are allocated in the function prologue.
+    /// At emission time, this is converted to `SPOffset` with a fixup added to
+    /// the offset constant. The fixup is a running value that is tracked as
+    /// emission iterates through instructions in linear order, and can be
+    /// adjusted up and down with [Inst::VirtualSPOffsetAdj].
+    ///
+    /// The standard ABI is in charge of handling this (by emitting the
+    /// adjustment meta-instructions). It maintains the invariant that "nominal
+    /// SP" is where the actual SP is after the function prologue and before
+    /// clobber pushes. See the diagram in the documentation for
+    /// [crate::isa::aarch64::abi](the ABI module) for more details.
+    NominalSPOffset(i64),
 }
 
 impl MemArg {
@@ -443,7 +465,7 @@ impl ShowWithRRU for MemArg {
                 simm9.show_rru(mb_rru)
             ),
             // Eliminated by `mem_finalize()`.
-            &MemArg::SPOffset(..) | &MemArg::FPOffset(..) => {
+            &MemArg::SPOffset(..) | &MemArg::FPOffset(..) | &MemArg::NominalSPOffset(..) => {
                 panic!("Unexpected stack-offset mem-arg mode!")
             }
         }

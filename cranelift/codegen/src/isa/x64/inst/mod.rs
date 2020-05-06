@@ -950,7 +950,9 @@ impl MachInst for Inst {
 }
 
 impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
-    fn emit(&self, sink: &mut O, _flags: &settings::Flags) {
+    type State = ();
+
+    fn emit(&self, sink: &mut O, _flags: &settings::Flags, _: &mut Self::State) {
         emit::emit(self, sink);
     }
 }
