@@ -100,7 +100,7 @@ impl Worker {
         let sent_event = self.sender.try_send(event.clone());
 
         if let Err(ref err) = sent_event {
-            debug!(
+            warn!(
                 "Failed to send asynchronously message to worker thread, \
                  event: {:?}, error: {}",
                 event, err
