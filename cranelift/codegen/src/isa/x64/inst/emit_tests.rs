@@ -33,6 +33,23 @@ fn test_x64_emit() {
     let r14 = regs::r14();
     let r15 = regs::r15();
 
+    let xmm0 = regs::xmm0();
+    let xmm1 = regs::xmm1();
+    let xmm2 = regs::xmm2();
+    let xmm3 = regs::xmm3();
+    let xmm4 = regs::xmm4();
+    let xmm5 = regs::xmm5();
+    let xmm6 = regs::xmm6();
+    let xmm7 = regs::xmm7();
+    let xmm8 = regs::xmm8();
+    let xmm9 = regs::xmm9();
+    let xmm10 = regs::xmm10();
+    let xmm11 = regs::xmm11();
+    let xmm12 = regs::xmm12();
+    let xmm13 = regs::xmm13();
+    let xmm14 = regs::xmm14();
+    let xmm15 = regs::xmm15();
+
     // And Writable<> versions of the same:
     let w_rax = Writable::<Reg>::from_reg(rax);
     let w_rbx = Writable::<Reg>::from_reg(rbx);
@@ -50,6 +67,23 @@ fn test_x64_emit() {
     let w_r13 = Writable::<Reg>::from_reg(r13);
     let w_r14 = Writable::<Reg>::from_reg(r14);
     let w_r15 = Writable::<Reg>::from_reg(r15);
+
+    let w_xmm0 = Writable::<Reg>::from_reg(xmm0);
+    let w_xmm1 = Writable::<Reg>::from_reg(xmm1);
+    let w_xmm2 = Writable::<Reg>::from_reg(xmm2);
+    let w_xmm3 = Writable::<Reg>::from_reg(xmm3);
+    let _w_xmm4 = Writable::<Reg>::from_reg(xmm4);
+    let _w_xmm5 = Writable::<Reg>::from_reg(xmm5);
+    let _w_xmm6 = Writable::<Reg>::from_reg(xmm6);
+    let _w_xmm7 = Writable::<Reg>::from_reg(xmm7);
+    let _w_xmm8 = Writable::<Reg>::from_reg(xmm8);
+    let _w_xmm9 = Writable::<Reg>::from_reg(xmm9);
+    let w_xmm10 = Writable::<Reg>::from_reg(xmm10);
+    let _w_xmm11 = Writable::<Reg>::from_reg(xmm11);
+    let _w_xmm12 = Writable::<Reg>::from_reg(xmm12);
+    let w_xmm13 = Writable::<Reg>::from_reg(xmm13);
+    let _w_xmm14 = Writable::<Reg>::from_reg(xmm14);
+    let _w_xmm15 = Writable::<Reg>::from_reg(xmm15);
 
     let mut insns = Vec::<(Inst, &str, &str)>::new();
 
@@ -2172,6 +2206,67 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
+    // XMM_RM_R
+
+    insns.push((
+        Inst::xmm_rm_r(SSE_Op::SSE_Addss, RM::reg(xmm1), w_xmm0),
+        "F30F58C1",
+        "addss   %xmm1, %xmm0",
+    ));
+    insns.push((
+        Inst::xmm_rm_r(SSE_Op::SSE_Subss, RM::reg(xmm0), w_xmm1),
+        "F30F5CC8",
+        "subss   %xmm0, %xmm1",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SSE_Op::SSE_Addss, RM::reg(xmm11), w_xmm13),
+        "F3450F58EB",
+        "addss   %xmm11, %xmm13",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SSE_Op::SSE_Subss, RM::reg(xmm12), w_xmm1),
+        "F3410F5CCC",
+        "subss   %xmm12, %xmm1",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(
+            SSE_Op::SSE_Addss,
+            RM::mem(Addr::imm_reg_reg_shift(123, r10, rdx, 2)),
+            w_xmm0,
+        ),
+        "F3410F5844927B",
+        "addss   123(%r10,%rdx,4), %xmm0",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(
+            SSE_Op::SSE_Subss,
+            RM::mem(Addr::imm_reg_reg_shift(321, r10, rax, 3)),
+            w_xmm10,
+        ),
+        "F3450F5C94C241010000",
+        "subss   321(%r10,%rax,8), %xmm10",
+    ));
+
+    // ========================================================
+    // XMM_R_R
+
+    insns.push((
+        Inst::xmm_r_r(SSE_Op::SSE_Movss, xmm3, w_xmm2),
+        "F30F10D3",
+        "movss   %xmm3, %xmm2",
+    ));
+
+    insns.push((
+        Inst::xmm_r_r(SSE_Op::SSE2_Movsd, xmm4, w_xmm3),
+        "F20F10DC",
+        "movsd   %xmm4, %xmm3",
+    ));
+
+    // ========================================================
     // Actually run the tests!
     let flags = settings::Flags::new(settings::builder());
     let rru = regs::create_reg_universe_systemv(&flags);
@@ -2179,7 +2274,6 @@ fn test_x64_emit() {
         // Check the printed text is as expected.
         let actual_printing = insn.show_rru(Some(&rru));
         assert_eq!(expected_printing, actual_printing);
-
         let mut sink = test_utils::TestCodeSink::new();
         let mut buffer = MachBuffer::new();
         insn.emit(&mut buffer, &flags, &mut Default::default());
