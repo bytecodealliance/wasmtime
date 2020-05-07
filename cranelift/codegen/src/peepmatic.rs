@@ -422,7 +422,10 @@ fn peepmatic_ty_to_ir_ty(ty: Type, dfg: &DataFlowGraph, root: Inst) -> types::Ty
     }
 }
 
-impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
+// NB: the unsafe contract we must uphold here is that our implementation of
+// `instruction_result_bit_width` must always return a valid, non-zero bit
+// width.
+unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
     type Context = FuncCursor<'b>;
 
     type Instruction = ValueOrInst;

@@ -307,7 +307,9 @@ pub struct TestIsa {
     pub native_word_size_in_bits: u8,
 }
 
-impl<'a> InstructionSet<'a> for TestIsa {
+// Unsafe because we must ensure that `instruction_result_bit_width` never
+// returns zero.
+unsafe impl<'a> InstructionSet<'a> for TestIsa {
     type Context = Program;
 
     type Instruction = Instruction;
@@ -521,7 +523,9 @@ impl<'a> InstructionSet<'a> for TestIsa {
     fn instruction_result_bit_width(&self, program: &mut Program, inst: Instruction) -> u8 {
         log::debug!("instruction_result_bit_width({:?})", inst);
         let ty = program.data(inst).r#type;
-        ty.bit_width.fixed_width().unwrap()
+        let width = ty.bit_width.fixed_width().unwrap();
+        assert!(width != 0);
+        width
     }
 
     fn native_word_size_in_bits(&self, _program: &mut Program) -> u8 {

@@ -3,7 +3,7 @@
 use crate::error::Result;
 use crate::instruction_set::InstructionSet;
 use crate::integer_interner::IntegerInterner;
-use crate::linear::{Action, MatchOp};
+use crate::linear::{Action, MatchOp, MatchResult};
 use crate::optimizer::PeepholeOptimizer;
 use crate::paths::PathInterner;
 use peepmatic_automata::Automaton;
@@ -29,7 +29,7 @@ pub struct PeepholeOptimizations {
 
     /// The underlying automata for matching optimizations' left-hand sides, and
     /// building up the corresponding right-hand side.
-    pub automata: Automaton<Option<u32>, MatchOp, Vec<Action>>,
+    pub automata: Automaton<MatchResult, MatchOp, Vec<Action>>,
 }
 
 impl PeepholeOptimizations {

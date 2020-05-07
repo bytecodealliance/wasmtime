@@ -65,7 +65,12 @@ fn compare_optimizations(
             return c;
         }
 
-        let c = a.expected.cmp(&b.expected).reverse();
+        let c = match (a.expected, b.expected) {
+            (Ok(a), Ok(b)) => a.cmp(&b).reverse(),
+            (Err(_), Ok(_)) => Ordering::Greater,
+            (Ok(_), Err(_)) => Ordering::Less,
+            (Err(linear::Else), Err(linear::Else)) => Ordering::Equal,
+        };
         if c != Ordering::Equal {
             return c;
         }
@@ -228,10 +233,10 @@ pub fn match_in_same_order(opts: &mut linear::Optimizations) {
                 Some(_) => {
                     new_increments.push(linear::Increment {
                         operation: *last_op,
-                        expected: None,
+                        expected: Err(linear::Else),
                         actions: vec![],
                     });
-                    if last_expected.is_some() {
+                    if last_expected.is_ok() {
                         break;
                     }
                 }
@@ -282,12 +287,99 @@ pub fn remove_unnecessary_nops(opts: &mut linear::Optimizations) {
 mod tests {
     use super::*;
     use crate::ast::*;
-    use linear::MatchOp::*;
-    use peepmatic_runtime::{operator::Operator, paths::*};
+    use peepmatic_runtime::{
+        linear::{bool_to_match_result, Else, MatchOp::*, MatchResult},
+        operator::Operator,
+        paths::*,
+    };
+    use std::num::NonZeroU32;
+
+    #[test]
+    fn ok_non_zero_less_than_err_else() {
+        assert!(Ok(NonZeroU32::new(1).unwrap()) < Err(Else));
+    }
 
     macro_rules! sorts_to {
         ($test_name:ident, $source:expr, $make_expected:expr) => {
             #[test]
+            #[allow(unused_variables)]
+            fn $test_name() {
+                let buf = wast::parser::ParseBuffer::new($source).expect("should lex OK");
+
+                let opts = match wast::parser::parse::<Optimizations>(&buf) {
+                    Ok(opts) => opts,
+                    Err(mut e) => {
+                        e.set_path(std::path::Path::new(stringify!($test_name)));
+                        e.set_text($source);
+                        eprintln!("{}", e);
+                        panic!("should parse OK")
+                    }
+                };
+
+                if let Err(mut e) = crate::verify(&opts) {
+                    e.set_path(std::path::Path::new(stringify!($test_name)));
+                    e.set_text($source);
+                    eprintln!("{}", e);
+                    panic!("should verify OK")
+                }
+
+                let mut opts = crate::linearize(&opts);
+
+                let before = opts
+                    .optimizations
+                    .iter()
+                    .map(|o| {
+                        o.increments
+                            .iter()
+                            .map(|i| format!("{:?} == {:?}", i.operation, i.expected))
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+                eprintln!("before = {:#?}", before);
+
+                sort_least_to_most_general(&mut opts);
+
+                let after = opts
+                    .optimizations
+                    .iter()
+                    .map(|o| {
+                        o.increments
+                            .iter()
+                            .map(|i| format!("{:?} == {:?}", i.operation, i.expected))
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+                eprintln!("after = {:#?}", before);
+
+                let linear::Optimizations {
+                    mut paths,
+                    mut integers,
+                    optimizations,
+                } = opts;
+
+                let actual: Vec<Vec<_>> = optimizations
+                    .iter()
+                    .map(|o| {
+                        o.increments
+                            .iter()
+                            .map(|i| (i.operation, i.expected))
+                            .collect()
+                    })
+                    .collect();
+
+                let mut p = |p: &[u8]| paths.intern(Path::new(&p));
+                let mut i = |i: u64| Ok(integers.intern(i).into());
+                let expected = $make_expected(&mut p, &mut i);
+
+                assert_eq!(expected, actual);
+            }
+        };
+    }
+
+    macro_rules! match_in_same_order {
+        ($test_name:ident, $source:expr, $make_expected:expr) => {
+            #[test]
+            #[allow(unused_variables)]
             fn $test_name() {
                 let buf = wast::parser::ParseBuffer::new($source).expect("should lex OK");
 
@@ -311,6 +403,32 @@ mod tests {
                 let mut opts = crate::linearize(&opts);
                 sort_least_to_most_general(&mut opts);
 
+                let before = opts
+                    .optimizations
+                    .iter()
+                    .map(|o| {
+                        o.increments
+                            .iter()
+                            .map(|i| format!("{:?} == {:?}", i.operation, i.expected))
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+                eprintln!("before = {:#?}", before);
+
+                match_in_same_order(&mut opts);
+
+                let after = opts
+                    .optimizations
+                    .iter()
+                    .map(|o| {
+                        o.increments
+                            .iter()
+                            .map(|i| format!("{:?} == {:?}", i.operation, i.expected))
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+                eprintln!("after = {:#?}", before);
+
                 let linear::Optimizations {
                     mut paths,
                     mut integers,
@@ -328,7 +446,7 @@ mod tests {
                     .collect();
 
                 let mut p = |p: &[u8]| paths.intern(Path::new(&p));
-                let mut i = |i: u64| Some(integers.intern(i).into());
+                let mut i = |i: u64| Ok(integers.intern(i).into());
                 let expected = $make_expected(&mut p, &mut i);
 
                 assert_eq!(expected, actual);
@@ -348,53 +466,83 @@ mod tests {
 (=>       (iadd $x 42)                       0)
 (=>       (iadd $x (iadd $y $z))             0)
 ",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> Option<u32>| vec![
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> MatchResult| vec![
             vec![
-                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
-                (Nop, None),
-                (Opcode { path: p(&[0, 1]) }, Some(Operator::Iadd as _)),
-                (Nop, None),
-                (Nop, None),
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
+                ),
+                (Nop, Err(Else)),
+                (
+                    Opcode { path: p(&[0, 1]) },
+                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
+                ),
+                (Nop, Err(Else)),
+                (Nop, Err(Else)),
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
-                (Nop, None),
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
+                ),
+                (Nop, Err(Else)),
                 (IntegerValue { path: p(&[0, 1]) }, i(42))
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
-                (Nop, None),
-                (IsConst { path: p(&[0, 1]) }, Some(1)),
-                (IsPowerOfTwo { path: p(&[0, 1]) }, Some(1))
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
+                ),
+                (Nop, Err(Else)),
+                (IsConst { path: p(&[0, 1]) }, bool_to_match_result(true)),
+                (
+                    IsPowerOfTwo { path: p(&[0, 1]) },
+                    bool_to_match_result(true)
+                )
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
-                (Nop, None),
-                (IsConst { path: p(&[0, 1]) }, Some(1)),
-                (BitWidth { path: p(&[0, 0]) }, Some(32))
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
+                ),
+                (Nop, Err(Else)),
+                (IsConst { path: p(&[0, 1]) }, bool_to_match_result(true)),
+                (
+                    BitWidth { path: p(&[0, 0]) },
+                    Ok(NonZeroU32::new(32).unwrap())
+                )
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
-                (Nop, None),
-                (IsConst { path: p(&[0, 1]) }, Some(1))
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
+                ),
+                (Nop, Err(Else)),
+                (IsConst { path: p(&[0, 1]) }, bool_to_match_result(true))
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
-                (Nop, None),
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
+                ),
+                (Nop, Err(Else)),
                 (
                     Eq {
                         path_a: p(&[0, 1]),
                         path_b: p(&[0, 0]),
                     },
-                    Some(1)
+                    bool_to_match_result(true)
                 )
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
-                (Nop, None),
-                (Nop, None),
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
+                ),
+                (Nop, Err(Else)),
+                (Nop, Err(Else)),
             ],
-            vec![(Nop, None)]
+            vec![(Nop, Err(Else))]
         ]
     );
 
@@ -408,37 +556,164 @@ mod tests {
 (=> (imul 2 $x) (ishl $x 1))
 (=> (imul $x 2) (ishl $x 1))
 ",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> Option<u32>| vec![
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> MatchResult| vec![
             vec![
-                (Opcode { path: p(&[0]) }, Some(Operator::Imul as _)),
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Imul as _).unwrap())
+                ),
                 (IntegerValue { path: p(&[0, 0]) }, i(2)),
-                (Nop, None)
+                (Nop, Err(Else))
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(Operator::Imul as _)),
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Imul as _).unwrap())
+                ),
                 (IntegerValue { path: p(&[0, 0]) }, i(1)),
-                (Nop, None)
+                (Nop, Err(Else))
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(Operator::Imul as _)),
-                (Nop, None),
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Imul as _).unwrap())
+                ),
+                (Nop, Err(Else)),
                 (IntegerValue { path: p(&[0, 1]) }, i(2))
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(Operator::Imul as _)),
-                (Nop, None),
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Imul as _).unwrap())
+                ),
+                (Nop, Err(Else)),
                 (IntegerValue { path: p(&[0, 1]) }, i(1))
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
+                ),
                 (IntegerValue { path: p(&[0, 0]) }, i(0)),
-                (Nop, None)
+                (Nop, Err(Else))
             ],
             vec![
-                (Opcode { path: p(&[0]) }, Some(Operator::Iadd as _)),
-                (Nop, None),
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
+                ),
+                (Nop, Err(Else)),
                 (IntegerValue { path: p(&[0, 1]) }, i(0))
             ]
+        ]
+    );
+
+    sorts_to!(
+        sort_redundant_bor,
+        "
+        (=> (bor (bor $x $y) $x)
+            (bor $x $y))
+
+        (=> (bor (bor $x $y) $y)
+            (bor $x $y))
+        ",
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> MatchResult| vec![
+            vec![
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Bor as _).unwrap())
+                ),
+                (
+                    Opcode { path: p(&[0, 0]) },
+                    Ok(NonZeroU32::new(Operator::Bor as _).unwrap())
+                ),
+                (Nop, Err(Else)),
+                (Nop, Err(Else)),
+                (
+                    Eq {
+                        path_a: p(&[0, 1]),
+                        path_b: p(&[0, 0, 0]),
+                    },
+                    bool_to_match_result(true)
+                ),
+            ],
+            vec![
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Bor as _).unwrap())
+                ),
+                (
+                    Opcode { path: p(&[0, 0]) },
+                    Ok(NonZeroU32::new(Operator::Bor as _).unwrap())
+                ),
+                (Nop, Err(Else)),
+                (Nop, Err(Else)),
+                (
+                    Eq {
+                        path_a: p(&[0, 1]),
+                        path_b: p(&[0, 0, 1]),
+                    },
+                    bool_to_match_result(true)
+                ),
+            ],
+        ]
+    );
+
+    match_in_same_order!(
+        match_in_same_order_redundant_bor,
+        "
+        (=> (bor (bor $x $y) $x)
+            (bor $x $y))
+
+        (=> (bor (bor $x $y) $y)
+            (bor $x $y))
+        ",
+        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> MatchResult| vec![
+            vec![
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Bor as _).unwrap())
+                ),
+                (
+                    Opcode { path: p(&[0, 0]) },
+                    Ok(NonZeroU32::new(Operator::Bor as _).unwrap())
+                ),
+                (Nop, Err(Else)),
+                (Nop, Err(Else)),
+                (
+                    Eq {
+                        path_a: p(&[0, 1]),
+                        path_b: p(&[0, 0, 0]),
+                    },
+                    bool_to_match_result(true)
+                ),
+            ],
+            vec![
+                (
+                    Opcode { path: p(&[0]) },
+                    Ok(NonZeroU32::new(Operator::Bor as _).unwrap())
+                ),
+                (
+                    Opcode { path: p(&[0, 0]) },
+                    Ok(NonZeroU32::new(Operator::Bor as _).unwrap())
+                ),
+                (Nop, Err(Else)),
+                (Nop, Err(Else)),
+                (
+                    Eq {
+                        path_a: p(&[0, 1]),
+                        path_b: p(&[0, 0, 0]),
+                    },
+                    Err(Else),
+                ),
+                (
+                    Eq {
+                        path_a: p(&[0, 1]),
+                        path_b: p(&[0, 0, 1]),
+                    },
+                    bool_to_match_result(true)
+                ),
+            ],
         ]
     );
 }

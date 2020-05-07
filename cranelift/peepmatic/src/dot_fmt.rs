@@ -12,36 +12,37 @@ use peepmatic_runtime::{
 };
 use std::convert::TryFrom;
 use std::io::{self, Write};
+use std::num::NonZeroU32;
 
 #[derive(Debug)]
 pub(crate) struct PeepholeDotFmt<'a>(pub(crate) &'a PathInterner, pub(crate) &'a IntegerInterner);
 
-impl DotFmt<Option<u32>, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFmt<'_> {
+impl DotFmt<linear::MatchResult, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFmt<'_> {
     fn fmt_transition(
         &self,
         w: &mut impl Write,
         from: Option<&linear::MatchOp>,
-        input: &Option<u32>,
+        input: &linear::MatchResult,
         _to: Option<&linear::MatchOp>,
     ) -> io::Result<()> {
         let from = from.expect("we should have match op for every state");
-        if let Some(x) = input {
+        if let Some(x) = input.ok().map(|x| x.get()) {
             match from {
                 linear::MatchOp::Opcode { .. } => {
                     let opcode =
-                        Operator::try_from(*x).expect("we shouldn't generate non-opcode edges");
+                        Operator::try_from(x).expect("we shouldn't generate non-opcode edges");
                     write!(w, "{}", opcode)
                 }
                 linear::MatchOp::ConditionCode { .. } => {
                     let cc =
-                        ConditionCode::try_from(*x).expect("we shouldn't generate non-CC edges");
+                        ConditionCode::try_from(x).expect("we shouldn't generate non-CC edges");
                     write!(w, "{}", cc)
                 }
                 linear::MatchOp::IntegerValue { .. } => {
-                    let x = self.1.lookup(IntegerId(*x));
+                    let x = self.1.lookup(IntegerId(NonZeroU32::new(x).unwrap()));
                     write!(w, "{}", x)
                 }
-                _ => write!(w, "{}", x),
+                _ => write!(w, "Ok({})", x),
             }
         } else {
             write!(w, "(else)")

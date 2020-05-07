@@ -12,6 +12,8 @@ use std::fmt;
 #[repr(u32)]
 pub enum ConditionCode {
     /// Equal.
+    // NB: We convert `ConditionCode` into `NonZeroU32`s with unchecked
+    // conversions; memory safety relies on no variant being zero.
     Eq = 1,
 
     /// Not equal.

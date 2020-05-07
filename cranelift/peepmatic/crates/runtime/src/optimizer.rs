@@ -1,7 +1,7 @@
 //! An optimizer for a set of peephole optimizations.
 
 use crate::instruction_set::InstructionSet;
-use crate::linear::{Action, MatchOp};
+use crate::linear::{bool_to_match_result, Action, Else, MatchOp, MatchResult};
 use crate::operator::UnquoteOperator;
 use crate::optimizations::PeepholeOptimizations;
 use crate::part::{Constant, Part};
@@ -10,6 +10,7 @@ use peepmatic_automata::State;
 use std::convert::TryFrom;
 use std::fmt::{self, Debug};
 use std::mem;
+use std::num::NonZeroU32;
 
 /// A peephole optimizer instance that can apply a set of peephole
 /// optimizations to instructions.
@@ -275,43 +276,72 @@ where
         context: &mut I::Context,
         root: I::Instruction,
         match_op: MatchOp,
-    ) -> Option<u32> {
+    ) -> MatchResult {
         use crate::linear::MatchOp::*;
 
         log::trace!("Evaluating match operation: {:?}", match_op);
-        let result = match match_op {
+        let result: MatchResult = (|| match match_op {
             Opcode { path } => {
                 let path = self.peep_opt.paths.lookup(path);
-                let part = self.instr_set.get_part_at_path(context, root, path)?;
-                let inst = part.as_instruction()?;
-                self.instr_set.operator(context, inst).map(|op| op as u32)
+                let part = self
+                    .instr_set
+                    .get_part_at_path(context, root, path)
+                    .ok_or(Else)?;
+                let inst = part.as_instruction().ok_or(Else)?;
+                let op = self.instr_set.operator(context, inst).ok_or(Else)?;
+                let op = op as u32;
+                debug_assert!(
+                    op != 0,
+                    "`Operator` doesn't have any variant represented
+        with zero"
+                );
+                Ok(unsafe { NonZeroU32::new_unchecked(op as u32) })
             }
             IsConst { path } => {
                 let path = self.peep_opt.paths.lookup(path);
-                let part = self.instr_set.get_part_at_path(context, root, path)?;
+                let part = self
+                    .instr_set
+                    .get_part_at_path(context, root, path)
+                    .ok_or(Else)?;
                 let is_const = match part {
                     Part::Instruction(i) => {
                         self.instr_set.instruction_to_constant(context, i).is_some()
                     }
                     Part::ConditionCode(_) | Part::Constant(_) => true,
                 };
-                Some(is_const as u32)
+                bool_to_match_result(is_const)
             }
             IsPowerOfTwo { path } => {
                 let path = self.peep_opt.paths.lookup(path);
-                let part = self.instr_set.get_part_at_path(context, root, path)?;
+                let part = self
+                    .instr_set
+                    .get_part_at_path(context, root, path)
+                    .ok_or(Else)?;
                 match part {
-                    Part::Constant(c) => Some(c.as_int().unwrap().is_power_of_two() as u32),
-                    Part::Instruction(i) => {
-                        let c = self.instr_set.instruction_to_constant(context, i)?;
-                        Some(c.as_int().unwrap().is_power_of_two() as u32)
+                    Part::Constant(c) => {
+                        let is_pow2 = c.as_int().unwrap().is_power_of_two();
+                        bool_to_match_result(is_pow2)
                     }
-                    Part::ConditionCode(_) => panic!("IsPowerOfTwo on a condition code"),
+                    Part::Instruction(i) => {
+                        let c = self
+                            .instr_set
+                            .instruction_to_constant(context, i)
+                            .ok_or(Else)?;
+                        let is_pow2 = c.as_int().unwrap().is_power_of_two();
+                        bool_to_match_result(is_pow2)
+                    }
+                    Part::ConditionCode(_) => unreachable!(
+                        "IsPowerOfTwo on a condition
+        code"
+                    ),
                 }
             }
             BitWidth { path } => {
                 let path = self.peep_opt.paths.lookup(path);
-                let part = self.instr_set.get_part_at_path(context, root, path)?;
+                let part = self
+                    .instr_set
+                    .get_part_at_path(context, root, path)
+                    .ok_or(Else)?;
                 let bit_width = match part {
                     Part::Instruction(i) => self.instr_set.instruction_result_bit_width(context, i),
                     Part::Constant(Constant::Int(_, w)) | Part::Constant(Constant::Bool(_, w)) => {
@@ -321,14 +351,22 @@ where
                     }
                     Part::ConditionCode(_) => panic!("BitWidth on condition code"),
                 };
-                Some(bit_width as u32)
+                debug_assert!(
+                    bit_width != 0,
+                    "`InstructionSet` implementors must uphold the contract that \
+                     `instruction_result_bit_width` returns one of 1, 8, 16, 32, 64, or 128"
+                );
+                Ok(unsafe { NonZeroU32::new_unchecked(bit_width as u32) })
             }
             FitsInNativeWord { path } => {
                 let native_word_size = self.instr_set.native_word_size_in_bits(context);
                 debug_assert!(native_word_size.is_power_of_two());
 
                 let path = self.peep_opt.paths.lookup(path);
-                let part = self.instr_set.get_part_at_path(context, root, path)?;
+                let part = self
+                    .instr_set
+                    .get_part_at_path(context, root, path)
+                    .ok_or(Else)?;
                 let fits = match part {
                     Part::Instruction(i) => {
                         let size = self.instr_set.instruction_result_bit_width(context, i);
@@ -341,13 +379,19 @@ where
                     }
                     Part::ConditionCode(_) => panic!("FitsInNativeWord on condition code"),
                 };
-                Some(fits as u32)
+                bool_to_match_result(fits)
             }
             Eq { path_a, path_b } => {
                 let path_a = self.peep_opt.paths.lookup(path_a);
-                let part_a = self.instr_set.get_part_at_path(context, root, path_a)?;
+                let part_a = self
+                    .instr_set
+                    .get_part_at_path(context, root, path_a)
+                    .ok_or(Else)?;
                 let path_b = self.peep_opt.paths.lookup(path_b);
-                let part_b = self.instr_set.get_part_at_path(context, root, path_b)?;
+                let part_b = self
+                    .instr_set
+                    .get_part_at_path(context, root, path_b)
+                    .ok_or(Else)?;
                 let eq = match (part_a, part_b) {
                     (Part::Instruction(inst), Part::Constant(c1))
                     | (Part::Constant(c1), Part::Instruction(inst)) => {
@@ -358,43 +402,67 @@ where
                     }
                     (a, b) => a == b,
                 };
-                Some(eq as _)
+                bool_to_match_result(eq)
             }
             IntegerValue { path } => {
                 let path = self.peep_opt.paths.lookup(path);
-                let part = self.instr_set.get_part_at_path(context, root, path)?;
+                let part = self
+                    .instr_set
+                    .get_part_at_path(context, root, path)
+                    .ok_or(Else)?;
                 match part {
                     Part::Constant(c) => {
-                        let x = c.as_int()?;
-                        self.peep_opt.integers.already_interned(x).map(|id| id.0)
+                        let x = c.as_int().ok_or(Else)?;
+                        let id = self.peep_opt.integers.already_interned(x).ok_or(Else)?;
+                        Ok(id.0)
                     }
                     Part::Instruction(i) => {
-                        let c = self.instr_set.instruction_to_constant(context, i)?;
-                        let x = c.as_int()?;
-                        self.peep_opt.integers.already_interned(x).map(|id| id.0)
+                        let c = self
+                            .instr_set
+                            .instruction_to_constant(context, i)
+                            .ok_or(Else)?;
+                        let x = c.as_int().ok_or(Else)?;
+                        let id = self.peep_opt.integers.already_interned(x).ok_or(Else)?;
+                        Ok(id.0)
                     }
-                    Part::ConditionCode(_) => panic!("IntegerValue on condition code"),
+                    Part::ConditionCode(_) => unreachable!("IntegerValue on condition code"),
                 }
             }
             BooleanValue { path } => {
                 let path = self.peep_opt.paths.lookup(path);
-                let part = self.instr_set.get_part_at_path(context, root, path)?;
+                let part = self
+                    .instr_set
+                    .get_part_at_path(context, root, path)
+                    .ok_or(Else)?;
                 match part {
-                    Part::Constant(c) => c.as_bool().map(|b| b as u32),
-                    Part::Instruction(i) => {
-                        let c = self.instr_set.instruction_to_constant(context, i)?;
-                        c.as_bool().map(|b| b as u32)
+                    Part::Constant(c) => {
+                        let b = c.as_bool().ok_or(Else)?;
+                        bool_to_match_result(b)
                     }
-                    Part::ConditionCode(_) => panic!("IntegerValue on condition code"),
+                    Part::Instruction(i) => {
+                        let c = self
+                            .instr_set
+                            .instruction_to_constant(context, i)
+                            .ok_or(Else)?;
+                        let b = c.as_bool().ok_or(Else)?;
+                        bool_to_match_result(b)
+                    }
+                    Part::ConditionCode(_) => unreachable!("IntegerValue on condition code"),
                 }
             }
             ConditionCode { path } => {
                 let path = self.peep_opt.paths.lookup(path);
-                let part = self.instr_set.get_part_at_path(context, root, path)?;
-                part.as_condition_code().map(|cc| cc as u32)
+                let part = self
+                    .instr_set
+                    .get_part_at_path(context, root, path)
+                    .ok_or(Else)?;
+                let cc = part.as_condition_code().ok_or(Else)?;
+                let cc = cc as u32;
+                debug_assert!(cc != 0);
+                Ok(unsafe { NonZeroU32::new_unchecked(cc) })
             }
-            MatchOp::Nop => None,
-        };
+            MatchOp::Nop => Err(Else),
+        })();
         log::trace!("Evaluated match operation: {:?} = {:?}", match_op, result);
         result
     }
@@ -437,12 +505,12 @@ where
                 r#final = Some((query.current_state(), self.actions.len()));
             }
 
-            // Anything following a `None` transition doesn't care about the
+            // Anything following a `Else` transition doesn't care about the
             // result of this match operation, so if we partially follow the
-            // current non-`None` path, but don't ultimately find a matching
+            // current non-`Else` path, but don't ultimately find a matching
             // optimization, we want to be able to backtrack to this state and
-            // then try taking the `None` transition.
-            if query.has_transition_on(&None) {
+            // then try taking the `Else` transition.
+            if query.has_transition_on(&Err(Else)) {
                 self.backtracking_states
                     .push((query.current_state(), self.actions.len()));
             }
@@ -462,8 +530,8 @@ where
                 query.go_to_state(state);
                 self.actions.truncate(actions_len);
                 query
-                    .next(&None)
-                    .expect("backtracking states always have `None` transitions")
+                    .next(&Err(Else))
+                    .expect("backtracking states always have `Else` transitions")
             } else {
                 break;
             };

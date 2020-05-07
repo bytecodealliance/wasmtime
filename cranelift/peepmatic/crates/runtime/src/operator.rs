@@ -20,6 +20,9 @@ use serde::{Deserialize, Serialize};
 pub enum Operator {
     /// `adjust_sp_down`
     #[peepmatic(params(iNN), result(void))]
+    // NB: We convert `Operator`s into `NonZeroU32`s with unchecked casts;
+    // memory safety relies on `Operator` starting at `1` and no variant ever
+    // being zero.
     AdjustSpDown = 1,
 
     /// `adjust_sp_down_imm`

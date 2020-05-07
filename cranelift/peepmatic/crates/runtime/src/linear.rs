@@ -11,6 +11,7 @@ use crate::operator::{Operator, UnquoteOperator};
 use crate::paths::{PathId, PathInterner};
 use crate::r#type::{BitWidth, Type};
 use serde::{Deserialize, Serialize};
+use std::num::NonZeroU32;
 
 /// A set of linear optimizations.
 #[derive(Debug)]
@@ -32,6 +33,26 @@ pub struct Optimization {
     pub increments: Vec<Increment>,
 }
 
+/// Match any value.
+///
+/// This can be used to create fallback, wildcard-style transitions between
+/// states.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct Else;
+
+/// The result of evaluating a `MatchOp`.
+///
+/// This is either a specific non-zero `u32`, or a fallback that matches
+/// everything.
+pub type MatchResult = Result<NonZeroU32, Else>;
+
+/// Convert a boolean to a `MatchResult`.
+#[inline]
+pub fn bool_to_match_result(b: bool) -> MatchResult {
+    let b = b as u32;
+    unsafe { Ok(NonZeroU32::new_unchecked(b + 1)) }
+}
+
 /// An increment is a matching operation, the expected result from that
 /// operation to continue to the next increment, and the actions to take to
 /// build up the LHS scope and RHS instructions given that we got the expected
@@ -44,9 +65,9 @@ pub struct Increment {
     pub operation: MatchOp,
 
     /// The expected result of our matching operation, that enables us to
-    /// continue to the next increment. `None` is used for wildcard-style "else"
-    /// transitions.
-    pub expected: Option<u32>,
+    /// continue to the next increment, or `Else` for "don't care"
+    /// wildcard-style matching.
+    pub expected: MatchResult,
 
     /// Actions to perform, given that the operation resulted in the expected
     /// value.
@@ -216,4 +237,24 @@ pub enum Action {
         /// The operands for this instruction.
         operands: [RhsId; 3],
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn match_result_is_4_bytes_in_size() {
+        assert_eq!(std::mem::size_of::<MatchResult>(), 4);
+    }
+
+    #[test]
+    fn match_op_is_12_bytes_in_size() {
+        assert_eq!(std::mem::size_of::<MatchOp>(), 12);
+    }
+
+    #[test]
+    fn action_is_20_bytes_in_size() {
+        assert_eq!(std::mem::size_of::<Action>(), 20);
+    }
 }

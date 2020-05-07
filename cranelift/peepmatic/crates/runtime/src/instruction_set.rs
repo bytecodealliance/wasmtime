@@ -21,7 +21,11 @@ use std::fmt::Debug;
 /// new `MachInst` and vcode backend easier, since all that needs to be done is
 /// "just" implementing this trait. (And probably add/modify some
 /// `peepmatic_runtime::operation::Operation`s as well).
-pub trait InstructionSet<'a> {
+///
+/// ## Safety
+///
+/// See doc comment for `instruction_result_bit_width`.
+pub unsafe trait InstructionSet<'a> {
     /// Mutable context passed into all trait methods. Can be whatever you want!
     ///
     /// In practice, this is a `FuncCursor` for `cranelift-codegen`'s trait
@@ -124,7 +128,10 @@ pub trait InstructionSet<'a> {
 
     /// Get the bit width of the given instruction's result.
     ///
-    /// Must be one of 1, 8, 16, 32, 64, or 128.
+    /// ## Safety
+    ///
+    /// There is code that makes memory-safety assumptions that the result is
+    /// always one of 1, 8, 16, 32, 64, or 128. Implementors must uphold this.
     fn instruction_result_bit_width(
         &self,
         context: &mut Self::Context,
