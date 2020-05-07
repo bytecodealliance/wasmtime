@@ -149,11 +149,11 @@ pub enum MatchOp {
 /// A canonicalized identifier for a left-hand side value that was bound in a
 /// pattern.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct LhsId(pub u32);
+pub struct LhsId(pub u16);
 
 /// A canonicalized identifier for a right-hand side value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct RhsId(pub u32);
+pub struct RhsId(pub u16);
 
 /// An action to perform when transitioning between states in the automata.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -243,18 +243,22 @@ pub enum Action {
 mod tests {
     use super::*;
 
+    // These types all end up in the automaton, so we should take care that they
+    // are small and don't fill up the data cache (or take up too much
+    // serialized size).
+
     #[test]
-    fn match_result_is_4_bytes_in_size() {
+    fn match_result_size() {
         assert_eq!(std::mem::size_of::<MatchResult>(), 4);
     }
 
     #[test]
-    fn match_op_is_12_bytes_in_size() {
-        assert_eq!(std::mem::size_of::<MatchOp>(), 12);
+    fn match_op_size() {
+        assert_eq!(std::mem::size_of::<MatchOp>(), 6);
     }
 
     #[test]
-    fn action_is_20_bytes_in_size() {
-        assert_eq!(std::mem::size_of::<Action>(), 20);
+    fn action_size() {
+        assert_eq!(std::mem::size_of::<Action>(), 16);
     }
 }

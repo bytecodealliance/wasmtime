@@ -46,7 +46,7 @@ impl Path<'_> {
 
 /// An identifier for an interned path.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct PathId(u32);
+pub struct PathId(u16);
 
 /// An interner and de-duplicator for `Path`s.
 ///
@@ -93,7 +93,7 @@ impl PathInterner {
 
     #[inline(never)]
     fn intern_new<'a>(&mut self, path: Path<'a>) -> PathId {
-        let id: u32 = self
+        let id: u16 = self
             .paths
             .len()
             .try_into()

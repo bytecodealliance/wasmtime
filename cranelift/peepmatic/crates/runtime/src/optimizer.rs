@@ -414,7 +414,7 @@ where
                     Part::Constant(c) => {
                         let x = c.as_int().ok_or(Else)?;
                         let id = self.peep_opt.integers.already_interned(x).ok_or(Else)?;
-                        Ok(id.0)
+                        Ok(id.into())
                     }
                     Part::Instruction(i) => {
                         let c = self
@@ -423,7 +423,7 @@ where
                             .ok_or(Else)?;
                         let x = c.as_int().ok_or(Else)?;
                         let id = self.peep_opt.integers.already_interned(x).ok_or(Else)?;
-                        Ok(id.0)
+                        Ok(id.into())
                     }
                     Part::ConditionCode(_) => unreachable!("IntegerValue on condition code"),
                 }

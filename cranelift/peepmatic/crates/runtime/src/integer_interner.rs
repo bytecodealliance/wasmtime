@@ -7,11 +7,11 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::num::NonZeroU32;
+use std::num::{NonZeroU16, NonZeroU32};
 
 /// An identifier for an interned integer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct IntegerId(#[doc(hidden)] pub NonZeroU32);
+pub struct IntegerId(#[doc(hidden)] pub NonZeroU16);
 
 /// An interner for integer values.
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -40,8 +40,8 @@ impl IntegerInterner {
             return *id;
         }
 
-        assert!((self.values.len() as u64) < (std::u32::MAX as u64));
-        let id = IntegerId(unsafe { NonZeroU32::new_unchecked(self.values.len() as u32 + 1) });
+        assert!((self.values.len() as u64) < (std::u16::MAX as u64));
+        let id = IntegerId(unsafe { NonZeroU16::new_unchecked(self.values.len() as u16 + 1) });
 
         self.values.push(value);
         self.map.insert(value, id);
@@ -65,16 +65,9 @@ impl IntegerInterner {
     }
 }
 
-impl From<IntegerId> for u32 {
-    #[inline]
-    fn from(id: IntegerId) -> u32 {
-        id.0.get()
-    }
-}
-
 impl From<IntegerId> for NonZeroU32 {
     #[inline]
     fn from(id: IntegerId) -> NonZeroU32 {
-        id.0
+        id.0.into()
     }
 }

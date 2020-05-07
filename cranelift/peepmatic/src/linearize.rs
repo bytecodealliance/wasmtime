@@ -92,6 +92,7 @@ use peepmatic_runtime::{
     paths::{Path, PathId, PathInterner},
 };
 use std::collections::BTreeMap;
+use std::convert::TryInto;
 use std::num::NonZeroU32;
 use wast::Id;
 
@@ -339,7 +340,7 @@ impl<'a> RhsBuilder<'a> {
     ) {
         while let Some(rhs) = self.rhs_post_order.next() {
             actions.push(self.rhs_to_linear_action(integers, lhs_id_to_path, rhs));
-            let id = linear::RhsId(self.rhs_span_to_id.len() as u32);
+            let id = linear::RhsId(self.rhs_span_to_id.len().try_into().unwrap());
             self.rhs_span_to_id.insert(rhs.span(), id);
         }
     }

@@ -10,9 +10,9 @@ use peepmatic_runtime::{
     operator::Operator,
     paths::{PathId, PathInterner},
 };
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::io::{self, Write};
-use std::num::NonZeroU32;
+use std::num::NonZeroU16;
 
 #[derive(Debug)]
 pub(crate) struct PeepholeDotFmt<'a>(pub(crate) &'a PathInterner, pub(crate) &'a IntegerInterner);
@@ -39,7 +39,9 @@ impl DotFmt<linear::MatchResult, linear::MatchOp, Vec<linear::Action>> for Peeph
                     write!(w, "{}", cc)
                 }
                 linear::MatchOp::IntegerValue { .. } => {
-                    let x = self.1.lookup(IntegerId(NonZeroU32::new(x).unwrap()));
+                    let x = self
+                        .1
+                        .lookup(IntegerId(NonZeroU16::new(x.try_into().unwrap()).unwrap()));
                     write!(w, "{}", x)
                 }
                 _ => write!(w, "Ok({})", x),
