@@ -1,13 +1,16 @@
 use crate::entry::{Entry, EntryHandle};
 use crate::fdpool::FdPool;
 use crate::handle::Handle;
-use crate::sys::oshandle::{OsHandle, OsHandleExt};
+use crate::sys::osdir::OsDir;
+use crate::sys::osother::{OsOther, OsOtherExt};
+use crate::sys::stdio::{Stderr, StderrExt, Stdin, StdinExt, Stdout, StdoutExt};
 use crate::virtfs::{VirtualDir, VirtualDirEntry};
 use crate::wasi::types;
 use crate::wasi::{Errno, Result};
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::ffi::{self, CString, OsString};
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -32,9 +35,9 @@ pub enum WasiCtxBuilderError {
     /// Provided sequence of bytes contained an unexpected NUL byte.
     #[error("provided sequence contained an unexpected NUL byte")]
     UnexpectedNul(#[from] ffi::NulError),
-    /// Provided `File` is not a directory.
-    #[error("preopened directory path {} is not a directory", .0.display())]
-    NotADirectory(PathBuf),
+    /// The root of a VirtualDirEntry tree must be a VirtualDirEntry::Directory.
+    #[error("the root of a VirtualDirEntry tree at {} must be a VirtualDirEntry::Directory", .0.display())]
+    VirtualDirEntryRootNotADirectory(PathBuf),
     /// `WasiCtx` has too many opened files.
     #[error("context object has too many opened files")]
     TooManyFilesOpen,
@@ -43,8 +46,8 @@ pub enum WasiCtxBuilderError {
 type WasiCtxBuilderResult<T> = std::result::Result<T, WasiCtxBuilderError>;
 
 enum PendingEntry {
-    Thunk(fn() -> io::Result<OsHandle>),
-    File(File),
+    Thunk(fn() -> io::Result<Box<dyn Handle>>),
+    OsHandle(File),
 }
 
 impl std::fmt::Debug for PendingEntry {
@@ -53,9 +56,9 @@ impl std::fmt::Debug for PendingEntry {
             Self::Thunk(f) => write!(
                 fmt,
                 "PendingEntry::Thunk({:p})",
-                f as *const fn() -> io::Result<OsHandle>
+                f as *const fn() -> io::Result<Box<dyn Handle>>
             ),
-            Self::File(f) => write!(fmt, "PendingEntry::File({:?})", f),
+            Self::OsHandle(f) => write!(fmt, "PendingEntry::OsHandle({:?})", f),
         }
     }
 }
@@ -105,12 +108,27 @@ impl PendingCString {
     }
 }
 
+struct PendingPreopen(Box<dyn FnOnce() -> WasiCtxBuilderResult<Box<dyn Handle>>>);
+
+impl PendingPreopen {
+    fn new<F>(f: F) -> Self
+    where
+        F: FnOnce() -> WasiCtxBuilderResult<Box<dyn Handle>> + 'static,
+    {
+        Self(Box::new(f))
+    }
+
+    fn into(self) -> WasiCtxBuilderResult<Box<dyn Handle>> {
+        self.0()
+    }
+}
+
 /// A builder allowing customizable construction of `WasiCtx` instances.
 pub struct WasiCtxBuilder {
     stdin: Option<PendingEntry>,
     stdout: Option<PendingEntry>,
     stderr: Option<PendingEntry>,
-    preopens: Option<Vec<(PathBuf, Box<dyn Handle>)>>,
+    preopens: Option<Vec<(PathBuf, PendingPreopen)>>,
     args: Option<Vec<PendingCString>>,
     env: Option<HashMap<PendingCString, PendingCString>>,
 }
@@ -118,9 +136,9 @@ pub struct WasiCtxBuilder {
 impl WasiCtxBuilder {
     /// Builder for a new `WasiCtx`.
     pub fn new() -> Self {
-        let stdin = Some(PendingEntry::Thunk(OsHandle::from_null));
-        let stdout = Some(PendingEntry::Thunk(OsHandle::from_null));
-        let stderr = Some(PendingEntry::Thunk(OsHandle::from_null));
+        let stdin = Some(PendingEntry::Thunk(OsOther::from_null));
+        let stdout = Some(PendingEntry::Thunk(OsOther::from_null));
+        let stderr = Some(PendingEntry::Thunk(OsOther::from_null));
 
         Self {
             stdin,
@@ -167,27 +185,27 @@ impl WasiCtxBuilder {
 
     /// Inherit stdin from the host process.
     pub fn inherit_stdin(&mut self) -> &mut Self {
-        self.stdin = Some(PendingEntry::Thunk(|| Ok(OsHandle::stdin())));
+        self.stdin = Some(PendingEntry::Thunk(Stdin::stdin));
         self
     }
 
     /// Inherit stdout from the host process.
     pub fn inherit_stdout(&mut self) -> &mut Self {
-        self.stdout = Some(PendingEntry::Thunk(|| Ok(OsHandle::stdout())));
+        self.stdout = Some(PendingEntry::Thunk(Stdout::stdout));
         self
     }
 
-    /// Inherit stdout from the host process.
+    /// Inherit stderr from the host process.
     pub fn inherit_stderr(&mut self) -> &mut Self {
-        self.stderr = Some(PendingEntry::Thunk(|| Ok(OsHandle::stderr())));
+        self.stderr = Some(PendingEntry::Thunk(Stderr::stderr));
         self
     }
 
     /// Inherit the stdin, stdout, and stderr streams from the host process.
     pub fn inherit_stdio(&mut self) -> &mut Self {
-        self.stdin = Some(PendingEntry::Thunk(|| Ok(OsHandle::stdin())));
-        self.stdout = Some(PendingEntry::Thunk(|| Ok(OsHandle::stdout())));
-        self.stderr = Some(PendingEntry::Thunk(|| Ok(OsHandle::stderr())));
+        self.stdin = Some(PendingEntry::Thunk(Stdin::stdin));
+        self.stdout = Some(PendingEntry::Thunk(Stdout::stdout));
+        self.stderr = Some(PendingEntry::Thunk(Stderr::stderr));
         self
     }
 
@@ -231,28 +249,32 @@ impl WasiCtxBuilder {
 
     /// Provide a File to use as stdin
     pub fn stdin(&mut self, file: File) -> &mut Self {
-        self.stdin = Some(PendingEntry::File(file));
+        self.stdin = Some(PendingEntry::OsHandle(file));
         self
     }
 
     /// Provide a File to use as stdout
     pub fn stdout(&mut self, file: File) -> &mut Self {
-        self.stdout = Some(PendingEntry::File(file));
+        self.stdout = Some(PendingEntry::OsHandle(file));
         self
     }
 
     /// Provide a File to use as stderr
     pub fn stderr(&mut self, file: File) -> &mut Self {
-        self.stderr = Some(PendingEntry::File(file));
+        self.stderr = Some(PendingEntry::OsHandle(file));
         self
     }
 
     /// Add a preopened directory.
     pub fn preopened_dir<P: AsRef<Path>>(&mut self, dir: File, guest_path: P) -> &mut Self {
-        self.preopens.as_mut().unwrap().push((
-            guest_path.as_ref().to_owned(),
-            Box::new(OsHandle::from(dir)),
-        ));
+        let preopen = PendingPreopen::new(move || {
+            let dir = OsDir::try_from(dir).map_err(WasiCtxBuilderError::from)?;
+            Ok(Box::new(dir))
+        });
+        self.preopens
+            .as_mut()
+            .unwrap()
+            .push((guest_path.as_ref().to_owned(), preopen));
         self
     }
 
@@ -277,18 +299,22 @@ impl WasiCtxBuilder {
             }
         }
 
-        let dir = if let VirtualDirEntry::Directory(entries) = dir {
-            let mut dir = VirtualDir::new(true);
-            populate_directory(entries, &mut dir);
-            Box::new(dir)
-        } else {
-            panic!("the root of a VirtualDirEntry tree must be a VirtualDirEntry::Directory");
-        };
-
+        let guest_path_owned = guest_path.as_ref().to_owned();
+        let preopen = PendingPreopen::new(move || {
+            if let VirtualDirEntry::Directory(entries) = dir {
+                let mut dir = VirtualDir::new(true);
+                populate_directory(entries, &mut dir);
+                Ok(Box::new(dir))
+            } else {
+                Err(WasiCtxBuilderError::VirtualDirEntryRootNotADirectory(
+                    guest_path_owned,
+                ))
+            }
+        });
         self.preopens
             .as_mut()
             .unwrap()
-            .push((guest_path.as_ref().to_owned(), dir));
+            .push((guest_path.as_ref().to_owned(), preopen));
         self
     }
 
@@ -336,15 +362,16 @@ impl WasiCtxBuilder {
             log::debug!("WasiCtx inserting entry {:?}", pending);
             let fd = match pending {
                 PendingEntry::Thunk(f) => {
-                    let handle = EntryHandle::new(f()?);
-                    let entry = Entry::from(handle)?;
+                    let handle = EntryHandle::from(f()?);
+                    let entry = Entry::new(handle);
                     entries
                         .insert(entry)
                         .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?
                 }
-                PendingEntry::File(f) => {
-                    let handle = EntryHandle::new(OsHandle::from(f));
-                    let entry = Entry::from(handle)?;
+                PendingEntry::OsHandle(f) => {
+                    let handle = OsOther::try_from(f)?;
+                    let handle = EntryHandle::new(handle);
+                    let entry = Entry::new(handle);
                     entries
                         .insert(entry)
                         .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?
@@ -353,13 +380,9 @@ impl WasiCtxBuilder {
             log::debug!("WasiCtx inserted at {:?}", fd);
         }
         // Then add the preopen entries.
-        for (guest_path, dir) in self.preopens.take().unwrap() {
-            if !dir.is_directory() {
-                return Err(WasiCtxBuilderError::NotADirectory(guest_path));
-            }
-
-            let handle = EntryHandle::from(dir);
-            let mut entry = Entry::from(handle)?;
+        for (guest_path, preopen) in self.preopens.take().unwrap() {
+            let handle = EntryHandle::from(preopen.into()?);
+            let mut entry = Entry::new(handle);
             entry.preopen_path = Some(guest_path);
             let fd = entries
                 .insert(entry)

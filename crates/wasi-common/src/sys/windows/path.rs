@@ -1,7 +1,8 @@
-use super::oshandle::OsFile;
-use crate::entry::EntryRights;
-use crate::sys::oshandle::{AsFile, OsHandle};
+use crate::handle::{Handle, HandleRights};
+use crate::sys::osdir::OsDir;
+use crate::sys::AsFile;
 use crate::wasi::{types, Errno, Result};
+use std::convert::TryFrom;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, Metadata, OpenOptions};
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
@@ -10,7 +11,7 @@ use std::path::{Path, PathBuf};
 use winapi::shared::winerror;
 use winx::file::AccessMode;
 
-fn strip_trailing_slashes_and_concatenate(dirfd: &OsFile, path: &str) -> Result<Option<PathBuf>> {
+fn strip_trailing_slashes_and_concatenate(dirfd: &OsDir, path: &str) -> Result<Option<PathBuf>> {
     if path.ends_with('/') {
         let suffix = path.trim_end_matches('/');
         concatenate(dirfd, Path::new(suffix)).map(Some)
@@ -28,7 +29,7 @@ fn strip_extended_prefix<P: AsRef<OsStr>>(path: P) -> OsString {
     }
 }
 
-fn concatenate<P: AsRef<Path>>(file: &OsFile, path: P) -> Result<PathBuf> {
+fn concatenate<P: AsRef<Path>>(file: &OsDir, path: P) -> Result<PathBuf> {
     use winx::file::get_file_path;
 
     // WASI is not able to deal with absolute paths
@@ -37,7 +38,7 @@ fn concatenate<P: AsRef<Path>>(file: &OsFile, path: P) -> Result<PathBuf> {
         return Err(Errno::Notcapable);
     }
 
-    let dir_path = get_file_path(&file.as_file())?;
+    let dir_path = get_file_path(&*file.as_file()?)?;
     // concatenate paths
     let mut out_path = PathBuf::from(dir_path);
     out_path.push(path.as_ref());
@@ -89,10 +90,10 @@ pub(crate) fn from_host<S: AsRef<OsStr>>(s: S) -> Result<String> {
 }
 
 pub(crate) fn open_rights(
-    input_rights: &EntryRights,
+    input_rights: &HandleRights,
     oflags: types::Oflags,
     fdflags: types::Fdflags,
-) -> EntryRights {
+) -> HandleRights {
     // which rights are needed on the dirfd?
     let mut needed_base = types::Rights::PATH_OPEN;
     let mut needed_inheriting = input_rights.base | input_rights.inheriting;
@@ -113,10 +114,10 @@ pub(crate) fn open_rights(
         needed_inheriting |= types::Rights::FD_SYNC;
     }
 
-    EntryRights::new(needed_base, needed_inheriting)
+    HandleRights::new(needed_base, needed_inheriting)
 }
 
-pub(crate) fn readlinkat(dirfd: &OsFile, s_path: &str) -> Result<String> {
+pub(crate) fn readlinkat(dirfd: &OsDir, s_path: &str) -> Result<String> {
     use winx::file::get_file_path;
 
     let path = concatenate(dirfd, Path::new(s_path))?;
@@ -126,7 +127,7 @@ pub(crate) fn readlinkat(dirfd: &OsFile, s_path: &str) -> Result<String> {
             // we need to strip the prefix from the absolute path
             // as otherwise we will error out since WASI is not capable
             // of dealing with absolute paths
-            let dir_path = get_file_path(&dirfd.as_file())?;
+            let dir_path = get_file_path(&*dirfd.as_file()?)?;
             let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
             let target_path = target_path
                 .strip_prefix(dir_path)
@@ -151,16 +152,16 @@ pub(crate) fn readlinkat(dirfd: &OsFile, s_path: &str) -> Result<String> {
     Err(err.into())
 }
 
-pub(crate) fn create_directory(file: &OsFile, path: &str) -> Result<()> {
+pub(crate) fn create_directory(file: &OsDir, path: &str) -> Result<()> {
     let path = concatenate(file, path)?;
     std::fs::create_dir(&path)?;
     Ok(())
 }
 
 pub(crate) fn link(
-    old_dirfd: &OsFile,
+    old_dirfd: &OsDir,
     old_path: &str,
-    new_dirfd: &OsFile,
+    new_dirfd: &OsDir,
     new_path: &str,
     follow_symlinks: bool,
 ) -> Result<()> {
@@ -197,13 +198,13 @@ pub(crate) fn link(
 }
 
 pub(crate) fn open(
-    dirfd: &OsFile,
+    dirfd: &OsDir,
     path: &str,
     read: bool,
     write: bool,
     oflags: types::Oflags,
     fdflags: types::Fdflags,
-) -> Result<OsHandle> {
+) -> Result<Box<dyn Handle>> {
     use winx::file::{AccessMode, CreationDisposition, Flags};
 
     let is_trunc = oflags.contains(&types::Oflags::TRUNC);
@@ -280,11 +281,11 @@ pub(crate) fn open(
         .access_mode(access_mode.bits())
         .custom_flags(flags.bits())
         .open(&path)?;
-    let handle = OsHandle::from(file);
+    let handle = <Box<dyn Handle>>::try_from(file)?;
     Ok(handle)
 }
 
-pub(crate) fn readlink(dirfd: &OsFile, path: &str, buf: &mut [u8]) -> Result<usize> {
+pub(crate) fn readlink(dirfd: &OsDir, path: &str, buf: &mut [u8]) -> Result<usize> {
     use winx::file::get_file_path;
 
     let path = concatenate(dirfd, path)?;
@@ -294,7 +295,7 @@ pub(crate) fn readlink(dirfd: &OsFile, path: &str, buf: &mut [u8]) -> Result<usi
     // we need to strip the prefix from the absolute path
     // as otherwise we will error out since WASI is not capable
     // of dealing with absolute paths
-    let dir_path = get_file_path(&dirfd.as_file())?;
+    let dir_path = get_file_path(&*dirfd.as_file()?)?;
     let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
     let target_path = target_path
         .strip_prefix(dir_path)
@@ -322,9 +323,9 @@ pub(crate) fn readlink(dirfd: &OsFile, path: &str, buf: &mut [u8]) -> Result<usi
 }
 
 pub(crate) fn rename(
-    old_dirfd: &OsFile,
+    old_dirfd: &OsDir,
     old_path_: &str,
-    new_dirfd: &OsFile,
+    new_dirfd: &OsDir,
     new_path_: &str,
 ) -> Result<()> {
     use std::fs;
@@ -390,7 +391,7 @@ pub(crate) fn rename(
     }
 }
 
-pub(crate) fn symlink(old_path: &str, new_dirfd: &OsFile, new_path_: &str) -> Result<()> {
+pub(crate) fn symlink(old_path: &str, new_dirfd: &OsDir, new_path_: &str) -> Result<()> {
     use std::os::windows::fs::{symlink_dir, symlink_file};
 
     let old_path = concatenate(new_dirfd, Path::new(old_path))?;
@@ -447,7 +448,7 @@ pub(crate) fn symlink(old_path: &str, new_dirfd: &OsFile, new_path_: &str) -> Re
     }
 }
 
-pub(crate) fn unlink_file(dirfd: &OsFile, path: &str) -> Result<()> {
+pub(crate) fn unlink_file(dirfd: &OsDir, path: &str) -> Result<()> {
     use std::fs;
 
     let path = concatenate(dirfd, path)?;
@@ -489,7 +490,7 @@ pub(crate) fn unlink_file(dirfd: &OsFile, path: &str) -> Result<()> {
     }
 }
 
-pub(crate) fn remove_directory(dirfd: &OsFile, path: &str) -> Result<()> {
+pub(crate) fn remove_directory(dirfd: &OsDir, path: &str) -> Result<()> {
     let path = concatenate(dirfd, path)?;
     std::fs::remove_dir(&path).map_err(Into::into)
 }

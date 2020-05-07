@@ -1,7 +1,9 @@
 use super::file_serial_no;
-use super::oshandle::OsFile;
+use super::oshandle::RawOsHandle;
 use crate::path;
-use crate::sys::oshandle::AsFile;
+use crate::sys::osdir::OsDir;
+use crate::sys::osfile::OsFile;
+use crate::sys::AsFile;
 use crate::wasi::{types, Result};
 use log::trace;
 use std::convert::TryInto;
@@ -39,7 +41,10 @@ pub(crate) fn fdstat_get(file: &File) -> Result<types::Fdflags> {
 // handle came from `CreateFile`, but the Rust's libstd will use `GetStdHandle`
 // rather than `CreateFile`. Relevant discussion can be found in:
 // https://github.com/rust-lang/rust/issues/40490
-pub(crate) fn fdstat_set_flags(file: &File, fdflags: types::Fdflags) -> Result<Option<OsFile>> {
+pub(crate) fn fdstat_set_flags(
+    file: &File,
+    fdflags: types::Fdflags,
+) -> Result<Option<RawOsHandle>> {
     let handle = file.as_raw_handle();
     let access_mode = winx::file::query_access_information(handle)?;
     let new_access_mode = file_access_mode_from_fdflags(
@@ -49,7 +54,7 @@ pub(crate) fn fdstat_set_flags(file: &File, fdflags: types::Fdflags) -> Result<O
             | access_mode.contains(AccessMode::FILE_APPEND_DATA),
     );
     unsafe {
-        Ok(Some(OsFile::from_raw_handle(winx::file::reopen_file(
+        Ok(Some(RawOsHandle::from_raw_handle(winx::file::reopen_file(
             handle,
             new_access_mode,
             fdflags.into(),
@@ -120,13 +125,13 @@ fn file_access_mode_from_fdflags(fdflags: types::Fdflags, read: bool, write: boo
 // ..       gets cookie = 2
 // other entries, in order they were returned by FindNextFileW get subsequent integers as their cookies
 pub(crate) fn readdir(
-    file: &OsFile,
+    dirfd: &OsDir,
     cookie: types::Dircookie,
 ) -> Result<Box<dyn Iterator<Item = Result<(types::Dirent, String)>>>> {
     use winx::file::get_file_path;
 
     let cookie = cookie.try_into()?;
-    let path = get_file_path(&file.as_file())?;
+    let path = get_file_path(&*dirfd.as_file()?)?;
     // std::fs::ReadDir doesn't return . and .., so we need to emulate it
     let path = Path::new(&path);
     // The directory /.. is the same as / on Unix (at least on ext4), so emulate this behavior too

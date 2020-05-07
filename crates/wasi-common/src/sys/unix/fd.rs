@@ -1,4 +1,6 @@
-use super::oshandle::OsFile;
+use super::oshandle::RawOsHandle;
+use crate::sys::osdir::OsDir;
+use crate::sys::osfile::OsFile;
 use crate::wasi::{self, types, Result};
 use std::convert::TryInto;
 use std::fs::File;
@@ -9,7 +11,7 @@ pub(crate) fn fdstat_get(fd: &File) -> Result<types::Fdflags> {
     Ok(fdflags.into())
 }
 
-pub(crate) fn fdstat_set_flags(fd: &File, fdflags: types::Fdflags) -> Result<Option<OsFile>> {
+pub(crate) fn fdstat_set_flags(fd: &File, fdflags: types::Fdflags) -> Result<Option<RawOsHandle>> {
     unsafe { yanix::fcntl::set_status_flags(fd.as_raw_fd(), fdflags.into())? };
     // We return None here to signal that the operation succeeded on the original
     // file descriptor and mutating the original WASI Descriptor is thus unnecessary.
@@ -45,14 +47,14 @@ pub(crate) fn filestat_get(file: &File) -> Result<types::Filestat> {
 }
 
 pub(crate) fn readdir<'a>(
-    file: &'a OsFile,
+    dirfd: &'a OsDir,
     cookie: types::Dircookie,
 ) -> Result<Box<dyn Iterator<Item = Result<(types::Dirent, String)>> + 'a>> {
     use yanix::dir::{DirIter, Entry, EntryExt, SeekLoc};
 
     // Get an instance of `Dir`; this is host-specific due to intricasies
     // of managing a dir stream between Linux and BSD *nixes
-    let mut dir = file.dir_stream()?;
+    let mut dir = dirfd.stream_ptr()?;
 
     // Seek if needed. Unless cookie is wasi::__WASI_DIRCOOKIE_START,
     // new items may not be returned to the caller.

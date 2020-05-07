@@ -1,8 +1,12 @@
 pub(crate) mod clock;
 pub(crate) mod fd;
+pub(crate) mod osdir;
+pub(crate) mod osfile;
 pub(crate) mod oshandle;
+pub(crate) mod osother;
 pub(crate) mod path;
 pub(crate) mod poll;
+pub(crate) mod stdio;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
@@ -22,15 +26,104 @@ cfg_if::cfg_if! {
     }
 }
 
-use crate::wasi::{types, Errno, Result};
+use crate::handle::HandleRights;
+use crate::sys::AsFile;
+use crate::wasi::{types, Errno, Result, RightsExt};
 use std::convert::{TryFrom, TryInto};
 use std::fs::File;
 use std::io;
+use std::mem::ManuallyDrop;
+use std::os::unix::prelude::{AsRawFd, FileTypeExt, FromRawFd};
 use std::path::Path;
 use yanix::clock::ClockId;
 use yanix::file::{AtFlag, OFlag};
 
 pub(crate) use sys_impl::*;
+
+impl<T: AsRawFd> AsFile for T {
+    fn as_file(&self) -> io::Result<ManuallyDrop<File>> {
+        let file = unsafe { File::from_raw_fd(self.as_raw_fd()) };
+        Ok(ManuallyDrop::new(file))
+    }
+}
+
+pub(super) fn get_file_type(file: &File) -> io::Result<types::Filetype> {
+    let ft = file.metadata()?.file_type();
+    let file_type = if ft.is_block_device() {
+        log::debug!("Host fd {:?} is a block device", file.as_raw_fd());
+        types::Filetype::BlockDevice
+    } else if ft.is_char_device() {
+        log::debug!("Host fd {:?} is a char device", file.as_raw_fd());
+        types::Filetype::CharacterDevice
+    } else if ft.is_dir() {
+        log::debug!("Host fd {:?} is a directory", file.as_raw_fd());
+        types::Filetype::Directory
+    } else if ft.is_file() {
+        log::debug!("Host fd {:?} is a file", file.as_raw_fd());
+        types::Filetype::RegularFile
+    } else if ft.is_socket() {
+        log::debug!("Host fd {:?} is a socket", file.as_raw_fd());
+        use yanix::socket::{get_socket_type, SockType};
+        match unsafe { get_socket_type(file.as_raw_fd())? } {
+            SockType::Datagram => types::Filetype::SocketDgram,
+            SockType::Stream => types::Filetype::SocketStream,
+            _ => return Err(io::Error::from_raw_os_error(libc::EINVAL)),
+        }
+    } else if ft.is_fifo() {
+        log::debug!("Host fd {:?} is a fifo", file.as_raw_fd());
+        types::Filetype::Unknown
+    } else {
+        log::debug!("Host fd {:?} is unknown", file.as_raw_fd());
+        return Err(io::Error::from_raw_os_error(libc::EINVAL));
+    };
+    Ok(file_type)
+}
+
+pub(super) fn get_rights(file: &File, file_type: &types::Filetype) -> io::Result<HandleRights> {
+    use yanix::{fcntl, file::OFlag};
+    let (base, inheriting) = match file_type {
+        types::Filetype::BlockDevice => (
+            types::Rights::block_device_base(),
+            types::Rights::block_device_inheriting(),
+        ),
+        types::Filetype::CharacterDevice => {
+            use yanix::file::isatty;
+            if unsafe { isatty(file.as_raw_fd())? } {
+                (types::Rights::tty_base(), types::Rights::tty_base())
+            } else {
+                (
+                    types::Rights::character_device_base(),
+                    types::Rights::character_device_inheriting(),
+                )
+            }
+        }
+        types::Filetype::SocketDgram | types::Filetype::SocketStream => (
+            types::Rights::socket_base(),
+            types::Rights::socket_inheriting(),
+        ),
+        types::Filetype::SymbolicLink | types::Filetype::Unknown => (
+            types::Rights::regular_file_base(),
+            types::Rights::regular_file_inheriting(),
+        ),
+        types::Filetype::Directory => (
+            types::Rights::directory_base(),
+            types::Rights::directory_inheriting(),
+        ),
+        types::Filetype::RegularFile => (
+            types::Rights::regular_file_base(),
+            types::Rights::regular_file_inheriting(),
+        ),
+    };
+    let mut rights = HandleRights::new(base, inheriting);
+    let flags = unsafe { fcntl::get_status_flags(file.as_raw_fd())? };
+    let accmode = flags & OFlag::ACCMODE;
+    if accmode == OFlag::RDONLY {
+        rights.base &= !types::Rights::FD_WRITE;
+    } else if accmode == OFlag::WRONLY {
+        rights.base &= !types::Rights::FD_READ;
+    }
+    Ok(rights)
+}
 
 pub fn preopen_dir<P: AsRef<Path>>(path: P) -> io::Result<File> {
     File::open(path)

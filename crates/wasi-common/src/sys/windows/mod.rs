@@ -1,17 +1,86 @@
 pub(crate) mod clock;
 pub(crate) mod fd;
+pub(crate) mod osdir;
+pub(crate) mod osfile;
 pub(crate) mod oshandle;
+pub(crate) mod osother;
 pub(crate) mod path;
 pub(crate) mod poll;
+pub(crate) mod stdio;
 
-use crate::wasi::{types, Errno, Result};
+use crate::handle::HandleRights;
+use crate::sys::AsFile;
+use crate::wasi::{types, Errno, Result, RightsExt};
 use std::convert::{TryFrom, TryInto};
 use std::fs::File;
+use std::mem::ManuallyDrop;
+use std::os::windows::prelude::{AsRawHandle, FromRawHandle};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{io, string};
 use winapi::shared::winerror;
 use winx::file::{CreationDisposition, Flags};
+
+impl<T: AsRawHandle> AsFile for T {
+    fn as_file(&self) -> io::Result<ManuallyDrop<File>> {
+        let file = unsafe { File::from_raw_handle(self.as_raw_handle()) };
+        Ok(ManuallyDrop::new(file))
+    }
+}
+
+pub(super) fn get_file_type(file: &File) -> io::Result<types::Filetype> {
+    let file_type = unsafe { winx::file::get_file_type(file.as_raw_handle())? };
+    let file_type = if file_type.is_char() {
+        // character file: LPT device or console
+        // TODO: rule out LPT device
+        types::Filetype::CharacterDevice
+    } else if file_type.is_disk() {
+        // disk file: file, dir or disk device
+        let meta = file.metadata()?;
+        if meta.is_dir() {
+            types::Filetype::Directory
+        } else if meta.is_file() {
+            types::Filetype::RegularFile
+        } else {
+            return Err(io::Error::from_raw_os_error(libc::EINVAL));
+        }
+    } else if file_type.is_pipe() {
+        // pipe object: socket, named pipe or anonymous pipe
+        // TODO: what about pipes, etc?
+        types::Filetype::SocketStream
+    } else {
+        return Err(io::Error::from_raw_os_error(libc::EINVAL));
+    };
+    Ok(file_type)
+}
+
+pub(super) fn get_rights(file_type: &types::Filetype) -> io::Result<HandleRights> {
+    let (base, inheriting) = match file_type {
+        types::Filetype::BlockDevice => (
+            types::Rights::block_device_base(),
+            types::Rights::block_device_inheriting(),
+        ),
+        types::Filetype::CharacterDevice => (types::Rights::tty_base(), types::Rights::tty_base()),
+        types::Filetype::SocketDgram | types::Filetype::SocketStream => (
+            types::Rights::socket_base(),
+            types::Rights::socket_inheriting(),
+        ),
+        types::Filetype::SymbolicLink | types::Filetype::Unknown => (
+            types::Rights::regular_file_base(),
+            types::Rights::regular_file_inheriting(),
+        ),
+        types::Filetype::Directory => (
+            types::Rights::directory_base(),
+            types::Rights::directory_inheriting(),
+        ),
+        types::Filetype::RegularFile => (
+            types::Rights::regular_file_base(),
+            types::Rights::regular_file_inheriting(),
+        ),
+    };
+    let rights = HandleRights::new(base, inheriting);
+    Ok(rights)
+}
 
 pub fn preopen_dir<P: AsRef<Path>>(path: P) -> io::Result<File> {
     use std::fs::OpenOptions;
