@@ -6,10 +6,10 @@ use peepmatic_runtime::linear;
 /// Construct an automaton from a set of linear optimizations.
 pub fn automatize(
     opts: &linear::Optimizations,
-) -> Automaton<linear::MatchResult, linear::MatchOp, Vec<linear::Action>> {
+) -> Automaton<linear::MatchResult, linear::MatchOp, Box<[linear::Action]>> {
     debug_assert!(crate::linear_passes::is_sorted_lexicographically(opts));
 
-    let mut builder = Builder::<linear::MatchResult, linear::MatchOp, Vec<linear::Action>>::new();
+    let mut builder = Builder::<linear::MatchResult, linear::MatchOp, Box<[linear::Action]>>::new();
 
     for opt in &opts.optimizations {
         let mut insertion = builder.insert();
@@ -22,7 +22,7 @@ pub fn automatize(
                 insertion.set_state_data(inc.operation);
             }
 
-            insertion.next(inc.expected, inc.actions.clone());
+            insertion.next(inc.expected, inc.actions.clone().into_boxed_slice());
         }
         insertion.finish();
     }

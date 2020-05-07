@@ -29,7 +29,7 @@ pub struct PeepholeOptimizations {
 
     /// The underlying automata for matching optimizations' left-hand sides, and
     /// building up the corresponding right-hand side.
-    pub automata: Automaton<MatchResult, MatchOp, Vec<Action>>,
+    pub automata: Automaton<MatchResult, MatchOp, Box<[Action]>>,
 }
 
 impl PeepholeOptimizations {

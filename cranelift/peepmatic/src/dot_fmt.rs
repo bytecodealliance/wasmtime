@@ -17,7 +17,7 @@ use std::num::NonZeroU16;
 #[derive(Debug)]
 pub(crate) struct PeepholeDotFmt<'a>(pub(crate) &'a PathInterner, pub(crate) &'a IntegerInterner);
 
-impl DotFmt<linear::MatchResult, linear::MatchOp, Vec<linear::Action>> for PeepholeDotFmt<'_> {
+impl DotFmt<linear::MatchResult, linear::MatchOp, Box<[linear::Action]>> for PeepholeDotFmt<'_> {
     fn fmt_transition(
         &self,
         w: &mut impl Write,
@@ -73,7 +73,7 @@ impl DotFmt<linear::MatchResult, linear::MatchOp, Vec<linear::Action>> for Peeph
         writeln!(w, "</font>")
     }
 
-    fn fmt_output(&self, w: &mut impl Write, actions: &Vec<linear::Action>) -> io::Result<()> {
+    fn fmt_output(&self, w: &mut impl Write, actions: &Box<[linear::Action]>) -> io::Result<()> {
         use linear::Action::*;
 
         if actions.is_empty() {
@@ -84,7 +84,7 @@ impl DotFmt<linear::MatchResult, linear::MatchOp, Vec<linear::Action>> for Peeph
 
         let p = p(self.0);
 
-        for a in actions {
+        for a in actions.iter() {
             match a {
                 GetLhs { path } => write!(w, "get-lhs @ {}<br/>", p(path))?,
                 UnaryUnquote { operator, operand } => {

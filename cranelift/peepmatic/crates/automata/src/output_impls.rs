@@ -57,6 +57,43 @@ where
     }
 }
 
+impl<T> Output for Box<[T]>
+where
+    T: Clone + Eq + Hash,
+{
+    fn empty() -> Self {
+        vec![].into_boxed_slice()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    fn prefix(a: &Self, b: &Self) -> Self {
+        a.iter()
+            .cloned()
+            .zip(b.iter().cloned())
+            .take_while(|(a, b)| a == b)
+            .map(|(a, _)| a)
+            .collect()
+    }
+
+    fn difference(a: &Self, b: &Self) -> Self {
+        let i = a
+            .iter()
+            .zip(b.iter())
+            .position(|(a, b)| a != b)
+            .unwrap_or(cmp::min(a.len(), b.len()));
+        a[i..].to_vec().into_boxed_slice()
+    }
+
+    fn concat(a: &Self, b: &Self) -> Self {
+        let mut c = a.clone().to_vec();
+        c.extend(b.iter().cloned());
+        c.into_boxed_slice()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::Output;
