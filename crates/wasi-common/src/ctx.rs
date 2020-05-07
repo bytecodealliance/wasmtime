@@ -35,9 +35,9 @@ pub enum WasiCtxBuilderError {
     /// Provided sequence of bytes contained an unexpected NUL byte.
     #[error("provided sequence contained an unexpected NUL byte")]
     UnexpectedNul(#[from] ffi::NulError),
-    /// Provided `File` is not a directory.
-    #[error("preopened directory path {} is not a directory", .0.display())]
-    NotADirectory(PathBuf),
+    /// The root of a VirtualDirEntry tree must be a VirtualDirEntry::Directory.
+    #[error("the root of a VirtualDirEntry tree at {} must be a VirtualDirEntry::Directory", .0.display())]
+    VirtualDirEntryRootNotADirectory(PathBuf),
     /// `WasiCtx` has too many opened files.
     #[error("context object has too many opened files")]
     TooManyFilesOpen,
@@ -108,12 +108,27 @@ impl PendingCString {
     }
 }
 
+struct PendingPreopen(Box<dyn FnOnce() -> WasiCtxBuilderResult<Box<dyn Handle>>>);
+
+impl PendingPreopen {
+    fn new<F>(f: F) -> Self
+    where
+        F: FnOnce() -> WasiCtxBuilderResult<Box<dyn Handle>> + 'static,
+    {
+        Self(Box::new(f))
+    }
+
+    fn into(self) -> WasiCtxBuilderResult<Box<dyn Handle>> {
+        self.0()
+    }
+}
+
 /// A builder allowing customizable construction of `WasiCtx` instances.
 pub struct WasiCtxBuilder {
     stdin: Option<PendingEntry>,
     stdout: Option<PendingEntry>,
     stderr: Option<PendingEntry>,
-    preopens: Option<Vec<(PathBuf, Box<dyn Handle>)>>,
+    preopens: Option<Vec<(PathBuf, PendingPreopen)>>,
     args: Option<Vec<PendingCString>>,
     env: Option<HashMap<PendingCString, PendingCString>>,
 }
@@ -252,10 +267,14 @@ impl WasiCtxBuilder {
 
     /// Add a preopened directory.
     pub fn preopened_dir<P: AsRef<Path>>(&mut self, dir: File, guest_path: P) -> &mut Self {
-        self.preopens.as_mut().unwrap().push((
-            guest_path.as_ref().to_owned(),
-            Box::new(OsDir::try_from(dir).expect("valid OsDir handle")),
-        ));
+        let preopen = PendingPreopen::new(move || {
+            let dir = OsDir::try_from(dir).map_err(WasiCtxBuilderError::from)?;
+            Ok(Box::new(dir))
+        });
+        self.preopens
+            .as_mut()
+            .unwrap()
+            .push((guest_path.as_ref().to_owned(), preopen));
         self
     }
 
@@ -280,18 +299,22 @@ impl WasiCtxBuilder {
             }
         }
 
-        let dir = if let VirtualDirEntry::Directory(entries) = dir {
-            let mut dir = VirtualDir::new(true);
-            populate_directory(entries, &mut dir);
-            Box::new(dir)
-        } else {
-            panic!("the root of a VirtualDirEntry tree must be a VirtualDirEntry::Directory");
-        };
-
+        let guest_path_owned = guest_path.as_ref().to_owned();
+        let preopen = PendingPreopen::new(move || {
+            if let VirtualDirEntry::Directory(entries) = dir {
+                let mut dir = VirtualDir::new(true);
+                populate_directory(entries, &mut dir);
+                Ok(Box::new(dir))
+            } else {
+                Err(WasiCtxBuilderError::VirtualDirEntryRootNotADirectory(
+                    guest_path_owned,
+                ))
+            }
+        });
         self.preopens
             .as_mut()
             .unwrap()
-            .push((guest_path.as_ref().to_owned(), dir));
+            .push((guest_path.as_ref().to_owned(), preopen));
         self
     }
 
@@ -357,12 +380,8 @@ impl WasiCtxBuilder {
             log::debug!("WasiCtx inserted at {:?}", fd);
         }
         // Then add the preopen entries.
-        for (guest_path, dir) in self.preopens.take().unwrap() {
-            if !dir.is_directory() {
-                return Err(WasiCtxBuilderError::NotADirectory(guest_path));
-            }
-
-            let handle = EntryHandle::from(dir);
+        for (guest_path, preopen) in self.preopens.take().unwrap() {
+            let handle = EntryHandle::from(preopen.into()?);
             let mut entry = Entry::new(handle);
             entry.preopen_path = Some(guest_path);
             let fd = entries
