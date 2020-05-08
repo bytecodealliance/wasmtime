@@ -611,8 +611,26 @@ pub fn do_preopt<'func, 'isa>(
 
     while let Some(block) = pos.next_block() {
         while let Some(inst) = pos.next_inst() {
-            preopt.apply_all(&mut pos, ValueOrInst::Inst(inst));
-            let inst = pos.current_inst().unwrap();
+            // After we apply one optimization, that might make another
+            // optimization applicable. Keep running the peephole optimizer
+            // until either:
+            //
+            // * No optimization applied, and therefore it doesn't make sense to
+            //   try again, because no optimization will apply again.
+            //
+            // * Or when we replaced an instruction with an alias to an existing
+            //   value, because we already ran the peephole optimizer over the
+            //   aliased value's instruction in an early part of the traversal
+            //   over the function.
+            while let Some(ValueOrInst::Inst(new_inst)) =
+                preopt.apply_one(&mut pos, ValueOrInst::Inst(inst))
+            {
+                // We transplanted a new instruction into the current
+                // instruction, so the "new" instruction is actually the same
+                // one, just with different data.
+                debug_assert_eq!(new_inst, inst);
+            }
+            debug_assert_eq!(pos.current_inst(), Some(inst));
 
             // Try to transform divide-by-constant into simpler operations.
             if let Some(divrem_info) = get_div_info(inst, &pos.func.dfg) {
