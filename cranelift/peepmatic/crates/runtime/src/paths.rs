@@ -54,17 +54,17 @@ pub struct PathId(u16);
 /// path mapping.
 #[derive(Debug, Default)]
 pub struct PathInterner {
-    // A map from a path (whose owned data is inside `arena`) to the canonical
-    // `PathId` we assigned it when interning it.
+    /// A map from a path (whose owned data is inside `arena`) to the canonical
+    /// `PathId` we assigned it when interning it.
     map: HashMap<UnsafePath, PathId>,
 
-    // A map from a `PathId` index to an unsafe, self-borrowed path pointing
-    // into `arena`. It is safe to given these out as safe `Path`s, as long as
-    // the lifetime is not longer than this `PathInterner`'s lifetime.
+    /// A map from a `PathId` index to an unsafe, self-borrowed path pointing
+    /// into `arena`. It is safe to given these out as safe `Path`s, as long as
+    /// the lifetime is not longer than this `PathInterner`'s lifetime.
     paths: Vec<UnsafePath>,
 
-    // Bump allocation arena for path data. The bump arena ensures that these
-    // allocations never move, and are therefore safe for self-references.
+    /// Bump allocation arena for path data. The bump arena ensures that these
+    /// allocations never move, and are therefore safe for self-references.
     arena: bumpalo::Bump,
 }
 

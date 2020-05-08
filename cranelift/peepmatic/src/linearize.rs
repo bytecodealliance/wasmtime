@@ -599,13 +599,17 @@ mod tests {
                 let mut i = |i: u64| integers.intern(i);
 
                 #[allow(unused_variables)]
-                let expected = $make_expected(&mut p, &mut i);
+                let make_expected: fn(
+                    &mut dyn FnMut(&[u8]) -> PathId,
+                    &mut dyn FnMut(u64) -> IntegerId,
+                ) -> Vec<linear::Increment> = $make_expected;
+                let expected = make_expected(&mut p, &mut i);
                 dbg!(&expected);
 
                 let actual = linearize_optimization(&mut paths, &mut integers, &opts.optimizations[0]);
-                dbg!(&actual);
+                dbg!(&actual.increments);
 
-                assert_eq!(expected, actual);
+                assert_eq!(expected, actual.increments);
             }
         };
     }
@@ -617,234 +621,192 @@ mod tests {
           (is-power-of-two $C))
     (ishl $x $C))
         ",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
-            linear::Optimization {
-                increments: vec![
-                    linear::Increment {
-                        operation: Opcode { path: p(&[0]) },
-                        expected: Ok(NonZeroU32::new(Operator::Imul as _).unwrap()),
-                        actions: vec![
-                            GetLhs { path: p(&[0, 0]) },
-                            GetLhs { path: p(&[0, 1]) },
-                            MakeBinaryInst {
-                                operator: Operator::Ishl,
-                                r#type: Type {
-                                    kind: Kind::Int,
-                                    bit_width: BitWidth::Polymorphic,
-                                },
-                                operands: [linear::RhsId(0), linear::RhsId(1)],
-                            },
-                        ],
-                    },
-                    linear::Increment {
-                        operation: Nop,
-                        expected: Err(Else),
-                        actions: vec![],
-                    },
-                    linear::Increment {
-                        operation: IsConst { path: p(&[0, 1]) },
-                        expected: bool_to_match_result(true),
-                        actions: vec![],
-                    },
-                    linear::Increment {
-                        operation: IsPowerOfTwo { path: p(&[0, 1]) },
-                        expected: bool_to_match_result(true),
-                        actions: vec![],
+        |p, i| vec![
+            linear::Increment {
+                operation: Opcode { path: p(&[0]) },
+                expected: Ok(NonZeroU32::new(Operator::Imul as _).unwrap()),
+                actions: vec![
+                    GetLhs { path: p(&[0, 0]) },
+                    GetLhs { path: p(&[0, 1]) },
+                    MakeBinaryInst {
+                        operator: Operator::Ishl,
+                        r#type: Type {
+                            kind: Kind::Int,
+                            bit_width: BitWidth::Polymorphic,
+                        },
+                        operands: [linear::RhsId(0), linear::RhsId(1)],
                     },
                 ],
-            }
-        },
+            },
+            linear::Increment {
+                operation: Nop,
+                expected: Err(Else),
+                actions: vec![],
+            },
+            linear::Increment {
+                operation: IsConst { path: p(&[0, 1]) },
+                expected: bool_to_match_result(true),
+                actions: vec![],
+            },
+            linear::Increment {
+                operation: IsPowerOfTwo { path: p(&[0, 1]) },
+                expected: bool_to_match_result(true),
+                actions: vec![],
+            },
+        ],
     );
 
-    linearizes_to!(
-        variable_pattern_id_optimization,
-        "(=> $x $x)",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
-            linear::Optimization {
-                increments: vec![linear::Increment {
-                    operation: Nop,
-                    expected: Err(Else),
-                    actions: vec![GetLhs { path: p(&[0]) }],
-                }],
-            }
-        },
-    );
+    linearizes_to!(variable_pattern_id_optimization, "(=> $x $x)", |p, i| vec![
+        linear::Increment {
+            operation: Nop,
+            expected: Err(Else),
+            actions: vec![GetLhs { path: p(&[0]) }],
+        }
+    ]);
 
-    linearizes_to!(
-        constant_pattern_id_optimization,
-        "(=> $C $C)",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
-            linear::Optimization {
-                increments: vec![linear::Increment {
-                    operation: IsConst { path: p(&[0]) },
-                    expected: bool_to_match_result(true),
-                    actions: vec![GetLhs { path: p(&[0]) }],
-                }],
-            }
-        },
-    );
+    linearizes_to!(constant_pattern_id_optimization, "(=> $C $C)", |p, i| vec![
+        linear::Increment {
+            operation: IsConst { path: p(&[0]) },
+            expected: bool_to_match_result(true),
+            actions: vec![GetLhs { path: p(&[0]) }],
+        }
+    ]);
 
     linearizes_to!(
         boolean_literal_id_optimization,
         "(=> true true)",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
-            linear::Optimization {
-                increments: vec![linear::Increment {
-                    operation: BooleanValue { path: p(&[0]) },
-                    expected: bool_to_match_result(true),
-                    actions: vec![MakeBooleanConst {
-                        value: true,
-                        bit_width: BitWidth::Polymorphic,
-                    }],
-                }],
-            }
-        },
+        |p, i| vec![linear::Increment {
+            operation: BooleanValue { path: p(&[0]) },
+            expected: bool_to_match_result(true),
+            actions: vec![MakeBooleanConst {
+                value: true,
+                bit_width: BitWidth::Polymorphic,
+            }],
+        }]
     );
 
-    linearizes_to!(
-        number_literal_id_optimization,
-        "(=> 5 5)",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
-            linear::Optimization {
-                increments: vec![linear::Increment {
-                    operation: IntegerValue { path: p(&[0]) },
-                    expected: Ok(i(5).into()),
-                    actions: vec![MakeIntegerConst {
-                        value: i(5),
-                        bit_width: BitWidth::Polymorphic,
-                    }],
-                }],
-            }
-        },
-    );
+    linearizes_to!(number_literal_id_optimization, "(=> 5 5)", |p, i| vec![
+        linear::Increment {
+            operation: IntegerValue { path: p(&[0]) },
+            expected: Ok(i(5).into()),
+            actions: vec![MakeIntegerConst {
+                value: i(5),
+                bit_width: BitWidth::Polymorphic,
+            }],
+        }
+    ]);
 
     linearizes_to!(
         operation_id_optimization,
         "(=> (iconst $C) (iconst $C))",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
-            linear::Optimization {
-                increments: vec![
-                    linear::Increment {
-                        operation: Opcode { path: p(&[0]) },
-                        expected: Ok(NonZeroU32::new(Operator::Iconst as _).unwrap()),
-                        actions: vec![
-                            GetLhs { path: p(&[0, 0]) },
-                            MakeUnaryInst {
-                                operator: Operator::Iconst,
-                                r#type: Type {
-                                    kind: Kind::Int,
-                                    bit_width: BitWidth::Polymorphic,
-                                },
-                                operand: linear::RhsId(0),
-                            },
-                        ],
-                    },
-                    linear::Increment {
-                        operation: IsConst { path: p(&[0, 0]) },
-                        expected: bool_to_match_result(true),
-                        actions: vec![],
+        |p, i| vec![
+            linear::Increment {
+                operation: Opcode { path: p(&[0]) },
+                expected: Ok(NonZeroU32::new(Operator::Iconst as _).unwrap()),
+                actions: vec![
+                    GetLhs { path: p(&[0, 0]) },
+                    MakeUnaryInst {
+                        operator: Operator::Iconst,
+                        r#type: Type {
+                            kind: Kind::Int,
+                            bit_width: BitWidth::Polymorphic,
+                        },
+                        operand: linear::RhsId(0),
                     },
                 ],
-            }
-        },
+            },
+            linear::Increment {
+                operation: IsConst { path: p(&[0, 0]) },
+                expected: bool_to_match_result(true),
+                actions: vec![],
+            },
+        ]
     );
 
     linearizes_to!(
         redundant_bor,
         "(=> (bor $x (bor $x $y)) (bor $x $y))",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
-            linear::Optimization {
-                increments: vec![
-                    linear::Increment {
-                        operation: Opcode { path: p(&[0]) },
-                        expected: Ok(NonZeroU32::new(Operator::Bor as _).unwrap()),
-                        actions: vec![
-                            GetLhs { path: p(&[0, 0]) },
-                            GetLhs {
-                                path: p(&[0, 1, 1]),
-                            },
-                            MakeBinaryInst {
-                                operator: Operator::Bor,
-                                r#type: Type {
-                                    kind: Kind::Int,
-                                    bit_width: BitWidth::Polymorphic,
-                                },
-                                operands: [linear::RhsId(0), linear::RhsId(1)],
-                            },
-                        ],
+        |p, i| vec![
+            linear::Increment {
+                operation: Opcode { path: p(&[0]) },
+                expected: Ok(NonZeroU32::new(Operator::Bor as _).unwrap()),
+                actions: vec![
+                    GetLhs { path: p(&[0, 0]) },
+                    GetLhs {
+                        path: p(&[0, 1, 1]),
                     },
-                    linear::Increment {
-                        operation: Nop,
-                        expected: Err(Else),
-                        actions: vec![],
-                    },
-                    linear::Increment {
-                        operation: Opcode { path: p(&[0, 1]) },
-                        expected: Ok(NonZeroU32::new(Operator::Bor as _).unwrap()),
-                        actions: vec![],
-                    },
-                    linear::Increment {
-                        operation: Eq {
-                            path_a: p(&[0, 1, 0]),
-                            path_b: p(&[0, 0]),
+                    MakeBinaryInst {
+                        operator: Operator::Bor,
+                        r#type: Type {
+                            kind: Kind::Int,
+                            bit_width: BitWidth::Polymorphic,
                         },
-                        expected: bool_to_match_result(true),
-                        actions: vec![],
-                    },
-                    linear::Increment {
-                        operation: Nop,
-                        expected: Err(Else),
-                        actions: vec![],
+                        operands: [linear::RhsId(0), linear::RhsId(1)],
                     },
                 ],
-            }
-        },
+            },
+            linear::Increment {
+                operation: Nop,
+                expected: Err(Else),
+                actions: vec![],
+            },
+            linear::Increment {
+                operation: Opcode { path: p(&[0, 1]) },
+                expected: Ok(NonZeroU32::new(Operator::Bor as _).unwrap()),
+                actions: vec![],
+            },
+            linear::Increment {
+                operation: Eq {
+                    path_a: p(&[0, 1, 0]),
+                    path_b: p(&[0, 0]),
+                },
+                expected: bool_to_match_result(true),
+                actions: vec![],
+            },
+            linear::Increment {
+                operation: Nop,
+                expected: Err(Else),
+                actions: vec![],
+            },
+        ]
     );
 
     linearizes_to!(
         large_integers,
         // u64::MAX
         "(=> 18446744073709551615 0)",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
-            linear::Optimization {
-                increments: vec![linear::Increment {
-                    operation: IntegerValue { path: p(&[0]) },
-                    expected: Ok(i(std::u64::MAX).into()),
-                    actions: vec![MakeIntegerConst {
-                        value: i(0),
-                        bit_width: BitWidth::Polymorphic,
-                    }],
-                }],
-            }
-        }
+        |p, i| vec![linear::Increment {
+            operation: IntegerValue { path: p(&[0]) },
+            expected: Ok(i(std::u64::MAX).into()),
+            actions: vec![MakeIntegerConst {
+                value: i(0),
+                bit_width: BitWidth::Polymorphic,
+            }],
+        }]
     );
 
     linearizes_to!(
         ireduce_with_type_ascription,
         "(=> (ireduce{i32} $x) 0)",
-        |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> IntegerId| {
-            linear::Optimization {
-                increments: vec![
-                    linear::Increment {
-                        operation: Opcode { path: p(&[0]) },
-                        expected: Ok(NonZeroU32::new(Operator::Ireduce as _).unwrap()),
-                        actions: vec![MakeIntegerConst {
-                            value: i(0),
-                            bit_width: BitWidth::ThirtyTwo,
-                        }],
-                    },
-                    linear::Increment {
-                        operation: linear::MatchOp::BitWidth { path: p(&[0]) },
-                        expected: Ok(NonZeroU32::new(32).unwrap()),
-                        actions: vec![],
-                    },
-                    linear::Increment {
-                        operation: Nop,
-                        expected: Err(Else),
-                        actions: vec![],
-                    },
-                ],
-            }
-        }
+        |p, i| vec![
+            linear::Increment {
+                operation: Opcode { path: p(&[0]) },
+                expected: Ok(NonZeroU32::new(Operator::Ireduce as _).unwrap()),
+                actions: vec![MakeIntegerConst {
+                    value: i(0),
+                    bit_width: BitWidth::ThirtyTwo,
+                }],
+            },
+            linear::Increment {
+                operation: linear::MatchOp::BitWidth { path: p(&[0]) },
+                expected: Ok(NonZeroU32::new(32).unwrap()),
+                actions: vec![],
+            },
+            linear::Increment {
+                operation: Nop,
+                expected: Err(Else),
+                actions: vec![],
+            },
+        ]
     );
 }

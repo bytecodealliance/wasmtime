@@ -53,6 +53,9 @@ pub fn bool_to_match_result(b: bool) -> MatchResult {
     unsafe { Ok(NonZeroU32::new_unchecked(b + 1)) }
 }
 
+/// A partial match of an optimization's LHS and partial construction of its
+/// RHS.
+///
 /// An increment is a matching operation, the expected result from that
 /// operation to continue to the next increment, and the actions to take to
 /// build up the LHS scope and RHS instructions given that we got the expected
@@ -156,17 +159,18 @@ pub struct LhsId(pub u16);
 pub struct RhsId(pub u16);
 
 /// An action to perform when transitioning between states in the automata.
+///
+/// When evaluating actions, the `i^th` action implicitly defines the
+/// `RhsId(i)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Action {
-    /// Implicitly define the n^th built up RHS instruction as something from
-    /// the left-hand side.
+    /// Reuse something from the left-hand side.
     GetLhs {
         /// The path to the instruction or value.
         path: PathId,
     },
 
-    /// Implicitly define the n^th RHS instruction as the result of the
-    /// compile-time evaluation off this unquote operation.
+    /// Perform compile-time evaluation.
     UnaryUnquote {
         /// The unquote operator.
         operator: UnquoteOperator,
@@ -174,8 +178,7 @@ pub enum Action {
         operand: RhsId,
     },
 
-    /// Implicitly define the n^th RHS instruction as the result of the
-    /// compile-time evaluation off this unquote operation.
+    /// Perform compile-time evaluation.
     BinaryUnquote {
         /// The unquote operator.
         operator: UnquoteOperator,
@@ -183,7 +186,7 @@ pub enum Action {
         operands: [RhsId; 2],
     },
 
-    /// Implicitly define the n^th RHS as an integer constant.
+    /// Create an integer constant.
     MakeIntegerConst {
         /// The constant integer value.
         value: IntegerId,
@@ -191,7 +194,7 @@ pub enum Action {
         bit_width: BitWidth,
     },
 
-    /// Implicitly define the n^th RHS as a boolean constant.
+    /// Create a boolean constant.
     MakeBooleanConst {
         /// The constant boolean value.
         value: bool,
@@ -199,14 +202,13 @@ pub enum Action {
         bit_width: BitWidth,
     },
 
-    /// Implicitly defint the n^th RHS as a condition code.
+    /// Create a condition code.
     MakeConditionCode {
         /// The condition code.
         cc: ConditionCode,
     },
 
-    /// Implicitly define the n^th RHS instruction by making a unary
-    /// instruction.
+    /// Make a unary instruction.
     MakeUnaryInst {
         /// The operand for this instruction.
         operand: RhsId,
@@ -216,8 +218,7 @@ pub enum Action {
         operator: Operator,
     },
 
-    /// Implicitly define the n^th RHS instruction by making a binary
-    /// instruction.
+    /// Make a binary instruction.
     MakeBinaryInst {
         /// The opcode for this instruction.
         operator: Operator,
@@ -227,8 +228,7 @@ pub enum Action {
         operands: [RhsId; 2],
     },
 
-    /// Implicitly define the n^th RHS instruction by making a ternary
-    /// instruction.
+    /// Make a ternary instruction.
     MakeTernaryInst {
         /// The opcode for this instruction.
         operator: Operator,

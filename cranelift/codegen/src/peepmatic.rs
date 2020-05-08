@@ -196,7 +196,7 @@ fn const_to_value<'a>(builder: impl InstBuilder<'a>, c: Constant, root: Inst) ->
         Constant::Int(x, width) => {
             let width = bit_width(builder.data_flow_graph(), width, root);
             let ty = match width {
-                1 | 8 => types::I8,
+                8 => types::I8,
                 16 => types::I16,
                 32 => types::I32,
                 64 => types::I64,
@@ -407,7 +407,7 @@ fn get_argument(dfg: &DataFlowGraph, inst: Inst, i: usize) -> Option<Value> {
 
 fn peepmatic_ty_to_ir_ty(ty: Type, dfg: &DataFlowGraph, root: Inst) -> types::Type {
     match (ty.kind, bit_width(dfg, ty.bit_width, root)) {
-        (Kind::Int, 1) | (Kind::Int, 8) => types::I8,
+        (Kind::Int, 8) => types::I8,
         (Kind::Int, 16) => types::I16,
         (Kind::Int, 32) => types::I32,
         (Kind::Int, 64) => types::I64,
