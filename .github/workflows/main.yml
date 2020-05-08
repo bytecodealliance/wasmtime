@@ -207,12 +207,16 @@ jobs:
     - uses: actions/checkout@v1
       with:
         submodules: true
-    - name: Build
+    - name: Rebuild peepmatic peephole optimizers
       run: |
-        cd cranelift && cargo build --features 'cranelift-codegen/rebuild-peephole-optimizers'
-    - name: Test
+        cd cranelift/
+        cargo build --features 'enable-peepmatic cranelift-codegen/rebuild-peephole-optimizers'
+    - name: Check that peephole optimizers are up to date
+      run: git diff --exit-code
+    - name: Test with peepmatic
       run: |
-        cd cranelift && cargo test --features 'cranelift-codegen/rebuild-peephole-optimizers'
+        cd cranelift/
+        cargo test --features 'enable-peepmatic'
 
   # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
   # channels of Rust as well as macOS/Linux/Windows.
@@ -383,11 +387,29 @@ jobs:
     # Build `wasmtime` and executables
     - run: $CENTOS cargo build --release --bin wasmtime
       shell: bash
+
     # Build `libwasmtime.so`
     - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
       shell: bash
-    # Test what we just built
-    - run: $CENTOS cargo test --features test-programs/test_programs --release --all --exclude lightbeam
+
+    # Test what we just built.
+    #
+    # Ignore some optional dependencies that are used by features that aren't
+    # enabled by default, are tested in other, dedicated CI jobs, and which
+    # would increase build times here.
+    - run: |
+        $CENTOS cargo test \
+            --features test-programs/test_programs \
+            --release \
+            --all \
+            --exclude lightbeam \
+            --exclude peepmatic \
+            --exclude peepmatic-automata \
+            --exclude peepmatic-fuzzing \
+            --exclude peepmatic-macro \
+            --exclude peepmatic-runtime \
+            --exclude peepmatic-test \
+            --exclude wasmtime-fuzz
       shell: bash
       env:
         RUST_BACKTRACE: 1
