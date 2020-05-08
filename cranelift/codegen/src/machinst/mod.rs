@@ -186,9 +186,6 @@ pub trait MachInst: Clone + Debug {
     /// BlockIndex.
     fn with_block_offsets(&mut self, my_offset: CodeOffset, targets: &[CodeOffset]);
 
-    /// Get the register universe for this backend.
-    fn reg_universe(flags: &Flags) -> RealRegUniverse;
-
     /// Align a basic block offset (from start of function).  By default, no
     /// alignment occurs.
     fn align_basic_block(offset: CodeOffset) -> CodeOffset {
@@ -264,7 +261,7 @@ pub trait MachBackend {
     fn name(&self) -> &'static str;
 
     /// Return the register universe for this backend.
-    fn reg_universe(&self) -> RealRegUniverse;
+    fn reg_universe(&self) -> &RealRegUniverse;
 
     /// Machine-specific condcode info needed by TargetIsa.
     fn unsigned_add_overflow_condition(&self) -> IntCC {

@@ -25,12 +25,18 @@ use inst::create_reg_universe;
 pub struct AArch64Backend {
     triple: Triple,
     flags: settings::Flags,
+    reg_universe: RealRegUniverse,
 }
 
 impl AArch64Backend {
     /// Create a new AArch64 backend with the given (shared) flags.
     pub fn new_with_flags(triple: Triple, flags: settings::Flags) -> AArch64Backend {
-        AArch64Backend { triple, flags }
+        let reg_universe = create_reg_universe(&flags);
+        AArch64Backend {
+            triple,
+            flags,
+            reg_universe,
+        }
     }
 
     /// This performs lowering to VCode, register-allocates the code, computes block layout and
@@ -81,8 +87,8 @@ impl MachBackend for AArch64Backend {
         &self.flags
     }
 
-    fn reg_universe(&self) -> RealRegUniverse {
-        create_reg_universe(&self.flags)
+    fn reg_universe(&self) -> &RealRegUniverse {
+        &self.reg_universe
     }
 }
 

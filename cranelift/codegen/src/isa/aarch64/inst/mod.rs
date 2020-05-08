@@ -1903,10 +1903,6 @@ impl MachInst for Inst {
             _ => {}
         }
     }
-
-    fn reg_universe(flags: &settings::Flags) -> RealRegUniverse {
-        create_reg_universe(flags)
-    }
 }
 
 //=============================================================================

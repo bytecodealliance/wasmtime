@@ -10,7 +10,7 @@ use regalloc::{allocate_registers_with_opts, Algorithm, Options};
 
 /// Compile the given function down to VCode with allocated registers, ready
 /// for binary emission.
-pub fn compile<B: LowerBackend>(
+pub fn compile<B: LowerBackend + MachBackend>(
     f: &Function,
     b: &B,
     abi: Box<dyn ABIBody<I = B::MInst>>,
@@ -21,9 +21,10 @@ where
     // This lowers the CL IR.
     let mut vcode = Lower::new(f, abi)?.lower(b)?;
 
-    let universe = &B::MInst::reg_universe(vcode.flags());
-
-    debug!("vcode from lowering: \n{}", vcode.show_rru(Some(universe)));
+    debug!(
+        "vcode from lowering: \n{}",
+        vcode.show_rru(Some(b.reg_universe()))
+    );
 
     // Perform register allocation.
     let (run_checker, algorithm) = match vcode.flags().regalloc() {
@@ -40,7 +41,7 @@ where
         let _tt = timing::regalloc();
         allocate_registers_with_opts(
             &mut vcode,
-            universe,
+            b.reg_universe(),
             Options {
                 run_checker,
                 algorithm,
@@ -49,7 +50,7 @@ where
         .map_err(|err| {
             debug!(
                 "Register allocation error for vcode\n{}\nError: {:?}",
-                vcode.show_rru(Some(universe)),
+                vcode.show_rru(Some(b.reg_universe())),
                 err
             );
             err
@@ -68,7 +69,7 @@ where
 
     debug!(
         "vcode after regalloc: final version:\n{}",
-        vcode.show_rru(Some(universe))
+        vcode.show_rru(Some(b.reg_universe()))
     );
 
     Ok(vcode)

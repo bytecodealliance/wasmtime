@@ -22,12 +22,18 @@ mod lower;
 pub(crate) struct X64Backend {
     triple: Triple,
     flags: Flags,
+    reg_universe: RealRegUniverse,
 }
 
 impl X64Backend {
     /// Create a new X64 backend with the given (shared) flags.
     fn new_with_flags(triple: Triple, flags: Flags) -> Self {
-        Self { triple, flags }
+        let reg_universe = create_reg_universe_systemv(&flags);
+        Self {
+            triple,
+            flags,
+            reg_universe,
+        }
     }
 
     fn compile_vcode(&self, func: &Function, flags: Flags) -> CodegenResult<VCode<inst::Inst>> {
@@ -74,8 +80,8 @@ impl MachBackend for X64Backend {
         self.triple.clone()
     }
 
-    fn reg_universe(&self) -> RealRegUniverse {
-        create_reg_universe_systemv(&self.flags)
+    fn reg_universe(&self) -> &RealRegUniverse {
+        &self.reg_universe
     }
 }
 
