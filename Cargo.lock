@@ -1262,7 +1262,7 @@ dependencies = [
  "peepmatic-automata",
  "peepmatic-macro",
  "peepmatic-runtime",
- "wast 13.0.0",
+ "wast 15.0.0",
  "z3",
 ]
 
@@ -1288,7 +1288,7 @@ dependencies = [
  "peepmatic-test",
  "rand 0.7.3",
  "serde",
- "wast 13.0.0",
+ "wast 15.0.0",
 ]
 
 [[package]]
@@ -1311,7 +1311,7 @@ dependencies = [
  "peepmatic-macro",
  "serde",
  "thiserror",
- "wast 13.0.0",
+ "wast 15.0.0",
 ]
 
 [[package]]
@@ -2455,15 +2455,6 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "13.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b20abd8b4a26f7e0d4dd5e357e90a3d555ec190e94472c9b2b27c5b9777f9ae"
-dependencies = [
- "leb128",
-]
-
-[[package]]
-name = "wast"
 version = "15.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a10df5277f68adee65bba117b40235f07a4cb3d59e5ec9aa86dbee180fb1bc04"
@@ -2473,11 +2464,11 @@ dependencies = [
 
 [[package]]
 name = "wat"
-version = "1.0.14"
+version = "1.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51a615830ee3e7200b505c441fec09aac2f114deae69df52f215cb828ba112c4"
+checksum = "526d28df6c047d9f9a92d4925b98afd8d8d95b1b3aa4f13eb1306f17d1da56c4"
 dependencies = [
- "wast 13.0.0",
+ "wast 15.0.0",
 ]
 
 [[package]]

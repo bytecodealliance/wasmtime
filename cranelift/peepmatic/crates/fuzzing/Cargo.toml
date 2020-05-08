@@ -19,4 +19,4 @@ peepmatic-runtime = { path = "../runtime", features = ["construct"] }
 peepmatic-test = { path = "../test" }
 rand = { version = "0.7.3", features = ["small_rng"] }
 serde = "1.0.106"
-wast = "13.0.0"
+wast = "15.0.0"
