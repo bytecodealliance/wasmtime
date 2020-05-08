@@ -23,7 +23,9 @@ pub fn derive_span(input: &DeriveInput) -> Result<impl quote::ToTokens> {
                 }
             }
         }
-        syn::Data::Union(_) => panic!("derive(Ast) can only be used with structs and enums, not unions"),
+        syn::Data::Union(_) => {
+            panic!("derive(Ast) can only be used with structs and enums, not unions")
+        }
     };
 
     let generics = add_span_trait_bounds(input.generics.clone());

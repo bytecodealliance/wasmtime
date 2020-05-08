@@ -155,27 +155,52 @@ where
                     &self,
                 ));
             }
-            None => return Err(de::Error::invalid_length(0, &"Automaton expects 5 elements")),
+            None => {
+                return Err(de::Error::invalid_length(
+                    0,
+                    &"Automaton expects 5 elements",
+                ))
+            }
         }
 
         let final_states = match seq.next_element::<BTreeMap<State, TOutput>>()? {
             Some(x) => x,
-            None => return Err(de::Error::invalid_length(1, &"Automaton expects 5 elements")),
+            None => {
+                return Err(de::Error::invalid_length(
+                    1,
+                    &"Automaton expects 5 elements",
+                ))
+            }
         };
 
         let start_state = match seq.next_element::<State>()? {
             Some(x) => x,
-            None => return Err(de::Error::invalid_length(2, &"Automaton expects 5 elements")),
+            None => {
+                return Err(de::Error::invalid_length(
+                    2,
+                    &"Automaton expects 5 elements",
+                ))
+            }
         };
 
         let state_data = match seq.next_element::<Vec<Option<TState>>>()? {
             Some(x) => x,
-            None => return Err(de::Error::invalid_length(3, &"Automaton expects 5 elements")),
+            None => {
+                return Err(de::Error::invalid_length(
+                    3,
+                    &"Automaton expects 5 elements",
+                ))
+            }
         };
 
         let transitions = match seq.next_element::<Vec<BTreeMap<TAlphabet, (State, TOutput)>>>()? {
             Some(x) => x,
-            None => return Err(de::Error::invalid_length(4, &"Automaton expects 5 elements")),
+            None => {
+                return Err(de::Error::invalid_length(
+                    4,
+                    &"Automaton expects 5 elements",
+                ))
+            }
         };
 
         let automata = Automaton {
