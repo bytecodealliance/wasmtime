@@ -101,7 +101,6 @@ mod licm;
 mod nan_canonicalization;
 mod num_uses;
 mod partition_slice;
-mod peepmatic;
 mod postopt;
 mod predicates;
 mod redundant_reload_remover;
@@ -115,6 +114,9 @@ mod stack_layout;
 mod topo_order;
 mod unreachable_code;
 mod value_label;
+
+#[cfg(feature = "enable-peepmatic")]
+mod peepmatic;
 
 pub use crate::result::{CodegenError, CodegenResult};
 

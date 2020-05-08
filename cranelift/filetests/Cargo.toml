@@ -26,3 +26,6 @@ num_cpus = "1.8.0"
 region = "2.1.2"
 target-lexicon = "0.10"
 thiserror = "1.0.15"
+
+[features]
+enable-peepmatic = []

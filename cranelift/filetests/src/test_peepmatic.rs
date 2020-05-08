@@ -1,6 +1,4 @@
-//! Test command for testing the preopt pass.
-//!
-//! The resulting function is sent to `filecheck`.
+//! Test command for `peepmatic`-generated peephole optimizers.
 
 use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
 use cranelift_codegen;
@@ -9,23 +7,27 @@ use cranelift_codegen::print_errors::pretty_error;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
 
-struct TestSimplePreopt;
+struct TestPreopt;
 
 pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
-    assert_eq!(parsed.command, "simple_preopt");
-    if !parsed.options.is_empty() {
-        Err(format!("No options allowed on {}", parsed))
+    assert_eq!(parsed.command, "peepmatic");
+    if parsed.options.is_empty() {
+        Ok(Box::new(TestPreopt))
     } else {
-        Ok(Box::new(TestSimplePreopt))
+        Err(format!("No options allowed on {}", parsed))
     }
 }
 
-impl SubTest for TestSimplePreopt {
+impl SubTest for TestPreopt {
     fn name(&self) -> &'static str {
-        "simple_preopt"
+        "peepmatic"
     }
 
     fn is_mutating(&self) -> bool {
+        true
+    }
+
+    fn needs_isa(&self) -> bool {
         true
     }
 
@@ -38,17 +40,17 @@ impl SubTest for TestSimplePreopt {
             .preopt(isa)
             .map_err(|e| pretty_error(&comp_ctx.func, context.isa, Into::into(e)))?;
         let text = &comp_ctx.func.display(isa).to_string();
-        log::debug!("After simple_preopt:\n{}", text);
+        log::debug!("After peepmatic-based simple_preopt:\n{}", text);
 
-        // Only actually run the filecheck if peepmatic is *not* enabled,
-        // because it can generate slightly different code (alias a result vs
-        // replace an instruction) than the non-peepmatic versions of peephole
-        // optimizations. Note that the `peepmatic`-based results can be tested
-        // with the `test peepmatic` subtest.
+        // Only actually run the filecheck if peepmatic is enabled, because it
+        // can generate slightly different code (alias a result vs replace an
+        // instruction) than the non-peepmatic versions of peephole
+        // optimizations. Note that the non-`peepmatic` results can be tested
+        // with the `test simple_preopt` subtest.
         if cfg!(feature = "enable-peepmatic") {
-            Ok(())
-        } else {
             run_filecheck(&text, context)
+        } else {
+            Ok(())
         }
     }
 }

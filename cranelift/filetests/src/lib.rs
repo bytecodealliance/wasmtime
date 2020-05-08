@@ -45,6 +45,7 @@ mod test_domtree;
 mod test_interpret;
 mod test_legalizer;
 mod test_licm;
+mod test_peepmatic;
 mod test_postopt;
 mod test_preopt;
 mod test_print_cfg;
@@ -128,6 +129,7 @@ fn new_subtest(parsed: &TestCommand) -> subtest::SubtestResult<Box<dyn subtest::
         "interpret" => test_interpret::subtest(parsed),
         "legalizer" => test_legalizer::subtest(parsed),
         "licm" => test_licm::subtest(parsed),
+        "peepmatic" => test_peepmatic::subtest(parsed),
         "postopt" => test_postopt::subtest(parsed),
         "preopt" => test_preopt::subtest(parsed),
         "print-cfg" => test_print_cfg::subtest(parsed),
