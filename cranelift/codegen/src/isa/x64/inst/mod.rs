@@ -25,7 +25,7 @@ mod emit_tests;
 pub mod regs;
 
 use args::*;
-use regs::{create_reg_universe_systemv, show_ireg_sized};
+use regs::show_ireg_sized;
 
 //=============================================================================
 // Instructions (top level): definition
@@ -942,10 +942,6 @@ impl MachInst for Inst {
             }
             _ => {}
         }
-    }
-
-    fn reg_universe(flags: &settings::Flags) -> RealRegUniverse {
-        create_reg_universe_systemv(flags)
     }
 }
 
