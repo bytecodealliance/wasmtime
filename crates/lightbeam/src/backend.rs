@@ -2,6 +2,7 @@
 
 use self::registers::*;
 use crate::{
+    alloc::{Alloc, Ptr, Size},
     error::{error, Error},
     microwasm::{BrTarget, Ieee32, Ieee64, SignlessType, Type, Value, F32, F64, I32, I64},
     module::{ModuleContext, Signature},
@@ -18,10 +19,12 @@ use more_asserts::{
     assert_ge, assert_le, assert_lt, debug_assert_ge, debug_assert_le, debug_assert_lt,
 };
 use std::{
+    collections::HashMap,
     convert::{TryFrom, TryInto},
     fmt::Display,
     hash::Hash,
-    iter, mem,
+    iter::{self, FromIterator},
+    mem,
     ops::{Deref, RangeInclusive},
 };
 // use wasmtime_environ::BuiltinFunctionIndex;
@@ -112,27 +115,33 @@ impl GPR {
     }
 }
 
+#[derive(Debug, Clone)]
+struct Locs<I> {
+    stack_count: u32,
+    locs: I,
+}
+
 fn arg_locs<I: IntoIterator<Item = SignlessType>>(
     types: I,
-) -> impl ExactSizeIterator<Item = CCLoc> + DoubleEndedIterator + Clone
+) -> Locs<impl ExactSizeIterator<Item = CCLoc> + DoubleEndedIterator + Clone>
 where
     I::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
 {
     // TODO: VmCtx is in the first register
     let mut int_gpr_iter = INTEGER_ARGS_IN_GPRS.iter();
     let mut float_gpr_iter = FLOAT_ARGS_IN_GPRS.iter();
-    let mut stack_idx = 0;
+    let mut stack_idx = 0u32;
 
-    types
+    let iter = types
         .into_iter()
-        .map(move |ty| {
+        .map(|ty| {
             match ty {
                 I32 | I64 => int_gpr_iter.next(),
                 F32 | F64 => float_gpr_iter.next(),
             }
             .map(|&r| CCLoc::Reg(r))
             .unwrap_or_else(|| {
-                let out = CCLoc::Stack(stack_idx);
+                let out = CCLoc::Stack(stack_idx as i32);
                 stack_idx += 1;
                 out
             })
@@ -140,12 +149,17 @@ where
         // Since we only advance the iterators based on the values in `types`,
         // we can't do this lazily.
         .collect::<Vec<_>>()
-        .into_iter()
+        .into_iter();
+
+    Locs {
+        stack_count: stack_idx,
+        locs: iter,
+    }
 }
 
 fn arg_locs_skip_caller_vmctx<I: IntoIterator<Item = SignlessType>>(
     types: I,
-) -> impl ExactSizeIterator<Item = CCLoc> + DoubleEndedIterator + Clone
+) -> Locs<impl ExactSizeIterator<Item = CCLoc> + DoubleEndedIterator + Clone>
 where
     I::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
 {
@@ -186,11 +200,15 @@ where
 
     impl<I> ExactSizeIterator for WithInt<I> where I: ExactSizeIterator<Item = SignlessType> {}
 
-    arg_locs(WithInt {
+    let Locs { locs, stack_count } = arg_locs(WithInt {
         caller_vmctx_ty: Some(I32),
         iter: types.into_iter(),
-    })
-    .skip(1)
+    });
+
+    Locs {
+        locs: locs.skip(1),
+        stack_count,
+    }
 }
 
 pub fn ret_locs(types: impl IntoIterator<Item = SignlessType>) -> Result<Vec<CCLoc>, Error> {
@@ -410,34 +428,34 @@ impl Registers {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BlockCallingConvention<I = Vec<CCLoc>> {
-    pub stack_depth: StackDepth,
+pub struct CallingConvention<I = Stack> {
     pub arguments: I,
+    pub depth: StackDepth,
 }
 
 // The return address and the saved `rbp` each take up a slot.
-const FUNCTION_START_DEPTH: StackDepth = StackDepth(2);
+pub(crate) const FUNCTION_START_DEPTH: StackDepth = StackDepth(2);
 
-impl<I> BlockCallingConvention<I> {
+impl<I> CallingConvention<I> {
     pub fn function_start(arguments: I) -> Self {
-        BlockCallingConvention {
+        CallingConvention {
             // We start and return the function with stack depth 1 since we must
             // allow space for the saved return address.
-            stack_depth: FUNCTION_START_DEPTH,
+            depth: FUNCTION_START_DEPTH,
             arguments,
         }
     }
 }
 
-impl<T: Copy + 'static, I: Deref> BlockCallingConvention<I>
+impl<T: Copy + 'static, I: Deref> CallingConvention<I>
 where
     for<'a> &'a I::Target: IntoIterator<Item = &'a T>,
 {
-    pub fn as_ref(&self) -> BlockCallingConvention<impl Iterator<Item = T> + '_> {
-        BlockCallingConvention {
+    pub fn as_ref(&self) -> CallingConvention<impl Iterator<Item = T> + '_> {
+        CallingConvention {
             // We start and return the function with stack depth 1 since we must
             // allow space for the saved return address.
-            stack_depth: self.stack_depth.clone(),
+            depth: self.depth.clone(),
             arguments: self.arguments.into_iter().copied(),
         }
     }
@@ -458,22 +476,19 @@ pub enum CCLoc {
     Stack(i32),
 }
 
-impl CCLoc {
-    fn try_from(other: ValueLocation) -> Option<Self> {
+impl TryFrom<ValueLocation> for CCLoc {
+    type Error = ();
+
+    fn try_from(other: ValueLocation) -> Result<CCLoc, ()> {
         match other {
-            ValueLocation::Reg(reg) => Some(CCLoc::Reg(reg)),
-            ValueLocation::Stack(offset) => Some(CCLoc::Stack(offset)),
-            ValueLocation::Cond(_) | ValueLocation::Immediate(_) => None,
+            ValueLocation::Reg(reg) => Ok(CCLoc::Reg(reg)),
+            ValueLocation::Stack(offset) => Ok(CCLoc::Stack(offset)),
+            ValueLocation::Cond(_) | ValueLocation::Immediate(_) => Err(()),
         }
     }
+}
 
-    fn stack(self) -> Option<i32> {
-        match self {
-            CCLoc::Stack(o) => Some(o),
-            _ => None,
-        }
-    }
-
+impl CCLoc {
     fn reg(self) -> Option<GPR> {
         match self {
             CCLoc::Reg(r) => Some(r),
@@ -663,7 +678,9 @@ impl<'module, M> CodeGenSession<'module, M> {
             pointer_type: self.pointer_type,
             source_loc: Default::default(),
             func_starts: &self.func_starts,
-            block_state: Default::default(),
+            stack: Default::default(),
+            regs: Default::default(),
+            allocated_stack: Default::default(),
             module_context: self.module_context,
             labels: Default::default(),
         }
@@ -739,11 +756,172 @@ impl TranslatedCodeSection {
     }
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct BlockState {
-    pub stack: Stack,
-    pub depth: StackDepth,
-    pub regs: Registers,
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct StackUsage {
+    // This is so we can track usage of stack args
+    offset: u32,
+    alloc: Alloc,
+    num_usages: HashMap<Ptr, u32>,
+}
+
+const ELEMENT_SIZE: Size = Size(WORD_SIZE as usize);
+
+fn real_offset(num_arguments: u32, offset: i32) -> Result<u32, Error> {
+    (-(offset + 1))
+        .checked_add(num_arguments as i32)
+        .and_then(|o| u32::try_from(o).ok())
+        .map(|o| o * WORD_SIZE)
+        .ok_or_else(|| {
+            error(format!(
+                "Tried to access stack value outside of bounds: {}, {}",
+                num_arguments, offset
+            ))
+        })
+}
+
+impl StackUsage {
+    pub fn new(num_arguments: u32) -> Self {
+        StackUsage {
+            offset: num_arguments,
+            alloc: Alloc::new(Size((num_arguments * WORD_SIZE) as usize)),
+            num_usages: (0..num_arguments)
+                .map(|o| {
+                    (
+                        Ptr(real_offset(num_arguments, o as i32).unwrap() as usize),
+                        1,
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        *self = Self::new(self.offset);
+    }
+
+    fn real_offset(&self, offset: i32) -> Result<u32, Error> {
+        real_offset(self.offset, offset)
+    }
+
+    pub fn alloc(&mut self) -> Option<i32> {
+        let ptr = self.alloc.malloc(ELEMENT_SIZE)?;
+
+        let prev_val = self.num_usages.insert(ptr, 1);
+        // debug_assert_eq!(prev_val, None);
+
+        Some(-((ptr.0 as u32 / WORD_SIZE) as i32 - self.offset as i32) - 1)
+    }
+
+    pub fn set_depth(&mut self, depth: StackDepth) -> Result<(), Error> {
+        let alloc_size = (depth.0 + self.offset) * WORD_SIZE;
+        let cur_depth = self.stack_depth();
+        self.alloc.set_size(Size(alloc_size as usize));
+
+        for i in cur_depth.0..depth.0 {
+            let ptr = Ptr(self.real_offset(-(i as i32 + 1))? as usize);
+            let prev_val = self.num_usages.insert(ptr, 1);
+            // debug_assert_eq!(prev_val, None);
+        }
+
+        Ok(())
+    }
+
+    pub fn set_depth_and_free(&mut self, depth: StackDepth) {
+        let ptr = Ptr(self.alloc.size().0);
+        let size = depth
+            .0
+            .checked_sub(self.stack_depth().0)
+            .map(|diff| diff * WORD_SIZE);
+
+        let alloc_size = (depth.0 + self.offset) * WORD_SIZE;
+        self.alloc.set_size(Size(alloc_size as usize));
+
+        if let Some(size) = size {
+            self.alloc.free(ptr, Size(size as usize));
+        }
+    }
+
+    pub fn reserve_space(&mut self, amount: u32) -> Result<(), Error> {
+        self.set_depth(StackDepth(self.stack_depth().0 + amount))
+    }
+
+    pub fn free_space(&mut self, amount: u32) -> Result<(), Error> {
+        self.set_depth(StackDepth(
+            self.stack_depth()
+                .0
+                .checked_sub(amount)
+                .ok_or_else(|| error("Stack depth underflowed"))?,
+        ))?;
+
+        Ok(())
+    }
+
+    pub fn mark_used(&mut self, offset: i32) -> Result<(), Error> {
+        let ptr = Ptr(self.real_offset(offset)? as usize);
+        if self.alloc.is_free(ptr, ELEMENT_SIZE) {
+            self.alloc.mark_allocated(ptr, ELEMENT_SIZE);
+            let prev_val = self.num_usages.insert(ptr, 1);
+        // debug_assert_eq!(prev_val, None);
+        } else {
+            *self.num_usages.entry(ptr).or_insert(0) += 1;
+        }
+
+        Ok(())
+    }
+
+    pub fn release(&mut self, offset: i32) -> Result<(), Error> {
+        let ptr = Ptr(self.real_offset(offset)? as usize);
+        if self.alloc.is_free(ptr, ELEMENT_SIZE) {
+            return Err(error(format!(
+                "Tried to release stack element that was already free at {}\nState: {:#?}",
+                offset, self,
+            )));
+        }
+
+        let num_usages = self
+            .num_usages
+            .remove(&ptr)
+            .ok_or_else(|| {
+                error(format!(
+                    "Tried to release stack element that was already free at {}",
+                    offset
+                ))
+            })?
+            .checked_sub(1)
+            .ok_or_else(|| {
+                error(format!(
+                    "Tried to release stack element that was already free at {}",
+                    offset
+                ))
+            })?;
+
+        if num_usages == 0 {
+            self.alloc.free(ptr, ELEMENT_SIZE);
+        } else {
+            self.num_usages.insert(ptr, num_usages);
+        }
+
+        Ok(())
+    }
+
+    pub fn num_usages(&self, offset: i32) -> Result<u32, Error> {
+        let ptr = Ptr(self.real_offset(offset)? as usize);
+
+        Ok(*self
+            .num_usages
+            .get(&ptr)
+            .ok_or_else(|| error("Tried to release stack element that was already free"))?)
+    }
+
+    pub fn is_free(&self, offset: i32) -> Result<bool, Error> {
+        let ptr = Ptr(self.real_offset(offset)? as usize);
+
+        Ok(self.alloc.is_free(ptr, ELEMENT_SIZE))
+    }
+
+    pub fn stack_depth(&self) -> StackDepth {
+        StackDepth((self.alloc.size().0 as u32 / WORD_SIZE) - self.offset)
+    }
 }
 
 type Stack = Vec<ValueLocation>;
@@ -827,8 +1005,10 @@ pub struct Context<'this, M> {
     module_context: &'this M,
     current_function: u32,
     func_starts: &'this Vec<(Option<AssemblyOffset>, DynamicLabel)>,
-    /// Each push and pop on the value stack increments or decrements this value by 1 respectively.
-    pub block_state: BlockState,
+    pub stack: Stack,
+    pub regs: Registers,
+    // TODO: Replace with `alloc`
+    pub allocated_stack: StackUsage,
     labels: Labels,
 }
 
@@ -839,16 +1019,6 @@ pub struct Label(DynamicLabel);
 /// Offset from starting value of SP counted in words.
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct StackDepth(u32);
-
-impl StackDepth {
-    pub fn reserve(&mut self, slots: u32) {
-        self.0 = self.0.checked_add(slots).unwrap();
-    }
-
-    pub fn free(&mut self, slots: u32) {
-        self.0 = self.0.checked_sub(slots).unwrap();
-    }
-}
 
 macro_rules! int_div {
     ($full_div_s:ident, $full_div_u:ident, $div_u:ident, $div_s:ident, $rem_u:ident, $rem_s:ident, $imm_fn:ident, $signed_ty:ty, $unsigned_ty:ty, $reg_ty:tt, $pointer_ty:tt) => {
@@ -873,7 +1043,7 @@ macro_rules! int_div {
 
             let (mut div, rem, saved) = self.$full_div_u(divisor, dividend)?;
 
-            self.free_value(rem)?;
+            self.free(rem)?;
 
             match div {
                 ValueLocation::Reg(div_reg)
@@ -883,7 +1053,7 @@ macro_rules! int_div {
                     dynasm!(self.asm
                         ; mov Rq(new.rq().unwrap()), Rq(div_reg.rq().unwrap())
                     );
-                    self.block_state.regs.release(div_reg)?;
+                    self.free(ValueLocation::Reg(div_reg))?;
                     div = ValueLocation::Reg(new);
                 },
                 ValueLocation::Reg(_) |
@@ -894,9 +1064,10 @@ macro_rules! int_div {
 
             for (src, dst) in saved {
                 self.copy_value(src, dst)?;
+                self.free(src)?;
             }
 
-            debug_assert!(self.block_state.stack.iter().all(|v| {
+            debug_assert!(self.stack.iter().all(|v| {
                 if let ValueLocation::Stack(o) = v {
                     debug_assert_ge!(self.adjusted_offset(*o), 0);
                 }
@@ -929,7 +1100,7 @@ macro_rules! int_div {
 
             let (mut div, rem, saved) = self.$full_div_s(divisor, dividend)?;
 
-            self.free_value(rem)?;
+            self.free(rem)?;
 
             match div {
                 ValueLocation::Reg(div_reg)
@@ -939,7 +1110,7 @@ macro_rules! int_div {
                     dynasm!(self.asm
                         ; mov Rq(new.rq().unwrap()), Rq(div_reg.rq().unwrap())
                     );
-                    self.block_state.regs.release(div_reg)?;
+                    self.free(div)?;
                     div = ValueLocation::Reg(new);
                 },
                 ValueLocation::Reg(_) |
@@ -950,6 +1121,7 @@ macro_rules! int_div {
 
             for (src, dst) in saved {
                 self.copy_value(src, dst)?;
+                self.free(src)?;
             }
 
             self.push(div)?;
@@ -974,7 +1146,7 @@ macro_rules! int_div {
 
             let (div, mut rem, saved) = self.$full_div_u(divisor, dividend)?;
 
-            self.free_value(div)?;
+            self.free(div)?;
 
             match rem {
                 ValueLocation::Reg(rem_reg)
@@ -984,7 +1156,7 @@ macro_rules! int_div {
                     dynasm!(self.asm
                         ; mov Rq(new.rq().unwrap()), Rq(rem_reg.rq().unwrap())
                     );
-                    self.block_state.regs.release(rem_reg)?;
+                    self.free(rem)?;
                     rem = ValueLocation::Reg(new);
                 },
                 ValueLocation::Reg(_) |
@@ -995,6 +1167,7 @@ macro_rules! int_div {
 
             for (src, dst) in saved {
                 self.copy_value(src, dst)?;
+                self.free(src)?;
             }
 
             self.push(rem)?;
@@ -1017,14 +1190,14 @@ macro_rules! int_div {
 
             let is_neg1 = self.create_label();
 
-            let current_depth = self.block_state.depth.clone();
+            let current_depth = self.allocated_stack.stack_depth();
 
             // TODO: This could cause segfaults because of implicit push/pop
             let gen_neg1_case = match divisor {
                 ValueLocation::Immediate(_) => {
                     if divisor.$imm_fn().unwrap() == -1 {
                         self.push(ValueLocation::Immediate((-1 as $signed_ty).into()))?;
-                        self.free_value(dividend)?;
+                        self.free(dividend)?;
                         return Ok(());
                     }
 
@@ -1065,7 +1238,7 @@ macro_rules! int_div {
 
             let (div, mut rem, saved) = self.$full_div_s(divisor, dividend)?;
 
-            self.free_value(div)?;
+            self.free(div)?;
 
             match rem {
                 ValueLocation::Reg(rem_reg)
@@ -1075,7 +1248,7 @@ macro_rules! int_div {
                     dynasm!(self.asm
                         ; mov Rq(new.rq().unwrap()), Rq(rem_reg.rq().unwrap())
                     );
-                    self.block_state.regs.release(rem_reg)?;
+                    self.free(rem)?;
                     rem = ValueLocation::Reg(new);
                 },
                 ValueLocation::Reg(_) |
@@ -1086,6 +1259,7 @@ macro_rules! int_div {
 
             for (src, dst) in saved {
                 self.copy_value(src, dst)?;
+                self.free(src)?;
             }
 
             if gen_neg1_case {
@@ -1096,7 +1270,7 @@ macro_rules! int_div {
                 );
                 self.define_label(is_neg1);
 
-                let dst_ccloc = match CCLoc::try_from(rem) {
+                let dst_ccloc = match CCLoc::try_from(rem).ok() {
                     None => {
                         return Err(error(
                             "$rem_s Programmer error".to_string()
@@ -1148,7 +1322,7 @@ macro_rules! unop {
                 }
             };
 
-            self.free_value(val)?;
+            self.free(val)?;
             self.push(out_val)?;
             Ok(())
         }
@@ -1197,7 +1371,7 @@ macro_rules! conversion {
                 }
             };
 
-            self.free_value(val)?;
+            self.free(val)?;
 
             self.push(out_val)?;
             Ok(())
@@ -1229,7 +1403,7 @@ macro_rules! shift {
             if val == ValueLocation::Reg(RCX) {
                 let new = self.take_or_free_reg($ty).ok_or_else(|| error("Ran out of free registers"))?;
                 self.copy_value(val, CCLoc::Reg(new))?;
-                self.free_value(val)?;
+                self.free(val)?;
                 val = ValueLocation::Reg(new);
             }
 
@@ -1239,7 +1413,7 @@ macro_rules! shift {
             let temp_rcx = match count {
                 ValueLocation::Reg(RCX) => {None}
                 other => {
-                    let out = if self.block_state.regs.is_free(RCX) {
+                    let out = if self.is_free(CCLoc::Reg(RCX))? {
                         None
                     } else {
                         let new_reg = self.take_or_free_reg(I32).ok_or_else(|| error("Ran out of free registers"))?;
@@ -1249,32 +1423,14 @@ macro_rules! shift {
                         Some(new_reg)
                     };
 
-                    match other {
-                        ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                            let gpr = self.put_into_register(I32, &mut count)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
-                            dynasm!(self.asm
-                                ; mov cl, Rb(gpr.rq().unwrap())
-                            );
-                        }
-                        ValueLocation::Stack(offset) => {
-                            let offset = self.adjusted_offset(offset);
-                            dynasm!(self.asm
-                                ; mov cl, [rsp + offset]
-                            );
-                        }
-                        ValueLocation::Immediate(imm) => {
-                            dynasm!(self.asm
-                                ; mov cl, imm.as_int().unwrap() as i8
-                            );
-                        }
-                    }
+                    self.copy_value(other, CCLoc::Reg(RCX))?;
 
                     out
                 }
             };
 
-            self.free_value(count)?;
-            self.block_state.regs.mark_used(RCX);
+            self.free(count)?;
+            self.mark_used(CCLoc::Reg(RCX))?;
             count = ValueLocation::Reg(RCX);
 
             let reg = self.put_into_temp_register($ty, &mut val)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
@@ -1283,13 +1439,13 @@ macro_rules! shift {
                 ; $instr $reg_ty(reg.rq().unwrap()), cl
             );
 
-            self.free_value(count)?;
+            self.free(count)?;
 
             if let Some(gpr) = temp_rcx {
                 dynasm!(self.asm
                     ; mov rcx, Rq(gpr.rq().unwrap())
                 );
-                self.block_state.regs.release(gpr)?;
+                self.free(ValueLocation::Reg(gpr))?;
             }
 
             self.push(val)?;
@@ -1358,8 +1514,8 @@ macro_rules! cmp_i32 {
                 ValueLocation::Cond($flags)
             };
 
-            self.free_value(left)?;
-            self.free_value(right)?;
+            self.free(left)?;
+            self.free(right)?;
 
             self.push(out)?;
             Ok(())
@@ -1452,8 +1608,8 @@ macro_rules! cmp_i64 {
                 ValueLocation::Cond($flags)
             };
 
-            self.free_value(left)?;
-            self.free_value(right)?;
+            self.free(left)?;
+            self.free(right)?;
             self.push(out)?;
             Ok(())
         }
@@ -1494,7 +1650,7 @@ macro_rules! eq_float {
             }
 
             let (mut left, mut right) = match left {
-                ValueLocation::Reg(r) if self.block_state.regs.num_usages(r) <= 1 => (left, right),
+                ValueLocation::Reg(r) if self.num_usages(CCLoc::Reg(r))? <= 1 => (left, right),
                 _ =>  (right, left)
             };
 
@@ -1510,8 +1666,8 @@ macro_rules! eq_float {
             );
 
             self.push(ValueLocation::Reg(out))?;
-            self.free_value(left)?;
-            self.free_value(right)?;
+            self.free(left)?;
+            self.free(right)?;
             Ok(())
         }
 
@@ -1542,7 +1698,7 @@ macro_rules! minmax_float {
             }
 
             let (mut left, mut right) = match left {
-                ValueLocation::Reg(r) if self.block_state.regs.num_usages(r) <= 1 => (left, right),
+                ValueLocation::Reg(r) if self.num_usages(CCLoc::Reg(r))? <= 1 => (left, right),
                 _ =>  (right, left)
             };
 
@@ -1564,7 +1720,7 @@ macro_rules! minmax_float {
             );
 
             self.push(left)?;
-            self.free_value(right)?;
+            self.free(right)?;
             Ok(())
         }
 
@@ -1639,8 +1795,8 @@ macro_rules! cmp_float {
                 $const_fallback
             );
 
-            self.free_value(left)?;
-            self.free_value(right)?;
+            self.free(left)?;
+            self.free(right)?;
 
             self.push(out)?;
             Ok(())
@@ -1661,8 +1817,8 @@ macro_rules! cmp_float {
                 $const_fallback
             );
 
-            self.free_value(left)?;
-            self.free_value(right)?;
+            self.free(left)?;
+            self.free(right)?;
 
             self.push(out)?;
             Ok(())
@@ -1875,12 +2031,12 @@ macro_rules! binop {
                             ; $instr $reg_ty(lreg.$reg_fn().unwrap()), $reg_ty(scratch.$reg_fn().unwrap())
                         );
 
-                        self.block_state.regs.release(scratch)?;
+                        self.free(ValueLocation::Reg(scratch))?;
                     }
                 }
             }
 
-            self.free_value(right)?;
+            self.free(right)?;
             self.push(left)?;
             Ok(())
         }
@@ -1944,7 +2100,7 @@ macro_rules! load {
                                     ; mov Rq(addr_reg.rq().unwrap()), Rq(gpr.rq().unwrap())
                                     ; add Rq(addr_reg.rq().unwrap()), Rq(offset_reg.rq().unwrap())
                                 );
-                                ctx.block_state.regs.release(offset_reg)?;
+                                ctx.free(ValueLocation::Reg(offset_reg))?;
                                 addr_reg
                             }
                         }
@@ -1957,7 +2113,7 @@ macro_rules! load {
                         ]
                         ;; ctx.trap_if(cc::GE_U, TrapCode::HeapOutOfBounds)
                     );
-                    ctx.block_state.regs.release(addr_reg)?;
+                    ctx.free(ValueLocation::Reg(addr_reg))?;
                 }
 
                 let mem_ptr_reg = ctx.take_or_free_reg(I64).ok_or_else(|| error("Ran out of free registers"))?;
@@ -1969,10 +2125,10 @@ macro_rules! load {
                     ]
                 );
                 if let Some(reg) = reg {
-                    ctx.block_state.regs.release(reg)?;
+                    ctx.free(ValueLocation::Reg(reg))?;
                 }
                 $emit_fn(ctx, dst, mem_ptr_reg, runtime_offset, offset)?;
-                ctx.block_state.regs.release(mem_ptr_reg)?;
+                ctx.free(ValueLocation::Reg(mem_ptr_reg))?;
                 Ok(())
             }
 
@@ -1988,7 +2144,7 @@ macro_rules! load {
                 mut base => {
                     let gpr = self.put_into_register(I32, &mut base)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
                     load_to_reg(self, temp, (offset as _, Err(gpr)))?;
-                    self.free_value(base)?;
+                    self.free(base)?;
                 }
             }
 
@@ -2048,7 +2204,7 @@ macro_rules! load {
                                     imm
                                 ]
                             );
-                            ctx.block_state.regs.release(offset_reg)?;
+                            ctx.free(ValueLocation::Reg(offset_reg))?;
                             Ok(())
                         }
                     }
@@ -2128,7 +2284,7 @@ macro_rules! store {
                                     ; mov Rq(addr_reg.rq().unwrap()), Rq(gpr.rq().unwrap())
                                     ; add Rq(addr_reg.rq().unwrap()), Rq(offset_reg.rq().unwrap())
                                 );
-                                ctx.block_state.regs.release(offset_reg)?;
+                                ctx.free(ValueLocation::Reg(offset_reg))?;
                                 addr_reg
                             }
                         }
@@ -2141,7 +2297,7 @@ macro_rules! store {
                         ]
                         ;; ctx.trap_if(cc::GE_U, TrapCode::HeapOutOfBounds)
                     );
-                    ctx.block_state.regs.release(addr_reg)?;
+                    ctx.free(ValueLocation::Reg(addr_reg))?;
                 }
 
                 let mem_ptr_reg = ctx.take_or_free_reg(I64).ok_or_else(|| error("Ran out of free registers"))?;
@@ -2153,11 +2309,11 @@ macro_rules! store {
                     ]
                 );
                 if let Some(reg) = reg {
-                    ctx.block_state.regs.release(reg)?;
+                    ctx.free(ValueLocation::Reg(reg))?;
                 }
                 let src = $match_offset(ctx, mem_ptr_reg, runtime_offset, offset, src)?;
-                ctx.block_state.regs.release(mem_ptr_reg)?;
-                ctx.block_state.regs.release(src)?;
+                ctx.free(ValueLocation::Reg(mem_ptr_reg))?;
+                ctx.free(ValueLocation::Reg(src))?;
                 Ok(())
             }
 
@@ -2180,7 +2336,7 @@ macro_rules! store {
                 mut base => {
                     let gpr = self.put_into_register(I32, &mut base)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
                     store_from_reg(self, src_reg, (offset as i32, Err(gpr)))?;
-                    self.free_value(base)?;
+                    self.free(base)?;
                 }
             }
             Ok(())
@@ -2246,12 +2402,6 @@ macro_rules! store {
     };
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VirtualCallingConvention {
-    pub stack: Stack,
-    pub depth: StackDepth,
-}
-
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub enum BrAction {
     Jump,
@@ -2263,10 +2413,16 @@ pub struct Target {
     pub action: BrAction,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum MaybeCCLoc {
+    Concrete(CCLoc),
+    Serialize,
+    NoSerialize,
+}
+
 impl<'this, M: ModuleContext> Context<'this, M> {
     fn free_reg(&mut self, type_: GPRType) -> Result<bool, Error> {
         let pos = if let Some(pos) = self
-            .block_state
             .stack
             .iter()
             .position(|r| r.reg().map(|reg| reg.type_() == type_).unwrap_or(false))
@@ -2276,24 +2432,27 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             return Ok(false);
         };
 
-        let old_loc = self.block_state.stack[pos];
+        let old_loc = self.stack[pos];
         let new_loc = self.push_physical(old_loc)?.into();
-        self.block_state.stack[pos] = new_loc;
+        self.stack[pos] = new_loc;
 
-        let reg = old_loc.reg().unwrap();
+        let mut stack = mem::take(&mut self.stack);
 
-        for elem in &mut self.block_state.stack[pos + 1..] {
+        for elem in &mut stack[pos + 1..] {
             if *elem == old_loc {
                 *elem = new_loc;
-                self.block_state.regs.release(reg)?;
+                self.mark_used(new_loc)?;
+                self.free(old_loc)?;
             }
         }
+
+        mem::replace(&mut self.stack, stack);
 
         Ok(true)
     }
 
     fn take_reg(&mut self, r: impl Into<GPRType>) -> Option<GPR> {
-        self.block_state.regs.take(r.into())
+        self.regs.take(r.into())
     }
 
     fn take_or_free_reg(&mut self, r: impl Into<GPRType>) -> Option<GPR> {
@@ -2313,10 +2472,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.source_loc = loc;
     }
 
-    pub fn virtual_calling_convention(&self) -> VirtualCallingConvention {
-        VirtualCallingConvention {
-            stack: self.block_state.stack.clone(),
-            depth: self.block_state.depth.clone(),
+    pub fn virtual_calling_convention(&self) -> CallingConvention {
+        CallingConvention {
+            arguments: self.stack.clone(),
+            depth: self.allocated_stack.stack_depth().clone(),
         }
     }
 
@@ -2326,25 +2485,32 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     fn adjusted_offset(&self, offset: i32) -> i32 {
-        let out = (self.block_state.depth.0 as i32 + offset) * WORD_SIZE as i32;
-        debug_assert_ge!(out, 0, "{:?}", self.block_state);
+        let out = (self.allocated_stack.stack_depth().0 as i32 + offset) * WORD_SIZE as i32;
+        debug_assert_ge!(
+            out,
+            0,
+            "Trying to access stack value at offset less than allocated space"
+        );
         debug_assert_ne!(
             out,
-            ((self.block_state.depth.0 - 1) * WORD_SIZE) as i32,
-            "{:?}",
-            self.block_state
+            ((self.allocated_stack.stack_depth().0 - 1) * WORD_SIZE) as i32,
+            "Trying to access saved return address",
+        );
+        debug_assert_ne!(
+            out,
+            ((self.allocated_stack.stack_depth().0 - 2) * WORD_SIZE) as i32,
+            "Trying to access saved `rbp`",
         );
         debug_assert_lt!(
             out,
-            ((self.block_state.depth.0
+            ((self.allocated_stack.stack_depth().0
                 + self
                     .module_context
                     .defined_func_type(self.current_function)
                     .params()
                     .len() as u32)
                 * WORD_SIZE) as i32,
-            "{:?}",
-            self.block_state
+            "Trying to access stack value at offset greater than allocated space"
         );
         out
     }
@@ -2434,7 +2600,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ; test Rd(reg.rq().unwrap()), Rd(reg.rq().unwrap())
         );
 
-        self.free_value(val)?;
+        self.free(val)?;
 
         self.push(ValueLocation::Cond(cc::EQUAL))?;
         Ok(())
@@ -2463,7 +2629,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ; test Rq(reg.rq().unwrap()), Rq(reg.rq().unwrap())
         );
 
-        self.free_value(val)?;
+        self.free(val)?;
 
         self.push(ValueLocation::Cond(cc::EQUAL))?;
         Ok(())
@@ -2514,13 +2680,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             self.set_stack_depth(stack_depth_if_true)?;
         } else if let Some(reg) = self.take_reg(GPRType::Rq) {
             self.set_stack_depth(stack_depth_if_false)?;
-            let diff = self.block_state.depth.0 as i32 - stack_depth_if_true.0 as i32;
+            let diff = self.allocated_stack.stack_depth().0 as i32 - stack_depth_if_true.0 as i32;
             dynasm!(self.asm
                 ; lea Rq(reg.rq().unwrap()), [rsp + diff * WORD_SIZE as i32]
             );
             let reg = CCLoc::Reg(reg);
             self.cmov(cond, RSP, reg);
-            self.free_value(reg.into())?;
+            self.free(reg)?;
         } else {
             self.set_stack_depth(stack_depth_if_true)?;
             let ret = self.create_label();
@@ -2616,7 +2782,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         &mut self,
         targets: I,
         default: Target,
-        pass_args: impl FnOnce(&mut Self) -> Result<(ValueLocation, StackDepth), Error>,
+        depth: StackDepth,
+        mut selector: ValueLocation,
     ) -> Result<(), Error>
     where
         I: IntoIterator<Item = Target>,
@@ -2624,8 +2791,6 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     {
         let mut targets = targets.into_iter();
         let count = targets.len();
-
-        let (mut selector, depth) = pass_args(self)?;
 
         match (count, selector) {
             (0, _) => {
@@ -2698,7 +2863,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                         self.br(default.target);
                     }
 
-                    self.free_value(ValueLocation::Reg(reg))?;
+                    self.free(ValueLocation::Reg(reg))?;
                 } else {
                     self.set_stack_depth(depth)?;
 
@@ -2765,7 +2930,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 if let Some(saved) = saved_tmp {
                     self.copy_value(saved, CCLoc::Reg(tmp))?;
                 } else {
-                    self.block_state.regs.release(tmp)?;
+                    self.free(ValueLocation::Reg(tmp))?;
                 }
 
                 if let Some(saved) = saved_selector {
@@ -2792,16 +2957,16 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         }
 
-        self.free_value(selector)?;
+        self.free(selector)?;
 
         Ok(())
     }
 
     #[cfg(debug_assertions)]
     fn check_block_depth_inbounds(&mut self, depth: StackDepth) -> Result<(), Error> {
-        let old_depth = mem::replace(&mut self.block_state.depth, depth);
+        let old_depth = mem::replace(&mut self.allocated_stack.stack_depth(), depth);
 
-        let block_depth_is_inbounds = self.block_state.stack.iter().all(|v| {
+        let block_depth_is_inbounds = self.stack.iter().all(|v| {
             if let ValueLocation::Stack(o) = v {
                 self.adjusted_offset(*o) >= 0
             } else {
@@ -2815,11 +2980,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             Err(error(format!(
                 "Some elements on the stack were out of range of the new \
                         stack depth: {:#?}",
-                self.block_state
+                self.stack
             )))
         };
 
-        self.block_state.depth = old_depth;
+        self.allocated_stack.set_depth(old_depth)?;
 
         out
     }
@@ -2830,13 +2995,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     fn set_stack_depth(&mut self, depth: StackDepth) -> Result<(), Error> {
-        if self.block_state.depth != depth {
+        if self.allocated_stack.stack_depth() != depth {
             if depth == FUNCTION_START_DEPTH {
                 dynasm!(self.asm
                     ; mov rsp, rbp
                 );
             } else {
-                let diff = self.block_state.depth.0 as i32 - depth.0 as i32;
+                let diff = self.allocated_stack.stack_depth().0 as i32 - depth.0 as i32;
 
                 dynasm!(self.asm
                     ; lea rsp, [rsp + diff * WORD_SIZE as i32]
@@ -2844,50 +3009,67 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         }
 
-        self.block_state.depth = depth;
+        self.allocated_stack.set_depth_and_free(depth);
 
-        self.check_block_depth_inbounds(self.block_state.depth.clone())
+        self.check_block_depth_inbounds(self.allocated_stack.stack_depth().clone())
     }
 
-    fn do_pass_block_args<I>(&mut self, params: I) -> Result<BlockCallingConvention, Error>
+    fn do_pass_block_args<I>(
+        &mut self,
+        params: I,
+        max_stack: Option<StackDepth>,
+    ) -> Result<CallingConvention, Error>
     where
-        I: ExactSizeIterator<Item = Option<CCLoc>> + DoubleEndedIterator,
+        I: ExactSizeIterator<Item = MaybeCCLoc> + DoubleEndedIterator,
     {
-        use itertools::Either;
+        #[derive(Debug, Copy, Clone)]
+        enum Dest {
+            Concrete(CCLoc),
+            Serialize(ValueLocation),
+            NoSerialize(ValueLocation),
+        }
 
         let mut pending = Vec::<(ValueLocation, CCLoc)>::with_capacity(params.len());
-        let mut out = Vec::<Either<CCLoc, ValueLocation>>::with_capacity(params.len());
+        let mut out = Vec::<Dest>::with_capacity(params.len());
 
         for loc in params.rev() {
-            if let Some(loc) = loc {
-                if let Some(reg) = loc.reg().filter(|reg| self.block_state.regs.is_free(*reg)) {
-                    self.block_state.regs.mark_used(reg);
-
-                    self.pop_into(loc)?;
-                } else {
-                    let src = self.pop()?;
-                    if src != ValueLocation::from(loc) {
-                        pending.push((src, loc));
+            match loc {
+                MaybeCCLoc::Concrete(loc) => {
+                    if self.is_free(loc)? {
+                        self.mark_used(loc)?;
+                        self.pop_into(loc)?;
+                    } else {
+                        let src = self.pop()?;
+                        if src != ValueLocation::from(loc) {
+                            pending.push((src, loc));
+                        }
                     }
+
+                    out.push(Dest::Concrete(loc));
                 }
-
-                out.push(Either::Left(loc));
-            } else {
-                let mut loc = self.pop()?;
-
-                // TODO: Handle CondCode etc.
-                self.put_into_temp_location(None, &mut loc)?;
-                out.push(Either::Right(loc));
+                MaybeCCLoc::Serialize => {
+                    out.push(Dest::Serialize(self.pop()?));
+                }
+                MaybeCCLoc::NoSerialize => {
+                    out.push(Dest::NoSerialize(self.pop()?));
+                }
             }
         }
 
         while let Some(val) = self.try_pop() {
-            self.free_value(val)?;
+            self.free(val)?;
         }
 
         for loc in out.iter().rev() {
-            if let Either::Right(loc) = loc {
-                self.push(*loc)?;
+            match *loc {
+                Dest::Serialize(mut vloc) | Dest::NoSerialize(mut vloc) => {
+                    if CCLoc::try_from(vloc).is_ok() {
+                        self.put_into_temp_location(None, &mut vloc)?;
+                    }
+
+                    self.push(vloc)?;
+                }
+                _ => {}
             }
         }
 
@@ -2898,21 +3080,16 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
             for (src, dst) in mem::take(&mut pending) {
                 if src != ValueLocation::from(dst) {
-                    let dst = match dst {
-                        CCLoc::Reg(r) => {
-                            if self.block_state.regs.is_free(r) {
-                                self.block_state.regs.mark_used(r);
-                                CCLoc::Reg(r)
-                            } else {
-                                pending.push((src, dst));
-                                continue;
-                            }
-                        }
-                        stack @ CCLoc::Stack(_) => stack,
+                    let dst = if self.is_free(dst)? {
+                        self.mark_used(dst)?;
+                        dst
+                    } else {
+                        pending.push((src, dst));
+                        continue;
                     };
 
                     self.copy_value(src, dst)?;
-                    self.free_value(src)?;
+                    self.free(src)?;
                 }
             }
 
@@ -2923,25 +3100,25 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
 
             if pending.len() == start_len {
-                let mut stack = mem::take(&mut self.block_state.stack);
+                let mut stack = mem::take(&mut self.stack);
                 let mut stack_borrow = &mut stack[..];
 
                 while let Some((cur, rest)) = stack_borrow.split_first_mut() {
                     if pending
                         .iter()
-                        .any(|(_, dst)| Some(dst.reg().unwrap()) == cur.reg())
+                        .any(|(_, dst)| ValueLocation::from(*dst) == *cur)
                     {
                         let old = *cur;
 
-                        self.block_state.regs.mark_used(cur.reg().unwrap());
+                        self.mark_used(old)?;
                         let new = self.put_into_temp_location(None, &mut { old })?.into();
-                        self.block_state.regs.release(cur.reg().unwrap())?;
+                        self.free(old)?;
 
                         *cur = new;
 
                         for cur in &mut *rest {
                             if *cur == old {
-                                self.free_value(*cur)?;
+                                self.free(*cur)?;
                                 *cur = new;
                             }
                         }
@@ -2960,16 +3137,19 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                 while let Some((cur, rest)) = pending_borrow.split_first_mut() {
                     let (src, _) = cur;
-                    if let Some(reg) = src.reg().filter(|r| !self.block_state.regs.is_free(*r)) {
-                        let old = *src;
 
-                        self.block_state.regs.mark_used(reg);
-                        let new = self.put_into_temp_location(None, src)?.into();
-                        self.block_state.regs.release(reg)?;
+                    if let Some(loc) = CCLoc::try_from(*src).ok() {
+                        if !self.is_free(loc)? {
+                            let old = *src;
 
-                        for (src, _) in &mut *rest {
-                            if *src == old {
-                                *src = new;
+                            self.mark_used(loc)?;
+                            let new = self.put_into_temp_location(None, src)?.into();
+                            self.free(loc)?;
+
+                            for (src, _) in &mut *rest {
+                                if *src == old {
+                                    *src = new;
+                                }
                             }
                         }
                     }
@@ -2977,7 +3157,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     pending_borrow = rest;
                 }
 
-                self.block_state.stack = stack;
+                self.stack = stack;
             }
 
             last_len = Some(start_len);
@@ -2985,14 +3165,33 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let mut out = out
             .into_iter()
-            .map(|loc| match loc {
-                Either::Left(ccloc) => Ok(ccloc),
-                Either::Right(_) => {
-                    let mut loc = self.pop()?;
-                    self.put_into_temp_location(None, &mut loc)
-                }
+            .map(|loc| {
+                Ok(match loc {
+                    Dest::Concrete(ccloc) => ccloc.into(),
+                    Dest::Serialize(_) => {
+                        let mut loc = self.pop()?;
+                        self.put_into_temp_location(None, &mut loc)?;
+                        loc
+                    }
+                    Dest::NoSerialize(_) => {
+                        let mut loc = self.pop()?;
+
+                        if let Some(max_stack) = &max_stack {
+                            match loc {
+                                ValueLocation::Stack(offset) if offset < -(max_stack.0 as i32) => {
+                                    if self.put_into_register(None, &mut loc)?.is_none() {
+                                        loc = self.push_physical(loc)?.into();
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        loc
+                    }
+                })
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, Error>>()?;
 
         out.reverse();
 
@@ -3005,15 +3204,14 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             .map(StackDepth)
             .unwrap_or(FUNCTION_START_DEPTH);
 
-        Ok(BlockCallingConvention {
+        Ok(CallingConvention {
             arguments: out,
-            stack_depth: max_stack_depth,
+            depth: max_stack_depth,
         })
     }
 
     pub fn shrink_stack_to_fit(&mut self) -> Result<(), Error> {
         let max = self
-            .block_state
             .stack
             .iter()
             .filter_map(|val| val.stack().map(|offset| -offset))
@@ -3023,57 +3221,43 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             .map(StackDepth)
             .unwrap_or(FUNCTION_START_DEPTH);
 
-        debug_assert_le!(max.0, self.block_state.depth.0);
+        debug_assert_le!(max.0, self.allocated_stack.stack_depth().0);
 
         self.set_stack_depth(max)?;
 
         Ok(())
     }
 
-    pub fn pass_block_args(&mut self, cc: &BlockCallingConvention) -> Result<(), Error> {
-        self.set_stack_depth(StackDepth(self.block_state.depth.0.max(cc.stack_depth.0)))?;
-
-        self.do_pass_block_args(cc.arguments.iter().cloned().map(Some))?;
-
-        if cfg!(debug_assertions) {
-            // So that the assertions in `set_stack_depth` trip. If we remove this the assertions
-            // won't have false-positives, but they won't trip when they should either.
-            self.block_state.stack = cc.arguments.iter().cloned().map(Into::into).collect();
-        }
-
-        Ok(())
-    }
-
-    pub fn serialize_block_args<IntoCCLoc, I>(
+    pub fn serialize_block_args<I>(
         &mut self,
         params: I,
-        stack_depth: StackDepth,
-    ) -> Result<BlockCallingConvention, Error>
+        depth: Option<StackDepth>,
+    ) -> Result<CallingConvention, Error>
     where
-        IntoCCLoc: Into<Option<CCLoc>>,
-        I: IntoIterator<Item = IntoCCLoc>,
+        I: IntoIterator<Item = MaybeCCLoc>,
         I::IntoIter: ExactSizeIterator + DoubleEndedIterator,
     {
-        self.set_stack_depth(StackDepth(self.block_state.depth.0.max(stack_depth.0)))?;
-
-        let mut out_cc = self.do_pass_block_args(params.into_iter().map(Into::into))?;
+        let mut out_cc =
+            self.do_pass_block_args(params.into_iter().map(Into::into), depth.clone())?;
 
         if cfg!(debug_assertions) {
             // So that the assertions in `set_stack_depth` trip. If we remove this the assertions
             // won't have false-positives, but they won't trip when they should either.
-            self.block_state.stack = out_cc.arguments.iter().cloned().map(Into::into).collect();
+            self.stack = out_cc.arguments.iter().cloned().map(Into::into).collect();
         }
 
-        debug_assert_le!(out_cc.stack_depth.0, stack_depth.0);
+        if let Some(depth) = depth {
+            debug_assert_le!(out_cc.depth.0, depth.0);
 
-        out_cc.stack_depth = stack_depth;
+            out_cc.depth = depth;
+        }
 
         Ok(out_cc)
     }
 
     /// Puts all stack values into "real" locations so that they can i.e. be set to different
     /// values on different iterations of a loop
-    pub fn serialize_args(&mut self, count: u32) -> Result<BlockCallingConvention, Error> {
+    pub fn serialize_args(&mut self, count: u32) -> Result<CallingConvention, Error> {
         let mut out = Vec::with_capacity(count as _);
 
         // TODO: We can make this more efficient now that `pop` isn't so complicated
@@ -3081,15 +3265,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             let mut val = self.pop()?;
             // TODO: We can use stack slots for values already on the stack but we
             //       don't refcount stack slots right now
-            let loc = self.put_into_temp_location(None, &mut val)?;
+            let loc = self.put_into_temp_location(None, &mut val)?.into();
 
             out.push(loc);
         }
 
         out.reverse();
 
-        Ok(BlockCallingConvention {
-            stack_depth: self.block_state.depth.clone(),
+        Ok(CallingConvention {
+            depth: self.allocated_stack.stack_depth().clone(),
             arguments: out,
         })
     }
@@ -3132,7 +3316,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         );
 
         if let Some(reg) = reg {
-            self.block_state.regs.release(reg)?;
+            self.free(ValueLocation::Reg(reg))?;
         }
 
         self.push(ValueLocation::Reg(out))?;
@@ -3180,10 +3364,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         );
 
         if let Some(reg) = reg {
-            self.block_state.regs.release(reg)?;
+            self.free(ValueLocation::Reg(reg))?;
         }
 
-        self.free_value(val)?;
+        self.free(val)?;
         Ok(())
     }
 
@@ -3209,7 +3393,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                         ;; immediate_to_rq(&mut self.asm, tmp.rq().unwrap(), val)
                         ; movq Rx(rx), Rq(tmp.rq().unwrap())
                     );
-                    self.free_value(ValueLocation::Reg(tmp))?;
+                    self.free(ValueLocation::Reg(tmp))?;
                 } else {
                     dynasm!(self.asm
                         ; push rax
@@ -3312,7 +3496,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     self.copy_value(src, temp)?;
                     let temp = temp.into();
                     self.copy_value(temp, dst)?;
-                    self.free_value(temp)?;
+                    self.free(temp)?;
                 }
             },
             (ValueLocation::Stack(in_offset), CCLoc::Stack(out_offset)) => {
@@ -3325,11 +3509,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                             ; mov Rq(gpr.rq().unwrap()), [rsp + in_offset]
                             ; mov [rsp + out_offset], Rq(gpr.rq().unwrap())
                         );
-                        self.block_state.regs.release(gpr)?;
+                        self.free(ValueLocation::Reg(gpr))?;
                     } else {
                         dynasm!(self.asm
                             ; push rax
-                            ;; self.block_state.depth.reserve(1)
+                            ;; self.allocated_stack.reserve_space(1)?
                         );
 
                         let in_offset = self.adjusted_offset(in_offset);
@@ -3341,7 +3525,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                         dynasm!(self.asm
                             ; pop rax
-                            ;; self.block_state.depth.free(1)
+                            ;; self.allocated_stack.free_space(1)?
                         );
                     }
                 }
@@ -3377,11 +3561,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                         ; mov [rsp + out_offset], Rq(scratch.rq().unwrap())
                     );
 
-                    self.block_state.regs.release(scratch)?;
+                    self.free(ValueLocation::Reg(scratch))?;
                 } else {
                     dynasm!(self.asm
                         ; push rax
-                        ;; self.block_state.depth.reserve(1)
+                        ;; self.allocated_stack.reserve_space(1)?
                     );
 
                     let out_offset = self.adjusted_offset(out_offset);
@@ -3393,7 +3577,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                     dynasm!(self.asm
                         ; pop rax
-                        ;; self.block_state.depth.free(1)
+                        ;; self.allocated_stack.free_space(1)?
                     );
                 }
             }
@@ -3460,38 +3644,26 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.asm.dynamic_label(label.0);
     }
 
-    pub fn set_state(&mut self, state: VirtualCallingConvention) -> Result<(), Error> {
-        self.block_state.regs = Registers::new();
-        self.block_state.regs.release_scratch_register()?;
-        for elem in &state.stack {
-            if let ValueLocation::Reg(r) = elem {
-                self.block_state.regs.mark_used(*r);
+    pub fn set_state<I>(&mut self, state: CallingConvention<I>) -> Result<(), Error>
+    where
+        I: IntoIterator,
+        Stack: FromIterator<I::Item>,
+    {
+        self.regs = Registers::new();
+        self.regs.release_scratch_register()?;
+        let stack: Stack = state.arguments.into_iter().collect();
+        self.allocated_stack.clear();
+        self.allocated_stack.set_depth(FUNCTION_START_DEPTH)?;
+        self.allocated_stack.set_depth_and_free(state.depth);
+
+        for elem in &stack {
+            if let Ok(ccloc) = CCLoc::try_from(*elem) {
+                self.mark_used(ccloc)?;
             }
         }
-        self.block_state.stack = state.stack;
-        self.block_state.depth = state.depth;
-        Ok(())
-    }
 
-    pub fn apply_cc(
-        &mut self,
-        cc: BlockCallingConvention<impl IntoIterator<Item = CCLoc>>,
-    ) -> Result<(), Error> {
-        let stack = cc.arguments.into_iter();
+        self.stack = stack;
 
-        self.block_state.stack = Vec::with_capacity(stack.size_hint().0);
-        self.block_state.regs = Registers::new();
-        self.block_state.regs.release_scratch_register()?;
-
-        for elem in stack {
-            if let CCLoc::Reg(r) = elem {
-                self.block_state.regs.mark_used(r);
-            }
-
-            self.block_state.stack.push(elem.into());
-        }
-
-        self.block_state.depth = cc.stack_depth;
         Ok(())
     }
 
@@ -3518,89 +3690,110 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     store!(store64, Rq, movq, QWORD);
 
     fn push_copy_physical(&mut self, value: ValueLocation) -> Result<CCLoc, Error> {
-        let out_offset = -(self.block_state.depth.0 as i32 + 1);
-        match value {
-            ValueLocation::Reg(GPR::Rq(gpr)) => {
-                dynasm!(self.asm
-                    ; push Rq(gpr)
-                );
-                self.block_state.depth.reserve(1);
-            }
-            ValueLocation::Stack(o) => {
-                // If `rsp` is used in `push` it uses its value _before_ `push`.
-                let offset = self.adjusted_offset(o);
-                dynasm!(self.asm
-                    ; push QWORD [rsp + offset]
-                );
-                self.block_state.depth.reserve(1);
-            }
-            _ => {
-                if let Some(gpr) = self.take_reg(GPRType::Rq) {
-                    self.copy_value(value, CCLoc::Reg(gpr))?;
-                    dynasm!(self.asm
-                        ; push Rq(gpr.rq().unwrap())
-                    );
-                    self.block_state.depth.reserve(1);
+        if let Some(offset) = self.allocated_stack.alloc() {
+            let out = CCLoc::Stack(offset);
 
-                    self.free_value(ValueLocation::Reg(gpr))?;
-                } else {
-                    dynasm!(self.asm
-                        ; push rax
-                    );
-                    self.block_state.depth.reserve(1);
+            self.copy_value(value, out)?;
 
-                    self.copy_value(value, CCLoc::Stack(out_offset))?;
+            Ok(out)
+        } else {
+            let out_offset = -(self.allocated_stack.stack_depth().0 as i32 + 1);
+            match value {
+                ValueLocation::Reg(GPR::Rq(gpr)) => {
+                    dynasm!(self.asm
+                        ; push Rq(gpr)
+                    );
+                    self.allocated_stack.reserve_space(1)?;
+                }
+                ValueLocation::Stack(o) => {
+                    // If `rsp` is used in `push` it uses its value _before_ `push`.
+                    let offset = self.adjusted_offset(o);
+                    dynasm!(self.asm
+                        ; push QWORD [rsp + offset]
+                    );
+                    self.allocated_stack.reserve_space(1)?;
+                }
+                _ => {
+                    if let Some(gpr) = self.take_reg(GPRType::Rq) {
+                        self.copy_value(value, CCLoc::Reg(gpr))?;
+                        dynasm!(self.asm
+                            ; push Rq(gpr.rq().unwrap())
+                        );
+                        self.allocated_stack.reserve_space(1)?;
+
+                        self.free(ValueLocation::Reg(gpr))?;
+                    } else {
+                        dynasm!(self.asm
+                            ; push rax
+                        );
+                        self.allocated_stack.reserve_space(1)?;
+
+                        self.copy_value(value, CCLoc::Stack(out_offset))?;
+                    }
                 }
             }
+
+            debug_assert_eq!(self.adjusted_offset(out_offset), 0);
+
+            let out = CCLoc::Stack(out_offset);
+
+            Ok(out)
         }
-
-        debug_assert_eq!(self.adjusted_offset(out_offset), 0);
-
-        Ok(CCLoc::Stack(out_offset))
     }
 
-    pub fn push_physical(&mut self, mut value: ValueLocation) -> Result<CCLoc, Error> {
-        let out_offset = -(self.block_state.depth.0 as i32 + 1);
-        match value {
-            ValueLocation::Reg(GPR::Rq(gpr)) => {
-                dynasm!(self.asm
-                    ; push Rq(gpr)
-                );
-                self.block_state.depth.reserve(1);
-            }
-            ValueLocation::Stack(o) => {
-                let offset = self.adjusted_offset(o);
-                dynasm!(self.asm
-                    ; push QWORD [rsp + offset]
-                );
-                self.block_state.depth.reserve(1);
-            }
-            _ => {
-                if let Some(gpr) = self.take_reg(GPRType::Rq) {
-                    self.copy_value(value, CCLoc::Reg(gpr))?;
-                    self.free_value(value)?;
-                    value = ValueLocation::Reg(gpr);
+    pub fn push_physical(&mut self, value: ValueLocation) -> Result<CCLoc, Error> {
+        if let Some(offset) = self.allocated_stack.alloc() {
+            let out = CCLoc::Stack(offset);
 
-                    dynasm!(self.asm
-                        ; push Rq(gpr.rq().unwrap())
-                    );
-                    self.block_state.depth.reserve(1);
-                } else {
-                    dynasm!(self.asm
-                        ; push rax
-                    );
-                    self.block_state.depth.reserve(1);
+            self.copy_value(value, out)?;
+            self.free(value)?;
 
-                    self.copy_value(value, CCLoc::Stack(out_offset))?;
+            Ok(out)
+        } else {
+            let out_offset = -(self.allocated_stack.stack_depth().0 as i32 + 1);
+            match value {
+                ValueLocation::Reg(GPR::Rq(gpr)) => {
+                    dynasm!(self.asm
+                        ; push Rq(gpr)
+                    );
+                    self.allocated_stack.reserve_space(1)?;
+                }
+                ValueLocation::Stack(o) => {
+                    // If `rsp` is used in `push` it uses its value _before_ `push`.
+                    let offset = self.adjusted_offset(o);
+                    dynasm!(self.asm
+                        ; push QWORD [rsp + offset]
+                    );
+                    self.allocated_stack.reserve_space(1)?;
+                }
+                _ => {
+                    if let Some(gpr) = self.take_reg(GPRType::Rq) {
+                        self.copy_value(value, CCLoc::Reg(gpr))?;
+                        dynasm!(self.asm
+                            ; push Rq(gpr.rq().unwrap())
+                        );
+                        self.allocated_stack.reserve_space(1)?;
+
+                        self.free(ValueLocation::Reg(gpr))?;
+                    } else {
+                        dynasm!(self.asm
+                            ; push rax
+                        );
+                        self.allocated_stack.reserve_space(1)?;
+
+                        self.copy_value(value, CCLoc::Stack(out_offset))?;
+                    }
                 }
             }
+
+            debug_assert_eq!(self.adjusted_offset(out_offset), 0);
+
+            let out = CCLoc::Stack(out_offset);
+
+            self.free(value)?;
+
+            Ok(out)
         }
-
-        self.free_value(value)?;
-
-        debug_assert_ge!(self.adjusted_offset(out_offset), 0);
-
-        Ok(CCLoc::Stack(out_offset))
     }
 
     fn push(&mut self, value: ValueLocation) -> Result<(), Error> {
@@ -3608,27 +3801,27 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             debug_assert_ge!(self.adjusted_offset(o), 0);
         }
 
-        if let Some(mut top) = self.block_state.stack.pop() {
+        if let Some(mut top) = self.stack.pop() {
             if let ValueLocation::Cond(_) = top {
                 self.put_into_temp_location(I32, &mut top)?;
             }
 
-            self.block_state.stack.push(top);
+            self.stack.push(top);
         }
 
-        self.block_state.stack.push(value);
+        self.stack.push(value);
         Ok(())
     }
 
     pub fn pop(&mut self) -> Result<ValueLocation, Error> {
-        match self.block_state.stack.pop() {
+        match self.stack.pop() {
             Some(v) => Ok(v),
             None => Err(error("Stack is empty - pop impossible".to_string())),
         }
     }
 
     fn try_pop(&mut self) -> Option<ValueLocation> {
-        self.block_state.stack.pop()
+        self.stack.pop()
     }
 
     pub fn drop(&mut self, range: RangeInclusive<u32>) -> Result<(), Error> {
@@ -3641,7 +3834,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         for _ in range {
             let val = self.pop()?;
-            self.free_value(val)?;
+            self.free(val)?;
         }
 
         for v in repush.into_iter().rev() {
@@ -3653,14 +3846,42 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     fn pop_into(&mut self, dst: CCLoc) -> Result<(), Error> {
         let val = self.pop()?;
         self.copy_value(val, dst)?;
-        self.free_value(val)?;
+        self.free(val)?;
         Ok(())
     }
 
-    fn free_value(&mut self, val: ValueLocation) -> Result<(), Error> {
-        if let ValueLocation::Reg(r) = val {
-            self.block_state.regs.release(r)?;
+    fn num_usages(&self, val: CCLoc) -> Result<u32, Error> {
+        match val {
+            CCLoc::Reg(r) => Ok(self.regs.num_usages(r) as u32),
+            CCLoc::Stack(o) => self.allocated_stack.num_usages(o),
         }
+    }
+
+    fn is_free(&self, val: CCLoc) -> Result<bool, Error> {
+        match val {
+            CCLoc::Reg(r) if SCRATCH_REGS.contains(&r) => Ok(self.regs.is_free(r)),
+            CCLoc::Reg(_) => Ok(true),
+            CCLoc::Stack(o) => self.allocated_stack.is_free(o),
+        }
+    }
+
+    fn mark_used<C: TryInto<CCLoc>>(&mut self, val: C) -> Result<(), Error> {
+        match val.try_into() {
+            Ok(CCLoc::Reg(r)) if SCRATCH_REGS.contains(&r) => self.regs.mark_used(r),
+            Ok(CCLoc::Stack(o)) => self.allocated_stack.mark_used(o)?,
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    fn free<C: TryInto<CCLoc>>(&mut self, val: C) -> Result<(), Error> {
+        match val.try_into() {
+            Ok(CCLoc::Reg(r)) if SCRATCH_REGS.contains(&r) => self.regs.release(r)?,
+            Ok(CCLoc::Stack(o)) => self.allocated_stack.release(o)?,
+            _ => {}
+        }
+
         Ok(())
     }
 
@@ -3671,7 +3892,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         val: &mut ValueLocation,
     ) -> Result<Option<GPR>, Error> {
         if let Some(out) = self.clone_to_register(ty, *val)? {
-            self.free_value(*val)?;
+            self.free(*val)?;
             *val = ValueLocation::Reg(out);
             Ok(Some(out))
         } else {
@@ -3688,7 +3909,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let ty = ty.into();
         match val {
             ValueLocation::Reg(r) if ty.map(|t| t == r.type_()).unwrap_or(true) => {
-                self.block_state.regs.mark_used(r);
+                self.mark_used(CCLoc::Reg(r))?;
                 Ok(Some(r))
             }
             val => match self.take_or_free_reg(ty.unwrap_or(GPRType::Rq)) {
@@ -3710,7 +3931,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     ) -> Result<Option<GPR>, Error> {
         let out = self.clone_to_temp_register(ty, *val)?;
         if let Some(o) = out {
-            self.free_value(*val)?;
+            self.free(*val)?;
             *val = ValueLocation::Reg(o);
             Ok(Some(o))
         } else {
@@ -3725,6 +3946,12 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     ) -> Result<CCLoc, Error> {
         let out = if let Some(gpr) = self.put_into_temp_register(ty, val)? {
             CCLoc::Reg(gpr)
+        } else if let Some(ccloc) = CCLoc::try_from(*val).ok() {
+            if self.num_usages(ccloc)? <= 1 {
+                ccloc
+            } else {
+                self.push_physical(*val)?
+            }
         } else {
             self.push_physical(*val)?
         };
@@ -3747,8 +3974,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 let ty = ty.into();
                 let type_matches = ty.map(|t| t == r.type_()).unwrap_or(true);
 
-                if self.block_state.regs.num_usages(r) <= 1 && type_matches {
-                    self.block_state.regs.mark_used(r);
+                if self.num_usages(CCLoc::Reg(r))? <= 1 && type_matches {
+                    self.mark_used(CCLoc::Reg(r))?;
                     Ok(Some(r))
                 } else if let Some(scratch) = self.take_or_free_reg(ty.unwrap_or(GPRType::Rq)) {
                     self.copy_value(val, CCLoc::Reg(scratch))?;
@@ -3940,7 +4167,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 ; orps  Rx(lreg.rx().unwrap()), Rx(rreg.rx().unwrap())
             );
 
-            self.free_value(right)?;
+            self.free(right)?;
 
             left
         };
@@ -3979,7 +4206,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 ; orpd  Rx(lreg.rx().unwrap()), Rx(rreg.rx().unwrap())
             );
 
-            self.free_value(right)?;
+            self.free(right)?;
 
             left
         };
@@ -4018,7 +4245,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                         ; mov Rd(temp_2.rq().unwrap()), DWORD 0x1fu64 as _
                         ; xor Rd(temp.rq().unwrap()), Rd(temp_2.rq().unwrap())
                     );
-                    self.free_value(ValueLocation::Reg(temp_2))?;
+                    self.free(ValueLocation::Reg(temp_2))?;
                     ValueLocation::Reg(temp)
                 }
             }
@@ -4050,7 +4277,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
         self.push(out_val)?;
         Ok(())
     }
@@ -4085,7 +4312,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                         ; mov Rq(temp_2.rq().unwrap()), QWORD 0x3fu64 as _
                         ; xor Rq(temp.rq().unwrap()), Rq(temp_2.rq().unwrap())
                     );
-                    self.free_value(ValueLocation::Reg(temp_2))?;
+                    self.free(ValueLocation::Reg(temp_2))?;
                     ValueLocation::Reg(temp)
                 }
             }
@@ -4116,7 +4343,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
         self.push(out_val)?;
         Ok(())
     }
@@ -4149,7 +4376,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                         ; mov Rd(temp_zero_val.rq().unwrap()), DWORD 0x20u32 as _
                         ; cmove Rd(temp.rq().unwrap()), Rd(temp_zero_val.rq().unwrap())
                     );
-                    self.free_value(ValueLocation::Reg(temp_zero_val))?;
+                    self.free(ValueLocation::Reg(temp_zero_val))?;
                     ValueLocation::Reg(temp)
                 }
             }
@@ -4178,7 +4405,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
         self.push(out_val)?;
         Ok(())
     }
@@ -4211,7 +4438,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                         ; mov Rq(temp_zero_val.rq().unwrap()), QWORD 0x40u64 as _
                         ; cmove Rq(temp.rq().unwrap()), Rq(temp_zero_val.rq().unwrap())
                     );
-                    self.free_value(ValueLocation::Reg(temp_zero_val))?;
+                    self.free(ValueLocation::Reg(temp_zero_val))?;
                     ValueLocation::Reg(temp)
                 }
             }
@@ -4233,7 +4460,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
         self.push(out_val)?;
         Ok(())
     }
@@ -4278,7 +4505,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Reg(new_reg)
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
 
         self.push(out)?;
         Ok(())
@@ -4287,7 +4514,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     pub fn i32_extend_s(&mut self) -> Result<(), Error> {
         let val = self.pop()?;
 
-        self.free_value(val)?;
+        self.free(val)?;
         let new_reg = self
             .take_or_free_reg(I64)
             .ok_or_else(|| error("Ran out of free registers"))?;
@@ -4325,7 +4552,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 ValueLocation::Reg(new_reg)
             }
             ValueLocation::Immediate(imm) => {
-                self.block_state.regs.release(new_reg)?;
+                self.free(ValueLocation::Reg(new_reg))?;
 
                 ValueLocation::Immediate((imm.as_i32().unwrap() as i64).into())
             }
@@ -4401,7 +4628,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
 
         self.push(out_val)?;
         Ok(())
@@ -4452,7 +4679,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
 
         self.push(out_val)?;
         Ok(())
@@ -4499,7 +4726,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
 
         self.push(out_val)?;
         Ok(())
@@ -4550,7 +4777,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
 
         self.push(out_val)?;
         Ok(())
@@ -4646,7 +4873,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
 
         self.push(out_val)?;
         Ok(())
@@ -4693,7 +4920,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
 
         self.push(out_val)?;
         Ok(())
@@ -4742,7 +4969,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
 
         self.push(out_val)?;
         Ok(())
@@ -4793,7 +5020,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
 
         self.push(out_val)?;
         Ok(())
@@ -4825,7 +5052,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
 
         self.push(out_val)?;
         Ok(())
@@ -4857,7 +5084,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
 
         self.push(out_val)?;
         Ok(())
@@ -4898,13 +5125,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 ; ret:
                 );
 
-                self.free_value(ValueLocation::Reg(temp))?;
+                self.free(ValueLocation::Reg(temp))?;
 
                 ValueLocation::Reg(out)
             }
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
 
         self.push(out_val)?;
         Ok(())
@@ -4945,13 +5172,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 ; ret:
                 );
 
-                self.free_value(ValueLocation::Reg(temp))?;
+                self.free(ValueLocation::Reg(temp))?;
 
                 ValueLocation::Reg(out)
             }
         };
 
-        self.free_value(val)?;
+        self.free(val)?;
 
         self.push(out_val)?;
         Ok(())
@@ -5301,21 +5528,21 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Error,
     > {
         // To stop `take_or_free_reg` from allocating either of these necessary registers
-        self.block_state.regs.mark_used(RAX);
-        self.block_state.regs.mark_used(RDX);
+        self.mark_used(CCLoc::Reg(RAX))?;
+        self.mark_used(CCLoc::Reg(RDX))?;
         if divisor == ValueLocation::Reg(RAX) || divisor == ValueLocation::Reg(RDX) {
             let new_reg = self
                 .take_or_free_reg(GPRType::Rq)
                 .ok_or_else(|| error("Ran out of free registers"))?;
             self.copy_value(divisor, CCLoc::Reg(new_reg))?;
-            self.free_value(divisor)?;
+            self.free(divisor)?;
 
             divisor = ValueLocation::Reg(new_reg);
         }
-        self.block_state.regs.release(RAX)?;
-        self.block_state.regs.release(RDX)?;
+        self.free(ValueLocation::Reg(RDX))?;
+        self.free(ValueLocation::Reg(RAX))?;
 
-        let saved_rax = if self.block_state.regs.is_free(RAX) {
+        let saved_rax = if self.is_free(CCLoc::Reg(RAX))? {
             None
         } else {
             // DON'T FREE THIS REGISTER HERE - since we don't
@@ -5324,7 +5551,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             Some(self.push_copy_physical(ValueLocation::Reg(RAX))?)
         };
 
-        let saved_rdx = if self.block_state.regs.is_free(RDX) {
+        let saved_rdx = if self.is_free(CCLoc::Reg(RDX))? {
             None
         } else {
             // DON'T FREE THIS REGISTER HERE - since we don't
@@ -5339,19 +5566,19 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             .chain(saved_rdx.map(|saved| (ValueLocation::from(saved), CCLoc::Reg(RDX))));
 
         self.copy_value(dividend, CCLoc::Reg(RAX))?;
-        self.block_state.regs.mark_used(RAX);
+        self.mark_used(CCLoc::Reg(RAX))?;
 
-        self.free_value(dividend)?;
+        self.free(dividend)?;
         // To stop `take_or_free_reg` from allocating either of these necessary registers
-        self.block_state.regs.mark_used(RDX);
+        self.mark_used(CCLoc::Reg(RDX))?;
 
         do_div(self, &mut divisor)?;
-        self.free_value(divisor)?;
+        self.free(divisor)?;
 
-        if self.block_state.regs.is_free(RAX) {
+        if self.is_free(CCLoc::Reg(RAX))? {
             return Err(error("full_div: RAX is not free".to_string()));
         }
-        if self.block_state.regs.is_free(RDX) {
+        if self.is_free(CCLoc::Reg(RDX))? {
             return Err(error("full_div: RDX is not free".to_string()));
         }
 
@@ -5568,13 +5795,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 dynasm!(self.asm
                     ; imul Rd(new_reg.rq().unwrap()), Rd(lreg.rq().unwrap()), i.as_i32().unwrap()
                 );
-                self.free_value(left)?;
+                self.free(left)?;
                 ValueLocation::Reg(new_reg)
             }
         };
 
         self.push(out)?;
-        self.free_value(right)?;
+        self.free(right)?;
         Ok(())
     }
 
@@ -5648,7 +5875,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                         ; imul Rq(new_reg.rq().unwrap()), Rq(lreg.rq().unwrap()), i
                     );
 
-                    self.free_value(left)?;
+                    self.free(left)?;
 
                     ValueLocation::Reg(new_reg)
                 } else {
@@ -5668,7 +5895,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         };
 
         self.push(out)?;
-        self.free_value(right)?;
+        self.free(right)?;
         Ok(())
     }
 
@@ -5792,10 +6019,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         if let ValueLocation::Immediate(i) = cond {
             if i.as_i32().unwrap() == 0 {
-                self.free_value(then)?;
+                self.free(then)?;
                 self.push(else_)?;
             } else {
-                self.free_value(else_)?;
+                self.free(else_)?;
                 self.push(then)?;
             }
 
@@ -5812,7 +6039,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 dynasm!(self.asm
                     ; test Rd(cond_reg.rq().unwrap()), Rd(cond_reg.rq().unwrap())
                 );
-                self.free_value(cond)?;
+                self.free(cond)?;
 
                 cc::NOT_EQUAL
             }
@@ -5839,15 +6066,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         };
 
         let out_gpr = match (then, else_) {
-            (CCLoc::Reg(then_reg), else_) if self.block_state.regs.num_usages(then_reg) <= 1 => {
+            (CCLoc::Reg(then_reg), else_) if self.num_usages(then)? <= 1 => {
                 self.cmov(!cond_code, then_reg, else_);
-                self.free_value(else_.into())?;
+                self.free(else_)?;
 
                 then_reg
             }
-            (then, CCLoc::Reg(else_reg)) if self.block_state.regs.num_usages(else_reg) <= 1 => {
+            (then, CCLoc::Reg(else_reg)) if self.num_usages(else_)? <= 1 => {
                 self.cmov(cond_code, else_reg, then);
-                self.free_value(then.into())?;
+                self.free(then)?;
 
                 else_reg
             }
@@ -5858,8 +6085,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 self.copy_value(else_.into(), CCLoc::Reg(out))?;
                 self.cmov(cond_code, out, then);
 
-                self.free_value(then.into())?;
-                self.free_value(else_.into())?;
+                self.free(then)?;
+                self.free(else_)?;
 
                 out
             }
@@ -5870,12 +6097,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn pick(&mut self, depth: u32) -> Result<(), Error> {
-        let idx = self.block_state.stack.len() - 1 - depth as usize;
-        let v = self.block_state.stack[idx];
-        if let ValueLocation::Reg(r) = v {
-            self.block_state.regs.mark_used(r);
-        }
-
+        let idx = self.stack.len() - 1 - depth as usize;
+        let v = self.stack[idx];
+        self.mark_used(v)?;
         self.push(v)
     }
 
@@ -5914,9 +6138,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         self.save_volatile()?;
 
-        self.pass_outgoing_args(&locs)?;
+        let locs = self.pass_outgoing_args(&locs)?;
 
-        let needed_depth = self.block_state.depth.clone();
+        let needed_depth = self.allocated_stack.stack_depth().clone();
 
         // 2 bytes for the 64-bit `mov` opcode + register ident, the rest is the immediate
         self.sinks.relocs.reloc_external(
@@ -5938,13 +6162,13 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         dynasm!(self.asm
             ; mov Rq(temp.rq().unwrap()), QWORD 0xDEAD_BEEF_DEAD_BEEF_u64 as i64
-            ;; assert_eq!(self.block_state.depth, needed_depth)
+            ;; assert_eq!(self.allocated_stack.stack_depth(), needed_depth)
             ; call Rq(temp.rq().unwrap())
         );
-        self.block_state.regs.release(temp)?;
+        self.free(ValueLocation::Reg(temp))?;
 
         for i in locs {
-            self.free_value(i.into())?;
+            self.free(i)?;
         }
 
         self.push_function_returns(rets)?;
@@ -5952,7 +6176,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         if func_def_loc == FunctionDefLocation::PossiblyExternal {
             let saved_vmctx = saved_vmctx.unwrap();
             self.copy_value(saved_vmctx, CCLoc::Reg(GPR::Rq(VMCTX)))?;
-            self.free_value(saved_vmctx)?;
+            self.free(saved_vmctx)?;
         }
 
         Ok(())
@@ -5978,8 +6202,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         self.save_volatile()?;
 
-        self.pass_outgoing_args(&locs)?;
-        let needed_depth = self.block_state.depth.clone();
+        let locs = self.pass_outgoing_args(&locs)?;
+        let needed_depth = self.allocated_stack.stack_depth().clone();
 
         let temp = self
             .take_reg(I64)
@@ -5988,22 +6212,20 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ; mov Rq(temp.rq().unwrap()), [
                 Rq(VMCTX) + self.module_context.vmctx_builtin_function(i.index()) as i32
             ]
-            ;; assert_eq!(self.block_state.depth, needed_depth)
+            ;; assert_eq!(self.allocated_stack.stack_depth(), needed_depth)
             ; call Rq(temp.rq().unwrap())
         );
 
-        self.block_state.regs.release(temp)?;
+        self.free(ValueLocation::Reg(temp))?;
 
         for i in locs {
-            if i.reg().map(|i| SCRATCH_REGS.contains(&i)).unwrap_or(true) {
-                self.free_value(i.into())?;
-            }
+            self.free(i)?;
         }
 
         self.push_function_returns(rets)?;
 
         self.copy_value(saved_vmctx, CCLoc::Reg(GPR::Rq(VMCTX)))?;
-        self.free_value(saved_vmctx)?;
+        self.free(saved_vmctx)?;
 
         Ok(())
     }
@@ -6072,19 +6294,20 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             return Ok(());
         }
 
-        for i in 0..self.block_state.stack.len() {
-            let old = self.block_state.stack[i];
+        for i in 0..self.stack.len() {
+            let old = self.stack[i];
             if let ValueLocation::Reg(vreg) = old {
                 if to_save.clone().any(|r| r == vreg) {
                     let new = self.push_physical(old)?.into();
 
-                    self.block_state.stack[i] = new;
+                    self.stack[i] = new;
 
-                    for j in i + 1..self.block_state.stack.len() {
-                        let cur = self.block_state.stack[j];
+                    for j in i + 1..self.stack.len() {
+                        let cur = self.stack[j];
                         if cur == old {
-                            self.free_value(cur)?;
-                            self.block_state.stack[j] = new;
+                            self.free(cur)?;
+                            self.mark_used(new)?;
+                            self.stack[j] = new;
                         }
                     }
                 }
@@ -6098,99 +6321,90 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     /// calling convention.
     fn pass_outgoing_args(
         &mut self,
-        out_locs: &(impl ExactSizeIterator<Item = CCLoc> + DoubleEndedIterator + Clone),
-    ) -> Result<(), Error> {
-        let total_stack_space = out_locs
-            .clone()
-            .flat_map(|l| {
-                if let CCLoc::Stack(offset) = l {
-                    if offset >= 0 {
-                        Some(offset as u32 + 1)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            })
-            .max()
-            .unwrap_or(0);
-        let mut needed_depth = self.block_state.depth.clone();
-        needed_depth.reserve(total_stack_space);
-
+        out_locs: &Locs<impl ExactSizeIterator<Item = CCLoc> + DoubleEndedIterator + Clone>,
+    ) -> Result<impl ExactSizeIterator<Item = CCLoc>, Error> {
+        let mut needed_depth =
+            StackDepth(self.allocated_stack.stack_depth().clone().0 + out_locs.stack_count);
         if needed_depth.0 & 1 != 0 {
-            needed_depth.reserve(1);
+            needed_depth.0 += 1;
         }
 
         self.set_stack_depth(needed_depth.clone())?;
 
-        let mut pending = Vec::<(ValueLocation, CCLoc)>::with_capacity(out_locs.len());
+        let mut pending = Vec::<(ValueLocation, CCLoc)>::with_capacity(out_locs.locs.len());
 
-        for loc in out_locs.clone().rev() {
-            pending.push((self.pop()?, loc));
+        for loc in out_locs.locs.clone().rev() {
+            pending.push((
+                self.pop()?,
+                match loc {
+                    CCLoc::Stack(offset) => CCLoc::Stack(offset - needed_depth.0 as i32),
+                    CCLoc::Reg(_) => loc,
+                },
+            ));
         }
+
+        let mut last_len = None;
 
         while !pending.is_empty() {
             let start_len = pending.len();
 
             for (src, dst) in mem::take(&mut pending) {
                 if src != ValueLocation::from(dst) {
-                    let dst = match dst {
-                        CCLoc::Reg(r) => {
-                            if SCRATCH_REGS.contains(&r) {
-                                if !self.block_state.regs.is_free(r) {
-                                    pending.push((src, dst));
-                                    continue;
-                                }
-
-                                self.block_state.regs.mark_used(r);
-                            }
-
-                            dst
-                        }
-                        CCLoc::Stack(offset) => CCLoc::Stack(offset - needed_depth.0 as i32),
+                    let dst = if self.is_free(dst)? {
+                        self.mark_used(dst)?;
+                        dst
+                    } else {
+                        pending.push((src, dst));
+                        continue;
                     };
 
                     self.copy_value(src, dst)?;
-                    self.free_value(src)?;
+                    self.free(src)?;
                 }
             }
 
+            if last_len == Some(pending.len()) {
+                return Err(error(
+                    "BUG: Making no progress allocating locations for block calling convention",
+                ));
+            }
+
             if pending.len() == start_len {
-                let src = match pending
+                let src = pending
                     .iter()
-                    .filter_map(|(src, _)| {
-                        if let ValueLocation::Reg(reg) = src {
-                            Some(reg)
-                        } else {
-                            None
-                        }
-                    })
+                    .filter_map(|(src, _)| CCLoc::try_from(*src).ok())
                     .next()
-                {
-                    None => {
-                        return Err(error(
+                    .ok_or_else(|| {
+                        error(format!(
                             "Programmer error: We shouldn't need to push \
-                             intermediate args if we don't have any argument sources in registers"
-                                .to_string(),
-                        ));
-                    }
-                    Some(val) => *val,
-                };
-                let new_src = self.push_physical(ValueLocation::Reg(src))?.into();
+                             intermediate args if we don't have any argument sources in reusable \
+                             locations ({:?}",
+                            pending
+                        ))
+                    })?;
+
+                let new_src = self.push_copy_physical(src.into())?.into();
+                self.free(new_src)?;
                 for (old_src, _) in pending.iter_mut() {
-                    if *old_src == ValueLocation::Reg(src) {
+                    if *old_src == ValueLocation::from(src) {
                         *old_src = new_src;
+                        self.free(*old_src)?;
+                        self.mark_used(new_src)?;
                     }
                 }
             }
+
+            last_len = Some(start_len);
         }
 
         // We do this a second time just in case we had to use `push_physical` to resolve cycles in
         // `pending`
-        self.set_stack_depth(needed_depth)?;
+        self.set_stack_depth(needed_depth.clone())?;
 
-        Ok(())
+        Ok(out_locs.locs.clone().map(move |loc| match loc {
+            CCLoc::Stack(offset) => CCLoc::Stack(offset - needed_depth.0 as i32),
+            CCLoc::Reg(_) => loc,
+        }))
     }
 
     fn push_function_returns(
@@ -6198,11 +6412,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         returns: impl IntoIterator<Item = SignlessType>,
     ) -> Result<(), Error> {
         for loc in ret_locs(returns)? {
-            if let CCLoc::Reg(reg) = loc {
-                self.block_state.regs.mark_used(reg);
-            } else {
-                unimplemented!("TODO: How to correctly handle stack returns");
-            }
+            self.mark_used(loc)?;
 
             self.push(loc.into())?;
         }
@@ -6232,9 +6442,9 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let saved_vmctx = self.push_copy_physical(ValueLocation::Reg(GPR::Rq(VMCTX)))?;
         let locs = arg_locs_skip_caller_vmctx(arg_types);
 
-        for loc in locs.clone() {
-            if let CCLoc::Reg(r) = loc {
-                self.block_state.regs.mark_used(r);
+        for loc in locs.locs.clone() {
+            if loc.reg().is_some() {
+                self.mark_used(loc)?;
             }
         }
 
@@ -6243,16 +6453,16 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             .put_into_temp_register(I32, &mut callee)?
             .ok_or_else(|| error("Ran out of free registers".to_string()))?;
 
-        self.save_volatile()?;
-
-        for loc in locs.clone() {
-            if let CCLoc::Reg(r) = loc {
-                self.block_state.regs.release(r)?;
+        for loc in locs.locs.clone() {
+            if loc.reg().is_some() {
+                self.free(loc)?;
             }
         }
 
-        self.pass_outgoing_args(&locs)?;
-        let needed_depth = self.block_state.depth.clone();
+        self.save_volatile()?;
+
+        let locs = self.pass_outgoing_args(&locs)?;
+        let needed_depth = self.allocated_stack.stack_depth().clone();
 
         dynasm!(self.asm
             ; mov Rq(CALLER_VMCTX), Rq(VMCTX)
@@ -6306,7 +6516,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         );
 
         if let Some(reg) = reg {
-            self.block_state.regs.release(reg)?;
+            self.free(ValueLocation::Reg(reg))?;
         }
 
         let temp1 = self
@@ -6330,7 +6540,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     Rq(callee_reg.rq().unwrap()) +
                     self.module_context.vmcaller_checked_anyfunc_vmctx() as i32
             ]
-            ;; assert_eq!(self.block_state.depth, needed_depth)
+            ;; assert_eq!(self.allocated_stack.stack_depth(), needed_depth)
             ; call QWORD [
                 Rq(temp0.rq().unwrap()) +
                     Rq(callee_reg.rq().unwrap()) +
@@ -6338,33 +6548,34 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ]
         );
 
-        self.block_state.regs.release(temp0)?;
-        self.block_state.regs.release(temp1)?;
-        self.free_value(callee)?;
+        self.free(ValueLocation::Reg(temp0))?;
+        self.free(ValueLocation::Reg(temp1))?;
+        self.free(callee)?;
 
         for i in locs {
-            self.free_value(i.into())?;
+            self.free(i)?;
         }
 
         self.push_function_returns(return_types)?;
 
         self.copy_value(saved_vmctx.into(), CCLoc::Reg(GPR::Rq(VMCTX)))?;
+        self.free(saved_vmctx)?;
 
         Ok(())
     }
 
     pub fn swap(&mut self, depth: u32) -> Result<(), Error> {
-        let last = self.block_state.stack.len() - 1;
+        let last = self.stack.len() - 1;
 
-        if let Some(mut top) = self.block_state.stack.pop() {
+        if let Some(mut top) = self.stack.pop() {
             if let ValueLocation::Cond(_) = top {
                 self.put_into_temp_location(I32, &mut top)?;
             }
 
-            self.block_state.stack.push(top);
+            self.stack.push(top);
         }
 
-        self.block_state.stack.swap(last, last - depth as usize);
+        self.stack.swap(last, last - depth as usize);
 
         Ok(())
     }
@@ -6408,14 +6619,14 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let (_, label) = self.func_starts[self.current_function as usize];
 
-        self.pass_outgoing_args(&locs)?;
+        let locs = self.pass_outgoing_args(&locs)?;
 
         dynasm!(self.asm
             ; call =>label
         );
 
         for i in locs {
-            self.free_value(i.into())?;
+            self.free(i)?;
         }
 
         self.push_function_returns(return_types)?;
@@ -6445,8 +6656,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::from(self.push_copy_physical(ValueLocation::Reg(GPR::Rq(VMCTX)))?);
 
         self.save_volatile()?;
-        self.pass_outgoing_args(&locs)?;
-        let needed_depth = self.block_state.depth.clone();
+        let locs = self.pass_outgoing_args(&locs)?;
 
         let callee = self
             .take_reg(I64)
@@ -6459,20 +6669,19 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ; mov Rq(VMCTX), [
                 Rq(VMCTX) + self.module_context.vmctx_vmfunction_import_vmctx(index) as i32
             ]
-            ;; assert_eq!(self.block_state.depth, needed_depth)
             ; call Rq(callee.rq().unwrap())
         );
 
-        self.block_state.regs.release(callee)?;
+        self.free(ValueLocation::Reg(callee))?;
 
         for i in locs {
-            self.free_value(i.into())?;
+            self.free(i)?;
         }
 
         self.push_function_returns(return_types)?;
 
         self.copy_value(saved_vmctx, CCLoc::Reg(GPR::Rq(VMCTX)))?;
-        self.free_value(saved_vmctx)?;
+        self.free(saved_vmctx)?;
 
         Ok(())
     }
@@ -6487,8 +6696,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     where
         P::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
     {
-        self.apply_cc(BlockCallingConvention::function_start(
-            arg_locs_skip_caller_vmctx(params),
+        let Locs { locs, stack_count } = arg_locs_skip_caller_vmctx(params);
+
+        self.allocated_stack = StackUsage::new(stack_count);
+        self.set_state(CallingConvention::function_start(
+            locs.map(ValueLocation::from),
         ))?;
 
         dynasm!(self.asm

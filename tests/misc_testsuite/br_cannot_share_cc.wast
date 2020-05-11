@@ -1,0 +1,17 @@
+(module
+  (func $test_cannot_share_cc (export "test_cannot_share_cc") (param $n i32) (result i32)
+    (block (result i32)
+      (i32.const 0)
+      (i32.eqz (get_local $n))
+      (br_if 0)
+      (i32.const 1)
+      (get_local $n)
+      (br_table 0 1)
+    )
+  )
+)
+
+(assert_return (invoke "test_cannot_share_cc" (i32.const 0)) (i32.const 0))
+(assert_return (invoke "test_cannot_share_cc" (i32.const 1)) (i32.const 1))
+(assert_return (invoke "test_cannot_share_cc" (i32.const 2)) (i32.const 1))
+(assert_return (invoke "test_cannot_share_cc" (i32.const 3)) (i32.const 1))

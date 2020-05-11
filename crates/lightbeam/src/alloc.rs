@@ -31,7 +31,7 @@ impl ops::Sub for Size {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct Alloc {
     size: Size,
     blocks_by_address: BTreeMap<Ptr, Size>,
@@ -52,10 +52,16 @@ impl Alloc {
             Ordering::Less => self.truncate(size),
             Ordering::Equal | Ordering::Greater => {}
         }
+
+        self.size = size;
     }
 
-    pub fn truncate(&mut self, _size: Size) {
-        unimplemented!()
+    pub fn size(&self) -> Size {
+        self.size
+    }
+
+    fn truncate(&mut self, size: Size) {
+        self.mark_allocated(Ptr(size.0), self.size - size);
     }
 
     pub fn mark_allocated(&mut self, ptr: Ptr, size: Size) {
@@ -133,6 +139,14 @@ impl Alloc {
         }
     }
 
+    pub fn is_free(&self, ptr: Ptr, size: Size) -> bool {
+        self.blocks_by_address
+            .range(..=ptr)
+            .last()
+            .map(|(p, s)| p.offset(*s) >= ptr.offset(size))
+            .unwrap_or(false)
+    }
+
     fn modify_block(&mut self, ptr: Ptr, new_size: Size) {
         self.remove_block(ptr);
         self.add_block(ptr, new_size);
@@ -184,11 +198,13 @@ mod tests {
         assert_eq!(a, Ptr(0));
         assert_eq!(b, Ptr(8));
         assert_eq!(c, Ptr(24));
+        assert!(alloc.malloc(small).is_none());
         alloc.free(a, small);
         alloc.free(b, mid);
         let a = alloc.malloc(small).unwrap();
         let b1 = alloc.malloc(small).unwrap();
         let b2 = alloc.malloc(small).unwrap();
+        assert!(alloc.malloc(small).is_none());
         assert_eq!(a, Ptr(0));
         assert_eq!(b1, Ptr(8));
         assert_eq!(b2, Ptr(16));
@@ -208,9 +224,9 @@ mod tests {
         let b = Ptr(8);
         alloc.mark_allocated(b, mid);
         alloc.mark_allocated(a, small);
-        
+
         println!("{:?}", alloc);
-        
+
         alloc.free(a, small);
         alloc.free(b, mid);
         alloc.mark_allocated(Ptr(24), large);
@@ -222,4 +238,3 @@ mod tests {
         assert_eq!(b2, Ptr(16));
     }
 }
-

@@ -2,8 +2,8 @@
 use crate::backend::Registers;
 use crate::{
     backend::{
-        ret_locs, BlockCallingConvention, BrAction, CodeGenSession, Label, Target, ValueLocation,
-        VirtualCallingConvention,
+        ret_locs, BrAction, CCLoc, CallingConvention, CodeGenSession, Label, MaybeCCLoc, Target,
+        ValueLocation,
     },
     error::{error, Error},
     microwasm::*,
@@ -11,19 +11,16 @@ use crate::{
 };
 use cranelift_codegen::{binemit, ir};
 use dynasmrt::DynasmApi;
-use itertools::{
-    Either::{self, Left, Right},
-    Itertools,
+use more_asserts::{assert_ge, assert_le, debug_assert_le};
+use std::{
+    collections::HashMap, convert::TryFrom, fmt, hash::Hash, iter, mem, ops::RangeInclusive,
 };
-#[cfg(debug_assertions)]
-use more_asserts::assert_ge;
-use std::{collections::HashMap, fmt, hash::Hash, iter, mem, ops::RangeInclusive};
 use wasmparser::FunctionBody;
 
 #[derive(Debug)]
 struct Block {
     label: BrTarget<Label>,
-    calling_convention: Option<Either<BlockCallingConvention, VirtualCallingConvention>>,
+    calling_convention: Option<CallingConvention>,
     params: u32,
     // TODO: Is there a cleaner way to do this? `has_backwards_callers` should always be set if `is_next`
     //       is false, so we should probably use an `enum` here.
@@ -73,6 +70,8 @@ where
     M: ModuleContext,
     for<'any> &'any M::Signature: Into<OpSig>,
 {
+    use itertools::Either;
+
     let ty = session.module_context.defined_func_type(func_idx);
 
     let microwasm_conv = MicrowasmConv::new(
@@ -83,12 +82,20 @@ where
         session.pointer_type(),
     )?
     .flat_map(|ops| match ops {
-        Ok(ops) => Left(ops.into_iter().map(Ok)),
-        Err(e) => Right(iter::once(Err(e))),
+        Ok(ops) => Either::Left(ops.into_iter().map(Ok)),
+        Err(e) => Either::Right(iter::once(Err(e))),
     });
 
     translate(session, sinks, func_idx, microwasm_conv)?;
     Ok(())
+}
+
+pub trait MakeInternalLabel: Sized {
+    type Id;
+
+    const FIRST_ID: Self::Id;
+
+    fn new_internal(id: Self::Id) -> (Self, Self::Id);
 }
 
 pub fn translate<M, I, L: Send + Sync + 'static>(
@@ -100,7 +107,7 @@ pub fn translate<M, I, L: Send + Sync + 'static>(
 where
     M: ModuleContext,
     I: IntoIterator<Item = Result<WithLoc<Operator<L>>, Error>>,
-    L: Hash + Clone + Eq,
+    L: Hash + Clone + Eq + MakeInternalLabel + fmt::Debug,
     BrTarget<L>: std::fmt::Display,
 {
     fn drop_elements<T>(stack: &mut Vec<T>, depths: std::ops::RangeInclusive<u32>) {
@@ -124,13 +131,17 @@ where
     let func_type = session.module_context.defined_func_type(func_idx);
     let mut body = body.into_iter().peekable();
 
+    let mut additional_instructions_offset = Default::default();
+    let mut additional_instructions = Vec::<Operator<L>>::new().into_iter();
+    let mut internal_block_id = L::FIRST_ID;
+
     let module_context = &*session.module_context;
     let mut op_offset_map = mem::replace(&mut session.op_offset_map, vec![]);
     {
         let ctx = &mut session.new_context(func_idx, sinks.reborrow());
         op_offset_map.push((
             ctx.asm.offset(),
-            Box::new(format!("Function {}:", func_idx)),
+            Box::new(format!("start .Fn{}:", func_idx)),
         ));
 
         let params = func_type
@@ -139,20 +150,41 @@ where
             .map(|t| t.to_microwasm_type())
             .collect::<Vec<_>>();
 
+        const DISASSEMBLE: bool = false;
+
+        if DISASSEMBLE {
+            print!("     \tdef .Fn{} :: [", func_idx);
+
+            let mut params_iter = params.iter();
+
+            if let Some(arg) = params_iter.next() {
+                print!("{}", arg);
+                for arg in params_iter {
+                    print!(", {}", arg);
+                }
+            }
+            println!("]");
+
+            println!("start .Fn{}:", func_idx);
+        }
+
         ctx.start_function(params.iter().cloned())?;
 
         let mut blocks = HashMap::<BrTarget<L>, Block>::new();
 
-        let num_returns = func_type.returns().len();
+        let returns = func_type.returns().iter().map(|t| t.to_microwasm_type());
 
-        let loc = ret_locs(func_type.returns().iter().map(|t| t.to_microwasm_type()))?;
+        let ret_block_params = returns.len() as u32;
+        let loc = ret_locs(returns)?;
 
         blocks.insert(
             BrTarget::Return,
             Block {
                 label: BrTarget::Return,
-                params: num_returns as u32,
-                calling_convention: Some(Left(BlockCallingConvention::function_start(loc))),
+                params: ret_block_params,
+                calling_convention: Some(CallingConvention::function_start(
+                    loc.into_iter().map(ValueLocation::from).collect(),
+                )),
                 is_next: false,
                 has_backwards_callers: false,
                 actual_num_callers: 0,
@@ -163,8 +195,23 @@ where
         #[cfg_attr(not(debug_assertions), allow(unused_variables))]
         let mut in_block = true;
 
-        while let Some(op_offset) = body.next() {
-            let WithLoc { op, offset } = op_offset?;
+        while let Some(op_offset) = additional_instructions
+            .next()
+            .map(|op| {
+                Ok(WithLoc {
+                    op,
+                    offset: additional_instructions_offset,
+                })
+            })
+            .or_else(|| body.next())
+        {
+            let op_offset = op_offset?;
+
+            if DISASSEMBLE {
+                println!("{}", DisassemblyOpFormatter(op_offset.clone()));
+            }
+
+            let WithLoc { op, offset } = op_offset;
 
             ctx.set_source_loc(offset);
             ctx.sinks.offsets.offset(offset, ctx.asm.offset().0);
@@ -189,10 +236,10 @@ where
                         debug_assert!(!in_block);
 
                         let block = &blocks[&BrTarget::Label(label.clone())];
-                        let num_cc_params = block.calling_convention.as_ref().map(|cc| match cc {
-                            Left(cc) => cc.arguments.len(),
-                            Right(cc) => cc.stack.len(),
-                        });
+                        let num_cc_params = block
+                            .calling_convention
+                            .as_ref()
+                            .map(|cc| cc.arguments.len());
                         if let Some(num_cc_params) = num_cc_params {
                             // we can use assert here bc we are in debug mode
                             assert_ge!(num_cc_params, block.params as usize);
@@ -201,14 +248,26 @@ where
                         debug_assert!(in_block);
 
                         let mut actual_regs = Registers::new();
+                        let mut actual_stack = ctx.allocated_stack.clone();
+                        actual_stack.clear();
+                        actual_stack.set_depth(crate::backend::FUNCTION_START_DEPTH)?;
+                        actual_stack.set_depth_and_free(ctx.allocated_stack.stack_depth());
+
                         actual_regs.release_scratch_register()?;
-                        for val in &ctx.block_state.stack {
-                            if let ValueLocation::Reg(gpr) = val {
-                                actual_regs.mark_used(*gpr);
+                        for val in &ctx.stack {
+                            match *val {
+                                ValueLocation::Reg(gpr) => {
+                                    actual_regs.mark_used(gpr);
+                                }
+                                ValueLocation::Stack(offset) => {
+                                    actual_stack.mark_used(offset)?;
+                                }
+                                _ => {}
                             }
                         }
-                        // we can use assert here bc we are in debug mode
-                        assert_eq!(actual_regs, ctx.block_state.regs);
+
+                        debug_assert_eq!(actual_regs, ctx.regs, "{:#?}", ctx.stack);
+                        debug_assert_eq!(actual_stack, ctx.allocated_stack, "{:#?}", ctx.stack);
                     }
                 };
             }
@@ -323,7 +382,7 @@ where
                                                 BrTarget::Label(label),
                                                 Block {
                                                     label: BrTarget::Label(asm_label),
-                                                    params: params.len() as _,
+                                                    params: params.len(),
                                                     calling_convention: None,
                                                     is_next: false,
                                                     has_backwards_callers,
@@ -343,11 +402,8 @@ where
 
                             // TODO: We can `take` this if it's a `Right`
                             match block.calling_convention.as_ref() {
-                                Some(Left(cc)) => {
-                                    ctx.apply_cc(cc.as_ref())?;
-                                }
-                                Some(Right(virt)) => {
-                                    ctx.set_state(virt.clone())?;
+                                Some(cc) => {
+                                    ctx.set_state(cc.clone())?;
                                 }
                                 None => {
                                     return Err(error("No calling convention to apply"));
@@ -380,7 +436,7 @@ where
                         BrTarget::Label(label),
                         Block {
                             label: BrTarget::Label(asm_label),
-                            params: params.len() as _,
+                            params: params.len(),
                             calling_convention: None,
                             is_next: false,
                             has_backwards_callers,
@@ -389,26 +445,248 @@ where
                         },
                     );
                 }
-                Operator::End(Targets { targets, default }) => {
+                Operator::End(Targets {
+                    mut targets,
+                    default,
+                }) => {
                     #[cfg_attr(not(debug_assertions), allow(unused_assignments))]
                     {
                         in_block = false;
                     }
 
-                    let target_labels = targets
-                        .iter()
-                        .map(|t| {
-                            let block = &blocks[&t.target];
-                            Target {
-                                target: block.label,
-                                action: if block.is_next {
-                                    BrAction::Continue
-                                } else {
-                                    BrAction::Jump
-                                },
+                    let (mut cc_and_to_drop, mut max_num_callers, params) = {
+                        let def = blocks.get_mut(&default.target).unwrap();
+
+                        def.actual_num_callers = def.actual_num_callers.saturating_add(1);
+
+                        (
+                            def.calling_convention
+                                .clone()
+                                .map(|cc| (cc, default.to_drop.clone())),
+                            def.num_callers,
+                            def.params
+                                + default
+                                    .to_drop
+                                    .as_ref()
+                                    .map(|t| t.clone().count())
+                                    .unwrap_or_default() as u32,
+                        )
+                    };
+
+                    fn cc_to_param_locs(
+                        params: u32,
+                        cc: &CallingConvention,
+                        to_drop: Option<RangeInclusive<u32>>,
+                    ) -> impl Iterator<Item = Option<ValueLocation>> + Clone + '_
+                    {
+                        let (end, count) = to_drop
+                            .as_ref()
+                            .map(|to_drop| (*to_drop.end() as usize, to_drop.clone().count()))
+                            .unwrap_or_default();
+                        let len = cc.arguments.len();
+                        let end = len.saturating_sub(end + 1);
+
+                        let extra = (params as usize).checked_sub(len + count).unwrap();
+
+                        std::iter::repeat(None)
+                            .take(extra)
+                            .chain(cc.arguments[..end].iter().cloned().map(Some))
+                            .chain(std::iter::repeat(None).take(count))
+                            .chain(cc.arguments[end..].iter().cloned().map(Some))
+                            .chain(std::iter::once(None))
+                    }
+
+                    let mut adaptors = Vec::new();
+
+                    for target in targets.iter_mut() {
+                        let block = blocks.get(&target.target).unwrap();
+                        let mut block_to_add = None;
+
+                        if let Some(block_cc) = &block.calling_convention {
+                            if let Some((cc, to_drop)) = &cc_and_to_drop {
+                                let block_locs =
+                                    cc_to_param_locs(params, &block_cc, target.to_drop.clone());
+                                let cur_locs = cc_to_param_locs(params, cc, to_drop.clone());
+                                let locs_iter = block_locs.zip(cur_locs);
+
+                                for loc in locs_iter {
+                                    match loc {
+                                        (Some(block_loc), Some(cur_loc))
+                                            if block_loc != cur_loc =>
+                                        {
+                                            let (new_label, next_id) =
+                                                L::new_internal(internal_block_id);
+                                            internal_block_id = next_id;
+                                            let asm_label = ctx.create_label();
+                                            block_to_add = Some((
+                                                BrTarget::Label(new_label.clone()),
+                                                Block {
+                                                    label: BrTarget::Label(asm_label),
+                                                    params: block.params
+                                                        + target
+                                                            .to_drop
+                                                            .clone()
+                                                            .map(|t| t.count())
+                                                            .unwrap_or_default()
+                                                            as u32,
+                                                    calling_convention: None,
+                                                    is_next: adaptors.is_empty(),
+                                                    has_backwards_callers: false,
+                                                    actual_num_callers: 0,
+                                                    num_callers: Some(1),
+                                                },
+                                            ));
+                                            adaptors.push(Operator::Start(new_label.clone()));
+                                            let current_target = mem::replace(
+                                                target,
+                                                BrTarget::Label(new_label).into(),
+                                            );
+                                            adaptors.push(Operator::Const(Value::I32(0)));
+                                            adaptors.push(Operator::End(Targets {
+                                                targets: vec![],
+                                                default: current_target,
+                                            }));
+
+                                            break;
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            } else {
+                                cc_and_to_drop = Some((block_cc.clone(), target.to_drop.clone()));
                             }
-                        })
-                        .collect::<Vec<_>>();
+                        }
+
+                        if let Some((label, block)) = block_to_add {
+                            blocks.insert(label, block);
+                        }
+
+                        let block = blocks.get_mut(&target.target).unwrap();
+
+                        // Although performance is slightly worse if we miscount this to be too high,
+                        // it doesn't affect correctness.
+                        block.actual_num_callers = block.actual_num_callers.saturating_add(1);
+
+                        if let Some(max) = max_num_callers {
+                            max_num_callers = block.num_callers.map(|n| max.max(n));
+                        }
+
+                        debug_assert_eq!(
+                            params,
+                            block.params
+                                + target
+                                    .to_drop
+                                    .clone()
+                                    .map(|t| t.count())
+                                    .unwrap_or_default() as u32,
+                        );
+                    }
+
+                    debug_assert_le!(
+                        // `params + 1` because we need 1 element for the selector.
+                        params + 1,
+                        ctx.stack.len() as u32
+                    );
+
+                    if !adaptors.is_empty() {
+                        debug_assert_eq!(additional_instructions.len(), 0);
+
+                        additional_instructions = adaptors.into_iter();
+                        additional_instructions_offset = offset;
+                    }
+
+                    let (cc, selector) = match cc_and_to_drop {
+                        Some((cc, to_drop)) => {
+                            let (end, count) = to_drop
+                                .as_ref()
+                                .map(|to_drop| (*to_drop.end() as usize, to_drop.clone().count()))
+                                .unwrap_or_default();
+                            let end = cc.arguments.len().saturating_sub(end + 1);
+
+                            let extra = (params as usize)
+                                .checked_sub(cc.arguments.len() + count)
+                                .unwrap();
+
+                            let should_serialize =
+                                if max_num_callers.map(|callers| callers <= 1).unwrap_or(false) {
+                                    MaybeCCLoc::NoSerialize
+                                } else {
+                                    MaybeCCLoc::Serialize
+                                };
+
+                            // TODO: We can also use `NoSerialize` for any elements that are only
+                            //       serialized for blocks where `!block.should_serialize_args()`.
+                            let locs = std::iter::repeat(should_serialize)
+                                .take(extra)
+                                .chain(cc.arguments[..end].iter().cloned().map(|vloc| {
+                                    CCLoc::try_from(vloc)
+                                        .map(MaybeCCLoc::Concrete)
+                                        .unwrap_or(should_serialize)
+                                }))
+                                .chain(std::iter::repeat(should_serialize).take(count))
+                                .chain(cc.arguments[end..].iter().cloned().map(|vloc| {
+                                    CCLoc::try_from(vloc)
+                                        .map(MaybeCCLoc::Concrete)
+                                        .unwrap_or(should_serialize)
+                                }))
+                                .chain(std::iter::once(MaybeCCLoc::NoSerialize))
+                                .collect::<Vec<_>>();
+
+                            let mut tmp = ctx.serialize_block_args(locs, Some(cc.depth))?;
+
+                            let selector = tmp.arguments.pop().unwrap();
+
+                            (tmp, selector)
+                        }
+                        None => {
+                            if max_num_callers.map(|callers| callers <= 1).unwrap_or(false) {
+                                let selector = ctx.pop()?;
+                                (ctx.virtual_calling_convention(), selector)
+                            } else {
+                                let mut tmp = ctx.serialize_block_args(
+                                    std::iter::repeat(MaybeCCLoc::Serialize)
+                                        .take(params as usize)
+                                        .chain(std::iter::once(MaybeCCLoc::NoSerialize))
+                                        .collect::<Vec<_>>()
+                                        .into_iter(),
+                                    None,
+                                )?;
+
+                                let selector = tmp.arguments.pop().unwrap().into();
+
+                                (tmp, selector)
+                            }
+                        }
+                    };
+
+                    for target in targets.iter().chain(std::iter::once(&default)) {
+                        let block = blocks.get_mut(&target.target).unwrap();
+
+                        if let Some(block_calling_convention) = &block.calling_convention {
+                            debug_assert_eq!(block_calling_convention, &{
+                                let mut cc = cc.clone();
+                                if let Some(to_drop) = target.to_drop.clone() {
+                                    drop_elements(&mut cc.arguments, to_drop);
+                                }
+
+                                debug_assert_eq!(cc.arguments.len(), block.params as usize,);
+
+                                cc
+                            });
+                        } else {
+                            let mut cc = cc.clone();
+                            if let Some(to_drop) = target.to_drop.clone() {
+                                drop_elements(&mut cc.arguments, to_drop);
+                            }
+
+                            debug_assert_eq!(cc.arguments.len(), block.params as usize,);
+
+                            block.calling_convention = Some(cc);
+                        }
+                    }
+
+                    let depth = cc.depth.clone();
+
                     let default_label = {
                         let block = &blocks[&default.target];
                         Target {
@@ -421,195 +699,22 @@ where
                         }
                     };
 
-                    ctx.end_block(target_labels, default_label, |ctx| {
-                        let (mut cc_and_to_drop, mut max_num_callers, params) = {
-                            let def = blocks.get_mut(&default.target).unwrap();
-
-                            def.actual_num_callers = def.actual_num_callers.saturating_add(1);
-
-                            (
-                                def.calling_convention.clone().map(|cc| (cc, default.to_drop.clone())),
-                                def.num_callers,
-                                def.params
-                                    + default
-                                        .to_drop
-                                        .as_ref()
-                                        .map(|t| t.clone().count())
-                                        .unwrap_or_default() as u32,
-                            )
-                        };
-
-                        fn cc_to_param_locs(params: u32, cc: &Either<BlockCallingConvention, VirtualCallingConvention>, to_drop: Option<RangeInclusive<u32>>) -> impl Iterator<Item = Option<ValueLocation>> + '_ {
-                            let (end, count) = to_drop.as_ref().map(|to_drop| {
-                                (*to_drop.end() as usize, to_drop.clone().count())
-                            }).unwrap_or_default();
-                            let len =match cc {
-                                Left(cc) => cc.arguments.len(),
-                                Right(cc) => cc.stack.len(),
-                            };
-                            let end = len.saturating_sub(end + 1);
-
-                            let extra = (params as usize)
-                                .checked_sub(len + count)
-                                .unwrap();
-
-                            std::iter::repeat(None)
-                                .take(extra)
-                                .chain(
-                                    cc.as_ref()
-                                        .map_left(|cc| {
-                                            cc.arguments[..end].iter()
-                                                .cloned()
-                                                .map(ValueLocation::from)
-                                        })
-                                        .map_right(|cc| {
-                                            cc.stack[..end].iter().cloned()
-                                        })
-                                        .map(Some)
-                                )
-                                .chain(std::iter::repeat(None).take(count))
-                                .chain(
-                                    cc.as_ref()
-                                        .map_left(|cc| {
-                                            cc.arguments[end..].iter()
-                                                .cloned()
-                                                .map(ValueLocation::from)
-                                        })
-                                        .map_right(|cc| {
-                                            cc.stack[end..].iter().cloned()
-                                        })
-                                        .map(Some)
-                                )
-                                .chain(std::iter::once(None))
-                        }
-
-                        for target in targets.iter().unique() {
-                            let block = blocks.get_mut(&target.target).unwrap();
-                            // Although performance is slightly worse if we miscount this to be too high,
-                            // it doesn't affect correctness.
-                            block.actual_num_callers = block.actual_num_callers.saturating_add(1);
-
-                            if let Some(block_cc) = &block.calling_convention {
-                                if let Some((cc, to_drop)) = &cc_and_to_drop {
-                                    let block_locs = cc_to_param_locs(params, &block_cc, target.to_drop.clone());
-                                    let cur_locs = cc_to_param_locs(params, cc, to_drop.clone());
-
-                                    for locs in block_locs.zip(cur_locs) {
-                                        match locs {
-                                            (Some(block_loc), Some(cur_loc)) if block_loc != cur_loc => {
-                                                return Err(error(
-                                                    format!(
-                                                        "Can't pass different params to different elems of \
-                                                        `br_table` yet (expected {:?}, got {:?})",
-                                                        block_loc,
-                                                        cur_loc,
-                                                    )
-                                                ));
-                                            }
-                                            _ => {}
-                                        }
-                                    }
-                                }
-
-                                cc_and_to_drop = Some((block_cc.clone(), target.to_drop.clone()));
-                            }
-
-                            if let Some(max) = max_num_callers {
-                                max_num_callers = block.num_callers.map(|n| max.max(n));
-                            }
-
-                            debug_assert_eq!(
-                                params,
-                                block.params
-                                    + target
-                                        .to_drop
-                                        .as_ref()
-                                        .map(|t| t.clone().count())
-                                        .unwrap_or_default() as u32,
-                            );
-                        }
-
-                        let (cc, selector) = match cc_and_to_drop {
-                             Some((cc, to_drop)) => match cc {
-                                Left(cc) => {
-                                    let (end, count) = to_drop.as_ref().map(|to_drop| {
-                                        (*to_drop.end() as usize, to_drop.clone().count())
-                                    }).unwrap_or_default();
-                                    let end = cc.arguments.len().saturating_sub(end + 1);
-
-                                    let extra = (params as usize)
-                                        .checked_sub(cc.arguments.len() + count)
-                                        .unwrap();
-
-                                    let locs = std::iter::repeat(None)
-                                        .take(extra)
-                                        .chain(cc.arguments[..end].iter()
-                                        .cloned()
-                                        .map(Some))
-                                        .chain(std::iter::repeat(None).take(count))
-                                        .chain(
-                                            cc.arguments[end..].iter()
-                                                .cloned()
-                                                .map(Some)
-                                        )
-                                        .chain(std::iter::once(None))
-                                        .collect::<Vec<_>>();
-
-                                    let mut tmp = ctx.serialize_block_args(locs, cc.stack_depth)?;
-
-                                    let selector = tmp.arguments.pop().unwrap().into();
-
-                                    (Left(tmp), selector)
-                                },
-                                Right(cc) => {
-                                    (Right(cc), ctx.pop()?)
-                                },
-                            },
-                            None => {
-                                if max_num_callers.map(|callers| callers <= 1).unwrap_or(false) {
-                                    let selector = ctx.pop()?;
-                                    (Right(ctx.virtual_calling_convention()), selector)
+                    ctx.end_block(
+                        targets.iter().map(|t| {
+                            let block = &blocks[&t.target];
+                            Target {
+                                target: block.label,
+                                action: if block.is_next {
+                                    BrAction::Continue
                                 } else {
-                                    let mut tmp = ctx.serialize_args(params + 1)?;
-
-                                    let selector = tmp.arguments.pop().unwrap().into();
-
-                                    (Left(tmp), selector)
-                                }
-                            }
-                        };
-
-                        for target in targets.iter().chain(std::iter::once(&default)).unique() {
-                            let block = blocks.get_mut(&target.target).unwrap();
-                            let mut cc = cc.clone();
-                            if let Some(to_drop) = target.to_drop.clone() {
-                                match &mut cc {
-                                    Left(cc) => drop_elements(&mut cc.arguments, to_drop),
-                                    Right(cc) => drop_elements(&mut cc.stack, to_drop),
-                                }
-                            }
-
-                            debug_assert!(block.calling_convention.is_none() || block.calling_convention.as_ref() == Some(&cc));
-
-                            debug_assert_eq!(
-                                match &cc {
-                                    Left(cc) => cc.arguments.len(),
-                                    Right(cc) => cc.stack.len(),
+                                    BrAction::Jump
                                 },
-                                block.params as usize,
-                            );
-
-                            block.calling_convention = Some(cc);
-                        }
-
-                        Ok((
-                            selector,
-                            match &cc {
-                                Left(cc) => cc.stack_depth.clone(),
-                                Right(cc) => cc.depth.clone(),
                             }
-                        ))
-                    })?;
+                        }),
+                        default_label,
+                        depth,
+                        selector,
+                    )?;
                 }
                 Operator::Swap(depth) => ctx.swap(depth)?,
                 Operator::Pick(depth) => ctx.pick(depth)?,

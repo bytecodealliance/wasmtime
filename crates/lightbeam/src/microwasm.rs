@@ -366,9 +366,20 @@ pub enum NameTag {
     Header,
     Else,
     End,
+    Internal,
 }
 
 pub type WasmLabel = (u32, NameTag);
+
+impl crate::function_body::MakeInternalLabel for WasmLabel {
+    type Id = u32;
+
+    const FIRST_ID: Self::Id = 0;
+
+    fn new_internal(id: Self::Id) -> (Self, Self::Id) {
+        ((id, NameTag::Internal), id.checked_add(1).unwrap())
+    }
+}
 
 pub type OperatorFromWasm = Operator<WasmLabel>;
 
@@ -400,6 +411,7 @@ impl fmt::Display for BrTarget<WasmLabel> {
             BrTarget::Label((i, NameTag::Header)) => write!(f, ".L{}", i),
             BrTarget::Label((i, NameTag::Else)) => write!(f, ".L{}_else", i),
             BrTarget::Label((i, NameTag::End)) => write!(f, ".L{}_end", i),
+            BrTarget::Label((i, NameTag::Internal)) => write!(f, ".INTERNAL{}", i),
         }
     }
 }
@@ -462,6 +474,78 @@ impl From<WasmMemoryImmediate> for MemoryImmediate {
     }
 }
 
+#[cfg(debug_assertions)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Params {
+    inner: Vec<SignlessType>,
+}
+
+#[cfg(not(debug_assertions))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Params {
+    inner: u32,
+}
+
+#[cfg(debug_assertions)]
+impl Params {
+    pub fn new<I: ExactSizeIterator<Item = SignlessType>>(iter: I) -> Self {
+        Params {
+            inner: iter.collect(),
+        }
+    }
+
+    pub fn len(&self) -> u32 {
+        self.inner.len() as u32
+    }
+}
+
+#[cfg(not(debug_assertions))]
+impl Params {
+    pub fn new<I: ExactSizeIterator<Item = SignlessType>>(iter: I) -> Self {
+        Params {
+            inner: iter.len() as u32,
+        }
+    }
+
+    pub fn len(&self) -> u32 {
+        self.inner
+    }
+}
+
+#[cfg(debug_assertions)]
+impl fmt::Display for Params {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut iter = self.inner.iter();
+        write!(f, "[")?;
+        if let Some(p) = iter.next() {
+            write!(f, "{}", p)?;
+            for p in iter {
+                write!(f, ", {}", p)?;
+            }
+        }
+        write!(f, "]")?;
+
+        Ok(())
+    }
+}
+
+#[cfg(not(debug_assertions))]
+impl fmt::Display for Params {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut iter = 0..self.inner;
+        write!(f, "[")?;
+        if let Some(_) = iter.next() {
+            write!(f, "??")?;
+            for p in iter {
+                write!(f, ", ??")?;
+            }
+        }
+        write!(f, "]")?;
+
+        Ok(())
+    }
+}
+
 // TODO: Explicit VmCtx?
 #[derive(Debug, Clone)]
 pub enum Operator<Label> {
@@ -471,8 +555,7 @@ pub enum Operator<Label> {
     /// is an error to branch to a block that has yet to be defined.
     Declare {
         label: Label,
-        // TODO: Do we need this?
-        params: Vec<SignlessType>,
+        params: Params,
         // TODO: Ideally we'd have `num_backwards_callers` but we can't know that for WebAssembly
         has_backwards_callers: bool,
         num_callers: Option<u32>,
@@ -626,7 +709,7 @@ impl<L> Operator<L> {
         }
     }
 
-    pub fn end_wasm_block(params: Vec<SignlessType>, label: L) -> Self {
+    pub fn end_wasm_block(params: Params, label: L) -> Self {
         Operator::Declare {
             params,
             label,
@@ -636,7 +719,7 @@ impl<L> Operator<L> {
         }
     }
 
-    pub fn block(params: Vec<SignlessType>, label: L) -> Self {
+    pub fn block(params: Params, label: L) -> Self {
         Operator::Declare {
             params,
             label,
@@ -645,7 +728,7 @@ impl<L> Operator<L> {
         }
     }
 
-    pub fn loop_(params: Vec<SignlessType>, label: L) -> Self {
+    pub fn loop_(params: Params, label: L) -> Self {
         Operator::Declare {
             params,
             label,
@@ -670,15 +753,7 @@ where
                 has_backwards_callers,
                 num_callers,
             } => {
-                write!(f, "def {} :: [", BrTarget::Label(label.clone()))?;
-                let mut iter = params.iter();
-                if let Some(p) = iter.next() {
-                    write!(f, "{}", p)?;
-                    for p in iter {
-                        write!(f, ", {}", p)?;
-                    }
-                }
-                write!(f, "]")?;
+                write!(f, "def {} :: {}", BrTarget::Label(label.clone()), params)?;
 
                 if *has_backwards_callers {
                     write!(f, " has_backwards_callers")?;
@@ -1041,6 +1116,7 @@ where
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WithLoc<T> {
     pub op: T,
     pub offset: SourceLoc,
@@ -1464,19 +1540,51 @@ where
         Ok(())
     }
 
-    fn block_params(&self) -> Vec<SignlessType> {
-        self.stack.clone()
+    fn block_params(&self) -> Params {
+        Params::new(self.stack.iter().cloned())
     }
 
-    fn block_params_with_wasm_type(
-        &self,
-        ty: wasmparser::TypeOrFuncType,
-    ) -> Result<impl Iterator<Item = SignlessType> + '_, Error> {
+    fn block_params_with_wasm_type(&self, ty: wasmparser::TypeOrFuncType) -> Result<Params, Error> {
+        struct ExactSizeChainIter<A, B> {
+            a: A,
+            b: B,
+        }
+
+        impl<A, B> Iterator for ExactSizeChainIter<A, B>
+        where
+            A: Iterator,
+            B: Iterator<Item = A::Item>,
+        {
+            type Item = A::Item;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                match self.a.next() {
+                    Some(val) => Some(val),
+                    None => self.b.next(),
+                }
+            }
+        }
+
+        impl<A, B> ExactSizeIterator for ExactSizeChainIter<A, B>
+        where
+            A: ExactSizeIterator,
+            B: ExactSizeIterator<Item = A::Item>,
+        {
+            fn len(&self) -> usize {
+                self.a
+                    .len()
+                    .checked_add(self.b.len())
+                    .expect("Could not chain iterators: sizes overflow `usize`")
+            }
+        }
+
         let (params, returns) = self.type_or_func_type_to_sig(ty)?;
-        Ok(self.stack[0..self.stack.len() - params.len()]
-            .iter()
-            .copied()
-            .chain(returns))
+        Ok(Params::new(ExactSizeChainIter {
+            a: self.stack[0..self.stack.len() - params.len()]
+                .iter()
+                .copied(),
+            b: returns,
+        }))
     }
 
     // Separate from `<Self as Iterator>::next` so we can use `?` to return errors (as
@@ -1735,7 +1843,7 @@ where
                 let block_param_type_wasm = self.block_params_with_wasm_type(ty)?;
 
                 one(Operator::end_wasm_block(
-                    block_param_type_wasm.collect(),
+                    block_param_type_wasm,
                     (id, NameTag::End),
                 ))
             }
@@ -1755,7 +1863,7 @@ where
 
                 vec(vec![
                     Operator::loop_(self.block_params(), label),
-                    Operator::end_wasm_block(block_param_type_wasm.collect(), (id, NameTag::End)),
+                    Operator::end_wasm_block(block_param_type_wasm, (id, NameTag::End)),
                     Operator::Const(0i32.into()),
                     Operator::End(BrTarget::Label(label).into()),
                     Operator::Start(label),
@@ -1781,7 +1889,7 @@ where
                 vec(vec![
                     Operator::block(self.block_params(), then),
                     Operator::block(self.block_params(), else_),
-                    Operator::end_wasm_block(block_param_type_wasm.collect(), end),
+                    Operator::end_wasm_block(block_param_type_wasm, end),
                     end_if(BrTarget::Label(then).into(), BrTarget::Label(else_).into()),
                     Operator::Start(then),
                 ])
