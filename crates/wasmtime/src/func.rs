@@ -1,6 +1,6 @@
 use crate::runtime::StoreInner;
 use crate::trampoline::StoreInstanceHandle;
-use crate::{error, Extern, FuncType, Memory, Store, Trap, Val, ValType};
+use crate::{Extern, FuncType, Memory, Store, Trap, Val, ValType};
 use anyhow::{bail, ensure, Context as _, Result};
 use std::cmp::max;
 use std::fmt;
@@ -151,7 +151,7 @@ macro_rules! getters {
         $(#[$doc])*
         #[allow(non_snake_case)]
         pub fn $name<$($args,)* R>(&self)
-            -> anyhow::Result<impl Fn($($args,)*) -> Result<R>>
+            -> anyhow::Result<impl Fn($($args,)*) -> Result<R, Trap>>
         where
             $($args: WasmTy,)*
             R: WasmTy,
@@ -181,7 +181,7 @@ macro_rules! getters {
 
             // ... and then once we've passed the typechecks we can hand out our
             // object since our `transmute` below should be safe!
-            Ok(move |$($args: $args),*| -> Result<R> {
+            Ok(move |$($args: $args),*| -> Result<R, Trap> {
                 unsafe {
                     let fnptr = mem::transmute::<
                         *const VMFunctionBody,
@@ -777,7 +777,7 @@ pub(crate) fn catch_traps(
     vmctx: *mut VMContext,
     store: &Store,
     closure: impl FnMut(),
-) -> Result<()> {
+) -> Result<(), Trap> {
     let signalhandler = store.signal_handler();
     unsafe {
         wasmtime_runtime::catch_traps(
@@ -787,7 +787,7 @@ pub(crate) fn catch_traps(
             signalhandler.as_deref(),
             closure,
         )
-        .map_err(error::from_runtime)
+        .map_err(Trap::from_jit)
     }
 }
 

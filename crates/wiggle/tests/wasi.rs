@@ -316,6 +316,10 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
         unimplemented!("poll_oneoff")
     }
 
+    fn proc_exit(&self, _rval: types::Exitcode) -> std::result::Result<(), ()> {
+        unimplemented!("proc_exit")
+    }
+
     fn proc_raise(&self, _sig: types::Signal) -> Result<()> {
         unimplemented!("proc_raise")
     }

@@ -12,12 +12,6 @@ pub fn define_func(
 ) -> TokenStream {
     let funcname = func.name.as_str();
 
-    // `proc_exit` is special; it's essentially an unwinding primitive,
-    // so we implement it in the runtime rather than in wasi-common.
-    if funcname == "proc_exit" {
-        return quote!();
-    }
-
     let ident = names.func(&func.name);
     let rt = names.runtime_mod();
     let ctx_type = names.ctx_type();

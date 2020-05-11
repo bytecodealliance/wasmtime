@@ -2,11 +2,10 @@
 //! signalhandling mechanisms.
 
 use crate::VMContext;
-use anyhow::Error;
 use backtrace::Backtrace;
 use std::any::Any;
 use std::cell::Cell;
-use std::fmt;
+use std::error::Error;
 use std::io;
 use std::num::NonZeroI32;
 use std::ptr;
@@ -273,7 +272,7 @@ fn real_init() {
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
-pub unsafe fn raise_user_trap(data: Error) -> ! {
+pub unsafe fn raise_user_trap(data: Box<dyn Error + Send + Sync>) -> ! {
     tls::with(|info| info.unwrap().unwind_with(UnwindReason::UserTrap(data)))
 }
 
@@ -307,7 +306,7 @@ pub unsafe fn resume_panic(payload: Box<dyn Any + Send>) -> ! {
 #[derive(Debug)]
 pub enum Trap {
     /// A user-raised trap through `raise_user_trap`.
-    User(Error),
+    User(Box<dyn Error + Send + Sync>),
 
     /// A trap raised from jit code
     Jit {
@@ -340,6 +339,12 @@ pub enum Trap {
         /// The exit status
         status: NonZeroI32,
     },
+
+    /// A program exit was requested with an invalid exit status.
+    InvalidExitStatus {
+        /// Native stack backtrace at the time the error occurred
+        backtrace: Backtrace,
+    },
 }
 
 impl Trap {
@@ -360,6 +365,14 @@ impl Trap {
     pub fn oom() -> Self {
         let backtrace = Backtrace::new_unresolved();
         Trap::OOM { backtrace }
+    }
+
+    /// Construct a new InvalidExitStatus trap with the given source location.
+    ///
+    /// Internally saves a backtrace when constructed.
+    pub fn invalid_exit_status() -> Self {
+        let backtrace = Backtrace::new_unresolved();
+        Trap::InvalidExitStatus { backtrace }
     }
 }
 
@@ -411,7 +424,7 @@ pub struct CallThreadState<'a> {
 enum UnwindReason {
     None,
     Panic(Box<dyn Any + Send>),
-    UserTrap(Error),
+    UserTrap(Box<dyn Error + Send + Sync>),
     LibTrap(Trap),
     JitTrap { backtrace: Backtrace, pc: usize },
     Exit { status: i32 },
@@ -816,19 +829,6 @@ pub unsafe extern "C" fn wasi_proc_exit(
     if status >= 0 && status < 126 {
         tls::with(|info| info.unwrap().unwind_with(UnwindReason::Exit { status }))
     } else {
-        raise_user_trap(InvalidWASIExitStatus {}.into())
+        raise_lib_trap(Trap::invalid_exit_status())
     }
 }
-
-/// An error type for indicating an exit was requested using an exit status outside
-/// of WASI's valid range of [0..126].
-#[derive(Debug)]
-pub struct InvalidWASIExitStatus {}
-
-impl fmt::Display for InvalidWASIExitStatus {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid WASI exit status; values must be in [0..126]")
-    }
-}
-
-impl std::error::Error for InvalidWASIExitStatus {}

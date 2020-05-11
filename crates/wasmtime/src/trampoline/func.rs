@@ -54,10 +54,10 @@ unsafe extern "C" fn stub_fn(
 
         // If a trap was raised (an error returned from the imported function)
         // then we smuggle the trap through `Box<dyn Error>` through to the
-        // call-site, which gets unwrapped in `error::from_runtime` later on as we
+        // call-site, which gets unwrapped in `Trap::from_jit` later on as we
         // convert from the internal `Trap` type to our own `Trap` type in this
         // crate.
-        Ok(Err(trap)) => wasmtime_runtime::raise_user_trap(trap.into()),
+        Ok(Err(trap)) => wasmtime_runtime::raise_user_trap(Box::new(trap)),
 
         // And finally if the imported function panicked, then we trigger the
         // form of unwinding that's safe to jump over wasm code on all

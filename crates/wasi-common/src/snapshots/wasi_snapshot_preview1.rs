@@ -813,6 +813,18 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(nevents)
     }
 
+    // Not all implementations use this implementation.
+    #[allow(dead_code)]
+    // This is just a temporary to ignore the warning which becomes a hard error
+    // in the CI. Once we figure out non-returns in `wiggle`, this should be gone.
+    #[allow(unreachable_code)]
+    fn proc_exit(&self, rval: types::Exitcode) -> std::result::Result<(), ()> {
+        // Note that this is just a default implementation. Host environments
+        // will often override this `proc_exit` implementation and do other
+        // things other than exit the host process.
+        std::process::exit(rval as i32);
+    }
+
     fn proc_raise(&self, _sig: types::Signal) -> Result<()> {
         unimplemented!("proc_raise")
     }

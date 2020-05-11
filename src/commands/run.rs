@@ -12,7 +12,7 @@ use std::{
 };
 use structopt::{clap::AppSettings, StructOpt};
 use wasi_common::preopen_dir;
-use wasmtime::{Engine, Exit, Instance, Module, Store, Trap, Val, ValType};
+use wasmtime::{Engine, Instance, Module, Store, Trap, TrapReason, Val, ValType};
 use wasmtime_wasi::{old::snapshot_0::Wasi as WasiSnapshot0, Wasi};
 
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
@@ -144,23 +144,22 @@ impl RunCommand {
             Err(e) => {
                 // If the program exited because of a non-zero exit status, print
                 // a message and exit.
-                if let Some(exit) = e.downcast_ref::<Exit>() {
-                    eprintln!("Error: {}", exit);
-                    // On Windows, exit status 3 indicates an abort (see below),
-                    // so just return 1 indicating a non-zero status.
-                    if cfg!(windows) {
-                        process::exit(1);
-                    }
-                    process::exit(exit.status().get());
-                }
-
-                // If the program exited because of a trap, return an error code
-                // to the outside environment indicating a more severe problem
-                // than a simple failure.
-                if e.is::<Trap>() {
+                if let Some(trap) = e.downcast_ref::<Trap>() {
                     // Print the error message in the usual way.
                     eprintln!("Error: {:?}", e);
 
+                    if let TrapReason::Exit(status) = trap.reason() {
+                        // On Windows, exit status 3 indicates an abort (see below),
+                        // so just return 1 indicating a non-zero status.
+                        if cfg!(windows) {
+                            process::exit(1);
+                        }
+                        process::exit(status.get());
+                    }
+
+                    // If the program exited because of a trap, return an error code
+                    // to the outside environment indicating a more severe problem
+                    // than a simple failure.
                     if cfg!(unix) {
                         // On Unix, return the error code of an abort.
                         process::exit(128 + libc::SIGABRT);

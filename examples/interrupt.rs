@@ -29,14 +29,10 @@ fn main() -> Result<()> {
     });
 
     println!("Entering infinite loop ...");
-    let error = run().unwrap_err();
+    let trap = run().unwrap_err();
 
     println!("trap received...");
-    assert!(error
-        .downcast_ref::<Trap>()
-        .unwrap()
-        .message()
-        .contains("wasm trap: interrupt"));
+    assert!(trap.reason().to_string().contains("wasm trap: interrupt"));
 
     Ok(())
 }

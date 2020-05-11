@@ -2,8 +2,8 @@ use crate::trampoline::{
     generate_global_export, generate_memory_export, generate_table_export, StoreInstanceHandle,
 };
 use crate::values::{from_checked_anyfunc, into_checked_anyfunc, Val};
-use crate::{error, Func, Store};
 use crate::{ExternType, GlobalType, MemoryType, Mutability, TableType, ValType};
+use crate::{Func, Store, Trap};
 use anyhow::{anyhow, bail, Result};
 use std::slice;
 use wasmtime_environ::wasm;
@@ -420,7 +420,7 @@ impl Table {
         let src_table = src_table.instance.get_defined_table(src_table_index);
 
         runtime::Table::copy(dst_table, src_table, dst_index, src_index, len)
-            .map_err(error::from_runtime)?;
+            .map_err(Trap::from_jit)?;
         Ok(())
     }
 

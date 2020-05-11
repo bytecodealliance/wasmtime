@@ -1,5 +1,5 @@
 use crate::trampoline::StoreInstanceHandle;
-use crate::{error, Export, Extern, Func, Global, Memory, Module, Store, Table};
+use crate::{Export, Extern, Func, Global, Memory, Module, Store, Table, Trap};
 use anyhow::{bail, Error, Result};
 use std::any::Any;
 use std::mem;
@@ -52,7 +52,7 @@ fn instantiate(
             .map_err(|e| -> Error {
                 match e {
                     InstantiationError::StartTrap(trap) | InstantiationError::Trap(trap) => {
-                        error::from_runtime(trap).into()
+                        Trap::from_jit(trap).into()
                     }
                     other => other.into(),
                 }

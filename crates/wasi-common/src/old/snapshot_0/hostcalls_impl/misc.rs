@@ -342,6 +342,17 @@ pub(crate) struct FdEventData<'a> {
     pub(crate) userdata: wasi::__wasi_userdata_t,
 }
 
+// Not all implementations use this implementation.
+#[allow(dead_code)]
+pub(crate) fn proc_exit(_wasi_ctx: &WasiCtx, _memory: &mut [u8], rval: wasi::__wasi_exitcode_t) {
+    trace!("proc_exit(rval={:?})", rval);
+
+    // Note that this is just a default implementation. Host environments
+    // will often override this `proc_exit` implementation and do other
+    // things other than exit the host process.
+    std::process::exit(rval as i32);
+}
+
 pub(crate) fn proc_raise(
     _wasi_ctx: &WasiCtx,
     _memory: &mut [u8],

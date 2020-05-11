@@ -2273,7 +2273,6 @@ dependencies = [
 name = "wasmtime-runtime"
 version = "0.16.0"
 dependencies = [
- "anyhow",
  "backtrace",
  "cc",
  "cfg-if",

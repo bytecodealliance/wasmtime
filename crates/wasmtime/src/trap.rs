@@ -2,6 +2,7 @@ use crate::frame_info::{GlobalFrameInfo, FRAME_INFO};
 use crate::FrameInfo;
 use backtrace::Backtrace;
 use std::fmt;
+use std::num::NonZeroI32;
 use std::sync::Arc;
 use wasmtime_environ::ir::TrapCode;
 
@@ -12,8 +13,27 @@ pub struct Trap {
     inner: Arc<TrapInner>,
 }
 
+/// State describing the occasion which evoked a trap.
+#[derive(Debug)]
+pub enum TrapReason {
+    /// An error message describing a trap.
+    Message(String),
+
+    /// A non-zero exit status describing an explicit program exit.
+    Exit(NonZeroI32),
+}
+
+impl fmt::Display for TrapReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TrapReason::Message(s) => write!(f, "{}", s),
+            TrapReason::Exit(status) => write!(f, "Exited with non-zero exit status {}", status),
+        }
+    }
+}
+
 struct TrapInner {
-    message: String,
+    reason: TrapReason,
     wasm_trace: Vec<FrameInfo>,
     native_trace: Backtrace,
 }
@@ -27,14 +47,58 @@ impl Trap {
     /// # Example
     /// ```
     /// let trap = wasmtime::Trap::new("unexpected error");
-    /// assert_eq!("unexpected error", trap.message());
+    /// assert_eq!("unexpected error", trap.reason().to_string());
     /// ```
     pub fn new<I: Into<String>>(message: I) -> Self {
         let info = FRAME_INFO.read().unwrap();
         Trap::new_with_trace(&info, None, message.into(), Backtrace::new_unresolved())
     }
 
-    pub(crate) fn new_wasm(
+    pub(crate) fn from_jit(jit: wasmtime_runtime::Trap) -> Self {
+        let info = FRAME_INFO.read().unwrap();
+        match jit {
+            wasmtime_runtime::Trap::User(error) => {
+                // Since we're the only one using the wasmtime internals (in
+                // theory) we should only see user errors which were originally
+                // created from our own `Trap` type (see the trampoline module
+                // with functions).
+                //
+                // If this unwrap trips for someone we'll need to tweak the
+                // return type of this function to probably be `anyhow::Error`
+                // or something like that.
+                *error
+                    .downcast()
+                    .expect("only `Trap` user errors are supported")
+            }
+            wasmtime_runtime::Trap::Jit {
+                pc,
+                backtrace,
+                maybe_interrupted,
+            } => {
+                let mut code = info
+                    .lookup_trap_info(pc)
+                    .map(|info| info.trap_code)
+                    .unwrap_or(TrapCode::StackOverflow);
+                if maybe_interrupted && code == TrapCode::StackOverflow {
+                    code = TrapCode::Interrupt;
+                }
+                Trap::new_wasm(&info, Some(pc), code, backtrace)
+            }
+            wasmtime_runtime::Trap::Wasm {
+                trap_code,
+                backtrace,
+            } => Trap::new_wasm(&info, None, trap_code, backtrace),
+            wasmtime_runtime::Trap::OOM { backtrace } => {
+                Trap::new_with_trace(&info, None, "out of memory".to_string(), backtrace)
+            }
+            wasmtime_runtime::Trap::Exit { status } => Trap::new_exit(status),
+            wasmtime_runtime::Trap::InvalidExitStatus { backtrace } => {
+                Trap::new_with_trace(&info, None, "invalid exit status".to_string(), backtrace)
+            }
+        }
+    }
+
+    fn new_wasm(
         info: &GlobalFrameInfo,
         trap_pc: Option<usize>,
         code: TrapCode,
@@ -58,7 +122,7 @@ impl Trap {
         Trap::new_with_trace(info, trap_pc, msg, backtrace)
     }
 
-    pub(crate) fn new_with_trace(
+    fn new_with_trace(
         info: &GlobalFrameInfo,
         trap_pc: Option<usize>,
         message: String,
@@ -87,16 +151,26 @@ impl Trap {
         }
         Trap {
             inner: Arc::new(TrapInner {
-                message,
+                reason: TrapReason::Message(message),
                 wasm_trace,
                 native_trace,
             }),
         }
     }
 
+    fn new_exit(status: NonZeroI32) -> Self {
+        Trap {
+            inner: Arc::new(TrapInner {
+                reason: TrapReason::Exit(status),
+                wasm_trace: Vec::new(),
+                native_trace: Backtrace::from(Vec::new()),
+            }),
+        }
+    }
+
     /// Returns a reference the `message` stored in `Trap`.
-    pub fn message(&self) -> &str {
-        &self.inner.message
+    pub fn reason(&self) -> &TrapReason {
+        &self.inner.reason
     }
 
     /// Returns a list of function frames in WebAssembly code that led to this
@@ -109,7 +183,7 @@ impl Trap {
 impl fmt::Debug for Trap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Trap")
-            .field("message", &self.inner.message)
+            .field("reason", &self.inner.reason)
             .field("wasm_trace", &self.inner.wasm_trace)
             .field("native_trace", &self.inner.native_trace)
             .finish()
@@ -118,7 +192,7 @@ impl fmt::Debug for Trap {
 
 impl fmt::Display for Trap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.inner.message)?;
+        write!(f, "{}", self.inner.reason)?;
         let trace = self.trace();
         if trace.is_empty() {
             return Ok(());
