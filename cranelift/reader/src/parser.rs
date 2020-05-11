@@ -23,6 +23,7 @@ use cranelift_codegen::ir::{
 use cranelift_codegen::isa::{self, CallConv, Encoding, RegUnit, TargetIsa};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_codegen::{settings, timing};
+use smallvec::SmallVec;
 use std::mem;
 use std::str::FromStr;
 use std::{u16, u32};
@@ -2223,9 +2224,9 @@ impl<'a> Parser<'a> {
     //
     // inst-results ::= Value(v) { "," Value(v) }
     //
-    fn parse_inst_results(&mut self) -> ParseResult<Vec<Value>> {
+    fn parse_inst_results(&mut self) -> ParseResult<SmallVec<[Value; 1]>> {
         // Result value numbers.
-        let mut results = Vec::new();
+        let mut results = SmallVec::new();
 
         // instruction  ::=  * [inst-results "="] Opcode(opc) ["." Type] ...
         // inst-results ::= * Value(v) { "," Value(v) }

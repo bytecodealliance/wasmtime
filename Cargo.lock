@@ -489,6 +489,7 @@ name = "cranelift-reader"
 version = "0.63.0"
 dependencies = [
  "cranelift-codegen",
+ "smallvec",
  "target-lexicon",
  "thiserror",
 ]
