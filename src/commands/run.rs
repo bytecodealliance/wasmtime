@@ -150,8 +150,8 @@ impl RunCommand {
 
                     if let Some(status) = trap.i32_exit_status() {
                         // On Windows, exit status 3 indicates an abort (see below),
-                        // so just return 1 indicating a non-zero status.
-                        if cfg!(windows) {
+                        // so return 1 indicating a non-zero status to avoid ambiguity.
+                        if cfg!(windows) && status >= 3 {
                             process::exit(1);
                         }
                         process::exit(status);

@@ -185,6 +185,24 @@ fn timeout_in_invoke() -> Result<()> {
 
 // Exit with a valid non-zero exit code, snapshot0 edition.
 #[test]
+fn exit2_wasi_snapshot0() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/exit2_wasi_snapshot0.wat")?;
+    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    assert_eq!(output.status.code().unwrap(), 2);
+    Ok(())
+}
+
+// Exit with a valid non-zero exit code, snapshot1 edition.
+#[test]
+fn exit2_wasi_snapshot1() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/exit2_wasi_snapshot1.wat")?;
+    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    assert_eq!(output.status.code().unwrap(), 2);
+    Ok(())
+}
+
+// Exit with a valid non-zero exit code, snapshot0 edition.
+#[test]
 fn exit125_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/wasm/exit125_wasi_snapshot0.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;

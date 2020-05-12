@@ -234,10 +234,7 @@ fn trap_start_function_import() -> Result<()> {
     let sig = FuncType::new(Box::new([]), Box::new([]));
     let func = Func::new(&store, sig, |_, _, _| Err(Trap::new("user trap")));
     let err = Instance::new(&module, &[func.into()]).err().unwrap();
-    assert_eq!(
-        err.downcast_ref::<Trap>().message().to_string(),
-        "user trap"
-    );
+    assert_eq!(err.downcast_ref::<Trap>().unwrap().message(), "user trap");
     Ok(())
 }
 
