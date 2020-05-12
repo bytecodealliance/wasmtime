@@ -35,6 +35,9 @@ where
         settings::Regalloc::ExperimentalLinearScan => {
             (false, Algorithm::LinearScan(Default::default()))
         }
+        settings::Regalloc::ExperimentalLinearScanChecked => {
+            (true, Algorithm::LinearScan(Default::default()))
+        }
     };
 
     let result = {
