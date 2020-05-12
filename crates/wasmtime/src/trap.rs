@@ -2,7 +2,6 @@ use crate::frame_info::{GlobalFrameInfo, FRAME_INFO};
 use crate::FrameInfo;
 use backtrace::Backtrace;
 use std::fmt;
-use std::num::NonZeroI32;
 use std::sync::Arc;
 use wasmtime_environ::ir::TrapCode;
 
@@ -19,15 +18,15 @@ pub enum TrapReason {
     /// An error message describing a trap.
     Message(String),
 
-    /// A non-zero exit status describing an explicit program exit.
-    Exit(NonZeroI32),
+    /// An `i32` exit status describing an explicit program exit.
+    I32Exit(i32),
 }
 
 impl fmt::Display for TrapReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TrapReason::Message(s) => write!(f, "{}", s),
-            TrapReason::Exit(status) => write!(f, "Exited with non-zero exit status {}", status),
+            TrapReason::I32Exit(status) => write!(f, "Exited with i32 exit status {}", status),
         }
     }
 }
@@ -54,9 +53,21 @@ impl Trap {
         Trap::new_with_trace(&info, None, message.into(), Backtrace::new_unresolved())
     }
 
-    pub(crate) fn from_jit(jit: wasmtime_runtime::Trap) -> Self {
+    /// Creates a new `Trap` representing an explicit program exit with a classic `i32`
+    /// exit status value.
+    pub fn i32_exit(status: i32) -> Self {
+        Trap {
+            inner: Arc::new(TrapInner {
+                reason: TrapReason::I32Exit(status),
+                wasm_trace: Vec::new(),
+                native_trace: Backtrace::from(Vec::new()),
+            }),
+        }
+    }
+
+    pub(crate) fn from_runtime(runtime_trap: wasmtime_runtime::Trap) -> Self {
         let info = FRAME_INFO.read().unwrap();
-        match jit {
+        match runtime_trap {
             wasmtime_runtime::Trap::User(error) => {
                 // Since we're the only one using the wasmtime internals (in
                 // theory) we should only see user errors which were originally
@@ -90,10 +101,6 @@ impl Trap {
             } => Trap::new_wasm(&info, None, trap_code, backtrace),
             wasmtime_runtime::Trap::OOM { backtrace } => {
                 Trap::new_with_trace(&info, None, "out of memory".to_string(), backtrace)
-            }
-            wasmtime_runtime::Trap::Exit { status } => Trap::new_exit(status),
-            wasmtime_runtime::Trap::InvalidExitStatus { backtrace } => {
-                Trap::new_with_trace(&info, None, "invalid exit status".to_string(), backtrace)
             }
         }
     }
@@ -154,16 +161,6 @@ impl Trap {
                 reason: TrapReason::Message(message),
                 wasm_trace,
                 native_trace,
-            }),
-        }
-    }
-
-    fn new_exit(status: NonZeroI32) -> Self {
-        Trap {
-            inner: Arc::new(TrapInner {
-                reason: TrapReason::Exit(status),
-                wasm_trace: Vec::new(),
-                native_trace: Backtrace::from(Vec::new()),
             }),
         }
     }

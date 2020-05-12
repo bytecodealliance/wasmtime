@@ -51,7 +51,7 @@ pub fn define_struct(args: TokenStream) -> TokenStream {
             // in wasi-common.
             if name == "proc_exit" {
                 ctor_externs.push(quote! {
-                    let #name_ident = wasmtime::Func::exit_func(store);
+                    let #name_ident = wasmtime::Func::wrap(store, crate::wasi_proc_exit);
                 });
                 continue;
             }
@@ -305,7 +305,7 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
             // in wasi-common.
             if name == "proc_exit" {
                 ctor_externs.push(quote! {
-                    let #name_ident = wasmtime::Func::exit_func(store);
+                    let #name_ident = wasmtime::Func::wrap(store, crate::wasi_proc_exit);
                 });
                 continue;
             }

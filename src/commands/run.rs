@@ -148,13 +148,13 @@ impl RunCommand {
                     // Print the error message in the usual way.
                     eprintln!("Error: {:?}", e);
 
-                    if let TrapReason::Exit(status) = trap.reason() {
+                    if let TrapReason::I32Exit(status) = trap.reason() {
                         // On Windows, exit status 3 indicates an abort (see below),
                         // so just return 1 indicating a non-zero status.
                         if cfg!(windows) {
                             process::exit(1);
                         }
-                        process::exit(status.get());
+                        process::exit(*status);
                     }
 
                     // If the program exited because of a trap, return an error code

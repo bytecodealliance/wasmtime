@@ -52,7 +52,7 @@ fn instantiate(
             .map_err(|e| -> Error {
                 match e {
                     InstantiationError::StartTrap(trap) | InstantiationError::Trap(trap) => {
-                        Trap::from_jit(trap).into()
+                        Trap::from_runtime(trap).into()
                     }
                     other => other.into(),
                 }

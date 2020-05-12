@@ -420,7 +420,7 @@ impl Table {
         let src_table = src_table.instance.get_defined_table(src_table_index);
 
         runtime::Table::copy(dst_table, src_table, dst_index, src_index, len)
-            .map_err(Trap::from_jit)?;
+            .map_err(Trap::from_runtime)?;
         Ok(())
     }
 

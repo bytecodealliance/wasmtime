@@ -8,7 +8,7 @@ use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::rc::Weak;
-use wasmtime_runtime::{raise_user_trap, wasi_proc_exit, ExportFunction, VMTrampoline};
+use wasmtime_runtime::{raise_user_trap, ExportFunction, VMTrampoline};
 use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
 
 /// A WebAssembly function which can be called.
@@ -474,46 +474,6 @@ impl Func {
         func.into_func(store)
     }
 
-    /// Creates a new `Func` for a function which performs a program exit,
-    /// unwinding the stack up the point where wasm was most recently entered.
-    pub fn exit_func(store: &Store) -> Func {
-        unsafe extern "C" fn trampoline(
-            callee_vmctx: *mut VMContext,
-            caller_vmctx: *mut VMContext,
-            ptr: *const VMFunctionBody,
-            args: *mut u128,
-        ) {
-            let ptr = mem::transmute::<
-                *const VMFunctionBody,
-                unsafe extern "C" fn(*mut VMContext, *mut VMContext, i32) -> !,
-            >(ptr);
-
-            let mut next = args as *const u128;
-            let status = i32::load(&mut next);
-            ptr(callee_vmctx, caller_vmctx, status)
-        }
-
-        let mut args = Vec::new();
-        <i32 as WasmTy>::push(&mut args);
-        let ret = Vec::new();
-        let ty = FuncType::new(args.into(), ret.into());
-        let (instance, export) = unsafe {
-            crate::trampoline::generate_raw_func_export(
-                &ty,
-                std::slice::from_raw_parts_mut(wasi_proc_exit as *mut _, 0),
-                trampoline,
-                store,
-                Box::new(()),
-            )
-            .expect("failed to generate export")
-        };
-        Func {
-            instance,
-            export,
-            trampoline,
-        }
-    }
-
     /// Returns the underlying wasm type that this `Func` has.
     pub fn ty(&self) -> FuncType {
         // Signatures should always be registered in the store's registry of
@@ -787,7 +747,7 @@ pub(crate) fn catch_traps(
             signalhandler.as_deref(),
             closure,
         )
-        .map_err(Trap::from_jit)
+        .map_err(Trap::from_runtime)
     }
 }
 
