@@ -12,7 +12,7 @@ use std::{
 };
 use structopt::{clap::AppSettings, StructOpt};
 use wasi_common::preopen_dir;
-use wasmtime::{Engine, Instance, Module, Store, Trap, TrapReason, Val, ValType};
+use wasmtime::{Engine, Instance, Module, Store, Trap, Val, ValType};
 use wasmtime_wasi::{old::snapshot_0::Wasi as WasiSnapshot0, Wasi};
 
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
@@ -148,13 +148,13 @@ impl RunCommand {
                     // Print the error message in the usual way.
                     eprintln!("Error: {:?}", e);
 
-                    if let TrapReason::I32Exit(status) = trap.reason() {
+                    if let Some(status) = trap.i32_exit_status() {
                         // On Windows, exit status 3 indicates an abort (see below),
                         // so just return 1 indicating a non-zero status.
                         if cfg!(windows) {
                             process::exit(1);
                         }
-                        process::exit(*status);
+                        process::exit(status);
                     }
 
                     // If the program exited because of a trap, return an error code

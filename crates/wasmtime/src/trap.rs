@@ -14,7 +14,7 @@ pub struct Trap {
 
 /// State describing the occasion which evoked a trap.
 #[derive(Debug)]
-pub enum TrapReason {
+enum TrapReason {
     /// An error message describing a trap.
     Message(String),
 
@@ -46,7 +46,7 @@ impl Trap {
     /// # Example
     /// ```
     /// let trap = wasmtime::Trap::new("unexpected error");
-    /// assert_eq!("unexpected error", trap.reason().to_string());
+    /// assert_eq!("unexpected error", trap.message());
     /// ```
     pub fn new<I: Into<String>>(message: I) -> Self {
         let info = FRAME_INFO.read().unwrap();
@@ -166,8 +166,23 @@ impl Trap {
     }
 
     /// Returns a reference the `message` stored in `Trap`.
-    pub fn reason(&self) -> &TrapReason {
-        &self.inner.reason
+    ///
+    /// In the case of an explicit exit, the exit status can be obtained by
+    /// calling [`exit_code`](Self::exit_code).
+    pub fn message(&self) -> &str {
+        match &self.inner.reason {
+            TrapReason::Message(message) => message,
+            TrapReason::I32Exit(_) => "explicitly exited",
+        }
+    }
+
+    /// If the trap was the result of an explicit program exit with a classic
+    /// `i32` exit status value, return the value, otherwise return `None`.
+    pub fn i32_exit_status(&self) -> Option<i32> {
+        match self.inner.reason {
+            TrapReason::I32Exit(status) => Some(status),
+            _ => None,
+        }
     }
 
     /// Returns a list of function frames in WebAssembly code that led to this

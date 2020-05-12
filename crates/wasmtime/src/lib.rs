@@ -31,7 +31,7 @@ pub use crate::linker::*;
 pub use crate::module::Module;
 pub use crate::r#ref::{AnyRef, HostRef};
 pub use crate::runtime::*;
-pub use crate::trap::{Trap, TrapReason};
+pub use crate::trap::Trap;
 pub use crate::types::*;
 pub use crate::values::*;
 

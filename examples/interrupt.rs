@@ -32,7 +32,7 @@ fn main() -> Result<()> {
     let trap = run().unwrap_err();
 
     println!("trap received...");
-    assert!(trap.reason().to_string().contains("wasm trap: interrupt"));
+    assert!(trap.message().contains("wasm trap: interrupt"));
 
     Ok(())
 }

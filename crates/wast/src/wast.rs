@@ -123,7 +123,7 @@ impl WastContext {
     fn module(&mut self, instance_name: Option<&str>, module: &[u8]) -> Result<()> {
         let instance = match self.instantiate(module)? {
             Outcome::Ok(i) => i,
-            Outcome::Trap(e) => bail!("instantiation failed: {}", e.reason()),
+            Outcome::Trap(e) => bail!("instantiation failed: {}", e.message()),
         };
         if let Some(name) = instance_name {
             self.linker.instance(name, &instance)?;
@@ -189,7 +189,7 @@ impl WastContext {
             Outcome::Ok(values) => bail!("expected trap, got {:?}", values),
             Outcome::Trap(t) => t,
         };
-        let actual = trap.reason().to_string();
+        let actual = trap.message();
         if actual.contains(expected)
             // `bulk-memory-operations/bulk.wast` checks for a message that
             // specifies which element is uninitialized, but our traps don't

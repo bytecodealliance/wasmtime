@@ -181,7 +181,8 @@ fn trap_smoke() -> Result<()> {
     let store = Store::default();
     let f = Func::wrap(&store, || -> Result<(), Trap> { Err(Trap::new("test")) });
     let err = f.call(&[]).unwrap_err().downcast::<Trap>()?;
-    assert_eq!(err.reason().to_string(), "test");
+    assert_eq!(err.message(), "test");
+    assert!(err.i32_exit_status().is_none());
     Ok(())
 }
 
@@ -202,7 +203,7 @@ fn trap_import() -> Result<()> {
     .err()
     .unwrap()
     .downcast::<Trap>()?;
-    assert_eq!(trap.reason().to_string(), "foo");
+    assert_eq!(trap.message(), "foo");
     Ok(())
 }
 
@@ -397,7 +398,7 @@ fn func_write_nothing() -> anyhow::Result<()> {
     let f = Func::new(&store, ty, |_, _, _| Ok(()));
     let err = f.call(&[]).unwrap_err().downcast::<Trap>()?;
     assert_eq!(
-        err.reason().to_string(),
+        err.message(),
         "function attempted to return an incompatible value"
     );
     Ok(())
