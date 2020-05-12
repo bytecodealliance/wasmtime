@@ -874,17 +874,32 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
         args.join(", ")
     );
 
+    let imms_need_sign_extension = format
+        .imm_fields
+        .iter()
+        .any(|f| f.kind.rust_type == "ir::immediates::Imm64");
+
     fmt.doc_comment(format.to_string());
     fmt.line("#[allow(non_snake_case)]");
     fmtln!(fmt, "fn {} {{", proto);
     fmt.indent(|fmt| {
         // Generate the instruction data.
-        fmtln!(fmt, "let data = ir::InstructionData::{} {{", format.name);
+        fmtln!(
+            fmt,
+            "let{} data = ir::InstructionData::{} {{",
+            if imms_need_sign_extension { " mut" } else { "" },
+            format.name
+        );
         fmt.indent(|fmt| {
             fmt.line("opcode,");
             gen_member_inits(format, fmt);
         });
         fmtln!(fmt, "};");
+
+        if imms_need_sign_extension {
+            fmtln!(fmt, "data.sign_extend_immediates(ctrl_typevar);");
+        }
+
         fmt.line("self.build(data, ctrl_typevar)");
     });
     fmtln!(fmt, "}");

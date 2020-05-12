@@ -274,6 +274,39 @@ impl InstructionData {
             }
         }
     }
+
+    #[inline]
+    pub(crate) fn sign_extend_immediates(&mut self, ctrl_typevar: Type) {
+        if ctrl_typevar.is_invalid() {
+            return;
+        }
+
+        let bit_width = ctrl_typevar.bits();
+
+        match self {
+            Self::BinaryImm {
+                opcode,
+                arg: _,
+                imm,
+            } => {
+                if matches!(opcode, Opcode::SdivImm | Opcode::SremImm) {
+                    imm.sign_extend_from_width(bit_width);
+                }
+            }
+            Self::IntCompareImm {
+                opcode,
+                arg: _,
+                cond,
+                imm,
+            } => {
+                debug_assert_eq!(*opcode, Opcode::IcmpImm);
+                if cond.unsigned() != *cond {
+                    imm.sign_extend_from_width(bit_width);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Information about branch and jump instructions.
