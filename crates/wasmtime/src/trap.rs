@@ -168,7 +168,7 @@ impl Trap {
     /// Returns a reference the `message` stored in `Trap`.
     ///
     /// In the case of an explicit exit, the exit status can be obtained by
-    /// calling [`i32_exit_status`](Self::i32_exit_status).
+    /// calling `i32_exit_status`.
     pub fn message(&self) -> &str {
         match &self.inner.reason {
             TrapReason::Message(message) => message,
