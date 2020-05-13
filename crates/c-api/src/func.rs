@@ -63,7 +63,7 @@ impl wasm_func_t {
         }
     }
 
-    fn func(&self) -> &HostRef<Func> {
+    pub(crate) fn func(&self) -> &HostRef<Func> {
         match &self.ext.which {
             ExternHost::Func(f) => f,
             _ => unsafe { std::hint::unreachable_unchecked() },
@@ -72,6 +72,16 @@ impl wasm_func_t {
 
     fn anyref(&self) -> wasmtime::AnyRef {
         self.func().anyref()
+    }
+}
+
+impl From<HostRef<Func>> for wasm_func_t {
+    fn from(func: HostRef<Func>) -> wasm_func_t {
+        wasm_func_t {
+            ext: wasm_extern_t {
+                which: ExternHost::Func(func),
+            },
+        }
     }
 }
 
@@ -97,11 +107,7 @@ fn create_function(
         }
         Ok(())
     });
-    Box::new(wasm_func_t {
-        ext: wasm_extern_t {
-            which: ExternHost::Func(HostRef::new(func)),
-        },
-    })
+    Box::new(HostRef::new(func).into())
 }
 
 #[no_mangle]

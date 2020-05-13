@@ -254,6 +254,32 @@ WASM_API_EXTERN own wasmtime_error_t *wasmtime_module_validate(
     const wasm_byte_vec_t *binary
 );
 
+
+// Similar to `wasm_table_*`, except these explicitly operate on funcref tables
+// and work with `wasm_func_t` values instead of `wasm_ref_t`.
+WASM_API_EXTERN own wasmtime_error_t *wasmtime_funcref_table_new(
+    wasm_store_t *store,
+    const wasm_tabletype_t *element_ty,
+    wasm_func_t *init,
+    own wasm_table_t **table
+);
+WASM_API_EXTERN bool wasmtime_funcref_table_get(
+    const wasm_table_t *table,
+    wasm_table_size_t index,
+    own wasm_func_t **func
+);
+WASM_API_EXTERN own wasmtime_error_t *wasmtime_funcref_table_set(
+    wasm_table_t *table,
+    wasm_table_size_t index,
+    const wasm_func_t *value
+);
+WASM_API_EXTERN wasmtime_error_t *wasmtime_funcref_table_grow(
+    wasm_table_t *table,
+    wasm_table_size_t delta,
+    const wasm_func_t *init,
+    wasm_table_size_t *prev_size
+);
+
 #undef own
 
 #ifdef __cplusplus
