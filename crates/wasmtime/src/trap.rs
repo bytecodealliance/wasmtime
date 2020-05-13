@@ -12,8 +12,27 @@ pub struct Trap {
     inner: Arc<TrapInner>,
 }
 
+/// State describing the occasion which evoked a trap.
+#[derive(Debug)]
+enum TrapReason {
+    /// An error message describing a trap.
+    Message(String),
+
+    /// An `i32` exit status describing an explicit program exit.
+    I32Exit(i32),
+}
+
+impl fmt::Display for TrapReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TrapReason::Message(s) => write!(f, "{}", s),
+            TrapReason::I32Exit(status) => write!(f, "Exited with i32 exit status {}", status),
+        }
+    }
+}
+
 struct TrapInner {
-    message: String,
+    reason: TrapReason,
     wasm_trace: Vec<FrameInfo>,
     native_trace: Backtrace,
 }
@@ -34,9 +53,21 @@ impl Trap {
         Trap::new_with_trace(&info, None, message.into(), Backtrace::new_unresolved())
     }
 
-    pub(crate) fn from_jit(jit: wasmtime_runtime::Trap) -> Self {
+    /// Creates a new `Trap` representing an explicit program exit with a classic `i32`
+    /// exit status value.
+    pub fn i32_exit(status: i32) -> Self {
+        Trap {
+            inner: Arc::new(TrapInner {
+                reason: TrapReason::I32Exit(status),
+                wasm_trace: Vec::new(),
+                native_trace: Backtrace::from(Vec::new()),
+            }),
+        }
+    }
+
+    pub(crate) fn from_runtime(runtime_trap: wasmtime_runtime::Trap) -> Self {
         let info = FRAME_INFO.read().unwrap();
-        match jit {
+        match runtime_trap {
             wasmtime_runtime::Trap::User(error) => {
                 // Since we're the only one using the wasmtime internals (in
                 // theory) we should only see user errors which were originally
@@ -85,7 +116,6 @@ impl Trap {
             StackOverflow => "call stack exhausted",
             HeapOutOfBounds => "out of bounds memory access",
             TableOutOfBounds => "undefined element: out of bounds table access",
-            OutOfBounds => "out of bounds",
             IndirectCallToNull => "uninitialized element",
             BadSignature => "indirect call type mismatch",
             IntegerOverflow => "integer overflow",
@@ -128,7 +158,7 @@ impl Trap {
         }
         Trap {
             inner: Arc::new(TrapInner {
-                message,
+                reason: TrapReason::Message(message),
                 wasm_trace,
                 native_trace,
             }),
@@ -136,8 +166,23 @@ impl Trap {
     }
 
     /// Returns a reference the `message` stored in `Trap`.
+    ///
+    /// In the case of an explicit exit, the exit status can be obtained by
+    /// calling `i32_exit_status`.
     pub fn message(&self) -> &str {
-        &self.inner.message
+        match &self.inner.reason {
+            TrapReason::Message(message) => message,
+            TrapReason::I32Exit(_) => "explicitly exited",
+        }
+    }
+
+    /// If the trap was the result of an explicit program exit with a classic
+    /// `i32` exit status value, return the value, otherwise return `None`.
+    pub fn i32_exit_status(&self) -> Option<i32> {
+        match self.inner.reason {
+            TrapReason::I32Exit(status) => Some(status),
+            _ => None,
+        }
     }
 
     /// Returns a list of function frames in WebAssembly code that led to this
@@ -150,7 +195,7 @@ impl Trap {
 impl fmt::Debug for Trap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Trap")
-            .field("message", &self.inner.message)
+            .field("reason", &self.inner.reason)
             .field("wasm_trace", &self.inner.wasm_trace)
             .field("native_trace", &self.inner.native_trace)
             .finish()
@@ -159,7 +204,7 @@ impl fmt::Debug for Trap {
 
 impl fmt::Display for Trap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.inner.message)?;
+        write!(f, "{}", self.inner.reason)?;
         let trace = self.trace();
         if trace.is_empty() {
             return Ok(());

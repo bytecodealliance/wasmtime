@@ -8,8 +8,8 @@ use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::rc::Weak;
+use wasmtime_runtime::{raise_user_trap, ExportFunction, VMTrampoline};
 use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
-use wasmtime_runtime::{ExportFunction, VMTrampoline};
 
 /// A WebAssembly function which can be called.
 ///
@@ -747,7 +747,7 @@ pub(crate) fn catch_traps(
             signalhandler.as_deref(),
             closure,
         )
-        .map_err(Trap::from_jit)
+        .map_err(Trap::from_runtime)
     }
 }
 
@@ -941,7 +941,7 @@ unsafe impl<T: WasmTy> WasmRet for Result<T, Trap> {
         }
 
         fn handle_trap(trap: Trap) -> ! {
-            unsafe { wasmtime_runtime::raise_user_trap(Box::new(trap)) }
+            unsafe { raise_user_trap(trap.into()) }
         }
     }
 
@@ -1133,9 +1133,9 @@ macro_rules! impl_into_func {
                 R::push(&mut ret);
                 let ty = FuncType::new(_args.into(), ret.into());
                 let store_weak = store.weak();
-                unsafe {
-					let trampoline = trampoline::<$($args,)* R>;
-                    let (instance, export) = crate::trampoline::generate_raw_func_export(
+                let trampoline = trampoline::<$($args,)* R>;
+                let (instance, export) = unsafe {
+                    crate::trampoline::generate_raw_func_export(
                         &ty,
                         std::slice::from_raw_parts_mut(
                             shim::<F, $($args,)* R> as *mut _,
@@ -1145,12 +1145,12 @@ macro_rules! impl_into_func {
                         store,
                         Box::new((self, store_weak)),
                     )
-                    .expect("failed to generate export");
-                    Func {
-                        instance,
-                        export,
-                        trampoline,
-                    }
+                    .expect("failed to generate export")
+                };
+                Func {
+                    instance,
+                    export,
+                    trampoline,
                 }
             }
         }

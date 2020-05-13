@@ -139,7 +139,7 @@ block0(v0: i64):
     jump block4
 
 block4:
-    trap oob
+    trap heap_oob
 
 block2:
     v8 = load.i64 v5+8

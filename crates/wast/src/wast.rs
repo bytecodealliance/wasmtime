@@ -123,7 +123,7 @@ impl WastContext {
     fn module(&mut self, instance_name: Option<&str>, module: &[u8]) -> Result<()> {
         let instance = match self.instantiate(module)? {
             Outcome::Ok(i) => i,
-            Outcome::Trap(e) => bail!("instantiation failed with: {}", e.message()),
+            Outcome::Trap(e) => bail!("instantiation failed: {}", e.message()),
         };
         if let Some(name) = instance_name {
             self.linker.instance(name, &instance)?;

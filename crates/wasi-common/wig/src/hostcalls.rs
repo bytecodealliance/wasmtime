@@ -17,6 +17,13 @@ pub fn define(args: TokenStream) -> TokenStream {
 
     for module in doc.modules() {
         for func in module.funcs() {
+            // `proc_exit` is special; it's essentially an unwinding primitive,
+            // so we implement it in the runtime rather than use the implementation
+            // in wasi-common.
+            if func.name.as_str() == "proc_exit" {
+                continue;
+            }
+
             ret.extend(generate_wrappers(&func, old));
         }
     }

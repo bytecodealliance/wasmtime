@@ -182,6 +182,7 @@ fn trap_smoke() -> Result<()> {
     let f = Func::wrap(&store, || -> Result<(), Trap> { Err(Trap::new("test")) });
     let err = f.call(&[]).unwrap_err().downcast::<Trap>()?;
     assert_eq!(err.message(), "test");
+    assert!(err.i32_exit_status().is_none());
     Ok(())
 }
 

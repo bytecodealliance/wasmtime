@@ -30,9 +30,9 @@ fn host_always_has_some_stack() -> anyhow::Result<()> {
     // has been exhausted.
     let trap = foo().unwrap_err();
     assert!(
-        trap.message().contains("call stack exhausted"),
+        trap.to_string().contains("call stack exhausted"),
         "{}",
-        trap.message()
+        trap.to_string()
     );
 
     // Additionally, however, and this is the crucial test, make sure that the

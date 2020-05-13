@@ -342,13 +342,6 @@ pub(crate) struct FdEventData<'a> {
     pub(crate) userdata: wasi::__wasi_userdata_t,
 }
 
-pub(crate) fn proc_exit(_wasi_ctx: &WasiCtx, _memory: &mut [u8], rval: wasi::__wasi_exitcode_t) {
-    trace!("proc_exit(rval={:?})", rval);
-    // TODO: Rather than call std::process::exit here, we should trigger a
-    // stack unwind similar to a trap.
-    std::process::exit(rval as i32);
-}
-
 pub(crate) fn proc_raise(
     _wasi_ctx: &WasiCtx,
     _memory: &mut [u8],

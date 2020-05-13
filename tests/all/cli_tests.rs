@@ -182,3 +182,77 @@ fn timeout_in_invoke() -> Result<()> {
     );
     Ok(())
 }
+
+// Exit with a valid non-zero exit code, snapshot0 edition.
+#[test]
+fn exit2_wasi_snapshot0() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/exit2_wasi_snapshot0.wat")?;
+    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    assert_eq!(output.status.code().unwrap(), 2);
+    Ok(())
+}
+
+// Exit with a valid non-zero exit code, snapshot1 edition.
+#[test]
+fn exit2_wasi_snapshot1() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/exit2_wasi_snapshot1.wat")?;
+    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    assert_eq!(output.status.code().unwrap(), 2);
+    Ok(())
+}
+
+// Exit with a valid non-zero exit code, snapshot0 edition.
+#[test]
+fn exit125_wasi_snapshot0() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/exit125_wasi_snapshot0.wat")?;
+    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    if cfg!(windows) {
+        assert_eq!(output.status.code().unwrap(), 1);
+    } else {
+        assert_eq!(output.status.code().unwrap(), 125);
+    }
+    Ok(())
+}
+
+// Exit with a valid non-zero exit code, snapshot1 edition.
+#[test]
+fn exit125_wasi_snapshot1() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/exit125_wasi_snapshot1.wat")?;
+    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    if cfg!(windows) {
+        assert_eq!(output.status.code().unwrap(), 1);
+    } else {
+        assert_eq!(output.status.code().unwrap(), 125);
+    }
+    Ok(())
+}
+
+// Exit with an invalid non-zero exit code, snapshot0 edition.
+#[test]
+fn exit126_wasi_snapshot0() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/exit126_wasi_snapshot0.wat")?;
+    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    if cfg!(windows) {
+        assert_eq!(output.status.code().unwrap(), 3);
+    } else {
+        assert_eq!(output.status.code().unwrap(), 128 + libc::SIGABRT);
+    }
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
+    Ok(())
+}
+
+// Exit with an invalid non-zero exit code, snapshot1 edition.
+#[test]
+fn exit126_wasi_snapshot1() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/exit126_wasi_snapshot1.wat")?;
+    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    if cfg!(windows) {
+        assert_eq!(output.status.code().unwrap(), 3);
+    } else {
+        assert_eq!(output.status.code().unwrap(), 128 + libc::SIGABRT);
+    }
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
+    Ok(())
+}

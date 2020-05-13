@@ -27,9 +27,6 @@ pub enum TrapCode {
     /// A `table_addr` instruction detected an out-of-bounds error.
     TableOutOfBounds,
 
-    /// Other bounds checking error.
-    OutOfBounds,
-
     /// Indirect call to a null table entry.
     IndirectCallToNull,
 
@@ -63,7 +60,6 @@ impl Display for TrapCode {
             StackOverflow => "stk_ovf",
             HeapOutOfBounds => "heap_oob",
             TableOutOfBounds => "table_oob",
-            OutOfBounds => "oob",
             IndirectCallToNull => "icall_null",
             BadSignature => "bad_sig",
             IntegerOverflow => "int_ovf",
@@ -86,7 +82,6 @@ impl FromStr for TrapCode {
             "stk_ovf" => Ok(StackOverflow),
             "heap_oob" => Ok(HeapOutOfBounds),
             "table_oob" => Ok(TableOutOfBounds),
-            "oob" => Ok(OutOfBounds),
             "icall_null" => Ok(IndirectCallToNull),
             "bad_sig" => Ok(BadSignature),
             "int_ovf" => Ok(IntegerOverflow),
@@ -106,11 +101,10 @@ mod tests {
     use alloc::string::ToString;
 
     // Everything but user-defined codes.
-    const CODES: [TrapCode; 11] = [
+    const CODES: [TrapCode; 10] = [
         TrapCode::StackOverflow,
         TrapCode::HeapOutOfBounds,
         TrapCode::TableOutOfBounds,
-        TrapCode::OutOfBounds,
         TrapCode::IndirectCallToNull,
         TrapCode::BadSignature,
         TrapCode::IntegerOverflow,

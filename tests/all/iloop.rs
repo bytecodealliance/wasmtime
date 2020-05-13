@@ -30,7 +30,7 @@ fn loops_interruptable() -> anyhow::Result<()> {
     let iloop = instance.get_func("loop").unwrap().get0::<()>()?;
     store.interrupt_handle()?.interrupt();
     let trap = iloop().unwrap_err();
-    assert!(trap.message().contains("wasm trap: interrupt"));
+    assert!(trap.to_string().contains("wasm trap: interrupt"));
     Ok(())
 }
 
@@ -44,9 +44,9 @@ fn functions_interruptable() -> anyhow::Result<()> {
     store.interrupt_handle()?.interrupt();
     let trap = iloop().unwrap_err();
     assert!(
-        trap.message().contains("wasm trap: interrupt"),
+        trap.to_string().contains("wasm trap: interrupt"),
         "{}",
-        trap.message()
+        trap.to_string()
     );
     Ok(())
 }
@@ -91,9 +91,9 @@ fn loop_interrupt_from_afar() -> anyhow::Result<()> {
     let trap = iloop().unwrap_err();
     thread.join().unwrap();
     assert!(
-        trap.message().contains("wasm trap: interrupt"),
+        trap.to_string().contains("wasm trap: interrupt"),
         "bad message: {}",
-        trap.message()
+        trap.to_string()
     );
     Ok(())
 }
@@ -127,9 +127,9 @@ fn function_interrupt_from_afar() -> anyhow::Result<()> {
     let trap = iloop().unwrap_err();
     thread.join().unwrap();
     assert!(
-        trap.message().contains("wasm trap: interrupt"),
+        trap.to_string().contains("wasm trap: interrupt"),
         "bad message: {}",
-        trap.message()
+        trap.to_string()
     );
     Ok(())
 }

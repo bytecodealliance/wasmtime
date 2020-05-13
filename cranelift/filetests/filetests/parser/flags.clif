@@ -25,7 +25,7 @@ block201:
     return
 
 block202:
-    trap oob
+    trap heap_oob
 }
 ; check: v1 = ifcmp_imm v0, 17
 ; check: brif eq v1, block201
@@ -56,7 +56,7 @@ block201:
     return
 
 block202:
-    trap oob
+    trap heap_oob
 }
 ; check: v2 = ffcmp v0, v1
 ; check: brff eq v2, block201
