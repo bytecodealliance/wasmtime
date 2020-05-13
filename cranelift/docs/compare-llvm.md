@@ -3,10 +3,11 @@
 [LLVM](https://llvm.org) is a collection of compiler components implemented as
 a set of C++ libraries. It can be used to build both JIT compilers and static
 compilers like [Clang](https://clang.llvm.org), and it is deservedly very
-popular. [Chris Lattner's chapter about LLVM]
-(https://www.aosabook.org/en/llvm.html) in the [Architecture of Open Source
-Applications](https://aosabook.org/en/index.html>) book gives an excellent
-overview of the architecture and design of LLVM.
+popular.
+[Chris Lattner's chapter about LLVM](https://www.aosabook.org/en/llvm.html)
+in the 
+[Architecture of Open Source Applications](https://aosabook.org/en/index.html>)
+book gives an excellent overview of the architecture and design of LLVM.
 
 Cranelift and LLVM are superficially similar projects, so it is worth
 highlighting some of the differences and similarities. Both projects:
@@ -132,9 +133,9 @@ only has a single target and falls through to the next instruction when its
 condition is false. The Cranelift representation is closer to how machine code
 works; LLVM's representation is more abstract.
 
-LLVM uses [phi instructions]
-(https://llvm.org/docs/LangRef.html#phi-instruction) in its SSA
-representation. Cranelift passes arguments to EBBs instead. The two
+LLVM uses
+[phi instructions](https://llvm.org/docs/LangRef.html#phi-instruction)
+in its SSA representation. Cranelift passes arguments to EBBs instead. The two
 representations are equivalent, but the EBB arguments are better suited to
 handle EBBs that may contain multiple branches to the same destination block
 with different arguments. Passing arguments to an EBB looks a lot like passing
