@@ -14,7 +14,7 @@ cranelift-reader = { path = "../cranelift/reader" }
 cranelift-wasm = { path = "../cranelift/wasm" }
 libfuzzer-sys = "0.3.2"
 target-lexicon = "0.10"
-wasmtime = { path = "../crates/api" }
+wasmtime = { path = "../crates/wasmtime" }
 wasmtime-fuzzing = { path = "../crates/fuzzing" }
 
 [[bin]]

@@ -32,7 +32,7 @@ for cargo_toml in \
     crates/profiling/Cargo.toml \
     crates/debug/Cargo.toml \
     crates/jit/Cargo.toml \
-    crates/api/Cargo.toml \
+    crates/wasmtime/Cargo.toml \
     crates/wasi/Cargo.toml \
     crates/wast/Cargo.toml \
     crates/misc/rust/macro/Cargo.toml \
