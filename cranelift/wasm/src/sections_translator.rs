@@ -224,7 +224,7 @@ pub fn parse_global_section(
             Operator::V128Const { value } => {
                 GlobalInit::V128Const(V128Imm::from(value.bytes().to_vec().as_slice()))
             }
-            Operator::RefNull => GlobalInit::RefNullConst,
+            Operator::RefNull { ty: _ } => GlobalInit::RefNullConst,
             Operator::RefFunc { function_index } => {
                 GlobalInit::RefFunc(FuncIndex::from_u32(function_index))
             }
@@ -294,7 +294,7 @@ fn read_elems(items: &ElementItems) -> WasmResult<Box<[FuncIndex]>> {
     let mut elems = Vec::with_capacity(usize::try_from(items_reader.get_count()).unwrap());
     for item in items_reader {
         let elem = match item? {
-            ElementItem::Null => FuncIndex::reserved_value(),
+            ElementItem::Null(_ty) => FuncIndex::reserved_value(),
             ElementItem::Func(index) => FuncIndex::from_u32(index),
         };
         elems.push(elem);
@@ -311,7 +311,7 @@ pub fn parse_element_section<'data>(
 
     for (index, entry) in elements.into_iter().enumerate() {
         let Element { kind, items, ty } = entry?;
-        if ty != Type::AnyFunc {
+        if ty != Type::FuncRef {
             return Err(wasm_unsupported!(
                 "unsupported table element type: {:?}",
                 ty

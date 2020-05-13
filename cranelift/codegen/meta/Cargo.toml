@@ -8,12 +8,12 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
 
+[package.metadata.docs.rs]
+rustdoc-args = [ "--document-private-items" ]
+
 [dependencies]
 cranelift-codegen-shared = { path = "../shared", version = "0.63.0" }
 cranelift-entity = { path = "../../entity", version = "0.63.0" }
 
 [badges]
 maintenance = { status = "experimental" }
-
-[package.metadata.docs.rs]
-rustdoc-args = [ "--document-private-items" ]

@@ -1035,8 +1035,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::F32Le | Operator::F64Le => {
             translate_fcmp(FloatCC::LessThanOrEqual, builder, state)
         }
-        Operator::RefNull => state.push1(builder.ins().null(environ.reference_type())),
-        Operator::RefIsNull => {
+        Operator::RefNull { ty: _ } => state.push1(builder.ins().null(environ.reference_type())),
+        Operator::RefIsNull { ty: _ } => {
             let arg = state.pop1();
             let val = builder.ins().is_null(arg);
             let val_int = builder.ins().bint(I32, val);
@@ -1435,18 +1435,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // operands must match (hence the bitcast).
             state.push1(builder.ins().bitselect(bitcast_c, bitcast_a, bitcast_b))
         }
-        Operator::I8x16AnyTrue
-        | Operator::I16x8AnyTrue
-        | Operator::I32x4AnyTrue
-        | Operator::I64x2AnyTrue => {
+        Operator::I8x16AnyTrue | Operator::I16x8AnyTrue | Operator::I32x4AnyTrue => {
             let a = pop1_with_bitcast(state, type_of(op), builder);
             let bool_result = builder.ins().vany_true(a);
             state.push1(builder.ins().bint(I32, bool_result))
         }
-        Operator::I8x16AllTrue
-        | Operator::I16x8AllTrue
-        | Operator::I32x4AllTrue
-        | Operator::I64x2AllTrue => {
+        Operator::I8x16AllTrue | Operator::I16x8AllTrue | Operator::I32x4AllTrue => {
             let a = pop1_with_bitcast(state, type_of(op), builder);
             let bool_result = builder.ins().vall_true(a);
             state.push1(builder.ins().bint(I32, bool_result))
@@ -1542,15 +1536,13 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, I32X4, builder);
             state.push1(builder.ins().fcvt_from_sint(F32X4, a))
         }
-        Operator::I8x16Mul
-        | Operator::I64x2Mul
+        Operator::I64x2Mul
         | Operator::I32x4TruncSatF32x4S
         | Operator::I32x4TruncSatF32x4U
-        | Operator::I64x2TruncSatF64x2S
-        | Operator::I64x2TruncSatF64x2U
         | Operator::F32x4ConvertI32x4U
-        | Operator::F64x2ConvertI64x2S
-        | Operator::F64x2ConvertI64x2U { .. }
+        | Operator::I8x16Abs
+        | Operator::I16x8Abs
+        | Operator::I32x4Abs
         | Operator::I8x16NarrowI16x8S { .. }
         | Operator::I8x16NarrowI16x8U { .. }
         | Operator::I16x8NarrowI32x4S { .. }
@@ -1990,8 +1982,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I8x16MinU
         | Operator::I8x16MaxS
         | Operator::I8x16MaxU
-        | Operator::I8x16RoundingAverageU
-        | Operator::I8x16Mul => I8X16,
+        | Operator::I8x16RoundingAverageU => I8X16,
 
         Operator::I16x8Splat
         | Operator::V16x8LoadSplat { .. }
@@ -2062,15 +2053,11 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I64x2ExtractLane { .. }
         | Operator::I64x2ReplaceLane { .. }
         | Operator::I64x2Neg
-        | Operator::I64x2AnyTrue
-        | Operator::I64x2AllTrue
         | Operator::I64x2Shl
         | Operator::I64x2ShrS
         | Operator::I64x2ShrU
         | Operator::I64x2Add
-        | Operator::I64x2Sub
-        | Operator::F64x2ConvertI64x2S
-        | Operator::F64x2ConvertI64x2U => I64X2,
+        | Operator::I64x2Sub => I64X2,
 
         Operator::F32x4Splat
         | Operator::F32x4ExtractLane { .. }
@@ -2110,9 +2097,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::F64x2Mul
         | Operator::F64x2Div
         | Operator::F64x2Min
-        | Operator::F64x2Max
-        | Operator::I64x2TruncSatF64x2S
-        | Operator::I64x2TruncSatF64x2U => F64X2,
+        | Operator::F64x2Max => F64X2,
 
         _ => unimplemented!(
             "Currently only SIMD instructions are mapped to their return type; the \

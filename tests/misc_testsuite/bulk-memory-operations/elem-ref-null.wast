@@ -1,2 +1,2 @@
 (module
-  (elem funcref (ref.null)))
+  (elem funcref (ref.null func)))
