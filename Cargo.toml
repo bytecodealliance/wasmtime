@@ -22,7 +22,7 @@ doc = false
 
 [dependencies]
 # Enable all supported architectures by default.
-wasmtime = { path = "crates/api", version = "0.16.0", default-features = false }
+wasmtime = { path = "crates/wasmtime", version = "0.16.0", default-features = false }
 wasmtime-debug = { path = "crates/debug", version = "0.16.0" }
 wasmtime-environ = { path = "crates/environ", version = "0.16.0" }
 wasmtime-jit = { path = "crates/jit", version = "0.16.0" }

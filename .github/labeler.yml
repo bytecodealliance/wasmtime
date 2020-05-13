@@ -53,7 +53,7 @@
   - "crates/wiggle/**"
 
 "wasmtime:api":
-  - "crates/api/**"
+  - "crates/wasmtime/**"
 
 "wasmtime:c-api":
   - "crates/c-api/**"

@@ -17,7 +17,7 @@ doctest = false
 [dependencies]
 wasmtime-rust-macro = { path = "./macro", version = "0.16.0" }
 wasmtime-wasi = { path = "../../wasi", version = "0.16.0" }
-wasmtime = { path = "../../api", version = "0.16.0" }
+wasmtime = { path = "../../wasmtime", version = "0.16.0" }
 anyhow = "1.0.19"
 
 [badges]

@@ -19,7 +19,7 @@ doctest = false
 [dependencies]
 anyhow = "1.0"
 once_cell = "1.3"
-wasmtime = { path = "../api", default-features = false }
+wasmtime = { path = "../wasmtime", default-features = false }
 wasmtime-c-api-macros = { path = "macros" }
 
 # Optional dependency for the `wat2wasm` API
