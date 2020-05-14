@@ -143,9 +143,7 @@ pub fn type_to_type<PE: TargetEnvironment + ?Sized>(
         wasmparser::Type::F32 => Ok(ir::types::F32),
         wasmparser::Type::F64 => Ok(ir::types::F64),
         wasmparser::Type::V128 => Ok(ir::types::I8X16),
-        wasmparser::Type::AnyRef | wasmparser::Type::AnyFunc | wasmparser::Type::NullRef => {
-            Ok(environ.reference_type())
-        }
+        wasmparser::Type::ExternRef | wasmparser::Type::FuncRef => Ok(environ.reference_type()),
         ty => Err(wasm_unsupported!("type_to_type: wasm type {:?}", ty)),
     }
 }
@@ -162,8 +160,8 @@ pub fn tabletype_to_type<PE: TargetEnvironment + ?Sized>(
         wasmparser::Type::F32 => Ok(Some(ir::types::F32)),
         wasmparser::Type::F64 => Ok(Some(ir::types::F64)),
         wasmparser::Type::V128 => Ok(Some(ir::types::I8X16)),
-        wasmparser::Type::AnyRef => Ok(Some(environ.reference_type())),
-        wasmparser::Type::AnyFunc => Ok(None),
+        wasmparser::Type::ExternRef => Ok(Some(environ.reference_type())),
+        wasmparser::Type::FuncRef => Ok(None),
         ty => Err(wasm_unsupported!(
             "tabletype_to_type: table wasm type {:?}",
             ty
@@ -183,9 +181,8 @@ pub fn blocktype_params_results(
             wasmparser::Type::F32 => (&[], &[wasmparser::Type::F32]),
             wasmparser::Type::F64 => (&[], &[wasmparser::Type::F64]),
             wasmparser::Type::V128 => (&[], &[wasmparser::Type::V128]),
-            wasmparser::Type::AnyRef => (&[], &[wasmparser::Type::AnyRef]),
-            wasmparser::Type::AnyFunc => (&[], &[wasmparser::Type::AnyFunc]),
-            wasmparser::Type::NullRef => (&[], &[wasmparser::Type::NullRef]),
+            wasmparser::Type::ExternRef => (&[], &[wasmparser::Type::ExternRef]),
+            wasmparser::Type::FuncRef => (&[], &[wasmparser::Type::FuncRef]),
             wasmparser::Type::EmptyBlockType => (&[], &[]),
             ty => return Err(wasm_unsupported!("blocktype_params_results: type {:?}", ty)),
         },
@@ -218,7 +215,7 @@ pub fn block_with_params<PE: TargetEnvironment + ?Sized>(
             wasmparser::Type::F64 => {
                 builder.append_block_param(block, ir::types::F64);
             }
-            wasmparser::Type::AnyRef | wasmparser::Type::AnyFunc | wasmparser::Type::NullRef => {
+            wasmparser::Type::ExternRef | wasmparser::Type::FuncRef => {
                 builder.append_block_param(block, environ.reference_type());
             }
             wasmparser::Type::V128 => {

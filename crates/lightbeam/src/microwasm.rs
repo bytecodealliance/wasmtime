@@ -2127,8 +2127,10 @@ where
             WasmOperator::I64Const { value } => one(Operator::Const(Value::I64(value))),
             WasmOperator::F32Const { value } => one(Operator::Const(Value::F32(value.into()))),
             WasmOperator::F64Const { value } => one(Operator::Const(Value::F64(value.into()))),
-            WasmOperator::RefNull => return Err(Error::Microwasm("RefNull unimplemented".into())),
-            WasmOperator::RefIsNull => {
+            WasmOperator::RefNull { ty: _ } => {
+                return Err(Error::Microwasm("RefNull unimplemented".into()))
+            }
+            WasmOperator::RefIsNull { ty: _ } => {
                 return Err(Error::Microwasm("RefIsNull unimplemented".into()))
             }
             WasmOperator::I32Eqz => one(Operator::Eqz(Size::_32)),

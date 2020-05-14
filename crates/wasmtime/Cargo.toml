@@ -14,7 +14,7 @@ wasmtime-runtime = { path = "../runtime", version = "0.16.0" }
 wasmtime-environ = { path = "../environ", version = "0.16.0" }
 wasmtime-jit = { path = "../jit", version = "0.16.0" }
 wasmtime-profiling = { path = "../profiling", version = "0.16.0" }
-wasmparser = "0.52.0"
+wasmparser = "0.55.0"
 target-lexicon = { version = "0.10.0", default-features = false }
 anyhow = "1.0.19"
 region = "2.0.0"
@@ -23,7 +23,7 @@ cfg-if = "0.1.9"
 backtrace = "0.3.42"
 rustc-demangle = "0.1.16"
 lazy_static = "1.4"
-wat = { version = "1.0.10", optional = true }
+wat = { version = "1.0.18", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = "0.3.7"

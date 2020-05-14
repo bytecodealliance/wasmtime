@@ -13,10 +13,10 @@ binaryen = { version = "0.10.0", optional = true }
 env_logger = "0.7.1"
 log = "0.4.8"
 rayon = "1.2.1"
-wasmparser = "0.52.0"
-wasmprinter = "0.2.1"
+wasmparser = "0.55.0"
+wasmprinter = "0.2.5"
 wasmtime = { path = "../wasmtime" }
 wasmtime-wast = { path = "../wast" }
 
 [dev-dependencies]
-wat = "1.0.10"
+wat = "1.0.18"

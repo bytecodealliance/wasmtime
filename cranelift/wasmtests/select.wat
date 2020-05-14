@@ -5,15 +5,15 @@
   	i32.const 1
   	select)
 
-  (func $typed-select-1 (result anyref)
-  	ref.null
-  	ref.null
+  (func $typed-select-1 (result externref)
+  	ref.null extern
+  	ref.null extern
   	i32.const 1
-  	select (result anyref))
+  	select (result externref))
 
-  (func $typed-select-2 (param anyref) (result anyref)
-    ref.null
+  (func $typed-select-2 (param externref) (result externref)
+    ref.null extern
     local.get 0
     i32.const 1
-    select (result anyref))
+    select (result externref))
 )
