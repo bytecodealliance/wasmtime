@@ -70,7 +70,6 @@ pub extern "C" fn wasmtime_funcref_table_new(
                     which: ExternHost::Table(HostRef::new(table)),
                 },
             }));
-            println!("ret at {:?}", *out);
         },
     )
 }
@@ -95,7 +94,6 @@ pub extern "C" fn wasmtime_funcref_table_get(
     index: wasm_table_size_t,
     ptr: &mut *mut wasm_func_t,
 ) -> bool {
-    println!("get {:p} at {}", t, index);
     match t.table().borrow().get(index) {
         Some(val) => {
             *ptr = match val {
