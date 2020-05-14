@@ -536,13 +536,59 @@ impl fmt::Display for Params {
         write!(f, "[")?;
         if let Some(_) = iter.next() {
             write!(f, "??")?;
-            for p in iter {
+            for _ in iter {
                 write!(f, ", ??")?;
             }
         }
         write!(f, "]")?;
 
         Ok(())
+    }
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Hash, Debug)]
+pub enum NumCallers {
+    Zero,
+    One,
+    Many,
+}
+
+impl fmt::Display for NumCallers {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            NumCallers::Zero => write!(f, "0"),
+            NumCallers::One => write!(f, "1"),
+            NumCallers::Many => write!(f, "??"),
+        }
+    }
+}
+
+impl Default for NumCallers {
+    fn default() -> Self {
+        NumCallers::Zero
+    }
+}
+
+impl NumCallers {
+    pub fn is_zero(&self) -> bool {
+        *self == NumCallers::Zero
+    }
+
+    pub fn is_many(&self) -> bool {
+        *self == NumCallers::Many
+    }
+
+    pub fn inc(&mut self) {
+        *self = match *self {
+            NumCallers::Zero => NumCallers::One,
+            NumCallers::One | NumCallers::Many => NumCallers::Many,
+        }
+    }
+
+    pub fn incremented(&self) -> Self {
+        let mut out = *self;
+        out.inc();
+        out
     }
 }
 
@@ -558,7 +604,7 @@ pub enum Operator<Label> {
         params: Params,
         // TODO: Ideally we'd have `num_backwards_callers` but we can't know that for WebAssembly
         has_backwards_callers: bool,
-        num_callers: Option<u32>,
+        num_callers: NumCallers,
     },
     /// Start a new block. It is an error if the previous block has not been closed by emitting `End`
     Start(Label),
@@ -715,7 +761,7 @@ impl<L> Operator<L> {
             label,
             has_backwards_callers: false,
             // TODO
-            num_callers: None,
+            num_callers: NumCallers::Many,
         }
     }
 
@@ -724,7 +770,7 @@ impl<L> Operator<L> {
             params,
             label,
             has_backwards_callers: false,
-            num_callers: Some(1),
+            num_callers: NumCallers::One,
         }
     }
 
@@ -733,7 +779,7 @@ impl<L> Operator<L> {
             params,
             label,
             has_backwards_callers: true,
-            num_callers: None,
+            num_callers: NumCallers::Many,
         }
     }
 }
@@ -759,9 +805,7 @@ where
                     write!(f, " has_backwards_callers")?;
                 }
 
-                if let Some(n) = num_callers {
-                    write!(f, " num_callers={}", n)?;
-                }
+                write!(f, " num_callers={}", num_callers)?;
 
                 Ok(())
             }

@@ -84,11 +84,13 @@ fn bench_compile(b: &mut test::bench::Bencher, wast: &str, strategy: Strategy) -
             Module(mut module) => {
                 let binary = module.encode()?;
 
-                let (name, bin) = (module.id.map(|s| s.name().to_string()), binary);
-                wast_context.module(name.as_ref().map(|s| &s[..]), &bin)?;
+                wast_context.module(
+                    module.id.map(|s| &s.name()[..]).as_ref().map(|s| &s[..]),
+                    &binary,
+                )?;
 
-                b.bytes += bin.len() as u64;
-                modules.push((name, bin));
+                b.bytes += binary.len() as u64;
+                modules.push(binary);
             }
             QuoteModule { span: _, source } => {
                 let mut module = String::new();
@@ -99,11 +101,17 @@ fn bench_compile(b: &mut test::bench::Bencher, wast: &str, strategy: Strategy) -
                 let buf = ParseBuffer::new(&module)?;
                 let mut wat = parser::parse::<Wat>(&buf)?;
                 let binary = wat.module.encode()?;
-                let (name, bin) = (wat.module.id.map(|s| s.name().to_string()), binary);
-                wast_context.module(name.as_ref().map(|s| &s[..]), &bin)?;
+                wast_context.module(
+                    wat.module
+                        .id
+                        .map(|s| &s.name()[..])
+                        .as_ref()
+                        .map(|s| &s[..]),
+                    &binary,
+                )?;
 
-                b.bytes += bin.len() as u64;
-                modules.push((name, bin));
+                b.bytes += binary.len() as u64;
+                modules.push(binary);
             }
             Register {
                 span: _,
@@ -117,10 +125,8 @@ fn bench_compile(b: &mut test::bench::Bencher, wast: &str, strategy: Strategy) -
     }
 
     b.iter(|| {
-        for (name, bin) in &modules {
-            wast_context
-                .module(name.as_ref().map(|s| &s[..]), bin)
-                .unwrap();
+        for bin in &modules {
+            wast_context.instantiate(bin).unwrap();
         }
     });
 

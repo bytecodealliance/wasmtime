@@ -11,7 +11,9 @@ use crate::{
 };
 use cranelift_codegen::{binemit, ir};
 use dynasmrt::DynasmApi;
-use more_asserts::{assert_ge, assert_le, debug_assert_le};
+#[cfg(debug_assertions)]
+use more_asserts::{assert_ge, debug_assert_ge};
+use more_asserts::{assert_le, debug_assert_le};
 use std::{
     collections::HashMap, convert::TryFrom, fmt, hash::Hash, iter, mem, ops::RangeInclusive,
 };
@@ -25,8 +27,9 @@ struct Block {
     // TODO: Is there a cleaner way to do this? `has_backwards_callers` should always be set if `is_next`
     //       is false, so we should probably use an `enum` here.
     is_next: bool,
-    num_callers: Option<u32>,
-    actual_num_callers: u32,
+    already_emitted: bool,
+    num_callers: NumCallers,
+    actual_num_callers: NumCallers,
     has_backwards_callers: bool,
 }
 
@@ -144,18 +147,14 @@ where
             Box::new(format!("start .Fn{}:", func_idx)),
         ));
 
-        let params = func_type
-            .params()
-            .iter()
-            .map(|t| t.to_microwasm_type())
-            .collect::<Vec<_>>();
+        let params = func_type.params().iter().map(|t| t.to_microwasm_type());
 
         const DISASSEMBLE: bool = false;
 
         if DISASSEMBLE {
             print!("     \tdef .Fn{} :: [", func_idx);
 
-            let mut params_iter = params.iter();
+            let mut params_iter = params.clone();
 
             if let Some(arg) = params_iter.next() {
                 print!("{}", arg);
@@ -168,7 +167,7 @@ where
             println!("start .Fn{}:", func_idx);
         }
 
-        ctx.start_function(params.iter().cloned())?;
+        ctx.start_function(params)?;
 
         let mut blocks = HashMap::<BrTarget<L>, Block>::new();
 
@@ -186,9 +185,10 @@ where
                     loc.into_iter().map(ValueLocation::from).collect(),
                 )),
                 is_next: false,
+                already_emitted: true,
                 has_backwards_callers: false,
-                actual_num_callers: 0,
-                num_callers: None,
+                actual_num_callers: Default::default(),
+                num_callers: NumCallers::Many,
             },
         );
 
@@ -239,10 +239,9 @@ where
                         let num_cc_params = block
                             .calling_convention
                             .as_ref()
-                            .map(|cc| cc.arguments.len());
+                            .map(|cc| cc.arguments.locs.len());
                         if let Some(num_cc_params) = num_cc_params {
-                            // we can use assert here bc we are in debug mode
-                            assert_ge!(num_cc_params, block.params as usize);
+                            debug_assert_ge!(num_cc_params, block.params as usize);
                         }
                     } else {
                         debug_assert!(in_block);
@@ -251,7 +250,7 @@ where
                         let mut actual_stack = ctx.allocated_stack.clone();
                         actual_stack.clear();
                         actual_stack.set_depth(crate::backend::FUNCTION_START_DEPTH)?;
-                        actual_stack.set_depth_and_free(ctx.allocated_stack.stack_depth());
+                        actual_stack.set_depth_and_free(ctx.allocated_stack.stack_depth())?;
 
                         actual_regs.release_scratch_register()?;
                         for val in &ctx.stack {
@@ -335,12 +334,13 @@ where
                     {
                         let has_backwards_callers = {
                             let block = entry.get_mut();
+                            block.is_next = false;
 
                             // TODO: Maybe we want to restrict Microwasm so that at least one of its callers
                             //       must be before the label. In an ideal world the restriction would be that
-                            //       blocks without callers are illegal, but that's not reasonably possible for
-                            //       Microwasm generated from Wasm.
-                            if block.actual_num_callers == 0 {
+                            //       blocks without callers are illegal, but that's not reasonably possible
+                            //       to enforce for Microwasm generated from Wasm.
+                            if block.actual_num_callers.is_zero() {
                                 if block.calling_convention.is_some() {
                                     return Err(error(
                                         "Block marked unreachable but has been jumped to before",
@@ -385,8 +385,9 @@ where
                                                     params: params.len(),
                                                     calling_convention: None,
                                                     is_next: false,
+                                                    already_emitted: false,
                                                     has_backwards_callers,
-                                                    actual_num_callers: 0,
+                                                    actual_num_callers: Default::default(),
                                                     num_callers,
                                                 },
                                             );
@@ -396,25 +397,22 @@ where
                                 }
 
                                 continue;
-                            }
+                            } else {
+                                block.already_emitted = true;
 
-                            block.is_next = false;
+                                ctx.define_label(*block.label.label().unwrap());
 
-                            // TODO: We can `take` this if it's a `Right`
-                            match block.calling_convention.as_ref() {
-                                Some(cc) => {
-                                    ctx.set_state(cc.clone())?;
+                                match block.calling_convention.as_ref() {
+                                    Some(cc) => {
+                                        ctx.set_state(cc.as_ref())?;
+                                    }
+                                    None => {
+                                        return Err(error("No calling convention to apply"));
+                                    }
                                 }
-                                None => {
-                                    return Err(error("No calling convention to apply"));
-                                }
+
+                                block.has_backwards_callers
                             }
-
-                            ctx.define_label(*block.label.label().unwrap());
-
-                            ctx.shrink_stack_to_fit()?;
-
-                            block.has_backwards_callers
                         };
 
                         // To reduce memory overhead
@@ -439,8 +437,9 @@ where
                             params: params.len(),
                             calling_convention: None,
                             is_next: false,
+                            already_emitted: false,
                             has_backwards_callers,
-                            actual_num_callers: 0,
+                            actual_num_callers: Default::default(),
                             num_callers,
                         },
                     );
@@ -454,25 +453,6 @@ where
                         in_block = false;
                     }
 
-                    let (mut cc_and_to_drop, mut max_num_callers, params) = {
-                        let def = blocks.get_mut(&default.target).unwrap();
-
-                        def.actual_num_callers = def.actual_num_callers.saturating_add(1);
-
-                        (
-                            def.calling_convention
-                                .clone()
-                                .map(|cc| (cc, default.to_drop.clone())),
-                            def.num_callers,
-                            def.params
-                                + default
-                                    .to_drop
-                                    .as_ref()
-                                    .map(|t| t.clone().count())
-                                    .unwrap_or_default() as u32,
-                        )
-                    };
-
                     fn cc_to_param_locs(
                         params: u32,
                         cc: &CallingConvention,
@@ -483,74 +463,128 @@ where
                             .as_ref()
                             .map(|to_drop| (*to_drop.end() as usize, to_drop.clone().count()))
                             .unwrap_or_default();
-                        let len = cc.arguments.len();
-                        let end = len.saturating_sub(end + 1);
+                        let len = cc.arguments.locs.len();
+                        let end = len.saturating_sub(end);
 
                         let extra = (params as usize).checked_sub(len + count).unwrap();
 
                         std::iter::repeat(None)
                             .take(extra)
-                            .chain(cc.arguments[..end].iter().cloned().map(Some))
+                            .chain(cc.arguments.locs[..end].iter().cloned().map(Some))
                             .chain(std::iter::repeat(None).take(count))
-                            .chain(cc.arguments[end..].iter().cloned().map(Some))
+                            .chain(cc.arguments.locs[end..].iter().cloned().map(Some))
                             .chain(std::iter::once(None))
                     }
+
+                    let tmp_num_callers = |block: &Block| {
+                        if block.is_next && !block.has_backwards_callers {
+                            block.actual_num_callers.incremented()
+                        } else {
+                            block.num_callers
+                        }
+                    };
+
+                    let (mut cc_and_to_drop, mut max_num_callers, params) = {
+                        let def = blocks.get_mut(&default.target).unwrap();
+
+                        (
+                            def.calling_convention
+                                .clone()
+                                .map(|cc| (cc, default.to_drop.clone())),
+                            tmp_num_callers(def),
+                            def.params
+                                + default
+                                    .to_drop
+                                    .as_ref()
+                                    .map(|t| t.clone().count())
+                                    .unwrap_or_default() as u32,
+                        )
+                    };
 
                     let mut adaptors = Vec::new();
 
                     for target in targets.iter_mut() {
-                        let block = blocks.get(&target.target).unwrap();
+                        let block = blocks.get_mut(&target.target).unwrap();
                         let mut block_to_add = None;
 
-                        if let Some(block_cc) = &block.calling_convention {
-                            if let Some((cc, to_drop)) = &cc_and_to_drop {
-                                let block_locs =
-                                    cc_to_param_locs(params, &block_cc, target.to_drop.clone());
-                                let cur_locs = cc_to_param_locs(params, cc, to_drop.clone());
-                                let locs_iter = block_locs.zip(cur_locs);
-
-                                for loc in locs_iter {
-                                    match loc {
-                                        (Some(block_loc), Some(cur_loc))
-                                            if block_loc != cur_loc =>
-                                        {
-                                            let (new_label, next_id) =
-                                                L::new_internal(internal_block_id);
-                                            internal_block_id = next_id;
-                                            let asm_label = ctx.create_label();
-                                            block_to_add = Some((
-                                                BrTarget::Label(new_label.clone()),
-                                                Block {
-                                                    label: BrTarget::Label(asm_label),
-                                                    params: block.params
-                                                        + target
-                                                            .to_drop
-                                                            .clone()
-                                                            .map(|t| t.count())
-                                                            .unwrap_or_default()
-                                                            as u32,
-                                                    calling_convention: None,
-                                                    is_next: adaptors.is_empty(),
-                                                    has_backwards_callers: false,
-                                                    actual_num_callers: 0,
-                                                    num_callers: Some(1),
-                                                },
-                                            ));
-                                            adaptors.push(Operator::Start(new_label.clone()));
-                                            let current_target = mem::replace(
-                                                target,
-                                                BrTarget::Label(new_label).into(),
-                                            );
-                                            adaptors.push(Operator::Const(Value::I32(0)));
-                                            adaptors.push(Operator::End(Targets {
-                                                targets: vec![],
-                                                default: current_target,
-                                            }));
-
-                                            break;
-                                        }
-                                        _ => {}
+                        if let Some(block_cc) = &mut block.calling_convention {
+                            if let Some((cc, to_drop)) = &mut cc_and_to_drop {
+                                match (&cc.depth, &block_cc.depth) {
+                                    (Some(a), Some(b)) if a == b => {}
+                                    (_, Some(_)) if !block.already_emitted => {
+                                        block_cc.depth = None;
                                     }
+                                    (_, None) => {}
+                                    _ => {
+                                        return Err(error(
+                                            "Tried to do a conditional jump with targets \
+                                            that require different values for `rsp`",
+                                        ));
+                                    }
+                                }
+
+                                let mut block_concrete_count = 0;
+                                let mut cur_concrete_count = 0;
+                                let locations_equal =
+                                    cc_to_param_locs(params, &block_cc, target.to_drop.clone())
+                                        .zip(cc_to_param_locs(params, cc, to_drop.clone()))
+                                        .all(|(block_loc, cur_loc)| {
+                                            if block_loc.is_some() {
+                                                block_concrete_count += 1;
+                                            }
+
+                                            if cur_loc.is_some() {
+                                                cur_concrete_count += 1;
+                                            }
+
+                                            match (block_loc, cur_loc) {
+                                                (Some(block_loc), Some(cur_loc)) => {
+                                                    block_loc == cur_loc
+                                                }
+                                                _ => true,
+                                            }
+                                        });
+
+                                if locations_equal {
+                                    if block_concrete_count > cur_concrete_count {
+                                        cc.arguments = block_cc.arguments.clone();
+                                        *to_drop = target.to_drop.clone();
+                                    }
+
+                                    cc.depth = mem::take(&mut cc.depth).or(block_cc.depth.clone());
+                                } else {
+                                    let (new_label, next_id) = L::new_internal(internal_block_id);
+                                    internal_block_id = next_id;
+                                    let asm_label = ctx.create_label();
+                                    block_to_add = Some((
+                                        BrTarget::Label(new_label.clone()),
+                                        Block {
+                                            label: BrTarget::Label(asm_label),
+                                            params: block.params
+                                                + target
+                                                    .to_drop
+                                                    .clone()
+                                                    .map(|t| t.count())
+                                                    .unwrap_or_default()
+                                                    as u32,
+                                            calling_convention: None,
+                                            is_next: false,
+                                            already_emitted: false,
+                                            has_backwards_callers: false,
+                                            actual_num_callers: Default::default(),
+                                            num_callers: NumCallers::One,
+                                        },
+                                    ));
+                                    adaptors.push(Operator::Start(new_label.clone()));
+                                    let current_target = mem::replace(
+                                        &mut target.target,
+                                        BrTarget::Label(new_label),
+                                    );
+                                    adaptors.push(Operator::Const(Value::I32(0)));
+                                    adaptors.push(Operator::End(Targets {
+                                        targets: vec![],
+                                        default: current_target.into(),
+                                    }));
                                 }
                             } else {
                                 cc_and_to_drop = Some((block_cc.clone(), target.to_drop.clone()));
@@ -563,13 +597,7 @@ where
 
                         let block = blocks.get_mut(&target.target).unwrap();
 
-                        // Although performance is slightly worse if we miscount this to be too high,
-                        // it doesn't affect correctness.
-                        block.actual_num_callers = block.actual_num_callers.saturating_add(1);
-
-                        if let Some(max) = max_num_callers {
-                            max_num_callers = block.num_callers.map(|n| max.max(n));
-                        }
+                        max_num_callers = max_num_callers.max(tmp_num_callers(block));
 
                         debug_assert_eq!(
                             params,
@@ -597,52 +625,30 @@ where
 
                     let (cc, selector) = match cc_and_to_drop {
                         Some((cc, to_drop)) => {
-                            let (end, count) = to_drop
-                                .as_ref()
-                                .map(|to_drop| (*to_drop.end() as usize, to_drop.clone().count()))
-                                .unwrap_or_default();
-                            let end = cc.arguments.len().saturating_sub(end + 1);
-
-                            let extra = (params as usize)
-                                .checked_sub(cc.arguments.len() + count)
-                                .unwrap();
-
-                            let should_serialize =
-                                if max_num_callers.map(|callers| callers <= 1).unwrap_or(false) {
-                                    MaybeCCLoc::NoSerialize
-                                } else {
-                                    MaybeCCLoc::Serialize
-                                };
+                            let should_serialize = if max_num_callers.is_zero() {
+                                MaybeCCLoc::Serialize
+                            } else {
+                                MaybeCCLoc::NoSerialize
+                            };
 
                             // TODO: We can also use `NoSerialize` for any elements that are only
                             //       serialized for blocks where `!block.should_serialize_args()`.
-                            let locs = std::iter::repeat(should_serialize)
-                                .take(extra)
-                                .chain(cc.arguments[..end].iter().cloned().map(|vloc| {
-                                    CCLoc::try_from(vloc)
+                            let locs = cc_to_param_locs(params, &cc, to_drop.clone())
+                                .map(|loc| {
+                                    loc.and_then(|loc| CCLoc::try_from(loc).ok())
                                         .map(MaybeCCLoc::Concrete)
                                         .unwrap_or(should_serialize)
-                                }))
-                                .chain(std::iter::repeat(should_serialize).take(count))
-                                .chain(cc.arguments[end..].iter().cloned().map(|vloc| {
-                                    CCLoc::try_from(vloc)
-                                        .map(MaybeCCLoc::Concrete)
-                                        .unwrap_or(should_serialize)
-                                }))
-                                .chain(std::iter::once(MaybeCCLoc::NoSerialize))
+                                })
                                 .collect::<Vec<_>>();
 
-                            let mut tmp = ctx.serialize_block_args(locs, Some(cc.depth))?;
+                            let mut tmp = ctx.serialize_block_args(locs, cc.depth)?;
 
-                            let selector = tmp.arguments.pop().unwrap();
+                            let selector = tmp.arguments.locs.pop().unwrap();
 
                             (tmp, selector)
                         }
                         None => {
-                            if max_num_callers.map(|callers| callers <= 1).unwrap_or(false) {
-                                let selector = ctx.pop()?;
-                                (ctx.virtual_calling_convention(), selector)
-                            } else {
+                            if max_num_callers.is_many() {
                                 let mut tmp = ctx.serialize_block_args(
                                     std::iter::repeat(MaybeCCLoc::Serialize)
                                         .take(params as usize)
@@ -652,37 +658,67 @@ where
                                     None,
                                 )?;
 
-                                let selector = tmp.arguments.pop().unwrap().into();
+                                tmp.depth = Some(tmp.arguments.max_depth.clone());
+
+                                let selector = tmp.arguments.locs.pop().unwrap();
 
                                 (tmp, selector)
+                            } else {
+                                let selector = ctx.pop()?;
+                                (ctx.virtual_calling_convention(), selector)
                             }
                         }
                     };
 
+                    let mut target_set = std::collections::HashSet::new();
+
                     for target in targets.iter().chain(std::iter::once(&default)) {
                         let block = blocks.get_mut(&target.target).unwrap();
 
-                        if let Some(block_calling_convention) = &block.calling_convention {
-                            debug_assert_eq!(block_calling_convention, &{
+                        if let Some(block_calling_convention) = &mut block.calling_convention {
+                            debug_assert_eq!(block_calling_convention.arguments.locs, {
                                 let mut cc = cc.clone();
+
                                 if let Some(to_drop) = target.to_drop.clone() {
-                                    drop_elements(&mut cc.arguments, to_drop);
+                                    drop_elements(&mut cc.arguments.locs, to_drop);
                                 }
 
-                                debug_assert_eq!(cc.arguments.len(), block.params as usize,);
+                                debug_assert_eq!(cc.arguments.locs.len(), block.params as usize);
 
-                                cc
+                                cc.arguments.locs
                             });
+
+                            match (&cc.depth, &block_calling_convention.depth) {
+                                (Some(a), Some(b)) if a == b => {}
+                                (_, None) => {}
+                                _ => {
+                                    return Err(error(
+                                            "Programmer error: Tried to conditionally jump to targets that require different values for `rsp`"));
+                                }
+                            }
                         } else {
                             let mut cc = cc.clone();
                             if let Some(to_drop) = target.to_drop.clone() {
-                                drop_elements(&mut cc.arguments, to_drop);
+                                drop_elements(&mut cc.arguments.locs, to_drop);
                             }
 
-                            debug_assert_eq!(cc.arguments.len(), block.params as usize,);
+                            debug_assert_eq!(cc.arguments.locs.len(), block.params as usize,);
+
+                            // TODO: Take `target_set` into account
+                            let num_callers = tmp_num_callers(block);
+
+                            if num_callers.is_many() {
+                                cc.depth = None;
+                            }
 
                             block.calling_convention = Some(cc);
                         }
+
+                        target_set.insert(&target.target);
+                    }
+
+                    for target in target_set {
+                        blocks.get_mut(&target).unwrap().actual_num_callers.inc();
                     }
 
                     let depth = cc.depth.clone();

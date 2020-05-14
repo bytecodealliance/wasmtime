@@ -147,6 +147,19 @@ impl Alloc {
             .unwrap_or(false)
     }
 
+    pub fn used_size(&self) -> Size {
+        if let Some((p, _)) = self
+            .blocks_by_address
+            .iter()
+            .last()
+            .filter(|(p, s)| p.offset(**s).0 == self.size.0)
+        {
+            Size(p.0)
+        } else {
+            self.size
+        }
+    }
+
     fn modify_block(&mut self, ptr: Ptr, new_size: Size) {
         self.remove_block(ptr);
         self.add_block(ptr, new_size);
@@ -154,8 +167,10 @@ impl Alloc {
 
     fn add_block(&mut self, ptr: Ptr, size: Size) {
         if size.0 > 0 {
-            debug_assert!(self.blocks_by_address.insert(ptr, size).is_none());
-            debug_assert!(self.blocks_by_size.entry(size).or_default().insert(ptr));
+            let existing = self.blocks_by_address.insert(ptr, size);
+            debug_assert!(existing.is_none());
+            let existing = self.blocks_by_size.entry(size).or_default().insert(ptr);
+            debug_assert!(existing);
         }
     }
 
@@ -168,7 +183,8 @@ impl Alloc {
             .expect("Double-free'd block");
         match self.blocks_by_size.entry(size) {
             Entry::Occupied(mut entry) => {
-                assert!(entry.get_mut().remove(&ptr), "Allocator metadata corrupted");
+                let existing = entry.get_mut().remove(&ptr);
+                debug_assert!(existing, "Allocator metadata corrupted");
                 if entry.get().is_empty() {
                     entry.remove_entry();
                 }

@@ -29,9 +29,6 @@ pub struct WastContext {
     /// Wast files have a concept of a "current" module, which is the most
     /// recently defined.
     current: Option<Instance>,
-    // FIXME(#1479) this is only needed to retain correct trap information after
-    // we've dropped previous `Instance` values.
-    modules: Vec<Module>,
     linker: Linker,
     store: Store,
 }
@@ -62,7 +59,6 @@ impl WastContext {
             current: None,
             linker,
             store,
-            modules: Vec::new(),
         }
     }
 
@@ -78,9 +74,9 @@ impl WastContext {
         }
     }
 
-    fn instantiate(&mut self, module: &[u8]) -> Result<Outcome<Instance>> {
+    /// Instantiate a module, without defining it under a given name
+    pub fn instantiate(&mut self, module: &[u8]) -> Result<Outcome<Instance>> {
         let module = Module::new(&self.store, module)?;
-        self.modules.push(module.clone());
         let instance = match self.linker.instantiate(&module) {
             Ok(i) => i,
             Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),
