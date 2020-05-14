@@ -1,0 +1,39 @@
+test simple_preopt
+target x86_64
+
+;; Tests for sign-extending immediates.
+
+function %sign_extend_signed_icmp(i8) -> b1 {
+block0(v0: i8):
+    ; 255 = -1 as u8
+    v1 = iconst.i8 255
+    v2 = icmp sge v0, v1
+    ; check: v2 = icmp_imm sge v0, -1
+    return v2
+}
+
+function %do_not_sign_extend_unsigned_icmp(i8) -> b1 {
+block0(v0: i8):
+    v1 = iconst.i8 255
+    v2 = icmp uge v0, v1
+    ; check: v2 = icmp_imm uge v0, 255
+    return v2
+}
+
+function %sign_extend_sdiv(i8) -> i8 {
+block0(v0: i8):
+    ; 255 = -1 as u8
+    v1 = iconst.i8 255
+    v2 = sdiv v0, v1
+    ; check: v2 = sdiv_imm v0, -1
+    return v2
+}
+
+function %sign_extend_srem(i8) -> i8 {
+block0(v0: i8):
+    ; 255 = -1 as u8
+    v1 = iconst.i8 255
+    v2 = srem v0, v1
+    ; check: v2 = srem_imm v0, -1
+    return v2
+}

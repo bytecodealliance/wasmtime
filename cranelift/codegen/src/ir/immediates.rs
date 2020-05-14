@@ -62,6 +62,21 @@ impl Imm64 {
     pub fn bits(&self) -> i64 {
         self.0
     }
+
+    /// Sign extend this immediate as if it were a signed integer of the given
+    /// power-of-two width.
+    pub fn sign_extend_from_width(&mut self, bit_width: u16) {
+        debug_assert!(bit_width.is_power_of_two());
+
+        if bit_width >= 64 {
+            return;
+        }
+
+        let bit_width = bit_width as i64;
+        let delta = 64 - bit_width;
+        let sign_extended = (self.0 << delta) >> delta;
+        *self = Imm64(sign_extended);
+    }
 }
 
 impl Into<i64> for Imm64 {
