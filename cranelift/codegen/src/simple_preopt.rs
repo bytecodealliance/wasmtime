@@ -1019,11 +1019,7 @@ mod simplify {
 }
 
 /// The main pre-opt pass.
-pub fn do_preopt<'func, 'isa>(
-    func: &'func mut Function,
-    cfg: &mut ControlFlowGraph,
-    isa: &'isa dyn TargetIsa,
-) {
+pub fn do_preopt(func: &mut Function, cfg: &mut ControlFlowGraph, isa: &dyn TargetIsa) {
     let _tt = timing::preopt();
 
     let mut pos = FuncCursor::new(func);
