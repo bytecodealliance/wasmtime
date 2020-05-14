@@ -65,7 +65,6 @@ impl PeepholeOptimizations {
         PeepholeOptimizer {
             peep_opt: self,
             instr_set,
-            left_hand_sides: vec![],
             right_hand_sides: vec![],
             actions: vec![],
             backtracking_states: vec![],
