@@ -1,0 +1,81 @@
+test peepmatic
+target x86_64
+
+function %icmp_to_brz_fold(i32) -> i32 {
+block0(v0: i32):
+    v1 = icmp_imm eq v0, 0
+    brnz v1, block1
+    jump block2
+block1:
+    v3 = iconst.i32 1
+    return v3
+block2:
+    v4 = iconst.i32 2
+    return v4
+}
+; sameln: function %icmp_to_brz_fold
+; nextln: block0(v0: i32):
+; nextln:     v1 = icmp_imm eq v0, 0
+; nextln:     brnz v0, block2
+; nextln:     jump block1
+; nextln: 
+; nextln: block1:
+; nextln:     v3 = iconst.i32 1
+; nextln:     return v3
+; nextln: 
+; nextln: block2:
+; nextln:     v4 = iconst.i32 2
+; nextln:     return v4
+; nextln: }
+
+function %icmp_to_brz_inverted_fold(i32) -> i32 {
+block0(v0: i32):
+    v1 = icmp_imm ne v0, 0
+    brz v1, block1
+    jump block2
+block1:
+    v3 = iconst.i32 1
+    return v3
+block2:
+    v4 = iconst.i32 2
+    return v4
+}
+; sameln: function %icmp_to_brz_inve
+; nextln: block0(v0: i32):
+; nextln:     v1 = icmp_imm ne v0, 0
+; nextln:     brnz v0, block2
+; nextln:     jump block1
+; nextln: 
+; nextln: block1:
+; nextln:     v3 = iconst.i32 1
+; nextln:     return v3
+; nextln: 
+; nextln: block2:
+; nextln:     v4 = iconst.i32 2
+; nextln:     return v4
+; nextln: }
+
+function %br_icmp_inversion(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    br_icmp ugt v0, v1, block1
+    jump block2
+block1:
+    v2 = iconst.i32 1
+    return v2
+block2:
+    v3 = iconst.i32 2
+    return v3
+}
+; sameln: function %br_icmp_inversio
+; nextln: block0(v0: i32, v1: i32):
+; nextln:     br_icmp ule v0, v1, block2
+; nextln:     jump block1
+; nextln: 
+; nextln: block1:
+; nextln:     v2 = iconst.i32 1
+; nextln:     return v2
+; nextln: 
+; nextln: block2:
+; nextln:     v3 = iconst.i32 2
+; nextln:     return v3
+; nextln: }

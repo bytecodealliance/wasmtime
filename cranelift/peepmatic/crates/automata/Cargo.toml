@@ -1,0 +1,18 @@
+[package]
+name = "peepmatic-automata"
+version = "0.1.0"
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+edition = "2018"
+
+[package.metadata.docs.rs]
+all-features = true
+
+[dependencies]
+serde = { version = "1.0.106", optional = true }
+
+[features]
+# Enable support for generating GraphViz Dot files that can be used to visually
+# render an automaton.
+#
+# https://en.wikipedia.org/wiki/DOT_%28graph_description_language%29
+dot = []

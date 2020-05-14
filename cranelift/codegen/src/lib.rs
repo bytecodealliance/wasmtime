@@ -115,6 +115,9 @@ mod topo_order;
 mod unreachable_code;
 mod value_label;
 
+#[cfg(feature = "enable-peepmatic")]
+mod peepmatic;
+
 pub use crate::result::{CodegenError, CodegenResult};
 
 /// Version number of this crate.

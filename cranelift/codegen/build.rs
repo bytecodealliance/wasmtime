@@ -71,4 +71,22 @@ fn main() {
         );
         println!("cargo:warning=Generated files are in {}", out_dir);
     }
+
+    #[cfg(feature = "rebuild-peephole-optimizers")]
+    rebuild_peephole_optimizers();
+}
+
+#[cfg(feature = "rebuild-peephole-optimizers")]
+fn rebuild_peephole_optimizers() {
+    use std::path::Path;
+
+    let source_path = Path::new("src").join("preopt.peepmatic");
+    println!("cargo:rerun-if-changed={}", source_path.display());
+
+    let preopt =
+        peepmatic::compile_file(&source_path).expect("failed to compile `src/preopt.peepmatic`");
+
+    preopt
+        .serialize_to_file(&Path::new("src").join("preopt.serialized"))
+        .expect("failed to serialize peephole optimizer to `src/preopt.serialized`");
 }

@@ -1,0 +1,22 @@
+test simple_preopt
+target x86_64
+
+function u0:2(i64 , i64) {
+    gv1 = load.i64 notrap aligned gv0
+    heap0 = static gv1
+    block0(v0: i64, v1: i64):
+        v16 = iconst.i32 6
+        v17 = heap_addr.i64 heap0, v16, 1
+        v18 = load.i32 v17
+        v19 = iconst.i32 4
+        v20 = icmp ne v18, v19
+        v21 = bint.i32 v20
+        brnz v21, block2
+        jump block4
+    block4:
+        jump block1
+    block2:
+        jump block1
+    block1:
+        return
+}

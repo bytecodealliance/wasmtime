@@ -1,0 +1,22 @@
+test simple_preopt
+target x86_64
+
+;; Test that although v5 can be replaced with v1, we don't transplant `load.i32
+;; v0` on top of `iadd v3, v4`, because that would move the load past other uses
+;; of its result.
+
+function %foo(i64) -> i32 {
+block0(v0: i64):
+    v1 = load.i32 v0
+    v2 = iconst.i32 16
+    v3 = iadd_imm v1, -16
+    v4 = iconst.i32 16
+    v5 = iadd v3, v4
+    ; check:  v1 = load.i32 v0
+    ; nextln: v5 -> v1
+    ; nextln: v2 = iconst.i32 16
+    ; nextln: v3 = iadd_imm v1, -16
+    ; nextln: v4 = iconst.i32 16
+    ; nextln: nop
+    return v5
+}

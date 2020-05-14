@@ -1,0 +1,13 @@
+;; Remove redundant bitwise OR instructions that are no-ops.
+
+(=> (bor $x (bor $x $y))
+    (bor $x $y))
+
+(=> (bor $y (bor $x $y))
+    (bor $x $y))
+
+(=> (bor (bor $x $y) $x)
+    (bor $x $y))
+
+(=> (bor (bor $x $y) $y)
+    (bor $x $y))
