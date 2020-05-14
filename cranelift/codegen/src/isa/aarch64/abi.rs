@@ -68,6 +68,7 @@ use crate::isa::aarch64::{self, inst::*};
 use crate::machinst::*;
 use crate::settings;
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use regalloc::{RealReg, Reg, RegClass, Set, SpillSlot, Writable};
@@ -1275,9 +1276,9 @@ impl ABICall for AArch64ABICall {
         );
         match &self.dest {
             &CallDest::ExtName(ref name, RelocDistance::Near) => ctx.emit(Inst::Call {
-                dest: name.clone(),
-                uses,
-                defs,
+                dest: Box::new(name.clone()),
+                uses: Box::new(uses),
+                defs: Box::new(defs),
                 loc: self.loc,
                 opcode: self.opcode,
             }),
@@ -1290,16 +1291,16 @@ impl ABICall for AArch64ABICall {
                 });
                 ctx.emit(Inst::CallInd {
                     rn: spilltmp_reg(),
-                    uses,
-                    defs,
+                    uses: Box::new(uses),
+                    defs: Box::new(defs),
                     loc: self.loc,
                     opcode: self.opcode,
                 });
             }
             &CallDest::Reg(reg) => ctx.emit(Inst::CallInd {
                 rn: reg,
-                uses,
-                defs,
+                uses: Box::new(uses),
+                defs: Box::new(defs),
                 loc: self.loc,
                 opcode: self.opcode,
             }),

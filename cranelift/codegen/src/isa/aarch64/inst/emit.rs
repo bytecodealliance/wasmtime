@@ -1303,7 +1303,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 };
                 inst.emit(sink, flags, state);
                 // Emit jump table (table of 32-bit offsets).
-                for target in targets {
+                for target in targets.iter() {
                     let off = target.as_offset_words() * 4;
                     let off = i32::try_from(off).unwrap();
                     // cast i32 to u32 (two's-complement)
