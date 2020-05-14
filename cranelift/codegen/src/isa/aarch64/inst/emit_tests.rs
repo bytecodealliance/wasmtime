@@ -3,6 +3,7 @@ use crate::isa::aarch64::inst::*;
 use crate::isa::test_utils;
 use crate::settings;
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 #[test]
@@ -2112,9 +2113,9 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::Call {
-            dest: ExternalName::testcase("test0"),
-            uses: Set::empty(),
-            defs: Set::empty(),
+            dest: Box::new(ExternalName::testcase("test0")),
+            uses: Box::new(Set::empty()),
+            defs: Box::new(Set::empty()),
             loc: SourceLoc::default(),
             opcode: Opcode::Call,
         },
@@ -2125,8 +2126,8 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::CallInd {
             rn: xreg(10),
-            uses: Set::empty(),
-            defs: Set::empty(),
+            uses: Box::new(Set::empty()),
+            defs: Box::new(Set::empty()),
             loc: SourceLoc::default(),
             opcode: Opcode::CallIndirect,
         },

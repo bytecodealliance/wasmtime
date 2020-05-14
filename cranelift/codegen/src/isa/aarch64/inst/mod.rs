@@ -12,6 +12,7 @@ use crate::{settings, CodegenError, CodegenResult};
 use regalloc::{RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
 use regalloc::{RegUsageCollector, RegUsageMapper, Set};
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use smallvec::{smallvec, SmallVec};
 use std::string::{String, ToString};
@@ -616,17 +617,17 @@ pub enum Inst {
     /// code should use a `LoadExtName` / `CallInd` sequence instead, allowing an arbitrary 64-bit
     /// target.
     Call {
-        dest: ExternalName,
-        uses: Set<Reg>,
-        defs: Set<Writable<Reg>>,
+        dest: Box<ExternalName>,
+        uses: Box<Set<Reg>>,
+        defs: Box<Set<Writable<Reg>>>,
         loc: SourceLoc,
         opcode: Opcode,
     },
     /// A machine indirect-call instruction.
     CallInd {
         rn: Reg,
-        uses: Set<Reg>,
-        defs: Set<Writable<Reg>>,
+        uses: Box<Set<Reg>>,
+        defs: Box<Set<Writable<Reg>>>,
         loc: SourceLoc,
         opcode: Opcode,
     },
@@ -704,8 +705,8 @@ pub enum Inst {
     /// Jump-table sequence, as one compound instruction (see note in lower.rs
     /// for rationale).
     JTSequence {
-        targets: Vec<BranchTarget>,
-        targets_for_term: Vec<BlockIndex>, // needed for MachTerminator.
+        targets: Box<[BranchTarget]>,
+        targets_for_term: Box<[BlockIndex]>, // needed for MachTerminator.
         ridx: Reg,
         rtmp1: Writable<Reg>,
         rtmp2: Writable<Reg>,
@@ -758,6 +759,13 @@ fn count_zero_half_words(mut value: u64) -> usize {
     }
 
     count
+}
+
+#[test]
+fn inst_size_test() {
+    // This test will help with unintentionally growing the size
+    // of the Inst enum.
+    assert_eq!(48, std::mem::size_of::<Inst>());
 }
 
 impl Inst {
@@ -1090,8 +1098,8 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::Call {
             ref uses, ref defs, ..
         } => {
-            collector.add_uses(uses);
-            collector.add_defs(defs);
+            collector.add_uses(&*uses);
+            collector.add_defs(&*defs);
         }
         &Inst::CallInd {
             ref uses,
@@ -1099,8 +1107,8 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             rn,
             ..
         } => {
-            collector.add_uses(uses);
-            collector.add_defs(defs);
+            collector.add_uses(&*uses);
+            collector.add_defs(&*defs);
             collector.add_use(rn);
         }
         &Inst::CondBr { ref kind, .. }
@@ -1643,8 +1651,8 @@ fn aarch64_map_regs(inst: &mut Inst, mapper: &RegUsageMapper) {
                 map_def(mapper, &mut r);
                 r
             });
-            *uses = new_uses;
-            *defs = new_defs;
+            *uses = Box::new(new_uses);
+            *defs = Box::new(new_defs);
         }
         &mut Inst::Ret | &mut Inst::EpiloguePlaceholder => {}
         &mut Inst::CallInd {
@@ -1664,8 +1672,8 @@ fn aarch64_map_regs(inst: &mut Inst, mapper: &RegUsageMapper) {
                 map_def(mapper, &mut r);
                 r
             });
-            *uses = new_uses;
-            *defs = new_defs;
+            *uses = Box::new(new_uses);
+            *defs = Box::new(new_defs);
             map_use(mapper, rn);
         }
         &mut Inst::CondBr { ref mut kind, .. } => {
@@ -1895,7 +1903,7 @@ impl MachInst for Inst {
             &mut Inst::JTSequence {
                 targets: ref mut t, ..
             } => {
-                for target in t {
+                for target in t.iter_mut() {
                     // offset+20: jumptable is 20 bytes into compound sequence.
                     target.lower(targets, my_offset + 20);
                 }

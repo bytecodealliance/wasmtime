@@ -2132,8 +2132,8 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     ridx,
                     rtmp1,
                     rtmp2,
-                    targets: jt_targets,
-                    targets_for_term,
+                    targets: jt_targets.into_boxed_slice(),
+                    targets_for_term: targets_for_term.into_boxed_slice(),
                 });
             }
 
