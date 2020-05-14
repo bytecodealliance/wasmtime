@@ -27,7 +27,6 @@ where
 {
     pub(crate) peep_opt: &'peep PeepholeOptimizations,
     pub(crate) instr_set: I,
-    pub(crate) left_hand_sides: Vec<Part<I::Instruction>>,
     pub(crate) right_hand_sides: Vec<Part<I::Instruction>>,
     pub(crate) actions: Vec<Action>,
     pub(crate) backtracking_states: Vec<(State, usize)>,
@@ -41,7 +40,6 @@ where
         let PeepholeOptimizer {
             peep_opt,
             instr_set: _,
-            left_hand_sides,
             right_hand_sides,
             actions,
             backtracking_states,
@@ -49,7 +47,6 @@ where
         f.debug_struct("PeepholeOptimizer")
             .field("peep_opt", peep_opt)
             .field("instr_set", &"_")
-            .field("left_hand_sides", left_hand_sides)
             .field("right_hand_sides", right_hand_sides)
             .field("actions", actions)
             .field("backtracking_states", backtracking_states)
@@ -485,7 +482,6 @@ where
 
         self.backtracking_states.clear();
         self.actions.clear();
-        self.left_hand_sides.clear();
         self.right_hand_sides.clear();
 
         let mut r#final = None;
