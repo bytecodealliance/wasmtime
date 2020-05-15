@@ -70,6 +70,8 @@ pub fn instantiate(
         bin_name,
     ))?;
 
+    // If `module` is a command, `Instance::new_wasi_abi` will run it and
+    // return `None`. If we get `Some`, it means `module` wasn't a command.
     if instance.is_some() {
         bail!("expected module to be a command with a \"_start\" function")
     }

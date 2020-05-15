@@ -15,7 +15,7 @@ fn main() -> Result<()> {
     // or environment variables.
     let mut linker = wasi_linker(&store, &[], &[], &[])?;
 
-    // Instanciate and run our module with the imports we've created.
+    // Instantiate and run our module with the imports we've created.
     let _instance = linker.instantiate_wasi_abi(&module)?;
 
     Ok(())

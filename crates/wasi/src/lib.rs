@@ -41,6 +41,7 @@ pub fn wasi_linker(
 ) -> Result<Linker> {
     let mut linker = Linker::new(store);
 
+    // Add the current snapshot to the linker.
     let mut cx = WasiCtxBuilder::new();
     cx.inherit_stdio().args(argv).envs(vars);
 
@@ -52,6 +53,7 @@ pub fn wasi_linker(
     let wasi = Wasi::new(linker.store(), cx);
     wasi.add_to_linker(&mut linker)?;
 
+    // Repeat the above, but this time for snapshot 0.
     let mut cx = old::snapshot_0::WasiCtxBuilder::new();
     cx.inherit_stdio().args(argv).envs(vars);
 
