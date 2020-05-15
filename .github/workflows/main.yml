@@ -5,6 +5,9 @@ on:
     tags-ignore: [dev]
   pull_request:
     branches: [master]
+defaults:
+  run:
+    shell: bash
 
 jobs:
   # Check Code style quickly by running `rustfmt` over all code
@@ -131,36 +134,31 @@ jobs:
     # our fuzzers over the sampled inputs still works OK.
     - run: |
         find fuzz/corpus/compile -type f \
-            | shuf \
-            | head -n 3000 \
+            | shuf -n 3000 \
             | xargs cargo fuzz run compile --release --debug-assertions --features binaryen
       env:
         RUST_BACKTRACE: 1
     - run: |
         find fuzz/corpus/instantiate -type f \
-            | shuf \
-            | head -n 2000 \
+            | shuf -n 2000 \
             | xargs cargo fuzz run instantiate --release --debug-assertions --features binaryen
       env:
         RUST_BACKTRACE: 1
     - run: |
         find fuzz/corpus/instantiate_translated -type f \
-            | shuf \
-            | head -n 1000 \
+            | shuf -n 1000 \
             | xargs cargo fuzz run instantiate_translated --release --debug-assertions --features binaryen
       env:
         RUST_BACKTRACE: 1
     - run: |
         find fuzz/corpus/api_calls -type f \
-            | shuf \
-            | head -n 100 \
+            | shuf -n 100 \
             | xargs cargo fuzz run api_calls --release --debug-assertions --features binaryen
       env:
         RUST_BACKTRACE: 1
     - run: |
         find fuzz/corpus/differential -type f \
-            | shuf \
-            | head -n 100 \
+            | shuf -n 100 \
             | xargs cargo fuzz run differential --release --debug-assertions --features binaryen
       env:
         RUST_BACKTRACE: 1
@@ -255,15 +253,15 @@ jobs:
       # Note: libclang is pre-installed on the macOS and linux images.
       if: matrix.os == 'windows-latest'
       run: |
-        Invoke-WebRequest https://releases.llvm.org/9.0.0/LLVM-9.0.0-win64.exe -OutFile llvm-installer.exe
-        7z x llvm-installer.exe -oC:\llvm-binary
-        Write-Host ::set-env name=LIBCLANG_PATH::C:\llvm-binary\bin\libclang.dll
-        Write-Host ::add-path::C:\llvm-binary\bin
+        curl https://releases.llvm.org/9.0.0/LLVM-9.0.0-win64.exe -OutFile llvm-installer.exe
+        7z x llvm-installer.exe -o./llvm-binary
+        echo ::set-env name=LIBCLANG_PATH::`pwd`/bin/libclang.dll
+        echo ::add-path::`pwd`/llvm-binary/bin
 
     - name: Query Clang Version
       if: matrix.os == 'windows-latest'
       run: |
-        Get-Command clang.exe
+        where clang.exe
         clang.exe --version
 
     # Install wasm32 targets in order to build various tests throughout the
@@ -355,7 +353,6 @@ jobs:
       run: |
         echo ::set-env name=CARGO_BUILD_TARGET::${{ matrix.target }}
         rustup target add ${{ matrix.target }}
-      shell: bash
       if: matrix.target != ''
 
     - name: Install cross-compilation tools
@@ -386,11 +383,9 @@ jobs:
 
     # Build `wasmtime` and executables
     - run: $CENTOS cargo build --release --bin wasmtime
-      shell: bash
 
     # Build `libwasmtime.so`
     - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
-      shell: bash
 
     # Test what we just built.
     #
@@ -410,7 +405,6 @@ jobs:
             --exclude peepmatic-runtime \
             --exclude peepmatic-test \
             --exclude wasmtime-fuzz
-      shell: bash
       env:
         RUST_BACKTRACE: 1
 
@@ -424,7 +418,6 @@ jobs:
     # something that we'll upload from this action.
 
     - run: mkdir dist
-      shell: bash
 
     # Move binaries to dist folder
     - run: cp target/release/wasmtime dist
@@ -432,10 +425,8 @@ jobs:
     - run: cp target/${{ matrix.target }}/release/wasmtime dist
       if: matrix.os != 'windows-latest' && matrix.target != ''
     - run: cp target/release/wasmtime.exe dist
-      shell: bash
       if: matrix.build == 'x86_64-windows'
     - run: cp target/x86_64-pc-windows-gnu/release/wasmtime.exe dist
-      shell: bash
       if: matrix.build == 'x86_64-mingw'
 
     # Move libwasmtime dylib to dist folder
@@ -446,10 +437,8 @@ jobs:
     - run: cp target/release/libwasmtime.{dylib,a} dist
       if: matrix.os == 'macos-latest'
     - run: cp target/release/wasmtime.{dll,lib,dll.lib} dist
-      shell: bash
       if: matrix.build == 'x86_64-windows'
     - run: cp target/x86_64-pc-windows-gnu/release/{wasmtime.dll,libwasmtime.a} dist
-      shell: bash
       if: matrix.build == 'x86_64-mingw'
 
     # Make a Windows MSI installer if we're on Windows
@@ -458,7 +447,6 @@ jobs:
         "$WIX/bin/candle" -arch x64 -out target/wasmtime.wixobj ci/wasmtime.wxs
         "$WIX/bin/light" -out dist/installer.msi target/wasmtime.wixobj -ext WixUtilExtension
         rm dist/installer.wixpdb
-      shell: bash
       if: matrix.build == 'x86_64-windows'
 
     - uses: actions/upload-artifact@v1
