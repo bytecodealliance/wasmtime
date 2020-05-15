@@ -61,7 +61,9 @@ wasm_trap_t* closure_callback(
 int main(int argc, const char* argv[]) {
   // Initialize.
   printf("Initializing...\n");
-  wasm_engine_t* engine = wasm_engine_new();
+  wasm_config_t* config = wasm_config_new();
+  wasmtime_config_wasm_multi_value_set(config, 1);
+  wasm_engine_t* engine = wasm_engine_new_with_config(config);
   wasm_store_t* store = wasm_store_new(engine);
 
   // Load our input file to parse it next
