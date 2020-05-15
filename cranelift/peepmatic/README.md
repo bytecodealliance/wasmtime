@@ -321,7 +321,7 @@ optimizations.
 We walk the AST and gather type constraints. Every constraint is associated with
 a span in the source file. We hand these constraints off to Z3. In the case that
 there are type errors (i.e. Z3 returns `unsat`), we get the constraints that are
-in conflict with each othe via `z3::Solver::get_unsat_core` and report the type
+in conflict with each other via `z3::Solver::get_unsat_core` and report the type
 errors to the user, with the source context, thanks to the constraints'
 associated spans.
 
