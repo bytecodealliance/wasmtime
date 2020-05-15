@@ -16,7 +16,7 @@ fn test_trap_return() -> Result<()> {
     let hello_type = FuncType::new(Box::new([]), Box::new([]));
     let hello_func = Func::new(&store, hello_type, |_, _, _| Err(Trap::new("test 123")));
 
-    let instance = Instance::new(&module, &[hello_func.into()])?;
+    let instance = Instance::new(&module, &[hello_func.into()])?.init_reactor(&[])?;
     let run_func = instance.get_func("run").expect("expected function export");
 
     let e = run_func
@@ -42,7 +42,7 @@ fn test_trap_trace() -> Result<()> {
     "#;
 
     let module = Module::new(&store, wat)?;
-    let instance = Instance::new(&module, &[])?;
+    let instance = Instance::new(&module, &[])?.init_reactor(&[])?;
     let run_func = instance.get_func("run").expect("expected function export");
 
     let e = run_func
@@ -88,7 +88,7 @@ fn test_trap_trace_cb() -> Result<()> {
     let fn_func = Func::new(&store, fn_type, |_, _, _| Err(Trap::new("cb throw")));
 
     let module = Module::new(&store, wat)?;
-    let instance = Instance::new(&module, &[fn_func.into()])?;
+    let instance = Instance::new(&module, &[fn_func.into()])?.init_reactor(&[])?;
     let run_func = instance.get_func("run").expect("expected function export");
 
     let e = run_func
@@ -119,7 +119,7 @@ fn test_trap_stack_overflow() -> Result<()> {
     "#;
 
     let module = Module::new(&store, wat)?;
-    let instance = Instance::new(&module, &[])?;
+    let instance = Instance::new(&module, &[])?.init_reactor(&[])?;
     let run_func = instance.get_func("run").expect("expected function export");
 
     let e = run_func
@@ -154,7 +154,7 @@ fn trap_display_pretty() -> Result<()> {
     "#;
 
     let module = Module::new(&store, wat)?;
-    let instance = Instance::new(&module, &[])?;
+    let instance = Instance::new(&module, &[])?.init_reactor(&[])?;
     let run_func = instance.get_func("bar").expect("expected function export");
 
     let e = run_func.call(&[]).err().expect("error calling function");
@@ -186,7 +186,7 @@ fn trap_display_multi_module() -> Result<()> {
     "#;
 
     let module = Module::new(&store, wat)?;
-    let instance = Instance::new(&module, &[])?;
+    let instance = Instance::new(&module, &[])?.init_reactor(&[])?;
     let bar = instance.get_export("bar").unwrap();
 
     let wat = r#"
@@ -197,7 +197,7 @@ fn trap_display_multi_module() -> Result<()> {
         )
     "#;
     let module = Module::new(&store, wat)?;
-    let instance = Instance::new(&module, &[bar])?;
+    let instance = Instance::new(&module, &[bar])?.init_reactor(&[])?;
     let bar2 = instance.get_func("bar2").expect("expected function export");
 
     let e = bar2.call(&[]).err().expect("error calling function");
@@ -233,7 +233,10 @@ fn trap_start_function_import() -> Result<()> {
     let module = Module::new(&store, &binary)?;
     let sig = FuncType::new(Box::new([]), Box::new([]));
     let func = Func::new(&store, sig, |_, _, _| Err(Trap::new("user trap")));
-    let err = Instance::new(&module, &[func.into()]).err().unwrap();
+    let err = Instance::new(&module, &[func.into()])
+        .and_then(|new_instance| new_instance.init_reactor(&[]))
+        .err()
+        .unwrap();
     assert_eq!(err.downcast_ref::<Trap>().unwrap().message(), "user trap");
     Ok(())
 }
@@ -262,7 +265,8 @@ fn rust_panic_import() -> Result<()> {
             func.into(),
             Func::wrap(&store, || panic!("this is another panic")).into(),
         ],
-    )?;
+    )?
+    .init_reactor(&[])?;
     let func = instance.get_func("foo").unwrap();
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
         drop(func.call(&[]));
@@ -299,14 +303,20 @@ fn rust_panic_start_function() -> Result<()> {
     let sig = FuncType::new(Box::new([]), Box::new([]));
     let func = Func::new(&store, sig, |_, _, _| panic!("this is a panic"));
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
-        drop(Instance::new(&module, &[func.into()]));
+        drop(
+            Instance::new(&module, &[func.into()])
+                .and_then(|new_instance| new_instance.init_reactor(&[])),
+        );
     }))
     .unwrap_err();
     assert_eq!(err.downcast_ref::<&'static str>(), Some(&"this is a panic"));
 
     let func = Func::wrap(&store, || panic!("this is another panic"));
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
-        drop(Instance::new(&module, &[func.into()]));
+        drop(
+            Instance::new(&module, &[func.into()])
+                .and_then(|new_instance| new_instance.init_reactor(&[])),
+        );
     }))
     .unwrap_err();
     assert_eq!(
@@ -329,7 +339,7 @@ fn mismatched_arguments() -> Result<()> {
     )?;
 
     let module = Module::new(&store, &binary)?;
-    let instance = Instance::new(&module, &[])?;
+    let instance = Instance::new(&module, &[])?.init_reactor(&[])?;
     let func = instance.get_func("foo").unwrap();
     assert_eq!(
         func.call(&[]).unwrap_err().to_string(),
@@ -369,6 +379,7 @@ fn call_signature_mismatch() -> Result<()> {
 
     let module = Module::new(&store, &binary)?;
     let err = Instance::new(&module, &[])
+        .and_then(|new_instance| new_instance.init_reactor(&[]))
         .err()
         .unwrap()
         .downcast::<Trap>()
@@ -392,10 +403,11 @@ fn start_trap_pretty() -> Result<()> {
     "#;
 
     let module = Module::new(&store, wat)?;
-    let e = match Instance::new(&module, &[]) {
-        Ok(_) => panic!("expected failure"),
-        Err(e) => e.downcast::<Trap>()?,
-    };
+    let e =
+        match Instance::new(&module, &[]).and_then(|new_instance| new_instance.init_reactor(&[])) {
+            Ok(_) => panic!("expected failure"),
+            Err(e) => e.downcast::<Trap>()?,
+        };
 
     assert_eq!(
         e.to_string(),
@@ -415,7 +427,7 @@ wasm backtrace:
 fn present_after_module_drop() -> Result<()> {
     let store = Store::default();
     let module = Module::new(&store, r#"(func (export "foo") unreachable)"#)?;
-    let instance = Instance::new(&module, &[])?;
+    let instance = Instance::new(&module, &[])?.init_reactor(&[])?;
     let func = instance.get_func("foo").unwrap();
 
     println!("asserting before we drop modules");

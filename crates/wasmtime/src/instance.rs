@@ -1,5 +1,5 @@
 use crate::trampoline::StoreInstanceHandle;
-use crate::{Export, Extern, Func, Global, Memory, Module, Store, Table, Trap};
+use crate::{Export, Extern, Func, Global, Memory, Module, Store, Table, Trap, Val};
 use anyhow::{bail, Error, Result};
 use std::any::Any;
 use std::mem;
@@ -56,22 +56,6 @@ fn instantiate(
                 }
             })?;
 
-        // If a start function is present, now that we've got our compiled
-        // instance we can invoke it. Make sure we use all the trap-handling
-        // configuration in `store` as well.
-        if let Some(start) = instance.module().start_func {
-            let f = match instance.lookup_by_declaration(&EntityIndex::Function(start)) {
-                wasmtime_runtime::Export::Function(f) => f,
-                _ => unreachable!(), // valid modules shouldn't hit this
-            };
-            super::func::catch_traps(instance.vmctx_ptr(), store, || {
-                mem::transmute::<
-                    *const VMFunctionBody,
-                    unsafe extern "C" fn(*mut VMContext, *mut VMContext),
-                >(f.address)(f.vmctx, instance.vmctx_ptr())
-            })?;
-        }
-
         Ok(instance)
     }
 }
@@ -100,54 +84,6 @@ pub struct Instance {
 
 impl Instance {
     /// Creates a new [`Instance`] from the previously compiled [`Module`] and
-    /// list of `imports` specified, similar to `Instance::new`, and performs
-    /// [WASI ABI initialization]:
-    ///  - If the module is a command, the `_start` function is run and `None`
-    ///    is returned.
-    ///  - If the module is a reactor, the `_initialize` function is run and
-    ///    the initialized `Instance` is returned.
-    ///
-    /// [WASI ABI initialization]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
-    pub fn new_wasi_abi(module: &Module, imports: &[Extern]) -> Result<Option<Instance>, Error> {
-        let instance = Instance::new(module, imports)?;
-
-        // Invoke the WASI start function of the instance, if one is present.
-        let command_start = instance.get_export("_start");
-        let reactor_start = instance.get_export("_initialize");
-        match (command_start, reactor_start) {
-            (Some(command_start), None) => {
-                if let Some(func) = command_start.into_func() {
-                    func.get0::<()>()?()?;
-
-                    // For commands, we consume the instance after running the program.
-                    Ok(None)
-                } else {
-                    bail!("_start must be a function".to_owned())
-                }
-            }
-            (None, Some(reactor_start)) => {
-                if let Some(func) = reactor_start.into_func() {
-                    func.get0::<()>()?()?;
-
-                    // For reactors, we return the instance after running the initialization.
-                    Ok(Some(instance))
-                } else {
-                    bail!("_initialize must be a function".to_owned())
-                }
-            }
-            (None, None) => {
-                // Treat modules which don't declare themselves as commands or reactors as
-                // reactors which have no initialization to do.
-                Ok(Some(instance))
-            }
-            (Some(_), Some(_)) => {
-                // Module declares to be both a command and a reactor.
-                bail!("Program cannot be both a command and a reactor".to_owned())
-            }
-        }
-    }
-
-    /// Creates a new [`Instance`] from the previously compiled [`Module`] and
     /// list of `imports` specified.
     ///
     /// This method instantiates the `module` provided with the `imports`,
@@ -157,9 +93,11 @@ impl Instance {
     /// automatically run (if provided) and then the [`Instance`] will be
     /// returned.
     ///
-    /// Note that this function does not perform `WASI` ABI initialization
-    /// (eg. it does not run the `_start` or `_initialize` functions). To
-    /// perform them, use `new_wasi_abi` instead.
+    /// This method returns a `NewInstance`, which is an instance which has
+    /// been created, however it has not yet been initialized -- wasm and WASI
+    /// initialization functions that it may have have not been run yet. Use
+    /// the methods on `NewInstance` to run the initialization and return the
+    /// actual `Instance`.
     ///
     /// ## Providing Imports
     ///
@@ -195,7 +133,7 @@ impl Instance {
     /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     /// [`ExternType`]: crate::ExternType
-    pub fn new(module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
+    pub fn new(module: &Module, imports: &[Extern]) -> Result<NewInstance, Error> {
         let store = module.store();
 
         // For now we have a restriction that the `Store` that we're working
@@ -223,9 +161,11 @@ impl Instance {
             Box::new(info),
         )?;
 
-        Ok(Instance {
-            handle,
-            module: module.clone(),
+        Ok(NewInstance {
+            instance: Instance {
+                handle,
+                module: module.clone(),
+            },
         })
     }
 
@@ -290,4 +230,183 @@ impl Instance {
     pub fn get_global(&self, name: &str) -> Option<Global> {
         self.get_export(name)?.into_global()
     }
+}
+
+/// A newly created instance which has not yet been initialized. These are
+/// returned by `Instance::new`. Its methods consume the `NewInstance`,
+/// perform initialization, and return the `Instance`.
+pub struct NewInstance {
+    instance: Instance,
+}
+
+impl NewInstance {
+    /// Run the instance's wasm start function (and not WASI ABI initialization).
+    ///
+    /// This is public as it's used by the C API, which doesn't expose the `NewInstance`
+    /// type and needs a way to internally run initialization on a plain `Instance`.
+    #[doc(hidden)]
+    pub fn minimal_init(self) -> Result<Instance> {
+        let start_func = self.instance.handle.module().start_func;
+        let instance = self.instance;
+        let store = instance.store();
+
+        // If a start function is present, invoke it. Make sure we use all the
+        // trap-handling configuration in `store` as well.
+        if let Some(start) = start_func {
+            let f = match instance
+                .handle
+                .lookup_by_declaration(&EntityIndex::Function(start))
+            {
+                wasmtime_runtime::Export::Function(f) => f,
+                _ => unreachable!(), // valid modules shouldn't hit this
+            };
+            let vmctx_ptr = instance.handle.vmctx_ptr();
+            unsafe {
+                super::func::catch_traps(vmctx_ptr, store, || {
+                    mem::transmute::<
+                        *const VMFunctionBody,
+                        unsafe extern "C" fn(*mut VMContext, *mut VMContext),
+                    >(f.address)(f.vmctx, vmctx_ptr)
+                })?;
+            }
+        }
+
+        Ok(instance)
+    }
+
+    /// Run the instance's wasm start function and, if applicable, perform
+    /// [WASI ABI initialization]:
+    ///  - If the module is a command, the `_start` function is run and `None`
+    ///    is returned.
+    ///  - If the module is a reactor, the `_initialize` function is run and
+    ///    the initialized `Instance` is returned.
+    ///
+    /// If you know you're expecting to run a command or a reactor specifically,
+    /// you can use `run_command` or `init_reactor` instead, which offer a
+    /// more streamlined API.
+    ///
+    /// For now, `params` must be an empty slice, and the results will always be empty.
+    /// In the future, this will be extended to support arguments and return values.
+    ///
+    /// [WASI ABI initialization]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
+    pub fn start(self, params: &[Val]) -> Result<Started> {
+        let instance = self.minimal_init()?;
+
+        match wasi_abi_exec_model(instance)? {
+            ExecModel::Command(func) => Ok(Started::Command(run_command(func, params)?)),
+            ExecModel::Reactor((maybe_func, instance)) => Ok(Started::Reactor(init_reactor(
+                maybe_func, params, instance,
+            )?)),
+        }
+    }
+
+    /// Given a command instance, run it. If the instance is not a command,
+    /// return an error.
+    ///
+    /// A command is an instance which is expected to be called only once.
+    /// Accordingly, this function consumes the `Instance`.
+    pub fn run_command(self, params: &[Val]) -> Result<Box<[Val]>> {
+        let instance = self.minimal_init()?;
+
+        if let ExecModel::Command(func) = wasi_abi_exec_model(instance)? {
+            return run_command(func, params);
+        }
+
+        bail!("`run_command` called on module which is not a command");
+    }
+
+    /// Given a reactor instance, initialize it. If the instance is not a reactor,
+    /// return an error.
+    ///
+    /// A reactor is an instance which is expected to be called any number of
+    /// times. Accordingly, this function returns the initialized `Instance`
+    /// so that its exports can be called.
+    pub fn init_reactor(self, params: &[Val]) -> Result<Instance> {
+        let instance = self.minimal_init()?;
+
+        if let ExecModel::Reactor((maybe_func, instance)) = wasi_abi_exec_model(instance)? {
+            return init_reactor(maybe_func, params, instance);
+        }
+
+        bail!("`init_reactor` called on module which is not a reactor");
+    }
+}
+
+/// Modules can be interpreted either as commands (instance lifetime ends
+/// when the start function returns) or reactor (instance persists).
+enum ExecModel {
+    /// The instance is a command, and this is its start function. The
+    /// instance should be consumed.
+    Command(Func),
+
+    /// The instance is a reactor, and this is its initialization function,
+    /// along with the instance itself, which should persist.
+    Reactor((Option<Func>, Instance)),
+}
+
+/// Classify the given instance as either a command or reactor and return
+/// the information needed to initialize it.
+fn wasi_abi_exec_model(instance: Instance) -> Result<ExecModel> {
+    // Invoke the WASI start function of the instance, if one is present.
+    let command_start = instance.get_export("_start");
+    let reactor_start = instance.get_export("_initialize");
+    match (command_start, reactor_start) {
+        (Some(command_start), None) => {
+            if let Some(func) = command_start.into_func() {
+                Ok(ExecModel::Command(func))
+            } else {
+                bail!("_start must be a function")
+            }
+        }
+        (None, Some(reactor_start)) => {
+            if let Some(func) = reactor_start.into_func() {
+                Ok(ExecModel::Reactor((Some(func), instance)))
+            } else {
+                bail!("_initialize must be a function")
+            }
+        }
+        (None, None) => {
+            // Module declares neither of the recognized functions, so treat
+            // it as a reactor with no initialization function.
+            Ok(ExecModel::Reactor((None, instance)))
+        }
+        (Some(_), Some(_)) => {
+            // Module declares itself to be both a command and a reactor.
+            bail!("Program cannot be both a command and a reactor")
+        }
+    }
+}
+
+/// The result of running WASI ABI initialization on a wasm module.
+pub enum Started {
+    /// The module was a command; the instance was consumed and this `Started`
+    /// holds the return values.
+    Command(Box<[Val]>),
+
+    /// The module was a reactor; this `Started` holds the instance.
+    Reactor(Instance),
+}
+
+/// Utility for running commands.
+fn run_command(func: Func, params: &[Val]) -> Result<Box<[Val]>> {
+    if !params.is_empty() {
+        bail!("passing arguments to a WASI-ABI command is not supported yet");
+    }
+
+    func.get0::<()>()?()?;
+
+    return Ok(Vec::new().into_boxed_slice());
+}
+
+/// Utility for initializing reactors.
+fn init_reactor(maybe_func: Option<Func>, params: &[Val], instance: Instance) -> Result<Instance> {
+    if !params.is_empty() {
+        bail!("passing arguments to a WASI-ABI reactor is not supported yet");
+    }
+
+    if let Some(func) = maybe_func {
+        func.get0::<()>()?()?;
+    }
+
+    Ok(instance)
 }

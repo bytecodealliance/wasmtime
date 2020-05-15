@@ -91,7 +91,7 @@ mod tests {
         let engine = Engine::new(&Config::default());
         let store = Store::new(&engine);
         let module = Module::new(&store, WAT1)?;
-        let instance = Instance::new(&module, &[])?;
+        let instance = Instance::new(&module, &[])?.init_reactor(&[])?;
 
         let (base, length) = set_up_memory(&instance);
         unsafe {
@@ -154,7 +154,7 @@ mod tests {
 
         // Set up multiple instances
 
-        let instance1 = Instance::new(&module, &[])?;
+        let instance1 = Instance::new(&module, &[])?.init_reactor(&[])?;
         let instance1_handler_triggered = Rc::new(AtomicBool::new(false));
 
         unsafe {
@@ -196,7 +196,9 @@ mod tests {
             );
         }
 
-        let instance2 = Instance::new(&module, &[]).expect("failed to instantiate module");
+        let instance2 = Instance::new(&module, &[])
+            .and_then(|new_instance| new_instance.init_reactor(&[]))
+            .expect("failed to instantiate module");
         let instance2_handler_triggered = Rc::new(AtomicBool::new(false));
 
         unsafe {
@@ -245,7 +247,7 @@ mod tests {
 
         // instance1 which defines 'read'
         let module1 = Module::new(&store, WAT1)?;
-        let instance1 = Instance::new(&module1, &[])?;
+        let instance1 = Instance::new(&module1, &[])?.init_reactor(&[])?;
         let (base1, length1) = set_up_memory(&instance1);
         unsafe {
             store.set_signal_handler(move |signum, siginfo, _| {
@@ -259,7 +261,8 @@ mod tests {
 
         // instance2 which calls 'instance1.read'
         let module2 = Module::new(&store, WAT2)?;
-        let instance2 = Instance::new(&module2, &[instance1_read.into_extern()])?;
+        let instance2 =
+            Instance::new(&module2, &[instance1_read.into_extern()])?.init_reactor(&[])?;
         // since 'instance2.run' calls 'instance1.read' we need to set up the signal handler to handle
         // SIGSEGV originating from within the memory of instance1
         unsafe {

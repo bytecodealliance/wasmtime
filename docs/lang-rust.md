@@ -69,7 +69,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // After we have a compiled `Module` we can then instantiate it, creating
     // an `Instance` which we can actually poke at functions on.
-    let instance = Instance::new(&module, &[])?;
+    let instance = Instance::new(&module, &[])?.init_reactor(&[])?;
 
     // The `Instance` gives us access to various exported functions and items,
     // which we access here to pull out our `answer` exported function and
@@ -160,7 +160,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // When instantiating the module we now need to provide the imports to the
     // instantiation process. This is the second slice argument, where each
     // entry in the slice must line up with the imports in the module.
-    let instance = Instance::new(&module, &[log.into(), double.into()])?;
+    let instance = Instance::new(&module, &[log.into(), double.into()])?.init_reactor(&[])?;
 
     let run = instance
         .get_func("run")

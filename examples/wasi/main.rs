@@ -16,7 +16,7 @@ fn main() -> Result<()> {
     let linker = wasi_linker(&store, &[], &[], &[])?;
 
     // Instantiate and run our module with the imports we've created.
-    let _instance = linker.instantiate_wasi_abi(&module)?;
+    let _instance = linker.instantiate(&module)?.run_command(&[])?;
 
     Ok(())
 }

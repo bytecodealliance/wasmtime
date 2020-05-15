@@ -8,10 +8,10 @@ Unreleased
 
 ### Added
 
-* The [WASI commands and reactors ABI] is now supported. To use, create a
-  `Linker` instance with `wasmtime_wasi::wasi_linker`, and instantiate modules
-  with `Linker::instantiate_wasi_abi`. This will automatically run commands
-  and automatically initialize reactors.
+* The [WASI commands and reactors ABI] is now supported. `Instance::new` and
+  `Linker::instantiate` now return a `NewInstance`; to perform initialization
+  and obtain the `Instance`, call `.start`, `.run_command`, or
+  `.init_reactor` on it as needed.
 
 [WASI commands and reactors ABI]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
 

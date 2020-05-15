@@ -12,7 +12,7 @@ use std::{
 };
 use structopt::{clap::AppSettings, StructOpt};
 use wasi_common::preopen_dir;
-use wasmtime::{Engine, Instance, Linker, Module, Store, Trap, Val, ValType};
+use wasmtime::{Engine, Instance, Linker, Module, Started, Store, Trap, Val, ValType};
 use wasmtime_wasi::wasi_linker;
 
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
@@ -141,15 +141,15 @@ impl RunCommand {
         for (name, path) in self.preloads.iter() {
             // Read the wasm module binary either as `*.wat` or a raw binary
             let module = Module::from_file(linker.store(), path)?;
-            let instance = linker
-                .instantiate_wasi_abi(&module)
+            let started = linker
+                .instantiate(&module)
+                .and_then(|new_instance| new_instance.start(&[]))
                 .context(format!("failed to instantiate {:?}", path))?;
 
             // If it was a command, don't register it.
-            let instance = if let Some(instance) = instance {
-                instance
-            } else {
-                continue;
+            let instance = match started {
+                Started::Command(_) => continue,
+                Started::Reactor(instance) => instance,
             };
 
             linker.instance(name, &instance).with_context(|| {
@@ -257,16 +257,18 @@ impl RunCommand {
 
         // Read the wasm module binary either as `*.wat` or a raw binary
         let module = Module::from_file(linker.store(), &self.module)?;
-        let instance = linker
-            .instantiate_wasi_abi(&module)
+        let started = linker
+            .instantiate(&module)
+            .and_then(|new_instance| new_instance.start(&[]))
             .context(format!("failed to instantiate {:?}", self.module))?;
 
         // If a function to invoke was given, invoke it.
         if let Some(name) = self.invoke.as_ref() {
-            if let Some(instance) = instance {
-                self.invoke_export(instance, name)
-            } else {
-                bail!("Cannot invoke exports on a command after it has executed")
+            match started {
+                Started::Command(_) => {
+                    bail!("Cannot invoke exports on a command after it has executed")
+                }
+                Started::Reactor(instance) => self.invoke_export(instance, name),
             }
         } else {
             Ok(())

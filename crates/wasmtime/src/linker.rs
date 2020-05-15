@@ -1,5 +1,6 @@
 use crate::{
-    Extern, ExternType, Func, FuncType, GlobalType, ImportType, Instance, IntoFunc, Module, Store,
+    Extern, ExternType, Func, FuncType, GlobalType, ImportType, Instance, IntoFunc, Module,
+    NewInstance, Store,
 };
 use anyhow::{anyhow, bail, Result};
 use std::collections::hash_map::{Entry, HashMap};
@@ -243,7 +244,7 @@ impl Linker {
     /// // Instantiate a small instance...
     /// let wat = r#"(module (func (export "run") ))"#;
     /// let module = Module::new(&store, wat)?;
-    /// let instance = linker.instantiate(&module)?;
+    /// let instance = linker.instantiate(&module)?.init_reactor(&[])?;
     ///
     /// // ... and inform the linker that the name of this instance is
     /// // `instance1`. This defines the `instance1::run` name for our next
@@ -341,20 +342,6 @@ impl Linker {
         idx
     }
 
-    /// Attempts to instantiate the `module` provided, similar to
-    /// `Linker::instantiate`, and performs [WASI ABI initialization]:
-    ///  - If the module is a command, the `_start` function is run and `None`
-    ///    is returned.
-    ///  - If the module is a reactor, the `_initialize` function is run and
-    ///    the initialized `Instance` is returned.
-    ///
-    /// [WASI ABI initialization]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
-    pub fn instantiate_wasi_abi(&self, module: &Module) -> Result<Option<Instance>> {
-        let imports = self.compute_imports(module)?;
-
-        Instance::new_wasi_abi(module, &imports)
-    }
-
     /// Attempts to instantiate the `module` provided.
     ///
     /// This method will attempt to assemble a list of imports that correspond
@@ -366,6 +353,12 @@ impl Linker {
     /// have previously been defined. If it was previously defined with an
     /// incorrect signature or if it was not prevoiusly defined then an error
     /// will be returned because the import can not be satisfied.
+    ///
+    /// This method returns a `NewInstance`, which is an instance which has
+    /// been created, however it has not yet been initialized -- wasm and WASI
+    /// initialization functions that it may have have not been run yet. Use
+    /// the methods on `NewInstance` to run the initialization and return the
+    /// actual `Instance`.
     ///
     /// # Errors
     ///
@@ -388,11 +381,11 @@ impl Linker {
     ///     )
     /// "#;
     /// let module = Module::new(&store, wat)?;
-    /// linker.instantiate(&module)?;
+    /// linker.instantiate(&module)?.init_reactor(&[])?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn instantiate(&self, module: &Module) -> Result<Instance> {
+    pub fn instantiate(&self, module: &Module) -> Result<NewInstance> {
         let imports = self.compute_imports(module)?;
 
         Instance::new(module, &imports)

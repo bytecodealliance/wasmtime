@@ -69,7 +69,7 @@ fn use_after_drop() -> anyhow::Result<()> {
                 (global (export "foo") (mut i32) (i32.const 100)))
         "#,
     )?;
-    let instance = Instance::new(&module, &[])?;
+    let instance = Instance::new(&module, &[])?.init_reactor(&[])?;
     let g = instance.get_global("foo").unwrap();
     assert_eq!(g.get().i32(), Some(100));
     g.set(101.into())?;

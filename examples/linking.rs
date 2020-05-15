@@ -21,11 +21,11 @@ fn main() -> Result<()> {
 
     // Instantiate our first module which only uses WASI, then register that
     // instance with the linker since the next linking will use it.
-    let linking2 = linker.instantiate(&linking2)?;
+    let linking2 = linker.instantiate(&linking2)?.init_reactor(&[])?;
     linker.instance("linking2", &linking2)?;
 
     // And with that we can perform the final link and the execute the module.
-    let linking1 = linker.instantiate(&linking1)?;
+    let linking1 = linker.instantiate(&linking1)?.init_reactor(&[])?;
     let run = linking1.get_func("run").unwrap();
     let run = run.get0::<()>()?;
     run()?;

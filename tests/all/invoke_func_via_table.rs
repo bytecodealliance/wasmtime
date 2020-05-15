@@ -14,7 +14,9 @@ fn test_invoke_func_via_table() -> Result<()> {
       )
     "#;
     let module = Module::new(&store, wat).context("> Error compiling module!")?;
-    let instance = Instance::new(&module, &[]).context("> Error instantiating module!")?;
+    let instance = Instance::new(&module, &[])
+        .and_then(|new_instance| new_instance.init_reactor(&[]))
+        .context("> Error instantiating module!")?;
 
     let f = instance
         .get_table("table")

@@ -65,18 +65,19 @@ pub fn instantiate(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let instance = Instance::new_wasi_abi(&module, &imports).context(format!(
-        "error while instantiating Wasm module '{}'",
-        bin_name,
-    ))?;
-
-    // If `module` is a command, `Instance::new_wasi_abi` will run it and
-    // return `None`. If we get `Some`, it means `module` wasn't a command.
-    if instance.is_some() {
-        bail!("expected module to be a command with a \"_start\" function")
-    }
-
-    Ok(())
+    Instance::new(&module, &imports)
+        .and_then(|new_instance| new_instance.run_command(&[]))
+        .and_then(|results| {
+            if !results.is_empty() {
+                bail!("unexpected result values from command")
+            } else {
+                Ok(())
+            }
+        })
+        .context(format!(
+            "error while instantiating Wasm module '{}'",
+            bin_name,
+        ))
 }
 
 #[cfg(unix)]

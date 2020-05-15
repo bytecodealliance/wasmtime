@@ -50,20 +50,29 @@ fn main() {
         ("make instance then segfault", || {
             let store = Store::default();
             let module = Module::new(&store, "(module)").unwrap();
-            let _instance = Instance::new(&module, &[]).unwrap();
+            let _instance = Instance::new(&module, &[])
+                .unwrap()
+                .init_reactor(&[])
+                .unwrap();
             segfault();
         }),
         ("make instance then overrun the stack", || {
             let store = Store::default();
             let module = Module::new(&store, "(module)").unwrap();
-            let _instance = Instance::new(&module, &[]).unwrap();
+            let _instance = Instance::new(&module, &[])
+                .unwrap()
+                .init_reactor(&[])
+                .unwrap();
             println!("stack overrun: {}", overrun_the_stack());
         }),
         ("segfault in a host function", || {
             let store = Store::default();
             let module = Module::new(&store, r#"(import "" "" (func)) (start 0)"#).unwrap();
             let segfault = Func::wrap(&store, || segfault());
-            Instance::new(&module, &[segfault.into()]).unwrap();
+            Instance::new(&module, &[segfault.into()])
+                .unwrap()
+                .init_reactor(&[])
+                .unwrap();
         }),
     ];
     match env::var(VAR_NAME) {

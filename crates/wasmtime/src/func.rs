@@ -40,7 +40,7 @@ use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
 /// # fn main() -> anyhow::Result<()> {
 /// let store = Store::default();
 /// let module = Module::new(&store, r#"(module (func (export "foo")))"#)?;
-/// let instance = Instance::new(&module, &[])?;
+/// let instance = Instance::new(&module, &[])?.init_reactor(&[])?;
 /// let foo = instance.get_func("foo").expect("export wasn't a function");
 ///
 /// // Work with `foo` as a `Func` at this point, such as calling it
@@ -90,7 +90,7 @@ use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
 ///                 i32.add))
 ///     "#,
 /// )?;
-/// let instance = Instance::new(&module, &[add.into()])?;
+/// let instance = Instance::new(&module, &[add.into()])?.init_reactor(&[])?;
 /// let call_add_twice = instance.get_func("call_add_twice").expect("export wasn't a function");
 /// let call_add_twice = call_add_twice.get0::<i32>()?;
 ///
@@ -131,7 +131,7 @@ use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
 ///             (start $start))
 ///     "#,
 /// )?;
-/// let instance = Instance::new(&module, &[double.into()])?;
+/// let instance = Instance::new(&module, &[double.into()])?.init_reactor(&[])?;
 /// // .. work with `instance` if necessary
 /// # Ok(())
 /// # }
@@ -344,7 +344,7 @@ impl Func {
     ///                 call $add))
     ///     "#,
     /// )?;
-    /// let instance = Instance::new(&module, &[add.into()])?;
+    /// let instance = Instance::new(&module, &[add.into()])?.init_reactor(&[])?;
     /// let foo = instance.get_func("foo").unwrap().get2::<i32, i32, i32>()?;
     /// assert_eq!(foo(1, 2)?, 3);
     /// # Ok(())
@@ -375,7 +375,7 @@ impl Func {
     ///                 call $add))
     ///     "#,
     /// )?;
-    /// let instance = Instance::new(&module, &[add.into()])?;
+    /// let instance = Instance::new(&module, &[add.into()])?.init_reactor(&[])?;
     /// let foo = instance.get_func("foo").unwrap().get2::<i32, i32, i32>()?;
     /// assert_eq!(foo(1, 2)?, 3);
     /// assert!(foo(i32::max_value(), 1).is_err());
@@ -408,7 +408,7 @@ impl Func {
     ///                 call $debug))
     ///     "#,
     /// )?;
-    /// let instance = Instance::new(&module, &[debug.into()])?;
+    /// let instance = Instance::new(&module, &[debug.into()])?.init_reactor(&[])?;
     /// let foo = instance.get_func("foo").unwrap().get0::<()>()?;
     /// foo()?;
     /// # Ok(())
@@ -464,7 +464,7 @@ impl Func {
     ///             (data (i32.const 4) "Hello, world!"))
     ///     "#,
     /// )?;
-    /// let instance = Instance::new(&module, &[log_str.into()])?;
+    /// let instance = Instance::new(&module, &[log_str.into()])?.init_reactor(&[])?;
     /// let foo = instance.get_func("foo").unwrap().get0::<()>()?;
     /// foo()?;
     /// # Ok(())

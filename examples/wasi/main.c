@@ -91,32 +91,11 @@ int main() {
   wasm_instance_t *instance = NULL;
   error = wasmtime_instance_new(module, imports, import_types.size, &instance, &trap);
   if (instance == NULL)
-    exit_with_error("failed to instantiate", error, trap);
+    exit_with_error("failed to run command", error, trap);
   free(imports);
   wasm_importtype_vec_delete(&import_types);
 
-  // Lookup our `_start` export function
-  wasm_extern_vec_t externs;
-  wasm_instance_exports(instance, &externs);
-  wasm_exporttype_vec_t exports;
-  wasm_module_exports(module, &exports);
-  wasm_extern_t *start_extern = NULL;
-  for (int i = 0; i < exports.size; i++) {
-    const wasm_name_t *name = wasm_exporttype_name(exports.data[i]);
-    if (strncmp(name->data, "_start", name->size) == 0)
-      start_extern = externs.data[i];
-  }
-  assert(start_extern);
-  wasm_func_t *start = wasm_extern_as_func(start_extern);
-  assert(start != NULL);
-  error = wasmtime_func_call(start, NULL, 0, NULL, 0, &trap);
-  if (error != NULL || trap != NULL)
-    exit_with_error("failed to call `_start`", error, trap);
-
   // Clean up after ourselves at this point
-  wasm_exporttype_vec_delete(&exports);
-  wasm_extern_vec_delete(&externs);
-  wasm_instance_delete(instance);
   wasm_module_delete(module);
   wasm_store_delete(store);
   wasm_engine_delete(engine);

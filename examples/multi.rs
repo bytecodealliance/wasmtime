@@ -35,7 +35,7 @@ fn main() -> Result<()> {
 
     // Instantiate.
     println!("Instantiating module...");
-    let instance = Instance::new(&module, &[callback_func.into()])?;
+    let instance = Instance::new(&module, &[callback_func.into()])?.init_reactor(&[])?;
 
     // Extract exports.
     println!("Extracting export...");
