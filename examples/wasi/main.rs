@@ -13,7 +13,7 @@ fn main() -> Result<()> {
 
     // Create a new `Linker` with no preloaded directories, command-line arguments,
     // or environment variables.
-    let mut linker = wasi_linker(&store, &[], &[], &[])?;
+    let linker = wasi_linker(&store, &[], &[], &[])?;
 
     // Instantiate and run our module with the imports we've created.
     let _instance = linker.instantiate_wasi_abi(&module)?;
