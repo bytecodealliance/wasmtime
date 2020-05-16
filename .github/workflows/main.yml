@@ -205,13 +205,22 @@ jobs:
     - uses: actions/checkout@v1
       with:
         submodules: true
-    - name: Rebuild peepmatic peephole optimizers
+    - name: Test `peepmatic`
+      run: |
+        cargo test \
+          --package peepmatic \
+          --package peepmatic-automata \
+          --package peepmatic-fuzzing \
+          --package peepmatic-macro \
+          --package peepmatic-runtime \
+          --package peepmatic-test
+    - name: Rebuild Cranelift's peepmatic-based peephole optimizers
       run: |
         cd cranelift/
         cargo build --features 'enable-peepmatic cranelift-codegen/rebuild-peephole-optimizers'
     - name: Check that peephole optimizers are up to date
       run: git diff --exit-code
-    - name: Test with peepmatic
+    - name: Test `cranelift-codegen` with `peepmatic` enabled
       run: |
         cd cranelift/
         cargo test --features 'enable-peepmatic'
@@ -253,10 +262,10 @@ jobs:
       # Note: libclang is pre-installed on the macOS and linux images.
       if: matrix.os == 'windows-latest'
       run: |
-        curl https://releases.llvm.org/9.0.0/LLVM-9.0.0-win64.exe -OutFile llvm-installer.exe
-        7z x llvm-installer.exe -o./llvm-binary
-        echo ::set-env name=LIBCLANG_PATH::`pwd`/bin/libclang.dll
-        echo ::add-path::`pwd`/llvm-binary/bin
+        curl https://releases.llvm.org/9.0.0/LLVM-9.0.0-win64.exe -o llvm-installer.exe
+        7z x llvm-installer.exe -oC:/llvm-binary
+        echo ::set-env name=LIBCLANG_PATH::C:/llvm-binary/bin/libclang.dll
+        echo ::add-path::C:/llvm-binary/bin
 
     - name: Query Clang Version
       if: matrix.os == 'windows-latest'
@@ -276,7 +285,17 @@ jobs:
     - run: cargo run -p run-examples
 
     # Build and test all features except for lightbeam
-    - run: cargo test --features test-programs/test_programs --all --exclude lightbeam
+    - run: |
+        cargo test \
+            --features test-programs/test_programs \
+            --all \
+            --exclude lightbeam \
+            --exclude peepmatic \
+            --exclude peepmatic-automata \
+            --exclude peepmatic-fuzzing \
+            --exclude peepmatic-macro \
+            --exclude peepmatic-runtime \
+            --exclude peepmatic-test
       env:
         RUST_BACKTRACE: 1
 
