@@ -170,8 +170,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     Ok(run()?)
 }
-
-}
 ```
 
 Note that there's a number of ways to define a `Func`, be sure to [consult its
