@@ -262,10 +262,10 @@ jobs:
       # Note: libclang is pre-installed on the macOS and linux images.
       if: matrix.os == 'windows-latest'
       run: |
-        curl https://releases.llvm.org/9.0.0/LLVM-9.0.0-win64.exe -OutFile llvm-installer.exe
-        7z x llvm-installer.exe -o./llvm-binary
-        echo ::set-env name=LIBCLANG_PATH::`pwd`/bin/libclang.dll
-        echo ::add-path::`pwd`/llvm-binary/bin
+        curl https://releases.llvm.org/9.0.0/LLVM-9.0.0-win64.exe -o llvm-installer.exe
+        7z x llvm-installer.exe -oC:/llvm-binary
+        echo ::set-env name=LIBCLANG_PATH::C:/llvm-binary/bin/libclang.dll
+        echo ::add-path::C:/llvm-binary/bin
 
     - name: Query Clang Version
       if: matrix.os == 'windows-latest'
