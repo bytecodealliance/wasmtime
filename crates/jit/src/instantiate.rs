@@ -140,7 +140,6 @@ impl CompiledModule {
         };
 
         let finished_functions = FinishedFunctions(finished_functions.into_boxed_slice());
-
         Ok(Self {
             module: Arc::new(module),
             code: Arc::new(ModuleCode {
