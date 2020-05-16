@@ -143,7 +143,10 @@ use wasmtime::*;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let store = Store::default();
+# if false {
     let module = Module::from_file(&store, "hello.wat")?;
+# }
+# let module = Module::new(&store, r#"(module (import "" "log" (func $log (param i32))) (import "" "double" (func $double (param i32) (result i32))) (func (export "run") i32.const 0 call $log i32.const 1 call $log i32.const 2 call $double call $log))"#)?;
 
     // First we can create our `log` function, which will simply print out the
     // parameter it receives.
