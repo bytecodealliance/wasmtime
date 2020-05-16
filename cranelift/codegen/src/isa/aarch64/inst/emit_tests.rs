@@ -1956,7 +1956,7 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Zero(xreg(8)),
         },
@@ -1964,7 +1964,7 @@ fn test_aarch64_binemit() {
         "cbz x8, 64",
     ));
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::NotZero(xreg(8)),
         },
@@ -1972,7 +1972,7 @@ fn test_aarch64_binemit() {
         "cbnz x8, 64",
     ));
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Cond(Cond::Eq),
         },
@@ -1980,7 +1980,7 @@ fn test_aarch64_binemit() {
         "b.eq 64",
     ));
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Cond(Cond::Ne),
         },
@@ -1989,7 +1989,7 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Cond(Cond::Hs),
         },
@@ -1997,7 +1997,7 @@ fn test_aarch64_binemit() {
         "b.hs 64",
     ));
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Cond(Cond::Lo),
         },
@@ -2005,7 +2005,7 @@ fn test_aarch64_binemit() {
         "b.lo 64",
     ));
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Cond(Cond::Mi),
         },
@@ -2013,7 +2013,7 @@ fn test_aarch64_binemit() {
         "b.mi 64",
     ));
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Cond(Cond::Pl),
         },
@@ -2021,7 +2021,7 @@ fn test_aarch64_binemit() {
         "b.pl 64",
     ));
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Cond(Cond::Vs),
         },
@@ -2029,7 +2029,7 @@ fn test_aarch64_binemit() {
         "b.vs 64",
     ));
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Cond(Cond::Vc),
         },
@@ -2037,7 +2037,7 @@ fn test_aarch64_binemit() {
         "b.vc 64",
     ));
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Cond(Cond::Hi),
         },
@@ -2045,7 +2045,7 @@ fn test_aarch64_binemit() {
         "b.hi 64",
     ));
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Cond(Cond::Ls),
         },
@@ -2053,7 +2053,7 @@ fn test_aarch64_binemit() {
         "b.ls 64",
     ));
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Cond(Cond::Ge),
         },
@@ -2061,7 +2061,7 @@ fn test_aarch64_binemit() {
         "b.ge 64",
     ));
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Cond(Cond::Lt),
         },
@@ -2069,7 +2069,7 @@ fn test_aarch64_binemit() {
         "b.lt 64",
     ));
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Cond(Cond::Gt),
         },
@@ -2077,7 +2077,7 @@ fn test_aarch64_binemit() {
         "b.gt 64",
     ));
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Cond(Cond::Le),
         },
@@ -2085,7 +2085,7 @@ fn test_aarch64_binemit() {
         "b.le 64",
     ));
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Cond(Cond::Al),
         },
@@ -2093,7 +2093,7 @@ fn test_aarch64_binemit() {
         "b.al 64",
     ));
     insns.push((
-        Inst::CondBrLowered {
+        Inst::OneWayCondBr {
             target: BranchTarget::ResolvedOffset(64),
             kind: CondBrKind::Cond(Cond::Nv),
         },
@@ -2102,7 +2102,7 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::CondBrLoweredCompound {
+        Inst::CondBr {
             taken: BranchTarget::ResolvedOffset(64),
             not_taken: BranchTarget::ResolvedOffset(128),
             kind: CondBrKind::Cond(Cond::Le),
@@ -2138,7 +2138,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::IndirectBr {
             rn: xreg(3),
-            targets: vec![1, 2, 3],
+            targets: vec![],
         },
         "60001FD6",
         "br x3",
@@ -2149,7 +2149,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::Adr {
             rd: writable_xreg(15),
-            label: MemLabel::PCRel((1 << 20) - 4),
+            off: (1 << 20) - 4,
         },
         "EFFF7F10",
         "adr x15, pc+1048572",
@@ -2792,19 +2792,11 @@ fn test_aarch64_binemit() {
         let actual_printing = insn.show_rru(Some(&rru));
         assert_eq!(expected_printing, actual_printing);
 
-        // Check the encoding is as expected.
-        let text_size = {
-            let mut code_sec = MachSectionSize::new(0);
-            insn.emit(&mut code_sec, &flags, &mut Default::default());
-            code_sec.size()
-        };
-
         let mut sink = test_utils::TestCodeSink::new();
-        let mut sections = MachSections::new();
-        let code_idx = sections.add_section(0, text_size);
-        let code_sec = sections.get_section(code_idx);
-        insn.emit(code_sec, &flags, &mut Default::default());
-        sections.emit(&mut sink);
+        let mut buffer = MachBuffer::new();
+        insn.emit(&mut buffer, &flags, &mut Default::default());
+        let buffer = buffer.finish();
+        buffer.emit(&mut sink);
         let actual_encoding = &sink.stringify();
         assert_eq!(expected_encoding, actual_encoding);
     }

@@ -30,17 +30,18 @@ block2:
   return v5
 }
 
+; check: Block 0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: subs xzr, x0, x1
-; nextln: b.eq 20
-; check: Block 2:
-; check: movz x0, #2
+; nextln: b.eq label1 ; b label2
+; check: Block 1:
+; check: movz x0, #1
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
-; check: Block 1:
-; check: movz x0, #1
+; check: Block 2:
+; check: movz x0, #2
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret

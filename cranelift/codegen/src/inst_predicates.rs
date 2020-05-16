@@ -40,3 +40,24 @@ pub fn has_side_effect(func: &Function, inst: Inst) -> bool {
     let opcode = data.opcode();
     trivially_has_side_effects(opcode) || is_load_with_defined_trapping(opcode, data)
 }
+
+/// Does the given instruction have any side-effect as per [has_side_effect], or else is a load?
+pub fn has_side_effect_or_load(func: &Function, inst: Inst) -> bool {
+    has_side_effect(func, inst) || func.dfg[inst].opcode().can_load()
+}
+
+/// Is the given instruction a constant value (`iconst`, `fconst`, `bconst`) that can be
+/// represented in 64 bits?
+pub fn is_constant_64bit(func: &Function, inst: Inst) -> Option<u64> {
+    let data = &func.dfg[inst];
+    if data.opcode() == Opcode::Null {
+        return Some(0);
+    }
+    match data {
+        &InstructionData::UnaryImm { imm, .. } => Some(imm.bits() as u64),
+        &InstructionData::UnaryIeee32 { imm, .. } => Some(imm.bits() as u64),
+        &InstructionData::UnaryIeee64 { imm, .. } => Some(imm.bits()),
+        &InstructionData::UnaryBool { imm, .. } => Some(if imm { 1 } else { 0 }),
+        _ => None,
+    }
+}

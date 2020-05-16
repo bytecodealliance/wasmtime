@@ -30,15 +30,15 @@ block5(v5: i64):
 
 ; check:   subs wzr, w0, #3
 ; nextln:   b.hs
-; nextln:   adr x2, pc+16 ; ldrsw x1, [x2, x0, LSL 2] ; add x2, x2, x1 ; br x2 ; jt_entries
+; nextln:   adr x1, pc+16 ; ldrsw x2, [x1, x0, LSL 2] ; add x1, x1, x2 ; br x1 ; jt_entries
 
-; check:   movz x1, #3
+; check:   movz x1, #1
 ; nextln:   b
 
 ; check:   movz x1, #2
 ; nextln:   b
 
-; check:   movz x1, #1
+; check:   movz x1, #3
 
 ; check:   add x0, x0, x1
 

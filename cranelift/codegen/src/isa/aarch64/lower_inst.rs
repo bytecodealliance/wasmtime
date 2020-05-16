@@ -1,11 +1,13 @@
 //! Lower a single Cranelift instruction into vcode.
 
+use crate::binemit::CodeOffset;
 use crate::ir::condcodes::FloatCC;
 use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
 use crate::ir::{InstructionData, Opcode, TrapCode};
 use crate::machinst::lower::*;
 use crate::machinst::*;
+use crate::CodegenResult;
 
 use crate::isa::aarch64::abi::*;
 use crate::isa::aarch64::inst::*;
@@ -19,7 +21,10 @@ use smallvec::SmallVec;
 use super::lower::*;
 
 /// Actually codegen an instruction's results into registers.
-pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
+pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    insn: IRInst,
+) -> CodegenResult<()> {
     let op = ctx.data(insn).opcode();
     let inputs: SmallVec<[InsnInput; 4]> = (0..ctx.num_inputs(insn))
         .map(|i| InsnInput { insn, input: i })
@@ -35,17 +40,17 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
 
     match op {
         Opcode::Iconst | Opcode::Bconst | Opcode::Null => {
-            let value = output_to_const(ctx, outputs[0]).unwrap();
+            let value = ctx.get_constant(insn).unwrap();
             let rd = output_to_reg(ctx, outputs[0]);
             lower_constant_u64(ctx, rd, value);
         }
         Opcode::F32const => {
-            let value = output_to_const_f32(ctx, outputs[0]).unwrap();
+            let value = f32::from_bits(ctx.get_constant(insn).unwrap() as u32);
             let rd = output_to_reg(ctx, outputs[0]);
             lower_constant_f32(ctx, rd, value);
         }
         Opcode::F64const => {
-            let value = output_to_const_f64(ctx, outputs[0]).unwrap();
+            let value = f64::from_bits(ctx.get_constant(insn).unwrap());
             let rd = output_to_reg(ctx, outputs[0]);
             lower_constant_f64(ctx, rd, value);
         }
@@ -271,7 +276,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
 
                 // Check for divide by 0.
                 let branch_size = 8;
-                ctx.emit(Inst::CondBrLowered {
+                ctx.emit(Inst::OneWayCondBr {
                     target: BranchTarget::ResolvedOffset(branch_size),
                     kind: CondBrKind::NotZero(rm),
                 });
@@ -297,7 +302,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
 
                     // Check for divide by 0.
                     let branch_size = 20;
-                    ctx.emit(Inst::CondBrLowered {
+                    ctx.emit(Inst::OneWayCondBr {
                         target: BranchTarget::ResolvedOffset(branch_size),
                         kind: CondBrKind::Zero(rm),
                     });
@@ -324,7 +329,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
                         nzcv: NZCV::new(false, false, false, false),
                         cond: Cond::Eq,
                     });
-                    ctx.emit(Inst::CondBrLowered {
+                    ctx.emit(Inst::OneWayCondBr {
                         target: BranchTarget::ResolvedOffset(12),
                         kind: CondBrKind::Cond(Cond::Vc),
                     });
@@ -337,7 +342,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
 
                     // Check for divide by 0.
                     let branch_size = 8;
-                    ctx.emit(Inst::CondBrLowered {
+                    ctx.emit(Inst::OneWayCondBr {
                         target: BranchTarget::ResolvedOffset(branch_size),
                         kind: CondBrKind::NotZero(rm),
                     });
@@ -1211,7 +1216,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
             // Branch around the break instruction with inverted cond. Go straight to lowered
             // one-target form; this is logically part of a single-in single-out template lowering.
             let cond = cond.invert();
-            ctx.emit(Inst::CondBrLowered {
+            ctx.emit(Inst::OneWayCondBr {
                 target: BranchTarget::ResolvedOffset(8),
                 kind: CondBrKind::Cond(cond),
             });
@@ -1301,11 +1306,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
 
         Opcode::GetPinnedReg => {
             let rd = output_to_reg(ctx, outputs[0]);
-            ctx.emit(Inst::GetPinnedReg { rd });
+            ctx.emit(Inst::mov(rd, xreg(PINNED_REG)));
         }
+
         Opcode::SetPinnedReg => {
             let rm = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
-            ctx.emit(Inst::SetPinnedReg { rm });
+            ctx.emit(Inst::mov(writable_xreg(PINNED_REG), rm));
         }
 
         Opcode::Spill
@@ -1533,7 +1539,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
             } else {
                 ctx.emit(Inst::FpuCmp64 { rn, rm: rn });
             }
-            ctx.emit(Inst::CondBrLowered {
+            ctx.emit(Inst::OneWayCondBr {
                 target: BranchTarget::ResolvedOffset(8),
                 kind: CondBrKind::Cond(lower_fp_condcode(FloatCC::Ordered)),
             });
@@ -1574,7 +1580,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
                     rn,
                     rm: tmp.to_reg(),
                 });
-                ctx.emit(Inst::CondBrLowered {
+                ctx.emit(Inst::OneWayCondBr {
                     target: BranchTarget::ResolvedOffset(8),
                     kind: CondBrKind::Cond(lower_fp_condcode(low_cond)),
                 });
@@ -1587,7 +1593,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
                     rn,
                     rm: tmp.to_reg(),
                 });
-                ctx.emit(Inst::CondBrLowered {
+                ctx.emit(Inst::OneWayCondBr {
                     target: BranchTarget::ResolvedOffset(8),
                     kind: CondBrKind::Cond(lower_fp_condcode(FloatCC::LessThan)),
                 });
@@ -1617,7 +1623,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
                     rn,
                     rm: tmp.to_reg(),
                 });
-                ctx.emit(Inst::CondBrLowered {
+                ctx.emit(Inst::OneWayCondBr {
                     target: BranchTarget::ResolvedOffset(8),
                     kind: CondBrKind::Cond(lower_fp_condcode(low_cond)),
                 });
@@ -1630,7 +1636,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
                     rn,
                     rm: tmp.to_reg(),
                 });
-                ctx.emit(Inst::CondBrLowered {
+                ctx.emit(Inst::OneWayCondBr {
                     target: BranchTarget::ResolvedOffset(8),
                     kind: CondBrKind::Cond(lower_fp_condcode(FloatCC::LessThan)),
                 });
@@ -1862,14 +1868,16 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRIns
         Opcode::AvgRound => unimplemented!(),
         Opcode::TlsValue => unimplemented!(),
     }
+
+    Ok(())
 }
 
 pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     branches: &[IRInst],
-    targets: &[BlockIndex],
-    fallthrough: Option<BlockIndex>,
-) {
+    targets: &[MachLabel],
+    fallthrough: Option<MachLabel>,
+) -> CodegenResult<()> {
     // A block should end with at most two branches. The first may be a
     // conditional branch; a conditional branch can be followed only by an
     // unconditional branch or fallthrough. Otherwise, if only one branch,
@@ -1883,18 +1891,14 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
         let op0 = ctx.data(branches[0]).opcode();
         let op1 = ctx.data(branches[1]).opcode();
 
-        //println!(
-        //    "lowering two-branch group: opcodes are {:?} and {:?}",
-        //    op0, op1
-        //);
-
         assert!(op1 == Opcode::Jump || op1 == Opcode::Fallthrough);
-        let taken = BranchTarget::Block(targets[0]);
+        let taken = BranchTarget::Label(targets[0]);
         let not_taken = match op1 {
-            Opcode::Jump => BranchTarget::Block(targets[1]),
-            Opcode::Fallthrough => BranchTarget::Block(fallthrough.unwrap()),
+            Opcode::Jump => BranchTarget::Label(targets[1]),
+            Opcode::Fallthrough => BranchTarget::Label(fallthrough.unwrap()),
             _ => unreachable!(), // assert above.
         };
+
         match op0 {
             Opcode::Brz | Opcode::Brnz => {
                 let flag_input = InsnInput {
@@ -1954,6 +1958,8 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
             Opcode::BrIcmp => {
                 let condcode = inst_condcode(ctx.data(branches[0])).unwrap();
                 let cond = lower_condcode(condcode);
+                let kind = CondBrKind::Cond(cond);
+
                 let is_signed = condcode_is_signed(condcode);
                 let ty = ctx.input_ty(branches[0], 0);
                 let bits = ty_bits(ty);
@@ -1986,13 +1992,15 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::CondBr {
                     taken,
                     not_taken,
-                    kind: CondBrKind::Cond(cond),
+                    kind,
                 });
             }
 
             Opcode::Brif => {
                 let condcode = inst_condcode(ctx.data(branches[0])).unwrap();
                 let cond = lower_condcode(condcode);
+                let kind = CondBrKind::Cond(cond);
+
                 let is_signed = condcode_is_signed(condcode);
                 let flag_input = InsnInput {
                     insn: branches[0],
@@ -2003,7 +2011,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     ctx.emit(Inst::CondBr {
                         taken,
                         not_taken,
-                        kind: CondBrKind::Cond(cond),
+                        kind,
                     });
                 } else {
                     // If the ifcmp result is actually placed in a
@@ -2013,7 +2021,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     ctx.emit(Inst::CondBr {
                         taken,
                         not_taken,
-                        kind: CondBrKind::Cond(cond),
+                        kind,
                     });
                 }
             }
@@ -2021,6 +2029,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
             Opcode::Brff => {
                 let condcode = inst_fp_condcode(ctx.data(branches[0])).unwrap();
                 let cond = lower_fp_condcode(condcode);
+                let kind = CondBrKind::Cond(cond);
                 let flag_input = InsnInput {
                     insn: branches[0],
                     input: 0,
@@ -2030,7 +2039,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     ctx.emit(Inst::CondBr {
                         taken,
                         not_taken,
-                        kind: CondBrKind::Cond(cond),
+                        kind,
                     });
                 } else {
                     // If the ffcmp result is actually placed in a
@@ -2040,7 +2049,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     ctx.emit(Inst::CondBr {
                         taken,
                         not_taken,
-                        kind: CondBrKind::Cond(cond),
+                        kind,
                     });
                 }
             }
@@ -2057,12 +2066,13 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                 // fills in `targets[0]` with our fallthrough block, so this
                 // is valid for both Jump and Fallthrough.
                 ctx.emit(Inst::Jump {
-                    dest: BranchTarget::Block(targets[0]),
+                    dest: BranchTarget::Label(targets[0]),
                 });
             }
             Opcode::BrTable => {
                 // Expand `br_table index, default, JT` to:
                 //
+                //   (emit island with guard jump if needed)
                 //   subs idx, #jt_size
                 //   b.hs default
                 //   adr vTmp1, PC+16
@@ -2072,6 +2082,11 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                 //   [jumptable offsets relative to JT base]
                 let jt_size = targets.len() - 1;
                 assert!(jt_size <= std::u32::MAX as usize);
+
+                ctx.emit(Inst::EmitIsland {
+                    needed_space: 4 * (6 + jt_size) as CodeOffset,
+                });
+
                 let ridx = input_to_reg(
                     ctx,
                     InsnInput {
@@ -2101,10 +2116,10 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                         rm: rtmp1.to_reg(),
                     });
                 }
-                let default_target = BranchTarget::Block(targets[0]);
-                ctx.emit(Inst::CondBrLowered {
-                    kind: CondBrKind::Cond(Cond::Hs), // unsigned >=
+                let default_target = BranchTarget::Label(targets[0]);
+                ctx.emit(Inst::OneWayCondBr {
                     target: default_target.clone(),
+                    kind: CondBrKind::Cond(Cond::Hs), // unsigned >=
                 });
 
                 // Emit the compound instruction that does:
@@ -2125,9 +2140,9 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                 let jt_targets: Vec<BranchTarget> = targets
                     .iter()
                     .skip(1)
-                    .map(|bix| BranchTarget::Block(*bix))
+                    .map(|bix| BranchTarget::Label(*bix))
                     .collect();
-                let targets_for_term: Vec<BlockIndex> = targets.to_vec();
+                let targets_for_term: Vec<MachLabel> = targets.to_vec();
                 ctx.emit(Inst::JTSequence {
                     ridx,
                     rtmp1,
@@ -2140,4 +2155,6 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
             _ => panic!("Unknown branch type!"),
         }
     }
+
+    Ok(())
 }

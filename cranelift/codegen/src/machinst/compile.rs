@@ -18,8 +18,12 @@ pub fn compile<B: LowerBackend + MachBackend>(
 where
     B::MInst: ShowWithRRU,
 {
-    // This lowers the CL IR.
-    let mut vcode = Lower::new(f, abi)?.lower(b)?;
+    // Compute lowered block order.
+    let block_order = BlockLoweringOrder::new(f);
+    // Build the lowering context.
+    let lower = Lower::new(f, abi, block_order)?;
+    // Lower the IR.
+    let mut vcode = lower.lower(b)?;
 
     debug!(
         "vcode from lowering: \n{}",
@@ -64,11 +68,6 @@ where
     // Reorder vcode into final order and copy out final instruction sequence
     // all at once. This also inserts prologues/epilogues.
     vcode.replace_insns_from_regalloc(result);
-
-    vcode.remove_redundant_branches();
-
-    // Do final passes over code to finalize branches.
-    vcode.finalize_branches();
 
     debug!(
         "vcode after regalloc: final version:\n{}",

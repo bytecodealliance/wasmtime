@@ -645,27 +645,20 @@ pub enum Inst {
         dest: BranchTarget,
     },
 
-    /// A conditional branch.
+    /// A conditional branch. Contains two targets; at emission time, both are emitted, but
+    /// the MachBuffer knows to truncate the trailing branch if fallthrough. We optimize the
+    /// choice of taken/not_taken (inverting the branch polarity as needed) based on the
+    /// fallthrough at the time of lowering.
     CondBr {
         taken: BranchTarget,
         not_taken: BranchTarget,
         kind: CondBrKind,
     },
 
-    /// Lowered conditional branch: contains the original branch kind (or the
-    /// inverse), but only one BranchTarget is retained. The other is
-    /// implicitly the next instruction, given the final basic-block layout.
-    CondBrLowered {
+    /// A one-way conditional branch, invisible to the CFG processing; used *only* as part of
+    /// straight-line sequences in code to be emitted.
+    OneWayCondBr {
         target: BranchTarget,
-        kind: CondBrKind,
-    },
-
-    /// As for `CondBrLowered`, but represents a condbr/uncond-br sequence (two
-    /// actual machine instructions). Needed when the final block layout implies
-    /// that neither arm of a conditional branch targets the fallthrough block.
-    CondBrLoweredCompound {
-        taken: BranchTarget,
-        not_taken: BranchTarget,
         kind: CondBrKind,
     },
 
@@ -673,7 +666,7 @@ pub enum Inst {
     /// possible successors.
     IndirectBr {
         rn: Reg,
-        targets: Vec<BlockIndex>,
+        targets: Vec<MachLabel>,
     },
 
     /// A "break" instruction, used for e.g. traps and debug breakpoints.
@@ -685,11 +678,14 @@ pub enum Inst {
         trap_info: (SourceLoc, TrapCode),
     },
 
-    /// Load the address (using a PC-relative offset) of a MemLabel, using the
-    /// `ADR` instruction.
+    /// Load the address (using a PC-relative offset) of a memory location, using the `ADR`
+    /// instruction. Note that we take a simple offset, not a `MemLabel`, here, because `Adr` is
+    /// only used for now in fixed lowering sequences with hardcoded offsets. In the future we may
+    /// need full `MemLabel` support.
     Adr {
         rd: Writable<Reg>,
-        label: MemLabel,
+        /// Offset in range -2^20 .. 2^20.
+        off: i32,
     },
 
     /// Raw 32-bit word, used for inline constants and jump-table entries.
@@ -706,7 +702,7 @@ pub enum Inst {
     /// for rationale).
     JTSequence {
         targets: Box<[BranchTarget]>,
-        targets_for_term: Box<[BlockIndex]>, // needed for MachTerminator.
+        targets_for_term: Box<[MachLabel]>, // needed for MachTerminator.
         ridx: Reg,
         rtmp1: Writable<Reg>,
         rtmp2: Writable<Reg>,
@@ -732,20 +728,18 @@ pub enum Inst {
         mem: MemArg,
     },
 
-    /// Sets the value of the pinned register to the given register target.
-    GetPinnedReg {
-        rd: Writable<Reg>,
-    },
-
-    /// Writes the value of the given source register to the pinned register.
-    SetPinnedReg {
-        rm: Reg,
-    },
-
     /// Marker, no-op in generated code: SP "virtual offset" is adjusted. This
     /// controls MemArg::NominalSPOffset args are lowered.
     VirtualSPOffsetAdj {
         offset: i64,
+    },
+
+    /// Meta-insn, no-op in generated code: emit constant/branch veneer island at this point (with
+    /// a guard jump around it) if less than the needed space is available before the next branch
+    /// deadline.
+    EmitIsland {
+        /// The needed space before the next deadline.
+        needed_space: CodeOffset,
     },
 }
 
@@ -1111,9 +1105,7 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_defs(&*defs);
             collector.add_use(rn);
         }
-        &Inst::CondBr { ref kind, .. }
-        | &Inst::CondBrLowered { ref kind, .. }
-        | &Inst::CondBrLoweredCompound { ref kind, .. } => match kind {
+        &Inst::CondBr { ref kind, .. } | &Inst::OneWayCondBr { ref kind, .. } => match kind {
             CondBrKind::Zero(rt) | CondBrKind::NotZero(rt) => {
                 collector.add_use(*rt);
             }
@@ -1142,13 +1134,8 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::LoadAddr { rd, mem: _ } => {
             collector.add_def(rd);
         }
-        &Inst::GetPinnedReg { rd } => {
-            collector.add_def(rd);
-        }
-        &Inst::SetPinnedReg { rm } => {
-            collector.add_use(rm);
-        }
         &Inst::VirtualSPOffsetAdj { .. } => {}
+        &Inst::EmitIsland { .. } => {}
     }
 }
 
@@ -1676,13 +1663,7 @@ fn aarch64_map_regs(inst: &mut Inst, mapper: &RegUsageMapper) {
             *defs = Box::new(new_defs);
             map_use(mapper, rn);
         }
-        &mut Inst::CondBr { ref mut kind, .. } => {
-            map_br(mapper, kind);
-        }
-        &mut Inst::CondBrLowered { ref mut kind, .. } => {
-            map_br(mapper, kind);
-        }
-        &mut Inst::CondBrLoweredCompound { ref mut kind, .. } => {
+        &mut Inst::CondBr { ref mut kind, .. } | &mut Inst::OneWayCondBr { ref mut kind, .. } => {
             map_br(mapper, kind);
         }
         &mut Inst::IndirectBr { ref mut rn, .. } => {
@@ -1716,13 +1697,8 @@ fn aarch64_map_regs(inst: &mut Inst, mapper: &RegUsageMapper) {
             map_def(mapper, rd);
             map_mem(mapper, mem);
         }
-        &mut Inst::GetPinnedReg { ref mut rd } => {
-            map_def(mapper, rd);
-        }
-        &mut Inst::SetPinnedReg { ref mut rm } => {
-            map_use(mapper, rm);
-        }
         &mut Inst::VirtualSPOffsetAdj { .. } => {}
+        &mut Inst::EmitIsland { .. } => {}
     }
 }
 
@@ -1730,6 +1706,8 @@ fn aarch64_map_regs(inst: &mut Inst, mapper: &RegUsageMapper) {
 // Instructions: misc functions and external interface
 
 impl MachInst for Inst {
+    type LabelUse = LabelUse;
+
     fn get_regs(&self, collector: &mut RegUsageCollector) {
         aarch64_get_regs(self, collector)
     }
@@ -1757,23 +1735,13 @@ impl MachInst for Inst {
     fn is_term<'a>(&'a self) -> MachTerminator<'a> {
         match self {
             &Inst::Ret | &Inst::EpiloguePlaceholder => MachTerminator::Ret,
-            &Inst::Jump { dest } => MachTerminator::Uncond(dest.as_block_index().unwrap()),
+            &Inst::Jump { dest } => MachTerminator::Uncond(dest.as_label().unwrap()),
             &Inst::CondBr {
                 taken, not_taken, ..
-            } => MachTerminator::Cond(
-                taken.as_block_index().unwrap(),
-                not_taken.as_block_index().unwrap(),
-            ),
-            &Inst::CondBrLowered { .. } => {
-                // When this is used prior to branch finalization for branches
-                // within an open-coded sequence, i.e. with ResolvedOffsets,
-                // do not consider it a terminator. From the point of view of CFG analysis,
-                // it is part of a black-box single-in single-out region, hence is not
-                // denoted a terminator.
+            } => MachTerminator::Cond(taken.as_label().unwrap(), not_taken.as_label().unwrap()),
+            &Inst::OneWayCondBr { .. } => {
+                // Explicitly invisible to CFG processing.
                 MachTerminator::None
-            }
-            &Inst::CondBrLoweredCompound { .. } => {
-                panic!("is_term() called after lowering branches");
             }
             &Inst::IndirectBr { ref targets, .. } => MachTerminator::Indirect(&targets[..]),
             &Inst::JTSequence {
@@ -1787,6 +1755,23 @@ impl MachInst for Inst {
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
         assert!(ty.bits() <= 64); // no vector support yet!
         Inst::mov(to_reg, from_reg)
+    }
+
+    fn gen_constant(to_reg: Writable<Reg>, value: u64, ty: Type) -> SmallVec<[Inst; 4]> {
+        if ty == F64 {
+            let mut ret = SmallVec::new();
+            ret.push(Inst::load_fp_constant64(to_reg, f64::from_bits(value)));
+            ret
+        } else if ty == F32 {
+            let mut ret = SmallVec::new();
+            ret.push(Inst::load_fp_constant32(
+                to_reg,
+                f32::from_bits(value as u32),
+            ));
+            ret
+        } else {
+            Inst::load_constant(to_reg, value)
+        }
     }
 
     fn gen_zero_len_nop() -> Inst {
@@ -1815,101 +1800,25 @@ impl MachInst for Inst {
         }
     }
 
-    fn gen_jump(blockindex: BlockIndex) -> Inst {
+    fn gen_jump(target: MachLabel) -> Inst {
         Inst::Jump {
-            dest: BranchTarget::Block(blockindex),
+            dest: BranchTarget::Label(target),
         }
     }
 
-    fn with_block_rewrites(&mut self, block_target_map: &[BlockIndex]) {
-        match self {
-            &mut Inst::Jump { ref mut dest } => {
-                dest.map(block_target_map);
-            }
-            &mut Inst::CondBr {
-                ref mut taken,
-                ref mut not_taken,
-                ..
-            } => {
-                taken.map(block_target_map);
-                not_taken.map(block_target_map);
-            }
-            &mut Inst::CondBrLowered { .. } => {
-                // See note in `is_term()`: this is used in open-coded sequences
-                // within blocks and should be left alone.
-            }
-            &mut Inst::CondBrLoweredCompound { .. } => {
-                panic!("with_block_rewrites called after branch lowering!");
-            }
-            _ => {}
-        }
+    fn reg_universe(flags: &settings::Flags) -> RealRegUniverse {
+        create_reg_universe(flags)
     }
 
-    fn with_fallthrough_block(&mut self, fallthrough: Option<BlockIndex>) {
-        match self {
-            &mut Inst::CondBr {
-                taken,
-                not_taken,
-                kind,
-            } => {
-                if taken.as_block_index() == fallthrough
-                    && not_taken.as_block_index() == fallthrough
-                {
-                    *self = Inst::Nop0;
-                } else if taken.as_block_index() == fallthrough {
-                    *self = Inst::CondBrLowered {
-                        target: not_taken,
-                        kind: kind.invert(),
-                    };
-                } else if not_taken.as_block_index() == fallthrough {
-                    *self = Inst::CondBrLowered {
-                        target: taken,
-                        kind,
-                    };
-                } else {
-                    // We need a compound sequence (condbr / uncond-br).
-                    *self = Inst::CondBrLoweredCompound {
-                        taken,
-                        not_taken,
-                        kind,
-                    };
-                }
-            }
-            &mut Inst::Jump { dest } => {
-                if dest.as_block_index() == fallthrough {
-                    *self = Inst::Nop0;
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn with_block_offsets(&mut self, my_offset: CodeOffset, targets: &[CodeOffset]) {
-        match self {
-            &mut Inst::CondBrLowered { ref mut target, .. } => {
-                target.lower(targets, my_offset);
-            }
-            &mut Inst::CondBrLoweredCompound {
-                ref mut taken,
-                ref mut not_taken,
-                ..
-            } => {
-                taken.lower(targets, my_offset);
-                not_taken.lower(targets, my_offset + 4);
-            }
-            &mut Inst::Jump { ref mut dest } => {
-                dest.lower(targets, my_offset);
-            }
-            &mut Inst::JTSequence {
-                targets: ref mut t, ..
-            } => {
-                for target in t.iter_mut() {
-                    // offset+20: jumptable is 20 bytes into compound sequence.
-                    target.lower(targets, my_offset + 20);
-                }
-            }
-            _ => {}
-        }
+    fn worst_case_size() -> CodeOffset {
+        // The maximum size, in bytes, of any `Inst`'s emitted code. We have at least one case of
+        // an 8-instruction sequence (saturating int-to-float conversions) with three embedded
+        // 64-bit f64 constants.
+        //
+        // Note that inline jump-tables handle island/pool insertion separately, so we do not need
+        // to account for them here (otherwise the worst case would be 2^31 * 4, clearly not
+        // feasible for other reasons).
+        44
     }
 }
 
@@ -2550,12 +2459,12 @@ impl ShowWithRRU for Inst {
                     }
                 }
             }
-            &Inst::CondBrLowered {
+            &Inst::OneWayCondBr {
                 ref target,
                 ref kind,
             } => {
                 let target = target.show_rru(mb_rru);
-                match &kind {
+                match kind {
                     &CondBrKind::Zero(reg) => {
                         let reg = reg.show_rru(mb_rru);
                         format!("cbz {}, {}", reg, target)
@@ -2570,30 +2479,15 @@ impl ShowWithRRU for Inst {
                     }
                 }
             }
-            &Inst::CondBrLoweredCompound {
-                ref taken,
-                ref not_taken,
-                ref kind,
-            } => {
-                let first = Inst::CondBrLowered {
-                    target: taken.clone(),
-                    kind: kind.clone(),
-                };
-                let second = Inst::Jump {
-                    dest: not_taken.clone(),
-                };
-                first.show_rru(mb_rru) + " ; " + &second.show_rru(mb_rru)
-            }
             &Inst::IndirectBr { rn, .. } => {
                 let rn = rn.show_rru(mb_rru);
                 format!("br {}", rn)
             }
             &Inst::Brk => "brk #0".to_string(),
             &Inst::Udf { .. } => "udf".to_string(),
-            &Inst::Adr { rd, ref label } => {
+            &Inst::Adr { rd, off } => {
                 let rd = rd.show_rru(mb_rru);
-                let label = label.show_rru(mb_rru);
-                format!("adr {}, {}", rd, label)
+                format!("adr {}, pc+{}", rd, off)
             }
             &Inst::Word4 { data } => format!("data.i32 {}", data),
             &Inst::Word8 { data } => format!("data.i64 {}", data),
@@ -2683,15 +2577,134 @@ impl ShowWithRRU for Inst {
                 }
                 ret
             }
-            &Inst::GetPinnedReg { rd } => {
-                let rd = rd.show_rru(mb_rru);
-                format!("get_pinned_reg {}", rd)
-            }
-            &Inst::SetPinnedReg { rm } => {
-                let rm = rm.show_rru(mb_rru);
-                format!("set_pinned_reg {}", rm)
-            }
             &Inst::VirtualSPOffsetAdj { offset } => format!("virtual_sp_offset_adjust {}", offset),
+            &Inst::EmitIsland { needed_space } => format!("emit_island {}", needed_space),
+        }
+    }
+}
+
+//=============================================================================
+// Label fixups and jump veneers.
+
+/// Different forms of label references for different instruction formats.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LabelUse {
+    /// 19-bit branch offset (conditional branches). PC-rel, offset is imm << 2. Immediate is 19
+    /// signed bits, in bits 23:5. Used by cbz, cbnz, b.cond.
+    Branch19,
+    /// 26-bit branch offset (unconditional branches). PC-rel, offset is imm << 2. Immediate is 26
+    /// signed bits, in bits 25:0. Used by b, bl.
+    Branch26,
+    /// 19-bit offset for LDR (load literal). PC-rel, offset is imm << 2. Immediate is 19 signed bits,
+    /// in bits 23:5.
+    Ldr19,
+    /// 21-bit offset for ADR (get address of label). PC-rel, offset is not shifted. Immediate is
+    /// 21 signed bits, with high 19 bits in bits 23:5 and low 2 bits in bits 30:29.
+    Adr21,
+    /// 32-bit PC relative constant offset (from address of constant itself). Used in jump tables.
+    PCRel32,
+}
+
+impl MachInstLabelUse for LabelUse {
+    /// Alignment for veneer code. Every AArch64 instruction must be 4-byte-aligned.
+    const ALIGN: CodeOffset = 4;
+
+    /// Maximum PC-relative range (positive), inclusive.
+    fn max_pos_range(self) -> CodeOffset {
+        match self {
+            // 19-bit immediate, left-shifted by 2, for 21 bits of total range. Signed, so +2^20
+            // from zero. Likewise for two other shifted cases below.
+            LabelUse::Branch19 => (1 << 20) - 1,
+            LabelUse::Branch26 => (1 << 27) - 1,
+            LabelUse::Ldr19 => (1 << 20) - 1,
+            // Adr does not shift its immediate, so the 21-bit immediate gives 21 bits of total
+            // range.
+            LabelUse::Adr21 => (1 << 20) - 1,
+            LabelUse::PCRel32 => 0x7fffffff,
+        }
+    }
+
+    /// Maximum PC-relative range (negative).
+    fn max_neg_range(self) -> CodeOffset {
+        // All forms are twos-complement signed offsets, so negative limit is one more than
+        // positive limit.
+        self.max_pos_range() + 1
+    }
+
+    /// Size of window into code needed to do the patch.
+    fn patch_size(self) -> CodeOffset {
+        // Patch is on one instruction only for all of these label reference types.
+        4
+    }
+
+    /// Perform the patch.
+    fn patch(self, buffer: &mut [u8], use_offset: CodeOffset, label_offset: CodeOffset) {
+        let pc_rel = (label_offset as i64) - (use_offset as i64);
+        debug_assert!(pc_rel <= self.max_pos_range() as i64);
+        debug_assert!(pc_rel >= -(self.max_neg_range() as i64));
+        let pc_rel = pc_rel as u32;
+        let insn_word = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+        let mask = match self {
+            LabelUse::Branch19 => 0x00ffffe0, // bits 23..5 inclusive
+            LabelUse::Branch26 => 0x03ffffff, // bits 25..0 inclusive
+            LabelUse::Ldr19 => 0x00ffffe0,    // bits 23..5 inclusive
+            LabelUse::Adr21 => 0x60ffffe0,    // bits 30..29, 25..5 inclusive
+            LabelUse::PCRel32 => 0xffffffff,
+        };
+        let pc_rel_shifted = match self {
+            LabelUse::Adr21 | LabelUse::PCRel32 => pc_rel,
+            _ => {
+                debug_assert!(pc_rel & 3 == 0);
+                pc_rel >> 2
+            }
+        };
+        let pc_rel_inserted = match self {
+            LabelUse::Branch19 | LabelUse::Ldr19 => (pc_rel_shifted & 0x7ffff) << 5,
+            LabelUse::Branch26 => pc_rel_shifted & 0x3ffffff,
+            LabelUse::Adr21 => (pc_rel_shifted & 0x7ffff) << 5 | (pc_rel_shifted & 0x180000) << 10,
+            LabelUse::PCRel32 => pc_rel_shifted,
+        };
+        let is_add = match self {
+            LabelUse::PCRel32 => true,
+            _ => false,
+        };
+        let insn_word = if is_add {
+            insn_word.wrapping_add(pc_rel_inserted)
+        } else {
+            (insn_word & !mask) | pc_rel_inserted
+        };
+        buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn_word));
+    }
+
+    /// Is a veneer supported for this label reference type?
+    fn supports_veneer(self) -> bool {
+        match self {
+            LabelUse::Branch19 => true, // veneer is a Branch26
+            _ => false,
+        }
+    }
+
+    /// How large is the veneer, if supported?
+    fn veneer_size(self) -> CodeOffset {
+        4
+    }
+
+    /// Generate a veneer into the buffer, given that this veneer is at `veneer_offset`, and return
+    /// an offset and label-use for the veneer's use of the original label.
+    fn generate_veneer(
+        self,
+        buffer: &mut [u8],
+        veneer_offset: CodeOffset,
+    ) -> (CodeOffset, LabelUse) {
+        match self {
+            LabelUse::Branch19 => {
+                // veneer is a Branch26 (unconditional branch). Just encode directly here -- don't
+                // bother with constructing an Inst.
+                let insn_word = 0b000101 << 26;
+                buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn_word));
+                (veneer_offset, LabelUse::Branch26)
+            }
+            _ => panic!("Unsupported label-reference type for veneer generation!"),
         }
     }
 }
