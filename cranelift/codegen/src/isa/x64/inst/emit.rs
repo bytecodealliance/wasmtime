@@ -80,8 +80,8 @@ const F_PREFIX_66: u32 = 4;
 /// deleted if it is redundant (0x40).  Note that for a 64-bit operation, the
 /// REX prefix will normally never be redundant, since REX.W must be 1 to
 /// indicate a 64-bit operation.
-fn emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE<O: MachSectionOutput>(
-    sink: &mut O,
+fn emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE(
+    sink: &mut MachBuffer<Inst>,
     opcodes: u32,
     mut numOpcodes: usize,
     encG: u8,
@@ -199,8 +199,8 @@ fn emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE<O: MachSectionOutput>(
 /// emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE, except it is for the case
 /// where the E operand is a register rather than memory.  Hence it is much
 /// simpler.
-fn emit_REX_OPCODES_MODRM_encG_encE<O: MachSectionOutput>(
-    sink: &mut O,
+fn emit_REX_OPCODES_MODRM_encG_encE(
+    sink: &mut MachBuffer<Inst>,
     opcodes: u32,
     mut numOpcodes: usize,
     encG: u8,
@@ -240,8 +240,8 @@ fn emit_REX_OPCODES_MODRM_encG_encE<O: MachSectionOutput>(
 // These are merely wrappers for the above two functions that facilitate passing
 // actual `Reg`s rather than their encodings.
 
-fn emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE<O: MachSectionOutput>(
-    sink: &mut O,
+fn emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
+    sink: &mut MachBuffer<Inst>,
     opcodes: u32,
     numOpcodes: usize,
     regG: Reg,
@@ -253,8 +253,8 @@ fn emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE<O: MachSectionOutput>(
     emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE(sink, opcodes, numOpcodes, encG, memE, flags);
 }
 
-fn emit_REX_OPCODES_MODRM_regG_regE<O: MachSectionOutput>(
-    sink: &mut O,
+fn emit_REX_OPCODES_MODRM_regG_regE(
+    sink: &mut MachBuffer<Inst>,
     opcodes: u32,
     numOpcodes: usize,
     regG: Reg,
@@ -268,7 +268,7 @@ fn emit_REX_OPCODES_MODRM_regG_regE<O: MachSectionOutput>(
 }
 
 /// Write a suitable number of bits from an imm64 to the sink.
-fn emit_simm<O: MachSectionOutput>(sink: &mut O, size: u8, simm32: u32) {
+fn emit_simm(sink: &mut MachBuffer<Inst>, size: u8, simm32: u32) {
     match size {
         8 | 4 => sink.put4(simm32),
         2 => sink.put2(simm32 as u16),
@@ -329,7 +329,7 @@ fn emit_simm<O: MachSectionOutput>(sink: &mut O, size: u8, simm32: u32) {
 ///
 /// * there's a shorter encoding for shl/shr/sar by a 1-bit immediate.  (Do we
 ///   care?)
-pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
+pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
     match inst {
         Inst::Nop { len: 0 } => {}
         Inst::Alu_RMI_R {
@@ -808,55 +808,59 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
         }
         Inst::Ret {} => sink.put1(0xC3),
 
-        Inst::JmpKnown {
-            dest: BranchTarget::Block(..),
-        } => {
-            // Computation of block offsets/sizes.
-            sink.put1(0);
-            sink.put4(0);
-        }
-        Inst::JmpKnown {
-            dest: BranchTarget::ResolvedOffset(_bix, offset),
-        } if *offset >= -0x7FFF_FF00 && *offset <= 0x7FFF_FF00 => {
-            // And now for real
-            let mut offs_i32 = *offset as i32;
-            offs_i32 -= 5;
-            let offs_u32 = offs_i32 as u32;
+        Inst::JmpKnown { dest } => {
+            let disp = dest.as_offset32_or_zero() - 5;
+            let disp = disp as u32;
+            let br_start = sink.cur_offset();
             sink.put1(0xE9);
-            sink.put4(offs_u32);
+            let br_disp_off = sink.cur_offset();
+            sink.put4(disp);
+            let br_end = sink.cur_offset();
+            if let Some(l) = dest.as_label() {
+                sink.use_label_at_offset(br_disp_off, l, LabelUse::Rel32);
+                sink.add_uncond_branch(br_start, br_end, l);
+            }
         }
-        //
-        // ** Inst::JmpCondSymm   XXXX should never happen
-        //
-        Inst::JmpCond {
-            cc: _,
-            target: BranchTarget::Block(..),
-        } => {
-            // This case occurs when we are computing block offsets / sizes,
-            // prior to lowering block-index targets to concrete-offset targets.
-            // Only the size matters, so let's emit 6 bytes, as below.
-            sink.put1(0);
-            sink.put1(0);
-            sink.put4(0);
-        }
-        Inst::JmpCond {
+        Inst::JmpCondSymm {
             cc,
-            target: BranchTarget::ResolvedOffset(_bix, offset),
-        } if *offset >= -0x7FFF_FF00 && *offset <= 0x7FFF_FF00 => {
+            taken,
+            not_taken,
+        } => {
+            // Conditional part.
+
             // This insn is 6 bytes long.  Currently `offset` is relative to
             // the start of this insn, but the Intel encoding requires it to
             // be relative to the start of the next instruction.  Hence the
             // adjustment.
-            let mut offs_i32 = *offset as i32;
-            offs_i32 -= 6;
-            let offs_u32 = offs_i32 as u32;
+            let taken_disp = taken.as_offset32_or_zero() - 6;
+            let taken_disp = taken_disp as u32;
+            let cond_start = sink.cur_offset();
             sink.put1(0x0F);
             sink.put1(0x80 + cc.get_enc());
-            sink.put4(offs_u32);
+            let cond_disp_off = sink.cur_offset();
+            sink.put4(taken_disp);
+            let cond_end = sink.cur_offset();
+            if let Some(l) = taken.as_label() {
+                sink.use_label_at_offset(cond_disp_off, l, LabelUse::Rel32);
+                let inverted: [u8; 6] =
+                    [0x0F, 0x80 + (cc.invert().get_enc()), 0xFA, 0xFF, 0xFF, 0xFF];
+                sink.add_cond_branch(cond_start, cond_end, l, &inverted[..]);
+            }
+
+            // Unconditional part.
+
+            let nt_disp = not_taken.as_offset32_or_zero() - 5;
+            let nt_disp = nt_disp as u32;
+            let uncond_start = sink.cur_offset();
+            sink.put1(0xE9);
+            let uncond_disp_off = sink.cur_offset();
+            sink.put4(nt_disp);
+            let uncond_end = sink.cur_offset();
+            if let Some(l) = not_taken.as_label() {
+                sink.use_label_at_offset(uncond_disp_off, l, LabelUse::Rel32);
+                sink.add_uncond_branch(uncond_start, uncond_end, l);
+            }
         }
-        //
-        // ** Inst::JmpCondCompound   XXXX should never happen
-        //
         Inst::JmpUnknown { target } => {
             match target {
                 RM::R { reg } => {

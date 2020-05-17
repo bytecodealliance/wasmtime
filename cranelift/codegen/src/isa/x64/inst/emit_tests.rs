@@ -2180,19 +2180,11 @@ fn test_x64_emit() {
         let actual_printing = insn.show_rru(Some(&rru));
         assert_eq!(expected_printing, actual_printing);
 
-        // Check the encoding is as expected.
-        let text_size = {
-            let mut code_sec = MachSectionSize::new(0);
-            insn.emit(&mut code_sec, &flags, &mut Default::default());
-            code_sec.size()
-        };
-
         let mut sink = test_utils::TestCodeSink::new();
-        let mut sections = MachSections::new();
-        let code_idx = sections.add_section(0, text_size);
-        let code_sec = sections.get_section(code_idx);
-        insn.emit(code_sec, &flags, &mut Default::default());
-        sections.emit(&mut sink);
+        let mut buffer = MachBuffer::new();
+        insn.emit(&mut buffer, &flags, &mut Default::default());
+        let buffer = buffer.finish();
+        buffer.emit(&mut sink);
         let actual_encoding = &sink.stringify();
         assert_eq!(expected_encoding, actual_encoding);
     }

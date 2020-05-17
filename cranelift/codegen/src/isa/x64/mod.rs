@@ -52,7 +52,8 @@ impl MachBackend for X64Backend {
     ) -> CodegenResult<MachCompileResult> {
         let flags = self.flags();
         let vcode = self.compile_vcode(func, flags.clone())?;
-        let sections = vcode.emit();
+        let buffer = vcode.emit();
+        let buffer = buffer.finish();
         let frame_size = vcode.frame_size();
 
         let disasm = if want_disasm {
@@ -62,7 +63,7 @@ impl MachBackend for X64Backend {
         };
 
         Ok(MachCompileResult {
-            sections,
+            buffer,
             frame_size,
             disasm,
         })
