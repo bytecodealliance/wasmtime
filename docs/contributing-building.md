@@ -142,3 +142,55 @@ cargo build --target aarch64-unknown-linux-gnu --release
 The built executable will be located at
 `target/aarch64-unknown-linux-gnu/release/wasmtime`. Note that you can
 cross-compile the C API in the same manner as the CLI too.
+
+Note that if you are using these invocations regularly, you can avoid the need
+to set environment variables by adding some configuration to your persistent
+Cargo configuration. In the file `~/.cargo/config.toml` (in your home
+directory), add the section:
+
+```plain
+[target.aarch64-unknown-linux-gnu]
+linker = 'aarch64-linux-gnu-gcc'
+```
+
+Then the above `cargo build --target aarch64-unknown-linux-gnu` command should
+work without setting any extra environment variables beforehand.
+
+## Running a Cross-Compiled Wasmtime in qemu (emulation)
+
+Once you have cross-compiled a binary, it is possible to run it on an emulator
+if you do not have access to (or do not wish to use) hardware with the given
+architecture. This can be done using an emulator such as `qemu`. The `qemu`
+user-space emulation support allows running, for example, a Linux/aarch64
+binary on a Linux/x86-64 host, as long as you have the system libraries for
+aarch64 as well.
+
+To try this out, first install `qemu`, making sure that the user-space emulator
+option for your target architecture is enabled. On Debian-based Linux
+distributions (including Ubuntu), this is in the `qemu-user` package, for
+example.
+
+Next, make sure that you have system libraries for the target. You will already
+have these present if you cross-compiled as described above.
+
+Finally, you can run the `wasmtime` binary under `qemu`; the following example
+is for an `aarch64` target. Adjust the library paths as appropriate; these are
+correct for Ubuntu/Debian's cross-compilation packages.
+
+```shell
+qemu-aarch64 \
+  -L /usr/aarch64-linux-gnu \
+  -E LD_LIBRARY_PATH=/usr/aarch64-linux-gnu/lib \
+  target/aarch64-unknown-linux-gnu/release/wasmtime [ARGS]
+```
+
+You can add this to your persistent Cargo configuration as well. Extending the
+above example in `~/.cargo/config.toml`, you can add:
+
+```plain
+[target.aarch64-unknown-linux-gnu]
+linker = 'aarch64-linux-gnu-gcc'
+runner = "qemu-aarch64 -L /usr/aarch64-linux-gnu -E LD_LIBRARY_PATH=/usr/aarch64-linux-gnu/lib"
+```
+
+Then a simple `cargo test --target aarch64-unknown-linux-gnu` should work.
