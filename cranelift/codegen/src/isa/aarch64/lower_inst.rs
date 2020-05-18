@@ -84,8 +84,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 VecALUOp::UQAddScalar
             };
-            let va = ctx.tmp(RegClass::V128, I128);
-            let vb = ctx.tmp(RegClass::V128, I128);
+            let va = ctx.alloc_tmp(RegClass::V128, I128);
+            let vb = ctx.alloc_tmp(RegClass::V128, I128);
             let ra = input_to_reg(ctx, inputs[0], narrow_mode);
             let rb = input_to_reg(ctx, inputs[1], narrow_mode);
             let rd = output_to_reg(ctx, outputs[0]);
@@ -115,8 +115,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 VecALUOp::UQSubScalar
             };
-            let va = ctx.tmp(RegClass::V128, I128);
-            let vb = ctx.tmp(RegClass::V128, I128);
+            let va = ctx.alloc_tmp(RegClass::V128, I128);
+            let vb = ctx.alloc_tmp(RegClass::V128, I128);
             let ra = input_to_reg(ctx, inputs[0], narrow_mode);
             let rb = input_to_reg(ctx, inputs[1], narrow_mode);
             let rd = output_to_reg(ctx, outputs[0]);
@@ -498,7 +498,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                             // ignored (because of the implicit masking done by the instruction),
                             // so this is equivalent to negating the input.
                             let alu_op = choose_32_64(ty, ALUOp::Sub32, ALUOp::Sub64);
-                            let tmp = ctx.tmp(RegClass::I64, ty);
+                            let tmp = ctx.alloc_tmp(RegClass::I64, ty);
                             ctx.emit(Inst::AluRRR {
                                 alu_op,
                                 rd: tmp,
@@ -521,7 +521,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                             // Really ty_bits_size - rn, but the upper bits of the result are
                             // ignored (because of the implicit masking done by the instruction),
                             // so this is equivalent to negating the input.
-                            let tmp = ctx.tmp(RegClass::I64, I32);
+                            let tmp = ctx.alloc_tmp(RegClass::I64, I32);
                             ctx.emit(Inst::AluRRR {
                                 alu_op: ALUOp::Sub32,
                                 rd: tmp,
@@ -534,7 +534,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         };
 
                         // Explicitly mask the rotation count.
-                        let tmp_masked_rm = ctx.tmp(RegClass::I64, I32);
+                        let tmp_masked_rm = ctx.alloc_tmp(RegClass::I64, I32);
                         ctx.emit(Inst::AluRRImmLogic {
                             alu_op: ALUOp::And32,
                             rd: tmp_masked_rm,
@@ -543,8 +543,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         });
                         let tmp_masked_rm = tmp_masked_rm.to_reg();
 
-                        let tmp1 = ctx.tmp(RegClass::I64, I32);
-                        let tmp2 = ctx.tmp(RegClass::I64, I32);
+                        let tmp1 = ctx.alloc_tmp(RegClass::I64, I32);
+                        let tmp2 = ctx.alloc_tmp(RegClass::I64, I32);
                         ctx.emit(Inst::AluRRImm12 {
                             alu_op: ALUOp::Sub32,
                             rd: tmp1,
@@ -583,7 +583,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         }
                         immshift.imm &= ty_bits_size - 1;
 
-                        let tmp1 = ctx.tmp(RegClass::I64, I32);
+                        let tmp1 = ctx.alloc_tmp(RegClass::I64, I32);
                         ctx.emit(Inst::AluRRImmShift {
                             alu_op: ALUOp::Lsr32,
                             rd: tmp1,
@@ -688,7 +688,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // and fix the sequence below to work properly for this.
             let narrow_mode = NarrowValueMode::ZeroExtend64;
             let rn = input_to_reg(ctx, inputs[0], narrow_mode);
-            let tmp = ctx.tmp(RegClass::I64, I64);
+            let tmp = ctx.alloc_tmp(RegClass::I64, I64);
 
             // If this is a 32-bit Popcnt, use Lsr32 to clear the top 32 bits of the register, then
             // the rest of the code is identical to the 64-bit version.
@@ -997,7 +997,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Bitselect => {
-            let tmp = ctx.tmp(RegClass::I64, I64);
+            let tmp = ctx.alloc_tmp(RegClass::I64, I64);
             let rd = output_to_reg(ctx, outputs[0]);
             let rcond = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
             let rn = input_to_reg(ctx, inputs[1], NarrowValueMode::None);
@@ -1475,8 +1475,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
             let rm = input_to_reg(ctx, inputs[1], NarrowValueMode::None);
             let rd = output_to_reg(ctx, outputs[0]);
-            let tmp1 = ctx.tmp(RegClass::I64, I64);
-            let tmp2 = ctx.tmp(RegClass::I64, I64);
+            let tmp1 = ctx.alloc_tmp(RegClass::I64, I64);
+            let tmp2 = ctx.alloc_tmp(RegClass::I64, I64);
             ctx.emit(Inst::MovFromVec64 { rd: tmp1, rn: rn });
             ctx.emit(Inst::MovFromVec64 { rd: tmp2, rn: rm });
             let imml = if bits == 32 {
@@ -1546,7 +1546,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let trap_info = (ctx.srcloc(insn), TrapCode::BadConversionToInteger);
             ctx.emit(Inst::Udf { trap_info });
 
-            let tmp = ctx.tmp(RegClass::V128, I128);
+            let tmp = ctx.alloc_tmp(RegClass::V128, I128);
 
             // Check that the input is in range, with "truncate towards zero" semantics. This means
             // we allow values that are slightly out of range:
@@ -1712,8 +1712,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 _ => unreachable!(),
             };
 
-            let rtmp1 = ctx.tmp(RegClass::V128, in_ty);
-            let rtmp2 = ctx.tmp(RegClass::V128, in_ty);
+            let rtmp1 = ctx.alloc_tmp(RegClass::V128, in_ty);
+            let rtmp2 = ctx.alloc_tmp(RegClass::V128, in_ty);
 
             if in_bits == 32 {
                 ctx.emit(Inst::LoadFpuConst32 {
@@ -2072,7 +2072,9 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
             Opcode::BrTable => {
                 // Expand `br_table index, default, JT` to:
                 //
-                //   (emit island with guard jump if needed)
+                //   emit_island  // this forces an island at this point
+                //                // if the jumptable would push us past
+                //                // the deadline
                 //   subs idx, #jt_size
                 //   b.hs default
                 //   adr vTmp1, PC+16
@@ -2096,8 +2098,8 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     NarrowValueMode::ZeroExtend32,
                 );
 
-                let rtmp1 = ctx.tmp(RegClass::I64, I32);
-                let rtmp2 = ctx.tmp(RegClass::I64, I32);
+                let rtmp1 = ctx.alloc_tmp(RegClass::I64, I32);
+                let rtmp2 = ctx.alloc_tmp(RegClass::I64, I32);
 
                 // Bounds-check and branch to default.
                 if let Some(imm12) = Imm12::maybe_from_u64(jt_size as u64) {

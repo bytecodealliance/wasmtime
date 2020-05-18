@@ -3,12 +3,54 @@
 //! This module handles the translation from CLIF BBs to VCode BBs.
 //!
 //! The basic idea is that we compute a sequence of "lowered blocks" that
-//! correspond to subgraphs of the CLIF CFG plus an implicit block on *every*
-//! edge (not just critical edges). Conceptually, the lowering pipeline wants to
-//! insert moves for phi-nodes on every block-to-block transfer; these blocks
-//! always conceptually exist, but may be merged with an "original" CLIF block
-//! (and hence not actually exist; this is equivalent to inserting the blocks
-//! only on critical edges).
+//! correspond to one or more blocks in the graph: (CLIF CFG) `union` (implicit
+//! block on *every* edge). Conceptually, the lowering pipeline wants to insert
+//! moves for phi-nodes on every block-to-block transfer; these blocks always
+//! conceptually exist, but may be merged with an "original" CLIF block (and
+//! hence not actually exist; this is equivalent to inserting the blocks only on
+//! critical edges).
+//!
+//! In other words, starting from a CFG like this (where each "CLIF block" and
+//! "(edge N->M)" is a separate basic block):
+//!
+//! ```plain
+//!
+//!              CLIF block 0
+//!               /           \
+//!       (edge 0->1)         (edge 0->2)
+//!              |                |
+//!       CLIF block 1         CLIF block 2
+//!              \                /
+//!           (edge 1->3)   (edge 2->3)
+//!                   \      /
+//!                 CLIF block 3
+//! ```
+//!
+//! We can produce a CFG of lowered blocks like so:
+//!
+//! ```plain
+//!            +--------------+
+//!            | CLIF block 0 |
+//!            +--------------+
+//!               /           \
+//!     +--------------+     +--------------+
+//!     | (edge 0->1)  |     |(edge 0->2)   |
+//!     | CLIF block 1 |     | CLIF block 2 |
+//!     +--------------+     +--------------+
+//!              \                /
+//!          +-----------+ +-----------+
+//!          |(edge 1->3)| |(edge 2->3)|
+//!          +-----------+ +-----------+
+//!                   \      /
+//!                +------------+
+//!                |CLIF block 3|
+//!                +------------+
+//! ```
+//!
+//! (note that the edges into CLIF blocks 1 and 2 could be merged with those
+//! blocks' original bodies, but the out-edges could not because for simplicity
+//! in the successor-function definition, we only ever merge an edge onto one
+//! side of an original CLIF block.)
 //!
 //! Each `LoweredBlock` names just an original CLIF block, an original CLIF
 //! block prepended or appended with an edge block (never both, though), or just
@@ -23,6 +65,9 @@
 //! have content, because this computation happens as part of lowering *before*
 //! regalloc, and regalloc may or may not insert moves/spills/reloads on any
 //! particular edge. But it works relatively well and is conceptually simple.
+//! Furthermore, the [MachBuffer] machine-code sink performs final peephole-like
+//! branch editing that in practice elides empty blocks and simplifies some of
+//! the other redundancies that this scheme produces.
 
 use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};

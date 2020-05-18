@@ -188,7 +188,7 @@ pub(crate) fn input_to_reg<C: LowerCtx<I = Inst>>(
     let inputs = ctx.get_input(input.insn, input.input);
     let in_reg = if let Some(c) = inputs.constant {
         // Generate constants fresh at each use to minimize long-range register pressure.
-        let to_reg = ctx.tmp(Inst::rc_for_type(ty).unwrap(), ty);
+        let to_reg = ctx.alloc_tmp(Inst::rc_for_type(ty).unwrap(), ty);
         for inst in Inst::gen_constant(to_reg, c, ty).into_iter() {
             ctx.emit(inst);
         }
@@ -201,7 +201,7 @@ pub(crate) fn input_to_reg<C: LowerCtx<I = Inst>>(
     match (narrow_mode, from_bits) {
         (NarrowValueMode::None, _) => in_reg,
         (NarrowValueMode::ZeroExtend32, n) if n < 32 => {
-            let tmp = ctx.tmp(RegClass::I64, I32);
+            let tmp = ctx.alloc_tmp(RegClass::I64, I32);
             ctx.emit(Inst::Extend {
                 rd: tmp,
                 rn: in_reg,
@@ -212,7 +212,7 @@ pub(crate) fn input_to_reg<C: LowerCtx<I = Inst>>(
             tmp.to_reg()
         }
         (NarrowValueMode::SignExtend32, n) if n < 32 => {
-            let tmp = ctx.tmp(RegClass::I64, I32);
+            let tmp = ctx.alloc_tmp(RegClass::I64, I32);
             ctx.emit(Inst::Extend {
                 rd: tmp,
                 rn: in_reg,
@@ -229,7 +229,7 @@ pub(crate) fn input_to_reg<C: LowerCtx<I = Inst>>(
                 // Constants are zero-extended to full 64-bit width on load already.
                 in_reg
             } else {
-                let tmp = ctx.tmp(RegClass::I64, I32);
+                let tmp = ctx.alloc_tmp(RegClass::I64, I32);
                 ctx.emit(Inst::Extend {
                     rd: tmp,
                     rn: in_reg,
@@ -241,7 +241,7 @@ pub(crate) fn input_to_reg<C: LowerCtx<I = Inst>>(
             }
         }
         (NarrowValueMode::SignExtend64, n) if n < 64 => {
-            let tmp = ctx.tmp(RegClass::I64, I32);
+            let tmp = ctx.alloc_tmp(RegClass::I64, I32);
             ctx.emit(Inst::Extend {
                 rd: tmp,
                 rn: in_reg,
@@ -529,7 +529,7 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
     }
 
     // Otherwise, generate add instructions.
-    let addr = ctx.tmp(RegClass::I64, I64);
+    let addr = ctx.alloc_tmp(RegClass::I64, I64);
 
     // Get the const into a reg.
     lower_constant_u64(ctx, addr.clone(), offset as u64);
@@ -541,7 +541,7 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
         // In an addition, the stack register is the zero register, so divert it to another
         // register just before doing the actual add.
         let reg = if reg == stack_reg() {
-            let tmp = ctx.tmp(RegClass::I64, I64);
+            let tmp = ctx.alloc_tmp(RegClass::I64, I64);
             ctx.emit(Inst::Mov {
                 rd: tmp,
                 rm: stack_reg(),

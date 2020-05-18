@@ -352,6 +352,13 @@ impl MachInstEmit for Inst {
     type State = EmitState;
 
     fn emit(&self, sink: &mut MachBuffer<Inst>, flags: &settings::Flags, state: &mut EmitState) {
+        // N.B.: we *must* not exceed the "worst-case size" used to compute
+        // where to insert islands, except when islands are explicitly triggered
+        // (with an `EmitIsland`). We check this in debug builds. This is `mut`
+        // to allow disabling the check for `JTSequence`, which is always
+        // emitted following an `EmitIsland`.
+        let mut start_off = sink.cur_offset();
+
         match self {
             &Inst::AluRRR { alu_op, rd, rn, rm } => {
                 let top11 = match alu_op {
@@ -1307,6 +1314,10 @@ impl MachInstEmit for Inst {
                         LabelUse::PCRel32,
                     );
                 }
+
+                // Lowering produces an EmitIsland before using a JTSequence, so we can safely
+                // disable the worst-case-size check in this case.
+                start_off = sink.cur_offset();
             }
             &Inst::LoadConst64 { rd, const_data } => {
                 let inst = Inst::ULoad64 {
@@ -1418,5 +1429,8 @@ impl MachInstEmit for Inst {
                 }
             }
         }
+
+        let end_off = sink.cur_offset();
+        debug_assert!((end_off - start_off) <= Inst::worst_case_size());
     }
 }

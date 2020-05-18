@@ -23,9 +23,9 @@ use alloc::vec::Vec;
 use log::debug;
 use smallvec::SmallVec;
 
-/// An "instruction color" partitions instructions by side-effecting ops. All
-/// instructions with the same "color" are guaranteed not to be separated by any
-/// side-effecting op (for this purpose, loads are also considered
+/// An "instruction color" partitions CLIF instructions by side-effecting ops.
+/// All instructions with the same "color" are guaranteed not to be separated by
+/// any side-effecting op (for this purpose, loads are also considered
 /// side-effecting, to avoid subtle questions w.r.t. the memory model), and
 /// furthermore, it is guaranteed that for any two instructions A and B such
 /// that color(A) == color(B), either A dominates B and B postdominates A, or
@@ -33,7 +33,8 @@ use smallvec::SmallVec;
 /// have the same color, trivially providing the second condition.) Intuitively,
 /// this means that the ops of the same color must always execute "together", as
 /// part of one atomic contiguous section of the dynamic execution trace, and
-/// they can be freely permuted without affecting program behavior.
+/// they can be freely permuted (modulo true dataflow dependencies) without
+/// affecting program behavior.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct InstColor(u32);
 impl InstColor {
@@ -122,7 +123,11 @@ pub trait LowerCtx {
     /// If the backend uses the register, rather than one of the other
     /// forms (constant or merging of the producing op), it must call
     /// `use_input_reg()` to ensure the producing inst is actually lowered
-    /// as well.
+    /// as well. Failing to do so may result in the instruction that generates
+    /// this value never being generated, thus resulting in incorrect execution.
+    /// For correctness, backends should thus wrap `get_input()` and
+    /// `use_input_regs()` with helpers that return a register only after
+    /// ensuring it is marked as used.
     fn get_input(&self, ir_inst: Inst, idx: usize) -> LowerInput;
     /// Get the `idx`th output register of the given IR instruction. When
     /// `backend.lower_inst_to_regs(ctx, inst)` is called, it is expected that
@@ -133,7 +138,7 @@ pub trait LowerCtx {
     // ask for an input to be gen'd into a register.
 
     /// Get a new temp.
-    fn tmp(&mut self, rc: RegClass, ty: Type) -> Writable<Reg>;
+    fn alloc_tmp(&mut self, rc: RegClass, ty: Type) -> Writable<Reg>;
     /// Emit a machine instruction.
     fn emit(&mut self, mach_inst: Self::I);
     /// Indicate that the given input uses the register returned by
@@ -477,7 +482,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // There's some overlap, so play safe and copy via temps.
             let mut tmp_regs: SmallVec<[Writable<Reg>; 16]> = SmallVec::new();
             for &ty in &phi_classes {
-                tmp_regs.push(self.tmp(I::rc_for_type(ty)?, ty));
+                tmp_regs.push(self.alloc_tmp(I::rc_for_type(ty)?, ty));
             }
 
             debug!("phi_temps = {:?}", tmp_regs);
@@ -721,6 +726,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         Ok(vcode)
     }
 
+    /// Get the actual inputs for a value. This is the implementation for
+    /// `get_input()` but starting from the SSA value, which is not exposed to
+    /// the backend.
     fn get_input_for_val(&self, at_inst: Inst, val: Value) -> LowerInput {
         debug!("get_input_for_val: val {} at inst {}", val, at_inst);
         let mut reg = self.value_regs[val];
@@ -889,7 +897,7 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         Writable::from_reg(self.value_regs[val])
     }
 
-    fn tmp(&mut self, rc: RegClass, ty: Type) -> Writable<Reg> {
+    fn alloc_tmp(&mut self, rc: RegClass, ty: Type) -> Writable<Reg> {
         let v = self.next_vreg;
         self.next_vreg += 1;
         let vreg = Reg::new_virtual(rc, v);

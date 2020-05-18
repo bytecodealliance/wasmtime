@@ -657,6 +657,15 @@ pub enum Inst {
 
     /// A one-way conditional branch, invisible to the CFG processing; used *only* as part of
     /// straight-line sequences in code to be emitted.
+    ///
+    /// In more detail:
+    /// - This branch is lowered to a branch at the machine-code level, but does not end a basic
+    ///   block, and does not create edges in the CFG seen by regalloc.
+    /// - Thus, it is *only* valid to use as part of a single-in, single-out sequence that is
+    ///   lowered from a single CLIF instruction. For example, certain arithmetic operations may
+    ///   use these branches to handle certain conditions, such as overflows, traps, etc.
+    ///
+    /// See, e.g., the lowering of `trapif` (conditional trap) for an example.
     OneWayCondBr {
         target: BranchTarget,
         kind: CondBrKind,
@@ -678,7 +687,7 @@ pub enum Inst {
         trap_info: (SourceLoc, TrapCode),
     },
 
-    /// Load the address (using a PC-relative offset) of a memory location, using the `ADR`
+    /// Compute the address (using a PC-relative offset) of a memory location, using the `ADR`
     /// instruction. Note that we take a simple offset, not a `MemLabel`, here, because `Adr` is
     /// only used for now in fixed lowering sequences with hardcoded offsets. In the future we may
     /// need full `MemLabel` support.
@@ -734,9 +743,26 @@ pub enum Inst {
         offset: i64,
     },
 
-    /// Meta-insn, no-op in generated code: emit constant/branch veneer island at this point (with
-    /// a guard jump around it) if less than the needed space is available before the next branch
-    /// deadline.
+    /// Meta-insn, no-op in generated code: emit constant/branch veneer island
+    /// at this point (with a guard jump around it) if less than the needed
+    /// space is available before the next branch deadline. See the `MachBuffer`
+    /// implementation in `machinst/buffer.rs` for the overall algorithm. In
+    /// brief, we retain a set of "pending/unresolved label references" from
+    /// branches as we scan forward through instructions to emit machine code;
+    /// if we notice we're about to go out of range on an unresolved reference,
+    /// we stop, emit a bunch of "veneers" (branches in a form that has a longer
+    /// range, e.g. a 26-bit-offset unconditional jump), and point the original
+    /// label references to those. This is an "island" because it comes in the
+    /// middle of the code.
+    ///
+    /// This meta-instruction is a necessary part of the logic that determines
+    /// where to place islands. Ordinarily, we want to place them between basic
+    /// blocks, so we compute the worst-case size of each block, and emit the
+    /// island before starting a block if we would exceed a deadline before the
+    /// end of the block. However, some sequences (such as an inline jumptable)
+    /// are variable-length and not accounted for by this logic; so these
+    /// lowered sequences include an `EmitIsland` to trigger island generation
+    /// where necessary.
     EmitIsland {
         /// The needed space before the next deadline.
         needed_space: CodeOffset,
@@ -1770,6 +1796,18 @@ impl MachInst for Inst {
             ));
             ret
         } else {
+            // Must be an integer type.
+            debug_assert!(
+                ty == B1
+                    || ty == I8
+                    || ty == B8
+                    || ty == I16
+                    || ty == B16
+                    || ty == I32
+                    || ty == B32
+                    || ty == I64
+                    || ty == B64
+            );
             Inst::load_constant(to_reg, value)
         }
     }
@@ -2601,7 +2639,8 @@ pub enum LabelUse {
     /// 21-bit offset for ADR (get address of label). PC-rel, offset is not shifted. Immediate is
     /// 21 signed bits, with high 19 bits in bits 23:5 and low 2 bits in bits 30:29.
     Adr21,
-    /// 32-bit PC relative constant offset (from address of constant itself). Used in jump tables.
+    /// 32-bit PC relative constant offset (from address of constant itself),
+    /// signed. Used in jump tables.
     PCRel32,
 }
 
