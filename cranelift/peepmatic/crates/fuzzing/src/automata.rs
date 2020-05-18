@@ -109,7 +109,11 @@ pub fn simple_automata(input_output_pairs: Vec<Vec<(u8, Vec<u8>)>>) {
 pub fn fst_differential(map: HashMap<Vec<u8>, u64>) {
     let _ = env_logger::try_init();
 
-    let mut inputs: Vec<_> = map.keys().filter(|i| !i.is_empty()).cloned().collect();
+    let mut inputs: Vec<_> = map
+        .keys()
+        .filter(|k| !k.is_empty() && k.len() < 256)
+        .cloned()
+        .collect();
     inputs.sort();
     inputs.dedup();
     if inputs.is_empty() {
