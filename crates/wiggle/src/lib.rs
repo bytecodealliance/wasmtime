@@ -16,7 +16,8 @@ mod error;
 mod guest_type;
 mod region;
 
-pub use borrow::GuestBorrows;
+pub use borrow::BorrowChecker;
+use borrow::BorrowHandle;
 pub use error::GuestError;
 pub use guest_type::{GuestErrorType, GuestType, GuestTypeTransparent};
 pub use region::Region;
@@ -150,12 +151,12 @@ pub unsafe trait GuestMemory {
     /// Note that `T` can be almost any type, and typically `offset` is a `u32`.
     /// The exception is slices and strings, in which case `offset` is a `(u32,
     /// u32)` of `(offset, length)`.
-    fn ptr<'a, T>(&'a self, offset: T::Pointer) -> GuestPtr<'a, T>
+    fn ptr<'a, T>(&'a self, bc: &'a BorrowChecker, offset: T::Pointer) -> GuestPtr<'a, T>
     where
         Self: Sized,
         T: ?Sized + Pointee,
     {
-        GuestPtr::new(self, offset)
+        GuestPtr::new(self, bc, offset)
     }
 }
 
@@ -237,6 +238,7 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Arc<T> {
 /// already-attached helper methods.
 pub struct GuestPtr<'a, T: ?Sized + Pointee> {
     mem: &'a (dyn GuestMemory + 'a),
+    bc: &'a BorrowChecker,
     pointer: T::Pointer,
     _marker: marker::PhantomData<&'a Cell<T>>,
 }
@@ -247,9 +249,14 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
     /// Note that for sized types like `u32`, `GuestPtr<T>`, etc, the `pointer`
     /// vlue is a `u32` offset into guest memory. For slices and strings,
     /// `pointer` is a `(u32, u32)` offset/length pair.
-    pub fn new(mem: &'a (dyn GuestMemory + 'a), pointer: T::Pointer) -> GuestPtr<'_, T> {
+    pub fn new(
+        mem: &'a (dyn GuestMemory + 'a),
+        bc: &'a BorrowChecker,
+        pointer: T::Pointer,
+    ) -> GuestPtr<'a, T> {
         GuestPtr {
             mem,
+            bc,
             pointer,
             _marker: marker::PhantomData,
         }
@@ -268,6 +275,11 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
         self.mem
     }
 
+    /// Returns the borrow checker that this pointer uses
+    pub fn borrow_checker(&self) -> &'a BorrowChecker {
+        self.bc
+    }
+
     /// Casts this `GuestPtr` type to a different type.
     ///
     /// This is a safe method which is useful for simply reinterpreting the type
@@ -278,7 +290,7 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
     where
         T: Pointee<Pointer = u32>,
     {
-        GuestPtr::new(self.mem, self.pointer)
+        GuestPtr::new(self.mem, self.bc, self.pointer)
     }
 
     /// Safely read a value from this pointer.
@@ -345,7 +357,7 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
             Some(o) => o,
             None => return Err(GuestError::PtrOverflow),
         };
-        Ok(GuestPtr::new(self.mem, offset))
+        Ok(GuestPtr::new(self.mem, self.bc, offset))
     }
 
     /// Returns a `GuestPtr` for an array of `T`s using this pointer as the
@@ -354,7 +366,7 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
     where
         T: GuestType<'a> + Pointee<Pointer = u32>,
     {
-        GuestPtr::new(self.mem, (self.pointer, elems))
+        GuestPtr::new(self.mem, self.bc, (self.pointer, elems))
     }
 }
 
@@ -403,7 +415,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
     /// For safety against overlapping mutable borrows, the user must use the
     /// same `GuestBorrows` to create all `*mut str` or `*mut [T]` that are alive
     /// at the same time.
-    pub fn as_raw(&self, bc: &mut GuestBorrows) -> Result<*mut [T], GuestError>
+    pub fn as_slice(&self) -> Result<GuestSlice<'a, T>, GuestError>
     where
         T: GuestTypeTransparent<'a>,
     {
@@ -415,7 +427,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
             self.mem
                 .validate_size_align(self.pointer.0, T::guest_align(), len)? as *mut T;
 
-        bc.borrow(Region {
+        let borrow = self.bc.borrow(Region {
             start: self.pointer.0,
             len,
         })?;
@@ -428,10 +440,16 @@ impl<'a, T> GuestPtr<'a, [T]> {
 
         // SAFETY: iff there are no overlapping borrows (all uses of as_raw use this same
         // GuestBorrows), its valid to construct a *mut [T]
-        unsafe {
+        let ptr = unsafe {
             let s = slice::from_raw_parts_mut(ptr, self.pointer.1 as usize);
-            Ok(s as *mut [T])
-        }
+            s as *mut [T]
+        };
+
+        Ok(GuestSlice {
+            ptr,
+            bc: self.bc,
+            borrow,
+        })
     }
 
     /// Copies the data pointed to by `slice` into this guest region.
@@ -451,22 +469,20 @@ impl<'a, T> GuestPtr<'a, [T]> {
         T: GuestTypeTransparent<'a> + Copy,
     {
         // bounds check ...
-        let raw = self.as_raw(&mut GuestBorrows::new())?;
-        unsafe {
-            // ... length check ...
-            if (*raw).len() != slice.len() {
-                return Err(GuestError::SliceLengthsDiffer);
-            }
-            // ... and copy!
-            (*raw).copy_from_slice(slice);
-            Ok(())
+        let mut self_slice = self.as_slice()?;
+        // ... length check ...
+        if self_slice.len() != slice.len() {
+            return Err(GuestError::SliceLengthsDiffer);
         }
+        // ... and copy!
+        self_slice.copy_from_slice(slice);
+        Ok(())
     }
 
     /// Returns a `GuestPtr` pointing to the base of the array for the interior
     /// type `T`.
     pub fn as_ptr(&self) -> GuestPtr<'a, T> {
-        GuestPtr::new(self.mem, self.offset_base())
+        GuestPtr::new(self.mem, self.bc, self.offset_base())
     }
 }
 
@@ -485,7 +501,7 @@ impl<'a> GuestPtr<'a, str> {
     /// Returns a raw pointer for the underlying slice of bytes that this
     /// pointer points to.
     pub fn as_bytes(&self) -> GuestPtr<'a, [u8]> {
-        GuestPtr::new(self.mem, self.pointer)
+        GuestPtr::new(self.mem, self.bc, self.pointer)
     }
 
     /// Attempts to read a raw `*mut str` pointer from this pointer, performing
@@ -505,24 +521,26 @@ impl<'a> GuestPtr<'a, str> {
     /// For safety against overlapping mutable borrows, the user must use the
     /// same `GuestBorrows` to create all `*mut str` or `*mut [T]` that are
     /// alive at the same time.
-    pub fn as_raw(&self, bc: &mut GuestBorrows) -> Result<*mut str, GuestError> {
+    pub fn as_str(&self) -> Result<GuestStr<'a>, GuestError> {
         let ptr = self
             .mem
             .validate_size_align(self.pointer.0, 1, self.pointer.1)?;
 
-        bc.borrow(Region {
+        let borrow = self.bc.borrow(Region {
             start: self.pointer.0,
             len: self.pointer.1,
         })?;
 
         // SAFETY: iff there are no overlapping borrows (all uses of as_raw use this same
         // GuestBorrows), its valid to construct a *mut str
-        unsafe {
-            let s = slice::from_raw_parts_mut(ptr, self.pointer.1 as usize);
-            match str::from_utf8_mut(s) {
-                Ok(s) => Ok(s),
-                Err(e) => Err(GuestError::InvalidUtf8(e)),
-            }
+        let ptr = unsafe { slice::from_raw_parts_mut(ptr, self.pointer.1 as usize) };
+        match str::from_utf8_mut(ptr) {
+            Ok(ptr) => Ok(GuestStr {
+                ptr,
+                bc: self.bc,
+                borrow,
+            }),
+            Err(e) => Err(GuestError::InvalidUtf8(e)),
         }
     }
 }
@@ -538,6 +556,56 @@ impl<T: ?Sized + Pointee> Copy for GuestPtr<'_, T> {}
 impl<T: ?Sized + Pointee> fmt::Debug for GuestPtr<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         T::debug(self.pointer, f)
+    }
+}
+
+pub struct GuestSlice<'a, T> {
+    ptr: *mut [T],
+    bc: &'a BorrowChecker,
+    borrow: BorrowHandle,
+}
+
+impl<'a, T> std::ops::Deref for GuestSlice<'a, T> {
+    type Target = [T];
+    fn deref(&self) -> &Self::Target {
+        unsafe { self.ptr.as_ref().expect("ptr guaranteed to be non-null") }
+    }
+}
+
+impl<'a, T> std::ops::DerefMut for GuestSlice<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { self.ptr.as_mut().expect("ptr guaranteed to be non-null") }
+    }
+}
+
+impl<'a, T> Drop for GuestSlice<'a, T> {
+    fn drop(&mut self) {
+        self.bc.unborrow(self.borrow)
+    }
+}
+
+pub struct GuestStr<'a> {
+    ptr: *mut str,
+    bc: &'a BorrowChecker,
+    borrow: BorrowHandle,
+}
+
+impl<'a> std::ops::Deref for GuestStr<'a> {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        unsafe { self.ptr.as_ref().expect("ptr guaranteed to be non-null") }
+    }
+}
+
+impl<'a> std::ops::DerefMut for GuestStr<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { self.ptr.as_mut().expect("ptr guaranteed to be non-null") }
+    }
+}
+
+impl<'a> Drop for GuestStr<'a> {
+    fn drop(&mut self) {
+        self.bc.unborrow(self.borrow)
     }
 }
 

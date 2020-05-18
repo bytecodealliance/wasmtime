@@ -131,7 +131,7 @@ impl<'a, T> GuestType<'a> for GuestPtr<'a, T> {
 
     fn read(ptr: &GuestPtr<'a, Self>) -> Result<Self, GuestError> {
         let offset = ptr.cast::<u32>().read()?;
-        Ok(GuestPtr::new(ptr.mem(), offset))
+        Ok(GuestPtr::new(ptr.mem(), ptr.borrow_checker(), offset))
     }
 
     fn write(ptr: &GuestPtr<'_, Self>, val: Self) -> Result<(), GuestError> {

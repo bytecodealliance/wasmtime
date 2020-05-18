@@ -1,64 +1,67 @@
+use crate::error::GuestError;
 use crate::region::Region;
-use crate::{GuestError, GuestPtr, GuestType};
+use std::cell::RefCell;
+use std::collections::HashMap;
 
-#[derive(Debug)]
-pub struct GuestBorrows {
-    borrows: Vec<Region>,
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct BorrowHandle(usize);
+
+pub struct BorrowChecker {
+    bc: RefCell<InnerBorrowChecker>,
 }
 
-impl GuestBorrows {
+impl BorrowChecker {
     pub fn new() -> Self {
-        Self {
-            borrows: Vec::new(),
+        BorrowChecker {
+            bc: RefCell::new(InnerBorrowChecker::new()),
+        }
+    }
+    pub fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        self.bc
+            .borrow_mut()
+            .borrow(r)
+            .ok_or_else(|| GuestError::PtrBorrowed(r))
+    }
+    pub fn unborrow(&self, h: BorrowHandle) {
+        self.bc.borrow_mut().unborrow(h)
+    }
+}
+
+#[derive(Debug)]
+struct InnerBorrowChecker {
+    borrows: HashMap<BorrowHandle, Region>,
+    next_handle: BorrowHandle,
+}
+
+impl InnerBorrowChecker {
+    fn new() -> Self {
+        InnerBorrowChecker {
+            borrows: HashMap::new(),
+            next_handle: BorrowHandle(0),
         }
     }
 
     fn is_borrowed(&self, r: Region) -> bool {
-        !self.borrows.iter().all(|b| !b.overlaps(r))
+        !self.borrows.values().all(|b| !b.overlaps(r))
     }
 
-    pub(crate) fn borrow(&mut self, r: Region) -> Result<(), GuestError> {
+    fn new_handle(&mut self) -> BorrowHandle {
+        let h = self.next_handle;
+        self.next_handle = BorrowHandle(h.0 + 1);
+        h
+    }
+
+    fn borrow(&mut self, r: Region) -> Option<BorrowHandle> {
         if self.is_borrowed(r) {
-            Err(GuestError::PtrBorrowed(r))
-        } else {
-            self.borrows.push(r);
-            Ok(())
+            return None;
         }
+        let h = self.new_handle();
+        self.borrows.insert(h, r);
+        Some(h)
     }
 
-    /// Borrow the region of memory pointed to by a `GuestPtr`. This is required for safety if
-    /// you are dereferencing `GuestPtr`s while holding a reference to a slice via
-    /// `GuestPtr::as_raw`.
-    pub fn borrow_pointee<'a, T>(&mut self, p: &GuestPtr<'a, T>) -> Result<(), GuestError>
-    where
-        T: GuestType<'a>,
-    {
-        self.borrow(Region {
-            start: p.offset(),
-            len: T::guest_size(),
-        })
-    }
-
-    /// Borrow the slice of memory pointed to by a `GuestPtr<[T]>`. This is required for safety if
-    /// you are dereferencing the `GuestPtr`s while holding a reference to another slice via
-    /// `GuestPtr::as_raw`. Not required if using `GuestPtr::as_raw` on this pointer.
-    pub fn borrow_slice<'a, T>(&mut self, p: &GuestPtr<'a, [T]>) -> Result<(), GuestError>
-    where
-        T: GuestType<'a>,
-    {
-        let (start, elems) = p.offset();
-        let len = T::guest_size()
-            .checked_mul(elems)
-            .ok_or_else(|| GuestError::PtrOverflow)?;
-        self.borrow(Region { start, len })
-    }
-
-    /// Borrow the slice of memory pointed to by a `GuestPtr<str>`. This is required for safety if
-    /// you are dereferencing the `GuestPtr`s while holding a reference to another slice via
-    /// `GuestPtr::as_raw`. Not required if using `GuestPtr::as_raw` on this pointer.
-    pub fn borrow_str(&mut self, p: &GuestPtr<str>) -> Result<(), GuestError> {
-        let (start, len) = p.offset();
-        self.borrow(Region { start, len })
+    fn unborrow(&mut self, h: BorrowHandle) {
+        let _ = self.borrows.remove(&h);
     }
 }
 
@@ -67,14 +70,14 @@ mod test {
     use super::*;
     #[test]
     fn nonoverlapping() {
-        let mut bs = GuestBorrows::new();
+        let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(0, 10);
         let r2 = Region::new(10, 10);
         assert!(!r1.overlaps(r2));
         bs.borrow(r1).expect("can borrow r1");
         bs.borrow(r2).expect("can borrow r2");
 
-        let mut bs = GuestBorrows::new();
+        let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(10, 10);
         let r2 = Region::new(0, 10);
         assert!(!r1.overlaps(r2));
@@ -84,35 +87,35 @@ mod test {
 
     #[test]
     fn overlapping() {
-        let mut bs = GuestBorrows::new();
+        let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(0, 10);
         let r2 = Region::new(9, 10);
         assert!(r1.overlaps(r2));
         bs.borrow(r1).expect("can borrow r1");
-        assert!(bs.borrow(r2).is_err(), "cant borrow r2");
+        assert!(bs.borrow(r2).is_none(), "cant borrow r2");
 
-        let mut bs = GuestBorrows::new();
+        let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(0, 10);
         let r2 = Region::new(2, 5);
         assert!(r1.overlaps(r2));
         bs.borrow(r1).expect("can borrow r1");
-        assert!(bs.borrow(r2).is_err(), "cant borrow r2");
+        assert!(bs.borrow(r2).is_none(), "cant borrow r2");
 
-        let mut bs = GuestBorrows::new();
+        let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(9, 10);
         let r2 = Region::new(0, 10);
         assert!(r1.overlaps(r2));
         bs.borrow(r1).expect("can borrow r1");
-        assert!(bs.borrow(r2).is_err(), "cant borrow r2");
+        assert!(bs.borrow(r2).is_none(), "cant borrow r2");
 
-        let mut bs = GuestBorrows::new();
+        let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(2, 5);
         let r2 = Region::new(0, 10);
         assert!(r1.overlaps(r2));
         bs.borrow(r1).expect("can borrow r1");
-        assert!(bs.borrow(r2).is_err(), "cant borrow r2");
+        assert!(bs.borrow(r2).is_none(), "cant borrow r2");
 
-        let mut bs = GuestBorrows::new();
+        let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(2, 5);
         let r2 = Region::new(10, 5);
         let r3 = Region::new(15, 5);
@@ -121,6 +124,23 @@ mod test {
         bs.borrow(r1).expect("can borrow r1");
         bs.borrow(r2).expect("can borrow r2");
         bs.borrow(r3).expect("can borrow r3");
-        assert!(bs.borrow(r4).is_err(), "cant borrow r4");
+        assert!(bs.borrow(r4).is_none(), "cant borrow r4");
+    }
+
+    #[test]
+    fn unborrowing() {
+        let mut bs = InnerBorrowChecker::new();
+        let r1 = Region::new(0, 10);
+        let r2 = Region::new(10, 10);
+        assert!(!r1.overlaps(r2));
+        let _h1 = bs.borrow(r1).expect("can borrow r1");
+        let h2 = bs.borrow(r2).expect("can borrow r2");
+
+        assert!(bs.borrow(r2).is_none(), "can't borrow r2 twice");
+        bs.unborrow(h2);
+
+        let _h3 = bs
+            .borrow(r2)
+            .expect("can borrow r2 again now that its been unborrowed");
     }
 }

@@ -1,4 +1,4 @@
-use wiggle::{GuestBorrows, GuestError, GuestErrorType, GuestPtr};
+use wiggle::{GuestError, GuestErrorType, GuestPtr, GuestSlice};
 use wiggle_test::WasiCtx;
 
 // This test file exists to make sure that the entire `wasi.witx` file can be
@@ -141,11 +141,11 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
         // that we can use the wiggle API to create the datastructures we want
         // for efficient implementation of this function elsewhere.
 
-        let mut bc = GuestBorrows::new();
-        let mut slices: Vec<&'_ mut [u8]> = Vec::new();
+        let mut slices: Vec<GuestSlice<'_, u8>> = Vec::new();
+        // XXX FIXME make sure this property still holds:
         // Mark the iov elements as borrowed, to ensure that they does not
         // overlap with any of the as_raw regions.
-        bc.borrow_slice(&iovs).expect("borrow iovec array");
+        // bc.borrow_slice(&iovs).expect("borrow iovec array");
         for iov_ptr in iovs.iter() {
             let iov_ptr = iov_ptr.expect("iovec element pointer is valid");
 
@@ -153,10 +153,14 @@ impl<'a> crate::wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx<'a> {
             let base: GuestPtr<u8> = iov.buf;
             let len: u32 = iov.buf_len;
             let buf: GuestPtr<[u8]> = base.as_array(len);
-            let slice = buf.as_raw(&mut bc).expect("borrow slice from iovec");
-            slices.push(unsafe { &mut *slice });
+            let slice = buf.as_slice().expect("borrow slice from iovec");
+            slices.push(slice);
         }
-        println!("iovec slices: {:?}", slices);
+        println!("iovec slices: [");
+        for slice in slices {
+            println!("  {:?},", &*slice);
+        }
+        println!("]");
         unimplemented!("fd_pread")
     }
 
