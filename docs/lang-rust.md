@@ -43,7 +43,7 @@ dependency in `Cargo.toml`:
 
 ```toml
 [dependencies]
-wasmtime = "0.12.0"
+wasmtime = "0.16.0"
 ```
 
 Next up let's write the code that we need to execute this wasm file. The
@@ -120,7 +120,7 @@ some simple arithmetic from the environment.
 (module
   (import "" "log" (func $log (param i32)))
   (import "" "double" (func $double (param i32) (result i32)))
-  (func (export "run") (result i32)
+  (func (export "run")
     i32.const 0
     call $log
     i32.const 1
@@ -138,29 +138,38 @@ looks like this:
 
 ```rust,no_run
 # extern crate wasmtime;
-# use std::error::Error;
-# use wasmtime::*;
-# fn main() -> Result<(), Box<dyn Error>> {
-# let store = Store::default();
-# let module = Module::new(&store, r#"
-# (module
-# (import "" "log" (func $log (param i32)))
-# (import "" "double" (func $double (param i32) (result i32))))"#)?;
-// First we can create our `log` function, which will simply print out the
-// parameter it receives.
-let log = Func::wrap(&store, |param: i32| {
-    println!("log: {}", param);
-});
+use std::error::Error;
+use wasmtime::*;
 
-// Next we can create our double function which doubles the input it receives.
-let double = Func::wrap(&store, |param: i32| param * 2);
-
-// When instantiating the module we now need to provide the imports to the
-// instantiation process. This is the second slice argument, where each
-// entry in the slice must line up with the imports in the module.
-let instance = Instance::new(&module, &[log.into(), double.into()])?;
-# Ok(())
+fn main() -> Result<(), Box<dyn Error>> {
+    let store = Store::default();
+# if false {
+    let module = Module::from_file(&store, "hello.wat")?;
 # }
+# let module = Module::new(&store, r#"(module (import "" "log" (func $log (param i32))) (import "" "double" (func $double (param i32) (result i32))) (func (export "run") i32.const 0 call $log i32.const 1 call $log i32.const 2 call $double call $log))"#)?;
+
+    // First we can create our `log` function, which will simply print out the
+    // parameter it receives.
+    let log = Func::wrap(&store, |param: i32| {
+        println!("log: {}", param);
+    });
+
+    // Next we can create our double function which doubles the input it receives.
+    let double = Func::wrap(&store, |param: i32| param * 2);
+
+    // When instantiating the module we now need to provide the imports to the
+    // instantiation process. This is the second slice argument, where each
+    // entry in the slice must line up with the imports in the module.
+    let instance = Instance::new(&module, &[log.into(), double.into()])?;
+
+    let run = instance
+        .get_func("run")
+        .expect("`run` was not an exported function");
+
+    let run = run.get0::<()>()?;
+
+    Ok(run()?)
+}
 ```
 
 Note that there's a number of ways to define a `Func`, be sure to [consult its
