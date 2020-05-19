@@ -257,4 +257,5 @@ pub(crate) fn filestat_set_times_at(
 
     utimensat(&*dirfd.as_file()?, path, atim, mtim, !follow)?;
 
-    Ok(()) }
+    Ok(())
+}
