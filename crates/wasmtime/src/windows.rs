@@ -18,14 +18,14 @@ pub trait StoreExt {
     /// TODO: needs more documentation.
     unsafe fn set_signal_handler<H>(&self, handler: H)
     where
-        H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool;
+        H: 'static + Send + Sync + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool;
 }
 
 impl StoreExt for Store {
     unsafe fn set_signal_handler<H>(&self, handler: H)
     where
-        H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool,
+        H: 'static + Send + Sync + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool,
     {
-        *self.signal_handler_mut() = Some(Box::new(handler));
+        Store::set_signal_handler(self, std::sync::Arc::new(handler));
     }
 }
