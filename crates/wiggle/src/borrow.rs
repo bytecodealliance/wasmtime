@@ -17,10 +17,7 @@ impl BorrowChecker {
         }
     }
     pub fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        self.bc
-            .borrow_mut()
-            .borrow(r)
-            .ok_or_else(|| GuestError::PtrBorrowed(r))
+        self.bc.borrow_mut().borrow(r)
     }
     pub fn unborrow(&self, h: BorrowHandle) {
         self.bc.borrow_mut().unborrow(h)
@@ -45,19 +42,26 @@ impl InnerBorrowChecker {
         !self.borrows.values().all(|b| !b.overlaps(r))
     }
 
-    fn new_handle(&mut self) -> BorrowHandle {
+    fn new_handle(&mut self) -> Result<BorrowHandle, GuestError> {
+        // Reset handles to 0 if all handles have been returned.
+        if self.borrows.is_empty() {
+            self.next_handle = BorrowHandle(0);
+        }
         let h = self.next_handle;
-        self.next_handle = BorrowHandle(h.0 + 1);
-        h
+        self.next_handle = BorrowHandle(
+            h.0.checked_add(1)
+                .ok_or_else(|| GuestError::BorrowCheckerOOM)?,
+        );
+        Ok(h)
     }
 
-    fn borrow(&mut self, r: Region) -> Option<BorrowHandle> {
+    fn borrow(&mut self, r: Region) -> Result<BorrowHandle, GuestError> {
         if self.is_borrowed(r) {
-            return None;
+            return Err(GuestError::PtrBorrowed(r));
         }
-        let h = self.new_handle();
+        let h = self.new_handle()?;
         self.borrows.insert(h, r);
-        Some(h)
+        Ok(h)
     }
 
     fn unborrow(&mut self, h: BorrowHandle) {
@@ -92,28 +96,28 @@ mod test {
         let r2 = Region::new(9, 10);
         assert!(r1.overlaps(r2));
         bs.borrow(r1).expect("can borrow r1");
-        assert!(bs.borrow(r2).is_none(), "cant borrow r2");
+        assert!(bs.borrow(r2).is_err(), "cant borrow r2");
 
         let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(0, 10);
         let r2 = Region::new(2, 5);
         assert!(r1.overlaps(r2));
         bs.borrow(r1).expect("can borrow r1");
-        assert!(bs.borrow(r2).is_none(), "cant borrow r2");
+        assert!(bs.borrow(r2).is_err(), "cant borrow r2");
 
         let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(9, 10);
         let r2 = Region::new(0, 10);
         assert!(r1.overlaps(r2));
         bs.borrow(r1).expect("can borrow r1");
-        assert!(bs.borrow(r2).is_none(), "cant borrow r2");
+        assert!(bs.borrow(r2).is_err(), "cant borrow r2");
 
         let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(2, 5);
         let r2 = Region::new(0, 10);
         assert!(r1.overlaps(r2));
         bs.borrow(r1).expect("can borrow r1");
-        assert!(bs.borrow(r2).is_none(), "cant borrow r2");
+        assert!(bs.borrow(r2).is_err(), "cant borrow r2");
 
         let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(2, 5);
@@ -124,7 +128,7 @@ mod test {
         bs.borrow(r1).expect("can borrow r1");
         bs.borrow(r2).expect("can borrow r2");
         bs.borrow(r3).expect("can borrow r3");
-        assert!(bs.borrow(r4).is_none(), "cant borrow r4");
+        assert!(bs.borrow(r4).is_err(), "cant borrow r4");
     }
 
     #[test]
@@ -136,7 +140,7 @@ mod test {
         let _h1 = bs.borrow(r1).expect("can borrow r1");
         let h2 = bs.borrow(r2).expect("can borrow r2");
 
-        assert!(bs.borrow(r2).is_none(), "can't borrow r2 twice");
+        assert!(bs.borrow(r2).is_err(), "can't borrow r2 twice");
         bs.unborrow(h2);
 
         let _h3 = bs
