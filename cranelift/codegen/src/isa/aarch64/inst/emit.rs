@@ -4,7 +4,7 @@ use crate::binemit::{CodeOffset, Reloc};
 use crate::ir::constant::ConstantData;
 use crate::ir::types::*;
 use crate::ir::TrapCode;
-use crate::isa::aarch64::{inst::regs::PINNED_REG, inst::*};
+use crate::isa::aarch64::inst::*;
 
 use regalloc::{Reg, RegClass, Writable};
 
@@ -147,6 +147,14 @@ fn enc_cbr(op_31_24: u32, off_18_0: u32, op_4: u32, cond: u32) -> u32 {
     assert!(off_18_0 < (1 << 19));
     assert!(cond < (1 << 4));
     (op_31_24 << 24) | (off_18_0 << 5) | (op_4 << 4) | cond
+}
+
+fn enc_conditional_br(taken: BranchTarget, kind: CondBrKind) -> u32 {
+    match kind {
+        CondBrKind::Zero(reg) => enc_cmpbr(0b1_011010_0, taken.as_offset19_or_zero(), reg),
+        CondBrKind::NotZero(reg) => enc_cmpbr(0b1_011010_1, taken.as_offset19_or_zero(), reg),
+        CondBrKind::Cond(c) => enc_cbr(0b01010100, taken.as_offset19_or_zero(), 0b0, c.bits()),
+    }
 }
 
 const MOVE_WIDE_FIXED: u32 = 0x92800000;
@@ -340,10 +348,17 @@ pub struct EmitState {
     virtual_sp_offset: i64,
 }
 
-impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
+impl MachInstEmit for Inst {
     type State = EmitState;
 
-    fn emit(&self, sink: &mut O, flags: &settings::Flags, state: &mut EmitState) {
+    fn emit(&self, sink: &mut MachBuffer<Inst>, flags: &settings::Flags, state: &mut EmitState) {
+        // N.B.: we *must* not exceed the "worst-case size" used to compute
+        // where to insert islands, except when islands are explicitly triggered
+        // (with an `EmitIsland`). We check this in debug builds. This is `mut`
+        // to allow disabling the check for `JTSequence`, which is always
+        // emitted following an `EmitIsland`.
+        let mut start_off = sink.cur_offset();
+
         match self {
             &Inst::AluRRR { alu_op, rd, rn, rm } => {
                 let top11 = match alu_op {
@@ -616,7 +631,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 ref mem,
                 srcloc,
             } => {
-                let (mem_insts, mem) = mem_finalize(sink.cur_offset_from_start(), mem, state);
+                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), mem, state);
 
                 for inst in mem_insts.into_iter() {
                     inst.emit(sink, flags, state);
@@ -759,7 +774,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 ref mem,
                 srcloc,
             } => {
-                let (mem_insts, mem) = mem_finalize(sink.cur_offset_from_start(), mem, state);
+                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), mem, state);
 
                 for inst in mem_insts.into_iter() {
                     inst.emit(sink, flags, state);
@@ -1147,10 +1162,18 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 panic!("Unsupported extend variant");
             }
             &Inst::Jump { ref dest } => {
-                // TODO: differentiate between as_off26() returning `None` for
-                // out-of-range vs. not-yet-finalized. The latter happens when we
-                // do early (fake) emission for size computation.
-                sink.put4(enc_jump26(0b000101, dest.as_off26().unwrap()));
+                let off = sink.cur_offset();
+                // Emit the jump itself.
+                sink.put4(enc_jump26(0b000101, dest.as_offset26_or_zero()));
+                // After the jump has been emitted, indicate that it uses a
+                // label, if so, so that a fixup can occur later. This happens
+                // after we emit the bytes because the fixup might occur right
+                // away (so the bytes must actually exist now).
+                if let Some(l) = dest.as_label() {
+                    sink.use_label_at_offset(off, l, LabelUse::Branch26);
+                    let cur_off = sink.cur_offset();
+                    sink.add_uncond_branch(off, cur_off, l);
+                }
             }
             &Inst::Ret => {
                 sink.put4(0xd65f03c0);
@@ -1178,51 +1201,35 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     sink.add_call_site(loc, opcode);
                 }
             }
-            &Inst::CondBr { .. } => panic!("Unlowered CondBr during binemit!"),
-            &Inst::CondBrLowered { target, kind } => match kind {
-                // TODO: handle >2^19 case by emitting a compound sequence with
-                // an unconditional (26-bit) branch. We need branch-relaxation
-                // adjustment machinery to enable this (because we don't want to
-                // always emit the long form).
-                CondBrKind::Zero(reg) => {
-                    sink.put4(enc_cmpbr(0b1_011010_0, target.as_off19().unwrap(), reg));
-                }
-                CondBrKind::NotZero(reg) => {
-                    sink.put4(enc_cmpbr(0b1_011010_1, target.as_off19().unwrap(), reg));
-                }
-                CondBrKind::Cond(c) => {
-                    sink.put4(enc_cbr(
-                        0b01010100,
-                        target.as_off19().unwrap_or(0),
-                        0b0,
-                        c.bits(),
-                    ));
-                }
-            },
-            &Inst::CondBrLoweredCompound {
+            &Inst::CondBr {
                 taken,
                 not_taken,
                 kind,
             } => {
                 // Conditional part first.
-                match kind {
-                    CondBrKind::Zero(reg) => {
-                        sink.put4(enc_cmpbr(0b1_011010_0, taken.as_off19().unwrap(), reg));
-                    }
-                    CondBrKind::NotZero(reg) => {
-                        sink.put4(enc_cmpbr(0b1_011010_1, taken.as_off19().unwrap(), reg));
-                    }
-                    CondBrKind::Cond(c) => {
-                        sink.put4(enc_cbr(
-                            0b01010100,
-                            taken.as_off19().unwrap_or(0),
-                            0b0,
-                            c.bits(),
-                        ));
-                    }
+                let cond_off = sink.cur_offset();
+                sink.put4(enc_conditional_br(taken, kind));
+                if let Some(l) = taken.as_label() {
+                    sink.use_label_at_offset(cond_off, l, LabelUse::Branch19);
+                    let cur_off = sink.cur_offset();
+                    let inverted = enc_conditional_br(taken, kind.invert()).to_le_bytes();
+                    sink.add_cond_branch(cond_off, cur_off, l, &inverted[..]);
                 }
                 // Unconditional part.
-                sink.put4(enc_jump26(0b000101, not_taken.as_off26().unwrap_or(0)));
+                let uncond_off = sink.cur_offset();
+                sink.put4(enc_jump26(0b000101, not_taken.as_offset26_or_zero()));
+                if let Some(l) = not_taken.as_label() {
+                    sink.use_label_at_offset(uncond_off, l, LabelUse::Branch26);
+                    let cur_off = sink.cur_offset();
+                    sink.add_uncond_branch(uncond_off, cur_off, l);
+                }
+            }
+            &Inst::OneWayCondBr { target, kind } => {
+                let off = sink.cur_offset();
+                sink.put4(enc_conditional_br(target, kind));
+                if let Some(l) = target.as_label() {
+                    sink.use_label_at_offset(off, l, LabelUse::Branch19);
+                }
             }
             &Inst::IndirectBr { rn, .. } => {
                 sink.put4(enc_br(rn));
@@ -1239,8 +1246,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 sink.add_trap(srcloc, code);
                 sink.put4(0xd4a00000);
             }
-            &Inst::Adr { rd, ref label } => {
-                let off = memlabel_finalize(sink.cur_offset_from_start(), label);
+            &Inst::Adr { rd, off } => {
                 assert!(off > -(1 << 20));
                 assert!(off < (1 << 20));
                 sink.put4(enc_adr(off, rd));
@@ -1261,19 +1267,13 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 // This sequence is *one* instruction in the vcode, and is expanded only here at
                 // emission time, because we cannot allow the regalloc to insert spills/reloads in
                 // the middle; we depend on hardcoded PC-rel addressing below.
-                //
-                // N.B.: if PC-rel addressing on ADR below is changed, also update
-                // `Inst::with_block_offsets()` in aarch64/inst/mod.rs.
 
                 // Save index in a tmp (the live range of ridx only goes to start of this
                 // sequence; rtmp1 or rtmp2 may overwrite it).
                 let inst = Inst::gen_move(rtmp2, ridx, I64);
                 inst.emit(sink, flags, state);
                 // Load address of jump table
-                let inst = Inst::Adr {
-                    rd: rtmp1,
-                    label: MemLabel::PCRel(16),
-                };
+                let inst = Inst::Adr { rd: rtmp1, off: 16 };
                 inst.emit(sink, flags, state);
                 // Load value out of jump table
                 let inst = Inst::SLoad32 {
@@ -1303,13 +1303,21 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 };
                 inst.emit(sink, flags, state);
                 // Emit jump table (table of 32-bit offsets).
-                for target in targets.iter() {
-                    let off = target.as_offset_words() * 4;
-                    let off = i32::try_from(off).unwrap();
-                    // cast i32 to u32 (two's-complement)
-                    let off = off as u32;
-                    sink.put4(off);
+                let jt_off = sink.cur_offset();
+                for &target in targets.iter() {
+                    let word_off = sink.cur_offset();
+                    let off_into_table = word_off - jt_off;
+                    sink.put4(off_into_table);
+                    sink.use_label_at_offset(
+                        word_off,
+                        target.as_label().unwrap(),
+                        LabelUse::PCRel32,
+                    );
                 }
+
+                // Lowering produces an EmitIsland before using a JTSequence, so we can safely
+                // disable the worst-case-size check in this case.
+                start_off = sink.cur_offset();
             }
             &Inst::LoadConst64 { rd, const_data } => {
                 let inst = Inst::ULoad64 {
@@ -1348,7 +1356,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 }
             }
             &Inst::LoadAddr { rd, ref mem } => {
-                let (mem_insts, mem) = mem_finalize(sink.cur_offset_from_start(), mem, state);
+                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), mem, state);
                 for inst in mem_insts.into_iter() {
                     inst.emit(sink, flags, state);
                 }
@@ -1401,20 +1409,6 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     add.emit(sink, flags, state);
                 }
             }
-            &Inst::GetPinnedReg { rd } => {
-                let inst = Inst::Mov {
-                    rd,
-                    rm: xreg(PINNED_REG),
-                };
-                inst.emit(sink, flags, state);
-            }
-            &Inst::SetPinnedReg { rm } => {
-                let inst = Inst::Mov {
-                    rd: Writable::from_reg(xreg(PINNED_REG)),
-                    rm,
-                };
-                inst.emit(sink, flags, state);
-            }
             &Inst::VirtualSPOffsetAdj { offset } => {
                 debug!(
                     "virtual sp offset adjusted by {} -> {}",
@@ -1423,6 +1417,20 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 );
                 state.virtual_sp_offset += offset;
             }
+            &Inst::EmitIsland { needed_space } => {
+                if sink.island_needed(needed_space + 4) {
+                    let jump_around_label = sink.get_label();
+                    let jmp = Inst::Jump {
+                        dest: BranchTarget::Label(jump_around_label),
+                    };
+                    jmp.emit(sink, flags, state);
+                    sink.emit_island();
+                    sink.bind_label(jump_around_label);
+                }
+            }
         }
+
+        let end_off = sink.cur_offset();
+        debug_assert!((end_off - start_off) <= Inst::worst_case_size());
     }
 }

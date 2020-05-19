@@ -4,6 +4,8 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 
+use core::convert::TryFrom;
+use smallvec::SmallVec;
 use std::fmt;
 use std::string::{String, ToString};
 
@@ -16,6 +18,7 @@ use crate::ir::types::{B1, B128, B16, B32, B64, B8, F32, F64, I128, I16, I32, I6
 use crate::ir::ExternalName;
 use crate::ir::Type;
 use crate::machinst::*;
+use crate::settings::Flags;
 use crate::{settings, CodegenError, CodegenResult};
 
 pub mod args;
@@ -25,7 +28,7 @@ mod emit_tests;
 pub mod regs;
 
 use args::*;
-use regs::show_ireg_sized;
+use regs::{create_reg_universe_systemv, show_ireg_sized};
 
 //=============================================================================
 // Instructions (top level): definition
@@ -136,29 +139,10 @@ pub(crate) enum Inst {
     JmpKnown { dest: BranchTarget },
 
     /// jcond cond target target
-    // Symmetrical two-way conditional branch.
-    // Should never reach the emitter.
+    /// Symmetrical two-way conditional branch.
+    /// Emitted as a compound sequence; the MachBuffer will shrink it
+    /// as appropriate.
     JmpCondSymm {
-        cc: CC,
-        taken: BranchTarget,
-        not_taken: BranchTarget,
-    },
-
-    /// Lowered conditional branch: contains the original instruction, and a
-    /// flag indicating whether to invert the taken-condition or not. Only one
-    /// BranchTarget is retained, and the other is implicitly the next
-    /// instruction, given the final basic-block layout.
-    JmpCond {
-        cc: CC,
-        //inverted: bool, is this needed?
-        target: BranchTarget,
-    },
-
-    /// As for `CondBrLowered`, but represents a condbr/uncond-br sequence (two
-    /// actual machine instructions). Needed when the final block layout implies
-    /// that neither arm of a conditional branch targets the fallthrough block.
-    // Should never reach the emitter
-    JmpCondCompound {
         cc: CC,
         taken: BranchTarget,
         not_taken: BranchTarget,
@@ -292,18 +276,6 @@ impl Inst {
 
     pub(crate) fn jmp_cond_symm(cc: CC, taken: BranchTarget, not_taken: BranchTarget) -> Inst {
         Inst::JmpCondSymm {
-            cc,
-            taken,
-            not_taken,
-        }
-    }
-
-    pub(crate) fn jmp_cond(cc: CC, target: BranchTarget) -> Inst {
-        Inst::JmpCond { cc, target }
-    }
-
-    pub(crate) fn jmp_cond_compound(cc: CC, taken: BranchTarget, not_taken: BranchTarget) -> Inst {
-        Inst::JmpCondCompound {
             cc,
             taken,
             not_taken,
@@ -485,13 +457,6 @@ impl ShowWithRRU for Inst {
                 not_taken.show_rru(mb_rru)
             ),
             //
-            Inst::JmpCond { cc, ref target } => format!(
-                "{} {}",
-                ljustify2("j".to_string(), cc.to_string()),
-                target.show_rru(None)
-            ),
-            //
-            Inst::JmpCondCompound { .. } => "**JmpCondCompound**".to_string(),
             Inst::JmpUnknown { target } => format!(
                 "{} *{}",
                 ljustify("jmp".to_string()),
@@ -601,18 +566,10 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             taken: _,
             not_taken: _,
         } => {}
-        //
-        // ** JmpCond
-        //
-        // ** JmpCondCompound
-        //
         //Inst::JmpUnknown { target } => {
         //    target.get_regs_as_uses(collector);
         //}
-        Inst::Nop { .. }
-        | Inst::JmpCond { .. }
-        | Inst::JmpCondCompound { .. }
-        | Inst::JmpUnknown { .. } => unimplemented!("x64_get_regs inst"),
+        Inst::Nop { .. } | Inst::JmpUnknown { .. } => unimplemented!("x64_get_regs inst"),
     }
 }
 
@@ -767,18 +724,10 @@ fn x64_map_regs(inst: &mut Inst, mapper: &RegUsageMapper) {
             taken: _,
             not_taken: _,
         } => {}
-        //
-        // ** JmpCond
-        //
-        // ** JmpCondCompound
-        //
         //Inst::JmpUnknown { target } => {
         //    target.apply_map(mapper);
         //}
-        Inst::Nop { .. }
-        | Inst::JmpCond { .. }
-        | Inst::JmpCondCompound { .. }
-        | Inst::JmpUnknown { .. } => unimplemented!("x64_map_regs opcode"),
+        Inst::Nop { .. } | Inst::JmpUnknown { .. } => unimplemented!("x64_map_regs opcode"),
     }
 }
 
@@ -817,18 +766,12 @@ impl MachInst for Inst {
         match self {
             // Interesting cases.
             &Self::Ret | &Self::EpiloguePlaceholder => MachTerminator::Ret,
-            &Self::JmpKnown { dest } => MachTerminator::Uncond(dest.as_block_index().unwrap()),
+            &Self::JmpKnown { dest } => MachTerminator::Uncond(dest.as_label().unwrap()),
             &Self::JmpCondSymm {
                 cc: _,
                 taken,
                 not_taken,
-            } => MachTerminator::Cond(
-                taken.as_block_index().unwrap(),
-                not_taken.as_block_index().unwrap(),
-            ),
-            &Self::JmpCond { .. } | &Self::JmpCondCompound { .. } => {
-                panic!("is_term() called after lowering branches");
-            }
+            } => MachTerminator::Cond(taken.as_label().unwrap(), not_taken.as_label().unwrap()),
             // All other cases are boring.
             _ => MachTerminator::None,
         }
@@ -868,87 +811,95 @@ impl MachInst for Inst {
         }
     }
 
-    fn gen_jump(blockindex: BlockIndex) -> Inst {
-        Inst::jmp_known(BranchTarget::Block(blockindex))
+    fn gen_jump(label: MachLabel) -> Inst {
+        Inst::jmp_known(BranchTarget::Label(label))
     }
 
-    fn with_block_rewrites(&mut self, block_target_map: &[BlockIndex]) {
-        // This is identical (modulo renaming) to the arm64 version.
-        match self {
-            &mut Inst::JmpKnown { ref mut dest } => {
-                dest.map(block_target_map);
-            }
-            &mut Inst::JmpCondSymm {
-                cc: _,
-                ref mut taken,
-                ref mut not_taken,
-            } => {
-                taken.map(block_target_map);
-                not_taken.map(block_target_map);
-            }
-            &mut Inst::JmpCond { .. } | &mut Inst::JmpCondCompound { .. } => {
-                panic!("with_block_rewrites called after branch lowering!");
-            }
-            _ => {}
-        }
+    fn gen_constant(to_reg: Writable<Reg>, value: u64, _: Type) -> SmallVec<[Self; 4]> {
+        let mut ret = SmallVec::new();
+        let is64 = value > 0xffff_ffff;
+        ret.push(Inst::imm_r(is64, value, to_reg));
+        ret
     }
 
-    fn with_fallthrough_block(&mut self, fallthrough: Option<BlockIndex>) {
-        // This is identical (modulo renaming) to the arm64 version.
-        match self {
-            &mut Inst::JmpCondSymm {
-                cc,
-                taken,
-                not_taken,
-            } => {
-                if taken.as_block_index() == fallthrough {
-                    *self = Inst::jmp_cond(cc.invert(), not_taken);
-                } else if not_taken.as_block_index() == fallthrough {
-                    *self = Inst::jmp_cond(cc, taken);
-                } else {
-                    // We need a compound sequence (condbr / uncond-br).
-                    *self = Inst::jmp_cond_compound(cc, taken, not_taken);
-                }
-            }
-            &mut Inst::JmpKnown { dest } => {
-                if dest.as_block_index() == fallthrough {
-                    *self = Inst::nop(0);
-                }
-            }
-            _ => {}
-        }
+    fn reg_universe(flags: &Flags) -> RealRegUniverse {
+        create_reg_universe_systemv(flags)
     }
 
-    fn with_block_offsets(&mut self, my_offset: CodeOffset, targets: &[CodeOffset]) {
-        // This is identical (modulo renaming) to the arm64 version.
-        match self {
-            &mut Self::JmpCond {
-                cc: _,
-                ref mut target,
-            } => {
-                target.lower(targets, my_offset);
-            }
-            &mut Self::JmpCondCompound {
-                cc: _,
-                ref mut taken,
-                ref mut not_taken,
-                ..
-            } => {
-                taken.lower(targets, my_offset);
-                not_taken.lower(targets, my_offset);
-            }
-            &mut Self::JmpKnown { ref mut dest } => {
-                dest.lower(targets, my_offset);
-            }
-            _ => {}
-        }
+    fn worst_case_size() -> CodeOffset {
+        15
+    }
+
+    type LabelUse = LabelUse;
+}
+
+impl MachInstEmit for Inst {
+    type State = ();
+
+    fn emit(&self, sink: &mut MachBuffer<Inst>, _flags: &settings::Flags, _: &mut Self::State) {
+        emit::emit(self, sink);
     }
 }
 
-impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
-    type State = ();
+/// A label-use (internal relocation) in generated code.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LabelUse {
+    /// A 32-bit offset from location of relocation itself, added to the
+    /// existing value at that location.
+    Rel32,
+}
 
-    fn emit(&self, sink: &mut O, _flags: &settings::Flags, _: &mut Self::State) {
-        emit::emit(self, sink);
+impl MachInstLabelUse for LabelUse {
+    const ALIGN: CodeOffset = 1;
+
+    fn max_pos_range(self) -> CodeOffset {
+        match self {
+            LabelUse::Rel32 => 0x7fff_ffff,
+        }
+    }
+
+    fn max_neg_range(self) -> CodeOffset {
+        match self {
+            LabelUse::Rel32 => 0x8000_0000,
+        }
+    }
+
+    fn patch_size(self) -> CodeOffset {
+        match self {
+            LabelUse::Rel32 => 4,
+        }
+    }
+
+    fn patch(self, buffer: &mut [u8], use_offset: CodeOffset, label_offset: CodeOffset) {
+        match self {
+            LabelUse::Rel32 => {
+                let addend = i32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+                let value = i32::try_from(label_offset)
+                    .unwrap()
+                    .wrapping_sub(i32::try_from(use_offset).unwrap())
+                    .wrapping_add(addend);
+                buffer.copy_from_slice(&value.to_le_bytes()[..]);
+            }
+        }
+    }
+
+    fn supports_veneer(self) -> bool {
+        match self {
+            LabelUse::Rel32 => false,
+        }
+    }
+
+    fn veneer_size(self) -> CodeOffset {
+        match self {
+            LabelUse::Rel32 => 0,
+        }
+    }
+
+    fn generate_veneer(self, _: &mut [u8], _: CodeOffset) -> (CodeOffset, LabelUse) {
+        match self {
+            LabelUse::Rel32 => {
+                panic!("Veneer not supported for Rel32 label-use.");
+            }
+        }
     }
 }

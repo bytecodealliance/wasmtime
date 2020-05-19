@@ -504,7 +504,7 @@ impl AArch64ABIBody {
                 rn: stack_reg(),
                 rm: stack_limit,
             });
-            insts.push(Inst::CondBrLowered {
+            insts.push(Inst::OneWayCondBr {
                 target: BranchTarget::ResolvedOffset(8),
                 // Here `Hs` == "higher or same" when interpreting the two
                 // operands as unsigned integers.

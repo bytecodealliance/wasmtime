@@ -1,7 +1,7 @@
 test vcode
 target aarch64
 
-function %f(i64, i64) -> i64 {
+function %f1(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = iadd.i64 v0, v1
   return v2
@@ -15,7 +15,7 @@ block0(v0: i64, v1: i64):
 ; nextln:  ret
 
 
-function %f(i64, i64) -> i64 {
+function %f2(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = isub.i64 v0, v1
   return v2
@@ -28,7 +28,7 @@ block0(v0: i64, v1: i64):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i64, i64) -> i64 {
+function %f3(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = imul.i64 v0, v1
   return v2
@@ -41,7 +41,7 @@ block0(v0: i64, v1: i64):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i64, i64) -> i64 {
+function %f4(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = umulhi.i64 v0, v1
   return v2
@@ -54,7 +54,7 @@ block0(v0: i64, v1: i64):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i64, i64) -> i64 {
+function %f5(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = smulhi.i64 v0, v1
   return v2
@@ -67,7 +67,7 @@ block0(v0: i64, v1: i64):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i64, i64) -> i64 {
+function %f6(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = sdiv.i64 v0, v1
   return v2
@@ -87,7 +87,7 @@ block0(v0: i64, v1: i64):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i64) -> i64 {
+function %f7(i64) -> i64 {
 block0(v0: i64):
   v1 = iconst.i64 2
   v2 = sdiv.i64 v0, v1
@@ -109,7 +109,7 @@ block0(v0: i64):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i64, i64) -> i64 {
+function %f8(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = udiv.i64 v0, v1
   return v2
@@ -124,7 +124,7 @@ block0(v0: i64, v1: i64):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i64) -> i64 {
+function %f9(i64) -> i64 {
 block0(v0: i64):
   v1 = iconst.i64 2
   v2 = udiv.i64 v0, v1
@@ -141,7 +141,7 @@ block0(v0: i64):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i64, i64) -> i64 {
+function %f10(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = srem.i64 v0, v1
   return v2
@@ -157,7 +157,7 @@ block0(v0: i64, v1: i64):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i64, i64) -> i64 {
+function %f11(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = urem.i64 v0, v1
   return v2
@@ -174,7 +174,7 @@ block0(v0: i64, v1: i64):
 ; nextln:  ret
 
 
-function %f(i32, i32) -> i32 {
+function %f12(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
   v2 = sdiv.i32 v0, v1
   return v2
@@ -195,48 +195,48 @@ block0(v0: i32, v1: i32):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i32) -> i32 {
+function %f13(i32) -> i32 {
 block0(v0: i32):
   v1 = iconst.i32 2
   v2 = sdiv.i32 v0, v1
   return v2
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; nextln:  mov x1, x0
-; nextln:  movz x0, #2
-; nextln:  sxtw x1, w1
-; nextln:  sxtw x2, w0
-; nextln:  sdiv x0, x1, x2
-; nextln:  cbz x2, 20
-; nextln:  adds wzr, w2, #1
-; nextln:  ccmp w1, #1, #nzcv, eq
-; nextln:  b.vc 12
-; nextln:  udf
-; nextln:  udf
-; nextln:  mov sp, fp
-; nextln:  ldp fp, lr, [sp], #16
-; nextln:  ret
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sxtw x1, w0
+; nextln: movz x0, #2
+; nextln: sxtw x2, w0
+; nextln: sdiv x0, x1, x2
+; nextln: cbz x2, 20
+; nextln: adds wzr, w2, #1
+; nextln: ccmp w1, #1, #nzcv, eq
+; nextln: b.vc 12
+; nextln: udf
+; nextln: udf
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
 
-function %f(i32, i32) -> i32 {
+function %f14(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
   v2 = udiv.i32 v0, v1
   return v2
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; nextln:  mov w0, w0
-; nextln:  mov w1, w1
-; nextln:  udiv x0, x0, x1
-; nextln:  cbnz x1, 8
-; nextln:  udf
-; nextln:  mov sp, fp
-; nextln:  ldp fp, lr, [sp], #16
-; nextln:  ret
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: mov w0, w0
+; nextln: mov w1, w1
+; nextln: udiv x0, x0, x1
+; nextln: cbnz x1, 8
+; nextln: udf
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
 
-function %f(i32) -> i32 {
+
+function %f15(i32) -> i32 {
 block0(v0: i32):
   v1 = iconst.i32 2
   v2 = udiv.i32 v0, v1
@@ -245,9 +245,8 @@ block0(v0: i32):
 
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
-; nextln:  movz x1, #2
 ; nextln:  mov w0, w0
-; nextln:  mov w1, w1
+; nextln:  movz x1, #2
 ; nextln:  udiv x0, x0, x1
 ; nextln:  cbnz x1, 8
 ; nextln:  udf
@@ -255,7 +254,7 @@ block0(v0: i32):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i32, i32) -> i32 {
+function %f16(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
   v2 = srem.i32 v0, v1
   return v2
@@ -273,7 +272,7 @@ block0(v0: i32, v1: i32):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i32, i32) -> i32 {
+function %f17(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
   v2 = urem.i32 v0, v1
   return v2
@@ -291,7 +290,7 @@ block0(v0: i32, v1: i32):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i64, i64) -> i64 {
+function %f18(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = band.i64 v0, v1
   return v2
@@ -304,7 +303,7 @@ block0(v0: i64, v1: i64):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i64, i64) -> i64 {
+function %f19(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = bor.i64 v0, v1
   return v2
@@ -317,7 +316,7 @@ block0(v0: i64, v1: i64):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i64, i64) -> i64 {
+function %f20(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = bxor.i64 v0, v1
   return v2
@@ -330,7 +329,7 @@ block0(v0: i64, v1: i64):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i64, i64) -> i64 {
+function %f21(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = band_not.i64 v0, v1
   return v2
@@ -343,7 +342,7 @@ block0(v0: i64, v1: i64):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i64, i64) -> i64 {
+function %f22(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = bor_not.i64 v0, v1
   return v2
@@ -356,7 +355,7 @@ block0(v0: i64, v1: i64):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i64, i64) -> i64 {
+function %f23(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = bxor_not.i64 v0, v1
   return v2
@@ -369,7 +368,7 @@ block0(v0: i64, v1: i64):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f(i64, i64) -> i64 {
+function %f24(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = bnot.i64 v0
   return v2

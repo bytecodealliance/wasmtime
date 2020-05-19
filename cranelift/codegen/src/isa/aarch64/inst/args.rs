@@ -3,14 +3,14 @@
 // Some variants are never constructed, but we still want them as options in the future.
 #![allow(dead_code)]
 
-use crate::binemit::CodeOffset;
 use crate::ir::Type;
 use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::lower::ty_bits;
+use crate::machinst::MachLabel;
 
 use regalloc::{RealRegUniverse, Reg, Writable};
 
-use core::convert::{Into, TryFrom};
+use core::convert::Into;
 use std::string::String;
 
 /// A shift operator for a register or immediate.
@@ -303,78 +303,44 @@ impl CondBrKind {
 
 /// A branch target. Either unresolved (basic-block index) or resolved (offset
 /// from end of current instruction).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BranchTarget {
-    /// An unresolved reference to a BlockIndex, as passed into
+    /// An unresolved reference to a Label, as passed into
     /// `lower_branch_group()`.
-    Block(BlockIndex),
-    /// A resolved reference to another instruction, after
-    /// `Inst::with_block_offsets()`.
+    Label(MachLabel),
+    /// A fixed PC offset.
     ResolvedOffset(isize),
 }
 
 impl BranchTarget {
-    /// Lower the branch target given offsets of each block.
-    pub fn lower(&mut self, targets: &[CodeOffset], my_offset: CodeOffset) {
+    /// Return the target's label, if it is a label-based target.
+    pub fn as_label(self) -> Option<MachLabel> {
         match self {
-            &mut BranchTarget::Block(bix) => {
-                let bix = usize::try_from(bix).unwrap();
-                assert!(bix < targets.len());
-                let block_offset_in_func = targets[bix];
-                let branch_offset = (block_offset_in_func as isize) - (my_offset as isize);
-                *self = BranchTarget::ResolvedOffset(branch_offset);
-            }
-            &mut BranchTarget::ResolvedOffset(..) => {}
-        }
-    }
-
-    /// Get the block index.
-    pub fn as_block_index(&self) -> Option<BlockIndex> {
-        match self {
-            &BranchTarget::Block(bix) => Some(bix),
+            BranchTarget::Label(l) => Some(l),
             _ => None,
         }
     }
 
-    /// Get the offset as 4-byte words. Returns `0` if not
-    /// yet resolved (in that case, we're only computing
-    /// size and the offset doesn't matter).
-    pub fn as_offset_words(&self) -> isize {
-        match self {
-            &BranchTarget::ResolvedOffset(off) => off >> 2,
+    /// Return the target's offset, if specified, or zero if label-based.
+    pub fn as_offset19_or_zero(self) -> u32 {
+        let off = match self {
+            BranchTarget::ResolvedOffset(off) => off >> 2,
             _ => 0,
-        }
+        };
+        assert!(off <= 0x3ffff);
+        assert!(off >= -0x40000);
+        (off as u32) & 0x7ffff
     }
 
-    /// Get the offset as a 26-bit offset suitable for a 26-bit jump, or `None` if overflow.
-    pub fn as_off26(&self) -> Option<u32> {
-        let off = self.as_offset_words();
-        if (off < (1 << 25)) && (off >= -(1 << 25)) {
-            Some((off as u32) & ((1 << 26) - 1))
-        } else {
-            None
-        }
-    }
-
-    /// Get the offset as a 19-bit offset, or `None` if overflow.
-    pub fn as_off19(&self) -> Option<u32> {
-        let off = self.as_offset_words();
-        if (off < (1 << 18)) && (off >= -(1 << 18)) {
-            Some((off as u32) & ((1 << 19) - 1))
-        } else {
-            None
-        }
-    }
-
-    /// Map the block index given a transform map.
-    pub fn map(&mut self, block_index_map: &[BlockIndex]) {
-        match self {
-            &mut BranchTarget::Block(ref mut bix) => {
-                let n = block_index_map[usize::try_from(*bix).unwrap()];
-                *bix = n;
-            }
-            &mut BranchTarget::ResolvedOffset(_) => {}
-        }
+    /// Return the target's offset, if specified, or zero if label-based.
+    pub fn as_offset26_or_zero(self) -> u32 {
+        let off = match self {
+            BranchTarget::ResolvedOffset(off) => off >> 2,
+            _ => 0,
+        };
+        assert!(off <= 0x1ffffff);
+        assert!(off >= -0x2000000);
+        (off as u32) & 0x3ffffff
     }
 }
 
@@ -507,7 +473,7 @@ impl ShowWithRRU for Cond {
 impl ShowWithRRU for BranchTarget {
     fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
         match self {
-            &BranchTarget::Block(block) => format!("block{}", block),
+            &BranchTarget::Label(label) => format!("label{:?}", label.get()),
             &BranchTarget::ResolvedOffset(off) => format!("{}", off),
         }
     }

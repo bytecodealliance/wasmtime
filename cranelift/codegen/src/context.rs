@@ -227,7 +227,7 @@ impl Context {
         let _tt = timing::binemit();
         let mut sink = MemoryCodeSink::new(mem, relocs, traps, stackmaps);
         if let Some(ref result) = &self.mach_compile_result {
-            result.sections.emit(&mut sink);
+            result.buffer.emit(&mut sink);
         } else {
             isa.emit_function_to_memory(&self.func, &mut sink);
         }

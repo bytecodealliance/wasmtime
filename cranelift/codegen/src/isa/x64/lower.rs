@@ -12,6 +12,7 @@ use crate::ir::{InstructionData, Opcode, Type};
 
 use crate::machinst::lower::*;
 use crate::machinst::*;
+use crate::result::CodegenResult;
 
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
@@ -94,6 +95,16 @@ fn intCC_to_x64_CC(cc: IntCC) -> CC {
     }
 }
 
+fn input_to_reg<'a>(ctx: Ctx<'a>, iri: IRInst, input: usize) -> Reg {
+    let inputs = ctx.get_input(iri, input);
+    ctx.use_input_reg(inputs);
+    inputs.reg
+}
+
+fn output_to_reg<'a>(ctx: Ctx<'a>, iri: IRInst, output: usize) -> Writable<Reg> {
+    ctx.get_output(iri, output)
+}
+
 //=============================================================================
 // Top-level instruction lowering entry point, for one instruction.
 
@@ -114,7 +125,7 @@ fn lower_insn_to_regs<'a>(ctx: Ctx<'a>, iri: IRInst) {
                 // Get exactly the bit pattern in 'w64' into the dest.  No
                 // monkeying with sign extension etc.
                 let dstIs64 = w64 > 0xFFFF_FFFF;
-                let regD = ctx.output(iri, 0);
+                let regD = output_to_reg(ctx, iri, 0);
                 ctx.emit(Inst::imm_r(dstIs64, w64, regD));
             } else {
                 unimplemented!();
@@ -122,9 +133,9 @@ fn lower_insn_to_regs<'a>(ctx: Ctx<'a>, iri: IRInst) {
         }
 
         Opcode::Iadd | Opcode::Isub => {
-            let regD = ctx.output(iri, 0);
-            let regL = ctx.input(iri, 0);
-            let regR = ctx.input(iri, 1);
+            let regD = output_to_reg(ctx, iri, 0);
+            let regL = input_to_reg(ctx, iri, 0);
+            let regR = input_to_reg(ctx, iri, 1);
             let is64 = int_ty_to_is64(ty.unwrap());
             let how = if op == Opcode::Iadd {
                 RMI_R_Op::Add
@@ -139,9 +150,9 @@ fn lower_insn_to_regs<'a>(ctx: Ctx<'a>, iri: IRInst) {
             // TODO: implement imm shift value into insn
             let tySL = ctx.input_ty(iri, 0);
             let tyD = ctx.output_ty(iri, 0); // should be the same as tySL
-            let regSL = ctx.input(iri, 0);
-            let regSR = ctx.input(iri, 1);
-            let regD = ctx.output(iri, 0);
+            let regSL = input_to_reg(ctx, iri, 0);
+            let regSR = input_to_reg(ctx, iri, 1);
+            let regD = output_to_reg(ctx, iri, 0);
             if tyD == tySL && (tyD == types::I32 || tyD == types::I64) {
                 let how = match op {
                     Opcode::Ishl => ShiftKind::Left,
@@ -168,8 +179,8 @@ fn lower_insn_to_regs<'a>(ctx: Ctx<'a>, iri: IRInst) {
             let isZX = op == Opcode::Uextend;
             let tyS = ctx.input_ty(iri, 0);
             let tyD = ctx.output_ty(iri, 0);
-            let regS = ctx.input(iri, 0);
-            let regD = ctx.output(iri, 0);
+            let regS = input_to_reg(ctx, iri, 0);
+            let regD = output_to_reg(ctx, iri, 0);
             ctx.emit(Inst::mov_r_r(true, regS, regD));
             match (tyS, tyD, isZX) {
                 (types::I8, types::I64, false) => {
@@ -182,7 +193,7 @@ fn lower_insn_to_regs<'a>(ctx: Ctx<'a>, iri: IRInst) {
 
         Opcode::FallthroughReturn | Opcode::Return => {
             for i in 0..ctx.num_inputs(iri) {
-                let src_reg = ctx.input(iri, i);
+                let src_reg = input_to_reg(ctx, iri, i);
                 let retval_reg = ctx.retval(i);
                 ctx.emit(Inst::mov_r_r(true, src_reg, retval_reg));
             }
@@ -219,35 +230,6 @@ fn lower_insn_to_regs<'a>(ctx: Ctx<'a>, iri: IRInst) {
             panic!("ALU+imm and ALU+carry ops should not appear here!");
         }
 
-        Opcode::X86Udivmodx
-        | Opcode::X86Sdivmodx
-        | Opcode::X86Umulx
-        | Opcode::X86Smulx
-        | Opcode::X86Cvtt2si
-        | Opcode::X86Fmin
-        | Opcode::X86Fmax
-        | Opcode::X86Push
-        | Opcode::X86Pop
-        | Opcode::X86Bsr
-        | Opcode::X86Bsf
-        | Opcode::X86Pshufd
-        | Opcode::X86Pshufb
-        | Opcode::X86Pextr
-        | Opcode::X86Pinsr
-        | Opcode::X86Insertps
-        | Opcode::X86Movsd
-        | Opcode::X86Movlhps
-        | Opcode::X86Psll
-        | Opcode::X86Psrl
-        | Opcode::X86Psra
-        | Opcode::X86Ptest
-        | Opcode::X86Pmaxs
-        | Opcode::X86Pmaxu
-        | Opcode::X86Pmins
-        | Opcode::X86Pminu => {
-            panic!("x86-specific opcode in supposedly arch-neutral IR!");
-        }
-
         _ => unimplemented!("unimplemented lowering for opcode {:?}", op),
     }
 }
@@ -258,17 +240,18 @@ fn lower_insn_to_regs<'a>(ctx: Ctx<'a>, iri: IRInst) {
 impl LowerBackend for X64Backend {
     type MInst = Inst;
 
-    fn lower<C: LowerCtx<I = Inst>>(&self, ctx: &mut C, ir_inst: IRInst) {
+    fn lower<C: LowerCtx<I = Inst>>(&self, ctx: &mut C, ir_inst: IRInst) -> CodegenResult<()> {
         lower_insn_to_regs(ctx, ir_inst);
+        Ok(())
     }
 
     fn lower_branch_group<C: LowerCtx<I = Inst>>(
         &self,
         ctx: &mut C,
         branches: &[IRInst],
-        targets: &[BlockIndex],
-        fallthrough: Option<BlockIndex>,
-    ) {
+        targets: &[MachLabel],
+        fallthrough: Option<MachLabel>,
+    ) -> CodegenResult<()> {
         // A block should end with at most two branches. The first may be a
         // conditional branch; a conditional branch can be followed only by an
         // unconditional branch or fallthrough. Otherwise, if only one branch,
@@ -290,17 +273,17 @@ impl LowerBackend for X64Backend {
             );
 
             assert!(op1 == Opcode::Jump || op1 == Opcode::Fallthrough);
-            let taken = BranchTarget::Block(targets[0]);
+            let taken = BranchTarget::Label(targets[0]);
             let not_taken = match op1 {
-                Opcode::Jump => BranchTarget::Block(targets[1]),
-                Opcode::Fallthrough => BranchTarget::Block(fallthrough.unwrap()),
+                Opcode::Jump => BranchTarget::Label(targets[1]),
+                Opcode::Fallthrough => BranchTarget::Label(fallthrough.unwrap()),
                 _ => unreachable!(), // assert above.
             };
             match op0 {
                 Opcode::Brz | Opcode::Brnz => {
                     let tyS = ctx.input_ty(branches[0], 0);
                     if is_int_ty(tyS) {
-                        let rS = ctx.input(branches[0], 0);
+                        let rS = input_to_reg(ctx, branches[0], 0);
                         let cc = match op0 {
                             Opcode::Brz => CC::Z,
                             Opcode::Brnz => CC::NZ,
@@ -316,8 +299,8 @@ impl LowerBackend for X64Backend {
                 Opcode::BrIcmp => {
                     let tyS = ctx.input_ty(branches[0], 0);
                     if is_int_ty(tyS) {
-                        let rSL = ctx.input(branches[0], 0);
-                        let rSR = ctx.input(branches[0], 1);
+                        let rSL = input_to_reg(ctx, branches[0], 0);
+                        let rSR = input_to_reg(ctx, branches[0], 1);
                         let cc = intCC_to_x64_CC(inst_condcode(ctx.data(branches[0])));
                         let sizeB = int_ty_to_sizeB(tyS);
                         // FIXME verify rSR vs rSL ordering
@@ -339,10 +322,10 @@ impl LowerBackend for X64Backend {
             let op = ctx.data(branches[0]).opcode();
             match op {
                 Opcode::Jump => {
-                    ctx.emit(Inst::jmp_known(BranchTarget::Block(targets[0])));
+                    ctx.emit(Inst::jmp_known(BranchTarget::Label(targets[0])));
                 }
                 Opcode::Fallthrough => {
-                    ctx.emit(Inst::jmp_known(BranchTarget::Block(targets[0])));
+                    ctx.emit(Inst::jmp_known(BranchTarget::Label(targets[0])));
                 }
                 Opcode::Trap => {
                     unimplemented = true;
@@ -354,5 +337,7 @@ impl LowerBackend for X64Backend {
         if unimplemented {
             unimplemented!("lower_branch_group(x64): can't handle: {:?}", branches);
         }
+
+        Ok(())
     }
 }
