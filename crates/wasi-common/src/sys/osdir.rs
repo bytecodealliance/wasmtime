@@ -69,6 +69,18 @@ impl Handle for OsDir {
     fn create_directory(&self, path: &str) -> Result<()> {
         path::create_directory(self, path)
     }
+    fn filestat_get_at(&self, path: &str) -> Result<types::Filestat> {
+        path::filestat_get_at(self, path)
+    }
+    fn filestat_set_times_at(
+        &self,
+        path: &str,
+        atim: types::Timestamp,
+        mtim: types::Timestamp,
+        fst_flags: types::Fstflags,
+    ) -> Result<()> {
+        path::filestat_set_times_at(self, path, atim, mtim, fst_flags)
+    }
     fn openat(
         &self,
         path: &str,

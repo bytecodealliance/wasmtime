@@ -1,7 +1,8 @@
 use crate::handle::{Handle, HandleRights};
 use crate::sys::osdir::OsDir;
+use crate::sys::AsFile;
 use crate::wasi::{types, Errno, Result};
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::ffi::OsStr;
 use std::fs::File;
 use std::os::unix::prelude::{AsRawFd, FromRawFd, OsStrExt};
@@ -202,5 +203,56 @@ pub(crate) fn readlink(dirfd: &OsDir, path: &str, buf: &mut [u8]) -> Result<usiz
 pub(crate) fn remove_directory(dirfd: &OsDir, path: &str) -> Result<()> {
     use yanix::file::{unlinkat, AtFlag};
     unsafe { unlinkat(dirfd.as_raw_fd(), path, AtFlag::REMOVEDIR)? };
+    Ok(())
+}
+
+pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str) -> Result<types::Filestat> {
+    use yanix::file::{fstatat, AtFlag};
+    // We always set `lookupflags` to SYMLINK_NOFOLLOW (0x0) since symlink expansion
+    // is taken care for us in `path::get` a level above.
+    let stat = unsafe { fstatat(dirfd.as_raw_fd(), path, AtFlag::empty())? };
+    let stat = stat.try_into()?;
+    Ok(stat)
+}
+
+pub(crate) fn filestat_set_times_at(
+    dirfd: &OsDir,
+    path: &str,
+    atim: types::Timestamp,
+    mtim: types::Timestamp,
+    fst_flags: types::Fstflags,
+) -> Result<()> {
+    use std::time::{Duration, UNIX_EPOCH};
+    use yanix::filetime::*;
+
+    let set_atim = fst_flags.contains(&types::Fstflags::ATIM);
+    let set_atim_now = fst_flags.contains(&types::Fstflags::ATIM_NOW);
+    let set_mtim = fst_flags.contains(&types::Fstflags::MTIM);
+    let set_mtim_now = fst_flags.contains(&types::Fstflags::MTIM_NOW);
+
+    if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
+        return Err(Errno::Inval);
+    }
+
+    let atim = if set_atim {
+        let time = UNIX_EPOCH + Duration::from_nanos(atim);
+        FileTime::FileTime(filetime::FileTime::from_system_time(time))
+    } else if set_atim_now {
+        FileTime::Now
+    } else {
+        FileTime::Omit
+    };
+    let mtim = if set_mtim {
+        let time = UNIX_EPOCH + Duration::from_nanos(mtim);
+        FileTime::FileTime(filetime::FileTime::from_system_time(time))
+    } else if set_mtim_now {
+        FileTime::Now
+    } else {
+        FileTime::Omit
+    };
+
+    // We always set `lookupflags` to SYMLINK_NOFOLLOW (0x0) since symlink expansion
+    // is taken care for us in `path::get` a level above.
+    utimensat(&*dirfd.as_file()?, path, atim, mtim, true)?;
     Ok(())
 }

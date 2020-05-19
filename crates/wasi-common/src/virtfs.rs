@@ -600,6 +600,35 @@ impl Handle for VirtualDir {
             }
         }
     }
+    fn filestat_get_at(&self, path: &str) -> Result<types::Filestat> {
+        let stat = self
+            .openat(
+                path,
+                false,
+                false,
+                types::Oflags::empty(),
+                types::Fdflags::empty(),
+            )?
+            .filestat_get()?;
+        Ok(stat)
+    }
+    fn filestat_set_times_at(
+        &self,
+        path: &str,
+        atim: types::Timestamp,
+        mtim: types::Timestamp,
+        fst_flags: types::Fstflags,
+    ) -> Result<()> {
+        self.openat(
+            path,
+            false,
+            false,
+            types::Oflags::empty(),
+            types::Fdflags::empty(),
+        )?
+        .filestat_set_times(atim, mtim, fst_flags)?;
+        Ok(())
+    }
     fn openat(
         &self,
         path: &str,
