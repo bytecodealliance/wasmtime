@@ -65,7 +65,7 @@ impl ConfigureCarExercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = BorrowChecker::new();
+        let bc = unsafe { BorrowChecker::new() };
 
         // Populate input ptr
         host_memory

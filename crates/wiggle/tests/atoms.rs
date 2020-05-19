@@ -31,7 +31,7 @@ impl IntFloatExercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = BorrowChecker::new();
+        let bc = unsafe { BorrowChecker::new() };
 
         let e = atoms::int_float_args(&ctx, &host_memory, &bc, self.an_int as i32, self.an_float);
 
@@ -61,7 +61,7 @@ impl DoubleIntExercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = BorrowChecker::new();
+        let bc = unsafe { BorrowChecker::new() };
 
         let e = atoms::double_int_return_float(
             &ctx,

@@ -128,7 +128,7 @@ impl PointersAndEnumsExercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = BorrowChecker::new();
+        let bc = unsafe { BorrowChecker::new() };
 
         host_memory
             .ptr(&bc, self.input2_loc.ptr)

@@ -107,7 +107,7 @@ impl GetTagExercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = BorrowChecker::new();
+        let bc = unsafe { BorrowChecker::new() };
 
         let discriminant: u8 = reason_tag(&self.input).into();
         host_memory
@@ -186,7 +186,7 @@ impl ReasonMultExercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = BorrowChecker::new();
+        let bc = unsafe { BorrowChecker::new() };
 
         let discriminant: u8 = reason_tag(&self.input).into();
         host_memory

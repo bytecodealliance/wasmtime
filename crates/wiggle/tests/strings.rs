@@ -69,7 +69,7 @@ impl HelloStringExercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = BorrowChecker::new();
+        let bc = unsafe { BorrowChecker::new() };
 
         // Populate string in guest's memory
         let ptr =
@@ -178,7 +178,7 @@ impl MultiStringExercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = BorrowChecker::new();
+        let bc = unsafe { BorrowChecker::new() };
 
         let write_string = |val: &str, loc: MemArea| {
             let ptr = host_memory.ptr::<str>(&bc, (loc.ptr, val.len() as u32));

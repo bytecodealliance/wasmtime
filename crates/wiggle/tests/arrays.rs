@@ -77,7 +77,7 @@ impl ReduceExcusesExcercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = BorrowChecker::new();
+        let bc = unsafe { BorrowChecker::new() };
 
         // Populate memory with pointers to generated Excuse values
         for (&excuse, ptr) in self.excuse_values.iter().zip(self.excuse_ptr_locs.iter()) {
@@ -169,7 +169,7 @@ impl PopulateExcusesExcercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = BorrowChecker::new();
+        let bc = unsafe { BorrowChecker::new() };
 
         // Populate array with valid pointers to Excuse type in memory
         let ptr = host_memory.ptr::<[GuestPtr<'_, types::Excuse>]>(

@@ -11,22 +11,35 @@ pub struct BorrowChecker {
 }
 
 impl BorrowChecker {
-    pub fn new() -> Self {
+    /// A `BorrowChecker` manages run-time validation of borrows from a `GuestMemory`. It keeps
+    /// track of regions of guest memory which are possible to alias with Rust references (via the
+    /// `GuestSlice` and `GuestStr` structs, which implement `std::ops::Deref` and
+    /// `std::ops::DerefMut`. It also enforces that `GuestPtr::read` and `GuestPtr::write` do not
+    /// access memory with an outstanding borrow.
+    /// The safety of this mechanism depends on creating exactly one `BorrowChecker` per
+    /// WebAssembly memory. There must be no other reads or writes of WebAssembly the memory by
+    /// either Rust or WebAssembly code while there are any outstanding borrows, as given by
+    /// `BorrowChecker::has_outstanding_borrows()`.
+    pub unsafe fn new() -> Self {
         BorrowChecker {
             bc: RefCell::new(InnerBorrowChecker::new()),
         }
     }
-    pub fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+    /// Indicates whether any outstanding borrows are known to the `BorrowChecker`. This function
+    /// must be `false` in order for it to be safe to recursively call into a WebAssembly module,
+    /// or to manipulate the WebAssembly memory by any other means.
+    pub fn has_outstanding_borrows(&self) -> bool {
+        self.bc.borrow().has_outstanding_borrows()
+    }
+
+    pub(crate) fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         self.bc.borrow_mut().borrow(r)
     }
-    pub fn unborrow(&self, h: BorrowHandle) {
+    pub(crate) fn unborrow(&self, h: BorrowHandle) {
         self.bc.borrow_mut().unborrow(h)
     }
-    pub fn is_borrowed(&self, r: Region) -> bool {
+    pub(crate) fn is_borrowed(&self, r: Region) -> bool {
         self.bc.borrow().is_borrowed(r)
-    }
-    pub fn is_empty(&self) -> bool {
-        self.bc.borrow().is_empty()
     }
 }
 
@@ -44,8 +57,8 @@ impl InnerBorrowChecker {
         }
     }
 
-    fn is_empty(&self) -> bool {
-        self.borrows.is_empty()
+    fn has_outstanding_borrows(&self) -> bool {
+        !self.borrows.is_empty()
     }
 
     fn is_borrowed(&self, r: Region) -> bool {
@@ -147,11 +160,20 @@ mod test {
         let r1 = Region::new(0, 10);
         let r2 = Region::new(10, 10);
         assert!(!r1.overlaps(r2));
-        let _h1 = bs.borrow(r1).expect("can borrow r1");
+        assert_eq!(bs.has_outstanding_borrows(), false, "start with no borrows");
+        let h1 = bs.borrow(r1).expect("can borrow r1");
+        assert_eq!(bs.has_outstanding_borrows(), true, "h1 is outstanding");
         let h2 = bs.borrow(r2).expect("can borrow r2");
 
         assert!(bs.borrow(r2).is_err(), "can't borrow r2 twice");
         bs.unborrow(h2);
+        assert_eq!(
+            bs.has_outstanding_borrows(),
+            true,
+            "h1 is still outstanding"
+        );
+        bs.unborrow(h1);
+        assert_eq!(bs.has_outstanding_borrows(), false, "no remaining borrows");
 
         let _h3 = bs
             .borrow(r2)
