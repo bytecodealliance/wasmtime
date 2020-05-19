@@ -495,7 +495,11 @@ pub(crate) fn remove_directory(dirfd: &OsDir, path: &str) -> Result<()> {
     std::fs::remove_dir(&path).map_err(Into::into)
 }
 
-pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str) -> Result<types::Filestat> {
+pub(crate) fn filestat_get_at(
+    dirfd: &OsDir,
+    path: &str,
+    _symlink_follow: bool,
+) -> Result<types::Filestat> {
     let stat = dirfd
         .openat(
             path,
@@ -514,6 +518,7 @@ pub(crate) fn filestat_set_times_at(
     atim: types::Timestamp,
     mtim: types::Timestamp,
     fst_flags: types::Fstflags,
+    _symlink_follow: bool,
 ) -> Result<()> {
     dirfd
         .openat(

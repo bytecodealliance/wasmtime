@@ -124,22 +124,12 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
     let mut sym_stat = wasi::path_filestat_get(dir_fd, 0, "file").expect("reading file stats");
 
     let sym_new_mtim = sym_stat.mtim - 200;
-    wasi::path_filestat_set_times(
-        dir_fd,
-        0,
-        "symlink",
-        // on purpose: the syscall should not touch atim, because
-        // neither of the ATIM flags is set
-        sym_new_mtim,
-        sym_new_mtim,
-        wasi::FSTFLAGS_MTIM,
-    )
-    .expect("path_filestat_set_times should succeed on symlink");
+    wasi::path_filestat_set_times(dir_fd, 0, "symlink", 0, sym_new_mtim, wasi::FSTFLAGS_MTIM)
+        .expect("path_filestat_set_times should succeed on symlink");
 
     sym_stat = wasi::path_filestat_get(dir_fd, 0, "symlink")
         .expect("reading file stats after path_filestat_set_times");
-    assert_eq!(sym_stat.mtim, new_mtim, "mtim should change");
-    assert_eq!(sym_stat.atim, old_atim, "atim should not change");
+    assert_eq!(sym_stat.mtim, sym_new_mtim, "mtim should change");
 
     // Now, dereference the symlink
     sym_stat = wasi::path_filestat_get(dir_fd, wasi::LOOKUPFLAGS_SYMLINK_FOLLOW, "symlink")

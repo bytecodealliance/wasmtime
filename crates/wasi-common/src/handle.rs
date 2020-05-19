@@ -135,7 +135,7 @@ pub(crate) trait Handle {
     fn create_directory(&self, _path: &str) -> Result<()> {
         Err(Errno::Acces)
     }
-    fn filestat_get_at(&self, _path: &str) -> Result<types::Filestat> {
+    fn filestat_get_at(&self, _path: &str, _follow: bool) -> Result<types::Filestat> {
         Err(Errno::Acces)
     }
     fn filestat_set_times_at(
@@ -144,6 +144,7 @@ pub(crate) trait Handle {
         _atim: types::Timestamp,
         _mtim: types::Timestamp,
         _fst_flags: types::Fstflags,
+        _follow: bool,
     ) -> Result<()> {
         Err(Errno::Acces)
     }

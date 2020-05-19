@@ -206,11 +206,14 @@ pub(crate) fn remove_directory(dirfd: &OsDir, path: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str) -> Result<types::Filestat> {
+pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str, follow: bool) -> Result<types::Filestat> {
     use yanix::file::{fstatat, AtFlag};
-    // We always set `lookupflags` to SYMLINK_NOFOLLOW (0x0) since symlink expansion
-    // is taken care for us in `path::get` a level above.
-    let stat = unsafe { fstatat(dirfd.as_raw_fd(), path, AtFlag::empty())? };
+    let flags = if follow {
+        AtFlag::empty()
+    } else {
+        AtFlag::SYMLINK_NOFOLLOW
+    };
+    let stat = unsafe { fstatat(dirfd.as_raw_fd(), path, flags)? };
     let stat = stat.try_into()?;
     Ok(stat)
 }
@@ -221,6 +224,7 @@ pub(crate) fn filestat_set_times_at(
     atim: types::Timestamp,
     mtim: types::Timestamp,
     fst_flags: types::Fstflags,
+    follow: bool,
 ) -> Result<()> {
     use std::time::{Duration, UNIX_EPOCH};
     use yanix::filetime::*;
@@ -251,8 +255,6 @@ pub(crate) fn filestat_set_times_at(
         FileTime::Omit
     };
 
-    // We always set `lookupflags` to SYMLINK_NOFOLLOW (0x0) since symlink expansion
-    // is taken care for us in `path::get` a level above.
-    utimensat(&*dirfd.as_file()?, path, atim, mtim, true)?;
-    Ok(())
-}
+    utimensat(&*dirfd.as_file()?, path, atim, mtim, !follow)?;
+
+    Ok(()) }
