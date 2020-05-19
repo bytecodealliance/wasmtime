@@ -17,6 +17,8 @@ where
     bincode::deserialize(&encoded).expect("should deserialize OK")
 }
 
+const MAX_AUTOMATON_KEY_LEN: usize = 256;
+
 /// Construct an automaton from the the given input-output pairs, and assert
 /// that:
 ///
@@ -41,11 +43,19 @@ pub fn simple_automata(input_output_pairs: Vec<Vec<(u8, Vec<u8>)>>) {
     let mut input_output_pairs: Vec<_> = input_output_pairs
         .into_iter()
         .filter(|pair| {
-            !pair.is_empty() && {
-                // Make sure we don't have duplicate inputs.
-                let is_new = inputs.insert(full_input(pair));
-                is_new
+            if pair.is_empty() {
+                return false;
             }
+
+            // Make sure that we don't generate huge input keys.
+            let full_input = full_input(pair);
+            if full_input.len() >= MAX_AUTOMATON_KEY_LEN {
+                return false;
+            }
+
+            // Make sure we don't have duplicate inputs.
+            let is_new = inputs.insert(full_input);
+            is_new
         })
         .collect();
 
@@ -111,7 +121,7 @@ pub fn fst_differential(map: HashMap<Vec<u8>, u64>) {
 
     let mut inputs: Vec<_> = map
         .keys()
-        .filter(|k| !k.is_empty() && k.len() < 256)
+        .filter(|k| !k.is_empty() && k.len() < MAX_AUTOMATON_KEY_LEN)
         .cloned()
         .collect();
     inputs.sort();
