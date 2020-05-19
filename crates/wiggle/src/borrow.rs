@@ -25,6 +25,9 @@ impl BorrowChecker {
     pub fn is_borrowed(&self, r: Region) -> bool {
         self.bc.borrow().is_borrowed(r)
     }
+    pub fn is_empty(&self) -> bool {
+        self.bc.borrow().is_empty()
+    }
 }
 
 #[derive(Debug)]
@@ -39,6 +42,10 @@ impl InnerBorrowChecker {
             borrows: HashMap::new(),
             next_handle: BorrowHandle(0),
         }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.borrows.is_empty()
     }
 
     fn is_borrowed(&self, r: Region) -> bool {
