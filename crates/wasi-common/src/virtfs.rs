@@ -600,7 +600,7 @@ impl Handle for VirtualDir {
             }
         }
     }
-    fn filestat_get_at(&self, path: &str, _symlink_follow: bool) -> Result<types::Filestat> {
+    fn filestat_get_at(&self, path: &str, _follow: bool) -> Result<types::Filestat> {
         let stat = self
             .openat(
                 path,
@@ -618,7 +618,7 @@ impl Handle for VirtualDir {
         atim: types::Timestamp,
         mtim: types::Timestamp,
         fst_flags: types::Fstflags,
-        _symlink_follow: bool,
+        _follow: bool,
     ) -> Result<()> {
         self.openat(
             path,

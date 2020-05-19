@@ -498,9 +498,15 @@ pub(crate) fn remove_directory(dirfd: &OsDir, path: &str) -> Result<()> {
 pub(crate) fn filestat_get_at(
     dirfd: &OsDir,
     path: &str,
-    _symlink_follow: bool,
+    follow: bool,
 ) -> Result<types::Filestat> {
     let path = concatenate(dirfd, path)?;
+    
+    // Expand symlinks if we're meant to follow.
+    // TODO audit this: is it possible to expand outside of
+    // `dirfd`? In a way, is it possible to "dirfd/.."?
+    let path = if follow { path.canonicalize()? } else { path };
+
     let file = File::open(path)?;
     let stat = fd::filestat_get(&file)?;
     Ok(stat)
@@ -512,10 +518,16 @@ pub(crate) fn filestat_set_times_at(
     atim: types::Timestamp,
     mtim: types::Timestamp,
     fst_flags: types::Fstflags,
-    _symlink_follow: bool,
+    follow: bool,
 ) -> Result<()> {
     use winx::file::AccessMode;
     let path = concatenate(dirfd, path)?;
+
+    // Expand symlinks if we're meant to follow.
+    // TODO audit this: is it possible to expand outside of
+    // `dirfd`? In a way, is it possible to "dirfd/.."?
+    let path = if follow { path.canonicalize()? } else { path };
+
     let file = OpenOptions::new()
         .access_mode(AccessMode::FILE_WRITE_ATTRIBUTES.bits())
         .open(path)?;
