@@ -108,95 +108,20 @@ jobs:
     - run: cargo check --target armv7-unknown-linux-gnueabihf -p wasi-common
 
 
-  # Download our libFuzzer corpus and make sure that we can still handle all the
-  # inputs.
-  fuzz_corpora:
-    name: Fuzz Corpora
+  fuzz_targets:
+    name: Fuzz Targets
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
       with:
         submodules: true
-    - uses: actions/checkout@v1
-      with:
-        repository: bytecodealliance/wasmtime-libfuzzer-corpus
-        path: ./wasmtime/fuzz/corpus
-        ref: refs/heads/master
     - uses: ./.github/actions/install-rust
       with:
         toolchain: nightly
     - run: cargo install cargo-fuzz --vers "^0.7"
     - run: cargo fetch
       working-directory: ./fuzz
-    - run: cargo fuzz build --release --debug-assertions --features binaryen
-    # Our corpora are too large to run in full on every pull request, they just
-    # take too long. Instead, we sample some of them and make sure that running
-    # our fuzzers over the sampled inputs still works OK.
-    - run: |
-        find fuzz/corpus/compile -type f \
-            | shuf -n 3000 \
-            | xargs cargo fuzz run compile --release --debug-assertions --features binaryen
-      env:
-        RUST_BACKTRACE: 1
-    - run: |
-        find fuzz/corpus/instantiate -type f \
-            | shuf -n 2000 \
-            | xargs cargo fuzz run instantiate --release --debug-assertions --features binaryen
-      env:
-        RUST_BACKTRACE: 1
-    - run: |
-        find fuzz/corpus/instantiate_translated -type f \
-            | shuf -n 1000 \
-            | xargs cargo fuzz run instantiate_translated --release --debug-assertions --features binaryen
-      env:
-        RUST_BACKTRACE: 1
-    - run: |
-        find fuzz/corpus/api_calls -type f \
-            | shuf -n 100 \
-            | xargs cargo fuzz run api_calls --release --debug-assertions --features binaryen
-      env:
-        RUST_BACKTRACE: 1
-    - run: |
-        find fuzz/corpus/differential -type f \
-            | shuf -n 100 \
-            | xargs cargo fuzz run differential --release --debug-assertions --features binaryen
-      env:
-        RUST_BACKTRACE: 1
-    - run: |
-        find fuzz/corpus/peepmatic_compile -type f \
-            | shuf \
-            | head -n 10000 \
-            | xargs cargo fuzz run peepmatic_compile --release --debug-assertions --features binaryen
-      env:
-        RUST_BACKTRACE: 1
-    - run: |
-        find fuzz/corpus/peepmatic_fst_differential -type f \
-            | shuf \
-            | head -n 10000 \
-            | xargs cargo fuzz run peepmatic_fst_differential --release --debug-assertions --features binaryen
-      env:
-        RUST_BACKTRACE: 1
-    - run: |
-        find fuzz/corpus/peepmatic_interp -type f \
-            | shuf \
-            | head -n 5000 \
-            | xargs cargo fuzz run peepmatic_interp --release --debug-assertions --features binaryen
-      env:
-        RUST_BACKTRACE: 1
-    - run: |
-        find fuzz/corpus/peepmatic_parser -type f \
-            | shuf \
-            | head -n 10000 \
-            | xargs cargo fuzz run peepmatic_parser --release --debug-assertions --features binaryen
-      env:
-        RUST_BACKTRACE: 1
-    - run: |
-        find fuzz/corpus/peepmatic_simple_automata -type f \
-            | shuf \
-            | head -n 1000 \
-            | xargs cargo fuzz run peepmatic_simple_automata --release --debug-assertions --features binaryen
-      env:
-        RUST_BACKTRACE: 1
+    - run: cargo fuzz build --features binaryen
 
   rebuild_peephole_optimizers:
     name: Rebuild Peephole Optimizers
