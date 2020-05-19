@@ -495,13 +495,9 @@ pub(crate) fn remove_directory(dirfd: &OsDir, path: &str) -> Result<()> {
     std::fs::remove_dir(&path).map_err(Into::into)
 }
 
-pub(crate) fn filestat_get_at(
-    dirfd: &OsDir,
-    path: &str,
-    follow: bool,
-) -> Result<types::Filestat> {
+pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str, follow: bool) -> Result<types::Filestat> {
     let path = concatenate(dirfd, path)?;
-    
+
     // Expand symlinks if we're meant to follow.
     // TODO audit this: is it possible to expand outside of
     // `dirfd`? In a way, is it possible to "dirfd/.."?
