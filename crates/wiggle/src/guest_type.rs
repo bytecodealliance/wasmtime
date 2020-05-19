@@ -1,4 +1,4 @@
-use crate::{GuestError, GuestPtr};
+use crate::{region::Region, GuestError, GuestPtr};
 use std::mem;
 
 /// A trait for types which are used to report errors. Each type used in the
@@ -74,27 +74,39 @@ macro_rules! primitives {
                 // size of our type as well as properly aligned. Consequently we
                 // should be able to safely ready the pointer just after we
                 // validated it, returning it along here.
+                let offset = ptr.offset();
+                let size = Self::guest_size();
                 let host_ptr = ptr.mem().validate_size_align(
-                    ptr.offset(),
+                    offset,
                     Self::guest_align(),
-                    Self::guest_size(),
+                    size,
                 )?;
-                Ok(unsafe { *host_ptr.cast::<Self>() })
+                let borrow_handle = ptr.borrow_checker().borrow( Region {
+                    start: offset,
+                    len: size,
+                })?;
+                let v = unsafe { *host_ptr.cast::<Self>() };
+                ptr.borrow_checker().unborrow(borrow_handle);
+                Ok(v)
             }
 
             #[inline]
             fn write(ptr: &GuestPtr<'_, Self>, val: Self) -> Result<(), GuestError> {
+                let offset = ptr.offset();
+                let size = Self::guest_size();
                 let host_ptr = ptr.mem().validate_size_align(
-                    ptr.offset(),
+                    offset,
                     Self::guest_align(),
-                    Self::guest_size(),
+                    size,
                 )?;
-                // Similar to above `as_raw` will do a lot of validation, and
-                // then afterwards we can safely write our value into the
-                // memory location.
+                let borrow_handle = ptr.borrow_checker().borrow( Region {
+                    start: offset,
+                    len: size,
+                })?;
                 unsafe {
                     *host_ptr.cast::<Self>() = val;
                 }
+                ptr.borrow_checker().unborrow(borrow_handle);
                 Ok(())
             }
         }
