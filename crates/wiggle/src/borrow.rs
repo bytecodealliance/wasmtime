@@ -22,6 +22,9 @@ impl BorrowChecker {
     pub fn unborrow(&self, h: BorrowHandle) {
         self.bc.borrow_mut().unborrow(h)
     }
+    pub fn is_borrowed(&self, r: Region) -> bool {
+        self.bc.borrow().is_borrowed(r)
+    }
 }
 
 #[derive(Debug)]

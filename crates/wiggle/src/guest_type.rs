@@ -81,13 +81,14 @@ macro_rules! primitives {
                     Self::guest_align(),
                     size,
                 )?;
-                let borrow_handle = ptr.borrow_checker().borrow( Region {
+                let region = Region {
                     start: offset,
                     len: size,
-                })?;
-                let v = unsafe { *host_ptr.cast::<Self>() };
-                ptr.borrow_checker().unborrow(borrow_handle);
-                Ok(v)
+                };
+                if ptr.borrow_checker().is_borrowed(region) {
+                    return Err(GuestError::PtrBorrowed(region));
+                }
+                Ok(unsafe { *host_ptr.cast::<Self>() })
             }
 
             #[inline]
@@ -99,14 +100,16 @@ macro_rules! primitives {
                     Self::guest_align(),
                     size,
                 )?;
-                let borrow_handle = ptr.borrow_checker().borrow( Region {
+                let region = Region {
                     start: offset,
                     len: size,
-                })?;
+                };
+                if ptr.borrow_checker().is_borrowed(region) {
+                    return Err(GuestError::PtrBorrowed(region));
+                }
                 unsafe {
                     *host_ptr.cast::<Self>() = val;
                 }
-                ptr.borrow_checker().unborrow(borrow_handle);
                 Ok(())
             }
         }
