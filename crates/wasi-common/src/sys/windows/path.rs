@@ -1,10 +1,10 @@
 use crate::handle::{Handle, HandleRights};
 use crate::sys::osdir::OsDir;
-use crate::sys::AsFile;
+use crate::sys::{fd, AsFile};
 use crate::wasi::{types, Errno, Result};
 use std::convert::TryFrom;
 use std::ffi::{OsStr, OsString};
-use std::fs::{self, Metadata, OpenOptions};
+use std::fs::{self, File, Metadata, OpenOptions};
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
@@ -500,15 +500,9 @@ pub(crate) fn filestat_get_at(
     path: &str,
     _symlink_follow: bool,
 ) -> Result<types::Filestat> {
-    let stat = dirfd
-        .openat(
-            path,
-            false,
-            false,
-            types::Oflags::empty(),
-            types::Fdflags::empty(),
-        )?
-        .filestat_get()?;
+    let path = concatenate(dirfd, path)?;
+    let file = File::open(path)?;
+    let stat = fd::filestat_get(&file)?;
     Ok(stat)
 }
 
@@ -520,14 +514,11 @@ pub(crate) fn filestat_set_times_at(
     fst_flags: types::Fstflags,
     _symlink_follow: bool,
 ) -> Result<()> {
-    dirfd
-        .openat(
-            path,
-            false,
-            false,
-            types::Oflags::empty(),
-            types::Fdflags::empty(),
-        )?
-        .filestat_set_times(atim, mtim, fst_flags)?;
+    use winx::file::AccessMode;
+    let path = concatenate(dirfd, path)?;
+    let file = OpenOptions::new()
+        .access_mode(AccessMode::FILE_WRITE_ATTRIBUTES.bits())
+        .open(path)?;
+    fd::filestat_set_times(&file, atim, mtim, fst_flags)?;
     Ok(())
 }
