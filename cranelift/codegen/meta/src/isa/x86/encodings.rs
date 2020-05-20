@@ -1645,6 +1645,7 @@ fn define_simd(
     let x86_pmaxu = x86.by_name("x86_pmaxu");
     let x86_pmins = x86.by_name("x86_pmins");
     let x86_pminu = x86.by_name("x86_pminu");
+    let x86_pmullq = x86.by_name("x86_pmullq");
     let x86_pshufb = x86.by_name("x86_pshufb");
     let x86_pshufd = x86.by_name("x86_pshufd");
     let x86_psll = x86.by_name("x86_psll");
@@ -2101,9 +2102,8 @@ fn define_simd(
 
     // SIMD integer multiplication for I64x2 using a AVX512.
     {
-        let imul = imul.bind(vector(I64, sse_vector_size));
         e.enc_32_64_maybe_isap(
-            imul,
+            x86_pmullq,
             rec_evex_reg_vvvv_rm_128.opcodes(&PMULLQ).w(),
             Some(use_avx512dq_simd), // TODO need an OR predicate to join with AVX512VL
         );

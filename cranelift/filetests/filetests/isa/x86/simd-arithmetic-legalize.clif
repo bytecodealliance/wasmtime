@@ -69,3 +69,10 @@ block0:
     ; nextln: v1 = band v0, v4
     return
 }
+
+function %imul(i64x2, i64x2) {
+block0(v0:i64x2, v1:i64x2):
+    v2 = imul v0, v1
+    ; check: v2 = x86_pmullq v0, v1
+    return
+}
