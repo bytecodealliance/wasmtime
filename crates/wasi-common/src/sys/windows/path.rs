@@ -1,6 +1,6 @@
 use crate::handle::{Handle, HandleRights};
 use crate::sys::osdir::OsDir;
-use crate::sys::AsFile;
+use crate::sys::{fd, AsFile};
 use crate::wasi::{types, Errno, Result};
 use std::convert::TryFrom;
 use std::ffi::{OsStr, OsString};
@@ -493,4 +493,43 @@ pub(crate) fn unlink_file(dirfd: &OsDir, path: &str) -> Result<()> {
 pub(crate) fn remove_directory(dirfd: &OsDir, path: &str) -> Result<()> {
     let path = concatenate(dirfd, path)?;
     std::fs::remove_dir(&path).map_err(Into::into)
+}
+
+pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str, follow: bool) -> Result<types::Filestat> {
+    use winx::file::Flags;
+    let path = concatenate(dirfd, path)?;
+    let mut opts = OpenOptions::new();
+
+    if !follow {
+        // By specifying FILE_FLAG_OPEN_REPARSE_POINT, we force Windows to *not* dereference symlinks.
+        opts.custom_flags(Flags::FILE_FLAG_OPEN_REPARSE_POINT.bits());
+    }
+
+    let file = opts.read(true).open(path)?;
+    let stat = fd::filestat_get(&file)?;
+    Ok(stat)
+}
+
+pub(crate) fn filestat_set_times_at(
+    dirfd: &OsDir,
+    path: &str,
+    atim: types::Timestamp,
+    mtim: types::Timestamp,
+    fst_flags: types::Fstflags,
+    follow: bool,
+) -> Result<()> {
+    use winx::file::{AccessMode, Flags};
+    let path = concatenate(dirfd, path)?;
+    let mut opts = OpenOptions::new();
+
+    if !follow {
+        // By specifying FILE_FLAG_OPEN_REPARSE_POINT, we force Windows to *not* dereference symlinks.
+        opts.custom_flags(Flags::FILE_FLAG_OPEN_REPARSE_POINT.bits());
+    }
+
+    let file = opts
+        .access_mode(AccessMode::FILE_WRITE_ATTRIBUTES.bits())
+        .open(path)?;
+    fd::filestat_set_times(&file, atim, mtim, fst_flags)?;
+    Ok(())
 }

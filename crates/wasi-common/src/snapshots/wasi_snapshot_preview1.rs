@@ -469,15 +469,8 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let required_rights = HandleRights::from_base(types::Rights::PATH_FILESTAT_GET);
         let entry = self.get_entry(dirfd)?;
         let (dirfd, path) = path::get(&entry, &required_rights, flags, path, false)?;
-        let host_filestat = dirfd
-            .openat(
-                &path,
-                false,
-                false,
-                types::Oflags::empty(),
-                types::Fdflags::empty(),
-            )?
-            .filestat_get()?;
+        let host_filestat =
+            dirfd.filestat_get_at(&path, flags.contains(&types::Lookupflags::SYMLINK_FOLLOW))?;
         Ok(host_filestat)
     }
 
@@ -493,15 +486,13 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let required_rights = HandleRights::from_base(types::Rights::PATH_FILESTAT_SET_TIMES);
         let entry = self.get_entry(dirfd)?;
         let (dirfd, path) = path::get(&entry, &required_rights, flags, path, false)?;
-        dirfd
-            .openat(
-                &path,
-                false,
-                false,
-                types::Oflags::empty(),
-                types::Fdflags::empty(),
-            )?
-            .filestat_set_times(atim, mtim, fst_flags)?;
+        dirfd.filestat_set_times_at(
+            &path,
+            atim,
+            mtim,
+            fst_flags,
+            flags.contains(&types::Lookupflags::SYMLINK_FOLLOW),
+        )?;
         Ok(())
     }
 
