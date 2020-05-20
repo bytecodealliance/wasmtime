@@ -72,17 +72,17 @@ pub fn declare_ref(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
         #[no_mangle]
         pub extern fn #same(a: &#ty, b: &#ty) -> bool {
-            a.anyref().ptr_eq(&b.anyref())
+            a.externref().ptr_eq(&b.externref())
         }
 
         #[no_mangle]
         pub extern fn #get_host_info(a: &#ty) -> *mut std::os::raw::c_void {
-            crate::r#ref::get_host_info(&a.anyref())
+            crate::r#ref::get_host_info(&a.externref())
         }
 
         #[no_mangle]
         pub extern fn #set_host_info(a: &#ty, info: *mut std::os::raw::c_void) {
-            crate::r#ref::set_host_info(&a.anyref(), info, None)
+            crate::r#ref::set_host_info(&a.externref(), info, None)
         }
 
         #[no_mangle]
@@ -91,12 +91,12 @@ pub fn declare_ref(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             info: *mut std::os::raw::c_void,
             finalizer: Option<extern "C" fn(*mut std::os::raw::c_void)>,
         ) {
-            crate::r#ref::set_host_info(&a.anyref(), info, finalizer)
+            crate::r#ref::set_host_info(&a.externref(), info, finalizer)
         }
 
         #[no_mangle]
         pub extern fn #as_ref(a: &#ty) -> Box<crate::wasm_ref_t> {
-            let r = a.anyref();
+            let r = a.externref();
             Box::new(crate::wasm_ref_t { r })
         }
 

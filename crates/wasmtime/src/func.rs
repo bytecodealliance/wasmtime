@@ -298,7 +298,7 @@ impl Func {
     /// | `f32`              | `f32`            |
     /// | `f64`              | `f64`            |
     /// | (not supported)    | `v128`           |
-    /// | (not supported)    | `anyref`         |
+    /// | (not supported)    | `externref`         |
     ///
     /// Any of the Rust types can be returned from the closure as well, in
     /// addition to some extra types

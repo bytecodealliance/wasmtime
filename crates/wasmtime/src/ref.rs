@@ -38,7 +38,7 @@ pub struct OtherRef(Rc<RefCell<AnyAndHostInfo>>);
 
 /// Represents an opaque reference to any data within WebAssembly.
 #[derive(Clone)]
-pub enum AnyRef {
+pub enum ExternRef {
     /// A reference to no data.
     Null,
     /// A reference to data stored internally in `wasmtime`.
@@ -47,52 +47,54 @@ pub enum AnyRef {
     Other(OtherRef),
 }
 
-impl AnyRef {
-    /// Creates a new instance of `AnyRef` from `Box<dyn Any>`.
+impl ExternRef {
+    /// Creates a new instance of `ExternRef` from `Box<dyn Any>`.
     pub fn new(data: Box<dyn Any>) -> Self {
         let info = AnyAndHostInfo {
             any: data,
             host_info: None,
         };
-        AnyRef::Other(OtherRef(Rc::new(RefCell::new(info))))
+        ExternRef::Other(OtherRef(Rc::new(RefCell::new(info))))
     }
 
     /// Creates a `Null` reference.
     pub fn null() -> Self {
-        AnyRef::Null
+        ExternRef::Null
     }
 
     /// Returns the data stored in the reference if available.
     /// # Panics
-    /// Panics if the variant isn't `AnyRef::Other`.
+    /// Panics if the variant isn't `ExternRef::Other`.
     pub fn data(&self) -> cell::Ref<Box<dyn Any>> {
         match self {
-            AnyRef::Other(OtherRef(r)) => cell::Ref::map(r.borrow(), |r| &r.any),
-            _ => panic!("expected AnyRef::Other"),
+            ExternRef::Other(OtherRef(r)) => cell::Ref::map(r.borrow(), |r| &r.any),
+            _ => panic!("expected ExternRef::Other"),
         }
     }
 
-    /// Returns true if the two `AnyRef<T>`'s point to the same value (not just
+    /// Returns true if the two `ExternRef<T>`'s point to the same value (not just
     /// values that compare as equal).
-    pub fn ptr_eq(&self, other: &AnyRef) -> bool {
+    pub fn ptr_eq(&self, other: &ExternRef) -> bool {
         match (self, other) {
-            (AnyRef::Null, AnyRef::Null) => true,
-            (AnyRef::Ref(InternalRef(ref a)), AnyRef::Ref(InternalRef(ref b))) => {
+            (ExternRef::Null, ExternRef::Null) => true,
+            (ExternRef::Ref(InternalRef(ref a)), ExternRef::Ref(InternalRef(ref b))) => {
                 a.ptr_eq(b.as_ref())
             }
-            (AnyRef::Other(OtherRef(ref a)), AnyRef::Other(OtherRef(ref b))) => Rc::ptr_eq(a, b),
+            (ExternRef::Other(OtherRef(ref a)), ExternRef::Other(OtherRef(ref b))) => {
+                Rc::ptr_eq(a, b)
+            }
             _ => false,
         }
     }
 
     /// Returns a mutable reference to the host information if available.
     /// # Panics
-    /// Panics if `AnyRef` is already borrowed or `AnyRef` is `Null`.
+    /// Panics if `ExternRef` is already borrowed or `ExternRef` is `Null`.
     pub fn host_info(&self) -> Option<cell::RefMut<Box<dyn Any>>> {
         match self {
-            AnyRef::Null => panic!("null"),
-            AnyRef::Ref(r) => r.0.host_info(),
-            AnyRef::Other(r) => {
+            ExternRef::Null => panic!("null"),
+            ExternRef::Ref(r) => r.0.host_info(),
+            ExternRef::Other(r) => {
                 let info = cell::RefMut::map(r.0.borrow_mut(), |b| &mut b.host_info);
                 if info.is_none() {
                     return None;
@@ -102,26 +104,26 @@ impl AnyRef {
         }
     }
 
-    /// Sets the host information for an `AnyRef`.
+    /// Sets the host information for an `ExternRef`.
     /// # Panics
-    /// Panics if `AnyRef` is already borrowed or `AnyRef` is `Null`.
+    /// Panics if `ExternRef` is already borrowed or `ExternRef` is `Null`.
     pub fn set_host_info(&self, info: Option<Box<dyn Any>>) {
         match self {
-            AnyRef::Null => panic!("null"),
-            AnyRef::Ref(r) => r.0.set_host_info(info),
-            AnyRef::Other(r) => {
+            ExternRef::Null => panic!("null"),
+            ExternRef::Ref(r) => r.0.set_host_info(info),
+            ExternRef::Other(r) => {
                 r.0.borrow_mut().host_info = info;
             }
         }
     }
 }
 
-impl fmt::Debug for AnyRef {
+impl fmt::Debug for ExternRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AnyRef::Null => write!(f, "null"),
-            AnyRef::Ref(_) => write!(f, "anyref"),
-            AnyRef::Other(_) => write!(f, "other ref"),
+            ExternRef::Null => write!(f, "null"),
+            ExternRef::Ref(_) => write!(f, "externref"),
+            ExternRef::Other(_) => write!(f, "other ref"),
         }
     }
 }
@@ -129,7 +131,7 @@ impl fmt::Debug for AnyRef {
 struct ContentBox<T> {
     content: T,
     host_info: Option<Box<dyn Any>>,
-    anyref_data: Weak<dyn InternalRefBase>,
+    externref_data: Weak<dyn InternalRefBase>,
 }
 
 /// Represents a piece of data located in the host environment.
@@ -138,11 +140,11 @@ pub struct HostRef<T>(Rc<RefCell<ContentBox<T>>>);
 impl<T: 'static> HostRef<T> {
     /// Creates a new `HostRef<T>` from `T`.
     pub fn new(item: T) -> HostRef<T> {
-        let anyref_data: Weak<HostRef<T>> = Weak::new();
+        let externref_data: Weak<HostRef<T>> = Weak::new();
         let content = ContentBox {
             content: item,
             host_info: None,
-            anyref_data,
+            externref_data,
         };
         HostRef(Rc::new(RefCell::new(content)))
     }
@@ -168,17 +170,17 @@ impl<T: 'static> HostRef<T> {
     }
 
     /// Returns an opaque reference to the wrapped data in the form of
-    /// an `AnyRef`.
+    /// an `ExternRef`.
     /// # Panics
     /// Panics if `HostRef<T>` is already mutably borrowed.
-    pub fn anyref(&self) -> AnyRef {
-        let r = self.0.borrow_mut().anyref_data.upgrade();
+    pub fn externref(&self) -> ExternRef {
+        let r = self.0.borrow_mut().externref_data.upgrade();
         if let Some(r) = r {
-            return AnyRef::Ref(InternalRef(r));
+            return ExternRef::Ref(InternalRef(r));
         }
-        let anyref_data: Rc<dyn InternalRefBase> = Rc::new(self.clone());
-        self.0.borrow_mut().anyref_data = Rc::downgrade(&anyref_data);
-        AnyRef::Ref(InternalRef(anyref_data))
+        let externref_data: Rc<dyn InternalRefBase> = Rc::new(self.clone());
+        self.0.borrow_mut().externref_data = Rc::downgrade(&externref_data);
+        ExternRef::Ref(InternalRef(externref_data))
     }
 }
 

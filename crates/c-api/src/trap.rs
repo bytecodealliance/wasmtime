@@ -17,8 +17,8 @@ impl wasm_trap_t {
         }
     }
 
-    fn anyref(&self) -> wasmtime::AnyRef {
-        self.trap.anyref()
+    fn externref(&self) -> wasmtime::ExternRef {
+        self.trap.externref()
     }
 }
 

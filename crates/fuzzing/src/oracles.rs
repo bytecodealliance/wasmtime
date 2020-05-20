@@ -65,7 +65,7 @@ pub fn instantiate_with_config(wasm: &[u8], config: Config) {
         Ok(imps) => imps,
         Err(_) => {
             // There are some value types that we can't synthesize a
-            // dummy value for (e.g. anyrefs) and for modules that
+            // dummy value for (e.g. externrefs) and for modules that
             // import things of these types we skip instantiation.
             return;
         }
@@ -147,7 +147,7 @@ pub fn differential_execution(
             Ok(imps) => imps,
             Err(e) => {
                 // There are some value types that we can't synthesize a
-                // dummy value for (e.g. anyrefs) and for modules that
+                // dummy value for (e.g. externrefs) and for modules that
                 // import things of these types we skip instantiation.
                 eprintln!("Warning: failed to synthesize dummy imports: {}", e);
                 continue;
@@ -244,9 +244,8 @@ pub fn differential_execution(
                                 fail()
                             }
                         }
-                        (Val::AnyRef(_), Val::AnyRef(_)) | (Val::FuncRef(_), Val::FuncRef(_)) => {
-                            continue
-                        }
+                        (Val::ExternRef(_), Val::ExternRef(_))
+                        | (Val::FuncRef(_), Val::FuncRef(_)) => continue,
                         _ => fail(),
                     }
                 }
@@ -329,7 +328,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                     Ok(imps) => imps,
                     Err(_) => {
                         // There are some value types that we can't synthesize a
-                        // dummy value for (e.g. anyrefs) and for modules that
+                        // dummy value for (e.g. externrefs) and for modules that
                         // import things of these types we skip instantiation.
                         continue;
                     }

@@ -70,8 +70,8 @@ impl wasm_func_t {
         }
     }
 
-    fn anyref(&self) -> wasmtime::AnyRef {
-        self.func().anyref()
+    fn externref(&self) -> wasmtime::ExternRef {
+        self.func().externref()
     }
 }
 

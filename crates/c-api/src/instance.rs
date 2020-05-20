@@ -22,8 +22,8 @@ impl wasm_instance_t {
         }
     }
 
-    fn anyref(&self) -> wasmtime::AnyRef {
-        self.instance.anyref()
+    fn externref(&self) -> wasmtime::ExternRef {
+        self.instance.externref()
     }
 }
 

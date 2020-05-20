@@ -26,8 +26,8 @@ impl wasm_global_t {
         }
     }
 
-    fn anyref(&self) -> wasmtime::AnyRef {
-        self.global().anyref()
+    fn externref(&self) -> wasmtime::ExternRef {
+        self.global().externref()
     }
 }
 

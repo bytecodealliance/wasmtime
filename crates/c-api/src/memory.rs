@@ -26,8 +26,8 @@ impl wasm_memory_t {
         }
     }
 
-    fn anyref(&self) -> wasmtime::AnyRef {
-        self.memory().anyref()
+    fn externref(&self) -> wasmtime::ExternRef {
+        self.memory().externref()
     }
 }
 
