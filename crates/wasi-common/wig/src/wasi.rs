@@ -468,12 +468,10 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
                                 }
                             };
                             let mem: WasiMemory = mem.into();
-                            // FIXME:
-                            // Currently, none of the wasi-common functions will re-enter the guest, so
-                            // creating a BorrowChecker here ensures there is just one per the
-                            // WebAssembly memory. I'd like a wasmtime expert to show me how to
-                            // create a BorrowChecker once per Store, and access it in this
-                            // context, though.
+                            // Wiggle does not expose any methods for functions to re-enter the
+                            // WebAssembly module, or expose the memory via non-wiggle mechanisms.
+                            // Therefore, creating a new BorrowChecker at the root of each function
+                            // invocation is correct.
                             let bc = wiggle::BorrowChecker::new();
                             wasi_common::wasi::#module_id::#name_ident(
                                 &mut my_cx.borrow_mut(),
