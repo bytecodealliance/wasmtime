@@ -532,6 +532,23 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let x = &Operand::new("x", I64x2);
+    let y = &Operand::new("y", I64x2);
+    let a = &Operand::new("a", I64x2);
+    ig.push(
+        Inst::new(
+            "x86_pmullq",
+            r#"
+        Multiply Packed Integers -- Multiply two 64x2 integers and receive a 64x2 result with
+        lane-wise wrapping if the result overflows. This instruction is necessary to add distinct
+        encodings for CPUs with newer vector features.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
     let x = &Operand::new("x", TxN);
     let y = &Operand::new("y", TxN);
     let f = &Operand::new("f", iflags);

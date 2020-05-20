@@ -1911,6 +1911,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::X86Pmaxu
         | Opcode::X86Pmins
         | Opcode::X86Pminu
+        | Opcode::X86Pmullq
         | Opcode::X86Packss
         | Opcode::X86Punpckh
         | Opcode::X86Punpckl

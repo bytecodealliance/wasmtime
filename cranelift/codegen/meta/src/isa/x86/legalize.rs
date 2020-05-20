@@ -359,6 +359,7 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
     let icmp = insts.by_name("icmp");
     let imax = insts.by_name("imax");
     let imin = insts.by_name("imin");
+    let imul = insts.by_name("imul");
     let ineg = insts.by_name("ineg");
     let insertlane = insts.by_name("insertlane");
     let ishl = insts.by_name("ishl");
@@ -761,6 +762,12 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
                 def!(b = band(a, e)),             // Unset the MSB.
             ],
         );
+    }
+
+    // SIMD imul
+    {
+        let imul = imul.bind(vector(I64, sse_vector_size));
+        narrow.legalize(def!(c = imul(a, b)), vec![def!(c = x86_pmullq(a, b))]);
     }
 
     narrow.custom_legalize(shuffle, "convert_shuffle");
