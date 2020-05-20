@@ -215,7 +215,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
         let host_nread = {
             let mut buf = guest_slices
-                .iter()
+                .iter_mut()
                 .map(|s| io::IoSliceMut::new(&mut *s))
                 .collect::<Vec<io::IoSliceMut<'_>>>();
             entry
@@ -276,13 +276,11 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         ciovs: &types::CiovecArray<'_>,
         offset: types::Filesize,
     ) -> Result<types::Size> {
-        let mut buf = Vec::new();
+        let mut guest_slices = Vec::new();
         for ciov_ptr in ciovs.iter() {
             let ciov_ptr = ciov_ptr?;
             let ciov: types::Ciovec = ciov_ptr.read()?;
-            let guest_slice: GuestSlice<u8> = ciov.buf.as_array(ciov.buf_len).as_slice()?;
-            let slice: &[u8] = &*guest_slice;
-            buf.push(io::IoSlice::new(slice));
+            guest_slices.push(ciov.buf.as_array(ciov.buf_len).as_slice()?);
         }
 
         let required_rights =
@@ -293,29 +291,37 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             return Err(Errno::Io);
         }
 
-        let host_nwritten = entry
-            .as_handle(&required_rights)?
-            .pwritev(&buf, offset)?
-            .try_into()?;
+        let host_nwritten = {
+            let buf: Vec<io::IoSlice> =
+                guest_slices.iter().map(|s| io::IoSlice::new(&*s)).collect();
+            entry
+                .as_handle(&required_rights)?
+                .pwritev(&buf, offset)?
+                .try_into()?
+        };
         Ok(host_nwritten)
     }
 
     fn fd_read(&self, fd: types::Fd, iovs: &types::IovecArray<'_>) -> Result<types::Size> {
-        let mut slices = Vec::new();
+        let mut guest_slices = Vec::new();
         for iov_ptr in iovs.iter() {
             let iov_ptr = iov_ptr?;
             let iov: types::Iovec = iov_ptr.read()?;
-            let guest_slice = iov.buf.as_array(iov.buf_len).as_slice()?;
-            let slice = &mut *guest_slice;
-            slices.push(io::IoSliceMut::new(slice));
+            guest_slices.push(iov.buf.as_array(iov.buf_len).as_slice()?);
         }
 
         let required_rights = HandleRights::from_base(types::Rights::FD_READ);
         let entry = self.get_entry(fd)?;
-        let host_nread = entry
-            .as_handle(&required_rights)?
-            .read_vectored(&mut slices)?
-            .try_into()?;
+        let host_nread = {
+            let mut slices: Vec<io::IoSliceMut> = guest_slices
+                .iter_mut()
+                .map(|s| io::IoSliceMut::new(&mut *s))
+                .collect();
+            entry
+                .as_handle(&required_rights)?
+                .read_vectored(&mut slices)?
+                .try_into()?
+        };
 
         Ok(host_nread)
     }
@@ -414,19 +420,22 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn fd_write(&self, fd: types::Fd, ciovs: &types::CiovecArray<'_>) -> Result<types::Size> {
-        let mut slices = Vec::new();
+        let mut guest_slices = Vec::new();
         for ciov_ptr in ciovs.iter() {
             let ciov_ptr = ciov_ptr?;
             let ciov: types::Ciovec = ciov_ptr.read()?;
-            let slice = ciov.buf.as_array(ciov.buf_len).as_slice()?;
-            slices.push(io::IoSlice::new(&*slice));
+            guest_slices.push(ciov.buf.as_array(ciov.buf_len).as_slice()?);
         }
         let required_rights = HandleRights::from_base(types::Rights::FD_WRITE);
         let entry = self.get_entry(fd)?;
-        let host_nwritten = entry
-            .as_handle(&required_rights)?
-            .write_vectored(&slices)?
-            .try_into()?;
+        let host_nwritten = {
+            let slices: Vec<io::IoSlice> =
+                guest_slices.iter().map(|s| io::IoSlice::new(&*s)).collect();
+            entry
+                .as_handle(&required_rights)?
+                .write_vectored(&slices)?
+                .try_into()?
+        };
         Ok(host_nwritten)
     }
 
@@ -581,7 +590,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             path,
             false,
         )?;
-        let slice = buf.as_array(buf_len).as_slice()?;
+        let mut slice = buf.as_array(buf_len).as_slice()?;
         let host_bufused = dirfd.readlink(&path, &mut *slice)?.try_into()?;
         Ok(host_bufused)
     }
@@ -793,7 +802,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn random_get(&self, buf: &GuestPtr<u8>, buf_len: types::Size) -> Result<()> {
-        let slice = buf.as_array(buf_len).as_slice()?;
+        let mut slice = buf.as_array(buf_len).as_slice()?;
         getrandom::getrandom(&mut *slice).map_err(|err| {
             error!("getrandom failure: {:?}", err);
             Errno::Io
