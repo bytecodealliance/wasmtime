@@ -158,7 +158,9 @@ pub fn differential_execution(
         // aren't caught during validation or compilation. For example, an imported
         // table might not have room for an element segment that we want to
         // initialize into it.
-        let instance = match Instance::new(&module, &imports) {
+        let instance = match Instance::new(&module, &imports)
+            .and_then(|new_instance| new_instance.init_reactor(&[]))
+        {
             Ok(instance) => instance,
             Err(e) => {
                 eprintln!(
@@ -338,7 +340,9 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 // aren't caught during validation or compilation. For example, an imported
                 // table might not have room for an element segment that we want to
                 // initialize into it.
-                if let Ok(instance) = Instance::new(&module, &imports) {
+                if let Ok(instance) = Instance::new(&module, &imports)
+                    .and_then(|new_instance| new_instance.init_reactor(&[]))
+                {
                     instances.insert(id, instance);
                 }
             }
