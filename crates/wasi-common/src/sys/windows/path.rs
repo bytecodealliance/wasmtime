@@ -501,7 +501,7 @@ pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str, follow: bool) -> Result
     let mut opts = OpenOptions::new();
 
     if !follow {
-        // by specifying FILE_FLAG_OPEN_REPARSE_POINT, we force Windows to *not* dereference symlinks
+        // By specifying FILE_FLAG_OPEN_REPARSE_POINT, we force Windows to *not* dereference symlinks.
         opts.custom_flags(Flags::FILE_FLAG_OPEN_REPARSE_POINT.bits());
     }
 
@@ -510,8 +510,6 @@ pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str, follow: bool) -> Result
     Ok(stat)
 }
 
-// We can safely ignore `follow` here as symlink expansion and any error throwing
-// should be done one layer above in `path::get`.
 pub(crate) fn filestat_set_times_at(
     dirfd: &OsDir,
     path: &str,
@@ -525,7 +523,7 @@ pub(crate) fn filestat_set_times_at(
     let mut opts = OpenOptions::new();
 
     if !follow {
-        // by specifying FILE_FLAG_OPEN_REPARSE_POINT, we force Windows to *not* dereference symlinks
+        // By specifying FILE_FLAG_OPEN_REPARSE_POINT, we force Windows to *not* dereference symlinks.
         opts.custom_flags(Flags::FILE_FLAG_OPEN_REPARSE_POINT.bits());
     }
 
