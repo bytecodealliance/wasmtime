@@ -457,7 +457,7 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         insn.get_regs(collector)
     }
 
-    fn map_regs(insn: &mut I, mapper: &RegUsageMapper) {
+    fn map_regs<RUM: RegUsageMapper>(insn: &mut I, mapper: &RUM) {
         insn.map_regs(mapper);
     }
 

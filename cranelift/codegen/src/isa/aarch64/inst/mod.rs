@@ -1168,29 +1168,29 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
 //=============================================================================
 // Instructions: map_regs
 
-fn aarch64_map_regs(inst: &mut Inst, mapper: &RegUsageMapper) {
-    fn map_use(m: &RegUsageMapper, r: &mut Reg) {
+fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
+    fn map_use<RUM: RegUsageMapper>(m: &RUM, r: &mut Reg) {
         if r.is_virtual() {
             let new = m.get_use(r.to_virtual_reg()).unwrap().to_reg();
             *r = new;
         }
     }
 
-    fn map_def(m: &RegUsageMapper, r: &mut Writable<Reg>) {
+    fn map_def<RUM: RegUsageMapper>(m: &RUM, r: &mut Writable<Reg>) {
         if r.to_reg().is_virtual() {
             let new = m.get_def(r.to_reg().to_virtual_reg()).unwrap().to_reg();
             *r = Writable::from_reg(new);
         }
     }
 
-    fn map_mod(m: &RegUsageMapper, r: &mut Writable<Reg>) {
+    fn map_mod<RUM: RegUsageMapper>(m: &RUM, r: &mut Writable<Reg>) {
         if r.to_reg().is_virtual() {
             let new = m.get_mod(r.to_reg().to_virtual_reg()).unwrap().to_reg();
             *r = Writable::from_reg(new);
         }
     }
 
-    fn map_mem(m: &RegUsageMapper, mem: &mut MemArg) {
+    fn map_mem<RUM: RegUsageMapper>(m: &RUM, mem: &mut MemArg) {
         // N.B.: we take only the pre-map here, but this is OK because the
         // only addressing modes that update registers (pre/post-increment on
         // AArch64) both read and write registers, so they are "mods" rather
@@ -1219,7 +1219,7 @@ fn aarch64_map_regs(inst: &mut Inst, mapper: &RegUsageMapper) {
         };
     }
 
-    fn map_pairmem(m: &RegUsageMapper, mem: &mut PairMemArg) {
+    fn map_pairmem<RUM: RegUsageMapper>(m: &RUM, mem: &mut PairMemArg) {
         match mem {
             &mut PairMemArg::SignedOffset(ref mut reg, ..) => map_use(m, reg),
             &mut PairMemArg::PreIndexed(ref mut reg, ..) => map_def(m, reg),
@@ -1227,7 +1227,7 @@ fn aarch64_map_regs(inst: &mut Inst, mapper: &RegUsageMapper) {
         }
     }
 
-    fn map_br(m: &RegUsageMapper, br: &mut CondBrKind) {
+    fn map_br<RUM: RegUsageMapper>(m: &RUM, br: &mut CondBrKind) {
         match br {
             &mut CondBrKind::Zero(ref mut reg) => map_use(m, reg),
             &mut CondBrKind::NotZero(ref mut reg) => map_use(m, reg),
@@ -1738,7 +1738,7 @@ impl MachInst for Inst {
         aarch64_get_regs(self, collector)
     }
 
-    fn map_regs(&mut self, mapper: &RegUsageMapper) {
+    fn map_regs<RUM: RegUsageMapper>(&mut self, mapper: &RUM) {
         aarch64_map_regs(self, mapper);
     }
 

@@ -138,7 +138,7 @@ pub trait MachInst: Clone + Debug {
 
     /// Map virtual registers to physical registers using the given virt->phys
     /// maps corresponding to the program points prior to, and after, this instruction.
-    fn map_regs(&mut self, maps: &RegUsageMapper);
+    fn map_regs<RUM: RegUsageMapper>(&mut self, maps: &RUM);
 
     /// If this is a simple move, return the (source, destination) tuple of registers.
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)>;
