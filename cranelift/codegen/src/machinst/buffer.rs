@@ -105,6 +105,40 @@
 //!   (fixups happen at island emission time, at which point latest-branches are
 //!   cleared, or at the end of emission), so we are sure to catch and redirect
 //!   all possible paths to this instruction.
+//!
+//! # Branch-optimization Correctness
+//!
+//! The branch-optimization mechanism depends on a few data structures with
+//! invariants, which are always held outside the scope of top-level public
+//! methods:
+//!
+//! - The latest-branches list. Each entry describes a span of the buffer
+//!   (start/end offsets), the label target, the corresponding fixup-list entry
+//!   index, and the bytes (must be the same length) for the inverted form, if
+//!   conditional. The list of labels that are bound to the start-offset of this
+//!   branch is *complete* (if any label has a resolved offset equal to `start`
+//!   and is not an alias, it must appear in this list) and *precise* (no label
+//!   in this list can be bound to another offset). No label in this list should
+//!   be an alias.  No two branch ranges can overlap, and branches are in
+//!   ascending-offset order.
+//!
+//! - The labels-at-tail list. This contains all MachLabels that have been bound
+//!   to (whose resolved offsets are equal to) the tail offset of the buffer.
+//!   No label in this list should be an alias.
+//!
+//! - The label_offsets array, containing the bound offset of a label or
+//!   UNKNOWN. No label can be bound at an offset greater than the current
+//!   buffer tail.
+//!
+//! - The label_aliases array, containing another label to which a label is
+//!   bound or UNKNOWN. A label's resolved offset is the resolved offset
+//!   of the label it is aliased to, if this is set.
+//!
+//! We argue below, at each method, how the invariants in these data structures
+//! are maintained (grep for "Post-invariant").
+//!
+//! Given these invariants, we argue why each optimization preserves execution
+//! semantics below (grep for "Preserves execution semantics").
 
 use crate::binemit::{Addend, CodeOffset, CodeSink, Reloc};
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode};
@@ -162,8 +196,21 @@ pub struct MachBuffer<I: VCodeInst> {
     /// Latest branches, to facilitate in-place editing for better fallthrough
     /// behavior and empty-block removal.
     latest_branches: SmallVec<[MachBranch; 4]>,
-    /// All labels, in offset order.
-    labels_by_offset: SmallVec<[(MachLabel, CodeOffset); 16]>,
+    /// All labels at the current offset (emission tail). This is lazily
+    /// cleared: it is actually accurate as long as the current offset is
+    /// `labels_at_tail_off`, but if `cur_offset()` has grown larger, it should
+    /// be considered as empty.
+    ///
+    /// For correctness, this *must* be complete (i.e., the vector must contain
+    /// all labels whose offsets are resolved to the current tail), because we
+    /// rely on it to update labels when we truncate branches.
+    labels_at_tail: SmallVec<[MachLabel; 4]>,
+    /// The last offset at which `labels_at_tail` is valid. It is conceptually
+    /// always describing the tail of the buffer, but we do not clear
+    /// `labels_at_tail` eagerly when the tail grows, rather we lazily clear it
+    /// when the offset has grown past this (`labels_at_tail_off`) point.
+    /// Always <= `cur_offset()`.
+    labels_at_tail_off: CodeOffset,
 }
 
 /// A `MachBuffer` once emission is completed: holds generated code and records,
@@ -223,8 +270,58 @@ impl<I: VCodeInst> MachBuffer<I> {
             island_deadline: UNKNOWN_LABEL_OFFSET,
             island_worst_case_size: 0,
             latest_branches: SmallVec::new(),
-            labels_by_offset: SmallVec::new(),
+            labels_at_tail: SmallVec::new(),
+            labels_at_tail_off: 0,
         }
+    }
+
+    /// Debug-only: check invariants of labels and branch-records described
+    /// under "Branch-optimization Correctness" above.
+    #[cfg(debug)]
+    fn check_label_branch_invariants(&self) {
+        let cur_off = self.cur_offset();
+        // Check that every entry in latest_branches has *correct*
+        // labels_at_this_branch lists. We do not check completeness because
+        // that would require building a reverse index, which is too slow even
+        // for a debug invariant check.
+        let mut last_end = 0;
+        for b in &self.latest_branches {
+            debug_assert!(b.start < b.end);
+            debug_assert!(b.end <= cur_off);
+            debug_assert!(b.start >= last_end);
+            last_end = b.end;
+            for &l in &b.labels_at_this_branch {
+                debug_assert_eq!(self.resolve_label_offset(l), b.start);
+                debug_assert_eq!(self.label_aliases[l.0 as usize], UNKNOWN_LABEL);
+            }
+        }
+
+        // Check that every label is unresolved, or resolved at or before
+        // cur_offset. If at cur_offset, must be in `labels_at_tail`.
+        for (i, &off) in self.label_offsets.iter().enumerate() {
+            let label = MachLabel(i as u32);
+            debug_assert!(off == UNKNOWN_LABEL_OFFSET || off <= cur_off);
+            if off == cur_off {
+                debug_assert!(
+                    self.labels_at_tail_off == cur_off && self.labels_at_tail.contains(&label)
+                );
+            }
+        }
+
+        // Check that every label in `labels_at_tail_off` is precise, i.e.,
+        // resolves to the cur offset.
+        debug_assert!(self.labels_at_tail_off <= cur_off);
+        if self.labels_at_tail_off == cur_off {
+            for &l in &self.labels_at_tail {
+                debug_assert_eq!(self.resolve_label_offset(l), cur_off);
+                debug_assert_eq!(self.label_aliases[l.0 as usize], UNKNOWN_LABEL);
+            }
+        }
+    }
+
+    #[cfg(not(debug))]
+    fn check_label_branch_invariants(&self) {
+        // Nothing.
     }
 
     /// Current offset from start of buffer.
@@ -236,6 +333,15 @@ impl<I: VCodeInst> MachBuffer<I> {
     pub fn put1(&mut self, value: u8) {
         trace!("MachBuffer: put byte @ {}: {:x}", self.cur_offset(), value);
         self.data.push(value);
+
+        // Post-invariant: conceptual-labels_at_tail contains a complete and
+        // precise list of labels bound at `cur_offset()`. We have advanced
+        // `cur_offset()`, hence if it had been equal to `labels_at_tail_off`
+        // before, it is not anymore (and it cannot become equal, because
+        // `labels_at_tail_off` is always <= `cur_offset()`). Thus the list is
+        // conceptually empty (even though it is only lazily cleared). No labels
+        // can be bound at this new offset (by invariant on `label_offsets`).
+        // Hence the invariant holds.
     }
 
     /// Add 2 bytes.
@@ -247,6 +353,8 @@ impl<I: VCodeInst> MachBuffer<I> {
         );
         let bytes = value.to_le_bytes();
         self.data.extend_from_slice(&bytes[..]);
+
+        // Post-invariant: as for `put1()`.
     }
 
     /// Add 4 bytes.
@@ -258,6 +366,8 @@ impl<I: VCodeInst> MachBuffer<I> {
         );
         let bytes = value.to_le_bytes();
         self.data.extend_from_slice(&bytes[..]);
+
+        // Post-invariant: as for `put1()`.
     }
 
     /// Add 8 bytes.
@@ -269,6 +379,8 @@ impl<I: VCodeInst> MachBuffer<I> {
         );
         let bytes = value.to_le_bytes();
         self.data.extend_from_slice(&bytes[..]);
+
+        // Post-invariant: as for `put1()`.
     }
 
     /// Add a slice of bytes.
@@ -279,6 +391,8 @@ impl<I: VCodeInst> MachBuffer<I> {
             data.len()
         );
         self.data.extend_from_slice(data);
+
+        // Post-invariant: as for `put1()`.
     }
 
     /// Reserve appended space and return a mutable slice referring to it.
@@ -288,6 +402,8 @@ impl<I: VCodeInst> MachBuffer<I> {
         let new_len = self.data.len() + len;
         self.data.resize(new_len, 0);
         &mut self.data[off..]
+
+        // Post-invariant: as for `put1()`.
     }
 
     /// Align up to the given alignment.
@@ -297,6 +413,8 @@ impl<I: VCodeInst> MachBuffer<I> {
         while self.cur_offset() & (align_to - 1) != 0 {
             self.put1(0);
         }
+
+        // Post-invariant: as for `put1()`.
     }
 
     /// Allocate a `Label` to refer to some offset. May not be bound to a fixed
@@ -307,6 +425,9 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.label_aliases.push(UNKNOWN_LABEL);
         trace!("MachBuffer: new label -> {:?}", MachLabel(l));
         MachLabel(l)
+
+        // Post-invariant: the only mutation is to add a new label; it has no
+        // bound offset yet, so it trivially satisfies all invariants.
     }
 
     /// Reserve the first N MachLabels for blocks.
@@ -316,19 +437,50 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.label_offsets
             .resize(blocks as usize, UNKNOWN_LABEL_OFFSET);
         self.label_aliases.resize(blocks as usize, UNKNOWN_LABEL);
+
+        // Post-invariant: as for `get_label()`.
     }
 
-    /// Bind a label to the current offset.
+    /// Bind a label to the current offset. A label can only be bound once.
     pub fn bind_label(&mut self, label: MachLabel) {
         trace!(
             "MachBuffer: bind label {:?} at offset {}",
             label,
             self.cur_offset()
         );
+        debug_assert_eq!(self.label_offsets[label.0 as usize], UNKNOWN_LABEL_OFFSET);
+        debug_assert_eq!(self.label_aliases[label.0 as usize], UNKNOWN_LABEL);
         let offset = self.cur_offset();
         self.label_offsets[label.0 as usize] = offset;
-        self.labels_by_offset.push((label, offset));
+        self.lazily_clear_labels_at_tail();
+        self.labels_at_tail.push(label);
+
+        // Invariants hold: bound offset of label is <= cur_offset (in fact it
+        // is equal). If the `labels_at_tail` list was complete and precise
+        // before, it is still, because we have bound this label to the current
+        // offset and added it to the list (which contains all labels at the
+        // current offset).
+
+        self.check_label_branch_invariants();
         self.optimize_branches();
+
+        // Post-invariant: by `optimize_branches()` (see argument there).
+        self.check_label_branch_invariants();
+    }
+
+    /// Lazily clear `labels_at_tail` if the tail offset has moved beyond the
+    /// offset that it applies to.
+    fn lazily_clear_labels_at_tail(&mut self) {
+        let offset = self.cur_offset();
+        if offset > self.labels_at_tail_off {
+            self.labels_at_tail_off = offset;
+            self.labels_at_tail.clear();
+        }
+
+        // Post-invariant: either labels_at_tail_off was at cur_offset, and
+        // state is untouched, or was less than cur_offset, in which case the
+        // labels_at_tail list was conceptually empty, and is now actually
+        // empty.
     }
 
     /// Resolve a label to an offset, if known. May return `UNKNOWN_LABEL_OFFSET`.
@@ -339,15 +491,16 @@ impl<I: VCodeInst> MachBuffer<I> {
         } else {
             self.label_offsets[label.0 as usize]
         }
+
+        // Post-invariant: no mutations.
     }
 
     /// Emit a reference to the given label with the given reference type (i.e.,
     /// branch-instruction format) at the current offset.  This is like a
     /// relocation, but handled internally.
     ///
-    /// Because the offset of the label may already be known and the patch may
-    /// happen immediately, the buffer must already contain bytes at `offset` up
-    /// to `offset + kind.patch_size()`.
+    /// This can be called before the branch is actually emitted; fixups will
+    /// not happen until an island is emitted or the buffer is finished.
     pub fn use_label_at_offset(&mut self, offset: CodeOffset, label: MachLabel, kind: I::LabelUse) {
         trace!(
             "MachBuffer: use_label_at_offset: offset {} label {:?} kind {:?}",
@@ -355,7 +508,6 @@ impl<I: VCodeInst> MachBuffer<I> {
             label,
             kind
         );
-        debug_assert!(offset + kind.patch_size() <= self.cur_offset());
 
         // Add the fixup, and update the worst-case island size based on a
         // veneer for this label use.
@@ -372,26 +524,51 @@ impl<I: VCodeInst> MachBuffer<I> {
         if deadline < self.island_deadline {
             self.island_deadline = deadline;
         }
+
+        // Post-invariant: no mutations to branches/labels data structures.
+        self.check_label_branch_invariants();
     }
 
     /// Inform the buffer of an unconditional branch at the given offset,
     /// targetting the given label. May be used to optimize branches.
     /// The last added label-use must correspond to this branch.
+    /// This must be called when the current offset is equal to `start`; i.e.,
+    /// before actually emitting the branch. This implies that for a branch that
+    /// uses a label and is eligible for optimizations by the MachBuffer, the
+    /// proper sequence is:
+    ///
+    /// - Call `use_label_at_offset()` to emit the fixup record.
+    /// - Call `add_uncond_branch()` to make note of the branch.
+    /// - Emit the bytes for the branch's machine code.
+    ///
+    /// Additional requirement: no labels may be bound between `start` and `end`
+    /// (exclusive on both ends).
     pub fn add_uncond_branch(&mut self, start: CodeOffset, end: CodeOffset, target: MachLabel) {
+        assert!(self.cur_offset() == start);
+        debug_assert!(end > start);
         assert!(!self.fixup_records.is_empty());
         let fixup = self.fixup_records.len() - 1;
+        self.lazily_clear_labels_at_tail();
         self.latest_branches.push(MachBranch {
             start,
             end,
             target,
             fixup,
             inverted: None,
+            labels_at_this_branch: self.labels_at_tail.clone(),
         });
+
+        // Post-invariant: we asserted branch start is current tail; the list of
+        // labels at branch is cloned from list of labels at current tail.
+        self.check_label_branch_invariants();
     }
 
     /// Inform the buffer of a conditional branch at the given offset,
     /// targetting the given label. May be used to optimize branches.
     /// The last added label-use must correspond to this branch.
+    ///
+    /// Additional requirement: no labels may be bound between `start` and `end`
+    /// (exclusive on both ends).
     pub fn add_cond_branch(
         &mut self,
         start: CodeOffset,
@@ -399,47 +576,127 @@ impl<I: VCodeInst> MachBuffer<I> {
         target: MachLabel,
         inverted: &[u8],
     ) {
+        assert!(self.cur_offset() == start);
+        debug_assert!(end > start);
         assert!(!self.fixup_records.is_empty());
+        debug_assert!(inverted.len() == (end - start) as usize);
         let fixup = self.fixup_records.len() - 1;
         let inverted = Some(SmallVec::from(inverted));
+        self.lazily_clear_labels_at_tail();
         self.latest_branches.push(MachBranch {
             start,
             end,
             target,
             fixup,
             inverted,
+            labels_at_this_branch: self.labels_at_tail.clone(),
         });
+
+        // Post-invariant: we asserted branch start is current tail; labels at
+        // branch list is cloned from list of labels at current tail.
+        self.check_label_branch_invariants();
     }
 
     fn truncate_last_branch(&mut self) {
+        self.lazily_clear_labels_at_tail();
+        // Invariants hold at this point.
+
         let b = self.latest_branches.pop().unwrap();
         assert!(b.end == self.cur_offset());
+
+        // State:
+        //    [PRE CODE]
+        //  Offset b.start, b.labels_at_this_branch:
+        //    [BRANCH CODE]
+        //  cur_off, self.labels_at_tail -->
+        //    (end of buffer)
         self.data.truncate(b.start as usize);
         self.fixup_records.truncate(b.fixup);
+        // State:
+        //    [PRE CODE]
+        //  cur_off, Offset b.start, b.labels_at_this_branch:
+        //    (end of buffer)
+        //
+        //  self.labels_at_tail -->  (past end of buffer)
         let cur_off = self.cur_offset();
+        self.labels_at_tail_off = cur_off;
+        // State:
+        //    [PRE CODE]
+        //  cur_off, Offset b.start, b.labels_at_this_branch,
+        //  self.labels_at_tail:
+        //    (end of buffer)
+        //
+        // resolve_label_offset(l) for l in labels_at_tail:
+        //    (past end of buffer)
+
         trace!(
             "truncate_last_branch: truncated {:?}; off now {}",
             b,
             cur_off
         );
-        for &mut (l, ref mut off) in self.labels_by_offset.iter_mut().rev() {
-            if *off > cur_off {
-                *off = cur_off;
-                trace!(" -> label {:?} reassigned to {}", l, cur_off);
-                self.label_offsets[l.0 as usize] = cur_off;
-            } else {
-                break;
-            }
+
+        // Fix up resolved label offsets for labels at tail.
+        for &l in &self.labels_at_tail {
+            self.label_offsets[l.0 as usize] = cur_off;
         }
+        // Old labels_at_this_branch are now at cur_off.
+        self.labels_at_tail
+            .extend(b.labels_at_this_branch.into_iter());
+
+        // Post-invariant: this operation is defined to truncate the buffer,
+        // which moves cur_off backward, and to move labels at the end of the
+        // buffer back to the start-of-branch offset.
+        //
+        // latest_branches satisfies all invariants:
+        // - it has no branches past the end of the buffer (branches are in
+        //   order, we removed the last one, and we truncated the buffer to just
+        //   before the start of that branch)
+        // - no labels were moved to lower offsets than the (new) cur_off, so
+        //   the labels_at_this_branch list for any other branch need not change.
+        //
+        // labels_at_tail satisfies all invariants:
+        // - all labels that were at the tail after the truncated branch are
+        //   moved backward to just before the branch, which becomes the new tail;
+        //   thus every element in the list should remain (ensured by `.extend()`
+        //   above).
+        // - all labels that refer to the new tail, which is the start-offset of
+        //   the truncated branch, must be present. The `labels_at_this_branch`
+        //   list in the truncated branch's record is a complete and precise list
+        //   of exactly these labels; we append these to labels_at_tail.
+        // - labels_at_tail_off is at cur_off after truncation occurs, so the
+        //   list is valid (not to be lazily cleared).
+        //
+        // The stated operation was performed:
+        // - For each label at the end of the buffer prior to this method, it
+        //   now resolves to the new (truncated) end of the buffer: it must have
+        //   been in `labels_at_tail` (this list is precise and complete, and
+        //   the tail was at the end of the truncated branch on entry), and we
+        //   iterate over this list and set `label_offsets` to the new tail.
+        //   None of these labels could have been an alias (by invariant), so
+        //   `label_offsets` is authoritative for each.
+        // - No other labels will be past the end of the buffer, because of the
+        //   requirement that no labels be bound to the middle of branch ranges
+        //   (see comments to `add_{cond,uncond}_branch()`).
+        // - The buffer is truncated to just before the last branch, and the
+        //   fixup record referring to that last branch is removed.
+        self.check_label_branch_invariants();
     }
 
     fn optimize_branches(&mut self) {
+        self.lazily_clear_labels_at_tail();
+        // Invariants valid at this point.
+
         trace!(
             "enter optimize_branches:\n b = {:?}\n l = {:?}\n f = {:?}",
             self.latest_branches,
-            self.labels_by_offset,
+            self.labels_at_tail,
             self.fixup_records
         );
+
+        // We continue to munch on branches at the tail of the buffer until no
+        // more rules apply. Note that the loop only continues if a branch is
+        // actually truncated (or if labels are redirected away from a branch),
+        // so this always makes progress.
         while let Some(b) = self.latest_branches.last() {
             let cur_off = self.cur_offset();
             trace!("optimize_branches: last branch {:?} at off {}", b, cur_off);
@@ -451,45 +708,141 @@ impl<I: VCodeInst> MachBuffer<I> {
                 break;
             }
 
+            // Invariant: we are looking at a branch that ends at the tail of
+            // the buffer.
+
+            // For any branch, conditional or unconditional:
+            // - If the target is a label at the current offset, then remove
+            //   the conditional branch, and reset all labels that targetted
+            //   the current offset (end of branch) to the truncated
+            //   end-of-code.
+            //
+            // Preserves execution semantics: a branch to its own fallthrough
+            // address is equivalent to a no-op; in both cases, nextPC is the
+            // fallthrough.
+            if self.resolve_label_offset(b.target) == cur_off {
+                trace!("branch with target == cur off; truncating");
+                self.truncate_last_branch();
+                continue;
+            }
+
             // If latest is an unconditional branch:
-            // - For each label at this point, make the label an alias of
-            //   the branch target. We can now assume below that the
-            //   unconditional branch is reachable only via fallthrough, and we
-            //   are free to remove it in an optimization.
+            //
+            // - If the branch's target is not its own start address, then for
+            //   each label at the start of branch, make the label an alias of the
+            //   branch target, and remove the label from the "labels at this
+            //   branch" list.
+            //
+            //   - Preserves execution semantics: an unconditional branch's
+            //     only effect is to set PC to a new PC; this change simply
+            //     collapses one step in the step-semantics.
+            //
+            //   - Post-invariant: the labels that were bound to the start of
+            //     this branch become aliases, so they must not be present in any
+            //     labels-at-this-branch list or the labels-at-tail list. The
+            //     labels are removed form the latest-branch record's
+            //     labels-at-this-branch list, and are never placed in the
+            //     labels-at-tail list. Furthermore, it is correct that they are
+            //     not in either list, because they are now aliases, and labels
+            //     that are aliases remain aliases forever.
+            //
             // - If there is a prior unconditional branch that ends just before
-            //   this one begins, then we can truncate this branch, because it is
-            //   entirely unreachable (due to above). Trim the end of the
-            //   `labels_by_offset` array and continue around the loop.
+            //   this one begins, and this branch has no labels bound to its
+            //   start, then we can truncate this branch, because it is entirely
+            //   unreachable (we have redirected all labels that make it
+            //   reachable otherwise). Do so and continue around the loop.
+            //
+            //   - Preserves execution semantics: the branch is unreachable,
+            //     because execution can only flow into an instruction from the
+            //     prior instruction's fallthrough or from a branch bound to that
+            //     instruction's start offset. Unconditional branches have no
+            //     fallthrough, so if the prior instruction is an unconditional
+            //     branch, no fallthrough entry can happen. The
+            //     labels-at-this-branch list is complete (by invariant), so if it
+            //     is empty, then the instruction is entirely unreachable. Thus,
+            //     it can be removed.
+            //
+            //   - Post-invariant: ensured by truncate_last_branch().
+            //
             // - If there is a prior conditional branch whose target label
             //   resolves to the current offset (branches around the
             //   unconditional branch), then remove the unconditional branch,
             //   and make the target of the unconditional the target of the
             //   conditional instead.
+            //
+            //   - Preserves execution semantics: previously we had:
+            //
+            //         L1:
+            //            cond_br L2
+            //            br L3
+            //         L2:
+            //            (end of buffer)
+            //
+            //     by removing the last branch, we have:
+            //
+            //         L1:
+            //            cond_br L2
+            //         L2:
+            //            (end of buffer)
+            //
+            //     we then fix up the records for the conditional branch to
+            //     have:
+            //
+            //         L1:
+            //           cond_br.inverted L3
+            //         L2:
+            //
+            //     In the original code, control flow reaches L2 when the
+            //     conditional branch's predicate is true, and L3 otherwise. In
+            //     the optimized code, the same is true.
+            //
+            //   - Post-invariant: all edits to latest_branches and
+            //     labels_at_tail are performed by `truncate_last_branch()`,
+            //     which maintains the invariants at each step.
+
             if b.is_uncond() {
                 // Set any label equal to current branch's start as an alias of
-                // the branch's target.
-                for &(l, off) in self.labels_by_offset.iter().rev() {
-                    trace!(" -> uncond: latest label {:?} at off {}", l, off);
-                    if off > b.start {
-                        continue;
-                    } else if off == b.start {
-                        trace!(" -> setting alias to {:?}", b.target);
+                // the branch's target, if the target is not the branch itself
+                // (i.e., an infinite loop).
+                if self.resolve_label_offset(b.target) != b.start {
+                    let redirected = b.labels_at_this_branch.len();
+                    for &l in &b.labels_at_this_branch {
+                        trace!(
+                            " -> label at start of branch {:?} redirected to target {:?}",
+                            l,
+                            b.target
+                        );
                         self.label_aliases[l.0 as usize] = b.target;
-                    } else {
-                        break;
+                        // NOTE: we continue to ensure the invariant that labels
+                        // pointing to tail of buffer are in `labels_at_tail`
+                        // because we already ensured above that the last branch
+                        // cannot have a target of `cur_off`; so we never have
+                        // to put the label into `labels_at_tail` when moving it
+                        // here.
+                    }
+                    // Maintain invariant: all branches have been redirected
+                    // and are no longer pointing at the start of this branch.
+                    let mut_b = self.latest_branches.last_mut().unwrap();
+                    mut_b.labels_at_this_branch.clear();
+
+                    if redirected > 0 {
+                        trace!(" -> after label redirects, restarting loop");
+                        continue;
                     }
                 }
-
-                // If the branch target is the next offset,
+                let b = self.latest_branches.last().unwrap();
 
                 // Examine any immediately preceding branch.
                 if self.latest_branches.len() > 1 {
                     let prev_b = &self.latest_branches[self.latest_branches.len() - 2];
                     trace!(" -> more than one branch; prev_b = {:?}", prev_b);
-                    // This uncond is immediately after another uncond; we've
-                    // already redirected labels to this uncond away; so we can
-                    // truncate this uncond.
-                    if prev_b.is_uncond() && prev_b.end == b.start {
+                    // This uncond is immediately after another uncond; we
+                    // should have already redirected labels to this uncond away
+                    // (but check to be sure); so we can truncate this uncond.
+                    if prev_b.is_uncond()
+                        && prev_b.end == b.start
+                        && b.labels_at_this_branch.is_empty()
+                    {
                         trace!(" -> uncond follows another uncond; truncating");
                         self.truncate_last_branch();
                         continue;
@@ -506,32 +859,36 @@ impl<I: VCodeInst> MachBuffer<I> {
                         && self.resolve_label_offset(prev_b.target) == cur_off
                     {
                         trace!(" -> uncond follows a conditional, and conditional's target resolves to current offset");
+                        // Save the target of the uncond (this becomes the
+                        // target of the cond), and truncate the uncond.
                         let target = b.target;
                         let data = prev_b.inverted.clone().unwrap();
                         self.truncate_last_branch();
+
+                        // Mutate the code and cond branch.
+                        let off_before_edit = self.cur_offset();
                         let prev_b = self.latest_branches.last_mut().unwrap();
                         let not_inverted = SmallVec::from(
                             &self.data[(prev_b.start as usize)..(prev_b.end as usize)],
                         );
+
+                        // Low-level edit: replaces bytes of branch with
+                        // inverted form. cur_off remains the same afterward, so
+                        // we do not need to modify label data structures.
                         self.data.truncate(prev_b.start as usize);
                         self.data.extend_from_slice(&data[..]);
+
+                        // Save the original code as the inversion of the
+                        // inverted branch, in case we later edit this branch
+                        // again.
                         prev_b.inverted = Some(not_inverted);
                         self.fixup_records[prev_b.fixup].label = target;
                         trace!(" -> reassigning target of condbr to {:?}", target);
                         prev_b.target = target;
+                        debug_assert_eq!(off_before_edit, self.cur_offset());
                         continue;
                     }
                 }
-            }
-
-            // For any branch, conditional or unconditional:
-            // - If the target is a label at the current offset, then remove
-            //   the conditional branch, and reset all labels that targetted
-            //   the current offset (end of branch) to the truncated
-            //   end-of-code.
-            if self.resolve_label_offset(b.target) == cur_off {
-                trace!("branch with target == cur off; truncating");
-                self.truncate_last_branch();
             }
 
             // If we couldn't do anything with the last branch, then break.
@@ -543,12 +900,16 @@ impl<I: VCodeInst> MachBuffer<I> {
         trace!(
             "leave optimize_branches:\n b = {:?}\n l = {:?}\n f = {:?}",
             self.latest_branches,
-            self.labels_by_offset,
+            self.labels_at_tail,
             self.fixup_records
         );
     }
 
     fn purge_latest_branches(&mut self) {
+        // All of our branch simplification rules work only if a branch ends at
+        // the tail of the buffer, with no following code; and branches are in
+        // order in latest_branches; so if the last entry ends prior to
+        // cur_offset, then clear all entries.
         let cur_off = self.cur_offset();
         if let Some(l) = self.latest_branches.last() {
             if l.end < cur_off {
@@ -556,6 +917,10 @@ impl<I: VCodeInst> MachBuffer<I> {
                 self.latest_branches.clear();
             }
         }
+
+        // Post-invariant: no invariant requires any branch to appear in
+        // `latest_branches`; it is always optional. The list-clear above thus
+        // preserves all semantics.
     }
 
     /// Emit a constant at some point in the future, binding the given label to
@@ -929,6 +1294,12 @@ struct MachBranch {
     target: MachLabel,
     fixup: usize,
     inverted: Option<SmallVec<[u8; 8]>>,
+    /// All labels pointing to the start of this branch. For correctness, this
+    /// *must* be complete (i.e., must contain all labels whose resolved offsets
+    /// are at the start of this branch): we rely on being able to redirect all
+    /// labels that could jump to this branch before removing it, if it is
+    /// otherwise unreachable.
+    labels_at_this_branch: SmallVec<[MachLabel; 4]>,
 }
 
 impl MachBranch {
