@@ -3,7 +3,7 @@ use crate::handle::{Handle, HandleRights};
 use crate::wasi::{types, Errno, Result};
 use std::path::{Component, Path};
 use std::str;
-use wiggle::{GuestBorrows, GuestPtr};
+use wiggle::GuestPtr;
 
 pub(crate) use crate::sys::path::{from_host, open_rights};
 
@@ -14,19 +14,15 @@ pub(crate) fn get(
     entry: &Entry,
     required_rights: &HandleRights,
     dirflags: types::Lookupflags,
-    path: &GuestPtr<'_, str>,
+    path_ptr: &GuestPtr<'_, str>,
     needs_final_component: bool,
 ) -> Result<(Box<dyn Handle>, String)> {
     const MAX_SYMLINK_EXPANSIONS: usize = 128;
 
     // Extract path as &str from guest's memory.
-    let path = unsafe {
-        let mut bc = GuestBorrows::new();
-        let raw = path.as_raw(&mut bc)?;
-        &*raw
-    };
+    let path = path_ptr.as_str()?;
 
-    log::trace!("     | (path_ptr,path_len)='{}'", path);
+    log::trace!("     | (path_ptr,path_len)='{}'", &*path);
 
     if path.contains('\0') {
         // if contains NUL, return Ilseq
@@ -50,6 +46,9 @@ pub(crate) fn get(
     // Stack of paths left to process. This is initially the `path` argument to this function, but
     // any symlinks we encounter are processed by pushing them on the stack.
     let mut path_stack = vec![path.to_owned()];
+
+    // No longer need a borrow into the guest memory for `path`:
+    drop(path);
 
     // Track the number of symlinks we've expanded, so we can return `ELOOP` after too many.
     let mut symlink_expansions = 0;
