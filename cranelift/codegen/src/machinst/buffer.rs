@@ -162,10 +162,20 @@ pub struct MachBuffer<I: VCodeInst> {
     /// Latest branches, to facilitate in-place editing for better fallthrough
     /// behavior and empty-block removal.
     latest_branches: SmallVec<[MachBranch; 4]>,
-    /// All labels at the current offset (emission tail). For correctness, this
-    /// *must* be complete, because we rely on it to update labels when we
-    /// truncate branches.
+    /// All labels at the current offset (emission tail). This is lazily
+    /// cleared: it is actually accurate as long as the current offset is
+    /// `labels_at_tail_off`, but if `cur_offset()` has grown larger, it should
+    /// be considered as empty.
+    ///
+    /// For correctness, this *must* be complete (i.e., the vector must contain
+    /// all labels whose offsets are resolved to the current tail), because we
+    /// rely on it to update labels when we truncate branches.
     labels_at_tail: SmallVec<[MachLabel; 4]>,
+    /// The last offset at which `labels_at_tail` is valid. It is conceptually
+    /// always describing the tail of the buffer, but we do not clear
+    /// `labels_at_tail` eagerly when the tail grows, rather we lazily clear it
+    /// when the offset has grown past this (`labels_at_tail_off`) point.
+    labels_at_tail_off: CodeOffset,
 }
 
 /// A `MachBuffer` once emission is completed: holds generated code and records,
@@ -226,6 +236,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             island_worst_case_size: 0,
             latest_branches: SmallVec::new(),
             labels_at_tail: SmallVec::new(),
+            labels_at_tail_off: 0,
         }
     }
 
@@ -238,7 +249,6 @@ impl<I: VCodeInst> MachBuffer<I> {
     pub fn put1(&mut self, value: u8) {
         trace!("MachBuffer: put byte @ {}: {:x}", self.cur_offset(), value);
         self.data.push(value);
-        self.labels_at_tail.clear();
     }
 
     /// Add 2 bytes.
@@ -250,7 +260,6 @@ impl<I: VCodeInst> MachBuffer<I> {
         );
         let bytes = value.to_le_bytes();
         self.data.extend_from_slice(&bytes[..]);
-        self.labels_at_tail.clear();
     }
 
     /// Add 4 bytes.
@@ -262,7 +271,6 @@ impl<I: VCodeInst> MachBuffer<I> {
         );
         let bytes = value.to_le_bytes();
         self.data.extend_from_slice(&bytes[..]);
-        self.labels_at_tail.clear();
     }
 
     /// Add 8 bytes.
@@ -274,7 +282,6 @@ impl<I: VCodeInst> MachBuffer<I> {
         );
         let bytes = value.to_le_bytes();
         self.data.extend_from_slice(&bytes[..]);
-        self.labels_at_tail.clear();
     }
 
     /// Add a slice of bytes.
@@ -285,7 +292,6 @@ impl<I: VCodeInst> MachBuffer<I> {
             data.len()
         );
         self.data.extend_from_slice(data);
-        self.labels_at_tail.clear();
     }
 
     /// Reserve appended space and return a mutable slice referring to it.
@@ -294,7 +300,6 @@ impl<I: VCodeInst> MachBuffer<I> {
         let off = self.data.len();
         let new_len = self.data.len() + len;
         self.data.resize(new_len, 0);
-        self.labels_at_tail.clear();
         &mut self.data[off..]
     }
 
@@ -335,8 +340,19 @@ impl<I: VCodeInst> MachBuffer<I> {
         );
         let offset = self.cur_offset();
         self.label_offsets[label.0 as usize] = offset;
+        self.lazily_clear_labels_at_tail();
         self.labels_at_tail.push(label);
         self.optimize_branches();
+    }
+
+    /// Lazily clear `labels_at_tail` if the tail offset has moved beyond the
+    /// offset that it applies to.
+    fn lazily_clear_labels_at_tail(&mut self) {
+        let offset = self.cur_offset();
+        if offset > self.labels_at_tail_off {
+            self.labels_at_tail_off = offset;
+            self.labels_at_tail.clear();
+        }
     }
 
     /// Resolve a label to an offset, if known. May return `UNKNOWN_LABEL_OFFSET`.
@@ -396,6 +412,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         debug_assert!(end > start);
         assert!(!self.fixup_records.is_empty());
         let fixup = self.fixup_records.len() - 1;
+        self.lazily_clear_labels_at_tail();
         self.latest_branches.push(MachBranch {
             start,
             end,
@@ -421,6 +438,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         assert!(!self.fixup_records.is_empty());
         let fixup = self.fixup_records.len() - 1;
         let inverted = Some(SmallVec::from(inverted));
+        self.lazily_clear_labels_at_tail();
         self.latest_branches.push(MachBranch {
             start,
             end,
@@ -432,11 +450,13 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     fn truncate_last_branch(&mut self) {
+        self.lazily_clear_labels_at_tail();
         let b = self.latest_branches.pop().unwrap();
         assert!(b.end == self.cur_offset());
         self.data.truncate(b.start as usize);
         self.fixup_records.truncate(b.fixup);
         let cur_off = self.cur_offset();
+        self.labels_at_tail_off = cur_off;
         trace!(
             "truncate_last_branch: truncated {:?}; off now {}",
             b,
@@ -450,12 +470,18 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     fn optimize_branches(&mut self) {
+        self.lazily_clear_labels_at_tail();
         trace!(
             "enter optimize_branches:\n b = {:?}\n l = {:?}\n f = {:?}",
             self.latest_branches,
             self.labels_at_tail,
             self.fixup_records
         );
+
+        // We continue to munch on branches at the tail of the buffer until no
+        // more rules apply. Note that the loop only continues if a branch is
+        // actually truncated (or if labels are redirected away from a branch),
+        // so this always makes progress.
         while let Some(b) = self.latest_branches.last() {
             let cur_off = self.cur_offset();
             trace!("optimize_branches: last branch {:?} at off {}", b, cur_off);
@@ -962,9 +988,10 @@ struct MachBranch {
     fixup: usize,
     inverted: Option<SmallVec<[u8; 8]>>,
     /// All labels pointing to the start of this branch. For correctness, this
-    /// *must* be complete: we rely on being able to redirect all labels that
-    /// could jump to this branch before removing it, if it is otherwise
-    /// unreachable.
+    /// *must* be complete (i.e., must contain all labels whose resolved offsets
+    /// are at the start of this branch): we rely on being able to redirect all
+    /// labels that could jump to this branch before removing it, if it is
+    /// otherwise unreachable.
     labels_at_this_branch: SmallVec<[MachLabel; 4]>,
 }
 
