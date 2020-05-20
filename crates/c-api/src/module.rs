@@ -15,8 +15,8 @@ pub struct wasm_module_t {
 wasmtime_c_api_macros::declare_ref!(wasm_module_t);
 
 impl wasm_module_t {
-    fn anyref(&self) -> wasmtime::AnyRef {
-        self.module.anyref()
+    fn externref(&self) -> wasmtime::ExternRef {
+        self.module.externref()
     }
 }
 

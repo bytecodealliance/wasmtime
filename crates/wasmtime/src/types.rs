@@ -62,7 +62,7 @@ pub enum ValType {
     /// A 128 bit number.
     V128,
     /// A reference to opaque data in the Wasm instance.
-    AnyRef, /* = 128 */
+    ExternRef, /* = 128 */
     /// A reference to a Wasm function.
     FuncRef,
 }
@@ -80,7 +80,7 @@ impl ValType {
     /// Returns true if `ValType` matches either of the reference types.
     pub fn is_ref(&self) -> bool {
         match self {
-            ValType::AnyRef | ValType::FuncRef => true,
+            ValType::ExternRef | ValType::FuncRef => true,
             _ => false,
         }
     }
@@ -321,7 +321,7 @@ impl GlobalType {
 /// A descriptor for a table in a WebAssembly module.
 ///
 /// Tables are contiguous chunks of a specific element, typically a `funcref` or
-/// an `anyref`. The most common use for tables is a function table through
+/// an `externref`. The most common use for tables is a function table through
 /// which `call_indirect` can invoke other functions.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct TableType {

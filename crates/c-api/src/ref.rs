@@ -1,11 +1,11 @@
 use crate::HostInfoState;
 use std::os::raw::c_void;
-use wasmtime::AnyRef;
+use wasmtime::ExternRef;
 
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_ref_t {
-    pub(crate) r: AnyRef,
+    pub(crate) r: ExternRef,
 }
 
 wasmtime_c_api_macros::declare_own!(wasm_ref_t);
@@ -20,7 +20,7 @@ pub extern "C" fn wasm_ref_same(a: &wasm_ref_t, b: &wasm_ref_t) -> bool {
     a.r.ptr_eq(&b.r)
 }
 
-pub(crate) fn get_host_info(r: &AnyRef) -> *mut c_void {
+pub(crate) fn get_host_info(r: &ExternRef) -> *mut c_void {
     let host_info = match r.host_info() {
         Some(info) => info,
         None => return std::ptr::null_mut(),
@@ -37,7 +37,7 @@ pub extern "C" fn wasm_ref_get_host_info(a: &wasm_ref_t) -> *mut c_void {
 }
 
 pub(crate) fn set_host_info(
-    r: &AnyRef,
+    r: &ExternRef,
     info: *mut c_void,
     finalizer: Option<extern "C" fn(*mut c_void)>,
 ) {

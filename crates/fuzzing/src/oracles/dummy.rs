@@ -44,9 +44,9 @@ pub fn dummy_value(val_ty: &ValType) -> Result<Val, Trap> {
                 "dummy_value: unsupported function return type: v128".to_string(),
             ))
         }
-        ValType::AnyRef => {
+        ValType::ExternRef => {
             return Err(Trap::new(
-                "dummy_value: unsupported function return type: anyref".to_string(),
+                "dummy_value: unsupported function return type: externref".to_string(),
             ))
         }
         ValType::FuncRef => {

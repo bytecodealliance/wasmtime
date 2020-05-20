@@ -337,8 +337,8 @@ impl RunCommand {
                 Val::I64(i) => println!("{}", i),
                 Val::F32(f) => println!("{}", f),
                 Val::F64(f) => println!("{}", f),
-                Val::AnyRef(_) => println!("<anyref>"),
-                Val::FuncRef(_) => println!("<anyref>"),
+                Val::ExternRef(_) => println!("<externref>"),
+                Val::FuncRef(_) => println!("<externref>"),
                 Val::V128(i) => println!("{}", i),
             }
         }
