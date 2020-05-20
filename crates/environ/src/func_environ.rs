@@ -727,7 +727,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn translate_table_grow(
         &mut self,
         _: cranelift_codegen::cursor::FuncCursor<'_>,
-        _: u32,
+        _: TableIndex,
         _: ir::Value,
         _: ir::Value,
     ) -> WasmResult<ir::Value> {
@@ -739,7 +739,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn translate_table_get(
         &mut self,
         _: cranelift_codegen::cursor::FuncCursor<'_>,
-        _: u32,
+        _: TableIndex,
         _: ir::Value,
     ) -> WasmResult<ir::Value> {
         Err(WasmError::Unsupported(
@@ -750,7 +750,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn translate_table_set(
         &mut self,
         _: cranelift_codegen::cursor::FuncCursor<'_>,
-        _: u32,
+        _: TableIndex,
         _: ir::Value,
         _: ir::Value,
     ) -> WasmResult<()> {
@@ -762,7 +762,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn translate_table_fill(
         &mut self,
         _: cranelift_codegen::cursor::FuncCursor<'_>,
-        _: u32,
+        _: TableIndex,
         _: ir::Value,
         _: ir::Value,
         _: ir::Value,
