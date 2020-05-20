@@ -4,7 +4,7 @@ use crate::sys::{fd, AsFile};
 use crate::wasi::{types, Errno, Result};
 use std::convert::TryFrom;
 use std::ffi::{OsStr, OsString};
-use std::fs::{self, File, Metadata, OpenOptions};
+use std::fs::{self, Metadata, OpenOptions};
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
@@ -496,18 +496,22 @@ pub(crate) fn remove_directory(dirfd: &OsDir, path: &str) -> Result<()> {
 }
 
 pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str, follow: bool) -> Result<types::Filestat> {
+    use winx::file::Flags;
     let path = concatenate(dirfd, path)?;
+    let mut opts = OpenOptions::new();
 
-    // Expand symlinks if we're meant to follow.
-    // TODO audit this: is it possible to expand outside of
-    // `dirfd`? In a way, is it possible to "dirfd/.."?
-    let path = if follow { path.canonicalize()? } else { path };
+    if !follow {
+        // by specifying FILE_FLAG_OPEN_REPARSE_POINT, we force Windows to *not* dereference symlinks
+        opts.custom_flags(Flags::FILE_FLAG_OPEN_REPARSE_POINT.bits());
+    }
 
-    let file = File::open(path)?;
+    let file = opts.read(true).open(path)?;
     let stat = fd::filestat_get(&file)?;
     Ok(stat)
 }
 
+// We can safely ignore `follow` here as symlink expansion and any error throwing
+// should be done one layer above in `path::get`.
 pub(crate) fn filestat_set_times_at(
     dirfd: &OsDir,
     path: &str,
@@ -516,15 +520,16 @@ pub(crate) fn filestat_set_times_at(
     fst_flags: types::Fstflags,
     follow: bool,
 ) -> Result<()> {
-    use winx::file::AccessMode;
+    use winx::file::{AccessMode, Flags};
     let path = concatenate(dirfd, path)?;
+    let mut opts = OpenOptions::new();
 
-    // Expand symlinks if we're meant to follow.
-    // TODO audit this: is it possible to expand outside of
-    // `dirfd`? In a way, is it possible to "dirfd/.."?
-    let path = if follow { path.canonicalize()? } else { path };
+    if !follow {
+        // by specifying FILE_FLAG_OPEN_REPARSE_POINT, we force Windows to *not* dereference symlinks
+        opts.custom_flags(Flags::FILE_FLAG_OPEN_REPARSE_POINT.bits());
+    }
 
-    let file = OpenOptions::new()
+    let file = opts
         .access_mode(AccessMode::FILE_WRITE_ATTRIBUTES.bits())
         .open(path)?;
     fd::filestat_set_times(&file, atim, mtim, fst_flags)?;
