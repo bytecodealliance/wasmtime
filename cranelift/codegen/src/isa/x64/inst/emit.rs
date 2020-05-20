@@ -812,14 +812,14 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
             let disp = dest.as_offset32_or_zero() - 5;
             let disp = disp as u32;
             let br_start = sink.cur_offset();
-            sink.put1(0xE9);
-            let br_disp_off = sink.cur_offset();
-            sink.put4(disp);
-            let br_end = sink.cur_offset();
+            let br_disp_off = br_start + 1;
+            let br_end = br_start + 5;
             if let Some(l) = dest.as_label() {
                 sink.use_label_at_offset(br_disp_off, l, LabelUse::Rel32);
                 sink.add_uncond_branch(br_start, br_end, l);
             }
+            sink.put1(0xE9);
+            sink.put4(disp);
         }
         Inst::JmpCondSymm {
             cc,
@@ -835,31 +835,31 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
             let taken_disp = taken.as_offset32_or_zero() - 6;
             let taken_disp = taken_disp as u32;
             let cond_start = sink.cur_offset();
-            sink.put1(0x0F);
-            sink.put1(0x80 + cc.get_enc());
-            let cond_disp_off = sink.cur_offset();
-            sink.put4(taken_disp);
-            let cond_end = sink.cur_offset();
+            let cond_disp_off = cond_start + 2;
+            let cond_end = cond_start + 6;
             if let Some(l) = taken.as_label() {
                 sink.use_label_at_offset(cond_disp_off, l, LabelUse::Rel32);
                 let inverted: [u8; 6] =
                     [0x0F, 0x80 + (cc.invert().get_enc()), 0xFA, 0xFF, 0xFF, 0xFF];
                 sink.add_cond_branch(cond_start, cond_end, l, &inverted[..]);
             }
+            sink.put1(0x0F);
+            sink.put1(0x80 + cc.get_enc());
+            sink.put4(taken_disp);
 
             // Unconditional part.
 
             let nt_disp = not_taken.as_offset32_or_zero() - 5;
             let nt_disp = nt_disp as u32;
             let uncond_start = sink.cur_offset();
-            sink.put1(0xE9);
-            let uncond_disp_off = sink.cur_offset();
-            sink.put4(nt_disp);
-            let uncond_end = sink.cur_offset();
+            let uncond_disp_off = uncond_start + 1;
+            let uncond_end = uncond_start + 5;
             if let Some(l) = not_taken.as_label() {
                 sink.use_label_at_offset(uncond_disp_off, l, LabelUse::Rel32);
                 sink.add_uncond_branch(uncond_start, uncond_end, l);
             }
+            sink.put1(0xE9);
+            sink.put4(nt_disp);
         }
         Inst::JmpUnknown { target } => {
             match target {

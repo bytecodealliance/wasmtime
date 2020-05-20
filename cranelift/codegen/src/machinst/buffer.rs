@@ -162,8 +162,10 @@ pub struct MachBuffer<I: VCodeInst> {
     /// Latest branches, to facilitate in-place editing for better fallthrough
     /// behavior and empty-block removal.
     latest_branches: SmallVec<[MachBranch; 4]>,
-    /// All labels, in offset order.
-    labels_by_offset: SmallVec<[(MachLabel, CodeOffset); 16]>,
+    /// All labels at the current offset (emission tail). For correctness, this
+    /// *must* be complete, because we rely on it to update labels when we
+    /// truncate branches.
+    labels_at_tail: SmallVec<[MachLabel; 4]>,
 }
 
 /// A `MachBuffer` once emission is completed: holds generated code and records,
@@ -223,7 +225,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             island_deadline: UNKNOWN_LABEL_OFFSET,
             island_worst_case_size: 0,
             latest_branches: SmallVec::new(),
-            labels_by_offset: SmallVec::new(),
+            labels_at_tail: SmallVec::new(),
         }
     }
 
@@ -236,6 +238,7 @@ impl<I: VCodeInst> MachBuffer<I> {
     pub fn put1(&mut self, value: u8) {
         trace!("MachBuffer: put byte @ {}: {:x}", self.cur_offset(), value);
         self.data.push(value);
+        self.labels_at_tail.clear();
     }
 
     /// Add 2 bytes.
@@ -247,6 +250,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         );
         let bytes = value.to_le_bytes();
         self.data.extend_from_slice(&bytes[..]);
+        self.labels_at_tail.clear();
     }
 
     /// Add 4 bytes.
@@ -258,6 +262,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         );
         let bytes = value.to_le_bytes();
         self.data.extend_from_slice(&bytes[..]);
+        self.labels_at_tail.clear();
     }
 
     /// Add 8 bytes.
@@ -269,6 +274,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         );
         let bytes = value.to_le_bytes();
         self.data.extend_from_slice(&bytes[..]);
+        self.labels_at_tail.clear();
     }
 
     /// Add a slice of bytes.
@@ -279,6 +285,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             data.len()
         );
         self.data.extend_from_slice(data);
+        self.labels_at_tail.clear();
     }
 
     /// Reserve appended space and return a mutable slice referring to it.
@@ -287,6 +294,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         let off = self.data.len();
         let new_len = self.data.len() + len;
         self.data.resize(new_len, 0);
+        self.labels_at_tail.clear();
         &mut self.data[off..]
     }
 
@@ -327,7 +335,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         );
         let offset = self.cur_offset();
         self.label_offsets[label.0 as usize] = offset;
-        self.labels_by_offset.push((label, offset));
+        self.labels_at_tail.push(label);
         self.optimize_branches();
     }
 
@@ -345,9 +353,8 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// branch-instruction format) at the current offset.  This is like a
     /// relocation, but handled internally.
     ///
-    /// Because the offset of the label may already be known and the patch may
-    /// happen immediately, the buffer must already contain bytes at `offset` up
-    /// to `offset + kind.patch_size()`.
+    /// This can be called before the branch is actually emitted; fixups will
+    /// not happen until an island is emitted or the buffer is finished.
     pub fn use_label_at_offset(&mut self, offset: CodeOffset, label: MachLabel, kind: I::LabelUse) {
         trace!(
             "MachBuffer: use_label_at_offset: offset {} label {:?} kind {:?}",
@@ -355,7 +362,6 @@ impl<I: VCodeInst> MachBuffer<I> {
             label,
             kind
         );
-        debug_assert!(offset + kind.patch_size() <= self.cur_offset());
 
         // Add the fixup, and update the worst-case island size based on a
         // veneer for this label use.
@@ -377,7 +383,17 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// Inform the buffer of an unconditional branch at the given offset,
     /// targetting the given label. May be used to optimize branches.
     /// The last added label-use must correspond to this branch.
+    /// This must be called when the current offset is equal to `start`; i.e.,
+    /// before actually emitting the branch. This implies that for a branch that
+    /// uses a label and is eligible for optimizations by the MachBuffer, the
+    /// proper sequence is:
+    ///
+    /// - Call `use_label_at_offset()` to emit the fixup record.
+    /// - Call `add_uncond_branch()` to make note of the branch.
+    /// - Emit the bytes for the branch's machine code.
     pub fn add_uncond_branch(&mut self, start: CodeOffset, end: CodeOffset, target: MachLabel) {
+        assert!(self.cur_offset() == start);
+        debug_assert!(end > start);
         assert!(!self.fixup_records.is_empty());
         let fixup = self.fixup_records.len() - 1;
         self.latest_branches.push(MachBranch {
@@ -386,6 +402,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             target,
             fixup,
             inverted: None,
+            labels_at_this_branch: self.labels_at_tail.clone(),
         });
     }
 
@@ -399,6 +416,8 @@ impl<I: VCodeInst> MachBuffer<I> {
         target: MachLabel,
         inverted: &[u8],
     ) {
+        assert!(self.cur_offset() == start);
+        debug_assert!(end > start);
         assert!(!self.fixup_records.is_empty());
         let fixup = self.fixup_records.len() - 1;
         let inverted = Some(SmallVec::from(inverted));
@@ -408,6 +427,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             target,
             fixup,
             inverted,
+            labels_at_this_branch: self.labels_at_tail.clone(),
         });
     }
 
@@ -422,22 +442,18 @@ impl<I: VCodeInst> MachBuffer<I> {
             b,
             cur_off
         );
-        for &mut (l, ref mut off) in self.labels_by_offset.iter_mut().rev() {
-            if *off > cur_off {
-                *off = cur_off;
-                trace!(" -> label {:?} reassigned to {}", l, cur_off);
-                self.label_offsets[l.0 as usize] = cur_off;
-            } else {
-                break;
-            }
+        for &l in &self.labels_at_tail {
+            self.label_offsets[l.0 as usize] = cur_off;
         }
+        self.labels_at_tail
+            .extend(b.labels_at_this_branch.into_iter());
     }
 
     fn optimize_branches(&mut self) {
         trace!(
             "enter optimize_branches:\n b = {:?}\n l = {:?}\n f = {:?}",
             self.latest_branches,
-            self.labels_by_offset,
+            self.labels_at_tail,
             self.fixup_records
         );
         while let Some(b) = self.latest_branches.last() {
@@ -451,6 +467,17 @@ impl<I: VCodeInst> MachBuffer<I> {
                 break;
             }
 
+            // For any branch, conditional or unconditional:
+            // - If the target is a label at the current offset, then remove
+            //   the conditional branch, and reset all labels that targetted
+            //   the current offset (end of branch) to the truncated
+            //   end-of-code.
+            if self.resolve_label_offset(b.target) == cur_off {
+                trace!("branch with target == cur off; truncating");
+                self.truncate_last_branch();
+                continue;
+            }
+
             // If latest is an unconditional branch:
             // - For each label at this point, make the label an alias of
             //   the branch target. We can now assume below that the
@@ -458,8 +485,8 @@ impl<I: VCodeInst> MachBuffer<I> {
             //   are free to remove it in an optimization.
             // - If there is a prior unconditional branch that ends just before
             //   this one begins, then we can truncate this branch, because it is
-            //   entirely unreachable (due to above). Trim the end of the
-            //   `labels_by_offset` array and continue around the loop.
+            //   entirely unreachable (due to above). Do so and continue around
+            //   the loop.
             // - If there is a prior conditional branch whose target label
             //   resolves to the current offset (branches around the
             //   unconditional branch), then remove the unconditional branch,
@@ -467,20 +494,35 @@ impl<I: VCodeInst> MachBuffer<I> {
             //   conditional instead.
             if b.is_uncond() {
                 // Set any label equal to current branch's start as an alias of
-                // the branch's target.
-                for &(l, off) in self.labels_by_offset.iter().rev() {
-                    trace!(" -> uncond: latest label {:?} at off {}", l, off);
-                    if off > b.start {
-                        continue;
-                    } else if off == b.start {
-                        trace!(" -> setting alias to {:?}", b.target);
+                // the branch's target, if the target is not the branch itself
+                // (i.e., an infinite loop).
+                if self.resolve_label_offset(b.target) != b.start {
+                    let redirected = b.labels_at_this_branch.len();
+                    for &l in &b.labels_at_this_branch {
+                        trace!(
+                            " -> label at start of branch {:?} redirected to target {:?}",
+                            l,
+                            b.target
+                        );
                         self.label_aliases[l.0 as usize] = b.target;
-                    } else {
-                        break;
+                        // NOTE: we continue to ensure the invariant that labels
+                        // pointing to tail of buffer are in `labels_at_tail`
+                        // because we already ensured above that the last branch
+                        // cannot have a target of `cur_off`; so we never have
+                        // to put the label into `labels_at_tail` when moving it
+                        // here.
+                    }
+                    // Maintain invariant: all branches have been redirected
+                    // and are no longer pointing at the start of this branch.
+                    let mut_b = self.latest_branches.last_mut().unwrap();
+                    mut_b.labels_at_this_branch.clear();
+
+                    if redirected > 0 {
+                        trace!(" -> after label redirects, restarting loop");
+                        continue;
                     }
                 }
-
-                // If the branch target is the next offset,
+                let b = self.latest_branches.last().unwrap();
 
                 // Examine any immediately preceding branch.
                 if self.latest_branches.len() > 1 {
@@ -524,16 +566,6 @@ impl<I: VCodeInst> MachBuffer<I> {
                 }
             }
 
-            // For any branch, conditional or unconditional:
-            // - If the target is a label at the current offset, then remove
-            //   the conditional branch, and reset all labels that targetted
-            //   the current offset (end of branch) to the truncated
-            //   end-of-code.
-            if self.resolve_label_offset(b.target) == cur_off {
-                trace!("branch with target == cur off; truncating");
-                self.truncate_last_branch();
-            }
-
             // If we couldn't do anything with the last branch, then break.
             break;
         }
@@ -543,7 +575,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         trace!(
             "leave optimize_branches:\n b = {:?}\n l = {:?}\n f = {:?}",
             self.latest_branches,
-            self.labels_by_offset,
+            self.labels_at_tail,
             self.fixup_records
         );
     }
@@ -929,6 +961,11 @@ struct MachBranch {
     target: MachLabel,
     fixup: usize,
     inverted: Option<SmallVec<[u8; 8]>>,
+    /// All labels pointing to the start of this branch. For correctness, this
+    /// *must* be complete: we rely on being able to redirect all labels that
+    /// could jump to this branch before removing it, if it is otherwise
+    /// unreachable.
+    labels_at_this_branch: SmallVec<[MachLabel; 4]>,
 }
 
 impl MachBranch {

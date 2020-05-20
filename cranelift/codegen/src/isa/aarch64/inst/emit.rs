@@ -1163,17 +1163,13 @@ impl MachInstEmit for Inst {
             }
             &Inst::Jump { ref dest } => {
                 let off = sink.cur_offset();
-                // Emit the jump itself.
-                sink.put4(enc_jump26(0b000101, dest.as_offset26_or_zero()));
-                // After the jump has been emitted, indicate that it uses a
-                // label, if so, so that a fixup can occur later. This happens
-                // after we emit the bytes because the fixup might occur right
-                // away (so the bytes must actually exist now).
+                // Indicate that the jump uses a label, if so, so that a fixup can occur later.
                 if let Some(l) = dest.as_label() {
                     sink.use_label_at_offset(off, l, LabelUse::Branch26);
-                    let cur_off = sink.cur_offset();
-                    sink.add_uncond_branch(off, cur_off, l);
+                    sink.add_uncond_branch(off, off + 4, l);
                 }
+                // Emit the jump itself.
+                sink.put4(enc_jump26(0b000101, dest.as_offset26_or_zero()));
             }
             &Inst::Ret => {
                 sink.put4(0xd65f03c0);
@@ -1208,28 +1204,27 @@ impl MachInstEmit for Inst {
             } => {
                 // Conditional part first.
                 let cond_off = sink.cur_offset();
-                sink.put4(enc_conditional_br(taken, kind));
                 if let Some(l) = taken.as_label() {
                     sink.use_label_at_offset(cond_off, l, LabelUse::Branch19);
-                    let cur_off = sink.cur_offset();
                     let inverted = enc_conditional_br(taken, kind.invert()).to_le_bytes();
-                    sink.add_cond_branch(cond_off, cur_off, l, &inverted[..]);
+                    sink.add_cond_branch(cond_off, cond_off + 4, l, &inverted[..]);
                 }
-                // Unconditional part.
+                sink.put4(enc_conditional_br(taken, kind));
+
+                // Unconditional part next.
                 let uncond_off = sink.cur_offset();
-                sink.put4(enc_jump26(0b000101, not_taken.as_offset26_or_zero()));
                 if let Some(l) = not_taken.as_label() {
                     sink.use_label_at_offset(uncond_off, l, LabelUse::Branch26);
-                    let cur_off = sink.cur_offset();
-                    sink.add_uncond_branch(uncond_off, cur_off, l);
+                    sink.add_uncond_branch(uncond_off, uncond_off + 4, l);
                 }
+                sink.put4(enc_jump26(0b000101, not_taken.as_offset26_or_zero()));
             }
             &Inst::OneWayCondBr { target, kind } => {
                 let off = sink.cur_offset();
-                sink.put4(enc_conditional_br(target, kind));
                 if let Some(l) = target.as_label() {
                     sink.use_label_at_offset(off, l, LabelUse::Branch19);
                 }
+                sink.put4(enc_conditional_br(target, kind));
             }
             &Inst::IndirectBr { rn, .. } => {
                 sink.put4(enc_br(rn));
@@ -1307,12 +1302,12 @@ impl MachInstEmit for Inst {
                 for &target in targets.iter() {
                     let word_off = sink.cur_offset();
                     let off_into_table = word_off - jt_off;
-                    sink.put4(off_into_table);
                     sink.use_label_at_offset(
                         word_off,
                         target.as_label().unwrap(),
                         LabelUse::PCRel32,
                     );
+                    sink.put4(off_into_table);
                 }
 
                 // Lowering produces an EmitIsland before using a JTSequence, so we can safely
