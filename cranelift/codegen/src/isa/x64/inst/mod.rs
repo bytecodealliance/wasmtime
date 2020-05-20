@@ -576,21 +576,21 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
 //=============================================================================
 // Instructions and subcomponents: map_regs
 
-fn map_use(m: &RegUsageMapper, r: &mut Reg) {
+fn map_use<RUM: RegUsageMapper>(m: &RUM, r: &mut Reg) {
     if r.is_virtual() {
         let new = m.get_use(r.to_virtual_reg()).unwrap().to_reg();
         *r = new;
     }
 }
 
-fn map_def(m: &RegUsageMapper, r: &mut Writable<Reg>) {
+fn map_def<RUM: RegUsageMapper>(m: &RUM, r: &mut Writable<Reg>) {
     if r.to_reg().is_virtual() {
         let new = m.get_def(r.to_reg().to_virtual_reg()).unwrap().to_reg();
         *r = Writable::from_reg(new);
     }
 }
 
-fn map_mod(m: &RegUsageMapper, r: &mut Writable<Reg>) {
+fn map_mod<RUM: RegUsageMapper>(m: &RUM, r: &mut Writable<Reg>) {
     if r.to_reg().is_virtual() {
         let new = m.get_mod(r.to_reg().to_virtual_reg()).unwrap().to_reg();
         *r = Writable::from_reg(new);
@@ -598,7 +598,7 @@ fn map_mod(m: &RegUsageMapper, r: &mut Writable<Reg>) {
 }
 
 impl Addr {
-    fn map_uses(&mut self, map: &RegUsageMapper) {
+    fn map_uses<RUM: RegUsageMapper>(&mut self, map: &RUM) {
         match self {
             Addr::IR {
                 simm32: _,
@@ -618,7 +618,7 @@ impl Addr {
 }
 
 impl RMI {
-    fn map_uses(&mut self, map: &RegUsageMapper) {
+    fn map_uses<RUM: RegUsageMapper>(&mut self, map: &RUM) {
         match self {
             RMI::R { ref mut reg } => map_use(map, reg),
             RMI::M { ref mut addr } => addr.map_uses(map),
@@ -628,7 +628,7 @@ impl RMI {
 }
 
 impl RM {
-    fn map_uses(&mut self, map: &RegUsageMapper) {
+    fn map_uses<RUM: RegUsageMapper>(&mut self, map: &RUM) {
         match self {
             RM::R { ref mut reg } => map_use(map, reg),
             RM::M { ref mut addr } => addr.map_uses(map),
@@ -636,7 +636,7 @@ impl RM {
     }
 }
 
-fn x64_map_regs(inst: &mut Inst, mapper: &RegUsageMapper) {
+fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
     // Note this must be carefully synchronized with x64_get_regs.
     match inst {
         // ** Nop
@@ -739,7 +739,7 @@ impl MachInst for Inst {
         x64_get_regs(&self, collector)
     }
 
-    fn map_regs(&mut self, mapper: &RegUsageMapper) {
+    fn map_regs<RUM: RegUsageMapper>(&mut self, mapper: &RUM) {
         x64_map_regs(self, mapper);
     }
 
