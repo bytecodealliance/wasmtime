@@ -6,7 +6,9 @@
 use std::ffi::c_void;
 use std::os::raw::c_ulong;
 use std::os::windows::prelude::RawHandle;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use winapi::shared::ntdef::NTSTATUS;
+use winapi::um::libloaderapi::{GetModuleHandleA, GetProcAddress};
 use winapi::um::winnt::ACCESS_MASK;
 
 #[repr(C)]
@@ -49,17 +51,40 @@ impl Default for IO_STATUS_BLOCK {
     }
 }
 
-#[link(name = "ntdll")]
-extern "C" {
+macro_rules! ntdll_import {
+    { fn $name:ident($($arg:ident: $argty:ty),*) -> $retty:ty; $($tail:tt)* } => {
+        pub(crate) unsafe fn $name($($arg: $argty),*) -> $retty {
+            static ADDRESS: AtomicUsize = AtomicUsize::new(0);
+            let address = match ADDRESS.load(Ordering::Relaxed) {
+                0 => {
+                    let ntdll = GetModuleHandleA("ntdll\0".as_ptr() as *const i8);
+                    let address = GetProcAddress(
+                        ntdll,
+                        concat!(stringify!($name), "\0").as_ptr() as *const i8,
+                    ) as usize;
+                    assert!(address != 0);
+                    ADDRESS.store(address, Ordering::Relaxed);
+                    address
+                }
+                address => address
+            };
+            let func: unsafe fn($($argty),*) -> $retty = std::mem::transmute(address);
+            func($($arg),*)
+        }
+        ntdll_import! { $($tail)* }
+    };
+    {} => {};
+}
+
+ntdll_import! {
     // https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntqueryinformationfile
-    pub(crate) fn NtQueryInformationFile(
+    fn NtQueryInformationFile(
         FileHandle: RawHandle,
         IoStatusBlock: *mut IO_STATUS_BLOCK,
         FileInformation: *mut c_void,
         Length: c_ulong,
-        FileInformationClass: FILE_INFORMATION_CLASS,
+        FileInformationClass: FILE_INFORMATION_CLASS
     ) -> NTSTATUS;
-
     // https://docs.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-rtlntstatustodoserror
-    pub(crate) fn RtlNtStatusToDosError(status: NTSTATUS) -> c_ulong;
+    fn RtlNtStatusToDosError(status: NTSTATUS) -> c_ulong;
 }
