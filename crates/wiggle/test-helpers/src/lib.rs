@@ -43,14 +43,20 @@ impl Into<Vec<MemArea>> for MemAreas {
 }
 
 #[repr(align(4096))]
+struct HostBuffer {
+    cell: UnsafeCell<[u8; 4096]>,
+}
+
 pub struct HostMemory {
-    buffer: UnsafeCell<[u8; 4096]>,
+    buffer: HostBuffer,
     bc: BorrowChecker,
 }
 impl HostMemory {
     pub fn new() -> Self {
         HostMemory {
-            buffer: UnsafeCell::new([0; 4096]),
+            buffer: HostBuffer {
+                cell: UnsafeCell::new([0; 4096]),
+            },
             bc: unsafe { BorrowChecker::new() },
         }
     }
@@ -109,7 +115,7 @@ impl HostMemory {
 unsafe impl GuestMemory for HostMemory {
     fn base(&self) -> (*mut u8, u32) {
         unsafe {
-            let ptr = self.buffer.get();
+            let ptr = self.buffer.cell.get();
             ((*ptr).as_mut_ptr(), (*ptr).len() as u32)
         }
     }
