@@ -1,6 +1,6 @@
 use proptest::prelude::*;
 use std::convert::TryFrom;
-use wiggle::{BorrowChecker, GuestMemory, GuestPtr};
+use wiggle::{GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
@@ -65,18 +65,16 @@ impl ConfigureCarExercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = unsafe { BorrowChecker::new() };
 
         // Populate input ptr
         host_memory
-            .ptr(&bc, self.other_config_by_ptr.ptr)
+            .ptr(self.other_config_by_ptr.ptr)
             .write(self.other_config)
             .expect("deref ptr mut to CarConfig");
 
         let res = flags::configure_car(
             &ctx,
             &host_memory,
-            &bc,
             self.old_config.into(),
             self.other_config_by_ptr.ptr as i32,
             self.return_ptr_loc.ptr as i32,
@@ -84,7 +82,7 @@ impl ConfigureCarExercise {
         assert_eq!(res, types::Errno::Ok.into(), "configure car errno");
 
         let res_config = host_memory
-            .ptr::<types::CarConfig>(&bc, self.return_ptr_loc.ptr)
+            .ptr::<types::CarConfig>(self.return_ptr_loc.ptr)
             .read()
             .expect("deref to CarConfig value");
 

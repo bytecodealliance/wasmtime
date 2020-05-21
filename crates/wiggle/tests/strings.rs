@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle::{BorrowChecker, GuestMemory, GuestPtr};
+use wiggle::{GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, MemAreas, WasiCtx};
 
 wiggle::from_witx!({
@@ -69,11 +69,9 @@ impl HelloStringExercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = unsafe { BorrowChecker::new() };
 
         // Populate string in guest's memory
-        let ptr =
-            host_memory.ptr::<str>(&bc, (self.string_ptr_loc.ptr, self.test_word.len() as u32));
+        let ptr = host_memory.ptr::<str>((self.string_ptr_loc.ptr, self.test_word.len() as u32));
         for (slot, byte) in ptr.as_bytes().iter().zip(self.test_word.bytes()) {
             slot.expect("should be valid pointer")
                 .write(byte)
@@ -83,7 +81,6 @@ impl HelloStringExercise {
         let res = strings::hello_string(
             &ctx,
             &host_memory,
-            &bc,
             self.string_ptr_loc.ptr as i32,
             self.test_word.len() as i32,
             self.return_ptr_loc.ptr as i32,
@@ -91,7 +88,7 @@ impl HelloStringExercise {
         assert_eq!(res, types::Errno::Ok.into(), "hello string errno");
 
         let given = host_memory
-            .ptr::<u32>(&bc, self.return_ptr_loc.ptr)
+            .ptr::<u32>(self.return_ptr_loc.ptr)
             .read()
             .expect("deref ptr to return value");
         assert_eq!(self.test_word.len() as u32, given);
@@ -178,10 +175,9 @@ impl MultiStringExercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = unsafe { BorrowChecker::new() };
 
         let write_string = |val: &str, loc: MemArea| {
-            let ptr = host_memory.ptr::<str>(&bc, (loc.ptr, val.len() as u32));
+            let ptr = host_memory.ptr::<str>((loc.ptr, val.len() as u32));
             for (slot, byte) in ptr.as_bytes().iter().zip(val.bytes()) {
                 slot.expect("should be valid pointer")
                     .write(byte)
@@ -196,7 +192,6 @@ impl MultiStringExercise {
         let res = strings::multi_string(
             &ctx,
             &host_memory,
-            &bc,
             self.sa_ptr_loc.ptr as i32,
             self.a.len() as i32,
             self.sb_ptr_loc.ptr as i32,
@@ -208,7 +203,7 @@ impl MultiStringExercise {
         assert_eq!(res, types::Errno::Ok.into(), "multi string errno");
 
         let given = host_memory
-            .ptr::<u32>(&bc, self.return_ptr_loc.ptr)
+            .ptr::<u32>(self.return_ptr_loc.ptr)
             .read()
             .expect("deref ptr to return value");
         assert_eq!((self.a.len() + self.b.len() + self.c.len()) as u32, given);

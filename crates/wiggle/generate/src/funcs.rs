@@ -26,7 +26,6 @@ pub fn define_func(
     let abi_args = quote!(
             ctx: &#ctx_type,
             memory: &dyn #rt::GuestMemory,
-            bc: &#rt::BorrowChecker,
             #(#params),*
     );
     let abi_ret = if let Some(ret) = &coretype.ret {
@@ -212,7 +211,7 @@ fn marshal_arg(
         let arg_name = names.func_ptr_binding(&param.name);
         let name = names.func_param(&param.name);
         quote! {
-            let #name = match #rt::GuestPtr::<#pointee_type>::new(memory, bc, #arg_name as u32).read() {
+            let #name = match #rt::GuestPtr::<#pointee_type>::new(memory, #arg_name as u32).read() {
                 Ok(r) => r,
                 Err(e) => {
                     #error_handling
@@ -258,7 +257,7 @@ fn marshal_arg(
                 let len_name = names.func_len_binding(&param.name);
                 let name = names.func_param(&param.name);
                 quote! {
-                    let #name = #rt::GuestPtr::<#lifetime, str>::new(memory, bc, (#ptr_name as u32, #len_name as u32));
+                    let #name = #rt::GuestPtr::<#lifetime, str>::new(memory, (#ptr_name as u32, #len_name as u32));
                 }
             }
         },
@@ -266,7 +265,7 @@ fn marshal_arg(
             let pointee_type = names.type_ref(pointee, anon_lifetime());
             let name = names.func_param(&param.name);
             quote! {
-                let #name = #rt::GuestPtr::<#pointee_type>::new(memory, bc, #name as u32);
+                let #name = #rt::GuestPtr::<#pointee_type>::new(memory, #name as u32);
             }
         }
         witx::Type::Struct(_) => read_conversion,
@@ -276,7 +275,7 @@ fn marshal_arg(
             let len_name = names.func_len_binding(&param.name);
             let name = names.func_param(&param.name);
             quote! {
-                let #name = #rt::GuestPtr::<[#pointee_type]>::new(memory, bc, (#ptr_name as u32, #len_name as u32));
+                let #name = #rt::GuestPtr::<[#pointee_type]>::new(memory, (#ptr_name as u32, #len_name as u32));
             }
         }
         witx::Type::Union(_u) => read_conversion,
@@ -305,7 +304,7 @@ where
         let ptr_name = names.func_ptr_binding(&result.name);
         let ptr_err_handling = error_handling(&format!("{}:result_ptr_mut", result.name.as_str()));
         let pre = quote! {
-            let #ptr_name = #rt::GuestPtr::<#pointee_type>::new(memory, bc, #ptr_name as u32);
+            let #ptr_name = #rt::GuestPtr::<#pointee_type>::new(memory, #ptr_name as u32);
         };
         // trait binding returns func_param name.
         let val_name = names.func_param(&result.name);

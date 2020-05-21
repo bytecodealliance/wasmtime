@@ -65,7 +65,7 @@ pub use region::Region;
 /// into the memory region given by a `GuestMemory`.
 ///
 /// These smart pointers are dynamically borrow-checked by the `BorrowChecker`
-/// passed to the wiggle-generated ABI-level functions. While a `GuestSlice`
+/// given by [`GuestMemory::borrow_checker()`]. While a `GuestSlice`
 /// or a `GuestStr` are live, the [`BorrowChecker::has_outstanding_borrows()`]
 /// method will always return `true`. If you need to re-enter the guest or
 /// otherwise read or write to the contents of a WebAssembly memory, all
@@ -83,6 +83,11 @@ pub unsafe trait GuestMemory {
     /// implementations must uphold, and for more details see the
     /// [`GuestMemory`] documentation.
     fn base(&self) -> (*mut u8, u32);
+
+    /// Gives a reference to the [`BorrowChecker`] used to keep track of each
+    /// outstanding borrow of the memory region. [`BorrowChecker::new`] safety
+    /// rules require that exactly one checker exist for each memory region.
+    fn borrow_checker(&self) -> &BorrowChecker;
 
     /// Validates a guest-relative pointer given various attributes, and returns
     /// the corresponding host pointer.
@@ -138,12 +143,12 @@ pub unsafe trait GuestMemory {
     /// Note that `T` can be almost any type, and typically `offset` is a `u32`.
     /// The exception is slices and strings, in which case `offset` is a `(u32,
     /// u32)` of `(offset, length)`.
-    fn ptr<'a, T>(&'a self, bc: &'a BorrowChecker, offset: T::Pointer) -> GuestPtr<'a, T>
+    fn ptr<'a, T>(&'a self, offset: T::Pointer) -> GuestPtr<'a, T>
     where
         Self: Sized,
         T: ?Sized + Pointee,
     {
-        GuestPtr::new(self, bc, offset)
+        GuestPtr::new(self, offset)
     }
 }
 
@@ -153,11 +158,17 @@ unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a T {
     fn base(&self) -> (*mut u8, u32) {
         T::base(self)
     }
+    fn borrow_checker(&self) -> &BorrowChecker {
+        T::borrow_checker(self)
+    }
 }
 
 unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a mut T {
     fn base(&self) -> (*mut u8, u32) {
         T::base(self)
+    }
+    fn borrow_checker(&self) -> &BorrowChecker {
+        T::borrow_checker(self)
     }
 }
 
@@ -165,17 +176,26 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Box<T> {
     fn base(&self) -> (*mut u8, u32) {
         T::base(self)
     }
+    fn borrow_checker(&self) -> &BorrowChecker {
+        T::borrow_checker(self)
+    }
 }
 
 unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Rc<T> {
     fn base(&self) -> (*mut u8, u32) {
         T::base(self)
     }
+    fn borrow_checker(&self) -> &BorrowChecker {
+        T::borrow_checker(self)
+    }
 }
 
 unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Arc<T> {
     fn base(&self) -> (*mut u8, u32) {
         T::base(self)
+    }
+    fn borrow_checker(&self) -> &BorrowChecker {
+        T::borrow_checker(self)
     }
 }
 
@@ -229,7 +249,6 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Arc<T> {
 /// already-attached helper methods.
 pub struct GuestPtr<'a, T: ?Sized + Pointee> {
     mem: &'a (dyn GuestMemory + 'a),
-    bc: &'a BorrowChecker,
     pointer: T::Pointer,
     _marker: marker::PhantomData<&'a Cell<T>>,
 }
@@ -240,14 +259,9 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
     /// Note that for sized types like `u32`, `GuestPtr<T>`, etc, the `pointer`
     /// vlue is a `u32` offset into guest memory. For slices and strings,
     /// `pointer` is a `(u32, u32)` offset/length pair.
-    pub fn new(
-        mem: &'a (dyn GuestMemory + 'a),
-        bc: &'a BorrowChecker,
-        pointer: T::Pointer,
-    ) -> GuestPtr<'a, T> {
+    pub fn new(mem: &'a (dyn GuestMemory + 'a), pointer: T::Pointer) -> GuestPtr<'a, T> {
         GuestPtr {
             mem,
-            bc,
             pointer,
             _marker: marker::PhantomData,
         }
@@ -268,7 +282,7 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
 
     /// Returns the borrow checker that this pointer uses
     pub fn borrow_checker(&self) -> &'a BorrowChecker {
-        self.bc
+        self.mem.borrow_checker()
     }
 
     /// Casts this `GuestPtr` type to a different type.
@@ -281,7 +295,7 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
     where
         T: Pointee<Pointer = u32>,
     {
-        GuestPtr::new(self.mem, self.bc, self.pointer)
+        GuestPtr::new(self.mem, self.pointer)
     }
 
     /// Safely read a value from this pointer.
@@ -348,7 +362,7 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
             Some(o) => o,
             None => return Err(GuestError::PtrOverflow),
         };
-        Ok(GuestPtr::new(self.mem, self.bc, offset))
+        Ok(GuestPtr::new(self.mem, offset))
     }
 
     /// Returns a `GuestPtr` for an array of `T`s using this pointer as the
@@ -357,7 +371,7 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
     where
         T: GuestType<'a> + Pointee<Pointer = u32>,
     {
-        GuestPtr::new(self.mem, self.bc, (self.pointer, elems))
+        GuestPtr::new(self.mem, (self.pointer, elems))
     }
 }
 
@@ -410,7 +424,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
             self.mem
                 .validate_size_align(self.pointer.0, T::guest_align(), len)? as *mut T;
 
-        let borrow = self.bc.borrow(Region {
+        let borrow = self.mem.borrow_checker().borrow(Region {
             start: self.pointer.0,
             len,
         })?;
@@ -426,7 +440,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
 
         Ok(GuestSlice {
             ptr,
-            bc: self.bc,
+            bc: self.mem.borrow_checker(),
             borrow,
         })
     }
@@ -461,7 +475,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
     /// Returns a `GuestPtr` pointing to the base of the array for the interior
     /// type `T`.
     pub fn as_ptr(&self) -> GuestPtr<'a, T> {
-        GuestPtr::new(self.mem, self.bc, self.offset_base())
+        GuestPtr::new(self.mem, self.offset_base())
     }
 }
 
@@ -480,7 +494,7 @@ impl<'a> GuestPtr<'a, str> {
     /// Returns a raw pointer for the underlying slice of bytes that this
     /// pointer points to.
     pub fn as_bytes(&self) -> GuestPtr<'a, [u8]> {
-        GuestPtr::new(self.mem, self.bc, self.pointer)
+        GuestPtr::new(self.mem, self.pointer)
     }
 
     /// Attempts to create a [`GuestStr<'_>`] from this pointer, performing
@@ -497,7 +511,7 @@ impl<'a> GuestPtr<'a, str> {
             .mem
             .validate_size_align(self.pointer.0, 1, self.pointer.1)?;
 
-        let borrow = self.bc.borrow(Region {
+        let borrow = self.mem.borrow_checker().borrow(Region {
             start: self.pointer.0,
             len: self.pointer.1,
         })?;
@@ -509,7 +523,7 @@ impl<'a> GuestPtr<'a, str> {
         match str::from_utf8_mut(ptr) {
             Ok(ptr) => Ok(GuestStr {
                 ptr,
-                bc: self.bc,
+                bc: self.mem.borrow_checker(),
                 borrow,
             }),
             Err(e) => Err(GuestError::InvalidUtf8(e)),

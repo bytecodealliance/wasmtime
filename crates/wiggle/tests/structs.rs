@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle::{BorrowChecker, GuestMemory, GuestPtr};
+use wiggle::{GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
@@ -83,20 +83,18 @@ impl SumOfPairExercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = unsafe { BorrowChecker::new() };
 
         host_memory
-            .ptr(&bc, self.input_loc.ptr)
+            .ptr(self.input_loc.ptr)
             .write(self.input.first)
             .expect("input ref_mut");
         host_memory
-            .ptr(&bc, self.input_loc.ptr + 4)
+            .ptr(self.input_loc.ptr + 4)
             .write(self.input.second)
             .expect("input ref_mut");
         let sum_err = structs::sum_of_pair(
             &ctx,
             &host_memory,
-            &bc,
             self.input_loc.ptr as i32,
             self.return_loc.ptr as i32,
         );
@@ -104,7 +102,7 @@ impl SumOfPairExercise {
         assert_eq!(sum_err, types::Errno::Ok.into(), "sum errno");
 
         let return_val: i64 = host_memory
-            .ptr(&bc, self.return_loc.ptr)
+            .ptr(self.return_loc.ptr)
             .read()
             .expect("return ref");
 
@@ -173,30 +171,28 @@ impl SumPairPtrsExercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = unsafe { BorrowChecker::new() };
 
         host_memory
-            .ptr(&bc, self.input_first_loc.ptr)
+            .ptr(self.input_first_loc.ptr)
             .write(self.input_first)
             .expect("input_first ref");
         host_memory
-            .ptr(&bc, self.input_second_loc.ptr)
+            .ptr(self.input_second_loc.ptr)
             .write(self.input_second)
             .expect("input_second ref");
 
         host_memory
-            .ptr(&bc, self.input_struct_loc.ptr)
+            .ptr(self.input_struct_loc.ptr)
             .write(self.input_first_loc.ptr)
             .expect("input_struct ref");
         host_memory
-            .ptr(&bc, self.input_struct_loc.ptr + 4)
+            .ptr(self.input_struct_loc.ptr + 4)
             .write(self.input_second_loc.ptr)
             .expect("input_struct ref");
 
         let res = structs::sum_of_pair_of_ptrs(
             &ctx,
             &host_memory,
-            &bc,
             self.input_struct_loc.ptr as i32,
             self.return_loc.ptr as i32,
         );
@@ -204,7 +200,7 @@ impl SumPairPtrsExercise {
         assert_eq!(res, types::Errno::Ok.into(), "sum of pair of ptrs errno");
 
         let doubled: i64 = host_memory
-            .ptr(&bc, self.return_loc.ptr)
+            .ptr(self.return_loc.ptr)
             .read()
             .expect("return ref");
 
@@ -259,25 +255,23 @@ impl SumIntAndPtrExercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = unsafe { BorrowChecker::new() };
 
         host_memory
-            .ptr(&bc, self.input_first_loc.ptr)
+            .ptr(self.input_first_loc.ptr)
             .write(self.input_first)
             .expect("input_first ref");
         host_memory
-            .ptr(&bc, self.input_struct_loc.ptr)
+            .ptr(self.input_struct_loc.ptr)
             .write(self.input_first_loc.ptr)
             .expect("input_struct ref");
         host_memory
-            .ptr(&bc, self.input_struct_loc.ptr + 4)
+            .ptr(self.input_struct_loc.ptr + 4)
             .write(self.input_second)
             .expect("input_struct ref");
 
         let res = structs::sum_of_int_and_ptr(
             &ctx,
             &host_memory,
-            &bc,
             self.input_struct_loc.ptr as i32,
             self.return_loc.ptr as i32,
         );
@@ -285,7 +279,7 @@ impl SumIntAndPtrExercise {
         assert_eq!(res, types::Errno::Ok.into(), "sum of int and ptr errno");
 
         let doubled: i64 = host_memory
-            .ptr(&bc, self.return_loc.ptr)
+            .ptr(self.return_loc.ptr)
             .read()
             .expect("return ref");
 
@@ -318,14 +312,13 @@ impl ReturnPairInts {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = unsafe { BorrowChecker::new() };
 
-        let err = structs::return_pair_ints(&ctx, &host_memory, &bc, self.return_loc.ptr as i32);
+        let err = structs::return_pair_ints(&ctx, &host_memory, self.return_loc.ptr as i32);
 
         assert_eq!(err, types::Errno::Ok.into(), "return struct errno");
 
         let return_struct: types::PairInts = host_memory
-            .ptr(&bc, self.return_loc.ptr)
+            .ptr(self.return_loc.ptr)
             .read()
             .expect("return ref");
 
@@ -384,21 +377,19 @@ impl ReturnPairPtrsExercise {
     pub fn test(&self) {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
-        let bc = unsafe { BorrowChecker::new() };
 
         host_memory
-            .ptr(&bc, self.input_first_loc.ptr)
+            .ptr(self.input_first_loc.ptr)
             .write(self.input_first)
             .expect("input_first ref");
         host_memory
-            .ptr(&bc, self.input_second_loc.ptr)
+            .ptr(self.input_second_loc.ptr)
             .write(self.input_second)
             .expect("input_second ref");
 
         let res = structs::return_pair_of_ptrs(
             &ctx,
             &host_memory,
-            &bc,
             self.input_first_loc.ptr as i32,
             self.input_second_loc.ptr as i32,
             self.return_loc.ptr as i32,
@@ -407,7 +398,7 @@ impl ReturnPairPtrsExercise {
         assert_eq!(res, types::Errno::Ok.into(), "return pair of ptrs errno");
 
         let ptr_pair_int_ptrs: types::PairIntPtrs<'_> = host_memory
-            .ptr(&bc, self.return_loc.ptr)
+            .ptr(self.return_loc.ptr)
             .read()
             .expect("failed to read return location");
         let ret_first_ptr = ptr_pair_int_ptrs.first;
