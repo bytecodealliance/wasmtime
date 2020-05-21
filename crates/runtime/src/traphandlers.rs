@@ -224,10 +224,16 @@ cfg_if::cfg_if! {
                     Some(info) => info,
                     None => return EXCEPTION_CONTINUE_SEARCH,
                 };
-                let jmp_buf = info.handle_trap(
-                    (*(*exception_info).ContextRecord).Rip as *const u8,
-                    |handler| handler(exception_info),
-                );
+                cfg_if::cfg_if! {
+                    if #[cfg(target_arch = "x86_64")] {
+                        let ip = (*(*exception_info).ContextRecord).Rip as *const u8;
+                    } else if #[cfg(target_arch = "x86")] {
+                        let ip = (*(*exception_info).ContextRecord).Eip as *const u8;
+                    } else {
+                        compile_error!("unsupported platform");
+                    }
+                }
+                let jmp_buf = info.handle_trap(ip, |handler| handler(exception_info));
                 if jmp_buf.is_null() {
                     EXCEPTION_CONTINUE_SEARCH
                 } else if jmp_buf as usize == 1 {
