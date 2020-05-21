@@ -1454,6 +1454,7 @@ fn define_alu(
     // x86 has a bitwise not instruction NOT.
     e.enc_i32_i64(bnot, rec_ur.opcodes(&NOT).rrr(2));
     e.enc_b32_b64(bnot, rec_ur.opcodes(&NOT).rrr(2));
+    e.enc_both(bnot.bind(B1), rec_ur.opcodes(&NOT).rrr(2));
 
     // Also add a `b1` encodings for the logic instructions.
     // TODO: Should this be done with 8-bit instructions? It would improve partial register
