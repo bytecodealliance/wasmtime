@@ -8,7 +8,7 @@ use crate::shared::Definitions as SharedDefinitions;
 
 #[allow(clippy::many_single_char_names)]
 pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &InstructionGroup) {
-    let mut group = TransformGroupBuilder::new(
+    let mut expand = TransformGroupBuilder::new(
         "x86_expand",
         r#"
     Legalize instructions by expansion.
@@ -17,6 +17,26 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     )
     .isa("x86")
     .chain_with(shared.transform_groups.by_name("expand_flags").id);
+
+    let mut narrow = TransformGroupBuilder::new(
+        "x86_narrow",
+        r#"
+    Legalize instructions by narrowing.
+
+    Use x86-specific instructions if needed."#,
+    )
+    .isa("x86")
+    .chain_with(shared.transform_groups.by_name("narrow_flags").id);
+
+    let mut widen = TransformGroupBuilder::new(
+        "x86_widen",
+        r#"
+    Legalize instructions by widening.
+
+    Use x86-specific instructions if needed."#,
+    )
+    .isa("x86")
+    .chain_with(shared.transform_groups.by_name("widen").id);
 
     // List of instructions.
     let insts = &shared.instructions;
@@ -69,7 +89,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     for &ty in &[I8, I16, I32] {
         let ishl_by_i64 = ishl.bind(ty).bind(I64);
         let ireduce = ireduce.bind(I32);
-        group.legalize(
+        expand.legalize(
             def!(a = ishl_by_i64(x, y)),
             vec![def!(z = ireduce(y)), def!(a = ishl(x, z))],
         );
@@ -78,7 +98,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     for &ty in &[I8, I16, I32] {
         let ushr_by_i64 = ushr.bind(ty).bind(I64);
         let ireduce = ireduce.bind(I32);
-        group.legalize(
+        expand.legalize(
             def!(a = ushr_by_i64(x, y)),
             vec![def!(z = ireduce(y)), def!(a = ishl(x, z))],
         );
@@ -88,10 +108,10 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     //
     // The srem expansion requires custom code because srem INT_MIN, -1 is not
     // allowed to trap. The other ops need to check avoid_div_traps.
-    group.custom_legalize(sdiv, "expand_sdivrem");
-    group.custom_legalize(srem, "expand_sdivrem");
-    group.custom_legalize(udiv, "expand_udivrem");
-    group.custom_legalize(urem, "expand_udivrem");
+    expand.custom_legalize(sdiv, "expand_sdivrem");
+    expand.custom_legalize(srem, "expand_sdivrem");
+    expand.custom_legalize(udiv, "expand_udivrem");
+    expand.custom_legalize(urem, "expand_udivrem");
 
     // Double length (widening) multiplication.
     let a = var("a");
@@ -102,12 +122,12 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let res_lo = var("res_lo");
     let res_hi = var("res_hi");
 
-    group.legalize(
+    expand.legalize(
         def!(res_hi = umulhi(x, y)),
         vec![def!((res_lo, res_hi) = x86_umulx(x, y))],
     );
 
-    group.legalize(
+    expand.legalize(
         def!(res_hi = smulhi(x, y)),
         vec![def!((res_lo, res_hi) = x86_smulx(x, y))],
     );
@@ -126,7 +146,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let floatcc_one = Literal::enumerator_for(&imm.floatcc, "one");
 
     // Equality needs an explicit `ord` test which checks the parity bit.
-    group.legalize(
+    expand.legalize(
         def!(a = fcmp(floatcc_eq, x, y)),
         vec![
             def!(a1 = fcmp(floatcc_ord, x, y)),
@@ -134,7 +154,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
             def!(a = band(a1, a2)),
         ],
     );
-    group.legalize(
+    expand.legalize(
         def!(a = fcmp(floatcc_ne, x, y)),
         vec![
             def!(a1 = fcmp(floatcc_uno, x, y)),
@@ -159,20 +179,20 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         (floatcc_ugt, floatcc_ult),
         (floatcc_uge, floatcc_ule),
     ] {
-        group.legalize(def!(a = fcmp(cc, x, y)), vec![def!(a = fcmp(rev_cc, y, x))]);
+        expand.legalize(def!(a = fcmp(cc, x, y)), vec![def!(a = fcmp(rev_cc, y, x))]);
     }
 
     // We need to modify the CFG for min/max legalization.
-    group.custom_legalize(fmin, "expand_minmax");
-    group.custom_legalize(fmax, "expand_minmax");
+    expand.custom_legalize(fmin, "expand_minmax");
+    expand.custom_legalize(fmax, "expand_minmax");
 
     // Conversions from unsigned need special handling.
-    group.custom_legalize(fcvt_from_uint, "expand_fcvt_from_uint");
+    expand.custom_legalize(fcvt_from_uint, "expand_fcvt_from_uint");
     // Conversions from float to int can trap and modify the control flow graph.
-    group.custom_legalize(fcvt_to_sint, "expand_fcvt_to_sint");
-    group.custom_legalize(fcvt_to_uint, "expand_fcvt_to_uint");
-    group.custom_legalize(fcvt_to_sint_sat, "expand_fcvt_to_sint_sat");
-    group.custom_legalize(fcvt_to_uint_sat, "expand_fcvt_to_uint_sat");
+    expand.custom_legalize(fcvt_to_sint, "expand_fcvt_to_sint");
+    expand.custom_legalize(fcvt_to_uint, "expand_fcvt_to_uint");
+    expand.custom_legalize(fcvt_to_sint_sat, "expand_fcvt_to_sint_sat");
+    expand.custom_legalize(fcvt_to_uint_sat, "expand_fcvt_to_uint_sat");
 
     // Count leading and trailing zeroes, for baseline x86_64
     let c_minus_one = var("c_minus_one");
@@ -187,7 +207,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let intcc_eq = Literal::enumerator_for(&imm.intcc, "eq");
     let imm64_minus_one = Literal::constant(&imm.imm64, -1);
     let imm64_63 = Literal::constant(&imm.imm64, 63);
-    group.legalize(
+    expand.legalize(
         def!(a = clz.I64(x)),
         vec![
             def!(c_minus_one = iconst(imm64_minus_one)),
@@ -199,7 +219,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     );
 
     let imm64_31 = Literal::constant(&imm.imm64, 31);
-    group.legalize(
+    expand.legalize(
         def!(a = clz.I32(x)),
         vec![
             def!(c_minus_one = iconst(imm64_minus_one)),
@@ -211,7 +231,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     );
 
     let imm64_64 = Literal::constant(&imm.imm64, 64);
-    group.legalize(
+    expand.legalize(
         def!(a = ctz.I64(x)),
         vec![
             def!(c_sixty_four = iconst(imm64_64)),
@@ -221,7 +241,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     );
 
     let imm64_32 = Literal::constant(&imm.imm64, 32);
-    group.legalize(
+    expand.legalize(
         def!(a = ctz.I32(x)),
         vec![
             def!(c_thirty_two = iconst(imm64_32)),
@@ -254,7 +274,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
 
     let imm64_1 = Literal::constant(&imm.imm64, 1);
     let imm64_4 = Literal::constant(&imm.imm64, 4);
-    group.legalize(
+    expand.legalize(
         def!(r = popcnt.I64(x)),
         vec![
             def!(qv3 = ushr_imm(x, imm64_1)),
@@ -295,7 +315,7 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     let lc0F = var("lc0F");
     let lc01 = var("lc01");
 
-    group.legalize(
+    expand.legalize(
         def!(r = popcnt.I32(x)),
         vec![
             def!(lv3 = ushr_imm(x, imm64_1)),
@@ -318,31 +338,24 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
         ],
     );
 
-    group.custom_legalize(ineg, "convert_ineg");
-
-    group.custom_legalize(tls_value, "expand_tls_value");
-
-    group.build_and_add_to(&mut shared.transform_groups);
-
-    let mut widen = TransformGroupBuilder::new(
-        "x86_widen",
-        r#"
-    Legalize instructions by widening.
-
-    Use x86-specific instructions if needed."#,
-    )
-    .isa("x86")
-    .chain_with(shared.transform_groups.by_name("widen").id);
-
+    expand.custom_legalize(ineg, "convert_ineg");
+    expand.custom_legalize(tls_value, "expand_tls_value");
     widen.custom_legalize(ineg, "convert_ineg");
-    widen.build_and_add_to(&mut shared.transform_groups);
 
-    // To reduce compilation times, separate out large blocks of legalizations by
-    // theme.
-    define_simd(shared, x86_instructions);
+    // To reduce compilation times, separate out large blocks of legalizations by theme.
+    define_simd(shared, x86_instructions, &mut narrow, &mut expand);
+
+    expand.build_and_add_to(&mut shared.transform_groups);
+    narrow.build_and_add_to(&mut shared.transform_groups);
+    widen.build_and_add_to(&mut shared.transform_groups);
 }
 
-fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGroup) {
+fn define_simd(
+    shared: &mut SharedDefinitions,
+    x86_instructions: &InstructionGroup,
+    narrow: &mut TransformGroupBuilder,
+    expand: &mut TransformGroupBuilder,
+) {
     let insts = &shared.instructions;
     let band = insts.by_name("band");
     let band_not = insts.by_name("band_not");
@@ -394,16 +407,6 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
     let x86_punpckl = x86_instructions.by_name("x86_punpckl");
 
     let imm = &shared.imm;
-
-    let mut narrow = TransformGroupBuilder::new(
-        "x86_narrow",
-        r#"
-    Legalize instructions by narrowing.
-
-    Use x86-specific instructions if needed."#,
-    )
-    .isa("x86")
-    .chain_with(shared.transform_groups.by_name("narrow_flags").id);
 
     // Set up variables and immediates.
     let uimm8_zero = Literal::constant(&imm.uimm8, 0x00);
