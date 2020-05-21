@@ -136,9 +136,12 @@ pub(crate) fn create_unwind_info(
 
     assert!(found_end);
 
+    // When using a frame register, certain unwind operations, such as XMM saves, are relative to the frame
+    // register minus some offset, forming a "base address". This attempts to calculate the frame register offset
+    // while updating the XMM save offsets to be relative from this "base address" rather than RSP.
     let mut frame_register_offset = 0;
-    if xmm_save_count > 0 {
-        // If there are XMM saves, determine the number of 16-byte slots used for all CSRs (including GPRs)
+    if frame_register.is_some() && xmm_save_count > 0 {
+        // Determine the number of 16-byte slots used for all CSRs (including GPRs)
         // The "frame register offset" will point at the last slot used (i.e. the last saved FPR)
         // Assumption: each FPR is stored at a lower address than the previous one
         let mut last_stack_offset = None;
