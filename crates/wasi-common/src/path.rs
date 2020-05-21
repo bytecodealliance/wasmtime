@@ -47,9 +47,6 @@ pub(crate) fn get(
     // any symlinks we encounter are processed by pushing them on the stack.
     let mut path_stack = vec![path.to_owned()];
 
-    // No longer need a borrow into the guest memory for `path`:
-    drop(path);
-
     // Track the number of symlinks we've expanded, so we can return `ELOOP` after too many.
     let mut symlink_expansions = 0;
 
