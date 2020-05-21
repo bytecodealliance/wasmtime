@@ -2188,6 +2188,7 @@ name = "wasmtime-c-api"
 version = "0.16.0"
 dependencies = [
  "anyhow",
+ "env_logger 0.7.1",
  "once_cell",
  "wasi-common",
  "wasmtime",
