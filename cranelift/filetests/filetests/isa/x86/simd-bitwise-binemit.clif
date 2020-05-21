@@ -97,9 +97,3 @@ block0(v0: i32x4 [%xmm4]):
 [-, %xmm4]  v2 = sshr_imm v0, 10     ; bin: 66 0f 72 e4 0a
             return v2
 }
-
-function %sshr_imm_i64x2(i64x2) -> i64x2 {
-block0(v0: i64x2 [%xmm6]):
-[-, %xmm6]  v2 = sshr_imm v0, 42     ; bin: 66 0f 73 e6 2a
-            return v2
-}

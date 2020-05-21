@@ -2184,8 +2184,11 @@ fn define_simd(
         let ushr_imm = ushr_imm.bind(vector(*ty, sse_vector_size));
         e.enc_both_inferred(ushr_imm, rec_f_ib.opcodes(*opcodes).rrr(2));
 
-        let sshr_imm = sshr_imm.bind(vector(*ty, sse_vector_size));
-        e.enc_both_inferred(sshr_imm, rec_f_ib.opcodes(*opcodes).rrr(4));
+        // One exception: PSRAQ does not exist in for 64x2 in SSE2, it requires a higher CPU feature set.
+        if *ty != I64 {
+            let sshr_imm = sshr_imm.bind(vector(*ty, sse_vector_size));
+            e.enc_both_inferred(sshr_imm, rec_f_ib.opcodes(*opcodes).rrr(4));
+        }
     }
 
     // SIMD integer comparisons
