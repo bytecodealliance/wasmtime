@@ -1,4 +1,4 @@
-test vcode
+test compile
 target aarch64
 
 function %stack_addr_small() -> i64 {
