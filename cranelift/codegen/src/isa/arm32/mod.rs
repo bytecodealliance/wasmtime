@@ -17,6 +17,7 @@ use crate::isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use crate::regalloc;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
+use core::any::Any;
 use core::fmt;
 use target_lexicon::{Architecture, Triple};
 
@@ -134,6 +135,10 @@ impl TargetIsa for Isa {
 
     fn unsigned_sub_overflow_condition(&self) -> ir::condcodes::IntCC {
         ir::condcodes::IntCC::UnsignedGreaterThanOrEqual
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self as &dyn Any
     }
 }
 

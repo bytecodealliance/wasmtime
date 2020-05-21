@@ -23,6 +23,7 @@ use crate::result::CodegenResult;
 use crate::timing;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
+use core::any::Any;
 use core::fmt;
 use target_lexicon::{PointerWidth, Triple};
 
@@ -183,6 +184,10 @@ impl TargetIsa for Isa {
     #[cfg(feature = "unwind")]
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         Some(unwind::systemv::create_cie())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self as &dyn Any
     }
 }
 
