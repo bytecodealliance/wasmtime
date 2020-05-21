@@ -473,6 +473,10 @@ pub static PMULLD: [u8; 4] = [0x66, 0x0f, 0x38, 0x40];
 /// bits of each product in xmm1 (AVX512VL/DQ). Requires an EVEX encoding.
 pub static PMULLQ: [u8; 4] = [0x66, 0x0f, 0x38, 0x40];
 
+/// Multiply packed unsigned doubleword integers in xmm1 by packed unsigned doubleword integers
+/// in xmm2/m128, and store the quadword results in xmm1 (SSE2).
+pub static PMULUDQ: [u8; 3] = [0x66, 0x0f, 0xf4];
+
 /// Pop top of stack into r{16,32,64}; increment stack pointer.
 pub static POP_REG: [u8; 1] = [0x58];
 

@@ -475,10 +475,11 @@ pub(crate) fn define(
             .includes_scalars(false)
             .build(),
     );
-    let I64x2 = &TypeVar::new(
-        "I64x2",
-        "A SIMD vector type containing one large integer (the upper lane is concatenated with \
-         the lower lane to form the integer)",
+    let I128 = &TypeVar::new(
+        "I128",
+        "A SIMD vector type containing one large integer (due to Cranelift type constraints, \
+        this uses the Cranelift I64X2 type but should be understood as one large value, i.e., the \
+        upper lane is concatenated with the lower lane to form the integer)",
         TypeSetBuilder::new()
             .ints(64..64)
             .simd_lanes(2..2)
@@ -487,7 +488,7 @@ pub(crate) fn define(
     );
 
     let x = &Operand::new("x", IxN).with_doc("Vector value to shift");
-    let y = &Operand::new("y", I64x2).with_doc("Number of bits to shift");
+    let y = &Operand::new("y", I128).with_doc("Number of bits to shift");
     let a = &Operand::new("a", IxN);
 
     ig.push(
@@ -532,6 +533,16 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let I64x2 = &TypeVar::new(
+        "I64x2",
+        "A SIMD vector type containing two 64-bit integers",
+        TypeSetBuilder::new()
+            .ints(64..64)
+            .simd_lanes(2..2)
+            .includes_scalars(false)
+            .build(),
+    );
+
     let x = &Operand::new("x", I64x2);
     let y = &Operand::new("y", I64x2);
     let a = &Operand::new("a", I64x2);
@@ -542,6 +553,20 @@ pub(crate) fn define(
         Multiply Packed Integers -- Multiply two 64x2 integers and receive a 64x2 result with
         lane-wise wrapping if the result overflows. This instruction is necessary to add distinct
         encodings for CPUs with newer vector features.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "x86_pmuludq",
+            r#"
+        Multiply Packed Integers -- Using only the bottom 32 bits in each lane, multiply two 64x2
+        unsigned integers and receive a 64x2 result. This instruction avoids the need for handling
+        overflow as in `x86_pmullq`.
         "#,
             &formats.binary,
         )
