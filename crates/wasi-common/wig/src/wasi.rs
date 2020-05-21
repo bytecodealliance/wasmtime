@@ -473,7 +473,7 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
                             // Therefore, creating a new BorrowChecker at the
                             // root of each function invocation is correct.
                             let bc = wiggle::BorrowChecker::new();
-                            let mem:  WasiMemory { mem, bc };
+                            let mem = WasiMemory { mem, bc };
                             wasi_common::wasi::#module_id::#name_ident(
                                 &mut my_cx.borrow_mut(),
                                 &mem,
@@ -493,11 +493,11 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
         struct WasiMemory {
             mem: wasmtime::Memory,
             bc: wiggle::BorrowChecker,
-        };
+        }
 
         unsafe impl wiggle::GuestMemory for WasiMemory {
             fn base(&self) -> (*mut u8, u32) {
-                (self.0.data_ptr(), self.0.data_size() as _)
+                (self.mem.data_ptr(), self.mem.data_size() as _)
             }
             fn borrow_checker(&self) -> &wiggle::BorrowChecker {
                 &self.bc
