@@ -67,8 +67,8 @@ macro_rules! declare_vecs {
         }
 
         impl From<Vec<$elem_ty>> for $name {
-            fn from(mut vec: Vec<$elem_ty>) -> Self {
-                assert_eq!(vec.len(), vec.capacity());
+            fn from(vec: Vec<$elem_ty>) -> Self {
+                let mut vec = vec.into_boxed_slice();
                 let result = $name {
                     size: vec.len(),
                     data: vec.as_mut_ptr(),
