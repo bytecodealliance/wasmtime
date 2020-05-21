@@ -22,6 +22,7 @@
 )]
 
 mod export;
+mod externref;
 mod imports;
 mod instance;
 mod jit_int;
@@ -36,6 +37,7 @@ pub mod debug_builtins;
 pub mod libcalls;
 
 pub use crate::export::*;
+pub use crate::externref::VMExternRef;
 pub use crate::imports::Imports;
 pub use crate::instance::{InstanceHandle, InstantiationError, LinkError};
 pub use crate::jit_int::GdbJitImageRegistration;

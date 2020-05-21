@@ -583,6 +583,14 @@ impl VMOffsets {
     }
 }
 
+/// Offsets for `VMExternData`.
+impl VMOffsets {
+    /// Return the offset for `VMExternData::ref_count`.
+    pub fn vm_extern_data_ref_count() -> u32 {
+        0
+    }
+}
+
 /// Target specific type for shared signature index.
 #[derive(Debug, Copy, Clone)]
 pub struct TargetSharedSignatureIndex(u32);
