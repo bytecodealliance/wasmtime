@@ -397,12 +397,8 @@ block0(v0: f32, v1: f32):
 
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
-; nextln:  mov x0, v0.d[0]
-; nextln:  mov x1, v1.d[0]
-; nextln:  and w1, w1, #2147483648
-; nextln:  bic w0, w0, #2147483648
-; nextln:  orr w0, w0, w1
-; nextln:  mov v0.d[0], x0
+; nextln:  ushr v1.2s, v1.2s, #31
+; nextln:  sli v0.2s, v1.2s, #31
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
@@ -415,12 +411,8 @@ block0(v0: f64, v1: f64):
 
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
-; nextln:  mov x0, v0.d[0]
-; nextln:  mov x1, v1.d[0]
-; nextln:  and x1, x1, #9223372036854775808
-; nextln:  bic x0, x0, #9223372036854775808
-; nextln:  orr x0, x0, x1
-; nextln:  mov v0.d[0], x0
+; nextln:  ushr d1, d1, #63
+; nextln:  sli d0, d1, #63
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
