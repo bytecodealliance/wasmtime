@@ -99,3 +99,9 @@ block0(v0: f64x2 [%xmm11], v1: f64x2 [%xmm13]):
 [-, %xmm11]    v8 = sqrt v0          ; bin: 66 45 0f 51 db
     return
 }
+
+function %pmuludq(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2 [%xmm3], v1: i64x2 [%xmm5]):
+[-, %xmm3]    v2 = x86_pmuludq v0, v1      ; bin: 66 0f f4 dd
+    return v2
+}

@@ -1646,6 +1646,7 @@ fn define_simd(
     let x86_pmins = x86.by_name("x86_pmins");
     let x86_pminu = x86.by_name("x86_pminu");
     let x86_pmullq = x86.by_name("x86_pmullq");
+    let x86_pmuludq = x86.by_name("x86_pmuludq");
     let x86_pshufb = x86.by_name("x86_pshufb");
     let x86_pshufd = x86.by_name("x86_pshufd");
     let x86_psll = x86.by_name("x86_psll");
@@ -2099,6 +2100,9 @@ fn define_simd(
         let imul = imul.bind(vector(*ty, sse_vector_size));
         e.enc_both_inferred_maybe_isap(imul, rec_fa.opcodes(opcodes), *isap);
     }
+
+    // SIMD multiplication with lane expansion.
+    e.enc_both_inferred(x86_pmuludq, rec_fa.opcodes(&PMULUDQ));
 
     // SIMD integer multiplication for I64x2 using a AVX512.
     {
