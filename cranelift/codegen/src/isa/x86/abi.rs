@@ -537,7 +537,7 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
 
     // FPRs must be saved with 16-byte alignment; because they follow the GPRs on the stack, align if needed
     if fpsr_stack_size > 0 {
-        csr_stack_size += gpsr_stack_size & isa.pointer_bytes() as u32;
+        csr_stack_size = (csr_stack_size + 15) & !15;
     }
 
     func.create_stack_slot(ir::StackSlotData {
@@ -615,14 +615,7 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
-    insert_common_epilogues(
-        &mut pos,
-        local_stack_size,
-        reg_type,
-        &csrs,
-        sp_arg_index,
-        isa,
-    );
+    insert_common_epilogues(&mut pos, local_stack_size, reg_type, &csrs, sp_arg_index);
 
     Ok(())
 }
@@ -700,14 +693,7 @@ fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
-    insert_common_epilogues(
-        &mut pos,
-        local_stack_size,
-        reg_type,
-        &csrs,
-        sp_arg_index,
-        isa,
-    );
+    insert_common_epilogues(&mut pos, local_stack_size, reg_type, &csrs, sp_arg_index);
 
     Ok(())
 }
@@ -839,7 +825,7 @@ fn insert_common_prologue(
 
         // Offset to where the register is saved relative to RSP, accounting for FPR save alignment
         let offset = ((i + 1) * types::F64X2.bytes() as usize) as i64
-            + (stack_size & isa.pointer_bytes() as i64);
+            + (stack_size % types::F64X2.bytes() as i64);
 
         last_fpr_save = Some(pos.ins().store(
             ir::MemFlags::trusted(),
@@ -983,13 +969,12 @@ fn insert_common_epilogues(
     reg_type: ir::types::Type,
     csrs: &RegisterSet,
     sp_arg_index: Option<usize>,
-    isa: &dyn TargetIsa,
 ) {
     while let Some(block) = pos.next_block() {
         pos.goto_last_inst(block);
         if let Some(inst) = pos.current_inst() {
             if pos.func.dfg[inst].opcode().is_return() {
-                insert_common_epilogue(inst, stack_size, pos, reg_type, csrs, sp_arg_index, isa);
+                insert_common_epilogue(inst, stack_size, pos, reg_type, csrs, sp_arg_index);
             }
         }
     }
@@ -1004,7 +989,6 @@ fn insert_common_epilogue(
     reg_type: ir::types::Type,
     csrs: &RegisterSet,
     sp_arg_index: Option<usize>,
-    isa: &dyn TargetIsa,
 ) {
     // Insert the pop of the frame pointer
     let fp_pop = pos.ins().x86_pop(reg_type);
@@ -1041,7 +1025,7 @@ fn insert_common_epilogue(
         for (i, reg) in csrs.iter(FPR).enumerate() {
             // Offset to where the register is saved relative to RSP, accounting for FPR save alignment
             let offset = ((i + 1) * types::F64X2.bytes() as usize) as i64
-                + (stack_size & isa.pointer_bytes() as i64);
+                + (stack_size % types::F64X2.bytes() as i64);
 
             let value = pos.ins().load(
                 types::F64X2,

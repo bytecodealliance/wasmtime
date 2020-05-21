@@ -163,6 +163,7 @@ pub(crate) fn create_unwind_info(
         assert_eq!(fpr_save_count, xmm_save_count);
 
         // Account for alignment space when there's an odd number of GPR pushes
+        // Assumption: an FPR (16 bytes) is twice the size of a GPR (8 bytes), hence the (rounded-up) integer division
         frame_register_offset = fpr_save_count + ((gpr_push_count + 1) / 2);
     }
 
