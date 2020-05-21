@@ -94,10 +94,10 @@ impl Instance {
     /// returned.
     ///
     /// This method returns a `NewInstance`, which is an instance which has
-    /// been created, however it has not yet been initialized -- wasm and WASI
-    /// initialization functions that it may have have not been run yet. Use
-    /// the methods on `NewInstance` to run the initialization and return the
-    /// actual `Instance`.
+    /// been created, however it has not yet been initialized -- initialization
+    /// functions that it may have have not been run yet. Use the methods on
+    /// `NewInstance` to run the initialization and return the actual
+    /// `Instance`.
     ///
     /// ## Providing Imports
     ///
@@ -240,12 +240,12 @@ pub struct NewInstance {
 }
 
 impl NewInstance {
-    /// Run the instance's wasm start function (and not WASI ABI initialization).
+    /// Run the instance's wasm start function (and not Command/Reactor initialization).
     ///
     /// This is public as it's used by the C API, which doesn't expose the `NewInstance`
     /// type and needs a way to internally run initialization on a plain `Instance`.
     #[doc(hidden)]
-    pub fn minimal_init(self) -> Result<Instance> {
+    pub fn start(self) -> Result<Instance> {
         let start_func = self.instance.handle.module().start_func;
         let instance = self.instance;
         let store = instance.store();
@@ -274,57 +274,58 @@ impl NewInstance {
         Ok(instance)
     }
 
-    /// Run the instance's wasm start function and, if applicable, perform
-    /// [WASI ABI initialization]:
-    ///  - If the module is a command, the `_start` function is run and `None`
+    /// Run the instance's wasm start function and:
+    ///  - If the module is a Command, the `_start` function is run and `None`
     ///    is returned.
-    ///  - If the module is a reactor, the `_initialize` function is run and
-    ///    the initialized `Instance` is returned.
+    ///  - If the module is a Reactor, if an `_initialize` function is present,
+    ///    it is run and the initialized `Instance` is returned.
     ///
-    /// If you know you're expecting to run a command or a reactor specifically,
+    /// See [the documentation for Commands and Reactors] for details on the ABI.
+    ///
+    /// If you know you're expecting to run a Command or a Reactor specifically,
     /// you can use `run_command` or `init_reactor` instead, which offer a
     /// more streamlined API.
     ///
     /// For now, `params` must be an empty slice, and the results will always be empty.
     /// In the future, this will be extended to support arguments and return values.
     ///
-    /// [WASI ABI initialization]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
-    pub fn start(self, params: &[Val]) -> Result<Started> {
-        let instance = self.minimal_init()?;
+    /// [the documentation for Commands and Reactors]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
+    pub fn activate(self, params: &[Val]) -> Result<Activated> {
+        let instance = self.start()?;
 
-        match wasi_abi_exec_model(instance)? {
-            ExecModel::Command(func) => Ok(Started::Command(run_command(func, params)?)),
-            ExecModel::Reactor((maybe_func, instance)) => Ok(Started::Reactor(init_reactor(
+        match exec_model(instance)? {
+            ExecModel::Command(func) => Ok(Activated::Command(run_command(func, params)?)),
+            ExecModel::Reactor((maybe_func, instance)) => Ok(Activated::Reactor(init_reactor(
                 maybe_func, params, instance,
             )?)),
         }
     }
 
-    /// Given a command instance, run it. If the instance is not a command,
+    /// Given a Command instance, run it. If the instance is not a Command,
     /// return an error.
     ///
-    /// A command is an instance which is expected to be called only once.
+    /// A Command is an instance which is expected to be called only once.
     /// Accordingly, this function consumes the `Instance`.
     pub fn run_command(self, params: &[Val]) -> Result<Box<[Val]>> {
-        let instance = self.minimal_init()?;
+        let instance = self.start()?;
 
-        if let ExecModel::Command(func) = wasi_abi_exec_model(instance)? {
+        if let ExecModel::Command(func) = exec_model(instance)? {
             return run_command(func, params);
         }
 
         bail!("`run_command` called on module which is not a command");
     }
 
-    /// Given a reactor instance, initialize it. If the instance is not a reactor,
+    /// Given a Reactor instance, initialize it. If the instance is not a Reactor,
     /// return an error.
     ///
-    /// A reactor is an instance which is expected to be called any number of
+    /// A Reactor is an instance which is expected to be called any number of
     /// times. Accordingly, this function returns the initialized `Instance`
     /// so that its exports can be called.
     pub fn init_reactor(self, params: &[Val]) -> Result<Instance> {
-        let instance = self.minimal_init()?;
+        let instance = self.start()?;
 
-        if let ExecModel::Reactor((maybe_func, instance)) = wasi_abi_exec_model(instance)? {
+        if let ExecModel::Reactor((maybe_func, instance)) = exec_model(instance)? {
             return init_reactor(maybe_func, params, instance);
         }
 
@@ -332,22 +333,21 @@ impl NewInstance {
     }
 }
 
-/// Modules can be interpreted either as commands (instance lifetime ends
-/// when the start function returns) or reactor (instance persists).
+/// Modules can be interpreted either as Commands (instance lifetime ends
+/// when the start function returns) or Reactor (instance persists).
 enum ExecModel {
-    /// The instance is a command, and this is its start function. The
+    /// The instance is a Command, and this is its start function. The
     /// instance should be consumed.
     Command(Func),
 
-    /// The instance is a reactor, and this is its initialization function,
+    /// The instance is a Reactor, and this is its initialization function,
     /// along with the instance itself, which should persist.
     Reactor((Option<Func>, Instance)),
 }
 
-/// Classify the given instance as either a command or reactor and return
+/// Classify the given instance as either a Command or Reactor and return
 /// the information needed to initialize it.
-fn wasi_abi_exec_model(instance: Instance) -> Result<ExecModel> {
-    // Invoke the WASI start function of the instance, if one is present.
+fn exec_model(instance: Instance) -> Result<ExecModel> {
     let command_start = instance.get_export("_start");
     let reactor_start = instance.get_export("_initialize");
     match (command_start, reactor_start) {
@@ -371,26 +371,26 @@ fn wasi_abi_exec_model(instance: Instance) -> Result<ExecModel> {
             Ok(ExecModel::Reactor((None, instance)))
         }
         (Some(_), Some(_)) => {
-            // Module declares itself to be both a command and a reactor.
-            bail!("Program cannot be both a command and a reactor")
+            // Module declares itself to be both a Command and a Reactor.
+            bail!("Program cannot be both a Command and a Reactor")
         }
     }
 }
 
-/// The result of running WASI ABI initialization on a wasm module.
-pub enum Started {
-    /// The module was a command; the instance was consumed and this `Started`
+/// The result of a successful `Instance::activate`.
+pub enum Activated {
+    /// The module was a Command; the instance was consumed and this `Activated`
     /// holds the return values.
     Command(Box<[Val]>),
 
-    /// The module was a reactor; this `Started` holds the instance.
+    /// The module was a Reactor; this `Activated` holds the instance.
     Reactor(Instance),
 }
 
-/// Utility for running commands.
+/// Utility for running Commands.
 fn run_command(func: Func, params: &[Val]) -> Result<Box<[Val]>> {
     if !params.is_empty() {
-        bail!("passing arguments to a WASI-ABI command is not supported yet");
+        bail!("passing arguments to a Command is not supported yet");
     }
 
     func.get0::<()>()?()?;
@@ -398,10 +398,10 @@ fn run_command(func: Func, params: &[Val]) -> Result<Box<[Val]>> {
     return Ok(Vec::new().into_boxed_slice());
 }
 
-/// Utility for initializing reactors.
+/// Utility for initializing Reactors.
 fn init_reactor(maybe_func: Option<Func>, params: &[Val], instance: Instance) -> Result<Instance> {
     if !params.is_empty() {
-        bail!("passing arguments to a WASI-ABI reactor is not supported yet");
+        bail!("passing arguments to a Reactor's `init_reactor` is not supported yet");
     }
 
     if let Some(func) = maybe_func {

@@ -124,7 +124,7 @@ pub fn handle_instantiate(
     }
 
     // Run the wasm start function.
-    let instance = instance.and_then(NewInstance::minimal_init);
+    let instance = instance.and_then(NewInstance::start);
 
     match instance {
         Ok(instance) => {

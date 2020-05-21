@@ -5,18 +5,33 @@
 
 use anyhow::Result;
 use wasmtime::*;
-use wasmtime_wasi::wasi_linker;
+use wasmtime_wasi::{Wasi, WasiCtx};
 
 fn main() -> Result<()> {
     let store = Store::default();
     let module = Module::from_file(&store, "target/wasm32-wasi/debug/wasi.wasm")?;
 
-    // Create a new `Linker` with no preloaded directories, command-line arguments,
-    // or environment variables.
-    let linker = wasi_linker(&store, &[], &[], &[])?;
+    // Create an instance of `Wasi` which contains a `WasiCtx`. Note that
+    // `WasiCtx` provides a number of ways to configure what the target program
+    // will have access to.
+    let wasi = Wasi::new(&store, WasiCtx::new(std::env::args())?);
+    let mut imports = Vec::new();
+    for import in module.imports() {
+        if import.module() == "wasi_snapshot_preview1" {
+            if let Some(export) = wasi.get_export(import.name()) {
+                imports.push(Extern::from(export.clone()));
+                continue;
+            }
+        }
+        panic!(
+            "couldn't find import for `{}::{}`",
+            import.module(),
+            import.name()
+        );
+    }
 
-    // Instantiate and run our module with the imports we've created.
-    let _instance = linker.instantiate(&module)?.run_command(&[])?;
+    // Instance our module with the imports we've created, and run it.
+    let _returns = Instance::new(&module, &imports)?.run_command(&[])?;
 
     Ok(())
 }

@@ -67,9 +67,6 @@ impl Linker {
     /// linker will be connected with `store` and must come from the same
     /// `store`.
     ///
-    /// To create a new [`Linker`] prepopulated with WASI APIs, see
-    /// `wasmtime_wasi::wasi_linker`.
-    ///
     /// # Examples
     ///
     /// ```

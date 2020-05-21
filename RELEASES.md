@@ -8,12 +8,12 @@ Unreleased
 
 ### Added
 
-* The [WASI commands and reactors ABI] is now supported. `Instance::new` and
-  `Linker::instantiate` now return a `NewInstance`; to perform initialization
-  and obtain the `Instance`, call `.start`, `.run_command`, or
+* The [Commands and Reactors ABI] is now supported in the Rust API. `Instance::new`
+  and `Linker::instantiate` now return a `NewInstance`; to perform initialization
+  and obtain the `Instance`, call `.activate`, `.run_command`, or
   `.init_reactor` on it as needed.
 
-[WASI commands and reactors ABI]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
+[Commands and Reactors ABI]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
 
 ### Changed
 

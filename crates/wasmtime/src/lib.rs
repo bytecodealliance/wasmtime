@@ -26,7 +26,7 @@ mod values;
 pub use crate::externals::*;
 pub use crate::frame_info::FrameInfo;
 pub use crate::func::*;
-pub use crate::instance::{Instance, NewInstance, Started};
+pub use crate::instance::{Activated, Instance, NewInstance};
 pub use crate::linker::*;
 pub use crate::module::Module;
 pub use crate::r#ref::{ExternRef, HostRef};

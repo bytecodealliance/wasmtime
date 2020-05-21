@@ -11,9 +11,9 @@ use std::{
     process,
 };
 use structopt::{clap::AppSettings, StructOpt};
-use wasi_common::preopen_dir;
-use wasmtime::{Engine, Instance, Linker, Module, Started, Store, Trap, Val, ValType};
-use wasmtime_wasi::wasi_linker;
+use wasi_common::{preopen_dir, WasiCtxBuilder};
+use wasmtime::{Activated, Engine, Instance, Linker, Module, Store, Trap, Val, ValType};
+use wasmtime_wasi::Wasi;
 
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
     // Do not accept wasmtime subcommand names as the module name
@@ -135,21 +135,22 @@ impl RunCommand {
         let preopen_dirs = self.compute_preopen_dirs()?;
         let argv = self.compute_argv();
 
-        let mut linker = wasi_linker(&store, &preopen_dirs, &argv, &self.vars)?;
+        let mut linker = Linker::new(&store);
+        populate_with_wasi(&mut linker, &preopen_dirs, &argv, &self.vars)?;
 
         // Load the preload wasm modules.
         for (name, path) in self.preloads.iter() {
             // Read the wasm module binary either as `*.wat` or a raw binary
             let module = Module::from_file(linker.store(), path)?;
-            let started = linker
+            let activated = linker
                 .instantiate(&module)
-                .and_then(|new_instance| new_instance.start(&[]))
+                .and_then(|new_instance| new_instance.activate(&[]))
                 .context(format!("failed to instantiate {:?}", path))?;
 
             // If it was a command, don't register it.
-            let instance = match started {
-                Started::Command(_) => continue,
-                Started::Reactor(instance) => instance,
+            let instance = match activated {
+                Activated::Command(_) => continue,
+                Activated::Reactor(instance) => instance,
             };
 
             linker.instance(name, &instance).with_context(|| {
@@ -257,18 +258,18 @@ impl RunCommand {
 
         // Read the wasm module binary either as `*.wat` or a raw binary
         let module = Module::from_file(linker.store(), &self.module)?;
-        let started = linker
+        let activated = linker
             .instantiate(&module)
-            .and_then(|new_instance| new_instance.start(&[]))
+            .and_then(|new_instance| new_instance.activate(&[]))
             .context(format!("failed to instantiate {:?}", self.module))?;
 
         // If a function to invoke was given, invoke it.
         if let Some(name) = self.invoke.as_ref() {
-            match started {
-                Started::Command(_) => {
-                    bail!("Cannot invoke exports on a command after it has executed")
+            match activated {
+                Activated::Command(_) => {
+                    bail!("Cannot invoke exports on a Command after it has executed")
                 }
-                Started::Reactor(instance) => self.invoke_export(instance, name),
+                Activated::Reactor(instance) => self.invoke_export(instance, name),
             }
         } else {
             Ok(())
@@ -337,4 +338,38 @@ impl RunCommand {
 
         Ok(())
     }
+}
+
+/// Populates the given `Linker` with WASI APIs.
+fn populate_with_wasi(
+    linker: &mut Linker,
+    preopen_dirs: &[(String, File)],
+    argv: &[String],
+    vars: &[(String, String)],
+) -> Result<()> {
+    // Add the current snapshot to the linker.
+    let mut cx = WasiCtxBuilder::new();
+    cx.inherit_stdio().args(argv).envs(vars);
+
+    for (name, file) in preopen_dirs {
+        cx.preopened_dir(file.try_clone()?, name);
+    }
+
+    let cx = cx.build()?;
+    let wasi = Wasi::new(linker.store(), cx);
+    wasi.add_to_linker(linker)?;
+
+    // Repeat the above, but this time for snapshot 0.
+    let mut cx = wasi_common::old::snapshot_0::WasiCtxBuilder::new();
+    cx.inherit_stdio().args(argv).envs(vars);
+
+    for (name, file) in preopen_dirs {
+        cx.preopened_dir(file.try_clone()?, name);
+    }
+
+    let cx = cx.build()?;
+    let wasi = wasmtime_wasi::old::snapshot_0::Wasi::new(linker.store(), cx);
+    wasi.add_to_linker(linker)?;
+
+    Ok(())
 }
