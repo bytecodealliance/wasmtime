@@ -2211,6 +2211,7 @@ name = "wasmtime-cli"
 version = "0.16.0"
 dependencies = [
  "anyhow",
+ "env_logger 0.7.1",
  "faerie",
  "file-per-thread-logger",
  "filecheck",

@@ -155,9 +155,10 @@ fn write_testsuite_tests(
         writeln!(out, "#[ignore]")?;
     }
     writeln!(out, "fn r#{}() {{", &testname)?;
+    writeln!(out, "    let _ = env_logger::try_init();")?;
     writeln!(
         out,
-        "crate::wast::run_wast(r#\"{}\"#, crate::wast::Strategy::{}).unwrap();",
+        "    crate::wast::run_wast(r#\"{}\"#, crate::wast::Strategy::{}).unwrap();",
         path.display(),
         strategy
     )?;
