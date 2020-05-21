@@ -2,7 +2,7 @@ use crate::isa::TargetIsa;
 use crate::settings::LibcallCallConv;
 use core::fmt;
 use core::str;
-use target_lexicon::{CallingConvention, Triple};
+use target_lexicon::{CallingConvention, OperatingSystem, PointerWidth, Triple};
 
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -30,6 +30,10 @@ pub enum CallConv {
 impl CallConv {
     /// Return the default calling convention for the given target triple.
     pub fn triple_default(triple: &Triple) -> Self {
+        match (triple.operating_system, triple.pointer_width()) {
+            (OperatingSystem::Windows, Ok(PointerWidth::U32)) => return Self::SystemV,
+            _ => ()
+        }
         match triple.default_calling_convention() {
             // Default to System V for unknown targets because most everything
             // uses System V.
