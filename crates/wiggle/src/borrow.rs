@@ -44,8 +44,17 @@ impl BorrowChecker {
 }
 
 #[derive(Debug)]
+/// This is a pretty naive way to account for borrows. This datastructure
+/// could be made a lot more efficient with some effort.
 struct InnerBorrowChecker {
+    /// Map from handle to region borrowed. A HashMap is probably not ideal
+    /// for this but it works. It would be more efficient if we could
+    /// check `is_borrowed` without an O(n) iteration, by organizing borrows
+    /// by an ordering of Region.
     borrows: HashMap<BorrowHandle, Region>,
+    /// Handle to give out for the next borrow. This is the bare minimum of
+    /// bookkeeping of free handles, and in a pathological case we could run
+    /// out, hence [`GuestError::BorrowCheckerOutOfHandles`]
     next_handle: BorrowHandle,
 }
 
@@ -71,9 +80,14 @@ impl InnerBorrowChecker {
             self.next_handle = BorrowHandle(0);
         }
         let h = self.next_handle;
+        // Get the next handle. Since we don't recycle handles until all of
+        // them have been returned, there is a pathological case where a user
+        // may make a Very Large (usize::MAX) number of valid borrows and
+        // unborrows while always keeping at least one borrow outstanding, and
+        // we will run out of borrow handles.
         self.next_handle = BorrowHandle(
             h.0.checked_add(1)
-                .ok_or_else(|| GuestError::BorrowCheckerOOM)?,
+                .ok_or_else(|| GuestError::BorrowCheckerOutOfHandles)?,
         );
         Ok(h)
     }
