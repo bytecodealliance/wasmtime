@@ -18,7 +18,7 @@ fn main() -> Result<()> {
     let engine = Engine::new(Config::new().debug_info(true));
     let store = Store::new(&engine);
     let module = Module::from_file(&store, "target/wasm32-unknown-unknown/debug/fib.wasm")?;
-    let instance = Instance::new(&module, &[])?.init_reactor(&[])?;
+    let instance = Instance::new(&module, &[])?.start()?;
 
     // Invoke `fib` export
     let fib = instance

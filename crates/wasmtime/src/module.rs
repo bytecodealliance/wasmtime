@@ -1,6 +1,6 @@
 use crate::frame_info::GlobalFrameInfoRegistration;
 use crate::runtime::Store;
-use crate::types::{EntityType, ExportType, ImportType};
+use crate::types::{EntityType, ExportType, ExternType, ImportType};
 use anyhow::{Error, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -476,6 +476,55 @@ impl Module {
             let r#type = EntityType::new(entity_index, module);
             ExportType::new(name, r#type)
         })
+    }
+
+    /// Looks up an export in this [`Module`] by name.
+    ///
+    /// This function will return the type of an export with the given name.
+    ///
+    /// # Examples
+    ///
+    /// There may be no export with that name:
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// let module = Module::new(&store, "(module)")?;
+    /// assert!(module.get_export("foo").is_none());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// When there is an export with that name, it is returned:
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// let wat = r#"
+    ///     (module
+    ///         (func (export "foo"))
+    ///         (memory (export "memory") 1)
+    ///     )
+    /// "#;
+    /// let module = Module::new(&store, wat)?;
+    /// let foo = module.get_export("foo");
+    /// assert!(foo.is_some());
+    ///
+    /// let foo = foo.unwrap();
+    /// match foo {
+    ///     ExternType::Func(_) => { /* ... */ }
+    ///     _ => panic!("unexpected export type!"),
+    /// }
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn get_export<'module>(&'module self, name: &'module str) -> Option<ExternType> {
+        let module = self.inner.compiled.module_ref();
+        let entity_index = module.exports.get(name)?;
+        Some(EntityType::new(entity_index, module).extern_type())
     }
 
     /// Returns the [`Store`] that this [`Module`] was compiled into.

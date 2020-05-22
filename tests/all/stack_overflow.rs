@@ -23,7 +23,7 @@ fn host_always_has_some_stack() -> anyhow::Result<()> {
         "#,
     )?;
     let func = Func::wrap(&store, test_host_stack);
-    let instance = Instance::new(&module, &[func.into()])?.init_reactor(&[])?;
+    let instance = Instance::new(&module, &[func.into()])?.start()?;
     let foo = instance.get_func("foo").unwrap().get0::<()>()?;
 
     // Make sure that our function traps and the trap says that the call stack

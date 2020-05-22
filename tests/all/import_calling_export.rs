@@ -40,7 +40,7 @@ fn test_import_calling_export() {
 
     let imports = vec![callback_func.into()];
     let instance = Instance::new(&module, imports.as_slice())
-        .and_then(|new_instance| new_instance.init_reactor(&[]))
+        .and_then(|new_instance| new_instance.start().map_err(Into::into))
         .expect("failed to instantiate module");
 
     let run_func = instance
@@ -81,7 +81,7 @@ fn test_returns_incorrect_type() -> Result<()> {
     );
 
     let imports = vec![callback_func.into()];
-    let instance = Instance::new(&module, imports.as_slice())?.init_reactor(&[])?;
+    let instance = Instance::new(&module, imports.as_slice())?.start()?;
 
     let run_func = instance
         .get_func("run")

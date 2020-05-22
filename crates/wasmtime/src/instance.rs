@@ -1,5 +1,5 @@
 use crate::trampoline::StoreInstanceHandle;
-use crate::{Export, Extern, Func, Global, Memory, Module, Store, Table, Trap, Val};
+use crate::{Export, Extern, Func, Global, Memory, Module, Store, Table, Trap};
 use anyhow::{bail, Error, Result};
 use std::any::Any;
 use std::mem;
@@ -26,6 +26,22 @@ fn instantiate(
     sig_registry: &SignatureRegistry,
     host: Box<dyn Any>,
 ) -> Result<StoreInstanceHandle, Error> {
+    // For now we have a restriction that the `Store` that we're working
+    // with is the same for everything involved here.
+    for import in imports {
+        if !import.comes_from_same_store(store) {
+            bail!("cross-`Store` instantiation is not currently supported");
+        }
+    }
+
+    if imports.len() != compiled_module.module().imports.len() {
+        bail!(
+            "wrong number of imports provided, {} != {}",
+            imports.len(),
+            compiled_module.module().imports.len()
+        );
+    }
+
     let mut resolver = SimpleResolver { imports };
     unsafe {
         let config = store.engine().config();
@@ -94,10 +110,14 @@ impl Instance {
     /// returned.
     ///
     /// This method returns a `NewInstance`, which is an instance which has
-    /// been created, however it has not yet been initialized -- initialization
-    /// functions that it may have have not been run yet. Use the methods on
-    /// `NewInstance` to run the initialization and return the actual
-    /// `Instance`.
+    /// been created, however it has not yet had the wasm start function called.
+    /// Use the `start` method on `NewInstance` to complete initialization and
+    /// return the `Instance`.
+    ///
+    /// Note that this is a low-level function that just performance an
+    /// instantiation. See the `Linker` struct for an API which provides a
+    /// convenient way to link imports and provides automatic Command and Reactor
+    /// behavior.
     ///
     /// ## Providing Imports
     ///
@@ -135,23 +155,6 @@ impl Instance {
     /// [`ExternType`]: crate::ExternType
     pub fn new(module: &Module, imports: &[Extern]) -> Result<NewInstance, Error> {
         let store = module.store();
-
-        // For now we have a restriction that the `Store` that we're working
-        // with is the same for everything involved here.
-        for import in imports {
-            if !import.comes_from_same_store(store) {
-                bail!("cross-`Store` instantiation is not currently supported");
-            }
-        }
-
-        if imports.len() != module.imports().len() {
-            bail!(
-                "wrong number of imports provided, {} != {}",
-                imports.len(),
-                module.imports().len()
-            );
-        }
-
         let info = module.register_frame_info();
         let handle = instantiate(
             store,
@@ -240,14 +243,13 @@ pub struct NewInstance {
 }
 
 impl NewInstance {
-    /// Run the instance's wasm start function (and not Command/Reactor initialization).
+    /// Run the instance's wasm start function.
     ///
-    /// This is public as it's used by the C API, which doesn't expose the `NewInstance`
-    /// type and needs a way to internally run initialization on a plain `Instance`.
-    #[doc(hidden)]
-    pub fn start(self) -> Result<Instance> {
-        let start_func = self.instance.handle.module().start_func;
+    /// Note that this does not run the Reactor `_initialize` function. Users
+    /// of this API should call that explicitly.
+    pub fn start(self) -> Result<Instance, Trap> {
         let instance = self.instance;
+        let start_func = instance.handle.module().start_func;
         let store = instance.store();
 
         // If a start function is present, invoke it. Make sure we use all the
@@ -273,140 +275,4 @@ impl NewInstance {
 
         Ok(instance)
     }
-
-    /// Run the instance's wasm start function and:
-    ///  - If the module is a Command, the `_start` function is run and `None`
-    ///    is returned.
-    ///  - If the module is a Reactor, if an `_initialize` function is present,
-    ///    it is run and the initialized `Instance` is returned.
-    ///
-    /// See [the documentation for Commands and Reactors] for details on the ABI.
-    ///
-    /// If you know you're expecting to run a Command or a Reactor specifically,
-    /// you can use `run_command` or `init_reactor` instead, which offer a
-    /// more streamlined API.
-    ///
-    /// For now, `params` must be an empty slice, and the results will always be empty.
-    /// In the future, this will be extended to support arguments and return values.
-    ///
-    /// [the documentation for Commands and Reactors]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
-    pub fn activate(self, params: &[Val]) -> Result<Activated> {
-        let instance = self.start()?;
-
-        match exec_model(instance)? {
-            ExecModel::Command(func) => Ok(Activated::Command(run_command(func, params)?)),
-            ExecModel::Reactor((maybe_func, instance)) => Ok(Activated::Reactor(init_reactor(
-                maybe_func, params, instance,
-            )?)),
-        }
-    }
-
-    /// Given a Command instance, run it. If the instance is not a Command,
-    /// return an error.
-    ///
-    /// A Command is an instance which is expected to be called only once.
-    /// Accordingly, this function consumes the `Instance`.
-    pub fn run_command(self, params: &[Val]) -> Result<Box<[Val]>> {
-        let instance = self.start()?;
-
-        if let ExecModel::Command(func) = exec_model(instance)? {
-            return run_command(func, params);
-        }
-
-        bail!("`run_command` called on module which is not a command");
-    }
-
-    /// Given a Reactor instance, initialize it. If the instance is not a Reactor,
-    /// return an error.
-    ///
-    /// A Reactor is an instance which is expected to be called any number of
-    /// times. Accordingly, this function returns the initialized `Instance`
-    /// so that its exports can be called.
-    pub fn init_reactor(self, params: &[Val]) -> Result<Instance> {
-        let instance = self.start()?;
-
-        if let ExecModel::Reactor((maybe_func, instance)) = exec_model(instance)? {
-            return init_reactor(maybe_func, params, instance);
-        }
-
-        bail!("`init_reactor` called on module which is not a reactor");
-    }
-}
-
-/// Modules can be interpreted either as Commands (instance lifetime ends
-/// when the start function returns) or Reactor (instance persists).
-enum ExecModel {
-    /// The instance is a Command, and this is its start function. The
-    /// instance should be consumed.
-    Command(Func),
-
-    /// The instance is a Reactor, and this is its initialization function,
-    /// along with the instance itself, which should persist.
-    Reactor((Option<Func>, Instance)),
-}
-
-/// Classify the given instance as either a Command or Reactor and return
-/// the information needed to initialize it.
-fn exec_model(instance: Instance) -> Result<ExecModel> {
-    let command_start = instance.get_export("_start");
-    let reactor_start = instance.get_export("_initialize");
-    match (command_start, reactor_start) {
-        (Some(command_start), None) => {
-            if let Some(func) = command_start.into_func() {
-                Ok(ExecModel::Command(func))
-            } else {
-                bail!("_start must be a function")
-            }
-        }
-        (None, Some(reactor_start)) => {
-            if let Some(func) = reactor_start.into_func() {
-                Ok(ExecModel::Reactor((Some(func), instance)))
-            } else {
-                bail!("_initialize must be a function")
-            }
-        }
-        (None, None) => {
-            // Module declares neither of the recognized functions, so treat
-            // it as a reactor with no initialization function.
-            Ok(ExecModel::Reactor((None, instance)))
-        }
-        (Some(_), Some(_)) => {
-            // Module declares itself to be both a Command and a Reactor.
-            bail!("Program cannot be both a Command and a Reactor")
-        }
-    }
-}
-
-/// The result of a successful `Instance::activate`.
-pub enum Activated {
-    /// The module was a Command; the instance was consumed and this `Activated`
-    /// holds the return values.
-    Command(Box<[Val]>),
-
-    /// The module was a Reactor; this `Activated` holds the instance.
-    Reactor(Instance),
-}
-
-/// Utility for running Commands.
-fn run_command(func: Func, params: &[Val]) -> Result<Box<[Val]>> {
-    if !params.is_empty() {
-        bail!("passing arguments to a Command is not supported yet");
-    }
-
-    func.get0::<()>()?()?;
-
-    return Ok(Vec::new().into_boxed_slice());
-}
-
-/// Utility for initializing Reactors.
-fn init_reactor(maybe_func: Option<Func>, params: &[Val], instance: Instance) -> Result<Instance> {
-    if !params.is_empty() {
-        bail!("passing arguments to a Reactor's `init_reactor` is not supported yet");
-    }
-
-    if let Some(func) = maybe_func {
-        func.get0::<()>()?()?;
-    }
-
-    Ok(instance)
 }

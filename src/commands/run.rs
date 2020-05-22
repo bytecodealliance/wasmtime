@@ -12,7 +12,7 @@ use std::{
 };
 use structopt::{clap::AppSettings, StructOpt};
 use wasi_common::{preopen_dir, WasiCtxBuilder};
-use wasmtime::{Activated, Engine, Instance, Linker, Module, Store, Trap, Val, ValType};
+use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
 use wasmtime_wasi::Wasi;
 
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
@@ -142,24 +142,13 @@ impl RunCommand {
         for (name, path) in self.preloads.iter() {
             // Read the wasm module binary either as `*.wat` or a raw binary
             let module = Module::from_file(linker.store(), path)?;
-            let activated = linker
-                .instantiate(&module)
-                .and_then(|new_instance| new_instance.activate(&[]))
-                .context(format!("failed to instantiate {:?}", path))?;
 
-            // If it was a command, don't register it.
-            let instance = match activated {
-                Activated::Command(_) => continue,
-                Activated::Reactor(instance) => instance,
-            };
-
-            linker.instance(name, &instance).with_context(|| {
-                format!(
-                    "failed to process preload `{}` at `{}`",
-                    name,
-                    path.display()
-                )
-            })?;
+            // Add the module's functions to the linker.
+            linker.module(name, &module).context(format!(
+                "failed to process preload `{}` at `{}`",
+                name,
+                path.display()
+            ))?;
         }
 
         // Load the main wasm module.
@@ -256,36 +245,31 @@ impl RunCommand {
             });
         }
 
-        // Read the wasm module binary either as `*.wat` or a raw binary
+        // Read the wasm module binary either as `*.wat` or a raw binary.
+        // Use "" as a default module name.
         let module = Module::from_file(linker.store(), &self.module)?;
-        let activated = linker
-            .instantiate(&module)
-            .and_then(|new_instance| new_instance.activate(&[]))
+        linker
+            .module("", &module)
             .context(format!("failed to instantiate {:?}", self.module))?;
 
         // If a function to invoke was given, invoke it.
         if let Some(name) = self.invoke.as_ref() {
-            match activated {
-                Activated::Command(_) => {
-                    bail!("Cannot invoke exports on a Command after it has executed")
-                }
-                Activated::Reactor(instance) => self.invoke_export(instance, name),
-            }
+            self.invoke_export(linker, name)
         } else {
-            Ok(())
+            let func = linker.get_default("")?;
+            self.invoke_func(func, None)
         }
     }
 
-    fn invoke_export(&self, instance: Instance, name: &str) -> Result<()> {
-        let func = if let Some(export) = instance.get_export(name) {
-            if let Some(func) = export.into_func() {
-                func
-            } else {
-                bail!("export of `{}` wasn't a function", name)
-            }
-        } else {
-            bail!("failed to find export of `{}` in module", name)
+    fn invoke_export(&self, linker: &Linker, name: &str) -> Result<()> {
+        let func = match linker.get_one_by_name("", name)?.into_func() {
+            Some(func) => func,
+            None => bail!("export of `{}` wasn't a function", name),
         };
+        self.invoke_func(func, Some(name))
+    }
+
+    fn invoke_func(&self, func: Func, name: Option<&str>) -> Result<()> {
         let ty = func.ty();
         if ty.params().len() > 0 {
             eprintln!(
@@ -298,7 +282,13 @@ impl RunCommand {
         for ty in ty.params() {
             let val = match args.next() {
                 Some(s) => s,
-                None => bail!("not enough arguments for `{}`", name),
+                None => {
+                    if let Some(name) = name {
+                        bail!("not enough arguments for `{}`", name)
+                    } else {
+                        bail!("not enough arguments for command default")
+                    }
+                }
             };
             values.push(match ty {
                 // TODO: integer parsing here should handle hexadecimal notation
@@ -314,9 +304,13 @@ impl RunCommand {
 
         // Invoke the function and then afterwards print all the results that came
         // out, if there are any.
-        let results = func
-            .call(&values)
-            .with_context(|| format!("failed to invoke `{}`", name))?;
+        let results = func.call(&values).with_context(|| {
+            if let Some(name) = name {
+                format!("failed to invoke `{}`", name)
+            } else {
+                format!("failed to invoke command default")
+            }
+        })?;
         if !results.is_empty() {
             eprintln!(
                 "warning: using `--invoke` with a function that returns values \

@@ -46,7 +46,7 @@ let wat = r#"
       i32.add))
 "#;
 let module = Module::new(&store, wat)?;
-let instance = Instance::new(&module, &[])?.init_reactor(&[])?;
+let instance = Instance::new(&module, &[])?.start()?;
 let add = instance.get_func("add").unwrap();
 let add = add.get2::<i32, i32, i32>()?;
 println!("1 + 2 = {}", add(1, 2)?);

@@ -892,7 +892,7 @@ impl Store {
     /// let module = Module::new(&store, r#"
     ///     (func (export "run") (loop br 0))
     /// "#)?;
-    /// let instance = Instance::new(&module, &[])?.init_reactor(&[])?;
+    /// let instance = Instance::new(&module, &[])?.start()?;
     /// let run = instance
     ///     .get_func("run")
     ///     .ok_or(anyhow::format_err!("failed to find `run` function export"))?

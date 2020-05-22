@@ -1,8 +1,8 @@
 use crate::{
     Extern, ExternType, Func, FuncType, GlobalType, ImportType, Instance, IntoFunc, Module,
-    NewInstance, Store,
+    NewInstance, Store, Trap,
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::collections::hash_map::{Entry, HashMap};
 use std::rc::Rc;
 
@@ -241,7 +241,7 @@ impl Linker {
     /// // Instantiate a small instance...
     /// let wat = r#"(module (func (export "run") ))"#;
     /// let module = Module::new(&store, wat)?;
-    /// let instance = linker.instantiate(&module)?.init_reactor(&[])?;
+    /// let instance = linker.instantiate(&module)?.start()?;
     ///
     /// // ... and inform the linker that the name of this instance is
     /// // `instance1`. This defines the `instance1::run` name for our next
@@ -268,6 +268,117 @@ impl Linker {
         for export in instance.exports() {
             self.insert(module_name, export.name(), export.into_extern())?;
         }
+        Ok(self)
+    }
+
+    /// Define automatic instantiations of a [`Module`] in this linker.
+    ///
+    /// For a Reactor module, this instantiates the module and adds all its
+    /// exports to the `Linker` as the `instance` method.
+    ///
+    /// For a Command module, this adds exports to the `Linker` which
+    /// instantiate the module each time the exports are called.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the any item is redefined twice in this linker (for
+    /// example the same `module_name` was already defined) and shadowing is
+    /// disallowed, or if `instance` comes from a different [`Store`] than this
+    /// [`Linker`] originally was created with.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// let mut linker = Linker::new(&store);
+    ///
+    /// // Instantiate a small instance and inform the linker that the name of
+    /// // this instance is `instance1`. This defines the `instance1::run` name
+    /// // for our next module to use.
+    /// let wat = r#"(module (func (export "run") ))"#;
+    /// let module = Module::new(&store, wat)?;
+    /// linker.module("instance1", &module)?;
+    ///
+    /// let wat = r#"
+    ///     (module
+    ///         (import "instance1" "run" (func $instance1_run))
+    ///         (func (export "run")
+    ///             call $instance1_run
+    ///         )
+    ///     )
+    /// "#;
+    /// let module = Module::new(&store, wat)?;
+    /// let instance = linker.instantiate(&module)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn module(&mut self, module_name: &str, module: &Module) -> Result<&mut Self> {
+        match ModuleKind::categorize(module)? {
+            ModuleKind::Command => self.command(module_name, module),
+            ModuleKind::Reactor => {
+                let instance = self.instantiate(&module)?.start()?;
+
+                if let Some(export) = instance.get_export("_initialize") {
+                    if let Extern::Func(func) = export {
+                        func.get0::<()>()
+                            .and_then(|f| f().map_err(Into::into))
+                            .context("calling the Reactor initialization function")?;
+                    }
+                }
+
+                self.instance(module_name, &instance)
+            }
+        }
+    }
+
+    fn command(&mut self, module_name: &str, module: &Module) -> Result<&mut Self> {
+        for export in module.exports() {
+            if let Some(func_ty) = export.ty().func() {
+                let imports = self.compute_imports(module)?;
+                let module = module.clone();
+                let export_name = export.name().to_owned();
+                let func = Func::new(&self.store, func_ty.clone(), move |_, params, results| {
+                    let instance = Instance::new(&module, &imports)
+                        .map_err(|error| match error.downcast::<Trap>() {
+                            Ok(trap) => trap,
+                            Err(error) => Trap::new(error.to_string()),
+                        })?
+                        .start()?;
+                    let command_results = instance
+                        .get_export(&export_name)
+                        .unwrap()
+                        .into_func()
+                        .unwrap()
+                        .call(params)
+                        .map_err(|error| error.downcast::<Trap>().unwrap())?;
+                    for (result, command_result) in
+                        results.iter_mut().zip(command_results.into_vec())
+                    {
+                        *result = command_result;
+                    }
+                    Ok(())
+                });
+                self.insert(module_name, export.name(), Extern::Func(func))?;
+            } else if export.name() == "memory" && export.ty().memory().is_some() {
+                // Allow an exported "memory" memory for now.
+            } else if export.name() == "__indirect_function_table" && export.ty().table().is_some()
+            {
+                // Allow an exported "__indirect_function_table" table for now.
+            } else if export.name() == "__data_end" && export.ty().global().is_some() {
+                // Allow an exported "__data_end" memory for compatibility with toolchains
+                // which use --export-dynamic, which unfortunately doesn't work the way
+                // we want it to.
+            } else if export.name() == "__heap_base" && export.ty().global().is_some() {
+                // Allow an exported "__data_end" memory for compatibility with toolchains
+                // which use --export-dynamic, which unfortunately doesn't work the way
+                // we want it to.
+            } else {
+                bail!("command export '{}' is not a function", export.name());
+            }
+        }
+
         Ok(self)
     }
 
@@ -378,7 +489,7 @@ impl Linker {
     ///     )
     /// "#;
     /// let module = Module::new(&store, wat)?;
-    /// linker.instantiate(&module)?.init_reactor(&[])?;
+    /// linker.instantiate(&module)?.start()?;
     /// # Ok(())
     /// # }
     /// ```
@@ -498,5 +609,86 @@ impl Linker {
             bail!("too many items named `{}` in `{}`", name, module);
         }
         Ok(ret.clone())
+    }
+
+    /// Returns the "default export" of a module.
+    ///
+    /// An export with an empty string is considered to be a "default export".
+    /// "_start" is also recognized for compatibility.
+    pub fn get_default(&self, module: &str) -> Result<Func> {
+        let mut items = self.get_by_name(module, "");
+        if let Some(external) = items.next() {
+            if items.next().is_some() {
+                bail!("too many items named `` in `{}`", module);
+            }
+            if let Extern::Func(func) = external {
+                return Ok(func.clone());
+            }
+            bail!("default export in '{}' is not a function", module);
+        }
+
+        // For compatibility, also recognize "_start".
+        let mut items = self.get_by_name(module, "_start");
+        if let Some(external) = items.next() {
+            if items.next().is_some() {
+                bail!("too many items named `_start` in `{}`", module);
+            }
+            if let Extern::Func(func) = external {
+                return Ok(func.clone());
+            }
+            bail!("`_start` in '{}' is not a function", module);
+        }
+
+        // Otherwise return a no-op function.
+        Ok(Func::new(
+            &self.store,
+            FuncType::new(Vec::new().into_boxed_slice(), Vec::new().into_boxed_slice()),
+            move |_, _, _| Ok(()),
+        ))
+    }
+}
+
+/// Modules can be interpreted either as Commands (instance lifetime ends
+/// when the start function returns) or Reactor (instance persists).
+enum ModuleKind {
+    /// The instance is a Command, and this is its start function. The
+    /// instance should be consumed.
+    Command,
+
+    /// The instance is a Reactor, and this is its initialization function,
+    /// along with the instance itself, which should persist.
+    Reactor,
+}
+
+impl ModuleKind {
+    /// Determine whether the given module is a Command or a Reactor.
+    fn categorize(module: &Module) -> Result<ModuleKind> {
+        let command_start = module.get_export("_start");
+        let reactor_start = module.get_export("_initialize");
+        match (command_start, reactor_start) {
+            (Some(command_start), None) => {
+                if let Some(_) = command_start.func() {
+                    Ok(ModuleKind::Command)
+                } else {
+                    bail!("`_start` must be a function")
+                }
+            }
+            (None, Some(reactor_start)) => {
+                if let Some(_) = reactor_start.func() {
+                    Ok(ModuleKind::Reactor)
+                } else {
+                    bail!("`_initialize` must be a function")
+                }
+            }
+            (None, None) => {
+                // Module declares neither of the recognized functions, so treat
+                // it as a reactor with no initialization function.
+                Ok(ModuleKind::Reactor)
+            }
+            (Some(_), Some(_)) => {
+                // Module declares itself to be both a Command and a Reactor.
+                bail!("Program cannot be both a Command and a Reactor")
+            }
+        }
     }
 }

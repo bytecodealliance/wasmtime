@@ -75,7 +75,7 @@ fn interposition() -> Result<()> {
         r#"(module (func (export "export") (result i32) (i32.const 7)))"#,
     )?;
     for _ in 0..4 {
-        let instance = linker.instantiate(&module)?.init_reactor(&[])?;
+        let instance = linker.instantiate(&module)?.start()?;
         linker.define(
             "red",
             "green",
@@ -89,7 +89,7 @@ fn interposition() -> Result<()> {
             )"#,
         )?;
     }
-    let instance = linker.instantiate(&module)?.init_reactor(&[])?;
+    let instance = linker.instantiate(&module)?.start()?;
     let func = instance.get_func("export").unwrap();
     let func = func.get0::<i32>()?;
     assert_eq!(func()?, 112);

@@ -30,7 +30,7 @@ fn main() -> Result<()> {
     // Note that this is where the wasm `start` function, if any, would run.
     println!("Instantiating module...");
     let imports = [hello_func.into()];
-    let instance = Instance::new(&module, &imports)?.init_reactor(&[])?;
+    let instance = Instance::new(&module, &imports)?.start()?;
 
     // Next we poke around a bit to extract the `run` function from the module.
     println!("Extracting export...");

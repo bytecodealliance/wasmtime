@@ -12,7 +12,7 @@ fn main() -> Result<()> {
     // can instantiate it.
     let store = Store::default();
     let module = Module::from_file(&store, "examples/gcd.wat")?;
-    let instance = Instance::new(&module, &[])?.init_reactor(&[])?;
+    let instance = Instance::new(&module, &[])?.start()?;
 
     // Invoke `gcd` export
     let gcd = instance

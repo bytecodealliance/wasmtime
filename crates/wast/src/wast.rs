@@ -84,7 +84,7 @@ impl WastContext {
         let instance = match self
             .linker
             .instantiate(&module)
-            .and_then(|instance| instance.init_reactor(&[]))
+            .and_then(|instance| instance.start().map_err(Into::into))
         {
             Ok(i) => i,
             Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),
