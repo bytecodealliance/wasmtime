@@ -13,16 +13,13 @@ use std::sync::Arc;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
-use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex};
+use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex, SignatureIndex};
 use wasmtime_environ::{
     CacheConfig, CompileError, CompiledFunction, Compiler as _C, ModuleAddressMap,
     ModuleMemoryOffset, ModuleTranslation, ModuleVmctxInfo, Relocation, RelocationTarget,
     Relocations, Traps, Tunables, VMOffsets,
 };
-use wasmtime_runtime::{
-    InstantiationError, SignatureRegistry, VMFunctionBody, VMInterrupts, VMSharedSignatureIndex,
-    VMTrampoline,
-};
+use wasmtime_runtime::{InstantiationError, VMFunctionBody, VMInterrupts, VMTrampoline};
 
 /// Select which kind of compilation to use.
 #[derive(Copy, Clone, Debug)]
@@ -49,7 +46,6 @@ pub enum CompilationStrategy {
 pub struct Compiler {
     isa: Box<dyn TargetIsa>,
     code_memory: CodeMemory,
-    signatures: SignatureRegistry,
     strategy: CompilationStrategy,
     cache_config: CacheConfig,
     tunables: Tunables,
@@ -67,7 +63,6 @@ impl Compiler {
         Self {
             isa,
             code_memory: CodeMemory::new(),
-            signatures: SignatureRegistry::new(),
             strategy,
             cache_config,
             tunables,
@@ -80,8 +75,8 @@ impl Compiler {
 pub struct Compilation {
     pub finished_functions: PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
     pub relocations: Relocations,
-    pub trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
-    pub trampoline_relocations: HashMap<VMSharedSignatureIndex, Vec<Relocation>>,
+    pub trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
+    pub trampoline_relocations: HashMap<SignatureIndex, Vec<Relocation>>,
     pub jt_offsets: PrimaryMap<DefinedFuncIndex, ir::JumpTableOffsets>,
     pub dbg_image: Option<Vec<u8>>,
     pub traps: Traps,
@@ -147,13 +142,9 @@ impl Compiler {
         // guarantees that all functions (including indirect ones through
         // tables) have a trampoline when invoked through the wasmtime API.
         let mut cx = FunctionBuilderContext::new();
-        let mut trampolines = HashMap::new();
+        let mut trampolines = PrimaryMap::new();
         let mut trampoline_relocations = HashMap::new();
-        for sig in translation.module.local.signatures.values() {
-            let index = self.signatures.register(sig);
-            if trampolines.contains_key(&index) {
-                continue;
-            }
+        for (index, sig) in translation.module.local.signatures.iter() {
             let (trampoline, relocations) = make_trampoline(
                 &*self.isa,
                 &mut self.code_memory,
@@ -161,7 +152,7 @@ impl Compiler {
                 sig,
                 std::mem::size_of::<u128>(),
             )?;
-            trampolines.insert(index, trampoline);
+            trampolines.push(trampoline);
 
             // Typically trampolines do not have relocations, so if one does
             // show up be sure to log it in case anyone's listening and there's
@@ -229,11 +220,6 @@ impl Compiler {
     /// Make memory containing compiled code executable.
     pub(crate) fn publish_compiled_code(&mut self) {
         self.code_memory.publish(self.isa.as_ref());
-    }
-
-    /// Shared signature registry.
-    pub fn signatures(&self) -> &SignatureRegistry {
-        &self.signatures
     }
 
     /// Returns whether or not the given address falls within the JIT code

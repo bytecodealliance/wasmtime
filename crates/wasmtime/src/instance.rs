@@ -169,7 +169,7 @@ impl Instance {
             store,
             module.compiled_module(),
             imports,
-            store.compiler().signatures(),
+            &store.signatures(),
             Box::new(info),
         )?;
 

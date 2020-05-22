@@ -22,7 +22,7 @@ pub fn link_module(module: &Module, compilation: &Compilation) {
     for (i, function_relocs) in compilation.trampoline_relocations.iter() {
         for r in function_relocs.iter() {
             println!("tramopline relocation");
-            let body = compilation.trampolines[&i] as *const VMFunctionBody;
+            let body = compilation.trampolines[*i] as *const VMFunctionBody;
             apply_reloc(module, compilation, body, r);
         }
     }

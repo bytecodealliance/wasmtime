@@ -14,7 +14,8 @@ use wasmtime_environ::{CacheConfig, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{
-    debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, VMInterrupts,
+    debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, SignatureRegistry,
+    VMInterrupts,
 };
 
 // Runtime Environment
@@ -730,6 +731,7 @@ pub struct Store {
 pub(crate) struct StoreInner {
     engine: Engine,
     compiler: RefCell<Compiler>,
+    signatures: RefCell<SignatureRegistry>,
     instances: RefCell<Vec<InstanceHandle>>,
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
 }
@@ -755,6 +757,7 @@ impl Store {
             inner: Rc::new(StoreInner {
                 engine: engine.clone(),
                 compiler: RefCell::new(compiler),
+                signatures: RefCell::new(SignatureRegistry::new()),
                 instances: RefCell::new(Vec::new()),
                 signal_handler: RefCell::new(None),
             }),
@@ -781,6 +784,10 @@ impl Store {
 
     pub(crate) fn compiler_mut(&self) -> std::cell::RefMut<'_, Compiler> {
         self.inner.compiler.borrow_mut()
+    }
+
+    pub(crate) fn signatures(&self) -> std::cell::Ref<'_, SignatureRegistry> {
+        self.inner.signatures.borrow()
     }
 
     pub(crate) unsafe fn add_instance(&self, handle: InstanceHandle) -> StoreInstanceHandle {

@@ -24,7 +24,7 @@ use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::VMInterrupts;
 use wasmtime_runtime::{
     GdbJitImageRegistration, InstanceHandle, InstantiationError, RuntimeMemoryCreator,
-    SignatureRegistry, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
+    SignatureRegistry, VMFunctionBody, VMTrampoline,
 };
 
 /// An error condition while setting up a wasm instance, be it validation,
@@ -54,9 +54,8 @@ pub enum SetupError {
 struct RawCompiledModule<'data> {
     module: Module,
     finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
-    trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
+    trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
     data_initializers: Box<[DataInitializer<'data>]>,
-    signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<GdbJitImageRegistration>,
     traps: Traps,
     address_transform: ModuleAddressMap,
@@ -85,18 +84,6 @@ impl<'data> RawCompiledModule<'data> {
 
         link_module(&translation.module, &compilation);
 
-        // Compute indices into the shared signature table.
-        let signatures = {
-            let signature_registry = compiler.signatures();
-            translation
-                .module
-                .local
-                .signatures
-                .values()
-                .map(|sig| signature_registry.register(sig))
-                .collect::<PrimaryMap<_, _>>()
-        };
-
         // Make all code compiled thus far executable.
         compiler.publish_compiled_code();
 
@@ -121,7 +108,6 @@ impl<'data> RawCompiledModule<'data> {
             finished_functions: compilation.finished_functions.into_boxed_slice(),
             trampolines: compilation.trampolines,
             data_initializers: translation.data_initializers.into_boxed_slice(),
-            signatures: signatures.into_boxed_slice(),
             dbg_jit_registration,
             traps: compilation.traps,
             address_transform: compilation.address_transform,
@@ -133,9 +119,8 @@ impl<'data> RawCompiledModule<'data> {
 pub struct CompiledModule {
     module: Arc<Module>,
     finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
-    trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
+    trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
     data_initializers: Box<[OwnedDataInitializer]>,
-    signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
     dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
     traps: Traps,
     address_transform: ModuleAddressMap,
@@ -160,7 +145,6 @@ impl CompiledModule {
                 .map(OwnedDataInitializer::new)
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
-            raw.signatures.clone(),
             raw.dbg_jit_registration,
             raw.traps,
             raw.address_transform,
@@ -172,9 +156,8 @@ impl CompiledModule {
     pub fn from_parts(
         module: Module,
         finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
-        trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
+        trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
         data_initializers: Box<[OwnedDataInitializer]>,
-        signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         dbg_jit_registration: Option<GdbJitImageRegistration>,
         traps: Traps,
         address_transform: ModuleAddressMap,
@@ -185,7 +168,6 @@ impl CompiledModule {
             finished_functions,
             trampolines,
             data_initializers,
-            signatures,
             dbg_jit_registration: dbg_jit_registration.map(Rc::new),
             traps,
             address_transform,
@@ -205,18 +187,33 @@ impl CompiledModule {
     pub unsafe fn instantiate(
         &self,
         resolver: &mut dyn Resolver,
-        sig_registry: &SignatureRegistry,
+        signature_registry: &SignatureRegistry,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
         host_state: Box<dyn Any>,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let imports = resolve_imports(&self.module, &sig_registry, resolver)?;
+        // Compute indices into the shared signature table.
+        let signatures = {
+            self.module
+                .local
+                .signatures
+                .values()
+                .map(|sig| signature_registry.register(sig))
+                .collect::<PrimaryMap<_, _>>()
+        };
+
+        let mut trampolines = HashMap::new();
+        for (i, trampoline) in self.trampolines.iter() {
+            trampolines.insert(signatures[i], trampoline.clone());
+        }
+
+        let imports = resolve_imports(&self.module, signature_registry, resolver)?;
         InstanceHandle::new(
             Arc::clone(&self.module),
             self.finished_functions.clone(),
-            self.trampolines.clone(),
+            trampolines,
             imports,
             mem_creator,
-            self.signatures.clone(),
+            signatures.into_boxed_slice(),
             self.dbg_jit_registration.as_ref().map(|r| Rc::clone(&r)),
             host_state,
             self.interrupts.clone(),

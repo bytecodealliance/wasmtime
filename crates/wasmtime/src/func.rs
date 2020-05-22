@@ -481,7 +481,6 @@ impl Func {
         let sig = self
             .instance
             .store
-            .compiler()
             .signatures()
             .lookup(self.export.signature)
             .expect("failed to lookup signature");
@@ -497,7 +496,6 @@ impl Func {
         let sig = self
             .instance
             .store
-            .compiler()
             .signatures()
             .lookup(self.export.signature)
             .expect("failed to lookup signature");
@@ -509,7 +507,6 @@ impl Func {
         let sig = self
             .instance
             .store
-            .compiler()
             .signatures()
             .lookup(self.export.signature)
             .expect("failed to lookup signature");

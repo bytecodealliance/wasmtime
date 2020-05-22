@@ -32,7 +32,7 @@ pub(crate) fn create_handle(
         .local
         .signatures
         .values()
-        .map(|sig| store.compiler().signatures().register(sig))
+        .map(|sig| store.signatures().register(sig))
         .collect::<PrimaryMap<_, _>>();
 
     unsafe {
