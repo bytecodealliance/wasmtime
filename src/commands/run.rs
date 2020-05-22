@@ -95,7 +95,7 @@ pub struct RunCommand {
     #[structopt(
         long = "preload",
         number_of_values = 1,
-        value_name = "NAME::MODULE_PATH",
+        value_name = "NAME=MODULE_PATH",
         parse(try_from_str = parse_preloads)
     )]
     preloads: Vec<(String, PathBuf)>,
