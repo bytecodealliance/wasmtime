@@ -78,6 +78,26 @@ pub extern "C" fn wasmtime_f32_nearest(x: f32) -> f32 {
     }
 }
 
+/// Implementation of i64.udiv
+pub extern "C" fn wasmtime_i64_udiv(x: u64, y: u64) -> u64 {
+    x / y
+}
+
+/// Implementation of i64.sdiv
+pub extern "C" fn wasmtime_i64_sdiv(x: i64, y: i64) -> i64 {
+    x / y
+}
+
+/// Implementation of i64.urem
+pub extern "C" fn wasmtime_i64_urem(x: u64, y: u64) -> u64 {
+    x % y
+}
+
+/// Implementation of i64.srem
+pub extern "C" fn wasmtime_i64_srem(x: i64, y: i64) -> i64 {
+    x % y
+}
+
 /// Implementation of f64.ceil
 pub extern "C" fn wasmtime_f64_ceil(x: f64) -> f64 {
     x.ceil()

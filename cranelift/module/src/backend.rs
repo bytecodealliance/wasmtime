@@ -179,6 +179,10 @@ where
 pub fn default_libcall_names() -> Box<dyn Fn(ir::LibCall) -> String> {
     Box::new(move |libcall| match libcall {
         ir::LibCall::Probestack => "__cranelift_probestack".to_owned(),
+        ir::LibCall::UdivI64 => "__udivdi3".to_owned(),
+        ir::LibCall::SdivI64 => "__divdi3".to_owned(),
+        ir::LibCall::UremI64 => "__umoddi3".to_owned(),
+        ir::LibCall::SremI64 => "__moddi3".to_owned(),
         ir::LibCall::CeilF32 => "ceilf".to_owned(),
         ir::LibCall::CeilF64 => "ceil".to_owned(),
         ir::LibCall::FloorF32 => "floorf".to_owned(),

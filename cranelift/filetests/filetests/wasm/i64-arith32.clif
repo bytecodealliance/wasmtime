@@ -1,0 +1,31 @@
+; Test basic code generation for i64 arithmetic WebAssembly instructions
+; on 32-bit platforms.
+test compile
+
+target i686 baseline
+
+; Binary operations.
+
+function %i64_div_s(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = sdiv v0, v1
+    return v2
+}
+
+function %i64_div_u(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = udiv v0, v1
+    return v2
+}
+
+function %i64_rem_s(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = srem v0, v1
+    return v2
+}
+
+function %i64_rem_u(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = urem v0, v1
+    return v2
+}

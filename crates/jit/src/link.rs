@@ -46,6 +46,10 @@ fn apply_reloc(
         RelocationTarget::LibCall(libcall) => {
             use cranelift_codegen::ir::LibCall::*;
             match libcall {
+                UdivI64 => wasmtime_i64_udiv as usize,
+                SdivI64 => wasmtime_i64_sdiv as usize,
+                UremI64 => wasmtime_i64_urem as usize,
+                SremI64 => wasmtime_i64_srem as usize,
                 CeilF32 => wasmtime_f32_ceil as usize,
                 FloorF32 => wasmtime_f32_floor as usize,
                 TruncF32 => wasmtime_f32_trunc as usize,
