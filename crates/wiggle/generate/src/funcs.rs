@@ -24,7 +24,8 @@ pub fn define_func(
     });
 
     let abi_args = quote!(
-            ctx: &#ctx_type, memory: &dyn #rt::GuestMemory,
+            ctx: &#ctx_type,
+            memory: &dyn #rt::GuestMemory,
             #(#params),*
     );
     let abi_ret = if let Some(ret) = &coretype.ret {

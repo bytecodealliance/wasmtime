@@ -40,6 +40,7 @@ impl From<wiggle::GuestError> for Errno {
             InFunc { .. } => Self::Inval,
             InDataField { .. } => Self::Inval,
             SliceLengthsDiffer { .. } => Self::Fault,
+            BorrowCheckerOutOfHandles { .. } => Self::Fault,
         }
     }
 }

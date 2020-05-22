@@ -75,8 +75,8 @@ impl ReduceExcusesExcercise {
     }
 
     pub fn test(&self) {
-        let mut ctx = WasiCtx::new();
-        let mut host_memory = HostMemory::new();
+        let ctx = WasiCtx::new();
+        let host_memory = HostMemory::new();
 
         // Populate memory with pointers to generated Excuse values
         for (&excuse, ptr) in self.excuse_values.iter().zip(self.excuse_ptr_locs.iter()) {
@@ -98,8 +98,8 @@ impl ReduceExcusesExcercise {
         }
 
         let res = arrays::reduce_excuses(
-            &mut ctx,
-            &mut host_memory,
+            &ctx,
+            &host_memory,
             self.array_ptr_loc.ptr as i32,
             self.excuse_ptr_locs.len() as i32,
             self.return_ptr_loc.ptr as i32,
