@@ -3,6 +3,7 @@
 //! `CompiledModule` to allow compiling and instantiating to be done as separate
 //! steps.
 
+use crate::code_memory::CodeMemory;
 use crate::compiler::Compiler;
 use crate::imports::resolve_imports;
 use crate::link::link_module;
@@ -52,6 +53,7 @@ pub enum SetupError {
 /// This is similar to `CompiledModule`, but references the data initializers
 /// from the wasm buffer rather than holding its own copy.
 struct RawCompiledModule<'data> {
+    code_memory: CodeMemory,
     module: Module,
     finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
     trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
@@ -85,7 +87,8 @@ impl<'data> RawCompiledModule<'data> {
         link_module(&translation.module, &compilation);
 
         // Make all code compiled thus far executable.
-        compiler.publish_compiled_code();
+        let mut code_memory = compilation.code_memory;
+        code_memory.publish(compiler.isa());
 
         // Initialize profiler and load the wasm module
         profiler.module_load(
@@ -104,6 +107,7 @@ impl<'data> RawCompiledModule<'data> {
         };
 
         Ok(Self {
+            code_memory,
             module: translation.module,
             finished_functions: compilation.finished_functions.into_boxed_slice(),
             trampolines: compilation.trampolines,
@@ -117,6 +121,7 @@ impl<'data> RawCompiledModule<'data> {
 
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
+    code_memory: CodeMemory,
     module: Arc<Module>,
     finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
     trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
@@ -137,6 +142,7 @@ impl CompiledModule {
         let raw = RawCompiledModule::<'data>::new(compiler, data, profiler)?;
 
         Ok(Self::from_parts(
+            raw.code_memory,
             raw.module,
             raw.finished_functions,
             raw.trampolines,
@@ -154,6 +160,7 @@ impl CompiledModule {
 
     /// Construct a `CompiledModule` from component parts.
     pub fn from_parts(
+        code_memory: CodeMemory,
         module: Module,
         finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
         trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
@@ -164,6 +171,7 @@ impl CompiledModule {
         interrupts: Arc<VMInterrupts>,
     ) -> Self {
         Self {
+            code_memory,
             module: Arc::new(module),
             finished_functions,
             trampolines,
@@ -259,6 +267,11 @@ impl CompiledModule {
     /// Returns a map of compiled addresses back to original bytecode offsets.
     pub fn address_transform(&self) -> &ModuleAddressMap {
         &self.address_transform
+    }
+
+    /// Returns all ranges convered by JIT code.
+    pub fn jit_code_ranges<'a>(&'a self) -> impl Iterator<Item = (usize, usize)> + 'a {
+        self.code_memory.published_ranges()
     }
 }
 

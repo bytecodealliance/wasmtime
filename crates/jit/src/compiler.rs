@@ -45,7 +45,6 @@ pub enum CompilationStrategy {
 /// TODO: Consider using cranelift-module.
 pub struct Compiler {
     isa: Box<dyn TargetIsa>,
-    code_memory: CodeMemory,
     strategy: CompilationStrategy,
     cache_config: CacheConfig,
     tunables: Tunables,
@@ -62,7 +61,6 @@ impl Compiler {
     ) -> Self {
         Self {
             isa,
-            code_memory: CodeMemory::new(),
             strategy,
             cache_config,
             tunables,
@@ -73,6 +71,7 @@ impl Compiler {
 
 #[allow(missing_docs)]
 pub struct Compilation {
+    pub code_memory: CodeMemory,
     pub finished_functions: PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
     pub relocations: Relocations,
     pub trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
@@ -84,6 +83,11 @@ pub struct Compilation {
 }
 
 impl Compiler {
+    /// Return the isa.
+    pub fn isa(&self) -> &dyn TargetIsa {
+        self.isa.as_ref()
+    }
+
     /// Return the target's frontend configuration settings.
     pub fn frontend_config(&self) -> TargetFrontendConfig {
         self.isa.frontend_config()
@@ -105,6 +109,8 @@ impl Compiler {
         translation: &ModuleTranslation,
         debug_data: Option<DebugInfoData>,
     ) -> Result<Compilation, SetupError> {
+        let mut code_memory = CodeMemory::new();
+
         let (compilation, relocations, address_transform, value_ranges, stack_slots, traps) =
             match self.strategy {
                 // For now, interpret `Auto` as `Cranelift` since that's the most stable
@@ -130,7 +136,7 @@ impl Compiler {
         // Allocate all of the compiled functions into executable memory,
         // copying over their contents.
         let finished_functions =
-            allocate_functions(&mut self.code_memory, &compilation).map_err(|message| {
+            allocate_functions(&mut code_memory, &compilation).map_err(|message| {
                 SetupError::Instantiate(InstantiationError::Resource(format!(
                     "failed to allocate memory for functions: {}",
                     message
@@ -147,7 +153,7 @@ impl Compiler {
         for (index, sig) in translation.module.local.signatures.iter() {
             let (trampoline, relocations) = make_trampoline(
                 &*self.isa,
-                &mut self.code_memory,
+                &mut code_memory,
                 &mut cx,
                 sig,
                 std::mem::size_of::<u128>(),
@@ -206,6 +212,7 @@ impl Compiler {
         let jt_offsets = compilation.get_jt_offsets();
 
         Ok(Compilation {
+            code_memory,
             finished_functions,
             relocations,
             trampolines,
@@ -215,17 +222,6 @@ impl Compiler {
             traps,
             address_transform,
         })
-    }
-
-    /// Make memory containing compiled code executable.
-    pub(crate) fn publish_compiled_code(&mut self) {
-        self.code_memory.publish(self.isa.as_ref());
-    }
-
-    /// Returns whether or not the given address falls within the JIT code
-    /// managed by the compiler
-    pub fn is_in_jit_code(&self, addr: usize) -> bool {
-        self.code_memory.published_contains(addr)
     }
 }
 

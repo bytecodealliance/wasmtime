@@ -22,10 +22,10 @@ impl CodeMemoryEntry {
         Ok(Self { mmap, registry })
     }
 
-    fn contains(&self, addr: usize) -> bool {
+    fn range(&self) -> (usize, usize) {
         let start = self.mmap.as_ptr() as usize;
         let end = start + self.mmap.len();
-        start <= addr && addr < end
+        (start, end)
     }
 }
 
@@ -243,11 +243,10 @@ impl CodeMemory {
         Ok(())
     }
 
-    /// Returns whether any published segment of this code memory contains
-    /// `addr`.
-    pub fn published_contains(&self, addr: usize) -> bool {
+    /// Returns all published segment ranges.
+    pub fn published_ranges<'a>(&'a self) -> impl Iterator<Item = (usize, usize)> + 'a {
         self.entries[..self.published]
             .iter()
-            .any(|entry| entry.contains(addr))
+            .map(|entry| entry.range())
     }
 }

@@ -1,5 +1,5 @@
 use crate::frame_info::GlobalFrameInfoRegistration;
-use crate::runtime::Store;
+use crate::runtime::{JitCodeRegistration, Store};
 use crate::types::{EntityType, ExportType, ImportType};
 use anyhow::{Error, Result};
 use std::path::Path;
@@ -82,6 +82,8 @@ struct ModuleInner {
     store: Store,
     compiled: CompiledModule,
     frame_info_registration: Mutex<Option<Option<Arc<GlobalFrameInfoRegistration>>>>,
+    #[allow(dead_code)]
+    jit_code_registration: JitCodeRegistration,
 }
 
 impl Module {
@@ -311,11 +313,14 @@ impl Module {
             &*store.engine().config().profiler,
         )?;
 
+        let jit_code_registration = store.register_jit_code(compiled.jit_code_ranges());
+
         Ok(Module {
             inner: Arc::new(ModuleInner {
                 store: store.clone(),
                 compiled,
                 frame_info_registration: Mutex::new(None),
+                jit_code_registration,
             }),
         })
     }

@@ -3,6 +3,7 @@ use crate::trampoline::{MemoryCreatorProxy, StoreInstanceHandle};
 use anyhow::{bail, Result};
 use std::cell::RefCell;
 use std::cmp;
+use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::fmt;
 use std::path::Path;
@@ -734,6 +735,19 @@ pub(crate) struct StoreInner {
     signatures: RefCell<SignatureRegistry>,
     instances: RefCell<Vec<InstanceHandle>>,
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
+    jit_code_ranges: RefCell<Vec<(usize, usize)>>,
+}
+
+pub(crate) struct JitCodeRegistration {
+    inner: Rc<StoreInner>,
+    ends: HashSet<usize>,
+}
+
+impl Drop for JitCodeRegistration {
+    fn drop(&mut self) {
+        let mut jit_code_ranges = self.inner.jit_code_ranges.borrow_mut();
+        jit_code_ranges.retain(|(_, end)| self.ends.contains(end));
+    }
 }
 
 impl Store {
@@ -760,6 +774,7 @@ impl Store {
                 signatures: RefCell::new(SignatureRegistry::new()),
                 instances: RefCell::new(Vec::new()),
                 signal_handler: RefCell::new(None),
+                jit_code_ranges: RefCell::new(Vec::new()),
             }),
         }
     }
@@ -788,6 +803,33 @@ impl Store {
 
     pub(crate) fn signatures(&self) -> std::cell::Ref<'_, SignatureRegistry> {
         self.inner.signatures.borrow()
+    }
+
+    /// Returns whether or not the given address falls within the JIT code
+    /// managed by the compiler
+    pub(crate) fn is_in_jit_code(&self, addr: usize) -> bool {
+        self.inner
+            .jit_code_ranges
+            .borrow()
+            .iter()
+            .find(|(start, end)| *start <= addr && addr < *end)
+            .is_some()
+    }
+
+    pub(crate) fn register_jit_code(
+        &self,
+        ranges: impl Iterator<Item = (usize, usize)>,
+    ) -> JitCodeRegistration {
+        let mut ends = HashSet::new();
+        let mut jit_code_ranges = self.inner.jit_code_ranges.borrow_mut();
+        for (start, end) in ranges {
+            jit_code_ranges.push((start, end));
+            ends.insert(end);
+        }
+        JitCodeRegistration {
+            inner: self.inner.clone(),
+            ends,
+        }
     }
 
     pub(crate) unsafe fn add_instance(&self, handle: InstanceHandle) -> StoreInstanceHandle {

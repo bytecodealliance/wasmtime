@@ -740,7 +740,7 @@ pub(crate) fn catch_traps(
         wasmtime_runtime::catch_traps(
             vmctx,
             store.engine().config().max_wasm_stack,
-            |addr| store.compiler().is_in_jit_code(addr),
+            |addr| store.is_in_jit_code(addr),
             signalhandler.as_deref(),
             closure,
         )
