@@ -72,30 +72,30 @@ int main() {
   if (wasi == NULL)
     exit_with_error("failed to instantiate WASI", NULL, trap);
 
-  // Create import list for our module using wasi
-  wasm_importtype_vec_t import_types;
-  wasm_module_imports(module, &import_types);
-  const wasm_extern_t **imports = calloc(import_types.size, sizeof(void*));
-  assert(imports);
-  for (int i = 0; i < import_types.size; i++) {
-    const wasm_extern_t *binding = wasi_instance_bind_import(wasi, import_types.data[i]);
-    if (binding != NULL) {
-      imports[i] = binding;
-    } else {
-      printf("> Failed to satisfy import\n");
-      exit(1);
-    }
-  }
+  wasmtime_linker_t *linker = wasmtime_linker_new(store);
+  error = wasmtime_linker_define_wasi(linker, wasi);
+  if (error != NULL)
+    exit_with_error("failed to link wasi", error, NULL);
 
   // Instantiate the module
+  wasm_name_t empty;
+  wasm_name_new_from_string(&empty, "");
   wasm_instance_t *instance = NULL;
-  error = wasmtime_instance_new(module, imports, import_types.size, &instance, &trap);
-  if (instance == NULL)
-    exit_with_error("failed to run command", error, trap);
-  free(imports);
-  wasm_importtype_vec_delete(&import_types);
+  error = wasmtime_linker_module(linker, &empty, module);
+  if (error != NULL)
+    exit_with_error("failed to instantiate module", error, NULL);
+
+  // Run it.
+  wasm_func_t* func;
+  wasmtime_linker_get_default(linker, &empty, &func);
+  if (error != NULL)
+    exit_with_error("failed to locate default export for module", error, NULL);
+  error = wasmtime_func_call(func, NULL, 0, NULL, 0, &trap);
+  if (error != NULL)
+    exit_with_error("error calling default export", error, trap);
 
   // Clean up after ourselves at this point
+  wasm_name_delete(&empty);
   wasm_module_delete(module);
   wasm_store_delete(store);
   wasm_engine_delete(engine);
