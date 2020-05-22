@@ -3,9 +3,31 @@ set opt_level=speed_and_size
 set is_pic
 target x86_64 haswell
 
-; check the unwind information with a function with no args
-function %no_args() windows_fastcall {
+; check the unwind information with a leaf function with no args
+function %no_args_leaf() windows_fastcall {
 block0:
+    return
+}
+; sameln:                version: 1
+; nextln:                  flags: 0
+; nextln:          prologue size: 4
+; nextln:         frame register: 5
+; nextln:  frame register offset: 0
+; nextln:           unwind codes: 2
+; nextln:  
+; nextln:                 offset: 1
+; nextln:                     op: PushNonvolatileRegister
+; nextln:                   info: 5
+; nextln:  
+; nextln:                 offset: 4
+; nextln:                     op: SetFramePointer
+; nextln:                   info: 0
+
+; check the unwind information with a non-leaf function with no args
+function %no_args() windows_fastcall {
+    fn0 = %foo()
+block0:
+    call fn0()
     return
 }
 ; sameln:                version: 1
@@ -51,7 +73,7 @@ block0:
 ; nextln:                offset: 17
 ; nextln:                    op: LargeStackAlloc
 ; nextln:                  info: 0
-; nextln:                 value: 12504 (u16)
+; nextln:                 value: 12500 (u16)
 
 ; check a function with large-sized stack alloc
 function %large_stack() windows_fastcall {
@@ -77,7 +99,7 @@ block0:
 ; nextln:                 offset: 17
 ; nextln:                     op: LargeStackAlloc
 ; nextln:                   info: 1
-; nextln:                  value: 524320 (u32)
+; nextln:                  value: 524288 (u32)
 
 function %fpr_with_function_call(i64, i64) windows_fastcall {
     fn0 = %foo(f64, f64, i64, i64, i64) windows_fastcall;
@@ -113,9 +135,9 @@ block0(v0: i64, v1: i64):
 ;
 ; sameln:                version: 1
 ; nextln:                  flags: 0 
-; nextln:          prologue size: 25
+; nextln:          prologue size: 22
 ; nextln:         frame register: 5
-; nextln:  frame register offset: 12
+; nextln:  frame register offset: 2
 ; nextln:           unwind codes: 5
 ; nextln:  
 ; nextln:                 offset: 1
@@ -135,10 +157,10 @@ block0(v0: i64, v1: i64):
 ; nextln:                   info: 0
 ; nextln:                  value: 23 (u16)
 ; nextln:  
-; nextln:                 offset: 25
+; nextln:                 offset: 22
 ; nextln:                     op: SaveXmm128
 ; nextln:                   info: 15
-; nextln:                  value: 3 (u16)
+; nextln:                  value: 0 (u16)
 
 ; check a function that has CSRs
 function %lots_of_registers(i64, i64) windows_fastcall {
@@ -191,9 +213,9 @@ block0(v0: i64, v1: i64):
 }
 ; sameln:                version: 1
 ; nextln:                  flags: 0
-; nextln:          prologue size: 41
+; nextln:          prologue size: 35
 ; nextln:         frame register: 5
-; nextln:  frame register offset: 10
+; nextln:  frame register offset: 7
 ; nextln:           unwind codes: 13
 ; nextln:  
 ; nextln:                 offset: 1
@@ -234,19 +256,19 @@ block0(v0: i64, v1: i64):
 ; nextln:  
 ; nextln:                 offset: 19
 ; nextln:                     op: SmallStackAlloc
-; nextln:                   info: 12
+; nextln:                   info: 8
 ; nextln:  
-; nextln:                 offset: 31
+; nextln:                 offset: 24
 ; nextln:                     op: SaveXmm128
 ; nextln:                   info: 6
-; nextln:                  value: 0 (u16)
+; nextln:                  value: 2 (u16)
 ; nextln:  
-; nextln:                 offset: 36
+; nextln:                 offset: 29
 ; nextln:                     op: SaveXmm128
 ; nextln:                   info: 7
 ; nextln:                  value: 1 (u16)
 ; nextln:  
-; nextln:                 offset: 41
+; nextln:                 offset: 35
 ; nextln:                     op: SaveXmm128
 ; nextln:                   info: 8
-; nextln:                  value: 2 (u16)
+; nextln:                  value: 0 (u16)
