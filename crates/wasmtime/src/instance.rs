@@ -43,8 +43,8 @@ fn instantiate(
     }
 
     let mut resolver = SimpleResolver { imports };
-    unsafe {
-        let config = store.engine().config();
+    let config = store.engine().config();
+    let instance = unsafe {
         let instance = compiled_module.instantiate(
             &mut resolver,
             sig_registry,
@@ -72,8 +72,33 @@ fn instantiate(
                 }
             })?;
 
-        Ok(instance)
+        instance
+    };
+
+    let start_func = instance.handle.module().start_func;
+
+    // If a start function is present, invoke it. Make sure we use all the
+    // trap-handling configuration in `store` as well.
+    if let Some(start) = start_func {
+        let f = match instance
+            .handle
+            .lookup_by_declaration(&EntityIndex::Function(start))
+        {
+            wasmtime_runtime::Export::Function(f) => f,
+            _ => unreachable!(), // valid modules shouldn't hit this
+        };
+        let vmctx_ptr = instance.handle.vmctx_ptr();
+        unsafe {
+            super::func::catch_traps(vmctx_ptr, store, || {
+                mem::transmute::<
+                    *const VMFunctionBody,
+                    unsafe extern "C" fn(*mut VMContext, *mut VMContext),
+                >(f.address)(f.vmctx, vmctx_ptr)
+            })?;
+        }
     }
+
+    Ok(instance)
 }
 
 /// An instantiated WebAssembly module.
@@ -109,10 +134,9 @@ impl Instance {
     /// automatically run (if provided) and then the [`Instance`] will be
     /// returned.
     ///
-    /// This method returns a `NewInstance`, which is an instance which has
-    /// been created, however it has not yet had the wasm start function called.
-    /// Use the `start` method on `NewInstance` to complete initialization and
-    /// return the `Instance`.
+    /// Per the WebAssembly spec, instantiation includes running the module's
+    /// start function, if it has one (not to be confused with the `_start`
+    /// function, which is not run).
     ///
     /// Note that this is a low-level function that just performance an
     /// instantiation. See the `Linker` struct for an API which provides a
@@ -153,7 +177,7 @@ impl Instance {
     /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     /// [`ExternType`]: crate::ExternType
-    pub fn new(module: &Module, imports: &[Extern]) -> Result<NewInstance, Error> {
+    pub fn new(module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
         let store = module.store();
         let info = module.register_frame_info();
         let handle = instantiate(
@@ -164,11 +188,9 @@ impl Instance {
             Box::new(info),
         )?;
 
-        Ok(NewInstance {
-            instance: Instance {
-                handle,
-                module: module.clone(),
-            },
+        Ok(Instance {
+            handle,
+            module: module.clone(),
         })
     }
 
@@ -232,47 +254,5 @@ impl Instance {
     /// it wasn't a global.
     pub fn get_global(&self, name: &str) -> Option<Global> {
         self.get_export(name)?.into_global()
-    }
-}
-
-/// A newly created instance which has not yet been initialized. These are
-/// returned by `Instance::new`. Its methods consume the `NewInstance`,
-/// perform initialization, and return the `Instance`.
-pub struct NewInstance {
-    instance: Instance,
-}
-
-impl NewInstance {
-    /// Run the instance's wasm start function.
-    ///
-    /// Note that this does not run the Reactor `_initialize` function. Users
-    /// of this API should call that explicitly.
-    pub fn start(self) -> Result<Instance, Trap> {
-        let instance = self.instance;
-        let start_func = instance.handle.module().start_func;
-        let store = instance.store();
-
-        // If a start function is present, invoke it. Make sure we use all the
-        // trap-handling configuration in `store` as well.
-        if let Some(start) = start_func {
-            let f = match instance
-                .handle
-                .lookup_by_declaration(&EntityIndex::Function(start))
-            {
-                wasmtime_runtime::Export::Function(f) => f,
-                _ => unreachable!(), // valid modules shouldn't hit this
-            };
-            let vmctx_ptr = instance.handle.vmctx_ptr();
-            unsafe {
-                super::func::catch_traps(vmctx_ptr, store, || {
-                    mem::transmute::<
-                        *const VMFunctionBody,
-                        unsafe extern "C" fn(*mut VMContext, *mut VMContext),
-                    >(f.address)(f.vmctx, vmctx_ptr)
-                })?;
-            }
-        }
-
-        Ok(instance)
     }
 }

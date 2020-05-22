@@ -13,12 +13,6 @@ Unreleased
 
 [Commands and Reactors ABI]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
 
-### Changed
-
-* The wasm start function call is now separated out from `Instance::new`. `Instance::new`
-  now returns a `NewInstance`, call `.start` to run the wasm start function and return
-  the initialized `Instance`.
-
 ### Fixed
 
 --------------------------------------------------------------------------------

@@ -14,7 +14,7 @@ fn main() -> Result<()> {
     // instance from the compiled module all in one go.
     let wasmtime_store = Store::default();
     let module = Module::from_file(&wasmtime_store, "examples/memory.wat")?;
-    let instance = Instance::new(&module, &[])?.start()?;
+    let instance = Instance::new(&module, &[])?;
 
     // Load up our exports from the instance
     let memory = instance

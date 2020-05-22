@@ -41,7 +41,7 @@ fn same_import_names_still_distinct() -> anyhow::Result<()> {
         )
         .into(),
     ];
-    let instance = Instance::new(&module, &imports)?.start()?;
+    let instance = Instance::new(&module, &imports)?;
 
     let func = instance.get_func("foo").unwrap();
     let results = func.call(&[])?;

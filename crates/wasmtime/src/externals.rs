@@ -665,7 +665,7 @@ impl Memory {
     /// let memory = Memory::new(&store, memory_ty);
     ///
     /// let module = Module::new(&store, "(module (memory (import \"\" \"\") 1))")?;
-    /// let instance = Instance::new(&module, &[memory.into()])?.start()?;
+    /// let instance = Instance::new(&module, &[memory.into()])?;
     /// // ...
     /// # Ok(())
     /// # }
@@ -688,7 +688,7 @@ impl Memory {
     /// # fn main() -> anyhow::Result<()> {
     /// let store = Store::default();
     /// let module = Module::new(&store, "(module (memory (export \"mem\") 1))")?;
-    /// let instance = Instance::new(&module, &[])?.start()?;
+    /// let instance = Instance::new(&module, &[])?;
     /// let memory = instance.get_memory("mem").unwrap();
     /// let ty = memory.ty();
     /// assert_eq!(ty.limits().min(), 1);
@@ -800,7 +800,7 @@ impl Memory {
     /// # fn main() -> anyhow::Result<()> {
     /// let store = Store::default();
     /// let module = Module::new(&store, "(module (memory (export \"mem\") 1 2))")?;
-    /// let instance = Instance::new(&module, &[])?.start()?;
+    /// let instance = Instance::new(&module, &[])?;
     /// let memory = instance.get_memory("mem").unwrap();
     ///
     /// assert_eq!(memory.size(), 1);

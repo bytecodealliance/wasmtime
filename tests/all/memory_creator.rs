@@ -150,7 +150,7 @@ mod not_for_windows {
             )
         "#,
         )?;
-        Instance::new(&module, &[])?.start()?;
+        Instance::new(&module, &[])?;
 
         assert_eq!(*mem_creator.num_created_memories.lock().unwrap(), 1);
 
@@ -171,8 +171,8 @@ mod not_for_windows {
         "#,
         )?;
 
-        let instance1 = Instance::new(&module, &[])?.start()?;
-        let instance2 = Instance::new(&module, &[])?.start()?;
+        let instance1 = Instance::new(&module, &[])?;
+        let instance2 = Instance::new(&module, &[])?;
 
         assert_eq!(*mem_creator.num_created_memories.lock().unwrap(), 2);
 

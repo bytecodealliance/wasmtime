@@ -3,7 +3,7 @@ use crate::{wasm_store_t, wasmtime_error_t, ExternHost};
 use anyhow::Result;
 use std::cell::RefCell;
 use std::ptr;
-use wasmtime::{Extern, HostRef, Instance, NewInstance, Store, Trap};
+use wasmtime::{Extern, HostRef, Instance, Store, Trap};
 
 #[repr(C)]
 #[derive(Clone)]
@@ -115,16 +115,13 @@ fn _wasmtime_instance_new(
 }
 
 pub fn handle_instantiate(
-    instance: Result<NewInstance>,
+    instance: Result<Instance>,
     instance_ptr: &mut *mut wasm_instance_t,
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
     fn write<T>(ptr: &mut *mut T, val: T) {
         *ptr = Box::into_raw(Box::new(val))
     }
-
-    // Run the wasm start function.
-    let instance = instance.and_then(|new_instance| new_instance.start().map_err(Into::into));
 
     match instance {
         Ok(instance) => {

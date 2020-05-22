@@ -81,11 +81,7 @@ impl WastContext {
     fn instantiate(&mut self, module: &[u8]) -> Result<Outcome<Instance>> {
         let module = Module::new(&self.store, module)?;
         self.modules.push(module.clone());
-        let instance = match self
-            .linker
-            .instantiate(&module)
-            .and_then(|instance| instance.start().map_err(Into::into))
-        {
+        let instance = match self.linker.instantiate(&module) {
             Ok(i) => i,
             Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),
         };

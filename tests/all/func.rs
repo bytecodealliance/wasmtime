@@ -200,7 +200,6 @@ fn trap_import() -> Result<()> {
         &module,
         &[Func::wrap(&store, || -> Result<(), Trap> { Err(Trap::new("foo")) }).into()],
     )
-    .and_then(|new_instance| new_instance.start().map_err(Into::into))
     .err()
     .unwrap()
     .downcast::<Trap>()?;
@@ -273,7 +272,7 @@ fn get_from_module() -> anyhow::Result<()> {
 
         "#,
     )?;
-    let instance = Instance::new(&module, &[])?.start()?;
+    let instance = Instance::new(&module, &[])?;
     let f0 = instance.get_func("f0").unwrap();
     assert!(f0.get0::<()>().is_ok());
     assert!(f0.get0::<i32>().is_err());

@@ -1,6 +1,6 @@
 use crate::{
-    Extern, ExternType, Func, FuncType, GlobalType, ImportType, Instance, IntoFunc, Module,
-    NewInstance, Store, Trap,
+    Extern, ExternType, Func, FuncType, GlobalType, ImportType, Instance, IntoFunc, Module, Store,
+    Trap,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use std::collections::hash_map::{Entry, HashMap};
@@ -241,7 +241,7 @@ impl Linker {
     /// // Instantiate a small instance...
     /// let wat = r#"(module (func (export "run") ))"#;
     /// let module = Module::new(&store, wat)?;
-    /// let instance = linker.instantiate(&module)?.start()?;
+    /// let instance = linker.instantiate(&module)?;
     ///
     /// // ... and inform the linker that the name of this instance is
     /// // `instance1`. This defines the `instance1::run` name for our next
@@ -318,7 +318,7 @@ impl Linker {
         match ModuleKind::categorize(module)? {
             ModuleKind::Command => self.command(module_name, module),
             ModuleKind::Reactor => {
-                let instance = self.instantiate(&module)?.start()?;
+                let instance = self.instantiate(&module)?;
 
                 if let Some(export) = instance.get_export("_initialize") {
                     if let Extern::Func(func) = export {
@@ -340,12 +340,12 @@ impl Linker {
                 let module = module.clone();
                 let export_name = export.name().to_owned();
                 let func = Func::new(&self.store, func_ty.clone(), move |_, params, results| {
-                    let instance = Instance::new(&module, &imports)
-                        .map_err(|error| match error.downcast::<Trap>() {
-                            Ok(trap) => trap,
-                            Err(error) => Trap::new(error.to_string()),
-                        })?
-                        .start()?;
+                    let instance = Instance::new(&module, &imports).map_err(|error| match error
+                        .downcast::<Trap>()
+                    {
+                        Ok(trap) => trap,
+                        Err(error) => Trap::new(error.to_string()),
+                    })?;
                     let command_results = instance
                         .get_export(&export_name)
                         .unwrap()
@@ -462,11 +462,9 @@ impl Linker {
     /// incorrect signature or if it was not prevoiusly defined then an error
     /// will be returned because the import can not be satisfied.
     ///
-    /// This method returns a `NewInstance`, which is an instance which has
-    /// been created, however it has not yet been initialized -- wasm and WASI
-    /// initialization functions that it may have have not been run yet. Use
-    /// the methods on `NewInstance` to run the initialization and return the
-    /// actual `Instance`.
+    /// Per the WebAssembly spec, instantiation includes running the module's
+    /// start function, if it has one (not to be confused with the `_start`
+    /// function, which is not run).
     ///
     /// # Errors
     ///
@@ -489,11 +487,11 @@ impl Linker {
     ///     )
     /// "#;
     /// let module = Module::new(&store, wat)?;
-    /// linker.instantiate(&module)?.start()?;
+    /// linker.instantiate(&module)?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn instantiate(&self, module: &Module) -> Result<NewInstance> {
+    pub fn instantiate(&self, module: &Module) -> Result<Instance> {
         let imports = self.compute_imports(module)?;
 
         Instance::new(module, &imports)

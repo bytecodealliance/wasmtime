@@ -26,7 +26,7 @@ fn hugely_recursive_module(store: &Store) -> anyhow::Result<Module> {
 fn loops_interruptable() -> anyhow::Result<()> {
     let store = interruptable_store();
     let module = Module::new(&store, r#"(func (export "loop") (loop br 0))"#)?;
-    let instance = Instance::new(&module, &[])?.start()?;
+    let instance = Instance::new(&module, &[])?;
     let iloop = instance.get_func("loop").unwrap().get0::<()>()?;
     store.interrupt_handle()?.interrupt();
     let trap = iloop().unwrap_err();
@@ -39,7 +39,7 @@ fn functions_interruptable() -> anyhow::Result<()> {
     let store = interruptable_store();
     let module = hugely_recursive_module(&store)?;
     let func = Func::wrap(&store, || {});
-    let instance = Instance::new(&module, &[func.into()])?.start()?;
+    let instance = Instance::new(&module, &[func.into()])?;
     let iloop = instance.get_func("loop").unwrap().get0::<()>()?;
     store.interrupt_handle()?.interrupt();
     let trap = iloop().unwrap_err();
@@ -73,7 +73,7 @@ fn loop_interrupt_from_afar() -> anyhow::Result<()> {
     let func = Func::wrap(&store, || {
         HITS.fetch_add(1, SeqCst);
     });
-    let instance = Instance::new(&module, &[func.into()])?.start()?;
+    let instance = Instance::new(&module, &[func.into()])?;
 
     // Use the instance's interrupt handle to wait for it to enter the loop long
     // enough and then we signal an interrupt happens.
@@ -109,7 +109,7 @@ fn function_interrupt_from_afar() -> anyhow::Result<()> {
     let func = Func::wrap(&store, || {
         HITS.fetch_add(1, SeqCst);
     });
-    let instance = Instance::new(&module, &[func.into()])?.start()?;
+    let instance = Instance::new(&module, &[func.into()])?;
 
     // Use the instance's interrupt handle to wait for it to enter the loop long
     // enough and then we signal an interrupt happens.
