@@ -158,17 +158,18 @@ pub fn differential_execution(
         // aren't caught during validation or compilation. For example, an imported
         // table might not have room for an element segment that we want to
         // initialize into it.
-        let instance =
-            match Instance::new(&module, &imports).and_then(|new_instance| new_instance.start()) {
-                Ok(instance) => instance,
-                Err(e) => {
-                    eprintln!(
-                        "Warning: failed to instantiate `wasm-opt -ttf` module: {}",
-                        e
-                    );
-                    continue;
-                }
-            };
+        let instance = match Instance::new(&module, &imports)
+            .and_then(|new_instance| new_instance.start().map_err(Into::into))
+        {
+            Ok(instance) => instance,
+            Err(e) => {
+                eprintln!(
+                    "Warning: failed to instantiate `wasm-opt -ttf` module: {}",
+                    e
+                );
+                continue;
+            }
+        };
 
         for (name, f) in instance.exports().filter_map(|e| {
             let name = e.name();
@@ -339,8 +340,8 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 // aren't caught during validation or compilation. For example, an imported
                 // table might not have room for an element segment that we want to
                 // initialize into it.
-                if let Ok(instance) =
-                    Instance::new(&module, &imports).and_then(|new_instance| new_instance.start())
+                if let Ok(instance) = Instance::new(&module, &imports)
+                    .and_then(|new_instance| new_instance.start().map_err(Into::into))
                 {
                     instances.insert(id, instance);
                 }
