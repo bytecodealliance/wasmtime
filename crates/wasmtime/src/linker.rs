@@ -273,11 +273,22 @@ impl Linker {
 
     /// Define automatic instantiations of a [`Module`] in this linker.
     ///
-    /// For a Reactor module, this instantiates the module and adds all its
-    /// exports to the `Linker` as the `instance` method.
+    /// This automatically handles [Commands and Reactors] instantiation and
+    /// initialization.
     ///
-    /// For a Command module, this adds exports to the `Linker` which
-    /// instantiate the module each time the exports are called.
+    /// Exported functions of a Command module may be called directly, however
+    /// instead of having a single instance which is reused for each call,
+    /// each call creates a new instance, which lives for the duration of the
+    /// call. The imports of the Command are resolved once, and reused for
+    /// each instantiation.
+    ///
+    /// For Reactors, a single instance is created, and an initialization
+    /// function is called, and then its exports may be called.
+    ///
+    /// Ordinary modules which don't declare themselves to be either Commands
+    /// or Reactors are treated as Reactors without any initialization calls.
+    ///
+    /// [Commands and Reactors]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
     ///
     /// # Errors
     ///
