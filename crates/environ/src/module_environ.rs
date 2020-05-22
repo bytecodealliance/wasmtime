@@ -7,7 +7,7 @@ use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
     self, translate_module, DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex,
     Memory, MemoryIndex, ModuleTranslationState, SignatureIndex, Table, TableIndex,
-    TargetEnvironment, WasmError, WasmResult,
+    TargetEnvironment, WasmError, WasmFuncType, WasmResult,
 };
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -106,7 +106,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         Ok(())
     }
 
-    fn declare_signature(&mut self, sig: ir::Signature) -> WasmResult<()> {
+    fn declare_signature(&mut self, _wasm: &WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
         let sig = translate_signature(sig, self.pointer_type());
         // TODO: Deduplicate signatures.
         self.result.module.local.signatures.push(sig);

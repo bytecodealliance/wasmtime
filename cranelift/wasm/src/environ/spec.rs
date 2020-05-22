@@ -22,6 +22,13 @@ use thiserror::Error;
 use wasmparser::BinaryReaderError;
 use wasmparser::Operator;
 
+// Re-export `wasmparser`'s function and value types so that consumers can
+// associate this the original Wasm signature with each compiled function. This
+// is often necessary because while each Wasm signature gets compiled down into
+// a single native signature, multiple Wasm signatures might compile down into
+// the same native signature.
+pub use wasmparser::{FuncType as WasmFuncType, Type as WasmType};
+
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
 pub enum GlobalVariable {
@@ -472,7 +479,11 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
     }
 
     /// Declares a function signature to the environment.
-    fn declare_signature(&mut self, sig: ir::Signature) -> WasmResult<()>;
+    fn declare_signature(
+        &mut self,
+        wasm_func_type: &WasmFuncType,
+        sig: ir::Signature,
+    ) -> WasmResult<()>;
 
     /// Provides the number of imports up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.

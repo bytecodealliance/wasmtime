@@ -6,7 +6,8 @@
 //! [Wasmtime]: https://github.com/bytecodealliance/wasmtime
 
 use crate::environ::{
-    FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, TargetEnvironment, WasmResult,
+    FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, TargetEnvironment,
+    WasmFuncType, WasmResult,
 };
 use crate::func_translator::FuncTranslator;
 use crate::state::ModuleTranslationState;
@@ -534,7 +535,7 @@ impl TargetEnvironment for DummyEnvironment {
 }
 
 impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
-    fn declare_signature(&mut self, sig: ir::Signature) -> WasmResult<()> {
+    fn declare_signature(&mut self, _wasm: &WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
         self.info.signatures.push(sig);
         Ok(())
     }
