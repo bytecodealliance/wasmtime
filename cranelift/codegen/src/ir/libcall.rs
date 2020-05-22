@@ -24,6 +24,14 @@ pub enum LibCall {
     /// probe for stack overflow. These are emitted for functions which need
     /// when the `enable_probestack` setting is true.
     Probestack,
+    /// udiv.i64
+    UdivI64,
+    /// sdiv.i64
+    SdivI64,
+    /// urem.i64
+    UremI64,
+    /// srem.i64
+    SremI64,
     /// ceil.f32
     CeilF32,
     /// ceil.f64
@@ -63,6 +71,10 @@ impl FromStr for LibCall {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "Probestack" => Ok(Self::Probestack),
+            "UdivI64" => Ok(Self::UdivI64),
+            "SdivI64" => Ok(Self::SdivI64),
+            "UremI64" => Ok(Self::UremI64),
+            "SremI64" => Ok(Self::SremI64),
             "CeilF32" => Ok(Self::CeilF32),
             "CeilF64" => Ok(Self::CeilF64),
             "FloorF32" => Ok(Self::FloorF32),
@@ -88,6 +100,13 @@ impl LibCall {
     /// Returns `None` if no well-known library routine name exists for that instruction.
     pub fn for_inst(opcode: Opcode, ctrl_type: Type) -> Option<Self> {
         Some(match ctrl_type {
+            types::I64 => match opcode {
+                Opcode::Udiv => Self::UdivI64,
+                Opcode::Sdiv => Self::SdivI64,
+                Opcode::Urem => Self::UremI64,
+                Opcode::Srem => Self::SremI64,
+                _ => return None,
+            },
             types::F32 => match opcode {
                 Opcode::Ceil => Self::CeilF32,
                 Opcode::Floor => Self::FloorF32,
