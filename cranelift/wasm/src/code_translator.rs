@@ -1565,6 +1565,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I32x4WidenHighI16x8U { .. } => {
             return Err(wasm_unsupported!("proposed SIMD operator {:?}", op));
         }
+
+        Operator::ReturnCall { .. } | Operator::ReturnCallIndirect { .. } => {
+            return Err(wasm_unsupported!("proposed tail-call operator {:?}", op));
+        }
     };
     Ok(())
 }

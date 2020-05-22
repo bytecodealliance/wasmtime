@@ -83,6 +83,7 @@ impl Config {
                     enable_bulk_memory: false,
                     enable_simd: false,
                     enable_multi_value: true,
+                    enable_tail_call: false,
                 },
             },
             flags,
