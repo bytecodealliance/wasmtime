@@ -344,7 +344,7 @@ impl Linker {
     ///         (func (export "_start")
     ///             (global.set $counter (i32.add (global.get $counter) (i32.const 1)))
     ///         )
-    ///         (func (export "read_counter")
+    ///         (func (export "read_counter") (result i32)
     ///             (global.get $counter)
     ///         )
     ///     )
@@ -359,7 +359,7 @@ impl Linker {
     /// let wat = r#"
     ///     (module
     ///         (import "commander" "_start" (func $commander_start))
-    ///         (import "commander" "read_counter" (func $commander_read_counter))
+    ///         (import "commander" "read_counter" (func $commander_read_counter (result i32)))
     ///         (func (export "run") (result i32)
     ///             call $commander_start
     ///             call $commander_start
@@ -371,7 +371,7 @@ impl Linker {
     /// let module = Module::new(&store, wat)?;
     /// linker.module("", &module)?;
     /// let count = linker.get_one_by_name("", "run")?.into_func().unwrap().get0::<i32>()?()?;
-    /// assert_eq!(count, 1, "a Command should get a fresh instance on each invocation");
+    /// assert_eq!(count, 0, "a Command should get a fresh instance on each invocation");
     ///
     /// # Ok(())
     /// # }
