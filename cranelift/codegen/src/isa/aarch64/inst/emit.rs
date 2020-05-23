@@ -85,12 +85,12 @@ pub fn u64_constant(bits: u64) -> ConstantData {
 // Instructions and subcomponents: emission
 
 fn machreg_to_gpr(m: Reg) -> u32 {
-    assert!(m.get_class() == RegClass::I64);
+    assert_eq!(m.get_class(), RegClass::I64);
     u32::try_from(m.to_real_reg().get_hw_encoding()).unwrap()
 }
 
 fn machreg_to_vec(m: Reg) -> u32 {
-    assert!(m.get_class() == RegClass::V128);
+    assert_eq!(m.get_class(), RegClass::V128);
     u32::try_from(m.to_real_reg().get_hw_encoding()).unwrap()
 }
 
@@ -948,6 +948,44 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_fpurrr(top22, rd, rn, rm));
             }
+            &Inst::FpuRRI { fpu_op, rd, rn } => match fpu_op {
+                FPUOpRI::UShr32(imm) => {
+                    debug_assert_eq!(32, imm.lane_size_in_bits);
+                    sink.put4(
+                        0b0_0_1_011110_0000000_00_0_0_0_1_00000_00000
+                            | imm.enc() << 16
+                            | machreg_to_vec(rn) << 5
+                            | machreg_to_vec(rd.to_reg()),
+                    )
+                }
+                FPUOpRI::UShr64(imm) => {
+                    debug_assert_eq!(64, imm.lane_size_in_bits);
+                    sink.put4(
+                        0b01_1_111110_0000000_00_0_0_0_1_00000_00000
+                            | imm.enc() << 16
+                            | machreg_to_vec(rn) << 5
+                            | machreg_to_vec(rd.to_reg()),
+                    )
+                }
+                FPUOpRI::Sli64(imm) => {
+                    debug_assert_eq!(64, imm.lane_size_in_bits);
+                    sink.put4(
+                        0b01_1_111110_0000000_010101_00000_00000
+                            | imm.enc() << 16
+                            | machreg_to_vec(rn) << 5
+                            | machreg_to_vec(rd.to_reg()),
+                    )
+                }
+                FPUOpRI::Sli32(imm) => {
+                    debug_assert_eq!(32, imm.lane_size_in_bits);
+                    sink.put4(
+                        0b0_0_1_011110_0000000_010101_00000_00000
+                            | imm.enc() << 16
+                            | machreg_to_vec(rn) << 5
+                            | machreg_to_vec(rd.to_reg()),
+                    )
+                }
+            },
             &Inst::FpuRRRR {
                 fpu_op,
                 rd,

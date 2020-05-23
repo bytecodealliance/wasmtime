@@ -106,6 +106,85 @@ impl SImm7Scaled {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct FPULeftShiftImm {
+    pub amount: u8,
+    pub lane_size_in_bits: u8,
+}
+
+impl FPULeftShiftImm {
+    pub fn maybe_from_u8(amount: u8, lane_size_in_bits: u8) -> Option<Self> {
+        debug_assert!(lane_size_in_bits == 32 || lane_size_in_bits == 64);
+        if amount < lane_size_in_bits {
+            Some(Self {
+                amount,
+                lane_size_in_bits,
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn enc(&self) -> u32 {
+        debug_assert!(self.lane_size_in_bits.is_power_of_two());
+        debug_assert!(self.lane_size_in_bits > self.amount);
+        // The encoding of the immediate follows the table below,
+        // where xs encode the shift amount.
+        //
+        // | lane_size_in_bits | encoding |
+        // +------------------------------+
+        // | 8                 | 0001xxx  |
+        // | 16                | 001xxxx  |
+        // | 32                | 01xxxxx  |
+        // | 64                | 1xxxxxx  |
+        //
+        // The highest one bit is represented by `lane_size_in_bits`. Since
+        // `lane_size_in_bits` is a power of 2 and `amount` is less
+        // than `lane_size_in_bits`, they can be ORed
+        // together to produced the encoded value.
+        u32::from(self.lane_size_in_bits | self.amount)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct FPURightShiftImm {
+    pub amount: u8,
+    pub lane_size_in_bits: u8,
+}
+
+impl FPURightShiftImm {
+    pub fn maybe_from_u8(amount: u8, lane_size_in_bits: u8) -> Option<Self> {
+        debug_assert!(lane_size_in_bits == 32 || lane_size_in_bits == 64);
+        if amount > 0 && amount <= lane_size_in_bits {
+            Some(Self {
+                amount,
+                lane_size_in_bits,
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn enc(&self) -> u32 {
+        debug_assert_ne!(0, self.amount);
+        // The encoding of the immediate follows the table below,
+        // where xs encodes the negated shift amount.
+        //
+        // | lane_size_in_bits | encoding |
+        // +------------------------------+
+        // | 8                 | 0001xxx  |
+        // | 16                | 001xxxx  |
+        // | 32                | 01xxxxx  |
+        // | 64                | 1xxxxxx  |
+        //
+        // The shift amount is negated such that a shift ammount
+        // of 1 (in 64-bit) is encoded as 0b111111 and a shift
+        // amount of 64 is encoded as 0b000000,
+        // in the bottom 6 bits.
+        u32::from((self.lane_size_in_bits * 2) - self.amount)
+    }
+}
+
 /// a 9-bit signed offset.
 #[derive(Clone, Copy, Debug)]
 pub struct SImm9 {
@@ -573,6 +652,18 @@ impl ShowWithRRU for Imm12 {
 impl ShowWithRRU for SImm7Scaled {
     fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
         format!("#{}", self.value)
+    }
+}
+
+impl ShowWithRRU for FPULeftShiftImm {
+    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+        format!("#{}", self.amount)
+    }
+}
+
+impl ShowWithRRU for FPURightShiftImm {
+    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+        format!("#{}", self.amount)
     }
 }
 

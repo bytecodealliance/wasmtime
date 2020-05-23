@@ -1460,54 +1460,38 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Fcopysign => {
             // Copy the sign bit from inputs[1] to inputs[0]. We use the following sequence:
             //
-            // (64 bits for example, 32-bit sequence is analogous):
+            // This is a scalar Fcopysign.
+            // This uses scalar NEON operations for 64-bit and vector operations (2S) for 32-bit.
             //
-            // MOV Xtmp1, Dinput0
-            // MOV Xtmp2, Dinput1
-            // AND Xtmp2, 0x8000_0000_0000_0000
-            // BIC Xtmp1, 0x8000_0000_0000_0000
-            // ORR Xtmp1, Xtmp1, Xtmp2
-            // MOV Doutput, Xtmp1
+            //  mov vd, vn
+            //  ushr vtmp, vm, #63 / #31
+            //  sli vd, vtmp, #63 / #31
 
             let ty = ctx.output_ty(insn, 0);
-            let bits = ty_bits(ty);
+            let bits = ty_bits(ty) as u8;
             assert!(bits == 32 || bits == 64);
             let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
             let rm = input_to_reg(ctx, inputs[1], NarrowValueMode::None);
             let rd = output_to_reg(ctx, outputs[0]);
-            let tmp1 = ctx.alloc_tmp(RegClass::I64, I64);
-            let tmp2 = ctx.alloc_tmp(RegClass::I64, I64);
-            ctx.emit(Inst::MovFromVec64 { rd: tmp1, rn: rn });
-            ctx.emit(Inst::MovFromVec64 { rd: tmp2, rn: rm });
-            let imml = if bits == 32 {
-                ImmLogic::maybe_from_u64(0x8000_0000, I32).unwrap()
-            } else {
-                ImmLogic::maybe_from_u64(0x8000_0000_0000_0000, I64).unwrap()
-            };
-            let alu_op = choose_32_64(ty, ALUOp::And32, ALUOp::And64);
-            ctx.emit(Inst::AluRRImmLogic {
-                alu_op,
-                rd: tmp2,
-                rn: tmp2.to_reg(),
-                imml: imml.clone(),
+            let tmp = ctx.alloc_tmp(RegClass::V128, F64);
+
+            // Copy LHS to rd.
+            ctx.emit(Inst::FpuMove64 { rd, rn });
+
+            // Copy the sign bit to the lowest bit in tmp.
+            let imm = FPURightShiftImm::maybe_from_u8(bits - 1, bits).unwrap();
+            ctx.emit(Inst::FpuRRI {
+                fpu_op: choose_32_64(ty, FPUOpRI::UShr32(imm), FPUOpRI::UShr64(imm)),
+                rd: tmp,
+                rn: rm,
             });
-            let alu_op = choose_32_64(ty, ALUOp::AndNot32, ALUOp::AndNot64);
-            ctx.emit(Inst::AluRRImmLogic {
-                alu_op,
-                rd: tmp1,
-                rn: tmp1.to_reg(),
-                imml,
-            });
-            let alu_op = choose_32_64(ty, ALUOp::Orr32, ALUOp::Orr64);
-            ctx.emit(Inst::AluRRR {
-                alu_op,
-                rd: tmp1,
-                rn: tmp1.to_reg(),
-                rm: tmp2.to_reg(),
-            });
-            ctx.emit(Inst::MovToVec64 {
+
+            // Insert the bit from tmp into the sign bit of rd.
+            let imm = FPULeftShiftImm::maybe_from_u8(bits - 1, bits).unwrap();
+            ctx.emit(Inst::FpuRRI {
+                fpu_op: choose_32_64(ty, FPUOpRI::Sli32(imm), FPUOpRI::Sli64(imm)),
                 rd,
-                rn: tmp1.to_reg(),
+                rn: tmp.to_reg(),
             });
         }
 
