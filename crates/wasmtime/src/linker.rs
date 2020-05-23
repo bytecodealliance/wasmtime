@@ -407,7 +407,7 @@ impl Linker {
                         .downcast::<Trap>()
                     {
                         Ok(trap) => trap,
-                        Err(error) => Trap::new(error.to_string()),
+                        Err(error) => Trap::new(format!("{:?}", error)),
                     })?;
 
                     // `unwrap()` everything here because we know the instance contains a
