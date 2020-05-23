@@ -205,6 +205,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
 
             // Still working on implementing these. See #929.
             ("reference_types", "table_copy_on_imported_tables") => return false,
+            ("reference_types", "externref_id_function") => return false,
             ("reference_types", _) => return true,
 
             _ => {}

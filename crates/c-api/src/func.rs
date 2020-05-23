@@ -71,7 +71,7 @@ impl wasm_func_t {
     }
 
     fn externref(&self) -> wasmtime::ExternRef {
-        self.func().externref()
+        self.func().clone().into()
     }
 }
 
@@ -90,7 +90,7 @@ fn create_function(
     ty: &wasm_functype_t,
     func: impl Fn(Caller<'_>, *const wasm_val_t, *mut wasm_val_t) -> Option<Box<wasm_trap_t>> + 'static,
 ) -> Box<wasm_func_t> {
-    let store = &store.store.borrow();
+    let store = &store.store;
     let ty = ty.ty().ty.clone();
     let func = Func::new(store, ty, move |caller, params, results| {
         let params = params
@@ -107,7 +107,7 @@ fn create_function(
         }
         Ok(())
     });
-    Box::new(HostRef::new(func).into())
+    Box::new(HostRef::new(store, func).into())
 }
 
 #[no_mangle]
@@ -182,7 +182,7 @@ pub unsafe extern "C" fn wasm_func_call(
         &mut trap,
     );
     match error {
-        Some(err) => Box::into_raw(err.to_trap()),
+        Some(err) => Box::into_raw(err.to_trap(&wasm_func.ext.externref().store().unwrap())),
         None => trap,
     }
 }
@@ -210,6 +210,7 @@ fn _wasmtime_func_call(
     results: &mut [wasm_val_t],
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
+    let store = &func.ext.externref().store().unwrap();
     let func = func.func().borrow();
     if results.len() != func.result_arity() {
         return Some(Box::new(anyhow!("wrong number of results provided").into()));
@@ -230,7 +231,7 @@ fn _wasmtime_func_call(
         }
         Ok(Err(trap)) => match trap.downcast::<Trap>() {
             Ok(trap) => {
-                *trap_ptr = Box::into_raw(Box::new(wasm_trap_t::new(trap)));
+                *trap_ptr = Box::into_raw(Box::new(wasm_trap_t::new(store, trap)));
                 None
             }
             Err(err) => Some(Box::new(err.into())),
@@ -243,7 +244,7 @@ fn _wasmtime_func_call(
             } else {
                 Trap::new("rust panic happened")
             };
-            let trap = Box::new(wasm_trap_t::new(trap));
+            let trap = Box::new(wasm_trap_t::new(store, trap));
             *trap_ptr = Box::into_raw(trap);
             None
         }
@@ -277,11 +278,12 @@ pub unsafe extern "C" fn wasmtime_caller_export_get(
 ) -> Option<Box<wasm_extern_t>> {
     let name = str::from_utf8(name.as_slice()).ok()?;
     let export = caller.caller.get_export(name)?;
+    let store = caller.caller.store();
     let which = match export {
-        Extern::Func(f) => ExternHost::Func(HostRef::new(f)),
-        Extern::Global(g) => ExternHost::Global(HostRef::new(g)),
-        Extern::Memory(m) => ExternHost::Memory(HostRef::new(m)),
-        Extern::Table(t) => ExternHost::Table(HostRef::new(t)),
+        Extern::Func(f) => ExternHost::Func(HostRef::new(&store, f)),
+        Extern::Global(g) => ExternHost::Global(HostRef::new(&store, g)),
+        Extern::Memory(m) => ExternHost::Memory(HostRef::new(&store, m)),
+        Extern::Table(t) => ExternHost::Table(HostRef::new(&store, t)),
     };
     Some(Box::new(wasm_extern_t { which }))
 }

@@ -92,6 +92,13 @@ impl<'data> TargetEnvironment for ModuleEnvironment<'data> {
     fn target_config(&self) -> TargetFrontendConfig {
         self.result.target_config
     }
+
+    fn reference_type(&self) -> ir::Type {
+        // For now, the only reference types we support are `externref`, which
+        // don't require tracing GC and stack maps. So we just use the target's
+        // pointer type. This will have to change once we move to tracing GC.
+        self.pointer_type()
+    }
 }
 
 /// This trait is useful for `translate_module` because it tells how to translate
@@ -106,10 +113,14 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         Ok(())
     }
 
-    fn declare_signature(&mut self, _wasm: &WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
+    fn declare_signature(&mut self, wasm: &WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
         let sig = translate_signature(sig, self.pointer_type());
         // TODO: Deduplicate signatures.
-        self.result.module.local.signatures.push(sig);
+        self.result
+            .module
+            .local
+            .signatures
+            .push((wasm.clone(), sig));
         Ok(())
     }
 

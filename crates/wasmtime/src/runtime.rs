@@ -1,8 +1,11 @@
 use crate::externals::MemoryCreator;
+use crate::r#ref::ExternRef;
 use crate::trampoline::{MemoryCreatorProxy, StoreInstanceHandle};
 use anyhow::{bail, Result};
+use std::any::Any;
 use std::cell::RefCell;
 use std::cmp;
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
 use std::path::Path;
@@ -14,7 +17,7 @@ use wasmtime_environ::{CacheConfig, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{
-    debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, VMInterrupts,
+    debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, VMExternRef, VMInterrupts,
 };
 
 // Runtime Environment
@@ -733,6 +736,7 @@ pub(crate) struct StoreInner {
     compiler: RefCell<Compiler>,
     instances: RefCell<Vec<InstanceHandle>>,
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
+    host_info: RefCell<HashMap<VMExternRef, Rc<RefCell<dyn Any>>>>,
 }
 
 impl Store {
@@ -758,6 +762,7 @@ impl Store {
                 compiler: RefCell::new(compiler),
                 instances: RefCell::new(Vec::new()),
                 signal_handler: RefCell::new(None),
+                host_info: RefCell::new(HashMap::new()),
             }),
         }
     }
@@ -807,6 +812,37 @@ impl Store {
 
     pub(crate) fn weak(&self) -> Weak<StoreInner> {
         Rc::downgrade(&self.inner)
+    }
+
+    pub(crate) fn upgrade(weak: &Weak<StoreInner>) -> Option<Self> {
+        let inner = weak.upgrade()?;
+        Some(Self { inner })
+    }
+
+    pub(crate) fn host_info(&self, externref: &ExternRef) -> Option<Rc<RefCell<dyn Any>>> {
+        debug_assert!(
+            std::rc::Weak::ptr_eq(&self.weak(), &externref.store),
+            "externref must be from this store"
+        );
+        let infos = self.inner.host_info.borrow();
+        infos.get(&externref.inner).cloned()
+    }
+
+    pub(crate) fn set_host_info(
+        &self,
+        externref: &ExternRef,
+        info: Option<Rc<RefCell<dyn Any>>>,
+    ) -> Option<Rc<RefCell<dyn Any>>> {
+        debug_assert!(
+            std::rc::Weak::ptr_eq(&self.weak(), &externref.store),
+            "externref must be from this store"
+        );
+        let mut infos = self.inner.host_info.borrow_mut();
+        if let Some(info) = info {
+            infos.insert(externref.inner.clone(), info)
+        } else {
+            infos.remove(&externref.inner)
+        }
     }
 
     pub(crate) fn signal_handler(&self) -> std::cell::Ref<'_, Option<Box<SignalHandler<'static>>>> {

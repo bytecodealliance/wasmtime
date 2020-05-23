@@ -1,7 +1,7 @@
 use crate::{handle_result, wasm_func_t, wasm_ref_t, wasmtime_error_t};
 use crate::{wasm_extern_t, wasm_store_t, wasm_tabletype_t, ExternHost};
 use std::ptr;
-use wasmtime::{ExternRef, HostRef, Table, Val};
+use wasmtime::{HostRef, Table, Val};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -29,7 +29,7 @@ impl wasm_table_t {
     }
 
     fn externref(&self) -> wasmtime::ExternRef {
-        self.table().externref()
+        self.table().clone().into()
     }
 }
 
@@ -41,12 +41,12 @@ pub extern "C" fn wasm_table_new(
 ) -> Option<Box<wasm_table_t>> {
     let init: Val = match init {
         Some(init) => init.r.into(),
-        None => Val::ExternRef(ExternRef::Null),
+        None => Val::ExternRef(None),
     };
-    let table = Table::new(&store.store.borrow(), tt.ty().ty.clone(), init).ok()?;
+    let table = Table::new(&store.store, tt.ty().ty.clone(), init).ok()?;
     Some(Box::new(wasm_table_t {
         ext: wasm_extern_t {
-            which: ExternHost::Table(HostRef::new(table)),
+            which: ExternHost::Table(HostRef::new(&store.store, table)),
         },
     }))
 }
@@ -60,14 +60,14 @@ pub extern "C" fn wasmtime_funcref_table_new(
 ) -> Option<Box<wasmtime_error_t>> {
     let init: Val = match init {
         Some(val) => Val::FuncRef(val.func().borrow().clone()),
-        None => Val::ExternRef(ExternRef::Null),
+        None => Val::ExternRef(None),
     };
     handle_result(
-        Table::new(&store.store.borrow(), tt.ty().ty.clone(), init),
+        Table::new(&store.store, tt.ty().ty.clone(), init),
         |table| {
             *out = Box::into_raw(Box::new(wasm_table_t {
                 ext: wasm_extern_t {
-                    which: ExternHost::Table(HostRef::new(table)),
+                    which: ExternHost::Table(HostRef::new(&store.store, table)),
                 },
             }));
         },
@@ -84,7 +84,7 @@ pub extern "C" fn wasm_table_type(t: &wasm_table_t) -> Box<wasm_tabletype_t> {
 pub extern "C" fn wasm_table_get(t: &wasm_table_t, index: wasm_table_size_t) -> *mut wasm_ref_t {
     match t.table().borrow().get(index) {
         Some(val) => into_funcref(val),
-        None => into_funcref(Val::ExternRef(ExternRef::Null)),
+        None => into_funcref(Val::ExternRef(None)),
     }
 }
 
@@ -98,8 +98,14 @@ pub extern "C" fn wasmtime_funcref_table_get(
         Some(val) => {
             *ptr = match val {
                 // TODO: what do do about creating new `HostRef` handles here?
-                Val::FuncRef(f) => Box::into_raw(Box::new(HostRef::new(f).into())),
-                Val::ExternRef(ExternRef::Null) => ptr::null_mut(),
+                Val::FuncRef(f) => {
+                    let store = match t.table().as_ref().store() {
+                        None => return false,
+                        Some(store) => store,
+                    };
+                    Box::into_raw(Box::new(HostRef::new(&store, f).into()))
+                }
+                Val::ExternRef(None) => ptr::null_mut(),
                 _ => return false,
             };
         }
@@ -127,13 +133,13 @@ pub extern "C" fn wasmtime_funcref_table_set(
 ) -> Option<Box<wasmtime_error_t>> {
     let val = match val {
         Some(val) => Val::FuncRef(val.func().borrow().clone()),
-        None => Val::ExternRef(ExternRef::Null),
+        None => Val::ExternRef(None),
     };
     handle_result(t.table().borrow().set(index, val), |()| {})
 }
 
 fn into_funcref(val: Val) -> *mut wasm_ref_t {
-    if let Val::ExternRef(ExternRef::Null) = val {
+    if let Val::ExternRef(None) = val {
         return ptr::null_mut();
     }
     let externref = match val.externref() {
@@ -148,7 +154,7 @@ unsafe fn from_funcref(r: *mut wasm_ref_t) -> Val {
     if !r.is_null() {
         Box::from_raw(r).r.into()
     } else {
-        Val::ExternRef(ExternRef::Null)
+        Val::ExternRef(None)
     }
 }
 
@@ -176,7 +182,7 @@ pub extern "C" fn wasmtime_funcref_table_grow(
 ) -> Option<Box<wasmtime_error_t>> {
     let val = match init {
         Some(val) => Val::FuncRef(val.func().borrow().clone()),
-        None => Val::ExternRef(ExternRef::Null),
+        None => Val::ExternRef(None),
     };
     handle_result(t.table().borrow().grow(delta, val), |prev| {
         if let Some(ptr) = prev_size {

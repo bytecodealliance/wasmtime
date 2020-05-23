@@ -11,7 +11,7 @@ fn use_func_after_drop() -> Result<()> {
             assert_eq!(closed_over_data, "abcd");
         });
         let ty = TableType::new(ValType::FuncRef, Limits::new(1, None));
-        table = Table::new(&store, ty, Val::ExternRef(ExternRef::Null))?;
+        table = Table::new(&store, ty, Val::ExternRef(None))?;
         table.set(0, func.into())?;
     }
     let func = table.get(0).unwrap().funcref().unwrap().clone();

@@ -2,11 +2,11 @@
 //! signature checking.
 
 use crate::vmcontext::VMSharedSignatureIndex;
-use more_asserts::{assert_lt, debug_assert_lt};
-use std::collections::{hash_map, HashMap};
+use more_asserts::assert_lt;
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::RwLock;
-use wasmtime_environ::ir;
+use wasmtime_environ::{ir, wasm::WasmFuncType};
 
 /// WebAssembly requires that the caller and callee signatures in an indirect
 /// call must match. To implement this efficiently, keep a registry of all
@@ -24,8 +24,13 @@ pub struct SignatureRegistry {
 
 #[derive(Debug, Default)]
 struct Inner {
-    signature2index: HashMap<ir::Signature, VMSharedSignatureIndex>,
-    index2signature: HashMap<VMSharedSignatureIndex, ir::Signature>,
+    wasm2index: HashMap<WasmFuncType, VMSharedSignatureIndex>,
+
+    // Maps the index to the original Wasm signature.
+    index2wasm: HashMap<VMSharedSignatureIndex, WasmFuncType>,
+
+    // Maps the index to the native signature.
+    index2native: HashMap<VMSharedSignatureIndex, ir::Signature>,
 }
 
 impl SignatureRegistry {
@@ -37,37 +42,42 @@ impl SignatureRegistry {
     }
 
     /// Register a signature and return its unique index.
-    pub fn register(&self, sig: &ir::Signature) -> VMSharedSignatureIndex {
-        let mut inner = self.inner.write().unwrap();
-        let len = inner.signature2index.len();
-        match inner.signature2index.entry(sig.clone()) {
-            hash_map::Entry::Occupied(entry) => *entry.get(),
-            hash_map::Entry::Vacant(entry) => {
-                // Keep `signature_hash` len under 2**32 -- VMSharedSignatureIndex::new(std::u32::MAX)
-                // is reserved for VMSharedSignatureIndex::default().
-                debug_assert_lt!(
-                    len,
-                    std::u32::MAX as usize,
-                    "Invariant check: signature_hash.len() < std::u32::MAX"
-                );
-                let sig_id = VMSharedSignatureIndex::new(u32::try_from(len).unwrap());
-                entry.insert(sig_id);
-                inner.index2signature.insert(sig_id, sig.clone());
-                sig_id
-            }
-        }
+    pub fn register(&self, wasm: WasmFuncType, native: ir::Signature) -> VMSharedSignatureIndex {
+        let Inner {
+            wasm2index,
+            index2wasm,
+            index2native,
+        } = &mut *self.inner.write().unwrap();
+        let len = wasm2index.len();
+
+        *wasm2index.entry(wasm.clone()).or_insert_with(|| {
+            // Keep `signature_hash` len under 2**32 -- VMSharedSignatureIndex::new(std::u32::MAX)
+            // is reserved for VMSharedSignatureIndex::default().
+            assert_lt!(
+                len,
+                std::u32::MAX as usize,
+                "Invariant check: signature_hash.len() < std::u32::MAX"
+            );
+            let index = VMSharedSignatureIndex::new(u32::try_from(len).unwrap());
+            index2wasm.insert(index, wasm);
+            index2native.insert(index, native);
+            index
+        })
     }
 
-    /// Looks up a shared signature index within this registry.
+    /// Looks up a shared native signature within this registry.
     ///
     /// Note that for this operation to be semantically correct the `idx` must
     /// have previously come from a call to `register` of this same object.
-    pub fn lookup(&self, idx: VMSharedSignatureIndex) -> Option<ir::Signature> {
-        self.inner
-            .read()
-            .unwrap()
-            .index2signature
-            .get(&idx)
-            .cloned()
+    pub fn lookup_native(&self, idx: VMSharedSignatureIndex) -> Option<ir::Signature> {
+        self.inner.read().unwrap().index2native.get(&idx).cloned()
+    }
+
+    /// Looks up a shared Wasm signature within this registry.
+    ///
+    /// Note that for this operation to be semantically correct the `idx` must
+    /// have previously come from a call to `register` of this same object.
+    pub fn lookup_wasm(&self, idx: VMSharedSignatureIndex) -> Option<WasmFuncType> {
+        self.inner.read().unwrap().index2wasm.get(&idx).cloned()
     }
 }

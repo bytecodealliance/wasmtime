@@ -27,7 +27,7 @@ impl wasm_global_t {
     }
 
     fn externref(&self) -> wasmtime::ExternRef {
-        self.global().externref()
+        self.global().clone().into()
     }
 }
 
@@ -54,11 +54,11 @@ pub extern "C" fn wasmtime_global_new(
     val: &wasm_val_t,
     ret: &mut *mut wasm_global_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let global = Global::new(&store.store.borrow(), gt.ty().ty.clone(), val.val());
+    let global = Global::new(&store.store, gt.ty().ty.clone(), val.val());
     handle_result(global, |global| {
         *ret = Box::into_raw(Box::new(wasm_global_t {
             ext: wasm_extern_t {
-                which: ExternHost::Global(HostRef::new(global)),
+                which: ExternHost::Global(HostRef::new(&store.store, global)),
             },
         }));
     })

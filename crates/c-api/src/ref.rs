@@ -5,7 +5,7 @@ use wasmtime::ExternRef;
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_ref_t {
-    pub(crate) r: ExternRef,
+    pub(crate) r: Option<ExternRef>,
 }
 
 wasmtime_c_api_macros::declare_own!(wasm_ref_t);
@@ -17,7 +17,11 @@ pub extern "C" fn wasm_ref_copy(r: &wasm_ref_t) -> Box<wasm_ref_t> {
 
 #[no_mangle]
 pub extern "C" fn wasm_ref_same(a: &wasm_ref_t, b: &wasm_ref_t) -> bool {
-    a.r.ptr_eq(&b.r)
+    match (a.r.as_ref(), b.r.as_ref()) {
+        (Some(a), Some(b)) => a.ptr_eq(b),
+        (None, None) => true,
+        _ => false,
+    }
 }
 
 pub(crate) fn get_host_info(r: &ExternRef) -> *mut c_void {
@@ -25,6 +29,7 @@ pub(crate) fn get_host_info(r: &ExternRef) -> *mut c_void {
         Some(info) => info,
         None => return std::ptr::null_mut(),
     };
+    let host_info = host_info.borrow();
     match host_info.downcast_ref::<HostInfoState>() {
         Some(state) => state.info,
         None => std::ptr::null_mut(),
@@ -33,7 +38,8 @@ pub(crate) fn get_host_info(r: &ExternRef) -> *mut c_void {
 
 #[no_mangle]
 pub extern "C" fn wasm_ref_get_host_info(a: &wasm_ref_t) -> *mut c_void {
-    get_host_info(&a.r)
+    a.r.as_ref()
+        .map_or(std::ptr::null_mut(), |r| get_host_info(r))
 }
 
 pub(crate) fn set_host_info(
@@ -51,7 +57,7 @@ pub(crate) fn set_host_info(
 
 #[no_mangle]
 pub extern "C" fn wasm_ref_set_host_info(a: &wasm_ref_t, info: *mut c_void) {
-    set_host_info(&a.r, info, None)
+    a.r.as_ref().map(|r| set_host_info(r, info, None));
 }
 
 #[no_mangle]
@@ -60,5 +66,5 @@ pub extern "C" fn wasm_ref_set_host_info_with_finalizer(
     info: *mut c_void,
     finalizer: Option<extern "C" fn(*mut c_void)>,
 ) {
-    set_host_info(&a.r, info, finalizer)
+    a.r.as_ref().map(|r| set_host_info(r, info, finalizer));
 }

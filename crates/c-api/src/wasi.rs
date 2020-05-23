@@ -282,7 +282,7 @@ pub unsafe extern "C" fn wasi_instance_new(
     config: Box<wasi_config_t>,
     trap: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasi_instance_t>> {
-    let store = &store.store.borrow();
+    let store = &store.store;
 
     let result = match CStr::from_ptr(name).to_str().unwrap_or("") {
         "wasi_snapshot_preview1" => create_preview1_instance(store, *config),
@@ -297,7 +297,7 @@ pub unsafe extern "C" fn wasi_instance_new(
         })),
         Err(e) => {
             *trap = Box::into_raw(Box::new(wasm_trap_t {
-                trap: HostRef::new(Trap::new(e)),
+                trap: HostRef::new(store, Trap::new(e)),
             }));
 
             None
@@ -335,13 +335,14 @@ pub extern "C" fn wasi_instance_bind_import<'a>(
     if &export.ty() != import.ty.func()? {
         return None;
     }
+    let store = export.store();
 
     let entry = instance
         .export_cache
         .entry(name.to_string())
         .or_insert_with(|| {
             Box::new(wasm_extern_t {
-                which: ExternHost::Func(HostRef::new(export.clone())),
+                which: ExternHost::Func(HostRef::new(store, export.clone())),
             })
         });
     Some(entry)

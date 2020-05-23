@@ -57,6 +57,21 @@
 //! to hold everything satisfies its alignment. It also ensures that we don't
 //! need a ton of excess padding between the `VMExternData` and the value for
 //! values with large alignment.
+//!
+//! ## Reference Counting Protocol and Wasm Functions
+//!
+//! Currently, `VMExternRef`s passed into compiled Wasm functions have move
+//! semantics: the host code gives up ownership and does not decrement the
+//! reference count. Similarly, `VMExternRef`s returned from compiled Wasm
+//! functions also have move semantics: host code takes ownership and the
+//! reference count is not incremented.
+//!
+//! This works well when a reference is passed into Wasm and then passed back
+//! out again. However, if a reference is passed into Wasm, but not passed back
+//! out, then the reference is leaked. This is only a temporary state, and
+//! follow up work will leverage stack maps to fix this issue. Follow
+//! https://github.com/bytecodealliance/wasmtime/issues/929 to keep an eye on
+//! this.
 
 use std::alloc::Layout;
 use std::any::Any;

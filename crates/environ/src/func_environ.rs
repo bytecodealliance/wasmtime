@@ -549,7 +549,7 @@ impl lightbeam::ModuleContext for FuncEnvironment<'_> {
     }
 
     fn signature(&self, index: u32) -> &Self::Signature {
-        &self.module.signatures[SignatureIndex::from_u32(index)]
+        &self.module.signatures[SignatureIndex::from_u32(index)].1
     }
 
     fn defined_table_index(&self, table_index: u32) -> Option<u32> {
@@ -657,6 +657,13 @@ impl lightbeam::ModuleContext for FuncEnvironment<'_> {
 impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environment> {
     fn target_config(&self) -> TargetFrontendConfig {
         self.target_config
+    }
+
+    fn reference_type(&self) -> ir::Type {
+        // For now, the only reference types we support are `externref`, which
+        // don't require tracing GC and stack maps. So we just use the target's
+        // pointer type. This will have to change once we move to tracing GC.
+        self.pointer_type()
     }
 }
 
@@ -915,7 +922,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: SignatureIndex,
     ) -> WasmResult<ir::SigRef> {
-        Ok(func.import_signature(self.module.signatures[index].clone()))
+        Ok(func.import_signature(self.module.signatures[index].1.clone()))
     }
 
     fn make_direct_func(
@@ -923,7 +930,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: FuncIndex,
     ) -> WasmResult<ir::FuncRef> {
-        let sig = self.module.func_signature(index);
+        let sig = self.module.native_func_signature(index);
         let signature = func.import_signature(sig.clone());
         let name = get_func_name(index);
         Ok(func.import_function(ir::ExtFuncData {

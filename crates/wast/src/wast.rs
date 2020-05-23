@@ -3,11 +3,14 @@ use anyhow::{anyhow, bail, Context as _, Result};
 use std::path::Path;
 use std::str;
 use wasmtime::*;
-use wast::parser::{self, ParseBuffer};
 use wast::Wat;
+use wast::{
+    parser::{self, ParseBuffer},
+    RefType,
+};
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
-fn runtime_value(v: &wast::Expression<'_>) -> Result<Val> {
+fn runtime_value(store: &Store, v: &wast::Expression<'_>) -> Result<Val> {
     use wast::Instruction::*;
 
     if v.instrs.len() != 1 {
@@ -19,6 +22,8 @@ fn runtime_value(v: &wast::Expression<'_>) -> Result<Val> {
         F32Const(x) => Val::F32(x.bits),
         F64Const(x) => Val::F64(x.bits),
         V128Const(x) => Val::V128(u128::from_le_bytes(x.to_le_bytes())),
+        RefNull(RefType::Extern) => Val::ExternRef(None),
+        RefExtern(x) => Val::ExternRef(Some(ExternRef::new(store, *x))),
         other => bail!("couldn't convert {:?} to a runtime value", other),
     })
 }
@@ -114,7 +119,7 @@ impl WastContext {
         let values = exec
             .args
             .iter()
-            .map(runtime_value)
+            .map(|v| runtime_value(&self.store, v))
             .collect::<Result<Vec<_>>>()?;
         self.invoke(exec.module.map(|i| i.name()), exec.name, &values)
     }
@@ -403,6 +408,18 @@ fn val_matches(actual: &Val, expected: &wast::AssertExpression) -> Result<bool> 
         (Val::F32(a), wast::AssertExpression::F32(b)) => f32_matches(*a, b),
         (Val::F64(a), wast::AssertExpression::F64(b)) => f64_matches(*a, b),
         (Val::V128(a), wast::AssertExpression::V128(b)) => v128_matches(*a, b),
+        (Val::ExternRef(x), wast::AssertExpression::RefNull(wast::RefType::Extern)) => x.is_none(),
+        (Val::ExternRef(x), wast::AssertExpression::RefExtern(y)) => {
+            if let Some(x) = x {
+                let x = x
+                    .data()
+                    .downcast_ref::<u32>()
+                    .expect("only u32 externrefs created in wast test suites");
+                x == y
+            } else {
+                false
+            }
+        }
         _ => bail!(
             "don't know how to compare {:?} and {:?} yet",
             actual,

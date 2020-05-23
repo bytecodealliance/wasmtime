@@ -18,12 +18,12 @@ pub(crate) enum ExternHost {
 }
 
 impl wasm_extern_t {
-    fn externref(&self) -> wasmtime::ExternRef {
+    pub(crate) fn externref(&self) -> wasmtime::ExternRef {
         match &self.which {
-            ExternHost::Func(f) => f.externref(),
-            ExternHost::Global(f) => f.externref(),
-            ExternHost::Memory(f) => f.externref(),
-            ExternHost::Table(f) => f.externref(),
+            ExternHost::Func(f) => f.clone().into(),
+            ExternHost::Global(f) => f.clone().into(),
+            ExternHost::Memory(f) => f.clone().into(),
+            ExternHost::Table(f) => f.clone().into(),
         }
     }
 }
