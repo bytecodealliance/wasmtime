@@ -280,7 +280,8 @@ impl Linker {
     /// instead of having a single instance which is reused for each call,
     /// each call creates a new instance, which lives for the duration of the
     /// call. The imports of the Command are resolved once, and reused for
-    /// each instantiation.
+    /// each instantiation, so all dependencies need to be present at the time
+    /// when `Linker::module` is called.
     ///
     /// For Reactors, a single instance is created, and an initialization
     /// function is called, and then its exports may be called.
@@ -294,8 +295,9 @@ impl Linker {
     ///
     /// Returns an error if the any item is redefined twice in this linker (for
     /// example the same `module_name` was already defined) and shadowing is
-    /// disallowed, or if `instance` comes from a different [`Store`] than this
-    /// [`Linker`] originally was created with.
+    /// disallowed, if `instance` comes from a different [`Store`] than this
+    /// [`Linker`] originally was created with, or if a Reactor initialization
+    /// function traps.
     ///
     /// # Examples
     ///
@@ -325,6 +327,55 @@ impl Linker {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// For a Command, a new instance is created for each call.
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// let mut linker = Linker::new(&store);
+    ///
+    /// // Create a Command that attempts to count the number of times it is run, but is
+    /// // foiled by each call getting a new instance.
+    /// let wat = r#"
+    ///     (module
+    ///         (global $counter i32 0)
+    ///         (func (export "_start")
+    ///             (global.set $counter (i32.add (global.get $counter) (i32.const 1)))
+    ///         )
+    ///         (func (export "read_counter")
+    ///             (global.get $counter)
+    ///         )
+    ///     )
+    /// "#;
+    /// let module = Module::new(&store, wat)?;
+    /// linker.module("commander", &module)?;
+    /// let run = linker.get_default("")?.get0::<()>()?;
+    /// run()?;
+    /// run()?;
+    /// run()?;
+    ///
+    /// let wat = r#"
+    ///     (module
+    ///         (import "commander" "_start" (func $commander_start))
+    ///         (import "commander" "read_counter" (func $commander_read_counter))
+    ///         (func (export "run") (result i32)
+    ///             call $commander_start
+    ///             call $commander_start
+    ///             call $commander_start
+    ///             call $commander_read_counter
+    ///         )
+    ///     )
+    /// "#;
+    /// let module = Module::new(&store, wat)?;
+    /// linker.module("", &module)?;
+    /// let count = linker.get_one_by_name("", "run")?.into_func().unwrap().get0::<i32>()?()?;
+    /// assert_eq!(count, 1, "a Command should get a fresh instance on each invocation");
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn module(&mut self, module_name: &str, module: &Module) -> Result<&mut Self> {
         match ModuleKind::categorize(module)? {
             ModuleKind::Command => self.command(module_name, module),
@@ -351,12 +402,17 @@ impl Linker {
                 let module = module.clone();
                 let export_name = export.name().to_owned();
                 let func = Func::new(&self.store, func_ty.clone(), move |_, params, results| {
+                    // Create a new instance for this command execution.
                     let instance = Instance::new(&module, &imports).map_err(|error| match error
                         .downcast::<Trap>()
                     {
                         Ok(trap) => trap,
                         Err(error) => Trap::new(error.to_string()),
                     })?;
+
+                    // `unwrap()` everything here because we know the instance contains a
+                    // function export with the given name and signature because we're
+                    // iterating over the module it was instantiated from.
                     let command_results = instance
                         .get_export(&export_name)
                         .unwrap()
@@ -364,11 +420,14 @@ impl Linker {
                         .unwrap()
                         .call(params)
                         .map_err(|error| error.downcast::<Trap>().unwrap())?;
+
+                    // Copy the return values into the output slice.
                     for (result, command_result) in
                         results.iter_mut().zip(command_results.into_vec())
                     {
                         *result = command_result;
                     }
+
                     Ok(())
                 });
                 self.insert(module_name, export.name(), Extern::Func(func))?;
