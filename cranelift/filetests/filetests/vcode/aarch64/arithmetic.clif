@@ -1,4 +1,4 @@
-test vcode
+test compile
 target aarch64
 
 function %f1(i64, i64) -> i64 {
