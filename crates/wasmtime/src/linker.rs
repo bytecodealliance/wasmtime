@@ -340,7 +340,7 @@ impl Linker {
     /// // foiled by each call getting a new instance.
     /// let wat = r#"
     ///     (module
-    ///         (global $counter i32 (i32.const 0))
+    ///         (global $counter (mut i32) (i32.const 0))
     ///         (func (export "_start")
     ///             (global.set $counter (i32.add (global.get $counter) (i32.const 1)))
     ///         )
