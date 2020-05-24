@@ -117,16 +117,20 @@ impl Interpreter {
         self.block(&mut frame, first_block)
     }
 
-    /// Interpret a single [Block] in a [Function].
+    /// Interpret a [Block] in a [Function]. This drives the interpretation over sequences of
+    /// instructions, which may continue in other blocks, until the function returns.
     fn block(&self, frame: &mut Frame, block: Block) -> Result<ControlFlow, Trap> {
         debug!("Block: {}", block);
-        for inst in frame.function.layout.block_insts(block) {
+        let layout = &frame.function.layout;
+        let mut maybe_inst = layout.first_inst(block);
+        while let Some(inst) = maybe_inst {
             match self.inst(frame, inst)? {
-                ControlFlow::Continue => continue,
+                ControlFlow::Continue => maybe_inst = layout.next_inst(inst),
                 ControlFlow::ContinueAt(block, old_names) => {
+                    debug!("Block: {}", block);
                     let new_names = frame.function.dfg.block_params(block);
                     frame.rename(&old_names, new_names);
-                    return self.block(frame, block);
+                    maybe_inst = layout.first_inst(block)
                 }
                 ControlFlow::Return(rs) => return Ok(ControlFlow::Return(rs)),
             }
