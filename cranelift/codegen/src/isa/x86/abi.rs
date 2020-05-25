@@ -70,6 +70,7 @@ struct Args {
     shared_flags: shared_settings::Flags,
     #[allow(dead_code)]
     isa_flags: isa_settings::Flags,
+    assigning_returns: bool,
 }
 
 impl Args {
@@ -80,6 +81,7 @@ impl Args {
         call_conv: CallConv,
         shared_flags: &shared_settings::Flags,
         isa_flags: &isa_settings::Flags,
+        assigning_returns: bool,
     ) -> Self {
         let offset = if call_conv.extends_windows_fastcall() {
             WIN_SHADOW_STACK_SPACE
@@ -99,6 +101,7 @@ impl Args {
             call_conv,
             shared_flags: shared_flags.clone(),
             isa_flags: isa_flags.clone(),
+            assigning_returns,
         }
     }
 }
@@ -106,6 +109,17 @@ impl Args {
 impl ArgAssigner for Args {
     fn assign(&mut self, arg: &AbiParam) -> ArgAction {
         let ty = arg.value_type;
+
+        if ty.bits() > u16::from(self.pointer_bits) {
+            if !self.assigning_returns && self.call_conv.extends_windows_fastcall() {
+                // "Any argument that doesn't fit in 8 bytes, or isn't
+                // 1, 2, 4, or 8 bytes, must be passed by reference"
+                return ValueConversion::Pointer(self.pointer_type).into();
+            } else if !ty.is_vector() && !ty.is_float() {
+                // On SystemV large integers and booleans are broken down to fit in a register.
+                return ValueConversion::IntSplit.into();
+            }
+        }
 
         // Vectors should stay in vector registers unless SIMD is not enabled--then they are split
         if ty.is_vector() {
@@ -115,11 +129,6 @@ impl ArgAssigner for Args {
                 return ArgumentLoc::Reg(reg).into();
             }
             return ValueConversion::VectorSplit.into();
-        }
-
-        // Large integers and booleans are broken down to fit in a register.
-        if !ty.is_float() && ty.bits() > u16::from(self.pointer_bits) {
-            return ValueConversion::IntSplit.into();
         }
 
         // Small integers are extended to the size of a pointer register.
@@ -203,7 +212,7 @@ pub fn legalize_signature(
         PointerWidth::U16 => panic!(),
         PointerWidth::U32 => {
             bits = 32;
-            args = Args::new(bits, &[], 0, sig.call_conv, shared_flags, isa_flags);
+            args = Args::new(bits, &[], 0, sig.call_conv, shared_flags, isa_flags, false);
         }
         PointerWidth::U64 => {
             bits = 64;
@@ -215,6 +224,7 @@ pub fn legalize_signature(
                     sig.call_conv,
                     shared_flags,
                     isa_flags,
+                    false,
                 )
             } else {
                 Args::new(
@@ -224,6 +234,7 @@ pub fn legalize_signature(
                     sig.call_conv,
                     shared_flags,
                     isa_flags,
+                    false,
                 )
             };
         }
@@ -243,6 +254,7 @@ pub fn legalize_signature(
         sig.call_conv,
         shared_flags,
         isa_flags,
+        true,
     );
 
     // If we don't have enough available return registers
@@ -267,6 +279,7 @@ pub fn legalize_signature(
                 purpose: ArgumentPurpose::StructReturn,
                 extension: ArgumentExtension::None,
                 location: ArgumentLoc::Unassigned,
+                legalized_to_pointer: false,
             };
             match args.assign(&ret_ptr_param) {
                 ArgAction::Assign(ArgumentLoc::Reg(reg)) => {
@@ -283,6 +296,7 @@ pub fn legalize_signature(
                 purpose: ArgumentPurpose::StructReturn,
                 extension: ArgumentExtension::None,
                 location: ArgumentLoc::Unassigned,
+                legalized_to_pointer: false,
             };
             match backup_rets.assign(&ret_ptr_return) {
                 ArgAction::Assign(ArgumentLoc::Reg(reg)) => {
