@@ -227,3 +227,9 @@ impl fmt::Display for Trap {
 }
 
 impl std::error::Error for Trap {}
+
+impl From<anyhow::Error> for Trap {
+    fn from(e: anyhow::Error) -> Trap {
+        Trap::new(e.to_string())
+    }
+}
