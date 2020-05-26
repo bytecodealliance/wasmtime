@@ -28,7 +28,7 @@ pub use crate::frame_info::FrameInfo;
 pub use crate::func::*;
 pub use crate::instance::Instance;
 pub use crate::linker::*;
-pub use crate::module::Module;
+pub use crate::module::{Module, SendableModule};
 pub use crate::r#ref::{ExternRef, HostRef};
 pub use crate::runtime::*;
 pub use crate::trap::Trap;

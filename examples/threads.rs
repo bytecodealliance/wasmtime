@@ -14,9 +14,9 @@ fn print_message(_: Caller<'_>, args: &[Val], _: &mut [Val]) -> Result<(), Trap>
     Ok(())
 }
 
-fn run(engine: &Engine, module: &Module, id: i32) -> Result<()> {
+fn run(engine: &Engine, module: SendableModule, id: i32) -> Result<()> {
     let store = Store::new(&engine);
-    let module = module.clone_into(&store)?;
+    let module = module.place_into(&store);
 
     // Create external print functions.
     println!("Creating callback...");
@@ -57,9 +57,9 @@ fn main() -> Result<()> {
     let mut children = Vec::new();
     for id in 0..N_THREADS {
         let engine = engine.clone();
-        let module = module.clone();
+        let module = module.share();
         children.push(thread::spawn(move || {
-            run(&engine, &module, id).expect("Success");
+            run(&engine, module, id).expect("Success");
         }));
     }
 

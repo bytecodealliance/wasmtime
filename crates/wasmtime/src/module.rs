@@ -78,9 +78,6 @@ pub struct Module {
     inner: Arc<ModuleInner>,
 }
 
-unsafe impl Sync for Module {}
-unsafe impl Send for Module {}
-
 struct ModuleInner {
     store: Store,
     compiled: Arc<CompiledModule>,
@@ -332,21 +329,12 @@ impl Module {
         &self.inner.compiled
     }
 
-    /// Returns `Module` that is usable in a different `Store`.
-    pub fn clone_into(&self, store: &Store) -> Result<Self> {
-        let compiled = self.inner.compiled.clone();
-        let frame_info_registration = self.inner.frame_info_registration.clone();
-
-        let jit_code_registration = store.register_jit_code(compiled.jit_code_ranges());
-
-        Ok(Module {
-            inner: Arc::new(ModuleInner {
-                store: store.clone(),
-                compiled,
-                frame_info_registration,
-                jit_code_registration,
-            }),
-        })
+    /// Returns the module that can be used in different thread.
+    pub fn share(&self) -> SendableModule {
+        SendableModule {
+            compiled: self.inner.compiled.clone(),
+            frame_info_registration: self.inner.frame_info_registration.clone(),
+        }
     }
 
     /// Returns identifier/name that this [`Module`] has. This name
@@ -519,5 +507,34 @@ impl Module {
         let ret = super::frame_info::register(self.inner.compiled.clone()).map(Arc::new);
         *info = Some(ret.clone());
         return ret;
+    }
+}
+
+/// Shareable portion of the `Module` that can be instantiated in
+/// deferent `Store`.
+#[derive(Clone)]
+pub struct SendableModule {
+    compiled: Arc<CompiledModule>,
+    frame_info_registration: Arc<Mutex<Option<Option<Arc<GlobalFrameInfoRegistration>>>>>,
+}
+
+unsafe impl Send for SendableModule {}
+
+impl SendableModule {
+    /// Returns `Module` that is belong to diffrent `Store`.
+    pub fn place_into(self, store: &Store) -> Module {
+        let compiled = self.compiled;
+        let frame_info_registration = self.frame_info_registration;
+
+        let jit_code_registration = store.register_jit_code(compiled.jit_code_ranges());
+
+        Module {
+            inner: Arc::new(ModuleInner {
+                store: store.clone(),
+                compiled,
+                frame_info_registration,
+                jit_code_registration,
+            }),
+        }
     }
 }
