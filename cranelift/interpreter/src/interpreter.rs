@@ -112,7 +112,8 @@ impl Interpreter {
             .next()
             .expect("to have a first block");
         let parameters = function.dfg.block_params(first_block);
-        let mut frame = Frame::new(function).with_parameters(parameters, arguments);
+        let mut frame = Frame::new(function);
+        frame.set_all(parameters, arguments.to_vec());
         self.block(&mut frame, first_block)
     }
 

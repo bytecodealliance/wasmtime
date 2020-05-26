@@ -30,16 +30,6 @@ impl<'a> Frame<'a> {
         }
     }
 
-    /// Construct a new [Frame] with the given `values` assigned to their corresponding slot
-    /// (from the SSA references in `parameters`) in the [Frame].
-    pub fn with_parameters(mut self, parameters: &[ValueRef], values: &[DataValue]) -> Self {
-        assert_eq!(parameters.len(), values.len());
-        for (n, v) in parameters.iter().zip(values) {
-            self.registers.insert(*n, v.clone());
-        }
-        self
-    }
-
     /// Retrieve the actual value associated with an SSA reference.
     #[inline]
     pub fn get(&self, name: &ValueRef) -> &DataValue {
