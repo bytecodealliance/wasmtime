@@ -11,7 +11,7 @@ use cranelift_codegen::ir::{
     Value as ValueRef, ValueList,
 };
 use cranelift_reader::{DataValue, DataValueCastFailure};
-use log::debug;
+use log::trace;
 use std::ops::{Add, Sub};
 use thiserror::Error;
 
@@ -105,7 +105,7 @@ impl Interpreter {
 
     /// Interpret a call to a [Function] given its [DataValue] arguments.
     fn call(&self, function: &Function, arguments: &[DataValue]) -> Result<ControlFlow, Trap> {
-        debug!("Call: {}({:?})", function.name, arguments);
+        trace!("Call: {}({:?})", function.name, arguments);
         let first_block = function
             .layout
             .blocks()
@@ -120,14 +120,14 @@ impl Interpreter {
     /// Interpret a [Block] in a [Function]. This drives the interpretation over sequences of
     /// instructions, which may continue in other blocks, until the function returns.
     fn block(&self, frame: &mut Frame, block: Block) -> Result<ControlFlow, Trap> {
-        debug!("Block: {}", block);
+        trace!("Block: {}", block);
         let layout = &frame.function.layout;
         let mut maybe_inst = layout.first_inst(block);
         while let Some(inst) = maybe_inst {
             match self.inst(frame, inst)? {
                 ControlFlow::Continue => maybe_inst = layout.next_inst(inst),
                 ControlFlow::ContinueAt(block, old_names) => {
-                    debug!("Block: {}", block);
+                    trace!("Block: {}", block);
                     let new_names = frame.function.dfg.block_params(block);
                     frame.rename(&old_names, new_names);
                     maybe_inst = layout.first_inst(block)
@@ -142,7 +142,7 @@ impl Interpreter {
     /// implementations.
     fn inst(&self, frame: &mut Frame, inst: Inst) -> Result<ControlFlow, Trap> {
         use ControlFlow::{Continue, ContinueAt};
-        debug!("Inst: {}", &frame.function.dfg.display_inst(inst, None));
+        trace!("Inst: {}", &frame.function.dfg.display_inst(inst, None));
 
         let data = &frame.function.dfg[inst];
         match data {
