@@ -2,6 +2,7 @@
 
 use cranelift_codegen::ir::{Function, Value as ValueRef};
 use cranelift_reader::DataValue;
+use log::trace;
 use std::collections::HashMap;
 
 /// Holds the mutable elements of an interpretation. At some point I thought about using
@@ -22,6 +23,7 @@ impl<'a> Frame<'a> {
     /// `Value` (renamed to `ValueRef` here) which should mean that no additional allocations are
     /// needed while interpreting the frame.
     pub fn new(function: &'a Function) -> Self {
+        trace!("Create new frame for function: {}", function.signature);
         Self {
             function,
             registers: HashMap::with_capacity(function.dfg.num_values()),
@@ -41,6 +43,7 @@ impl<'a> Frame<'a> {
     /// Retrieve the actual value associated with an SSA reference.
     #[inline]
     pub fn get(&self, name: &ValueRef) -> &DataValue {
+        trace!("Get {}", name);
         self.registers
             .get(name)
             .unwrap_or_else(|| panic!("unknown value: {}", name))
@@ -54,6 +57,7 @@ impl<'a> Frame<'a> {
     /// Assign `value` to the SSA reference `name`.
     #[inline]
     pub fn set(&mut self, name: ValueRef, value: DataValue) -> Option<DataValue> {
+        trace!("Set {} -> {}", name, value);
         self.registers.insert(name, value)
     }
 
@@ -70,6 +74,7 @@ impl<'a> Frame<'a> {
     /// could be removed if we copied the values in the right order (i.e. when modifying in place,
     /// we need to avoid changing a value before it is referenced).
     pub fn rename(&mut self, old_names: &[ValueRef], new_names: &[ValueRef]) {
+        trace!("Renaming {:?} -> {:?}", old_names, new_names);
         assert_eq!(old_names.len(), new_names.len());
         let mut registers = HashMap::with_capacity(self.registers.len());
         for (on, nn) in old_names.iter().zip(new_names) {
