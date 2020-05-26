@@ -2046,6 +2046,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::X86Pop
         | Opcode::X86Bsr
         | Opcode::X86Bsf
+        | Opcode::X86Pblendw
         | Opcode::X86Pshufd
         | Opcode::X86Pshufb
         | Opcode::X86Pextr
