@@ -23,7 +23,12 @@ pub(crate) fn define(shared: &SettingGroup) -> SettingGroup {
     );
     let has_avx512vl = settings.add_bool(
         "has_avx512vl",
-        "AVX512DQ: CPUID.07H:EBX.AVX512VL[bit 31]",
+        "AVX512VL: CPUID.07H:EBX.AVX512VL[bit 31]",
+        false,
+    );
+    let has_avx512f = settings.add_bool(
+        "has_avx512f",
+        "AVX512F: CPUID.07H:EBX.AVX512F[bit 16]",
         false,
     );
     let has_popcnt = settings.add_bool("has_popcnt", "POPCNT: CPUID.01H:ECX.POPCNT[bit 23]", false);
@@ -75,6 +80,10 @@ pub(crate) fn define(shared: &SettingGroup) -> SettingGroup {
     settings.add_predicate(
         "use_avx512vl_simd",
         predicate!(shared_enable_simd && has_avx512vl),
+    );
+    settings.add_predicate(
+        "use_avx512f_simd",
+        predicate!(shared_enable_simd && has_avx512f),
     );
 
     settings.add_predicate("use_popcnt", predicate!(has_popcnt && has_sse42));
