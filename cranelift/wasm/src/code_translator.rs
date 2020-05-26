@@ -1383,7 +1383,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().ineg(a))
         }
-        Operator::I16x8Mul | Operator::I32x4Mul => {
+        Operator::I16x8Mul | Operator::I32x4Mul | Operator::I64x2Mul => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().imul(a, b))
         }
@@ -1544,8 +1544,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, I32X4, builder);
             state.push1(builder.ins().fcvt_from_sint(F32X4, a))
         }
-        Operator::I64x2Mul
-        | Operator::I32x4TruncSatF32x4S
+        Operator::I32x4TruncSatF32x4S
         | Operator::I32x4TruncSatF32x4U
         | Operator::F32x4ConvertI32x4U
         | Operator::I8x16Abs
@@ -2069,7 +2068,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I64x2ShrS
         | Operator::I64x2ShrU
         | Operator::I64x2Add
-        | Operator::I64x2Sub => I64X2,
+        | Operator::I64x2Sub
+        | Operator::I64x2Mul => I64X2,
 
         Operator::F32x4Splat
         | Operator::F32x4ExtractLane { .. }
