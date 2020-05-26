@@ -78,10 +78,13 @@ pub struct Module {
     inner: Arc<ModuleInner>,
 }
 
+unsafe impl Sync for Module {}
+unsafe impl Send for Module {}
+
 struct ModuleInner {
     store: Store,
     compiled: Arc<CompiledModule>,
-    frame_info_registration: Mutex<Option<Option<Arc<GlobalFrameInfoRegistration>>>>,
+    frame_info_registration: Arc<Mutex<Option<Option<Arc<GlobalFrameInfoRegistration>>>>>,
     #[allow(dead_code)]
     jit_code_registration: JitCodeRegistration,
 }
@@ -319,7 +322,7 @@ impl Module {
             inner: Arc::new(ModuleInner {
                 store: store.clone(),
                 compiled: Arc::new(compiled),
-                frame_info_registration: Mutex::new(None),
+                frame_info_registration: Arc::new(Mutex::new(None)),
                 jit_code_registration,
             }),
         })
@@ -327,6 +330,23 @@ impl Module {
 
     pub(crate) fn compiled_module(&self) -> &Arc<CompiledModule> {
         &self.inner.compiled
+    }
+
+    /// Returns `Module` that is usable in a different `Store`.
+    pub fn clone_into(&self, store: &Store) -> Result<Self> {
+        let compiled = self.inner.compiled.clone();
+        let frame_info_registration = self.inner.frame_info_registration.clone();
+
+        let jit_code_registration = store.register_jit_code(compiled.jit_code_ranges());
+
+        Ok(Module {
+            inner: Arc::new(ModuleInner {
+                store: store.clone(),
+                compiled,
+                frame_info_registration,
+                jit_code_registration,
+            }),
+        })
     }
 
     /// Returns identifier/name that this [`Module`] has. This name
