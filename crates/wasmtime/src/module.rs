@@ -311,7 +311,7 @@ impl Module {
 
     unsafe fn compile(store: &Store, binary: &[u8]) -> Result<Self> {
         let compiled = CompiledModule::new(
-            &mut store.compiler_mut(),
+            &store.compiler(),
             binary,
             &*store.engine().config().profiler,
         )?;

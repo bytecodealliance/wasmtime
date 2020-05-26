@@ -44,7 +44,7 @@ pub(crate) fn create_handle(
             store.memory_creator(),
             signatures.into_boxed_slice(),
             state,
-            store.compiler().interrupts().clone(),
+            store.interrupts().clone(),
         )?;
         Ok(store.add_instance(handle))
     }

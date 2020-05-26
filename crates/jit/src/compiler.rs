@@ -9,7 +9,6 @@ use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use std::collections::HashMap;
-use std::sync::Arc;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
@@ -19,7 +18,7 @@ use wasmtime_environ::{
     ModuleMemoryOffset, ModuleTranslation, ModuleVmctxInfo, Relocation, RelocationTarget,
     Relocations, Traps, Tunables, VMOffsets,
 };
-use wasmtime_runtime::{InstantiationError, VMFunctionBody, VMInterrupts, VMTrampoline};
+use wasmtime_runtime::{InstantiationError, VMFunctionBody, VMTrampoline};
 
 /// Select which kind of compilation to use.
 #[derive(Copy, Clone, Debug)]
@@ -48,7 +47,6 @@ pub struct Compiler {
     strategy: CompilationStrategy,
     cache_config: CacheConfig,
     tunables: Tunables,
-    interrupts: Arc<VMInterrupts>,
 }
 
 impl Compiler {
@@ -64,7 +62,6 @@ impl Compiler {
             strategy,
             cache_config,
             tunables,
-            interrupts: Arc::new(VMInterrupts::default()),
         }
     }
 }
@@ -98,14 +95,9 @@ impl Compiler {
         &self.tunables
     }
 
-    /// Return the handle by which to interrupt instances
-    pub fn interrupts(&self) -> &Arc<VMInterrupts> {
-        &self.interrupts
-    }
-
     /// Compile the given function bodies.
     pub(crate) fn compile<'data>(
-        &mut self,
+        &self,
         translation: &ModuleTranslation,
         debug_data: Option<DebugInfoData>,
     ) -> Result<Compilation, SetupError> {

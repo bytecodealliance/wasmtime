@@ -732,6 +732,7 @@ pub struct Store {
 pub(crate) struct StoreInner {
     engine: Engine,
     compiler: RefCell<Compiler>,
+    interrupts: Arc<VMInterrupts>,
     signatures: RefCell<SignatureRegistry>,
     instances: RefCell<Vec<InstanceHandle>>,
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
@@ -771,6 +772,7 @@ impl Store {
             inner: Rc::new(StoreInner {
                 engine: engine.clone(),
                 compiler: RefCell::new(compiler),
+                interrupts: Arc::new(Default::default()),
                 signatures: RefCell::new(SignatureRegistry::new()),
                 instances: RefCell::new(Vec::new()),
                 signal_handler: RefCell::new(None),
@@ -795,10 +797,6 @@ impl Store {
 
     pub(crate) fn compiler(&self) -> std::cell::Ref<'_, Compiler> {
         self.inner.compiler.borrow()
-    }
-
-    pub(crate) fn compiler_mut(&self) -> std::cell::RefMut<'_, Compiler> {
-        self.inner.compiler.borrow_mut()
     }
 
     pub(crate) fn signatures(&self) -> std::cell::Ref<'_, SignatureRegistry> {
@@ -865,6 +863,10 @@ impl Store {
         &self,
     ) -> std::cell::RefMut<'_, Option<Box<SignalHandler<'static>>>> {
         self.inner.signal_handler.borrow_mut()
+    }
+
+    pub(crate) fn interrupts(&self) -> &Arc<VMInterrupts> {
+        &self.inner.interrupts
     }
 
     /// Returns whether the stores `a` and `b` refer to the same underlying
@@ -961,7 +963,7 @@ impl Store {
     pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
         if self.engine().config.tunables.interruptable {
             Ok(InterruptHandle {
-                interrupts: self.compiler().interrupts().clone(),
+                interrupts: self.interrupts().clone(),
             })
         } else {
             bail!("interrupts aren't enabled for this `Store`")

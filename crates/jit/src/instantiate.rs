@@ -65,7 +65,7 @@ struct RawCompiledModule<'data> {
 impl<'data> RawCompiledModule<'data> {
     /// Create a new `RawCompiledModule` by compiling the wasm module in `data` and instatiating it.
     fn new(
-        compiler: &mut Compiler,
+        compiler: &Compiler,
         data: &'data [u8],
         profiler: &dyn ProfilingAgent,
     ) -> Result<Self, SetupError> {
@@ -129,7 +129,6 @@ pub struct CompiledModule {
     dbg_jit_registration: Option<GdbJitImageRegistration>,
     traps: Traps,
     address_transform: ModuleAddressMap,
-    interrupts: Arc<VMInterrupts>,
 }
 
 impl std::ops::Deref for CompiledModule {
@@ -151,7 +150,7 @@ unsafe impl Sync for CompiledModule {}
 impl CompiledModule {
     /// Compile a data buffer into a `CompiledModule`, which may then be instantiated.
     pub fn new<'data>(
-        compiler: &mut Compiler,
+        compiler: &Compiler,
         data: &'data [u8],
         profiler: &dyn ProfilingAgent,
     ) -> Result<Self, SetupError> {
@@ -170,7 +169,6 @@ impl CompiledModule {
             raw.dbg_jit_registration,
             raw.traps,
             raw.address_transform,
-            compiler.interrupts().clone(),
         ))
     }
 
@@ -184,7 +182,6 @@ impl CompiledModule {
         dbg_jit_registration: Option<GdbJitImageRegistration>,
         traps: Traps,
         address_transform: ModuleAddressMap,
-        interrupts: Arc<VMInterrupts>,
     ) -> Self {
         Self {
             code_memory,
@@ -195,7 +192,6 @@ impl CompiledModule {
             dbg_jit_registration,
             traps,
             address_transform,
-            interrupts,
         }
     }
 
@@ -213,6 +209,7 @@ impl CompiledModule {
         resolver: &mut dyn Resolver,
         signature_registry: &SignatureRegistry,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
+        interrupts: Arc<VMInterrupts>,
         host_state: Box<dyn Any>,
     ) -> Result<InstanceHandle, InstantiationError> {
         // Compute indices into the shared signature table.
@@ -231,7 +228,6 @@ impl CompiledModule {
         }
 
         let finished_functions = module.finished_functions.clone();
-        let interrupts = module.interrupts.clone();
 
         let imports = resolve_imports(&module, signature_registry, resolver)?;
         InstanceHandle::new(

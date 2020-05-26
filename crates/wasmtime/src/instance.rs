@@ -30,11 +30,13 @@ fn instantiate(
     let mut resolver = SimpleResolver { imports };
     unsafe {
         let config = store.engine().config();
+        let interrupts = store.interrupts().clone();
         let instance = CompiledModule::instantiate(
             compiled_module.clone(),
             &mut resolver,
             sig_registry,
             config.memory_creator.as_ref().map(|a| a as _),
+            interrupts,
             host,
         )?;
 
