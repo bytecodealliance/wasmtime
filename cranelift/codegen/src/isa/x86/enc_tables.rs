@@ -1513,6 +1513,53 @@ fn convert_ishl(
     }
 }
 
+/// Convert an imul.i64x2 to a valid code sequence on x86, first with AVX512 and then with SSE2.
+fn convert_i64x2_imul(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    isa: &dyn TargetIsa,
+) {
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    if let ir::InstructionData::Binary {
+        opcode: ir::Opcode::Imul,
+        args: [arg0, arg1],
+    } = pos.func.dfg[inst]
+    {
+        let ty = pos.func.dfg.ctrl_typevar(inst);
+        if ty == I64X2 {
+            let x86_isa = isa
+                .as_any()
+                .downcast_ref::<isa::x86::Isa>()
+                .expect("the target ISA must be x86 at this point");
+            if x86_isa.isa_flags.use_avx512dq_simd() || x86_isa.isa_flags.use_avx512vl_simd() {
+                // If we have certain AVX512 features, we can lower this instruction simply.
+                pos.func.dfg.replace(inst).x86_pmullq(arg0, arg1);
+            } else {
+                // Otherwise, we default to a very lengthy SSE2-compatible sequence. It splits each
+                // 64-bit lane into 32-bit high and low sections using shifting and then performs
+                // the following arithmetic per lane: with arg0 = concat(high0, low0) and arg1 =
+                // concat(high1, low1), calculate (high0 * low1) + (high1 * low0) + (low0 * low1).
+                let high0 = pos.ins().ushr_imm(arg0, 32);
+                let mul0 = pos.ins().x86_pmuludq(high0, arg1);
+                let high1 = pos.ins().ushr_imm(arg1, 32);
+                let mul1 = pos.ins().x86_pmuludq(high1, arg0);
+                let addhigh = pos.ins().iadd(mul0, mul1);
+                let high = pos.ins().ishl_imm(addhigh, 32);
+                let low = pos.ins().x86_pmuludq(arg0, arg1);
+                pos.func.dfg.replace(inst).iadd(low, high);
+            }
+        } else {
+            unreachable!(
+                "{} should be encodable; it cannot be legalized by convert_i64x2_imul",
+                pos.func.dfg.display_inst(inst, None)
+            );
+        }
+    }
+}
+
 fn expand_tls_value(
     inst: ir::Inst,
     func: &mut ir::Function,
