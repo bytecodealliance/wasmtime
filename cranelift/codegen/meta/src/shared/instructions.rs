@@ -2265,7 +2265,7 @@ pub(crate) fn define(
         This is similar to `iadd` but the operands are interpreted as signed integers and their
         summed result, instead of wrapping, will be saturated to the lowest or highest
         signed integer for the controlling type (e.g. `0x80` or `0x7F` for i8). For example,
-        since an `iadd_ssat.i8` of `0x70` and `0x70` is greater than `0x7F`, the result will be
+        since an `sadd_sat.i8` of `0x70` and `0x70` is greater than `0x7F`, the result will be
         clamped to `0x7F`.
         "#,
             &formats.binary,
