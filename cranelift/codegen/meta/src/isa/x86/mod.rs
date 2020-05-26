@@ -48,6 +48,7 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     x86_32.legalize_type(F32, x86_expand);
     x86_32.legalize_type(F64, x86_expand);
     x86_32.legalize_value_type(VectorType::new(I64.into(), 2), x86_narrow_avx);
+    x86_32.legalize_value_type(VectorType::new(F32.into(), 4), x86_narrow_avx);
 
     x86_64.legalize_monomorphic(expand_flags);
     x86_64.legalize_default(x86_narrow);
@@ -60,6 +61,7 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     x86_64.legalize_type(F32, x86_expand);
     x86_64.legalize_type(F64, x86_expand);
     x86_64.legalize_value_type(VectorType::new(I64.into(), 2), x86_narrow_avx);
+    x86_64.legalize_value_type(VectorType::new(F32.into(), 4), x86_narrow_avx);
 
     let recipes = recipes::define(shared_defs, &settings, &regs);
 
