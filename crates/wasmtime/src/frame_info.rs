@@ -4,7 +4,7 @@ use std::sync::{Arc, RwLock};
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::ir;
 use wasmtime_environ::wasm::FuncIndex;
-use wasmtime_environ::{FunctionAddressMap, Module, TrapInformation};
+use wasmtime_environ::{FunctionAddressMap, TrapInformation};
 use wasmtime_jit::CompiledModule;
 
 lazy_static::lazy_static! {
@@ -41,7 +41,7 @@ pub struct GlobalFrameInfoRegistration {
 struct ModuleFrameInfo {
     start: usize,
     functions: BTreeMap<usize, FunctionInfo>,
-    module: Arc<Module>,
+    module: Arc<CompiledModule>,
 }
 
 struct FunctionInfo {
@@ -146,7 +146,7 @@ impl Drop for GlobalFrameInfoRegistration {
 /// compiled functions within `module`. If the `module` has no functions
 /// then `None` will be returned. Otherwise the returned object, when
 /// dropped, will be used to unregister all name information from this map.
-pub fn register(module: &CompiledModule) -> Option<GlobalFrameInfoRegistration> {
+pub fn register(module: Arc<CompiledModule>) -> Option<GlobalFrameInfoRegistration> {
     let mut min = usize::max_value();
     let mut max = 0;
     let mut functions = BTreeMap::new();
@@ -165,7 +165,7 @@ pub fn register(module: &CompiledModule) -> Option<GlobalFrameInfoRegistration> 
         max = cmp::max(max, end);
         let func = FunctionInfo {
             start,
-            index: module.module().local.func_index(i),
+            index: module.local.func_index(i),
             traps: traps.to_vec(),
             instr_map: (*instrs).clone(),
         };
@@ -191,7 +191,7 @@ pub fn register(module: &CompiledModule) -> Option<GlobalFrameInfoRegistration> 
         ModuleFrameInfo {
             start: min,
             functions,
-            module: module.module().clone(),
+            module: module.clone(),
         },
     );
     assert!(prev.is_none());

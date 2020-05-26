@@ -37,13 +37,12 @@ pub(crate) fn create_handle(
 
     unsafe {
         let handle = InstanceHandle::new(
-            Arc::new(module),
+            Arc::new(Box::new(module)),
             finished_functions.into_boxed_slice(),
             trampolines,
             imports,
             store.memory_creator(),
             signatures.into_boxed_slice(),
-            None,
             state,
             store.compiler().interrupts().clone(),
         )?;

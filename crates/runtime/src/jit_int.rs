@@ -2,7 +2,10 @@
 //! the __jit_debug_register_code() and __jit_debug_descriptor to register
 //! or unregister generated object images with debuggers.
 
+use lazy_static::lazy_static;
+use std::pin::Pin;
 use std::ptr;
+use std::sync::Mutex;
 
 #[repr(C)]
 struct JITCodeEntry {
@@ -43,17 +46,25 @@ extern "C" fn __jit_debug_register_code() {
     }
 }
 
+lazy_static! {
+    pub static ref GDB_REGISTRATION: Mutex<u32> = Mutex::new(Default::default());
+}
+
 /// Registeration for JIT image
 pub struct GdbJitImageRegistration {
     entry: *mut JITCodeEntry,
-    file: Vec<u8>,
+    file: Pin<Box<[u8]>>,
 }
 
 impl GdbJitImageRegistration {
     /// Registers JIT image using __jit_debug_register_code
     pub fn register(file: Vec<u8>) -> Self {
+        let file = Pin::new(file.into_boxed_slice());
         Self {
-            entry: unsafe { register_gdb_jit_image(&file) },
+            entry: unsafe {
+                let _ = GDB_REGISTRATION.lock().unwrap();
+                register_gdb_jit_image(&file)
+            },
             file,
         }
     }
@@ -67,10 +78,14 @@ impl GdbJitImageRegistration {
 impl Drop for GdbJitImageRegistration {
     fn drop(&mut self) {
         unsafe {
+            let _ = GDB_REGISTRATION.lock().unwrap();
             unregister_gdb_jit_image(self.entry);
         }
     }
 }
+
+unsafe impl Send for GdbJitImageRegistration {}
+unsafe impl Sync for GdbJitImageRegistration {}
 
 unsafe fn register_gdb_jit_image(file: &[u8]) -> *mut JITCodeEntry {
     // Create a code entry for the file, which gives the start and size of the symbol file.

@@ -3,6 +3,7 @@ use crate::{Export, Extern, Func, Global, Memory, Module, Store, Table, Trap};
 use anyhow::{bail, Error, Result};
 use std::any::Any;
 use std::mem;
+use std::sync::Arc;
 use wasmtime_environ::EntityIndex;
 use wasmtime_jit::{CompiledModule, Resolver};
 use wasmtime_runtime::{InstantiationError, SignatureRegistry, VMContext, VMFunctionBody};
@@ -21,7 +22,7 @@ impl Resolver for SimpleResolver<'_> {
 
 fn instantiate(
     store: &Store,
-    compiled_module: &CompiledModule,
+    compiled_module: Arc<CompiledModule>,
     imports: &[Extern],
     sig_registry: &SignatureRegistry,
     host: Box<dyn Any>,
@@ -29,7 +30,8 @@ fn instantiate(
     let mut resolver = SimpleResolver { imports };
     unsafe {
         let config = store.engine().config();
-        let instance = compiled_module.instantiate(
+        let instance = CompiledModule::instantiate(
+            compiled_module.clone(),
             &mut resolver,
             sig_registry,
             config.memory_creator.as_ref().map(|a| a as _),
@@ -61,7 +63,7 @@ fn instantiate(
         // If a start function is present, now that we've got our compiled
         // instance we can invoke it. Make sure we use all the trap-handling
         // configuration in `store` as well.
-        if let Some(start) = instance.module().start_func {
+        if let Some(start) = instance.module_ref().start_func {
             let f = match instance.lookup_by_declaration(&EntityIndex::Function(start)) {
                 wasmtime_runtime::Export::Function(f) => f,
                 _ => unreachable!(), // valid modules shouldn't hit this
@@ -167,7 +169,7 @@ impl Instance {
         let info = module.register_frame_info();
         let handle = instantiate(
             store,
-            module.compiled_module(),
+            module.compiled_module().clone(),
             imports,
             &store.signatures(),
             Box::new(info),

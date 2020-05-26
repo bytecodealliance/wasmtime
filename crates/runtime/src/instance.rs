@@ -4,7 +4,6 @@
 
 use crate::export::Export;
 use crate::imports::Imports;
-use crate::jit_int::GdbJitImageRegistration;
 use crate::memory::{DefaultMemoryCreator, RuntimeLinearMemory, RuntimeMemoryCreator};
 use crate::table::Table;
 use crate::traphandlers::Trap;
@@ -21,7 +20,7 @@ use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::rc::Rc;
+use std::ops::Deref;
 use std::sync::Arc;
 use std::{mem, ptr, slice};
 use thiserror::Error;
@@ -37,8 +36,8 @@ use wasmtime_environ::{ir, DataInitializer, EntityIndex, Module, TableElements, 
 /// This is repr(C) to ensure that the vmctx field is last.
 #[repr(C)]
 pub(crate) struct Instance {
-    /// The `Module` this `Instance` was instantiated from.
-    module: Arc<Module>,
+    /// The `ModuleGrip` this `Instance` was instantiated from.
+    module: Arc<dyn Deref<Target = Module>>,
 
     /// Offsets in the `vmctx` region.
     offsets: VMOffsets,
@@ -67,9 +66,6 @@ pub(crate) struct Instance {
     /// Hosts can store arbitrary per-instance information here.
     host_state: Box<dyn Any>,
 
-    /// Optional image of JIT'ed code for debugger registration.
-    dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
-
     /// Externally allocated data indicating how this instance will be
     /// interrupted.
     pub(crate) interrupts: Arc<VMInterrupts>,
@@ -96,12 +92,8 @@ impl Instance {
         unsafe { *self.signature_ids_ptr().add(index) }
     }
 
-    pub(crate) fn module(&self) -> &Arc<Module> {
-        &self.module
-    }
-
     pub(crate) fn module_ref(&self) -> &Module {
-        &*self.module
+        &self.module
     }
 
     /// Return a pointer to the `VMSharedSignatureIndex`s.
@@ -781,18 +773,19 @@ impl InstanceHandle {
     /// the `wasmtime` crate API rather than this type since that is vetted for
     /// safety.
     pub unsafe fn new(
-        module: Arc<Module>,
+        module: Arc<dyn Deref<Target = Module>>,
         finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
         trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
         imports: Imports,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
         vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
-        dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
         host_state: Box<dyn Any>,
         interrupts: Arc<VMInterrupts>,
     ) -> Result<Self, InstantiationError> {
-        let tables = create_tables(&module);
-        let memories = create_memories(&module, mem_creator.unwrap_or(&DefaultMemoryCreator {}))?;
+        let module_ref = &*module;
+        let tables = create_tables(module_ref);
+        let memories =
+            create_memories(module_ref, mem_creator.unwrap_or(&DefaultMemoryCreator {}))?;
 
         let vmctx_tables = tables
             .values()
@@ -806,11 +799,11 @@ impl InstanceHandle {
             .collect::<PrimaryMap<DefinedMemoryIndex, _>>()
             .into_boxed_slice();
 
-        let vmctx_globals = create_globals(&module);
+        let vmctx_globals = create_globals(module_ref);
 
         let offsets = VMOffsets::new(mem::size_of::<*const u8>() as u8, &module.local);
 
-        let passive_data = RefCell::new(module.passive_data.clone());
+        let passive_data = RefCell::new(module_ref.passive_data.clone());
 
         let handle = {
             let instance = Instance {
@@ -822,7 +815,6 @@ impl InstanceHandle {
                 passive_data,
                 finished_functions,
                 trampolines,
-                dbg_jit_registration,
                 host_state,
                 interrupts,
                 vmctx: VMContext {},
@@ -939,11 +931,6 @@ impl InstanceHandle {
     /// Return a raw pointer to the vmctx used by compiled wasm code.
     pub fn vmctx_ptr(&self) -> *mut VMContext {
         self.instance().vmctx_ptr()
-    }
-
-    /// Return a reference-counting pointer to a module.
-    pub fn module(&self) -> &Arc<Module> {
-        self.instance().module()
     }
 
     /// Return a reference to a module.
@@ -1066,7 +1053,7 @@ impl InstanceHandle {
 
 fn check_table_init_bounds(instance: &Instance) -> Result<(), InstantiationError> {
     let module = Arc::clone(&instance.module);
-    for init in &module.table_elements {
+    for init in &module.as_ref().table_elements {
         let start = get_table_init_start(init, instance);
         let table = instance.get_table(init.table_index);
 
@@ -1170,7 +1157,7 @@ fn get_table_init_start(init: &TableElements, instance: &Instance) -> usize {
 
 /// Initialize the table memory from the provided initializers.
 fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
-    let module = Arc::clone(&instance.module);
+    let module = instance.module.as_ref();
     for init in &module.table_elements {
         let start = get_table_init_start(init, instance);
         let table = instance.get_table(init.table_index);
@@ -1208,6 +1195,7 @@ fn initialize_passive_elements(instance: &Instance) {
     passive_elements.extend(
         instance
             .module
+            .as_ref()
             .passive_elements
             .iter()
             .filter(|(_, segments)| !segments.is_empty())

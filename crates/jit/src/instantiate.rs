@@ -11,7 +11,6 @@ use crate::resolver::Resolver;
 use std::any::Any;
 use std::collections::HashMap;
 use std::io::Write;
-use std::rc::Rc;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_debug::read_debuginfo;
@@ -122,15 +121,32 @@ impl<'data> RawCompiledModule<'data> {
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
     code_memory: CodeMemory,
-    module: Arc<Module>,
+    module: Module,
     finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
     trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
     data_initializers: Box<[OwnedDataInitializer]>,
-    dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
+    #[allow(dead_code)]
+    dbg_jit_registration: Option<GdbJitImageRegistration>,
     traps: Traps,
     address_transform: ModuleAddressMap,
     interrupts: Arc<VMInterrupts>,
 }
+
+impl std::ops::Deref for CompiledModule {
+    type Target = Module;
+    fn deref(&self) -> &Self::Target {
+        &self.module
+    }
+}
+
+impl std::ops::DerefMut for CompiledModule {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.module
+    }
+}
+
+unsafe impl Send for CompiledModule {}
+unsafe impl Sync for CompiledModule {}
 
 impl CompiledModule {
     /// Compile a data buffer into a `CompiledModule`, which may then be instantiated.
@@ -172,11 +188,11 @@ impl CompiledModule {
     ) -> Self {
         Self {
             code_memory,
-            module: Arc::new(module),
+            module: module,
             finished_functions,
             trampolines,
             data_initializers,
-            dbg_jit_registration: dbg_jit_registration.map(Rc::new),
+            dbg_jit_registration,
             traps,
             address_transform,
             interrupts,
@@ -193,7 +209,7 @@ impl CompiledModule {
     ///
     /// See `InstanceHandle::new`
     pub unsafe fn instantiate(
-        &self,
+        module: Arc<CompiledModule>,
         resolver: &mut dyn Resolver,
         signature_registry: &SignatureRegistry,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
@@ -201,7 +217,7 @@ impl CompiledModule {
     ) -> Result<InstanceHandle, InstantiationError> {
         // Compute indices into the shared signature table.
         let signatures = {
-            self.module
+            module
                 .local
                 .signatures
                 .values()
@@ -210,21 +226,23 @@ impl CompiledModule {
         };
 
         let mut trampolines = HashMap::new();
-        for (i, trampoline) in self.trampolines.iter() {
+        for (i, trampoline) in module.trampolines.iter() {
             trampolines.insert(signatures[i], trampoline.clone());
         }
 
-        let imports = resolve_imports(&self.module, signature_registry, resolver)?;
+        let finished_functions = module.finished_functions.clone();
+        let interrupts = module.interrupts.clone();
+
+        let imports = resolve_imports(&module, signature_registry, resolver)?;
         InstanceHandle::new(
-            Arc::clone(&self.module),
-            self.finished_functions.clone(),
+            module,
+            finished_functions,
             trampolines,
             imports,
             mem_creator,
             signatures.into_boxed_slice(),
-            self.dbg_jit_registration.as_ref().map(|r| Rc::clone(&r)),
             host_state,
-            self.interrupts.clone(),
+            interrupts,
         )
     }
 
@@ -237,16 +255,6 @@ impl CompiledModule {
                 data: &*init.data,
             })
             .collect()
-    }
-
-    /// Return a reference-counting pointer to a module.
-    pub fn module(&self) -> &Arc<Module> {
-        &self.module
-    }
-
-    /// Return a reference-counting pointer to a module.
-    pub fn module_mut(&mut self) -> &mut Arc<Module> {
-        &mut self.module
     }
 
     /// Return a reference to a module.

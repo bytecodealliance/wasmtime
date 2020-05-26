@@ -80,7 +80,7 @@ pub struct Module {
 
 struct ModuleInner {
     store: Store,
-    compiled: CompiledModule,
+    compiled: Arc<CompiledModule>,
     frame_info_registration: Mutex<Option<Option<Arc<GlobalFrameInfoRegistration>>>>,
     #[allow(dead_code)]
     jit_code_registration: JitCodeRegistration,
@@ -171,7 +171,7 @@ impl Module {
     pub fn new_with_name(store: &Store, bytes: impl AsRef<[u8]>, name: &str) -> Result<Module> {
         let mut module = Module::new(store, bytes.as_ref())?;
         let inner = Arc::get_mut(&mut module.inner).unwrap();
-        Arc::get_mut(inner.compiled.module_mut()).unwrap().name = Some(name.to_string());
+        Arc::get_mut(&mut inner.compiled).unwrap().name = Some(name.to_string());
         Ok(module)
     }
 
@@ -318,14 +318,14 @@ impl Module {
         Ok(Module {
             inner: Arc::new(ModuleInner {
                 store: store.clone(),
-                compiled,
+                compiled: Arc::new(compiled),
                 frame_info_registration: Mutex::new(None),
                 jit_code_registration,
             }),
         })
     }
 
-    pub(crate) fn compiled_module(&self) -> &CompiledModule {
+    pub(crate) fn compiled_module(&self) -> &Arc<CompiledModule> {
         &self.inner.compiled
     }
 
@@ -354,7 +354,7 @@ impl Module {
     /// # }
     /// ```
     pub fn name(&self) -> Option<&str> {
-        self.inner.compiled.module().name.as_deref()
+        self.inner.compiled.name.as_deref()
     }
 
     /// Returns the list of imports that this [`Module`] has and must be
@@ -496,7 +496,7 @@ impl Module {
         if let Some(info) = &*info {
             return info.clone();
         }
-        let ret = super::frame_info::register(&self.inner.compiled).map(Arc::new);
+        let ret = super::frame_info::register(self.inner.compiled.clone()).map(Arc::new);
         *info = Some(ret.clone());
         return ret;
     }
