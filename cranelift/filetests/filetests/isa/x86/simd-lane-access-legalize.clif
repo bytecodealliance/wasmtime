@@ -55,7 +55,7 @@ block0:
 ; check:   block0:
 ; nextln:     v0 = iconst.i64 42
 ; nextln:     v2 = scalar_to_vector.i64x2 v0
-; nextln:     v1 = x86_pinsr v2, 1, v0
+; nextln:     v1 = x86_pinsr v2, v0, 1
 ; nextln:     return v1
 
 function %splat_b16() -> b16x8 {
@@ -67,7 +67,7 @@ block0:
 ; check:   block0:
 ; nextln:     v0 = bconst.b16 true
 ; nextln:     v2 = scalar_to_vector.b16x8 v0
-; nextln:     v3 = x86_pinsr v2, 1, v0
+; nextln:     v3 = x86_pinsr v2, v0, 1
 ; nextln:     v4 = raw_bitcast.i32x4 v3
 ; nextln:     v5 = x86_pshufd v4, 0
 ; nextln:     v1 = raw_bitcast.b16x8 v5

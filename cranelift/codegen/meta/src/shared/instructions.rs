@@ -559,9 +559,9 @@ fn define_simd_lane_access(
         The lane index, ``Idx``, is an immediate value, not an SSA value. It
         must indicate a valid lane index for the type of ``x``.
         "#,
-            &formats.insert_lane,
+            &formats.ternary_imm8,
         )
-        .operands_in(vec![x, Idx, y])
+        .operands_in(vec![x, y, Idx])
         .operands_out(vec![a]),
     );
 

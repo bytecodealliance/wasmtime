@@ -24,7 +24,6 @@ pub(crate) struct Formats {
     pub(crate) func_addr: Rc<InstructionFormat>,
     pub(crate) heap_addr: Rc<InstructionFormat>,
     pub(crate) indirect_jump: Rc<InstructionFormat>,
-    pub(crate) insert_lane: Rc<InstructionFormat>,
     pub(crate) int_compare: Rc<InstructionFormat>,
     pub(crate) int_compare_imm: Rc<InstructionFormat>,
     pub(crate) int_cond: Rc<InstructionFormat>,
@@ -45,6 +44,7 @@ pub(crate) struct Formats {
     pub(crate) store_complex: Rc<InstructionFormat>,
     pub(crate) table_addr: Rc<InstructionFormat>,
     pub(crate) ternary: Rc<InstructionFormat>,
+    pub(crate) ternary_imm8: Rc<InstructionFormat>,
     pub(crate) trap: Rc<InstructionFormat>,
     pub(crate) unary: Rc<InstructionFormat>,
     pub(crate) unary_bool: Rc<InstructionFormat>,
@@ -88,17 +88,17 @@ impl Formats {
                 .typevar_operand(1)
                 .build(),
 
+            ternary_imm8: Builder::new("TernaryImm8")
+                .value()
+                .imm(&imm.uimm8)
+                .value()
+                .build(),
+
             // Catch-all for instructions with many outputs and inputs and no immediate
             // operands.
             multiary: Builder::new("MultiAry").varargs().build(),
 
             nullary: Builder::new("NullAry").build(),
-
-            insert_lane: Builder::new("InsertLane")
-                .value()
-                .imm_with_name("lane", &imm.uimm8)
-                .value()
-                .build(),
 
             extract_lane: Builder::new("ExtractLane")
                 .value()
