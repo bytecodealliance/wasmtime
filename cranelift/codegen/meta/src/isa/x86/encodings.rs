@@ -1655,10 +1655,12 @@ fn define_simd(
     let x86_ptest = x86.by_name("x86_ptest");
     let x86_punpckh = x86.by_name("x86_punpckh");
     let x86_punpckl = x86.by_name("x86_punpckl");
+    let x86_vcvtudq2ps = x86.by_name("x86_vcvtudq2ps");
 
     // Shorthands for recipes.
     let rec_blend = r.template("blend");
     let rec_evex_reg_vvvv_rm_128 = r.template("evex_reg_vvvv_rm_128");
+    let rec_evex_reg_rm_128 = r.template("evex_reg_rm_128");
     let rec_f_ib = r.template("f_ib");
     let rec_fa = r.template("fa");
     let rec_fa_ib = r.template("fa_ib");
@@ -1702,6 +1704,7 @@ fn define_simd(
     let use_sse41_simd = settings.predicate_by_name("use_sse41_simd");
     let use_sse42_simd = settings.predicate_by_name("use_sse42_simd");
     let use_avx512dq_simd = settings.predicate_by_name("use_avx512dq_simd");
+    let use_avx512vl_simd = settings.predicate_by_name("use_avx512vl_simd");
 
     // SIMD vector size: eventually multiple vector sizes may be supported but for now only
     // SSE-sized vectors are available.
@@ -1885,6 +1888,12 @@ fn define_simd(
             .bind(vector(F32, sse_vector_size))
             .bind(vector(I32, sse_vector_size));
         e.enc_both(fcvt_from_sint_32, rec_furm.opcodes(&CVTDQ2PS));
+
+        e.enc_32_64_maybe_isap(
+            x86_vcvtudq2ps,
+            rec_evex_reg_rm_128.opcodes(&VCVTUDQ2PS),
+            Some(use_avx512vl_simd), // TODO need an OR predicate to join with AVX512F
+        );
     }
 
     // SIMD vconst for special cases (all zeroes, all ones)

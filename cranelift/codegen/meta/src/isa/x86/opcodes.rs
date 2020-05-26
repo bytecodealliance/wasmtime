@@ -665,6 +665,12 @@ pub static UCOMISS: [u8; 2] = [0x0f, 0x2e];
 /// Raise invalid opcode instruction.
 pub static UNDEFINED2: [u8; 2] = [0x0f, 0x0b];
 
+/// Convert four packed unsigned doubleword integers from xmm2/m128/m32bcst to packed
+/// single-precision floating-point values in xmm1 with writemask k1. Rounding behavior
+/// is controlled by MXCSR but can be overriden by EVEX.L'L in static rounding mode
+/// (AVX512VL, AVX512F).
+pub static VCVTUDQ2PS: [u8; 3] = [0xf2, 0x0f, 0x7a];
+
 /// imm{16,32} XOR r/m{16,32,64}, possibly sign-extended.
 pub static XOR_IMM: [u8; 1] = [0x81];
 

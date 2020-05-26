@@ -145,6 +145,37 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let f32x4 = &TypeVar::new(
+        "f32x4",
+        "A floating point number",
+        TypeSetBuilder::new()
+            .floats(32..32)
+            .simd_lanes(4..4)
+            .build(),
+    );
+    let i32x4 = &TypeVar::new(
+        "i32x4",
+        "An integer type with the same number of lanes",
+        TypeSetBuilder::new().ints(32..32).simd_lanes(4..4).build(),
+    );
+    let x = &Operand::new("x", i32x4);
+    let a = &Operand::new("a", f32x4);
+
+    ig.push(
+        Inst::new(
+            "x86_vcvtudq2ps",
+            r#"
+        Convert unsigned integer to floating point.
+
+        Convert packed doubleword unsigned integers to packed single-precision floating-point 
+        values. This instruction does not trap.
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
     let x = &Operand::new("x", Float);
     let a = &Operand::new("a", Float);
     let y = &Operand::new("y", Float);
