@@ -403,11 +403,10 @@ impl Linker {
                 let export_name = export.name().to_owned();
                 let func = Func::new(&self.store, func_ty.clone(), move |_, params, results| {
                     // Create a new instance for this command execution.
-                    let instance = Instance::new(&module, &imports).map_err(|error| match error
-                        .downcast::<Trap>()
-                    {
-                        Ok(trap) => trap,
-                        Err(error) => Trap::new(format!("{:?}", error)),
+                    let instance = Instance::new(&module, &imports).map_err(|error| {
+                        error
+                            .downcast::<Trap>()
+                            .unwrap_or_else(|error| Trap::new(format!("{:?}", error)))
                     })?;
 
                     // `unwrap()` everything here because we know the instance contains a
