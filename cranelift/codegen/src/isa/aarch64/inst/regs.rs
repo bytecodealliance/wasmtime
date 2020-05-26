@@ -1,5 +1,6 @@
 //! AArch64 ISA definitions: registers.
 
+use crate::ir::types::*;
 use crate::isa::aarch64::inst::InstSize;
 use crate::machinst::*;
 use crate::settings;
@@ -275,13 +276,17 @@ pub fn show_ireg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, size: InstSiz
     s
 }
 
-/// Show a vector register when its use as a 32-bit or 64-bit float is known.
+/// Show a vector register.
 pub fn show_freg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, size: InstSize) -> String {
     let mut s = reg.show_rru(mb_rru);
     if reg.get_class() != RegClass::V128 {
         return s;
     }
-    let prefix = if size.is32() { "s" } else { "d" };
+    let prefix = match size {
+        InstSize::Size32 => "s",
+        InstSize::Size64 => "d",
+        InstSize::Size128 => "q",
+    };
     s.replace_range(0..1, prefix);
     s
 }
@@ -305,5 +310,18 @@ pub fn show_vreg_scalar(reg: Reg, mb_rru: Option<&RealRegUniverse>) -> String {
             s.push('d');
         }
     }
+    s
+}
+
+/// Show a vector register.
+pub fn show_vreg_vector(reg: Reg, mb_rru: Option<&RealRegUniverse>, ty: Type) -> String {
+    assert_eq!(RegClass::V128, reg.get_class());
+    let mut s = reg.show_rru(mb_rru);
+
+    match ty {
+        F32X2 => s.push_str(".2s"),
+        _ => unimplemented!(),
+    }
+
     s
 }

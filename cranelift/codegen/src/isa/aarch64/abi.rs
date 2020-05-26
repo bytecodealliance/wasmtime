@@ -280,7 +280,7 @@ fn in_int_reg(ty: ir::Type) -> bool {
 
 fn in_vec_reg(ty: ir::Type) -> bool {
     match ty {
-        types::F32 | types::F64 => true,
+        types::F32 | types::F64 | types::I8X16 => true,
         _ => false,
     }
 }

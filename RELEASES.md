@@ -8,7 +8,10 @@ Unreleased
 
 ### Added
 
-### Changed
+* The [Commands and Reactors ABI] is now supported in the Rust API. `Linker::module`
+  loads a module and automatically handles Commands and Reactors semantics.
+
+[Commands and Reactors ABI]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
 
 ### Fixed
 

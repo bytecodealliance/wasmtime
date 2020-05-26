@@ -256,3 +256,97 @@ fn exit126_wasi_snapshot1() -> Result<()> {
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
     Ok(())
 }
+
+// Run a minimal command program.
+#[test]
+fn minimal_command() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/minimal-command.wat")?;
+    let stdout = run_wasmtime(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    assert_eq!(stdout, "");
+    Ok(())
+}
+
+// Run a minimal reactor program.
+#[test]
+fn minimal_reactor() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/minimal-reactor.wat")?;
+    let stdout = run_wasmtime(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    assert_eq!(stdout, "");
+    Ok(())
+}
+
+// Attempt to call invoke on a command.
+#[test]
+fn command_invoke() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/minimal-command.wat")?;
+    run_wasmtime(&[
+        "run",
+        wasm.path().to_str().unwrap(),
+        "--invoke",
+        "_start",
+        "--disable-cache",
+    ])?;
+    Ok(())
+}
+
+// Attempt to call invoke on a command.
+#[test]
+fn reactor_invoke() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/minimal-reactor.wat")?;
+    run_wasmtime(&[
+        "run",
+        wasm.path().to_str().unwrap(),
+        "--invoke",
+        "_initialize",
+        "--disable-cache",
+    ])?;
+    Ok(())
+}
+
+// Run the greeter test, which runs a preloaded reactor and a command.
+#[test]
+fn greeter() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/greeter_command.wat")?;
+    let stdout = run_wasmtime(&[
+        "run",
+        wasm.path().to_str().unwrap(),
+        "--disable-cache",
+        "--preload",
+        "reactor=tests/wasm/greeter_reactor.wat",
+    ])?;
+    assert_eq!(
+        stdout,
+        "Hello _initialize\nHello _start\nHello greet\nHello done\n"
+    );
+    Ok(())
+}
+
+// Run the greeter test, but this time preload a command.
+#[test]
+fn greeter_preload_command() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/greeter_reactor.wat")?;
+    let stdout = run_wasmtime(&[
+        "run",
+        wasm.path().to_str().unwrap(),
+        "--disable-cache",
+        "--preload",
+        "reactor=tests/wasm/hello_wasi_snapshot1.wat",
+    ])?;
+    assert_eq!(stdout, "Hello _initialize\n");
+    Ok(())
+}
+
+// Run the greeter test, which runs a preloaded reactor and a command.
+#[test]
+fn greeter_preload_callable_command() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/greeter_command.wat")?;
+    let stdout = run_wasmtime(&[
+        "run",
+        wasm.path().to_str().unwrap(),
+        "--disable-cache",
+        "--preload",
+        "reactor=tests/wasm/greeter_callable_command.wat",
+    ])?;
+    assert_eq!(stdout, "Hello _start\nHello callable greet\nHello done\n");
+    Ok(())
+}

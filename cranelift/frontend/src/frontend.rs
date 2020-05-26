@@ -272,6 +272,12 @@ impl<'a> FunctionBuilder<'a> {
 
     /// In order to use a variable in a `use_var`, you need to declare its type with this method.
     pub fn declare_var(&mut self, var: Variable, ty: Type) {
+        debug_assert_eq!(
+            self.func_ctx.types[var],
+            types::INVALID,
+            "variable {:?} is declared twice",
+            var
+        );
         self.func_ctx.types[var] = ty;
     }
 
@@ -285,6 +291,12 @@ impl<'a> FunctionBuilder<'a> {
                     var
                 )
             });
+            debug_assert_ne!(
+                ty,
+                types::INVALID,
+                "variable {:?} is used but its type has not been declared",
+                var
+            );
             self.func_ctx
                 .ssa
                 .use_var(self.func, var, ty, self.position.unwrap())

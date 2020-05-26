@@ -480,11 +480,14 @@ impl ShowWithRRU for BranchTarget {
 }
 
 /// Type used to communicate the operand size of a machine instruction, as AArch64 has 32- and
-/// 64-bit variants of many instructions (and integer registers).
+/// 64-bit variants of many instructions (and integer and floating-point registers) and 128-bit
+/// variants of vector instructions.
+/// TODO: Create a separate type for SIMD & floating-point operands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InstSize {
     Size32,
     Size64,
+    Size128,
 }
 
 impl InstSize {
@@ -507,11 +510,13 @@ impl InstSize {
     /// Convert from a needed width to the smallest size that fits.
     pub fn from_bits<I: Into<usize>>(bits: I) -> InstSize {
         let bits: usize = bits.into();
-        assert!(bits <= 64);
+        assert!(bits <= 128);
         if bits <= 32 {
             InstSize::Size32
-        } else {
+        } else if bits <= 64 {
             InstSize::Size64
+        } else {
+            InstSize::Size128
         }
     }
 
@@ -520,11 +525,12 @@ impl InstSize {
         Self::from_bits(ty_bits(ty))
     }
 
-    /// Convert to I32 or I64.
+    /// Convert to I32, I64, or I128.
     pub fn to_ty(self) -> Type {
         match self {
             InstSize::Size32 => I32,
             InstSize::Size64 => I64,
+            InstSize::Size128 => I128,
         }
     }
 
@@ -532,6 +538,9 @@ impl InstSize {
         match self {
             InstSize::Size32 => 0,
             InstSize::Size64 => 1,
+            _ => {
+                panic!("Unexpected size");
+            }
         }
     }
 }

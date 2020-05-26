@@ -179,7 +179,8 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             _ => (),
         },
         "Cranelift" => match (testsuite, testname) {
-            // All simd tests are known to fail on aarch64 for now, it's going
+            ("simd", "simd_store") => return false,
+            // Most simd tests are known to fail on aarch64 for now, it's going
             // to be a big chunk of work to implement them all there!
             ("simd", _) if target.contains("aarch64") => return true,
 

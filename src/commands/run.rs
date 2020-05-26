@@ -7,13 +7,13 @@ use std::time::Duration;
 use std::{
     ffi::{OsStr, OsString},
     fs::File,
-    path::{Component, Path, PathBuf},
+    path::{Component, PathBuf},
     process,
 };
 use structopt::{clap::AppSettings, StructOpt};
-use wasi_common::preopen_dir;
-use wasmtime::{Engine, Instance, Module, Store, Trap, Val, ValType};
-use wasmtime_wasi::{old::snapshot_0::Wasi as WasiSnapshot0, Wasi};
+use wasi_common::{preopen_dir, WasiCtxBuilder};
+use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
+use wasmtime_wasi::Wasi;
 
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
     // Do not accept wasmtime subcommand names as the module name
@@ -49,6 +49,14 @@ fn parse_dur(s: &str) -> Result<Duration> {
     // ... otherwise try to parse it with units such as `3s` or `300ms`
     let dur = humantime::parse_duration(s)?;
     Ok(dur)
+}
+
+fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
+    let parts: Vec<&str> = s.splitn(2, '=').collect();
+    if parts.len() != 2 {
+        bail!("must contain exactly one equals character ('=')");
+    }
+    Ok((parts[0].into(), parts[1].into()))
 }
 
 /// Runs a WebAssembly module
@@ -87,10 +95,10 @@ pub struct RunCommand {
     #[structopt(
         long = "preload",
         number_of_values = 1,
-        value_name = "MODULE_PATH",
-        parse(from_os_str)
+        value_name = "NAME=MODULE_PATH",
+        parse(try_from_str = parse_preloads)
     )]
-    preloads: Vec<PathBuf>,
+    preloads: Vec<(String, PathBuf)>,
 
     /// Maximum execution time of wasm code before timing out (1, 2s, 100ms, etc)
     #[structopt(
@@ -127,17 +135,25 @@ impl RunCommand {
         let preopen_dirs = self.compute_preopen_dirs()?;
         let argv = self.compute_argv();
 
-        let module_registry = ModuleRegistry::new(&store, &preopen_dirs, &argv, &self.vars)?;
+        let mut linker = Linker::new(&store);
+        populate_with_wasi(&mut linker, &preopen_dirs, &argv, &self.vars)?;
 
         // Load the preload wasm modules.
-        for preload in self.preloads.iter() {
-            Self::instantiate_module(&store, &module_registry, preload)
-                .with_context(|| format!("failed to process preload at `{}`", preload.display()))?;
+        for (name, path) in self.preloads.iter() {
+            // Read the wasm module binary either as `*.wat` or a raw binary
+            let module = Module::from_file(linker.store(), path)?;
+
+            // Add the module's functions to the linker.
+            linker.module(name, &module).context(format!(
+                "failed to process preload `{}` at `{}`",
+                name,
+                path.display()
+            ))?;
         }
 
         // Load the main wasm module.
         match self
-            .handle_module(&store, &module_registry)
+            .load_main_module(&mut linker)
             .with_context(|| format!("failed to run main module `{}`", self.module.display()))
         {
             Ok(()) => (),
@@ -220,79 +236,40 @@ impl RunCommand {
         result
     }
 
-    fn instantiate_module(
-        store: &Store,
-        module_registry: &ModuleRegistry,
-        path: &Path,
-    ) -> Result<Instance> {
-        // Read the wasm module binary either as `*.wat` or a raw binary
-        let data = wat::parse_file(path)?;
-
-        let module = Module::new(store, &data)?;
-
-        // Resolve import using module_registry.
-        let imports = module
-            .imports()
-            .map(|i| {
-                let export = match i.module() {
-                    "wasi_snapshot_preview1" => {
-                        module_registry.wasi_snapshot_preview1.get_export(i.name())
-                    }
-                    "wasi_unstable" => module_registry.wasi_unstable.get_export(i.name()),
-                    other => bail!("import module `{}` was not found", other),
-                };
-                match export {
-                    Some(export) => Ok(export.clone().into()),
-                    None => bail!(
-                        "import `{}` was not found in module `{}`",
-                        i.name(),
-                        i.module()
-                    ),
-                }
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let instance = Instance::new(&module, &imports)
-            .context(format!("failed to instantiate {:?}", path))?;
-
-        Ok(instance)
-    }
-
-    fn handle_module(&self, store: &Store, module_registry: &ModuleRegistry) -> Result<()> {
+    fn load_main_module(&self, linker: &mut Linker) -> Result<()> {
         if let Some(timeout) = self.wasm_timeout {
-            let handle = store.interrupt_handle()?;
+            let handle = linker.store().interrupt_handle()?;
             thread::spawn(move || {
                 thread::sleep(timeout);
                 handle.interrupt();
             });
         }
-        let instance = Self::instantiate_module(store, module_registry, &self.module)?;
+
+        // Read the wasm module binary either as `*.wat` or a raw binary.
+        // Use "" as a default module name.
+        let module = Module::from_file(linker.store(), &self.module)?;
+        linker
+            .module("", &module)
+            .context(format!("failed to instantiate {:?}", self.module))?;
 
         // If a function to invoke was given, invoke it.
         if let Some(name) = self.invoke.as_ref() {
-            self.invoke_export(instance, name)?;
-        } else if instance.exports().any(|export| export.name().is_empty()) {
-            // Launch the default command export.
-            self.invoke_export(instance, "")?;
+            self.invoke_export(linker, name)
         } else {
-            // If the module doesn't have a default command export, launch the
-            // _start function if one is present, as a compatibility measure.
-            self.invoke_export(instance, "_start")?;
+            let func = linker.get_default("")?;
+            self.invoke_func(func, None)
         }
-
-        Ok(())
     }
 
-    fn invoke_export(&self, instance: Instance, name: &str) -> Result<()> {
-        let func = if let Some(export) = instance.get_export(name) {
-            if let Some(func) = export.into_func() {
-                func
-            } else {
-                bail!("export of `{}` wasn't a function", name)
-            }
-        } else {
-            bail!("failed to find export of `{}` in module", name)
+    fn invoke_export(&self, linker: &Linker, name: &str) -> Result<()> {
+        let func = match linker.get_one_by_name("", name)?.into_func() {
+            Some(func) => func,
+            None => bail!("export of `{}` wasn't a function", name),
         };
+        self.invoke_func(func, Some(name))
+    }
+
+    fn invoke_func(&self, func: Func, name: Option<&str>) -> Result<()> {
         let ty = func.ty();
         if ty.params().len() > 0 {
             eprintln!(
@@ -305,7 +282,13 @@ impl RunCommand {
         for ty in ty.params() {
             let val = match args.next() {
                 Some(s) => s,
-                None => bail!("not enough arguments for `{}`", name),
+                None => {
+                    if let Some(name) = name {
+                        bail!("not enough arguments for `{}`", name)
+                    } else {
+                        bail!("not enough arguments for command default")
+                    }
+                }
             };
             values.push(match ty {
                 // TODO: integer parsing here should handle hexadecimal notation
@@ -321,9 +304,13 @@ impl RunCommand {
 
         // Invoke the function and then afterwards print all the results that came
         // out, if there are any.
-        let results = func
-            .call(&values)
-            .with_context(|| format!("failed to invoke `{}`", name))?;
+        let results = func.call(&values).with_context(|| {
+            if let Some(name) = name {
+                format!("failed to invoke `{}`", name)
+            } else {
+                format!("failed to invoke command default")
+            }
+        })?;
         if !results.is_empty() {
             eprintln!(
                 "warning: using `--invoke` with a function that returns values \
@@ -347,41 +334,36 @@ impl RunCommand {
     }
 }
 
-struct ModuleRegistry {
-    wasi_snapshot_preview1: Wasi,
-    wasi_unstable: WasiSnapshot0,
-}
+/// Populates the given `Linker` with WASI APIs.
+fn populate_with_wasi(
+    linker: &mut Linker,
+    preopen_dirs: &[(String, File)],
+    argv: &[String],
+    vars: &[(String, String)],
+) -> Result<()> {
+    // Add the current snapshot to the linker.
+    let mut cx = WasiCtxBuilder::new();
+    cx.inherit_stdio().args(argv).envs(vars);
 
-impl ModuleRegistry {
-    fn new(
-        store: &Store,
-        preopen_dirs: &[(String, File)],
-        argv: &[String],
-        vars: &[(String, String)],
-    ) -> Result<ModuleRegistry> {
-        let mut cx1 = wasi_common::WasiCtxBuilder::new();
-
-        cx1.inherit_stdio().args(argv).envs(vars);
-
-        for (name, file) in preopen_dirs {
-            cx1.preopened_dir(file.try_clone()?, name);
-        }
-
-        let cx1 = cx1.build()?;
-
-        let mut cx2 = wasi_common::old::snapshot_0::WasiCtxBuilder::new();
-
-        cx2.inherit_stdio().args(argv).envs(vars);
-
-        for (name, file) in preopen_dirs {
-            cx2.preopened_dir(file.try_clone()?, name);
-        }
-
-        let cx2 = cx2.build()?;
-
-        Ok(ModuleRegistry {
-            wasi_snapshot_preview1: Wasi::new(store, cx1),
-            wasi_unstable: WasiSnapshot0::new(store, cx2),
-        })
+    for (name, file) in preopen_dirs {
+        cx.preopened_dir(file.try_clone()?, name);
     }
+
+    let cx = cx.build()?;
+    let wasi = Wasi::new(linker.store(), cx);
+    wasi.add_to_linker(linker)?;
+
+    // Repeat the above, but this time for snapshot 0.
+    let mut cx = wasi_common::old::snapshot_0::WasiCtxBuilder::new();
+    cx.inherit_stdio().args(argv).envs(vars);
+
+    for (name, file) in preopen_dirs {
+        cx.preopened_dir(file.try_clone()?, name);
+    }
+
+    let cx = cx.build()?;
+    let wasi = wasmtime_wasi::old::snapshot_0::Wasi::new(linker.store(), cx);
+    wasi.add_to_linker(linker)?;
+
+    Ok(())
 }

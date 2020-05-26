@@ -4,7 +4,9 @@
 #![allow(dead_code)]
 
 use crate::binemit::CodeOffset;
-use crate::ir::types::{B1, B16, B32, B64, B8, F32, F64, FFLAGS, I16, I32, I64, I8, IFLAGS};
+use crate::ir::types::{
+    B1, B16, B32, B64, B8, F32, F32X2, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS,
+};
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
@@ -122,6 +124,19 @@ pub enum FPUOp2 {
     Max64,
     Min32,
     Min64,
+}
+
+/// A floating-point unit (FPU) operation with two args, a register and an immediate.
+#[derive(Copy, Clone, Debug)]
+pub enum FPUOpRI {
+    /// Unsigned right shift. Rd = Rn << #imm
+    UShr32(FPURightShiftImm),
+    /// Unsigned right shift. Rd = Rn << #imm
+    UShr64(FPURightShiftImm),
+    /// Shift left and insert. Rd |= Rn << #imm
+    Sli32(FPULeftShiftImm),
+    /// Shift left and insert. Rd |= Rn << #imm
+    Sli64(FPULeftShiftImm),
 }
 
 /// A floating-point unit (FPU) operation with three args.
@@ -457,6 +472,12 @@ pub enum Inst {
         rn: Reg,
     },
 
+    /// Vector register move.
+    FpuMove128 {
+        rd: Writable<Reg>,
+        rn: Reg,
+    },
+
     /// 1-op FPU instruction.
     FpuRR {
         fpu_op: FPUOp1,
@@ -470,6 +491,12 @@ pub enum Inst {
         rd: Writable<Reg>,
         rn: Reg,
         rm: Reg,
+    },
+
+    FpuRRI {
+        fpu_op: FPUOpRI,
+        rd: Writable<Reg>,
+        rn: Reg,
     },
 
     /// 3-op FPU instruction.
@@ -538,6 +565,11 @@ pub enum Inst {
     LoadFpuConst64 {
         rd: Writable<Reg>,
         const_data: f64,
+    },
+
+    LoadFpuConst128 {
+        rd: Writable<Reg>,
+        const_data: u128,
     },
 
     /// Conversion: FP -> integer.
@@ -797,6 +829,11 @@ impl Inst {
                 rd: to_reg,
                 rm: from_reg,
             }
+        } else if from_reg.get_class() == RegClass::V128 {
+            Inst::FpuMove128 {
+                rd: to_reg,
+                rn: from_reg,
+            }
         } else {
             Inst::FpuMove64 {
                 rd: to_reg,
@@ -882,6 +919,14 @@ impl Inst {
     pub fn load_fp_constant64(rd: Writable<Reg>, value: f64) -> Inst {
         // TODO: use FMOV immediate form when `value` has sufficiently few mantissa/exponent bits.
         Inst::LoadFpuConst64 {
+            rd,
+            const_data: value,
+        }
+    }
+
+    /// Create an instruction that loads a 128-bit vector constant.
+    pub fn load_fp_constant128(rd: Writable<Reg>, value: u128) -> Inst {
+        Inst::LoadFpuConst128 {
             rd,
             const_data: value,
         }
@@ -1025,6 +1070,10 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             collector.add_use(rn);
         }
+        &Inst::FpuMove128 { rd, rn } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
+        }
         &Inst::FpuRR { rd, rn, .. } => {
             collector.add_def(rd);
             collector.add_use(rn);
@@ -1033,6 +1082,13 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             collector.add_use(rn);
             collector.add_use(rm);
+        }
+        &Inst::FpuRRI { fpu_op, rd, rn, .. } => {
+            match fpu_op {
+                FPUOpRI::UShr32(..) | FPUOpRI::UShr64(..) => collector.add_def(rd),
+                FPUOpRI::Sli32(..) | FPUOpRI::Sli64(..) => collector.add_mod(rd),
+            }
+            collector.add_use(rn);
         }
         &Inst::FpuRRRR { rd, rn, rm, ra, .. } => {
             collector.add_def(rd);
@@ -1068,7 +1124,9 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(rd);
             memarg_regs(mem, collector);
         }
-        &Inst::LoadFpuConst32 { rd, .. } | &Inst::LoadFpuConst64 { rd, .. } => {
+        &Inst::LoadFpuConst32 { rd, .. }
+        | &Inst::LoadFpuConst64 { rd, .. }
+        | &Inst::LoadFpuConst128 { rd, .. } => {
             collector.add_def(rd);
         }
         &Inst::FpuToInt { rd, rn, .. } => {
@@ -1464,6 +1522,13 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_def(mapper, rd);
             map_use(mapper, rn);
         }
+        &mut Inst::FpuMove128 {
+            ref mut rd,
+            ref mut rn,
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+        }
         &mut Inst::FpuRR {
             ref mut rd,
             ref mut rn,
@@ -1481,6 +1546,14 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_def(mapper, rd);
             map_use(mapper, rn);
             map_use(mapper, rm);
+        }
+        &mut Inst::FpuRRI {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
         }
         &mut Inst::FpuRRRR {
             ref mut rd,
@@ -1560,6 +1633,9 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_def(mapper, rd);
         }
         &mut Inst::LoadFpuConst64 { ref mut rd, .. } => {
+            map_def(mapper, rd);
+        }
+        &mut Inst::LoadFpuConst128 { ref mut rd, .. } => {
             map_def(mapper, rd);
         }
         &mut Inst::FpuToInt {
@@ -1746,6 +1822,7 @@ impl MachInst for Inst {
         match self {
             &Inst::Mov { rd, rm } => Some((rd, rm)),
             &Inst::FpuMove64 { rd, rn } => Some((rd, rn)),
+            &Inst::FpuMove128 { rd, rn } => Some((rd, rn)),
             _ => None,
         }
     }
@@ -1779,7 +1856,7 @@ impl MachInst for Inst {
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
-        assert!(ty.bits() <= 64); // no vector support yet!
+        assert!(ty.bits() <= 128);
         Inst::mov(to_reg, from_reg)
     }
 
@@ -1831,6 +1908,7 @@ impl MachInst for Inst {
             I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 => Ok(RegClass::I64),
             F32 | F64 => Ok(RegClass::V128),
             IFLAGS | FFLAGS => Ok(RegClass::I64),
+            I8X16 => Ok(RegClass::V128),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty
@@ -2201,6 +2279,11 @@ impl ShowWithRRU for Inst {
                 let rn = rn.show_rru(mb_rru);
                 format!("mov {}.8b, {}.8b", rd, rn)
             }
+            &Inst::FpuMove128 { rd, rn } => {
+                let rd = rd.to_reg().show_rru(mb_rru);
+                let rn = rn.show_rru(mb_rru);
+                format!("mov {}.16b, {}.16b", rd, rn)
+            }
             &Inst::FpuRR { fpu_op, rd, rn } => {
                 let (op, sizesrc, sizedest) = match fpu_op {
                     FPUOp1::Abs32 => ("fabs", InstSize::Size32, InstSize::Size32),
@@ -2235,6 +2318,23 @@ impl ShowWithRRU for Inst {
                 let rn = show_freg_sized(rn, mb_rru, size);
                 let rm = show_freg_sized(rm, mb_rru, size);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
+            }
+            &Inst::FpuRRI { fpu_op, rd, rn } => {
+                let (op, imm, vector) = match fpu_op {
+                    FPUOpRI::UShr32(imm) => ("ushr", imm.show_rru(mb_rru), true),
+                    FPUOpRI::UShr64(imm) => ("ushr", imm.show_rru(mb_rru), false),
+                    FPUOpRI::Sli32(imm) => ("sli", imm.show_rru(mb_rru), true),
+                    FPUOpRI::Sli64(imm) => ("sli", imm.show_rru(mb_rru), false),
+                };
+
+                let show_vreg_fn: fn(Reg, Option<&RealRegUniverse>) -> String = if vector {
+                    |reg, mb_rru| show_vreg_vector(reg, mb_rru, F32X2)
+                } else {
+                    show_vreg_scalar
+                };
+                let rd = show_vreg_fn(rd.to_reg(), mb_rru);
+                let rn = show_vreg_fn(rn, mb_rru);
+                format!("{} {}, {}, {}", op, rd, rn, imm)
             }
             &Inst::FpuRRRR {
                 fpu_op,
@@ -2308,6 +2408,10 @@ impl ShowWithRRU for Inst {
             &Inst::LoadFpuConst64 { rd, const_data } => {
                 let rd = show_freg_sized(rd.to_reg(), mb_rru, InstSize::Size64);
                 format!("ldr {}, pc+8 ; b 12 ; data.f64 {}", rd, const_data)
+            }
+            &Inst::LoadFpuConst128 { rd, const_data } => {
+                let rd = show_freg_sized(rd.to_reg(), mb_rru, InstSize::Size128);
+                format!("ldr {}, pc+8 ; b 20 ; data.f128 0x{:032x}", rd, const_data)
             }
             &Inst::FpuToInt { op, rd, rn } => {
                 let (op, sizesrc, sizedest) = match op {
