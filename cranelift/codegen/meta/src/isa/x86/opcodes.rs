@@ -347,6 +347,10 @@ pub static PAVGW: [u8; 3] = [0x66, 0x0f, 0xE3];
 /// in XMM0 and store the values into xmm1 (SSE4.1).
 pub static PBLENDVB: [u8; 4] = [0x66, 0x0f, 0x38, 0x10];
 
+/// Select words from xmm1 and xmm2/m128 from mask specified in imm8 and store the values into xmm1
+/// (SSE4.1).
+pub static PBLENDW: [u8; 4] = [0x66, 0x0f, 0x3a, 0x0e];
+
 /// Compare packed data for equal (SSE2).
 pub static PCMPEQB: [u8; 3] = [0x66, 0x0f, 0x74];
 

@@ -333,6 +333,20 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let mask = &Operand::new("mask", uimm8).with_doc("mask to select lanes from b");
+    ig.push(
+        Inst::new(
+            "x86_pblendw",
+            r#"
+    Blend packed words using an immediate mask. Each bit of the 8-bit immediate corresponds to a 
+    lane in ``b``: if the bit is set, the lane is copied into ``a``.
+    "#,
+            &formats.ternary_imm8,
+        )
+        .operands_in(vec![a, b, mask])
+        .operands_out(vec![a]),
+    );
+
     let Idx = &Operand::new("Idx", uimm8).with_doc("Lane index");
     let x = &Operand::new("x", TxN);
     let a = &Operand::new("a", &TxN.lane_of());

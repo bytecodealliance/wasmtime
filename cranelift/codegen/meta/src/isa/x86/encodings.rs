@@ -1639,6 +1639,7 @@ fn define_simd(
     let x86_movlhps = x86.by_name("x86_movlhps");
     let x86_movsd = x86.by_name("x86_movsd");
     let x86_packss = x86.by_name("x86_packss");
+    let x86_pblendw = x86.by_name("x86_pblendw");
     let x86_pextr = x86.by_name("x86_pextr");
     let x86_pinsr = x86.by_name("x86_pinsr");
     let x86_pmaxs = x86.by_name("x86_pmaxs");
@@ -1741,6 +1742,13 @@ fn define_simd(
         };
         let instruction = vselect.bind(vector(ty, sse_vector_size));
         let template = rec_blend.opcodes(opcode);
+        e.enc_both_inferred_maybe_isap(instruction, template, Some(use_sse41_simd));
+    }
+
+    // PBLENDW, select lanes using a u8 immediate.
+    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 16) {
+        let instruction = x86_pblendw.bind(vector(ty, sse_vector_size));
+        let template = rec_fa_ib.opcodes(&PBLENDW);
         e.enc_both_inferred_maybe_isap(instruction, template, Some(use_sse41_simd));
     }
 
