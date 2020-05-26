@@ -3,154 +3,37 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 
+mod inst;
+mod abi;
+mod lower;
+
 use alloc::boxed::Box;
-
-use regalloc::RealRegUniverse;
-use target_lexicon::Triple;
-
-use crate::ir::Function;
-use crate::isa::Builder as IsaBuilder;
-use crate::machinst::pretty_print::ShowWithRRU;
-use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter, VCode};
-use crate::settings::{self, Flags};
-use crate::result::{CodegenResult, CodegenError};
-use crate::machinst::{MachBuffer, MachInst, MachInstEmit};
-use crate::machinst::MachTerminator;
-use crate::machinst::buffer::MachLabel;
-use crate::ir::types::Type;
 use crate::binemit::CodeOffset;
+use crate::ir::Function;
+use crate::ir::types::Type;
+use crate::isa::Builder as IsaBuilder;
+use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter, VCode};
+use crate::machinst::{MachBuffer, MachInst, MachInstEmit};
+use crate::machinst::buffer::MachLabel;
 use crate::machinst::MachInstLabelUse;
-
+use crate::machinst::MachTerminator;
+use crate::machinst::pretty_print::ShowWithRRU;
+use crate::result::{CodegenResult, CodegenError};
+use crate::settings::{self, Flags};
+use inst::Inst;
 use regalloc::NUM_REG_CLASSES;
+use regalloc::RealRegUniverse;
+use regalloc::Reg;
+use regalloc::RegClass;
 use regalloc::RegUsageCollector;
 use regalloc::RegUsageMapper;
-use regalloc::Writable;
-use regalloc::Reg;
 use regalloc::SpillSlot;
-use regalloc::RegClass;
 use regalloc::VirtualReg;
-
+use regalloc::Writable;
 use smallvec::SmallVec;
 use target_lexicon::Architecture;
+use target_lexicon::Triple;
 
-#[derive(Clone, Debug)]
-enum SpirvInst {
-    Nop
-}
-
-#[derive(Debug, Default, Clone)]
-struct MachInstEmitState {
-
-}
-
-impl MachInstEmit for SpirvInst {
-    type State = MachInstEmitState;
-
-    fn emit(&self, code: &mut MachBuffer<Self>, flags: &Flags, state: &mut Self::State) {
-
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LabelUse {
-    Standard
-}
-
-impl MachInstLabelUse for LabelUse {
-    const ALIGN: CodeOffset = 4;
-
-    fn max_pos_range(self) -> CodeOffset {
-        0
-    }
-
-    fn max_neg_range(self) -> CodeOffset {
-        0
-    }
-
-    fn patch_size(self) -> CodeOffset {
-        4
-    }
-
-    fn patch(self, buffer: &mut [u8], use_offset: CodeOffset, label_offset: CodeOffset) {
-        
-    }
-
-    fn supports_veneer(self) -> bool {
-        false
-    }
-
-    fn veneer_size(self) -> CodeOffset {
-        4
-    }
-
-    fn generate_veneer(
-        self,
-        buffer: &mut [u8],
-        veneer_offset: CodeOffset,
-    ) -> (CodeOffset, LabelUse) {
-        (0, Self::Standard)
-    }
-}
-
-impl MachInst for SpirvInst {
-    fn get_regs(&self, collector: &mut RegUsageCollector) {}
-
-    fn map_regs<RUM: RegUsageMapper>(&mut self, maps: &RUM) {}
-
-    fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
-        None
-    }
-
-    fn is_term<'a>(&'a self) -> MachTerminator<'a> {
-        MachTerminator::None
-    }
-
-    fn is_epilogue_placeholder(&self) -> bool {
-        false
-    }
-
-    fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self {
-        SpirvInst::Nop
-    }
-
-    fn gen_constant(to_reg: Writable<Reg>, value: u64, ty: Type) -> SmallVec<[Self; 4]> {
-        SmallVec::new()
-    }
-
-    fn gen_zero_len_nop() -> Self {
-        SpirvInst::Nop
-    }
-
-    fn maybe_direct_reload(&self, reg: VirtualReg, slot: SpillSlot) -> Option<Self> {
-        None
-    }
-
-    fn rc_for_type(ty: Type) -> CodegenResult<RegClass> {
-        Err(CodegenError::Unsupported(format!("rc_for_type")))
-    }
-
-    fn gen_jump(target: MachLabel) -> Self {
-        SpirvInst::Nop
-    }
-
-    fn gen_nop(preferred_size: usize) -> Self {
-        SpirvInst::Nop
-    }
-
-    fn reg_universe(flags: &Flags) -> RealRegUniverse {
-        RealRegUniverse {
-            regs: vec![],
-            allocable: 0,
-            allocable_by_class: [None; NUM_REG_CLASSES],
-        }
-    }
-
-    fn worst_case_size() -> CodeOffset {
-        0
-    }
-
-    type LabelUse = LabelUse;
-}
 
 pub(crate) struct SpirvBackend {
     triple: Triple,
@@ -173,13 +56,11 @@ impl SpirvBackend {
         }
     }
 
-    fn compile_vcode(&self, func: &Function, flags: Flags) -> CodegenResult<VCode<SpirvInst>> {
+    fn compile_vcode(&self, func: &Function, flags: Flags) -> CodegenResult<VCode<Inst>> {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
-        //let abi = Box::new(abi::X64ABIBody::new(&func, flags));
-        //compile::compile::<Self>(&func, self, abi)
-
-        Err(CodegenError::Unsupported(format!("compile_vcode")))
+        let abi = Box::new(abi::SpirvABIBody::new());//&func, flags));
+        compile::compile::<Self>(&func, self, abi)
     }
 }
 
