@@ -49,75 +49,6 @@ pub enum SetupError {
     DebugInfo(#[from] anyhow::Error),
 }
 
-/// This is similar to `CompiledModule`, but references the data initializers
-/// from the wasm buffer rather than holding its own copy.
-struct RawCompiledModule<'data> {
-    code_memory: CodeMemory,
-    module: Module,
-    finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
-    trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
-    data_initializers: Box<[DataInitializer<'data>]>,
-    dbg_jit_registration: Option<GdbJitImageRegistration>,
-    traps: Traps,
-    address_transform: ModuleAddressMap,
-}
-
-impl<'data> RawCompiledModule<'data> {
-    /// Create a new `RawCompiledModule` by compiling the wasm module in `data` and instatiating it.
-    fn new(
-        compiler: &Compiler,
-        data: &'data [u8],
-        profiler: &dyn ProfilingAgent,
-    ) -> Result<Self, SetupError> {
-        let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
-
-        let translation = environ
-            .translate(data)
-            .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
-
-        let mut debug_data = None;
-        if compiler.tunables().debug_info {
-            // TODO Do we want to ignore invalid DWARF data?
-            debug_data = Some(read_debuginfo(&data)?);
-        }
-
-        let compilation = compiler.compile(&translation, debug_data)?;
-
-        link_module(&translation.module, &compilation);
-
-        // Make all code compiled thus far executable.
-        let mut code_memory = compilation.code_memory;
-        code_memory.publish(compiler.isa());
-
-        // Initialize profiler and load the wasm module
-        profiler.module_load(
-            &translation.module,
-            &compilation.finished_functions,
-            compilation.dbg_image.as_deref(),
-        );
-
-        let dbg_jit_registration = if let Some(img) = compilation.dbg_image {
-            let mut bytes = Vec::new();
-            bytes.write_all(&img).expect("all written");
-            let reg = GdbJitImageRegistration::register(bytes);
-            Some(reg)
-        } else {
-            None
-        };
-
-        Ok(Self {
-            code_memory,
-            module: translation.module,
-            finished_functions: compilation.finished_functions.into_boxed_slice(),
-            trampolines: compilation.trampolines,
-            data_initializers: translation.data_initializers.into_boxed_slice(),
-            dbg_jit_registration,
-            traps: compilation.traps,
-            address_transform: compilation.address_transform,
-        })
-    }
-}
-
 struct FinishedFunctions(BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>);
 
 unsafe impl Send for FinishedFunctions {}
@@ -156,45 +87,64 @@ impl CompiledModule {
         data: &'data [u8],
         profiler: &dyn ProfilingAgent,
     ) -> Result<Self, SetupError> {
-        let raw = RawCompiledModule::<'data>::new(compiler, data, profiler)?;
+        let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
 
-        Ok(Self::from_parts(
-            raw.code_memory,
-            raw.module,
-            raw.finished_functions,
-            raw.trampolines,
-            raw.data_initializers
-                .iter()
-                .map(OwnedDataInitializer::new)
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
-            raw.dbg_jit_registration,
-            raw.traps,
-            raw.address_transform,
-        ))
-    }
+        let translation = environ
+            .translate(data)
+            .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
 
-    /// Construct a `CompiledModule` from component parts.
-    pub fn from_parts(
-        code_memory: CodeMemory,
-        module: Module,
-        finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
-        trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
-        data_initializers: Box<[OwnedDataInitializer]>,
-        dbg_jit_registration: Option<GdbJitImageRegistration>,
-        traps: Traps,
-        address_transform: ModuleAddressMap,
-    ) -> Self {
-        Self {
+        let mut debug_data = None;
+        if compiler.tunables().debug_info {
+            // TODO Do we want to ignore invalid DWARF data?
+            debug_data = Some(read_debuginfo(&data)?);
+        }
+
+        let compilation = compiler.compile(&translation, debug_data)?;
+
+        let module = translation.module;
+
+        link_module(&module, &compilation);
+
+        // Make all code compiled thus far executable.
+        let mut code_memory = compilation.code_memory;
+        code_memory.publish(compiler.isa());
+
+        let data_initializers = translation
+            .data_initializers
+            .into_iter()
+            .map(OwnedDataInitializer::new)
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+
+        // Initialize profiler and load the wasm module
+        profiler.module_load(
+            &module,
+            &compilation.finished_functions,
+            compilation.dbg_image.as_deref(),
+        );
+
+        let dbg_jit_registration = if let Some(img) = compilation.dbg_image {
+            let mut bytes = Vec::new();
+            bytes.write_all(&img).expect("all written");
+            let reg = GdbJitImageRegistration::register(bytes);
+            Some(reg)
+        } else {
+            None
+        };
+
+        let finished_functions =
+            FinishedFunctions(compilation.finished_functions.into_boxed_slice());
+
+        Ok(Self {
             code_memory,
-            module: module,
-            finished_functions: FinishedFunctions(finished_functions),
-            trampolines,
+            module,
+            finished_functions,
+            trampolines: compilation.trampolines,
             data_initializers,
             dbg_jit_registration,
-            traps,
-            address_transform,
-        }
+            traps: compilation.traps,
+            address_transform: compilation.address_transform,
+        })
     }
 
     /// Crate an `Instance` from this `CompiledModule`.
@@ -292,7 +242,7 @@ pub struct OwnedDataInitializer {
 }
 
 impl OwnedDataInitializer {
-    fn new(borrowed: &DataInitializer<'_>) -> Self {
+    fn new(borrowed: DataInitializer<'_>) -> Self {
         Self {
             location: borrowed.location.clone(),
             data: borrowed.data.to_vec().into_boxed_slice(),
