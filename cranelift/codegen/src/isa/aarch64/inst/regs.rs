@@ -276,13 +276,17 @@ pub fn show_ireg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, size: InstSiz
     s
 }
 
-/// Show a vector register when its use as a 32-bit or 64-bit float is known.
+/// Show a vector register.
 pub fn show_freg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, size: InstSize) -> String {
     let mut s = reg.show_rru(mb_rru);
     if reg.get_class() != RegClass::V128 {
         return s;
     }
-    let prefix = if size.is32() { "s" } else { "d" };
+    let prefix = match size {
+        InstSize::Size32 => "s",
+        InstSize::Size64 => "d",
+        InstSize::Size128 => "q",
+    };
     s.replace_range(0..1, prefix);
     s
 }

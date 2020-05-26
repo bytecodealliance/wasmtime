@@ -7,8 +7,8 @@ use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_side_effect_or_load, is_constant_64bit};
 use crate::ir::instructions::BranchInfo;
 use crate::ir::{
-    ArgumentExtension, Block, ExternalName, Function, GlobalValueData, Inst, InstructionData,
-    MemFlags, Opcode, Signature, SourceLoc, Type, Value, ValueDef,
+    ArgumentExtension, Block, Constant, ConstantData, ExternalName, Function, GlobalValueData,
+    Inst, InstructionData, MemFlags, Opcode, Signature, SourceLoc, Type, Value, ValueDef,
 };
 use crate::machinst::{
     ABIBody, BlockIndex, BlockLoweringOrder, LoweredBlock, MachLabel, VCode, VCodeBuilder,
@@ -145,6 +145,8 @@ pub trait LowerCtx {
     /// `get_input()`. Codegen may not happen otherwise for the producing
     /// instruction if it has no side effects and no uses.
     fn use_input_reg(&mut self, input: LowerInput);
+    /// Retrieve constant data given a handle.
+    fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData;
 }
 
 /// A representation of all of the ways in which an instruction input is
@@ -912,6 +914,10 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
     fn use_input_reg(&mut self, input: LowerInput) {
         debug!("use_input_reg: vreg {:?} is needed", input.reg);
         self.vreg_needed[input.reg.get_index()] = true;
+    }
+
+    fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData {
+        self.f.dfg.constants.get(constant_handle)
     }
 }
 

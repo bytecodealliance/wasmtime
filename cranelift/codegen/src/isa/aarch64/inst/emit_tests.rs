@@ -2165,6 +2165,15 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::FpuMove128 {
+            rd: writable_vreg(17),
+            rn: vreg(26),
+        },
+        "511FBA4E",
+        "mov v17.16b, v26.16b",
+    ));
+
+    insns.push((
         Inst::FpuRR {
             fpu_op: FPUOp1::Abs32,
             rd: writable_vreg(15),
@@ -2724,6 +2733,15 @@ fn test_aarch64_binemit() {
         },
         "5000005C03000014000000000000F03F",
         "ldr d16, pc+8 ; b 12 ; data.f64 1",
+    ));
+
+    insns.push((
+        Inst::LoadFpuConst128 {
+            rd: writable_vreg(5),
+            const_data: 0x0f0e0d0c0b0a09080706050403020100,
+        },
+        "4500009C05000014000102030405060708090A0B0C0D0E0F",
+        "ldr q5, pc+8 ; b 20 ; data.f128 0x0f0e0d0c0b0a09080706050403020100",
     ));
 
     insns.push((
