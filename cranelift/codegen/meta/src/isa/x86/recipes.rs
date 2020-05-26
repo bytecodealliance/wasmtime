@@ -3417,5 +3417,23 @@ pub(crate) fn define<'shared>(
         regs).rex_kind(RecipePrefixKind::Evex)
     );
 
+    recipes.add_template(
+        Template::new(
+            EncodingRecipeBuilder::new("evex_reg_rm_128", &formats.unary, 1)
+                .operands_in(vec![fpr])
+                .operands_out(vec![fpr])
+                .emit(
+                    r#"
+                // instruction encoding operands: reg (op1, w), rm (op2, r)
+                // this maps to:                  out_reg0,     in_reg0
+                let context = EvexContext::Other { length: EvexVectorLength::V128 };
+                let masking = EvexMasking::None;
+                put_evex(bits, out_reg0, 0, in_reg0, context, masking, sink); // params: reg, vvvv, rm
+                modrm_rr(in_reg0, out_reg0, sink); // params: rm, reg
+                "#,
+                ),
+            regs).rex_kind(RecipePrefixKind::Evex)
+    );
+
     recipes
 }
