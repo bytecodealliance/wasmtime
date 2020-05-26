@@ -91,6 +91,9 @@ fn parse_x86_cpuid(isa_builder: &mut isa::Builder) -> Result<(), &'static str> {
         if info.has_avx512vl() {
             isa_builder.enable("has_avx512vl").unwrap();
         }
+        if info.has_avx512f() {
+            isa_builder.enable("has_avx512f").unwrap();
+        }
     }
     if let Some(info) = cpuid.get_extended_function_info() {
         if info.has_lzcnt() {
