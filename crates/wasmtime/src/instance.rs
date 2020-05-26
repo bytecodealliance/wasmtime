@@ -6,7 +6,7 @@ use std::mem;
 use std::sync::Arc;
 use wasmtime_environ::EntityIndex;
 use wasmtime_jit::{CompiledModule, Resolver};
-use wasmtime_runtime::{InstantiationError, SignatureRegistry, VMContext, VMFunctionBody};
+use wasmtime_runtime::{InstantiationError, VMContext, VMFunctionBody};
 
 struct SimpleResolver<'a> {
     imports: &'a [Extern],
@@ -22,9 +22,8 @@ impl Resolver for SimpleResolver<'_> {
 
 fn instantiate(
     store: &Store,
-    compiled_module: Arc<CompiledModule>,
+    compiled_module: &Arc<CompiledModule>,
     imports: &[Extern],
-    sig_registry: &SignatureRegistry,
     host: Box<dyn Any>,
 ) -> Result<StoreInstanceHandle, Error> {
     // For now we have a restriction that the `Store` that we're working
@@ -46,13 +45,12 @@ fn instantiate(
     let mut resolver = SimpleResolver { imports };
     let config = store.engine().config();
     let instance = unsafe {
-        let interrupts = store.interrupts().clone();
         let instance = CompiledModule::instantiate(
             compiled_module.clone(),
             &mut resolver,
-            sig_registry,
+            &store.signatures(),
             config.memory_creator.as_ref().map(|a| a as _),
-            interrupts,
+            store.interrupts().clone(),
             host,
         )?;
 
@@ -182,13 +180,11 @@ impl Instance {
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     /// [`ExternType`]: crate::ExternType
     pub fn new(module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
-        let store = module.store();
         let info = module.register_frame_info();
         let handle = instantiate(
-            store,
-            module.compiled_module().clone(),
+            module.store(),
+            module.compiled_module(),
             imports,
-            &store.signatures(),
             Box::new(info),
         )?;
 
