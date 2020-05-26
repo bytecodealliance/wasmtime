@@ -1,8 +1,8 @@
 use crate::{bad_utf8, handle_result, wasmtime_error_t};
 use crate::{wasm_extern_t, wasm_store_t, ExternHost};
-use crate::{wasm_instance_t, wasm_module_t, wasm_name_t, wasm_trap_t};
+use crate::{wasm_func_t, wasm_instance_t, wasm_module_t, wasm_name_t, wasm_trap_t};
 use std::str;
-use wasmtime::{Extern, Linker};
+use wasmtime::{Extern, HostRef, Linker};
 
 #[repr(C)]
 pub struct wasmtime_linker_t {
@@ -88,4 +88,34 @@ pub unsafe extern "C" fn wasmtime_linker_instantiate(
 ) -> Option<Box<wasmtime_error_t>> {
     let result = linker.linker.instantiate(&module.module.borrow());
     super::instance::handle_instantiate(result, instance_ptr, trap_ptr)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_linker_module(
+    linker: &mut wasmtime_linker_t,
+    name: &wasm_name_t,
+    module: &wasm_module_t,
+) -> Option<Box<wasmtime_error_t>> {
+    let linker = &mut linker.linker;
+    let name = match str::from_utf8(name.as_slice()) {
+        Ok(s) => s,
+        Err(_) => return bad_utf8(),
+    };
+    handle_result(linker.module(name, &module.module.borrow()), |_linker| ())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_linker_get_default(
+    linker: &mut wasmtime_linker_t,
+    name: &wasm_name_t,
+    func: &mut *mut wasm_func_t,
+) -> Option<Box<wasmtime_error_t>> {
+    let linker = &mut linker.linker;
+    let name = match str::from_utf8(name.as_slice()) {
+        Ok(s) => s,
+        Err(_) => return bad_utf8(),
+    };
+    handle_result(linker.get_default(name), |f| {
+        *func = Box::into_raw(Box::new(HostRef::new(f).into()))
+    })
 }

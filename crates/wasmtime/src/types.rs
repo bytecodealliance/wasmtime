@@ -419,7 +419,8 @@ impl<'module> EntityType<'module> {
         }
     }
 
-    fn extern_type(&self) -> ExternType {
+    /// Convert this `EntityType` to an `ExternType`.
+    pub(crate) fn extern_type(&self) -> ExternType {
         match self {
             EntityType::Function(sig) => FuncType::from_wasmtime_signature(sig)
                 .expect("core wasm function type should be supported")
