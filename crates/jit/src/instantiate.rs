@@ -118,11 +118,16 @@ impl<'data> RawCompiledModule<'data> {
     }
 }
 
+struct FinishedFunctions(BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>);
+
+unsafe impl Send for FinishedFunctions {}
+unsafe impl Sync for FinishedFunctions {}
+
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
     code_memory: CodeMemory,
     module: Module,
-    finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    finished_functions: FinishedFunctions,
     trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
     data_initializers: Box<[OwnedDataInitializer]>,
     #[allow(dead_code)]
@@ -143,9 +148,6 @@ impl std::ops::DerefMut for CompiledModule {
         &mut self.module
     }
 }
-
-unsafe impl Send for CompiledModule {}
-unsafe impl Sync for CompiledModule {}
 
 impl CompiledModule {
     /// Compile a data buffer into a `CompiledModule`, which may then be instantiated.
@@ -186,7 +188,7 @@ impl CompiledModule {
         Self {
             code_memory,
             module: module,
-            finished_functions,
+            finished_functions: FinishedFunctions(finished_functions),
             trampolines,
             data_initializers,
             dbg_jit_registration,
@@ -227,7 +229,7 @@ impl CompiledModule {
             trampolines.insert(signatures[i], trampoline.clone());
         }
 
-        let finished_functions = module.finished_functions.clone();
+        let finished_functions = module.finished_functions.0.clone();
 
         let imports = resolve_imports(&module, signature_registry, resolver)?;
         InstanceHandle::new(
@@ -260,7 +262,7 @@ impl CompiledModule {
 
     /// Returns the map of all finished JIT functions compiled for this module
     pub fn finished_functions(&self) -> &BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]> {
-        &self.finished_functions
+        &self.finished_functions.0
     }
 
     /// Returns the a map for all traps in this module.
