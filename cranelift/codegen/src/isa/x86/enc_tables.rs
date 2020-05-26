@@ -1251,10 +1251,10 @@ fn convert_insertlane(
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
-    if let ir::InstructionData::InsertLane {
+    if let ir::InstructionData::TernaryImm8 {
         opcode: ir::Opcode::Insertlane,
         args: [vector, replacement],
-        lane,
+        imm: lane,
     } = pos.func.dfg[inst]
     {
         let value_type = pos.func.dfg.value_type(vector);
@@ -1269,7 +1269,7 @@ fn convert_insertlane(
                     pos.func
                         .dfg
                         .replace(inst)
-                        .x86_insertps(vector, immediate, replacement)
+                        .x86_insertps(vector, replacement, immediate)
                 }
                 F64X2 => {
                     let replacement_as_vector = pos.ins().raw_bitcast(F64X2, replacement); // only necessary due to SSA types
@@ -1297,7 +1297,7 @@ fn convert_insertlane(
             pos.func
                 .dfg
                 .replace(inst)
-                .x86_pinsr(vector, lane, replacement);
+                .x86_pinsr(vector, replacement, lane);
         }
     }
 }
@@ -1340,7 +1340,7 @@ fn expand_dword_to_xmm<'f>(
     if arg_type == I64 {
         let (arg_lo, arg_hi) = pos.ins().isplit(arg);
         let arg = pos.ins().scalar_to_vector(I32X4, arg_lo);
-        let arg = pos.ins().insertlane(arg, 1, arg_hi);
+        let arg = pos.ins().insertlane(arg, arg_hi, 1);
         let arg = pos.ins().raw_bitcast(I64X2, arg);
         arg
     } else {

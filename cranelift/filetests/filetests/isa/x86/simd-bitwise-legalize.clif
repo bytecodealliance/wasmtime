@@ -91,10 +91,10 @@ block0:
     v2 = sshr v1, v0
     ; check:  v3 = x86_pextr v1, 0
     ; nextln: v4 = sshr v3, v0
-    ; nextln: v5 = x86_pinsr v1, 0, v4
+    ; nextln: v5 = x86_pinsr v1, v4, 0
     ; nextln: v6 = x86_pextr v1, 1
     ; nextln: v7 = sshr v6, v0
-    ; nextln: v2 = x86_pinsr v5, 1, v7
+    ; nextln: v2 = x86_pinsr v5, v7, 1
     return v2
 }
 

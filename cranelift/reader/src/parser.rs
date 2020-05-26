@@ -2887,15 +2887,15 @@ impl<'a> Parser<'a> {
                 ctx.check_jt(table, self.loc)?;
                 InstructionData::IndirectJump { opcode, arg, table }
             }
-            InstructionFormat::InsertLane => {
+            InstructionFormat::TernaryImm8 => {
                 let lhs = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let lane = self.match_uimm8("expected lane number")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value last operand")?;
-                InstructionData::InsertLane {
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let imm = self.match_uimm8("expected 8-bit immediate")?;
+                InstructionData::TernaryImm8 {
                     opcode,
-                    lane,
+                    imm,
                     args: [lhs, rhs],
                 }
             }

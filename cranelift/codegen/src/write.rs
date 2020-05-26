@@ -518,7 +518,7 @@ pub fn write_operands(
             }
         }
         NullAry { .. } => write!(w, " "),
-        InsertLane { lane, args, .. } => write!(w, " {}, {}, {}", args[0], lane, args[1]),
+        TernaryImm8 { imm, args, .. } => write!(w, " {}, {}, {}", args[0], args[1], imm),
         ExtractLane { lane, arg, .. } => write!(w, " {}, {}", arg, lane),
         Shuffle { mask, args, .. } => {
             let data = dfg.immediates.get(mask).expect(

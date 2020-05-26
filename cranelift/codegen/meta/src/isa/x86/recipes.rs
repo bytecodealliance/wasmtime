@@ -608,12 +608,12 @@ pub(crate) fn define<'shared>(
     // XX /r with FPR ins and outs. A form with a byte immediate.
     {
         recipes.add_template_inferred(
-            EncodingRecipeBuilder::new("fa_ib", &formats.insert_lane, 2)
+            EncodingRecipeBuilder::new("fa_ib", &formats.ternary_imm8, 2)
                 .operands_in(vec![fpr, fpr])
                 .operands_out(vec![0])
                 .inst_predicate(InstructionPredicate::new_is_unsigned_int(
-                    &*formats.insert_lane,
-                    "lane",
+                    &*formats.ternary_imm8,
+                    "imm",
                     8,
                     0,
                 ))
@@ -621,7 +621,7 @@ pub(crate) fn define<'shared>(
                     r#"
                     {{PUT_OP}}(bits, rex2(in_reg1, in_reg0), sink);
                     modrm_rr(in_reg1, in_reg0, sink);
-                    let imm:i64 = lane.into();
+                    let imm: i64 = imm.into();
                     sink.put1(imm as u8);
                 "#,
                 ),
@@ -1040,12 +1040,12 @@ pub(crate) fn define<'shared>(
     // XX /r ib with 8-bit unsigned immediate (e.g. for insertlane)
     {
         recipes.add_template_inferred(
-            EncodingRecipeBuilder::new("r_ib_unsigned_r", &formats.insert_lane, 2)
+            EncodingRecipeBuilder::new("r_ib_unsigned_r", &formats.ternary_imm8, 2)
                 .operands_in(vec![fpr, gpr])
                 .operands_out(vec![0])
                 .inst_predicate(InstructionPredicate::new_is_unsigned_int(
-                    &*formats.insert_lane,
-                    "lane",
+                    &*formats.ternary_imm8,
+                    "imm",
                     8,
                     0,
                 ))
@@ -1053,7 +1053,7 @@ pub(crate) fn define<'shared>(
                     r#"
                     {{PUT_OP}}(bits, rex2(in_reg1, in_reg0), sink);
                     modrm_rr(in_reg1, in_reg0, sink);
-                    let imm:i64 = lane.into();
+                    let imm: i64 = imm.into();
                     sink.put1(imm as u8);
                 "#,
                 ),

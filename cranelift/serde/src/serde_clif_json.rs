@@ -41,17 +41,17 @@ pub enum SerInstData {
         opcode: String,
         args: [String; 3],
     },
+    TernaryImm8 {
+        opcode: String,
+        args: [String; 2],
+        imm: String,
+    },
     MultiAry {
         opcode: String,
         args: Vec<String>,
     },
     NullAry {
         opcode: String,
-    },
-    InsertLane {
-        opcode: String,
-        args: [String; 2],
-        lane: String,
     },
     ExtractLane {
         opcode: String,
@@ -323,12 +323,12 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
         InstructionData::NullAry { opcode } => SerInstData::NullAry {
             opcode: opcode.to_string(),
         },
-        InstructionData::InsertLane { opcode, args, lane } => {
+        InstructionData::TernaryImm8 { opcode, args, imm } => {
             let hold_args = [args[0].to_string(), args[1].to_string()];
-            SerInstData::InsertLane {
+            SerInstData::TernaryImm8 {
                 opcode: opcode.to_string(),
                 args: hold_args,
-                lane: lane.to_string(),
+                imm: imm.to_string(),
             }
         }
         InstructionData::ExtractLane { opcode, arg, lane } => SerInstData::ExtractLane {
