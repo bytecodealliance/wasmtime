@@ -826,8 +826,7 @@ version = "0.0.0"
 [[package]]
 name = "faerie"
 version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfef65b0e94693295c5d2fe2506f0ee6f43465342d4b5331659936aee8b16084"
+source = "git+https://github.com/Traverse-Research/faerie.git?rev=94df3e2#94df3e25a1a0d8ba8752bfe785c52895605716dd"
 dependencies = [
  "goblin",
  "indexmap",
@@ -1991,8 +1990,7 @@ dependencies = [
 [[package]]
 name = "target-lexicon"
 version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab0e7238dcc7b40a7be719a25365910f6807bd864f4cce6b2e6b873658e2b19d"
+source = "git+https://github.com/Traverse-Research/target-lexicon.git?rev=d0834ff#d0834ff66165c370cf61dcd6f8d129caade637ed"
 
 [[package]]
 name = "tempfile"

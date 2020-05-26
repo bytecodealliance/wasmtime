@@ -62,13 +62,15 @@ arm32 = []
 arm64 = []
 riscv = []
 x64 = [] # New work-in-progress codegen backend for x86_64 based on the new isel.
+spirv = []
 
 # Option to enable all architectures.
 all-arch = [
     "x86",
     "arm32",
     "arm64",
-    "riscv"
+    "riscv",
+    "spirv"
 ]
 
 # For dependent crates that want to serialize some parts of cranelift

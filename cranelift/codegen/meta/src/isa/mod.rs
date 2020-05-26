@@ -7,6 +7,7 @@ mod arm32;
 mod arm64;
 mod riscv;
 pub(crate) mod x86;
+mod spirv;
 
 /// Represents known ISA target.
 #[derive(PartialEq, Copy, Clone)]
@@ -15,6 +16,7 @@ pub enum Isa {
     X86,
     Arm32,
     Arm64,
+    Spirv,
 }
 
 impl Isa {
@@ -33,6 +35,7 @@ impl Isa {
             "aarch64" => Some(Isa::Arm64),
             x if ["x86_64", "i386", "i586", "i686"].contains(&x) => Some(Isa::X86),
             x if x.starts_with("arm") || arch.starts_with("thumb") => Some(Isa::Arm32),
+            "spirv" => Some(Isa::Spirv),
             _ => None,
         }
     }
@@ -48,9 +51,11 @@ impl fmt::Display for Isa {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Isa::Riscv => write!(f, "riscv"),
+            Isa::Spirv => write!(f, "spirv"),
             Isa::X86 => write!(f, "x86"),
             Isa::Arm32 => write!(f, "arm32"),
             Isa::Arm64 => write!(f, "arm64"),
+            Isa::Spirv => write!(f, "spirv"),
         }
     }
 }
@@ -62,6 +67,7 @@ pub(crate) fn define(isas: &[Isa], shared_defs: &mut SharedDefinitions) -> Vec<T
             Isa::X86 => x86::define(shared_defs),
             Isa::Arm32 => arm32::define(shared_defs),
             Isa::Arm64 => arm64::define(shared_defs),
+            Isa::Spirv => spirv::define(shared_defs),
         })
         .collect()
 }

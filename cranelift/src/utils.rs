@@ -66,9 +66,10 @@ pub fn parse_sets_and_triple(
     let mut words = flag_triple.trim().split_whitespace();
     // Look for `target foo`.
     if let Some(triple_name) = words.next() {
+        
         let triple = match Triple::from_str(triple_name) {
             Ok(triple) => triple,
-            Err(parse_error) => return Err(parse_error.to_string()),
+            Err(parse_error) => return Err(dbg!(parse_error.to_string())),
         };
 
         let mut isa_builder = isa::lookup(triple).map_err(|err| match err {

@@ -84,6 +84,8 @@ mod x64;
 #[cfg(feature = "arm32")]
 mod arm32;
 
+mod spirv;
+
 #[cfg(feature = "arm64")]
 pub(crate) mod aarch64;
 
@@ -129,6 +131,7 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
         }
         Architecture::Arm { .. } => isa_builder!(arm32, "arm32", triple),
         Architecture::Aarch64 { .. } => isa_builder!(aarch64, "arm64", triple),
+        Architecture::Spirv { .. } => isa_builder!(spirv, "spirv", triple),
         _ => Err(LookupError::Unsupported),
     }
 }

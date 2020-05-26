@@ -95,3 +95,7 @@ harness = false
 
 [profile.dev.package.backtrace]
 debug = false # FIXME(#1813)
+
+[patch.crates-io]
+target-lexicon = { git = "https://github.com/Traverse-Research/target-lexicon.git", rev = "d0834ff" }
+faerie = { git = "https://github.com/Traverse-Research/faerie.git", rev = "94df3e2" }
