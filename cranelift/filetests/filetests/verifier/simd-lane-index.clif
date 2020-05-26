@@ -6,7 +6,7 @@ function %insertlane_i32x4() {
 block0:
     v0 = vconst.i32x4 [0 0 0 0]
     v1 = iconst.i32 42
-    v2 = insertlane v0, 4, v1 ; error: The lane 4 does not index into the type i32x4
+    v2 = insertlane v0, v1, 4 ; error: The lane 4 does not index into the type i32x4
     return
 }
 
@@ -14,7 +14,7 @@ function %insertlane_b16x8() {
 block0:
     v0 = vconst.b16x8 [false false false false false false false false]
     v1 = bconst.b16 true
-    v2 = insertlane v0, 8, v1 ; error: The lane 8 does not index into the type b16x8
+    v2 = insertlane v0, v1, 8 ; error: The lane 8 does not index into the type b16x8
     return
 }
 
@@ -22,7 +22,7 @@ function %insertlane_f64x2() {
 block0:
     v0 = vconst.f64x2 0x00
     v1 = f64const 0x0.1
-    v2 = insertlane v0, 2, v1 ; error: The lane 2 does not index into the type f64x2
+    v2 = insertlane v0, v1, 2 ; error: The lane 2 does not index into the type f64x2
     return
 }
 

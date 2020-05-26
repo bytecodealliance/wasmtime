@@ -342,9 +342,9 @@ pub(crate) fn define(
         The lane index, ``Idx``, is an immediate value, not an SSA value. It
         must indicate a valid lane index for the type of ``x``.
         "#,
-            &formats.insert_lane,
+            &formats.ternary_imm8,
         )
-        .operands_in(vec![x, Idx, y])
+        .operands_in(vec![x, y, Idx])
         .operands_out(vec![a]),
     );
 
@@ -369,9 +369,9 @@ pub(crate) fn define(
         extracted from and which it is inserted to. This is similar to x86_pinsr but inserts
         floats, which are already stored in an XMM register.
         "#,
-            &formats.insert_lane,
+            &formats.ternary_imm8,
         )
-        .operands_in(vec![x, Idx, y])
+        .operands_in(vec![x, y, Idx])
         .operands_out(vec![a]),
     );
 
