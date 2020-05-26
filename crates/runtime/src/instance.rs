@@ -92,7 +92,7 @@ impl Instance {
         unsafe { *self.signature_ids_ptr().add(index) }
     }
 
-    pub(crate) fn module_ref(&self) -> &Module {
+    pub(crate) fn module(&self) -> &Module {
         &self.module
     }
 
@@ -782,10 +782,8 @@ impl InstanceHandle {
         host_state: Box<dyn Any>,
         interrupts: Arc<VMInterrupts>,
     ) -> Result<Self, InstantiationError> {
-        let module_ref = &*module;
-        let tables = create_tables(module_ref);
-        let memories =
-            create_memories(module_ref, mem_creator.unwrap_or(&DefaultMemoryCreator {}))?;
+        let tables = create_tables(&module);
+        let memories = create_memories(&module, mem_creator.unwrap_or(&DefaultMemoryCreator {}))?;
 
         let vmctx_tables = tables
             .values()
@@ -799,11 +797,11 @@ impl InstanceHandle {
             .collect::<PrimaryMap<DefinedMemoryIndex, _>>()
             .into_boxed_slice();
 
-        let vmctx_globals = create_globals(module_ref);
+        let vmctx_globals = create_globals(&module);
 
         let offsets = VMOffsets::new(mem::size_of::<*const u8>() as u8, &module.local);
 
-        let passive_data = RefCell::new(module_ref.passive_data.clone());
+        let passive_data = RefCell::new(module.passive_data.clone());
 
         let handle = {
             let instance = Instance {
@@ -934,8 +932,8 @@ impl InstanceHandle {
     }
 
     /// Return a reference to a module.
-    pub fn module_ref(&self) -> &Module {
-        self.instance().module_ref()
+    pub fn module(&self) -> &Module {
+        self.instance().module()
     }
 
     /// Lookup an export with the given name.
@@ -1053,7 +1051,7 @@ impl InstanceHandle {
 
 fn check_table_init_bounds(instance: &Instance) -> Result<(), InstantiationError> {
     let module = Arc::clone(&instance.module);
-    for init in &module.as_ref().table_elements {
+    for init in &module.table_elements {
         let start = get_table_init_start(init, instance);
         let table = instance.get_table(init.table_index);
 
@@ -1157,7 +1155,7 @@ fn get_table_init_start(init: &TableElements, instance: &Instance) -> usize {
 
 /// Initialize the table memory from the provided initializers.
 fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
-    let module = instance.module.as_ref();
+    let module = &instance.module;
     for init in &module.table_elements {
         let start = get_table_init_start(init, instance);
         let table = instance.get_table(init.table_index);
@@ -1195,7 +1193,6 @@ fn initialize_passive_elements(instance: &Instance) {
     passive_elements.extend(
         instance
             .module
-            .as_ref()
             .passive_elements
             .iter()
             .filter(|(_, segments)| !segments.is_empty())

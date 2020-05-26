@@ -417,7 +417,7 @@ impl Module {
     pub fn imports<'module>(
         &'module self,
     ) -> impl ExactSizeIterator<Item = ImportType<'module>> + 'module {
-        let module = self.inner.compiled.module_ref();
+        let module = self.inner.compiled.module();
         module
             .imports
             .iter()
@@ -484,7 +484,7 @@ impl Module {
     pub fn exports<'module>(
         &'module self,
     ) -> impl ExactSizeIterator<Item = ExportType<'module>> + 'module {
-        let module = self.inner.compiled.module_ref();
+        let module = self.inner.compiled.module();
         module.exports.iter().map(move |(name, entity_index)| {
             let r#type = EntityType::new(entity_index, module);
             ExportType::new(name, r#type)
@@ -535,7 +535,7 @@ impl Module {
     /// # }
     /// ```
     pub fn get_export<'module>(&'module self, name: &'module str) -> Option<ExternType> {
-        let module = self.inner.compiled.module_ref();
+        let module = self.inner.compiled.module();
         let entity_index = module.exports.get(name)?;
         Some(EntityType::new(entity_index, module).extern_type())
     }

@@ -35,11 +35,11 @@ fn instantiate(
         }
     }
 
-    if imports.len() != compiled_module.module_ref().imports.len() {
+    if imports.len() != compiled_module.module().imports.len() {
         bail!(
             "wrong number of imports provided, {} != {}",
             imports.len(),
-            compiled_module.module_ref().imports.len()
+            compiled_module.module().imports.len()
         );
     }
 
@@ -79,7 +79,7 @@ fn instantiate(
         instance
     };
 
-    let start_func = instance.handle.module_ref().start_func;
+    let start_func = instance.handle.module().start_func;
 
     // If a start function is present, invoke it. Make sure we use all the
     // trap-handling configuration in `store` as well.

@@ -254,7 +254,7 @@ impl CompiledModule {
     }
 
     /// Return a reference to a module.
-    pub fn module_ref(&self) -> &Module {
+    pub fn module(&self) -> &Module {
         &self.module
     }
 
