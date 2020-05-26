@@ -1,6 +1,6 @@
 use crate::cdsl::cpu_modes::CpuMode;
 use crate::cdsl::isa::TargetIsa;
-use crate::cdsl::types::ReferenceType;
+use crate::cdsl::types::{ReferenceType, VectorType};
 
 use crate::shared::types::Bool::B1;
 use crate::shared::types::Float::{F32, F64};
@@ -35,6 +35,7 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     let expand_flags = shared_defs.transform_groups.by_name("expand_flags");
     let x86_widen = shared_defs.transform_groups.by_name("x86_widen");
     let x86_narrow = shared_defs.transform_groups.by_name("x86_narrow");
+    let x86_narrow_avx = shared_defs.transform_groups.by_name("x86_narrow_avx");
     let x86_expand = shared_defs.transform_groups.by_name("x86_expand");
 
     x86_32.legalize_monomorphic(expand_flags);
@@ -46,6 +47,7 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     x86_32.legalize_value_type(ReferenceType(R32), x86_expand);
     x86_32.legalize_type(F32, x86_expand);
     x86_32.legalize_type(F64, x86_expand);
+    x86_32.legalize_value_type(VectorType::new(I64.into(), 2), x86_narrow_avx);
 
     x86_64.legalize_monomorphic(expand_flags);
     x86_64.legalize_default(x86_narrow);
@@ -57,6 +59,7 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     x86_64.legalize_value_type(ReferenceType(R64), x86_expand);
     x86_64.legalize_type(F32, x86_expand);
     x86_64.legalize_type(F64, x86_expand);
+    x86_64.legalize_value_type(VectorType::new(I64.into(), 2), x86_narrow_avx);
 
     let recipes = recipes::define(shared_defs, &settings, &regs);
 

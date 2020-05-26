@@ -28,6 +28,17 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     .isa("x86")
     .chain_with(shared.transform_groups.by_name("narrow_flags").id);
 
+    let mut narrow_avx = TransformGroupBuilder::new(
+        "x86_narrow_avx",
+        r#"
+    Legalize instructions by narrowing with CPU feature checks.
+
+    This special case converts using x86 AVX instructions where available."#,
+    )
+    .isa("x86");
+    // We cannot chain with the x86_narrow group until this group is built, see bottom of this
+    // function for where this is chained.
+
     let mut widen = TransformGroupBuilder::new(
         "x86_widen",
         r#"
@@ -343,10 +354,13 @@ pub(crate) fn define(shared: &mut SharedDefinitions, x86_instructions: &Instruct
     widen.custom_legalize(ineg, "convert_ineg");
 
     // To reduce compilation times, separate out large blocks of legalizations by theme.
-    define_simd(shared, x86_instructions, &mut narrow, &mut expand);
+    define_simd(shared, x86_instructions, &mut narrow, &mut narrow_avx);
 
     expand.build_and_add_to(&mut shared.transform_groups);
-    narrow.build_and_add_to(&mut shared.transform_groups);
+    let narrow_id = narrow.build_and_add_to(&mut shared.transform_groups);
+    narrow_avx
+        .chain_with(narrow_id)
+        .build_and_add_to(&mut shared.transform_groups);
     widen.build_and_add_to(&mut shared.transform_groups);
 }
 
@@ -354,7 +368,7 @@ fn define_simd(
     shared: &mut SharedDefinitions,
     x86_instructions: &InstructionGroup,
     narrow: &mut TransformGroupBuilder,
-    expand: &mut TransformGroupBuilder,
+    narrow_avx: &mut TransformGroupBuilder,
 ) {
     let insts = &shared.instructions;
     let band = insts.by_name("band");
@@ -767,12 +781,6 @@ fn define_simd(
         );
     }
 
-    // SIMD imul
-    {
-        let imul = imul.bind(vector(I64, sse_vector_size));
-        narrow.legalize(def!(c = imul(a, b)), vec![def!(c = x86_pmullq(a, b))]);
-    }
-
     narrow.custom_legalize(shuffle, "convert_shuffle");
     narrow.custom_legalize(extractlane, "convert_extractlane");
     narrow.custom_legalize(insertlane, "convert_insertlane");
@@ -780,5 +788,6 @@ fn define_simd(
     narrow.custom_legalize(ushr, "convert_ushr");
     narrow.custom_legalize(ishl, "convert_ishl");
 
-    narrow.build_and_add_to(&mut shared.transform_groups);
+    // This lives in the expand group to avoid conflicting with, e.g., i128 legalizations.
+    narrow_avx.custom_legalize(imul, "convert_i64x2_imul");
 }

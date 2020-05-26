@@ -49,6 +49,13 @@ block0:
 }
 ; run
 
+function %imul_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+    v2 = imul v0, v1
+    return v2
+}
+; run: %imul_i64x2([0 2], [0 2]) == [0 4]
+
 function %imul_i32x4() -> b1 {
 block0:
     v0 = vconst.i32x4 [-1 0 1 0x80_00_00_01]
