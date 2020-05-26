@@ -598,6 +598,9 @@ fn expand_minmax(
 
 /// x86 has no unsigned-to-float conversions. We handle the easy case of zero-extending i32 to
 /// i64 with a pattern, the rest needs more code.
+///
+/// Note that this is the scalar implementation; for the vector implemenation see
+/// [expand_fcvt_from_uint_vector].
 fn expand_fcvt_from_uint(
     inst: ir::Inst,
     func: &mut ir::Function,
@@ -677,6 +680,56 @@ fn expand_fcvt_from_uint(
     cfg.recompute_block(pos.func, poszero_block);
     cfg.recompute_block(pos.func, neg_block);
     cfg.recompute_block(pos.func, done);
+}
+
+/// To convert packed unsigned integers to their float equivalents, we must legalize to a special
+/// AVX512 instruction (using MCSR rounding) or use a long sequence of instructions. This logic is
+/// separate from [expand_fcvt_from_uint] above (the scalar version), only due to how the transform
+/// groups are set up; TODO if we change the SIMD legalization groups, then this logic could be
+/// merged into [expand_fcvt_from_uint] (see https://github.com/bytecodealliance/wasmtime/issues/1745).
+fn expand_fcvt_from_uint_vector(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    isa: &dyn TargetIsa,
+) {
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    if let ir::InstructionData::Unary {
+        opcode: ir::Opcode::FcvtFromUint,
+        arg,
+    } = pos.func.dfg[inst]
+    {
+        let controlling_type = pos.func.dfg.ctrl_typevar(inst);
+        if controlling_type == F32X4 {
+            debug_assert_eq!(pos.func.dfg.value_type(arg), I32X4);
+            let x86_isa = isa
+                .as_any()
+                .downcast_ref::<isa::x86::Isa>()
+                .expect("the target ISA must be x86 at this point");
+            if x86_isa.isa_flags.use_avx512vl_simd() || x86_isa.isa_flags.use_avx512f_simd() {
+                // If we have certain AVX512 features, we can lower this instruction simply.
+                pos.func.dfg.replace(inst).x86_vcvtudq2ps(arg);
+            } else {
+                // Otherwise, we default to a very lengthy SSE4.1-compatible sequence: PXOR,
+                // PBLENDW, PSUB, CVTDQ2PS, PSRLD, CVTDQ2PS, ADDPS, ADDPS
+                let bitcast_arg = pos.ins().raw_bitcast(I16X8, arg);
+                let zero_constant = pos.func.dfg.constants.insert(vec![0; 16].into());
+                let zero = pos.ins().vconst(I16X8, zero_constant);
+                let low = pos.ins().x86_pblendw(zero, bitcast_arg, 0x55);
+                let bitcast_low = pos.ins().raw_bitcast(I32X4, low);
+                let high = pos.ins().isub(arg, bitcast_low);
+                let convert_low = pos.ins().fcvt_from_sint(F32X4, bitcast_low);
+                let shift_high = pos.ins().ushr_imm(high, 1);
+                let convert_high = pos.ins().fcvt_from_sint(F32X4, shift_high);
+                let double_high = pos.ins().fadd(convert_high, convert_high);
+                pos.func.dfg.replace(inst).fadd(double_high, convert_low);
+            }
+        } else {
+            unimplemented!("cannot legalize {}", pos.func.dfg.display_inst(inst, None))
+        }
+    }
 }
 
 fn expand_fcvt_to_sint(
