@@ -58,7 +58,7 @@ impl SubTest for TestRun {
                 // running x86_64 code on aarch64 platforms.
                 let compiled_fn = compiler
                     .compile(func.clone().into_owned())
-                    .map_err(|e| e.to_string())?;
+                    .map_err(|e| format!("{:?}", e))?;
                 command.run(|_, args| Ok(compiled_fn.call(args)))?;
             }
         }
