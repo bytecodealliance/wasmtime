@@ -528,7 +528,7 @@ impl Linker {
     ///
     /// Each import of `module` will be looked up in this [`Linker`] and must
     /// have previously been defined. If it was previously defined with an
-    /// incorrect signature or if it was not prevoiusly defined then an error
+    /// incorrect signature or if it was not previously defined then an error
     /// will be returned because the import can not be satisfied.
     ///
     /// Per the WebAssembly spec, instantiation includes running the module's
