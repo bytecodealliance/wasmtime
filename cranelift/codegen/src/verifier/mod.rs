@@ -757,7 +757,7 @@ impl<'a> Verifier<'a> {
             | UnaryBool { .. }
             | Binary { .. }
             | BinaryImm8 { .. }
-            | BinaryImm { .. }
+            | BinaryImm64 { .. }
             | Ternary { .. }
             | TernaryImm8 { .. }
             | Shuffle { .. }

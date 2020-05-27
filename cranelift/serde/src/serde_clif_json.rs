@@ -37,7 +37,7 @@ pub enum SerInstData {
         arg: String,
         imm: String,
     },
-    BinaryImm {
+    BinaryImm64 {
         opcode: String,
         arg: String,
         imm: String,
@@ -297,7 +297,7 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             arg: arg.to_string(),
             imm: imm.to_string(),
         },
-        InstructionData::BinaryImm { opcode, arg, imm } => SerInstData::BinaryImm {
+        InstructionData::BinaryImm64 { opcode, arg, imm } => SerInstData::BinaryImm64 {
             opcode: opcode.to_string(),
             arg: arg.to_string(),
             imm: imm.to_string(),

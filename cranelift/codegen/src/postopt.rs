@@ -341,7 +341,7 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &dyn TargetI
                 }
                 _ => panic!("Unsupported load or store opcode"),
             },
-            InstructionData::BinaryImm {
+            InstructionData::BinaryImm64 {
                 opcode: Opcode::IaddImm,
                 arg,
                 imm,

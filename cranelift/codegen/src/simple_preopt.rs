@@ -142,7 +142,7 @@ fn package_up_divrem_info(
 /// Examine `inst` to see if it is a div or rem by a constant, and if so return the operands,
 /// signedness, operation size and div-vs-rem-ness in a handy bundle.
 fn get_div_info(inst: Inst, dfg: &DataFlowGraph) -> Option<DivRemByConstInfo> {
-    if let InstructionData::BinaryImm { opcode, arg, imm } = dfg[inst] {
+    if let InstructionData::BinaryImm64 { opcode, arg, imm } = dfg[inst] {
         let (is_signed, is_rem) = match opcode {
             Opcode::UdivImm => (false, false),
             Opcode::UremImm => (false, true),
@@ -704,7 +704,7 @@ mod simplify {
         imm: immediates::Imm64,
     ) -> bool {
         if let ValueDef::Result(arg_inst, _) = pos.func.dfg.value_def(arg) {
-            if let InstructionData::BinaryImm {
+            if let InstructionData::BinaryImm64 {
                 opcode: Opcode::IshlImm,
                 arg: prev_arg,
                 imm: prev_imm,
@@ -784,7 +784,7 @@ mod simplify {
                         pos.func
                             .dfg
                             .replace(inst)
-                            .BinaryImm(new_opcode, ty, imm, args[0]);
+                            .BinaryImm64(new_opcode, ty, imm, args[0]);
 
                         // Repeat for BinaryImm simplification.
                         simplify(pos, inst, native_word_width);
@@ -804,7 +804,7 @@ mod simplify {
                         pos.func
                             .dfg
                             .replace(inst)
-                            .BinaryImm(new_opcode, ty, imm, args[1]);
+                            .BinaryImm64(new_opcode, ty, imm, args[1]);
                     }
                 }
             }
@@ -818,7 +818,7 @@ mod simplify {
                 }
             }
 
-            InstructionData::BinaryImm { opcode, arg, imm } => {
+            InstructionData::BinaryImm64 { opcode, arg, imm } => {
                 let ty = pos.func.dfg.ctrl_typevar(inst);
 
                 let mut arg = arg;
@@ -831,7 +831,7 @@ mod simplify {
                     | Opcode::BxorImm => {
                         // Fold binary_op(C2, binary_op(C1, x)) into binary_op(binary_op(C1, C2), x)
                         if let ValueDef::Result(arg_inst, _) = pos.func.dfg.value_def(arg) {
-                            if let InstructionData::BinaryImm {
+                            if let InstructionData::BinaryImm64 {
                                 opcode: prev_opcode,
                                 arg: prev_arg,
                                 imm: prev_imm,
@@ -855,7 +855,7 @@ mod simplify {
                                     pos.func
                                         .dfg
                                         .replace(inst)
-                                        .BinaryImm(opcode, ty, new_imm, new_arg);
+                                        .BinaryImm64(opcode, ty, new_imm, new_arg);
                                     imm = new_imm;
                                     arg = new_arg;
                                 }
