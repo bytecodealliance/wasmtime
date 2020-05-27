@@ -2108,7 +2108,7 @@ fn define_simd(
     {
         e.enc_32_64_maybe_isap(
             x86_pmullq,
-            rec_evex_reg_vvvv_rm_128.opcodes(&PMULLQ).w(),
+            rec_evex_reg_vvvv_rm_128.opcodes(&VPMULLQ).w(),
             Some(use_avx512dq_simd), // TODO need an OR predicate to join with AVX512VL
         );
     }
