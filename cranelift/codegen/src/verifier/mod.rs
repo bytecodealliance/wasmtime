@@ -756,10 +756,10 @@ impl<'a> Verifier<'a> {
             | UnaryIeee64 { .. }
             | UnaryBool { .. }
             | Binary { .. }
+            | BinaryImm8 { .. }
             | BinaryImm { .. }
             | Ternary { .. }
             | TernaryImm8 { .. }
-            | ExtractLane { .. }
             | Shuffle { .. }
             | IntCompare { .. }
             | IntCompareImm { .. }
@@ -1912,9 +1912,9 @@ impl<'a> Verifier<'a> {
                     Ok(())
                 }
             }
-            ir::InstructionData::ExtractLane {
+            ir::InstructionData::BinaryImm8 {
                 opcode: ir::instructions::Opcode::Extractlane,
-                lane,
+                imm: lane,
                 arg,
                 ..
             }
