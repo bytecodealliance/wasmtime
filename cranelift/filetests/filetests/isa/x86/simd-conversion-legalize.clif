@@ -17,3 +17,18 @@ block0(v0:i32x4):
     ; nextln: v1 = fadd v10, v7
     return v1
 }
+
+function %fcvt_to_sint_sat(f32x4) -> i32x4 {
+block0(v0:f32x4):
+    v1 = fcvt_to_sint_sat.i32x4 v0
+    ; check: v2 = fcmp eq v0, v0
+    ; nextln: v3 = raw_bitcast.f32x4 v2
+    ; nextln: v4 = band v0, v3
+    ; nextln: v5 = bxor v3, v0
+    ; nextln: v6 = raw_bitcast.i32x4 v5
+    ; nextln: v7 = x86_cvtt2si.i32x4 v4
+    ; nextln: v8 = band v6, v7
+    ; nextln: v9 = sshr_imm v8, 31
+    ; nextln: v1 = bxor v7, v9
+    return v1
+}

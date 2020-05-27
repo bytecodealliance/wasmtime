@@ -20,3 +20,11 @@ block0(v0:i32x4):
     return v1
 }
 ; run: %fcvt_from_uint([0 0 0 0]) == [0x0.0 0x0.0 0x0.0 0x0.0]
+
+function %fcvt_to_sint_sat(f32x4) -> i32x4 {
+block0(v0:f32x4):
+    v1 = fcvt_to_sint_sat.i32x4 v0
+    return v1
+}
+; run: %fcvt_to_sint_sat([0x0.0 -0x1.0 0x1.0 0x1.0p100]) == [0 -1 1 0x7FFFFFFF]
+; run: %fcvt_to_sint_sat([-0x8.1 0x0.0 0x0.0 -0x1.0p100]) == [-8 0 0 0x80000000]
