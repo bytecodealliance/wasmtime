@@ -9,6 +9,13 @@ pub(crate) fn define(shared: &SettingGroup) -> SettingGroup {
         false,
     );
 
+    settings.add_bool(
+        "assert_no_nans",
+        "If set, Cranelift will assume that floating-point operations will not produce \
+        NaNs; in certain cases, Cranelift can use this information to produce faster code.",
+        false,
+    );
+
     // CPUID.01H:ECX
     let has_sse3 = settings.add_bool("has_sse3", "SSE3: CPUID.01H:ECX.SSE3[bit 0]", false);
     let has_ssse3 = settings.add_bool("has_ssse3", "SSSE3: CPUID.01H:ECX.SSSE3[bit 9]", false);
