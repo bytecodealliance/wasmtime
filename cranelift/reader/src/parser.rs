@@ -2758,11 +2758,11 @@ impl<'a> Parser<'a> {
                 let imm = self.match_uimm8("expected unsigned 8-bit immediate")?;
                 InstructionData::BinaryImm8 { opcode, arg, imm }
             }
-            InstructionFormat::BinaryImm => {
+            InstructionFormat::BinaryImm64 => {
                 let lhs = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_imm64("expected immediate integer second operand")?;
-                InstructionData::BinaryImm {
+                InstructionData::BinaryImm64 {
                     opcode,
                     arg: lhs,
                     imm: rhs,

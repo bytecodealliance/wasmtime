@@ -306,7 +306,7 @@ impl InstructionData {
         let bit_width = ctrl_typevar.bits();
 
         match self {
-            Self::BinaryImm {
+            Self::BinaryImm64 {
                 opcode,
                 arg: _,
                 imm,

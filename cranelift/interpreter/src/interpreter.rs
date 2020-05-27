@@ -163,7 +163,7 @@ impl Interpreter {
                 Ok(Continue)
             }
 
-            BinaryImm { opcode, arg, imm } => {
+            BinaryImm64 { opcode, arg, imm } => {
                 let imm = DataValue::from_integer(*imm, type_of(*arg, frame.function))?;
                 let arg = frame.get(&arg);
                 let result = match opcode {

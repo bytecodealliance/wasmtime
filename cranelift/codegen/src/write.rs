@@ -509,7 +509,7 @@ pub fn write_operands(
         } => write!(w, " {}", constant_handle),
         Binary { args, .. } => write!(w, " {}, {}", args[0], args[1]),
         BinaryImm8 { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
-        BinaryImm { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
+        BinaryImm64 { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
         Ternary { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
         MultiAry { ref args, .. } => {
             if args.is_empty() {

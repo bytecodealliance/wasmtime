@@ -926,11 +926,11 @@ pub(crate) fn define<'shared>(
     // XX /n ib with 8-bit immediate sign-extended.
     {
         recipes.add_template_inferred(
-            EncodingRecipeBuilder::new("r_ib", &formats.binary_imm, 2)
+            EncodingRecipeBuilder::new("r_ib", &formats.binary_imm64, 2)
                 .operands_in(vec![gpr])
                 .operands_out(vec![0])
                 .inst_predicate(InstructionPredicate::new_is_signed_int(
-                    &*formats.binary_imm,
+                    &*formats.binary_imm64,
                     "imm",
                     8,
                     0,
@@ -947,11 +947,11 @@ pub(crate) fn define<'shared>(
         );
 
         recipes.add_template_inferred(
-            EncodingRecipeBuilder::new("f_ib", &formats.binary_imm, 2)
+            EncodingRecipeBuilder::new("f_ib", &formats.binary_imm64, 2)
                 .operands_in(vec![fpr])
                 .operands_out(vec![0])
                 .inst_predicate(InstructionPredicate::new_is_signed_int(
-                    &*formats.binary_imm,
+                    &*formats.binary_imm64,
                     "imm",
                     8,
                     0,
@@ -970,11 +970,11 @@ pub(crate) fn define<'shared>(
         // XX /n id with 32-bit immediate sign-extended.
         recipes.add_template(
             Template::new(
-                EncodingRecipeBuilder::new("r_id", &formats.binary_imm, 5)
+                EncodingRecipeBuilder::new("r_id", &formats.binary_imm64, 5)
                     .operands_in(vec![gpr])
                     .operands_out(vec![0])
                     .inst_predicate(InstructionPredicate::new_is_signed_int(
-                        &*formats.binary_imm,
+                        &*formats.binary_imm64,
                         "imm",
                         32,
                         0,
@@ -2874,12 +2874,12 @@ pub(crate) fn define<'shared>(
 
     {
         let has_small_offset =
-            InstructionPredicate::new_is_signed_int(&*formats.binary_imm, "imm", 8, 0);
+            InstructionPredicate::new_is_signed_int(&*formats.binary_imm64, "imm", 8, 0);
 
         // XX /n, MI form with imm8.
         recipes.add_template(
             Template::new(
-                EncodingRecipeBuilder::new("rcmp_ib", &formats.binary_imm, 2)
+                EncodingRecipeBuilder::new("rcmp_ib", &formats.binary_imm64, 2)
                     .operands_in(vec![gpr])
                     .operands_out(vec![reg_rflags])
                     .inst_predicate(has_small_offset)
@@ -2897,12 +2897,12 @@ pub(crate) fn define<'shared>(
         );
 
         let has_big_offset =
-            InstructionPredicate::new_is_signed_int(&*formats.binary_imm, "imm", 32, 0);
+            InstructionPredicate::new_is_signed_int(&*formats.binary_imm64, "imm", 32, 0);
 
         // XX /n, MI form with imm32.
         recipes.add_template(
             Template::new(
-                EncodingRecipeBuilder::new("rcmp_id", &formats.binary_imm, 5)
+                EncodingRecipeBuilder::new("rcmp_id", &formats.binary_imm64, 5)
                     .operands_in(vec![gpr])
                     .operands_out(vec![reg_rflags])
                     .inst_predicate(has_big_offset)
