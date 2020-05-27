@@ -1635,6 +1635,7 @@ fn define_simd(
     let usub_sat = shared.by_name("usub_sat");
     let vconst = shared.by_name("vconst");
     let vselect = shared.by_name("vselect");
+    let x86_cvtt2si = x86.by_name("x86_cvtt2si");
     let x86_insertps = x86.by_name("x86_insertps");
     let x86_movlhps = x86.by_name("x86_movlhps");
     let x86_movsd = x86.by_name("x86_movsd");
@@ -1901,6 +1902,13 @@ fn define_simd(
             x86_vcvtudq2ps,
             rec_evex_reg_rm_128.opcodes(&VCVTUDQ2PS),
             Some(use_avx512vl_simd), // TODO need an OR predicate to join with AVX512F
+        );
+
+        e.enc_both_inferred(
+            x86_cvtt2si
+                .bind(vector(I32, sse_vector_size))
+                .bind(vector(F32, sse_vector_size)),
+            rec_furm.opcodes(&CVTTPS2DQ),
         );
     }
 
