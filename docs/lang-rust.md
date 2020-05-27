@@ -55,7 +55,7 @@ use std::error::Error;
 use wasmtime::*;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let engine = Engine::default()
+    let engine = Engine::default();
     // A `Store` is a sort of "global object" in a sense, but for now it suffices
     // to say that it's generally passed to most constructors.
     let store = Store::new(&engine);

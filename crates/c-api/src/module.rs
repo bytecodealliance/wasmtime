@@ -51,26 +51,24 @@ pub extern "C" fn wasmtime_module_new(
     ret: &mut *mut wasm_module_t,
 ) -> Option<Box<wasmtime_error_t>> {
     let binary = binary.as_slice();
-    handle_result(
-        Module::from_binary(store.store.borrow().engine(), binary),
-        |module| {
-            let imports = module
-                .imports()
-                .map(|i| wasm_importtype_t::new(i.module().to_owned(), i.name().to_owned(), i.ty()))
-                .collect::<Vec<_>>();
-            let exports = module
-                .exports()
-                .map(|e| wasm_exporttype_t::new(e.name().to_owned(), e.ty()))
-                .collect::<Vec<_>>();
-            let module = Box::new(wasm_module_t {
-                store: store.store.clone(),
-                module: HostRef::new(module),
-                imports,
-                exports,
-            });
-            *ret = Box::into_raw(module);
-        },
-    )
+    let store_ref = store.store.borrow();
+    handle_result(Module::from_binary(store_ref.engine(), binary), |module| {
+        let imports = module
+            .imports()
+            .map(|i| wasm_importtype_t::new(i.module().to_owned(), i.name().to_owned(), i.ty()))
+            .collect::<Vec<_>>();
+        let exports = module
+            .exports()
+            .map(|e| wasm_exporttype_t::new(e.name().to_owned(), e.ty()))
+            .collect::<Vec<_>>();
+        let module = Box::new(wasm_module_t {
+            store: store.store.clone(),
+            module: HostRef::new(module),
+            imports,
+            exports,
+        });
+        *ret = Box::into_raw(module);
+    })
 }
 
 #[no_mangle]
