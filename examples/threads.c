@@ -163,13 +163,6 @@ int main(int argc, const char *argv[]) {
   return 0;
 }
 
-#else
-// TODO implement example for Windows
-int main(int argc, const char *argv[]) {
-  return 0;
-}
-#endif // _WIN32
-
 static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
   fprintf(stderr, "error: %s\n", message);
   wasm_byte_vec_t error_message;
@@ -182,3 +175,10 @@ static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_t
   wasm_byte_vec_delete(&error_message);
   exit(1);
 }
+
+#else
+// TODO implement example for Windows
+int main(int argc, const char *argv[]) {
+  return 0;
+}
+#endif // _WIN32
