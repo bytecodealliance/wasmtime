@@ -54,6 +54,14 @@ pub static BIT_SCAN_FORWARD: [u8; 2] = [0x0f, 0xbc];
 /// Bit scan reverse (stores index of first encountered 1 from the back).
 pub static BIT_SCAN_REVERSE: [u8; 2] = [0x0f, 0xbd];
 
+/// Select packed single-precision floating-point values from xmm1 and xmm2/m128
+/// from mask specified in XMM0 and store the values into xmm1 (SSE4.1).
+pub static BLENDVPS: [u8; 4] = [0x66, 0x0f, 0x38, 0x14];
+
+/// Select packed double-precision floating-point values from xmm1 and xmm2/m128
+/// from mask specified in XMM0 and store the values into xmm1 (SSE4.1).
+pub static BLENDVPD: [u8; 4] = [0x66, 0x0f, 0x38, 0x15];
+
 /// Call near, relative, displacement relative to next instruction (sign-extended).
 pub static CALL_RELATIVE: [u8; 1] = [0xe8];
 
@@ -334,6 +342,10 @@ pub static PAVGB: [u8; 3] = [0x66, 0x0f, 0xE0];
 
 /// Average packed unsigned word integers from xmm2/m128 and xmm1 with rounding (SSE2).
 pub static PAVGW: [u8; 3] = [0x66, 0x0f, 0xE3];
+
+/// Select byte values from xmm1 and xmm2/m128 from mask specified in the high bit of each byte
+/// in XMM0 and store the values into xmm1 (SSE4.1).
+pub static PBLENDVB: [u8; 4] = [0x66, 0x0f, 0x38, 0x10];
 
 /// Compare packed data for equal (SSE2).
 pub static PCMPEQB: [u8; 3] = [0x66, 0x0f, 0x74];

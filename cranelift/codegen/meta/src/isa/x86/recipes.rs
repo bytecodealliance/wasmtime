@@ -427,6 +427,7 @@ pub(crate) fn define<'shared>(
     let reg_rcx = Register::new(gpr, regs.regunit_by_name(gpr, "rcx"));
     let reg_rdx = Register::new(gpr, regs.regunit_by_name(gpr, "rdx"));
     let reg_r15 = Register::new(gpr, regs.regunit_by_name(gpr, "r15"));
+    let reg_xmm0 = Register::new(fpr, regs.regunit_by_name(fpr, "xmm0"));
 
     // Stack operand with a 32-bit signed displacement from either RBP or RSP.
     let stack_gpr32 = Stack::new(gpr);
@@ -902,6 +903,24 @@ pub(crate) fn define<'shared>(
             regs,
         )
         .inferred_rex_compute_size("size_with_inferred_rex_for_inreg1"),
+    );
+
+    // XX /r for BLEND* instructions
+    recipes.add_template_inferred(
+        EncodingRecipeBuilder::new("blend", &formats.ternary, 1)
+            .operands_in(vec![
+                OperandConstraint::FixedReg(reg_xmm0),
+                OperandConstraint::RegClass(fpr),
+                OperandConstraint::RegClass(fpr),
+            ])
+            .operands_out(vec![2])
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(in_reg1, in_reg2), sink);
+                    modrm_rr(in_reg1, in_reg2, sink);
+                "#,
+            ),
+        "size_with_inferred_rex_for_inreg1_inreg2",
     );
 
     // XX /n ib with 8-bit immediate sign-extended.
