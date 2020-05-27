@@ -471,7 +471,7 @@ pub static PMULLD: [u8; 4] = [0x66, 0x0f, 0x38, 0x40];
 
 /// Multiply the packed quadword signed integers in xmm2 and xmm3/m128 and store the low 64
 /// bits of each product in xmm1 (AVX512VL/DQ). Requires an EVEX encoding.
-pub static PMULLQ: [u8; 4] = [0x66, 0x0f, 0x38, 0x40];
+pub static VPMULLQ: [u8; 4] = [0x66, 0x0f, 0x38, 0x40];
 
 /// Multiply packed unsigned doubleword integers in xmm1 by packed unsigned doubleword integers
 /// in xmm2/m128, and store the quadword results in xmm1 (SSE2).
