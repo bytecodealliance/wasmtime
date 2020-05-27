@@ -2,7 +2,7 @@ use crate::{
     Extern, ExternType, Func, FuncType, GlobalType, ImportType, Instance, IntoFunc, Module, Store,
     Trap,
 };
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Error, Result};
 use std::collections::hash_map::{Entry, HashMap};
 use std::rc::Rc;
 
@@ -567,45 +567,41 @@ impl Linker {
     }
 
     fn compute_imports(&self, module: &Module) -> Result<Vec<Extern>> {
-        let mut imports = Vec::new();
+        module
+            .imports()
+            .map(|import| self.get(&import).ok_or_else(|| self.link_error(&import)))
+            .collect()
+    }
 
-        for import in module.imports() {
-            if let Some(item) = self.get(&import) {
-                imports.push(item);
+    fn link_error(&self, import: &ImportType) -> Error {
+        let mut options = Vec::new();
+        for i in self.map.keys() {
+            if &*self.strings[i.module] != import.module()
+                || &*self.strings[i.name] != import.name()
+            {
                 continue;
             }
-
-            let mut options = String::new();
-            for i in self.map.keys() {
-                if &*self.strings[i.module] != import.module()
-                    || &*self.strings[i.name] != import.name()
-                {
-                    continue;
-                }
-                options.push_str("  * ");
-                options.push_str(&format!("{:?}", i.kind));
-                options.push_str("\n");
-            }
-            if options.len() == 0 {
-                bail!(
-                    "unknown import: `{}::{}` has not been defined",
-                    import.module(),
-                    import.name()
-                )
-            }
-
-            bail!(
-                "incompatible import type for `{}::{}` specified\n\
-                 desired signature was: {:?}\n\
-                 signatures available:\n\n{}",
+            options.push(format!("  * {:?}\n", i.kind));
+        }
+        if options.is_empty() {
+            return anyhow!(
+                "unknown import: `{}::{}` has not been defined",
                 import.module(),
-                import.name(),
-                import.ty(),
-                options,
-            )
+                import.name()
+            );
         }
 
-        Ok(imports)
+        options.sort();
+
+        anyhow!(
+            "incompatible import type for `{}::{}` specified\n\
+                 desired signature was: {:?}\n\
+                 signatures available:\n\n{}",
+            import.module(),
+            import.name(),
+            import.ty(),
+            options.concat(),
+        )
     }
 
     /// Returns the [`Store`] that this linker is connected to.
