@@ -35,8 +35,8 @@ pub unsafe extern "C" fn wasm_instance_new(
     result: Option<&mut *mut wasm_trap_t>,
 ) -> Option<Box<wasm_instance_t>> {
     let store = &store.store.borrow();
-    let module = &wasm_module.module.borrow();
-    if !Store::same(&store, module.store()) {
+    let module_store = &wasm_module.store.borrow();
+    if !Store::same(&store, module_store) {
         if let Some(result) = result {
             let trap = Trap::new("wasm_store_t must match store in wasm_module_t");
             let trap = Box::new(wasm_trap_t::new(trap));
@@ -110,8 +110,13 @@ fn _wasmtime_instance_new(
             ExternHost::Memory(e) => Extern::Memory(e.borrow().clone()),
         })
         .collect::<Vec<_>>();
+    let store = &module.store.borrow();
     let module = &module.module.borrow();
-    handle_instantiate(Instance::new(module, &imports), instance_ptr, trap_ptr)
+    handle_instantiate(
+        Instance::new(store, module, &imports),
+        instance_ptr,
+        trap_ptr,
+    )
 }
 
 pub fn handle_instantiate(

@@ -15,7 +15,7 @@ fn main() -> Result<()> {
 
     // Compile the wasm binary into an in-memory instance of a `Module`.
     println!("Compiling module...");
-    let module = Module::from_file(&store, "examples/hello.wat")?;
+    let module = Module::from_file(store.engine(), "examples/hello.wat")?;
 
     // Here we handle the imports of the module, which in this case is our
     // `HelloCallback` type and its associated implementation of `Callback.
@@ -30,7 +30,7 @@ fn main() -> Result<()> {
     // Note that this is where the wasm `start` function, if any, would run.
     println!("Instantiating module...");
     let imports = [hello_func.into()];
-    let instance = Instance::new(&module, &imports)?;
+    let instance = Instance::new(&store, &module, &imports)?;
 
     // Next we poke around a bit to extract the `run` function from the module.
     println!("Extracting export...");

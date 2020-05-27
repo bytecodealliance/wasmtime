@@ -12,7 +12,7 @@ fn host_always_has_some_stack() -> anyhow::Result<()> {
     // Create a module that's infinitely recursive, but calls the host on each
     // level of wasm stack to always test how much host stack we have left.
     let module = Module::new(
-        &store,
+        store.engine(),
         r#"
             (module
                 (import "" "" (func $host))
@@ -23,7 +23,7 @@ fn host_always_has_some_stack() -> anyhow::Result<()> {
         "#,
     )?;
     let func = Func::wrap(&store, test_host_stack);
-    let instance = Instance::new(&module, &[func.into()])?;
+    let instance = Instance::new(&store, &module, &[func.into()])?;
     let foo = instance.get_func("foo").unwrap().get0::<()>()?;
 
     // Make sure that our function traps and the trap says that the call stack

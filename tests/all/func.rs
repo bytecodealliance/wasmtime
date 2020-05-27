@@ -61,8 +61,8 @@ fn dtor_delayed() -> Result<()> {
 
     assert_eq!(HITS.load(SeqCst), 0);
     let wasm = wat::parse_str(r#"(import "" "" (func))"#)?;
-    let module = Module::new(&store, &wasm)?;
-    let instance = Instance::new(&module, &[func.into()])?;
+    let module = Module::new(store.engine(), &wasm)?;
+    let instance = Instance::new(&store, &module, &[func.into()])?;
     assert_eq!(HITS.load(SeqCst), 0);
     drop((instance, module, store));
     assert_eq!(HITS.load(SeqCst), 1);
@@ -142,8 +142,9 @@ fn import_works() -> Result<()> {
         "#,
     )?;
     let store = Store::default();
-    let module = Module::new(&store, &wasm)?;
+    let module = Module::new(store.engine(), &wasm)?;
     Instance::new(
+        &store,
         &module,
         &[
             Func::wrap(&store, || {
@@ -195,8 +196,9 @@ fn trap_import() -> Result<()> {
         "#,
     )?;
     let store = Store::default();
-    let module = Module::new(&store, &wasm)?;
+    let module = Module::new(store.engine(), &wasm)?;
     let trap = Instance::new(
+        &store,
         &module,
         &[Func::wrap(&store, || -> Result<(), Trap> { Err(Trap::new("foo")) }).into()],
     )
@@ -261,7 +263,7 @@ fn get_from_signature() {
 fn get_from_module() -> anyhow::Result<()> {
     let store = Store::default();
     let module = Module::new(
-        &store,
+        store.engine(),
         r#"
             (module
                 (func (export "f0"))
@@ -272,7 +274,7 @@ fn get_from_module() -> anyhow::Result<()> {
 
         "#,
     )?;
-    let instance = Instance::new(&module, &[])?;
+    let instance = Instance::new(&store, &module, &[])?;
     let f0 = instance.get_func("f0").unwrap();
     assert!(f0.get0::<()>().is_ok());
     assert!(f0.get0::<i32>().is_err());
@@ -340,7 +342,7 @@ fn caller_memory() -> anyhow::Result<()> {
         assert!(c.get_export("x").is_none());
     });
     let module = Module::new(
-        &store,
+        store.engine(),
         r#"
             (module
                 (import "" "" (func $f))
@@ -349,13 +351,13 @@ fn caller_memory() -> anyhow::Result<()> {
 
         "#,
     )?;
-    Instance::new(&module, &[f.into()])?;
+    Instance::new(&store, &module, &[f.into()])?;
 
     let f = Func::wrap(&store, |c: Caller<'_>| {
         assert!(c.get_export("memory").is_some());
     });
     let module = Module::new(
-        &store,
+        store.engine(),
         r#"
             (module
                 (import "" "" (func $f))
@@ -365,7 +367,7 @@ fn caller_memory() -> anyhow::Result<()> {
 
         "#,
     )?;
-    Instance::new(&module, &[f.into()])?;
+    Instance::new(&store, &module, &[f.into()])?;
 
     let f = Func::wrap(&store, |c: Caller<'_>| {
         assert!(c.get_export("m").is_some());
@@ -374,7 +376,7 @@ fn caller_memory() -> anyhow::Result<()> {
         assert!(c.get_export("t").is_none());
     });
     let module = Module::new(
-        &store,
+        store.engine(),
         r#"
             (module
                 (import "" "" (func $f))
@@ -387,7 +389,7 @@ fn caller_memory() -> anyhow::Result<()> {
 
         "#,
     )?;
-    Instance::new(&module, &[f.into()])?;
+    Instance::new(&store, &module, &[f.into()])?;
     Ok(())
 }
 

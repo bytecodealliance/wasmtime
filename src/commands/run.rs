@@ -141,7 +141,7 @@ impl RunCommand {
         // Load the preload wasm modules.
         for (name, path) in self.preloads.iter() {
             // Read the wasm module binary either as `*.wat` or a raw binary
-            let module = Module::from_file(linker.store(), path)?;
+            let module = Module::from_file(&engine, path)?;
 
             // Add the module's functions to the linker.
             linker.module(name, &module).context(format!(
@@ -247,7 +247,7 @@ impl RunCommand {
 
         // Read the wasm module binary either as `*.wat` or a raw binary.
         // Use "" as a default module name.
-        let module = Module::from_file(linker.store(), &self.module)?;
+        let module = Module::from_file(linker.store().engine(), &self.module)?;
         linker
             .module("", &module)
             .context(format!("failed to instantiate {:?}", self.module))?;

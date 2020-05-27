@@ -659,13 +659,14 @@ impl Memory {
     /// ```
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// let store = Store::default();
+    /// let engine = Engine::default();
+    /// let store = Store::new(&engine);
     ///
     /// let memory_ty = MemoryType::new(Limits::new(1, None));
     /// let memory = Memory::new(&store, memory_ty);
     ///
-    /// let module = Module::new(&store, "(module (memory (import \"\" \"\") 1))")?;
-    /// let instance = Instance::new(&module, &[memory.into()])?;
+    /// let module = Module::new(&engine, "(module (memory (import \"\" \"\") 1))")?;
+    /// let instance = Instance::new(&store, &module, &[memory.into()])?;
     /// // ...
     /// # Ok(())
     /// # }
@@ -686,9 +687,10 @@ impl Memory {
     /// ```
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// let store = Store::default();
-    /// let module = Module::new(&store, "(module (memory (export \"mem\") 1))")?;
-    /// let instance = Instance::new(&module, &[])?;
+    /// let engine = Engine::default();
+    /// let store = Store::new(&engine);
+    /// let module = Module::new(&engine, "(module (memory (export \"mem\") 1))")?;
+    /// let instance = Instance::new(&store, &module, &[])?;
     /// let memory = instance.get_memory("mem").unwrap();
     /// let ty = memory.ty();
     /// assert_eq!(ty.limits().min(), 1);
@@ -798,9 +800,10 @@ impl Memory {
     /// ```
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// let store = Store::default();
-    /// let module = Module::new(&store, "(module (memory (export \"mem\") 1 2))")?;
-    /// let instance = Instance::new(&module, &[])?;
+    /// let engine = Engine::default();
+    /// let store = Store::new(&engine);
+    /// let module = Module::new(&engine, "(module (memory (export \"mem\") 1 2))")?;
+    /// let instance = Instance::new(&store, &module, &[])?;
     /// let memory = instance.get_memory("mem").unwrap();
     ///
     /// assert_eq!(memory.size(), 1);

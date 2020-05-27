@@ -702,6 +702,16 @@ impl Engine {
     pub fn config(&self) -> &Config {
         &self.config
     }
+
+    pub(crate) fn get_compiler(&self) -> Compiler {
+        let isa = native::builder().finish(settings::Flags::new(self.config.flags.clone()));
+        Compiler::new(
+            isa,
+            self.config.strategy,
+            self.config.cache_config.clone(),
+            self.config.tunables.clone(),
+        )
+    }
 }
 
 // Store
@@ -730,7 +740,6 @@ pub struct Store {
 
 pub(crate) struct StoreInner {
     engine: Engine,
-    compiler: RefCell<Compiler>,
     interrupts: Arc<VMInterrupts>,
     signatures: RefCell<SignatureRegistry>,
     instances: RefCell<Vec<InstanceHandle>>,
@@ -748,17 +757,9 @@ impl Store {
         // each one that's not relevant just won't do anything.
         wasmtime_runtime::init_traps();
 
-        let isa = native::builder().finish(settings::Flags::new(engine.config.flags.clone()));
-        let compiler = Compiler::new(
-            isa,
-            engine.config.strategy,
-            engine.config.cache_config.clone(),
-            engine.config.tunables.clone(),
-        );
         Store {
             inner: Rc::new(StoreInner {
                 engine: engine.clone(),
-                compiler: RefCell::new(compiler),
                 interrupts: Arc::new(Default::default()),
                 signatures: RefCell::new(Default::default()),
                 instances: RefCell::new(Vec::new()),
@@ -782,10 +783,6 @@ impl Store {
         self.engine().config.memory_creator.as_ref().map(|x| x as _)
     }
 
-    pub(crate) fn compiler(&self) -> std::cell::Ref<'_, Compiler> {
-        self.inner.compiler.borrow()
-    }
-
     pub(crate) fn signatures(&self) -> std::cell::Ref<'_, SignatureRegistry> {
         self.inner.signatures.borrow()
     }
@@ -804,9 +801,17 @@ impl Store {
             .any(|(start, end)| *start <= addr && addr < *end)
     }
 
-    pub(crate) fn register_jit_code(&self, ranges: impl Iterator<Item = (usize, usize)>) {
-        let mut jit_code_ranges = self.inner.jit_code_ranges.borrow_mut();
-        jit_code_ranges.extend(ranges);
+    pub(crate) fn register_jit_code(&self, mut ranges: impl Iterator<Item = (usize, usize)>) {
+        match ranges.next() {
+            None => (),
+            Some(first) => {
+                if !self.is_in_jit_code(first.0) {
+                    let mut jit_code_ranges = self.inner.jit_code_ranges.borrow_mut();
+                    jit_code_ranges.push(first);
+                    jit_code_ranges.extend(ranges);
+                }
+            }
+        }
     }
 
     pub(crate) unsafe fn add_instance(&self, handle: InstanceHandle) -> StoreInstanceHandle {
@@ -919,10 +924,10 @@ impl Store {
     /// let interrupt_handle = store.interrupt_handle()?;
     ///
     /// // Compile and instantiate a small example with an infinite loop.
-    /// let module = Module::new(&store, r#"
+    /// let module = Module::new(&engine, r#"
     ///     (func (export "run") (loop br 0))
     /// "#)?;
-    /// let instance = Instance::new(&module, &[])?;
+    /// let instance = Instance::new(&store, &module, &[])?;
     /// let run = instance
     ///     .get_func("run")
     ///     .ok_or(anyhow::format_err!("failed to find `run` function export"))?
@@ -1018,47 +1023,47 @@ mod tests {
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::None)
             .cache_config_load(&config_path)?;
-        let store = Store::new(&Engine::new(&cfg));
-        Module::new(&store, "(module (func))")?;
-        assert_eq!(store.engine().config.cache_config.cache_hits(), 0);
-        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
-        Module::new(&store, "(module (func))")?;
-        assert_eq!(store.engine().config.cache_config.cache_hits(), 1);
-        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+        let engine = Engine::new(&cfg);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config.cache_config.cache_hits(), 0);
+        assert_eq!(engine.config.cache_config.cache_misses(), 1);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config.cache_config.cache_hits(), 1);
+        assert_eq!(engine.config.cache_config.cache_misses(), 1);
 
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::Speed)
             .cache_config_load(&config_path)?;
-        let store = Store::new(&Engine::new(&cfg));
-        Module::new(&store, "(module (func))")?;
-        assert_eq!(store.engine().config.cache_config.cache_hits(), 0);
-        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
-        Module::new(&store, "(module (func))")?;
-        assert_eq!(store.engine().config.cache_config.cache_hits(), 1);
-        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+        let engine = Engine::new(&cfg);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config.cache_config.cache_hits(), 0);
+        assert_eq!(engine.config.cache_config.cache_misses(), 1);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config.cache_config.cache_hits(), 1);
+        assert_eq!(engine.config.cache_config.cache_misses(), 1);
 
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::SpeedAndSize)
             .cache_config_load(&config_path)?;
-        let store = Store::new(&Engine::new(&cfg));
-        Module::new(&store, "(module (func))")?;
-        assert_eq!(store.engine().config.cache_config.cache_hits(), 0);
-        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
-        Module::new(&store, "(module (func))")?;
-        assert_eq!(store.engine().config.cache_config.cache_hits(), 1);
-        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+        let engine = Engine::new(&cfg);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config.cache_config.cache_hits(), 0);
+        assert_eq!(engine.config.cache_config.cache_misses(), 1);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config.cache_config.cache_hits(), 1);
+        assert_eq!(engine.config.cache_config.cache_misses(), 1);
 
         // FIXME(#1523) need debuginfo on aarch64 before we run this test there
         if !cfg!(target_arch = "aarch64") {
             let mut cfg = Config::new();
             cfg.debug_info(true).cache_config_load(&config_path)?;
-            let store = Store::new(&Engine::new(&cfg));
-            Module::new(&store, "(module (func))")?;
-            assert_eq!(store.engine().config.cache_config.cache_hits(), 0);
-            assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
-            Module::new(&store, "(module (func))")?;
-            assert_eq!(store.engine().config.cache_config.cache_hits(), 1);
-            assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+            let engine = Engine::new(&cfg);
+            Module::new(&engine, "(module (func))")?;
+            assert_eq!(engine.config.cache_config.cache_hits(), 0);
+            assert_eq!(engine.config.cache_config.cache_misses(), 1);
+            Module::new(&engine, "(module (func))")?;
+            assert_eq!(engine.config.cache_config.cache_hits(), 1);
+            assert_eq!(engine.config.cache_config.cache_misses(), 1);
         }
 
         Ok(())

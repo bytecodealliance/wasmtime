@@ -13,8 +13,8 @@ fn main() -> Result<()> {
     // Create our `Store` context and then compile a module and create an
     // instance from the compiled module all in one go.
     let wasmtime_store = Store::default();
-    let module = Module::from_file(&wasmtime_store, "examples/memory.wat")?;
-    let instance = Instance::new(&module, &[])?;
+    let module = Module::from_file(wasmtime_store.engine(), "examples/memory.wat")?;
+    let instance = Instance::new(&wasmtime_store, &module, &[])?;
 
     // Load up our exports from the instance
     let memory = instance

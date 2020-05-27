@@ -122,6 +122,7 @@ fn instantiate(
 #[derive(Clone)]
 pub struct Instance {
     pub(crate) handle: StoreInstanceHandle,
+    store: Store,
     module: Module,
 }
 
@@ -179,17 +180,15 @@ impl Instance {
     /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     /// [`ExternType`]: crate::ExternType
-    pub fn new(module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
+    pub fn new(store: &Store, module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
         let info = module.register_frame_info();
-        let handle = instantiate(
-            module.store(),
-            module.compiled_module(),
-            imports,
-            Box::new(info),
-        )?;
+        store.register_jit_code(module.compiled_module().jit_code_ranges());
+
+        let handle = instantiate(store, module.compiled_module(), imports, Box::new(info))?;
 
         Ok(Instance {
             handle,
+            store: store.clone(),
             module: module.clone(),
         })
     }
@@ -199,7 +198,7 @@ impl Instance {
     /// This is the [`Store`] that generally serves as a sort of global cache
     /// for various instance-related things.
     pub fn store(&self) -> &Store {
-        self.module.store()
+        &self.store
     }
 
     /// Returns the list of exported items from this [`Instance`].

@@ -1,7 +1,6 @@
 // You can execute this example with `cargo run --example threads`
 
 use anyhow::{format_err, Result};
-use std::sync::Arc;
 use std::thread;
 use std::time;
 use wasmtime::*;
@@ -14,9 +13,8 @@ fn print_message(_: Caller<'_>, args: &[Val], _: &mut [Val]) -> Result<(), Trap>
     Ok(())
 }
 
-fn run(engine: &Engine, module: SendableModule, id: i32) -> Result<()> {
+fn run(engine: &Engine, module: Module, id: i32) -> Result<()> {
     let store = Store::new(&engine);
-    let module = module.place_into(&store);
 
     // Create external print functions.
     println!("Creating callback...");
@@ -28,7 +26,7 @@ fn run(engine: &Engine, module: SendableModule, id: i32) -> Result<()> {
 
     // Instantiate.
     println!("Instantiating module...");
-    let instance = Instance::new(&module, &[callback_func.into(), id_global.into()])?;
+    let instance = Instance::new(&store, &module, &[callback_func.into(), id_global.into()])?;
 
     // Extract exports.
     println!("Extracting export...");
@@ -47,17 +45,16 @@ fn run(engine: &Engine, module: SendableModule, id: i32) -> Result<()> {
 
 fn main() -> Result<()> {
     println!("Initializing...");
-    let engine = Arc::new(Engine::default());
-    let store = Store::new(&engine);
+    let engine = Engine::default();
 
     // Compile.
     println!("Compiling module...");
-    let module = Module::from_file(&store, "examples/threads.wat")?;
+    let module = Module::from_file(&engine, "examples/threads.wat")?;
 
     let mut children = Vec::new();
     for id in 0..N_THREADS {
         let engine = engine.clone();
-        let module = module.share();
+        let module = module.clone();
         children.push(thread::spawn(move || {
             run(&engine, module, id).expect("Success");
         }));

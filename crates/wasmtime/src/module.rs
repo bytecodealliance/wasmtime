@@ -1,5 +1,5 @@
 use crate::frame_info::GlobalFrameInfoRegistration;
-use crate::runtime::Store;
+use crate::runtime::Engine;
 use crate::types::{EntityType, ExportType, ExternType, ImportType};
 use anyhow::{Error, Result};
 use std::path::Path;
@@ -38,8 +38,8 @@ use wasmtime_jit::CompiledModule;
 /// ```no_run
 /// # use wasmtime::*;
 /// # fn main() -> anyhow::Result<()> {
-/// let store = Store::default();
-/// let module = Module::from_file(&store, "path/to/foo.wasm")?;
+/// let engine = Engine::default();
+/// let module = Module::from_file(&engine, "path/to/foo.wasm")?;
 /// # Ok(())
 /// # }
 /// ```
@@ -49,9 +49,9 @@ use wasmtime_jit::CompiledModule;
 /// ```no_run
 /// # use wasmtime::*;
 /// # fn main() -> anyhow::Result<()> {
-/// let store = Store::default();
+/// let engine = Engine::default();
 /// // Now we're using the WebAssembly text extension: `.wat`!
-/// let module = Module::from_file(&store, "path/to/foo.wat")?;
+/// let module = Module::from_file(&engine, "path/to/foo.wat")?;
 /// # Ok(())
 /// # }
 /// ```
@@ -62,12 +62,12 @@ use wasmtime_jit::CompiledModule;
 /// ```no_run
 /// # use wasmtime::*;
 /// # fn main() -> anyhow::Result<()> {
-/// let store = Store::default();
+/// let engine = Engine::default();
 /// # let wasm_bytes: Vec<u8> = Vec::new();
-/// let module = Module::new(&store, &wasm_bytes)?;
+/// let module = Module::new(&engine, &wasm_bytes)?;
 ///
 /// // It also works with the text format!
-/// let module = Module::new(&store, "(module (func))")?;
+/// let module = Module::new(&engine, "(module (func))")?;
 /// # Ok(())
 /// # }
 /// ```
@@ -75,11 +75,7 @@ use wasmtime_jit::CompiledModule;
 /// [`Config`]: crate::Config
 #[derive(Clone)]
 pub struct Module {
-    inner: Arc<ModuleInner>,
-}
-
-struct ModuleInner {
-    store: Store,
+    engine: Engine,
     compiled: Arc<CompiledModule>,
     frame_info_registration: Arc<Mutex<Option<Option<Arc<GlobalFrameInfoRegistration>>>>>,
 }
@@ -103,12 +99,7 @@ impl Module {
     /// compilation of a module.
     ///
     /// The WebAssembly binary will be decoded and validated. It will also be
-    /// compiled according to the configuration of the provided `store` and
-    /// cached in this type.
-    ///
-    /// The provided `store` is a global cache for compiled resources as well as
-    /// configuration for what wasm features are enabled. It's recommended to
-    /// share a `store` among modules if possible.
+    /// compiled according to the configuration of the provided `engine`.
     ///
     /// # Errors
     ///
@@ -121,7 +112,7 @@ impl Module {
     /// * Implementation-specific limits were exceeded with a valid binary (for
     ///   example too many locals)
     /// * The wasm binary may use features that are not enabled in the
-    ///   configuration of `store`
+    ///   configuration of `enging`
     /// * If the `wat` feature is enabled and the input is text, then it may be
     ///   rejected if it fails to parse.
     ///
@@ -138,9 +129,9 @@ impl Module {
     /// ```no_run
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// # let store = Store::default();
+    /// # let engine = Engine::default();
     /// # let wasm_bytes: Vec<u8> = Vec::new();
-    /// let module = Module::new(&store, &wasm_bytes)?;
+    /// let module = Module::new(&engine, &wasm_bytes)?;
     /// # Ok(())
     /// # }
     /// ```
@@ -151,25 +142,27 @@ impl Module {
     /// ```
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// # let store = Store::default();
-    /// let module = Module::new(&store, "(module (func))")?;
+    /// # let engine = Engine::default();
+    /// let module = Module::new(&engine, "(module (func))")?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(store: &Store, bytes: impl AsRef<[u8]>) -> Result<Module> {
+    pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(bytes.as_ref())?;
-        Module::from_binary(store, bytes.as_ref())
+        Module::from_binary(engine, bytes.as_ref())
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
     /// data. The provided `name` will be used in traps/backtrace details.
     ///
     /// See [`Module::new`] for other details.
-    pub fn new_with_name(store: &Store, bytes: impl AsRef<[u8]>, name: &str) -> Result<Module> {
-        let mut module = Module::new(store, bytes.as_ref())?;
-        let inner = Arc::get_mut(&mut module.inner).unwrap();
-        Arc::get_mut(&mut inner.compiled).unwrap().module_mut().name = Some(name.to_string());
+    pub fn new_with_name(engine: &Engine, bytes: impl AsRef<[u8]>, name: &str) -> Result<Module> {
+        let mut module = Module::new(engine, bytes.as_ref())?;
+        Arc::get_mut(&mut module.compiled)
+            .unwrap()
+            .module_mut()
+            .name = Some(name.to_string());
         Ok(module)
     }
 
@@ -185,8 +178,8 @@ impl Module {
     /// ```no_run
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// let store = Store::default();
-    /// let module = Module::from_file(&store, "./path/to/foo.wasm")?;
+    /// let engine = Engine::default();
+    /// let module = Module::from_file(&engine, "./path/to/foo.wasm")?;
     /// # Ok(())
     /// # }
     /// ```
@@ -196,17 +189,17 @@ impl Module {
     /// ```no_run
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// # let store = Store::default();
-    /// let module = Module::from_file(&store, "./path/to/foo.wat")?;
+    /// # let engine = Engine::default();
+    /// let module = Module::from_file(&engine, "./path/to/foo.wat")?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn from_file(store: &Store, file: impl AsRef<Path>) -> Result<Module> {
+    pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         #[cfg(feature = "wat")]
         let wasm = wat::parse_file(file)?;
         #[cfg(not(feature = "wat"))]
         let wasm = std::fs::read(file)?;
-        Module::new(store, &wasm)
+        Module::new(engine, &wasm)
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
@@ -223,9 +216,9 @@ impl Module {
     /// ```
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// # let store = Store::default();
+    /// # let engine = Engine::default();
     /// let wasm = b"\0asm\x01\0\0\0";
-    /// let module = Module::from_binary(&store, wasm)?;
+    /// let module = Module::from_binary(&engine, wasm)?;
     /// # Ok(())
     /// # }
     /// ```
@@ -235,17 +228,17 @@ impl Module {
     /// ```
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// # let store = Store::default();
-    /// assert!(Module::from_binary(&store, b"(module)").is_err());
+    /// # let engine = Engine::default();
+    /// assert!(Module::from_binary(&engine, b"(module)").is_err());
     /// # Ok(())
     /// # }
     /// ```
-    pub fn from_binary(store: &Store, binary: &[u8]) -> Result<Module> {
-        Module::validate(store, binary)?;
+    pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
+        Module::validate(engine, binary)?;
         // Note that the call to `from_binary_unchecked` here should be ok
         // because we previously validated the binary, meaning we're guaranteed
-        // to pass a valid binary for `store`.
-        unsafe { Module::from_binary_unchecked(store, binary) }
+        // to pass a valid binary for `engine`.
+        unsafe { Module::from_binary_unchecked(engine, binary) }
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`
@@ -257,7 +250,7 @@ impl Module {
     /// WebAssembly. The WebAssembly binary is not validated for
     /// correctness and it is simply assumed as valid.
     ///
-    /// For more information about creation of a module and the `store` argument
+    /// For more information about creation of a module and the `engine` argument
     /// see the documentation of [`Module::new`].
     ///
     /// # Unsafety
@@ -275,17 +268,17 @@ impl Module {
     /// While this assumes that the binary is valid it still needs to actually
     /// be somewhat valid for decoding purposes, and the basics of decoding can
     /// still fail.
-    pub unsafe fn from_binary_unchecked(store: &Store, binary: &[u8]) -> Result<Module> {
-        Module::compile(store, binary)
+    pub unsafe fn from_binary_unchecked(engine: &Engine, binary: &[u8]) -> Result<Module> {
+        Module::compile(engine, binary)
     }
 
     /// Validates `binary` input data as a WebAssembly binary given the
-    /// configuration in `store`.
+    /// configuration in `engine`.
     ///
     /// This function will perform a speedy validation of the `binary` input
     /// WebAssembly module (which is in [binary form][binary], the text format
     /// is not accepted by this function) and return either `Ok` or `Err`
-    /// depending on the results of validation. The `store` argument indicates
+    /// depending on the results of validation. The `engine` argument indicates
     /// configuration for WebAssembly features, for example, which are used to
     /// indicate what should be valid and what shouldn't be.
     ///
@@ -299,39 +292,24 @@ impl Module {
     /// validation issue will be returned.
     ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
-    pub fn validate(store: &Store, binary: &[u8]) -> Result<()> {
-        let config = store.engine().config().validating_config.clone();
+    pub fn validate(engine: &Engine, binary: &[u8]) -> Result<()> {
+        let config = engine.config().validating_config.clone();
         validate(binary, Some(config)).map_err(Error::new)
     }
 
-    unsafe fn compile(store: &Store, binary: &[u8]) -> Result<Self> {
-        let compiled = CompiledModule::new(
-            &store.compiler(),
-            binary,
-            &*store.engine().config().profiler,
-        )?;
-
-        store.register_jit_code(compiled.jit_code_ranges());
+    unsafe fn compile(engine: &Engine, binary: &[u8]) -> Result<Self> {
+        let compiled =
+            CompiledModule::new(&engine.get_compiler(), binary, &*engine.config().profiler)?;
 
         Ok(Module {
-            inner: Arc::new(ModuleInner {
-                store: store.clone(),
-                compiled: Arc::new(compiled),
-                frame_info_registration: Arc::new(Mutex::new(None)),
-            }),
+            engine: engine.clone(),
+            compiled: Arc::new(compiled),
+            frame_info_registration: Arc::new(Mutex::new(None)),
         })
     }
 
     pub(crate) fn compiled_module(&self) -> &Arc<CompiledModule> {
-        &self.inner.compiled
-    }
-
-    /// Returns the module that can be used in different thread.
-    pub fn share(&self) -> SendableModule {
-        SendableModule {
-            compiled: self.inner.compiled.clone(),
-            frame_info_registration: self.inner.frame_info_registration.clone(),
-        }
+        &self.compiled
     }
 
     /// Returns identifier/name that this [`Module`] has. This name
@@ -346,20 +324,20 @@ impl Module {
     /// ```
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// # let store = Store::default();
-    /// let module = Module::new(&store, "(module $foo)")?;
+    /// # let engine = Engine::default();
+    /// let module = Module::new(&engine, "(module $foo)")?;
     /// assert_eq!(module.name(), Some("foo"));
     ///
-    /// let module = Module::new(&store, "(module)")?;
+    /// let module = Module::new(&engine, "(module)")?;
     /// assert_eq!(module.name(), None);
     ///
-    /// let module = Module::new_with_name(&store, "(module)", "bar")?;
+    /// let module = Module::new_with_name(&engine, "(module)", "bar")?;
     /// assert_eq!(module.name(), Some("bar"));
     /// # Ok(())
     /// # }
     /// ```
     pub fn name(&self) -> Option<&str> {
-        self.inner.compiled.module().name.as_deref()
+        self.compiled.module().name.as_deref()
     }
 
     /// Returns the list of imports that this [`Module`] has and must be
@@ -381,8 +359,8 @@ impl Module {
     /// ```
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// # let store = Store::default();
-    /// let module = Module::new(&store, "(module)")?;
+    /// # let engine = Engine::default();
+    /// let module = Module::new(&engine, "(module)")?;
     /// assert_eq!(module.imports().len(), 0);
     /// # Ok(())
     /// # }
@@ -393,13 +371,13 @@ impl Module {
     /// ```
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// # let store = Store::default();
+    /// # let engine = Engine::default();
     /// let wat = r#"
     ///     (module
     ///         (import "host" "foo" (func))
     ///     )
     /// "#;
-    /// let module = Module::new(&store, wat)?;
+    /// let module = Module::new(&engine, wat)?;
     /// assert_eq!(module.imports().len(), 1);
     /// let import = module.imports().next().unwrap();
     /// assert_eq!(import.module(), "host");
@@ -414,7 +392,7 @@ impl Module {
     pub fn imports<'module>(
         &'module self,
     ) -> impl ExactSizeIterator<Item = ImportType<'module>> + 'module {
-        let module = self.inner.compiled.module();
+        let module = self.compiled.module();
         module
             .imports
             .iter()
@@ -439,8 +417,8 @@ impl Module {
     /// ```
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// # let store = Store::default();
-    /// let module = Module::new(&store, "(module)")?;
+    /// # let engine = Engine::default();
+    /// let module = Module::new(&engine, "(module)")?;
     /// assert!(module.exports().next().is_none());
     /// # Ok(())
     /// # }
@@ -451,14 +429,14 @@ impl Module {
     /// ```
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// # let store = Store::default();
+    /// # let engine = Engine::default();
     /// let wat = r#"
     ///     (module
     ///         (func (export "foo"))
     ///         (memory (export "memory") 1)
     ///     )
     /// "#;
-    /// let module = Module::new(&store, wat)?;
+    /// let module = Module::new(&engine, wat)?;
     /// assert_eq!(module.exports().len(), 2);
     ///
     /// let mut exports = module.exports();
@@ -481,7 +459,7 @@ impl Module {
     pub fn exports<'module>(
         &'module self,
     ) -> impl ExactSizeIterator<Item = ExportType<'module>> + 'module {
-        let module = self.inner.compiled.module();
+        let module = self.compiled.module();
         module.exports.iter().map(move |(name, entity_index)| {
             let r#type = EntityType::new(entity_index, module);
             ExportType::new(name, r#type)
@@ -499,8 +477,8 @@ impl Module {
     /// ```
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// # let store = Store::default();
-    /// let module = Module::new(&store, "(module)")?;
+    /// # let engine = Engine::default();
+    /// let module = Module::new(&engine, "(module)")?;
     /// assert!(module.get_export("foo").is_none());
     /// # Ok(())
     /// # }
@@ -511,14 +489,14 @@ impl Module {
     /// ```
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// # let store = Store::default();
+    /// # let engine = Engine::default();
     /// let wat = r#"
     ///     (module
     ///         (func (export "foo"))
     ///         (memory (export "memory") 1)
     ///     )
     /// "#;
-    /// let module = Module::new(&store, wat)?;
+    /// let module = Module::new(&engine, wat)?;
     /// let foo = module.get_export("foo");
     /// assert!(foo.is_some());
     ///
@@ -532,54 +510,26 @@ impl Module {
     /// # }
     /// ```
     pub fn get_export<'module>(&'module self, name: &'module str) -> Option<ExternType> {
-        let module = self.inner.compiled.module();
+        let module = self.compiled.module();
         let entity_index = module.exports.get(name)?;
         Some(EntityType::new(entity_index, module).extern_type())
     }
 
-    /// Returns the [`Store`] that this [`Module`] was compiled into.
-    pub fn store(&self) -> &Store {
-        &self.inner.store
+    /// Returns the [`Engine`] that this [`Module`] was compiled by.
+    pub fn engine(&self) -> &Engine {
+        &self.engine
     }
 
     /// Register this module's stack frame information into the global scope.
     ///
     /// This is required to ensure that any traps can be properly symbolicated.
     pub(crate) fn register_frame_info(&self) -> Option<Arc<GlobalFrameInfoRegistration>> {
-        let mut info = self.inner.frame_info_registration.lock().unwrap();
+        let mut info = self.frame_info_registration.lock().unwrap();
         if let Some(info) = &*info {
             return info.clone();
         }
-        let ret = super::frame_info::register(self.inner.compiled.clone()).map(Arc::new);
+        let ret = super::frame_info::register(self.compiled.clone()).map(Arc::new);
         *info = Some(ret.clone());
         return ret;
-    }
-}
-
-/// Shareable portion of the `Module` that can be instantiated in
-/// deferent `Store`.
-#[derive(Clone)]
-pub struct SendableModule {
-    compiled: Arc<CompiledModule>,
-    frame_info_registration: Arc<Mutex<Option<Option<Arc<GlobalFrameInfoRegistration>>>>>,
-}
-
-unsafe impl Send for SendableModule {}
-
-impl SendableModule {
-    /// Returns `Module` that is belong to diffrent `Store`.
-    pub fn place_into(self, store: &Store) -> Module {
-        let compiled = self.compiled;
-        let frame_info_registration = self.frame_info_registration;
-
-        store.register_jit_code(compiled.jit_code_ranges());
-
-        Module {
-            inner: Arc::new(ModuleInner {
-                store: store.clone(),
-                compiled,
-                frame_info_registration,
-            }),
-        }
     }
 }
