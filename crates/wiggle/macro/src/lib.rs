@@ -95,7 +95,7 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR env var"),
     );
 
-    let doc = witx::load(&config.witx.paths).expect("loading witx");
+    let doc = config.load_document();
     let names = wiggle_generate::Names::new(&config.ctx.name, quote!(wiggle));
 
     let code = wiggle_generate::generate(&doc, &names);
