@@ -303,7 +303,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
             ApiCall::ModuleNew { id, wasm } => {
                 log::debug!("creating module: {}", id);
                 log_wasm(&wasm.wasm);
-                let module = match Module::new(store.as_ref().unwrap(), &wasm.wasm) {
+                let module = match Module::new(engine.as_ref().unwrap(), &wasm.wasm) {
                     Ok(m) => m,
                     Err(_) => continue,
                 };
