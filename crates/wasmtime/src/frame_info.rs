@@ -101,9 +101,9 @@ impl GlobalFrameInfo {
             None => func.instr_map.start_srcloc,
         };
         Some(FrameInfo {
-            module_name: module.module.name.clone(),
+            module_name: module.module.module().name.clone(),
             func_index: func.index.index() as u32,
-            func_name: module.module.func_names.get(&func.index).cloned(),
+            func_name: module.module.module().func_names.get(&func.index).cloned(),
             instr,
             func_start: func.instr_map.start_srcloc,
         })
@@ -165,7 +165,7 @@ pub fn register(module: Arc<CompiledModule>) -> Option<GlobalFrameInfoRegistrati
         max = cmp::max(max, end);
         let func = FunctionInfo {
             start,
-            index: module.local.func_index(i),
+            index: module.module().local.func_index(i),
             traps: traps.to_vec(),
             instr_map: (*instrs).clone(),
         };

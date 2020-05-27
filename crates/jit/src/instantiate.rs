@@ -23,8 +23,8 @@ use wasmtime_environ::{
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::VMInterrupts;
 use wasmtime_runtime::{
-    GdbJitImageRegistration, InstanceHandle, InstantiationError, RuntimeMemoryCreator,
-    SignatureRegistry, VMFunctionBody, VMTrampoline,
+    GdbJitImageRegistration, InstanceContext, InstanceHandle, InstantiationError,
+    RuntimeMemoryCreator, SignatureRegistry, VMFunctionBody, VMTrampoline,
 };
 
 /// An error condition while setting up a wasm instance, be it validation,
@@ -67,16 +67,9 @@ pub struct CompiledModule {
     address_transform: ModuleAddressMap,
 }
 
-impl std::ops::Deref for CompiledModule {
-    type Target = Module;
-    fn deref(&self) -> &Self::Target {
+impl InstanceContext for CompiledModule {
+    fn module(&self) -> &Module {
         &self.module
-    }
-}
-
-impl std::ops::DerefMut for CompiledModule {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.module
     }
 }
 
@@ -167,6 +160,7 @@ impl CompiledModule {
         // Compute indices into the shared signature table.
         let signatures = {
             module
+                .module()
                 .local
                 .signatures
                 .values()
@@ -181,7 +175,7 @@ impl CompiledModule {
 
         let finished_functions = module.finished_functions.0.clone();
 
-        let imports = resolve_imports(&module, signature_registry, resolver)?;
+        let imports = resolve_imports(module.module(), signature_registry, resolver)?;
         InstanceHandle::new(
             module,
             finished_functions,
@@ -208,6 +202,11 @@ impl CompiledModule {
     /// Return a reference to a module.
     pub fn module(&self) -> &Module {
         &self.module
+    }
+
+    /// Return a reference to a module.
+    pub fn module_mut(&mut self) -> &mut Module {
+        &mut self.module
     }
 
     /// Returns the map of all finished JIT functions compiled for this module

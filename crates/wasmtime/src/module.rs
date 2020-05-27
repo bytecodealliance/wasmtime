@@ -169,7 +169,7 @@ impl Module {
     pub fn new_with_name(store: &Store, bytes: impl AsRef<[u8]>, name: &str) -> Result<Module> {
         let mut module = Module::new(store, bytes.as_ref())?;
         let inner = Arc::get_mut(&mut module.inner).unwrap();
-        Arc::get_mut(&mut inner.compiled).unwrap().name = Some(name.to_string());
+        Arc::get_mut(&mut inner.compiled).unwrap().module_mut().name = Some(name.to_string());
         Ok(module)
     }
 
@@ -359,7 +359,7 @@ impl Module {
     /// # }
     /// ```
     pub fn name(&self) -> Option<&str> {
-        self.inner.compiled.name.as_deref()
+        self.inner.compiled.module().name.as_deref()
     }
 
     /// Returns the list of imports that this [`Module`] has and must be
