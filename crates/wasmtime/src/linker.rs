@@ -613,7 +613,7 @@ impl Linker {
         &self.store
     }
 
-    /// Returns an iterator over all items defined in this `Linker`.
+    /// Returns an iterator over all items defined in this `Linker`, in arbitrary order.
     ///
     /// The iterator returned will yield 3-tuples where the first two elements
     /// are the module name and item name for the external item, and the third
