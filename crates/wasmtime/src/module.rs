@@ -1,5 +1,5 @@
 use crate::frame_info::GlobalFrameInfoRegistration;
-use crate::runtime::{JitCodeRegistration, Store};
+use crate::runtime::Store;
 use crate::types::{EntityType, ExportType, ExternType, ImportType};
 use anyhow::{Error, Result};
 use std::path::Path;
@@ -82,8 +82,6 @@ struct ModuleInner {
     store: Store,
     compiled: Arc<CompiledModule>,
     frame_info_registration: Arc<Mutex<Option<Option<Arc<GlobalFrameInfoRegistration>>>>>,
-    #[allow(dead_code)]
-    jit_code_registration: JitCodeRegistration,
 }
 
 impl Module {
@@ -313,14 +311,13 @@ impl Module {
             &*store.engine().config().profiler,
         )?;
 
-        let jit_code_registration = store.register_jit_code(compiled.jit_code_ranges());
+        store.register_jit_code(compiled.jit_code_ranges());
 
         Ok(Module {
             inner: Arc::new(ModuleInner {
                 store: store.clone(),
                 compiled: Arc::new(compiled),
                 frame_info_registration: Arc::new(Mutex::new(None)),
-                jit_code_registration,
             }),
         })
     }
@@ -575,14 +572,13 @@ impl SendableModule {
         let compiled = self.compiled;
         let frame_info_registration = self.frame_info_registration;
 
-        let jit_code_registration = store.register_jit_code(compiled.jit_code_ranges());
+        store.register_jit_code(compiled.jit_code_ranges());
 
         Module {
             inner: Arc::new(ModuleInner {
                 store: store.clone(),
                 compiled,
                 frame_info_registration,
-                jit_code_registration,
             }),
         }
     }

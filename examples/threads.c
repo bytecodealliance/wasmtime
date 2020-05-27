@@ -1,3 +1,5 @@
+#ifndef _WIN32
+
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -160,6 +162,13 @@ int main(int argc, const char *argv[]) {
 
   return 0;
 }
+
+#else
+// TODO implement example for Windows
+int main(int argc, const char *argv[]) {
+  return 0;
+}
+#endif // _WIN32
 
 static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {
   fprintf(stderr, "error: %s\n", message);

@@ -3,7 +3,6 @@ use crate::trampoline::{MemoryCreatorProxy, StoreInstanceHandle};
 use anyhow::{bail, Result};
 use std::cell::RefCell;
 use std::cmp;
-use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::fmt;
 use std::path::Path;
@@ -739,18 +738,6 @@ pub(crate) struct StoreInner {
     jit_code_ranges: RefCell<Vec<(usize, usize)>>,
 }
 
-pub(crate) struct JitCodeRegistration {
-    inner: Rc<StoreInner>,
-    ends: HashSet<usize>,
-}
-
-impl Drop for JitCodeRegistration {
-    fn drop(&mut self) {
-        let mut jit_code_ranges = self.inner.jit_code_ranges.borrow_mut();
-        jit_code_ranges.retain(|(_, end)| self.ends.contains(end));
-    }
-}
-
 impl Store {
     /// Creates a new store to be associated with the given [`Engine`].
     pub fn new(engine: &Engine) -> Store {
@@ -810,24 +797,12 @@ impl Store {
             .jit_code_ranges
             .borrow()
             .iter()
-            .find(|(start, end)| *start <= addr && addr < *end)
-            .is_some()
+            .any(|(start, end)| *start <= addr && addr < *end)
     }
 
-    pub(crate) fn register_jit_code(
-        &self,
-        ranges: impl Iterator<Item = (usize, usize)>,
-    ) -> JitCodeRegistration {
-        let mut ends = HashSet::new();
+    pub(crate) fn register_jit_code(&self, ranges: impl Iterator<Item = (usize, usize)>) {
         let mut jit_code_ranges = self.inner.jit_code_ranges.borrow_mut();
-        for (start, end) in ranges {
-            jit_code_ranges.push((start, end));
-            ends.insert(end);
-        }
-        JitCodeRegistration {
-            inner: self.inner.clone(),
-            ends,
-        }
+        jit_code_ranges.extend(ranges);
     }
 
     pub(crate) unsafe fn add_instance(&self, handle: InstanceHandle) -> StoreInstanceHandle {
