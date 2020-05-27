@@ -962,6 +962,58 @@ fn expand_fcvt_to_sint_sat(
     cfg.recompute_block(pos.func, done_block);
 }
 
+/// This legalization converts a vector of 32-bit floating point lanes to signed integer lanes
+/// using CVTTPS2DQ (see encoding of `x86_cvtt2si`). If user-defined flags `assert_no_nans` and
+/// `assert_in_bounds` are set, only CVTTPS2DQ is emitted; otherwise, a longer sequence of NaN
+/// quieting and lane saturation is emitted. This logic is separate from [expand_fcvt_to_sint_sat]
+/// above (the scalar version), only due to how the transform groups are set up; TODO if we change
+/// the SIMD legalization groups, then this logic could be merged into [expand_fcvt_to_sint_sat]
+/// (see https://github.com/bytecodealliance/wasmtime/issues/1745).
+fn expand_fcvt_to_sint_sat_vector(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    isa: &dyn TargetIsa,
+) {
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    if let ir::InstructionData::Unary {
+        opcode: ir::Opcode::FcvtToSintSat,
+        arg,
+    } = pos.func.dfg[inst]
+    {
+        let controlling_type = pos.func.dfg.ctrl_typevar(inst);
+        if controlling_type == I32X4 {
+            debug_assert_eq!(pos.func.dfg.value_type(arg), F32X4);
+            let x86_isa = isa
+                .as_any()
+                .downcast_ref::<isa::x86::Isa>()
+                .expect("the target ISA must be x86 at this point");
+            if x86_isa.isa_flags.assert_no_nans() && x86_isa.isa_flags.assert_in_bounds() {
+                // When no NaNs are possible and we know the results do not need saturation, we can
+                // emit faster code.
+                pos.func.dfg.replace(inst).x86_cvtt2si(F32X4, arg);
+            } else {
+                // Otherwise, we must both quiet any NaNs--setting that lane to 0--and saturate any
+                // lanes that might overflow during conversion to the highest/lowest integer
+                // allowed in that lane.
+                let ones_constant = pos.func.dfg.constants.insert(vec![0xff; 16].into());
+                let ones = pos.ins().vconst(F32X4, ones_constant);
+                let arg1 = pos.ins().band(arg, ones);
+                let tmp1 = pos.ins().bxor(ones, arg);
+                let arg2 = pos.ins().x86_cvtt2si(I32X4, arg1);
+                let tmp2 = pos.ins().raw_bitcast(I32X4, tmp1);
+                let tmp3 = pos.ins().band(tmp2, arg2);
+                let tmp4 = pos.ins().sshr_imm(tmp3, 31);
+                pos.func.dfg.replace(inst).bxor(arg2, tmp4);
+            }
+        } else {
+            unimplemented!("cannot legalize {}", pos.func.dfg.display_inst(inst, None))
+        }
+    }
+}
+
 fn expand_fcvt_to_uint(
     inst: ir::Inst,
     func: &mut ir::Function,

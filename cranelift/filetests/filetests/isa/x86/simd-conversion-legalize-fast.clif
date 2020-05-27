@@ -1,0 +1,12 @@
+test legalizer
+set enable_simd
+target x86_64 skylake assert_no_nans=true assert_in_bounds=true
+
+; When we assert that no NaNs are possible and the conversion will not overflow, we can emit a shorter legalization
+; sequence.
+function %fcvt_to_sint_sat(f32x4) -> i32x4 {
+block0(v0:f32x4):
+    v1 = fcvt_to_sint_sat.i32x4 v0
+    ; check: v1 = x86_cvtt2si.i32x4 v0
+    return v1
+}
