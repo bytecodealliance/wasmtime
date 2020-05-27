@@ -964,6 +964,61 @@ fn expand_fcvt_to_sint_sat(
     cfg.recompute_block(pos.func, done_block);
 }
 
+/// This legalization converts a vector of 32-bit floating point lanes to signed integer lanes
+/// using CVTTPS2DQ (see encoding of `x86_cvtt2si`). This logic is separate from [expand_fcvt_to_sint_sat]
+/// above (the scalar version), only due to how the transform groups are set up; TODO if we change
+/// the SIMD legalization groups, then this logic could be merged into [expand_fcvt_to_sint_sat]
+/// (see https://github.com/bytecodealliance/wasmtime/issues/1745).
+fn expand_fcvt_to_sint_sat_vector(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    _isa: &dyn TargetIsa,
+) {
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    if let ir::InstructionData::Unary {
+        opcode: ir::Opcode::FcvtToSintSat,
+        arg,
+    } = pos.func.dfg[inst]
+    {
+        let controlling_type = pos.func.dfg.ctrl_typevar(inst);
+        if controlling_type == I32X4 {
+            debug_assert_eq!(pos.func.dfg.value_type(arg), F32X4);
+            // We must both quiet any NaNs--setting that lane to 0--and saturate any
+            // lanes that might overflow during conversion to the highest/lowest signed integer
+            // allowed in that lane.
+
+            // Saturate NaNs: `fcmp eq` will not match if a lane contains a NaN. We use ANDPS to
+            // avoid doing the comparison twice (we need the zeroed lanes to find differences).
+            let zeroed_nans = pos.ins().fcmp(FloatCC::Equal, arg, arg);
+            let zeroed_nans_bitcast = pos.ins().raw_bitcast(F32X4, zeroed_nans);
+            let zeroed_nans_copy = pos.ins().band(arg, zeroed_nans_bitcast);
+
+            // Find differences with the zeroed lanes (we will only use the MSB: 1 if positive or
+            // NaN, 0 otherwise).
+            let differences = pos.ins().bxor(zeroed_nans_bitcast, arg);
+            let differences_bitcast = pos.ins().raw_bitcast(I32X4, differences);
+
+            // Convert the numeric lanes. CVTTPS2DQ will mark overflows with 0x80000000 (MSB set).
+            let converted = pos.ins().x86_cvtt2si(I32X4, zeroed_nans_copy);
+
+            // Create a mask of all 1s only on positive overflow, 0s otherwise. This uses the MSB
+            // of `differences` (1 when positive or NaN) and the MSB of `converted` (1 on positive
+            // overflow).
+            let tmp = pos.ins().band(differences_bitcast, converted);
+            let mask = pos.ins().sshr_imm(tmp, 31);
+
+            // Apply the mask to create 0x7FFFFFFF for positive overflow. XOR of all 0s (all other
+            // cases) has no effect.
+            pos.func.dfg.replace(inst).bxor(converted, mask);
+        } else {
+            unimplemented!("cannot legalize {}", pos.func.dfg.display_inst(inst, None))
+        }
+    }
+}
+
 fn expand_fcvt_to_uint(
     inst: ir::Inst,
     func: &mut ir::Function,

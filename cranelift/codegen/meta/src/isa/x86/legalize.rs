@@ -381,6 +381,7 @@ fn define_simd(
     let extractlane = insts.by_name("extractlane");
     let fcmp = insts.by_name("fcmp");
     let fcvt_from_uint = insts.by_name("fcvt_from_uint");
+    let fcvt_to_sint_sat = insts.by_name("fcvt_to_sint_sat");
     let fabs = insts.by_name("fabs");
     let fneg = insts.by_name("fneg");
     let iadd_imm = insts.by_name("iadd_imm");
@@ -788,6 +789,7 @@ fn define_simd(
     narrow.custom_legalize(ineg, "convert_ineg");
     narrow.custom_legalize(ushr, "convert_ushr");
     narrow.custom_legalize(ishl, "convert_ishl");
+    narrow.custom_legalize(fcvt_to_sint_sat, "expand_fcvt_to_sint_sat_vector");
 
     narrow_avx.custom_legalize(imul, "convert_i64x2_imul");
     narrow_avx.custom_legalize(fcvt_from_uint, "expand_fcvt_from_uint_vector");
