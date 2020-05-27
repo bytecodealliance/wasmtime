@@ -1075,9 +1075,8 @@ impl<'a> Parser<'a> {
             if lane_size < 1 {
                 panic!("The boolean lane must have a byte size greater than zero.");
             }
-            let mut buffer = vec![0; lane_size as usize];
-            buffer[0] = if value { 1 } else { 0 };
-            buffer
+            let value = if value { 0xFF } else { 0 };
+            vec![value; lane_size as usize]
         }
 
         if !ty.is_vector() {
@@ -3824,7 +3823,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             c.into_vec(),
-            [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
+            [0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0]
         )
     }
 
