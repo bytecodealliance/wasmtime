@@ -32,6 +32,11 @@ pub enum SerInstData {
         opcode: String,
         args: [String; 2],
     },
+    BinaryImm8 {
+        opcode: String,
+        arg: String,
+        imm: String,
+    },
     BinaryImm {
         opcode: String,
         arg: String,
@@ -52,11 +57,6 @@ pub enum SerInstData {
     },
     NullAry {
         opcode: String,
-    },
-    ExtractLane {
-        opcode: String,
-        arg: String,
-        lane: String,
     },
     Shuffle {
         opcode: String,
@@ -292,6 +292,11 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 args: hold_args,
             }
         }
+        InstructionData::BinaryImm8 { opcode, arg, imm } => SerInstData::BinaryImm8 {
+            opcode: opcode.to_string(),
+            arg: arg.to_string(),
+            imm: imm.to_string(),
+        },
         InstructionData::BinaryImm { opcode, arg, imm } => SerInstData::BinaryImm {
             opcode: opcode.to_string(),
             arg: arg.to_string(),
@@ -331,11 +336,6 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 imm: imm.to_string(),
             }
         }
-        InstructionData::ExtractLane { opcode, arg, lane } => SerInstData::ExtractLane {
-            opcode: opcode.to_string(),
-            arg: arg.to_string(),
-            lane: lane.to_string(),
-        },
         InstructionData::UnaryConst {
             opcode,
             constant_handle,

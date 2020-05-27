@@ -2752,6 +2752,12 @@ impl<'a> Parser<'a> {
                     args: [lhs, rhs],
                 }
             }
+            InstructionFormat::BinaryImm8 => {
+                let arg = self.match_value("expected SSA value first operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let imm = self.match_uimm8("expected unsigned 8-bit immediate")?;
+                InstructionData::BinaryImm8 { opcode, arg, imm }
+            }
             InstructionFormat::BinaryImm => {
                 let lhs = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
@@ -2898,12 +2904,6 @@ impl<'a> Parser<'a> {
                     imm,
                     args: [lhs, rhs],
                 }
-            }
-            InstructionFormat::ExtractLane => {
-                let arg = self.match_value("expected SSA value last operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let lane = self.match_uimm8("expected lane number")?;
-                InstructionData::ExtractLane { opcode, lane, arg }
             }
             InstructionFormat::Shuffle => {
                 let a = self.match_value("expected SSA value first operand")?;

@@ -1195,10 +1195,10 @@ fn convert_extractlane(
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
-    if let ir::InstructionData::ExtractLane {
+    if let ir::InstructionData::BinaryImm8 {
         opcode: ir::Opcode::Extractlane,
         arg,
-        lane,
+        imm: lane,
     } = pos.func.dfg[inst]
     {
         // NOTE: the following legalization assumes that the upper bits of the XMM register do

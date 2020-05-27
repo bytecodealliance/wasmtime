@@ -996,20 +996,20 @@ pub(crate) fn define<'shared>(
     // XX /r ib with 8-bit unsigned immediate (e.g. for pshufd)
     {
         recipes.add_template_inferred(
-            EncodingRecipeBuilder::new("r_ib_unsigned_fpr", &formats.extract_lane, 2)
+            EncodingRecipeBuilder::new("r_ib_unsigned_fpr", &formats.binary_imm8, 2)
                 .operands_in(vec![fpr])
                 .operands_out(vec![fpr])
                 .inst_predicate(InstructionPredicate::new_is_unsigned_int(
-                    &*formats.extract_lane,
-                    "lane",
+                    &*formats.binary_imm8,
+                    "imm",
                     8,
                     0,
-                )) // TODO if the format name is changed then "lane" should be renamed to something more appropriate--ordering mask? broadcast immediate?
+                ))
                 .emit(
                     r#"
                     {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
                     modrm_rr(in_reg0, out_reg0, sink);
-                    let imm:i64 = lane.into();
+                    let imm: i64 = imm.into();
                     sink.put1(imm as u8);
                 "#,
                 ),
@@ -1020,17 +1020,17 @@ pub(crate) fn define<'shared>(
     // XX /r ib with 8-bit unsigned immediate (e.g. for extractlane)
     {
         recipes.add_template_inferred(
-            EncodingRecipeBuilder::new("r_ib_unsigned_gpr", &formats.extract_lane, 2)
+            EncodingRecipeBuilder::new("r_ib_unsigned_gpr", &formats.binary_imm8, 2)
                 .operands_in(vec![fpr])
                 .operands_out(vec![gpr])
                 .inst_predicate(InstructionPredicate::new_is_unsigned_int(
-                    &*formats.extract_lane, "lane", 8, 0,
+                    &*formats.binary_imm8, "imm", 8, 0,
                 ))
                 .emit(
                     r#"
                     {{PUT_OP}}(bits, rex2(out_reg0, in_reg0), sink);
                     modrm_rr(out_reg0, in_reg0, sink); // note the flipped register in the ModR/M byte
-                    let imm:i64 = lane.into();
+                    let imm: i64 = imm.into();
                     sink.put1(imm as u8);
                 "#,
                 ), "size_with_inferred_rex_for_inreg0_outreg0"

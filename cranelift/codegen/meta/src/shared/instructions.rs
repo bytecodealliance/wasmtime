@@ -579,7 +579,7 @@ fn define_simd_lane_access(
         may or may not be zeroed depending on the ISA but the type system should prevent using
         ``a`` as anything other than the extracted value.
         "#,
-            &formats.extract_lane,
+            &formats.binary_imm8,
         )
         .operands_in(vec![x, Idx])
         .operands_out(vec![a]),

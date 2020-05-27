@@ -17,7 +17,7 @@ pub(crate) struct Formats {
     pub(crate) cond_trap: Rc<InstructionFormat>,
     pub(crate) copy_special: Rc<InstructionFormat>,
     pub(crate) copy_to_ssa: Rc<InstructionFormat>,
-    pub(crate) extract_lane: Rc<InstructionFormat>,
+    pub(crate) binary_imm8: Rc<InstructionFormat>,
     pub(crate) float_compare: Rc<InstructionFormat>,
     pub(crate) float_cond: Rc<InstructionFormat>,
     pub(crate) float_cond_trap: Rc<InstructionFormat>,
@@ -76,6 +76,8 @@ impl Formats {
 
             binary: Builder::new("Binary").value().value().build(),
 
+            binary_imm8: Builder::new("BinaryImm8").value().imm(&imm.uimm8).build(),
+
             binary_imm: Builder::new("BinaryImm").value().imm(&imm.imm64).build(),
 
             // The select instructions are controlled by the second VALUE operand.
@@ -99,11 +101,6 @@ impl Formats {
             multiary: Builder::new("MultiAry").varargs().build(),
 
             nullary: Builder::new("NullAry").build(),
-
-            extract_lane: Builder::new("ExtractLane")
-                .value()
-                .imm_with_name("lane", &imm.uimm8)
-                .build(),
 
             shuffle: Builder::new("Shuffle")
                 .value()
