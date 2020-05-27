@@ -184,6 +184,12 @@ impl X64ABIBody {
 impl ABIBody for X64ABIBody {
     type I = Inst;
 
+    fn needed_tmps(&self) -> usize {
+        0
+    }
+
+    fn init_with_tmps(&mut self, _: &[Writable<Reg>]) {}
+
     fn flags(&self) -> &settings::Flags {
         &self.flags
     }
@@ -231,6 +237,10 @@ impl ABIBody for X64ABIBody {
             }
             ABIArg::_Stack => unimplemented!("moving from stack arg to vreg"),
         }
+    }
+
+    fn gen_retval_area_setup(&self) -> Vec<Inst> {
+        vec![]
     }
 
     fn gen_copy_reg_to_retval(

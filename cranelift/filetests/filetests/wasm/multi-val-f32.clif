@@ -1,5 +1,6 @@
 test compile
 target x86_64 haswell
+target aarch64
 
 ;; Returning many f32s
 

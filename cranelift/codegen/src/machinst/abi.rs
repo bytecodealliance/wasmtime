@@ -12,6 +12,12 @@ pub trait ABIBody {
     /// The instruction type for the ISA associated with this ABI.
     type I: VCodeInst;
 
+    /// How many temps are needed?
+    fn needed_tmps(&self) -> usize;
+
+    /// Initialize, providing the requersted temps.
+    fn init_with_tmps(&mut self, tmps: &[Writable<Reg>]);
+
     /// Get the settings controlling this function's compilation.
     fn flags(&self) -> &settings::Flags;
 
@@ -33,6 +39,13 @@ pub trait ABIBody {
     /// Generate an instruction which copies an argument to a destination
     /// register.
     fn gen_copy_arg_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Self::I;
+
+    /// Generate any setup instructions needed to save values to the
+    /// return-value area. This is usually used when were are multiple return
+    /// values or an otherwise large return value that must be passed on the
+    /// stack; typically the ABI specifies an extra hidden argument that is a
+    /// pointer to that memory.
+    fn gen_retval_area_setup(&self) -> Vec<Self::I>;
 
     /// Generate an instruction which copies a source register to a return value slot.
     fn gen_copy_reg_to_retval(
