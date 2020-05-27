@@ -103,6 +103,10 @@ pub static CVTSI2SS: [u8; 3] = [0xf3, 0x0f, 0x2a];
 /// float-point value.
 pub static CVTSS2SD: [u8; 3] = [0xf3, 0x0f, 0x5a];
 
+/// Convert four packed single-precision floating-point values from xmm2/mem to four packed signed
+/// doubleword values in xmm1 using truncation (SSE2).
+pub static CVTTPS2DQ: [u8; 3] = [0xf3, 0x0f, 0x5b];
+
 /// Convert with truncation scalar double-precision floating-point value to signed
 /// integer.
 pub static CVTTSD2SI: [u8; 3] = [0xf2, 0x0f, 0x2c];
