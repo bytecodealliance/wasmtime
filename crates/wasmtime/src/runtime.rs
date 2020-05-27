@@ -760,7 +760,7 @@ impl Store {
                 engine: engine.clone(),
                 compiler: RefCell::new(compiler),
                 interrupts: Arc::new(Default::default()),
-                signatures: RefCell::new(SignatureRegistry::new()),
+                signatures: RefCell::new(Default::default()),
                 instances: RefCell::new(Vec::new()),
                 signal_handler: RefCell::new(None),
                 jit_code_ranges: RefCell::new(Vec::new()),
@@ -788,6 +788,10 @@ impl Store {
 
     pub(crate) fn signatures(&self) -> std::cell::Ref<'_, SignatureRegistry> {
         self.inner.signatures.borrow()
+    }
+
+    pub(crate) fn signatures_mut(&self) -> std::cell::RefMut<'_, SignatureRegistry> {
+        self.inner.signatures.borrow_mut()
     }
 
     /// Returns whether or not the given address falls within the JIT code

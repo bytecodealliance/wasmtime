@@ -48,7 +48,7 @@ fn instantiate(
         let instance = CompiledModule::instantiate(
             compiled_module.clone(),
             &mut resolver,
-            &store.signatures(),
+            &mut store.signatures_mut(),
             config.memory_creator.as_ref().map(|a| a as _),
             store.interrupts().clone(),
             host,

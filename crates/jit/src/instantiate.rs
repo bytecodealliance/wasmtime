@@ -159,7 +159,7 @@ impl CompiledModule {
     pub unsafe fn instantiate(
         module: Arc<CompiledModule>,
         resolver: &mut dyn Resolver,
-        signature_registry: &SignatureRegistry,
+        signature_registry: &mut SignatureRegistry,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
         interrupts: Arc<VMInterrupts>,
         host_state: Box<dyn Any>,
