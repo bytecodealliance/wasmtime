@@ -2,7 +2,8 @@ use crate::{
     Extern, ExternType, Func, FuncType, GlobalType, ImportType, Instance, IntoFunc, Module, Store,
     Trap,
 };
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Error, Result};
+use log::warn;
 use std::collections::hash_map::{Entry, HashMap};
 use std::rc::Rc;
 
@@ -403,11 +404,10 @@ impl Linker {
                 let export_name = export.name().to_owned();
                 let func = Func::new(&self.store, func_ty.clone(), move |_, params, results| {
                     // Create a new instance for this command execution.
-                    let instance = Instance::new(&module, &imports).map_err(|error| match error
-                        .downcast::<Trap>()
-                    {
-                        Ok(trap) => trap,
-                        Err(error) => Trap::new(format!("{:?}", error)),
+                    let instance = Instance::new(&module, &imports).map_err(|error| {
+                        error
+                            .downcast::<Trap>()
+                            .unwrap_or_else(|error| Trap::new(format!("{:?}", error)))
                     })?;
 
                     // `unwrap()` everything here because we know the instance contains a
@@ -436,14 +436,22 @@ impl Linker {
             } else if export.name() == "__indirect_function_table" && export.ty().table().is_some()
             {
                 // Allow an exported "__indirect_function_table" table for now.
+            } else if export.name() == "table" && export.ty().table().is_some() {
+                // Allow an exported "table" table for now.
             } else if export.name() == "__data_end" && export.ty().global().is_some() {
                 // Allow an exported "__data_end" memory for compatibility with toolchains
                 // which use --export-dynamic, which unfortunately doesn't work the way
                 // we want it to.
+                warn!("command module exporting '__data_end' is deprecated");
             } else if export.name() == "__heap_base" && export.ty().global().is_some() {
                 // Allow an exported "__data_end" memory for compatibility with toolchains
                 // which use --export-dynamic, which unfortunately doesn't work the way
                 // we want it to.
+                warn!("command module exporting '__heap_base' is deprecated");
+            } else if export.name() == "__rtti_base" && export.ty().global().is_some() {
+                // Allow an exported "__rtti_base" memory for compatibility with
+                // AssemblyScript.
+                warn!("command module exporting '__rtti_base' is deprecated; pass `--runtime half` to the AssemblyScript compiler");
             } else {
                 bail!("command export '{}' is not a function", export.name());
             }
@@ -529,7 +537,7 @@ impl Linker {
     ///
     /// Each import of `module` will be looked up in this [`Linker`] and must
     /// have previously been defined. If it was previously defined with an
-    /// incorrect signature or if it was not prevoiusly defined then an error
+    /// incorrect signature or if it was not previously defined then an error
     /// will be returned because the import can not be satisfied.
     ///
     /// Per the WebAssembly spec, instantiation includes running the module's
@@ -568,45 +576,41 @@ impl Linker {
     }
 
     fn compute_imports(&self, module: &Module) -> Result<Vec<Extern>> {
-        let mut imports = Vec::new();
+        module
+            .imports()
+            .map(|import| self.get(&import).ok_or_else(|| self.link_error(&import)))
+            .collect()
+    }
 
-        for import in module.imports() {
-            if let Some(item) = self.get(&import) {
-                imports.push(item);
+    fn link_error(&self, import: &ImportType) -> Error {
+        let mut options = Vec::new();
+        for i in self.map.keys() {
+            if &*self.strings[i.module] != import.module()
+                || &*self.strings[i.name] != import.name()
+            {
                 continue;
             }
-
-            let mut options = String::new();
-            for i in self.map.keys() {
-                if &*self.strings[i.module] != import.module()
-                    || &*self.strings[i.name] != import.name()
-                {
-                    continue;
-                }
-                options.push_str("  * ");
-                options.push_str(&format!("{:?}", i.kind));
-                options.push_str("\n");
-            }
-            if options.len() == 0 {
-                bail!(
-                    "unknown import: `{}::{}` has not been defined",
-                    import.module(),
-                    import.name()
-                )
-            }
-
-            bail!(
-                "incompatible import type for `{}::{}` specified\n\
-                 desired signature was: {:?}\n\
-                 signatures available:\n\n{}",
+            options.push(format!("  * {:?}\n", i.kind));
+        }
+        if options.is_empty() {
+            return anyhow!(
+                "unknown import: `{}::{}` has not been defined",
                 import.module(),
-                import.name(),
-                import.ty(),
-                options,
-            )
+                import.name()
+            );
         }
 
-        Ok(imports)
+        options.sort();
+
+        anyhow!(
+            "incompatible import type for `{}::{}` specified\n\
+                 desired signature was: {:?}\n\
+                 signatures available:\n\n{}",
+            import.module(),
+            import.name(),
+            import.ty(),
+            options.concat(),
+        )
     }
 
     /// Returns the [`Store`] that this linker is connected to.
@@ -614,7 +618,7 @@ impl Linker {
         &self.store
     }
 
-    /// Returns an iterator over all items defined in this `Linker`.
+    /// Returns an iterator over all items defined in this `Linker`, in arbitrary order.
     ///
     /// The iterator returned will yield 3-tuples where the first two elements
     /// are the module name and item name for the external item, and the third
@@ -716,15 +720,14 @@ impl Linker {
     }
 }
 
-/// Modules can be interpreted either as Commands (instance lifetime ends
-/// when the start function returns) or Reactor (instance persists).
+/// Modules can be interpreted either as Commands or Reactors.
 enum ModuleKind {
-    /// The instance is a Command, and this is its start function. The
-    /// instance should be consumed.
+    /// The instance is a Command, meaning an instance is created for each
+    /// exported function and lives for the duration of the function call.
     Command,
 
-    /// The instance is a Reactor, and this is its initialization function,
-    /// along with the instance itself, which should persist.
+    /// The instance is a Reactor, meaning one instance is created which
+    /// may live across multiple calls.
     Reactor,
 }
 
