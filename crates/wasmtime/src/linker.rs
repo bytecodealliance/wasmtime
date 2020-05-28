@@ -436,6 +436,8 @@ impl Linker {
             } else if export.name() == "__indirect_function_table" && export.ty().table().is_some()
             {
                 // Allow an exported "__indirect_function_table" table for now.
+            } else if export.name() == "table" && export.ty().table().is_some() {
+                // Allow an exported "table" table for now.
             } else if export.name() == "__data_end" && export.ty().global().is_some() {
                 // Allow an exported "__data_end" memory for compatibility with toolchains
                 // which use --export-dynamic, which unfortunately doesn't work the way
