@@ -13,3 +13,5 @@ syn = { version = "1.0.16", features = ['extra-traits'] }
 
 [lib]
 proc_macro = true
+test = false
+doctest = false
