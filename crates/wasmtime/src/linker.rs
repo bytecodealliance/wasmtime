@@ -3,6 +3,7 @@ use crate::{
     Trap,
 };
 use anyhow::{anyhow, bail, Context, Error, Result};
+use log::warn;
 use std::collections::hash_map::{Entry, HashMap};
 use std::rc::Rc;
 
@@ -439,10 +440,16 @@ impl Linker {
                 // Allow an exported "__data_end" memory for compatibility with toolchains
                 // which use --export-dynamic, which unfortunately doesn't work the way
                 // we want it to.
+                warn!("command module exporting '__data_end' is deprecated");
             } else if export.name() == "__heap_base" && export.ty().global().is_some() {
                 // Allow an exported "__data_end" memory for compatibility with toolchains
                 // which use --export-dynamic, which unfortunately doesn't work the way
                 // we want it to.
+                warn!("command module exporting '__heap_base' is deprecated");
+            } else if export.name() == "__rtti_base" && export.ty().global().is_some() {
+                // Allow an exported "__rtti_base" memory for compatibility with
+                // AssemblyScript.
+                warn!("command module exporting '__rtti_base' is deprecated; pass `--runtime half` to the AssemblyScript compiler");
             } else {
                 bail!("command export '{}' is not a function", export.name());
             }
