@@ -5,7 +5,8 @@
 
 use crate::binemit::CodeOffset;
 use crate::ir::types::{
-    B1, B16, B32, B64, B8, B8X16, F32, F32X2, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS,
+    B1, B16, B32, B64, B8, B8X16, F32, F32X2, F64, FFLAGS, I128, I16, I16X4, I16X8, I32, I32X2,
+    I32X4, I64, I64X2, I8, I8X16, I8X8, IFLAGS,
 };
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
@@ -184,6 +185,23 @@ pub enum FpuRoundMode {
     Zero64,
     Nearest32,
     Nearest64,
+}
+
+/// Type of vector element extensions.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum VecExtendOp {
+    /// Signed extension of 8-bit elements
+    Sxtl8,
+    /// Signed extension of 16-bit elements
+    Sxtl16,
+    /// Signed extension of 32-bit elements
+    Sxtl32,
+    /// Unsigned extension of 8-bit elements
+    Uxtl8,
+    /// Unsigned extension of 16-bit elements
+    Uxtl16,
+    /// Unsigned extension of 32-bit elements
+    Uxtl32,
 }
 
 /// A vector ALU operation.
@@ -663,6 +681,13 @@ pub enum Inst {
 
     /// Move to a GPR from a vector register.
     MovFromVec64 {
+        rd: Writable<Reg>,
+        rn: Reg,
+    },
+
+    /// Vector extend.
+    VecExtend {
+        t: VecExtendOp,
         rd: Writable<Reg>,
         rn: Reg,
     },
@@ -1205,6 +1230,10 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(rn);
         }
         &Inst::MovFromVec64 { rd, rn } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
+        }
+        &Inst::VecExtend { rd, rn, .. } => {
             collector.add_def(rd);
             collector.add_use(rn);
         }
@@ -1752,6 +1781,14 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_def(mapper, rd);
             map_use(mapper, rn);
         }
+        &mut Inst::VecExtend {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+        }
         &mut Inst::VecRRR {
             ref mut rd,
             ref mut rn,
@@ -1940,7 +1977,7 @@ impl MachInst for Inst {
             I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 => Ok(RegClass::I64),
             F32 | F64 => Ok(RegClass::V128),
             IFLAGS | FFLAGS => Ok(RegClass::I64),
-            I8X16 => Ok(RegClass::V128),
+            I8X16 | I16X8 | I32X4 | I64X2 => Ok(RegClass::V128),
             B8X16 => Ok(RegClass::V128),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
@@ -2514,6 +2551,19 @@ impl ShowWithRRU for Inst {
                 let rd = rd.to_reg().show_rru(mb_rru);
                 let rn = rn.show_rru(mb_rru);
                 format!("mov {}, {}.d[0]", rd, rn)
+            }
+            &Inst::VecExtend { t, rd, rn } => {
+                let (op, dest, src) = match t {
+                    VecExtendOp::Sxtl8 => ("sxtl", I16X8, I8X8),
+                    VecExtendOp::Sxtl16 => ("sxtl", I32X4, I16X4),
+                    VecExtendOp::Sxtl32 => ("sxtl", I64X2, I32X2),
+                    VecExtendOp::Uxtl8 => ("uxtl", I16X8, I8X8),
+                    VecExtendOp::Uxtl16 => ("uxtl", I32X4, I16X4),
+                    VecExtendOp::Uxtl32 => ("uxtl", I64X2, I32X2),
+                };
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, dest);
+                let rn = show_vreg_vector(rn, mb_rru, src);
+                format!("{} {}, {}", op, rd, rn)
             }
             &Inst::VecRRR {
                 rd,

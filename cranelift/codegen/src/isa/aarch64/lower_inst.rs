@@ -829,7 +829,13 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Uload16Complex
         | Opcode::Sload16Complex
         | Opcode::Uload32Complex
-        | Opcode::Sload32Complex => {
+        | Opcode::Sload32Complex
+        | Opcode::Sload8x8
+        | Opcode::Uload8x8
+        | Opcode::Sload16x4
+        | Opcode::Uload16x4
+        | Opcode::Sload32x2
+        | Opcode::Uload32x2 => {
             let off = ldst_offset(ctx.data(insn)).unwrap();
             let elem_ty = match op {
                 Opcode::Sload8 | Opcode::Uload8 | Opcode::Sload8Complex | Opcode::Uload8Complex => {
@@ -844,6 +850,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 | Opcode::Sload32Complex
                 | Opcode::Uload32Complex => I32,
                 Opcode::Load | Opcode::LoadComplex => ctx.output_ty(insn, 0),
+                Opcode::Sload8x8 | Opcode::Uload8x8 => I8X8,
+                Opcode::Sload16x4 | Opcode::Uload16x4 => I16X4,
+                Opcode::Sload32x2 | Opcode::Uload32x2 => I32X2,
                 _ => unreachable!(),
             };
             let sign_extend = match op {
@@ -877,10 +886,30 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 (32, true, false) => Inst::SLoad32 { rd, mem, srcloc },
                 (32, _, true) => Inst::FpuLoad32 { rd, mem, srcloc },
                 (64, _, false) => Inst::ULoad64 { rd, mem, srcloc },
+                // Note that we treat some of the vector loads as scalar floating-point loads,
+                // which is correct in a little endian environment.
                 (64, _, true) => Inst::FpuLoad64 { rd, mem, srcloc },
                 (128, _, _) => Inst::FpuLoad128 { rd, mem, srcloc },
                 _ => panic!("Unsupported size in load"),
             });
+
+            let vec_extend = match op {
+                Opcode::Sload8x8 => Some(VecExtendOp::Sxtl8),
+                Opcode::Uload8x8 => Some(VecExtendOp::Uxtl8),
+                Opcode::Sload16x4 => Some(VecExtendOp::Sxtl16),
+                Opcode::Uload16x4 => Some(VecExtendOp::Uxtl16),
+                Opcode::Sload32x2 => Some(VecExtendOp::Sxtl32),
+                Opcode::Uload32x2 => Some(VecExtendOp::Uxtl32),
+                _ => None,
+            };
+
+            if let Some(t) = vec_extend {
+                ctx.emit(Inst::VecExtend {
+                    t,
+                    rd,
+                    rn: rd.to_reg(),
+                });
+            }
         }
 
         Opcode::Store
@@ -1433,17 +1462,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Extractlane
         | Opcode::ScalarToVector
         | Opcode::Swizzle
-        | Opcode::Uload8x8
         | Opcode::Uload8x8Complex
-        | Opcode::Sload8x8
         | Opcode::Sload8x8Complex
-        | Opcode::Uload16x4
         | Opcode::Uload16x4Complex
-        | Opcode::Sload16x4
         | Opcode::Sload16x4Complex
-        | Opcode::Uload32x2
         | Opcode::Uload32x2Complex
-        | Opcode::Sload32x2
         | Opcode::Sload32x2Complex => {
             // TODO
             panic!("Vector ops not implemented.");

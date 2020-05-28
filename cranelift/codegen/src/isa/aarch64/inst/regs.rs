@@ -321,6 +321,12 @@ pub fn show_vreg_vector(reg: Reg, mb_rru: Option<&RealRegUniverse>, ty: Type) ->
     match ty {
         I8X16 => s.push_str(".16b"),
         F32X2 => s.push_str(".2s"),
+        I8X8 => s.push_str(".8b"),
+        I16X4 => s.push_str(".4h"),
+        I16X8 => s.push_str(".8h"),
+        I32X2 => s.push_str(".2s"),
+        I32X4 => s.push_str(".4s"),
+        I64X2 => s.push_str(".2d"),
         _ => unimplemented!(),
     }
 
