@@ -12,9 +12,41 @@ the future, so it's encouraged. As a bonus, it also reduces code size.)
 To create a program which can be loaded as a library and used from other modules,
 no special options are needed.
 
-[Here is a repository containing an example Hello World program][WASI hello world]
-using WASI and AssemblyScript.
+Let's walk through a simple hello world example.
+
+## `wasi-hello-world.ts`
+
+```typescript
+{{#include ../examples/assemblyscript/wasi-hello-world.ts}}
+```
+
+This uses [as-wasi](https://github.com/jedisct1/as-wasi) as a dependency to make
+working with the AssemblyScript WASI bindings easier. Then, you can run:
+
+```sh
+asc wasi-hello-world.ts -b wasi-hello-world.wasm
+```
+
+to compile it to wasm, and
+
+```sh
+wasmtime wasi-hello-world.wasm
+```
+
+to run it from the command-line. Or you can instantiate it using the [Wasmtime API](lang.md).
+
+## `package.json`
+
+It can also be packaged using a `package.json` file:
+
+```json
+{{#include ../examples/assemblyscript/package.json}}
+```
+
+You can also [browse this source code online][code] and clone the wasmtime
+repository to run the example locally.
+
+[code]: https://github.com/bytecodealliance/wasmtime/blob/master/examples/assemblyscript
 
 [AssemblyScript]: https://assemblyscript.org
 [half runtime]: https://docs.assemblyscript.org/details/runtime#runtime-variants
-[WASI hello world]: https://github.com/torch2424/as-playground/tree/master/wasi-hello-world
