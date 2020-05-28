@@ -718,15 +718,14 @@ impl Linker {
     }
 }
 
-/// Modules can be interpreted either as Commands (instance lifetime ends
-/// when the start function returns) or Reactor (instance persists).
+/// Modules can be interpreted either as Commands or Reactors.
 enum ModuleKind {
-    /// The instance is a Command, and this is its start function. The
-    /// instance should be consumed.
+    /// The instance is a Command, meaning an instance is created for each
+    /// exported function and lives for the duration of the function call.
     Command,
 
-    /// The instance is a Reactor, and this is its initialization function,
-    /// along with the instance itself, which should persist.
+    /// The instance is a Reactor, meaning one instance is created which
+    /// may live across multiple calls.
     Reactor,
 }
 
