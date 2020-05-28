@@ -1,0 +1,50 @@
+test simple_preopt
+target x86_64
+
+;; Test replacement of bitselect with vselect for special masks
+
+function %mask_from_icmp(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = icmp eq v0, v1
+    v3 = raw_bitcast.i8x16 v2
+    v4 = bitselect v3, v0, v1
+    ; check: v4 = vselect v2, v0, v1
+    return v4
+}
+
+function %mask_casted(i8x16, i8x16, i32x4) -> i8x16 {
+block0(v0: i8x16, v1: i8x16, v2: i32x4):
+    v3 = raw_bitcast.i8x16 v2
+    v4 = bitselect v3, v0, v1
+    ; check: v4 = bitselect v3, v0, v1
+    return v4
+}
+
+function %good_const_mask_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v3 = vconst.i8x16 [0 0 0xFF 0 0 0xFF 0 0 0 0 0xFF 0 0 0 0 0xFF]
+    v4 = bitselect v3, v0, v1
+    ; check:  v5 = raw_bitcast.b8x16 v3
+    ; nextln: v4 = vselect v5, v0, v1
+    return v4
+}
+
+function %good_const_mask_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v3 = vconst.i16x8 [0x0000 0xFF00 0x0000 0x00FF 0x0000 0xFFFF 0x00FF 0xFFFF]
+    v4 = bitselect v3, v0, v1
+    ; check:  v5 = raw_bitcast.b8x16 v3
+    ; nextln: v6 = raw_bitcast.i8x16 v0
+    ; nextln: v7 = raw_bitcast.i8x16 v1
+    ; nextln: v8 = vselect v5, v6, v7
+    ; nextln: v4 = raw_bitcast.i16x8 v8
+    return v4
+}
+
+function %bad_const_mask(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v3 = vconst.i8x16 [0 0 0xF0 0 0 0xFF 0 0 0 0 0xFF 0 0 0 0 0xFF]
+    v4 = bitselect v3, v0, v1
+    ; check: v4 = bitselect v3, v0, v1
+    return v4
+}
