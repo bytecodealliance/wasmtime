@@ -17,11 +17,11 @@ Let's walk through a simple hello world example.
 ## `wasi-hello-world.ts`
 
 ```typescript
-{{#include ../examples/assemblyscript/wasi-hello-world.ts}}
+{{#include ./assemblyscript-hello-world/wasi-hello-world.ts}}
 ```
 
-This uses [as-wasi](https://github.com/jedisct1/as-wasi) as a dependency to make
-working with the AssemblyScript WASI bindings easier. Then, you can run:
+This uses [as-wasi] as a dependency to make working with the AssemblyScript WASI
+bindings easier. Then, you can run:
 
 ```sh
 asc wasi-hello-world.ts -b wasi-hello-world.wasm
@@ -33,20 +33,21 @@ to compile it to wasm, and
 wasmtime wasi-hello-world.wasm
 ```
 
-to run it from the command-line. Or you can instantiate it using the [Wasmtime API](lang.md).
+to run it from the command-line. Or you can instantiate it using the [Wasmtime API].
 
 ## `package.json`
 
 It can also be packaged using a `package.json` file:
 
 ```json
-{{#include ../examples/assemblyscript/package.json}}
+{{#include ./assemblyscript-hello-world/package.json}}
 ```
 
 You can also [browse this source code online][code] and clone the wasmtime
 repository to run the example locally.
 
-[code]: https://github.com/bytecodealliance/wasmtime/blob/master/examples/assemblyscript
-
+[code]: https://github.com/bytecodealliance/wasmtime/blob/master/docs/assemblyscript-hello-world
 [AssemblyScript]: https://assemblyscript.org
+[as-wasi]: https://github.com/jedisct1/as-wasi
 [half runtime]: https://docs.assemblyscript.org/details/runtime#runtime-variants
+[Wasmtime API]: ./lang.md
