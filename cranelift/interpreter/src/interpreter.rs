@@ -150,8 +150,8 @@ impl Interpreter {
                 let arg1 = frame.get(&args[0]);
                 let arg2 = frame.get(&args[1]);
                 let result = match opcode {
-                    Iadd => binary_op!(Add::add[arg1, arg2]; [I8, I16, I32, I64, F32, F64]; inst),
-                    Isub => binary_op!(Sub::sub[arg1, arg2]; [I8, I16, I32, I64, F32, F64]; inst),
+                    Iadd => binary_op!(Add::add[arg1, arg2]; [I8, I16, I32, I64]; inst),
+                    Isub => binary_op!(Sub::sub[arg1, arg2]; [I8, I16, I32, I64]; inst),
                     _ => unimplemented!("interpreter does not support opcode yet: {}", opcode),
                 }?;
                 frame.set(first_result(frame.function, inst), result);
@@ -162,8 +162,8 @@ impl Interpreter {
                 let imm = DataValue::from_integer(*imm, type_of(*arg, frame.function))?;
                 let arg = frame.get(&arg);
                 let result = match opcode {
-                    IaddImm => binary_op!(Add::add[arg, imm]; [I8, I16, I32, I64, F32, F64]; inst),
-                    IrsubImm => binary_op!(Sub::sub[imm, arg]; [I8, I16, I32, I64, F32, F64]; inst),
+                    IaddImm => binary_op!(Add::add[arg, imm]; [I8, I16, I32, I64]; inst),
+                    IrsubImm => binary_op!(Sub::sub[imm, arg]; [I8, I16, I32, I64]; inst),
                     _ => unimplemented!("interpreter does not support opcode yet: {}", opcode),
                 }?;
                 frame.set(first_result(frame.function, inst), result);
