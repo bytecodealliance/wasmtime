@@ -90,9 +90,8 @@ fn test_returns_incorrect_type() -> Result<()> {
         .call(&[])
         .expect_err("the execution should fail")
         .downcast::<Trap>()?;
-    assert_eq!(
-        trap.message(),
-        "function attempted to return an incompatible value"
-    );
+    assert!(trap
+        .to_string()
+        .contains("function attempted to return an incompatible value"));
     Ok(())
 }

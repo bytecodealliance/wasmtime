@@ -25,7 +25,7 @@ fn test_trap_return() -> Result<()> {
         .expect("error calling function")
         .downcast::<Trap>()?;
 
-    assert_eq!(e.message(), "test 123");
+    assert!(e.to_string().contains("test 123"));
 
     Ok(())
 }
@@ -64,9 +64,9 @@ fn test_trap_trace() -> Result<()> {
     assert_eq!(trace[1].func_offset(), 1);
     assert_eq!(trace[1].module_offset(), 0x21);
     assert!(
-        e.message().contains("unreachable"),
+        e.to_string().contains("unreachable"),
         "wrong message: {}",
-        e.message()
+        e.to_string()
     );
 
     Ok(())
@@ -103,7 +103,7 @@ fn test_trap_trace_cb() -> Result<()> {
     assert_eq!(trace[0].func_index(), 2);
     assert_eq!(trace[1].module_name().unwrap(), "hello_mod");
     assert_eq!(trace[1].func_index(), 1);
-    assert_eq!(e.message(), "cb throw");
+    assert!(e.to_string().contains("cb throw"));
 
     Ok(())
 }
@@ -135,7 +135,7 @@ fn test_trap_stack_overflow() -> Result<()> {
         assert_eq!(trace[i].func_index(), 0);
         assert_eq!(trace[i].func_name(), Some("run"));
     }
-    assert!(e.message().contains("call stack exhausted"));
+    assert!(e.to_string().contains("call stack exhausted"));
 
     Ok(())
 }
@@ -234,7 +234,11 @@ fn trap_start_function_import() -> Result<()> {
     let sig = FuncType::new(Box::new([]), Box::new([]));
     let func = Func::new(&store, sig, |_, _, _| Err(Trap::new("user trap")));
     let err = Instance::new(&module, &[func.into()]).err().unwrap();
-    assert_eq!(err.downcast_ref::<Trap>().unwrap().message(), "user trap");
+    assert!(err
+        .downcast_ref::<Trap>()
+        .unwrap()
+        .to_string()
+        .contains("user trap"));
     Ok(())
 }
 
@@ -373,7 +377,9 @@ fn call_signature_mismatch() -> Result<()> {
         .unwrap()
         .downcast::<Trap>()
         .unwrap();
-    assert_eq!(err.message(), "wasm trap: indirect call type mismatch");
+    assert!(err
+        .to_string()
+        .contains("wasm trap: indirect call type mismatch"));
     Ok(())
 }
 

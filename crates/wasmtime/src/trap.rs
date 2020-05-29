@@ -50,7 +50,7 @@ impl Trap {
     /// # Example
     /// ```
     /// let trap = wasmtime::Trap::new("unexpected error");
-    /// assert_eq!("unexpected error", trap.message());
+    /// assert!(trap.to_string().contains("unexpected error"));
     /// ```
     pub fn new<I: Into<String>>(message: I) -> Self {
         let info = FRAME_INFO.read().unwrap();
@@ -156,18 +156,6 @@ impl Trap {
                 wasm_trace,
                 native_trace,
             }),
-        }
-    }
-
-    /// String representation the error stored in `Trap`.
-    ///
-    /// In the case of an explicit exit, the exit status can be obtained by
-    /// calling `i32_exit_status`.
-    pub fn message(&self) -> String {
-        match &self.inner.reason {
-            TrapReason::Message(message) => message.to_string(),
-            TrapReason::I32Exit(_) => "explicitly exited".to_string(),
-            TrapReason::Error(e) => e.to_string(),
         }
     }
 
