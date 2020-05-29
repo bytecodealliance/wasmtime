@@ -98,6 +98,21 @@ pub extern "C" fn wasmtime_i64_srem(x: i64, y: i64) -> i64 {
     x % y
 }
 
+/// Implementation of i64.ishl
+pub extern "C" fn wasmtime_i64_ishl(x: i64, y: i64) -> i64 {
+    x << y
+}
+
+/// Implementation of i64.ushr
+pub extern "C" fn wasmtime_i64_ushr(x: u64, y: i64) -> u64 {
+    x >> y
+}
+
+/// Implementation of i64.sshr
+pub extern "C" fn wasmtime_i64_sshr(x: i64, y: i64) -> i64 {
+    x >> y
+}
+
 /// Implementation of f64.ceil
 pub extern "C" fn wasmtime_f64_ceil(x: f64) -> f64 {
     x.ceil()
