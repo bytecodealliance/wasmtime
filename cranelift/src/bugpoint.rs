@@ -258,6 +258,58 @@ impl Mutator for ReplaceInstWithTrap {
     }
 }
 
+/// Try to move instructions to entry block.
+struct MoveInstToEntryBlock {
+    block: Block,
+    inst: Inst,
+}
+
+impl MoveInstToEntryBlock {
+    fn new(func: &Function) -> Self {
+        let first_block = func.layout.entry_block().unwrap();
+        let first_inst = func.layout.first_inst(first_block).unwrap();
+        Self {
+            block: first_block,
+            inst: first_inst,
+        }
+    }
+}
+
+impl Mutator for MoveInstToEntryBlock {
+    fn name(&self) -> &'static str {
+        "move inst to entry block"
+    }
+
+    fn mutation_count(&self, func: &Function) -> usize {
+        inst_count(func)
+    }
+
+    fn mutate(&mut self, mut func: Function) -> Option<(Function, String, ProgressStatus)> {
+        next_inst_ret_prev(&func, &mut self.block, &mut self.inst).map(|(prev_block, prev_inst)| {
+            // Don't move instructions that are already in entry block
+            // and instructions that end blocks.
+            let first_block = func.layout.entry_block().unwrap();
+            if first_block == prev_block || self.block != prev_block {
+                return (
+                    func,
+                    format!("did nothing for {}", prev_inst),
+                    ProgressStatus::Skip,
+                );
+            }
+
+            let last_inst_of_first_block = func.layout.last_inst(first_block).unwrap();
+            func.layout.remove_inst(prev_inst);
+            func.layout.insert_inst(prev_inst, last_inst_of_first_block);
+
+            (
+                func,
+                format!("Move inst {} to entry block", prev_inst),
+                ProgressStatus::ExpandedOrShrinked,
+            )
+        })
+    }
+}
+
 /// Try to remove a block.
 struct RemoveBlock {
     block: Block,
@@ -798,10 +850,11 @@ fn reduce(
                 0 => Box::new(RemoveInst::new(&func)),
                 1 => Box::new(ReplaceInstWithConst::new(&func)),
                 2 => Box::new(ReplaceInstWithTrap::new(&func)),
-                3 => Box::new(RemoveBlock::new(&func)),
-                4 => Box::new(ReplaceBlockParamWithConst::new(&func)),
-                5 => Box::new(RemoveUnusedEntities::new()),
-                6 => Box::new(MergeBlocks::new(&func)),
+                3 => Box::new(MoveInstToEntryBlock::new(&func)),
+                4 => Box::new(RemoveBlock::new(&func)),
+                5 => Box::new(ReplaceBlockParamWithConst::new(&func)),
+                6 => Box::new(RemoveUnusedEntities::new()),
+                7 => Box::new(MergeBlocks::new(&func)),
                 _ => break,
             };
 
