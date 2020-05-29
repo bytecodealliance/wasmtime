@@ -824,6 +824,15 @@ fn resolve_aliases(func: &mut Function) {
     }
 }
 
+/// Resolve aliases only if function still crashes after this.
+fn try_resolve_aliases(context: &mut CrashCheckContext, func: &mut Function) {
+    let mut func_with_resolved_aliases = func.clone();
+    resolve_aliases(&mut func_with_resolved_aliases);
+    if let CheckResult::Crash(_) = context.check_for_crash(&func_with_resolved_aliases) {
+        *func = func_with_resolved_aliases;
+    }
+}
+
 fn reduce(
     isa: &dyn TargetIsa,
     mut func: Function,
@@ -840,7 +849,7 @@ fn reduce(
         CheckResult::Crash(_) => {}
     }
 
-    resolve_aliases(&mut func);
+    try_resolve_aliases(&mut context, &mut func);
 
     let progress_bar = ProgressBar::with_draw_target(0, ProgressDrawTarget::stdout());
     progress_bar.set_style(
@@ -938,6 +947,7 @@ fn reduce(
         }
     }
 
+    try_resolve_aliases(&mut context, &mut func);
     progress_bar.finish();
 
     let crash_msg = match context.check_for_crash(&func) {
