@@ -2270,8 +2270,7 @@ fn define_entity_ref(
     let rec_gvaddr8 = r.template("gvaddr8");
     let rec_pcrel_fnaddr8 = r.template("pcrel_fnaddr8");
     let rec_pcrel_gvaddr8 = r.template("pcrel_gvaddr8");
-    let rec_spaddr4_id = r.template("spaddr4_id");
-    let rec_spaddr8_id = r.template("spaddr8_id");
+    let rec_spaddr_id = r.template("spaddr_id");
 
     // Predicates shorthands.
     let all_ones_funcaddrs_and_not_is_pic =
@@ -2359,8 +2358,8 @@ fn define_entity_ref(
     //
     // TODO: Add encoding rules for stack_load and stack_store, so that they
     // don't get legalized to stack_addr + load/store.
-    e.enc32(stack_addr.bind(I32), rec_spaddr4_id.opcodes(&LEA));
-    e.enc64(stack_addr.bind(I64), rec_spaddr8_id.opcodes(&LEA).rex().w());
+    e.enc64(stack_addr.bind(I64), rec_spaddr_id.opcodes(&LEA).rex().w());
+    e.enc32(stack_addr.bind(I32), rec_spaddr_id.opcodes(&LEA));
 
     // Constant addresses (PIC).
     e.enc64(const_addr.bind(I64), rec_const_addr.opcodes(&LEA).rex().w());
