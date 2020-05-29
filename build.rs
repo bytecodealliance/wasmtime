@@ -181,6 +181,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         },
         "Cranelift" => match (testsuite, testname) {
             ("simd", "simd_i8x16_cmp") => return false,
+            ("simd", "simd_load_extend") => return false,
             ("simd", "simd_store") => return false,
             // Most simd tests are known to fail on aarch64 for now, it's going
             // to be a big chunk of work to implement them all there!

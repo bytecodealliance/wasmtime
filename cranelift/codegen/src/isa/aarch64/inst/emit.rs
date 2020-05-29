@@ -936,6 +936,21 @@ impl MachInstEmit for Inst {
             &Inst::FpuMove128 { rd, rn } => {
                 sink.put4(enc_vecmov(/* 16b = */ true, rd, rn));
             }
+            &Inst::FpuMoveFromVec { rd, rn, idx, ty } => {
+                let (imm5, shift, mask) = match ty {
+                    F32 => (0b00100, 3, 0b011),
+                    F64 => (0b01000, 4, 0b001),
+                    _ => unimplemented!(),
+                };
+                debug_assert_eq!(idx & mask, idx);
+                let imm5 = imm5 | ((idx as u32) << shift);
+                sink.put4(
+                    0b010_11110000_00000_000001_00000_00000
+                        | (imm5 << 16)
+                        | (machreg_to_vec(rn) << 5)
+                        | machreg_to_vec(rd.to_reg()),
+                );
+            }
             &Inst::FpuRR { fpu_op, rd, rn } => {
                 let top22 = match fpu_op {
                     FPUOp1::Abs32 => 0b000_11110_00_1_000001_10000,
@@ -1142,9 +1157,20 @@ impl MachInstEmit for Inst {
                         | machreg_to_vec(rd.to_reg()),
                 );
             }
-            &Inst::MovFromVec64 { rd, rn } => {
+            &Inst::MovFromVec { rd, rn, idx, ty } => {
+                let (q, imm5, shift, mask) = match ty {
+                    I8 => (0b0, 0b00001, 1, 0b1111),
+                    I16 => (0b0, 0b00010, 2, 0b0111),
+                    I32 => (0b0, 0b00100, 3, 0b0011),
+                    I64 => (0b1, 0b01000, 4, 0b0001),
+                    _ => unreachable!(),
+                };
+                debug_assert_eq!(idx & mask, idx);
+                let imm5 = imm5 | ((idx as u32) << shift);
                 sink.put4(
-                    0b010_01110000_01000_0_0111_1_00000_00000
+                    0b000_01110000_00000_0_0111_1_00000_00000
+                        | (q << 30)
+                        | (imm5 << 16)
                         | (machreg_to_vec(rn) << 5)
                         | machreg_to_gpr(rd.to_reg()),
                 );

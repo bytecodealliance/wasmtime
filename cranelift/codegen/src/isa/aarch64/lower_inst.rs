@@ -99,9 +99,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 alu_op,
                 ty: I64,
             });
-            ctx.emit(Inst::MovFromVec64 {
+            ctx.emit(Inst::MovFromVec {
                 rd,
                 rn: va.to_reg(),
+                idx: 0,
+                ty: I64,
             });
         }
 
@@ -131,9 +133,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 alu_op,
                 ty: I64,
             });
-            ctx.emit(Inst::MovFromVec64 {
+            ctx.emit(Inst::MovFromVec {
                 rd,
                 rn: va.to_reg(),
+                idx: 0,
+                ty: I64,
             });
         }
 
@@ -1146,7 +1150,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
                 (true, false) => {
                     let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
-                    ctx.emit(Inst::MovFromVec64 { rd, rn });
+                    ctx.emit(Inst::MovFromVec {
+                        rd,
+                        rn,
+                        idx: 0,
+                        ty: I64,
+                    });
                 }
             }
         }
@@ -1451,6 +1460,26 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::gen_move(rd, rm, ty));
         }
 
+        Opcode::Extractlane => {
+            if let InstructionData::BinaryImm8 { imm, .. } = ctx.data(insn) {
+                let idx = *imm;
+                let rd = output_to_reg(ctx, outputs[0]);
+                let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
+                let ty = ty.unwrap();
+
+                if ty_is_int(ty) {
+                    ctx.emit(Inst::MovFromVec { rd, rn, idx, ty });
+                // Plain moves are faster on some processors.
+                } else if idx == 0 {
+                    ctx.emit(Inst::gen_move(rd, rn, ty));
+                } else {
+                    ctx.emit(Inst::FpuMoveFromVec { rd, rn, idx, ty });
+                }
+            } else {
+                unreachable!();
+            }
+        }
+
         Opcode::Shuffle
         | Opcode::Vsplit
         | Opcode::Vconcat
@@ -1459,7 +1488,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::VallTrue
         | Opcode::Splat
         | Opcode::Insertlane
-        | Opcode::Extractlane
         | Opcode::ScalarToVector
         | Opcode::Swizzle
         | Opcode::Uload8x8Complex

@@ -1799,9 +1799,41 @@ fn test_aarch64_binemit() {
         "mov v20.d[0], x21",
     ));
     insns.push((
-        Inst::MovFromVec64 {
+        Inst::MovFromVec {
+            rd: writable_xreg(3),
+            rn: vreg(27),
+            idx: 14,
+            ty: I8,
+        },
+        "633F1D0E",
+        "umov w3, v27.b[14]",
+    ));
+    insns.push((
+        Inst::MovFromVec {
+            rd: writable_xreg(24),
+            rn: vreg(5),
+            idx: 3,
+            ty: I16,
+        },
+        "B83C0E0E",
+        "umov w24, v5.h[3]",
+    ));
+    insns.push((
+        Inst::MovFromVec {
+            rd: writable_xreg(12),
+            rn: vreg(17),
+            idx: 1,
+            ty: I32,
+        },
+        "2C3E0C0E",
+        "mov w12, v17.s[1]",
+    ));
+    insns.push((
+        Inst::MovFromVec {
             rd: writable_xreg(21),
             rn: vreg(20),
+            idx: 0,
+            ty: I64,
         },
         "953E084E",
         "mov x21, v20.d[0]",
@@ -2335,6 +2367,28 @@ fn test_aarch64_binemit() {
         },
         "511FBA4E",
         "mov v17.16b, v26.16b",
+    ));
+
+    insns.push((
+        Inst::FpuMoveFromVec {
+            rd: writable_vreg(1),
+            rn: vreg(30),
+            idx: 2,
+            ty: F32,
+        },
+        "C107145E",
+        "mov s1, v30.s[2]",
+    ));
+
+    insns.push((
+        Inst::FpuMoveFromVec {
+            rd: writable_vreg(23),
+            rn: vreg(11),
+            idx: 0,
+            ty: F64,
+        },
+        "7705085E",
+        "mov d23, v11.d[0]",
     ));
 
     insns.push((
