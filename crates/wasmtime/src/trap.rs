@@ -224,7 +224,7 @@ impl fmt::Display for Trap {
 impl std::error::Error for Trap {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match &self.inner.reason {
-            TrapReason::Error(e) => Some(e.as_ref()),
+            TrapReason::Error(e) => e.source(),
             TrapReason::I32Exit(_) | TrapReason::Message(_) => None,
         }
     }
@@ -232,26 +232,19 @@ impl std::error::Error for Trap {
 
 impl From<anyhow::Error> for Trap {
     fn from(e: anyhow::Error) -> Trap {
-        match e.downcast::<Trap>() {
-            Ok(trap) => trap,
-            Err(error) => {
-                let info = FRAME_INFO.read().unwrap();
-                let reason = TrapReason::Error(error.into());
-                Trap::new_with_trace(&info, None, reason, Backtrace::new_unresolved())
-            }
-        }
+        Box::<dyn std::error::Error + Send + Sync>::from(e).into()
     }
 }
 
 impl From<Box<dyn std::error::Error + Send + Sync>> for Trap {
     fn from(e: Box<dyn std::error::Error + Send + Sync>) -> Trap {
-        match e.downcast::<Trap>() {
-            Ok(trap) => *trap,
-            Err(error) => {
-                let info = FRAME_INFO.read().unwrap();
-                let reason = TrapReason::Error(error.into());
-                Trap::new_with_trace(&info, None, reason, Backtrace::new_unresolved())
-            }
+        // If the top-level error is already a trap, don't be redundant and just return it.
+        if let Some(trap) = e.downcast_ref::<Trap>() {
+            trap.clone()
+        } else {
+            let info = FRAME_INFO.read().unwrap();
+            let reason = TrapReason::Error(e.into());
+            Trap::new_with_trace(&info, None, reason, Backtrace::new_unresolved())
         }
     }
 }
