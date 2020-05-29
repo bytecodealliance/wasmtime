@@ -1,0 +1,26 @@
+function u0:0() fast {
+    sig0 = (f32, f64, i8, i16, i32, i64, i128, b1, b8, b128, r32, r64, b8x16, i16x4, f32x16) fast
+    fn0 = u0:1 sig0
+    const0 = 0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+    const1 = 0x0000000000000000
+    const2 = 0x00000000000000000000000000000000
+
+block1:
+    v0 = f32const 0.0
+    v1 = f64const 0.0
+    v2 = iconst.i8 0
+    v3 = iconst.i16 0
+    v4 = iconst.i32 0
+    v5 = iconst.i64 0
+    v6 = iconst.i128 0
+    v7 = bconst.b1 false
+    v8 = bconst.b8 false
+    v9 = bconst.b128 false
+    v10 = null.r32 
+    v11 = null.r64 
+    v12 = vconst.b8x16 const2
+    v13 = vconst.i16x4 const1
+    v14 = vconst.f32x16 const0
+    call fn0(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14)
+    trap user0
+}

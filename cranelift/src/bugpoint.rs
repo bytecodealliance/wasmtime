@@ -762,10 +762,7 @@ impl Mutator for MergeBlocks {
     }
 }
 
-fn const_for_type<'f, T: InstBuilder<'f>>(builder: T, ty: ir::Type) -> &'static str {
-    // Try to keep the result type consistent, and default to an integer type
-    // otherwise: this will cover all the cases for f32/f64, integer and boolean types,
-    // or create verifier errors otherwise.
+fn const_for_type<'f, T: InstBuilder<'f>>(mut builder: T, ty: ir::Type) -> &'static str {
     if ty == F32 {
         builder.f32const(0.0);
         "f32const"
@@ -775,7 +772,16 @@ fn const_for_type<'f, T: InstBuilder<'f>>(builder: T, ty: ir::Type) -> &'static 
     } else if ty.is_bool() {
         builder.bconst(ty, false);
         "bconst"
+    } else if ty.is_ref() {
+        builder.null(ty);
+        "null"
+    } else if ty.is_vector() {
+        let zero_data = vec![0; ty.bytes() as usize].into();
+        let zero_handle = builder.data_flow_graph_mut().constants.insert(zero_data);
+        builder.vconst(ty, zero_handle);
+        "vconst"
     } else {
+        // Default to an integer type and possibly create verifier error
         builder.iconst(ty, 0);
         "iconst"
     }
@@ -1054,12 +1060,8 @@ mod tests {
     use super::*;
     use cranelift_reader::ParseOptions;
 
-    #[test]
-    fn test_reduce() {
-        const TEST: &str = include_str!("../tests/bugpoint_test.clif");
-        const EXPECTED: &str = include_str!("../tests/bugpoint_test_expected.clif");
-
-        let test_file = parse_test(TEST, ParseOptions::default()).unwrap();
+    fn run_test(test_str: &str, expected_str: &str) {
+        let test_file = parse_test(test_str, ParseOptions::default()).unwrap();
 
         // If we have an isa from the command-line, use that. Otherwise if the
         // file contains a unique isa, use that.
@@ -1085,7 +1087,24 @@ mod tests {
                 "reduction wasn't maximal for insts"
             );
 
-            assert_eq!(format!("{}", reduced_func), EXPECTED.replace("\r\n", "\n"));
+            assert_eq!(
+                format!("{}", reduced_func),
+                expected_str.replace("\r\n", "\n")
+            );
         }
+    }
+
+    #[test]
+    fn test_reduce() {
+        const TEST: &str = include_str!("../tests/bugpoint_test.clif");
+        const EXPECTED: &str = include_str!("../tests/bugpoint_test_expected.clif");
+        run_test(TEST, EXPECTED);
+    }
+
+    #[test]
+    fn test_consts() {
+        const TEST: &str = include_str!("../tests/bugpoint_consts.clif");
+        const EXPECTED: &str = include_str!("../tests/bugpoint_consts_expected.clif");
+        run_test(TEST, EXPECTED);
     }
 }
