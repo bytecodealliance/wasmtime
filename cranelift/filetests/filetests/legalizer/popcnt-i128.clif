@@ -1,5 +1,5 @@
 test legalizer
-target i686
+target x86_64 haswell
 
 function %foo() -> i128 {
 block0:
@@ -10,22 +10,12 @@ block0:
     return v4
 }
 
-; check: v5 = iconst.i32 66
-; check: v6 = iconst.i32 100
-; check: v1 = iconcat v5, v6
-; check: v7 = iconst.i32 0x1010_0042
-; check: v8 = iconst.i32 127
-; check: v2 = iconcat v7, v8
+; check: v1 = iconst.i64 0x0064_0000_0042
+; check: v2 = iconst.i64 0x007f_1010_0042
 ; check: v3 = iconcat v1, v2
-; check: v9 = popcnt v1
-; check: v10 = popcnt v2
-; check: v12, v13 = isplit v9
-; check: v14, v15 = isplit v10
-; check: v16, v17 = iadd_ifcout v12, v14
-; check: v18 = iadd_ifcin v13, v15, v17
-; check: v11 = iconcat v16, v18
-; check: v20 = iconst.i32 0
-; check: v21 = iconst.i32 0
-; check: v19 = iconcat v20, v21
-; check: v4 = iconcat v11, v19
-; check: return v16, v18, v20, v21
+; check: v5 = popcnt v1
+; check: v6 = popcnt v2
+; check: v7 = iadd v5, v6
+; check: v8 = iconst.i64 0
+; check: v4 = iconcat v7, v8
+; check: return v7, v8

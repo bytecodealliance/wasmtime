@@ -14,6 +14,12 @@ function %f() {
     sig2 = (f32, i64) -> f64 system_v
     ; check: sig2 = (f32 [%xmm0], i64 [%rdi]) -> f64 [%xmm0] system_v
 
+    sig3 = () -> i128 system_v
+    ; check: sig3 = () -> i64 [%rax], i64 [%rdx] system_v
+
+    sig4 = (i128) -> i128 system_v
+    ; check: sig4 = (i64 [%rdi], i64 [%rsi]) -> i64 [%rax], i64 [%rdx] system_v
+
 block0:
     return
 }
