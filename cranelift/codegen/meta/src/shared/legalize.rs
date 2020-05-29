@@ -90,6 +90,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let isplit = insts.by_name("isplit");
     let istore8 = insts.by_name("istore8");
     let istore16 = insts.by_name("istore16");
+    let istore32 = insts.by_name("istore32");
     let isub = insts.by_name("isub");
     let isub_bin = insts.by_name("isub_bin");
     let isub_bout = insts.by_name("isub_bout");
@@ -107,6 +108,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let sdiv_imm = insts.by_name("sdiv_imm");
     let select = insts.by_name("select");
     let sextend = insts.by_name("sextend");
+    let sload32 = insts.by_name("sload32");
     let sshr = insts.by_name("sshr");
     let sshr_imm = insts.by_name("sshr_imm");
     let srem = insts.by_name("srem");
@@ -117,6 +119,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let uextend = insts.by_name("uextend");
     let uload8 = insts.by_name("uload8");
     let uload16 = insts.by_name("uload16");
+    let uload32 = insts.by_name("uload32");
     let umulhi = insts.by_name("umulhi");
     let ushr = insts.by_name("ushr");
     let ushr_imm = insts.by_name("ushr_imm");
@@ -212,6 +215,30 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     // iconst.i64 can't be legalized in the meta langage (because integer literals can't be
     // embedded as part of arguments), so use a custom legalization for now.
     narrow.custom_legalize(iconst, "narrow_iconst");
+
+    narrow.legalize(
+        def!(istore32.I64(flags, a, ptr, offset)),
+        vec![
+            def!((al, ah) = isplit(a)),
+            def!(store.I32(flags, al, ptr, offset)),
+        ],
+    );
+
+    expand.legalize(
+        def!(a = sload32.I32(flags, ptr, offset)),
+        vec![
+            def!(b = load.I32(flags, ptr, offset)),
+            def!(a = sextend.I64(b)),
+        ],
+    );
+
+    expand.legalize(
+        def!(a = uload32.I32(flags, ptr, offset)),
+        vec![
+            def!(b = load.I32(flags, ptr, offset)),
+            def!(a = uextend.I64(b)),
+        ],
+    );
 
     for &(ty, ty_half) in &[(I128, I64), (I64, I32)] {
         let inst = uextend.bind(ty).bind(ty_half);
