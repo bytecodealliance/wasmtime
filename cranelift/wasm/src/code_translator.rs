@@ -125,7 +125,11 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 GlobalVariable::Memory { gv, offset, ty } => {
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let flags = ir::MemFlags::trusted();
-                    let val = state.pop1();
+                    let mut val = state.pop1();
+                    // Ensure SIMD values are cast to their default Cranelift type, I8x16.
+                    if ty.is_vector() {
+                        val = optionally_bitcast_vector(val, I8X16, builder);
+                    }
                     debug_assert_eq!(ty, builder.func.dfg.value_type(val));
                     builder.ins().store(flags, val, addr, offset);
                 }
