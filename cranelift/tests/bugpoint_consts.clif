@@ -1,0 +1,14 @@
+test compile
+target x86_64
+
+function u0:0() {
+    sig0 = (f32, f64, i8, i16, i32, i64, i128, b1, b8, b128, r32, r64, b8x16, i16x4, f32x16)
+    fn0 = u0:1 sig0
+
+block0:
+    trap user0
+
+block1(v0: f32, v1: f64, v2: i8, v3: i16, v4: i32, v5: i64, v6: i128, v7: b1, v8: b8, v9: b128, v10: r32, v11: r64, v12: b8x16, v13: i16x4, v14: f32x16):
+    call fn0(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14)
+    trap user0
+}
