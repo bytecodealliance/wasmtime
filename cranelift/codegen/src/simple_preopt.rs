@@ -953,6 +953,9 @@ mod simplify {
                             opcode: Opcode::RawBitcast,
                             arg,
                         } => {
+                            // If controlling mask is raw-bitcasted boolean vector then
+                            // we know each lane is either all zeroes or ones,
+                            // so we can use vselect instruction instead.
                             let arg_type = pos.func.dfg.value_type(arg);
                             if !arg_type.is_vector() || !arg_type.lane_type().is_bool() {
                                 return;
@@ -963,6 +966,9 @@ mod simplify {
                             opcode: Opcode::Vconst,
                             constant_handle,
                         } => {
+                            // If each byte of controlling mask is 0x00 or 0xFF then
+                            // we will always bitcast our way to vselect(B8x16, I8x16, I8x16).
+                            // Bitselect operates at bit level, so the lane types don't matter.
                             let const_data = pos.func.dfg.constants.get(constant_handle);
                             if !const_data.iter().all(|&b| b == 0 || b == 0xFF) {
                                 return;

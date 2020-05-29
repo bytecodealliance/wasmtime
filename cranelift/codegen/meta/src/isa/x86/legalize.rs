@@ -590,7 +590,8 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
         );
     }
 
-    // SIMD vselect; if BLEND* instructions are not available
+    // SIMD vselect; replace with bitselect if BLEND* instructions are not available.
+    // This works, because each lane of boolean vector is filled with zeroes or ones.
     for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
         let vselect = vselect.bind(vector(ty, sse_vector_size));
         let raw_bitcast = raw_bitcast.bind(vector(ty, sse_vector_size));
