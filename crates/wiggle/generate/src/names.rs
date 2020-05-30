@@ -286,6 +286,10 @@ mod escaping {
     /// This will only return `Some(_)` if the given witx identifier *is* `2big`, otherwise this
     /// function will return `None`.
     ///
+    /// This functionality is a short-term fix that keeps WASI working. Instead of expanding these sort of special cases,
+    /// we should replace this function by having the user provide a mapping of witx identifiers to Rust identifiers in the
+    /// arguments to the macro.
+    ///
     /// [err]: https://github.com/WebAssembly/WASI/blob/master/phases/snapshot/docs.md#-errno-enumu16
     pub fn handle_2big_enum_variant(id: &Id) -> Option<Ident> {
         if id.as_str() == "2big" {
