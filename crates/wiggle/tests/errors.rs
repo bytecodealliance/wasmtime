@@ -1,5 +1,8 @@
-use wiggle_test::{impl_errno, WasiCtx};
+use wiggle_test::{impl_errno, HostMemory, WasiCtx};
 
+/// The `errors` argument to the wiggle gives us a hook to map a rich error
+/// type like this one (typical of wiggle use cases in wasi-common and beyond)
+/// down to the flat error enums that witx can specify.
 #[derive(Debug, thiserror::Error)]
 pub enum RichError {
     #[error("Invalid argument: {0}")]
@@ -8,28 +11,87 @@ pub enum RichError {
     PicketLine(String),
 }
 
+/// Define an errno with variants corresponding to RichError. Use it in a
+/// trivial function.
 wiggle::from_witx!({
-    witx: ["tests/arrays.witx"],
+    witx_literal: "
+(typename $errno (enum u8 $ok $invalid_arg $picket_line))
+(module $one_error_conversion
+  (@interface func (export \"foo\")
+     (param $strike u32)
+     (result $err $errno)))
+    ",
     ctx: WasiCtx,
     errors: { errno => RichError },
 });
 
 impl_errno!(types::Errno, types::GuestErrorConversion);
 
+/// When the `errors` mapping in witx is non-empty, we need to impl the
+/// types::UserErrorConversion trait that wiggle generates from that mapping.
 impl<'a> types::UserErrorConversion for WasiCtx<'a> {
-    fn errno_from_rich_error(&self, _e: RichError) -> types::Errno {
-        unimplemented!();
+    fn errno_from_rich_error(&self, e: RichError) -> types::Errno {
+        // WasiCtx can collect a Vec<String> log so we can test this. We're
+        // logging the Display impl that `thiserror::Error` provides us.
+        self.log.borrow_mut().push(e.to_string());
+        // Then do the trivial mapping down to the flat enum.
+        match e {
+            RichError::InvalidArg { .. } => types::Errno::InvalidArg,
+            RichError::PicketLine { .. } => types::Errno::PicketLine,
+        }
     }
 }
 
-impl<'a> arrays::Arrays for WasiCtx<'a> {
-    fn reduce_excuses(
-        &self,
-        _excuses: &types::ConstExcuseArray,
-    ) -> Result<types::Excuse, RichError> {
-        unimplemented!()
+impl<'a> one_error_conversion::OneErrorConversion for WasiCtx<'a> {
+    fn foo(&self, strike: u32) -> Result<(), RichError> {
+        // We use the argument to this function to exercise all of the
+        // possible error cases we could hit here
+        match strike {
+            0 => Ok(()),
+            1 => Err(RichError::PicketLine(format!("I'm not a scab"))),
+            _ => Err(RichError::InvalidArg(format!("out-of-bounds: {}", strike))),
+        }
     }
-    fn populate_excuses(&self, _excuses: &types::ExcuseArray) -> Result<(), RichError> {
-        unimplemented!()
-    }
+}
+
+#[test]
+fn one_error_conversion_test() {
+    let ctx = WasiCtx::new();
+    let host_memory = HostMemory::new();
+
+    // Exercise each of the branches in `foo`.
+    // Start with the success case:
+    let r0 = one_error_conversion::foo(&ctx, &host_memory, 0);
+    assert_eq!(
+        r0,
+        i32::from(types::Errno::Ok),
+        "Expected return value for strike=0"
+    );
+    assert!(ctx.log.borrow().is_empty(), "No error log for strike=0");
+
+    // First error case:
+    let r1 = one_error_conversion::foo(&ctx, &host_memory, 1);
+    assert_eq!(
+        r1,
+        i32::from(types::Errno::PicketLine),
+        "Expected return value for strike=1"
+    );
+    assert_eq!(
+        ctx.log.borrow_mut().pop().expect("one log entry"),
+        "Won't cross picket line: I'm not a scab",
+        "Expected log entry for strike=1",
+    );
+
+    // Second error case:
+    let r2 = one_error_conversion::foo(&ctx, &host_memory, 2);
+    assert_eq!(
+        r2,
+        i32::from(types::Errno::InvalidArg),
+        "Expected return value for strike=2"
+    );
+    assert_eq!(
+        ctx.log.borrow_mut().pop().expect("one log entry"),
+        "Invalid argument: out-of-bounds: 2",
+        "Expected log entry for strike=2",
+    );
 }
