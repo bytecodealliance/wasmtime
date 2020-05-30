@@ -1,0 +1,43 @@
+test run
+set enable_simd
+target x86_64 haswell
+
+function %vselect_i8x16() -> i8x16 {
+block0:
+    v1 = vconst.b8x16 [false true false true false true true true true true false false false false false false]
+    v2 = vconst.i8x16 [100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115]
+    v3 = vconst.i8x16 [200 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215]
+    v4 = vselect v1, v2, v3
+    return v4
+}
+; run: %vselect_i8x16() == [200 101 202 103 204 105 106 107 108 109 210 211 212 213 214 215]
+
+function %vselect_i16x8() -> i16x8 {
+block0:
+    v1 = vconst.b16x8 [false true false true false true true true]
+    v2 = vconst.i16x8 [100 101 102 103 104 105 106 107]
+    v3 = vconst.i16x8 [200 201 202 203 204 205 206 207]
+    v4 = vselect v1, v2, v3
+    return v4
+}
+; run: %vselect_i16x8() == [200 101 202 103 204 105 106 107]
+
+function %vselect_i32x4() -> i32x4 {
+block0:
+    v1 = vconst.b32x4 [false true false true]
+    v2 = vconst.i32x4 [100 101 102 103]
+    v3 = vconst.i32x4 [200 201 202 203]
+    v4 = vselect v1, v2, v3
+    return v4
+}
+; run: %vselect_i32x4() == [200 101 202 103]
+
+function %vselect_i64x2() -> i64x2 {
+block0:
+    v1 = vconst.b64x2 [false true]
+    v2 = vconst.i64x2 [100 101]
+    v3 = vconst.i64x2 [200 201]
+    v4 = vselect v1, v2, v3
+    return v4
+}
+; run: %vselect_i64x2() == [200 101]

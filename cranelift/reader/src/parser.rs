@@ -2752,11 +2752,17 @@ impl<'a> Parser<'a> {
                     args: [lhs, rhs],
                 }
             }
-            InstructionFormat::BinaryImm => {
+            InstructionFormat::BinaryImm8 => {
+                let arg = self.match_value("expected SSA value first operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let imm = self.match_uimm8("expected unsigned 8-bit immediate")?;
+                InstructionData::BinaryImm8 { opcode, arg, imm }
+            }
+            InstructionFormat::BinaryImm64 => {
                 let lhs = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_imm64("expected immediate integer second operand")?;
-                InstructionData::BinaryImm {
+                InstructionData::BinaryImm64 {
                     opcode,
                     arg: lhs,
                     imm: rhs,
@@ -2887,23 +2893,17 @@ impl<'a> Parser<'a> {
                 ctx.check_jt(table, self.loc)?;
                 InstructionData::IndirectJump { opcode, arg, table }
             }
-            InstructionFormat::InsertLane => {
+            InstructionFormat::TernaryImm8 => {
                 let lhs = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let lane = self.match_uimm8("expected lane number")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value last operand")?;
-                InstructionData::InsertLane {
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let imm = self.match_uimm8("expected 8-bit immediate")?;
+                InstructionData::TernaryImm8 {
                     opcode,
-                    lane,
+                    imm,
                     args: [lhs, rhs],
                 }
-            }
-            InstructionFormat::ExtractLane => {
-                let arg = self.match_value("expected SSA value last operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let lane = self.match_uimm8("expected lane number")?;
-                InstructionData::ExtractLane { opcode, lane, arg }
             }
             InstructionFormat::Shuffle => {
                 let a = self.match_value("expected SSA value first operand")?;

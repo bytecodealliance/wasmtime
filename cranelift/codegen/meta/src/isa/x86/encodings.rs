@@ -1454,6 +1454,7 @@ fn define_alu(
     // x86 has a bitwise not instruction NOT.
     e.enc_i32_i64(bnot, rec_ur.opcodes(&NOT).rrr(2));
     e.enc_b32_b64(bnot, rec_ur.opcodes(&NOT).rrr(2));
+    e.enc_both(bnot.bind(B1), rec_ur.opcodes(&NOT).rrr(2));
 
     // Also add a `b1` encodings for the logic instructions.
     // TODO: Should this be done with 8-bit instructions? It would improve partial register
@@ -1633,6 +1634,7 @@ fn define_simd(
     let ushr_imm = shared.by_name("ushr_imm");
     let usub_sat = shared.by_name("usub_sat");
     let vconst = shared.by_name("vconst");
+    let vselect = shared.by_name("vselect");
     let x86_insertps = x86.by_name("x86_insertps");
     let x86_movlhps = x86.by_name("x86_movlhps");
     let x86_movsd = x86.by_name("x86_movsd");
@@ -1653,6 +1655,7 @@ fn define_simd(
     let x86_punpckl = x86.by_name("x86_punpckl");
 
     // Shorthands for recipes.
+    let rec_blend = r.template("blend");
     let rec_evex_reg_vvvv_rm_128 = r.template("evex_reg_vvvv_rm_128");
     let rec_f_ib = r.template("f_ib");
     let rec_fa = r.template("fa");
@@ -1720,6 +1723,20 @@ fn define_simd(
         let instruction = x86_pshufd.bind(vector(ty, sse_vector_size));
         let template = rec_r_ib_unsigned_fpr.opcodes(&PSHUFD);
         e.enc_both_inferred(instruction, template);
+    }
+
+    // SIMD vselect; controlling value of vselect is a boolean vector, so each lane should be
+    // either all ones or all zeroes - it makes it possible to always use 8-bit PBLENDVB;
+    // for 32/64-bit lanes we can also use BLENDVPS and BLENDVPD
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
+        let opcode = match ty.lane_bits() {
+            32 => &BLENDVPS,
+            64 => &BLENDVPD,
+            _ => &PBLENDVB,
+        };
+        let instruction = vselect.bind(vector(ty, sse_vector_size));
+        let template = rec_blend.opcodes(opcode);
+        e.enc_both_inferred_maybe_isap(instruction, template, Some(use_sse41_simd));
     }
 
     // SIMD scalar_to_vector; this uses MOV to copy the scalar value to an XMM register; according
@@ -2269,8 +2286,7 @@ fn define_entity_ref(
     let rec_gvaddr8 = r.template("gvaddr8");
     let rec_pcrel_fnaddr8 = r.template("pcrel_fnaddr8");
     let rec_pcrel_gvaddr8 = r.template("pcrel_gvaddr8");
-    let rec_spaddr4_id = r.template("spaddr4_id");
-    let rec_spaddr8_id = r.template("spaddr8_id");
+    let rec_spaddr_id = r.template("spaddr_id");
 
     // Predicates shorthands.
     let all_ones_funcaddrs_and_not_is_pic =
@@ -2358,8 +2374,8 @@ fn define_entity_ref(
     //
     // TODO: Add encoding rules for stack_load and stack_store, so that they
     // don't get legalized to stack_addr + load/store.
-    e.enc32(stack_addr.bind(I32), rec_spaddr4_id.opcodes(&LEA));
-    e.enc64(stack_addr.bind(I64), rec_spaddr8_id.opcodes(&LEA).rex().w());
+    e.enc64(stack_addr.bind(I64), rec_spaddr_id.opcodes(&LEA).rex().w());
+    e.enc32(stack_addr.bind(I32), rec_spaddr_id.opcodes(&LEA));
 
     // Constant addresses (PIC).
     e.enc64(const_addr.bind(I64), rec_const_addr.opcodes(&LEA).rex().w());

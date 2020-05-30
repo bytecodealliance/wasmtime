@@ -378,7 +378,7 @@ fn intcc_to_peepmatic(cc: IntCC) -> ConditionCode {
 
 fn get_immediate(dfg: &DataFlowGraph, inst: Inst, i: usize) -> Part<ValueOrInst> {
     return match dfg[inst] {
-        InstructionData::BinaryImm { imm, .. } if i == 0 => imm.into(),
+        InstructionData::BinaryImm64 { imm, .. } if i == 0 => imm.into(),
         InstructionData::BranchIcmp { cond, .. } if i == 0 => intcc_to_peepmatic(cond).into(),
         InstructionData::BranchInt { cond, .. } if i == 0 => intcc_to_peepmatic(cond).into(),
         InstructionData::IntCompare { cond, .. } if i == 0 => intcc_to_peepmatic(cond).into(),

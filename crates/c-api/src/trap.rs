@@ -53,7 +53,7 @@ pub extern "C" fn wasm_trap_new(
 #[no_mangle]
 pub extern "C" fn wasm_trap_message(trap: &wasm_trap_t, out: &mut wasm_message_t) {
     let mut buffer = Vec::new();
-    buffer.extend_from_slice(trap.trap.borrow().message().as_bytes());
+    buffer.extend_from_slice(trap.trap.borrow().to_string().as_bytes());
     buffer.reserve_exact(1);
     buffer.push(0);
     out.set_buffer(buffer);

@@ -378,6 +378,7 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
     let vconst = insts.by_name("vconst");
     let vall_true = insts.by_name("vall_true");
     let vany_true = insts.by_name("vany_true");
+    let vselect = insts.by_name("vselect");
 
     let x86_packss = x86_instructions.by_name("x86_packss");
     let x86_pmaxs = x86_instructions.by_name("x86_pmaxs");
@@ -459,7 +460,7 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
                 // Move into the lowest 16 bits of an XMM register.
                 def!(a = scalar_to_vector(x)),
                 // Insert the value again but in the next lowest 16 bits.
-                def!(b = insertlane(a, uimm8_one, x)),
+                def!(b = insertlane(a, x, uimm8_one)),
                 // No instruction emitted; pretend this is an I32x4 so we can use PSHUFD.
                 def!(c = raw_bitcast_any16x8_to_i32x4(b)),
                 // Broadcast the bytes in the XMM register with PSHUFD.
@@ -493,7 +494,7 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
                 // Move into the lowest 64 bits of an XMM register.
                 def!(a = scalar_to_vector(x)),
                 // Move into the highest 64 bits of the same XMM register.
-                def!(y = insertlane(a, uimm8_one, x)),
+                def!(y = insertlane(a, x, uimm8_one)),
             ],
         );
     }
@@ -567,11 +568,11 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
                 // Use scalar operations to shift the first lane.
                 def!(a = extractlane(x, uimm8_zero)),
                 def!(b = sshr_scalar_lane0(a, y)),
-                def!(c = insertlane(x, uimm8_zero, b)),
+                def!(c = insertlane(x, b, uimm8_zero)),
                 // Do the same for the second lane.
                 def!(d = extractlane(x, uimm8_one)),
                 def!(e = sshr_scalar_lane1(d, y)),
-                def!(z = insertlane(c, uimm8_one, e)),
+                def!(z = insertlane(c, e, uimm8_one)),
             ],
         );
     }
@@ -586,6 +587,17 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
                 def!(b = band_not(y, c)),
                 def!(d = bor(a, b)),
             ],
+        );
+    }
+
+    // SIMD vselect; replace with bitselect if BLEND* instructions are not available.
+    // This works, because each lane of boolean vector is filled with zeroes or ones.
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
+        let vselect = vselect.bind(vector(ty, sse_vector_size));
+        let raw_bitcast = raw_bitcast.bind(vector(ty, sse_vector_size));
+        narrow.legalize(
+            def!(d = vselect(c, x, y)),
+            vec![def!(a = raw_bitcast(c)), def!(d = bitselect(a, x, y))],
         );
     }
 

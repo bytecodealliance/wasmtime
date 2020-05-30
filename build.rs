@@ -189,7 +189,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", "simd_f64x2") => return true, // FIXME expected V128(F64x2([Value(Float64 { bits: 9221120237041090560 }), Value(Float64 { bits: 0 })])), got V128(0)
             ("simd", "simd_f64x2_arith") => return true, // FIXME expected V128(F64x2([Value(Float64 { bits: 9221120237041090560 }), Value(Float64 { bits: 13835058055282163712 })])), got V128(255211775190703847615975447847722024960)
             ("simd", "simd_i64x2_arith") => return true, // FIXME Unsupported feature: proposed SIMD operator I64x2Mul
-            ("simd", "simd_lane") => return true, // FIXME invalid u8 number: constant out of range: (v8x16.shuffle -1 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14...
             ("simd", "simd_load") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16Shl
             ("simd", "simd_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16ShrS
 

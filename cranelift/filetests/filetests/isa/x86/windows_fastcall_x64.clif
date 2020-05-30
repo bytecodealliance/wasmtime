@@ -110,6 +110,13 @@ block0(v0: f32, v1: f64, v2: i64, v3: i64):
 ; nextln: return v1, v5
 ; nextln: }
 
+function %ret_val_i128(i64, i64) -> i128 windows_fastcall {
+block0(v0: i64, v1: i64):
+    v2 = iconcat v0, v1
+    return v2
+}
+; check: function %ret_val_i128(i64 [%rdx], i64 [%r8], i64 sret [%rcx], i64 fp [%rbp]) -> i64 sret [%rax], i64 fp [%rbp] windows_fastcall {
+
 function %internal_stack_arg_function_call(i64) -> i64 windows_fastcall {
   fn0 = %foo(i64, i64, i64, i64) -> i64 windows_fastcall
   fn1 = %foo2(i64, i64, i64, i64) -> i64 windows_fastcall

@@ -142,7 +142,7 @@ fn package_up_divrem_info(
 /// Examine `inst` to see if it is a div or rem by a constant, and if so return the operands,
 /// signedness, operation size and div-vs-rem-ness in a handy bundle.
 fn get_div_info(inst: Inst, dfg: &DataFlowGraph) -> Option<DivRemByConstInfo> {
-    if let InstructionData::BinaryImm { opcode, arg, imm } = dfg[inst] {
+    if let InstructionData::BinaryImm64 { opcode, arg, imm } = dfg[inst] {
         let (is_signed, is_rem) = match opcode {
             Opcode::UdivImm => (false, false),
             Opcode::UremImm => (false, true),
@@ -656,7 +656,7 @@ mod simplify {
         dfg::ValueDef,
         immediates,
         instructions::{Opcode, ValueList},
-        types::{I16, I32, I8},
+        types::{B8, I16, I32, I8},
     };
     use std::marker::PhantomData;
 
@@ -704,7 +704,7 @@ mod simplify {
         imm: immediates::Imm64,
     ) -> bool {
         if let ValueDef::Result(arg_inst, _) = pos.func.dfg.value_def(arg) {
-            if let InstructionData::BinaryImm {
+            if let InstructionData::BinaryImm64 {
                 opcode: Opcode::IshlImm,
                 arg: prev_arg,
                 imm: prev_imm,
@@ -784,7 +784,7 @@ mod simplify {
                         pos.func
                             .dfg
                             .replace(inst)
-                            .BinaryImm(new_opcode, ty, imm, args[0]);
+                            .BinaryImm64(new_opcode, ty, imm, args[0]);
 
                         // Repeat for BinaryImm simplification.
                         simplify(pos, inst, native_word_width);
@@ -804,7 +804,7 @@ mod simplify {
                         pos.func
                             .dfg
                             .replace(inst)
-                            .BinaryImm(new_opcode, ty, imm, args[1]);
+                            .BinaryImm64(new_opcode, ty, imm, args[1]);
                     }
                 }
             }
@@ -818,7 +818,7 @@ mod simplify {
                 }
             }
 
-            InstructionData::BinaryImm { opcode, arg, imm } => {
+            InstructionData::BinaryImm64 { opcode, arg, imm } => {
                 let ty = pos.func.dfg.ctrl_typevar(inst);
 
                 let mut arg = arg;
@@ -831,7 +831,7 @@ mod simplify {
                     | Opcode::BxorImm => {
                         // Fold binary_op(C2, binary_op(C1, x)) into binary_op(binary_op(C1, C2), x)
                         if let ValueDef::Result(arg_inst, _) = pos.func.dfg.value_def(arg) {
-                            if let InstructionData::BinaryImm {
+                            if let InstructionData::BinaryImm64 {
                                 opcode: prev_opcode,
                                 arg: prev_arg,
                                 imm: prev_imm,
@@ -855,7 +855,7 @@ mod simplify {
                                     pos.func
                                         .dfg
                                         .replace(inst)
-                                        .BinaryImm(opcode, ty, new_imm, new_arg);
+                                        .BinaryImm64(opcode, ty, new_imm, new_arg);
                                     imm = new_imm;
                                     arg = new_arg;
                                 }
@@ -931,6 +931,69 @@ mod simplify {
                     {
                         let args = pos.func.dfg.inst_args_mut(inst);
                         args[0] = bool_val;
+                    }
+                }
+            }
+
+            InstructionData::Ternary {
+                opcode: Opcode::Bitselect,
+                args,
+            } => {
+                let old_cond_type = pos.func.dfg.value_type(args[0]);
+                if !old_cond_type.is_vector() {
+                    return;
+                }
+
+                // Replace bitselect with vselect if each lane of controlling mask is either
+                // all ones or all zeroes; on x86 bitselect is encoded using 3 instructions,
+                // while vselect can be encoded using single BLEND instruction.
+                if let ValueDef::Result(def_inst, _) = pos.func.dfg.value_def(args[0]) {
+                    let (cond_val, cond_type) = match pos.func.dfg[def_inst] {
+                        InstructionData::Unary {
+                            opcode: Opcode::RawBitcast,
+                            arg,
+                        } => {
+                            // If controlling mask is raw-bitcasted boolean vector then
+                            // we know each lane is either all zeroes or ones,
+                            // so we can use vselect instruction instead.
+                            let arg_type = pos.func.dfg.value_type(arg);
+                            if !arg_type.is_vector() || !arg_type.lane_type().is_bool() {
+                                return;
+                            }
+                            (arg, arg_type)
+                        }
+                        InstructionData::UnaryConst {
+                            opcode: Opcode::Vconst,
+                            constant_handle,
+                        } => {
+                            // If each byte of controlling mask is 0x00 or 0xFF then
+                            // we will always bitcast our way to vselect(B8x16, I8x16, I8x16).
+                            // Bitselect operates at bit level, so the lane types don't matter.
+                            let const_data = pos.func.dfg.constants.get(constant_handle);
+                            if !const_data.iter().all(|&b| b == 0 || b == 0xFF) {
+                                return;
+                            }
+                            let new_type = B8.by(old_cond_type.bytes() as u16).unwrap();
+                            (pos.ins().raw_bitcast(new_type, args[0]), new_type)
+                        }
+                        _ => return,
+                    };
+
+                    let lane_type = Type::int(cond_type.lane_bits() as u16).unwrap();
+                    let arg_type = lane_type.by(cond_type.lane_count()).unwrap();
+                    let old_arg_type = pos.func.dfg.value_type(args[1]);
+
+                    if arg_type != old_arg_type {
+                        // Operands types must match, we need to add bitcasts.
+                        let arg1 = pos.ins().raw_bitcast(arg_type, args[1]);
+                        let arg2 = pos.ins().raw_bitcast(arg_type, args[2]);
+                        let ret = pos.ins().vselect(cond_val, arg1, arg2);
+                        pos.func.dfg.replace(inst).raw_bitcast(old_arg_type, ret);
+                    } else {
+                        pos.func
+                            .dfg
+                            .replace(inst)
+                            .vselect(cond_val, args[1], args[2]);
                     }
                 }
             }
