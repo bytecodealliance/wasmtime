@@ -30,7 +30,7 @@ impl fmt::Display for TrapReason {
         match self {
             TrapReason::Message(s) => write!(f, "{}", s),
             TrapReason::I32Exit(status) => write!(f, "Exited with i32 exit status {}", status),
-            TrapReason::Error(e) => write!(f, "{}", e),
+            TrapReason::Error(e) => write!(f, "{:#}", e),
         }
     }
 }
