@@ -1,0 +1,39 @@
+test run
+set opt_level=speed_and_size
+set enable_simd
+target x86_64 haswell
+
+;; Test if bitselect->vselect optimization works properly
+
+function %mask_from_icmp(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp sge v0, v1
+    v3 = raw_bitcast.i32x4 v2
+    v4 = bitselect v3, v0, v1
+    return v4
+}
+; run: %mask_from_icmp([5 6 7 8], [1 10 20 7]) == [5 10 20 8]
+
+function %mask_casted(i64x2, i64x2, i32x4) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i32x4):
+    v3 = raw_bitcast.i64x2 v2
+    v4 = bitselect v3, v0, v1
+    return v4
+}
+; run: %mask_casted([0 0], [0xFFFFFF 0xFFFF4F], [0xFFF1 0 0xF 0]) == [0xFF000E 0xFFFF40]
+
+function %good_const_mask(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = vconst.i32x4 [0x0000FF00 0x00FF00FF 0x00FF00FF 0xFF00FFFF]
+    v4 = bitselect v2, v0, v1
+    return v4
+}
+; run: %good_const_mask([0x1234 0x5678 0x1234 0x5678], [0xAAAA 0xAAAA 0xAAAA 0xAAAA]) == [0x12AA 0xAA78 0xAA34 0x5678]
+
+function %bad_const_mask(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = vconst.i32x4 [0x0000FF00 0x00FF00FF 0x00FF000F 0xFF00FFF0]
+    v4 = bitselect v2, v0, v1
+    return v4
+}
+; run: %bad_const_mask([0x1234 0x5678 0x1234 0x5678], [0xAAAA 0xAAAA 0xAAAA 0xAAAA]) == [0x12AA 0xAA78 0xAAA4 0x567A]

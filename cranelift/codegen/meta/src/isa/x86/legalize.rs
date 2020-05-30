@@ -378,6 +378,7 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
     let vconst = insts.by_name("vconst");
     let vall_true = insts.by_name("vall_true");
     let vany_true = insts.by_name("vany_true");
+    let vselect = insts.by_name("vselect");
 
     let x86_packss = x86_instructions.by_name("x86_packss");
     let x86_pmaxs = x86_instructions.by_name("x86_pmaxs");
@@ -586,6 +587,17 @@ fn define_simd(shared: &mut SharedDefinitions, x86_instructions: &InstructionGro
                 def!(b = band_not(y, c)),
                 def!(d = bor(a, b)),
             ],
+        );
+    }
+
+    // SIMD vselect; replace with bitselect if BLEND* instructions are not available.
+    // This works, because each lane of boolean vector is filled with zeroes or ones.
+    for ty in ValueType::all_lane_types().filter(allowed_simd_type) {
+        let vselect = vselect.bind(vector(ty, sse_vector_size));
+        let raw_bitcast = raw_bitcast.bind(vector(ty, sse_vector_size));
+        narrow.legalize(
+            def!(d = vselect(c, x, y)),
+            vec![def!(a = raw_bitcast(c)), def!(d = bitselect(a, x, y))],
         );
     }
 

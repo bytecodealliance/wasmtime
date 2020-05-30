@@ -246,6 +246,20 @@ fn size_with_inferred_rex_for_inreg0_inreg1(
     sizing.base_size + if needs_rex { 1 } else { 0 }
 }
 
+/// Infers whether a dynamic REX prefix will be emitted, based on second and third operand.
+fn size_with_inferred_rex_for_inreg1_inreg2(
+    sizing: &RecipeSizing,
+    _enc: Encoding,
+    inst: Inst,
+    divert: &RegDiversions,
+    func: &Function,
+) -> u8 {
+    // No need to check for REX.W in `needs_rex` because `infer_rex().w()` is not allowed.
+    let needs_rex = test_input(1, inst, divert, func, is_extended_reg)
+        || test_input(2, inst, divert, func, is_extended_reg);
+    sizing.base_size + if needs_rex { 1 } else { 0 }
+}
+
 /// Infers whether a dynamic REX prefix will be emitted, based on a single
 /// input register and a single output register.
 fn size_with_inferred_rex_for_inreg0_outreg0(
