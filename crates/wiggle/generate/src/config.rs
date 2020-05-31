@@ -321,6 +321,7 @@ impl Parse for ErrorConfField {
 }
 
 /// Configure logging statements in generated code
+#[derive(Debug, Clone)]
 pub enum LoggingConf {
     Log { cfg_feature: Option<String> },
     Tracing,

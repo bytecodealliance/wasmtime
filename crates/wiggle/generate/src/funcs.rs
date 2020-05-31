@@ -1,6 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
+use crate::config::LoggingConf;
 use crate::error_transform::ErrorTransform;
 use crate::lifetimes::anon_lifetime;
 use crate::module_trait::passed_by_reference;
@@ -11,6 +12,7 @@ pub fn define_func(
     func: &witx::InterfaceFunc,
     trait_name: TokenStream,
     errxform: &ErrorTransform,
+    logging: &LoggingConf,
 ) -> TokenStream {
     let funcname = func.name.as_str();
 
@@ -161,27 +163,12 @@ pub fn define_func(
         quote!()
     };
 
-    let (placeholders, args): (Vec<_>, Vec<_>) = func
-        .params
-        .iter()
-        .map(|param| {
-            let name = names.func_param(&param.name);
-            let fmt = if passed_by_reference(&*param.tref.type_()) {
-                "{:?}"
-            } else {
-                "{}"
-            };
-            (format!("{}={}", name.to_string(), fmt), quote!(#name))
-        })
-        .unzip();
-    let trace_fmt = format!("{}({})", ident.to_string(), placeholders.join(","));
+    let log_args = logging.args(&func, names);
+
     quote!(pub fn #ident(#abi_args) -> #abi_ret {
         #(#marshal_args)*
         #(#marshal_rets_pre)*
-        #[cfg(feature = "trace_log")]
-        {
-            log::trace!(#trace_fmt, #(#args),*);
-        }
+        #log_args
         let #trait_bindings  = match #trait_name::#ident(ctx, #(#trait_args),*) {
             Ok(#trait_bindings) => { #trait_rets },
             Err(e) => { #ret_err },
@@ -334,5 +321,53 @@ where
             unimplemented!("pointer/array result types")
         }
         _ => write_val_to_ptr,
+    }
+}
+
+impl LoggingConf {
+    fn args(&self, func: &witx::InterfaceFunc, names: &Names) -> TokenStream {
+        match self {
+            Self::Log { cfg_feature } => {
+                let (placeholders, args): (Vec<_>, Vec<_>) = func
+                    .params
+                    .iter()
+                    .map(|param| {
+                        let name = names.func_param(&param.name);
+                        let fmt = if passed_by_reference(&*param.tref.type_()) {
+                            "{:?}"
+                        } else {
+                            "{}"
+                        };
+                        (format!("{}={}", name.to_string(), fmt), quote!(#name))
+                    })
+                    .unzip();
+                let trace_fmt = format!(
+                    "{}({})",
+                    names.func(&func.name).to_string(),
+                    placeholders.join(",")
+                );
+                let trace_stmt = quote!(log::trace!(#trace_fmt, #(#args),*););
+                if let Some(feature) = cfg_feature {
+                    quote! {
+                        #[cfg(feature = #feature)]
+                        {
+                            #trace_stmt
+                        }
+                    }
+                } else {
+                    trace_stmt
+                }
+            }
+            Self::Tracing => {
+                let args = func.params.iter().map(|param| {
+                    let name = names.func_param(&param.name);
+                    quote!( #name = #name )
+                });
+                let func_name = names.func(&func.name).to_string();
+                quote! {
+                    tracing::debug!(function = #func_name, #(#args),*, "marshalled arguments");
+                }
+            }
+        }
     }
 }

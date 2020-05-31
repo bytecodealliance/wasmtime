@@ -101,7 +101,7 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
     let error_transform = wiggle_generate::ErrorTransform::new(&config.errors, &doc)
         .expect("validating error transform");
 
-    let code = wiggle_generate::generate(&doc, &names, &error_transform);
+    let code = wiggle_generate::generate(&doc, &names, &error_transform, &config.logging);
     let metadata = if cfg!(feature = "wiggle_metadata") {
         wiggle_generate::generate_metadata(&doc, &names)
     } else {
