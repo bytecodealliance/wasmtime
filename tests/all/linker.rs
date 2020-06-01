@@ -74,7 +74,7 @@ fn function_interposition() -> Result<()> {
     let mut linker = Linker::new(&store);
     linker.allow_shadowing(true);
     let mut module = Module::new(
-        &store,
+        store.engine(),
         r#"(module (func (export "green") (result i32) (i32.const 7)))"#,
     )?;
     for _ in 0..4 {
@@ -85,7 +85,7 @@ fn function_interposition() -> Result<()> {
             instance.get_export("green").unwrap().clone(),
         )?;
         module = Module::new(
-            &store,
+            store.engine(),
             r#"(module
                 (import "red" "green" (func (result i32)))
                 (func (export "green") (result i32) (i32.mul (call 0) (i32.const 2)))
@@ -140,14 +140,14 @@ fn module_interposition() -> Result<()> {
     let mut linker = Linker::new(&store);
     linker.allow_shadowing(true);
     let mut module = Module::new(
-        &store,
+        store.engine(),
         r#"(module (func (export "export") (result i32) (i32.const 7)))"#,
     )?;
     for _ in 0..4 {
         let instance = linker.instantiate(&module)?;
         linker.instance("instance", &instance)?;
         module = Module::new(
-            &store,
+            store.engine(),
             r#"(module
                 (import "instance" "export" (func (result i32)))
                 (func (export "export") (result i32) (i32.mul (call 0) (i32.const 2)))
