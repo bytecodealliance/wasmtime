@@ -1548,8 +1548,11 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, I32X4, builder);
             state.push1(builder.ins().fcvt_from_uint(F32X4, a))
         }
-        Operator::I32x4TruncSatF32x4S
-        | Operator::I32x4TruncSatF32x4U
+        Operator::I32x4TruncSatF32x4S => {
+            let a = pop1_with_bitcast(state, F32X4, builder);
+            state.push1(builder.ins().fcvt_to_sint_sat(I32X4, a))
+        }
+        Operator::I32x4TruncSatF32x4U
         | Operator::I8x16Abs
         | Operator::I16x8Abs
         | Operator::I32x4Abs
