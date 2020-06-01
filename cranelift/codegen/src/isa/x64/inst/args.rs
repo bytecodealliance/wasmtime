@@ -291,16 +291,6 @@ impl SseOpcode {
             SseOpcode::Insertps | SseOpcode::Roundss | SseOpcode::Roundsd => SSE41,
         }
     }
-
-    pub(crate) fn to_string(&self) -> String {
-        match self {
-            SseOpcode::Addss => "addss".to_string(),
-            SseOpcode::Subss => "subss".to_string(),
-            SseOpcode::Movss => "movss".to_string(),
-            SseOpcode::Movsd => "movsd".to_string(),
-            _ => "unimplemented sse_op".to_string(),
-        }
-    }
 }
 
 impl fmt::Debug for SseOpcode {
@@ -332,7 +322,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Roundss => "roundss",
             SseOpcode::Roundsd => "roundsd",
             SseOpcode::Rsqrtss => "rsqrtss",
-            SseOpcode::Sqrtss => "srtqss",
+            SseOpcode::Sqrtss => "sqrtss",
             SseOpcode::Sqrtsd => "sqrtsd",
             SseOpcode::Subss => "subss",
             SseOpcode::Subsd => "subsd",

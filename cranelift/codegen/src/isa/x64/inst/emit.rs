@@ -1059,6 +1059,9 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
             let opcode = match op {
                 SseOpcode::Addss => 0x0F58,
                 SseOpcode::Subss => 0x0F5C,
+                SseOpcode::Mulss => 0x0F59,
+                SseOpcode::Divss => 0x0F5E,
+                SseOpcode::Sqrtss => 0x0F51,
                 _ => unimplemented!("XMM_RM_R opcode"),
             };
 
