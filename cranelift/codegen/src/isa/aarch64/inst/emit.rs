@@ -1239,24 +1239,17 @@ impl MachInstEmit for Inst {
             &Inst::EpiloguePlaceholder => {
                 // Noop; this is just a placeholder for epilogues.
             }
-            &Inst::Call {
-                ref dest,
-                loc,
-                opcode,
-                ..
-            } => {
-                sink.add_reloc(loc, Reloc::Arm64Call, dest, 0);
+            &Inst::Call { ref info } => {
+                sink.add_reloc(info.loc, Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b100101, 0));
-                if opcode.is_call() {
-                    sink.add_call_site(loc, opcode);
+                if info.opcode.is_call() {
+                    sink.add_call_site(info.loc, info.opcode);
                 }
             }
-            &Inst::CallInd {
-                rn, loc, opcode, ..
-            } => {
-                sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(rn) << 5));
-                if opcode.is_call() {
-                    sink.add_call_site(loc, opcode);
+            &Inst::CallInd { ref info } => {
+                sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(info.rn) << 5));
+                if info.opcode.is_call() {
+                    sink.add_call_site(info.loc, info.opcode);
                 }
             }
             &Inst::CondBr {
@@ -1318,7 +1311,7 @@ impl MachInstEmit for Inst {
                 ridx,
                 rtmp1,
                 rtmp2,
-                ref targets,
+                ref info,
                 ..
             } => {
                 // This sequence is *one* instruction in the vcode, and is expanded only here at
@@ -1361,7 +1354,7 @@ impl MachInstEmit for Inst {
                 inst.emit(sink, flags, state);
                 // Emit jump table (table of 32-bit offsets).
                 let jt_off = sink.cur_offset();
-                for &target in targets.iter() {
+                for &target in info.targets.iter() {
                     let word_off = sink.cur_offset();
                     let off_into_table = word_off - jt_off;
                     sink.use_label_at_offset(

@@ -309,7 +309,7 @@ pub enum BranchTarget {
     /// `lower_branch_group()`.
     Label(MachLabel),
     /// A fixed PC offset.
-    ResolvedOffset(isize),
+    ResolvedOffset(i32),
 }
 
 impl BranchTarget {

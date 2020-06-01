@@ -1276,33 +1276,39 @@ impl ABICall for AArch64ABICall {
         );
         match &self.dest {
             &CallDest::ExtName(ref name, RelocDistance::Near) => ctx.emit(Inst::Call {
-                dest: Box::new(name.clone()),
-                uses: uses.into_boxed_slice(),
-                defs: defs.into_boxed_slice(),
-                loc: self.loc,
-                opcode: self.opcode,
+                info: Box::new(CallInfo {
+                    dest: name.clone(),
+                    uses,
+                    defs,
+                    loc: self.loc,
+                    opcode: self.opcode,
+                }),
             }),
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
                 ctx.emit(Inst::LoadExtName {
                     rd: writable_spilltmp_reg(),
-                    name: name.clone(),
+                    name: Box::new(name.clone()),
                     offset: 0,
                     srcloc: self.loc,
                 });
                 ctx.emit(Inst::CallInd {
-                    rn: spilltmp_reg(),
-                    uses: uses.into_boxed_slice(),
-                    defs: defs.into_boxed_slice(),
-                    loc: self.loc,
-                    opcode: self.opcode,
+                    info: Box::new(CallIndInfo {
+                        rn: spilltmp_reg(),
+                        uses,
+                        defs,
+                        loc: self.loc,
+                        opcode: self.opcode,
+                    }),
                 });
             }
             &CallDest::Reg(reg) => ctx.emit(Inst::CallInd {
-                rn: reg,
-                uses: uses.into_boxed_slice(),
-                defs: defs.into_boxed_slice(),
-                loc: self.loc,
-                opcode: self.opcode,
+                info: Box::new(CallIndInfo {
+                    rn: reg,
+                    uses,
+                    defs,
+                    loc: self.loc,
+                    opcode: self.opcode,
+                }),
             }),
         }
     }
