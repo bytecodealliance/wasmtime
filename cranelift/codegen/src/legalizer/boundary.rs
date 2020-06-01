@@ -757,18 +757,19 @@ pub fn handle_call_abi(
     {
         legalize_sret_call(isa, pos, sig_ref, inst);
     } else {
-        // OK, we need to fix the call arguments to match the ABI signature.
-        let abi_args = pos.func.dfg.signatures[sig_ref].params.len();
-        legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
-            func.dfg.signatures[sig_ref].params[abi_arg]
-        });
-
         if !pos.func.dfg.signatures[sig_ref].returns.is_empty() {
             inst = legalize_inst_results(pos, |func, abi_res| {
                 func.dfg.signatures[sig_ref].returns[abi_res]
             });
         }
     }
+
+    // Go back and fix the call arguments to match the ABI signature.
+    pos.goto_inst(inst);
+    let abi_args = pos.func.dfg.signatures[sig_ref].params.len();
+    legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
+        func.dfg.signatures[sig_ref].params[abi_arg]
+    });
 
     debug_assert!(
         check_call_signature(&pos.func.dfg, inst).is_ok(),

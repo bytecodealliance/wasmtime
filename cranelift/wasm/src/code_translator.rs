@@ -125,7 +125,11 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 GlobalVariable::Memory { gv, offset, ty } => {
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let flags = ir::MemFlags::trusted();
-                    let val = state.pop1();
+                    let mut val = state.pop1();
+                    // Ensure SIMD values are cast to their default Cranelift type, I8x16.
+                    if ty.is_vector() {
+                        val = optionally_bitcast_vector(val, I8X16, builder);
+                    }
                     debug_assert_eq!(ty, builder.func.dfg.value_type(val));
                     builder.ins().store(flags, val, addr, offset);
                 }
@@ -1302,7 +1306,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let ty = type_of(op);
             let reduced = builder.ins().ireduce(ty.lane_type(), replacement);
             let vector = optionally_bitcast_vector(vector, ty, builder);
-            state.push1(builder.ins().insertlane(vector, *lane, reduced))
+            state.push1(builder.ins().insertlane(vector, reduced, *lane))
         }
         Operator::I32x4ReplaceLane { lane }
         | Operator::I64x2ReplaceLane { lane }
@@ -1310,7 +1314,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::F64x2ReplaceLane { lane } => {
             let (vector, replacement) = state.pop2();
             let vector = optionally_bitcast_vector(vector, type_of(op), builder);
-            state.push1(builder.ins().insertlane(vector, *lane, replacement))
+            state.push1(builder.ins().insertlane(vector, replacement, *lane))
         }
         Operator::V8x16Shuffle { lanes, .. } => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);

@@ -9,4 +9,5 @@ check out your language's documentation for WebAssembly as well.
 
 * [Rust](wasm-rust.md)
 * [C/C++](wasm-c.md)
+* [AssemblyScript](wasm-assemblyscript.md)
 * [WebAssembly Text Format (`*.wat`)](wasm-wat.md)

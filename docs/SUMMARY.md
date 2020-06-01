@@ -39,6 +39,7 @@
 - [Writing WebAssembly](./wasm.md)
   - [Rust](./wasm-rust.md)
   - [C/C++](./wasm-c.md)
+  - [AssemblyScript](./wasm-assemblyscript.md)
   - [WebAssembly Text Format (`*.wat`)](./wasm-wat.md)
   - [Example: Markdown Parser](./wasm-markdown.md)
 - [Stability](stability.md)

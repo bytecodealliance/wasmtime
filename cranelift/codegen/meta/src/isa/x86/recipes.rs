@@ -427,6 +427,7 @@ pub(crate) fn define<'shared>(
     let reg_rcx = Register::new(gpr, regs.regunit_by_name(gpr, "rcx"));
     let reg_rdx = Register::new(gpr, regs.regunit_by_name(gpr, "rdx"));
     let reg_r15 = Register::new(gpr, regs.regunit_by_name(gpr, "r15"));
+    let reg_xmm0 = Register::new(fpr, regs.regunit_by_name(fpr, "xmm0"));
 
     // Stack operand with a 32-bit signed displacement from either RBP or RSP.
     let stack_gpr32 = Stack::new(gpr);
@@ -607,12 +608,12 @@ pub(crate) fn define<'shared>(
     // XX /r with FPR ins and outs. A form with a byte immediate.
     {
         recipes.add_template_inferred(
-            EncodingRecipeBuilder::new("fa_ib", &formats.insert_lane, 2)
+            EncodingRecipeBuilder::new("fa_ib", &formats.ternary_imm8, 2)
                 .operands_in(vec![fpr, fpr])
                 .operands_out(vec![0])
                 .inst_predicate(InstructionPredicate::new_is_unsigned_int(
-                    &*formats.insert_lane,
-                    "lane",
+                    &*formats.ternary_imm8,
+                    "imm",
                     8,
                     0,
                 ))
@@ -620,7 +621,7 @@ pub(crate) fn define<'shared>(
                     r#"
                     {{PUT_OP}}(bits, rex2(in_reg1, in_reg0), sink);
                     modrm_rr(in_reg1, in_reg0, sink);
-                    let imm:i64 = lane.into();
+                    let imm: i64 = imm.into();
                     sink.put1(imm as u8);
                 "#,
                 ),
@@ -904,14 +905,32 @@ pub(crate) fn define<'shared>(
         .inferred_rex_compute_size("size_with_inferred_rex_for_inreg1"),
     );
 
+    // XX /r for BLEND* instructions
+    recipes.add_template_inferred(
+        EncodingRecipeBuilder::new("blend", &formats.ternary, 1)
+            .operands_in(vec![
+                OperandConstraint::FixedReg(reg_xmm0),
+                OperandConstraint::RegClass(fpr),
+                OperandConstraint::RegClass(fpr),
+            ])
+            .operands_out(vec![2])
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(in_reg1, in_reg2), sink);
+                    modrm_rr(in_reg1, in_reg2, sink);
+                "#,
+            ),
+        "size_with_inferred_rex_for_inreg1_inreg2",
+    );
+
     // XX /n ib with 8-bit immediate sign-extended.
     {
         recipes.add_template_inferred(
-            EncodingRecipeBuilder::new("r_ib", &formats.binary_imm, 2)
+            EncodingRecipeBuilder::new("r_ib", &formats.binary_imm64, 2)
                 .operands_in(vec![gpr])
                 .operands_out(vec![0])
                 .inst_predicate(InstructionPredicate::new_is_signed_int(
-                    &*formats.binary_imm,
+                    &*formats.binary_imm64,
                     "imm",
                     8,
                     0,
@@ -928,11 +947,11 @@ pub(crate) fn define<'shared>(
         );
 
         recipes.add_template_inferred(
-            EncodingRecipeBuilder::new("f_ib", &formats.binary_imm, 2)
+            EncodingRecipeBuilder::new("f_ib", &formats.binary_imm64, 2)
                 .operands_in(vec![fpr])
                 .operands_out(vec![0])
                 .inst_predicate(InstructionPredicate::new_is_signed_int(
-                    &*formats.binary_imm,
+                    &*formats.binary_imm64,
                     "imm",
                     8,
                     0,
@@ -951,11 +970,11 @@ pub(crate) fn define<'shared>(
         // XX /n id with 32-bit immediate sign-extended.
         recipes.add_template(
             Template::new(
-                EncodingRecipeBuilder::new("r_id", &formats.binary_imm, 5)
+                EncodingRecipeBuilder::new("r_id", &formats.binary_imm64, 5)
                     .operands_in(vec![gpr])
                     .operands_out(vec![0])
                     .inst_predicate(InstructionPredicate::new_is_signed_int(
-                        &*formats.binary_imm,
+                        &*formats.binary_imm64,
                         "imm",
                         32,
                         0,
@@ -977,20 +996,20 @@ pub(crate) fn define<'shared>(
     // XX /r ib with 8-bit unsigned immediate (e.g. for pshufd)
     {
         recipes.add_template_inferred(
-            EncodingRecipeBuilder::new("r_ib_unsigned_fpr", &formats.extract_lane, 2)
+            EncodingRecipeBuilder::new("r_ib_unsigned_fpr", &formats.binary_imm8, 2)
                 .operands_in(vec![fpr])
                 .operands_out(vec![fpr])
                 .inst_predicate(InstructionPredicate::new_is_unsigned_int(
-                    &*formats.extract_lane,
-                    "lane",
+                    &*formats.binary_imm8,
+                    "imm",
                     8,
                     0,
-                )) // TODO if the format name is changed then "lane" should be renamed to something more appropriate--ordering mask? broadcast immediate?
+                ))
                 .emit(
                     r#"
                     {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
                     modrm_rr(in_reg0, out_reg0, sink);
-                    let imm:i64 = lane.into();
+                    let imm: i64 = imm.into();
                     sink.put1(imm as u8);
                 "#,
                 ),
@@ -1001,17 +1020,17 @@ pub(crate) fn define<'shared>(
     // XX /r ib with 8-bit unsigned immediate (e.g. for extractlane)
     {
         recipes.add_template_inferred(
-            EncodingRecipeBuilder::new("r_ib_unsigned_gpr", &formats.extract_lane, 2)
+            EncodingRecipeBuilder::new("r_ib_unsigned_gpr", &formats.binary_imm8, 2)
                 .operands_in(vec![fpr])
                 .operands_out(vec![gpr])
                 .inst_predicate(InstructionPredicate::new_is_unsigned_int(
-                    &*formats.extract_lane, "lane", 8, 0,
+                    &*formats.binary_imm8, "imm", 8, 0,
                 ))
                 .emit(
                     r#"
                     {{PUT_OP}}(bits, rex2(out_reg0, in_reg0), sink);
                     modrm_rr(out_reg0, in_reg0, sink); // note the flipped register in the ModR/M byte
-                    let imm:i64 = lane.into();
+                    let imm: i64 = imm.into();
                     sink.put1(imm as u8);
                 "#,
                 ), "size_with_inferred_rex_for_inreg0_outreg0"
@@ -1021,12 +1040,12 @@ pub(crate) fn define<'shared>(
     // XX /r ib with 8-bit unsigned immediate (e.g. for insertlane)
     {
         recipes.add_template_inferred(
-            EncodingRecipeBuilder::new("r_ib_unsigned_r", &formats.insert_lane, 2)
+            EncodingRecipeBuilder::new("r_ib_unsigned_r", &formats.ternary_imm8, 2)
                 .operands_in(vec![fpr, gpr])
                 .operands_out(vec![0])
                 .inst_predicate(InstructionPredicate::new_is_unsigned_int(
-                    &*formats.insert_lane,
-                    "lane",
+                    &*formats.ternary_imm8,
+                    "imm",
                     8,
                     0,
                 ))
@@ -1034,7 +1053,7 @@ pub(crate) fn define<'shared>(
                     r#"
                     {{PUT_OP}}(bits, rex2(in_reg1, in_reg0), sink);
                     modrm_rr(in_reg1, in_reg0, sink);
-                    let imm:i64 = lane.into();
+                    let imm: i64 = imm.into();
                     sink.put1(imm as u8);
                 "#,
                 ),
@@ -1432,23 +1451,7 @@ pub(crate) fn define<'shared>(
     // TODO Alternative forms for 8-bit immediates, when applicable.
 
     recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("spaddr4_id", &formats.stack_load, 6)
-            .operands_out(vec![gpr])
-            .emit(
-                r#"
-                    let sp = StackRef::sp(stack_slot, &func.stack_slots);
-                    let base = stk_base(sp.base);
-                    {{PUT_OP}}(bits, rex2(out_reg0, base), sink);
-                    modrm_sib_disp8(out_reg0, sink);
-                    sib_noindex(base, sink);
-                    let imm : i32 = offset.into();
-                    sink.put4(sp.offset.checked_add(imm).unwrap() as u32);
-                "#,
-            ),
-    );
-
-    recipes.add_template_recipe(
-        EncodingRecipeBuilder::new("spaddr8_id", &formats.stack_load, 6)
+        EncodingRecipeBuilder::new("spaddr_id", &formats.stack_load, 6)
             .operands_out(vec![gpr])
             .emit(
                 r#"
@@ -2871,12 +2874,12 @@ pub(crate) fn define<'shared>(
 
     {
         let has_small_offset =
-            InstructionPredicate::new_is_signed_int(&*formats.binary_imm, "imm", 8, 0);
+            InstructionPredicate::new_is_signed_int(&*formats.binary_imm64, "imm", 8, 0);
 
         // XX /n, MI form with imm8.
         recipes.add_template(
             Template::new(
-                EncodingRecipeBuilder::new("rcmp_ib", &formats.binary_imm, 2)
+                EncodingRecipeBuilder::new("rcmp_ib", &formats.binary_imm64, 2)
                     .operands_in(vec![gpr])
                     .operands_out(vec![reg_rflags])
                     .inst_predicate(has_small_offset)
@@ -2894,12 +2897,12 @@ pub(crate) fn define<'shared>(
         );
 
         let has_big_offset =
-            InstructionPredicate::new_is_signed_int(&*formats.binary_imm, "imm", 32, 0);
+            InstructionPredicate::new_is_signed_int(&*formats.binary_imm64, "imm", 32, 0);
 
         // XX /n, MI form with imm32.
         recipes.add_template(
             Template::new(
-                EncodingRecipeBuilder::new("rcmp_id", &formats.binary_imm, 5)
+                EncodingRecipeBuilder::new("rcmp_id", &formats.binary_imm64, 5)
                     .operands_in(vec![gpr])
                     .operands_out(vec![reg_rflags])
                     .inst_predicate(has_big_offset)

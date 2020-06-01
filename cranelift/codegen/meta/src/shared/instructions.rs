@@ -559,9 +559,9 @@ fn define_simd_lane_access(
         The lane index, ``Idx``, is an immediate value, not an SSA value. It
         must indicate a valid lane index for the type of ``x``.
         "#,
-            &formats.insert_lane,
+            &formats.ternary_imm8,
         )
-        .operands_in(vec![x, Idx, y])
+        .operands_in(vec![x, y, Idx])
         .operands_out(vec![a]),
     );
 
@@ -579,7 +579,7 @@ fn define_simd_lane_access(
         may or may not be zeroed depending on the ISA but the type system should prevent using
         ``a`` as anything other than the extracted value.
         "#,
-            &formats.extract_lane,
+            &formats.binary_imm8,
         )
         .operands_in(vec![x, Idx])
         .operands_out(vec![a]),
@@ -2215,7 +2215,7 @@ pub(crate) fn define(
         Like `icmp_imm`, but returns integer CPU flags instead of testing
         a specific condition code.
         "#,
-            &formats.binary_imm,
+            &formats.binary_imm64,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![f]),
@@ -2460,7 +2460,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
-            &formats.binary_imm,
+            &formats.binary_imm64,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2475,7 +2475,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
-            &formats.binary_imm,
+            &formats.binary_imm64,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2489,7 +2489,7 @@ pub(crate) fn define(
 
         This operation traps if the divisor is zero.
         "#,
-            &formats.binary_imm,
+            &formats.binary_imm64,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2505,7 +2505,7 @@ pub(crate) fn define(
         representable in `B` bits two's complement. This only happens
         when `x = -2^{B-1}, Y = -1`.
         "#,
-            &formats.binary_imm,
+            &formats.binary_imm64,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2519,7 +2519,7 @@ pub(crate) fn define(
 
         This operation traps if the divisor is zero.
         "#,
-            &formats.binary_imm,
+            &formats.binary_imm64,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2533,7 +2533,7 @@ pub(crate) fn define(
 
         This operation traps if the divisor is zero.
         "#,
-            &formats.binary_imm,
+            &formats.binary_imm64,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2552,7 +2552,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
-            &formats.binary_imm,
+            &formats.binary_imm64,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2952,7 +2952,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
-            &formats.binary_imm,
+            &formats.binary_imm64,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2969,7 +2969,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
-            &formats.binary_imm,
+            &formats.binary_imm64,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -2986,7 +2986,7 @@ pub(crate) fn define(
         Polymorphic over all scalar integer types, but does not support vector
         types.
         "#,
-            &formats.binary_imm,
+            &formats.binary_imm64,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -3031,7 +3031,7 @@ pub(crate) fn define(
             r#"
         Rotate left by immediate.
         "#,
-            &formats.binary_imm,
+            &formats.binary_imm64,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -3043,7 +3043,7 @@ pub(crate) fn define(
             r#"
         Rotate right by immediate.
         "#,
-            &formats.binary_imm,
+            &formats.binary_imm64,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -3118,7 +3118,7 @@ pub(crate) fn define(
 
         The shift amount is masked to the size of ``x``.
         "#,
-            &formats.binary_imm,
+            &formats.binary_imm64,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -3132,7 +3132,7 @@ pub(crate) fn define(
 
         The shift amount is masked to the size of the register.
         "#,
-            &formats.binary_imm,
+            &formats.binary_imm64,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),
@@ -3146,7 +3146,7 @@ pub(crate) fn define(
 
         The shift amount is masked to the size of the register.
         "#,
-            &formats.binary_imm,
+            &formats.binary_imm64,
         )
         .operands_in(vec![x, Y])
         .operands_out(vec![a]),

@@ -1,0 +1,14 @@
+test binemit
+test run
+
+target x86_64
+
+function u0:323() -> b1 {
+block0:
+    [-,%rax] v221 = bconst.b1 false   ; bin: 40 b8 00000000
+    [-,%rcx] v222 = bconst.b1 true    ; bin: 40 b9 00000001
+    [-,%rax] v223 = bnot v221         ; bin: 40 f7 d0
+    [-,%rax] v224 = band v223, v222   ; bin: 40 21 c8
+    return v224
+}
+; run

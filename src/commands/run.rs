@@ -162,8 +162,6 @@ impl RunCommand {
                 // a message and exit.
                 if let Some(trap) = e.downcast_ref::<Trap>() {
                     // Print the error message in the usual way.
-                    eprintln!("Error: {:?}", e);
-
                     if let Some(status) = trap.i32_exit_status() {
                         // On Windows, exit status 3 indicates an abort (see below),
                         // so return 1 indicating a non-zero status to avoid ambiguity.
@@ -172,6 +170,8 @@ impl RunCommand {
                         }
                         process::exit(status);
                     }
+
+                    eprintln!("Error: {:?}", e);
 
                     // If the program exited because of a trap, return an error code
                     // to the outside environment indicating a more severe problem

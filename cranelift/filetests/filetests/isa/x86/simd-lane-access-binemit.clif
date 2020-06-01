@@ -10,7 +10,7 @@ block0:
 [-, %rax]   v0 = bconst.b8 true
 [-, %rbx]   v1 = bconst.b8 false
 [-, %xmm0]  v2 = splat.b8x16 v0
-[-, %xmm0]  v3 = x86_pinsr v2, 10, v1    ; bin: 66 0f 3a 20 c3 0a
+[-, %xmm0]  v3 = x86_pinsr v2, v1, 10    ; bin: 66 0f 3a 20 c3 0a
             return
 }
 
@@ -19,7 +19,7 @@ block0:
 [-, %rax]   v0 = iconst.i16 4
 [-, %rbx]   v1 = iconst.i16 5
 [-, %xmm1]  v2 = splat.i16x8 v0
-[-, %xmm1]  v3 = x86_pinsr v2, 4, v1    ; bin: 66 0f c4 cb 04
+[-, %xmm1]  v3 = x86_pinsr v2, v1, 4    ; bin: 66 0f c4 cb 04
             return
 }
 
@@ -28,7 +28,7 @@ block0:
 [-, %rax]   v0 = iconst.i32 42
 [-, %rbx]   v1 = iconst.i32 99
 [-, %xmm4]  v2 = splat.i32x4 v0
-[-, %xmm4]  v3 = x86_pinsr v2, 2, v1    ; bin: 66 0f 3a 22 e3 02
+[-, %xmm4]  v3 = x86_pinsr v2, v1, 2    ; bin: 66 0f 3a 22 e3 02
             return
 }
 
@@ -37,7 +37,7 @@ block0:
 [-, %rax]   v0 = bconst.b64 true
 [-, %rbx]   v1 = bconst.b64 false
 [-, %xmm2]  v2 = splat.b64x2 v0
-[-, %xmm2]  v3 = x86_pinsr v2, 1, v1    ; bin: 66 48 0f 3a 22 d3 01
+[-, %xmm2]  v3 = x86_pinsr v2, v1, 1    ; bin: 66 48 0f 3a 22 d3 01
             return
 }
 

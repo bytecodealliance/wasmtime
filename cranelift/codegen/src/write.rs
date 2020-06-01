@@ -508,7 +508,8 @@ pub fn write_operands(
             constant_handle, ..
         } => write!(w, " {}", constant_handle),
         Binary { args, .. } => write!(w, " {}, {}", args[0], args[1]),
-        BinaryImm { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
+        BinaryImm8 { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
+        BinaryImm64 { arg, imm, .. } => write!(w, " {}, {}", arg, imm),
         Ternary { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
         MultiAry { ref args, .. } => {
             if args.is_empty() {
@@ -518,8 +519,7 @@ pub fn write_operands(
             }
         }
         NullAry { .. } => write!(w, " "),
-        InsertLane { lane, args, .. } => write!(w, " {}, {}, {}", args[0], lane, args[1]),
-        ExtractLane { lane, arg, .. } => write!(w, " {}, {}", arg, lane),
+        TernaryImm8 { imm, args, .. } => write!(w, " {}, {}, {}", args[0], args[1], imm),
         Shuffle { mask, args, .. } => {
             let data = dfg.immediates.get(mask).expect(
                 "Expected the shuffle mask to already be inserted into the immediates table",

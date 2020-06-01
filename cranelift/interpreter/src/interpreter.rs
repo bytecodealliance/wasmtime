@@ -12,7 +12,7 @@ use cranelift_codegen::ir::{
 };
 use cranelift_reader::{DataValue, DataValueCastFailure};
 use log::trace;
-use std::ops::{Add, Sub};
+use std::ops::{Add, Div, Mul, Sub};
 use thiserror::Error;
 
 /// The valid control flow states.
@@ -150,20 +150,26 @@ impl Interpreter {
                 let arg1 = frame.get(&args[0]);
                 let arg2 = frame.get(&args[1]);
                 let result = match opcode {
-                    Iadd => binary_op!(Add::add[arg1, arg2]; [I8, I16, I32, I64, F32, F64]; inst),
-                    Isub => binary_op!(Sub::sub[arg1, arg2]; [I8, I16, I32, I64, F32, F64]; inst),
+                    Iadd => binary_op!(Add::add[arg1, arg2]; [I8, I16, I32, I64]; inst),
+                    Isub => binary_op!(Sub::sub[arg1, arg2]; [I8, I16, I32, I64]; inst),
+                    Imul => binary_op!(Mul::mul[arg1, arg2]; [I8, I16, I32, I64]; inst),
+                    Fadd => binary_op!(Add::add[arg1, arg2]; [F32, F64]; inst),
+                    Fsub => binary_op!(Sub::sub[arg1, arg2]; [F32, F64]; inst),
+                    Fmul => binary_op!(Mul::mul[arg1, arg2]; [F32, F64]; inst),
+                    Fdiv => binary_op!(Div::div[arg1, arg2]; [F32, F64]; inst),
                     _ => unimplemented!("interpreter does not support opcode yet: {}", opcode),
                 }?;
                 frame.set(first_result(frame.function, inst), result);
                 Ok(Continue)
             }
 
-            BinaryImm { opcode, arg, imm } => {
+            BinaryImm64 { opcode, arg, imm } => {
                 let imm = DataValue::from_integer(*imm, type_of(*arg, frame.function))?;
                 let arg = frame.get(&arg);
                 let result = match opcode {
-                    IaddImm => binary_op!(Add::add[arg, imm]; [I8, I16, I32, I64, F32, F64]; inst),
-                    IrsubImm => binary_op!(Sub::sub[arg, imm]; [I8, I16, I32, I64, F32, F64]; inst),
+                    IaddImm => binary_op!(Add::add[arg, imm]; [I8, I16, I32, I64]; inst),
+                    IrsubImm => binary_op!(Sub::sub[imm, arg]; [I8, I16, I32, I64]; inst),
+                    ImulImm => binary_op!(Mul::mul[arg, imm]; [I8, I16, I32, I64]; inst),
                     _ => unimplemented!("interpreter does not support opcode yet: {}", opcode),
                 }?;
                 frame.set(first_result(frame.function, inst), result);
@@ -349,9 +355,9 @@ mod tests {
     fn sanity() {
         let code = "function %test() -> b1 {
         block0:
-            v0 = iconst.i32 40
-            v1 = iadd_imm v0, 3
-            v2 = irsub_imm v1, 1
+            v0 = iconst.i32 1
+            v1 = iadd_imm v0, 1
+            v2 = irsub_imm v1, 44  ; 44 - 2 == 42 (see irsub_imm's semantics)
             v3 = icmp_imm eq v2, 42
             return v3
         }";

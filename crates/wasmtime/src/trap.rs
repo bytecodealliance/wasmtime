@@ -20,6 +20,9 @@ enum TrapReason {
 
     /// An `i32` exit status describing an explicit program exit.
     I32Exit(i32),
+
+    /// A structured error describing a trap.
+    Error(Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl fmt::Display for TrapReason {
@@ -27,6 +30,7 @@ impl fmt::Display for TrapReason {
         match self {
             TrapReason::Message(s) => write!(f, "{}", s),
             TrapReason::I32Exit(status) => write!(f, "Exited with i32 exit status {}", status),
+            TrapReason::Error(e) => write!(f, "{}", e),
         }
     }
 }
@@ -46,11 +50,12 @@ impl Trap {
     /// # Example
     /// ```
     /// let trap = wasmtime::Trap::new("unexpected error");
-    /// assert_eq!("unexpected error", trap.message());
+    /// assert!(trap.to_string().contains("unexpected error"));
     /// ```
     pub fn new<I: Into<String>>(message: I) -> Self {
         let info = FRAME_INFO.read().unwrap();
-        Trap::new_with_trace(&info, None, message.into(), Backtrace::new_unresolved())
+        let reason = TrapReason::Message(message.into());
+        Trap::new_with_trace(&info, None, reason, Backtrace::new_unresolved())
     }
 
     /// Creates a new `Trap` representing an explicit program exit with a classic `i32`
@@ -68,19 +73,7 @@ impl Trap {
     pub(crate) fn from_runtime(runtime_trap: wasmtime_runtime::Trap) -> Self {
         let info = FRAME_INFO.read().unwrap();
         match runtime_trap {
-            wasmtime_runtime::Trap::User(error) => {
-                // Since we're the only one using the wasmtime internals (in
-                // theory) we should only see user errors which were originally
-                // created from our own `Trap` type (see the trampoline module
-                // with functions).
-                //
-                // If this unwrap trips for someone we'll need to tweak the
-                // return type of this function to probably be `anyhow::Error`
-                // or something like that.
-                *error
-                    .downcast()
-                    .expect("only `Trap` user errors are supported")
-            }
+            wasmtime_runtime::Trap::User(error) => Trap::from(error),
             wasmtime_runtime::Trap::Jit {
                 pc,
                 backtrace,
@@ -100,7 +93,8 @@ impl Trap {
                 backtrace,
             } => Trap::new_wasm(&info, None, trap_code, backtrace),
             wasmtime_runtime::Trap::OOM { backtrace } => {
-                Trap::new_with_trace(&info, None, "out of memory".to_string(), backtrace)
+                let reason = TrapReason::Message("out of memory".to_string());
+                Trap::new_with_trace(&info, None, reason, backtrace)
             }
         }
     }
@@ -125,14 +119,14 @@ impl Trap {
             Interrupt => "interrupt",
             User(_) => unreachable!(),
         };
-        let msg = format!("wasm trap: {}", desc);
+        let msg = TrapReason::Message(format!("wasm trap: {}", desc));
         Trap::new_with_trace(info, trap_pc, msg, backtrace)
     }
 
     fn new_with_trace(
         info: &GlobalFrameInfo,
         trap_pc: Option<usize>,
-        message: String,
+        reason: TrapReason,
         native_trace: Backtrace,
     ) -> Self {
         let mut wasm_trace = Vec::new();
@@ -158,21 +152,10 @@ impl Trap {
         }
         Trap {
             inner: Arc::new(TrapInner {
-                reason: TrapReason::Message(message),
+                reason,
                 wasm_trace,
                 native_trace,
             }),
-        }
-    }
-
-    /// Returns a reference the `message` stored in `Trap`.
-    ///
-    /// In the case of an explicit exit, the exit status can be obtained by
-    /// calling `i32_exit_status`.
-    pub fn message(&self) -> &str {
-        match &self.inner.reason {
-            TrapReason::Message(message) => message,
-            TrapReason::I32Exit(_) => "explicitly exited",
         }
     }
 
@@ -226,4 +209,30 @@ impl fmt::Display for Trap {
     }
 }
 
-impl std::error::Error for Trap {}
+impl std::error::Error for Trap {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match &self.inner.reason {
+            TrapReason::Error(e) => e.source(),
+            TrapReason::I32Exit(_) | TrapReason::Message(_) => None,
+        }
+    }
+}
+
+impl From<anyhow::Error> for Trap {
+    fn from(e: anyhow::Error) -> Trap {
+        Box::<dyn std::error::Error + Send + Sync>::from(e).into()
+    }
+}
+
+impl From<Box<dyn std::error::Error + Send + Sync>> for Trap {
+    fn from(e: Box<dyn std::error::Error + Send + Sync>) -> Trap {
+        // If the top-level error is already a trap, don't be redundant and just return it.
+        if let Some(trap) = e.downcast_ref::<Trap>() {
+            trap.clone()
+        } else {
+            let info = FRAME_INFO.read().unwrap();
+            let reason = TrapReason::Error(e.into());
+            Trap::new_with_trace(&info, None, reason, Backtrace::new_unresolved())
+        }
+    }
+}

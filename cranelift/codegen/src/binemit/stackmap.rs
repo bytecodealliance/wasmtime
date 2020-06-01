@@ -15,7 +15,8 @@ const NUM_BITS: usize = core::mem::size_of::<Num>() * 8;
 /// The first value in the bitmap is of the lowest addressed slot on the stack.
 /// As all stacks in Isa's supported by Cranelift grow down, this means that
 /// first value is of the top of the stack and values proceed down the stack.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Stackmap {
     bitmap: Vec<BitSet<Num>>,
     mapped_words: u32,
