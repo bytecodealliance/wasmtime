@@ -83,3 +83,35 @@ block0(v0:i64x2, v1:i64x2):
     ; nextln: v2 = iadd v9, v8
     return
 }
+
+function %fmin_f32x4(f32x4, f32x4) {
+block0(v0:f32x4, v1:f32x4):
+    v2 = fmin v0, v1
+    ; check: v3 = x86_fmin v0, v1
+    ; nextln: v4 = x86_fmin v1, v0
+    ; nextln: v5 = bor v4, v3
+    ; nextln: v6 = fcmp uno v3, v5
+    ; nextln: v7 = raw_bitcast.f32x4 v6
+    ; nextln: v8 = bor v5, v7
+    ; nextln: v9 = raw_bitcast.i32x4 v7
+    ; nextln: v10 = ushr_imm v9, 10
+    ; nextln: v11 = raw_bitcast.f32x4 v10
+    ; nextln: v2 = band_not v8, v11
+    return
+}
+
+function %fmax_f64x2(f64x2, f64x2) {
+block0(v0:f64x2, v1:f64x2):
+    v2 = fmax v0, v1
+    ; check: v3 = x86_fmax v0, v1
+    ; nextln: v4 = x86_fmax v1, v0
+    ; nextln: v5 = bxor v3, v4
+    ; nextln: v6 = bor v4, v5
+    ; nextln: v7 = fsub v6, v5
+    ; nextln: v8 = fcmp uno v5, v7
+    ; nextln: v9 = raw_bitcast.i64x2 v8
+    ; nextln: v10 = ushr_imm v9, 13
+    ; nextln: v11 = raw_bitcast.f64x2 v10
+    ; nextln: v2 = band_not v7, v11
+    return
+}
