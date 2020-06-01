@@ -1064,33 +1064,33 @@ mod tests {
             .cache_config_load(&config_path)?;
         let engine = Engine::new(&cfg);
         Module::new(&engine, "(module (func))")?;
-        assert_eq!(engine.config.cache_config.cache_hits(), 0);
-        assert_eq!(engine.config.cache_config.cache_misses(), 1);
+        assert_eq!(engine.config().cache_config.cache_hits(), 0);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
         Module::new(&engine, "(module (func))")?;
-        assert_eq!(engine.config.cache_config.cache_hits(), 1);
-        assert_eq!(engine.config.cache_config.cache_misses(), 1);
+        assert_eq!(engine.config().cache_config.cache_hits(), 1);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
 
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::Speed)
             .cache_config_load(&config_path)?;
         let engine = Engine::new(&cfg);
         Module::new(&engine, "(module (func))")?;
-        assert_eq!(engine.config.cache_config.cache_hits(), 0);
-        assert_eq!(engine.config.cache_config.cache_misses(), 1);
+        assert_eq!(engine.config().cache_config.cache_hits(), 0);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
         Module::new(&engine, "(module (func))")?;
-        assert_eq!(engine.config.cache_config.cache_hits(), 1);
-        assert_eq!(engine.config.cache_config.cache_misses(), 1);
+        assert_eq!(engine.config().cache_config.cache_hits(), 1);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
 
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::SpeedAndSize)
             .cache_config_load(&config_path)?;
         let engine = Engine::new(&cfg);
         Module::new(&engine, "(module (func))")?;
-        assert_eq!(engine.config.cache_config.cache_hits(), 0);
-        assert_eq!(engine.config.cache_config.cache_misses(), 1);
+        assert_eq!(engine.config().cache_config.cache_hits(), 0);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
         Module::new(&engine, "(module (func))")?;
-        assert_eq!(engine.config.cache_config.cache_hits(), 1);
-        assert_eq!(engine.config.cache_config.cache_misses(), 1);
+        assert_eq!(engine.config().cache_config.cache_hits(), 1);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
 
         // FIXME(#1523) need debuginfo on aarch64 before we run this test there
         if !cfg!(target_arch = "aarch64") {
@@ -1098,11 +1098,11 @@ mod tests {
             cfg.debug_info(true).cache_config_load(&config_path)?;
             let engine = Engine::new(&cfg);
             Module::new(&engine, "(module (func))")?;
-            assert_eq!(engine.config.cache_config.cache_hits(), 0);
-            assert_eq!(engine.config.cache_config.cache_misses(), 1);
+            assert_eq!(engine.config().cache_config.cache_hits(), 0);
+            assert_eq!(engine.config().cache_config.cache_misses(), 1);
             Module::new(&engine, "(module (func))")?;
-            assert_eq!(engine.config.cache_config.cache_hits(), 1);
-            assert_eq!(engine.config.cache_config.cache_misses(), 1);
+            assert_eq!(engine.config().cache_config.cache_hits(), 1);
+            assert_eq!(engine.config().cache_config.cache_misses(), 1);
         }
 
         Ok(())
