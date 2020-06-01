@@ -529,7 +529,7 @@ impl Module {
         if let Some(info) = &*info {
             return info.clone();
         }
-        let ret = super::frame_info::register(self.compiled.clone()).map(Arc::new);
+        let ret = super::frame_info::register(&self.compiled).map(Arc::new);
         *info = Some(ret.clone());
         return ret;
     }

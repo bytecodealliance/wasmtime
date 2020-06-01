@@ -4,7 +4,7 @@ use std::sync::{Arc, RwLock};
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::ir;
 use wasmtime_environ::wasm::FuncIndex;
-use wasmtime_environ::{FunctionAddressMap, TrapInformation};
+use wasmtime_environ::{FunctionAddressMap, Module, TrapInformation};
 use wasmtime_jit::CompiledModule;
 
 lazy_static::lazy_static! {
@@ -41,7 +41,9 @@ pub struct GlobalFrameInfoRegistration {
 struct ModuleFrameInfo {
     start: usize,
     functions: BTreeMap<usize, FunctionInfo>,
-    module: Arc<CompiledModule>,
+    module: Arc<Module>,
+    #[allow(dead_code)]
+    module_code: Arc<dyn std::any::Any + Send + Sync>,
 }
 
 struct FunctionInfo {
@@ -101,9 +103,9 @@ impl GlobalFrameInfo {
             None => func.instr_map.start_srcloc,
         };
         Some(FrameInfo {
-            module_name: module.module.module().name.clone(),
+            module_name: module.module.name.clone(),
             func_index: func.index.index() as u32,
-            func_name: module.module.module().func_names.get(&func.index).cloned(),
+            func_name: module.module.func_names.get(&func.index).cloned(),
             instr,
             func_start: func.instr_map.start_srcloc,
         })
@@ -146,7 +148,7 @@ impl Drop for GlobalFrameInfoRegistration {
 /// compiled functions within `module`. If the `module` has no functions
 /// then `None` will be returned. Otherwise the returned object, when
 /// dropped, will be used to unregister all name information from this map.
-pub fn register(module: Arc<CompiledModule>) -> Option<GlobalFrameInfoRegistration> {
+pub fn register(module: &CompiledModule) -> Option<GlobalFrameInfoRegistration> {
     let mut min = usize::max_value();
     let mut max = 0;
     let mut functions = BTreeMap::new();
@@ -191,7 +193,8 @@ pub fn register(module: Arc<CompiledModule>) -> Option<GlobalFrameInfoRegistrati
         ModuleFrameInfo {
             start: min,
             functions,
-            module: module.clone(),
+            module: module.module().clone(),
+            module_code: module.code().clone(),
         },
     );
     assert!(prev.is_none());

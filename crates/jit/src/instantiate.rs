@@ -23,8 +23,8 @@ use wasmtime_environ::{
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::VMInterrupts;
 use wasmtime_runtime::{
-    GdbJitImageRegistration, InstanceContext, InstanceHandle, InstantiationError,
-    RuntimeMemoryCreator, SignatureRegistry, VMFunctionBody, VMTrampoline,
+    GdbJitImageRegistration, InstanceHandle, InstantiationError, RuntimeMemoryCreator,
+    SignatureRegistry, VMFunctionBody, VMTrampoline,
 };
 
 /// An error condition while setting up a wasm instance, be it validation,
@@ -54,23 +54,22 @@ struct FinishedFunctions(BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>);
 unsafe impl Send for FinishedFunctions {}
 unsafe impl Sync for FinishedFunctions {}
 
+/// Container for data needed for an Instance function to exist.
+pub struct ModuleCode {
+    code_memory: CodeMemory,
+    #[allow(dead_code)]
+    dbg_jit_registration: Option<GdbJitImageRegistration>,
+}
+
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
-    code_memory: CodeMemory,
-    module: Module,
+    module: Arc<Module>,
+    code: Arc<ModuleCode>,
     finished_functions: FinishedFunctions,
     trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
     data_initializers: Box<[OwnedDataInitializer]>,
-    #[allow(dead_code)]
-    dbg_jit_registration: Option<GdbJitImageRegistration>,
     traps: Traps,
     address_transform: ModuleAddressMap,
-}
-
-impl InstanceContext for CompiledModule {
-    fn module(&self) -> &Module {
-        &self.module
-    }
 }
 
 impl CompiledModule {
@@ -129,12 +128,14 @@ impl CompiledModule {
             FinishedFunctions(compilation.finished_functions.into_boxed_slice());
 
         Ok(Self {
-            code_memory,
-            module,
+            module: Arc::new(module),
+            code: Arc::new(ModuleCode {
+                code_memory,
+                dbg_jit_registration,
+            }),
             finished_functions,
             trampolines: compilation.trampolines,
             data_initializers,
-            dbg_jit_registration,
             traps: compilation.traps,
             address_transform: compilation.address_transform,
         })
@@ -177,7 +178,8 @@ impl CompiledModule {
 
         let imports = resolve_imports(module.module(), signature_registry, resolver)?;
         InstanceHandle::new(
-            module,
+            module.module.clone(),
+            module.code.clone(),
             finished_functions,
             trampolines,
             imports,
@@ -200,13 +202,13 @@ impl CompiledModule {
     }
 
     /// Return a reference to a module.
-    pub fn module(&self) -> &Module {
+    pub fn module(&self) -> &Arc<Module> {
         &self.module
     }
 
     /// Return a reference to a module.
     pub fn module_mut(&mut self) -> &mut Module {
-        &mut self.module
+        Arc::get_mut(&mut self.module).unwrap()
     }
 
     /// Returns the map of all finished JIT functions compiled for this module
@@ -226,7 +228,12 @@ impl CompiledModule {
 
     /// Returns all ranges convered by JIT code.
     pub fn jit_code_ranges<'a>(&'a self) -> impl Iterator<Item = (usize, usize)> + 'a {
-        self.code_memory.published_ranges()
+        self.code.code_memory.published_ranges()
+    }
+
+    /// Returns module's JIT code.
+    pub fn code(&self) -> &Arc<ModuleCode> {
+        &self.code
     }
 }
 

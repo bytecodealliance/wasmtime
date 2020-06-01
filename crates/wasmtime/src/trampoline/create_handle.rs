@@ -10,16 +10,8 @@ use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::Module;
 use wasmtime_runtime::{
-    Imports, InstanceContext, InstanceHandle, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
+    Imports, InstanceHandle, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
 };
-
-struct ModuleWrapper(Module);
-
-impl InstanceContext for ModuleWrapper {
-    fn module(&self) -> &Module {
-        &self.0
-    }
-}
 
 pub(crate) fn create_handle(
     module: Module,
@@ -45,7 +37,8 @@ pub(crate) fn create_handle(
 
     unsafe {
         let handle = InstanceHandle::new(
-            Arc::new(ModuleWrapper(module)),
+            Arc::new(module),
+            Arc::new(()),
             finished_functions.into_boxed_slice(),
             trampolines,
             imports,

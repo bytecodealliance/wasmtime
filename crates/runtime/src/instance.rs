@@ -30,19 +30,16 @@ use wasmtime_environ::wasm::{
 };
 use wasmtime_environ::{ir, DataInitializer, EntityIndex, Module, TableElements, VMOffsets};
 
-/// Trait that exposes required instance resources.
-pub trait InstanceContext {
-    /// Returns Module module.
-    fn module(&self) -> &Module;
-}
-
 /// A WebAssembly instance.
 ///
 /// This is repr(C) to ensure that the vmctx field is last.
 #[repr(C)]
 pub(crate) struct Instance {
-    /// The `ModuleGrip` this `Instance` was instantiated from.
-    context: Arc<dyn InstanceContext>,
+    /// The `Module` this `Instance` was instantiated from.
+    module: Arc<Module>,
+
+    /// The module's JIT code (if exists).
+    code: Arc<dyn Any>,
 
     /// Offsets in the `vmctx` region.
     offsets: VMOffsets,
@@ -98,7 +95,7 @@ impl Instance {
     }
 
     pub(crate) fn module(&self) -> &Module {
-        self.context.module()
+        &self.module
     }
 
     /// Return a pointer to the `VMSharedSignatureIndex`s.
@@ -779,7 +776,8 @@ impl InstanceHandle {
     /// the `wasmtime` crate API rather than this type since that is vetted for
     /// safety.
     pub unsafe fn new(
-        context: Arc<dyn InstanceContext>,
+        module: Arc<Module>,
+        code: Arc<dyn Any>,
         finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
         trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
         imports: Imports,
@@ -788,7 +786,6 @@ impl InstanceHandle {
         host_state: Box<dyn Any>,
         interrupts: Arc<VMInterrupts>,
     ) -> Result<Self, InstantiationError> {
-        let module = context.module();
         let tables = create_tables(&module);
         let memories = create_memories(&module, mem_creator.unwrap_or(&DefaultMemoryCreator {}))?;
 
@@ -812,7 +809,8 @@ impl InstanceHandle {
 
         let handle = {
             let instance = Instance {
-                context,
+                module,
+                code,
                 offsets,
                 memories,
                 tables,
