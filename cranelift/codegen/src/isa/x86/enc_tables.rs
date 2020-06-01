@@ -596,6 +596,100 @@ fn expand_minmax(
     cfg.recompute_block(pos.func, done);
 }
 
+/// This legalization converts a minimum/maximum operation into a sequence that matches the
+/// non-x86-friendly WebAssembly semantics of NaN handling. This logic is kept separate from
+/// [expand_minmax] above (the scalar version) for code clarity.
+fn expand_minmax_vector(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    _isa: &dyn TargetIsa,
+) {
+    let ty = func.dfg.ctrl_typevar(inst);
+    debug_assert!(ty.is_vector());
+    let (x, y, x86_opcode, is_max) = match func.dfg[inst] {
+        ir::InstructionData::Binary {
+            opcode: ir::Opcode::Fmin,
+            args,
+        } => (args[0], args[1], ir::Opcode::X86Fmin, false),
+        ir::InstructionData::Binary {
+            opcode: ir::Opcode::Fmax,
+            args,
+        } => (args[0], args[1], ir::Opcode::X86Fmax, true),
+        _ => panic!("Expected fmin/fmax: {}", func.dfg.display_inst(inst, None)),
+    };
+
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    // This sequence is complex due to how x86 handles NaNs and +0/-0. If x86 finds a NaN in
+    // either lane it returns the second operand; likewise, if both operands are in {+0.0, -0.0}
+    // it returns the second operand. To match the behavior of "return the minimum of the
+    // operands or a canonical NaN if either operand is NaN," we must compare in both
+    // directions.
+    let (forward_inst, dfg) = pos.ins().Binary(x86_opcode, ty, x, y);
+    let forward = dfg.first_result(forward_inst);
+    let (backward_inst, dfg) = pos.ins().Binary(x86_opcode, ty, y, x);
+    let backward = dfg.first_result(backward_inst);
+
+    let (value, mask) = if is_max {
+        // For maximum:
+        // Find any differences between the forward and backward `max` operation.
+        let difference = pos.ins().bxor(forward, backward);
+        // Merge in the differences.
+        let propagate_nans_and_plus_zero = pos.ins().bor(backward, difference);
+        let value = pos.ins().fsub(propagate_nans_and_plus_zero, difference);
+        // Discover which lanes have NaNs in them.
+        let find_nan_lanes_mask = pos.ins().fcmp(FloatCC::Unordered, difference, value);
+        (value, find_nan_lanes_mask)
+    } else {
+        // For minimum:
+        // If either lane is a NaN, we want to use these bits, not the second operand bits.
+        let propagate_nans = pos.ins().bor(backward, forward);
+        // Find which lanes contain a NaN with an unordered comparison, filling the mask with
+        // 1s.
+        let find_nan_lanes_mask = pos.ins().fcmp(FloatCC::Unordered, forward, propagate_nans);
+        let bitcast_find_nan_lanes_mask = pos.ins().raw_bitcast(ty, find_nan_lanes_mask);
+        // Then flood the value lane with all 1s if that lane is a NaN. This causes all NaNs
+        // along this code path to be quieted and negative: after the upcoming shift and and_not,
+        // all upper bits (sign, exponent, and payload MSB) will be 1s.
+        let tmp = pos.ins().bor(propagate_nans, bitcast_find_nan_lanes_mask);
+        (tmp, bitcast_find_nan_lanes_mask)
+    };
+
+    // During this lowering we will need to know how many bits to shift by and what type to
+    // convert to when using an integer shift. Recall that an IEEE754 number looks like:
+    // `[sign bit] [exponent bits] [significand bits]`
+    // A quiet NaN has all exponent bits set to 1 and the most significant bit of the
+    // significand set to 1; a signaling NaN has the same exponent but the MSB of the
+    // significand is set to 0. The payload of the NaN is the remaining significand bits, and
+    // WebAssembly assumes a canonical NaN is quiet and has 0s in its payload. To compute this
+    // canonical NaN, we create a mask for the top 10 bits on F32X4 (1 sign + 8 exp. + 1 MSB
+    // sig.) and the top 13 bits on F64X2 (1 sign + 11 exp. + 1 MSB sig.). This means that all
+    // NaNs produced with the mask will be negative (`-NaN`) which is allowed by the sign
+    // non-determinism in the spec: https://webassembly.github.io/spec/core/bikeshed/index.html#nan-propagation%E2%91%A0
+    let (shift_by, ty_as_int) = match ty {
+        F32X4 => (10, I32X4),
+        F64X2 => (13, I64X2),
+        _ => unimplemented!("this legalization only understands 128-bit floating point types"),
+    };
+
+    // In order to clear the NaN payload for canonical NaNs, we shift right the NaN lanes (all
+    // 1s) leaving 0s in the top bits. Remember that non-NaN lanes are all 0s so this has
+    // little effect.
+    let mask_as_int = pos.ins().raw_bitcast(ty_as_int, mask);
+    let shift_mask = pos.ins().ushr_imm(mask_as_int, shift_by);
+    let shift_mask_as_float = pos.ins().raw_bitcast(ty, shift_mask);
+
+    // Finally, we replace the value with `value & ~shift_mask`. For non-NaN lanes, this is
+    // equivalent to `... & 1111...` but for NaN lanes this will only have 1s in the top bits,
+    // clearing the payload.
+    pos.func
+        .dfg
+        .replace(inst)
+        .band_not(value, shift_mask_as_float);
+}
+
 /// x86 has no unsigned-to-float conversions. We handle the easy case of zero-extending i32 to
 /// i64 with a pattern, the rest needs more code.
 ///
