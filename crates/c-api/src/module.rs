@@ -1,8 +1,9 @@
+use crate::host_ref::HostRef;
 use crate::{handle_result, wasmtime_error_t};
 use crate::{wasm_byte_vec_t, wasm_exporttype_vec_t, wasm_importtype_vec_t};
 use crate::{wasm_exporttype_t, wasm_importtype_t, wasm_store_t};
 use std::ptr;
-use wasmtime::{HostRef, Module};
+use wasmtime::Module;
 
 #[repr(C)]
 #[derive(Clone)]

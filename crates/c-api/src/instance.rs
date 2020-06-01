@@ -1,9 +1,10 @@
+use crate::host_ref::HostRef;
 use crate::{wasm_extern_t, wasm_extern_vec_t, wasm_module_t, wasm_trap_t};
 use crate::{wasm_store_t, wasmtime_error_t, ExternHost};
 use anyhow::Result;
 use std::cell::RefCell;
 use std::ptr;
-use wasmtime::{Extern, HostRef, Instance, Store, Trap};
+use wasmtime::{Extern, Instance, Store, Trap};
 
 #[repr(C)]
 #[derive(Clone)]

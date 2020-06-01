@@ -1,3 +1,4 @@
+use crate::host_ref::HostRef;
 use crate::{wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t};
 use crate::{wasm_name_t, wasm_trap_t, wasmtime_error_t, ExternHost};
 use anyhow::anyhow;
@@ -5,7 +6,7 @@ use std::ffi::c_void;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::str;
-use wasmtime::{Caller, Extern, Func, HostRef, Trap};
+use wasmtime::{Caller, Extern, Func, Trap};
 
 #[derive(Clone)]
 #[repr(transparent)]

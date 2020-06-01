@@ -1,6 +1,7 @@
+use crate::host_ref::HostRef;
 use crate::{wasm_frame_vec_t, wasm_instance_t, wasm_name_t, wasm_store_t};
 use once_cell::unsync::OnceCell;
-use wasmtime::{HostRef, Store, Trap};
+use wasmtime::{Store, Trap};
 
 #[repr(C)]
 #[derive(Clone)]

@@ -1,5 +1,6 @@
+use crate::host_ref::HostRef;
 use crate::{wasm_extern_t, wasm_memorytype_t, wasm_store_t, ExternHost};
-use wasmtime::{HostRef, Memory};
+use wasmtime::Memory;
 
 #[derive(Clone)]
 #[repr(transparent)]

@@ -1,4 +1,5 @@
 //! The WASI embedding API definitions for Wasmtime.
+use crate::host_ref::HostRef;
 use crate::{wasm_extern_t, wasm_importtype_t, wasm_store_t, wasm_trap_t, ExternHost};
 use anyhow::Result;
 use std::collections::HashMap;
@@ -12,7 +13,7 @@ use wasi_common::{
     old::snapshot_0::WasiCtxBuilder as WasiSnapshot0CtxBuilder, preopen_dir,
     WasiCtxBuilder as WasiPreview1CtxBuilder,
 };
-use wasmtime::{HostRef, Linker, Store, Trap};
+use wasmtime::{Linker, Store, Trap};
 use wasmtime_wasi::{old::snapshot_0::Wasi as WasiSnapshot0, Wasi as WasiPreview1};
 
 unsafe fn cstr_to_path<'a>(path: *const c_char) -> Option<&'a Path> {

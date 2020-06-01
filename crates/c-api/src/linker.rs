@@ -1,8 +1,9 @@
+use crate::host_ref::HostRef;
 use crate::{bad_utf8, handle_result, wasmtime_error_t};
 use crate::{wasm_extern_t, wasm_store_t, ExternHost};
 use crate::{wasm_func_t, wasm_instance_t, wasm_module_t, wasm_name_t, wasm_trap_t};
 use std::str;
-use wasmtime::{Extern, HostRef, Linker};
+use wasmtime::{Extern, Linker};
 
 #[repr(C)]
 pub struct wasmtime_linker_t {

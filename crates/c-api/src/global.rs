@@ -1,7 +1,8 @@
+use crate::host_ref::HostRef;
 use crate::{handle_result, wasmtime_error_t};
 use crate::{wasm_extern_t, wasm_globaltype_t, wasm_store_t, wasm_val_t, ExternHost};
 use std::ptr;
-use wasmtime::{Global, HostRef};
+use wasmtime::Global;
 
 #[derive(Clone)]
 #[repr(transparent)]
