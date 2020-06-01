@@ -8,6 +8,7 @@ use std::cmp;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
@@ -736,7 +737,26 @@ pub(crate) struct StoreInner {
     compiler: RefCell<Compiler>,
     instances: RefCell<Vec<InstanceHandle>>,
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
-    host_info: RefCell<HashMap<VMExternRef, Rc<RefCell<dyn Any>>>>,
+    host_info: RefCell<HashMap<HostInfoKey, Rc<RefCell<dyn Any>>>>,
+}
+
+struct HostInfoKey(VMExternRef);
+
+impl PartialEq for HostInfoKey {
+    fn eq(&self, rhs: &Self) -> bool {
+        VMExternRef::eq(&self.0, &rhs.0)
+    }
+}
+
+impl Eq for HostInfoKey {}
+
+impl Hash for HostInfoKey {
+    fn hash<H>(&self, hasher: &mut H)
+    where
+        H: Hasher,
+    {
+        VMExternRef::hash(&self.0, hasher);
+    }
 }
 
 impl Store {
@@ -825,7 +845,7 @@ impl Store {
             "externref must be from this store"
         );
         let infos = self.inner.host_info.borrow();
-        infos.get(&externref.inner).cloned()
+        infos.get(&HostInfoKey(externref.inner.clone())).cloned()
     }
 
     pub(crate) fn set_host_info(
@@ -839,9 +859,9 @@ impl Store {
         );
         let mut infos = self.inner.host_info.borrow_mut();
         if let Some(info) = info {
-            infos.insert(externref.inner.clone(), info)
+            infos.insert(HostInfoKey(externref.inner.clone()), info)
         } else {
-            infos.remove(&externref.inner)
+            infos.remove(&HostInfoKey(externref.inner.clone()))
         }
     }
 

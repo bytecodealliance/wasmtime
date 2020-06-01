@@ -77,7 +77,7 @@ use std::alloc::Layout;
 use std::any::Any;
 use std::cell::UnsafeCell;
 use std::cmp::Ordering;
-use std::hash::{Hash, Hasher};
+use std::hash::Hasher;
 use std::mem;
 use std::ops::Deref;
 use std::ptr::{self, NonNull};
@@ -344,39 +344,43 @@ impl VMExternRef {
     }
 }
 
-impl PartialEq for VMExternRef {
+/// Methods that would normally be trait implementations, but aren't to avoid
+/// potential footguns around `VMExternRef`'s pointer-equality semantics.
+///
+/// Note that none of these methods are on `&self`, they all require a
+/// fully-qualified `VMExternRef::foo(my_ref)` invocation.
+impl VMExternRef {
+    /// Check whether two `VMExternRef`s point to the same inner allocation.
+    ///
+    /// Note that this uses pointer-equality semantics, not structural-equality
+    /// semantics, and so only pointers are compared, and doesn't use any `Eq`
+    /// or `PartialEq` implementation of the pointed-to values.
     #[inline]
-    fn eq(&self, rhs: &Self) -> bool {
-        ptr::eq(self.0.as_ptr() as *const _, rhs.0.as_ptr() as *const _)
+    pub fn eq(a: &Self, b: &Self) -> bool {
+        ptr::eq(a.0.as_ptr() as *const _, b.0.as_ptr() as *const _)
     }
-}
 
-impl Eq for VMExternRef {}
-
-impl Hash for VMExternRef {
+    /// Hash a given `VMExternRef`.
+    ///
+    /// Note that this just hashes the pointer to the inner value, it does *not*
+    /// use the inner value's `Hash` implementation (if any).
     #[inline]
-    fn hash<H>(&self, hasher: &mut H)
+    pub fn hash<H>(externref: &Self, hasher: &mut H)
     where
         H: Hasher,
     {
-        ptr::hash(self.0.as_ptr() as *const _, hasher);
+        ptr::hash(externref.0.as_ptr() as *const _, hasher);
     }
-}
 
-impl PartialOrd for VMExternRef {
+    /// Compare two `VMExternRef`s.
+    ///
+    /// Note that this uses pointer-equality semantics, not structural-equality
+    /// semantics, and so only pointers are compared, and doesn't use any `Cmp`
+    /// or `PartialCmp` implementation of the pointed-to values.
     #[inline]
-    fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
-        let a = self.0.as_ptr() as usize;
-        let b = rhs.0.as_ptr() as usize;
-        a.partial_cmp(&b)
-    }
-}
-
-impl Ord for VMExternRef {
-    #[inline]
-    fn cmp(&self, rhs: &Self) -> Ordering {
-        let a = self.0.as_ptr() as usize;
-        let b = rhs.0.as_ptr() as usize;
+    pub fn cmp(a: &Self, b: &Self) -> Ordering {
+        let a = a.0.as_ptr() as usize;
+        let b = b.0.as_ptr() as usize;
         a.cmp(&b)
     }
 }

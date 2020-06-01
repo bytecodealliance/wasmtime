@@ -48,7 +48,7 @@ impl ExternRef {
     /// This is *only* pointer equality, and does *not* run any inner value's
     /// `Eq` implementation.
     pub fn ptr_eq(&self, other: &ExternRef) -> bool {
-        self.inner == other.inner
+        VMExternRef::eq(&self.inner, &other.inner)
     }
 
     /// Returns the host information for this `externref`, if previously created
