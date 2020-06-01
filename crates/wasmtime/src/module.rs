@@ -23,6 +23,8 @@ use wasmtime_jit::CompiledModule;
 /// compiling the original wasm module only once with a single [`Module`]
 /// instance.
 ///
+/// The `Module` is threadsafe and safe to share accross threads.
+///
 /// ## Modules and `Clone`
 ///
 /// Using `clone` on a `Module` is a cheap operation. It will not create an
