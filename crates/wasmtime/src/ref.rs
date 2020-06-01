@@ -26,11 +26,6 @@ impl ExternRef {
         ExternRef { inner, store }
     }
 
-    /// Creates a `Null` reference.
-    pub fn null() -> Option<Self> {
-        None
-    }
-
     /// Get this reference's store.
     ///
     /// Returns `None` if this reference outlived its store.

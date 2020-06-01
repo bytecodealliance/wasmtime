@@ -63,7 +63,7 @@ macro_rules! accessors {
 impl Val {
     /// Returns a null `externref` value.
     pub fn null() -> Val {
-        Val::ExternRef(ExternRef::null())
+        Val::ExternRef(None)
     }
 
     /// Returns the corresponding [`ValType`] for this `Val`.
