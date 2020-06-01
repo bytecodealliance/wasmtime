@@ -718,6 +718,11 @@ impl Engine {
             config.tunables.clone(),
         )
     }
+
+    /// Returns whether the engine `a` and `b` refer to the same configuration.
+    pub fn same(a: &Engine, b: &Engine) -> bool {
+        Arc::ptr_eq(&a.config, &b.config)
+    }
 }
 
 impl Default for Engine {

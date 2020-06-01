@@ -1,5 +1,5 @@
 use crate::trampoline::StoreInstanceHandle;
-use crate::{Export, Extern, Func, Global, Memory, Module, Store, Table, Trap};
+use crate::{Engine, Export, Extern, Func, Global, Memory, Module, Store, Table, Trap};
 use anyhow::{bail, Error, Result};
 use std::any::Any;
 use std::mem;
@@ -181,6 +181,10 @@ impl Instance {
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     /// [`ExternType`]: crate::ExternType
     pub fn new(store: &Store, module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
+        if !Engine::same(store.engine(), module.engine()) {
+            bail!("cross-`Engine` instantiation is not currently supported");
+        }
+
         let info = module.register_frame_info();
         store.register_jit_code(module.compiled_module().jit_code_ranges());
 
