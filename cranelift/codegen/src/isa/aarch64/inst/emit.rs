@@ -8,7 +8,6 @@ use crate::isa::aarch64::inst::*;
 
 use regalloc::{Reg, RegClass, Writable};
 
-use alloc::vec::Vec;
 use core::convert::TryFrom;
 use log::debug;
 
@@ -24,7 +23,11 @@ pub fn memlabel_finalize(_insn_off: CodeOffset, label: &MemLabel) -> i32 {
 /// generic arbitrary stack offset) into real addressing modes, possibly by
 /// emitting some helper instructions that come immediately before the use
 /// of this amode.
-pub fn mem_finalize(insn_off: CodeOffset, mem: &MemArg, state: &EmitState) -> (Vec<Inst>, MemArg) {
+pub fn mem_finalize(
+    insn_off: CodeOffset,
+    mem: &MemArg,
+    state: &EmitState,
+) -> (SmallVec<[Inst; 4]>, MemArg) {
     match mem {
         &MemArg::SPOffset(off) | &MemArg::FPOffset(off) | &MemArg::NominalSPOffset(off) => {
             let basereg = match mem {
@@ -48,7 +51,7 @@ pub fn mem_finalize(insn_off: CodeOffset, mem: &MemArg, state: &EmitState) -> (V
 
             if let Some(simm9) = SImm9::maybe_from_i64(off) {
                 let mem = MemArg::Unscaled(basereg, simm9);
-                (vec![], mem)
+                (smallvec![], mem)
             } else {
                 let tmp = writable_spilltmp_reg();
                 let mut const_insts = Inst::load_constant(tmp, off as u64);
@@ -64,14 +67,16 @@ pub fn mem_finalize(insn_off: CodeOffset, mem: &MemArg, state: &EmitState) -> (V
                     extendop: ExtendOp::UXTX,
                 };
                 const_insts.push(add_inst);
-                (const_insts.to_vec(), MemArg::reg(tmp.to_reg()))
+                (const_insts, MemArg::reg(tmp.to_reg()))
             }
         }
+
         &MemArg::Label(ref label) => {
             let off = memlabel_finalize(insn_off, label);
-            (vec![], MemArg::Label(MemLabel::PCRel(off)))
+            (smallvec![], MemArg::Label(MemLabel::PCRel(off)))
         }
-        _ => (vec![], mem.clone()),
+
+        _ => (smallvec![], mem.clone()),
     }
 }
 
