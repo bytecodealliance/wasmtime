@@ -829,10 +829,14 @@ impl Store {
     }
 
     pub(crate) fn register_jit_code(&self, mut ranges: impl Iterator<Item = (usize, usize)>) {
+        // Checking of we already registered JIT code ranges by searching
+        // first range start.
         match ranges.next() {
             None => (),
             Some(first) => {
                 if !self.is_in_jit_code(first.0) {
+                    // The range is not registered -- add all ranges (including
+                    // first one) to the jit_code_ranges.
                     let mut jit_code_ranges = self.inner.jit_code_ranges.borrow_mut();
                     jit_code_ranges.push(first);
                     jit_code_ranges.extend(ranges);
