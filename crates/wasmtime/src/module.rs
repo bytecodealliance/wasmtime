@@ -309,7 +309,7 @@ impl Module {
         })
     }
 
-    pub(crate) fn compiled_module(&self) -> &Arc<CompiledModule> {
+    pub(crate) fn compiled_module(&self) -> &CompiledModule {
         &self.compiled
     }
 

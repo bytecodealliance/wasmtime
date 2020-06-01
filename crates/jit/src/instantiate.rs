@@ -151,7 +151,7 @@ impl CompiledModule {
     ///
     /// See `InstanceHandle::new`
     pub unsafe fn instantiate(
-        module: Arc<CompiledModule>,
+        &self,
         resolver: &mut dyn Resolver,
         signature_registry: &mut SignatureRegistry,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
@@ -160,8 +160,7 @@ impl CompiledModule {
     ) -> Result<InstanceHandle, InstantiationError> {
         // Compute indices into the shared signature table.
         let signatures = {
-            module
-                .module()
+            self.module
                 .local
                 .signatures
                 .values()
@@ -170,16 +169,16 @@ impl CompiledModule {
         };
 
         let mut trampolines = HashMap::new();
-        for (i, trampoline) in module.trampolines.iter() {
+        for (i, trampoline) in self.trampolines.iter() {
             trampolines.insert(signatures[i], trampoline.clone());
         }
 
-        let finished_functions = module.finished_functions.0.clone();
+        let finished_functions = self.finished_functions.0.clone();
 
-        let imports = resolve_imports(module.module(), signature_registry, resolver)?;
+        let imports = resolve_imports(&self.module, signature_registry, resolver)?;
         InstanceHandle::new(
-            module.module.clone(),
-            module.code.clone(),
+            self.module.clone(),
+            self.code.clone(),
             finished_functions,
             trampolines,
             imports,

@@ -173,7 +173,7 @@ impl Instance {
 
     /// Get a locally defined or imported memory.
     pub(crate) fn get_memory(&self, index: MemoryIndex) -> VMMemoryDefinition {
-        if let Some(defined_index) = self.module().local.defined_memory_index(index) {
+        if let Some(defined_index) = self.module.local.defined_memory_index(index) {
             self.memory(defined_index)
         } else {
             let import = self.imported_memory(index);
@@ -250,7 +250,7 @@ impl Instance {
 
     /// Lookup an export with the given name.
     pub fn lookup(&self, field: &str) -> Option<Export> {
-        let export = if let Some(export) = self.module().exports.get(field) {
+        let export = if let Some(export) = self.module.exports.get(field) {
             export.clone()
         } else {
             return None;
@@ -262,9 +262,9 @@ impl Instance {
     pub fn lookup_by_declaration(&self, export: &EntityIndex) -> Export {
         match export {
             EntityIndex::Function(index) => {
-                let signature = self.signature_id(self.module().local.functions[*index]);
+                let signature = self.signature_id(self.module.local.functions[*index]);
                 let (address, vmctx) =
-                    if let Some(def_index) = self.module().local.defined_func_index(*index) {
+                    if let Some(def_index) = self.module.local.defined_func_index(*index) {
                         (
                             self.finished_functions[def_index] as *const _,
                             self.vmctx_ptr(),
@@ -282,7 +282,7 @@ impl Instance {
             }
             EntityIndex::Table(index) => {
                 let (definition, vmctx) =
-                    if let Some(def_index) = self.module().local.defined_table_index(*index) {
+                    if let Some(def_index) = self.module.local.defined_table_index(*index) {
                         (self.table_ptr(def_index), self.vmctx_ptr())
                     } else {
                         let import = self.imported_table(*index);
@@ -291,13 +291,13 @@ impl Instance {
                 ExportTable {
                     definition,
                     vmctx,
-                    table: self.module().local.table_plans[*index].clone(),
+                    table: self.module.local.table_plans[*index].clone(),
                 }
                 .into()
             }
             EntityIndex::Memory(index) => {
                 let (definition, vmctx) =
-                    if let Some(def_index) = self.module().local.defined_memory_index(*index) {
+                    if let Some(def_index) = self.module.local.defined_memory_index(*index) {
                         (self.memory_ptr(def_index), self.vmctx_ptr())
                     } else {
                         let import = self.imported_memory(*index);
@@ -306,20 +306,19 @@ impl Instance {
                 ExportMemory {
                     definition,
                     vmctx,
-                    memory: self.module().local.memory_plans[*index].clone(),
+                    memory: self.module.local.memory_plans[*index].clone(),
                 }
                 .into()
             }
             EntityIndex::Global(index) => ExportGlobal {
-                definition: if let Some(def_index) =
-                    self.module().local.defined_global_index(*index)
+                definition: if let Some(def_index) = self.module.local.defined_global_index(*index)
                 {
                     self.global_ptr(def_index)
                 } else {
                     self.imported_global(*index).from
                 },
                 vmctx: self.vmctx_ptr(),
-                global: self.module().local.globals[*index],
+                global: self.module.local.globals[*index],
             }
             .into(),
         }
@@ -331,7 +330,7 @@ impl Instance {
     /// are export names, and the values are export declarations which can be
     /// resolved `lookup_by_declaration`.
     pub fn exports(&self) -> indexmap::map::Iter<String, EntityIndex> {
-        self.module().exports.iter()
+        self.module.exports.iter()
     }
 
     /// Return a reference to the custom state attached to this instance.
@@ -493,19 +492,19 @@ impl Instance {
             return VMCallerCheckedAnyfunc::default();
         }
 
-        let sig = self.module().local.functions[index];
+        let sig = self.module.local.functions[index];
         let type_index = self.signature_id(sig);
 
-        let (func_ptr, vmctx) =
-            if let Some(def_index) = self.module().local.defined_func_index(index) {
-                (
-                    self.finished_functions[def_index] as *const _,
-                    self.vmctx_ptr(),
-                )
-            } else {
-                let import = self.imported_function(index);
-                (import.body, import.vmctx)
-            };
+        let (func_ptr, vmctx) = if let Some(def_index) = self.module.local.defined_func_index(index)
+        {
+            (
+                self.finished_functions[def_index] as *const _,
+                self.vmctx_ptr(),
+            )
+        } else {
+            let import = self.imported_function(index);
+            (import.body, import.vmctx)
+        };
         VMCallerCheckedAnyfunc {
             func_ptr,
             type_index,
@@ -731,7 +730,7 @@ impl Instance {
     /// Get a table by index regardless of whether it is locally-defined or an
     /// imported, foreign table.
     pub(crate) fn get_table(&self, table_index: TableIndex) -> &Table {
-        if let Some(defined_table_index) = self.module().local.defined_table_index(table_index) {
+        if let Some(defined_table_index) = self.module.local.defined_table_index(table_index) {
             self.get_defined_table(defined_table_index)
         } else {
             self.get_foreign_table(table_index)
@@ -1076,7 +1075,7 @@ fn get_memory_init_start(init: &DataInitializer<'_>, instance: &Instance) -> usi
 
     if let Some(base) = init.location.base {
         let val = unsafe {
-            if let Some(def_index) = instance.module().local.defined_global_index(base) {
+            if let Some(def_index) = instance.module.local.defined_global_index(base) {
                 *instance.global(def_index).as_u32()
             } else {
                 *(*instance.imported_global(base).from).as_u32()
@@ -1145,7 +1144,7 @@ fn get_table_init_start(init: &TableElements, instance: &Instance) -> usize {
 
     if let Some(base) = init.base {
         let val = unsafe {
-            if let Some(def_index) = instance.module().local.defined_global_index(base) {
+            if let Some(def_index) = instance.module.local.defined_global_index(base) {
                 *instance.global(def_index).as_u32()
             } else {
                 *(*instance.imported_global(base).from).as_u32()

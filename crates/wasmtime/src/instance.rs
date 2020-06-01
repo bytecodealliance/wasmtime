@@ -3,7 +3,6 @@ use crate::{Engine, Export, Extern, Func, Global, Memory, Module, Store, Table, 
 use anyhow::{bail, Error, Result};
 use std::any::Any;
 use std::mem;
-use std::sync::Arc;
 use wasmtime_environ::EntityIndex;
 use wasmtime_jit::{CompiledModule, Resolver};
 use wasmtime_runtime::{InstantiationError, VMContext, VMFunctionBody};
@@ -22,7 +21,7 @@ impl Resolver for SimpleResolver<'_> {
 
 fn instantiate(
     store: &Store,
-    compiled_module: &Arc<CompiledModule>,
+    compiled_module: &CompiledModule,
     imports: &[Extern],
     host: Box<dyn Any>,
 ) -> Result<StoreInstanceHandle, Error> {
@@ -45,8 +44,7 @@ fn instantiate(
     let mut resolver = SimpleResolver { imports };
     let config = store.engine().config();
     let instance = unsafe {
-        let instance = CompiledModule::instantiate(
-            compiled_module.clone(),
+        let instance = compiled_module.instantiate(
             &mut resolver,
             &mut store.signatures_mut(),
             config.memory_creator.as_ref().map(|a| a as _),
