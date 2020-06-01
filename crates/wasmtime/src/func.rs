@@ -479,12 +479,7 @@ impl Func {
     pub fn ty(&self) -> FuncType {
         // Signatures should always be registered in the store's registry of
         // shared signatures, so we should be able to unwrap safely here.
-        let sig = self
-            .instance
-            .store
-            .signatures()
-            .lookup(self.export.signature)
-            .expect("failed to lookup signature");
+        let sig = self.instance.store.lookup_signature(self.export.signature);
 
         // This is only called with `Export::Function`, and since it's coming
         // from wasmtime_runtime itself we should support all the types coming
@@ -494,23 +489,13 @@ impl Func {
 
     /// Returns the number of parameters that this function takes.
     pub fn param_arity(&self) -> usize {
-        let sig = self
-            .instance
-            .store
-            .signatures()
-            .lookup(self.export.signature)
-            .expect("failed to lookup signature");
+        let sig = self.instance.store.lookup_signature(self.export.signature);
         sig.params.len() - 2 // skip the two vmctx leading parameters
     }
 
     /// Returns the number of results this function produces.
     pub fn result_arity(&self) -> usize {
-        let sig = self
-            .instance
-            .store
-            .signatures()
-            .lookup(self.export.signature)
-            .expect("failed to lookup signature");
+        let sig = self.instance.store.lookup_signature(self.export.signature);
         sig.returns.len()
     }
 

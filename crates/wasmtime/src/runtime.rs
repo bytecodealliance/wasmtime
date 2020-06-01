@@ -10,12 +10,12 @@ use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use wasmparser::{OperatorValidatorConfig, ValidatingParserConfig};
 use wasmtime_environ::settings::{self, Configurable};
-use wasmtime_environ::{CacheConfig, Tunables};
+use wasmtime_environ::{ir, CacheConfig, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{
     debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, SignatureRegistry,
-    VMInterrupts,
+    VMInterrupts, VMSharedSignatureIndex,
 };
 
 // Runtime Environment
@@ -810,8 +810,16 @@ impl Store {
             .map(|x| x as _)
     }
 
-    pub(crate) fn signatures(&self) -> std::cell::Ref<'_, SignatureRegistry> {
-        self.inner.signatures.borrow()
+    pub(crate) fn lookup_signature(&self, sig_index: VMSharedSignatureIndex) -> ir::Signature {
+        self.inner
+            .signatures
+            .borrow()
+            .lookup(sig_index)
+            .expect("failed to lookup signature")
+    }
+
+    pub(crate) fn register_signature(&self, sig: &ir::Signature) -> VMSharedSignatureIndex {
+        self.inner.signatures.borrow_mut().register(sig)
     }
 
     pub(crate) fn signatures_mut(&self) -> std::cell::RefMut<'_, SignatureRegistry> {
