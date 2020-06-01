@@ -983,6 +983,13 @@ impl Default for Store {
     }
 }
 
+impl fmt::Debug for Store {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let inner = &*self.inner as *const StoreInner;
+        f.debug_struct("Store").field("inner", &inner).finish()
+    }
+}
+
 impl Drop for StoreInner {
     fn drop(&mut self) {
         for instance in self.instances.get_mut().iter() {

@@ -74,9 +74,10 @@ impl ExternRef {
 impl fmt::Debug for ExternRef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let ExternRef { inner, store: _ } = self;
+        let store = self.store();
         f.debug_struct("ExternRef")
             .field("inner", &inner)
-            .field("store", &"..")
+            .field("store", &store)
             .finish()
     }
 }
