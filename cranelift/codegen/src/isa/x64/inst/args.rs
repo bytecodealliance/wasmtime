@@ -295,9 +295,14 @@ impl SseOpcode {
     pub(crate) fn to_string(&self) -> String {
         match self {
             SseOpcode::Addss => "addss".to_string(),
+            SseOpcode::Divss => "divss".to_string(),
             SseOpcode::Subss => "subss".to_string(),
+            SseOpcode::Maxss => "maxss".to_string(),
+            SseOpcode::Minss => "minss".to_string(),
             SseOpcode::Movss => "movss".to_string(),
             SseOpcode::Movsd => "movsd".to_string(),
+            SseOpcode::Mulss => "mulss".to_string(),
+
             _ => "unimplemented sse_op".to_string(),
         }
     }
