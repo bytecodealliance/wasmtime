@@ -3,6 +3,7 @@ use crate::{
     wasm_importtype_t, wasm_importtype_vec_t, wasm_store_t, wasmtime_error_t,
 };
 use std::ptr;
+use std::sync::Arc;
 use wasmtime::{Engine, HostRef, Module};
 
 #[repr(C)]
@@ -35,8 +36,9 @@ pub extern "C" fn wasm_module_new(
     binary: &wasm_byte_vec_t,
 ) -> Option<Box<wasm_module_t>> {
     let mut ret = ptr::null_mut();
+    let store = store.store.clone();
     let engine = wasm_engine_t {
-        engine: HostRef::new(store.store.borrow().engine().clone()),
+        engine: Arc::new(store.borrow().engine().clone()),
     };
     match wasmtime_module_new(&engine, binary, &mut ret) {
         Some(_err) => None,
@@ -54,25 +56,22 @@ pub extern "C" fn wasmtime_module_new(
     ret: &mut *mut wasm_module_t,
 ) -> Option<Box<wasmtime_error_t>> {
     let binary = binary.as_slice();
-    handle_result(
-        Module::from_binary(&engine.engine.borrow(), binary),
-        |module| {
-            let imports = module
-                .imports()
-                .map(|i| wasm_importtype_t::new(i.module().to_owned(), i.name().to_owned(), i.ty()))
-                .collect::<Vec<_>>();
-            let exports = module
-                .exports()
-                .map(|e| wasm_exporttype_t::new(e.name().to_owned(), e.ty()))
-                .collect::<Vec<_>>();
-            let module = Box::new(wasm_module_t {
-                module: HostRef::new(module),
-                imports,
-                exports,
-            });
-            *ret = Box::into_raw(module);
-        },
-    )
+    handle_result(Module::from_binary(&engine.engine, binary), |module| {
+        let imports = module
+            .imports()
+            .map(|i| wasm_importtype_t::new(i.module().to_owned(), i.name().to_owned(), i.ty()))
+            .collect::<Vec<_>>();
+        let exports = module
+            .exports()
+            .map(|e| wasm_exporttype_t::new(e.name().to_owned(), e.ty()))
+            .collect::<Vec<_>>();
+        let module = Box::new(wasm_module_t {
+            module: HostRef::new(module),
+            imports,
+            exports,
+        });
+        *ret = Box::into_raw(module);
+    })
 }
 
 #[no_mangle]
