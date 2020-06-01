@@ -281,7 +281,7 @@ impl VMExternRef {
 
             let alloc_ptr = std::alloc::alloc(layout);
             let alloc_ptr = NonNull::new(alloc_ptr).unwrap_or_else(|| {
-                Self::alloc_failure();
+                std::alloc::handle_alloc_error(layout);
             });
 
             let value_ptr = alloc_ptr.cast::<T>();
@@ -336,12 +336,6 @@ impl VMExternRef {
     pub unsafe fn from_raw(ptr: *mut u8) -> Self {
         debug_assert!(!ptr.is_null());
         VMExternRef(NonNull::new_unchecked(ptr).cast())
-    }
-
-    #[inline(never)]
-    #[cold]
-    fn alloc_failure() -> ! {
-        panic!("VMExternRef allocation failure")
     }
 
     #[inline]
