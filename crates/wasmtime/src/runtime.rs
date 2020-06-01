@@ -683,9 +683,10 @@ pub enum ProfilingStrategy {
 /// You can create an engine with default configuration settings using
 /// `Engine::default()`. Be sure to consult the documentation of [`Config`] for
 /// default settings.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Engine {
     config: Arc<Config>,
+    compiler: Arc<Compiler>,
 }
 
 impl Engine {
@@ -695,6 +696,7 @@ impl Engine {
         debug_builtins::ensure_exported();
         Engine {
             config: Arc::new(config.clone()),
+            compiler: Arc::new(Engine::build_compiler(config)),
         }
     }
 
@@ -703,14 +705,24 @@ impl Engine {
         &self.config
     }
 
-    pub(crate) fn get_compiler(&self) -> Compiler {
-        let isa = native::builder().finish(settings::Flags::new(self.config.flags.clone()));
+    pub(crate) fn compiler(&self) -> &Compiler {
+        &self.compiler
+    }
+
+    fn build_compiler(config: &Config) -> Compiler {
+        let isa = native::builder().finish(settings::Flags::new(config.flags.clone()));
         Compiler::new(
             isa,
-            self.config.strategy,
-            self.config.cache_config.clone(),
-            self.config.tunables.clone(),
+            config.strategy,
+            config.cache_config.clone(),
+            config.tunables.clone(),
         )
+    }
+}
+
+impl Default for Engine {
+    fn default() -> Engine {
+        Engine::new(&Config::default())
     }
 }
 

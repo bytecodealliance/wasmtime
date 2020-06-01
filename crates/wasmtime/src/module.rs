@@ -298,8 +298,7 @@ impl Module {
     }
 
     unsafe fn compile(engine: &Engine, binary: &[u8]) -> Result<Self> {
-        let compiled =
-            CompiledModule::new(&engine.get_compiler(), binary, &*engine.config().profiler)?;
+        let compiled = CompiledModule::new(engine.compiler(), binary, &*engine.config().profiler)?;
 
         Ok(Module {
             engine: engine.clone(),
