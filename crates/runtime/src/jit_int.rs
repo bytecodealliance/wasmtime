@@ -52,14 +52,13 @@ lazy_static! {
     // and when paused in __jit_debug_register_code.
     //
     // The GDB_REGISTRATION lock is needed for GdbJitImageRegistration to protect
-    // access to the __jit_debug_descriptor within this process, and `u32` is
-    // just a "phantom" data.
+    // access to the __jit_debug_descriptor within this process.
     pub static ref GDB_REGISTRATION: Mutex<()> = Mutex::new(Default::default());
 }
 
 /// Registeration for JIT image
 pub struct GdbJitImageRegistration {
-    entry: *mut JITCodeEntry,
+    entry: Pin<Box<JITCodeEntry>>,
     file: Pin<Box<[u8]>>,
 }
 
@@ -67,13 +66,21 @@ impl GdbJitImageRegistration {
     /// Registers JIT image using __jit_debug_register_code
     pub fn register(file: Vec<u8>) -> Self {
         let file = Pin::new(file.into_boxed_slice());
-        Self {
-            entry: unsafe {
-                let _lock = GDB_REGISTRATION.lock().unwrap();
-                register_gdb_jit_image(&file)
-            },
-            file,
+
+        // Create a code entry for the file, which gives the start and size
+        // of the symbol file.
+        let mut entry = Pin::new(Box::new(JITCodeEntry {
+            next_entry: ptr::null_mut(),
+            prev_entry: ptr::null_mut(),
+            symfile_addr: file.as_ptr(),
+            symfile_size: file.len() as u64,
+        }));
+
+        unsafe {
+            register_gdb_jit_image(&mut *entry);
         }
+
+        Self { entry, file }
     }
 
     /// JIT image used in registration
@@ -85,8 +92,7 @@ impl GdbJitImageRegistration {
 impl Drop for GdbJitImageRegistration {
     fn drop(&mut self) {
         unsafe {
-            let _lock = GDB_REGISTRATION.lock().unwrap();
-            unregister_gdb_jit_image(self.entry);
+            unregister_gdb_jit_image(&mut *self.entry);
         }
     }
 }
@@ -94,15 +100,11 @@ impl Drop for GdbJitImageRegistration {
 unsafe impl Send for GdbJitImageRegistration {}
 unsafe impl Sync for GdbJitImageRegistration {}
 
-unsafe fn register_gdb_jit_image(file: &[u8]) -> *mut JITCodeEntry {
-    // Create a code entry for the file, which gives the start and size of the symbol file.
-    let entry = Box::into_raw(Box::new(JITCodeEntry {
-        next_entry: __jit_debug_descriptor.first_entry,
-        prev_entry: ptr::null_mut(),
-        symfile_addr: file.as_ptr(),
-        symfile_size: file.len() as u64,
-    }));
+unsafe fn register_gdb_jit_image(entry: *mut JITCodeEntry) {
+    let _lock = GDB_REGISTRATION.lock().unwrap();
+
     // Add it to the linked list in the JIT descriptor.
+    (*entry).next_entry = __jit_debug_descriptor.first_entry;
     if !__jit_debug_descriptor.first_entry.is_null() {
         (*__jit_debug_descriptor.first_entry).prev_entry = entry;
     }
@@ -115,10 +117,11 @@ unsafe fn register_gdb_jit_image(file: &[u8]) -> *mut JITCodeEntry {
 
     __jit_debug_descriptor.action_flag = JIT_NOACTION;
     __jit_debug_descriptor.relevant_entry = ptr::null_mut();
-    entry
 }
 
 unsafe fn unregister_gdb_jit_image(entry: *mut JITCodeEntry) {
+    let _lock = GDB_REGISTRATION.lock().unwrap();
+
     // Remove the code entry corresponding to the code from the linked list.
     if !(*entry).prev_entry.is_null() {
         (*(*entry).prev_entry).next_entry = (*entry).next_entry;
@@ -136,5 +139,4 @@ unsafe fn unregister_gdb_jit_image(entry: *mut JITCodeEntry) {
 
     __jit_debug_descriptor.action_flag = JIT_NOACTION;
     __jit_debug_descriptor.relevant_entry = ptr::null_mut();
-    let _box = Box::from_raw(entry);
 }
