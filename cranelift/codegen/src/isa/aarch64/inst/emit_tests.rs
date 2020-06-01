@@ -2114,8 +2114,8 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::Call {
             dest: Box::new(ExternalName::testcase("test0")),
-            uses: Box::new(Set::empty()),
-            defs: Box::new(Set::empty()),
+            uses: Vec::new().into_boxed_slice(),
+            defs: Vec::new().into_boxed_slice(),
             loc: SourceLoc::default(),
             opcode: Opcode::Call,
         },
@@ -2126,8 +2126,8 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::CallInd {
             rn: xreg(10),
-            uses: Box::new(Set::empty()),
-            defs: Box::new(Set::empty()),
+            uses: Vec::new().into_boxed_slice(),
+            defs: Vec::new().into_boxed_slice(),
             loc: SourceLoc::default(),
             opcode: Opcode::CallIndirect,
         },

@@ -12,7 +12,7 @@ use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 
 use regalloc::{RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
-use regalloc::{RegUsageCollector, RegUsageMapper, Set};
+use regalloc::{RegUsageCollector, RegUsageMapper};
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -650,16 +650,16 @@ pub enum Inst {
     /// target.
     Call {
         dest: Box<ExternalName>,
-        uses: Box<Set<Reg>>,
-        defs: Box<Set<Writable<Reg>>>,
+        uses: Box<[Reg]>,
+        defs: Box<[Writable<Reg>]>,
         loc: SourceLoc,
         opcode: Opcode,
     },
     /// A machine indirect-call instruction.
     CallInd {
         rn: Reg,
-        uses: Box<Set<Reg>>,
-        defs: Box<Set<Writable<Reg>>>,
+        uses: Box<[Reg]>,
+        defs: Box<[Writable<Reg>]>,
         loc: SourceLoc,
         opcode: Opcode,
     },
@@ -1729,19 +1729,12 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut defs,
             ..
         } => {
-            // TODO: add `map_mut()` to regalloc.rs's Set.
-            let new_uses = uses.map(|r| {
-                let mut r = *r;
-                map_use(mapper, &mut r);
-                r
-            });
-            let new_defs = defs.map(|r| {
-                let mut r = *r;
-                map_def(mapper, &mut r);
-                r
-            });
-            *uses = Box::new(new_uses);
-            *defs = Box::new(new_defs);
+            for r in uses.iter_mut() {
+                map_use(mapper, r);
+            }
+            for r in defs.iter_mut() {
+                map_def(mapper, r);
+            }
         }
         &mut Inst::Ret | &mut Inst::EpiloguePlaceholder => {}
         &mut Inst::CallInd {
@@ -1750,19 +1743,12 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut rn,
             ..
         } => {
-            // TODO: add `map_mut()` to regalloc.rs's Set.
-            let new_uses = uses.map(|r| {
-                let mut r = *r;
-                map_use(mapper, &mut r);
-                r
-            });
-            let new_defs = defs.map(|r| {
-                let mut r = *r;
-                map_def(mapper, &mut r);
-                r
-            });
-            *uses = Box::new(new_uses);
-            *defs = Box::new(new_defs);
+            for r in uses.iter_mut() {
+                map_use(mapper, r);
+            }
+            for r in defs.iter_mut() {
+                map_def(mapper, r);
+            }
             map_use(mapper, rn);
         }
         &mut Inst::CondBr { ref mut kind, .. } | &mut Inst::OneWayCondBr { ref mut kind, .. } => {
