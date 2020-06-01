@@ -167,5 +167,8 @@ pub trait ABICall {
     /// registers are also logically defs, but should never be read; their
     /// values are "defined" (to the regalloc) but "undefined" in every other
     /// sense.)
+    ///
+    /// This function should only be called once, as it is allowed to re-use
+    /// parts of the ABICall object in emitting instructions.
     fn emit_call<C: LowerCtx<I = Self::I>>(&mut self, ctx: &mut C);
 }

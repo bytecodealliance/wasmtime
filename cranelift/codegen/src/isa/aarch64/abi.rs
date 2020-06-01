@@ -655,21 +655,21 @@ fn is_caller_save(call_conv: isa::CallConv, r: RealReg) -> bool {
     }
 }
 
-fn get_caller_saves_set(call_conv: isa::CallConv) -> Set<Writable<Reg>> {
-    let mut set = Set::empty();
+fn get_caller_saves(call_conv: isa::CallConv) -> Vec<Writable<Reg>> {
+    let mut caller_saved = Vec::new();
     for i in 0..29 {
         let x = writable_xreg(i);
         if is_caller_save(call_conv, x.to_reg().to_real_reg()) {
-            set.insert(x);
+            caller_saved.push(x);
         }
     }
     for i in 0..32 {
         let v = writable_vreg(i);
         if is_caller_save(call_conv, v.to_reg().to_real_reg()) {
-            set.insert(v);
+            caller_saved.push(v);
         }
     }
-    set
+    caller_saved
 }
 
 impl ABIBody for AArch64ABIBody {
@@ -1111,28 +1111,28 @@ enum CallDest {
 /// AArch64 ABI object for a function call.
 pub struct AArch64ABICall {
     sig: ABISig,
-    uses: Set<Reg>,
-    defs: Set<Writable<Reg>>,
+    uses: Vec<Reg>,
+    defs: Vec<Writable<Reg>>,
     dest: CallDest,
     loc: ir::SourceLoc,
     opcode: ir::Opcode,
 }
 
-fn abisig_to_uses_and_defs(sig: &ABISig) -> (Set<Reg>, Set<Writable<Reg>>) {
+fn abisig_to_uses_and_defs(sig: &ABISig) -> (Vec<Reg>, Vec<Writable<Reg>>) {
     // Compute uses: all arg regs.
-    let mut uses = Set::empty();
+    let mut uses = Vec::new();
     for arg in &sig.args {
         match arg {
-            &ABIArg::Reg(reg, _) => uses.insert(reg.to_reg()),
+            &ABIArg::Reg(reg, _) => uses.push(reg.to_reg()),
             _ => {}
         }
     }
 
     // Compute defs: all retval regs, and all caller-save (clobbered) regs.
-    let mut defs = get_caller_saves_set(sig.call_conv);
+    let mut defs = get_caller_saves(sig.call_conv);
     for ret in &sig.rets {
         match ret {
-            &ABIArg::Reg(reg, _) => defs.insert(Writable::from_reg(reg.to_reg())),
+            &ABIArg::Reg(reg, _) => defs.push(Writable::from_reg(reg.to_reg())),
             _ => {}
         }
     }
@@ -1271,14 +1271,14 @@ impl ABICall for AArch64ABICall {
 
     fn emit_call<C: LowerCtx<I = Self::I>>(&mut self, ctx: &mut C) {
         let (uses, defs) = (
-            mem::replace(&mut self.uses, Set::empty()),
-            mem::replace(&mut self.defs, Set::empty()),
+            mem::replace(&mut self.uses, Default::default()),
+            mem::replace(&mut self.defs, Default::default()),
         );
         match &self.dest {
             &CallDest::ExtName(ref name, RelocDistance::Near) => ctx.emit(Inst::Call {
                 dest: Box::new(name.clone()),
-                uses: Box::new(uses),
-                defs: Box::new(defs),
+                uses: uses.into_boxed_slice(),
+                defs: defs.into_boxed_slice(),
                 loc: self.loc,
                 opcode: self.opcode,
             }),
@@ -1291,16 +1291,16 @@ impl ABICall for AArch64ABICall {
                 });
                 ctx.emit(Inst::CallInd {
                     rn: spilltmp_reg(),
-                    uses: Box::new(uses),
-                    defs: Box::new(defs),
+                    uses: uses.into_boxed_slice(),
+                    defs: defs.into_boxed_slice(),
                     loc: self.loc,
                     opcode: self.opcode,
                 });
             }
             &CallDest::Reg(reg) => ctx.emit(Inst::CallInd {
                 rn: reg,
-                uses: Box::new(uses),
-                defs: Box::new(defs),
+                uses: uses.into_boxed_slice(),
+                defs: defs.into_boxed_slice(),
                 loc: self.loc,
                 opcode: self.opcode,
             }),
