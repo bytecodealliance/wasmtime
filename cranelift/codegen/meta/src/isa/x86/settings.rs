@@ -16,6 +16,14 @@ pub(crate) fn define(shared: &SettingGroup) -> SettingGroup {
         false,
     );
 
+    settings.add_bool(
+        "assert_in_bounds",
+        "If set, Cranelift will assume that operations with bounds are in bounds (e.g. \
+        float/integers conversions, dynamic lane indices); in certain cases, Cranelift can use \
+        this information to produce faster code.",
+        false,
+    );
+
     // CPUID.01H:ECX
     let has_sse3 = settings.add_bool("has_sse3", "SSE3: CPUID.01H:ECX.SSE3[bit 0]", false);
     let has_ssse3 = settings.add_bool("has_ssse3", "SSSE3: CPUID.01H:ECX.SSSE3[bit 9]", false);
