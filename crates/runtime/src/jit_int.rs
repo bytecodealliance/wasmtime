@@ -47,7 +47,14 @@ extern "C" fn __jit_debug_register_code() {
 }
 
 lazy_static! {
-    pub static ref GDB_REGISTRATION: Mutex<u32> = Mutex::new(Default::default());
+    // The process controls access to the __jit_debug_descriptor by itself --
+    // the GDB/LLDB accesses this structure and its data at the process startup
+    // and when paused in __jit_debug_register_code.
+    //
+    // The GDB_REGISTRATION lock is needed for GdbJitImageRegistration to protect
+    // access to the __jit_debug_descriptor within this process, and `u32` is
+    // just a "phantom" data.
+    pub static ref GDB_REGISTRATION: Mutex<()> = Mutex::new(Default::default());
 }
 
 /// Registeration for JIT image
@@ -62,7 +69,7 @@ impl GdbJitImageRegistration {
         let file = Pin::new(file.into_boxed_slice());
         Self {
             entry: unsafe {
-                let _ = GDB_REGISTRATION.lock().unwrap();
+                let _lock = GDB_REGISTRATION.lock().unwrap();
                 register_gdb_jit_image(&file)
             },
             file,
@@ -78,7 +85,7 @@ impl GdbJitImageRegistration {
 impl Drop for GdbJitImageRegistration {
     fn drop(&mut self) {
         unsafe {
-            let _ = GDB_REGISTRATION.lock().unwrap();
+            let _lock = GDB_REGISTRATION.lock().unwrap();
             unregister_gdb_jit_image(self.entry);
         }
     }
