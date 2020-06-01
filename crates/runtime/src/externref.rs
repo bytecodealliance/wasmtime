@@ -183,6 +183,30 @@ impl Drop for VMExternRef {
 }
 
 impl VMExternData {
+    /// Get the `Layout` for a value with the given size and alignment, and the
+    /// offset within that layout where the `VMExternData` footer resides.
+    ///
+    /// This doesn't take a `value: &T` because `VMExternRef::new_with` hasn't
+    /// constructed a `T` value yet, and it isn't generic over `T` because
+    /// `VMExternData::drop_and_dealloc` doesn't know what `T` to use, and has
+    /// to use `std::mem::{size,align}_of_val` instead.
+    unsafe fn layout_for(value_size: usize, value_align: usize) -> (Layout, usize) {
+        let extern_data_size = mem::size_of::<VMExternData>();
+        let extern_data_align = mem::align_of::<VMExternData>();
+
+        let value_and_padding_size = round_up_to_align(value_size, extern_data_align).unwrap();
+
+        let alloc_align = std::cmp::max(value_align, extern_data_align);
+        let alloc_size = value_and_padding_size + extern_data_size;
+
+        debug_assert!(Layout::from_size_align(alloc_size, alloc_align).is_ok());
+        (
+            Layout::from_size_align_unchecked(alloc_size, alloc_align),
+            value_and_padding_size,
+        )
+    }
+
+    /// Drop the inner value and then free this `VMExternData` heap allocation.
     unsafe fn drop_and_dealloc(mut data: NonNull<VMExternData>) {
         // Note: we introduce a block scope so that we drop the live
         // reference to the data before we free the heap allocation it
@@ -193,23 +217,9 @@ impl VMExternData {
 
             // Same thing, but for the dropping the reference to `value` before
             // we drop it itself.
-            let layout = {
+            let (layout, _) = {
                 let value = data.value_ptr.as_ref();
-
-                let value_size = mem::size_of_val(value);
-                let value_align = mem::align_of_val(value);
-
-                let extern_data_size = mem::size_of::<VMExternData>();
-                let extern_data_align = mem::align_of::<VMExternData>();
-
-                let value_and_padding_size = round_up_to_align(value_size, extern_data_align)
-                    .unwrap_or_else(|| unreachable!());
-
-                let alloc_align = std::cmp::max(value_align, extern_data_align);
-                let alloc_size = value_and_padding_size + extern_data_size;
-
-                debug_assert!(Layout::from_size_align(alloc_size, alloc_align).is_ok());
-                Layout::from_size_align_unchecked(alloc_size, alloc_align)
+                Self::layout_for(mem::size_of_val(value), mem::align_of_val(value))
             };
 
             ptr::drop_in_place(data.value_ptr.as_ptr());
@@ -265,25 +275,9 @@ impl VMExternRef {
     where
         T: 'static + Any,
     {
-        let value_size = mem::size_of::<T>();
-        let value_align = mem::align_of::<T>();
-
-        let extern_data_align = mem::align_of::<VMExternData>();
-        let extern_data_size = mem::size_of::<VMExternData>();
-
-        let value_and_padding_size = round_up_to_align(value_size, extern_data_align)
-            .unwrap_or_else(|| {
-                Self::alloc_failure();
-            });
-
-        let alloc_align = std::cmp::max(value_align, extern_data_align);
-        let alloc_size = value_and_padding_size
-            .checked_add(extern_data_size)
-            .unwrap_or_else(|| Self::alloc_failure());
-
         unsafe {
-            debug_assert!(Layout::from_size_align(alloc_size, alloc_align).is_ok());
-            let layout = Layout::from_size_align_unchecked(alloc_size, alloc_align);
+            let (layout, footer_offset) =
+                VMExternData::layout_for(mem::size_of::<T>(), mem::align_of::<T>());
 
             let alloc_ptr = std::alloc::alloc(layout);
             let alloc_ptr = NonNull::new(alloc_ptr).unwrap_or_else(|| {
@@ -300,7 +294,7 @@ impl VMExternRef {
             let value_ptr = NonNull::new_unchecked(value_ptr);
 
             let extern_data_ptr =
-                alloc_ptr.cast::<u8>().as_ptr().add(value_and_padding_size) as *mut VMExternData;
+                alloc_ptr.cast::<u8>().as_ptr().add(footer_offset) as *mut VMExternData;
             ptr::write(
                 extern_data_ptr,
                 VMExternData {
