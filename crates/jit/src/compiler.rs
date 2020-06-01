@@ -66,6 +66,11 @@ impl Compiler {
     }
 }
 
+fn _assert_compiler_send_sync() {
+    fn _assert<T: Send + Sync>() {}
+    _assert::<Compiler>();
+}
+
 #[allow(missing_docs)]
 pub struct Compilation {
     pub code_memory: CodeMemory,

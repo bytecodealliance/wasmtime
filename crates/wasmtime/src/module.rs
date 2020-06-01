@@ -533,3 +533,8 @@ impl Module {
         return ret;
     }
 }
+
+fn _assert_send_sync() {
+    fn _assert<T: Send + Sync>() {}
+    _assert::<Module>();
+}
