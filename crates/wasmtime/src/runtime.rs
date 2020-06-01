@@ -567,6 +567,16 @@ impl Config {
             cmp::max(guard_size, self.tunables.static_memory_offset_guard_size);
         self
     }
+
+    fn build_compiler(&self) -> Compiler {
+        let isa = native::builder().finish(settings::Flags::new(self.flags.clone()));
+        Compiler::new(
+            isa,
+            self.strategy,
+            self.cache_config.clone(),
+            self.tunables.clone(),
+        )
+    }
 }
 
 fn round_up_to_pages(val: u64) -> u64 {
@@ -685,8 +695,12 @@ pub enum ProfilingStrategy {
 /// default settings.
 #[derive(Clone)]
 pub struct Engine {
-    config: Arc<Config>,
-    compiler: Arc<Compiler>,
+    inner: Arc<EngineInner>,
+}
+
+struct EngineInner {
+    config: Config,
+    compiler: Compiler,
 }
 
 impl Engine {
@@ -695,33 +709,25 @@ impl Engine {
     pub fn new(config: &Config) -> Engine {
         debug_builtins::ensure_exported();
         Engine {
-            config: Arc::new(config.clone()),
-            compiler: Arc::new(Engine::build_compiler(config)),
+            inner: Arc::new(EngineInner {
+                config: config.clone(),
+                compiler: config.build_compiler(),
+            }),
         }
     }
 
     /// Returns the configuration settings that this engine is using.
     pub fn config(&self) -> &Config {
-        &self.config
+        &self.inner.config
     }
 
     pub(crate) fn compiler(&self) -> &Compiler {
-        &self.compiler
-    }
-
-    fn build_compiler(config: &Config) -> Compiler {
-        let isa = native::builder().finish(settings::Flags::new(config.flags.clone()));
-        Compiler::new(
-            isa,
-            config.strategy,
-            config.cache_config.clone(),
-            config.tunables.clone(),
-        )
+        &self.inner.compiler
     }
 
     /// Returns whether the engine `a` and `b` refer to the same configuration.
     pub fn same(a: &Engine, b: &Engine) -> bool {
-        Arc::ptr_eq(&a.config, &b.config)
+        Arc::ptr_eq(&a.inner, &b.inner)
     }
 }
 
@@ -797,7 +803,11 @@ impl Store {
 
     /// Returns an optional reference to a ['RuntimeMemoryCreator']
     pub(crate) fn memory_creator(&self) -> Option<&dyn RuntimeMemoryCreator> {
-        self.engine().config.memory_creator.as_ref().map(|x| x as _)
+        self.engine()
+            .config()
+            .memory_creator
+            .as_ref()
+            .map(|x| x as _)
     }
 
     pub(crate) fn signatures(&self) -> std::cell::Ref<'_, SignatureRegistry> {
@@ -962,7 +972,7 @@ impl Store {
     /// # }
     /// ```
     pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
-        if self.engine().config.tunables.interruptable {
+        if self.engine().config().tunables.interruptable {
             Ok(InterruptHandle {
                 interrupts: self.interrupts().clone(),
             })
