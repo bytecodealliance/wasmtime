@@ -247,6 +247,36 @@ impl From<(Opcode, Type)> for BitOp {
     }
 }
 
+/// Additional information for (direct) Call instructions, left out of line to lower the size of
+/// the Inst enum.
+#[derive(Clone, Debug)]
+pub struct CallInfo {
+    pub dest: ExternalName,
+    pub uses: Vec<Reg>,
+    pub defs: Vec<Writable<Reg>>,
+    pub loc: SourceLoc,
+    pub opcode: Opcode,
+}
+
+/// Additional information for CallInd instructions, left out of line to lower the size of the Inst
+/// enum.
+#[derive(Clone, Debug)]
+pub struct CallIndInfo {
+    pub rn: Reg,
+    pub uses: Vec<Reg>,
+    pub defs: Vec<Writable<Reg>>,
+    pub loc: SourceLoc,
+    pub opcode: Opcode,
+}
+
+/// Additional information for JTSequence instructions, left out of line to lower the size of the Inst
+/// enum.
+#[derive(Clone, Debug)]
+pub struct JTSequenceInfo {
+    pub targets: Vec<BranchTarget>,
+    pub targets_for_term: Vec<MachLabel>, // needed for MachTerminator.
+}
+
 /// Instruction formats.
 #[derive(Clone, Debug)]
 pub enum Inst {
@@ -649,19 +679,11 @@ pub enum Inst {
     /// code should use a `LoadExtName` / `CallInd` sequence instead, allowing an arbitrary 64-bit
     /// target.
     Call {
-        dest: Box<ExternalName>,
-        uses: Box<[Reg]>,
-        defs: Box<[Writable<Reg>]>,
-        loc: SourceLoc,
-        opcode: Opcode,
+        info: Box<CallInfo>,
     },
     /// A machine indirect-call instruction.
     CallInd {
-        rn: Reg,
-        uses: Box<[Reg]>,
-        defs: Box<[Writable<Reg>]>,
-        loc: SourceLoc,
-        opcode: Opcode,
+        info: Box<CallIndInfo>,
     },
 
     // ---- branches (exactly one must appear at end of BB) ----
@@ -742,8 +764,7 @@ pub enum Inst {
     /// Jump-table sequence, as one compound instruction (see note in lower.rs
     /// for rationale).
     JTSequence {
-        targets: Box<[BranchTarget]>,
-        targets_for_term: Box<[MachLabel]>, // needed for MachTerminator.
+        info: Box<JTSequenceInfo>,
         ridx: Reg,
         rtmp1: Writable<Reg>,
         rtmp2: Writable<Reg>,
@@ -758,7 +779,7 @@ pub enum Inst {
     /// Load an inline symbol reference.
     LoadExtName {
         rd: Writable<Reg>,
-        name: ExternalName,
+        name: Box<ExternalName>,
         srcloc: SourceLoc,
         offset: i64,
     },
@@ -817,7 +838,7 @@ fn count_zero_half_words(mut value: u64) -> usize {
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
-    assert_eq!(48, std::mem::size_of::<Inst>());
+    assert_eq!(32, std::mem::size_of::<Inst>());
 }
 
 impl Inst {
@@ -1173,21 +1194,14 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(rn);
         }
         &Inst::Jump { .. } | &Inst::Ret | &Inst::EpiloguePlaceholder => {}
-        &Inst::Call {
-            ref uses, ref defs, ..
-        } => {
-            collector.add_uses(&*uses);
-            collector.add_defs(&*defs);
+        &Inst::Call { ref info } => {
+            collector.add_uses(&*info.uses);
+            collector.add_defs(&*info.defs);
         }
-        &Inst::CallInd {
-            ref uses,
-            ref defs,
-            rn,
-            ..
-        } => {
-            collector.add_uses(&*uses);
-            collector.add_defs(&*defs);
-            collector.add_use(rn);
+        &Inst::CallInd { ref info } => {
+            collector.add_uses(&*info.uses);
+            collector.add_defs(&*info.defs);
+            collector.add_use(info.rn);
         }
         &Inst::CondBr { ref kind, .. } | &Inst::OneWayCondBr { ref kind, .. } => match kind {
             CondBrKind::Zero(rt) | CondBrKind::NotZero(rt) => {
@@ -1724,32 +1738,23 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, rn);
         }
         &mut Inst::Jump { .. } => {}
-        &mut Inst::Call {
-            ref mut uses,
-            ref mut defs,
-            ..
-        } => {
-            for r in uses.iter_mut() {
+        &mut Inst::Call { ref mut info } => {
+            for r in info.uses.iter_mut() {
                 map_use(mapper, r);
             }
-            for r in defs.iter_mut() {
+            for r in info.defs.iter_mut() {
                 map_def(mapper, r);
             }
         }
         &mut Inst::Ret | &mut Inst::EpiloguePlaceholder => {}
-        &mut Inst::CallInd {
-            ref mut uses,
-            ref mut defs,
-            ref mut rn,
-            ..
-        } => {
-            for r in uses.iter_mut() {
+        &mut Inst::CallInd { ref mut info, .. } => {
+            for r in info.uses.iter_mut() {
                 map_use(mapper, r);
             }
-            for r in defs.iter_mut() {
+            for r in info.defs.iter_mut() {
                 map_def(mapper, r);
             }
-            map_use(mapper, rn);
+            map_use(mapper, &mut info.rn);
         }
         &mut Inst::CondBr { ref mut kind, .. } | &mut Inst::OneWayCondBr { ref mut kind, .. } => {
             map_br(mapper, kind);
@@ -1833,10 +1838,9 @@ impl MachInst for Inst {
                 MachTerminator::None
             }
             &Inst::IndirectBr { ref targets, .. } => MachTerminator::Indirect(&targets[..]),
-            &Inst::JTSequence {
-                ref targets_for_term,
-                ..
-            } => MachTerminator::Indirect(&targets_for_term[..]),
+            &Inst::JTSequence { ref info, .. } => {
+                MachTerminator::Indirect(&info.targets_for_term[..])
+            }
             _ => MachTerminator::None,
         }
     }
@@ -2554,9 +2558,9 @@ impl ShowWithRRU for Inst {
             &Inst::Extend { .. } => {
                 panic!("Unsupported Extend case");
             }
-            &Inst::Call { dest: _, .. } => format!("bl 0"),
-            &Inst::CallInd { rn, .. } => {
-                let rn = rn.show_rru(mb_rru);
+            &Inst::Call { .. } => format!("bl 0"),
+            &Inst::CallInd { ref info, .. } => {
+                let rn = info.rn.show_rru(mb_rru);
                 format!("blr {}", rn)
             }
             &Inst::Ret => "ret".to_string(),
@@ -2620,7 +2624,7 @@ impl ShowWithRRU for Inst {
             &Inst::Word4 { data } => format!("data.i32 {}", data),
             &Inst::Word8 { data } => format!("data.i64 {}", data),
             &Inst::JTSequence {
-                ref targets,
+                ref info,
                 ridx,
                 rtmp1,
                 rtmp2,
@@ -2637,7 +2641,7 @@ impl ShowWithRRU for Inst {
                         "br {} ; ",
                         "jt_entries {:?}"
                     ),
-                    rtmp1, rtmp2, rtmp1, ridx, rtmp1, rtmp1, rtmp2, rtmp1, targets
+                    rtmp1, rtmp2, rtmp1, ridx, rtmp1, rtmp1, rtmp2, rtmp1, info.targets
                 )
             }
             &Inst::LoadConst64 { rd, const_data } => {

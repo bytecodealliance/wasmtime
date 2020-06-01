@@ -14,6 +14,7 @@ use crate::isa::aarch64::inst::*;
 
 use regalloc::RegClass;
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
 use smallvec::SmallVec;
@@ -1245,7 +1246,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let loc = ctx.srcloc(insn);
             ctx.emit(Inst::LoadExtName {
                 rd,
-                name: extname,
+                name: Box::new(extname),
                 srcloc: loc,
                 offset: 0,
             });
@@ -1262,7 +1263,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let loc = ctx.srcloc(insn);
             ctx.emit(Inst::LoadExtName {
                 rd,
-                name: extname,
+                name: Box::new(extname),
                 srcloc: loc,
                 offset,
             });
@@ -2140,8 +2141,10 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     ridx,
                     rtmp1,
                     rtmp2,
-                    targets: jt_targets.into_boxed_slice(),
-                    targets_for_term: targets_for_term.into_boxed_slice(),
+                    info: Box::new(JTSequenceInfo {
+                        targets: jt_targets,
+                        targets_for_term: targets_for_term,
+                    }),
                 });
             }
 

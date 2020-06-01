@@ -2113,11 +2113,13 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::Call {
-            dest: Box::new(ExternalName::testcase("test0")),
-            uses: Vec::new().into_boxed_slice(),
-            defs: Vec::new().into_boxed_slice(),
-            loc: SourceLoc::default(),
-            opcode: Opcode::Call,
+            info: Box::new(CallInfo {
+                dest: ExternalName::testcase("test0"),
+                uses: Vec::new(),
+                defs: Vec::new(),
+                loc: SourceLoc::default(),
+                opcode: Opcode::Call,
+            }),
         },
         "00000094",
         "bl 0",
@@ -2125,11 +2127,13 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::CallInd {
-            rn: xreg(10),
-            uses: Vec::new().into_boxed_slice(),
-            defs: Vec::new().into_boxed_slice(),
-            loc: SourceLoc::default(),
-            opcode: Opcode::CallIndirect,
+            info: Box::new(CallIndInfo {
+                rn: xreg(10),
+                uses: Vec::new(),
+                defs: Vec::new(),
+                loc: SourceLoc::default(),
+                opcode: Opcode::CallIndirect,
+            }),
         },
         "40013FD6",
         "blr x10",
