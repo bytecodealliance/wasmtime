@@ -59,13 +59,13 @@ int main() {
 
   // Compile and instantiate our module
   wasm_module_t *module = NULL;
-  error = wasmtime_module_new(store, &wasm, &module);
+  error = wasmtime_module_new(engine, &wasm, &module);
   if (module == NULL)
     exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&wasm);
   wasm_trap_t *trap = NULL;
   wasm_instance_t *instance = NULL;
-  error = wasmtime_instance_new(module, NULL, 0, &instance, &trap);
+  error = wasmtime_instance_new(store, module, NULL, 0, &instance, &trap);
   if (instance == NULL)
     exit_with_error("failed to instantiate", error, trap);
 

@@ -1,13 +1,13 @@
-use crate::{handle_result, wasmtime_error_t};
-use crate::{wasm_byte_vec_t, wasm_exporttype_vec_t, wasm_importtype_vec_t};
-use crate::{wasm_exporttype_t, wasm_importtype_t, wasm_store_t};
+use crate::{
+    handle_result, wasm_byte_vec_t, wasm_engine_t, wasm_exporttype_t, wasm_exporttype_vec_t,
+    wasm_importtype_t, wasm_importtype_vec_t, wasm_store_t, wasmtime_error_t,
+};
 use std::ptr;
-use wasmtime::{Engine, HostRef, Module, Store};
+use wasmtime::{Engine, HostRef, Module};
 
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_module_t {
-    pub(crate) store: HostRef<Store>,
     pub(crate) module: HostRef<Module>,
     pub(crate) imports: Vec<wasm_importtype_t>,
     pub(crate) exports: Vec<wasm_exporttype_t>,
@@ -35,7 +35,10 @@ pub extern "C" fn wasm_module_new(
     binary: &wasm_byte_vec_t,
 ) -> Option<Box<wasm_module_t>> {
     let mut ret = ptr::null_mut();
-    match wasmtime_module_new(store, binary, &mut ret) {
+    let engine = wasm_engine_t {
+        engine: HostRef::new(store.store.borrow().engine().clone()),
+    };
+    match wasmtime_module_new(&engine, binary, &mut ret) {
         Some(_err) => None,
         None => {
             assert!(!ret.is_null());
@@ -46,29 +49,30 @@ pub extern "C" fn wasm_module_new(
 
 #[no_mangle]
 pub extern "C" fn wasmtime_module_new(
-    store: &wasm_store_t,
+    engine: &wasm_engine_t,
     binary: &wasm_byte_vec_t,
     ret: &mut *mut wasm_module_t,
 ) -> Option<Box<wasmtime_error_t>> {
     let binary = binary.as_slice();
-    let store_ref = store.store.borrow();
-    handle_result(Module::from_binary(store_ref.engine(), binary), |module| {
-        let imports = module
-            .imports()
-            .map(|i| wasm_importtype_t::new(i.module().to_owned(), i.name().to_owned(), i.ty()))
-            .collect::<Vec<_>>();
-        let exports = module
-            .exports()
-            .map(|e| wasm_exporttype_t::new(e.name().to_owned(), e.ty()))
-            .collect::<Vec<_>>();
-        let module = Box::new(wasm_module_t {
-            store: store.store.clone(),
-            module: HostRef::new(module),
-            imports,
-            exports,
-        });
-        *ret = Box::into_raw(module);
-    })
+    handle_result(
+        Module::from_binary(&engine.engine.borrow(), binary),
+        |module| {
+            let imports = module
+                .imports()
+                .map(|i| wasm_importtype_t::new(i.module().to_owned(), i.name().to_owned(), i.ty()))
+                .collect::<Vec<_>>();
+            let exports = module
+                .exports()
+                .map(|e| wasm_exporttype_t::new(e.name().to_owned(), e.ty()))
+                .collect::<Vec<_>>();
+            let module = Box::new(wasm_module_t {
+                module: HostRef::new(module),
+                imports,
+                exports,
+            });
+            *ret = Box::into_raw(module);
+        },
+    )
 }
 
 #[no_mangle]
@@ -133,7 +137,6 @@ pub extern "C" fn wasm_module_obtain(
         .map(|e| wasm_exporttype_t::new(e.name().to_owned(), e.ty()))
         .collect::<Vec<_>>();
     Some(Box::new(wasm_module_t {
-        store: store.store.clone(),
         module: HostRef::new(module),
         imports,
         exports,

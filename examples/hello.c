@@ -67,7 +67,7 @@ int main() {
   // Now that we've got our binary webassembly we can compile our module.
   printf("Compiling module...\n");
   wasm_module_t *module = NULL;
-  error = wasmtime_module_new(store, &wasm, &module);
+  error = wasmtime_module_new(engine, &wasm, &module);
   wasm_byte_vec_delete(&wasm);
   if (error != NULL)
     exit_with_error("failed to compile module", error, NULL);
@@ -87,7 +87,7 @@ int main() {
   wasm_trap_t *trap = NULL;
   wasm_instance_t *instance = NULL;
   const wasm_extern_t *imports[] = { wasm_func_as_extern(hello) };
-  error = wasmtime_instance_new(module, imports, 1, &instance, &trap);
+  error = wasmtime_instance_new(store, module, imports, 1, &instance, &trap);
   if (instance == NULL)
     exit_with_error("failed to instantiate", error, trap);
 

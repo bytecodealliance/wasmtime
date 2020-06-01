@@ -43,7 +43,7 @@ int main(int argc, const char* argv[]) {
   // Compile.
   printf("Compiling module...\n");
   wasm_module_t *module = NULL;
-  wasmtime_error_t* error = wasmtime_module_new(store, &binary, &module);
+  wasmtime_error_t* error = wasmtime_module_new(engine, &binary, &module);
   if (!module)
     exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&binary);
@@ -71,7 +71,7 @@ int main(int argc, const char* argv[]) {
   printf("Instantiating module...\n");
   wasm_instance_t* instance = NULL;
   wasm_trap_t *trap = NULL;
-  error = wasmtime_instance_new(module, NULL, 0, &instance, &trap);
+  error = wasmtime_instance_new(store, module, NULL, 0, &instance, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to instantiate", error, trap);
   wasm_module_delete(module);

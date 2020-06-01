@@ -45,10 +45,10 @@ int main() {
   wasmtime_error_t *error;
   wasm_module_t *linking1_module = NULL;
   wasm_module_t *linking2_module = NULL;
-  error = wasmtime_module_new(store, &linking1_wasm, &linking1_module);
+  error = wasmtime_module_new(engine, &linking1_wasm, &linking1_module);
   if (error != NULL)
     exit_with_error("failed to compile linking1", error, NULL);
-  error = wasmtime_module_new(store, &linking2_wasm, &linking2_module);
+  error = wasmtime_module_new(engine, &linking2_wasm, &linking2_module);
   if (error != NULL)
     exit_with_error("failed to compile linking2", error, NULL);
   wasm_byte_vec_delete(&linking1_wasm);
