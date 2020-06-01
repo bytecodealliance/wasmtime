@@ -58,8 +58,8 @@ block0(v0: f32x4 [%xmm3], v1: f32x4 [%xmm5]):
 [-, %xmm3]    v3 = fsub v0, v1      ; bin: 0f 5c dd
 [-, %xmm3]    v4 = fmul v0, v1      ; bin: 0f 59 dd
 [-, %xmm3]    v5 = fdiv v0, v1      ; bin: 0f 5e dd
-[-, %xmm3]    v6 = fmin v0, v1      ; bin: 0f 5d dd
-[-, %xmm3]    v7 = fmax v0, v1      ; bin: 0f 5f dd
+[-, %xmm3]    v6 = x86_fmin v0, v1  ; bin: 0f 5d dd
+[-, %xmm3]    v7 = x86_fmax v0, v1  ; bin: 0f 5f dd
 [-, %xmm3]    v8 = sqrt v0          ; bin: 0f 51 db
     return
 }
@@ -70,8 +70,8 @@ block0(v0: f32x4 [%xmm3], v1: f32x4 [%xmm10]):
 [-, %xmm3]    v3 = fsub v0, v1      ; bin: 41 0f 5c da
 [-, %xmm3]    v4 = fmul v0, v1      ; bin: 41 0f 59 da
 [-, %xmm3]    v5 = fdiv v0, v1      ; bin: 41 0f 5e da
-[-, %xmm3]    v6 = fmin v0, v1      ; bin: 41 0f 5d da
-[-, %xmm3]    v7 = fmax v0, v1      ; bin: 41 0f 5f da
+[-, %xmm3]    v6 = x86_fmin v0, v1  ; bin: 41 0f 5d da
+[-, %xmm3]    v7 = x86_fmax v0, v1  ; bin: 41 0f 5f da
 [-, %xmm3]    v8 = sqrt v1          ; bin: 41 0f 51 da
     return
 }
@@ -82,8 +82,8 @@ block0(v0: f64x2 [%xmm3], v1: f64x2 [%xmm5]):
 [-, %xmm3]    v3 = fsub v0, v1      ; bin: 66 0f 5c dd
 [-, %xmm3]    v4 = fmul v0, v1      ; bin: 66 0f 59 dd
 [-, %xmm3]    v5 = fdiv v0, v1      ; bin: 66 0f 5e dd
-[-, %xmm3]    v6 = fmin v0, v1      ; bin: 66 0f 5d dd
-[-, %xmm3]    v7 = fmax v0, v1      ; bin: 66 0f 5f dd
+[-, %xmm3]    v6 = x86_fmin v0, v1  ; bin: 66 0f 5d dd
+[-, %xmm3]    v7 = x86_fmax v0, v1  ; bin: 66 0f 5f dd
 [-, %xmm3]    v8 = sqrt v0          ; bin: 66 0f 51 db
     return
 }
@@ -94,8 +94,8 @@ block0(v0: f64x2 [%xmm11], v1: f64x2 [%xmm13]):
 [-, %xmm11]    v3 = fsub v0, v1      ; bin: 66 45 0f 5c dd
 [-, %xmm11]    v4 = fmul v0, v1      ; bin: 66 45 0f 59 dd
 [-, %xmm11]    v5 = fdiv v0, v1      ; bin: 66 45 0f 5e dd
-[-, %xmm11]    v6 = fmin v0, v1      ; bin: 66 45 0f 5d dd
-[-, %xmm11]    v7 = fmax v0, v1      ; bin: 66 45 0f 5f dd
+[-, %xmm11]    v6 = x86_fmin v0, v1  ; bin: 66 45 0f 5d dd
+[-, %xmm11]    v7 = x86_fmax v0, v1  ; bin: 66 45 0f 5f dd
 [-, %xmm11]    v8 = sqrt v0          ; bin: 66 45 0f 51 db
     return
 }

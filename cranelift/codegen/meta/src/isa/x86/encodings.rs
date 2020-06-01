@@ -1596,8 +1596,6 @@ fn define_simd(
     let fdiv = shared.by_name("fdiv");
     let fill = shared.by_name("fill");
     let fill_nop = shared.by_name("fill_nop");
-    let fmax = shared.by_name("fmax");
-    let fmin = shared.by_name("fmin");
     let fmul = shared.by_name("fmul");
     let fsub = shared.by_name("fsub");
     let iadd = shared.by_name("iadd");
@@ -1637,6 +1635,8 @@ fn define_simd(
     let vselect = shared.by_name("vselect");
     let x86_cvtt2si = x86.by_name("x86_cvtt2si");
     let x86_insertps = x86.by_name("x86_insertps");
+    let x86_fmax = x86.by_name("x86_fmax");
+    let x86_fmin = x86.by_name("x86_fmin");
     let x86_movlhps = x86.by_name("x86_movlhps");
     let x86_movsd = x86.by_name("x86_movsd");
     let x86_packss = x86.by_name("x86_packss");
@@ -2276,10 +2276,10 @@ fn define_simd(
         (F64, fmul, &MULPD[..]),
         (F32, fdiv, &DIVPS[..]),
         (F64, fdiv, &DIVPD[..]),
-        (F32, fmin, &MINPS[..]),
-        (F64, fmin, &MINPD[..]),
-        (F32, fmax, &MAXPS[..]),
-        (F64, fmax, &MAXPD[..]),
+        (F32, x86_fmin, &MINPS[..]),
+        (F64, x86_fmin, &MINPD[..]),
+        (F32, x86_fmax, &MAXPS[..]),
+        (F64, x86_fmax, &MAXPD[..]),
     ] {
         let inst = inst.bind(vector(*ty, sse_vector_size));
         e.enc_both_inferred(inst, rec_fa.opcodes(opcodes));

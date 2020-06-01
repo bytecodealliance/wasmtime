@@ -192,31 +192,22 @@ block0:
 }
 ; run
 
-function %fmax_f64x2() -> b1 {
-block0:
-    v0 = vconst.f64x2 [-0.0 -0x1.0]
-    v1 = vconst.f64x2 [+0.0 +0x1.0]
-
+function %fmax_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
     v2 = fmax v0, v1
-    v3 = fcmp eq v2, v1
-    v4 = vall_true v3
-
-    return v4
+    return v2
 }
-; run
+; run: %fmax_f64x2([-0x0.0 -0x1.0], [+0x0.0 0x1.0]) == [+0x0.0 0x1.0]
+; run: %fmax_f64x2([-NaN NaN], [0x0.0 0x100.0]) == [-NaN NaN]
 
-function %fmin_f64x2() -> b1 {
-block0:
-    v0 = vconst.f64x2 [-0x1.0 -0x1.0]
-    v1 = vconst.f64x2 [+0.0 +0x1.0]
-
+function %fmin_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
     v2 = fmin v0, v1
-    v3 = fcmp eq v2, v0
-    v4 = vall_true v3
-
-    return v4
+    return v2
 }
-; run
+; run: %fmin_f64x2([-0x0.0 -0x1.0], [+0x0.0 0x1.0]) == [-0x0.0 -0x1.0]
+; run: %fmin_f64x2([-NaN 0x100.0], [0x0.0 NaN]) == [-NaN -NaN]  ; note how the second NaN is now quieted and negative:
+; this is due to non-determinism in the NaN sequence.
 
 function %fneg_f64x2() -> b1 {
 block0:
