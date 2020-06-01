@@ -72,11 +72,11 @@ fn test_x64_emit() {
     let w_xmm1 = Writable::<Reg>::from_reg(xmm1);
     let w_xmm2 = Writable::<Reg>::from_reg(xmm2);
     let w_xmm3 = Writable::<Reg>::from_reg(xmm3);
-    let _w_xmm4 = Writable::<Reg>::from_reg(xmm4);
+    let w_xmm4 = Writable::<Reg>::from_reg(xmm4);
     let _w_xmm5 = Writable::<Reg>::from_reg(xmm5);
     let _w_xmm6 = Writable::<Reg>::from_reg(xmm6);
-    let _w_xmm7 = Writable::<Reg>::from_reg(xmm7);
-    let _w_xmm8 = Writable::<Reg>::from_reg(xmm8);
+    let w_xmm7 = Writable::<Reg>::from_reg(xmm7);
+    let w_xmm8 = Writable::<Reg>::from_reg(xmm8);
     let _w_xmm9 = Writable::<Reg>::from_reg(xmm9);
     let w_xmm10 = Writable::<Reg>::from_reg(xmm10);
     let _w_xmm11 = Writable::<Reg>::from_reg(xmm11);
@@ -2324,19 +2324,16 @@ fn test_x64_emit() {
         "F30F5CC8",
         "subss   %xmm0, %xmm1",
     ));
-
     insns.push((
         Inst::xmm_rm_r(SseOpcode::Addss, RegMem::reg(xmm11), w_xmm13),
         "F3450F58EB",
         "addss   %xmm11, %xmm13",
     ));
-
     insns.push((
         Inst::xmm_rm_r(SseOpcode::Subss, RegMem::reg(xmm12), w_xmm1),
         "F3410F5CCC",
         "subss   %xmm12, %xmm1",
     ));
-
     insns.push((
         Inst::xmm_rm_r(
             SseOpcode::Addss,
@@ -2346,7 +2343,6 @@ fn test_x64_emit() {
         "F3410F5844927B",
         "addss   123(%r10,%rdx,4), %xmm0",
     ));
-
     insns.push((
         Inst::xmm_rm_r(
             SseOpcode::Subss,
@@ -2355,6 +2351,22 @@ fn test_x64_emit() {
         ),
         "F3450F5C94C241010000",
         "subss   321(%r10,%rax,8), %xmm10",
+    ));
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Mulss, RegMem::reg(xmm5), w_xmm4),
+        "F30F59E5",
+        "mulss   %xmm5, %xmm4",
+    ));
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Divss, RegMem::reg(xmm8), w_xmm7),
+        "F3410F5EF8",
+        "divss   %xmm8, %xmm7",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Sqrtss, RegMem::reg(xmm7), w_xmm8),
+        "F3440F51C7",
+        "sqrtss  %xmm7, %xmm8",
     ));
 
     // ========================================================
