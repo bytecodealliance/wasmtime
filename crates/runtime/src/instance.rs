@@ -1093,7 +1093,7 @@ unsafe fn get_memory_slice<'instance>(
     instance: &'instance Instance,
 ) -> &'instance mut [u8] {
     let memory = if let Some(defined_memory_index) = instance
-        .module()
+        .module
         .local
         .defined_memory_index(init.location.memory_index)
     {
@@ -1194,7 +1194,7 @@ fn initialize_passive_elements(instance: &Instance) {
 
     passive_elements.extend(
         instance
-            .module()
+            .module
             .passive_elements
             .iter()
             .filter(|(_, segments)| !segments.is_empty())

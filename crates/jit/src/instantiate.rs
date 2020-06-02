@@ -202,14 +202,14 @@ impl CompiledModule {
             .collect()
     }
 
-    /// Return a reference to a module.
+    /// Return a reference-counting pointer to a module.
     pub fn module(&self) -> &Arc<Module> {
         &self.module
     }
 
-    /// Return a reference to a module.
-    pub fn module_mut(&mut self) -> &mut Module {
-        Arc::get_mut(&mut self.module).unwrap()
+    /// Return a reference to a mutable module (if possible).
+    pub fn module_mut(&mut self) -> Option<&mut Module> {
+        Arc::get_mut(&mut self.module)
     }
 
     /// Returns the map of all finished JIT functions compiled for this module

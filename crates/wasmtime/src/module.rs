@@ -164,6 +164,7 @@ impl Module {
         Arc::get_mut(&mut module.compiled)
             .unwrap()
             .module_mut()
+            .expect("mutable module")
             .name = Some(name.to_string());
         Ok(module)
     }

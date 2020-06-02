@@ -11,8 +11,9 @@ wasmtime_c_api_macros::declare_own!(wasm_store_t);
 
 #[no_mangle]
 pub extern "C" fn wasm_store_new(engine: &wasm_engine_t) -> Box<wasm_store_t> {
+    let engine = &engine.engine;
     Box::new(wasm_store_t {
-        store: Store::new(&engine.engine),
+        store: Store::new(&engine),
     })
 }
 
