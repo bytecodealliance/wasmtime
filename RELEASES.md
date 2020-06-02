@@ -11,9 +11,37 @@ Unreleased
 * The [Commands and Reactors ABI] is now supported in the Rust API. `Linker::module`
   loads a module and automatically handles Commands and Reactors semantics.
 
+  [#1565](https://github.com/bytecodealliance/wasmtime/pull/1565)
+
 [Commands and Reactors ABI]: https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi
 
-### Fixed
+The `Table::grow` function now returns the previous table size, making it consistent
+with the `table.grow` instruction.
+
+  [#1653](https://github.com/bytecodealliance/wasmtime/pull/1653)
+
+New Wasmtime-specific C APIs for working with tables were added which provide more
+detailed error information and which make growing a table more consistent with the
+`table.grow` instruction as well.
+
+  [#1654](https://github.com/bytecodealliance/wasmtime/pull/1654)
+
+The C API now includes support for enabling logging in Wasmtime.
+
+  [#1737](https://github.com/bytecodealliance/wasmtime/pull/1737)
+
+### Changed
+
+The WASI `proc_exit` function no longer exits the host process. It now unwinds the
+callstack back to the wasm entrypoint, and the exit value is available from the
+`Trap::i32_exit_status` method.
+
+  [#1646](https://github.com/bytecodealliance/wasmtime/pull/1646)
+
+The WebAssembly [multi-value](https://github.com/WebAssembly/multi-value/) proposal
+is now enabled by default.
+
+  [#1667](https://github.com/bytecodealliance/wasmtime/pull/1667)
 
 --------------------------------------------------------------------------------
 
