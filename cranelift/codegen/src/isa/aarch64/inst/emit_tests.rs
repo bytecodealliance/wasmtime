@@ -1311,7 +1311,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::ULoad64 {
             rd: writable_xreg(1),
-            mem: MemArg::FPOffset(32768),
+            mem: MemArg::FPOffset(32768, I8),
             srcloc: None,
         },
         "100090D2B063308B010240F9",
@@ -1320,7 +1320,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::ULoad64 {
             rd: writable_xreg(1),
-            mem: MemArg::FPOffset(-32768),
+            mem: MemArg::FPOffset(-32768, I8),
             srcloc: None,
         },
         "F0FF8F92B063308B010240F9",
@@ -1329,7 +1329,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::ULoad64 {
             rd: writable_xreg(1),
-            mem: MemArg::FPOffset(1048576), // 2^20
+            mem: MemArg::FPOffset(1048576, I8), // 2^20
             srcloc: None,
         },
         "1002A0D2B063308B010240F9",
@@ -1338,11 +1338,41 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::ULoad64 {
             rd: writable_xreg(1),
-            mem: MemArg::FPOffset(1048576 + 1), // 2^20 + 1
+            mem: MemArg::FPOffset(1048576 + 1, I8), // 2^20 + 1
             srcloc: None,
         },
         "300080D21002A0F2B063308B010240F9",
         "movz x16, #1 ; movk x16, #16, LSL #16 ; add x16, fp, x16, UXTX ; ldr x1, [x16]",
+    ));
+
+    insns.push((
+        Inst::ULoad64 {
+            rd: writable_xreg(1),
+            mem: MemArg::RegOffset(xreg(7), 8, I64),
+            srcloc: None,
+        },
+        "E18040F8",
+        "ldur x1, [x7, #8]",
+    ));
+
+    insns.push((
+        Inst::ULoad64 {
+            rd: writable_xreg(1),
+            mem: MemArg::RegOffset(xreg(7), 1024, I64),
+            srcloc: None,
+        },
+        "E10042F9",
+        "ldr x1, [x7, #1024]",
+    ));
+
+    insns.push((
+        Inst::ULoad64 {
+            rd: writable_xreg(1),
+            mem: MemArg::RegOffset(xreg(7), 1048576, I64),
+            srcloc: None,
+        },
+        "1002A0D2F060308B010240F9",
+        "movz x16, #16, LSL #16 ; add x16, x7, x16, UXTX ; ldr x1, [x16]",
     ));
 
     insns.push((

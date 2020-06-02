@@ -1004,6 +1004,9 @@ fn memarg_regs(memarg: &MemArg, collector: &mut RegUsageCollector) {
         &MemArg::SPOffset(..) | &MemArg::NominalSPOffset(..) => {
             collector.add_use(stack_reg());
         }
+        &MemArg::RegOffset(r, ..) => {
+            collector.add_use(r);
+        }
     }
 }
 
@@ -1318,6 +1321,7 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             &mut MemArg::FPOffset(..)
             | &mut MemArg::SPOffset(..)
             | &mut MemArg::NominalSPOffset(..) => {}
+            &mut MemArg::RegOffset(ref mut r, ..) => map_use(m, r),
         };
     }
 

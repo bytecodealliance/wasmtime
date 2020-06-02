@@ -64,8 +64,8 @@ block0(v0: i64):
 
 ; check:      stp fp, lr, [sp, #-16]!
 ; nextln:     mov fp, sp
-; nextln:     ldr x16, [x0]
-; nextln:     ldr x16, [x16, #4]
+; nextln:     ldur x16, [x0]
+; nextln:     ldur x16, [x16, #4]
 ; nextln:     subs xzr, sp, x16
 ; nextln:     b.hs 8
 ; nextln:     udf
@@ -128,8 +128,8 @@ block0(v0: i64):
 
 ; check:      stp fp, lr, [sp, #-16]!
 ; nextln:     mov fp, sp
-; nextln:     ldr x16, [x0]
-; nextln:     ldr x16, [x16, #4]
+; nextln:     ldur x16, [x0]
+; nextln:     ldur x16, [x16, #4]
 ; nextln:     add x16, x16, #32
 ; nextln:     subs xzr, sp, x16
 ; nextln:     b.hs 8
@@ -151,8 +151,8 @@ block0(v0: i64):
 
 ; check:      stp fp, lr, [sp, #-16]!
 ; nextln:     mov fp, sp
-; nextln:     ldr x16, [x0]
-; nextln:     ldr x16, [x16, #4]
+; nextln:     ldur x16, [x0]
+; nextln:     ldur x16, [x16, #4]
 ; nextln:     subs xzr, sp, x16
 ; nextln:     b.hs 8
 ; nextln:     udf
@@ -179,9 +179,7 @@ block0(v0: i64):
 
 ; check:      stp fp, lr, [sp, #-16]!
 ; nextln:     mov fp, sp
-; nextln:     movz x16, #6784
-; nextln:     movk x16, #6, LSL #16
-; nextln:     ldr x16, [x0, x16]
+; nextln:     movz x16, #6784 ; movk x16, #6, LSL #16 ; add x16, x0, x16, UXTX ; ldr x16, [x16]
 ; nextln:     add x16, x16, #32
 ; nextln:     subs xzr, sp, x16
 ; nextln:     b.hs 8

@@ -383,7 +383,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 let insn = self.vcode.abi().gen_copy_arg_to_reg(i, reg);
                 self.emit(insn);
             }
-            for insn in self.vcode.abi().gen_retval_area_setup().into_iter() {
+            if let Some(insn) = self.vcode.abi().gen_retval_area_setup() {
                 self.emit(insn);
             }
         }
@@ -652,11 +652,13 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     pub fn lower<B: LowerBackend<MInst = I>>(mut self, backend: &B) -> CodegenResult<VCode<I>> {
         debug!("about to lower function: {:?}", self.f);
 
-        // Initialize the ABI object with any temps it needs.
-        let tmps: SmallVec<[Writable<Reg>; 4]> = (0..self.vcode.abi().needed_tmps())
-            .map(|_| self.alloc_tmp(RegClass::I64, I64))
-            .collect();
-        self.vcode.abi().init_with_tmps(&tmps[..]);
+        // Initialize the ABI object, giving it a temp if requested.
+        let maybe_tmp = if self.vcode.abi().temp_needed() {
+            Some(self.alloc_tmp(RegClass::I64, I64))
+        } else {
+            None
+        };
+        self.vcode.abi().init(maybe_tmp);
 
         // Get the pinned reg here (we only parameterize this function on `B`,
         // not the whole `Lower` impl).

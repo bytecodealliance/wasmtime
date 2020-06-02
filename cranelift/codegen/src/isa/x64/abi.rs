@@ -184,11 +184,11 @@ impl X64ABIBody {
 impl ABIBody for X64ABIBody {
     type I = Inst;
 
-    fn needed_tmps(&self) -> usize {
-        0
+    fn temp_needed(&self) -> bool {
+        false
     }
 
-    fn init_with_tmps(&mut self, _: &[Writable<Reg>]) {}
+    fn init(&mut self, _: Option<Writable<Reg>>) {}
 
     fn flags(&self) -> &settings::Flags {
         &self.flags
@@ -239,8 +239,8 @@ impl ABIBody for X64ABIBody {
         }
     }
 
-    fn gen_retval_area_setup(&self) -> Vec<Inst> {
-        vec![]
+    fn gen_retval_area_setup(&self) -> Option<Inst> {
+        None
     }
 
     fn gen_copy_reg_to_retval(
