@@ -1,6 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
+use crate::error_transform::ErrorTransform;
 use crate::lifetimes::{anon_lifetime, LifetimeExt};
 use crate::names::Names;
 use witx::Module;
@@ -20,7 +21,7 @@ pub fn passed_by_reference(ty: &witx::Type) -> bool {
     }
 }
 
-pub fn define_module_trait(names: &Names, m: &Module) -> TokenStream {
+pub fn define_module_trait(names: &Names, m: &Module, errxform: &ErrorTransform) -> TokenStream {
     let traitname = names.trait_name(&m.name);
     let traitmethods = m.funcs().map(|f| {
         // Check if we're returning an entity anotated with a lifetime,
@@ -55,7 +56,14 @@ pub fn define_module_trait(names: &Names, m: &Module) -> TokenStream {
         let err = f
             .results
             .get(0)
-            .map(|err_result| names.type_ref(&err_result.tref, lifetime.clone()))
+            .map(|err_result| {
+                if let Some(custom_err) = errxform.for_abi_error(&err_result.tref) {
+                    let tn = custom_err.typename();
+                    quote!(super::#tn)
+                } else {
+                    names.type_ref(&err_result.tref, lifetime.clone())
+                }
+            })
             .unwrap_or(quote!(()));
 
         if is_anonymous {

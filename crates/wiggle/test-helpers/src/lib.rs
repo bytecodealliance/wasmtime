@@ -306,6 +306,7 @@ use wiggle::GuestError;
 // on the test as well.
 pub struct WasiCtx<'a> {
     pub guest_errors: RefCell<Vec<GuestError>>,
+    pub log: RefCell<Vec<String>>,
     lifetime: marker::PhantomData<&'a ()>,
 }
 
@@ -313,6 +314,7 @@ impl<'a> WasiCtx<'a> {
     pub fn new() -> Self {
         Self {
             guest_errors: RefCell::new(vec![]),
+            log: RefCell::new(vec![]),
             lifetime: marker::PhantomData,
         }
     }
@@ -333,6 +335,7 @@ macro_rules! impl_errno {
         impl<'a> $convert for WasiCtx<'a> {
             fn into_errno(&self, e: wiggle::GuestError) -> $errno {
                 eprintln!("GuestError: {:?}", e);
+                self.guest_errors.borrow_mut().push(e);
                 <$errno>::InvalidArg
             }
         }

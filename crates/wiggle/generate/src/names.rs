@@ -1,9 +1,10 @@
-use crate::lifetimes::LifetimeExt;
 use escaping::{escape_id, handle_2big_enum_variant, NamingConvention};
 use heck::{ShoutySnakeCase, SnakeCase};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use witx::{AtomType, BuiltinType, Id, Type, TypeRef};
+
+use crate::{lifetimes::LifetimeExt, UserErrorType};
 
 pub struct Names {
     ctx_type: Ident,
@@ -161,28 +162,46 @@ impl Names {
         format_ident!("{}_len", id.as_str().to_snake_case())
     }
 
-    pub fn guest_error_conversion_method(&self, tref: &TypeRef) -> Ident {
+    fn builtin_name(b: &BuiltinType) -> &'static str {
+        match b {
+            BuiltinType::String => "string",
+            BuiltinType::U8 => "u8",
+            BuiltinType::U16 => "u16",
+            BuiltinType::U32 => "u32",
+            BuiltinType::U64 => "u64",
+            BuiltinType::S8 => "i8",
+            BuiltinType::S16 => "i16",
+            BuiltinType::S32 => "i32",
+            BuiltinType::S64 => "i64",
+            BuiltinType::F32 => "f32",
+            BuiltinType::F64 => "f64",
+            BuiltinType::Char8 => "char8",
+            BuiltinType::USize => "usize",
+        }
+    }
+
+    fn snake_typename(tref: &TypeRef) -> String {
         match tref {
-            TypeRef::Name(nt) => format_ident!("into_{}", nt.name.as_str().to_snake_case()),
+            TypeRef::Name(nt) => nt.name.as_str().to_snake_case(),
             TypeRef::Value(ty) => match &**ty {
-                Type::Builtin(b) => match b {
-                    BuiltinType::String => unreachable!("error type must be atom"),
-                    BuiltinType::U8 => format_ident!("into_u8"),
-                    BuiltinType::U16 => format_ident!("into_u16"),
-                    BuiltinType::U32 => format_ident!("into_u32"),
-                    BuiltinType::U64 => format_ident!("into_u64"),
-                    BuiltinType::S8 => format_ident!("into_i8"),
-                    BuiltinType::S16 => format_ident!("into_i16"),
-                    BuiltinType::S32 => format_ident!("into_i32"),
-                    BuiltinType::S64 => format_ident!("into_i64"),
-                    BuiltinType::F32 => format_ident!("into_f32"),
-                    BuiltinType::F64 => format_ident!("into_f64"),
-                    BuiltinType::Char8 => format_ident!("into_char8"),
-                    BuiltinType::USize => format_ident!("into_usize"),
-                },
-                _ => panic!("unexpected anonymous error type: {:?}", ty),
+                Type::Builtin(b) => Self::builtin_name(&b).to_owned(),
+                _ => panic!("unexpected anonymous type: {:?}", ty),
             },
         }
+    }
+
+    pub fn guest_error_conversion_method(&self, tref: &TypeRef) -> Ident {
+        let suffix = Self::snake_typename(tref);
+        format_ident!("into_{}", suffix)
+    }
+
+    pub fn user_error_conversion_method(&self, user_type: &UserErrorType) -> Ident {
+        let abi_type = Self::snake_typename(&user_type.abi_type());
+        format_ident!(
+            "{}_from_{}",
+            abi_type,
+            user_type.method_fragment().to_snake_case()
+        )
     }
 }
 
