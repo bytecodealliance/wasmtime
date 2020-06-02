@@ -14,7 +14,7 @@ include = ["src/**/*", "LICENSE"]
 thiserror = "1"
 witx = { path = "../wasi-common/WASI/tools/witx", version = "0.8.5", optional = true }
 wiggle-macro = { path = "macro", version = "0.17.0" }
-tracing_crate = { version = "0.1.14", optional = true, package = "tracing" }
+tracing = { version = "0.1.14" }
 
 [badges]
 maintenance = { status = "actively-developed" }
@@ -29,9 +29,5 @@ proptest = "0.9"
 # users of wiggle are not forced to take a direct dependency on the `witx`
 # crate unless they want it.
 wiggle_metadata = ['witx', "wiggle-macro/wiggle_metadata"]
-# The wiggle proc-macro emits code which may transitively depend on the
-# `tracing` crate, via `wiggle::tracing`. When this feature is not enabled,
-# a no-op equivelant to the tracing macros is provided instead.
-tracing = [ "tracing_crate" ]
 
-default = ["wiggle_metadata", "tracing"]
+default = ["wiggle_metadata" ]

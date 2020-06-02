@@ -15,7 +15,9 @@ mod borrow;
 mod error;
 mod guest_type;
 mod region;
-pub mod tracing;
+pub mod tracing {
+    pub use tracing::*;
+}
 
 pub use borrow::BorrowChecker;
 use borrow::BorrowHandle;
