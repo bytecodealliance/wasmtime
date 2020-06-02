@@ -8,7 +8,6 @@ use crate::isa::aarch64::inst::*;
 
 use regalloc::{Reg, RegClass, Writable};
 
-use alloc::vec::Vec;
 use core::convert::TryFrom;
 use log::debug;
 
@@ -24,7 +23,11 @@ pub fn memlabel_finalize(_insn_off: CodeOffset, label: &MemLabel) -> i32 {
 /// generic arbitrary stack offset) into real addressing modes, possibly by
 /// emitting some helper instructions that come immediately before the use
 /// of this amode.
-pub fn mem_finalize(insn_off: CodeOffset, mem: &MemArg, state: &EmitState) -> (Vec<Inst>, MemArg) {
+pub fn mem_finalize(
+    insn_off: CodeOffset,
+    mem: &MemArg,
+    state: &EmitState,
+) -> (SmallVec<[Inst; 4]>, MemArg) {
     match mem {
         &MemArg::SPOffset(off) | &MemArg::FPOffset(off) | &MemArg::NominalSPOffset(off) => {
             let basereg = match mem {
@@ -48,7 +51,7 @@ pub fn mem_finalize(insn_off: CodeOffset, mem: &MemArg, state: &EmitState) -> (V
 
             if let Some(simm9) = SImm9::maybe_from_i64(off) {
                 let mem = MemArg::Unscaled(basereg, simm9);
-                (vec![], mem)
+                (smallvec![], mem)
             } else {
                 let tmp = writable_spilltmp_reg();
                 let mut const_insts = Inst::load_constant(tmp, off as u64);
@@ -64,14 +67,16 @@ pub fn mem_finalize(insn_off: CodeOffset, mem: &MemArg, state: &EmitState) -> (V
                     extendop: ExtendOp::UXTX,
                 };
                 const_insts.push(add_inst);
-                (const_insts.to_vec(), MemArg::reg(tmp.to_reg()))
+                (const_insts, MemArg::reg(tmp.to_reg()))
             }
         }
+
         &MemArg::Label(ref label) => {
             let off = memlabel_finalize(insn_off, label);
-            (vec![], MemArg::Label(MemLabel::PCRel(off)))
+            (smallvec![], MemArg::Label(MemLabel::PCRel(off)))
         }
-        _ => (vec![], mem.clone()),
+
+        _ => (smallvec![], mem.clone()),
     }
 }
 
@@ -340,6 +345,12 @@ fn enc_inttofpu(top16: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
 
 fn enc_fround(top22: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
     (top22 << 10) | (machreg_to_vec(rn) << 5) | machreg_to_vec(rd.to_reg())
+}
+
+fn enc_vec_rr_misc(bits_12_16: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
+    debug_assert_eq!(bits_12_16 & 0b11111, bits_12_16);
+    let bits = 0b0_1_1_01110_00_10000_00000_10_00000_00000;
+    bits | bits_12_16 << 12 | machreg_to_vec(rn) << 5 | machreg_to_vec(rd.to_reg())
 }
 
 /// State carried between emissions of a sequence of instructions.
@@ -1002,6 +1013,15 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_fpurrrr(top17, rd, rn, rm, ra));
             }
+            &Inst::VecMisc { op, rd, rn, ty } => {
+                let bits_12_16 = match op {
+                    VecMisc2::Not => {
+                        debug_assert_eq!(I8X16, ty);
+                        0b00101
+                    }
+                };
+                sink.put4(enc_vec_rr_misc(bits_12_16, rd, rn));
+            }
             &Inst::FpuCmp32 { rn, rm } => {
                 sink.put4(enc_fcmp(InstSize::Size32, rn, rm));
             }
@@ -1125,12 +1145,40 @@ impl MachInstEmit for Inst {
                         | machreg_to_gpr(rd.to_reg()),
                 );
             }
-            &Inst::VecRRR { rd, rn, rm, alu_op } => {
+            &Inst::VecRRR {
+                rd,
+                rn,
+                rm,
+                alu_op,
+                ty,
+            } => {
+                let enc_size_for_cmp = match ty {
+                    I8X16 => 0b00,
+                    _ => 0,
+                };
+
                 let (top11, bit15_10) = match alu_op {
-                    VecALUOp::SQAddScalar => (0b010_11110_11_1, 0b000011),
-                    VecALUOp::SQSubScalar => (0b010_11110_11_1, 0b001011),
-                    VecALUOp::UQAddScalar => (0b011_11110_11_1, 0b000011),
-                    VecALUOp::UQSubScalar => (0b011_11110_11_1, 0b001011),
+                    VecALUOp::SQAddScalar => {
+                        debug_assert_eq!(I64, ty);
+                        (0b010_11110_11_1, 0b000011)
+                    }
+                    VecALUOp::SQSubScalar => {
+                        debug_assert_eq!(I64, ty);
+                        (0b010_11110_11_1, 0b001011)
+                    }
+                    VecALUOp::UQAddScalar => {
+                        debug_assert_eq!(I64, ty);
+                        (0b011_11110_11_1, 0b000011)
+                    }
+                    VecALUOp::UQSubScalar => {
+                        debug_assert_eq!(I64, ty);
+                        (0b011_11110_11_1, 0b001011)
+                    }
+                    VecALUOp::Cmeq => (0b011_01110_00_1 | enc_size_for_cmp << 1, 0b100011),
+                    VecALUOp::Cmge => (0b010_01110_00_1 | enc_size_for_cmp << 1, 0b001111),
+                    VecALUOp::Cmgt => (0b010_01110_00_1 | enc_size_for_cmp << 1, 0b001101),
+                    VecALUOp::Cmhi => (0b011_01110_00_1 | enc_size_for_cmp << 1, 0b001101),
+                    VecALUOp::Cmhs => (0b011_01110_00_1 | enc_size_for_cmp << 1, 0b001111),
                 };
                 sink.put4(enc_vec_rrr(top11, rm, bit15_10, rn, rd));
             }
@@ -1234,24 +1282,17 @@ impl MachInstEmit for Inst {
             &Inst::EpiloguePlaceholder => {
                 // Noop; this is just a placeholder for epilogues.
             }
-            &Inst::Call {
-                ref dest,
-                loc,
-                opcode,
-                ..
-            } => {
-                sink.add_reloc(loc, Reloc::Arm64Call, dest, 0);
+            &Inst::Call { ref info } => {
+                sink.add_reloc(info.loc, Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b100101, 0));
-                if opcode.is_call() {
-                    sink.add_call_site(loc, opcode);
+                if info.opcode.is_call() {
+                    sink.add_call_site(info.loc, info.opcode);
                 }
             }
-            &Inst::CallInd {
-                rn, loc, opcode, ..
-            } => {
-                sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(rn) << 5));
-                if opcode.is_call() {
-                    sink.add_call_site(loc, opcode);
+            &Inst::CallInd { ref info } => {
+                sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(info.rn) << 5));
+                if info.opcode.is_call() {
+                    sink.add_call_site(info.loc, info.opcode);
                 }
             }
             &Inst::CondBr {
@@ -1313,7 +1354,7 @@ impl MachInstEmit for Inst {
                 ridx,
                 rtmp1,
                 rtmp2,
-                ref targets,
+                ref info,
                 ..
             } => {
                 // This sequence is *one* instruction in the vcode, and is expanded only here at
@@ -1356,7 +1397,7 @@ impl MachInstEmit for Inst {
                 inst.emit(sink, flags, state);
                 // Emit jump table (table of 32-bit offsets).
                 let jt_off = sink.cur_offset();
-                for &target in targets.iter() {
+                for &target in info.targets.iter() {
                     let word_off = sink.cur_offset();
                     let off_into_table = word_off - jt_off;
                     sink.use_label_at_offset(

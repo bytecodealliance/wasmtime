@@ -7,13 +7,14 @@ use crate::ir::Inst as IRInst;
 use crate::ir::{InstructionData, Opcode, TrapCode};
 use crate::machinst::lower::*;
 use crate::machinst::*;
-use crate::CodegenResult;
+use crate::{CodegenError, CodegenResult};
 
 use crate::isa::aarch64::abi::*;
 use crate::isa::aarch64::inst::*;
 
 use regalloc::RegClass;
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
 use smallvec::SmallVec;
@@ -96,6 +97,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 rn: va.to_reg(),
                 rm: vb.to_reg(),
                 alu_op,
+                ty: I64,
             });
             ctx.emit(Inst::MovFromVec64 {
                 rd,
@@ -127,6 +129,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 rn: va.to_reg(),
                 rm: vb.to_reg(),
                 alu_op,
+                ty: I64,
             });
             ctx.emit(Inst::MovFromVec64 {
                 rd,
@@ -1152,12 +1155,66 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 (false, true) => NarrowValueMode::SignExtend64,
                 (false, false) => NarrowValueMode::ZeroExtend64,
             };
-            let alu_op = choose_32_64(ty, ALUOp::SubS32, ALUOp::SubS64);
-            let rn = input_to_reg(ctx, inputs[0], narrow_mode);
-            let rm = input_to_rse_imm12(ctx, inputs[1], narrow_mode);
-            let rd = output_to_reg(ctx, outputs[0]);
-            ctx.emit(alu_inst_imm12(alu_op, writable_zero_reg(), rn, rm));
-            ctx.emit(Inst::CondSet { cond, rd });
+
+            if ty_bits(ty) < 128 {
+                let alu_op = choose_32_64(ty, ALUOp::SubS32, ALUOp::SubS64);
+                let rn = input_to_reg(ctx, inputs[0], narrow_mode);
+                let rm = input_to_rse_imm12(ctx, inputs[1], narrow_mode);
+                let rd = output_to_reg(ctx, outputs[0]);
+                ctx.emit(alu_inst_imm12(alu_op, writable_zero_reg(), rn, rm));
+                ctx.emit(Inst::CondSet { cond, rd });
+            } else {
+                if ty != I8X16 {
+                    return Err(CodegenError::Unsupported(format!(
+                        "unsupported simd type: {:?}",
+                        ty
+                    )));
+                }
+
+                let mut rn = input_to_reg(ctx, inputs[0], narrow_mode);
+                let mut rm = input_to_reg(ctx, inputs[1], narrow_mode);
+                let rd = output_to_reg(ctx, outputs[0]);
+
+                // 'Less than' operations are implemented by swapping
+                // the order of operands and using the 'greater than'
+                // instructions.
+                // 'Not equal' is implemented with 'equal' and inverting
+                // the result.
+                let (alu_op, swap) = match cond {
+                    Cond::Eq => (VecALUOp::Cmeq, false),
+                    Cond::Ne => (VecALUOp::Cmeq, false),
+                    Cond::Ge => (VecALUOp::Cmge, false),
+                    Cond::Gt => (VecALUOp::Cmgt, false),
+                    Cond::Le => (VecALUOp::Cmge, true),
+                    Cond::Lt => (VecALUOp::Cmgt, true),
+                    Cond::Hs => (VecALUOp::Cmhs, false),
+                    Cond::Hi => (VecALUOp::Cmhi, false),
+                    Cond::Ls => (VecALUOp::Cmhs, true),
+                    Cond::Lo => (VecALUOp::Cmhi, true),
+                    _ => unreachable!(),
+                };
+
+                if swap {
+                    std::mem::swap(&mut rn, &mut rm);
+                }
+
+                ctx.emit(Inst::VecRRR {
+                    alu_op,
+                    rd,
+                    rn,
+                    rm,
+                    ty,
+                });
+
+                if cond == Cond::Ne {
+                    ctx.emit(Inst::VecMisc {
+                        op: VecMisc2::Not,
+                        rd,
+                        rn: rd.to_reg(),
+                        ty: I8X16,
+                    });
+                }
+            }
         }
 
         Opcode::Fcmp => {
@@ -1245,7 +1302,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let loc = ctx.srcloc(insn);
             ctx.emit(Inst::LoadExtName {
                 rd,
-                name: extname,
+                name: Box::new(extname),
                 srcloc: loc,
                 offset: 0,
             });
@@ -1262,7 +1319,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let loc = ctx.srcloc(insn);
             ctx.emit(Inst::LoadExtName {
                 rd,
-                name: extname,
+                name: Box::new(extname),
                 srcloc: loc,
                 offset,
             });
@@ -1350,6 +1407,13 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             lower_constant_f128(ctx, rd, value);
         }
 
+        Opcode::RawBitcast => {
+            let rm = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
+            let rd = output_to_reg(ctx, outputs[0]);
+            let ty = ctx.input_ty(insn, 0);
+            ctx.emit(Inst::gen_move(rd, rm, ty));
+        }
+
         Opcode::Shuffle
         | Opcode::Vsplit
         | Opcode::Vconcat
@@ -1359,7 +1423,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Splat
         | Opcode::Insertlane
         | Opcode::Extractlane
-        | Opcode::RawBitcast
         | Opcode::ScalarToVector
         | Opcode::Swizzle
         | Opcode::Uload8x8
@@ -2140,8 +2203,10 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     ridx,
                     rtmp1,
                     rtmp2,
-                    targets: jt_targets.into_boxed_slice(),
-                    targets_for_term: targets_for_term.into_boxed_slice(),
+                    info: Box::new(JTSequenceInfo {
+                        targets: jt_targets,
+                        targets_for_term: targets_for_term,
+                    }),
                 });
             }
 

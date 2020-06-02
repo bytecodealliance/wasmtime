@@ -245,9 +245,10 @@ impl Func {
             // number of arguments and the right types of arguments. As a result
             // we should be able to safely run through them all and read them.
             let mut args = Vec::with_capacity(ty_clone.params().len());
+            let store = Store::upgrade(&store_weak).unwrap();
             for (i, ty) in ty_clone.params().iter().enumerate() {
                 unsafe {
-                    args.push(Val::read_value_from(values_vec.add(i), ty));
+                    args.push(Val::read_value_from(&store, values_vec.add(i), ty));
                 }
             }
             let mut returns = vec![Val::null(); ty_clone.results().len()];
@@ -484,13 +485,13 @@ impl Func {
         // This is only called with `Export::Function`, and since it's coming
         // from wasmtime_runtime itself we should support all the types coming
         // out of it, so assert such here.
-        FuncType::from_wasmtime_signature(&sig).expect("core wasm signature should be supported")
+        FuncType::from_wasm_func_type(&sig).expect("core wasm signature should be supported")
     }
 
     /// Returns the number of parameters that this function takes.
     pub fn param_arity(&self) -> usize {
         let sig = self.instance.store.lookup_signature(self.export.signature);
-        sig.params.len() - 2 // skip the two vmctx leading parameters
+        sig.params.len()
     }
 
     /// Returns the number of results this function produces.
@@ -529,7 +530,11 @@ impl Func {
         let param_tys = my_ty.params().iter();
         for ((arg, slot), ty) in params.iter().zip(&mut values_vec).zip(param_tys) {
             if arg.ty() != *ty {
-                bail!("argument type mismatch");
+                bail!(
+                    "argument type mismatch: found {} but expected {}",
+                    arg.ty(),
+                    ty
+                );
             }
             if !arg.comes_from_same_store(&self.instance.store) {
                 bail!("cross-`Store` values are not currently supported");
@@ -554,7 +559,7 @@ impl Func {
         for (index, ty) in my_ty.results().iter().enumerate() {
             unsafe {
                 let ptr = values_vec.as_ptr().add(index);
-                results.push(Val::read_value_from(ptr, ty));
+                results.push(Val::read_value_from(&self.instance.store, ptr, ty));
             }
         }
 
@@ -705,7 +710,8 @@ impl Func {
         (get15, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15)
     }
 
-    pub(crate) fn store(&self) -> &Store {
+    /// Get a reference to this function's store.
+    pub fn store(&self) -> &Store {
         &self.instance.store
     }
 }
@@ -1020,6 +1026,12 @@ impl Caller<'_> {
             let mem = Memory::from_wasmtime_memory(export, handle);
             Some(Extern::Memory(mem))
         }
+    }
+
+    /// Get a handle to this caller's store.
+    pub fn store(&self) -> Store {
+        // See comment above the `store` member for why this unwrap is OK.
+        Store::upgrade(&self.store).unwrap()
     }
 }
 

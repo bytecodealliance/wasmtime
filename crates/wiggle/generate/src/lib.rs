@@ -1,4 +1,5 @@
 pub mod config;
+mod error_transform;
 mod funcs;
 mod lifetimes;
 mod module_trait;
@@ -11,12 +12,13 @@ use quote::quote;
 use lifetimes::anon_lifetime;
 
 pub use config::Config;
+pub use error_transform::{ErrorTransform, UserErrorType};
 pub use funcs::define_func;
 pub use module_trait::define_module_trait;
 pub use names::Names;
 pub use types::define_datatype;
 
-pub fn generate(doc: &witx::Document, names: &Names) -> TokenStream {
+pub fn generate(doc: &witx::Document, names: &Names, errs: &ErrorTransform) -> TokenStream {
     // TODO at some point config should grow more ability to configure name
     // overrides.
     let rt = names.runtime_mod();
@@ -34,13 +36,24 @@ pub fn generate(doc: &witx::Document, names: &Names) -> TokenStream {
         }
     };
 
+    let user_error_methods = errs.iter().map(|errtype| {
+        let abi_typename = names.type_ref(&errtype.abi_type(), anon_lifetime());
+        let user_typename = errtype.typename();
+        let methodname = names.user_error_conversion_method(&errtype);
+        quote!(fn #methodname(&self, e: super::#user_typename) -> #abi_typename;)
+    });
+    let user_error_conversion = quote! {
+        pub trait UserErrorConversion {
+            #(#user_error_methods)*
+        }
+    };
     let modules = doc.modules().map(|module| {
         let modname = names.module(&module.name);
         let trait_name = names.trait_name(&module.name);
         let fs = module
             .funcs()
-            .map(|f| define_func(&names, &f, quote!(#trait_name)));
-        let modtrait = define_module_trait(&names, &module);
+            .map(|f| define_func(&names, &f, quote!(#trait_name), &errs));
+        let modtrait = define_module_trait(&names, &module, &errs);
         let ctx_type = names.ctx_type();
         quote!(
             pub mod #modname {
@@ -57,6 +70,7 @@ pub fn generate(doc: &witx::Document, names: &Names) -> TokenStream {
         pub mod types {
             #(#types)*
             #guest_error_conversion
+            #user_error_conversion
         }
         #(#modules)*
     )

@@ -164,7 +164,9 @@ impl CompiledModule {
                 .local
                 .signatures
                 .values()
-                .map(|sig| signature_registry.register(sig))
+                .map(|(wasm_sig, native)| {
+                    signature_registry.register(wasm_sig.clone(), native.clone())
+                })
                 .collect::<PrimaryMap<_, _>>()
         };
 

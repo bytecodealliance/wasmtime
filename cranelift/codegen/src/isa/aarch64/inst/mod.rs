@@ -5,14 +5,14 @@
 
 use crate::binemit::CodeOffset;
 use crate::ir::types::{
-    B1, B16, B32, B64, B8, F32, F32X2, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS,
+    B1, B16, B32, B64, B8, B8X16, F32, F32X2, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS,
 };
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 
 use regalloc::{RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
-use regalloc::{RegUsageCollector, RegUsageMapper, Set};
+use regalloc::{RegUsageCollector, RegUsageMapper};
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -197,6 +197,23 @@ pub enum VecALUOp {
     SQSubScalar,
     /// Unsigned saturating subtract
     UQSubScalar,
+    /// Compare bitwise equal
+    Cmeq,
+    /// Compare signed greater than or equal
+    Cmge,
+    /// Compare signed greater than
+    Cmgt,
+    /// Compare unsigned higher
+    Cmhs,
+    /// Compare unsigned higher or same
+    Cmhi,
+}
+
+/// A Vector miscellaneous operation with two registers.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum VecMisc2 {
+    /// Bitwise NOT.
+    Not,
 }
 
 /// An operation on the bits of a register. This can be paired with several instruction formats
@@ -245,6 +262,36 @@ impl From<(Opcode, Type)> for BitOp {
             _ => unreachable!("Called with non-bit op!: {:?}", op_ty),
         }
     }
+}
+
+/// Additional information for (direct) Call instructions, left out of line to lower the size of
+/// the Inst enum.
+#[derive(Clone, Debug)]
+pub struct CallInfo {
+    pub dest: ExternalName,
+    pub uses: Vec<Reg>,
+    pub defs: Vec<Writable<Reg>>,
+    pub loc: SourceLoc,
+    pub opcode: Opcode,
+}
+
+/// Additional information for CallInd instructions, left out of line to lower the size of the Inst
+/// enum.
+#[derive(Clone, Debug)]
+pub struct CallIndInfo {
+    pub rn: Reg,
+    pub uses: Vec<Reg>,
+    pub defs: Vec<Writable<Reg>>,
+    pub loc: SourceLoc,
+    pub opcode: Opcode,
+}
+
+/// Additional information for JTSequence instructions, left out of line to lower the size of the Inst
+/// enum.
+#[derive(Clone, Debug)]
+pub struct JTSequenceInfo {
+    pub targets: Vec<BranchTarget>,
+    pub targets_for_term: Vec<MachLabel>, // needed for MachTerminator.
 }
 
 /// Instruction formats.
@@ -626,6 +673,15 @@ pub enum Inst {
         rd: Writable<Reg>,
         rn: Reg,
         rm: Reg,
+        ty: Type,
+    },
+
+    /// Vector two register miscellaneous instruction.
+    VecMisc {
+        op: VecMisc2,
+        rd: Writable<Reg>,
+        rn: Reg,
+        ty: Type,
     },
 
     /// Move to the NZCV flags (actually a `MSR NZCV, Xn` insn).
@@ -649,19 +705,11 @@ pub enum Inst {
     /// code should use a `LoadExtName` / `CallInd` sequence instead, allowing an arbitrary 64-bit
     /// target.
     Call {
-        dest: Box<ExternalName>,
-        uses: Box<Set<Reg>>,
-        defs: Box<Set<Writable<Reg>>>,
-        loc: SourceLoc,
-        opcode: Opcode,
+        info: Box<CallInfo>,
     },
     /// A machine indirect-call instruction.
     CallInd {
-        rn: Reg,
-        uses: Box<Set<Reg>>,
-        defs: Box<Set<Writable<Reg>>>,
-        loc: SourceLoc,
-        opcode: Opcode,
+        info: Box<CallIndInfo>,
     },
 
     // ---- branches (exactly one must appear at end of BB) ----
@@ -742,8 +790,7 @@ pub enum Inst {
     /// Jump-table sequence, as one compound instruction (see note in lower.rs
     /// for rationale).
     JTSequence {
-        targets: Box<[BranchTarget]>,
-        targets_for_term: Box<[MachLabel]>, // needed for MachTerminator.
+        info: Box<JTSequenceInfo>,
         ridx: Reg,
         rtmp1: Writable<Reg>,
         rtmp2: Writable<Reg>,
@@ -758,7 +805,7 @@ pub enum Inst {
     /// Load an inline symbol reference.
     LoadExtName {
         rd: Writable<Reg>,
-        name: ExternalName,
+        name: Box<ExternalName>,
         srcloc: SourceLoc,
         offset: i64,
     },
@@ -817,7 +864,7 @@ fn count_zero_half_words(mut value: u64) -> usize {
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
-    assert_eq!(48, std::mem::size_of::<Inst>());
+    assert_eq!(32, std::mem::size_of::<Inst>());
 }
 
 impl Inst {
@@ -1096,6 +1143,10 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(rm);
             collector.add_use(ra);
         }
+        &Inst::VecMisc { rd, rn, .. } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
+        }
         &Inst::FpuCmp32 { rn, rm } | &Inst::FpuCmp64 { rn, rm } => {
             collector.add_use(rn);
             collector.add_use(rm);
@@ -1173,21 +1224,14 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(rn);
         }
         &Inst::Jump { .. } | &Inst::Ret | &Inst::EpiloguePlaceholder => {}
-        &Inst::Call {
-            ref uses, ref defs, ..
-        } => {
-            collector.add_uses(&*uses);
-            collector.add_defs(&*defs);
+        &Inst::Call { ref info } => {
+            collector.add_uses(&*info.uses);
+            collector.add_defs(&*info.defs);
         }
-        &Inst::CallInd {
-            ref uses,
-            ref defs,
-            rn,
-            ..
-        } => {
-            collector.add_uses(&*uses);
-            collector.add_defs(&*defs);
-            collector.add_use(rn);
+        &Inst::CallInd { ref info } => {
+            collector.add_uses(&*info.uses);
+            collector.add_defs(&*info.defs);
+            collector.add_use(info.rn);
         }
         &Inst::CondBr { ref kind, .. } | &Inst::OneWayCondBr { ref kind, .. } => match kind {
             CondBrKind::Zero(rt) | CondBrKind::NotZero(rt) => {
@@ -1567,6 +1611,14 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, rm);
             map_use(mapper, ra);
         }
+        &mut Inst::VecMisc {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+        }
         &mut Inst::FpuCmp32 {
             ref mut rn,
             ref mut rm,
@@ -1724,46 +1776,23 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, rn);
         }
         &mut Inst::Jump { .. } => {}
-        &mut Inst::Call {
-            ref mut uses,
-            ref mut defs,
-            ..
-        } => {
-            // TODO: add `map_mut()` to regalloc.rs's Set.
-            let new_uses = uses.map(|r| {
-                let mut r = *r;
-                map_use(mapper, &mut r);
-                r
-            });
-            let new_defs = defs.map(|r| {
-                let mut r = *r;
-                map_def(mapper, &mut r);
-                r
-            });
-            *uses = Box::new(new_uses);
-            *defs = Box::new(new_defs);
+        &mut Inst::Call { ref mut info } => {
+            for r in info.uses.iter_mut() {
+                map_use(mapper, r);
+            }
+            for r in info.defs.iter_mut() {
+                map_def(mapper, r);
+            }
         }
         &mut Inst::Ret | &mut Inst::EpiloguePlaceholder => {}
-        &mut Inst::CallInd {
-            ref mut uses,
-            ref mut defs,
-            ref mut rn,
-            ..
-        } => {
-            // TODO: add `map_mut()` to regalloc.rs's Set.
-            let new_uses = uses.map(|r| {
-                let mut r = *r;
-                map_use(mapper, &mut r);
-                r
-            });
-            let new_defs = defs.map(|r| {
-                let mut r = *r;
-                map_def(mapper, &mut r);
-                r
-            });
-            *uses = Box::new(new_uses);
-            *defs = Box::new(new_defs);
-            map_use(mapper, rn);
+        &mut Inst::CallInd { ref mut info, .. } => {
+            for r in info.uses.iter_mut() {
+                map_use(mapper, r);
+            }
+            for r in info.defs.iter_mut() {
+                map_def(mapper, r);
+            }
+            map_use(mapper, &mut info.rn);
         }
         &mut Inst::CondBr { ref mut kind, .. } | &mut Inst::OneWayCondBr { ref mut kind, .. } => {
             map_br(mapper, kind);
@@ -1847,10 +1876,9 @@ impl MachInst for Inst {
                 MachTerminator::None
             }
             &Inst::IndirectBr { ref targets, .. } => MachTerminator::Indirect(&targets[..]),
-            &Inst::JTSequence {
-                ref targets_for_term,
-                ..
-            } => MachTerminator::Indirect(&targets_for_term[..]),
+            &Inst::JTSequence { ref info, .. } => {
+                MachTerminator::Indirect(&info.targets_for_term[..])
+            }
             _ => MachTerminator::None,
         }
     }
@@ -1909,6 +1937,7 @@ impl MachInst for Inst {
             F32 | F64 => Ok(RegClass::V128),
             IFLAGS | FFLAGS => Ok(RegClass::I64),
             I8X16 => Ok(RegClass::V128),
+            B8X16 => Ok(RegClass::V128),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty
@@ -2482,17 +2511,44 @@ impl ShowWithRRU for Inst {
                 let rn = rn.show_rru(mb_rru);
                 format!("mov {}, {}.d[0]", rd, rn)
             }
-            &Inst::VecRRR { rd, rn, rm, alu_op } => {
-                let op = match alu_op {
-                    VecALUOp::SQAddScalar => "sqadd",
-                    VecALUOp::UQAddScalar => "uqadd",
-                    VecALUOp::SQSubScalar => "sqsub",
-                    VecALUOp::UQSubScalar => "uqsub",
+            &Inst::VecRRR {
+                rd,
+                rn,
+                rm,
+                alu_op,
+                ty,
+            } => {
+                let (op, vector) = match alu_op {
+                    VecALUOp::SQAddScalar => ("sqadd", false),
+                    VecALUOp::UQAddScalar => ("uqadd", false),
+                    VecALUOp::SQSubScalar => ("sqsub", false),
+                    VecALUOp::UQSubScalar => ("uqsub", false),
+                    VecALUOp::Cmeq => ("cmeq", true),
+                    VecALUOp::Cmge => ("cmge", true),
+                    VecALUOp::Cmgt => ("cmgt", true),
+                    VecALUOp::Cmhs => ("cmhs", true),
+                    VecALUOp::Cmhi => ("cmhi", true),
                 };
-                let rd = show_vreg_scalar(rd.to_reg(), mb_rru);
-                let rn = show_vreg_scalar(rn, mb_rru);
-                let rm = show_vreg_scalar(rm, mb_rru);
+
+                let show_vreg_fn: fn(Reg, Option<&RealRegUniverse>, Type) -> String = if vector {
+                    |reg, mb_rru, ty| show_vreg_vector(reg, mb_rru, ty)
+                } else {
+                    |reg, mb_rru, _ty| show_vreg_scalar(reg, mb_rru)
+                };
+
+                let rd = show_vreg_fn(rd.to_reg(), mb_rru, ty);
+                let rn = show_vreg_fn(rn, mb_rru, ty);
+                let rm = show_vreg_fn(rm, mb_rru, ty);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
+            }
+            &Inst::VecMisc { op, rd, rn, ty } => {
+                let op = match op {
+                    VecMisc2::Not => "mvn",
+                };
+
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, ty);
+                let rn = show_vreg_vector(rn, mb_rru, ty);
+                format!("{} {}, {}", op, rd, rn)
             }
             &Inst::MovToNZCV { rn } => {
                 let rn = rn.show_rru(mb_rru);
@@ -2568,9 +2624,9 @@ impl ShowWithRRU for Inst {
             &Inst::Extend { .. } => {
                 panic!("Unsupported Extend case");
             }
-            &Inst::Call { dest: _, .. } => format!("bl 0"),
-            &Inst::CallInd { rn, .. } => {
-                let rn = rn.show_rru(mb_rru);
+            &Inst::Call { .. } => format!("bl 0"),
+            &Inst::CallInd { ref info, .. } => {
+                let rn = info.rn.show_rru(mb_rru);
                 format!("blr {}", rn)
             }
             &Inst::Ret => "ret".to_string(),
@@ -2634,7 +2690,7 @@ impl ShowWithRRU for Inst {
             &Inst::Word4 { data } => format!("data.i32 {}", data),
             &Inst::Word8 { data } => format!("data.i64 {}", data),
             &Inst::JTSequence {
-                ref targets,
+                ref info,
                 ridx,
                 rtmp1,
                 rtmp2,
@@ -2651,7 +2707,7 @@ impl ShowWithRRU for Inst {
                         "br {} ; ",
                         "jt_entries {:?}"
                     ),
-                    rtmp1, rtmp2, rtmp1, ridx, rtmp1, rtmp1, rtmp2, rtmp1, targets
+                    rtmp1, rtmp2, rtmp1, ridx, rtmp1, rtmp1, rtmp2, rtmp1, info.targets
                 )
             }
             &Inst::LoadConst64 { rd, const_data } => {

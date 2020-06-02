@@ -255,7 +255,7 @@ WASM_API_EXTERN own wasmtime_error_t *wasmtime_instance_new(
 // Similar to `wasm_module_new`, but an error is returned to return a
 // descriptive error message in case compilation fails.
 WASM_API_EXTERN own wasmtime_error_t *wasmtime_module_new(
-    wasm_engine_t *engine,
+    wasm_store_t *store,
     const wasm_byte_vec_t *binary,
     own wasm_module_t **ret
 );

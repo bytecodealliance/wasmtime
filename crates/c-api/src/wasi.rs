@@ -1,4 +1,5 @@
 //! The WASI embedding API definitions for Wasmtime.
+use crate::host_ref::HostRef;
 use crate::{wasm_extern_t, wasm_importtype_t, wasm_store_t, wasm_trap_t, ExternHost};
 use anyhow::Result;
 use std::collections::HashMap;
@@ -12,7 +13,7 @@ use wasi_common::{
     old::snapshot_0::WasiCtxBuilder as WasiSnapshot0CtxBuilder, preopen_dir,
     WasiCtxBuilder as WasiPreview1CtxBuilder,
 };
-use wasmtime::{HostRef, Linker, Store, Trap};
+use wasmtime::{Linker, Store, Trap};
 use wasmtime_wasi::{old::snapshot_0::Wasi as WasiSnapshot0, Wasi as WasiPreview1};
 
 unsafe fn cstr_to_path<'a>(path: *const c_char) -> Option<&'a Path> {
@@ -282,7 +283,7 @@ pub unsafe extern "C" fn wasi_instance_new(
     config: Box<wasi_config_t>,
     trap: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasi_instance_t>> {
-    let store = &store.store.borrow();
+    let store = &store.store;
 
     let result = match CStr::from_ptr(name).to_str().unwrap_or("") {
         "wasi_snapshot_preview1" => create_preview1_instance(store, *config),
@@ -297,7 +298,7 @@ pub unsafe extern "C" fn wasi_instance_new(
         })),
         Err(e) => {
             *trap = Box::into_raw(Box::new(wasm_trap_t {
-                trap: HostRef::new(Trap::new(e)),
+                trap: HostRef::new(store, Trap::new(e)),
             }));
 
             None
@@ -335,13 +336,14 @@ pub extern "C" fn wasi_instance_bind_import<'a>(
     if &export.ty() != import.ty.func()? {
         return None;
     }
+    let store = export.store();
 
     let entry = instance
         .export_cache
         .entry(name.to_string())
         .or_insert_with(|| {
             Box::new(wasm_extern_t {
-                which: ExternHost::Func(HostRef::new(export.clone())),
+                which: ExternHost::Func(HostRef::new(store, export.clone())),
             })
         });
     Some(entry)

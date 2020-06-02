@@ -32,7 +32,7 @@ pub(crate) fn create_handle(
         .local
         .signatures
         .values()
-        .map(|sig| store.register_signature(sig))
+        .map(|(wasm, native)| store.register_signature(wasm.clone(), native.clone()))
         .collect::<PrimaryMap<_, _>>();
 
     unsafe {

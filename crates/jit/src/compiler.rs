@@ -147,12 +147,12 @@ impl Compiler {
         let mut cx = FunctionBuilderContext::new();
         let mut trampolines = PrimaryMap::new();
         let mut trampoline_relocations = HashMap::new();
-        for (index, sig) in translation.module.local.signatures.iter() {
+        for (index, (_, native_sig)) in translation.module.local.signatures.iter() {
             let (trampoline, relocations) = make_trampoline(
                 &*self.isa,
                 &mut code_memory,
                 &mut cx,
-                sig,
+                native_sig,
                 std::mem::size_of::<u128>(),
             )?;
             trampolines.push(trampoline);
@@ -161,7 +161,7 @@ impl Compiler {
             // show up be sure to log it in case anyone's listening and there's
             // an accidental bug.
             if relocations.len() > 0 {
-                log::info!("relocations found in trampoline for {:?}", sig);
+                log::info!("relocations found in trampoline for {:?}", native_sig);
                 trampoline_relocations.insert(index, relocations);
             }
         }

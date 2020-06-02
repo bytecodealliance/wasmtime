@@ -1,6 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
+use crate::error_transform::ErrorTransform;
 use crate::lifetimes::anon_lifetime;
 use crate::module_trait::passed_by_reference;
 use crate::names::Names;
@@ -9,6 +10,7 @@ pub fn define_func(
     names: &Names,
     func: &witx::InterfaceFunc,
     trait_name: TokenStream,
+    errxform: &ErrorTransform,
 ) -> TokenStream {
     let funcname = func.name.as_str();
 
@@ -43,16 +45,23 @@ pub fn define_func(
         quote!(())
     };
 
-    let err_type = coretype.ret.map(|ret| ret.param.tref);
-    let ret_err = err_type
-        .clone()
-        .map(|_res| {
+    let err_type = coretype.ret.clone().map(|ret| ret.param.tref);
+    let ret_err = coretype
+        .ret
+        .map(|ret| {
+            let name = ret.param.name.as_str();
+            let conversion = if let Some(user_err) = errxform.for_abi_error(&ret.param.tref) {
+                let method = names.user_error_conversion_method(&user_err);
+                quote!(#abi_ret::from(UserErrorConversion::#method(ctx, e)))
+            } else {
+                quote!(#abi_ret::from(e))
+            };
             quote! {
                 #[cfg(feature = "trace_log")]
                 {
-                    log::trace!("     | errno={}", e);
+                    log::trace!("     | {}={:?}", #name, e);
                 }
-                return #abi_ret::from(e);
+                return #conversion;
             }
         })
         .unwrap_or_else(|| quote!(()));

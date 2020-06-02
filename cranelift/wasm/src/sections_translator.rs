@@ -23,7 +23,7 @@ use std::boxed::Box;
 use std::vec::Vec;
 use wasmparser::{
     self, CodeSectionReader, Data, DataKind, DataSectionReader, Element, ElementItem, ElementItems,
-    ElementKind, ElementSectionReader, Export, ExportSectionReader, ExternalKind, FuncType,
+    ElementKind, ElementSectionReader, Export, ExportSectionReader, ExternalKind,
     FunctionSectionReader, GlobalSectionReader, GlobalType, ImportSectionEntryType,
     ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader, Naming, NamingReader,
     Operator, TableSectionReader, Type, TypeSectionReader,
@@ -40,34 +40,22 @@ pub fn parse_type_section(
     environ.reserve_signatures(count)?;
 
     for entry in types {
-        match entry? {
-            FuncType {
-                form: wasmparser::Type::Func,
-                params,
-                returns,
-            } => {
-                let mut sig =
-                    Signature::new(ModuleEnvironment::target_config(environ).default_call_conv);
-                sig.params.extend(params.iter().map(|ty| {
-                    let cret_arg: ir::Type = type_to_type(*ty, environ)
-                        .expect("only numeric types are supported in function signatures");
-                    AbiParam::new(cret_arg)
-                }));
-                sig.returns.extend(returns.iter().map(|ty| {
-                    let cret_arg: ir::Type = type_to_type(*ty, environ)
-                        .expect("only numeric types are supported in function signatures");
-                    AbiParam::new(cret_arg)
-                }));
-                environ.declare_signature(sig)?;
-                module_translation_state.wasm_types.push((params, returns));
-            }
-            ty => {
-                return Err(wasm_unsupported!(
-                    "unsupported type in type section: {:?}",
-                    ty
-                ))
-            }
-        }
+        let wasm_func_ty = entry?;
+        let mut sig = Signature::new(ModuleEnvironment::target_config(environ).default_call_conv);
+        sig.params.extend(wasm_func_ty.params.iter().map(|ty| {
+            let cret_arg: ir::Type = type_to_type(*ty, environ)
+                .expect("only numeric types are supported in function signatures");
+            AbiParam::new(cret_arg)
+        }));
+        sig.returns.extend(wasm_func_ty.returns.iter().map(|ty| {
+            let cret_arg: ir::Type = type_to_type(*ty, environ)
+                .expect("only numeric types are supported in function signatures");
+            AbiParam::new(cret_arg)
+        }));
+        environ.declare_signature(&wasm_func_ty, sig)?;
+        module_translation_state
+            .wasm_types
+            .push((wasm_func_ty.params, wasm_func_ty.returns));
     }
     Ok(())
 }

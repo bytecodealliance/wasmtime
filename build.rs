@@ -155,9 +155,10 @@ fn write_testsuite_tests(
         writeln!(out, "#[ignore]")?;
     }
     writeln!(out, "fn r#{}() {{", &testname)?;
+    writeln!(out, "    let _ = env_logger::try_init();")?;
     writeln!(
         out,
-        "crate::wast::run_wast(r#\"{}\"#, crate::wast::Strategy::{}).unwrap();",
+        "    crate::wast::run_wast(r#\"{}\"#, crate::wast::Strategy::{}).unwrap();",
         path.display(),
         strategy
     )?;
@@ -180,6 +181,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         },
         "Cranelift" => match (testsuite, testname) {
             ("simd", "simd_store") => return false,
+            ("simd", "simd_i8x16_cmp") => return false,
             // Most simd tests are known to fail on aarch64 for now, it's going
             // to be a big chunk of work to implement them all there!
             ("simd", _) if target.contains("aarch64") => return true,
@@ -204,6 +206,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
 
             // Still working on implementing these. See #929.
             ("reference_types", "table_copy_on_imported_tables") => return false,
+            ("reference_types", "externref_id_function") => return false,
             ("reference_types", _) => return true,
 
             _ => {}

@@ -1,11 +1,10 @@
 use crate::wasm_config_t;
-use std::sync::Arc;
 use wasmtime::Engine;
 
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_engine_t {
-    pub(crate) engine: Arc<Engine>,
+    pub(crate) engine: Engine,
 }
 
 wasmtime_c_api_macros::declare_own!(wasm_engine_t);
@@ -23,7 +22,7 @@ pub extern "C" fn wasm_engine_new() -> Box<wasm_engine_t> {
     drop(env_logger::try_init());
 
     Box::new(wasm_engine_t {
-        engine: Arc::new(Engine::default()),
+        engine: Engine::default(),
     })
 }
 
@@ -31,6 +30,6 @@ pub extern "C" fn wasm_engine_new() -> Box<wasm_engine_t> {
 pub extern "C" fn wasm_engine_new_with_config(c: Box<wasm_config_t>) -> Box<wasm_engine_t> {
     let config = c.config;
     Box::new(wasm_engine_t {
-        engine: Arc::new(Engine::new(&config)),
+        engine: Engine::new(&config),
     })
 }
