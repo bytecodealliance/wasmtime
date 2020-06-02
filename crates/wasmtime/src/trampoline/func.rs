@@ -225,7 +225,10 @@ pub fn create_handle_with_function(
 
     // First up we manufacture a trampoline which has the ABI specified by `ft`
     // and calls into `stub_fn`...
-    let sig_id = module.local.signatures.push(sig.clone());
+    let sig_id = module
+        .local
+        .signatures
+        .push((ft.to_wasm_func_type(), sig.clone()));
     let func_id = module.local.functions.push(sig_id);
     module
         .exports
@@ -244,7 +247,10 @@ pub fn create_handle_with_function(
         mem::size_of::<u128>(),
     )?;
     assert!(relocations.is_empty());
-    let sig_id = store.compiler().signatures().register(&sig);
+    let sig_id = store
+        .compiler()
+        .signatures()
+        .register(ft.to_wasm_func_type(), sig);
     trampolines.insert(sig_id, trampoline);
 
     // Next up we wrap everything up into an `InstanceHandle` by publishing our
@@ -285,13 +291,19 @@ pub unsafe fn create_handle_with_raw_function(
     let mut finished_functions = PrimaryMap::new();
     let mut trampolines = HashMap::new();
 
-    let sig_id = module.local.signatures.push(sig.clone());
+    let sig_id = module
+        .local
+        .signatures
+        .push((ft.to_wasm_func_type(), sig.clone()));
     let func_id = module.local.functions.push(sig_id);
     module
         .exports
         .insert("trampoline".to_string(), EntityIndex::Function(func_id));
     finished_functions.push(func);
-    let sig_id = store.compiler().signatures().register(&sig);
+    let sig_id = store
+        .compiler()
+        .signatures()
+        .register(ft.to_wasm_func_type(), sig);
     trampolines.insert(sig_id, trampoline);
 
     create_handle(module, store, finished_functions, trampolines, state)

@@ -1,6 +1,7 @@
+use crate::host_ref::HostRef;
 use crate::{wasm_frame_vec_t, wasm_instance_t, wasm_name_t, wasm_store_t};
 use once_cell::unsync::OnceCell;
-use wasmtime::{HostRef, Trap};
+use wasmtime::{Store, Trap};
 
 #[repr(C)]
 #[derive(Clone)]
@@ -11,14 +12,14 @@ pub struct wasm_trap_t {
 wasmtime_c_api_macros::declare_ref!(wasm_trap_t);
 
 impl wasm_trap_t {
-    pub(crate) fn new(trap: Trap) -> wasm_trap_t {
+    pub(crate) fn new(store: &Store, trap: Trap) -> wasm_trap_t {
         wasm_trap_t {
-            trap: HostRef::new(trap),
+            trap: HostRef::new(store, trap),
         }
     }
 
     fn externref(&self) -> wasmtime::ExternRef {
-        self.trap.externref()
+        self.trap.clone().into()
     }
 }
 
@@ -37,7 +38,7 @@ pub type wasm_message_t = wasm_name_t;
 
 #[no_mangle]
 pub extern "C" fn wasm_trap_new(
-    _store: &wasm_store_t,
+    store: &wasm_store_t,
     message: &wasm_message_t,
 ) -> Box<wasm_trap_t> {
     let message = message.as_slice();
@@ -46,7 +47,7 @@ pub extern "C" fn wasm_trap_new(
     }
     let message = String::from_utf8_lossy(&message[..message.len() - 1]);
     Box::new(wasm_trap_t {
-        trap: HostRef::new(Trap::new(message)),
+        trap: HostRef::new(&store.store, Trap::new(message)),
     })
 }
 

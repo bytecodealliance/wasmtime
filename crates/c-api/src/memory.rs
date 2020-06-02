@@ -1,5 +1,6 @@
+use crate::host_ref::HostRef;
 use crate::{wasm_extern_t, wasm_memorytype_t, wasm_store_t, ExternHost};
-use wasmtime::{HostRef, Memory};
+use wasmtime::Memory;
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -27,7 +28,7 @@ impl wasm_memory_t {
     }
 
     fn externref(&self) -> wasmtime::ExternRef {
-        self.memory().externref()
+        self.memory().clone().into()
     }
 }
 
@@ -36,7 +37,7 @@ pub extern "C" fn wasm_memory_new(
     store: &wasm_store_t,
     mt: &wasm_memorytype_t,
 ) -> Box<wasm_memory_t> {
-    let memory = HostRef::new(Memory::new(&store.store.borrow(), mt.ty().ty.clone()));
+    let memory = HostRef::new(&store.store, Memory::new(&store.store, mt.ty().ty.clone()));
     Box::new(wasm_memory_t {
         ext: wasm_extern_t {
             which: ExternHost::Memory(memory),

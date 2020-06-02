@@ -1,8 +1,9 @@
+use crate::host_ref::HostRef;
 use crate::{handle_result, wasmtime_error_t};
 use crate::{wasm_byte_vec_t, wasm_exporttype_vec_t, wasm_importtype_vec_t};
 use crate::{wasm_exporttype_t, wasm_importtype_t, wasm_store_t};
 use std::ptr;
-use wasmtime::{HostRef, Module};
+use wasmtime::Module;
 
 #[repr(C)]
 #[derive(Clone)]
@@ -16,7 +17,7 @@ wasmtime_c_api_macros::declare_ref!(wasm_module_t);
 
 impl wasm_module_t {
     fn externref(&self) -> wasmtime::ExternRef {
-        self.module.externref()
+        self.module.clone().into()
     }
 }
 
@@ -42,7 +43,7 @@ pub extern "C" fn wasmtime_module_new(
     ret: &mut *mut wasm_module_t,
 ) -> Option<Box<wasmtime_error_t>> {
     let binary = binary.as_slice();
-    let store = &store.store.borrow();
+    let store = &store.store;
     handle_result(Module::from_binary(store, binary), |module| {
         let imports = module
             .imports()
@@ -53,7 +54,7 @@ pub extern "C" fn wasmtime_module_new(
             .map(|e| wasm_exporttype_t::new(e.name().to_owned(), e.ty()))
             .collect::<Vec<_>>();
         let module = Box::new(wasm_module_t {
-            module: HostRef::new(module),
+            module: HostRef::new(store, module),
             imports,
             exports,
         });
@@ -72,7 +73,7 @@ pub extern "C" fn wasmtime_module_validate(
     binary: &wasm_byte_vec_t,
 ) -> Option<Box<wasmtime_error_t>> {
     let binary = binary.as_slice();
-    let store = &store.store.borrow();
+    let store = &store.store;
     handle_result(Module::validate(store, binary), |()| {})
 }
 

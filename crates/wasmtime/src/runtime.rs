@@ -1,10 +1,14 @@
 use crate::externals::MemoryCreator;
+use crate::r#ref::ExternRef;
 use crate::trampoline::{MemoryCreatorProxy, StoreInstanceHandle};
 use anyhow::{bail, Result};
+use std::any::Any;
 use std::cell::RefCell;
 use std::cmp;
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
@@ -14,7 +18,7 @@ use wasmtime_environ::{CacheConfig, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{
-    debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, VMInterrupts,
+    debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, VMExternRef, VMInterrupts,
 };
 
 // Runtime Environment
@@ -83,6 +87,7 @@ impl Config {
                     enable_bulk_memory: false,
                     enable_simd: false,
                     enable_multi_value: true,
+                    enable_tail_call: false,
                 },
             },
             flags,
@@ -732,6 +737,26 @@ pub(crate) struct StoreInner {
     compiler: RefCell<Compiler>,
     instances: RefCell<Vec<InstanceHandle>>,
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
+    host_info: RefCell<HashMap<HostInfoKey, Rc<RefCell<dyn Any>>>>,
+}
+
+struct HostInfoKey(VMExternRef);
+
+impl PartialEq for HostInfoKey {
+    fn eq(&self, rhs: &Self) -> bool {
+        VMExternRef::eq(&self.0, &rhs.0)
+    }
+}
+
+impl Eq for HostInfoKey {}
+
+impl Hash for HostInfoKey {
+    fn hash<H>(&self, hasher: &mut H)
+    where
+        H: Hasher,
+    {
+        VMExternRef::hash(&self.0, hasher);
+    }
 }
 
 impl Store {
@@ -757,6 +782,7 @@ impl Store {
                 compiler: RefCell::new(compiler),
                 instances: RefCell::new(Vec::new()),
                 signal_handler: RefCell::new(None),
+                host_info: RefCell::new(HashMap::new()),
             }),
         }
     }
@@ -806,6 +832,37 @@ impl Store {
 
     pub(crate) fn weak(&self) -> Weak<StoreInner> {
         Rc::downgrade(&self.inner)
+    }
+
+    pub(crate) fn upgrade(weak: &Weak<StoreInner>) -> Option<Self> {
+        let inner = weak.upgrade()?;
+        Some(Self { inner })
+    }
+
+    pub(crate) fn host_info(&self, externref: &ExternRef) -> Option<Rc<RefCell<dyn Any>>> {
+        debug_assert!(
+            std::rc::Weak::ptr_eq(&self.weak(), &externref.store),
+            "externref must be from this store"
+        );
+        let infos = self.inner.host_info.borrow();
+        infos.get(&HostInfoKey(externref.inner.clone())).cloned()
+    }
+
+    pub(crate) fn set_host_info(
+        &self,
+        externref: &ExternRef,
+        info: Option<Rc<RefCell<dyn Any>>>,
+    ) -> Option<Rc<RefCell<dyn Any>>> {
+        debug_assert!(
+            std::rc::Weak::ptr_eq(&self.weak(), &externref.store),
+            "externref must be from this store"
+        );
+        let mut infos = self.inner.host_info.borrow_mut();
+        if let Some(info) = info {
+            infos.insert(HostInfoKey(externref.inner.clone()), info)
+        } else {
+            infos.remove(&HostInfoKey(externref.inner.clone()))
+        }
     }
 
     pub(crate) fn signal_handler(&self) -> std::cell::Ref<'_, Option<Box<SignalHandler<'static>>>> {
@@ -923,6 +980,13 @@ impl Store {
 impl Default for Store {
     fn default() -> Store {
         Store::new(&Engine::default())
+    }
+}
+
+impl fmt::Debug for Store {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let inner = &*self.inner as *const StoreInner;
+        f.debug_struct("Store").field("inner", &inner).finish()
     }
 }
 

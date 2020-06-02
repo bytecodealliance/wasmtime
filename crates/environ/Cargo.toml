@@ -16,7 +16,7 @@ anyhow = "1.0"
 cranelift-codegen = { path = "../../cranelift/codegen", version = "0.63.0", features = ["enable-serde"] }
 cranelift-entity = { path = "../../cranelift/entity", version = "0.63.0", features = ["enable-serde"] }
 cranelift-wasm = { path = "../../cranelift/wasm", version = "0.63.0", features = ["enable-serde"] }
-wasmparser = "0.55.0"
+wasmparser = "0.57.0"
 lightbeam = { path = "../lightbeam", optional = true, version = "0.16.0" }
 indexmap = "1.0.2"
 rayon = "1.2.1"

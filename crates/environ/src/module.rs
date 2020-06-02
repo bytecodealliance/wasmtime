@@ -7,7 +7,7 @@ use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{
     DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
     ElemIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table,
-    TableIndex,
+    TableIndex, WasmFuncType,
 };
 use indexmap::IndexMap;
 use more_asserts::assert_ge;
@@ -181,7 +181,7 @@ pub struct Module {
 #[derive(Debug, Hash)]
 pub struct ModuleLocal {
     /// Unprocessed signatures exactly as provided by `declare_signature()`.
-    pub signatures: PrimaryMap<SignatureIndex, ir::Signature>,
+    pub signatures: PrimaryMap<SignatureIndex, (WasmFuncType, ir::Signature)>,
 
     /// Number of imported functions in the module.
     pub num_imported_funcs: usize,
@@ -332,8 +332,15 @@ impl ModuleLocal {
         index.index() < self.num_imported_globals
     }
 
-    /// Convenience method for looking up the signature of a function.
-    pub fn func_signature(&self, func_index: FuncIndex) -> &ir::Signature {
-        &self.signatures[self.functions[func_index]]
+    /// Convenience method for looking up the native signature of a compiled
+    /// Wasm function.
+    pub fn native_func_signature(&self, func_index: FuncIndex) -> &ir::Signature {
+        &self.signatures[self.functions[func_index]].1
+    }
+
+    /// Convenience method for looking up the original Wasm signature of a
+    /// function.
+    pub fn wasm_func_type(&self, func_index: FuncIndex) -> &WasmFuncType {
+        &self.signatures[self.functions[func_index]].0
     }
 }

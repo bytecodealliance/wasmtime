@@ -155,9 +155,10 @@ fn write_testsuite_tests(
         writeln!(out, "#[ignore]")?;
     }
     writeln!(out, "fn r#{}() {{", &testname)?;
+    writeln!(out, "    let _ = env_logger::try_init();")?;
     writeln!(
         out,
-        "crate::wast::run_wast(r#\"{}\"#, crate::wast::Strategy::{}).unwrap();",
+        "    crate::wast::run_wast(r#\"{}\"#, crate::wast::Strategy::{}).unwrap();",
         path.display(),
         strategy
     )?;
@@ -205,6 +206,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
 
             // Still working on implementing these. See #929.
             ("reference_types", "table_copy_on_imported_tables") => return false,
+            ("reference_types", "externref_id_function") => return false,
             ("reference_types", _) => return true,
 
             _ => {}

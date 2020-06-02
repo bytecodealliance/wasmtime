@@ -24,7 +24,7 @@ smallvec = "1.0.0"
 staticvec = "0.9"
 thiserror = "1.0.9"
 typemap = "0.3"
-wasmparser = "0.55.0"
+wasmparser = "0.57.0"
 
 [dev-dependencies]
 lazy_static = "1.2"

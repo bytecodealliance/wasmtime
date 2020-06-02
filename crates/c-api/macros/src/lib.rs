@@ -96,7 +96,7 @@ pub fn declare_ref(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
         #[no_mangle]
         pub extern fn #as_ref(a: &#ty) -> Box<crate::wasm_ref_t> {
-            let r = a.externref();
+            let r = Some(a.externref());
             Box::new(crate::wasm_ref_t { r })
         }
 

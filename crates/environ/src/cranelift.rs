@@ -303,7 +303,7 @@ fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError
             let func_index = env.local.func_index(*i);
             let mut context = Context::new();
             context.func.name = get_func_name(func_index);
-            context.func.signature = env.local.func_signature(func_index).clone();
+            context.func.signature = env.local.native_func_signature(func_index).clone();
             if env.tunables.debug_info {
                 context.func.collect_debug_info();
             }

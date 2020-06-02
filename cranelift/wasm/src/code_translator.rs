@@ -1171,23 +1171,26 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             )?);
         }
         Operator::TableGrow { table } => {
+            let table_index = TableIndex::from_u32(*table);
             let delta = state.pop1();
             let init_value = state.pop1();
             state.push1(environ.translate_table_grow(
                 builder.cursor(),
-                *table,
+                table_index,
                 delta,
                 init_value,
             )?);
         }
         Operator::TableGet { table } => {
+            let table_index = TableIndex::from_u32(*table);
             let index = state.pop1();
-            state.push1(environ.translate_table_get(builder.cursor(), *table, index)?);
+            state.push1(environ.translate_table_get(builder.cursor(), table_index, index)?);
         }
         Operator::TableSet { table } => {
+            let table_index = TableIndex::from_u32(*table);
             let value = state.pop1();
             let index = state.pop1();
-            environ.translate_table_set(builder.cursor(), *table, value, index)?;
+            environ.translate_table_set(builder.cursor(), table_index, value, index)?;
         }
         Operator::TableCopy {
             dst_table: dst_table_index,
@@ -1210,10 +1213,11 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             )?;
         }
         Operator::TableFill { table } => {
+            let table_index = TableIndex::from_u32(*table);
             let len = state.pop1();
             let val = state.pop1();
             let dest = state.pop1();
-            environ.translate_table_fill(builder.cursor(), *table, dest, val, len)?;
+            environ.translate_table_fill(builder.cursor(), table_index, dest, val, len)?;
         }
         Operator::TableInit {
             segment,
@@ -1560,6 +1564,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I32x4WidenLowI16x8U { .. }
         | Operator::I32x4WidenHighI16x8U { .. } => {
             return Err(wasm_unsupported!("proposed SIMD operator {:?}", op));
+        }
+
+        Operator::ReturnCall { .. } | Operator::ReturnCallIndirect { .. } => {
+            return Err(wasm_unsupported!("proposed tail-call operator {:?}", op));
         }
     };
     Ok(())

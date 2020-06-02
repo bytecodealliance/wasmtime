@@ -93,7 +93,7 @@ impl<'data> RawCompiledModule<'data> {
                 .local
                 .signatures
                 .values()
-                .map(|sig| signature_registry.register(sig))
+                .map(|(wasm, native)| signature_registry.register(wasm.clone(), native.clone()))
                 .collect::<PrimaryMap<_, _>>()
         };
 

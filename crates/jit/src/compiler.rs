@@ -149,8 +149,10 @@ impl Compiler {
         let mut cx = FunctionBuilderContext::new();
         let mut trampolines = HashMap::new();
         let mut trampoline_relocations = HashMap::new();
-        for sig in translation.module.local.signatures.values() {
-            let index = self.signatures.register(sig);
+        for (wasm_func_ty, native_sig) in translation.module.local.signatures.values() {
+            let index = self
+                .signatures
+                .register(wasm_func_ty.clone(), native_sig.clone());
             if trampolines.contains_key(&index) {
                 continue;
             }
@@ -158,7 +160,7 @@ impl Compiler {
                 &*self.isa,
                 &mut self.code_memory,
                 &mut cx,
-                sig,
+                native_sig,
                 std::mem::size_of::<u128>(),
             )?;
             trampolines.insert(index, trampoline);
@@ -167,7 +169,7 @@ impl Compiler {
             // show up be sure to log it in case anyone's listening and there's
             // an accidental bug.
             if relocations.len() > 0 {
-                log::info!("relocations found in trampoline for {:?}", sig);
+                log::info!("relocations found in trampoline for {:?}", native_sig);
                 trampoline_relocations.insert(index, relocations);
             }
         }

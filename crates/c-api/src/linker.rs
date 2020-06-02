@@ -1,8 +1,9 @@
+use crate::host_ref::HostRef;
 use crate::{bad_utf8, handle_result, wasmtime_error_t};
 use crate::{wasm_extern_t, wasm_store_t, ExternHost};
 use crate::{wasm_func_t, wasm_instance_t, wasm_module_t, wasm_name_t, wasm_trap_t};
 use std::str;
-use wasmtime::{Extern, HostRef, Linker};
+use wasmtime::{Extern, Linker};
 
 #[repr(C)]
 pub struct wasmtime_linker_t {
@@ -12,7 +13,7 @@ pub struct wasmtime_linker_t {
 #[no_mangle]
 pub extern "C" fn wasmtime_linker_new(store: &wasm_store_t) -> Box<wasmtime_linker_t> {
     Box::new(wasmtime_linker_t {
-        linker: Linker::new(&store.store.borrow()),
+        linker: Linker::new(&store.store),
     })
 }
 
@@ -87,7 +88,7 @@ pub unsafe extern "C" fn wasmtime_linker_instantiate(
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
     let result = linker.linker.instantiate(&module.module.borrow());
-    super::instance::handle_instantiate(result, instance_ptr, trap_ptr)
+    super::instance::handle_instantiate(linker.linker.store(), result, instance_ptr, trap_ptr)
 }
 
 #[no_mangle]
@@ -116,6 +117,6 @@ pub unsafe extern "C" fn wasmtime_linker_get_default(
         Err(_) => return bad_utf8(),
     };
     handle_result(linker.get_default(name), |f| {
-        *func = Box::into_raw(Box::new(HostRef::new(f).into()))
+        *func = Box::into_raw(Box::new(HostRef::new(linker.store(), f).into()))
     })
 }

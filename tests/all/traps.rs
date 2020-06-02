@@ -341,7 +341,7 @@ fn mismatched_arguments() -> Result<()> {
     );
     assert_eq!(
         func.call(&[Val::F32(0)]).unwrap_err().to_string(),
-        "argument type mismatch",
+        "argument type mismatch: found f32 but expected i32",
     );
     assert_eq!(
         func.call(&[Val::I32(0), Val::I32(1)])

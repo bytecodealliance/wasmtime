@@ -1,6 +1,6 @@
 use crate::{wasm_name_t, wasm_trap_t};
 use anyhow::{anyhow, Error, Result};
-use wasmtime::Trap;
+use wasmtime::{Store, Trap};
 
 #[repr(C)]
 pub struct wasmtime_error_t {
@@ -10,8 +10,8 @@ pub struct wasmtime_error_t {
 wasmtime_c_api_macros::declare_own!(wasmtime_error_t);
 
 impl wasmtime_error_t {
-    pub(crate) fn to_trap(self) -> Box<wasm_trap_t> {
-        Box::new(wasm_trap_t::new(Trap::from(self.error)))
+    pub(crate) fn to_trap(self, store: &Store) -> Box<wasm_trap_t> {
+        Box::new(wasm_trap_t::new(store, Trap::from(self.error)))
     }
 }
 
