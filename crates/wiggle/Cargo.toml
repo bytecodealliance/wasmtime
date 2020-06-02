@@ -30,4 +30,10 @@ proptest = "0.9"
 # crate unless they want it.
 wiggle_metadata = ['witx', "wiggle-macro/wiggle_metadata"]
 
+# The `tracing` crate can use the `log` ecosystem of backends with this
+# non-default feature. We don't need to provide this by default, but its
+# useful for users that don't want to use `tracing-subscriber` to get
+# the logs out of wiggle-generated libraries.
+tracing_log = [ "tracing/log" ]
+
 default = ["wiggle_metadata" ]
