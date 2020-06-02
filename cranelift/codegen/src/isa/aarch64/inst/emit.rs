@@ -342,6 +342,12 @@ fn enc_fround(top22: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
     (top22 << 10) | (machreg_to_vec(rn) << 5) | machreg_to_vec(rd.to_reg())
 }
 
+fn enc_vec_rr_misc(bits_12_16: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
+    debug_assert_eq!(bits_12_16 & 0b11111, bits_12_16);
+    let bits = 0b0_1_1_01110_00_10000_00000_10_00000_00000;
+    bits | bits_12_16 << 12 | machreg_to_vec(rn) << 5 | machreg_to_vec(rd.to_reg())
+}
+
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
@@ -1002,6 +1008,15 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_fpurrrr(top17, rd, rn, rm, ra));
             }
+            &Inst::VecMisc { op, rd, rn, ty } => {
+                let bits_12_16 = match op {
+                    VecMisc2::Not => {
+                        debug_assert_eq!(I8X16, ty);
+                        0b00101
+                    }
+                };
+                sink.put4(enc_vec_rr_misc(bits_12_16, rd, rn));
+            }
             &Inst::FpuCmp32 { rn, rm } => {
                 sink.put4(enc_fcmp(InstSize::Size32, rn, rm));
             }
@@ -1125,12 +1140,40 @@ impl MachInstEmit for Inst {
                         | machreg_to_gpr(rd.to_reg()),
                 );
             }
-            &Inst::VecRRR { rd, rn, rm, alu_op } => {
+            &Inst::VecRRR {
+                rd,
+                rn,
+                rm,
+                alu_op,
+                ty,
+            } => {
+                let enc_size_for_cmp = match ty {
+                    I8X16 => 0b00,
+                    _ => 0,
+                };
+
                 let (top11, bit15_10) = match alu_op {
-                    VecALUOp::SQAddScalar => (0b010_11110_11_1, 0b000011),
-                    VecALUOp::SQSubScalar => (0b010_11110_11_1, 0b001011),
-                    VecALUOp::UQAddScalar => (0b011_11110_11_1, 0b000011),
-                    VecALUOp::UQSubScalar => (0b011_11110_11_1, 0b001011),
+                    VecALUOp::SQAddScalar => {
+                        debug_assert_eq!(I64, ty);
+                        (0b010_11110_11_1, 0b000011)
+                    }
+                    VecALUOp::SQSubScalar => {
+                        debug_assert_eq!(I64, ty);
+                        (0b010_11110_11_1, 0b001011)
+                    }
+                    VecALUOp::UQAddScalar => {
+                        debug_assert_eq!(I64, ty);
+                        (0b011_11110_11_1, 0b000011)
+                    }
+                    VecALUOp::UQSubScalar => {
+                        debug_assert_eq!(I64, ty);
+                        (0b011_11110_11_1, 0b001011)
+                    }
+                    VecALUOp::Cmeq => (0b011_01110_00_1 | enc_size_for_cmp << 1, 0b100011),
+                    VecALUOp::Cmge => (0b010_01110_00_1 | enc_size_for_cmp << 1, 0b001111),
+                    VecALUOp::Cmgt => (0b010_01110_00_1 | enc_size_for_cmp << 1, 0b001101),
+                    VecALUOp::Cmhi => (0b011_01110_00_1 | enc_size_for_cmp << 1, 0b001101),
+                    VecALUOp::Cmhs => (0b011_01110_00_1 | enc_size_for_cmp << 1, 0b001111),
                 };
                 sink.put4(enc_vec_rrr(top11, rm, bit15_10, rn, rd));
             }

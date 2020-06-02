@@ -319,6 +319,7 @@ pub fn show_vreg_vector(reg: Reg, mb_rru: Option<&RealRegUniverse>, ty: Type) ->
     let mut s = reg.show_rru(mb_rru);
 
     match ty {
+        I8X16 => s.push_str(".16b"),
         F32X2 => s.push_str(".2s"),
         _ => unimplemented!(),
     }

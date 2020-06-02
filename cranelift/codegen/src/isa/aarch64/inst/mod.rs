@@ -5,7 +5,7 @@
 
 use crate::binemit::CodeOffset;
 use crate::ir::types::{
-    B1, B16, B32, B64, B8, F32, F32X2, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS,
+    B1, B16, B32, B64, B8, B8X16, F32, F32X2, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS,
 };
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
@@ -197,6 +197,23 @@ pub enum VecALUOp {
     SQSubScalar,
     /// Unsigned saturating subtract
     UQSubScalar,
+    /// Compare bitwise equal
+    Cmeq,
+    /// Compare signed greater than or equal
+    Cmge,
+    /// Compare signed greater than
+    Cmgt,
+    /// Compare unsigned higher
+    Cmhs,
+    /// Compare unsigned higher or same
+    Cmhi,
+}
+
+/// A Vector miscellaneous operation with two registers.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum VecMisc2 {
+    /// Bitwise NOT.
+    Not,
 }
 
 /// An operation on the bits of a register. This can be paired with several instruction formats
@@ -626,6 +643,15 @@ pub enum Inst {
         rd: Writable<Reg>,
         rn: Reg,
         rm: Reg,
+        ty: Type,
+    },
+
+    /// Vector two register miscellaneous instruction.
+    VecMisc {
+        op: VecMisc2,
+        rd: Writable<Reg>,
+        rn: Reg,
+        ty: Type,
     },
 
     /// Move to the NZCV flags (actually a `MSR NZCV, Xn` insn).
@@ -1095,6 +1121,10 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(rn);
             collector.add_use(rm);
             collector.add_use(ra);
+        }
+        &Inst::VecMisc { rd, rn, .. } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
         }
         &Inst::FpuCmp32 { rn, rm } | &Inst::FpuCmp64 { rn, rm } => {
             collector.add_use(rn);
@@ -1567,6 +1597,14 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, rm);
             map_use(mapper, ra);
         }
+        &mut Inst::VecMisc {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+        }
         &mut Inst::FpuCmp32 {
             ref mut rn,
             ref mut rm,
@@ -1909,6 +1947,7 @@ impl MachInst for Inst {
             F32 | F64 => Ok(RegClass::V128),
             IFLAGS | FFLAGS => Ok(RegClass::I64),
             I8X16 => Ok(RegClass::V128),
+            B8X16 => Ok(RegClass::V128),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty
@@ -2482,17 +2521,44 @@ impl ShowWithRRU for Inst {
                 let rn = rn.show_rru(mb_rru);
                 format!("mov {}, {}.d[0]", rd, rn)
             }
-            &Inst::VecRRR { rd, rn, rm, alu_op } => {
-                let op = match alu_op {
-                    VecALUOp::SQAddScalar => "sqadd",
-                    VecALUOp::UQAddScalar => "uqadd",
-                    VecALUOp::SQSubScalar => "sqsub",
-                    VecALUOp::UQSubScalar => "uqsub",
+            &Inst::VecRRR {
+                rd,
+                rn,
+                rm,
+                alu_op,
+                ty,
+            } => {
+                let (op, vector) = match alu_op {
+                    VecALUOp::SQAddScalar => ("sqadd", false),
+                    VecALUOp::UQAddScalar => ("uqadd", false),
+                    VecALUOp::SQSubScalar => ("sqsub", false),
+                    VecALUOp::UQSubScalar => ("uqsub", false),
+                    VecALUOp::Cmeq => ("cmeq", true),
+                    VecALUOp::Cmge => ("cmge", true),
+                    VecALUOp::Cmgt => ("cmgt", true),
+                    VecALUOp::Cmhs => ("cmhs", true),
+                    VecALUOp::Cmhi => ("cmhi", true),
                 };
-                let rd = show_vreg_scalar(rd.to_reg(), mb_rru);
-                let rn = show_vreg_scalar(rn, mb_rru);
-                let rm = show_vreg_scalar(rm, mb_rru);
+
+                let show_vreg_fn: fn(Reg, Option<&RealRegUniverse>, Type) -> String = if vector {
+                    |reg, mb_rru, ty| show_vreg_vector(reg, mb_rru, ty)
+                } else {
+                    |reg, mb_rru, _ty| show_vreg_scalar(reg, mb_rru)
+                };
+
+                let rd = show_vreg_fn(rd.to_reg(), mb_rru, ty);
+                let rn = show_vreg_fn(rn, mb_rru, ty);
+                let rm = show_vreg_fn(rm, mb_rru, ty);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
+            }
+            &Inst::VecMisc { op, rd, rn, ty } => {
+                let op = match op {
+                    VecMisc2::Not => "mvn",
+                };
+
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, ty);
+                let rn = show_vreg_vector(rn, mb_rru, ty);
+                format!("{} {}, {}", op, rd, rn)
             }
             &Inst::MovToNZCV { rn } => {
                 let rn = rn.show_rru(mb_rru);

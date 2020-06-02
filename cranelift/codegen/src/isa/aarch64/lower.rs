@@ -277,6 +277,7 @@ pub(crate) fn input_to_reg<C: LowerCtx<I = Inst>>(
             tmp.to_reg()
         }
         (_, 64) => in_reg,
+        (_, 128) => in_reg,
 
         _ => panic!(
             "Unsupported input width: input ty {} bits {} mode {:?}",
@@ -712,7 +713,7 @@ pub fn ty_bits(ty: Type) -> usize {
         B64 | I64 | F64 => 64,
         B128 | I128 => 128,
         IFLAGS | FFLAGS => 32,
-        I8X16 => 128,
+        I8X16 | B8X16 => 128,
         _ => panic!("ty_bits() on unknown type: {:?}", ty),
     }
 }
