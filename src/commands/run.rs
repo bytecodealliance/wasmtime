@@ -284,9 +284,9 @@ impl RunCommand {
                 Some(s) => s,
                 None => {
                     if let Some(name) = name {
-                        bail!("not enough arguments for `{}`", name)
+                        bail!("not enough arguments for command function `{}`", name)
                     } else {
-                        bail!("not enough arguments for command default")
+                        bail!("not enough arguments for command")
                     }
                 }
             };
@@ -306,9 +306,9 @@ impl RunCommand {
         // out, if there are any.
         let results = func.call(&values).with_context(|| {
             if let Some(name) = name {
-                format!("failed to invoke `{}`", name)
+                format!("failed to invoke command function `{}`", name)
             } else {
-                format!("failed to invoke command default")
+                format!("failed to invoke command")
             }
         })?;
         if !results.is_empty() {
