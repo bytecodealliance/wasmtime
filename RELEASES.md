@@ -43,6 +43,10 @@ is now enabled by default.
 
   [#1667](https://github.com/bytecodealliance/wasmtime/pull/1667)
 
+The Rust API does not require a store provided during `Module::new` operation. The `Module` can be send accross threads and instantiate for a specific store. The `Instance::new` now requires the store.
+
+  [#1761](https://github.com/bytecodealliance/wasmtime/pull/1761)
+
 --------------------------------------------------------------------------------
 
 ## 0.16.0
