@@ -150,7 +150,7 @@ impl Linker {
     ///         (data (global.get 0) "foo")
     ///     )
     /// "#;
-    /// let module = Module::new(&store, wat)?;
+    /// let module = Module::new(store.engine(), wat)?;
     /// linker.instantiate(&module)?;
     /// # Ok(())
     /// # }
@@ -203,7 +203,7 @@ impl Linker {
     ///         (import "host" "log_str" (func (param i32 i32)))
     ///     )
     /// "#;
-    /// let module = Module::new(&store, wat)?;
+    /// let module = Module::new(store.engine(), wat)?;
     /// linker.instantiate(&module)?;
     /// # Ok(())
     /// # }
@@ -241,7 +241,7 @@ impl Linker {
     ///
     /// // Instantiate a small instance...
     /// let wat = r#"(module (func (export "run") ))"#;
-    /// let module = Module::new(&store, wat)?;
+    /// let module = Module::new(store.engine(), wat)?;
     /// let instance = linker.instantiate(&module)?;
     ///
     /// // ... and inform the linker that the name of this instance is
@@ -257,7 +257,7 @@ impl Linker {
     ///         )
     ///     )
     /// "#;
-    /// let module = Module::new(&store, wat)?;
+    /// let module = Module::new(store.engine(), wat)?;
     /// let instance = linker.instantiate(&module)?;
     /// # Ok(())
     /// # }
@@ -312,7 +312,7 @@ impl Linker {
     /// // this instance is `instance1`. This defines the `instance1::run` name
     /// // for our next module to use.
     /// let wat = r#"(module (func (export "run") ))"#;
-    /// let module = Module::new(&store, wat)?;
+    /// let module = Module::new(store.engine(), wat)?;
     /// linker.module("instance1", &module)?;
     ///
     /// let wat = r#"
@@ -323,7 +323,7 @@ impl Linker {
     ///         )
     ///     )
     /// "#;
-    /// let module = Module::new(&store, wat)?;
+    /// let module = Module::new(store.engine(), wat)?;
     /// let instance = linker.instantiate(&module)?;
     /// # Ok(())
     /// # }
@@ -350,7 +350,7 @@ impl Linker {
     ///         )
     ///     )
     /// "#;
-    /// let module = Module::new(&store, wat)?;
+    /// let module = Module::new(store.engine(), wat)?;
     /// linker.module("commander", &module)?;
     /// let run = linker.get_default("")?.get0::<()>()?;
     /// run()?;
@@ -369,7 +369,7 @@ impl Linker {
     ///         )
     ///     )
     /// "#;
-    /// let module = Module::new(&store, wat)?;
+    /// let module = Module::new(store.engine(), wat)?;
     /// linker.module("", &module)?;
     /// let count = linker.get_one_by_name("", "run")?.into_func().unwrap().get0::<i32>()?()?;
     /// assert_eq!(count, 0, "a Command should get a fresh instance on each invocation");
@@ -400,11 +400,12 @@ impl Linker {
         for export in module.exports() {
             if let Some(func_ty) = export.ty().func() {
                 let imports = self.compute_imports(module)?;
+                let store = self.store.clone();
                 let module = module.clone();
                 let export_name = export.name().to_owned();
                 let func = Func::new(&self.store, func_ty.clone(), move |_, params, results| {
                     // Create a new instance for this command execution.
-                    let instance = Instance::new(&module, &imports)?;
+                    let instance = Instance::new(&store, &module, &imports)?;
 
                     // `unwrap()` everything here because we know the instance contains a
                     // function export with the given name and signature because we're
@@ -560,7 +561,7 @@ impl Linker {
     ///         (import "host" "double" (func (param i32) (result i32)))
     ///     )
     /// "#;
-    /// let module = Module::new(&store, wat)?;
+    /// let module = Module::new(store.engine(), wat)?;
     /// linker.instantiate(&module)?;
     /// # Ok(())
     /// # }
@@ -568,7 +569,7 @@ impl Linker {
     pub fn instantiate(&self, module: &Module) -> Result<Instance> {
         let imports = self.compute_imports(module)?;
 
-        Instance::new(module, &imports)
+        Instance::new(&self.store, module, &imports)
     }
 
     fn compute_imports(&self, module: &Module) -> Result<Vec<Extern>> {

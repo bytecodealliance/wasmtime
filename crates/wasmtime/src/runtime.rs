@@ -14,11 +14,12 @@ use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use wasmparser::{OperatorValidatorConfig, ValidatingParserConfig};
 use wasmtime_environ::settings::{self, Configurable};
-use wasmtime_environ::{CacheConfig, Tunables};
+use wasmtime_environ::{ir, wasm, CacheConfig, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{
-    debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, VMExternRef, VMInterrupts,
+    debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, SignatureRegistry,
+    VMExternRef, VMInterrupts, VMSharedSignatureIndex,
 };
 
 // Runtime Environment
@@ -571,6 +572,16 @@ impl Config {
             cmp::max(guard_size, self.tunables.static_memory_offset_guard_size);
         self
     }
+
+    fn build_compiler(&self) -> Compiler {
+        let isa = native::builder().finish(settings::Flags::new(self.flags.clone()));
+        Compiler::new(
+            isa,
+            self.strategy,
+            self.cache_config.clone(),
+            self.tunables.clone(),
+        )
+    }
 }
 
 fn round_up_to_pages(val: u64) -> u64 {
@@ -687,9 +698,14 @@ pub enum ProfilingStrategy {
 /// You can create an engine with default configuration settings using
 /// `Engine::default()`. Be sure to consult the documentation of [`Config`] for
 /// default settings.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Engine {
-    config: Arc<Config>,
+    inner: Arc<EngineInner>,
+}
+
+struct EngineInner {
+    config: Config,
+    compiler: Compiler,
 }
 
 impl Engine {
@@ -698,13 +714,31 @@ impl Engine {
     pub fn new(config: &Config) -> Engine {
         debug_builtins::ensure_exported();
         Engine {
-            config: Arc::new(config.clone()),
+            inner: Arc::new(EngineInner {
+                config: config.clone(),
+                compiler: config.build_compiler(),
+            }),
         }
     }
 
     /// Returns the configuration settings that this engine is using.
     pub fn config(&self) -> &Config {
-        &self.config
+        &self.inner.config
+    }
+
+    pub(crate) fn compiler(&self) -> &Compiler {
+        &self.inner.compiler
+    }
+
+    /// Returns whether the engine `a` and `b` refer to the same configuration.
+    pub fn same(a: &Engine, b: &Engine) -> bool {
+        Arc::ptr_eq(&a.inner, &b.inner)
+    }
+}
+
+impl Default for Engine {
+    fn default() -> Engine {
+        Engine::new(&Config::default())
     }
 }
 
@@ -734,9 +768,11 @@ pub struct Store {
 
 pub(crate) struct StoreInner {
     engine: Engine,
-    compiler: RefCell<Compiler>,
+    interrupts: Arc<VMInterrupts>,
+    signatures: RefCell<SignatureRegistry>,
     instances: RefCell<Vec<InstanceHandle>>,
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
+    jit_code_ranges: RefCell<Vec<(usize, usize)>>,
     host_info: RefCell<HashMap<HostInfoKey, Rc<RefCell<dyn Any>>>>,
 }
 
@@ -769,19 +805,14 @@ impl Store {
         // each one that's not relevant just won't do anything.
         wasmtime_runtime::init_traps();
 
-        let isa = native::builder().finish(settings::Flags::new(engine.config.flags.clone()));
-        let compiler = Compiler::new(
-            isa,
-            engine.config.strategy,
-            engine.config.cache_config.clone(),
-            engine.config.tunables.clone(),
-        );
         Store {
             inner: Rc::new(StoreInner {
                 engine: engine.clone(),
-                compiler: RefCell::new(compiler),
+                interrupts: Arc::new(Default::default()),
+                signatures: RefCell::new(Default::default()),
                 instances: RefCell::new(Vec::new()),
                 signal_handler: RefCell::new(None),
+                jit_code_ranges: RefCell::new(Vec::new()),
                 host_info: RefCell::new(HashMap::new()),
             }),
         }
@@ -798,15 +829,61 @@ impl Store {
 
     /// Returns an optional reference to a ['RuntimeMemoryCreator']
     pub(crate) fn memory_creator(&self) -> Option<&dyn RuntimeMemoryCreator> {
-        self.engine().config.memory_creator.as_ref().map(|x| x as _)
+        self.engine()
+            .config()
+            .memory_creator
+            .as_ref()
+            .map(|x| x as _)
     }
 
-    pub(crate) fn compiler(&self) -> std::cell::Ref<'_, Compiler> {
-        self.inner.compiler.borrow()
+    pub(crate) fn lookup_signature(&self, sig_index: VMSharedSignatureIndex) -> wasm::WasmFuncType {
+        self.inner
+            .signatures
+            .borrow()
+            .lookup_wasm(sig_index)
+            .expect("failed to lookup signature")
     }
 
-    pub(crate) fn compiler_mut(&self) -> std::cell::RefMut<'_, Compiler> {
-        self.inner.compiler.borrow_mut()
+    pub(crate) fn register_signature(
+        &self,
+        wasm_sig: wasm::WasmFuncType,
+        native: ir::Signature,
+    ) -> VMSharedSignatureIndex {
+        self.inner
+            .signatures
+            .borrow_mut()
+            .register(wasm_sig, native)
+    }
+
+    pub(crate) fn signatures_mut(&self) -> std::cell::RefMut<'_, SignatureRegistry> {
+        self.inner.signatures.borrow_mut()
+    }
+
+    /// Returns whether or not the given address falls within the JIT code
+    /// managed by the compiler
+    pub(crate) fn is_in_jit_code(&self, addr: usize) -> bool {
+        self.inner
+            .jit_code_ranges
+            .borrow()
+            .iter()
+            .any(|(start, end)| *start <= addr && addr < *end)
+    }
+
+    pub(crate) fn register_jit_code(&self, mut ranges: impl Iterator<Item = (usize, usize)>) {
+        // Checking of we already registered JIT code ranges by searching
+        // first range start.
+        match ranges.next() {
+            None => (),
+            Some(first) => {
+                if !self.is_in_jit_code(first.0) {
+                    // The range is not registered -- add all ranges (including
+                    // first one) to the jit_code_ranges.
+                    let mut jit_code_ranges = self.inner.jit_code_ranges.borrow_mut();
+                    jit_code_ranges.push(first);
+                    jit_code_ranges.extend(ranges);
+                }
+            }
+        }
     }
 
     pub(crate) unsafe fn add_instance(&self, handle: InstanceHandle) -> StoreInstanceHandle {
@@ -873,6 +950,10 @@ impl Store {
         &self,
     ) -> std::cell::RefMut<'_, Option<Box<SignalHandler<'static>>>> {
         self.inner.signal_handler.borrow_mut()
+    }
+
+    pub(crate) fn interrupts(&self) -> &Arc<VMInterrupts> {
+        &self.inner.interrupts
     }
 
     /// Returns whether the stores `a` and `b` refer to the same underlying
@@ -946,10 +1027,10 @@ impl Store {
     /// let interrupt_handle = store.interrupt_handle()?;
     ///
     /// // Compile and instantiate a small example with an infinite loop.
-    /// let module = Module::new(&store, r#"
+    /// let module = Module::new(&engine, r#"
     ///     (func (export "run") (loop br 0))
     /// "#)?;
-    /// let instance = Instance::new(&module, &[])?;
+    /// let instance = Instance::new(&store, &module, &[])?;
     /// let run = instance
     ///     .get_func("run")
     ///     .ok_or(anyhow::format_err!("failed to find `run` function export"))?
@@ -967,9 +1048,9 @@ impl Store {
     /// # }
     /// ```
     pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
-        if self.engine().config.tunables.interruptable {
+        if self.engine().config().tunables.interruptable {
             Ok(InterruptHandle {
-                interrupts: self.compiler().interrupts().clone(),
+                interrupts: self.interrupts().clone(),
             })
         } else {
             bail!("interrupts aren't enabled for this `Store`")
@@ -1052,47 +1133,47 @@ mod tests {
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::None)
             .cache_config_load(&config_path)?;
-        let store = Store::new(&Engine::new(&cfg));
-        Module::new(&store, "(module (func))")?;
-        assert_eq!(store.engine().config.cache_config.cache_hits(), 0);
-        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
-        Module::new(&store, "(module (func))")?;
-        assert_eq!(store.engine().config.cache_config.cache_hits(), 1);
-        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+        let engine = Engine::new(&cfg);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 0);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 1);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
 
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::Speed)
             .cache_config_load(&config_path)?;
-        let store = Store::new(&Engine::new(&cfg));
-        Module::new(&store, "(module (func))")?;
-        assert_eq!(store.engine().config.cache_config.cache_hits(), 0);
-        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
-        Module::new(&store, "(module (func))")?;
-        assert_eq!(store.engine().config.cache_config.cache_hits(), 1);
-        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+        let engine = Engine::new(&cfg);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 0);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 1);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
 
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::SpeedAndSize)
             .cache_config_load(&config_path)?;
-        let store = Store::new(&Engine::new(&cfg));
-        Module::new(&store, "(module (func))")?;
-        assert_eq!(store.engine().config.cache_config.cache_hits(), 0);
-        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
-        Module::new(&store, "(module (func))")?;
-        assert_eq!(store.engine().config.cache_config.cache_hits(), 1);
-        assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+        let engine = Engine::new(&cfg);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 0);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 1);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
 
         // FIXME(#1523) need debuginfo on aarch64 before we run this test there
         if !cfg!(target_arch = "aarch64") {
             let mut cfg = Config::new();
             cfg.debug_info(true).cache_config_load(&config_path)?;
-            let store = Store::new(&Engine::new(&cfg));
-            Module::new(&store, "(module (func))")?;
-            assert_eq!(store.engine().config.cache_config.cache_hits(), 0);
-            assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
-            Module::new(&store, "(module (func))")?;
-            assert_eq!(store.engine().config.cache_config.cache_hits(), 1);
-            assert_eq!(store.engine().config.cache_config.cache_misses(), 1);
+            let engine = Engine::new(&cfg);
+            Module::new(&engine, "(module (func))")?;
+            assert_eq!(engine.config().cache_config.cache_hits(), 0);
+            assert_eq!(engine.config().cache_config.cache_misses(), 1);
+            Module::new(&engine, "(module (func))")?;
+            assert_eq!(engine.config().cache_config.cache_hits(), 1);
+            assert_eq!(engine.config().cache_config.cache_misses(), 1);
         }
 
         Ok(())

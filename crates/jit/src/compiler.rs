@@ -9,20 +9,16 @@ use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use std::collections::HashMap;
-use std::sync::Arc;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
-use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex};
+use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex, SignatureIndex};
 use wasmtime_environ::{
     CacheConfig, CompileError, CompiledFunction, Compiler as _C, ModuleAddressMap,
     ModuleMemoryOffset, ModuleTranslation, ModuleVmctxInfo, Relocation, RelocationTarget,
     Relocations, Traps, Tunables, VMOffsets,
 };
-use wasmtime_runtime::{
-    InstantiationError, SignatureRegistry, VMFunctionBody, VMInterrupts, VMSharedSignatureIndex,
-    VMTrampoline,
-};
+use wasmtime_runtime::{InstantiationError, VMFunctionBody, VMTrampoline};
 
 /// Select which kind of compilation to use.
 #[derive(Copy, Clone, Debug)]
@@ -48,12 +44,9 @@ pub enum CompilationStrategy {
 /// TODO: Consider using cranelift-module.
 pub struct Compiler {
     isa: Box<dyn TargetIsa>,
-    code_memory: CodeMemory,
-    signatures: SignatureRegistry,
     strategy: CompilationStrategy,
     cache_config: CacheConfig,
     tunables: Tunables,
-    interrupts: Arc<VMInterrupts>,
 }
 
 impl Compiler {
@@ -66,22 +59,25 @@ impl Compiler {
     ) -> Self {
         Self {
             isa,
-            code_memory: CodeMemory::new(),
-            signatures: SignatureRegistry::new(),
             strategy,
             cache_config,
             tunables,
-            interrupts: Arc::new(VMInterrupts::default()),
         }
     }
 }
 
+fn _assert_compiler_send_sync() {
+    fn _assert<T: Send + Sync>() {}
+    _assert::<Compiler>();
+}
+
 #[allow(missing_docs)]
 pub struct Compilation {
+    pub code_memory: CodeMemory,
     pub finished_functions: PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
     pub relocations: Relocations,
-    pub trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
-    pub trampoline_relocations: HashMap<VMSharedSignatureIndex, Vec<Relocation>>,
+    pub trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
+    pub trampoline_relocations: HashMap<SignatureIndex, Vec<Relocation>>,
     pub jt_offsets: PrimaryMap<DefinedFuncIndex, ir::JumpTableOffsets>,
     pub dbg_image: Option<Vec<u8>>,
     pub traps: Traps,
@@ -89,6 +85,11 @@ pub struct Compilation {
 }
 
 impl Compiler {
+    /// Return the isa.
+    pub fn isa(&self) -> &dyn TargetIsa {
+        self.isa.as_ref()
+    }
+
     /// Return the target's frontend configuration settings.
     pub fn frontend_config(&self) -> TargetFrontendConfig {
         self.isa.frontend_config()
@@ -99,17 +100,14 @@ impl Compiler {
         &self.tunables
     }
 
-    /// Return the handle by which to interrupt instances
-    pub fn interrupts(&self) -> &Arc<VMInterrupts> {
-        &self.interrupts
-    }
-
     /// Compile the given function bodies.
     pub(crate) fn compile<'data>(
-        &mut self,
+        &self,
         translation: &ModuleTranslation,
         debug_data: Option<DebugInfoData>,
     ) -> Result<Compilation, SetupError> {
+        let mut code_memory = CodeMemory::new();
+
         let (compilation, relocations, address_transform, value_ranges, stack_slots, traps) =
             match self.strategy {
                 // For now, interpret `Auto` as `Cranelift` since that's the most stable
@@ -135,7 +133,7 @@ impl Compiler {
         // Allocate all of the compiled functions into executable memory,
         // copying over their contents.
         let finished_functions =
-            allocate_functions(&mut self.code_memory, &compilation).map_err(|message| {
+            allocate_functions(&mut code_memory, &compilation).map_err(|message| {
                 SetupError::Instantiate(InstantiationError::Resource(format!(
                     "failed to allocate memory for functions: {}",
                     message
@@ -147,23 +145,17 @@ impl Compiler {
         // guarantees that all functions (including indirect ones through
         // tables) have a trampoline when invoked through the wasmtime API.
         let mut cx = FunctionBuilderContext::new();
-        let mut trampolines = HashMap::new();
+        let mut trampolines = PrimaryMap::new();
         let mut trampoline_relocations = HashMap::new();
-        for (wasm_func_ty, native_sig) in translation.module.local.signatures.values() {
-            let index = self
-                .signatures
-                .register(wasm_func_ty.clone(), native_sig.clone());
-            if trampolines.contains_key(&index) {
-                continue;
-            }
+        for (index, (_, native_sig)) in translation.module.local.signatures.iter() {
             let (trampoline, relocations) = make_trampoline(
                 &*self.isa,
-                &mut self.code_memory,
+                &mut code_memory,
                 &mut cx,
                 native_sig,
                 std::mem::size_of::<u128>(),
             )?;
-            trampolines.insert(index, trampoline);
+            trampolines.push(trampoline);
 
             // Typically trampolines do not have relocations, so if one does
             // show up be sure to log it in case anyone's listening and there's
@@ -217,6 +209,7 @@ impl Compiler {
         let jt_offsets = compilation.get_jt_offsets();
 
         Ok(Compilation {
+            code_memory,
             finished_functions,
             relocations,
             trampolines,
@@ -226,22 +219,6 @@ impl Compiler {
             traps,
             address_transform,
         })
-    }
-
-    /// Make memory containing compiled code executable.
-    pub(crate) fn publish_compiled_code(&mut self) {
-        self.code_memory.publish(self.isa.as_ref());
-    }
-
-    /// Shared signature registry.
-    pub fn signatures(&self) -> &SignatureRegistry {
-        &self.signatures
-    }
-
-    /// Returns whether or not the given address falls within the JIT code
-    /// managed by the compiler
-    pub fn is_in_jit_code(&self, addr: usize) -> bool {
-        self.code_memory.published_contains(addr)
     }
 }
 

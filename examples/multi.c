@@ -115,7 +115,7 @@ int main(int argc, const char* argv[]) {
   const wasm_extern_t* imports[] = {wasm_func_as_extern(callback_func)};
   wasm_instance_t* instance = NULL;
   wasm_trap_t* trap = NULL;
-  error = wasmtime_instance_new(module, imports, 1, &instance, &trap);
+  error = wasmtime_instance_new(store, module, imports, 1, &instance, &trap);
   if (!instance)
     exit_with_error("failed to instantiate", error, trap);
 

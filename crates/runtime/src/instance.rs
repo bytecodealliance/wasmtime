@@ -4,7 +4,6 @@
 
 use crate::export::Export;
 use crate::imports::Imports;
-use crate::jit_int::GdbJitImageRegistration;
 use crate::memory::{DefaultMemoryCreator, RuntimeLinearMemory, RuntimeMemoryCreator};
 use crate::table::Table;
 use crate::traphandlers::Trap;
@@ -21,7 +20,6 @@ use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::{mem, ptr, slice};
 use thiserror::Error;
@@ -39,6 +37,9 @@ use wasmtime_environ::{ir, DataInitializer, EntityIndex, Module, TableElements, 
 pub(crate) struct Instance {
     /// The `Module` this `Instance` was instantiated from.
     module: Arc<Module>,
+
+    /// The module's JIT code (if exists).
+    code: Arc<dyn Any>,
 
     /// Offsets in the `vmctx` region.
     offsets: VMOffsets,
@@ -67,9 +68,6 @@ pub(crate) struct Instance {
     /// Hosts can store arbitrary per-instance information here.
     host_state: Box<dyn Any>,
 
-    /// Optional image of JIT'ed code for debugger registration.
-    dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
-
     /// Externally allocated data indicating how this instance will be
     /// interrupted.
     pub(crate) interrupts: Arc<VMInterrupts>,
@@ -96,12 +94,8 @@ impl Instance {
         unsafe { *self.signature_ids_ptr().add(index) }
     }
 
-    pub(crate) fn module(&self) -> &Arc<Module> {
+    pub(crate) fn module(&self) -> &Module {
         &self.module
-    }
-
-    pub(crate) fn module_ref(&self) -> &Module {
-        &*self.module
     }
 
     /// Return a pointer to the `VMSharedSignatureIndex`s.
@@ -782,12 +776,12 @@ impl InstanceHandle {
     /// safety.
     pub unsafe fn new(
         module: Arc<Module>,
+        code: Arc<dyn Any>,
         finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
         trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
         imports: Imports,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
         vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
-        dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
         host_state: Box<dyn Any>,
         interrupts: Arc<VMInterrupts>,
     ) -> Result<Self, InstantiationError> {
@@ -815,6 +809,7 @@ impl InstanceHandle {
         let handle = {
             let instance = Instance {
                 module,
+                code,
                 offsets,
                 memories,
                 tables,
@@ -822,7 +817,6 @@ impl InstanceHandle {
                 passive_data,
                 finished_functions,
                 trampolines,
-                dbg_jit_registration,
                 host_state,
                 interrupts,
                 vmctx: VMContext {},
@@ -941,14 +935,9 @@ impl InstanceHandle {
         self.instance().vmctx_ptr()
     }
 
-    /// Return a reference-counting pointer to a module.
-    pub fn module(&self) -> &Arc<Module> {
-        self.instance().module()
-    }
-
     /// Return a reference to a module.
-    pub fn module_ref(&self) -> &Module {
-        self.instance().module_ref()
+    pub fn module(&self) -> &Module {
+        self.instance().module()
     }
 
     /// Lookup an export with the given name.
@@ -1065,8 +1054,7 @@ impl InstanceHandle {
 }
 
 fn check_table_init_bounds(instance: &Instance) -> Result<(), InstantiationError> {
-    let module = Arc::clone(&instance.module);
-    for init in &module.table_elements {
+    for init in &instance.module().table_elements {
         let start = get_table_init_start(init, instance);
         let table = instance.get_table(init.table_index);
 
@@ -1170,8 +1158,7 @@ fn get_table_init_start(init: &TableElements, instance: &Instance) -> usize {
 
 /// Initialize the table memory from the provided initializers.
 fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
-    let module = Arc::clone(&instance.module);
-    for init in &module.table_elements {
+    for init in &instance.module().table_elements {
         let start = get_table_init_start(init, instance);
         let table = instance.get_table(init.table_index);
 
@@ -1284,7 +1271,7 @@ fn create_globals(module: &Module) -> BoxedSlice<DefinedGlobalIndex, VMGlobalDef
 }
 
 fn initialize_globals(instance: &Instance) {
-    let module = Arc::clone(&instance.module);
+    let module = instance.module();
     let num_imports = module.local.num_imported_globals;
     for (index, global) in module.local.globals.iter().skip(num_imports) {
         let def_index = module.local.defined_global_index(index).unwrap();

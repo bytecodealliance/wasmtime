@@ -1,11 +1,11 @@
 use crate::trampoline::StoreInstanceHandle;
-use crate::{Export, Extern, Func, Global, Memory, Module, Store, Table, Trap};
+use crate::{Engine, Export, Extern, Func, Global, Memory, Module, Store, Table, Trap};
 use anyhow::{bail, Error, Result};
 use std::any::Any;
 use std::mem;
 use wasmtime_environ::EntityIndex;
 use wasmtime_jit::{CompiledModule, Resolver};
-use wasmtime_runtime::{InstantiationError, SignatureRegistry, VMContext, VMFunctionBody};
+use wasmtime_runtime::{InstantiationError, VMContext, VMFunctionBody};
 
 struct SimpleResolver<'a> {
     imports: &'a [Extern],
@@ -23,7 +23,6 @@ fn instantiate(
     store: &Store,
     compiled_module: &CompiledModule,
     imports: &[Extern],
-    sig_registry: &SignatureRegistry,
     host: Box<dyn Any>,
 ) -> Result<StoreInstanceHandle, Error> {
     // For now we have a restriction that the `Store` that we're working
@@ -47,8 +46,9 @@ fn instantiate(
     let instance = unsafe {
         let instance = compiled_module.instantiate(
             &mut resolver,
-            sig_registry,
+            &mut store.signatures_mut(),
             config.memory_creator.as_ref().map(|a| a as _),
+            store.interrupts().clone(),
             host,
         )?;
 
@@ -120,6 +120,7 @@ fn instantiate(
 #[derive(Clone)]
 pub struct Instance {
     pub(crate) handle: StoreInstanceHandle,
+    store: Store,
     module: Module,
 }
 
@@ -177,19 +178,19 @@ impl Instance {
     /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     /// [`ExternType`]: crate::ExternType
-    pub fn new(module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
-        let store = module.store();
+    pub fn new(store: &Store, module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
+        if !Engine::same(store.engine(), module.engine()) {
+            bail!("cross-`Engine` instantiation is not currently supported");
+        }
+
         let info = module.register_frame_info();
-        let handle = instantiate(
-            store,
-            module.compiled_module(),
-            imports,
-            store.compiler().signatures(),
-            Box::new(info),
-        )?;
+        store.register_jit_code(module.compiled_module().jit_code_ranges());
+
+        let handle = instantiate(store, module.compiled_module(), imports, Box::new(info))?;
 
         Ok(Instance {
             handle,
+            store: store.clone(),
             module: module.clone(),
         })
     }
@@ -199,7 +200,7 @@ impl Instance {
     /// This is the [`Store`] that generally serves as a sort of global cache
     /// for various instance-related things.
     pub fn store(&self) -> &Store {
-        self.module.store()
+        &self.store
     }
 
     /// Returns the list of exported items from this [`Instance`].

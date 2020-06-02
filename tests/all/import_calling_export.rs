@@ -17,7 +17,7 @@ fn test_import_calling_export() {
     "#;
 
     let store = Store::default();
-    let module = Module::new(&store, WAT).expect("failed to create module");
+    let module = Module::new(store.engine(), WAT).expect("failed to create module");
 
     let other = Rc::new(RefCell::new(None::<Func>));
     let other2 = Rc::downgrade(&other);
@@ -40,7 +40,7 @@ fn test_import_calling_export() {
 
     let imports = vec![callback_func.into()];
     let instance =
-        Instance::new(&module, imports.as_slice()).expect("failed to instantiate module");
+        Instance::new(&store, &module, imports.as_slice()).expect("failed to instantiate module");
 
     let run_func = instance
         .get_func("run")
@@ -67,7 +67,7 @@ fn test_returns_incorrect_type() -> Result<()> {
     "#;
 
     let store = Store::default();
-    let module = Module::new(&store, WAT)?;
+    let module = Module::new(store.engine(), WAT)?;
 
     let callback_func = Func::new(
         &store,
@@ -80,7 +80,7 @@ fn test_returns_incorrect_type() -> Result<()> {
     );
 
     let imports = vec![callback_func.into()];
-    let instance = Instance::new(&module, imports.as_slice())?;
+    let instance = Instance::new(&store, &module, imports.as_slice())?;
 
     let run_func = instance
         .get_func("run")

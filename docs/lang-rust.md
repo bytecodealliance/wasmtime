@@ -55,21 +55,22 @@ use std::error::Error;
 use wasmtime::*;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let engine = Engine::default();
     // A `Store` is a sort of "global object" in a sense, but for now it suffices
     // to say that it's generally passed to most constructors.
-    let store = Store::default();
+    let store = Store::new(&engine);
 
 # if false {
     // We start off by creating a `Module` which represents a compiled form
     // of our input wasm module. In this case it'll be JIT-compiled after
     // we parse the text format.
-    let module = Module::from_file(&store, "hello.wat")?;
+    let module = Module::from_file(&engine, "hello.wat")?;
 # }
-# let module = Module::new(&store, r#"(module (func (export "answer") (result i32) i32.const 42))"#)?;
+# let module = Module::new(&engine, r#"(module (func (export "answer") (result i32) i32.const 42))"#)?;
 
     // After we have a compiled `Module` we can then instantiate it, creating
     // an `Instance` which we can actually poke at functions on.
-    let instance = Instance::new(&module, &[])?;
+    let instance = Instance::new(&store, &module, &[])?;
 
     // The `Instance` gives us access to various exported functions and items,
     // which we access here to pull out our `answer` exported function and
@@ -142,11 +143,12 @@ use std::error::Error;
 use wasmtime::*;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let store = Store::default();
+    let engine = Engine::default();
+    let store = Store::new(&engine);
 # if false {
-    let module = Module::from_file(&store, "hello.wat")?;
+    let module = Module::from_file(&engine, "hello.wat")?;
 # }
-# let module = Module::new(&store, r#"(module (import "" "log" (func $log (param i32))) (import "" "double" (func $double (param i32) (result i32))) (func (export "run") i32.const 0 call $log i32.const 1 call $log i32.const 2 call $double call $log))"#)?;
+# let module = Module::new(&engine, r#"(module (import "" "log" (func $log (param i32))) (import "" "double" (func $double (param i32) (result i32))) (func (export "run") i32.const 0 call $log i32.const 1 call $log i32.const 2 call $double call $log))"#)?;
 
     // First we can create our `log` function, which will simply print out the
     // parameter it receives.
@@ -160,7 +162,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // When instantiating the module we now need to provide the imports to the
     // instantiation process. This is the second slice argument, where each
     // entry in the slice must line up with the imports in the module.
-    let instance = Instance::new(&module, &[log.into(), double.into()])?;
+    let instance = Instance::new(&store, &module, &[log.into(), double.into()])?;
 
     let run = instance
         .get_func("run")

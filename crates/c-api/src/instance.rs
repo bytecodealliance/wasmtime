@@ -36,19 +36,10 @@ pub unsafe extern "C" fn wasm_instance_new(
     imports: *const Box<wasm_extern_t>,
     result: Option<&mut *mut wasm_trap_t>,
 ) -> Option<Box<wasm_instance_t>> {
-    let store = &store.store;
-    let module = &wasm_module.module.borrow();
-    if !Store::same(&store, module.store()) {
-        if let Some(result) = result {
-            let trap = Trap::new("wasm_store_t must match store in wasm_module_t");
-            let trap = Box::new(wasm_trap_t::new(store, trap));
-            *result = Box::into_raw(trap);
-        }
-        return None;
-    }
     let mut instance = ptr::null_mut();
     let mut trap = ptr::null_mut();
     let err = wasmtime_instance_new(
+        store,
         wasm_module,
         imports,
         wasm_module.imports.len(),
@@ -60,7 +51,7 @@ pub unsafe extern "C" fn wasm_instance_new(
             assert!(trap.is_null());
             assert!(instance.is_null());
             if let Some(result) = result {
-                *result = Box::into_raw(err.to_trap(store));
+                *result = Box::into_raw(err.to_trap(&store.store));
             }
             None
         }
@@ -83,6 +74,7 @@ pub unsafe extern "C" fn wasm_instance_new(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_instance_new(
+    store: &wasm_store_t,
     module: &wasm_module_t,
     imports: *const Box<wasm_extern_t>,
     num_imports: usize,
@@ -90,6 +82,7 @@ pub unsafe extern "C" fn wasmtime_instance_new(
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
     _wasmtime_instance_new(
+        store,
         module,
         std::slice::from_raw_parts(imports, num_imports),
         instance_ptr,
@@ -98,11 +91,13 @@ pub unsafe extern "C" fn wasmtime_instance_new(
 }
 
 fn _wasmtime_instance_new(
+    store: &wasm_store_t,
     module: &wasm_module_t,
     imports: &[Box<wasm_extern_t>],
     instance_ptr: &mut *mut wasm_instance_t,
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
+    let store = &store.store;
     let imports = imports
         .iter()
         .map(|import| match &import.which {
@@ -114,8 +109,8 @@ fn _wasmtime_instance_new(
         .collect::<Vec<_>>();
     let module = &module.module.borrow();
     handle_instantiate(
-        module.store(),
-        Instance::new(module, &imports),
+        store,
+        Instance::new(store, module, &imports),
         instance_ptr,
         trap_ptr,
     )

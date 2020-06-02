@@ -12,11 +12,12 @@ use wasmtime::*;
 
 fn main() -> Result<()> {
     println!("Initializing...");
-    let store = Store::default();
+    let engine = Engine::default();
+    let store = Store::new(&engine);
 
     // Compile.
     println!("Compiling module...");
-    let module = Module::from_file(&store, "examples/multi.wat")?;
+    let module = Module::from_file(&engine, "examples/multi.wat")?;
 
     // Create external print functions.
     println!("Creating callback...");
@@ -35,7 +36,7 @@ fn main() -> Result<()> {
 
     // Instantiate.
     println!("Instantiating module...");
-    let instance = Instance::new(&module, &[callback_func.into()])?;
+    let instance = Instance::new(&store, &module, &[callback_func.into()])?;
 
     // Extract exports.
     println!("Extracting export...");

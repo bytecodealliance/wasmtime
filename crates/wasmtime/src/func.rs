@@ -38,9 +38,10 @@ use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
 /// ```
 /// # use wasmtime::*;
 /// # fn main() -> anyhow::Result<()> {
-/// let store = Store::default();
-/// let module = Module::new(&store, r#"(module (func (export "foo")))"#)?;
-/// let instance = Instance::new(&module, &[])?;
+/// let engine = Engine::default();
+/// let store = Store::new(&engine);
+/// let module = Module::new(&engine, r#"(module (func (export "foo")))"#)?;
+/// let instance = Instance::new(&store, &module, &[])?;
 /// let foo = instance.get_func("foo").expect("export wasn't a function");
 ///
 /// // Work with `foo` as a `Func` at this point, such as calling it
@@ -76,7 +77,7 @@ use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
 ///
 /// // Next we can hook that up to a wasm module which uses it.
 /// let module = Module::new(
-///     &store,
+///     store.engine(),
 ///     r#"
 ///         (module
 ///             (import "" "" (func $add (param i32 i32) (result i32)))
@@ -90,7 +91,7 @@ use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
 ///                 i32.add))
 ///     "#,
 /// )?;
-/// let instance = Instance::new(&module, &[add.into()])?;
+/// let instance = Instance::new(&store, &module, &[add.into()])?;
 /// let call_add_twice = instance.get_func("call_add_twice").expect("export wasn't a function");
 /// let call_add_twice = call_add_twice.get0::<i32>()?;
 ///
@@ -120,7 +121,7 @@ use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
 /// });
 ///
 /// let module = Module::new(
-///     &store,
+///     store.engine(),
 ///     r#"
 ///         (module
 ///             (import "" "" (func $double (param i32) (result i32)))
@@ -131,7 +132,7 @@ use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
 ///             (start $start))
 ///     "#,
 /// )?;
-/// let instance = Instance::new(&module, &[double.into()])?;
+/// let instance = Instance::new(&store, &module, &[double.into()])?;
 /// // .. work with `instance` if necessary
 /// # Ok(())
 /// # }
@@ -335,7 +336,7 @@ impl Func {
     /// # let store = Store::default();
     /// let add = Func::wrap(&store, |a: i32, b: i32| a + b);
     /// let module = Module::new(
-    ///     &store,
+    ///     store.engine(),
     ///     r#"
     ///         (module
     ///             (import "" "" (func $add (param i32 i32) (result i32)))
@@ -345,7 +346,7 @@ impl Func {
     ///                 call $add))
     ///     "#,
     /// )?;
-    /// let instance = Instance::new(&module, &[add.into()])?;
+    /// let instance = Instance::new(&store, &module, &[add.into()])?;
     /// let foo = instance.get_func("foo").unwrap().get2::<i32, i32, i32>()?;
     /// assert_eq!(foo(1, 2)?, 3);
     /// # Ok(())
@@ -366,7 +367,7 @@ impl Func {
     ///     }
     /// });
     /// let module = Module::new(
-    ///     &store,
+    ///     store.engine(),
     ///     r#"
     ///         (module
     ///             (import "" "" (func $add (param i32 i32) (result i32)))
@@ -376,7 +377,7 @@ impl Func {
     ///                 call $add))
     ///     "#,
     /// )?;
-    /// let instance = Instance::new(&module, &[add.into()])?;
+    /// let instance = Instance::new(&store, &module, &[add.into()])?;
     /// let foo = instance.get_func("foo").unwrap().get2::<i32, i32, i32>()?;
     /// assert_eq!(foo(1, 2)?, 3);
     /// assert!(foo(i32::max_value(), 1).is_err());
@@ -397,7 +398,7 @@ impl Func {
     ///     println!("d={}", d);
     /// });
     /// let module = Module::new(
-    ///     &store,
+    ///     store.engine(),
     ///     r#"
     ///         (module
     ///             (import "" "" (func $debug (param i32 f32 i64 f64)))
@@ -409,7 +410,7 @@ impl Func {
     ///                 call $debug))
     ///     "#,
     /// )?;
-    /// let instance = Instance::new(&module, &[debug.into()])?;
+    /// let instance = Instance::new(&store, &module, &[debug.into()])?;
     /// let foo = instance.get_func("foo").unwrap().get0::<()>()?;
     /// foo()?;
     /// # Ok(())
@@ -453,7 +454,7 @@ impl Func {
     ///     Ok(())
     /// });
     /// let module = Module::new(
-    ///     &store,
+    ///     store.engine(),
     ///     r#"
     ///         (module
     ///             (import "" "" (func $log_str (param i32 i32)))
@@ -465,7 +466,7 @@ impl Func {
     ///             (data (i32.const 4) "Hello, world!"))
     ///     "#,
     /// )?;
-    /// let instance = Instance::new(&module, &[log_str.into()])?;
+    /// let instance = Instance::new(&store, &module, &[log_str.into()])?;
     /// let foo = instance.get_func("foo").unwrap().get0::<()>()?;
     /// foo()?;
     /// # Ok(())
@@ -479,13 +480,7 @@ impl Func {
     pub fn ty(&self) -> FuncType {
         // Signatures should always be registered in the store's registry of
         // shared signatures, so we should be able to unwrap safely here.
-        let sig = self
-            .instance
-            .store
-            .compiler()
-            .signatures()
-            .lookup_wasm(self.export.signature)
-            .expect("failed to lookup signature");
+        let sig = self.instance.store.lookup_signature(self.export.signature);
 
         // This is only called with `Export::Function`, and since it's coming
         // from wasmtime_runtime itself we should support all the types coming
@@ -495,25 +490,13 @@ impl Func {
 
     /// Returns the number of parameters that this function takes.
     pub fn param_arity(&self) -> usize {
-        self.instance
-            .store
-            .compiler()
-            .signatures()
-            .lookup_wasm(self.export.signature)
-            .expect("failed to lookup signature")
-            .params
-            .len()
+        let sig = self.instance.store.lookup_signature(self.export.signature);
+        sig.params.len()
     }
 
     /// Returns the number of results this function produces.
     pub fn result_arity(&self) -> usize {
-        let sig = self
-            .instance
-            .store
-            .compiler()
-            .signatures()
-            .lookup_wasm(self.export.signature)
-            .expect("failed to lookup signature");
+        let sig = self.instance.store.lookup_signature(self.export.signature);
         sig.returns.len()
     }
 
@@ -749,7 +732,7 @@ pub(crate) fn catch_traps(
         wasmtime_runtime::catch_traps(
             vmctx,
             store.engine().config().max_wasm_stack,
-            |addr| store.compiler().is_in_jit_code(addr),
+            |addr| store.is_in_jit_code(addr),
             signalhandler.as_deref(),
             closure,
         )

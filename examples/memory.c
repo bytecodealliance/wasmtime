@@ -167,7 +167,7 @@ int main(int argc, const char* argv[]) {
   printf("Instantiating module...\n");
   wasm_instance_t* instance = NULL;
   wasm_trap_t *trap = NULL;
-  error = wasmtime_instance_new(module, NULL, 0, &instance, &trap);
+  error = wasmtime_instance_new(store, module, NULL, 0, &instance, &trap);
   if (!instance)
     exit_with_error("failed to instantiate", error, trap);
 

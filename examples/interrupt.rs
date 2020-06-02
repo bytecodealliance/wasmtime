@@ -14,8 +14,8 @@ fn main() -> Result<()> {
     let interrupt_handle = store.interrupt_handle()?;
 
     // Compile and instantiate a small example with an infinite loop.
-    let module = Module::from_file(&store, "examples/interrupt.wat")?;
-    let instance = Instance::new(&module, &[])?;
+    let module = Module::from_file(&engine, "examples/interrupt.wat")?;
+    let instance = Instance::new(&store, &module, &[])?;
     let run = instance
         .get_func("run")
         .ok_or(anyhow::format_err!("failed to find `run` function export"))?

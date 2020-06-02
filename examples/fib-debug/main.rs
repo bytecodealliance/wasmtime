@@ -17,8 +17,8 @@ fn main() -> Result<()> {
     // debugged in GDB.
     let engine = Engine::new(Config::new().debug_info(true));
     let store = Store::new(&engine);
-    let module = Module::from_file(&store, "target/wasm32-unknown-unknown/debug/fib.wasm")?;
-    let instance = Instance::new(&module, &[])?;
+    let module = Module::from_file(&engine, "target/wasm32-unknown-unknown/debug/fib.wasm")?;
+    let instance = Instance::new(&store, &module, &[])?;
 
     // Invoke `fib` export
     let fib = instance

@@ -1,9 +1,10 @@
 use crate::host_ref::HostRef;
-use crate::{handle_result, wasmtime_error_t};
-use crate::{wasm_byte_vec_t, wasm_exporttype_vec_t, wasm_importtype_vec_t};
-use crate::{wasm_exporttype_t, wasm_importtype_t, wasm_store_t};
+use crate::{
+    handle_result, wasm_byte_vec_t, wasm_exporttype_t, wasm_exporttype_vec_t, wasm_importtype_t,
+    wasm_importtype_vec_t, wasm_store_t, wasmtime_error_t,
+};
 use std::ptr;
-use wasmtime::Module;
+use wasmtime::{Engine, Module};
 
 #[repr(C)]
 #[derive(Clone)]
@@ -20,6 +21,14 @@ impl wasm_module_t {
         self.module.clone().into()
     }
 }
+
+#[repr(C)]
+#[derive(Clone)]
+pub struct wasm_shared_module_t {
+    module: Module,
+}
+
+wasmtime_c_api_macros::declare_own!(wasm_shared_module_t);
 
 #[no_mangle]
 pub extern "C" fn wasm_module_new(
@@ -44,7 +53,7 @@ pub extern "C" fn wasmtime_module_new(
 ) -> Option<Box<wasmtime_error_t>> {
     let binary = binary.as_slice();
     let store = &store.store;
-    handle_result(Module::from_binary(store, binary), |module| {
+    handle_result(Module::from_binary(store.engine(), binary), |module| {
         let imports = module
             .imports()
             .map(|i| wasm_importtype_t::new(i.module().to_owned(), i.name().to_owned(), i.ty()))
@@ -73,8 +82,7 @@ pub extern "C" fn wasmtime_module_validate(
     binary: &wasm_byte_vec_t,
 ) -> Option<Box<wasmtime_error_t>> {
     let binary = binary.as_slice();
-    let store = &store.store;
-    handle_result(Module::validate(store, binary), |()| {})
+    handle_result(Module::validate(store.store.engine(), binary), |()| {})
 }
 
 #[no_mangle]
@@ -95,4 +103,35 @@ pub extern "C" fn wasm_module_imports(module: &wasm_module_t, out: &mut wasm_imp
         .map(|it| Some(Box::new(it.clone())))
         .collect::<Vec<_>>();
     out.set_buffer(buffer);
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_module_share(module: &wasm_module_t) -> Box<wasm_shared_module_t> {
+    Box::new(wasm_shared_module_t {
+        module: module.module.borrow().clone(),
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_module_obtain(
+    store: &wasm_store_t,
+    shared_module: &wasm_shared_module_t,
+) -> Option<Box<wasm_module_t>> {
+    let module = shared_module.module.clone();
+    if !Engine::same(store.store.engine(), module.engine()) {
+        return None;
+    }
+    let imports = module
+        .imports()
+        .map(|i| wasm_importtype_t::new(i.module().to_owned(), i.name().to_owned(), i.ty()))
+        .collect::<Vec<_>>();
+    let exports = module
+        .exports()
+        .map(|e| wasm_exporttype_t::new(e.name().to_owned(), e.ty()))
+        .collect::<Vec<_>>();
+    Some(Box::new(wasm_module_t {
+        module: HostRef::new(&store.store, module),
+        imports,
+        exports,
+    }))
 }

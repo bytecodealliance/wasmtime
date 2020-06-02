@@ -42,6 +42,8 @@ struct ModuleFrameInfo {
     start: usize,
     functions: BTreeMap<usize, FunctionInfo>,
     module: Arc<Module>,
+    #[allow(dead_code)]
+    module_code: Arc<dyn std::any::Any + Send + Sync>,
 }
 
 struct FunctionInfo {
@@ -192,6 +194,7 @@ pub fn register(module: &CompiledModule) -> Option<GlobalFrameInfoRegistration> 
             start: min,
             functions,
             module: module.module().clone(),
+            module_code: module.code().clone(),
         },
     );
     assert!(prev.is_none());

@@ -87,7 +87,7 @@ int main() {
   wasm_trap_t *trap = NULL;
   wasm_instance_t *instance = NULL;
   const wasm_extern_t *imports[] = { wasm_func_as_extern(hello) };
-  error = wasmtime_instance_new(module, imports, 1, &instance, &trap);
+  error = wasmtime_instance_new(store, module, imports, 1, &instance, &trap);
   if (instance == NULL)
     exit_with_error("failed to instantiate", error, trap);
 

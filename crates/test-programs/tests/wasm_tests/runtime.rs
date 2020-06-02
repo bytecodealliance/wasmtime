@@ -53,7 +53,7 @@ pub fn instantiate(
 
     snapshot1.add_to_linker(&mut linker)?;
 
-    let module = Module::new(&store, &data).context("failed to create wasm module")?;
+    let module = Module::new(store.engine(), &data).context("failed to create wasm module")?;
 
     linker
         .module("", &module)

@@ -65,7 +65,7 @@ int main() {
   wasm_byte_vec_delete(&wasm);
   wasm_trap_t *trap = NULL;
   wasm_instance_t *instance = NULL;
-  error = wasmtime_instance_new(module, NULL, 0, &instance, &trap);
+  error = wasmtime_instance_new(store, module, NULL, 0, &instance, &trap);
   if (instance == NULL)
     exit_with_error("failed to instantiate", error, trap);
 

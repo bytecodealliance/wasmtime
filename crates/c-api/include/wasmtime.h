@@ -244,6 +244,7 @@ WASM_API_EXTERN own wasmtime_error_t *wasmtime_global_set(
 // instance is returned), or an instance can be returned (meaning no error or
 // trap is returned).
 WASM_API_EXTERN own wasmtime_error_t *wasmtime_instance_new(
+    wasm_store_t *store,
     const wasm_module_t *module,
     const wasm_extern_t* const imports[],
     size_t num_imports,

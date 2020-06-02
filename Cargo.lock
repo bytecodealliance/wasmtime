@@ -2381,6 +2381,7 @@ dependencies = [
  "cc",
  "cfg-if",
  "indexmap",
+ "lazy_static",
  "libc",
  "memoffset",
  "more-asserts",
