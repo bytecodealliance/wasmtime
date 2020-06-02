@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-debug"
-version = "0.16.0"
+version = "0.17.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Debug utils for WebAsssembly code in Cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -15,7 +15,7 @@ edition = "2018"
 gimli = "0.20.0"
 wasmparser = "0.57.0"
 faerie = "0.15.0"
-wasmtime-environ = { path = "../environ", version = "0.16.0" }
+wasmtime-environ = { path = "../environ", version = "0.17.0" }
 target-lexicon = { version = "0.10.0", default-features = false }
 anyhow = "1.0"
 thiserror = "1.0.4"
