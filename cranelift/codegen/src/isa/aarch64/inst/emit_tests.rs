@@ -1802,6 +1802,7 @@ fn test_aarch64_binemit() {
             rn: vreg(22),
             rm: vreg(23),
             alu_op: VecALUOp::UQAddScalar,
+            ty: I64,
         },
         "D50EF77E",
         "uqadd d21, d22, d23",
@@ -1812,6 +1813,7 @@ fn test_aarch64_binemit() {
             rn: vreg(22),
             rm: vreg(23),
             alu_op: VecALUOp::SQAddScalar,
+            ty: I64,
         },
         "D50EF75E",
         "sqadd d21, d22, d23",
@@ -1822,6 +1824,7 @@ fn test_aarch64_binemit() {
             rn: vreg(22),
             rm: vreg(23),
             alu_op: VecALUOp::UQSubScalar,
+            ty: I64,
         },
         "D52EF77E",
         "uqsub d21, d22, d23",
@@ -1832,10 +1835,83 @@ fn test_aarch64_binemit() {
             rn: vreg(22),
             rm: vreg(23),
             alu_op: VecALUOp::SQSubScalar,
+            ty: I64,
         },
         "D52EF75E",
         "sqsub d21, d22, d23",
     ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Cmeq,
+            rd: writable_vreg(3),
+            rn: vreg(23),
+            rm: vreg(24),
+            ty: I8X16,
+        },
+        "E38E386E",
+        "cmeq v3.16b, v23.16b, v24.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Cmgt,
+            rd: writable_vreg(3),
+            rn: vreg(23),
+            rm: vreg(24),
+            ty: I8X16,
+        },
+        "E336384E",
+        "cmgt v3.16b, v23.16b, v24.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Cmge,
+            rd: writable_vreg(23),
+            rn: vreg(9),
+            rm: vreg(12),
+            ty: I8X16,
+        },
+        "373D2C4E",
+        "cmge v23.16b, v9.16b, v12.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Cmhi,
+            rd: writable_vreg(5),
+            rn: vreg(1),
+            rm: vreg(1),
+            ty: I8X16,
+        },
+        "2534216E",
+        "cmhi v5.16b, v1.16b, v1.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Cmhs,
+            rd: writable_vreg(8),
+            rn: vreg(2),
+            rm: vreg(15),
+            ty: I8X16,
+        },
+        "483C2F6E",
+        "cmhs v8.16b, v2.16b, v15.16b",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Not,
+            rd: writable_vreg(2),
+            rn: vreg(1),
+            ty: I8X16,
+        },
+        "2258206E",
+        "mvn v2.16b, v1.16b",
+    ));
+
     insns.push((
         Inst::Extend {
             rd: writable_xreg(1),
