@@ -82,3 +82,9 @@ pub(super) fn define_handle(
 
     }
 }
+
+impl super::WiggleType for witx::HandleDatatype {
+    fn impls_display(&self) -> bool {
+        true
+    }
+}

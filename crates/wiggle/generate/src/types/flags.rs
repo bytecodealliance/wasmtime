@@ -180,3 +180,9 @@ pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDataty
 
     }
 }
+
+impl super::WiggleType for witx::FlagsDatatype {
+    fn impls_display(&self) -> bool {
+        true
+    }
+}

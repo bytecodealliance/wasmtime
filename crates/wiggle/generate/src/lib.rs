@@ -11,19 +11,14 @@ use quote::quote;
 
 use lifetimes::anon_lifetime;
 
-pub use config::{Config, LoggingConf};
+pub use config::Config;
 pub use error_transform::{ErrorTransform, UserErrorType};
 pub use funcs::define_func;
 pub use module_trait::define_module_trait;
 pub use names::Names;
 pub use types::define_datatype;
 
-pub fn generate(
-    doc: &witx::Document,
-    names: &Names,
-    errs: &ErrorTransform,
-    logging: &LoggingConf,
-) -> TokenStream {
+pub fn generate(doc: &witx::Document, names: &Names, errs: &ErrorTransform) -> TokenStream {
     // TODO at some point config should grow more ability to configure name
     // overrides.
     let rt = names.runtime_mod();
@@ -54,10 +49,9 @@ pub fn generate(
     };
     let modules = doc.modules().map(|module| {
         let modname = names.module(&module.name);
-        let trait_name = names.trait_name(&module.name);
         let fs = module
             .funcs()
-            .map(|f| define_func(&names, &f, quote!(#trait_name), &errs, logging));
+            .map(|f| define_func(&names, &module, &f, &errs));
         let modtrait = define_module_trait(&names, &module, &errs);
         let ctx_type = names.ctx_type();
         quote!(

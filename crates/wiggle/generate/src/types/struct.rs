@@ -133,3 +133,9 @@ pub(super) fn define_struct(
         #transparent
     }
 }
+
+impl super::WiggleType for witx::StructDatatype {
+    fn impls_display(&self) -> bool {
+        false
+    }
+}

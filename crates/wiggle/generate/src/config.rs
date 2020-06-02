@@ -18,7 +18,6 @@ pub struct Config {
     pub witx: WitxConf,
     pub ctx: CtxConf,
     pub errors: ErrorConf,
-    pub logging: LoggingConf,
 }
 
 #[derive(Debug, Clone)]
@@ -26,17 +25,13 @@ pub enum ConfigField {
     Witx(WitxConf),
     Ctx(CtxConf),
     Error(ErrorConf),
-    Logging(LoggingConf),
 }
 
 mod kw {
     syn::custom_keyword!(witx);
     syn::custom_keyword!(witx_literal);
     syn::custom_keyword!(ctx);
-    syn::custom_keyword!(logging);
     syn::custom_keyword!(errors);
-    syn::custom_keyword!(log);
-    syn::custom_keyword!(tracing);
 }
 
 impl Parse for ConfigField {
@@ -54,10 +49,6 @@ impl Parse for ConfigField {
             input.parse::<kw::ctx>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Ctx(input.parse()?))
-        } else if lookahead.peek(kw::logging) {
-            input.parse::<kw::logging>()?;
-            input.parse::<Token![:]>()?;
-            Ok(ConfigField::Logging(input.parse()?))
         } else if lookahead.peek(kw::errors) {
             input.parse::<kw::errors>()?;
             input.parse::<Token![:]>()?;
@@ -73,7 +64,6 @@ impl Config {
         let mut witx = None;
         let mut ctx = None;
         let mut errors = None;
-        let mut logging = None;
         for f in fields {
             match f {
                 ConfigField::Witx(c) => {
@@ -94,12 +84,6 @@ impl Config {
                     }
                     errors = Some(c);
                 }
-                ConfigField::Logging(c) => {
-                    if logging.is_some() {
-                        return Err(Error::new(err_loc, "duplicate `logging` field"));
-                    }
-                    logging = Some(c);
-                }
             }
         }
         Ok(Config {
@@ -110,7 +94,6 @@ impl Config {
                 .take()
                 .ok_or_else(|| Error::new(err_loc, "`ctx` field required"))?,
             errors: errors.take().unwrap_or_default(),
-            logging: logging.take().unwrap_or_default(),
         })
     }
 
@@ -317,37 +300,5 @@ impl Parse for ErrorConfField {
             rich_error,
             err_loc,
         })
-    }
-}
-
-/// Configure logging statements in generated code
-#[derive(Debug, Clone)]
-pub enum LoggingConf {
-    Log { cfg_feature: Option<String> },
-    Tracing,
-}
-
-impl Default for LoggingConf {
-    fn default() -> Self {
-        // For compatibility with existing code. We should probably revise this later.
-        LoggingConf::Log {
-            cfg_feature: Some("trace_log".to_owned()),
-        }
-    }
-}
-
-impl Parse for LoggingConf {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let lookahead = input.lookahead1();
-        if lookahead.peek(kw::log) {
-            input.parse::<kw::log>()?;
-            // TODO: syntax so the user can specify their own cfg_feature guard here.
-            Ok(LoggingConf::Log { cfg_feature: None })
-        } else if lookahead.peek(kw::tracing) {
-            input.parse::<kw::tracing>()?;
-            Ok(LoggingConf::Tracing)
-        } else {
-            Err(lookahead.error())
-        }
     }
 }
