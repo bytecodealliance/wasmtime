@@ -5,7 +5,7 @@
 
 // To execute this example you'll need to run two commands:
 //
-//      cargo build -p example-fib-wasm --target wasm32-unknown-unknown
+//      cargo build -p example-fib-debug-wasm --target wasm32-unknown-unknown
 //      cargo run --example fib-debug
 
 use anyhow::Result;
