@@ -12,6 +12,15 @@ pub trait ABIBody {
     /// The instruction type for the ISA associated with this ABI.
     type I: VCodeInst;
 
+    /// Does the ABI-body code need a temp reg? One will be provided to `init()`
+    /// as the `maybe_tmp` arg if so.
+    fn temp_needed(&self) -> bool;
+
+    /// Initialize. This is called after the ABIBody is constructed because it
+    /// may be provided with a temp vreg, which can only be allocated once the
+    /// lowering context exists.
+    fn init(&mut self, maybe_tmp: Option<Writable<Reg>>);
+
     /// Get the settings controlling this function's compilation.
     fn flags(&self) -> &settings::Flags;
 
@@ -33,6 +42,13 @@ pub trait ABIBody {
     /// Generate an instruction which copies an argument to a destination
     /// register.
     fn gen_copy_arg_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Self::I;
+
+    /// Generate any setup instruction needed to save values to the
+    /// return-value area. This is usually used when were are multiple return
+    /// values or an otherwise large return value that must be passed on the
+    /// stack; typically the ABI specifies an extra hidden argument that is a
+    /// pointer to that memory.
+    fn gen_retval_area_setup(&self) -> Option<Self::I>;
 
     /// Generate an instruction which copies a source register to a return value slot.
     fn gen_copy_reg_to_retval(

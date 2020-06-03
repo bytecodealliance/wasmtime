@@ -539,12 +539,10 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
     // TODO: support base_reg + scale * index_reg. For this, we would need to pattern-match shl or
     // mul instructions (Load/StoreComplex don't include scale factors).
 
-    // Handle one reg and offset that fits in immediate, if possible.
+    // Handle one reg and offset.
     if addends.len() == 1 {
         let reg = input_to_reg(ctx, addends[0], NarrowValueMode::ZeroExtend64);
-        if let Some(memarg) = MemArg::reg_maybe_offset(reg, offset as i64, elem_ty) {
-            return memarg;
-        }
+        return MemArg::RegOffset(reg, offset as i64, elem_ty);
     }
 
     // Handle two regs and a zero offset, if possible.

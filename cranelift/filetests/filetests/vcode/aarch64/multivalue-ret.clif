@@ -1,0 +1,18 @@
+test compile
+target aarch64
+
+;; Test default (non-SpiderMonkey) ABI.
+function %f() -> i64, i64 {
+block1:
+  v0 = iconst.i64 1
+  v1 = iconst.i64 2
+  return v0, v1
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  movz x0, #1
+; nextln:  movz x1, #2
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret

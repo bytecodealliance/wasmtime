@@ -259,7 +259,12 @@ impl UImm12Scaled {
 
     /// Value after scaling.
     pub fn value(&self) -> u32 {
-        self.value as u32 * self.scale_ty.bytes()
+        self.value as u32
+    }
+
+    /// The value type which is the scaling base.
+    pub fn scale_ty(&self) -> Type {
+        self.scale_ty
     }
 }
 

@@ -5,6 +5,7 @@ use crate::ir::constant::ConstantData;
 use crate::ir::types::*;
 use crate::ir::TrapCode;
 use crate::isa::aarch64::inst::*;
+use crate::isa::aarch64::lower::ty_bits;
 
 use regalloc::{Reg, RegClass, Writable};
 
@@ -29,8 +30,12 @@ pub fn mem_finalize(
     state: &EmitState,
 ) -> (SmallVec<[Inst; 4]>, MemArg) {
     match mem {
-        &MemArg::SPOffset(off) | &MemArg::FPOffset(off) | &MemArg::NominalSPOffset(off) => {
+        &MemArg::RegOffset(_, off, ty)
+        | &MemArg::SPOffset(off, ty)
+        | &MemArg::FPOffset(off, ty)
+        | &MemArg::NominalSPOffset(off, ty) => {
             let basereg = match mem {
+                &MemArg::RegOffset(reg, _, _) => reg,
                 &MemArg::SPOffset(..) | &MemArg::NominalSPOffset(..) => stack_reg(),
                 &MemArg::FPOffset(..) => fp_reg(),
                 _ => unreachable!(),
@@ -51,6 +56,9 @@ pub fn mem_finalize(
 
             if let Some(simm9) = SImm9::maybe_from_i64(off) {
                 let mem = MemArg::Unscaled(basereg, simm9);
+                (smallvec![], mem)
+            } else if let Some(uimm12s) = UImm12Scaled::maybe_from_i64(off, ty) {
+                let mem = MemArg::UnsignedOffset(basereg, uimm12s);
                 (smallvec![], mem)
             } else {
                 let tmp = writable_spilltmp_reg();
@@ -654,17 +662,17 @@ impl MachInstEmit for Inst {
                 // This is the base opcode (top 10 bits) for the "unscaled
                 // immediate" form (Unscaled). Other addressing modes will OR in
                 // other values for bits 24/25 (bits 1/2 of this constant).
-                let op = match self {
-                    &Inst::ULoad8 { .. } => 0b0011100001,
-                    &Inst::SLoad8 { .. } => 0b0011100010,
-                    &Inst::ULoad16 { .. } => 0b0111100001,
-                    &Inst::SLoad16 { .. } => 0b0111100010,
-                    &Inst::ULoad32 { .. } => 0b1011100001,
-                    &Inst::SLoad32 { .. } => 0b1011100010,
-                    &Inst::ULoad64 { .. } => 0b1111100001,
-                    &Inst::FpuLoad32 { .. } => 0b1011110001,
-                    &Inst::FpuLoad64 { .. } => 0b1111110001,
-                    &Inst::FpuLoad128 { .. } => 0b0011110011,
+                let (op, bits) = match self {
+                    &Inst::ULoad8 { .. } => (0b0011100001, 8),
+                    &Inst::SLoad8 { .. } => (0b0011100010, 8),
+                    &Inst::ULoad16 { .. } => (0b0111100001, 16),
+                    &Inst::SLoad16 { .. } => (0b0111100010, 16),
+                    &Inst::ULoad32 { .. } => (0b1011100001, 32),
+                    &Inst::SLoad32 { .. } => (0b1011100010, 32),
+                    &Inst::ULoad64 { .. } => (0b1111100001, 64),
+                    &Inst::FpuLoad32 { .. } => (0b1011110001, 32),
+                    &Inst::FpuLoad64 { .. } => (0b1111110001, 64),
+                    &Inst::FpuLoad128 { .. } => (0b0011110011, 128),
                     _ => unreachable!(),
                 };
 
@@ -678,6 +686,9 @@ impl MachInstEmit for Inst {
                         sink.put4(enc_ldst_simm9(op, simm9, 0b00, reg, rd));
                     }
                     &MemArg::UnsignedOffset(reg, uimm12scaled) => {
+                        if uimm12scaled.value() != 0 {
+                            assert_eq!(bits, ty_bits(uimm12scaled.scale_ty()));
+                        }
                         sink.put4(enc_ldst_uimm12(op, uimm12scaled, reg, rd));
                     }
                     &MemArg::RegReg(r1, r2) => {
@@ -686,19 +697,7 @@ impl MachInstEmit for Inst {
                         ));
                     }
                     &MemArg::RegScaled(r1, r2, ty) | &MemArg::RegScaledExtended(r1, r2, ty, _) => {
-                        match (ty, self) {
-                            (I8, &Inst::ULoad8 { .. }) => {}
-                            (I8, &Inst::SLoad8 { .. }) => {}
-                            (I16, &Inst::ULoad16 { .. }) => {}
-                            (I16, &Inst::SLoad16 { .. }) => {}
-                            (I32, &Inst::ULoad32 { .. }) => {}
-                            (I32, &Inst::SLoad32 { .. }) => {}
-                            (I64, &Inst::ULoad64 { .. }) => {}
-                            (F32, &Inst::FpuLoad32 { .. }) => {}
-                            (F64, &Inst::FpuLoad64 { .. }) => {}
-                            (I128, &Inst::FpuLoad128 { .. }) => {}
-                            _ => panic!("Mismatching reg-scaling type in MemArg"),
-                        }
+                        assert_eq!(bits, ty_bits(ty));
                         let extendop = match &mem {
                             &MemArg::RegScaled(..) => None,
                             &MemArg::RegScaledExtended(_, _, _, op) => Some(op),
@@ -746,6 +745,7 @@ impl MachInstEmit for Inst {
                     &MemArg::SPOffset(..)
                     | &MemArg::FPOffset(..)
                     | &MemArg::NominalSPOffset(..) => panic!("Should not see stack-offset here!"),
+                    &MemArg::RegOffset(..) => panic!("SHould not see generic reg-offset here!"),
                 }
             }
 
@@ -791,14 +791,14 @@ impl MachInstEmit for Inst {
                     inst.emit(sink, flags, state);
                 }
 
-                let op = match self {
-                    &Inst::Store8 { .. } => 0b0011100000,
-                    &Inst::Store16 { .. } => 0b0111100000,
-                    &Inst::Store32 { .. } => 0b1011100000,
-                    &Inst::Store64 { .. } => 0b1111100000,
-                    &Inst::FpuStore32 { .. } => 0b1011110000,
-                    &Inst::FpuStore64 { .. } => 0b1111110000,
-                    &Inst::FpuStore128 { .. } => 0b0011110010,
+                let (op, bits) = match self {
+                    &Inst::Store8 { .. } => (0b0011100000, 8),
+                    &Inst::Store16 { .. } => (0b0111100000, 16),
+                    &Inst::Store32 { .. } => (0b1011100000, 32),
+                    &Inst::Store64 { .. } => (0b1111100000, 64),
+                    &Inst::FpuStore32 { .. } => (0b1011110000, 32),
+                    &Inst::FpuStore64 { .. } => (0b1111110000, 64),
+                    &Inst::FpuStore128 { .. } => (0b0011110010, 128),
                     _ => unreachable!(),
                 };
 
@@ -812,6 +812,9 @@ impl MachInstEmit for Inst {
                         sink.put4(enc_ldst_simm9(op, simm9, 0b00, reg, rd));
                     }
                     &MemArg::UnsignedOffset(reg, uimm12scaled) => {
+                        if uimm12scaled.value() != 0 {
+                            assert_eq!(bits, ty_bits(uimm12scaled.scale_ty()));
+                        }
                         sink.put4(enc_ldst_uimm12(op, uimm12scaled, reg, rd));
                     }
                     &MemArg::RegReg(r1, r2) => {
@@ -843,6 +846,7 @@ impl MachInstEmit for Inst {
                     &MemArg::SPOffset(..)
                     | &MemArg::FPOffset(..)
                     | &MemArg::NominalSPOffset(..) => panic!("Should not see stack-offset here!"),
+                    &MemArg::RegOffset(..) => panic!("SHould not see generic reg-offset here!"),
                 }
             }
 

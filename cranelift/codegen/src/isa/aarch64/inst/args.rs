@@ -145,11 +145,15 @@ pub enum MemArg {
     /// Reference to a "label": e.g., a symbol.
     Label(MemLabel),
 
+    /// Arbitrary offset from a register. Converted to generation of large
+    /// offsets with multiple instructions as necessary during code emission.
+    RegOffset(Reg, i64, Type),
+
     /// Offset from the stack pointer.
-    SPOffset(i64),
+    SPOffset(i64, Type),
 
     /// Offset from the frame pointer.
-    FPOffset(i64),
+    FPOffset(i64, Type),
 
     /// Offset from the "nominal stack pointer", which is where the real SP is
     /// just after stack and spill slots are allocated in the function prologue.
@@ -163,7 +167,7 @@ pub enum MemArg {
     /// SP" is where the actual SP is after the function prologue and before
     /// clobber pushes. See the diagram in the documentation for
     /// [crate::isa::aarch64::abi](the ABI module) for more details.
-    NominalSPOffset(i64),
+    NominalSPOffset(i64, Type),
 }
 
 impl MemArg {
@@ -172,17 +176,6 @@ impl MemArg {
         // Use UnsignedOffset rather than Unscaled to use ldr rather than ldur.
         // This also does not use PostIndexed / PreIndexed as they update the register.
         MemArg::UnsignedOffset(reg, UImm12Scaled::zero(I64))
-    }
-
-    /// Memory reference using an address in a register and an offset, if possible.
-    pub fn reg_maybe_offset(reg: Reg, offset: i64, value_type: Type) -> Option<MemArg> {
-        if let Some(simm9) = SImm9::maybe_from_i64(offset) {
-            Some(MemArg::Unscaled(reg, simm9))
-        } else if let Some(uimm12s) = UImm12Scaled::maybe_from_i64(offset, value_type) {
-            Some(MemArg::UnsignedOffset(reg, uimm12s))
-        } else {
-            None
-        }
     }
 
     /// Memory reference using the sum of two registers as an address.
@@ -431,8 +424,11 @@ impl ShowWithRRU for MemArg {
                 simm9.show_rru(mb_rru)
             ),
             // Eliminated by `mem_finalize()`.
-            &MemArg::SPOffset(..) | &MemArg::FPOffset(..) | &MemArg::NominalSPOffset(..) => {
-                panic!("Unexpected stack-offset mem-arg mode!")
+            &MemArg::SPOffset(..)
+            | &MemArg::FPOffset(..)
+            | &MemArg::NominalSPOffset(..)
+            | &MemArg::RegOffset(..) => {
+                panic!("Unexpected pseudo mem-arg mode (stack-offset or generic reg-offset)!")
             }
         }
     }

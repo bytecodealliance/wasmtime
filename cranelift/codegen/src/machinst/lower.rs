@@ -6,6 +6,7 @@ use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_side_effect_or_load, is_constant_64bit};
 use crate::ir::instructions::BranchInfo;
+use crate::ir::types::I64;
 use crate::ir::{
     ArgumentExtension, Block, Constant, ConstantData, ExternalName, Function, GlobalValueData,
     Inst, InstructionData, MemFlags, Opcode, Signature, SourceLoc, Type, Value, ValueDef,
@@ -382,6 +383,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 let insn = self.vcode.abi().gen_copy_arg_to_reg(i, reg);
                 self.emit(insn);
             }
+            if let Some(insn) = self.vcode.abi().gen_retval_area_setup() {
+                self.emit(insn);
+            }
         }
     }
 
@@ -647,6 +651,14 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Lower the function.
     pub fn lower<B: LowerBackend<MInst = I>>(mut self, backend: &B) -> CodegenResult<VCode<I>> {
         debug!("about to lower function: {:?}", self.f);
+
+        // Initialize the ABI object, giving it a temp if requested.
+        let maybe_tmp = if self.vcode.abi().temp_needed() {
+            Some(self.alloc_tmp(RegClass::I64, I64))
+        } else {
+            None
+        };
+        self.vcode.abi().init(maybe_tmp);
 
         // Get the pinned reg here (we only parameterize this function on `B`,
         // not the whole `Lower` impl).
