@@ -47,6 +47,7 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     x86_32.legalize_value_type(ReferenceType(R32), x86_expand);
     x86_32.legalize_type(F32, x86_expand);
     x86_32.legalize_type(F64, x86_expand);
+    x86_32.legalize_value_type(VectorType::new(I32.into(), 4), x86_narrow_avx);
     x86_32.legalize_value_type(VectorType::new(I64.into(), 2), x86_narrow_avx);
     x86_32.legalize_value_type(VectorType::new(F32.into(), 4), x86_narrow_avx);
 
@@ -60,6 +61,7 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     x86_64.legalize_value_type(ReferenceType(R64), x86_expand);
     x86_64.legalize_type(F32, x86_expand);
     x86_64.legalize_type(F64, x86_expand);
+    x86_64.legalize_value_type(VectorType::new(I32.into(), 4), x86_narrow_avx);
     x86_64.legalize_value_type(VectorType::new(I64.into(), 2), x86_narrow_avx);
     x86_64.legalize_value_type(VectorType::new(F32.into(), 4), x86_narrow_avx);
 

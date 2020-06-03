@@ -383,6 +383,7 @@ fn define_simd(
     let fcmp = insts.by_name("fcmp");
     let fcvt_from_uint = insts.by_name("fcvt_from_uint");
     let fcvt_to_sint_sat = insts.by_name("fcvt_to_sint_sat");
+    let fcvt_to_uint_sat = insts.by_name("fcvt_to_uint_sat");
     let fmax = insts.by_name("fmax");
     let fmin = insts.by_name("fmin");
     let fneg = insts.by_name("fneg");
@@ -797,4 +798,5 @@ fn define_simd(
 
     narrow_avx.custom_legalize(imul, "convert_i64x2_imul");
     narrow_avx.custom_legalize(fcvt_from_uint, "expand_fcvt_from_uint_vector");
+    narrow_avx.custom_legalize(fcvt_to_uint_sat, "expand_fcvt_to_uint_sat_vector");
 }
