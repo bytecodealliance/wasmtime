@@ -2063,6 +2063,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::X86Packss
         | Opcode::X86Punpckh
         | Opcode::X86Punpckl
+        | Opcode::X86Vcvtps2udq
         | Opcode::X86Vcvtudq2ps
         | Opcode::X86ElfTlsGetAddr
         | Opcode::X86MachoTlsGetAddr => {

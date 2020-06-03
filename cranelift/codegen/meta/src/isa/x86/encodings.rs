@@ -1704,6 +1704,7 @@ fn define_simd(
     let x86_ptest = x86.by_name("x86_ptest");
     let x86_punpckh = x86.by_name("x86_punpckh");
     let x86_punpckl = x86.by_name("x86_punpckl");
+    let x86_vcvtps2udq = x86.by_name("x86_vcvtps2udq");
     let x86_vcvtudq2ps = x86.by_name("x86_vcvtudq2ps");
 
     // Shorthands for recipes.
@@ -1948,6 +1949,12 @@ fn define_simd(
         e.enc_32_64_maybe_isap(
             x86_vcvtudq2ps,
             rec_evex_reg_rm_128.opcodes(&VCVTUDQ2PS),
+            Some(use_avx512vl_simd), // TODO need an OR predicate to join with AVX512F
+        );
+
+        e.enc_32_64_maybe_isap(
+            x86_vcvtps2udq,
+            rec_evex_reg_rm_128.opcodes(&VCVTPS2UDQ),
             Some(use_avx512vl_simd), // TODO need an OR predicate to join with AVX512F
         );
 

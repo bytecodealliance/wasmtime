@@ -7,3 +7,9 @@ block0(v0: i32x4 [%xmm2]):
 [-, %xmm6]  v1 = x86_vcvtudq2ps v0 ; bin: 62 f1 7f 08 7a f2
     return
 }
+
+function %fcvt_to_uint(f32x4) {
+block0(v0: f32x4 [%xmm2]):
+[-, %xmm6]  v1 = x86_vcvtps2udq v0 ; bin: 62 f1 7c 08 79 f2
+    return
+}

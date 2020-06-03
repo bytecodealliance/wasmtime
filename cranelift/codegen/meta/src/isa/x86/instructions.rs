@@ -167,8 +167,29 @@ pub(crate) fn define(
             r#"
         Convert unsigned integer to floating point.
 
-        Convert packed doubleword unsigned integers to packed single-precision floating-point 
-        values. This instruction does not trap.
+        Convert packed doubleword unsigned integers to packed single-precision floating-point
+        values. When a conversion is inexact, the value returned is rounded according to the
+        rounding control bits in the MXCSR register or the embedded rounding control bits. This
+        instruction does not trap.
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
+    let x = &Operand::new("x", f32x4);
+    let a = &Operand::new("a", i32x4);
+    ig.push(
+        Inst::new(
+            "x86_vcvtps2udq",
+            r#"
+        Convert floating point to unsigned integer.
+
+        Convert packed single-precision floating-point to packed doubleword unsigned integers 
+        values. When a conversion is inexact, the value returned is rounded according to the
+        rounding control bits in the MXCSR register or the embedded rounding control bits. This
+        instruction does not trap.
         "#,
             &formats.unary,
         )
