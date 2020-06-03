@@ -71,7 +71,7 @@ fn main() {
     if std::env::var("RUST_LOG").is_err() {
         // with no RUST_LOG env variable: use the tracing subscriber.
         let subscriber = tracing_subscriber::fmt()
-            // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
+            // all spans/events with a level equal to or higher than TRACE (e.g, trace, debug, info, warn, etc.)
             // will be written to stdout.
             .with_max_level(tracing::Level::TRACE)
             // builds the subscriber.
