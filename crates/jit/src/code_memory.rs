@@ -6,20 +6,27 @@ use std::mem::ManuallyDrop;
 use std::{cmp, mem};
 use wasmtime_environ::{
     isa::{unwind::UnwindInfo, TargetIsa},
-    Compilation, CompiledFunction,
+    Compilation, CompiledFunction, Relocation, Relocations,
 };
 use wasmtime_runtime::{Mmap, VMFunctionBody};
+
+type CodeMemoryRelocations = Vec<(u32, Vec<Relocation>)>;
 
 struct CodeMemoryEntry {
     mmap: ManuallyDrop<Mmap>,
     registry: ManuallyDrop<UnwindRegistry>,
+    relocs: CodeMemoryRelocations,
 }
 
 impl CodeMemoryEntry {
     fn with_capacity(cap: usize) -> Result<Self, String> {
         let mmap = ManuallyDrop::new(Mmap::with_at_least(cap)?);
         let registry = ManuallyDrop::new(UnwindRegistry::new(mmap.as_ptr() as usize));
-        Ok(Self { mmap, registry })
+        Ok(Self {
+            mmap,
+            registry,
+            relocs: vec![],
+        })
     }
 
     fn range(&self) -> (usize, usize) {
@@ -66,15 +73,18 @@ impl CodeMemory {
     /// Allocate a continuous memory block for a single compiled function.
     /// TODO: Reorganize the code that calls this to emit code directly into the
     /// mmap region rather than into a Vec that we need to copy in.
-    pub fn allocate_for_function(
+    pub fn allocate_for_function<'a>(
         &mut self,
-        func: &CompiledFunction,
+        func: &'a CompiledFunction,
+        relocs: impl Iterator<Item = &'a Relocation>,
     ) -> Result<&mut [VMFunctionBody], String> {
         let size = Self::function_allocation_size(func);
 
-        let (buf, registry, start) = self.allocate(size)?;
+        let (buf, registry, start, m_relocs) = self.allocate(size)?;
 
         let (_, _, vmfunc) = Self::copy_function(func, start as u32, buf, registry);
+
+        Self::copy_relocs(m_relocs, start as u32, relocs);
 
         Ok(vmfunc)
     }
@@ -83,19 +93,22 @@ impl CodeMemory {
     pub fn allocate_for_compilation(
         &mut self,
         compilation: &Compilation,
+        relocations: &Relocations,
     ) -> Result<Box<[&mut [VMFunctionBody]]>, String> {
         let total_len = compilation
             .into_iter()
             .fold(0, |acc, func| acc + Self::function_allocation_size(func));
 
-        let (mut buf, registry, start) = self.allocate(total_len)?;
+        let (mut buf, registry, start, m_relocs) = self.allocate(total_len)?;
         let mut result = Vec::with_capacity(compilation.len());
         let mut start = start as u32;
 
-        for func in compilation.into_iter() {
+        for (func, relocs) in compilation.into_iter().zip(relocations.values()) {
             let (next_start, next_buf, vmfunc) = Self::copy_function(func, start, buf, registry);
 
             result.push(vmfunc);
+
+            Self::copy_relocs(m_relocs, start, relocs.iter());
 
             start = next_start;
             buf = next_buf;
@@ -112,6 +125,7 @@ impl CodeMemory {
         for CodeMemoryEntry {
             mmap: m,
             registry: r,
+            relocs,
         } in &mut self.entries[self.published..]
         {
             // Remove write access to the pages due to the relocation fixups.
@@ -124,6 +138,10 @@ impl CodeMemory {
                 }
                 .expect("unable to make memory readonly and executable");
             }
+
+            // Relocs data in not needed anymore -- clearing.
+            // TODO use relocs to serialize the published code.
+            relocs.clear();
         }
 
         self.published = self.entries.len();
@@ -141,7 +159,18 @@ impl CodeMemory {
     /// * The offset within the current mmap that the slice starts at
     ///
     /// TODO: Add an alignment flag.
-    fn allocate(&mut self, size: usize) -> Result<(&mut [u8], &mut UnwindRegistry, usize), String> {
+    fn allocate(
+        &mut self,
+        size: usize,
+    ) -> Result<
+        (
+            &mut [u8],
+            &mut UnwindRegistry,
+            usize,
+            &mut CodeMemoryRelocations,
+        ),
+        String,
+    > {
         assert!(size > 0);
 
         if match &self.current {
@@ -160,6 +189,7 @@ impl CodeMemory {
             &mut e.mmap.as_mut_slice()[old_position..self.position],
             &mut e.registry,
             old_position,
+            &mut e.relocs,
         ))
     }
 
@@ -174,6 +204,14 @@ impl CodeMemory {
             }
             _ => func.body.len(),
         }
+    }
+
+    fn copy_relocs<'a>(
+        entry_relocs: &'_ mut CodeMemoryRelocations,
+        start: u32,
+        relocs: impl Iterator<Item = &'a Relocation>,
+    ) {
+        entry_relocs.push((start, relocs.cloned().collect()));
     }
 
     /// Copies the data of the compiled function to the given buffer.
@@ -248,5 +286,20 @@ impl CodeMemory {
         self.entries[..self.published]
             .iter()
             .map(|entry| entry.range())
+    }
+
+    /// Returns all relocations for the unpublished memory.
+    pub fn unpublished_relocations<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = (*const u8, &'a Relocation)> + 'a {
+        self.entries[self.published..]
+            .iter()
+            .chain(self.current.iter())
+            .flat_map(|entry| {
+                entry.relocs.iter().flat_map(move |(start, relocs)| {
+                    let base_ptr = unsafe { entry.mmap.as_ptr().add(*start as usize) };
+                    relocs.iter().map(move |r| (base_ptr, r))
+                })
+            })
     }
 }

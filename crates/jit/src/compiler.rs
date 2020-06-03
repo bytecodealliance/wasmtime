@@ -8,7 +8,6 @@ use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
-use std::collections::HashMap;
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
@@ -75,9 +74,7 @@ fn _assert_compiler_send_sync() {
 pub struct Compilation {
     pub code_memory: CodeMemory,
     pub finished_functions: PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-    pub relocations: Relocations,
     pub trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
-    pub trampoline_relocations: HashMap<SignatureIndex, Vec<Relocation>>,
     pub jt_offsets: PrimaryMap<DefinedFuncIndex, ir::JumpTableOffsets>,
     pub dbg_image: Option<Vec<u8>>,
     pub traps: Traps,
@@ -132,13 +129,13 @@ impl Compiler {
 
         // Allocate all of the compiled functions into executable memory,
         // copying over their contents.
-        let finished_functions =
-            allocate_functions(&mut code_memory, &compilation).map_err(|message| {
-                SetupError::Instantiate(InstantiationError::Resource(format!(
-                    "failed to allocate memory for functions: {}",
-                    message
-                )))
-            })?;
+        let finished_functions = allocate_functions(&mut code_memory, &compilation, &relocations)
+            .map_err(|message| {
+            SetupError::Instantiate(InstantiationError::Resource(format!(
+                "failed to allocate memory for functions: {}",
+                message
+            )))
+        })?;
 
         // Eagerly generate a entry trampoline for every type signature in the
         // module. This should be "relatively lightweight" for most modules and
@@ -146,9 +143,8 @@ impl Compiler {
         // tables) have a trampoline when invoked through the wasmtime API.
         let mut cx = FunctionBuilderContext::new();
         let mut trampolines = PrimaryMap::new();
-        let mut trampoline_relocations = HashMap::new();
-        for (index, (_, native_sig)) in translation.module.local.signatures.iter() {
-            let (trampoline, relocations) = make_trampoline(
+        for (_, (_, native_sig)) in translation.module.local.signatures.iter() {
+            let trampoline = make_trampoline(
                 &*self.isa,
                 &mut code_memory,
                 &mut cx,
@@ -156,14 +152,6 @@ impl Compiler {
                 std::mem::size_of::<u128>(),
             )?;
             trampolines.push(trampoline);
-
-            // Typically trampolines do not have relocations, so if one does
-            // show up be sure to log it in case anyone's listening and there's
-            // an accidental bug.
-            if relocations.len() > 0 {
-                log::info!("relocations found in trampoline for {:?}", native_sig);
-                trampoline_relocations.insert(index, relocations);
-            }
         }
 
         // Translate debug info (DWARF) only if at least one function is present.
@@ -211,9 +199,7 @@ impl Compiler {
         Ok(Compilation {
             code_memory,
             finished_functions,
-            relocations,
             trampolines,
-            trampoline_relocations,
             jt_offsets,
             dbg_image,
             traps,
@@ -229,7 +215,7 @@ pub fn make_trampoline(
     fn_builder_ctx: &mut FunctionBuilderContext,
     signature: &ir::Signature,
     value_size: usize,
-) -> Result<(VMTrampoline, Vec<Relocation>), SetupError> {
+) -> Result<VMTrampoline, SetupError> {
     let pointer_type = isa.pointer_type();
     let mut wrapper_sig = ir::Signature::new(isa.frontend_config().default_call_conv);
 
@@ -337,28 +323,29 @@ pub fn make_trampoline(
     })?;
 
     let ptr = code_memory
-        .allocate_for_function(&CompiledFunction {
-            body: code_buf,
-            jt_offsets: context.func.jt_offsets,
-            unwind_info,
-        })
+        .allocate_for_function(
+            &CompiledFunction {
+                body: code_buf,
+                jt_offsets: context.func.jt_offsets,
+                unwind_info,
+            },
+            reloc_sink.relocs.iter(),
+        )
         .map_err(|message| SetupError::Instantiate(InstantiationError::Resource(message)))?
         .as_ptr();
-    Ok((
-        unsafe { std::mem::transmute::<*const VMFunctionBody, VMTrampoline>(ptr) },
-        reloc_sink.relocs,
-    ))
+    Ok(unsafe { std::mem::transmute::<*const VMFunctionBody, VMTrampoline>(ptr) })
 }
 
 fn allocate_functions(
     code_memory: &mut CodeMemory,
     compilation: &wasmtime_environ::Compilation,
+    relocations: &Relocations,
 ) -> Result<PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>, String> {
     if compilation.is_empty() {
         return Ok(PrimaryMap::new());
     }
 
-    let fat_ptrs = code_memory.allocate_for_compilation(compilation)?;
+    let fat_ptrs = code_memory.allocate_for_compilation(compilation, relocations)?;
 
     // Second, create a PrimaryMap from result vector of pointers.
     let mut result = PrimaryMap::with_capacity(compilation.len());
@@ -374,8 +361,15 @@ fn allocate_functions(
 /// this `RelocSink` just asserts that it doesn't recieve most of them, but
 /// handles libcall ones.
 #[derive(Default)]
-struct RelocSink {
+pub struct RelocSink {
     relocs: Vec<Relocation>,
+}
+
+impl RelocSink {
+    /// Returns collected relocations.
+    pub fn relocs(&self) -> &[Relocation] {
+        &self.relocs
+    }
 }
 
 impl binemit::RelocSink for RelocSink {

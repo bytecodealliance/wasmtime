@@ -11,20 +11,9 @@ use wasmtime_runtime::VMFunctionBody;
 ///
 /// Performs all required relocations inside the function code, provided the necessary metadata.
 pub fn link_module(module: &Module, compilation: &Compilation) {
-    for (i, function_relocs) in compilation.relocations.iter() {
-        for r in function_relocs.iter() {
-            let fatptr: *const [VMFunctionBody] = compilation.finished_functions[i];
-            let body = fatptr as *const VMFunctionBody;
-            apply_reloc(module, compilation, body, r);
-        }
-    }
-
-    for (i, function_relocs) in compilation.trampoline_relocations.iter() {
-        for r in function_relocs.iter() {
-            println!("tramopline relocation");
-            let body = compilation.trampolines[*i] as *const VMFunctionBody;
-            apply_reloc(module, compilation, body, r);
-        }
+    for (fatptr, r) in compilation.code_memory.unpublished_relocations() {
+        let body = fatptr as *const VMFunctionBody;
+        apply_reloc(module, compilation, body, r);
     }
 }
 
