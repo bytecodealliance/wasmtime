@@ -1131,9 +1131,9 @@ dependencies = [
 
 [[package]]
 name = "mach"
-version = "0.3.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b823e83b2affd8f40a9ee8c29dbc56404c1e34cd2710921f2801e2cf29527afa"
+checksum = "86dd2487cdfea56def77b88438a2c915fb45113c5319bfe7e14306ca4cd0b0e1"
 dependencies = [
  "libc",
 ]
@@ -1677,9 +1677,9 @@ checksum = "26412eb97c6b088a6997e05f69403a802a92d520de2f8e63c2b65f9e0f47c4e8"
 
 [[package]]
 name = "region"
-version = "2.2.0"
+version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "877e54ea2adcd70d80e9179344c97f93ef0dffd6b03e1f4529e6e83ab2fa9ae0"
+checksum = "448e868c6e4cfddfa49b6a72c95906c04e8547465e9536575b95c70a4044f856"
 dependencies = [
  "bitflags",
  "libc",
