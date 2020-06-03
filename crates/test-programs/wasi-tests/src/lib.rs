@@ -15,7 +15,7 @@ pub fn open_scratch_directory(path: &str) -> Result<wasi::Fd, String> {
                 Ok(s) => s,
                 Err(_) => break,
             };
-            if stat.pr_type != wasi::PREOPENTYPE_DIR {
+            if stat.tag != wasi::PREOPENTYPE_DIR {
                 continue;
             }
             let mut dst = Vec::with_capacity(stat.u.dir.pr_name_len);
