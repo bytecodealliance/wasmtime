@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-codegen"
-version = "0.63.0"
+version = "0.64.0"
 description = "Low-level code generator library"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-codegen"
@@ -13,9 +13,9 @@ build = "build.rs"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen-shared = { path = "./shared", version = "0.63.0" }
-cranelift-entity = { path = "../entity", version = "0.63.0" }
-cranelift-bforest = { path = "../bforest", version = "0.63.0" }
+cranelift-codegen-shared = { path = "./shared", version = "0.64.0" }
+cranelift-entity = { path = "../entity", version = "0.64.0" }
+cranelift-bforest = { path = "../bforest", version = "0.64.0" }
 hashbrown = { version = "0.7", optional = true }
 target-lexicon = "0.10"
 log = { version = "0.4.6", default-features = false }
@@ -24,7 +24,7 @@ gimli = { version = "0.20.0", default-features = false, features = ["write"], op
 smallvec = { version = "1.0.0" }
 thiserror = "1.0.4"
 byteorder = { version = "1.3.2", default-features = false }
-peepmatic-runtime = { path = "../peepmatic/crates/runtime", optional = true }
+peepmatic-runtime = { path = "../peepmatic/crates/runtime", optional = true, version = "0.1.0" }
 regalloc = "0.0.25"
 # It is a goal of the cranelift-codegen crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary
@@ -32,8 +32,8 @@ regalloc = "0.0.25"
 # accomodated in `tests`.
 
 [build-dependencies]
-cranelift-codegen-meta = { path = "meta", version = "0.63.0" }
-peepmatic = { path = "../peepmatic", optional = true }
+cranelift-codegen-meta = { path = "meta", version = "0.64.0" }
+peepmatic = { path = "../peepmatic", optional = true, version = "0.64.0" }
 
 [features]
 default = ["std", "unwind"]

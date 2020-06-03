@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-rust-macro"
-version = "0.16.0"
+version = "0.17.0"
 authors = ["Alex Crichton <alex@alexcrichton.com>"]
 description = "Macro support crate for wasmtime-rust"
 license = "Apache-2.0 WITH LLVM-exception"

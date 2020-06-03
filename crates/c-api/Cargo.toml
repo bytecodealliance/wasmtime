@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-c-api"
-version = "0.16.0"
+version = "0.17.0"
 authors = ["The Wasmtime Project Developers"]
 description = "C API to expose the Wasmtime runtime"
 license = "Apache-2.0 WITH LLVM-exception"

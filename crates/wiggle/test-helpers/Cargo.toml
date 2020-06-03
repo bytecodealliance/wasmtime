@@ -1,6 +1,6 @@
 [package]
 name = "wiggle-test"
-version = "0.16.0"
+version = "0.17.0"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 license = "Apache-2.0 WITH LLVM-exception"
 edition = "2018"

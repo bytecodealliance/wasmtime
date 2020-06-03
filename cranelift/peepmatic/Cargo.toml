@@ -1,8 +1,10 @@
 [package]
 name = "peepmatic"
-version = "0.1.0"
+version = "0.64.0"
 authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 edition = "2018"
+license = "Apache-2.0 WITH LLVM-exception"
+description = "DSL and compiler for generating peephole optimizers"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
