@@ -99,19 +99,26 @@ pub fn compile_to_obj(
         .translate(wasm)
         .context("failed to translate module")?;
 
-    // TODO: use the traps information
-    let (compilation, relocations, address_transform, value_ranges, stack_slots, _traps) =
-        match strategy {
-            Strategy::Auto | Strategy::Cranelift => {
-                Cranelift::compile_module(&translation, &*isa, cache_config)
-            }
-            #[cfg(feature = "lightbeam")]
-            Strategy::Lightbeam => Lightbeam::compile_module(&translation, &*isa, cache_config),
-            #[cfg(not(feature = "lightbeam"))]
-            Strategy::Lightbeam => bail!("lightbeam support not enabled"),
-            other => bail!("unsupported compilation strategy {:?}", other),
+    // TODO: use the traps and stack maps information.
+    let (
+        compilation,
+        relocations,
+        address_transform,
+        value_ranges,
+        stack_slots,
+        _traps,
+        _stack_maps,
+    ) = match strategy {
+        Strategy::Auto | Strategy::Cranelift => {
+            Cranelift::compile_module(&translation, &*isa, cache_config)
         }
-        .context("failed to compile module")?;
+        #[cfg(feature = "lightbeam")]
+        Strategy::Lightbeam => Lightbeam::compile_module(&translation, &*isa, cache_config),
+        #[cfg(not(feature = "lightbeam"))]
+        Strategy::Lightbeam => bail!("lightbeam support not enabled"),
+        other => bail!("unsupported compilation strategy {:?}", other),
+    }
+    .context("failed to compile module")?;
 
     if compilation.is_empty() {
         bail!("no functions were found/compiled");

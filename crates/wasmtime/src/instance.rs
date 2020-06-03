@@ -3,9 +3,13 @@ use crate::{Engine, Export, Extern, Func, Global, Memory, Module, Store, Table, 
 use anyhow::{bail, Error, Result};
 use std::any::Any;
 use std::mem;
+use std::rc::Rc;
+use std::sync::Arc;
 use wasmtime_environ::EntityIndex;
 use wasmtime_jit::{CompiledModule, Resolver};
-use wasmtime_runtime::{InstantiationError, VMContext, VMFunctionBody};
+use wasmtime_runtime::{
+    InstantiationError, StackMapRegistry, VMContext, VMExternRefActivationsTable, VMFunctionBody,
+};
 
 struct SimpleResolver<'a> {
     imports: &'a [Extern],
@@ -24,6 +28,8 @@ fn instantiate(
     compiled_module: &CompiledModule,
     imports: &[Extern],
     host: Box<dyn Any>,
+    externref_activations_table: Rc<VMExternRefActivationsTable>,
+    stack_map_registry: Arc<StackMapRegistry>,
 ) -> Result<StoreInstanceHandle, Error> {
     // For now we have a restriction that the `Store` that we're working
     // with is the same for everything involved here.
@@ -50,6 +56,8 @@ fn instantiate(
             config.memory_creator.as_ref().map(|a| a as _),
             store.interrupts().clone(),
             host,
+            externref_activations_table,
+            stack_map_registry,
         )?;
 
         // After we've created the `InstanceHandle` we still need to run
@@ -183,10 +191,27 @@ impl Instance {
             bail!("cross-`Engine` instantiation is not currently supported");
         }
 
-        let info = module.register_frame_info();
-        store.register_jit_code(module.compiled_module().jit_code_ranges());
+        let host_info = Box::new({
+            let frame_info_registration = module.register_frame_info();
+            store.register_jit_code(module.compiled_module().jit_code_ranges());
 
-        let handle = instantiate(store, module.compiled_module(), imports, Box::new(info))?;
+            // We need to make sure that we keep this alive as long as the instance
+            // is alive, or else we could miss GC roots, reclaim objects too early,
+            // and get user-after-frees.
+            let stack_map_registration =
+                unsafe { module.register_stack_maps(&*store.stack_map_registry()) };
+
+            (frame_info_registration, stack_map_registration)
+        });
+
+        let handle = instantiate(
+            store,
+            module.compiled_module(),
+            imports,
+            host_info,
+            store.externref_activations_table().clone(),
+            store.stack_map_registry().clone(),
+        )?;
 
         Ok(Instance {
             handle,

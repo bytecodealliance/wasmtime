@@ -19,7 +19,8 @@ use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{
     debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, SignatureRegistry,
-    VMExternRef, VMInterrupts, VMSharedSignatureIndex,
+    StackMapRegistry, VMExternRef, VMExternRefActivationsTable, VMInterrupts,
+    VMSharedSignatureIndex,
 };
 
 // Runtime Environment
@@ -194,10 +195,15 @@ impl Config {
         self.validating_config
             .operator_config
             .enable_reference_types = enable;
-        // The reference types proposal depends on the bulk memory proposal
+        self.flags
+            .set("enable_safepoints", if enable { "true" } else { "false" })
+            .unwrap();
+
+        // The reference types proposal depends on the bulk memory proposal.
         if enable {
             self.wasm_bulk_memory(true);
         }
+
         self
     }
 
@@ -724,6 +730,7 @@ pub struct Engine {
 struct EngineInner {
     config: Config,
     compiler: Compiler,
+    stack_map_registry: Arc<StackMapRegistry>,
 }
 
 impl Engine {
@@ -735,6 +742,7 @@ impl Engine {
             inner: Arc::new(EngineInner {
                 config: config.clone(),
                 compiler: config.build_compiler(),
+                stack_map_registry: Arc::new(StackMapRegistry::default()),
             }),
         }
     }
@@ -792,6 +800,8 @@ pub(crate) struct StoreInner {
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
     jit_code_ranges: RefCell<Vec<(usize, usize)>>,
     host_info: RefCell<HashMap<HostInfoKey, Rc<RefCell<dyn Any>>>>,
+    externref_activations_table: Rc<VMExternRefActivationsTable>,
+    stack_map_registry: Arc<StackMapRegistry>,
 }
 
 struct HostInfoKey(VMExternRef);
@@ -832,6 +842,8 @@ impl Store {
                 signal_handler: RefCell::new(None),
                 jit_code_ranges: RefCell::new(Vec::new()),
                 host_info: RefCell::new(HashMap::new()),
+                externref_activations_table: Rc::new(VMExternRefActivationsTable::new()),
+                stack_map_registry: engine.inner.stack_map_registry.clone(),
             }),
         }
     }
@@ -1073,6 +1085,22 @@ impl Store {
         } else {
             bail!("interrupts aren't enabled for this `Store`")
         }
+    }
+
+    pub(crate) fn externref_activations_table(&self) -> &Rc<VMExternRefActivationsTable> {
+        &self.inner.externref_activations_table
+    }
+
+    pub(crate) fn stack_map_registry(&self) -> &Arc<StackMapRegistry> {
+        &self.inner.engine.inner.stack_map_registry
+    }
+
+    /// Perform garbage collection of `ExternRef`s.
+    pub fn gc(&self) {
+        wasmtime_runtime::gc(
+            &*self.inner.stack_map_registry,
+            &*self.inner.externref_activations_table,
+        );
     }
 }
 

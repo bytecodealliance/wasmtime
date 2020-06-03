@@ -10,6 +10,7 @@ use crate::link::link_module;
 use crate::resolver::Resolver;
 use std::any::Any;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_debug::{read_debuginfo, write_debugsections_image, DwarfSection};
@@ -18,13 +19,13 @@ use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
 use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleAddressMap,
-    ModuleEnvironment, ModuleTranslation, Traps,
+    ModuleEnvironment, ModuleTranslation, StackMaps, Traps,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::VMInterrupts;
 use wasmtime_runtime::{
     GdbJitImageRegistration, InstanceHandle, InstantiationError, RuntimeMemoryCreator,
-    SignatureRegistry, VMFunctionBody, VMTrampoline,
+    SignatureRegistry, StackMapRegistry, VMExternRefActivationsTable, VMFunctionBody, VMTrampoline,
 };
 
 /// An error condition while setting up a wasm instance, be it validation,
@@ -69,6 +70,7 @@ pub struct CompiledModule {
     trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
     data_initializers: Box<[OwnedDataInitializer]>,
     traps: Traps,
+    stack_maps: StackMaps,
     address_transform: ModuleAddressMap,
 }
 
@@ -99,6 +101,7 @@ impl CompiledModule {
             jt_offsets,
             dwarf_sections,
             traps,
+            stack_maps,
             address_transform,
         } = compiler.compile(&translation, debug_data)?;
 
@@ -149,6 +152,7 @@ impl CompiledModule {
             trampolines,
             data_initializers,
             traps,
+            stack_maps,
             address_transform,
         })
     }
@@ -169,6 +173,8 @@ impl CompiledModule {
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
         interrupts: Arc<VMInterrupts>,
         host_state: Box<dyn Any>,
+        externref_activations_table: Rc<VMExternRefActivationsTable>,
+        stack_map_registry: Arc<StackMapRegistry>,
     ) -> Result<InstanceHandle, InstantiationError> {
         // Compute indices into the shared signature table.
         let signatures = {
@@ -200,6 +206,8 @@ impl CompiledModule {
             signatures.into_boxed_slice(),
             host_state,
             interrupts,
+            externref_activations_table,
+            stack_map_registry,
         )
     }
 
@@ -229,9 +237,14 @@ impl CompiledModule {
         &self.finished_functions.0
     }
 
-    /// Returns the a map for all traps in this module.
+    /// Returns the map for all traps in this module.
     pub fn traps(&self) -> &Traps {
         &self.traps
+    }
+
+    /// Returns the map for each of this module's stack maps.
+    pub fn stack_maps(&self) -> &StackMaps {
+        &self.stack_maps
     }
 
     /// Returns a map of compiled addresses back to original bytecode offsets.

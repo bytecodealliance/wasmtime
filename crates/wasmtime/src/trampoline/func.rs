@@ -2,7 +2,7 @@
 
 use super::create_handle::create_handle;
 use crate::trampoline::StoreInstanceHandle;
-use crate::{FuncType, Store, Trap};
+use crate::{FuncType, Store, Trap, ValType};
 use anyhow::{bail, Result};
 use std::any::Any;
 use std::cmp;
@@ -11,7 +11,9 @@ use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::isa::TargetIsa;
-use wasmtime_environ::{ir, settings, CompiledFunction, EntityIndex, Module};
+use wasmtime_environ::{
+    ir, settings, settings::Configurable, CompiledFunction, EntityIndex, Module,
+};
 use wasmtime_jit::trampoline::ir::{
     ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind,
 };
@@ -210,7 +212,14 @@ pub fn create_handle_with_function(
 ) -> Result<(StoreInstanceHandle, VMTrampoline)> {
     let isa = {
         let isa_builder = native::builder();
-        let flag_builder = settings::builder();
+        let mut flag_builder = settings::builder();
+
+        if ft.params().iter().any(|p| *p == ValType::ExternRef)
+            || ft.results().iter().any(|r| *r == ValType::ExternRef)
+        {
+            flag_builder.set("enable_safepoints", "true").unwrap();
+        }
+
         isa_builder.finish(settings::Flags::new(flag_builder))
     };
 

@@ -6,6 +6,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use wasmparser::validate;
 use wasmtime_jit::CompiledModule;
+use wasmtime_runtime::{StackMapRegistration, StackMapRegistry};
 
 /// A compiled WebAssembly module, ready to be instantiated.
 ///
@@ -80,6 +81,7 @@ pub struct Module {
     engine: Engine,
     compiled: Arc<CompiledModule>,
     frame_info_registration: Arc<Mutex<Option<Option<Arc<GlobalFrameInfoRegistration>>>>>,
+    stack_map_registration: Arc<Mutex<Option<Option<Arc<StackMapRegistration>>>>>,
 }
 
 impl Module {
@@ -307,6 +309,7 @@ impl Module {
             engine: engine.clone(),
             compiled: Arc::new(compiled),
             frame_info_registration: Arc::new(Mutex::new(None)),
+            stack_map_registration: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -533,6 +536,41 @@ impl Module {
         let ret = super::frame_info::register(&self.compiled).map(Arc::new);
         *info = Some(ret.clone());
         return ret;
+    }
+
+    /// Register this module's stack maps.
+    ///
+    /// # Safety
+    ///
+    /// The same as `wasmtime_runtime::StackMapRegistry::register_stack_maps`.
+    pub(crate) unsafe fn register_stack_maps(
+        &self,
+        registry: &Arc<StackMapRegistry>,
+    ) -> Option<Arc<StackMapRegistration>> {
+        let mut registration = self.stack_map_registration.lock().unwrap();
+        if let Some(registration) = &*registration {
+            return registration.clone();
+        }
+
+        let module = &self.compiled;
+        let ret = registry
+            .register_stack_maps(
+                module
+                    .finished_functions()
+                    .values()
+                    .zip(module.stack_maps().values())
+                    .map(|(func, stack_maps)| {
+                        let ptr = (**func).as_ptr();
+                        let len = (**func).len();
+                        let start = ptr as usize;
+                        let end = ptr as usize + len;
+                        let range = start..end;
+                        (range, &stack_maps[..])
+                    }),
+            )
+            .map(Arc::new);
+        *registration = Some(ret.clone());
+        ret
     }
 }
 

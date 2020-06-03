@@ -79,15 +79,22 @@ impl Val {
         }
     }
 
-    pub(crate) unsafe fn write_value_to(&self, p: *mut u128) {
+    pub(crate) unsafe fn write_value_to(self, store: &Store, p: *mut u128) {
         match self {
-            Val::I32(i) => ptr::write(p as *mut i32, *i),
-            Val::I64(i) => ptr::write(p as *mut i64, *i),
-            Val::F32(u) => ptr::write(p as *mut u32, *u),
-            Val::F64(u) => ptr::write(p as *mut u64, *u),
-            Val::V128(b) => ptr::write(p as *mut u128, *b),
+            Val::I32(i) => ptr::write(p as *mut i32, i),
+            Val::I64(i) => ptr::write(p as *mut i64, i),
+            Val::F32(u) => ptr::write(p as *mut u32, u),
+            Val::F64(u) => ptr::write(p as *mut u64, u),
+            Val::V128(b) => ptr::write(p as *mut u128, b),
             Val::ExternRef(None) => ptr::write(p, 0),
-            Val::ExternRef(Some(x)) => ptr::write(p as *mut *mut u8, x.inner.clone().into_raw()),
+            Val::ExternRef(Some(x)) => {
+                let externref_ptr = x.inner.as_raw();
+                if let Err(inner) = store.externref_activations_table().try_insert(x.inner) {
+                    store.gc();
+                    store.externref_activations_table().insert_slow_path(inner);
+                }
+                ptr::write(p as *mut *mut u8, externref_ptr)
+            }
             _ => unimplemented!("Val::write_value_to"),
         }
     }
@@ -105,7 +112,7 @@ impl Val {
                     Val::ExternRef(None)
                 } else {
                     Val::ExternRef(Some(ExternRef {
-                        inner: VMExternRef::from_raw(raw),
+                        inner: VMExternRef::clone_from_raw(raw),
                         store: store.weak(),
                     }))
                 }

@@ -92,13 +92,6 @@ impl<'data> TargetEnvironment for ModuleEnvironment<'data> {
     fn target_config(&self) -> TargetFrontendConfig {
         self.result.target_config
     }
-
-    fn reference_type(&self) -> ir::Type {
-        // For now, the only reference types we support are `externref`, which
-        // don't require tracing GC and stack maps. So we just use the target's
-        // pointer type. This will have to change once we move to tracing GC.
-        self.pointer_type()
-    }
 }
 
 /// This trait is useful for `translate_module` because it tells how to translate

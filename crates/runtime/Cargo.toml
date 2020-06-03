@@ -15,6 +15,7 @@ edition = "2018"
 wasmtime-environ = { path = "../environ", version = "0.18.0" }
 region = "2.0.0"
 libc = { version = "0.2.70", default-features = false }
+log = "0.4.8"
 memoffset = "0.5.3"
 indexmap = "1.0.2"
 thiserror = "1.0.4"

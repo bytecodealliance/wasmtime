@@ -106,6 +106,7 @@ impl ValType {
             ValType::F32 => Some(ir::types::F32),
             ValType::F64 => Some(ir::types::F64),
             ValType::V128 => Some(ir::types::I8X16),
+            ValType::ExternRef => Some(ir::types::R64),
             _ => None,
         }
     }
@@ -117,6 +118,7 @@ impl ValType {
             ir::types::F32 => Some(ValType::F32),
             ir::types::F64 => Some(ValType::F64),
             ir::types::I8X16 => Some(ValType::V128),
+            ir::types::R64 => Some(ValType::ExternRef),
             _ => None,
         }
     }
