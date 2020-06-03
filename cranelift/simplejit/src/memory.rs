@@ -111,7 +111,7 @@ impl Drop for PtrLen {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
             unsafe {
-                region::protect(self.ptr, self.len, region::Protection::ReadWrite)
+                region::protect(self.ptr, self.len, region::Protection::READ_WRITE)
                     .expect("unable to unprotect memory");
                 libc::free(self.ptr as _);
             }
@@ -179,7 +179,7 @@ impl Memory {
             for &PtrLen { ref map, ptr, len } in &self.allocations[self.executable..] {
                 if len != 0 && map.is_some() {
                     unsafe {
-                        region::protect(ptr, len, region::Protection::ReadExecute)
+                        region::protect(ptr, len, region::Protection::READ_EXECUTE)
                             .expect("unable to make memory readable+executable");
                     }
                 }
@@ -191,7 +191,7 @@ impl Memory {
             for &PtrLen { ptr, len } in &self.allocations[self.executable..] {
                 if len != 0 {
                     unsafe {
-                        region::protect(ptr, len, region::Protection::ReadExecute)
+                        region::protect(ptr, len, region::Protection::READ_EXECUTE)
                             .expect("unable to make memory readable+executable");
                     }
                 }
@@ -208,7 +208,7 @@ impl Memory {
             for &PtrLen { ref map, ptr, len } in &self.allocations[self.executable..] {
                 if len != 0 && map.is_some() {
                     unsafe {
-                        region::protect(ptr, len, region::Protection::Read)
+                        region::protect(ptr, len, region::Protection::READ)
                             .expect("unable to make memory readonly");
                     }
                 }
@@ -220,7 +220,7 @@ impl Memory {
             for &PtrLen { ptr, len } in &self.allocations[self.executable..] {
                 if len != 0 {
                     unsafe {
-                        region::protect(ptr, len, region::Protection::Read)
+                        region::protect(ptr, len, region::Protection::READ)
                             .expect("unable to make memory readonly");
                     }
                 }
