@@ -32,3 +32,23 @@ block0(v0:f32x4):
     ; nextln: v1 = bxor v7, v9
     return v1
 }
+
+function %fcvt_to_uint_sat(f32x4) -> i32x4 {
+; check: const0 = 0x00000000000000000000000000000000
+; nextln: const1 = 0x4f0000004f0000004f0000004f000000
+block0(v0:f32x4):
+    v1 = fcvt_to_uint_sat.i32x4 v0
+    ; check: v2 = vconst.f32x4 const0
+    ; nextln: v3 = vconst.f32x4 const1
+    ; nextln: v4 = x86_fmax v0, v2
+    ; nextln: v5 = fsub v4, v3
+    ; nextln: v6 = fcmp le v3, v5
+    ; nextln: v7 = x86_cvtt2si.i32x4 v5
+    ; nextln: v8 = raw_bitcast.i32x4 v6
+    ; nextln: v9 = bxor v7, v8
+    ; nextln: v10 = raw_bitcast.i32x4 v2
+    ; nextln: v11 = x86_pmaxs v9, v10
+    ; nextln: v12 = x86_cvtt2si.i32x4 v4
+    ; nextln: v1 = iadd v12, v11
+    return v1
+}

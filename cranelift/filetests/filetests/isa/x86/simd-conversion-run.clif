@@ -28,3 +28,12 @@ block0(v0:f32x4):
 }
 ; run: %fcvt_to_sint_sat([0x0.0 -0x1.0 0x1.0 0x1.0p100]) == [0 -1 1 0x7FFFFFFF]
 ; run: %fcvt_to_sint_sat([-0x8.1 0x0.0 0x0.0 -0x1.0p100]) == [-8 0 0 0x80000000]
+
+function %fcvt_to_uint_sat(f32x4) -> i32x4 {
+block0(v0:f32x4):
+    v1 = fcvt_to_uint_sat.i32x4 v0
+    return v1
+}
+; run: %fcvt_to_uint_sat([0x1.0 0x4.2 0x4.6 0x1.0p100]) == [1 4 4 0xFFFFFFFF]
+; run: %fcvt_to_uint_sat([-0x8.1 -0x0.0 0x0.0 -0x1.0p100]) == [0 0 0 0]
+; run: %fcvt_to_uint_sat([0xB2D05E00.0 0.0 0.0 0.0]) == [3000000000 0 0 0]
