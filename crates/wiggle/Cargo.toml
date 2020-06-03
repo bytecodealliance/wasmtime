@@ -14,7 +14,7 @@ include = ["src/**/*", "LICENSE"]
 thiserror = "1"
 witx = { path = "../wasi-common/WASI/tools/witx", version = "0.8.5", optional = true }
 wiggle-macro = { path = "macro", version = "0.17.0" }
-tracing = { version = "0.1.14" }
+tracing = {  git = "https://github.com/tokio-rs/tracing" }
 
 [badges]
 maintenance = { status = "actively-developed" }

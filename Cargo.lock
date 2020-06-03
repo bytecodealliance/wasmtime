@@ -2109,13 +2109,33 @@ dependencies = [
 [[package]]
 name = "tracing"
 version = "0.1.14"
+source = "git+https://github.com/tokio-rs/tracing#180e494c7a13c0a18c09f3c7b465e8734c51f5e2"
+dependencies = [
+ "cfg-if",
+ "log",
+ "tracing-attributes 0.1.8 (git+https://github.com/tokio-rs/tracing)",
+ "tracing-core 0.1.10 (git+https://github.com/tokio-rs/tracing)",
+]
+
+[[package]]
+name = "tracing"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7c6b59d116d218cb2d990eb06b77b64043e0268ef7323aae63d8b30ae462923"
 dependencies = [
  "cfg-if",
- "log",
- "tracing-attributes",
- "tracing-core",
+ "tracing-attributes 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing-core 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "tracing-attributes"
+version = "0.1.8"
+source = "git+https://github.com/tokio-rs/tracing#180e494c7a13c0a18c09f3c7b465e8734c51f5e2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -2127,6 +2147,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "tracing-core"
+version = "0.1.10"
+source = "git+https://github.com/tokio-rs/tracing#180e494c7a13c0a18c09f3c7b465e8734c51f5e2"
+dependencies = [
+ "lazy_static",
 ]
 
 [[package]]
@@ -2146,7 +2174,7 @@ checksum = "5e0f8c7178e13481ff6765bd169b33e8d554c5d2bbede5e32c356194be02b9b9"
 dependencies = [
  "lazy_static",
  "log",
- "tracing-core",
+ "tracing-core 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2156,7 +2184,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6ccba2f8f16e0ed268fc765d9b7ff22e965e7185d32f8f1ec8294fe17d86e79"
 dependencies = [
  "serde",
- "tracing-core",
+ "tracing-core 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2174,7 +2202,7 @@ dependencies = [
  "serde_json",
  "sharded-slab",
  "smallvec",
- "tracing-core",
+ "tracing-core 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing-log",
  "tracing-serde",
 ]
@@ -2624,7 +2652,7 @@ version = "0.17.0"
 dependencies = [
  "proptest",
  "thiserror",
- "tracing",
+ "tracing 0.1.14 (git+https://github.com/tokio-rs/tracing)",
  "wiggle-macro",
  "wiggle-test",
  "witx",
@@ -2660,7 +2688,7 @@ dependencies = [
  "env_logger 0.7.1",
  "proptest",
  "thiserror",
- "tracing",
+ "tracing 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing-subscriber",
  "wiggle",
 ]
