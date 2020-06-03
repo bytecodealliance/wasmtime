@@ -68,51 +68,56 @@ impl<'a> one_error_conversion::OneErrorConversion for WasiCtx<'a> {
 }
 
 fn main() {
-    let subscriber = tracing_subscriber::fmt()
-        // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
-        // will be written to stdout.
-        .with_max_level(tracing::Level::TRACE)
-        // builds the subscriber.
-        .finish();
+    if std::env::var("RUST_LOG").is_err() {
+        // with no RUST_LOG env variable: use the tracing subscriber.
+        let subscriber = tracing_subscriber::fmt()
+            // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
+            // will be written to stdout.
+            .with_max_level(tracing::Level::TRACE)
+            // builds the subscriber.
+            .finish();
+        tracing::subscriber::set_global_default(subscriber).expect("set global tracing subscriber");
+    } else {
+        // with RUST_LOG set: use the env_logger backend to tracing.
+        env_logger::init();
+    }
 
-    tracing::subscriber::with_default(subscriber, || {
-        let ctx = WasiCtx::new();
-        let host_memory = HostMemory::new();
+    let ctx = WasiCtx::new();
+    let host_memory = HostMemory::new();
 
-        // Exercise each of the branches in `foo`.
-        // Start with the success case:
-        let r0 = one_error_conversion::foo(&ctx, &host_memory, 0, 0, 8);
-        assert_eq!(
-            r0,
-            i32::from(types::Errno::Ok),
-            "Expected return value for strike=0"
-        );
-        assert!(ctx.log.borrow().is_empty(), "No error log for strike=0");
+    // Exercise each of the branches in `foo`.
+    // Start with the success case:
+    let r0 = one_error_conversion::foo(&ctx, &host_memory, 0, 0, 8);
+    assert_eq!(
+        r0,
+        i32::from(types::Errno::Ok),
+        "Expected return value for strike=0"
+    );
+    assert!(ctx.log.borrow().is_empty(), "No error log for strike=0");
 
-        // First error case:
-        let r1 = one_error_conversion::foo(&ctx, &host_memory, 1, 0, 8);
-        assert_eq!(
-            r1,
-            i32::from(types::Errno::PicketLine),
-            "Expected return value for strike=1"
-        );
-        assert_eq!(
-            ctx.log.borrow_mut().pop().expect("one log entry"),
-            "Won't cross picket line: I'm not a scab",
-            "Expected log entry for strike=1",
-        );
+    // First error case:
+    let r1 = one_error_conversion::foo(&ctx, &host_memory, 1, 0, 8);
+    assert_eq!(
+        r1,
+        i32::from(types::Errno::PicketLine),
+        "Expected return value for strike=1"
+    );
+    assert_eq!(
+        ctx.log.borrow_mut().pop().expect("one log entry"),
+        "Won't cross picket line: I'm not a scab",
+        "Expected log entry for strike=1",
+    );
 
-        // Second error case:
-        let r2 = one_error_conversion::foo(&ctx, &host_memory, 2, 0, 8);
-        assert_eq!(
-            r2,
-            i32::from(types::Errno::InvalidArg),
-            "Expected return value for strike=2"
-        );
-        assert_eq!(
-            ctx.log.borrow_mut().pop().expect("one log entry"),
-            "Invalid argument: out-of-bounds: 2",
-            "Expected log entry for strike=2",
-        );
-    });
+    // Second error case:
+    let r2 = one_error_conversion::foo(&ctx, &host_memory, 2, 0, 8);
+    assert_eq!(
+        r2,
+        i32::from(types::Errno::InvalidArg),
+        "Expected return value for strike=2"
+    );
+    assert_eq!(
+        ctx.log.borrow_mut().pop().expect("one log entry"),
+        "Invalid argument: out-of-bounds: 2",
+        "Expected log entry for strike=2",
+    );
 }

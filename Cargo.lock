@@ -2113,6 +2113,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7c6b59d116d218cb2d990eb06b77b64043e0268ef7323aae63d8b30ae462923"
 dependencies = [
  "cfg-if",
+ "log",
  "tracing-attributes",
  "tracing-core",
 ]
@@ -2656,6 +2657,7 @@ dependencies = [
 name = "wiggle-test"
 version = "0.17.0"
 dependencies = [
+ "env_logger 0.7.1",
  "proptest",
  "thiserror",
  "tracing",
