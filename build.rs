@@ -200,8 +200,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", _) if target.contains("aarch64") => return true,
 
             ("simd", "simd_conversions") => return true, // FIXME Unsupported feature: proposed SIMD operator I32x4TruncSatF32x4S
-            ("simd", "simd_load") => return true, // FIXME Unsupported feature: proposed SIMD operator I32x4TruncSatF32x4S
-            ("simd", "simd_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator I32x4TruncSatF32x4S
 
             // TODO(#1886): Ignore reference types tests if this isn't x64,
             // because Cranelift only supports reference types on x64.
