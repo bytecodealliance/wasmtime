@@ -1313,6 +1313,79 @@ fn expand_fcvt_to_uint_sat(
     cfg.recompute_block(pos.func, done);
 }
 
+// Lanes of an I32x4 filled with the max signed integer values converted to an F32x4.
+static MAX_SIGNED_I32X4S_AS_F32X4S: [u8; 16] = [
+    0x00, 0x00, 0x00, 0x4f, 0x00, 0x00, 0x00, 0x4f, 0x00, 0x00, 0x00, 0x4f, 0x00, 0x00, 0x00, 0x4f,
+];
+
+/// This legalization converts a vector of 32-bit floating point lanes to unsigned integer lanes
+/// using a long sequence of NaN quieting and truncation. This logic is separate from
+/// [expand_fcvt_to_uint_sat] above (the scalar version), only due to how the transform groups are
+/// set up; TODO if we change the SIMD legalization groups, then this logic could be merged into
+/// [expand_fcvt_to_uint_sat] (see https://github.com/bytecodealliance/wasmtime/issues/1745).
+fn expand_fcvt_to_uint_sat_vector(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    _isa: &dyn TargetIsa,
+) {
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    if let ir::InstructionData::Unary {
+        opcode: ir::Opcode::FcvtToUintSat,
+        arg,
+    } = pos.func.dfg[inst]
+    {
+        let controlling_type = pos.func.dfg.ctrl_typevar(inst);
+        if controlling_type == I32X4 {
+            debug_assert_eq!(pos.func.dfg.value_type(arg), F32X4);
+            // We must both quiet any NaNs--setting that lane to 0--and saturate any
+            // lanes that might overflow during conversion to the highest/lowest integer
+            // allowed in that lane.
+            let zeroes_constant = pos.func.dfg.constants.insert(vec![0x00; 16].into());
+            let max_signed_constant = pos
+                .func
+                .dfg
+                .constants
+                .insert(MAX_SIGNED_I32X4S_AS_F32X4S.as_ref().into());
+            let zeroes = pos.ins().vconst(F32X4, zeroes_constant);
+            let max_signed = pos.ins().vconst(F32X4, max_signed_constant);
+            // Clamp the input to 0 for negative floating point numbers. TODO we need to
+            // convert NaNs to 0 but this doesn't do that?
+            let ge_zero = pos.ins().x86_fmax(arg, zeroes);
+            // Find lanes that exceed the max signed value that CVTTPS2DQ knows how to convert.
+            // For floating point numbers above this, CVTTPS2DQ returns the undefined value
+            // 0x80000000.
+            let minus_max_signed = pos.ins().fsub(ge_zero, max_signed);
+            let le_max_signed =
+                pos.ins()
+                    .fcmp(FloatCC::LessThanOrEqual, max_signed, minus_max_signed);
+            // Identify lanes that have minus_max_signed > max_signed || minus_max_signed < 0.
+            // These lanes have the MSB set to 1 after the XOR. We are trying to calculate a
+            // valid, in-range addend.
+            let minus_max_signed_as_int = pos.ins().x86_cvtt2si(I32X4, minus_max_signed);
+            let le_max_signed_as_int = pos.ins().raw_bitcast(I32X4, le_max_signed);
+            let difference = pos
+                .ins()
+                .bxor(minus_max_signed_as_int, le_max_signed_as_int);
+            // Calculate amount to add above 0x7FFFFFF, zeroing out any lanes identified
+            // previously (MSB set to 1).
+            let zeroes_as_int = pos.ins().raw_bitcast(I32X4, zeroes);
+            let addend = pos.ins().x86_pmaxs(difference, zeroes_as_int);
+            // Convert the original clamped number to an integer and add back in the addend
+            // (the part of the value above 0x7FFFFFF, since CVTTPS2DQ overflows with these).
+            let converted = pos.ins().x86_cvtt2si(I32X4, ge_zero);
+            pos.func.dfg.replace(inst).iadd(converted, addend);
+        } else {
+            unreachable!(
+                "{} should not be legalized in expand_fcvt_to_uint_sat_vector",
+                pos.func.dfg.display_inst(inst, None)
+            )
+        }
+    }
+}
+
 /// Convert shuffle instructions.
 fn convert_shuffle(
     inst: ir::Inst,
