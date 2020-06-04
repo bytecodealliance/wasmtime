@@ -8,7 +8,6 @@ use thiserror::Error;
 use serde::{Deserialize, Serialize};
 
 type Register = u16;
-type Expression = Vec<u8>;
 
 /// Enumerate the errors possible in mapping Cranelift registers to their DWARF equivalent.
 #[allow(missing_docs)]
@@ -23,6 +22,8 @@ pub enum RegisterMappingError {
 }
 
 // This mirrors gimli's CallFrameInstruction, but is serializable
+// This excludes CfaExpression, Expression, ValExpression due to
+// https://github.com/gimli-rs/gimli/issues/513.
 // TODO: if gimli ever adds serialization support, remove this type
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
@@ -30,15 +31,12 @@ pub(crate) enum CallFrameInstruction {
     Cfa(Register, i32),
     CfaRegister(Register),
     CfaOffset(i32),
-    CfaExpression(Expression),
     Restore(Register),
     Undefined(Register),
     SameValue(Register),
     Offset(Register, i32),
     ValOffset(Register, i32),
     Register(Register, Register),
-    Expression(Register, Expression),
-    ValExpression(Register, Expression),
     RememberState,
     RestoreState,
     ArgsSize(u32),
@@ -52,34 +50,33 @@ impl From<gimli::write::CallFrameInstruction> for CallFrameInstruction {
             CallFrameInstruction::Cfa(reg, offset) => Self::Cfa(reg.0, offset),
             CallFrameInstruction::CfaRegister(reg) => Self::CfaRegister(reg.0),
             CallFrameInstruction::CfaOffset(offset) => Self::CfaOffset(offset),
-            CallFrameInstruction::CfaExpression(expr) => Self::CfaExpression(expr.0),
             CallFrameInstruction::Restore(reg) => Self::Restore(reg.0),
             CallFrameInstruction::Undefined(reg) => Self::Undefined(reg.0),
             CallFrameInstruction::SameValue(reg) => Self::SameValue(reg.0),
             CallFrameInstruction::Offset(reg, offset) => Self::Offset(reg.0, offset),
             CallFrameInstruction::ValOffset(reg, offset) => Self::ValOffset(reg.0, offset),
             CallFrameInstruction::Register(reg1, reg2) => Self::Register(reg1.0, reg2.0),
-            CallFrameInstruction::Expression(reg, expr) => Self::Expression(reg.0, expr.0),
-            CallFrameInstruction::ValExpression(reg, expr) => Self::ValExpression(reg.0, expr.0),
             CallFrameInstruction::RememberState => Self::RememberState,
             CallFrameInstruction::RestoreState => Self::RestoreState,
             CallFrameInstruction::ArgsSize(size) => Self::ArgsSize(size),
+            _ => {
+                // Cranelift's unwind support does not generate `CallFrameInstruction`s with
+                // Expression at this moment, and it is not trivial to
+                // serialize such instructions.
+                panic!("CallFrameInstruction with Expression not supported");
+            }
         }
     }
 }
 
 impl Into<gimli::write::CallFrameInstruction> for CallFrameInstruction {
     fn into(self) -> gimli::write::CallFrameInstruction {
-        use gimli::{
-            write::{CallFrameInstruction, Expression},
-            Register,
-        };
+        use gimli::{write::CallFrameInstruction, Register};
 
         match self {
             Self::Cfa(reg, offset) => CallFrameInstruction::Cfa(Register(reg), offset),
             Self::CfaRegister(reg) => CallFrameInstruction::CfaRegister(Register(reg)),
             Self::CfaOffset(offset) => CallFrameInstruction::CfaOffset(offset),
-            Self::CfaExpression(expr) => CallFrameInstruction::CfaExpression(Expression(expr)),
             Self::Restore(reg) => CallFrameInstruction::Restore(Register(reg)),
             Self::Undefined(reg) => CallFrameInstruction::Undefined(Register(reg)),
             Self::SameValue(reg) => CallFrameInstruction::SameValue(Register(reg)),
@@ -87,12 +84,6 @@ impl Into<gimli::write::CallFrameInstruction> for CallFrameInstruction {
             Self::ValOffset(reg, offset) => CallFrameInstruction::ValOffset(Register(reg), offset),
             Self::Register(reg1, reg2) => {
                 CallFrameInstruction::Register(Register(reg1), Register(reg2))
-            }
-            Self::Expression(reg, expr) => {
-                CallFrameInstruction::Expression(Register(reg), Expression(expr))
-            }
-            Self::ValExpression(reg, expr) => {
-                CallFrameInstruction::ValExpression(Register(reg), Expression(expr))
             }
             Self::RememberState => CallFrameInstruction::RememberState,
             Self::RestoreState => CallFrameInstruction::RestoreState,

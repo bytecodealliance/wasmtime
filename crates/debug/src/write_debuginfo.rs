@@ -1,6 +1,6 @@
 use faerie::artifact::{Decl, SectionKind};
 use faerie::*;
-use gimli::write::{Address, DebugFrame, Dwarf, EndianVec, FrameTable, Result, Sections, Writer};
+use gimli::write::{Address, Dwarf, EndianVec, FrameTable, Result, Sections, Writer};
 use gimli::{RunTimeEndian, SectionId};
 
 #[derive(Clone)]
@@ -30,6 +30,9 @@ pub fn emit_dwarf(
 
     let mut sections = Sections::new(WriterRelocate::new(endian, symbol_resolver));
     dwarf.write(&mut sections)?;
+    if let Some(frames) = frames {
+        frames.write_debug_frame(&mut sections.debug_frame)?;
+    }
     sections.for_each_mut(|id, s| -> anyhow::Result<()> {
         artifact.declare_with(
             id.name(),
@@ -54,29 +57,6 @@ pub fn emit_dwarf(
         }
         Ok(())
     })?;
-
-    if let Some(frames) = frames {
-        let mut debug_frame = DebugFrame::from(WriterRelocate::new(endian, symbol_resolver));
-        frames.write_debug_frame(&mut debug_frame).unwrap();
-        artifact.declare_with(
-            SectionId::DebugFrame.name(),
-            Decl::section(SectionKind::Debug),
-            debug_frame.writer.take(),
-        )?;
-        for reloc in &debug_frame.relocs {
-            artifact.link_with(
-                faerie::Link {
-                    from: SectionId::DebugFrame.name(),
-                    to: &reloc.name,
-                    at: u64::from(reloc.offset),
-                },
-                faerie::Reloc::Debug {
-                    size: reloc.size,
-                    addend: reloc.addend as i32,
-                },
-            )?;
-        }
-    }
 
     Ok(())
 }
