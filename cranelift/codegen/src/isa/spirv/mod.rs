@@ -33,6 +33,7 @@ use regalloc::Writable;
 use smallvec::SmallVec;
 use target_lexicon::Architecture;
 use target_lexicon::Triple;
+use log::debug;
 
 
 pub(crate) struct SpirvBackend {
@@ -59,7 +60,8 @@ impl SpirvBackend {
     fn compile_vcode(&self, func: &Function, flags: Flags) -> CodegenResult<VCode<Inst>> {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
-        let abi = Box::new(abi::SpirvABIBody::new());//&func, flags));
+        debug!("Hoi");
+        let abi = Box::new(abi::SpirvABIBody::new(func, flags));
         compile::compile::<Self>(&func, self, abi)
     }
 }
@@ -82,7 +84,12 @@ impl MachBackend for SpirvBackend {
         //     None
         // };
 
-        Err(CodegenError::Unsupported(format!("compile_function")))
+        
+        Ok(MachCompileResult {
+            buffer,
+            frame_size,
+            disasm: None,
+        })
     }
 
     fn flags(&self) -> &Flags {

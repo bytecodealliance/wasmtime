@@ -116,7 +116,7 @@ pub fn generate(
             isa::Isa::Arm64 => {
                 // aarch64 doesn't have platform-specific settings.
             }
-            isa::Isa::Arm32 | isa::Isa::Riscv => todo!(),
+            isa::Isa::Arm32 | isa::Isa::Riscv | isa::Isa::Spirv => todo!(),
         }
     }
 

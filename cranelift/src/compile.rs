@@ -85,6 +85,8 @@ fn handle_module(
                     &stackmaps,
                 )?;
             }
+
+            std::fs::write("./out.bin", &mem);
         }
     }
 

@@ -9,7 +9,11 @@ impl LowerBackend for SpirvBackend {
     type MInst = Inst;
 
     fn lower<C: LowerCtx<I = Self::MInst>>(&self, ctx: &mut C, inst: IRInst) -> CodegenResult<()> {
-        Err(CodegenError::Unsupported(format!("lower")))
+        dbg!(inst);
+        let op = ctx.data(inst).opcode();
+        dbg!(op);
+        Ok(())
+        //Err(CodegenError::Unsupported(format!("lower")))
     }
 
     fn lower_branch_group<C: LowerCtx<I = Self::MInst>>(

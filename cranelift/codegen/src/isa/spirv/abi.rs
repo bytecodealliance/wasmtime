@@ -4,16 +4,18 @@ use crate::ir::types::Type;
 use crate::isa::spirv::inst::Inst;
 use crate::machinst::abi::ABIBody;
 use crate::settings;
+use crate::ir::Function;
 use regalloc::*;
+use spirv_headers::Op;
 
 pub(crate) struct SpirvABIBody {
-    
+    flags: settings::Flags,
 }
 
 impl SpirvABIBody {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(func: &Function, flags: settings::Flags) -> Self {
         Self {
-
+            flags
         }
     }
 }
@@ -22,29 +24,27 @@ impl ABIBody for SpirvABIBody {
     type I = Inst;
 
     fn flags(&self) -> &settings::Flags {
-        unimplemented!()
+        &self.flags
     }
 
     fn num_args(&self) -> usize {
-        unimplemented!()
+        0
     }
 
     fn num_retvals(&self) -> usize {
-        unimplemented!()
+        0
     }
 
     fn num_stackslots(&self) -> usize {
-        unimplemented!()
+        0
     }
 
     fn liveins(&self) -> Set<RealReg> {
-        unimplemented!()
-
+        Set::empty()
     }
 
     fn liveouts(&self) -> Set<RealReg> {
-        unimplemented!()
-
+        Set::empty()
     }
 
     fn gen_copy_arg_to_reg(&self, idx: usize, to_reg: Writable<Reg>) -> Inst {
@@ -58,12 +58,11 @@ impl ABIBody for SpirvABIBody {
         from_reg: Writable<Reg>,
         ext: ArgumentExtension,
     ) -> Vec<Inst> {
-        unimplemented!()
-
+        Vec::new()
     }
 
     fn gen_ret(&self) -> Inst {
-        unimplemented!()
+        Inst::new(Op::Return, None, None, vec![])
     }
 
     fn gen_epilogue_placeholder(&self) -> Inst {
@@ -71,11 +70,11 @@ impl ABIBody for SpirvABIBody {
     }
 
     fn set_num_spillslots(&mut self, slots: usize) {
-        unimplemented!()
+        
     }
 
     fn set_clobbered(&mut self, clobbered: Set<Writable<RealReg>>) {
-        unimplemented!()
+        
     }
 
     fn stackslot_addr(&self, _slot: StackSlot, _offset: u32, _into_reg: Writable<Reg>) -> Inst {
@@ -105,19 +104,19 @@ impl ABIBody for SpirvABIBody {
     }
 
     fn gen_prologue(&mut self) -> Vec<Inst> {
-        unimplemented!()
+        Vec::new()
     }
 
     fn gen_epilogue(&self) -> Vec<Inst> {
-        unimplemented!()
+        Vec::new()
     }
 
     fn frame_size(&self) -> u32 {
-        unimplemented!()
+        0
     }
 
     fn get_spillslot_size(&self, rc: RegClass, ty: Type) -> u32 {
-        unimplemented!()
+        0
     }
 
     fn gen_spill(&self, _to_slot: SpillSlot, _from_reg: RealReg, _ty: Type) -> Inst {
