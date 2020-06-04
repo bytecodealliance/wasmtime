@@ -215,7 +215,7 @@ impl CompiledExpression {
 
     pub fn build(&self) -> Option<write::Expression> {
         if let [CompiledExpressionPart::Code(code)] = self.parts.as_slice() {
-            return Some(write::Expression(code.to_vec()));
+            return Some(write::Expression::raw(code.to_vec()));
         }
         // locals found, not supported
         None
@@ -245,7 +245,7 @@ impl CompiledExpression {
                     BuildWithLocalsResult::Empty => None,
                     BuildWithLocalsResult::Simple(it, code) => it
                         .next()
-                        .map(|(addr, len)| Ok((addr, len, write::Expression(code.to_vec())))),
+                        .map(|(addr, len)| Ok((addr, len, write::Expression::raw(code.to_vec())))),
                     BuildWithLocalsResult::Ranges(it) => it.next().map(|r| {
                         r.map(|(func_index, start, end, code_buf)| {
                             (
@@ -254,7 +254,7 @@ impl CompiledExpression {
                                     addend: start as i64,
                                 },
                                 (end - start) as u64,
-                                write::Expression(code_buf),
+                                write::Expression::raw(code_buf),
                             )
                         })
                     }),
@@ -415,7 +415,7 @@ where
             });
         } else {
             let pos = pc.offset_from(&expr.0).into_u64() as usize;
-            let op = Operation::parse(&mut pc, &expr.0, encoding)?;
+            let op = Operation::parse(&mut pc, encoding)?;
             match op {
                 Operation::FrameOffset { offset } => {
                     // Expand DW_OP_fpreg into frame location and DW_OP_plus_uconst.
@@ -435,7 +435,8 @@ where
                     code_chunk.extend(writer.into_vec());
                     continue;
                 }
-                Operation::Literal { .. }
+                Operation::UnsignedConstant { .. }
+                | Operation::SignedConstant { .. }
                 | Operation::PlusConstant { .. }
                 | Operation::Piece { .. } => (),
                 Operation::StackValue => {

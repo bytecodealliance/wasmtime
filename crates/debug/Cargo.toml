@@ -12,7 +12,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-gimli = "0.20.0"
+gimli = "0.21.0"
 wasmparser = "0.57.0"
 faerie = "0.15.0"
 wasmtime-environ = { path = "../environ", version = "0.17.0" }

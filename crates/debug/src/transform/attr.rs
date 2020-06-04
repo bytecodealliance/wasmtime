@@ -228,7 +228,7 @@ where
                                 let mut found_expr: Option<write::Expression> = None;
                                 for (_, _, expr) in &exprs {
                                     if let Some(ref prev_expr) = found_expr {
-                                        if expr.0.eq(&prev_expr.0) {
+                                        if expr == prev_expr {
                                             continue; // the same expression
                                         }
                                         found_expr = None;

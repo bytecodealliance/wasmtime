@@ -58,7 +58,7 @@ impl UnitRefsMap {
         for (die_id, attr_name, offset) in refs.refs {
             let die = comp_unit.get_mut(die_id);
             if let Some(unit_id) = self.map.get(&offset) {
-                die.set(attr_name, write::AttributeValue::ThisUnitEntryRef(*unit_id));
+                die.set(attr_name, write::AttributeValue::UnitRef(*unit_id));
             }
         }
     }
@@ -102,7 +102,9 @@ impl DebugInfoRefsMap {
                 if let Some((id, entry_id)) = self.map.get(&offset) {
                     die.set(
                         attr_name,
-                        write::AttributeValue::AnyUnitEntryRef((*id, *entry_id)),
+                        write::AttributeValue::DebugInfoRef(write::Reference::Entry(
+                            *id, *entry_id,
+                        )),
                     );
                 }
             }

@@ -56,7 +56,7 @@ pub(crate) fn add_internal_types(
     //  .. DW_AT_type = <memory_byte_die>
     add_tag!(root_id, gimli::DW_TAG_pointer_type => memory_bytes_die as memory_bytes_die_id {
         gimli::DW_AT_name = write::AttributeValue::StringRef(out_strings.add("u8*")),
-        gimli::DW_AT_type = write::AttributeValue::ThisUnitEntryRef(memory_byte_die_id)
+        gimli::DW_AT_type = write::AttributeValue::UnitRef(memory_byte_die_id)
     });
 
     // Create artificial VMContext type and its reference for convinience viewing
@@ -87,7 +87,7 @@ pub(crate) fn add_internal_types(
             //  .. DW_AT_data_member_location = `memory_offset`
             add_tag!(vmctx_die_id, gimli::DW_TAG_member => m_die as m_die_id {
                 gimli::DW_AT_name = write::AttributeValue::StringRef(out_strings.add("memory")),
-                gimli::DW_AT_type = write::AttributeValue::ThisUnitEntryRef(memory_bytes_die_id),
+                gimli::DW_AT_type = write::AttributeValue::UnitRef(memory_bytes_die_id),
                 gimli::DW_AT_data_member_location = write::AttributeValue::Udata(memory_offset as u64)
             });
         }
@@ -102,7 +102,7 @@ pub(crate) fn add_internal_types(
     //  .. DW_AT_type = <vmctx_die>
     add_tag!(root_id, gimli::DW_TAG_pointer_type => vmctx_ptr_die as vmctx_ptr_die_id {
         gimli::DW_AT_name = write::AttributeValue::StringRef(out_strings.add("WasmtimeVMContext*")),
-        gimli::DW_AT_type = write::AttributeValue::ThisUnitEntryRef(vmctx_die_id)
+        gimli::DW_AT_type = write::AttributeValue::UnitRef(vmctx_die_id)
     });
 
     // Build vmctx_die's DW_TAG_subprogram for `set` method:
@@ -116,7 +116,7 @@ pub(crate) fn add_internal_types(
         gimli::DW_AT_name = write::AttributeValue::StringRef(out_strings.add("set"))
     });
     add_tag!(vmctx_set_id, gimli::DW_TAG_formal_parameter => vmctx_set_this_param as vmctx_set_this_param_id {
-        gimli::DW_AT_type = write::AttributeValue::ThisUnitEntryRef(vmctx_ptr_die_id),
+        gimli::DW_AT_type = write::AttributeValue::UnitRef(vmctx_ptr_die_id),
         gimli::DW_AT_artificial = write::AttributeValue::Flag(true)
     });
 
@@ -157,7 +157,7 @@ pub(crate) fn append_vmctx_info(
     );
     var_die.set(
         gimli::DW_AT_type,
-        write::AttributeValue::ThisUnitEntryRef(vmctx_die_id),
+        write::AttributeValue::UnitRef(vmctx_die_id),
     );
     var_die.set(gimli::DW_AT_location, loc);
 
