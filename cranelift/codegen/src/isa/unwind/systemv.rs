@@ -60,7 +60,7 @@ impl From<gimli::write::CallFrameInstruction> for CallFrameInstruction {
             CallFrameInstruction::RestoreState => Self::RestoreState,
             CallFrameInstruction::ArgsSize(size) => Self::ArgsSize(size),
             _ => {
-                // The unwind do not generated CallFrameInstruction with
+                // Cranelift's unwind support does not generate `CallFrameInstruction`s with
                 // Expression at this moment, and it is not trivial to
                 // serialize such instructions.
                 panic!("CallFrameInstruction with Expression not supported");
