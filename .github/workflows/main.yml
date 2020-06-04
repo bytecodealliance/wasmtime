@@ -55,7 +55,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly
+        toolchain: nightly-2020-06-03
     - run: cargo doc --no-deps --all --exclude wasmtime-cli --exclude test-programs --exclude cranelift-codegen-meta
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
     - uses: actions/upload-artifact@v1
@@ -75,7 +75,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly
+        toolchain: nightly-2020-06-03
 
     # Check some feature combinations of the `wasmtime` crate
     - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --no-default-features
@@ -167,7 +167,7 @@ jobs:
             rust: beta
           - build: nightly
             os: ubuntu-latest
-            rust: nightly
+            rust: nightly-2020-06-03
           - build: macos
             os: macos-latest
             rust: stable
@@ -233,9 +233,9 @@ jobs:
     # Build and test lightbeam if we're using the nightly toolchain. Note that
     # Lightbeam tests fail right now, but we don't want to block on that.
     - run: cargo build --package lightbeam
-      if: matrix.rust == 'nightly'
+      if: matrix.rust == 'nightly-2020-06-03'
     - run: cargo test --package lightbeam
-      if: matrix.rust == 'nightly'
+      if: matrix.rust == 'nightly-2020-06-03'
       continue-on-error: true
       env:
         RUST_BACKTRACE: 1
