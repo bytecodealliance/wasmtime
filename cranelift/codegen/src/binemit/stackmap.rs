@@ -6,15 +6,68 @@ use alloc::vec::Vec;
 type Num = u32;
 const NUM_BITS: usize = core::mem::size_of::<Num>() * 8;
 
-/// A stack map is a bitmap with one bit per machine word on the stack. Stack
-/// maps are created at `safepoint` instructions and record all live reference
-/// values that are on the stack. All slot kinds, except `OutgoingArg` are
-/// captured in a stack map. The `OutgoingArg`'s will be captured in the callee
-/// function as `IncomingArg`'s.
+/// Stack maps record which words in a stack frame contain live GC references at
+/// a given instruction pointer.
 ///
-/// The first value in the bitmap is of the lowest addressed slot on the stack.
-/// As all stacks in Isa's supported by Cranelift grow down, this means that
-/// first value is of the top of the stack and values proceed down the stack.
+/// Logically, a set of stack maps for a function record a table of the form:
+///
+/// ```text
+/// +---------------------+-------------------------------------------+
+/// | Instruction Pointer | SP-Relative Offsets of Live GC References |
+/// +---------------------+-------------------------------------------+
+/// | 0x12345678          | 2, 6, 12                                  |
+/// | 0x1234abcd          | 2, 6                                      |
+/// | ...                 | ...                                       |
+/// +---------------------+-------------------------------------------+
+/// ```
+///
+/// Where "instruction pointer" is an instruction pointer within the function,
+/// and "offsets of live GC references" contains the offsets (in units of words)
+/// from the frame's stack pointer where live GC references are stored on the
+/// stack. Instruction pointers within the function that do not have an entry in
+/// this table are not GC safepoints.
+///
+/// Because
+///
+/// * offsets of live GC references are relative from the stack pointer, and
+/// * stack frames grow down from higher addresses to lower addresses,
+///
+/// to get a pointer to a live reference at offset `x` within a stack frame, you
+/// add `x` from the frame's stack pointer.
+///
+/// For example, to calculate the pointer to the live GC reference inside "frame
+/// 1" below, you would do `frame_1_sp + x`:
+///
+/// ```text
+///           Stack
+///         +-------------------+
+///         | Frame 0           |
+///         |                   |
+///    |    |                   |
+///    |    +-------------------+ <--- Frame 0's SP
+///    |    | Frame 1           |
+///  Grows  |                   |
+///  down   |                   |
+///    |    | Live GC reference | --+--
+///    |    |                   |   |
+///    |    |                   |   |
+///    V    |                   |   x = offset of live GC reference
+///         |                   |   |
+///         |                   |   |
+///         +-------------------+ --+--  <--- Frame 1's SP
+///         | Frame 2           |
+///         | ...               |
+/// ```
+///
+/// An individual `Stackmap` is associated with just one instruction pointer
+/// within the function, contains the size of the stack frame, and represents
+/// the stack frame as a bitmap. There is one bit per word in the stack frame,
+/// and if the bit is set, then the word contains a live GC reference.
+///
+/// Note that a caller's `OutgoingArg` stack slots and callee's `IncomingArg`
+/// stack slots overlap, so we must choose which function's stack maps record
+/// live GC references in these slots. We record the `IncomingArg`s in the
+/// callee's stack map.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Stackmap {
@@ -50,7 +103,7 @@ impl Stackmap {
 
         // Refer to the doc comment for `Stackmap` above to understand the
         // bitmap representation used here.
-        let map_size = (info.frame_size + info.inbound_args_size) as usize;
+        let map_size = (dbg!(info.frame_size) + dbg!(info.inbound_args_size)) as usize;
         let word_size = isa.pointer_bytes() as usize;
         let num_words = map_size / word_size;
 
