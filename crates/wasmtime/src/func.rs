@@ -296,7 +296,9 @@ impl Func {
     /// | Rust Argument Type | WebAssembly Type |
     /// |--------------------|------------------|
     /// | `i32`              | `i32`            |
+    /// | `u32`              | `i32`            |
     /// | `i64`              | `i64`            |
+    /// | `u64`              | `i64`            |
     /// | `f32`              | `f32`            |
     /// | `f64`              | `f64`            |
     /// | (not supported)    | `v128`           |
@@ -391,20 +393,25 @@ impl Func {
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
     /// # let store = Store::default();
-    /// let debug = Func::wrap(&store, |a: i32, b: f32, c: i64, d: f64| {
+    /// let debug = Func::wrap(&store, |a: i32, b: u32, c: f32, d: i64, e: u64, f: f64| {
+    ///
     ///     println!("a={}", a);
     ///     println!("b={}", b);
     ///     println!("c={}", c);
     ///     println!("d={}", d);
+    ///     println!("e={}", e);
+    ///     println!("f={}", f);
     /// });
     /// let module = Module::new(
     ///     store.engine(),
     ///     r#"
     ///         (module
-    ///             (import "" "" (func $debug (param i32 f32 i64 f64)))
+    ///             (import "" "" (func $debug (param i32 i32 f32 i64 i64 f64)))
     ///             (func (export "foo")
+    ///                 i32.const -1
     ///                 i32.const 1
     ///                 f32.const 2
+    ///                 i64.const -3
     ///                 i64.const 3
     ///                 f64.const 4
     ///                 call $debug))
@@ -795,6 +802,23 @@ unsafe impl WasmTy for i32 {
     }
 }
 
+unsafe impl WasmTy for u32 {
+    fn push(dst: &mut Vec<ValType>) {
+        <i32 as WasmTy>::push(dst)
+    }
+    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        <i32 as WasmTy>::matches(tys)
+    }
+    #[inline]
+    unsafe fn load(ptr: &mut *const u128) -> Self {
+        <i32 as WasmTy>::load(ptr) as Self
+    }
+    #[inline]
+    unsafe fn store(abi: Self, ptr: *mut u128) {
+        <i32 as WasmTy>::store(abi as i32, ptr)
+    }
+}
+
 unsafe impl WasmTy for i64 {
     fn push(dst: &mut Vec<ValType>) {
         dst.push(ValType::I64);
@@ -817,6 +841,23 @@ unsafe impl WasmTy for i64 {
     #[inline]
     unsafe fn store(abi: Self, ptr: *mut u128) {
         *ptr = abi as u128;
+    }
+}
+
+unsafe impl WasmTy for u64 {
+    fn push(dst: &mut Vec<ValType>) {
+        <i64 as WasmTy>::push(dst)
+    }
+    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        <i64 as WasmTy>::matches(tys)
+    }
+    #[inline]
+    unsafe fn load(ptr: &mut *const u128) -> Self {
+        <i64 as WasmTy>::load(ptr) as Self
+    }
+    #[inline]
+    unsafe fn store(abi: Self, ptr: *mut u128) {
+        <i64 as WasmTy>::store(abi as i64, ptr)
     }
 }
 
@@ -1169,4 +1210,60 @@ impl_into_func! {
     (A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13)
     (A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14)
     (A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15)
+}
+
+#[test]
+fn wasm_ty_roundtrip() -> Result<(), anyhow::Error> {
+    use crate::*;
+    let store = Store::default();
+    let debug = Func::wrap(&store, |a: i32, b: u32, c: f32, d: i64, e: u64, f: f64| {
+        assert_eq!(a, -1);
+        assert_eq!(b, 1);
+        assert_eq!(c, 2.0);
+        assert_eq!(d, -3);
+        assert_eq!(e, 3);
+        assert_eq!(f, 4.0);
+    });
+    let module = Module::new(
+        store.engine(),
+        r#"
+             (module
+                 (import "" "" (func $debug (param i32 i32 f32 i64 i64 f64)))
+                 (func (export "foo") (param i32 i32 f32 i64 i64 f64)
+                    (if (i32.ne (local.get 0) (i32.const -1))
+                        (then unreachable)
+                    )
+                    (if (i32.ne (local.get 1) (i32.const 1))
+                        (then unreachable)
+                    )
+                    (if (f32.ne (local.get 2) (f32.const 2))
+                        (then unreachable)
+                    )
+                    (if (i64.ne (local.get 3) (i64.const -3))
+                        (then unreachable)
+                    )
+                    (if (i64.ne (local.get 4) (i64.const 3))
+                        (then unreachable)
+                    )
+                    (if (f64.ne (local.get 5) (f64.const 4))
+                        (then unreachable)
+                    )
+                    local.get 0
+                    local.get 1
+                    local.get 2
+                    local.get 3
+                    local.get 4
+                    local.get 5
+                    call $debug
+                )
+            )
+         "#,
+    )?;
+    let instance = Instance::new(&store, &module, &[debug.into()])?;
+    let foo = instance
+        .get_func("foo")
+        .unwrap()
+        .get6::<i32, u32, f32, i64, u64, f64, ()>()?;
+    foo(-1, 1, 2.0, -3, 3, 4.0)?;
+    Ok(())
 }
