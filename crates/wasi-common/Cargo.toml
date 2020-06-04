@@ -41,10 +41,10 @@ maintenance = { status = "actively-developed" }
 
 [features]
 default = ["trace_log"]
-# This feature enables `log::trace` calls in syscalls shims, in effect
-# emulating something like `strace`. This feature is an opt-out and hence
-# enabled by default.
-trace_log = []
+# This feature enables the `tracing` logs in the calls to target the `log`
+# ecosystem of backends (e.g. `env_logger`. Disable this if you want to use
+# `tracing-subscriber`.
+trace_log = [ "wiggle/tracing_log" ]
 # Need to make the wiggle_metadata feature available to consumers of this
 # crate if they want the snapshots to have metadata available.
 wiggle_metadata = ["wiggle/wiggle_metadata"]

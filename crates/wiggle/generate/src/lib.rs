@@ -49,10 +49,9 @@ pub fn generate(doc: &witx::Document, names: &Names, errs: &ErrorTransform) -> T
     };
     let modules = doc.modules().map(|module| {
         let modname = names.module(&module.name);
-        let trait_name = names.trait_name(&module.name);
         let fs = module
             .funcs()
-            .map(|f| define_func(&names, &f, quote!(#trait_name), &errs));
+            .map(|f| define_func(&names, &module, &f, &errs));
         let modtrait = define_module_trait(&names, &module, &errs);
         let ctx_type = names.ctx_type();
         quote!(

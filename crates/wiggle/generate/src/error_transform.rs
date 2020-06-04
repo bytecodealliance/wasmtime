@@ -11,6 +11,9 @@ pub struct ErrorTransform {
 }
 
 impl ErrorTransform {
+    pub fn empty() -> Self {
+        Self { m: Vec::new() }
+    }
     pub fn new(conf: &ErrorConf, doc: &Document) -> Result<Self, Error> {
         let mut richtype_identifiers = HashMap::new();
         let m = conf.iter().map(|(ident, field)|

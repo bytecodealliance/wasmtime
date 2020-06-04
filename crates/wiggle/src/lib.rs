@@ -16,6 +16,8 @@ mod error;
 mod guest_type;
 mod region;
 
+pub extern crate tracing;
+
 pub use borrow::BorrowChecker;
 use borrow::BorrowHandle;
 pub use error::GuestError;

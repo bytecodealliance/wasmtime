@@ -27,23 +27,35 @@ pub enum ConfigField {
     Error(ErrorConf),
 }
 
-impl ConfigField {
-    pub fn parse_pair(ident: &str, value: ParseStream, err_loc: Span) -> Result<Self> {
-        match ident {
-            "witx" => Ok(ConfigField::Witx(WitxConf::Paths(value.parse()?))),
-            "witx_literal" => Ok(ConfigField::Witx(WitxConf::Literal(value.parse()?))),
-            "ctx" => Ok(ConfigField::Ctx(value.parse()?)),
-            "errors" => Ok(ConfigField::Error(value.parse()?)),
-            _ => Err(Error::new(err_loc, "expected `witx`, `ctx`, or `errors`")),
-        }
-    }
+mod kw {
+    syn::custom_keyword!(witx);
+    syn::custom_keyword!(witx_literal);
+    syn::custom_keyword!(ctx);
+    syn::custom_keyword!(errors);
 }
 
 impl Parse for ConfigField {
     fn parse(input: ParseStream) -> Result<Self> {
-        let id: Ident = input.parse()?;
-        let _colon: Token![:] = input.parse()?;
-        Self::parse_pair(id.to_string().as_ref(), input, id.span())
+        let lookahead = input.lookahead1();
+        if lookahead.peek(kw::witx) {
+            input.parse::<kw::witx>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ConfigField::Witx(WitxConf::Paths(input.parse()?)))
+        } else if lookahead.peek(kw::witx_literal) {
+            input.parse::<kw::witx_literal>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ConfigField::Witx(WitxConf::Literal(input.parse()?)))
+        } else if lookahead.peek(kw::ctx) {
+            input.parse::<kw::ctx>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ConfigField::Ctx(input.parse()?))
+        } else if lookahead.peek(kw::errors) {
+            input.parse::<kw::errors>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ConfigField::Error(input.parse()?))
+        } else {
+            Err(lookahead.error())
+        }
     }
 }
 

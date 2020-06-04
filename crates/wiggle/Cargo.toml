@@ -14,6 +14,7 @@ include = ["src/**/*", "LICENSE"]
 thiserror = "1"
 witx = { path = "../wasi-common/WASI/tools/witx", version = "0.8.5", optional = true }
 wiggle-macro = { path = "macro", version = "0.17.0" }
+tracing = "0.1.15"
 
 [badges]
 maintenance = { status = "actively-developed" }
@@ -23,13 +24,16 @@ wiggle-test = { path = "test-helpers" }
 proptest = "0.9"
 
 [features]
-# These features have no effect on the users of this crate. They are only
-# necessary for testing.
 # The wiggle proc-macro emits some code (inside `pub mod metadata`) guarded
 # by the `wiggle_metadata` feature flag. We use this feature flag so that
 # users of wiggle are not forced to take a direct dependency on the `witx`
 # crate unless they want it.
 wiggle_metadata = ['witx', "wiggle-macro/wiggle_metadata"]
-# In order to test that the contents of this metadata module meet
-# expectations, we must have this feature enabled for the crate by default.
-default = ["wiggle_metadata"]
+
+# The `tracing` crate can use the `log` ecosystem of backends with this
+# non-default feature. We don't need to provide this by default, but its
+# useful for users that don't want to use `tracing-subscriber` to get
+# the logs out of wiggle-generated libraries.
+tracing_log = [ "tracing/log" ]
+
+default = ["wiggle_metadata" ]
