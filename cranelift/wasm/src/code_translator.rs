@@ -361,7 +361,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 // We signal that all the code that follows until the next End is unreachable
                 frame.set_branched_to_exit();
                 let return_count = if frame.is_loop() {
-                    0
+                    frame.num_param_values()
                 } else {
                     frame.num_return_values()
                 };
