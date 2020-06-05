@@ -5,6 +5,7 @@ use alloc::boxed::Box;
 use regalloc::RealRegUniverse;
 use target_lexicon::Triple;
 
+use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
 use crate::isa::Builder as IsaBuilder;
 use crate::machinst::pretty_print::ShowWithRRU;
@@ -83,6 +84,18 @@ impl MachBackend for X64Backend {
 
     fn reg_universe(&self) -> &RealRegUniverse {
         &self.reg_universe
+    }
+
+    fn unsigned_add_overflow_condition(&self) -> IntCC {
+        // Unsigned `>=`; this corresponds to the carry flag set on x86, which happens on
+        // overflow of an add.
+        IntCC::UnsignedGreaterThanOrEqual
+    }
+
+    fn unsigned_sub_overflow_condition(&self) -> IntCC {
+        // unsigned `>=`; this corresponds to the carry flag set on x86, which happens on
+        // underflow of a subtract (carry is borrow for subtract).
+        IntCC::UnsignedGreaterThanOrEqual
     }
 }
 

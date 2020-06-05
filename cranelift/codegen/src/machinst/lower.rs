@@ -133,7 +133,7 @@ pub trait LowerCtx {
     /// Get the `idx`th output register of the given IR instruction. When
     /// `backend.lower_inst_to_regs(ctx, inst)` is called, it is expected that
     /// the backend will write results to these output register(s).
-    fn get_output(&mut self, ir_inst: Inst, idx: usize) -> Writable<Reg>;
+    fn get_output(&self, ir_inst: Inst, idx: usize) -> Writable<Reg>;
 
     // Codegen primitives: allocate temps, emit instructions, set result registers,
     // ask for an input to be gen'd into a register.
@@ -146,6 +146,10 @@ pub trait LowerCtx {
     /// `get_input()`. Codegen may not happen otherwise for the producing
     /// instruction if it has no side effects and no uses.
     fn use_input_reg(&mut self, input: LowerInput);
+    /// Is the given register output needed after the given instruction? Allows
+    /// instructions with multiple outputs to make fine-grained decisions on
+    /// which outputs to actually generate.
+    fn is_reg_needed(&self, ir_inst: Inst, reg: Reg) -> bool;
     /// Retrieve constant data given a handle.
     fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData;
 }
@@ -906,7 +910,7 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         self.get_input_for_val(ir_inst, val)
     }
 
-    fn get_output(&mut self, ir_inst: Inst, idx: usize) -> Writable<Reg> {
+    fn get_output(&self, ir_inst: Inst, idx: usize) -> Writable<Reg> {
         let val = self.f.dfg.inst_results(ir_inst)[idx];
         Writable::from_reg(self.value_regs[val])
     }
@@ -926,6 +930,10 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
     fn use_input_reg(&mut self, input: LowerInput) {
         debug!("use_input_reg: vreg {:?} is needed", input.reg);
         self.vreg_needed[input.reg.get_index()] = true;
+    }
+
+    fn is_reg_needed(&self, ir_inst: Inst, reg: Reg) -> bool {
+        self.inst_needed[ir_inst] || self.vreg_needed[reg.get_index()]
     }
 
     fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData {
