@@ -65,8 +65,7 @@ impl MemFlags {
     /// also required to trap.
     ///
     /// The `notrap` flag tells Cranelift that the memory is *accessible*, which means that
-    /// accesses will not trap. This makes it possible to delete an unused load or a dead store
-    /// instruction.
+    /// accesses will not trap. This makes it possible to delete an unused load instruction.
     pub fn notrap(self) -> bool {
         self.read(FlagBit::Notrap)
     }
