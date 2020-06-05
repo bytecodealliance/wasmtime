@@ -1,84 +1,63 @@
-use faerie::artifact::{Decl, SectionKind};
-use faerie::*;
+pub use crate::read_debuginfo::{read_debuginfo, DebugInfoData, WasmFileInfo};
+pub use crate::transform::transform_dwarf;
 use gimli::write::{Address, Dwarf, EndianVec, FrameTable, Result, Sections, Writer};
 use gimli::{RunTimeEndian, SectionId};
+use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
+use wasmtime_environ::{Compilation, ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
 
 #[derive(Clone)]
-struct DebugReloc {
-    offset: u32,
-    size: u8,
-    name: String,
-    addend: i64,
+pub struct DwarfSectionReloc {
+    pub target: String,
+    pub offset: u32,
+    pub addend: i32,
+    pub size: u8,
 }
 
-pub enum ResolvedSymbol {
-    PhysicalAddress(u64),
-    Reloc { name: String, addend: i64 },
+pub struct DwarfSection {
+    pub name: String,
+    pub body: Vec<u8>,
+    pub relocs: Vec<DwarfSectionReloc>,
 }
 
-pub trait SymbolResolver {
-    fn resolve_symbol(&self, symbol: usize, addend: i64) -> ResolvedSymbol;
-}
-
-pub fn emit_dwarf(
-    artifact: &mut Artifact,
+fn emit_dwarf_sections(
     mut dwarf: Dwarf,
-    symbol_resolver: &dyn SymbolResolver,
     frames: Option<FrameTable>,
-) -> anyhow::Result<()> {
-    let endian = RunTimeEndian::Little;
-
-    let mut sections = Sections::new(WriterRelocate::new(endian, symbol_resolver));
+) -> anyhow::Result<Vec<DwarfSection>> {
+    let mut sections = Sections::new(WriterRelocate::default());
     dwarf.write(&mut sections)?;
     if let Some(frames) = frames {
         frames.write_debug_frame(&mut sections.debug_frame)?;
     }
+
+    let mut result = Vec::new();
     sections.for_each_mut(|id, s| -> anyhow::Result<()> {
-        artifact.declare_with(
-            id.name(),
-            Decl::section(SectionKind::Debug),
-            s.writer.take(),
-        )?;
-        Ok(())
-    })?;
-    sections.for_each_mut(|id, s| -> anyhow::Result<()> {
-        for reloc in &s.relocs {
-            artifact.link_with(
-                faerie::Link {
-                    from: id.name(),
-                    to: &reloc.name,
-                    at: u64::from(reloc.offset),
-                },
-                faerie::Reloc::Debug {
-                    size: reloc.size,
-                    addend: reloc.addend as i32,
-                },
-            )?;
-        }
+        let name = id.name().to_string();
+        let body = s.writer.take();
+        let mut relocs = vec![];
+        ::std::mem::swap(&mut relocs, &mut s.relocs);
+        result.push(DwarfSection { name, body, relocs });
         Ok(())
     })?;
 
-    Ok(())
+    Ok(result)
 }
 
 #[derive(Clone)]
-pub struct WriterRelocate<'a> {
-    relocs: Vec<DebugReloc>,
+pub struct WriterRelocate {
+    relocs: Vec<DwarfSectionReloc>,
     writer: EndianVec<RunTimeEndian>,
-    symbol_resolver: &'a dyn SymbolResolver,
 }
 
-impl<'a> WriterRelocate<'a> {
-    pub fn new(endian: RunTimeEndian, symbol_resolver: &'a dyn SymbolResolver) -> Self {
+impl Default for WriterRelocate {
+    fn default() -> Self {
         WriterRelocate {
             relocs: Vec::new(),
-            writer: EndianVec::new(endian),
-            symbol_resolver,
+            writer: EndianVec::new(RunTimeEndian::Little),
         }
     }
 }
 
-impl<'a> Writer for WriterRelocate<'a> {
+impl Writer for WriterRelocate {
     type Endian = RunTimeEndian;
 
     fn endian(&self) -> Self::Endian {
@@ -101,31 +80,27 @@ impl<'a> Writer for WriterRelocate<'a> {
         match address {
             Address::Constant(val) => self.write_udata(val, size),
             Address::Symbol { symbol, addend } => {
-                match self.symbol_resolver.resolve_symbol(symbol, addend as i64) {
-                    ResolvedSymbol::PhysicalAddress(addr) => self.write_udata(addr, size),
-                    ResolvedSymbol::Reloc { name, addend } => {
-                        let offset = self.len() as u64;
-                        self.relocs.push(DebugReloc {
-                            offset: offset as u32,
-                            size,
-                            name,
-                            addend,
-                        });
-                        self.write_udata(addend as u64, size)
-                    }
-                }
+                let target = format!("_wasm_function_{}", symbol);
+                let offset = self.len() as u32;
+                self.relocs.push(DwarfSectionReloc {
+                    target,
+                    offset,
+                    size,
+                    addend: addend as i32,
+                });
+                self.write_udata(addend as u64, size)
             }
         }
     }
 
     fn write_offset(&mut self, val: usize, section: SectionId, size: u8) -> Result<()> {
         let offset = self.len() as u32;
-        let name = section.name().to_string();
-        self.relocs.push(DebugReloc {
+        let target = section.name().to_string();
+        self.relocs.push(DwarfSectionReloc {
+            target,
             offset,
             size,
-            name,
-            addend: val as i64,
+            addend: val as i32,
         });
         self.write_udata(val as u64, size)
     }
@@ -137,13 +112,50 @@ impl<'a> Writer for WriterRelocate<'a> {
         section: SectionId,
         size: u8,
     ) -> Result<()> {
-        let name = section.name().to_string();
-        self.relocs.push(DebugReloc {
+        let target = section.name().to_string();
+        self.relocs.push(DwarfSectionReloc {
+            target,
             offset: offset as u32,
             size,
-            name,
-            addend: val as i64,
+            addend: val as i32,
         });
         self.write_udata_at(offset, val as u64, size)
     }
+}
+
+fn create_frame_table<'a>(
+    isa: &dyn TargetIsa,
+    infos: impl Iterator<Item = &'a Option<UnwindInfo>>,
+) -> Option<FrameTable> {
+    let mut table = FrameTable::default();
+
+    let cie_id = table.add_cie(isa.create_systemv_cie()?);
+
+    for (i, info) in infos.enumerate() {
+        if let Some(UnwindInfo::SystemV(info)) = info {
+            table.add_fde(
+                cie_id,
+                info.to_fde(Address::Symbol {
+                    symbol: i,
+                    addend: 0,
+                }),
+            );
+        }
+    }
+
+    Some(table)
+}
+
+pub fn emit_dwarf(
+    isa: &dyn TargetIsa,
+    debuginfo_data: &DebugInfoData,
+    at: &ModuleAddressMap,
+    vmctx_info: &ModuleVmctxInfo,
+    ranges: &ValueLabelsRanges,
+    compilation: &Compilation,
+) -> anyhow::Result<Vec<DwarfSection>> {
+    let dwarf = transform_dwarf(isa, debuginfo_data, at, vmctx_info, ranges)?;
+    let frame_table = create_frame_table(isa, compilation.into_iter().map(|f| &f.unwind_info));
+    let sections = emit_dwarf_sections(dwarf, frame_table)?;
+    Ok(sections)
 }

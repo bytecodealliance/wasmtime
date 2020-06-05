@@ -2,7 +2,7 @@ use anyhow::{anyhow, bail, Context as _, Result};
 use faerie::Artifact;
 use target_lexicon::Triple;
 use wasmtime::Strategy;
-use wasmtime_debug::{emit_debugsections, read_debuginfo};
+use wasmtime_debug::{emit_dwarf, read_debuginfo, write_debugsections};
 #[cfg(feature = "lightbeam")]
 use wasmtime_environ::Lightbeam;
 use wasmtime_environ::{
@@ -113,16 +113,16 @@ pub fn compile_to_obj(
 
     if debug_info {
         let debug_data = read_debuginfo(wasm).context("failed to emit DWARF")?;
-        emit_debugsections(
-            &mut obj,
-            &module_vmctx_info,
+        let sections = emit_dwarf(
             &*isa,
             &debug_data,
             &address_transform,
+            &module_vmctx_info,
             &value_ranges,
             &compilation,
         )
         .context("failed to emit debug sections")?;
+        write_debugsections(&mut obj, sections).context("failed to emit debug sections")?;
     }
     Ok(obj)
 }

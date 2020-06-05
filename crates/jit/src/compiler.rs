@@ -8,7 +8,7 @@ use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
-use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
+use wasmtime_debug::{emit_dwarf, write_debugsections_image, DebugInfoData};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
 use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex, SignatureIndex};
@@ -179,15 +179,15 @@ impl Compiler {
                     stack_slots,
                 }
             };
-            let bytes = emit_debugsections_image(
+            let bytes = emit_dwarf(
                 &*self.isa,
                 debug_data.as_ref().unwrap(),
-                &module_vmctx_info,
                 &address_transform,
+                &module_vmctx_info,
                 &value_ranges,
-                &funcs,
                 &compilation,
             )
+            .and_then(|sections| write_debugsections_image(&*self.isa, sections, &funcs))
             .map_err(SetupError::DebugInfo)?;
             Some(bytes)
         } else {
