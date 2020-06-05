@@ -43,7 +43,7 @@ pub fn write_debugsections(obj: &mut Artifact, sections: Vec<DwarfSection>) -> R
     Ok(())
 }
 
-fn patch_dwarf_sections(sections: &mut [DwarfSection], funcs: &[(*const u8, usize)]) {
+fn patch_dwarf_sections(sections: &mut [DwarfSection], funcs: &[*const u8]) {
     for section in sections {
         const FUNC_SYMBOL_PREFIX: &str = "_wasm_function_";
         for reloc in section.relocs.iter() {
@@ -55,7 +55,7 @@ fn patch_dwarf_sections(sections: &mut [DwarfSection], funcs: &[(*const u8, usiz
             let func_index = reloc.target[FUNC_SYMBOL_PREFIX.len()..]
                 .parse::<usize>()
                 .expect("func index");
-            let target = (funcs[func_index].0 as u64).wrapping_add(reloc.addend as i64 as u64);
+            let target = (funcs[func_index] as u64).wrapping_add(reloc.addend as i64 as u64);
             let entry_ptr = section.body
                 [reloc.offset as usize..reloc.offset as usize + reloc.size as usize]
                 .as_mut_ptr();
@@ -76,20 +76,15 @@ fn patch_dwarf_sections(sections: &mut [DwarfSection], funcs: &[(*const u8, usiz
 pub fn write_debugsections_image(
     isa: &dyn TargetIsa,
     mut sections: Vec<DwarfSection>,
-    funcs: &[(*const u8, usize)],
+    code_region: (*const u8, usize),
+    funcs: &[*const u8],
 ) -> Result<Vec<u8>, Error> {
     let mut obj = Artifact::new(isa.triple().clone(), String::from("module"));
 
-    // Assuming all functions in the same code block, looking min/max of its range.
+    assert!(!code_region.0.is_null() && code_region.1 > 0);
     assert_gt!(funcs.len(), 0);
-    let mut segment_body: (usize, usize) = (!0, 0);
-    for (body_ptr, body_len) in funcs {
-        segment_body.0 = std::cmp::min(segment_body.0, *body_ptr as usize);
-        segment_body.1 = std::cmp::max(segment_body.1, *body_ptr as usize + body_len);
-    }
-    let segment_body = (segment_body.0 as *const u8, segment_body.1 - segment_body.0);
 
-    let body = unsafe { std::slice::from_raw_parts(segment_body.0, segment_body.1) };
+    let body = unsafe { std::slice::from_raw_parts(code_region.0, code_region.1) };
     obj.declare_with("all", Decl::function(), body.to_vec())?;
 
     // Get DWARF sections and patch relocs
@@ -100,7 +95,7 @@ pub fn write_debugsections_image(
     // LLDB is too "magical" about mach-o, generating elf
     let mut bytes = obj.emit_as(BinaryFormat::Elf)?;
     // elf is still missing details...
-    convert_faerie_elf_to_loadable_file(&mut bytes, segment_body.0);
+    convert_faerie_elf_to_loadable_file(&mut bytes, code_region.0);
 
     // let mut file = ::std::fs::File::create(::std::path::Path::new("test.o")).expect("file");
     // ::std::io::Write::write(&mut file, &bytes).expect("write");

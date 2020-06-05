@@ -10,11 +10,11 @@ use crate::link::link_module;
 use crate::resolver::Resolver;
 use std::any::Any;
 use std::collections::HashMap;
-use std::io::Write;
 use std::sync::Arc;
 use thiserror::Error;
-use wasmtime_debug::read_debuginfo;
+use wasmtime_debug::{read_debuginfo, write_debugsections_image, DwarfSection};
 use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
+use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
 use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleAddressMap,
@@ -94,9 +94,10 @@ impl CompiledModule {
         let Compilation {
             mut code_memory,
             finished_functions,
+            code_range,
             trampolines,
             jt_offsets,
-            dbg_image,
+            dwarf_sections,
             traps,
             address_transform,
         } = compiler.compile(&translation, debug_data)?;
@@ -118,15 +119,21 @@ impl CompiledModule {
             .collect::<Vec<_>>()
             .into_boxed_slice();
 
-        // Initialize profiler and load the wasm module
-        profiler.module_load(&module, &finished_functions, dbg_image.as_deref());
+        // Register GDB JIT images; initialize profiler and load the wasm module.
+        let dbg_jit_registration = if !dwarf_sections.is_empty() {
+            let bytes = create_dbg_image(
+                dwarf_sections,
+                compiler.isa(),
+                code_range,
+                &finished_functions,
+            )?;
 
-        let dbg_jit_registration = if let Some(img) = dbg_image {
-            let mut bytes = Vec::new();
-            bytes.write_all(&img).expect("all written");
+            profiler.module_load(&module, &finished_functions, Some(&bytes));
+
             let reg = GdbJitImageRegistration::register(bytes);
             Some(reg)
         } else {
+            profiler.module_load(&module, &finished_functions, None);
             None
         };
 
@@ -260,4 +267,18 @@ impl OwnedDataInitializer {
             data: borrowed.data.to_vec().into_boxed_slice(),
         }
     }
+}
+
+fn create_dbg_image(
+    dwarf_sections: Vec<DwarfSection>,
+    isa: &dyn TargetIsa,
+    code_range: (*const u8, usize),
+    finished_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+) -> Result<Vec<u8>, SetupError> {
+    let funcs = finished_functions
+        .values()
+        .map(|allocated: &*mut [VMFunctionBody]| (*allocated) as *const u8)
+        .collect::<Vec<_>>();
+    write_debugsections_image(isa, dwarf_sections, code_range, &funcs)
+        .map_err(SetupError::DebugInfo)
 }
