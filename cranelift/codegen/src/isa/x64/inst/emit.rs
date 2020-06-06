@@ -1029,12 +1029,14 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
             let opcode = match op {
                 SseOpcode::Movss => 0x0F10,
                 SseOpcode::Movsd => 0x0F10,
+                SseOpcode::Movd => 0x0F6E,
                 _ => unimplemented!("XMM_R_R opcode"),
             };
 
             let prefix = match op {
                 SseOpcode::Movss => LegacyPrefix::_F3,
                 SseOpcode::Movsd => LegacyPrefix::_F2,
+                SseOpcode::Movd => LegacyPrefix::_66,
                 _ => unimplemented!("XMM_R_R opcode"),
             };
 
@@ -1049,45 +1051,56 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
             );
         }
 
-        Inst::XMM_RM_R {
+        Inst::XMM_MOV_RM_R {
             op,
-            src: srcE,
+            src: src_e,
             dst: reg_g,
         } => {
             let rex = RexFlags::clear_w();
-
-            let opcode = match op {
-                SseOpcode::Addss => 0x0F58,
-                SseOpcode::Subss => 0x0F5C,
-                SseOpcode::Mulss => 0x0F59,
-                SseOpcode::Divss => 0x0F5E,
-                SseOpcode::Sqrtss => 0x0F51,
-                _ => unimplemented!("XMM_RM_R opcode"),
+            let (prefix, opcode) = match op {
+                SseOpcode::Movaps => (LegacyPrefix::None, 0x0F28),
+                SseOpcode::Movd => (LegacyPrefix::_66, 0x0F6E),
+                SseOpcode::Movsd => (LegacyPrefix::_F2, 0x0F10),
+                SseOpcode::Movss => (LegacyPrefix::_F3, 0x0F10),
+                _ => unimplemented!("Opcode {:?} not implemented", op),
             };
 
-            match srcE {
-                RegMem::Reg { reg: regE } => {
-                    emit_std_reg_reg(
-                        sink,
-                        LegacyPrefix::_F3,
-                        opcode,
-                        2,
-                        reg_g.to_reg(),
-                        *regE,
-                        rex,
-                    );
+            match src_e {
+                RegMem::Reg { reg: reg_e } => {
+                    emit_std_reg_reg(sink, prefix, opcode, 2, reg_g.to_reg(), *reg_e, rex);
                 }
 
                 RegMem::Mem { addr } => {
-                    emit_std_reg_mem(
-                        sink,
-                        LegacyPrefix::_F3,
-                        opcode,
-                        2,
-                        reg_g.to_reg(),
-                        addr,
-                        rex,
-                    );
+                    emit_std_reg_mem(sink, prefix, opcode, 2, reg_g.to_reg(), addr, rex);
+                }
+            }
+        }
+
+        Inst::XMM_RM_R {
+            op,
+            src: src_e,
+            dst: reg_g,
+        } => {
+            let rex = RexFlags::clear_w();
+            let (prefix, opcode) = match op {
+                SseOpcode::Addss => (LegacyPrefix::_F3, 0x0F58),
+                SseOpcode::Andps => (LegacyPrefix::None, 0x0F54),
+                SseOpcode::Andnps => (LegacyPrefix::None, 0x0F55),
+                SseOpcode::Divss => (LegacyPrefix::_F3, 0x0F5E),
+                SseOpcode::Mulss => (LegacyPrefix::_F3, 0x0F59),
+                SseOpcode::Orps => (LegacyPrefix::None, 0x0F56),
+                SseOpcode::Subss => (LegacyPrefix::_F3, 0x0F5C),
+                SseOpcode::Sqrtss => (LegacyPrefix::_F3, 0x0F51),
+                _ => unimplemented!("Opcode {:?} not implemented", op),
+            };
+
+            match src_e {
+                RegMem::Reg { reg: reg_e } => {
+                    emit_std_reg_reg(sink, prefix, opcode, 2, reg_g.to_reg(), *reg_e, rex);
+                }
+
+                RegMem::Mem { addr } => {
+                    emit_std_reg_mem(sink, prefix, opcode, 2, reg_g.to_reg(), addr, rex);
                 }
             }
         }

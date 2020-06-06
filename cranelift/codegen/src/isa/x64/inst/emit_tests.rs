@@ -79,11 +79,11 @@ fn test_x64_emit() {
     let w_xmm8 = Writable::<Reg>::from_reg(xmm8);
     let _w_xmm9 = Writable::<Reg>::from_reg(xmm9);
     let w_xmm10 = Writable::<Reg>::from_reg(xmm10);
-    let _w_xmm11 = Writable::<Reg>::from_reg(xmm11);
-    let _w_xmm12 = Writable::<Reg>::from_reg(xmm12);
+    let w_xmm11 = Writable::<Reg>::from_reg(xmm11);
+    let w_xmm12 = Writable::<Reg>::from_reg(xmm12);
     let w_xmm13 = Writable::<Reg>::from_reg(xmm13);
-    let _w_xmm14 = Writable::<Reg>::from_reg(xmm14);
-    let _w_xmm15 = Writable::<Reg>::from_reg(xmm15);
+    let w_xmm14 = Writable::<Reg>::from_reg(xmm14);
+    let w_xmm15 = Writable::<Reg>::from_reg(xmm15);
 
     let mut insns = Vec::<(Inst, &str, &str)>::new();
 
@@ -2362,11 +2362,50 @@ fn test_x64_emit() {
         "F3410F5EF8",
         "divss   %xmm8, %xmm7",
     ));
-
     insns.push((
         Inst::xmm_rm_r(SseOpcode::Sqrtss, RegMem::reg(xmm7), w_xmm8),
         "F3440F51C7",
         "sqrtss  %xmm7, %xmm8",
+    ));
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Andps, RegMem::reg(xmm3), w_xmm12),
+        "440F54E3",
+        "andps   %xmm3, %xmm12",
+    ));
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Andnps, RegMem::reg(xmm4), w_xmm11),
+        "440F55DC",
+        "andnps  %xmm4, %xmm11",
+    ));
+    insns.push((
+        Inst::xmm_mov_rm_r(SseOpcode::Movaps, RegMem::reg(xmm5), w_xmm14),
+        "440F28F5",
+        "movaps  %xmm5, %xmm14",
+    ));
+    insns.push((
+        Inst::xmm_mov_rm_r(SseOpcode::Movd, RegMem::reg(rax), w_xmm15),
+        "66440F6EF8",
+        "movd    %eax, %xmm15",
+    ));
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Orps, RegMem::reg(xmm1), w_xmm15),
+        "440F56F9",
+        "orps    %xmm1, %xmm15",
+    ));
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Orps, RegMem::reg(xmm5), w_xmm4),
+        "0F56E5",
+        "orps    %xmm5, %xmm4",
+    ));
+    insns.push((
+        Inst::xmm_mov_rm_r(SseOpcode::Movss, RegMem::reg(xmm13), w_xmm2),
+        "F3410F10D5",
+        "movss   %xmm13, %xmm2",
+    ));
+    insns.push((
+        Inst::xmm_mov_rm_r(SseOpcode::Movsd, RegMem::reg(xmm14), w_xmm3),
+        "F2410F10DE",
+        "movsd   %xmm14, %xmm3",
     ));
 
     // ========================================================
