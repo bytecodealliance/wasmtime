@@ -2409,21 +2409,6 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
-    // XMM_R_R
-
-    insns.push((
-        Inst::xmm_r_r(SseOpcode::Movss, xmm3, w_xmm2),
-        "F30F10D3",
-        "movss   %xmm3, %xmm2",
-    ));
-
-    insns.push((
-        Inst::xmm_r_r(SseOpcode::Movsd, xmm4, w_xmm3),
-        "F20F10DC",
-        "movsd   %xmm4, %xmm3",
-    ));
-
-    // ========================================================
     // Actually run the tests!
     let flags = settings::Flags::new(settings::builder());
     let rru = regs::create_reg_universe_systemv(&flags);

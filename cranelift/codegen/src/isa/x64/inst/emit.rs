@@ -1025,32 +1025,6 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
             }
         }
 
-        Inst::XMM_R_R { op, src, dst } => {
-            let opcode = match op {
-                SseOpcode::Movss => 0x0F10,
-                SseOpcode::Movsd => 0x0F10,
-                SseOpcode::Movd => 0x0F6E,
-                _ => unimplemented!("XMM_R_R opcode"),
-            };
-
-            let prefix = match op {
-                SseOpcode::Movss => LegacyPrefix::_F3,
-                SseOpcode::Movsd => LegacyPrefix::_F2,
-                SseOpcode::Movd => LegacyPrefix::_66,
-                _ => unimplemented!("XMM_R_R opcode"),
-            };
-
-            emit_std_reg_reg(
-                sink,
-                prefix,
-                opcode,
-                2,
-                dst.to_reg(),
-                *src,
-                RexFlags::clear_w(),
-            );
-        }
-
         Inst::XMM_MOV_RM_R {
             op,
             src: src_e,

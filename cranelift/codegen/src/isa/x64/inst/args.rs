@@ -302,7 +302,7 @@ impl SseOpcode {
         }
     }
 
-    /// Returns src register operand size for an instruction
+    /// Returns the src operand size for an instruction
     pub(crate) fn src_size(&self) -> u8 {
         match self {
             SseOpcode::Movd => 4,

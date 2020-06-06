@@ -169,13 +169,6 @@ pub(crate) enum Inst {
         src: RegMem,
         dst: Writable<Reg>,
     },
-
-    /// mov (64 32) reg reg
-    XMM_R_R {
-        op: SseOpcode,
-        src: Reg,
-        dst: Writable<Reg>,
-    },
 }
 
 // Handy constructors for Insts.
@@ -224,12 +217,6 @@ impl Inst {
         debug_assert!(src.get_class() == RegClass::I64);
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
         Inst::Mov_R_R { is_64, src, dst }
-    }
-
-    pub(crate) fn xmm_r_r(op: SseOpcode, src: Reg, dst: Writable<Reg>) -> Inst {
-        debug_assert!(src.get_class() == RegClass::V128);
-        debug_assert!(dst.to_reg().get_class() == RegClass::V128);
-        Inst::XMM_R_R { op, src, dst }
     }
 
     pub(crate) fn xmm_mov_rm_r(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Inst {
@@ -427,12 +414,6 @@ impl ShowWithRRU for Inst {
                 show_ireg_sized(*src, mb_rru, sizeLQ(*is_64)),
                 show_ireg_sized(dst.to_reg(), mb_rru, sizeLQ(*is_64))
             ),
-            Inst::XMM_R_R { op, src, dst } => format!(
-                "{} {}, {}",
-                ljustify(op.to_string()),
-                show_ireg_sized(*src, mb_rru, 8),
-                show_ireg_sized(dst.to_reg(), mb_rru, 8)
-            ),
             Inst::MovZX_M_R { extMode, addr, dst } => {
                 if *extMode == ExtMode::LQ {
                     format!(
@@ -571,10 +552,6 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(*dst);
         }
         Inst::Mov_R_R { is_64: _, src, dst } => {
-            collector.add_use(*src);
-            collector.add_def(*dst);
-        }
-        Inst::XMM_R_R { op: _, src, dst } => {
             collector.add_use(*src);
             collector.add_def(*dst);
         }
@@ -755,14 +732,6 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, src);
             map_def(mapper, dst);
         }
-        Inst::XMM_R_R {
-            op: _,
-            ref mut src,
-            ref mut dst,
-        } => {
-            map_use(mapper, src);
-            map_def(mapper, dst);
-        }
         Inst::MovZX_M_R {
             extMode: _,
             ref mut addr,
@@ -851,12 +820,16 @@ impl MachInst for Inst {
         // %reg.
         match self {
             Self::Mov_R_R { is_64, src, dst } if *is_64 => Some((*dst, *src)),
-            Self::XMM_R_R { op, src, dst }
+            Self::XMM_MOV_RM_R { op, src, dst }
                 if *op == SseOpcode::Movss
                     || *op == SseOpcode::Movsd
                     || *op == SseOpcode::Movaps =>
             {
-                Some((*dst, *src))
+                if let RegMem::Reg { reg } = src {
+                    Some((*dst, *reg))
+                } else {
+                    None
+                }
             }
             _ => None,
         }
@@ -893,11 +866,11 @@ impl MachInst for Inst {
         match rc_dst {
             RegClass::I64 => Inst::mov_r_r(true, src_reg, dst_reg),
             RegClass::V128 => match ty {
-                F32 => Inst::xmm_r_r(SseOpcode::Movss, src_reg, dst_reg),
-                F64 => Inst::xmm_r_r(SseOpcode::Movsd, src_reg, dst_reg),
+                F32 => Inst::xmm_mov_rm_r(SseOpcode::Movss, RegMem::reg(src_reg), dst_reg),
+                F64 => Inst::xmm_mov_rm_r(SseOpcode::Movsd, RegMem::reg(src_reg), dst_reg),
                 _ => panic!("unexpected V128 type in gen_move"),
             },
-            _ => panic!("gen_move(x64): unhandled gen_move"),
+            _ => panic!("gen_move(x64): unhandled regclass"),
         }
     }
 
