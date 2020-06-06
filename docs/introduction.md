@@ -1,9 +1,12 @@
 # Introduction
 
-[Wasmtime][github] is a [Bytecode Alliance][BA] project that is a standalone
-wasm-only optimizing runtime for [WebAssembly] and [WASI]. It runs WebAssembly
-code [outside of the Web], and can be used both as a command-line utility or as
-a library embedded in a larger application.
+Wasmtime, a Bytecode Alliance project, is used to run Webassembly
+(WASM) and WebAssembly System Interface (WASI) without a web browser.
+Typically, an application or library calls wasmtime to load and run
+WASM code. Wasmtime is a standalone runtime, optimized for WASM
+alone. It is intended for running WASM and WASI in a wide range of
+applications, from command-line utilties to libraries in large
+applications.
 
 Wasmtime strives to be a highly configurable and embeddable runtime to run on
 any scale of application. Many features are still under development so if you
