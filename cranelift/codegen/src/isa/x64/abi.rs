@@ -280,7 +280,11 @@ impl ABIBody for X64ABIBody {
                     return Inst::mov_r_r(/*is64=*/ true, from_reg.to_reg(), to_reg);
                 } else if from_reg.get_class() == RegClass::V128 {
                     // TODO: How to support Movss. Should is64 always be true?
-                    return Inst::xmm_r_r(SseOpcode::Movsd, from_reg.to_reg(), to_reg);
+                    return Inst::xmm_mov_rm_r(
+                        SseOpcode::Movsd,
+                        RegMem::reg(from_reg.to_reg()),
+                        to_reg,
+                    );
                 }
                 unimplemented!("moving from non-int arg to vreg {:?}", from_reg.get_class());
             }
@@ -316,9 +320,9 @@ impl ABIBody for X64ABIBody {
                         Writable::<Reg>::from_reg(to_reg.to_reg()),
                     ))
                 } else if to_reg.get_class() == RegClass::V128 {
-                    ret.push(Inst::xmm_r_r(
+                    ret.push(Inst::xmm_mov_rm_r(
                         SseOpcode::Movsd,
-                        from_reg.to_reg(),
+                        RegMem::reg(from_reg.to_reg()),
                         Writable::<Reg>::from_reg(to_reg.to_reg()),
                     ))
                 } else {
