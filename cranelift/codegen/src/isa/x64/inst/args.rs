@@ -214,6 +214,8 @@ pub(crate) enum InstructionSet {
 pub enum SseOpcode {
     Addss,
     Addsd,
+    Andps,
+    Andnps,
     Comiss,
     Comisd,
     Cmpss,
@@ -233,10 +235,13 @@ pub enum SseOpcode {
     Maxsd,
     Minss,
     Minsd,
+    Movaps,
+    Movd,
     Movss,
     Movsd,
     Mulss,
     Mulsd,
+    Orps,
     Rcpss,
     Roundss,
     Roundsd,
@@ -255,14 +260,18 @@ impl SseOpcode {
         use InstructionSet::*;
         match self {
             SseOpcode::Addss
+            | SseOpcode::Andps
+            | SseOpcode::Andnps
             | SseOpcode::Cvtsi2ss
             | SseOpcode::Cvtss2si
             | SseOpcode::Cvttss2si
             | SseOpcode::Divss
             | SseOpcode::Maxss
+            | SseOpcode::Movaps
             | SseOpcode::Minss
             | SseOpcode::Movss
             | SseOpcode::Mulss
+            | SseOpcode::Orps
             | SseOpcode::Rcpss
             | SseOpcode::Rsqrtss
             | SseOpcode::Subss
@@ -280,6 +289,7 @@ impl SseOpcode {
             | SseOpcode::Divsd
             | SseOpcode::Maxsd
             | SseOpcode::Minsd
+            | SseOpcode::Movd
             | SseOpcode::Movsd
             | SseOpcode::Mulsd
             | SseOpcode::Sqrtsd
@@ -291,6 +301,14 @@ impl SseOpcode {
             SseOpcode::Insertps | SseOpcode::Roundss | SseOpcode::Roundsd => SSE41,
         }
     }
+
+    /// Returns src register operand size for an instruction
+    pub(crate) fn src_size(&self) -> u8 {
+        match self {
+            SseOpcode::Movd => 4,
+            _ => 8,
+        }
+    }
 }
 
 impl fmt::Debug for SseOpcode {
@@ -298,6 +316,8 @@ impl fmt::Debug for SseOpcode {
         let name = match self {
             SseOpcode::Addss => "addss",
             SseOpcode::Addsd => "addsd",
+            SseOpcode::Andps => "andps",
+            SseOpcode::Andnps => "andnps",
             SseOpcode::Comiss => "comiss",
             SseOpcode::Comisd => "comisd",
             SseOpcode::Cvtsd2ss => "cvtsd2ss",
@@ -314,10 +334,13 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Maxsd => "maxsd",
             SseOpcode::Minss => "minss",
             SseOpcode::Minsd => "minsd",
+            SseOpcode::Movaps => "movaps",
+            SseOpcode::Movd => "movd",
             SseOpcode::Movss => "movss",
             SseOpcode::Movsd => "movsd",
             SseOpcode::Mulss => "mulss",
             SseOpcode::Mulsd => "mulsd",
+            SseOpcode::Orps => "orps",
             SseOpcode::Rcpss => "rcpss",
             SseOpcode::Roundss => "roundss",
             SseOpcode::Roundsd => "roundsd",

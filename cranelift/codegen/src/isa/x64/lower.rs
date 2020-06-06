@@ -7,6 +7,7 @@ use log::trace;
 use regalloc::{Reg, RegClass, Writable};
 
 use crate::ir::types;
+use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
 use crate::ir::{condcodes::IntCC, InstructionData, Opcode, Type};
 
@@ -214,7 +215,52 @@ fn lower_insn_to_regs<'a>(ctx: Ctx<'a>, inst: IRInst) {
                 unimplemented!("unimplemented lowering for opcode {:?}", op);
             }
         }
-
+        Opcode::Fcopysign => {
+            let dst = output_to_reg(ctx, inst, 0);
+            let lhs = input_to_reg(ctx, inst, 0);
+            let rhs = input_to_reg(ctx, inst, 1);
+            if !flt_ty_is_64(ty.unwrap()) {
+                // movabs   0x8000_0000, tmp_gpr1
+                // movd     tmp_gpr1, tmp_xmm1
+                // movaps   tmp_xmm1, dst
+                // andnps   src_1, dst
+                // movss    src_2, tmp_xmm2
+                // andps    tmp_xmm1, tmp_xmm2
+                // orps     tmp_xmm2, dst
+                let tmp_gpr1 = ctx.alloc_tmp(RegClass::I64, I32);
+                let tmp_xmm1 = ctx.alloc_tmp(RegClass::V128, F32);
+                let tmp_xmm2 = ctx.alloc_tmp(RegClass::V128, F32);
+                ctx.emit(Inst::imm_r(true, 0x8000_0000, tmp_gpr1));
+                ctx.emit(Inst::xmm_mov_rm_r(
+                    SseOpcode::Movd,
+                    RegMem::reg(tmp_gpr1.to_reg()),
+                    tmp_xmm1,
+                ));
+                ctx.emit(Inst::xmm_mov_rm_r(
+                    SseOpcode::Movaps,
+                    RegMem::reg(tmp_xmm1.to_reg()),
+                    dst,
+                ));
+                ctx.emit(Inst::xmm_rm_r(SseOpcode::Andnps, RegMem::reg(lhs), dst));
+                ctx.emit(Inst::xmm_mov_rm_r(
+                    SseOpcode::Movss,
+                    RegMem::reg(rhs),
+                    tmp_xmm2,
+                ));
+                ctx.emit(Inst::xmm_rm_r(
+                    SseOpcode::Andps,
+                    RegMem::reg(tmp_xmm1.to_reg()),
+                    tmp_xmm2,
+                ));
+                ctx.emit(Inst::xmm_rm_r(
+                    SseOpcode::Orps,
+                    RegMem::reg(tmp_xmm2.to_reg()),
+                    dst,
+                ));
+            } else {
+                unimplemented!("{:?} for non 32-bit destination is not supported", op);
+            }
+        }
         Opcode::IaddImm
         | Opcode::ImulImm
         | Opcode::UdivImm
