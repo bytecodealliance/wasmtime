@@ -46,6 +46,8 @@ pub struct DataDescription {
     pub function_relocs: Vec<(CodeOffset, ir::FuncRef)>,
     /// Data addresses to write at specified offsets.
     pub data_relocs: Vec<(CodeOffset, ir::GlobalValue, Addend)>,
+    /// Object file section
+    pub section: Option<(std::string::String, std::string::String)>
 }
 
 /// This is to data objects what cranelift_codegen::Context is to functions.
@@ -63,6 +65,7 @@ impl DataContext {
                 data_decls: PrimaryMap::new(),
                 function_relocs: vec![],
                 data_relocs: vec![],
+                section: None
             },
         }
     }
@@ -88,6 +91,11 @@ impl DataContext {
     pub fn define(&mut self, contents: Box<[u8]>) {
         debug_assert_eq!(self.description.init, Init::Uninitialized);
         self.description.init = Init::Bytes { contents };
+    }
+
+    /// Override the segment/section for data, only supported on Object backend
+    pub fn set_section(&mut self, seg: &str, sec: &str) {
+        self.description.section = Some((std::string::String::from(seg), std::string::String::from(sec)))
     }
 
     /// Declare an external function import.
