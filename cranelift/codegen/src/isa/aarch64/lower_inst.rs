@@ -1483,13 +1483,24 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::Splat => {
+            let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
+            let rd = output_to_reg(ctx, outputs[0]);
+            let ty = ctx.input_ty(insn, 0);
+            let inst = if ty_is_int(ty) {
+                Inst::VecDup { rd, rn, ty }
+            } else {
+                Inst::VecDupFromFpu { rd, rn, ty }
+            };
+            ctx.emit(inst);
+        }
+
         Opcode::Shuffle
         | Opcode::Vsplit
         | Opcode::Vconcat
         | Opcode::Vselect
         | Opcode::VanyTrue
         | Opcode::VallTrue
-        | Opcode::Splat
         | Opcode::Insertlane
         | Opcode::ScalarToVector
         | Opcode::Swizzle
