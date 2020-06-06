@@ -1,12 +1,15 @@
 # Introduction
 
-Wasmtime, a Bytecode Alliance project, is used to run Webassembly
-(WASM) and WebAssembly System Interface (WASI) without a web browser.
-Typically, an application or library calls wasmtime to load and run
-WASM code. Wasmtime is a standalone runtime, optimized for WASM
-alone. It is intended for running WASM and WASI in a wide range of
-applications, from command-line utilties to libraries in large
-applications.
+[Wasmtime][github], a [Bytecode Alliance][BA] project, is used to run
+[Webassembly][Wasm] (Wasm) and [WebAssembly System Interface][Wasi] (Wasi)
+[without a web browser].  Typically, an application or library calls wasmtime to
+load and run Wasm code. Or, the Wasmtime command line utility can run standalone
+Wasm programs.
+
+[Wasm] is an assembly language: it has no strings or structs built in.
+[Wasm-bindgen], a binding generator, enables passing strings and struts to
+functions. On top of that, [Wasi] is a library of system functions, such as
+opening files. Wasmtime enables them to run inside another application.
 
 Wasmtime strives to be a highly configurable and embeddable runtime to run on
 any scale of application. Many features are still under development so if you
@@ -26,7 +29,8 @@ contributions are welcome!
 
 [github]: https://github.com/bytecodealliance/wasmtime
 [BA]: https://bytecodealliance.org/
-[WebAssembly]: https://webassembly.org/
-[WASI]: https://wasi.dev
-[outside of the Web]: https://webassembly.org/docs/non-web/
+[Wasm]: https://webassembly.org/
+[Wasi]: https://wasi.dev
+[without a web browser]: https://webassembly.org/docs/non-web/
+[Wasm-bindgen]: https://rustwasm.github.io/docs/wasm-bindgen/
 [issue]: https://github.com/bytecodealliance/wasmtime/issues/new
