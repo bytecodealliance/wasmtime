@@ -1,15 +1,15 @@
 # Introduction
 
 [Wasmtime][github], a [Bytecode Alliance][BA] project, is used to run
-[Webassembly][Wasm] (Wasm) and [WebAssembly System Interface][Wasi] (Wasi)
-[without a web browser].  Typically, an application or library calls wasmtime to
-load and run Wasm code. Or, the Wasmtime command line utility can run standalone
-Wasm programs.
+[Webassembly][Wasm] (Wasm) programs [without a web browser].  
+[Wasm] is a low-level executable assembly language.  Typically, an application
+or library calls wasmtime to load and run Wasm code. Or, the Wasmtime command
+line utility can run standalone Wasm programs.
 
-[Wasm] is an assembly language: it has no strings or structs built in.  Rust can
-compile to Wasm, and can use [Wasm-bindgen], a binding generator, to pass
-strings and struts to external functions. [Wasi] provides system functions, such
-as reading files. Wasmtime enables them to run inside another application.
+Wasm programs are generally written in high-level languages, and compiled to
+Wasm.  [WebAssembly System Interface][Wasi] (Wasi) provides a library of
+essential functions, such as reading files, somewhat similar libc. Wasmtime
+enables them to run inside another application.
 
 Wasmtime strives to be a highly configurable and embeddable runtime to run on
 any scale of application. Many features are still under development so if you
