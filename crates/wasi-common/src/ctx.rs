@@ -2,6 +2,7 @@ use crate::entry::{Entry, EntryHandle};
 use crate::fdpool::FdPool;
 use crate::handle::Handle;
 use crate::sys::osdir::OsDir;
+use crate::sys::osfile::OsFile;
 use crate::sys::osother::{OsOther, OsOtherExt};
 use crate::sys::stdio::{Stderr, StderrExt, Stdin, StdinExt, Stdout, StdoutExt};
 use crate::virtfs::{VirtualDir, VirtualDirEntry};
@@ -369,7 +370,7 @@ impl WasiCtxBuilder {
                         .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?
                 }
                 PendingEntry::OsHandle(f) => {
-                    let handle = OsOther::try_from(f)?;
+                    let handle = OsFile::try_from(f)?;
                     let handle = EntryHandle::new(handle);
                     let entry = Entry::new(handle);
                     entries
