@@ -8,9 +8,8 @@ Wasm programs.
 
 [Wasm] is an assembly language: it has no strings or structs built in.  Rust can
 compile to Wasm, and can use [Wasm-bindgen], a binding generator, to pass
-strings and struts to external functions. On top of that, [Wasi] provides system
-functions, such as reading files. Wasmtime enables them to run inside another
-application.
+strings and struts to external functions. [Wasi] provides system functions, such
+as reading files. Wasmtime enables them to run inside another application.
 
 Wasmtime strives to be a highly configurable and embeddable runtime to run on
 any scale of application. Many features are still under development so if you
