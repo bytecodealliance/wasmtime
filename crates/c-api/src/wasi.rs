@@ -239,7 +239,7 @@ fn create_snapshot0_instance(store: &Store, config: wasi_config_t) -> Result<Was
 
 fn wasi_preview_builder(config: wasi_config_t) -> Result<WasiPreview1CtxBuilder> {
     use std::convert::TryFrom;
-    use wasi_common::OsOther;
+    use wasi_common::OsFile;
     let mut builder = WasiPreview1CtxBuilder::new();
     if config.inherit_args {
         builder.inherit_args();
@@ -254,17 +254,17 @@ fn wasi_preview_builder(config: wasi_config_t) -> Result<WasiPreview1CtxBuilder>
     if config.inherit_stdin {
         builder.inherit_stdin();
     } else if let Some(file) = config.stdin {
-        builder.stdin(OsOther::try_from(file)?);
+        builder.stdin(OsFile::try_from(file)?);
     }
     if config.inherit_stdout {
         builder.inherit_stdout();
     } else if let Some(file) = config.stdout {
-        builder.stdout(OsOther::try_from(file)?);
+        builder.stdout(OsFile::try_from(file)?);
     }
     if config.inherit_stderr {
         builder.inherit_stderr();
     } else if let Some(file) = config.stderr {
-        builder.stderr(OsOther::try_from(file)?);
+        builder.stderr(OsFile::try_from(file)?);
     }
     for preopen in config.preopens {
         builder.preopened_dir(preopen.0, preopen.1);
