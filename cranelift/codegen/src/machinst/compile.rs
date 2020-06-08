@@ -44,6 +44,19 @@ where
         }
     };
 
+    #[cfg(feature = "regalloc-snapshot")]
+    {
+        use std::fs;
+        use std::path::Path;
+        if let Some(path) = std::env::var("SERIALIZE_REGALLOC").ok() {
+            let snapshot = regalloc::IRSnapshot::from_function(&vcode, b.reg_universe());
+            let serialized = bincode::serialize(&snapshot).expect("couldn't serialize snapshot");
+
+            let file_path = Path::new(&path).join(Path::new(&format!("ir{}.bin", f.name)));
+            fs::write(file_path, &serialized).expect("couldn't write IR snapshot file");
+        }
+    }
+
     let result = {
         let _tt = timing::regalloc();
         allocate_registers_with_opts(
