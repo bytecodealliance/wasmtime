@@ -234,7 +234,7 @@ impl Backend for ObjectBackend {
             ref data_decls,
             ref function_relocs,
             ref data_relocs,
-            section: ref datasection
+            section: ref datasection,
         } = data_ctx.description();
 
         let reloc_size = match self.isa.triple().pointer_width().unwrap() {
@@ -265,31 +265,36 @@ impl Backend for ObjectBackend {
         }
 
         let symbol = self.data_objects[data_id].unwrap();
-        let section = 
-            if datasection.is_none() {
-                let section_kind = if let Init::Zeros { .. } = *init {
-                    if tls {
-                        StandardSection::UninitializedTls
-                    } else {
-                        StandardSection::UninitializedData
-                    }
-                } else if tls {
-                    StandardSection::Tls
-                } else if writable {
-                    StandardSection::Data
-                } else if relocs.is_empty() {
-                    StandardSection::ReadOnlyData
+        let section = if datasection.is_none() {
+            let section_kind = if let Init::Zeros { .. } = *init {
+                if tls {
+                    StandardSection::UninitializedTls
                 } else {
-                    StandardSection::ReadOnlyDataWithRel
-                };
-                self.object.section_id(section_kind)
+                    StandardSection::UninitializedData
+                }
+            } else if tls {
+                StandardSection::Tls
+            } else if writable {
+                StandardSection::Data
+            } else if relocs.is_empty() {
+                StandardSection::ReadOnlyData
             } else {
-                assert!(!tls, "Tls data cannot be in named section");
-                let (seg, sec) = &datasection.as_ref().unwrap();
-                self.object.add_section(seg.clone().into_bytes(), sec.clone().into_bytes(), 
-                    if writable { SectionKind::Data } else { SectionKind::ReadOnlyData }
-                )
+                StandardSection::ReadOnlyDataWithRel
             };
+            self.object.section_id(section_kind)
+        } else {
+            assert!(!tls, "Tls data cannot be in named section");
+            let (seg, sec) = &datasection.as_ref().unwrap();
+            self.object.add_section(
+                seg.clone().into_bytes(),
+                sec.clone().into_bytes(),
+                if writable {
+                    SectionKind::Data
+                } else {
+                    SectionKind::ReadOnlyData
+                },
+            )
+        };
 
         let align = u64::from(align.unwrap_or(1));
         let offset = match *init {

@@ -211,7 +211,7 @@ impl Backend for FaerieBackend {
             ref data_decls,
             ref function_relocs,
             ref data_relocs,
-            section: ref datasection
+            section: ref datasection,
         } = data_ctx.description();
 
         assert!(datasection.is_none(), "Custom sections not supported");
