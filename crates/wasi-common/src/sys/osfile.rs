@@ -9,6 +9,9 @@ use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::ops::Deref;
 
 #[derive(Debug)]
+/// A file backed by the operating system's file system. Dereferences to a
+/// `RawOsHandle`.  Its impl of `Handle` uses Rust's `std` to implement all
+/// file descriptor operations.
 pub struct OsFile {
     rights: Cell<HandleRights>,
     handle: RawOsHandle,

@@ -6,6 +6,9 @@ use std::io;
 use yanix::dir::Dir;
 
 #[derive(Debug)]
+/// A directory in the operating system's file system. Its impl of `Handle` is
+/// in sys::osdir. This type is exposed to all other moduleas as
+/// sys::osdir::OsDir when configured.
 pub struct OsDir {
     pub(crate) rights: Cell<HandleRights>,
     pub(crate) handle: RawOsHandle,
@@ -16,7 +19,8 @@ impl OsDir {
         let rights = Cell::new(rights);
         Ok(Self { rights, handle })
     }
-    /// Returns the `Dir` stream pointer associated with this `OsDir`.
+    /// Returns the `Dir` stream pointer associated with this `OsDir`. Duck typing:
+    /// sys::unix::fd::readdir expects the configured OsDir to have this method.
     pub(crate) fn stream_ptr(&self) -> Result<Box<Dir>> {
         // We need to duplicate the handle, because `opendir(3)`:
         //     After a successful call to fdopendir(), fd is used internally by the implementation,

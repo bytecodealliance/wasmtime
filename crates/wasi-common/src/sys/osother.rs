@@ -10,6 +10,8 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::ops::Deref;
 
+/// Extra methods for `OsOther` that are only available when configured for
+/// some operating systems.
 pub trait OsOtherExt {
     /// Create `OsOther` as `dyn Handle` from null device.
     fn from_null() -> io::Result<Box<dyn Handle>>;

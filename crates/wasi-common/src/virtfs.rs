@@ -11,12 +11,16 @@ use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+/// An entry in a virtual filesystem
 pub enum VirtualDirEntry {
+    /// The contents of a child directory
     Directory(HashMap<String, VirtualDirEntry>),
+    /// A file
     File(Box<dyn FileContents>),
 }
 
 impl VirtualDirEntry {
+    /// Construct an empty directory
     pub fn empty_directory() -> Self {
         Self::Directory(HashMap::new())
     }
