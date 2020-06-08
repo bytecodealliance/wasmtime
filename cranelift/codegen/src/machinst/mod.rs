@@ -308,14 +308,10 @@ pub trait MachBackend {
     fn reg_universe(&self) -> &RealRegUniverse;
 
     /// Machine-specific condcode info needed by TargetIsa.
-    fn unsigned_add_overflow_condition(&self) -> IntCC {
-        // TODO: this is what x86 specifies. Is this right for arm64?
-        IntCC::UnsignedLessThan
-    }
+    /// Condition that will be true when an IaddIfcout overflows.
+    fn unsigned_add_overflow_condition(&self) -> IntCC;
 
     /// Machine-specific condcode info needed by TargetIsa.
-    fn unsigned_sub_overflow_condition(&self) -> IntCC {
-        // TODO: this is what x86 specifies. Is this right for arm64?
-        IntCC::UnsignedLessThan
-    }
+    /// Condition that will be true when an IsubIfcout overflows.
+    fn unsigned_sub_overflow_condition(&self) -> IntCC;
 }

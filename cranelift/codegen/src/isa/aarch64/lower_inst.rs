@@ -1252,7 +1252,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Trapif | Opcode::Trapff => {
             let trap_info = (ctx.srcloc(insn), inst_trapcode(ctx.data(insn)).unwrap());
 
-            let cond = if op == Opcode::Trapif {
+            let cond = if maybe_input_insn(ctx, inputs[0], Opcode::IaddIfcout).is_some() {
+                let condcode = inst_condcode(ctx.data(insn)).unwrap();
+                let cond = lower_condcode(condcode);
+                // The flags must not have been clobbered by any other
+                // instruction between the iadd_ifcout and this instruction, as
+                // verified by the CLIF validator; so we can simply use the
+                // flags here.
+                cond
+            } else if op == Opcode::Trapif {
                 let condcode = inst_condcode(ctx.data(insn)).unwrap();
                 let cond = lower_condcode(condcode);
                 let is_signed = condcode_is_signed(condcode);
@@ -1852,6 +1860,35 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
         }
 
+        Opcode::IaddIfcout => {
+            // This is a two-output instruction that is needed for the
+            // legalizer's explicit heap-check sequence, among possible other
+            // uses. Its second output is a flags output only ever meant to
+            // check for overflow using the
+            // `backend.unsigned_add_overflow_condition()` condition.
+            //
+            // Note that the CLIF validation will ensure that no flag-setting
+            // operation comes between this IaddIfcout and its use (e.g., a
+            // Trapif). Thus, we can rely on implicit communication through the
+            // processor flags rather than explicitly generating flags into a
+            // register. We simply use the variant of the add instruction that
+            // sets flags (`adds`) here.
+
+            // Ensure that the second output isn't directly called for: it
+            // should only be used by a flags-consuming op, which will directly
+            // understand this instruction and merge the comparison.
+            assert!(!ctx.is_reg_needed(insn, ctx.get_output(insn, 1).to_reg()));
+
+            // Now handle the iadd as above, except use an AddS opcode that sets
+            // flags.
+            let rd = output_to_reg(ctx, outputs[0]);
+            let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
+            let rm = input_to_rse_imm12(ctx, inputs[1], NarrowValueMode::None);
+            let ty = ty.unwrap();
+            let alu_op = choose_32_64(ty, ALUOp::AddS32, ALUOp::AddS64);
+            ctx.emit(alu_inst_imm12(alu_op, rd, rn, rm));
+        }
+
         Opcode::IaddImm
         | Opcode::ImulImm
         | Opcode::UdivImm
@@ -1862,7 +1899,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::IaddCin
         | Opcode::IaddIfcin
         | Opcode::IaddCout
-        | Opcode::IaddIfcout
         | Opcode::IaddCarry
         | Opcode::IaddIfcarry
         | Opcode::IsubBin

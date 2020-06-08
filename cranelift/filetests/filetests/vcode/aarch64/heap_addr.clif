@@ -1,0 +1,49 @@
+test compile
+target aarch64
+
+function %dynamic_heap_check(i64 vmctx, i32) -> i64 {
+    gv0 = vmctx
+    gv1 = load.i32 notrap aligned gv0
+    heap0 = dynamic gv0, bound gv1, offset_guard 0x1000, index_type i32
+
+block0(v0: i64, v1: i32):
+    v2 = heap_addr.i64 heap0, v1, 0
+    return v2
+}
+
+; check:   stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  ldur w2, [x0]
+; nextln:  add w2, w2, #0
+; nextln:  subs wzr, w1, w2
+; nextln:  b.ls label1 ; b label2
+; nextln:  Block 1:
+; check:   add x0, x0, x1, UXTW
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+; nextln:  Block 2:
+; check:  udf
+
+
+function %static_heap_check(i64 vmctx, i32) -> i64 {
+    gv0 = vmctx
+    heap0 = static gv0, bound 0x1_0000, offset_guard 0x1000, index_type i32
+
+block0(v0: i64, v1: i32):
+    v2 = heap_addr.i64 heap0, v1, 0
+    return v2
+}
+
+; check:   stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  subs wzr, w1, #65536
+; nextln:  b.ls label1 ; b label2
+; nextln:  Block 1:
+; check:   add x0, x0, x1, UXTW
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+; nextln:  Block 2:
+; check:   udf
+
