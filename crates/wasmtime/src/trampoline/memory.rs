@@ -67,12 +67,12 @@ pub(crate) struct MemoryCreatorProxy {
 impl RuntimeMemoryCreator for MemoryCreatorProxy {
     fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn RuntimeLinearMemory>, String> {
         let ty = MemoryType::new(Limits::new(plan.memory.minimum, plan.memory.maximum));
-        let reserved_size = match plan.style {
-            MemoryStyle::Static { bound } => Some(bound.into()),
+        let reserved_size_in_bytes = match plan.style {
+            MemoryStyle::Static { bound } => Some(bound as u64 * WASM_PAGE_SIZE as u64),
             MemoryStyle::Dynamic => None,
         };
         self.mem_creator
-            .new_memory(ty, reserved_size, plan.offset_guard_size)
+            .new_memory(ty, reserved_size_in_bytes, plan.offset_guard_size)
             .map(|mem| Box::new(LinearMemoryProxy { mem }) as Box<dyn RuntimeLinearMemory>)
     }
 }

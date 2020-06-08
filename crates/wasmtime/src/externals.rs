@@ -902,8 +902,8 @@ pub unsafe trait MemoryCreator: Send + Sync {
     fn new_memory(
         &self,
         ty: MemoryType,
-        reserved_size: Option<u64>,
-        guard_size: u64,
+        reserved_size_in_bytes: Option<u64>,
+        guard_size_in_bytes: u64,
     ) -> Result<Box<dyn LinearMemory>, String>;
 }
 
