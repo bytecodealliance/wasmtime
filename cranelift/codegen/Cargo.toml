@@ -20,6 +20,7 @@ hashbrown = { version = "0.7", optional = true }
 target-lexicon = "0.10"
 log = { version = "0.4.6", default-features = false }
 serde = { version = "1.0.94", features = ["derive"], optional = true }
+bincode = { version = "1.2.1", optional = true }
 gimli = { version = "0.21.0", default-features = false, features = ["write"], optional = true }
 smallvec = { version = "1.0.0" }
 thiserror = "1.0.4"
@@ -73,6 +74,10 @@ all-arch = [
 
 # For dependent crates that want to serialize some parts of cranelift
 enable-serde = ["serde"]
+
+# Allow snapshotting regalloc test cases. Useful only to report bad register
+# allocation failures, or for regalloc.rs developers.
+regalloc-snapshot = ["bincode", "regalloc/enable-serde"]
 
 # Recompile our optimizations that are written in the `peepmatic` DSL into a
 # compact finite-state transducer automaton.

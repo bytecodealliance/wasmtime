@@ -368,6 +368,7 @@ dependencies = [
 name = "cranelift-codegen"
 version = "0.64.0"
 dependencies = [
+ "bincode",
  "byteorder",
  "cranelift-bforest",
  "cranelift-codegen-meta",
@@ -1669,6 +1670,7 @@ checksum = "7c03092d79e0fd610932d89ed53895a38c0dd3bcd317a0046e69940de32f1d95"
 dependencies = [
  "log",
  "rustc-hash",
+ "serde",
  "smallvec",
 ]
 
