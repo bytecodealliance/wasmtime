@@ -200,6 +200,7 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
 
 /// A `RelocSink` implementation that does nothing, which is convenient when
 /// compiling code that does not relocate anything.
+#[derive(Default)]
 pub struct NullRelocSink {}
 
 impl RelocSink for NullRelocSink {
@@ -219,6 +220,7 @@ impl RelocSink for NullRelocSink {
 
 /// A `TrapSink` implementation that does nothing, which is convenient when
 /// compiling code that does not rely on trapping semantics.
+#[derive(Default)]
 pub struct NullTrapSink {}
 
 impl TrapSink for NullTrapSink {

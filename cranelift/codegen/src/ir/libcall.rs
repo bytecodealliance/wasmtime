@@ -32,6 +32,12 @@ pub enum LibCall {
     UremI64,
     /// srem.i64
     SremI64,
+    /// ishl.i64
+    IshlI64,
+    /// ushr.i64
+    UshrI64,
+    /// sshr.i64
+    SshrI64,
     /// ceil.f32
     CeilF32,
     /// ceil.f64
@@ -75,6 +81,9 @@ impl FromStr for LibCall {
             "SdivI64" => Ok(Self::SdivI64),
             "UremI64" => Ok(Self::UremI64),
             "SremI64" => Ok(Self::SremI64),
+            "IshlI64" => Ok(Self::IshlI64),
+            "UshrI64" => Ok(Self::UshrI64),
+            "SshrI64" => Ok(Self::SshrI64),
             "CeilF32" => Ok(Self::CeilF32),
             "CeilF64" => Ok(Self::CeilF64),
             "FloorF32" => Ok(Self::FloorF32),
@@ -105,6 +114,9 @@ impl LibCall {
                 Opcode::Sdiv => Self::SdivI64,
                 Opcode::Urem => Self::UremI64,
                 Opcode::Srem => Self::SremI64,
+                Opcode::Ishl => Self::IshlI64,
+                Opcode::Ushr => Self::UshrI64,
+                Opcode::Sshr => Self::SshrI64,
                 _ => return None,
             },
             types::F32 => match opcode {

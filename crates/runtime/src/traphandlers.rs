@@ -589,11 +589,6 @@ impl<'a> CallThreadState<'a> {
             return ptr::null();
         }
 
-        // If this fault wasn't in wasm code, then it's not our problem
-        if !(self.is_wasm_code)(pc as usize) {
-            return ptr::null();
-        }
-
         // First up see if any instance registered has a custom trap handler,
         // in which case run them all. If anything handles the trap then we
         // return that the trap was handled.
@@ -601,6 +596,11 @@ impl<'a> CallThreadState<'a> {
             if call_handler(handler) {
                 return 1 as *const _;
             }
+        }
+
+        // If this fault wasn't in wasm code, then it's not our problem
+        if !(self.is_wasm_code)(pc as usize) {
+            return ptr::null();
         }
 
         // TODO: stack overflow can happen at any random time (i.e. in malloc()

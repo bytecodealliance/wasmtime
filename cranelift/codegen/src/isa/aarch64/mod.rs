@@ -1,5 +1,6 @@
 //! ARM 64-bit Instruction Set Architecture.
 
+use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
 use crate::isa::Builder as IsaBuilder;
 use crate::machinst::{
@@ -91,6 +92,19 @@ impl MachBackend for AArch64Backend {
 
     fn reg_universe(&self) -> &RealRegUniverse {
         &self.reg_universe
+    }
+
+    fn unsigned_add_overflow_condition(&self) -> IntCC {
+        // Unsigned `>=`; this corresponds to the carry flag set on aarch64, which happens on
+        // overflow of an add.
+        IntCC::UnsignedGreaterThanOrEqual
+    }
+
+    fn unsigned_sub_overflow_condition(&self) -> IntCC {
+        // unsigned `<`; this corresponds to the carry flag cleared on aarch64, which happens on
+        // underflow of a subtract (aarch64 follows a carry-cleared-on-borrow convention, the
+        // opposite of x86).
+        IntCC::UnsignedLessThan
     }
 }
 

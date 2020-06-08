@@ -8,6 +8,7 @@ mod tests {
 
     const WAT1: &str = r#"
 (module
+  (func $hostcall_read (import "" "hostcall_read") (result i32))
   (func $read (export "read") (result i32)
     (i32.load (i32.const 0))
   )
@@ -20,6 +21,9 @@ mod tests {
         (i32.const 65536)
       )
     )
+  )
+  (func (export "hostcall_read") (result i32)
+    call $hostcall_read
   )
   (func $start
     (i32.store (i32.const 0) (i32.const 123))
@@ -86,12 +90,53 @@ mod tests {
         }
     }
 
+    fn make_externs(store: &Store, module: &Module) -> Vec<Extern> {
+        module
+            .imports()
+            .map(|import| {
+                assert_eq!("hostcall_read", import.name());
+                let func = Func::wrap(&store, {
+                    move |caller: Caller<'_>| {
+                        let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
+                        let memory = unsafe { mem.data_unchecked_mut() };
+                        use std::convert::TryInto;
+                        i32::from_le_bytes(memory[0..4].try_into().unwrap())
+                    }
+                });
+                wasmtime::Extern::Func(func)
+            })
+            .collect::<Vec<_>>()
+    }
+
+    // This test will only succeed if the SIGSEGV signal originating from the
+    // hostcall can be handled.
+    #[test]
+    fn test_custom_signal_handler_single_instance_hostcall() -> Result<()> {
+        let engine = Engine::new(&Config::default());
+        let store = Store::new(&engine);
+        let module = Module::new(&engine, WAT1)?;
+
+        let instance = Instance::new(&store, &module, &make_externs(&store, &module))?;
+
+        let (base, length) = set_up_memory(&instance);
+        unsafe {
+            store.set_signal_handler(move |signum, siginfo, _| {
+                handle_sigsegv(base, length, signum, siginfo)
+            });
+        }
+        println!("calling hostcall_read...");
+        let result = invoke_export(&instance, "hostcall_read").unwrap();
+        assert_eq!(123, result[0].unwrap_i32());
+        Ok(())
+    }
+
     #[test]
     fn test_custom_signal_handler_single_instance() -> Result<()> {
         let engine = Engine::new(&Config::default());
         let store = Store::new(&engine);
         let module = Module::new(&engine, WAT1)?;
-        let instance = Instance::new(&store, &module, &[])?;
+
+        let instance = Instance::new(&store, &module, &make_externs(&store, &module))?;
 
         let (base, length) = set_up_memory(&instance);
         unsafe {
@@ -154,7 +199,7 @@ mod tests {
 
         // Set up multiple instances
 
-        let instance1 = Instance::new(&store, &module, &[])?;
+        let instance1 = Instance::new(&store, &module, &make_externs(&store, &module))?;
         let instance1_handler_triggered = Rc::new(AtomicBool::new(false));
 
         unsafe {
@@ -196,7 +241,8 @@ mod tests {
             );
         }
 
-        let instance2 = Instance::new(&store, &module, &[]).expect("failed to instantiate module");
+        let instance2 = Instance::new(&store, &module, &make_externs(&store, &module))
+            .expect("failed to instantiate module");
         let instance2_handler_triggered = Rc::new(AtomicBool::new(false));
 
         unsafe {
@@ -245,7 +291,7 @@ mod tests {
 
         // instance1 which defines 'read'
         let module1 = Module::new(&engine, WAT1)?;
-        let instance1 = Instance::new(&store, &module1, &[])?;
+        let instance1 = Instance::new(&store, &module1, &make_externs(&store, &module1))?;
         let (base1, length1) = set_up_memory(&instance1);
         unsafe {
             store.set_signal_handler(move |signum, siginfo, _| {

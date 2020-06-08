@@ -13,6 +13,7 @@ use crate::isa::encoding::base_size;
 use crate::isa::encoding::{Encoding, RecipeSizing};
 use crate::isa::RegUnit;
 use crate::isa::{self, TargetIsa};
+use crate::legalizer::expand_as_libcall;
 use crate::predicates;
 use crate::regalloc::RegDiversions;
 
@@ -1428,10 +1429,20 @@ fn convert_ushr(
             pos.func.dfg.replace(inst).x86_psrl(arg0, shift_index);
         } else if arg0_type == I64 {
             // 64 bit shifts need to be legalized on x86_32.
-            let value = expand_dword_to_xmm(&mut pos, arg0, arg0_type);
-            let amount = expand_dword_to_xmm(&mut pos, arg1, arg1_type);
-            let shifted = pos.ins().x86_psrl(value, amount);
-            contract_dword_from_xmm(&mut pos, inst, shifted, arg0_type);
+            let x86_isa = isa
+                .as_any()
+                .downcast_ref::<isa::x86::Isa>()
+                .expect("the target ISA must be x86 at this point");
+            if x86_isa.isa_flags.has_sse41() {
+                // if we have pinstrq/pextrq (SSE 4.1), legalize to that
+                let value = expand_dword_to_xmm(&mut pos, arg0, arg0_type);
+                let amount = expand_dword_to_xmm(&mut pos, arg1, arg1_type);
+                let shifted = pos.ins().x86_psrl(value, amount);
+                contract_dword_from_xmm(&mut pos, inst, shifted, arg0_type);
+            } else {
+                // otherwise legalize to libcall
+                expand_as_libcall(inst, func, isa);
+            }
         } else {
             // Everything else should be already legal.
             unreachable!()
@@ -1502,10 +1513,20 @@ fn convert_ishl(
             pos.func.dfg.replace(inst).x86_psll(arg0, shift_index);
         } else if arg0_type == I64 {
             // 64 bit shifts need to be legalized on x86_32.
-            let value = expand_dword_to_xmm(&mut pos, arg0, arg0_type);
-            let amount = expand_dword_to_xmm(&mut pos, arg1, arg1_type);
-            let shifted = pos.ins().x86_psll(value, amount);
-            contract_dword_from_xmm(&mut pos, inst, shifted, arg0_type);
+            let x86_isa = isa
+                .as_any()
+                .downcast_ref::<isa::x86::Isa>()
+                .expect("the target ISA must be x86 at this point");
+            if x86_isa.isa_flags.has_sse41() {
+                // if we have pinstrq/pextrq (SSE 4.1), legalize to that
+                let value = expand_dword_to_xmm(&mut pos, arg0, arg0_type);
+                let amount = expand_dword_to_xmm(&mut pos, arg1, arg1_type);
+                let shifted = pos.ins().x86_psll(value, amount);
+                contract_dword_from_xmm(&mut pos, inst, shifted, arg0_type);
+            } else {
+                // otherwise legalize to libcall
+                expand_as_libcall(inst, func, isa);
+            }
         } else {
             // Everything else should be already legal.
             unreachable!()
