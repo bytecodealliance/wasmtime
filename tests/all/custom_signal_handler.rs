@@ -241,7 +241,8 @@ mod tests {
             );
         }
 
-        let instance2 = Instance::new(&store, &module, &make_externs(&store, &module)).expect("failed to instantiate module");
+        let instance2 = Instance::new(&store, &module, &make_externs(&store, &module))
+            .expect("failed to instantiate module");
         let instance2_handler_triggered = Rc::new(AtomicBool::new(false));
 
         unsafe {
