@@ -211,7 +211,10 @@ impl Backend for FaerieBackend {
             ref data_decls,
             ref function_relocs,
             ref data_relocs,
+            section: ref datasection
         } = data_ctx.description();
+
+        assert!(datasection.is_none(), "Custom sections not supported");
 
         for &(offset, id) in function_relocs {
             let to = &namespace.get_function_decl(&function_decls[id]).name;

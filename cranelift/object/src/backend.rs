@@ -284,6 +284,7 @@ impl Backend for ObjectBackend {
                 };
                 self.object.section_id(section_kind)
             } else {
+                assert!(!tls, "Tls data cannot be in named section");
                 let (seg, sec) = &datasection.as_ref().unwrap();
                 self.object.add_section(seg.clone().into_bytes(), sec.clone().into_bytes(), 
                     if writable { SectionKind::Data } else { SectionKind::ReadOnlyData }
