@@ -201,7 +201,7 @@ enum WasiInstance {
     Snapshot0(WasiSnapshot0),
 }
 
-fn create_snapshot0_instance(store: &Store, config: wasi_config_t) -> Result<WasiInstance, String> {
+fn create_snapshot0_instance(store: &Store, config: wasi_config_t) -> Result<WasiInstance> {
     let mut builder = WasiSnapshot0CtxBuilder::new();
     if config.inherit_args {
         builder.inherit_args();
@@ -233,11 +233,11 @@ fn create_snapshot0_instance(store: &Store, config: wasi_config_t) -> Result<Was
     }
     Ok(WasiInstance::Snapshot0(WasiSnapshot0::new(
         store,
-        builder.build().map_err(|e| e.to_string())?,
+        builder.build()?,
     )))
 }
 
-fn wasi_preview_builder(config: wasi_config_t) -> Result<WasiPreview1CtxBuilder> {
+fn create_preview1_instance(store: &Store, config: wasi_config_t) -> Result<WasiInstance> {
     use std::convert::TryFrom;
     use wasi_common::OsFile;
     let mut builder = WasiPreview1CtxBuilder::new();
@@ -269,18 +269,9 @@ fn wasi_preview_builder(config: wasi_config_t) -> Result<WasiPreview1CtxBuilder>
     for preopen in config.preopens {
         builder.preopened_dir(preopen.0, preopen.1);
     }
-    Ok(builder)
-}
-
-fn create_preview1_instance(store: &Store, config: wasi_config_t) -> Result<WasiInstance, String> {
     Ok(WasiInstance::Preview1(WasiPreview1::new(
         store,
-        wasi_preview_builder(config)
-            .and_then(|mut b| {
-                let b = b.build()?;
-                Ok(b)
-            })
-            .map_err(|e| e.to_string())?,
+        builder.build()?,
     )))
 }
 
@@ -309,8 +300,10 @@ pub unsafe extern "C" fn wasi_instance_new(
     let store = &store.store;
 
     let result = match CStr::from_ptr(name).to_str().unwrap_or("") {
-        "wasi_snapshot_preview1" => create_preview1_instance(store, *config),
-        "wasi_unstable" => create_snapshot0_instance(store, *config),
+        "wasi_snapshot_preview1" => {
+            create_preview1_instance(store, *config).map_err(|e| e.to_string())
+        }
+        "wasi_unstable" => create_snapshot0_instance(store, *config).map_err(|e| e.to_string()),
         _ => Err("unsupported WASI version".into()),
     };
 
