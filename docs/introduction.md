@@ -7,7 +7,7 @@ or library calls wasmtime to load and run Wasm code. Or, the Wasmtime command
 line utility can run standalone Wasm programs.
 
 Wasm programs are generally written in high-level languages, and compiled to
-Wasm.  [WebAssembly System Interface][Wasi] (Wasi) provides a library of
+Wasm.  [WebAssembly System Interface][WASI] (WASI) provides a library of
 essential functions, such as reading files, somewhat similar libc. Wasmtime
 enables them to run inside another application.
 
@@ -30,7 +30,7 @@ contributions are welcome!
 [github]: https://github.com/bytecodealliance/wasmtime
 [BA]: https://bytecodealliance.org/
 [Wasm]: https://webassembly.org/
-[Wasi]: https://wasi.dev
+[WASI]: https://wasi.dev
 [without a web browser]: https://webassembly.org/docs/non-web/
 [Wasm-bindgen]: https://rustwasm.github.io/docs/wasm-bindgen/
 [issue]: https://github.com/bytecodealliance/wasmtime/issues/new
