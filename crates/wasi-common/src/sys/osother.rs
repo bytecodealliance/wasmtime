@@ -22,6 +22,20 @@ pub trait OsOtherExt {
 /// sockets, streams, etc. As such, when redirecting stdio within `WasiCtxBuilder`, the redirected
 /// pipe should be encapsulated within this instance _and not_ `OsFile` which represents a regular
 /// OS file.
+///
+/// # Constructing `OsOther`
+///
+/// `OsOther` can currently only be constructed from `std::fs::File` using
+/// the `std::convert::TryFrom` trait:
+///
+/// ```rust,no_run
+/// use std::fs::OpenOptions;
+/// use std::convert::TryFrom;
+/// use wasi_common::OsOther;
+///
+/// let pipe = OpenOptions::new().read(true).open("a_pipe").unwrap();
+/// let os_other = OsOther::try_from(pipe).unwrap();
+/// ```
 #[derive(Debug)]
 pub struct OsOther {
     file_type: Filetype,

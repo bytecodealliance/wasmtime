@@ -7,8 +7,22 @@ use yanix::dir::Dir;
 
 #[derive(Debug)]
 /// A directory in the operating system's file system. Its impl of `Handle` is
-/// in sys::osdir. This type is exposed to all other modules as
-/// sys::osdir::OsDir when configured.
+/// in `sys::osdir`. This type is exposed to all other modules as
+/// `sys::osdir::OsDir` when configured.
+///
+/// # Constructing `OsDir`
+///
+/// `OsDir` can currently only be constructed from `std::fs::File` using
+/// the `std::convert::TryFrom` trait:
+///
+/// ```rust,no_run
+/// use std::fs::OpenOptions;
+/// use std::convert::TryFrom;
+/// use wasi_common::OsDir;
+///
+/// let dir = OpenOptions::new().read(true).open("some_dir").unwrap();
+/// let os_dir = OsDir::try_from(dir).unwrap();
+/// ```
 pub struct OsDir {
     pub(crate) rights: Cell<HandleRights>,
     pub(crate) handle: RawOsHandle,

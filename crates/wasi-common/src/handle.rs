@@ -61,7 +61,24 @@ impl fmt::Display for HandleRights {
     }
 }
 
-// TODO docs
+/// Generic interface for all WASI-compatible handles. We currently group these into two groups:
+/// * OS-based resources (actual, real resources): `OsFile`, `OsDir`, `OsOther`, and `Stdio`,
+/// * virtual files and directories: VirtualDir`, and `InMemoryFile`.
+///
+/// # Constructing `Handle`s representing OS-based resources
+///
+/// Each type of handle can either be constructed directly (see docs entry for a specific handle
+/// type such as `OsFile`), or you can let the `wasi_common` crate's machinery work it out
+/// automatically for you using `std::convert::TryInto` from `std::fs::File`:
+///
+/// ```rust,no_run
+/// use std::convert::TryInto;
+/// use wasi_common::Handle;
+/// use std::fs::OpenOptions;
+///
+/// let some_file = OpenOptions::new().read(true).open("some_file").unwrap();
+/// let wasi_handle: Box<dyn Handle> = some_file.try_into().unwrap();
+/// ```
 pub trait Handle {
     fn as_any(&self) -> &dyn Any;
     fn try_clone(&self) -> io::Result<Box<dyn Handle>>;
