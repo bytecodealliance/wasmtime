@@ -6,7 +6,7 @@
 use crate::binemit::CodeOffset;
 use crate::ir::types::{
     B1, B16, B16X8, B32, B32X4, B64, B64X2, B8, B8X16, F32, F32X2, F32X4, F64, F64X2, FFLAGS, I16,
-    I16X4, I16X8, I32, I32X2, I32X4, I64, I64X2, I8, I8X16, I8X8, IFLAGS,
+    I16X4, I16X8, I32, I32X2, I32X4, I64, I64X2, I8, I8X16, I8X8, IFLAGS, R32, R64,
 };
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
@@ -2081,6 +2081,8 @@ impl MachInst for Inst {
                     || ty == B32
                     || ty == I64
                     || ty == B64
+                    || ty == R32
+                    || ty == R64
             );
             Inst::load_constant(to_reg, value)
         }
@@ -2102,7 +2104,7 @@ impl MachInst for Inst {
 
     fn rc_for_type(ty: Type) -> CodegenResult<RegClass> {
         match ty {
-            I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 => Ok(RegClass::I64),
+            I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 | R32 | R64 => Ok(RegClass::I64),
             F32 | F64 => Ok(RegClass::V128),
             IFLAGS | FFLAGS => Ok(RegClass::I64),
             B8X16 | I8X16 | B16X8 | I16X8 | B32X4 | I32X4 | B64X2 | I64X2 | F32X4 | F64X2 => {

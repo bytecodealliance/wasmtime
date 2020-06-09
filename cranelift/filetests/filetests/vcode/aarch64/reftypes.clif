@@ -1,0 +1,65 @@
+test compile
+target aarch64
+
+function %f0(r64) -> r64 {
+block0(v0: r64):
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f1(r32) -> r32 {
+block0(v0: r32):
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f2(r64) -> b1 {
+block0(v0: r64):
+  v1 = is_null v0
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, #0
+; nextln: cset x0, eq
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f3(r64) -> b1 {
+block0(v0: r64):
+  v1 = is_invalid v0
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: adds xzr, x0, #1
+; nextln: cset x0, eq
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f4() -> r64 {
+block0:
+  v0 = null.r64
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x0, #0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret

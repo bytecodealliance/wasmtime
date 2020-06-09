@@ -400,6 +400,7 @@ fn in_int_reg(ty: ir::Type) -> bool {
     match ty {
         types::I8 | types::I16 | types::I32 | types::I64 => true,
         types::B1 | types::B8 | types::B16 | types::B32 | types::B64 => true,
+        types::R32 | types::R64 => true,
         _ => false,
     }
 }
@@ -653,12 +654,12 @@ fn load_stack(mem: MemArg, into_reg: Writable<Reg>, ty: Type) -> Inst {
             mem,
             srcloc: None,
         },
-        types::B32 | types::I32 => Inst::ULoad32 {
+        types::B32 | types::I32 | types::R32 => Inst::ULoad32 {
             rd: into_reg,
             mem,
             srcloc: None,
         },
-        types::B64 | types::I64 => Inst::ULoad64 {
+        types::B64 | types::I64 | types::R64 => Inst::ULoad64 {
             rd: into_reg,
             mem,
             srcloc: None,
@@ -689,12 +690,12 @@ fn store_stack(mem: MemArg, from_reg: Reg, ty: Type) -> Inst {
             mem,
             srcloc: None,
         },
-        types::B32 | types::I32 => Inst::Store32 {
+        types::B32 | types::I32 | types::R32 => Inst::Store32 {
             rd: from_reg,
             mem,
             srcloc: None,
         },
-        types::B64 | types::I64 => Inst::Store64 {
+        types::B64 | types::I64 | types::R64 => Inst::Store64 {
             rd: from_reg,
             mem,
             srcloc: None,
