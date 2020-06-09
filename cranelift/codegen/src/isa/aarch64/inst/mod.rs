@@ -5,8 +5,8 @@
 
 use crate::binemit::CodeOffset;
 use crate::ir::types::{
-    B1, B16, B32, B64, B8, B8X16, F32, F32X2, F64, FFLAGS, I128, I16, I16X4, I16X8, I32, I32X2,
-    I32X4, I64, I64X2, I8, I8X16, I8X8, IFLAGS,
+    B1, B16, B16X8, B32, B32X4, B64, B64X2, B8, B8X16, F32, F32X2, F64, FFLAGS, I128, I16, I16X4,
+    I16X8, I32, I32X2, I32X4, I64, I64X2, I8, I8X16, I8X8, IFLAGS,
 };
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
@@ -1977,8 +1977,7 @@ impl MachInst for Inst {
             I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 => Ok(RegClass::I64),
             F32 | F64 => Ok(RegClass::V128),
             IFLAGS | FFLAGS => Ok(RegClass::I64),
-            I8X16 | I16X8 | I32X4 | I64X2 => Ok(RegClass::V128),
-            B8X16 => Ok(RegClass::V128),
+            B8X16 | I8X16 | B16X8 | I16X8 | B32X4 | I32X4 | B64X2 | I64X2 => Ok(RegClass::V128),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty

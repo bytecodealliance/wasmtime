@@ -716,8 +716,8 @@ pub fn ty_bits(ty: Type) -> usize {
         B64 | I64 | F64 => 64,
         B128 | I128 => 128,
         IFLAGS | FFLAGS => 32,
-        I8X8 | I16X4 | I32X2 => 64,
-        B8X16 | I8X16 | I16X8 | I32X4 | I64X2 => 128,
+        B8X8 | I8X8 | B16X4 | I16X4 | B32X2 | I32X2 => 64,
+        B8X16 | I8X16 | B16X8 | I16X8 | B32X4 | I32X4 | B64X2 | I64X2 => 128,
         _ => panic!("ty_bits() on unknown type: {:?}", ty),
     }
 }
