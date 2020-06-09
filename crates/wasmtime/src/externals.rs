@@ -879,7 +879,7 @@ pub unsafe trait MemoryCreator: Send + Sync {
     /// The type of memory being created is specified by `ty` which indicates
     /// both the minimum and maximum size, in wasm pages.
     ///
-    /// The `reserved_size` value indicates the expected size of the
+    /// The `reserved_size_in_bytes` value indicates the expected size of the
     /// reservation that is to be made for this memory. If this value is `None`
     /// than the implementation is free to allocate memory as it sees fit. If
     /// the value is `Some`, however, then the implementation is expected to
@@ -887,23 +887,23 @@ pub unsafe trait MemoryCreator: Send + Sync {
     /// size at the end. Note that this reservation need only be a virtual
     /// memory reservation, physical memory does not need to be allocated
     /// immediately. In this case `grow` should never move the base pointer and
-    /// the maximum size of `ty` is guaranteed to fit within `reserved_size`.
+    /// the maximum size of `ty` is guaranteed to fit within `reserved_size_in_bytes`.
     ///
-    /// The `guard_size` parameter indicates how many bytes of space, after the
+    /// The `guard_size_in_bytes` parameter indicates how many bytes of space, after the
     /// memory allocation, is expected to be unmapped. JIT code will elide
-    /// bounds checks based on the `guard_size` provided, so for JIT code to
+    /// bounds checks based on the `guard_size_in_bytes` provided, so for JIT code to
     /// work correctly the memory returned will need to be properly guarded with
-    /// `guard_size` bytes left unmapped after the base allocation.
+    /// `guard_size_in_bytes` bytes left unmapped after the base allocation.
     ///
-    /// Note that the `reserved_size` and `guard_size` options are tuned from
+    /// Note that the `reserved_size_in_bytes` and `guard_size_in_bytes` options are tuned from
     /// the various [`Config`](crate::Config) methods about memory
     /// sizes/guards. Additionally these two values are guaranteed to be
     /// multiples of the system page size.
     fn new_memory(
         &self,
         ty: MemoryType,
-        reserved_size: Option<u64>,
-        guard_size: u64,
+        reserved_size_in_bytes: Option<u64>,
+        guard_size_in_bytes: u64,
     ) -> Result<Box<dyn LinearMemory>, String>;
 }
 
