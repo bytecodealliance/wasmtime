@@ -408,112 +408,100 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     fn lower_edge(&mut self, pred: Block, inst: Inst, succ: Block) -> CodegenResult<()> {
         debug!("lower_edge: pred {} succ {}", pred, succ);
 
-        let mut src_regs: SmallVec<[Option<Reg>; 16]> = SmallVec::new();
-        let mut src_consts: SmallVec<[Option<u64>; 16]> = SmallVec::new();
-        let mut dst_regs: SmallVec<[Writable<Reg>; 16]> = SmallVec::new();
+        let num_args = self.f.dfg.block_params(succ).len();
+        debug_assert!(num_args == self.f.dfg.inst_variable_args(inst).len());
 
-        fn overlap(a: &[Option<Reg>], b: &[Writable<Reg>]) -> bool {
-            let mut set = FxHashSet::default();
-            for &maybe_reg in a {
-                if let Some(r) = maybe_reg {
-                    set.insert(r);
-                }
-            }
-            for &reg in b {
-                if set.contains(&reg.to_reg()) {
-                    return true;
-                }
-            }
-            false
+        // Most blocks have no params, so skip all the hoop-jumping below and make an early exit.
+        if num_args == 0 {
+            return Ok(());
         }
 
-        // Create a temporary for each block parameter.
-        let phi_classes: SmallVec<[Type; 16]> = self
+        // Make up two vectors of info:
+        //
+        // * one for dsts which are to be assigned constants.  We'll deal with those second, so
+        //   as to minimise live ranges.
+        //
+        // * one for dsts whose sources are non-constants.
+
+        let mut const_bundles = SmallVec::<[(Type, Writable<Reg>, u64); 16]>::new();
+        let mut var_bundles = SmallVec::<[(Type, Writable<Reg>, Reg); 16]>::new();
+
+        let mut i = 0;
+        for (dst_val, src_val) in self
             .f
             .dfg
             .block_params(succ)
             .iter()
-            .map(|p| self.f.dfg.value_type(*p))
-            .collect();
+            .zip(self.f.dfg.inst_variable_args(inst).iter())
+        {
+            let src_val = self.f.dfg.resolve_aliases(*src_val);
+            let ty = self.f.dfg.value_type(src_val);
 
-        // Create all of the phi uses (reads) from jump args to temps.
-        // Round up all the source and destination regs
-        for (i, arg) in self.f.dfg.inst_variable_args(inst).iter().enumerate() {
-            let arg = self.f.dfg.resolve_aliases(*arg);
-            let input = self.get_input_for_val(inst, arg);
-            debug!("jump arg {} is {}, reg {:?}", i, arg, input.reg);
+            debug_assert!(ty == self.f.dfg.value_type(*dst_val));
+            let dst_reg = self.value_regs[*dst_val];
+
+            let input = self.get_input_for_val(inst, src_val);
+            debug!("jump arg {} is {}, reg {:?}", i, src_val, input.reg);
+            i += 1;
+
             if let Some(c) = input.constant {
-                src_consts.push(Some(c));
-                src_regs.push(None);
+                const_bundles.push((ty, Writable::from_reg(dst_reg), c));
             } else {
                 self.use_input_reg(input);
-                src_regs.push(Some(input.reg));
-                src_consts.push(None);
+                let src_reg = input.reg;
+                // Skip self-assignments.  Not only are they pointless, they falsely trigger the
+                // overlap-check below and hence can cause a lot of unnecessary copying through
+                // temporaries.
+                if dst_reg != src_reg {
+                    var_bundles.push((ty, Writable::from_reg(dst_reg), src_reg));
+                }
             }
         }
-        for (i, param) in self.f.dfg.block_params(succ).iter().enumerate() {
-            debug!("bb arg {} is {}", i, param);
-            dst_regs.push(Writable::from_reg(self.value_regs[*param]));
-        }
-        debug_assert!(src_regs.len() == dst_regs.len());
-        debug_assert!(src_consts.len() == dst_regs.len());
-        debug_assert!(phi_classes.len() == dst_regs.len());
-        debug!(
-            "src_regs = {:?} src_consts = {:?} dst_regs = {:?}",
-            src_regs, src_consts, dst_regs
-        );
 
-        // If, as is mostly the case, the source and destination register
-        // sets are non overlapping, then we can copy directly, so as to
-        // save the register allocator work.
-        if !overlap(&src_regs[..], &dst_regs[..]) {
-            for i in 0..dst_regs.len() {
-                let src_reg = src_regs[i];
-                let src_const = src_consts[i];
-                let dst_reg = dst_regs[i];
-                let ty = phi_classes[i];
-                if let Some(r) = src_reg {
-                    self.emit(I::gen_move(dst_reg, r, ty));
-                } else {
-                    // Generate constants fresh in phi-edge to avoid long
-                    // live-ranges. Note that these are also excluded from the
-                    // overlap check, which increases the chance that we don't
-                    // have to do a two-stage copy.
-                    for inst in I::gen_constant(dst_reg, src_const.unwrap(), ty).into_iter() {
-                        self.emit(inst);
-                    }
-                }
+        // Deal first with the moves whose sources are variables.
+
+        // FIXME: use regalloc.rs' SparseSetU here.  This would avoid all heap allocation
+        // for cases of up to circa 16 args.  Currently not possible because regalloc.rs
+        // does not export it.
+        let mut src_reg_set = FxHashSet::<Reg>::default();
+        for (_, _, src_reg) in &var_bundles {
+            src_reg_set.insert(*src_reg);
+        }
+        let mut overlaps = false;
+        for (_, dst_reg, _) in &var_bundles {
+            if src_reg_set.contains(&dst_reg.to_reg()) {
+                overlaps = true;
+                break;
+            }
+        }
+
+        // If, as is mostly the case, the source and destination register sets are non
+        // overlapping, then we can copy directly, so as to save the register allocator work.
+        if !overlaps {
+            for (ty, dst_reg, src_reg) in &var_bundles {
+                self.emit(I::gen_move(*dst_reg, *src_reg, *ty));
             }
         } else {
             // There's some overlap, so play safe and copy via temps.
-            let mut tmp_regs: SmallVec<[Writable<Reg>; 16]> = SmallVec::new();
-            for &ty in &phi_classes {
-                tmp_regs.push(self.alloc_tmp(I::rc_for_type(ty)?, ty));
+            let mut tmp_regs = SmallVec::<[Writable<Reg>; 16]>::new();
+            for (ty, _, _) in &var_bundles {
+                tmp_regs.push(self.alloc_tmp(I::rc_for_type(*ty)?, *ty));
             }
-
-            debug!("phi_temps = {:?}", tmp_regs);
-            debug_assert!(tmp_regs.len() == src_regs.len());
-
-            for i in 0..dst_regs.len() {
-                let src_reg = src_regs[i];
-                let tmp_reg = tmp_regs[i];
-                let ty = phi_classes[i];
-                let src_const = src_consts[i];
-                if let Some(src_reg) = src_reg {
-                    self.emit(I::gen_move(tmp_reg, src_reg, ty));
-                } else {
-                    for inst in I::gen_constant(tmp_reg, src_const.unwrap(), ty).into_iter() {
-                        self.emit(inst);
-                    }
-                }
+            for ((ty, _, src_reg), tmp_reg) in var_bundles.iter().zip(tmp_regs.iter()) {
+                self.emit(I::gen_move(*tmp_reg, *src_reg, *ty));
             }
-            for i in 0..dst_regs.len() {
-                let tmp_reg = tmp_regs[i].to_reg();
-                let dst_reg = dst_regs[i];
-                let ty = phi_classes[i];
-                self.emit(I::gen_move(dst_reg, tmp_reg, ty));
+            for ((ty, dst_reg, _), tmp_reg) in var_bundles.iter().zip(tmp_regs.iter()) {
+                self.emit(I::gen_move(*dst_reg, (*tmp_reg).to_reg(), *ty));
             }
         }
+
+        // Now, finally, deal with the moves whose sources are constants.
+        for (ty, dst_reg, const_u64) in &const_bundles {
+            for inst in I::gen_constant(*dst_reg, *const_u64, *ty).into_iter() {
+                self.emit(inst);
+            }
+        }
+
         Ok(())
     }
 
