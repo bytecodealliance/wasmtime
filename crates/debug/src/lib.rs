@@ -3,117 +3,99 @@
 #![allow(clippy::cast_ptr_alignment)]
 
 use anyhow::Error;
-use faerie::{Artifact, Decl};
-use gimli::write::{Address, FrameTable};
+use faerie::{Artifact, Decl, SectionKind};
 use more_asserts::assert_gt;
 use target_lexicon::BinaryFormat;
-use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
-use wasmtime_environ::{Compilation, ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
+use wasmtime_environ::isa::TargetIsa;
 
 pub use crate::read_debuginfo::{read_debuginfo, DebugInfoData, WasmFileInfo};
-pub use crate::transform::transform_dwarf;
-pub use crate::write_debuginfo::{emit_dwarf, ResolvedSymbol, SymbolResolver};
+pub use crate::write_debuginfo::{emit_dwarf, DwarfSection};
 
 mod gc;
 mod read_debuginfo;
 mod transform;
 mod write_debuginfo;
 
-struct FunctionRelocResolver {}
-impl SymbolResolver for FunctionRelocResolver {
-    fn resolve_symbol(&self, symbol: usize, addend: i64) -> ResolvedSymbol {
-        let name = format!("_wasm_function_{}", symbol);
-        ResolvedSymbol::Reloc { name, addend }
+pub fn write_debugsections(obj: &mut Artifact, sections: Vec<DwarfSection>) -> Result<(), Error> {
+    let (bodies, relocs) = sections
+        .into_iter()
+        .map(|s| ((s.name.clone(), s.body), (s.name, s.relocs)))
+        .unzip::<_, _, Vec<_>, Vec<_>>();
+    for (name, body) in bodies {
+        obj.declare_with(name, Decl::section(SectionKind::Debug), body)?;
     }
-}
-
-fn create_frame_table<'a>(
-    isa: &dyn TargetIsa,
-    infos: impl Iterator<Item = &'a Option<UnwindInfo>>,
-) -> Option<FrameTable> {
-    let mut table = FrameTable::default();
-
-    let cie_id = table.add_cie(isa.create_systemv_cie()?);
-
-    for (i, info) in infos.enumerate() {
-        if let Some(UnwindInfo::SystemV(info)) = info {
-            table.add_fde(
-                cie_id,
-                info.to_fde(Address::Symbol {
-                    symbol: i,
-                    addend: 0,
-                }),
-            );
+    for (name, relocs) in relocs {
+        for reloc in relocs {
+            obj.link_with(
+                faerie::Link {
+                    from: &name,
+                    to: &reloc.target,
+                    at: reloc.offset as u64,
+                },
+                faerie::Reloc::Debug {
+                    size: reloc.size,
+                    addend: reloc.addend,
+                },
+            )?;
         }
     }
 
-    Some(table)
-}
-
-pub fn emit_debugsections(
-    obj: &mut Artifact,
-    vmctx_info: &ModuleVmctxInfo,
-    isa: &dyn TargetIsa,
-    debuginfo_data: &DebugInfoData,
-    at: &ModuleAddressMap,
-    ranges: &ValueLabelsRanges,
-    compilation: &Compilation,
-) -> Result<(), Error> {
-    let resolver = FunctionRelocResolver {};
-    let dwarf = transform_dwarf(isa, debuginfo_data, at, vmctx_info, ranges)?;
-    let frame_table = create_frame_table(isa, compilation.into_iter().map(|f| &f.unwind_info));
-
-    emit_dwarf(obj, dwarf, &resolver, frame_table)?;
     Ok(())
 }
 
-struct ImageRelocResolver<'a> {
-    func_offsets: &'a Vec<u64>,
-}
-
-impl<'a> SymbolResolver for ImageRelocResolver<'a> {
-    fn resolve_symbol(&self, symbol: usize, addend: i64) -> ResolvedSymbol {
-        let func_start = self.func_offsets[symbol];
-        ResolvedSymbol::PhysicalAddress(func_start + addend as u64)
+fn patch_dwarf_sections(sections: &mut [DwarfSection], funcs: &[*const u8]) {
+    for section in sections {
+        const FUNC_SYMBOL_PREFIX: &str = "_wasm_function_";
+        for reloc in section.relocs.iter() {
+            if !reloc.target.starts_with(FUNC_SYMBOL_PREFIX) {
+                // Fixing only "all" section relocs -- all functions are merged
+                // into one blob.
+                continue;
+            }
+            let func_index = reloc.target[FUNC_SYMBOL_PREFIX.len()..]
+                .parse::<usize>()
+                .expect("func index");
+            let target = (funcs[func_index] as u64).wrapping_add(reloc.addend as i64 as u64);
+            let entry_ptr = section.body
+                [reloc.offset as usize..reloc.offset as usize + reloc.size as usize]
+                .as_mut_ptr();
+            unsafe {
+                match reloc.size {
+                    4 => std::ptr::write(entry_ptr as *mut u32, target as u32),
+                    8 => std::ptr::write(entry_ptr as *mut u64, target),
+                    _ => panic!("unexpected reloc entry size"),
+                }
+            }
+        }
+        section
+            .relocs
+            .retain(|r| !r.target.starts_with(FUNC_SYMBOL_PREFIX));
     }
 }
 
-pub fn emit_debugsections_image(
+pub fn write_debugsections_image(
     isa: &dyn TargetIsa,
-    debuginfo_data: &DebugInfoData,
-    vmctx_info: &ModuleVmctxInfo,
-    at: &ModuleAddressMap,
-    ranges: &ValueLabelsRanges,
-    funcs: &[(*const u8, usize)],
-    compilation: &Compilation,
+    mut sections: Vec<DwarfSection>,
+    code_region: (*const u8, usize),
+    funcs: &[*const u8],
 ) -> Result<Vec<u8>, Error> {
-    let func_offsets = &funcs
-        .iter()
-        .map(|(ptr, _)| *ptr as u64)
-        .collect::<Vec<u64>>();
     let mut obj = Artifact::new(isa.triple().clone(), String::from("module"));
-    let resolver = ImageRelocResolver { func_offsets };
-    let dwarf = transform_dwarf(isa, debuginfo_data, at, vmctx_info, ranges)?;
 
-    // Assuming all functions in the same code block, looking min/max of its range.
+    assert!(!code_region.0.is_null() && code_region.1 > 0);
     assert_gt!(funcs.len(), 0);
-    let mut segment_body: (usize, usize) = (!0, 0);
-    for (body_ptr, body_len) in funcs {
-        segment_body.0 = std::cmp::min(segment_body.0, *body_ptr as usize);
-        segment_body.1 = std::cmp::max(segment_body.1, *body_ptr as usize + body_len);
-    }
-    let segment_body = (segment_body.0 as *const u8, segment_body.1 - segment_body.0);
 
-    let body = unsafe { std::slice::from_raw_parts(segment_body.0, segment_body.1) };
+    let body = unsafe { std::slice::from_raw_parts(code_region.0, code_region.1) };
     obj.declare_with("all", Decl::function(), body.to_vec())?;
 
-    let frame_table = create_frame_table(isa, compilation.into_iter().map(|f| &f.unwind_info));
-    emit_dwarf(&mut obj, dwarf, &resolver, frame_table)?;
+    // Get DWARF sections and patch relocs
+    patch_dwarf_sections(&mut sections, funcs);
+
+    write_debugsections(&mut obj, sections)?;
 
     // LLDB is too "magical" about mach-o, generating elf
     let mut bytes = obj.emit_as(BinaryFormat::Elf)?;
     // elf is still missing details...
-    convert_faerie_elf_to_loadable_file(&mut bytes, segment_body.0);
+    convert_faerie_elf_to_loadable_file(&mut bytes, code_region.0);
 
     // let mut file = ::std::fs::File::create(::std::path::Path::new("test.o")).expect("file");
     // ::std::io::Write::write(&mut file, &bytes).expect("write");
@@ -170,7 +152,7 @@ fn convert_faerie_elf_to_loadable_file(bytes: &mut Vec<u8>, code_ptr: *const u8)
         }
 
         assert!(segment.is_none());
-        // Functions was added at emit_debugsections_image as .text.all.
+        // Functions was added at write_debugsections_image as .text.all.
         // Patch vaddr, and save file location and its size.
         unsafe {
             *(bytes.as_ptr().offset(off + 0x10) as *mut u64) = code_ptr as u64;

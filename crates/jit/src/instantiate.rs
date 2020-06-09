@@ -4,21 +4,21 @@
 //! steps.
 
 use crate::code_memory::CodeMemory;
-use crate::compiler::Compiler;
+use crate::compiler::{Compilation, Compiler};
 use crate::imports::resolve_imports;
 use crate::link::link_module;
 use crate::resolver::Resolver;
 use std::any::Any;
 use std::collections::HashMap;
-use std::io::Write;
 use std::sync::Arc;
 use thiserror::Error;
-use wasmtime_debug::read_debuginfo;
+use wasmtime_debug::{read_debuginfo, write_debugsections_image, DwarfSection};
 use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
+use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
 use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleAddressMap,
-    ModuleEnvironment, Traps,
+    ModuleEnvironment, ModuleTranslation, Traps,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::VMInterrupts;
@@ -91,41 +91,53 @@ impl CompiledModule {
             debug_data = Some(read_debuginfo(&data)?);
         }
 
-        let compilation = compiler.compile(&translation, debug_data)?;
+        let Compilation {
+            mut code_memory,
+            finished_functions,
+            code_range,
+            trampolines,
+            jt_offsets,
+            dwarf_sections,
+            traps,
+            address_transform,
+        } = compiler.compile(&translation, debug_data)?;
 
-        let module = translation.module;
+        let ModuleTranslation {
+            module,
+            data_initializers,
+            ..
+        } = translation;
 
-        link_module(&module, &compilation);
+        link_module(&mut code_memory, &module, &finished_functions, &jt_offsets);
 
         // Make all code compiled thus far executable.
-        let mut code_memory = compilation.code_memory;
         code_memory.publish(compiler.isa());
 
-        let data_initializers = translation
-            .data_initializers
+        let data_initializers = data_initializers
             .into_iter()
             .map(OwnedDataInitializer::new)
             .collect::<Vec<_>>()
             .into_boxed_slice();
 
-        // Initialize profiler and load the wasm module
-        profiler.module_load(
-            &module,
-            &compilation.finished_functions,
-            compilation.dbg_image.as_deref(),
-        );
+        // Register GDB JIT images; initialize profiler and load the wasm module.
+        let dbg_jit_registration = if !dwarf_sections.is_empty() {
+            let bytes = create_dbg_image(
+                dwarf_sections,
+                compiler.isa(),
+                code_range,
+                &finished_functions,
+            )?;
 
-        let dbg_jit_registration = if let Some(img) = compilation.dbg_image {
-            let mut bytes = Vec::new();
-            bytes.write_all(&img).expect("all written");
+            profiler.module_load(&module, &finished_functions, Some(&bytes));
+
             let reg = GdbJitImageRegistration::register(bytes);
             Some(reg)
         } else {
+            profiler.module_load(&module, &finished_functions, None);
             None
         };
 
-        let finished_functions =
-            FinishedFunctions(compilation.finished_functions.into_boxed_slice());
+        let finished_functions = FinishedFunctions(finished_functions.into_boxed_slice());
 
         Ok(Self {
             module: Arc::new(module),
@@ -134,10 +146,10 @@ impl CompiledModule {
                 dbg_jit_registration,
             }),
             finished_functions,
-            trampolines: compilation.trampolines,
+            trampolines,
             data_initializers,
-            traps: compilation.traps,
-            address_transform: compilation.address_transform,
+            traps,
+            address_transform,
         })
     }
 
@@ -255,4 +267,18 @@ impl OwnedDataInitializer {
             data: borrowed.data.to_vec().into_boxed_slice(),
         }
     }
+}
+
+fn create_dbg_image(
+    dwarf_sections: Vec<DwarfSection>,
+    isa: &dyn TargetIsa,
+    code_range: (*const u8, usize),
+    finished_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+) -> Result<Vec<u8>, SetupError> {
+    let funcs = finished_functions
+        .values()
+        .map(|allocated: &*mut [VMFunctionBody]| (*allocated) as *const u8)
+        .collect::<Vec<_>>();
+    write_debugsections_image(isa, dwarf_sections, code_range, &funcs)
+        .map_err(SetupError::DebugInfo)
 }

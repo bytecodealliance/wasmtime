@@ -172,7 +172,7 @@ fn make_trampoline(
     }
 
     let mut code_buf: Vec<u8> = Vec::new();
-    let mut reloc_sink = binemit::TrampolineRelocSink {};
+    let mut reloc_sink = binemit::TrampolineRelocSink::default();
     let mut trap_sink = binemit::NullTrapSink {};
     let mut stackmap_sink = binemit::NullStackmapSink {};
     context
@@ -192,11 +192,14 @@ fn make_trampoline(
         .expect("create unwind information");
 
     code_memory
-        .allocate_for_function(&CompiledFunction {
-            body: code_buf,
-            jt_offsets: context.func.jt_offsets,
-            unwind_info,
-        })
+        .allocate_for_function(
+            &CompiledFunction {
+                body: code_buf,
+                jt_offsets: context.func.jt_offsets,
+                unwind_info,
+            },
+            reloc_sink.relocs().iter(),
+        )
         .expect("allocate_for_function")
 }
 
@@ -239,14 +242,13 @@ pub fn create_handle_with_function(
     // ... and then we also need a trampoline with the standard "trampoline ABI"
     // which enters into the ABI specified by `ft`. Note that this is only used
     // if `Func::call` is called on an object created by `Func::new`.
-    let (trampoline, relocations) = wasmtime_jit::make_trampoline(
+    let trampoline = wasmtime_jit::make_trampoline(
         &*isa,
         &mut code_memory,
         &mut fn_builder_ctx,
         &sig,
         mem::size_of::<u128>(),
     )?;
-    assert!(relocations.is_empty());
     let sig_id = store.register_signature(ft.to_wasm_func_type(), sig);
     trampolines.insert(sig_id, trampoline);
 
