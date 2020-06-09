@@ -183,9 +183,7 @@ impl CommonOptions {
     fn config(&self) -> Result<Config> {
         let mut config = Config::new();
         config
-            .cranelift_debug_verifier(
-                cfg!(debug_assertions) || self.enable_cranelift_debug_verifier,
-            )
+            .cranelift_debug_verifier(self.enable_cranelift_debug_verifier)
             .debug_info(self.debug_info)
             .wasm_bulk_memory(self.enable_bulk_memory || self.enable_all)
             .wasm_simd(self.enable_simd || self.enable_all)

@@ -273,9 +273,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
             ApiCall::ConfigNew => {
                 log::trace!("creating config");
                 assert!(config.is_none());
-                let mut cfg = Config::new();
-                cfg.cranelift_debug_verifier(true);
-                config = Some(cfg);
+                config = Some(crate::fuzz_default_config(wasmtime::Strategy::Cranelift).unwrap());
             }
 
             ApiCall::ConfigDebugInfo(b) => {
