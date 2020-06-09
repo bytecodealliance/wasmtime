@@ -1175,6 +1175,8 @@ impl MachInstEmit for Inst {
             } => {
                 let enc_size_for_cmp = match ty {
                     I8X16 => 0b00,
+                    I16X8 => 0b01,
+                    I32X4 => 0b10,
                     _ => 0,
                 };
 

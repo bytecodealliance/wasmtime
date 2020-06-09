@@ -1193,12 +1193,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(alu_inst_imm12(alu_op, writable_zero_reg(), rn, rm));
                 ctx.emit(Inst::CondSet { cond, rd });
             } else {
-                if ty != I8X16 {
-                    return Err(CodegenError::Unsupported(format!(
-                        "unsupported simd type: {:?}",
-                        ty
-                    )));
-                }
+                match ty {
+                    I8X16 | I16X8 | I32X4 => {}
+                    _ => {
+                        return Err(CodegenError::Unsupported(format!(
+                            "unsupported simd type: {:?}",
+                            ty
+                        )));
+                    }
+                };
 
                 let mut rn = input_to_reg(ctx, inputs[0], narrow_mode);
                 let mut rm = input_to_reg(ctx, inputs[1], narrow_mode);
