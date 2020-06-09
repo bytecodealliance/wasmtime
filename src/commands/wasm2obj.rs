@@ -52,6 +52,8 @@ impl WasmToObjCommand {
     }
 
     fn handle_module(&self) -> Result<()> {
+        use std::io::Write;
+
         if self.common.log_to_files {
             let prefix = "wasm2obj.dbg.";
             init_file_per_thread_logger(prefix);
@@ -75,13 +77,13 @@ impl WasmToObjCommand {
             self.common.enable_simd,
             self.common.opt_level(),
             self.common.debug_info,
-            self.output.clone(),
             &cache_config,
         )?;
 
-        // FIXME: Make the format a parameter.
-        let file = File::create(Path::new(&self.output)).context("failed to create object file")?;
-        obj.write(file).context("failed to write object file")?;
+        let mut file =
+            File::create(Path::new(&self.output)).context("failed to create object file")?;
+        file.write_all(&obj.write()?)
+            .context("failed to write object file")?;
 
         Ok(())
     }

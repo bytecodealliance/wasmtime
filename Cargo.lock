@@ -2343,12 +2343,12 @@ version = "0.17.0"
 dependencies = [
  "anyhow",
  "env_logger",
- "faerie",
  "file-per-thread-logger",
  "filecheck",
  "humantime",
  "libc",
  "more-asserts",
+ "object",
  "pretty_env_logger",
  "rayon",
  "structopt",
@@ -2373,9 +2373,9 @@ name = "wasmtime-debug"
 version = "0.17.0"
 dependencies = [
  "anyhow",
- "faerie",
  "gimli",
  "more-asserts",
+ "object",
  "target-lexicon",
  "thiserror",
  "wasmparser 0.57.0",
@@ -2475,8 +2475,8 @@ name = "wasmtime-obj"
 version = "0.17.0"
 dependencies = [
  "anyhow",
- "faerie",
  "more-asserts",
+ "object",
  "wasmtime-environ",
 ]
 

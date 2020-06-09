@@ -1,25 +1,37 @@
 use anyhow::Result;
-use faerie::{Artifact, Decl};
+use object::write::{Object, StandardSection, Symbol, SymbolSection};
+use object::{SymbolFlags, SymbolKind, SymbolScope};
 use wasmtime_environ::DataInitializer;
 
 /// Declares data segment symbol
 pub fn declare_data_segment(
-    obj: &mut Artifact,
+    obj: &mut Object,
     _data_initaliazer: &DataInitializer,
     index: usize,
 ) -> Result<()> {
     let name = format!("_memory_{}", index);
-    obj.declare(name, Decl::data())?;
+    let _symbol_id = obj.add_symbol(Symbol {
+        name: name.as_bytes().to_vec(),
+        value: 0,
+        size: 0,
+        kind: SymbolKind::Data,
+        scope: SymbolScope::Linkage,
+        weak: false,
+        section: SymbolSection::Undefined,
+        flags: SymbolFlags::None,
+    });
     Ok(())
 }
 
 /// Emit segment data and initialization location
 pub fn emit_data_segment(
-    obj: &mut Artifact,
+    obj: &mut Object,
     data_initaliazer: &DataInitializer,
     index: usize,
 ) -> Result<()> {
     let name = format!("_memory_{}", index);
-    obj.define(name, Vec::from(data_initaliazer.data))?;
+    let symbol_id = obj.symbol_id(name.as_bytes()).unwrap();
+    let section_id = obj.section_id(StandardSection::Data);
+    obj.add_symbol_data(symbol_id, section_id, data_initaliazer.data, 1);
     Ok(())
 }

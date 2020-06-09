@@ -18,12 +18,6 @@ pub fn compile_cranelift(
         false,
         wasmtime::OptLevel::None,
         true,
-        output
-            .as_ref()
-            .file_name()
-            .unwrap()
-            .to_string_lossy()
-            .to_string(),
         &CacheConfig::new_cache_disabled(),
     )?;
 

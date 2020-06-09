@@ -1,5 +1,5 @@
 use anyhow::{anyhow, bail, Context as _, Result};
-use faerie::Artifact;
+use object::write::Object;
 use target_lexicon::Triple;
 use wasmtime::Strategy;
 use wasmtime_debug::{emit_dwarf, read_debuginfo, write_debugsections};
@@ -21,9 +21,8 @@ pub fn compile_to_obj(
     enable_simd: bool,
     opt_level: wasmtime::OptLevel,
     debug_info: bool,
-    artifact_name: String,
     cache_config: &CacheConfig,
-) -> Result<Artifact> {
+) -> Result<Object> {
     let isa_builder = match target {
         Some(target) => native::lookup(target.clone())?,
         None => native::builder(),
@@ -51,7 +50,7 @@ pub fn compile_to_obj(
 
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
-    let mut obj = Artifact::new(isa.triple().clone(), artifact_name);
+    let mut obj = Object::new(isa.triple().binary_format, isa.triple().architecture);
 
     // TODO: Expose the tunables as command-line flags.
     let mut tunables = Tunables::default();
