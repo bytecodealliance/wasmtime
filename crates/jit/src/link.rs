@@ -13,36 +13,30 @@ use wasmtime_runtime::VMFunctionBody;
 /// Links a module that has been compiled with `compiled_module` in `wasmtime-environ`.
 ///
 /// Performs all required relocations inside the function code, provided the necessary metadata.
-pub fn link_module<'a>(
+pub fn link_module(
     code_memory: &mut CodeMemory,
-    module: &'a Module,
-    finished_functions: &'a PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-    jt_offsets: &'a PrimaryMap<DefinedFuncIndex, JumpTableOffsets>,
+    module: &Module,
+    finished_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    jt_offsets: &PrimaryMap<DefinedFuncIndex, JumpTableOffsets>,
 ) {
-    let context = LinkContext {
-        module,
-        finished_functions,
-        jt_offsets,
-    };
-
     for (fatptr, r) in code_memory.unpublished_relocations() {
         let body = fatptr as *const VMFunctionBody;
-        apply_reloc(&context, body, r);
+        apply_reloc(module, finished_functions, jt_offsets, body, r);
     }
 }
 
-struct LinkContext<'a> {
-    module: &'a Module,
-    finished_functions: &'a PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-    jt_offsets: &'a PrimaryMap<DefinedFuncIndex, JumpTableOffsets>,
-}
-
-fn apply_reloc(context: &LinkContext, body: *const VMFunctionBody, r: &Relocation) {
+fn apply_reloc(
+    module: &Module,
+    finished_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    jt_offsets: &PrimaryMap<DefinedFuncIndex, JumpTableOffsets>,
+    body: *const VMFunctionBody,
+    r: &Relocation,
+) {
     use self::libcalls::*;
     let target_func_address: usize = match r.reloc_target {
-        RelocationTarget::UserFunc(index) => match context.module.local.defined_func_index(index) {
+        RelocationTarget::UserFunc(index) => match module.local.defined_func_index(index) {
             Some(f) => {
-                let fatptr: *const [VMFunctionBody] = context.finished_functions[f];
+                let fatptr: *const [VMFunctionBody] = finished_functions[f];
                 fatptr as *const VMFunctionBody as usize
             }
             None => panic!("direct call to import"),
@@ -69,14 +63,13 @@ fn apply_reloc(context: &LinkContext, body: *const VMFunctionBody, r: &Relocatio
             }
         }
         RelocationTarget::JumpTable(func_index, jt) => {
-            match context.module.local.defined_func_index(func_index) {
+            match module.local.defined_func_index(func_index) {
                 Some(f) => {
-                    let offset = *context
-                        .jt_offsets
+                    let offset = *jt_offsets
                         .get(f)
                         .and_then(|ofs| ofs.get(jt))
                         .expect("func jump table");
-                    let fatptr: *const [VMFunctionBody] = context.finished_functions[f];
+                    let fatptr: *const [VMFunctionBody] = finished_functions[f];
                     fatptr as *const VMFunctionBody as usize + offset as usize
                 }
                 None => panic!("func index of jump table"),
