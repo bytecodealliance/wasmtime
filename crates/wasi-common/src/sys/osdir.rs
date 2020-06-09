@@ -10,7 +10,7 @@ use std::ops::Deref;
 // TODO could this be cleaned up?
 // The actual `OsDir` struct is OS-dependent, therefore we delegate
 // its definition to OS-specific modules.
-pub(crate) use super::sys_impl::osdir::OsDir;
+pub use super::sys_impl::osdir::OsDir;
 
 impl Deref for OsDir {
     type Target = RawOsHandle;

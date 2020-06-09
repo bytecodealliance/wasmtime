@@ -3,7 +3,7 @@ use std::io;
 use std::os::unix::prelude::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 #[derive(Debug)]
-pub(crate) struct RawOsHandle(File);
+pub struct RawOsHandle(File);
 
 impl RawOsHandle {
     /// Tries clone `self`.

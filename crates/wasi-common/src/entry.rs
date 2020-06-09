@@ -8,6 +8,7 @@ use std::rc::Rc;
 pub(crate) struct EntryHandle(Rc<dyn Handle>);
 
 impl EntryHandle {
+    #[allow(dead_code)]
     pub(crate) fn new<T: Handle + 'static>(handle: T) -> Self {
         Self(Rc::new(handle))
     }

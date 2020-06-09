@@ -9,7 +9,24 @@ use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::ops::Deref;
 
 #[derive(Debug)]
-pub(crate) struct OsFile {
+/// A file backed by the operating system's file system. Dereferences to a
+/// `RawOsHandle`.  Its impl of `Handle` uses Rust's `std` to implement all
+/// file descriptor operations.
+///
+/// # Constructing `OsFile`
+///
+/// `OsFile` can currently only be constructed from `std::fs::File` using
+/// the `std::convert::TryFrom` trait:
+///
+/// ```rust,no_run
+/// use std::fs::OpenOptions;
+/// use std::convert::TryFrom;
+/// use wasi_common::OsFile;
+///
+/// let file = OpenOptions::new().read(true).open("some_file").unwrap();
+/// let os_file = OsFile::try_from(file).unwrap();
+/// ```
+pub struct OsFile {
     rights: Cell<HandleRights>,
     handle: RawOsHandle,
 }

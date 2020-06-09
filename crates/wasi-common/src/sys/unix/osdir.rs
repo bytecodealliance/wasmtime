@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io;
 use std::os::unix::prelude::{AsRawFd, FromRawFd, IntoRawFd};
 
-pub(crate) use super::sys_impl::osdir::OsDir;
+pub use super::sys_impl::osdir::OsDir;
 
 impl TryFrom<File> for OsDir {
     type Error = io::Error;
