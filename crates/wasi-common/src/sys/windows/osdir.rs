@@ -20,6 +20,7 @@ use std::os::windows::prelude::{AsRawHandle, FromRawHandle, IntoRawHandle};
 /// ```rust,no_run
 /// use std::fs::OpenOptions;
 /// use std::convert::TryFrom;
+/// use std::os::windows::fs::OpenOptionsExt;
 /// use wasi_common::OsDir;
 /// use winapi::um::winbase::FILE_FLAG_BACKUP_SEMANTICS;
 ///
