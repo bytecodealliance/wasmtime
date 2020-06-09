@@ -1,21 +1,24 @@
 //! Memory management for executable code.
 
+use crate::object::ObjectUnwindInfo;
 use crate::unwind::UnwindRegistry;
+use object::read::{File as ObjectFile, Object, ObjectSection};
 use region;
+use std::collections::BTreeMap;
 use std::mem::ManuallyDrop;
 use std::{cmp, mem};
 use wasmtime_environ::{
+    entity::EntityRef,
     isa::{unwind::UnwindInfo, TargetIsa},
-    Compilation, CompiledFunction, Relocation, Relocations,
+    wasm::{FuncIndex, SignatureIndex},
+    Compilation, CompiledFunction,
 };
 use wasmtime_runtime::{Mmap, VMFunctionBody};
-
-type CodeMemoryRelocations = Vec<(u32, Vec<Relocation>)>;
 
 struct CodeMemoryEntry {
     mmap: ManuallyDrop<Mmap>,
     registry: ManuallyDrop<UnwindRegistry>,
-    relocs: CodeMemoryRelocations,
+    len: usize,
 }
 
 impl CodeMemoryEntry {
@@ -25,13 +28,13 @@ impl CodeMemoryEntry {
         Ok(Self {
             mmap,
             registry,
-            relocs: vec![],
+            len: 0,
         })
     }
 
     fn range(&self) -> (usize, usize) {
         let start = self.mmap.as_ptr() as usize;
-        let end = start + self.mmap.len();
+        let end = start + self.len;
         (start, end)
     }
 }
@@ -46,11 +49,40 @@ impl Drop for CodeMemoryEntry {
     }
 }
 
+pub(crate) struct CodeMemoryObjectAllocation<'a> {
+    buf: &'a mut [u8],
+    funcs: BTreeMap<usize, (usize, usize)>,
+    trampolines: BTreeMap<usize, (usize, usize)>,
+}
+
+impl<'a> CodeMemoryObjectAllocation<'a> {
+    pub fn code_range(self) -> &'a mut [u8] {
+        self.buf
+    }
+    pub fn funcs(&'a self) -> impl Iterator<Item = (FuncIndex, &'a mut [VMFunctionBody])> + 'a {
+        let buf = self.buf as *const _ as *mut [u8];
+        self.funcs.iter().map(move |(i, (start, len))| {
+            (FuncIndex::new(*i), unsafe {
+                CodeMemory::view_as_mut_vmfunc_slice(&mut (*buf)[*start..*start + *len])
+            })
+        })
+    }
+    pub fn trampolines(
+        &'a self,
+    ) -> impl Iterator<Item = (SignatureIndex, &'a mut [VMFunctionBody])> + 'a {
+        let buf = self.buf as *const _ as *mut [u8];
+        self.trampolines.iter().map(move |(i, (start, len))| {
+            (SignatureIndex::new(*i), unsafe {
+                CodeMemory::view_as_mut_vmfunc_slice(&mut (*buf)[*start..*start + *len])
+            })
+        })
+    }
+}
+
 /// Memory manager for executable code.
 pub struct CodeMemory {
     current: Option<CodeMemoryEntry>,
     entries: Vec<CodeMemoryEntry>,
-    position: usize,
     published: usize,
 }
 
@@ -65,7 +97,6 @@ impl CodeMemory {
         Self {
             current: None,
             entries: Vec::new(),
-            position: 0,
             published: 0,
         }
     }
@@ -76,15 +107,12 @@ impl CodeMemory {
     pub fn allocate_for_function<'a>(
         &mut self,
         func: &'a CompiledFunction,
-        relocs: impl Iterator<Item = &'a Relocation>,
     ) -> Result<&mut [VMFunctionBody], String> {
         let size = Self::function_allocation_size(func);
 
-        let (buf, registry, start, m_relocs) = self.allocate(size)?;
+        let (buf, registry, start) = self.allocate(size)?;
 
         let (_, _, vmfunc) = Self::copy_function(func, start as u32, buf, registry);
-
-        Self::copy_relocs(m_relocs, start as u32, relocs);
 
         Ok(vmfunc)
     }
@@ -93,22 +121,19 @@ impl CodeMemory {
     pub fn allocate_for_compilation(
         &mut self,
         compilation: &Compilation,
-        relocations: &Relocations,
     ) -> Result<Box<[&mut [VMFunctionBody]]>, String> {
         let total_len = compilation
             .into_iter()
             .fold(0, |acc, func| acc + Self::function_allocation_size(func));
 
-        let (mut buf, registry, start, m_relocs) = self.allocate(total_len)?;
+        let (mut buf, registry, start) = self.allocate(total_len)?;
         let mut result = Vec::with_capacity(compilation.len());
         let mut start = start as u32;
 
-        for (func, relocs) in compilation.into_iter().zip(relocations.values()) {
+        for func in compilation.into_iter() {
             let (next_start, next_buf, vmfunc) = Self::copy_function(func, start, buf, registry);
 
             result.push(vmfunc);
-
-            Self::copy_relocs(m_relocs, start, relocs.iter());
 
             start = next_start;
             buf = next_buf;
@@ -125,7 +150,7 @@ impl CodeMemory {
         for CodeMemoryEntry {
             mmap: m,
             registry: r,
-            relocs,
+            ..
         } in &mut self.entries[self.published..]
         {
             // Remove write access to the pages due to the relocation fixups.
@@ -138,10 +163,6 @@ impl CodeMemory {
                 }
                 .expect("unable to make memory readonly and executable");
             }
-
-            // Relocs data in not needed anymore -- clearing.
-            // TODO use relocs to serialize the published code.
-            relocs.clear();
         }
 
         self.published = self.entries.len();
@@ -159,37 +180,24 @@ impl CodeMemory {
     /// * The offset within the current mmap that the slice starts at
     ///
     /// TODO: Add an alignment flag.
-    fn allocate(
-        &mut self,
-        size: usize,
-    ) -> Result<
-        (
-            &mut [u8],
-            &mut UnwindRegistry,
-            usize,
-            &mut CodeMemoryRelocations,
-        ),
-        String,
-    > {
+    fn allocate(&mut self, size: usize) -> Result<(&mut [u8], &mut UnwindRegistry, usize), String> {
         assert!(size > 0);
 
         if match &self.current {
-            Some(e) => e.mmap.len() - self.position < size,
+            Some(e) => e.mmap.len() - e.len < size,
             None => true,
         } {
             self.push_current(cmp::max(0x10000, size))?;
         }
 
-        let old_position = self.position;
-        self.position += size;
-
         let e = self.current.as_mut().unwrap();
+        let old_position = e.len;
+        e.len += size;
 
         Ok((
-            &mut e.mmap.as_mut_slice()[old_position..self.position],
+            &mut e.mmap.as_mut_slice()[old_position..e.len],
             &mut e.registry,
             old_position,
-            &mut e.relocs,
         ))
     }
 
@@ -204,14 +212,6 @@ impl CodeMemory {
             }
             _ => func.body.len(),
         }
-    }
-
-    fn copy_relocs<'a>(
-        entry_relocs: &'_ mut CodeMemoryRelocations,
-        start: u32,
-        relocs: impl Iterator<Item = &'a Relocation>,
-    ) {
-        entry_relocs.push((start, relocs.cloned().collect()));
     }
 
     /// Copies the data of the compiled function to the given buffer.
@@ -276,8 +276,6 @@ impl CodeMemory {
             self.entries.push(e);
         }
 
-        self.position = 0;
-
         Ok(())
     }
 
@@ -288,18 +286,82 @@ impl CodeMemory {
             .map(|entry| entry.range())
     }
 
-    /// Returns all relocations for the unpublished memory.
-    pub fn unpublished_relocations<'a>(
-        &'a self,
-    ) -> impl Iterator<Item = (*const u8, &'a Relocation)> + 'a {
-        self.entries[self.published..]
-            .iter()
-            .chain(self.current.iter())
-            .flat_map(|entry| {
-                entry.relocs.iter().flat_map(move |(start, relocs)| {
-                    let base_ptr = unsafe { entry.mmap.as_ptr().add(*start as usize) };
-                    relocs.iter().map(move |r| (base_ptr, r))
-                })
-            })
+    /// Allocates and copies the ELF image code section into CodeMemory.
+    /// Returns references to functions and trampolines defined there.
+    pub(crate) fn allocate_for_object<'a>(
+        &'a mut self,
+        obj: &ObjectFile,
+        unwind_info: &[ObjectUnwindInfo],
+    ) -> Result<CodeMemoryObjectAllocation<'a>, String> {
+        let text_section = obj.section_by_name(".text").unwrap();
+
+        if text_section.size() == 0 {
+            // No code in the image.
+            return Ok(CodeMemoryObjectAllocation {
+                buf: &mut [],
+                funcs: BTreeMap::new(),
+                trampolines: BTreeMap::new(),
+            });
+        }
+
+        // Allocate chunk memory that spans entire code section.
+        let (buf, registry, start) = self.allocate(text_section.size() as usize)?;
+        buf.copy_from_slice(
+            text_section
+                .data()
+                .map_err(|_| "cannot read section data".to_string())?,
+        );
+
+        // Track locations of all defined functions and trampolines.
+        let mut funcs = BTreeMap::new();
+        let mut trampolines = BTreeMap::new();
+        const FUNCTION_PREFIX: &str = "_wasm_function_";
+        const TRAMPOLINE_PREFIX: &str = "_trampoline_";
+        for (_id, sym) in obj.symbols() {
+            match sym.name() {
+                Some(name) => {
+                    if name.starts_with(FUNCTION_PREFIX) {
+                        let index = name[FUNCTION_PREFIX.len()..].parse::<usize>().unwrap();
+                        let is_import = sym.section_index().is_none();
+                        if !is_import {
+                            funcs.insert(
+                                index,
+                                (start + sym.address() as usize, sym.size() as usize),
+                            );
+                        }
+                    } else if name.starts_with(TRAMPOLINE_PREFIX) {
+                        let index = name[TRAMPOLINE_PREFIX.len()..].parse::<usize>().unwrap();
+                        trampolines
+                            .insert(index, (start + sym.address() as usize, sym.size() as usize));
+                    }
+                }
+                None => (),
+            }
+        }
+
+        // Register all unwind entiries for functions and trampolines.
+        // TODO will `u32` type for start/len be enough for large code base.
+        for i in unwind_info {
+            match i {
+                ObjectUnwindInfo::Func(func_index, info) => {
+                    let (start, len) = funcs.get(&func_index.index()).unwrap();
+                    registry
+                        .register(*start as u32, *len as u32, &info)
+                        .expect("failed to register unwind information");
+                }
+                ObjectUnwindInfo::Trampoline(trampoline_index, info) => {
+                    let (start, len) = trampolines.get(&trampoline_index.index()).unwrap();
+                    registry
+                        .register(*start as u32, *len as u32, &info)
+                        .expect("failed to register unwind information");
+                }
+            }
+        }
+
+        Ok(CodeMemoryObjectAllocation {
+            buf: &mut buf[..text_section.size() as usize],
+            funcs,
+            trampolines,
+        })
     }
 }
