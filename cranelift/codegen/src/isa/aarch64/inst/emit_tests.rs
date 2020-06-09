@@ -1827,6 +1827,60 @@ fn test_aarch64_binemit() {
         "cset x5, hi",
     ));
     insns.push((
+        Inst::VecExtend {
+            t: VecExtendOp::Sxtl8,
+            rd: writable_vreg(4),
+            rn: vreg(27),
+        },
+        "64A7080F",
+        "sxtl v4.8h, v27.8b",
+    ));
+    insns.push((
+        Inst::VecExtend {
+            t: VecExtendOp::Sxtl16,
+            rd: writable_vreg(17),
+            rn: vreg(19),
+        },
+        "71A6100F",
+        "sxtl v17.4s, v19.4h",
+    ));
+    insns.push((
+        Inst::VecExtend {
+            t: VecExtendOp::Sxtl32,
+            rd: writable_vreg(30),
+            rn: vreg(6),
+        },
+        "DEA4200F",
+        "sxtl v30.2d, v6.2s",
+    ));
+    insns.push((
+        Inst::VecExtend {
+            t: VecExtendOp::Uxtl8,
+            rd: writable_vreg(3),
+            rn: vreg(29),
+        },
+        "A3A7082F",
+        "uxtl v3.8h, v29.8b",
+    ));
+    insns.push((
+        Inst::VecExtend {
+            t: VecExtendOp::Uxtl16,
+            rd: writable_vreg(15),
+            rn: vreg(12),
+        },
+        "8FA5102F",
+        "uxtl v15.4s, v12.4h",
+    ));
+    insns.push((
+        Inst::VecExtend {
+            t: VecExtendOp::Uxtl32,
+            rd: writable_vreg(28),
+            rn: vreg(2),
+        },
+        "5CA4202F",
+        "uxtl v28.2d, v2.2s",
+    ));
+    insns.push((
         Inst::VecRRR {
             rd: writable_vreg(21),
             rn: vreg(22),

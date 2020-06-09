@@ -1149,6 +1149,23 @@ impl MachInstEmit for Inst {
                         | machreg_to_gpr(rd.to_reg()),
                 );
             }
+            &Inst::VecExtend { t, rd, rn } => {
+                let (u, immh) = match t {
+                    VecExtendOp::Sxtl8 => (0b0, 0b001),
+                    VecExtendOp::Sxtl16 => (0b0, 0b010),
+                    VecExtendOp::Sxtl32 => (0b0, 0b100),
+                    VecExtendOp::Uxtl8 => (0b1, 0b001),
+                    VecExtendOp::Uxtl16 => (0b1, 0b010),
+                    VecExtendOp::Uxtl32 => (0b1, 0b100),
+                };
+                sink.put4(
+                    0b000_011110_0000_000_101001_00000_00000
+                        | (u << 29)
+                        | (immh << 19)
+                        | (machreg_to_vec(rn) << 5)
+                        | machreg_to_vec(rd.to_reg()),
+                );
+            }
             &Inst::VecRRR {
                 rd,
                 rn,
