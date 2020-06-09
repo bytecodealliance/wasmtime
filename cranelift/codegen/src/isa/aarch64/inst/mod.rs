@@ -543,6 +543,14 @@ pub enum Inst {
         rn: Reg,
     },
 
+    /// Move to scalar from a vector element.
+    FpuMoveFromVec {
+        rd: Writable<Reg>,
+        rn: Reg,
+        idx: u8,
+        ty: Type,
+    },
+
     /// 1-op FPU instruction.
     FpuRR {
         fpu_op: FPUOp1,
@@ -679,10 +687,12 @@ pub enum Inst {
         rn: Reg,
     },
 
-    /// Move to a GPR from a vector register.
-    MovFromVec64 {
+    /// Move to a GPR from a vector element.
+    MovFromVec {
         rd: Writable<Reg>,
         rn: Reg,
+        idx: u8,
+        ty: Type,
     },
 
     /// Vector extend.
@@ -1149,6 +1159,10 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             collector.add_use(rn);
         }
+        &Inst::FpuMoveFromVec { rd, rn, .. } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
+        }
         &Inst::FpuRR { rd, rn, .. } => {
             collector.add_def(rd);
             collector.add_use(rn);
@@ -1229,7 +1243,7 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             collector.add_use(rn);
         }
-        &Inst::MovFromVec64 { rd, rn } => {
+        &Inst::MovFromVec { rd, rn, .. } => {
             collector.add_def(rd);
             collector.add_use(rn);
         }
@@ -1606,6 +1620,14 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_def(mapper, rd);
             map_use(mapper, rn);
         }
+        &mut Inst::FpuMoveFromVec {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+        }
         &mut Inst::FpuRR {
             ref mut rd,
             ref mut rn,
@@ -1774,9 +1796,10 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_def(mapper, rd);
             map_use(mapper, rn);
         }
-        &mut Inst::MovFromVec64 {
+        &mut Inst::MovFromVec {
             ref mut rd,
             ref mut rn,
+            ..
         } => {
             map_def(mapper, rd);
             map_use(mapper, rn);
@@ -2353,6 +2376,11 @@ impl ShowWithRRU for Inst {
                 let rn = rn.show_rru(mb_rru);
                 format!("mov {}.16b, {}.16b", rd, rn)
             }
+            &Inst::FpuMoveFromVec { rd, rn, idx, ty } => {
+                let rd = show_freg_sized(rd.to_reg(), mb_rru, InstSize::from_ty(ty));
+                let rn = show_vreg_element(rn, mb_rru, idx, ty);
+                format!("mov {}, {}", rd, rn)
+            }
             &Inst::FpuRR { fpu_op, rd, rn } => {
                 let (op, sizesrc, sizedest) = match fpu_op {
                     FPUOp1::Abs32 => ("fabs", InstSize::Size32, InstSize::Size32),
@@ -2546,10 +2574,14 @@ impl ShowWithRRU for Inst {
                 let rn = rn.show_rru(mb_rru);
                 format!("mov {}.d[0], {}", rd, rn)
             }
-            &Inst::MovFromVec64 { rd, rn } => {
-                let rd = rd.to_reg().show_rru(mb_rru);
-                let rn = rn.show_rru(mb_rru);
-                format!("mov {}, {}.d[0]", rd, rn)
+            &Inst::MovFromVec { rd, rn, idx, ty } => {
+                let op = match ty {
+                    I32 | I64 => "mov",
+                    _ => "umov",
+                };
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, InstSize::from_ty(ty));
+                let rn = show_vreg_element(rn, mb_rru, idx, ty);
+                format!("{} {}, {}", op, rd, rn)
             }
             &Inst::VecExtend { t, rd, rn } => {
                 let (op, dest, src) = match t {

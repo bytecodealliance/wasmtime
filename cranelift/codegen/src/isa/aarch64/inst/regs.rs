@@ -332,3 +332,22 @@ pub fn show_vreg_vector(reg: Reg, mb_rru: Option<&RealRegUniverse>, ty: Type) ->
 
     s
 }
+
+/// Show an indexed vector element.
+pub fn show_vreg_element(reg: Reg, mb_rru: Option<&RealRegUniverse>, idx: u8, ty: Type) -> String {
+    assert_eq!(RegClass::V128, reg.get_class());
+    let mut s = reg.show_rru(mb_rru);
+
+    let suffix = match ty {
+        I8 => "b",
+        I16 => "h",
+        I32 => "s",
+        I64 => "d",
+        F32 => "s",
+        F64 => "d",
+        _ => unimplemented!(),
+    };
+
+    s.push_str(&format!(".{}[{}]", suffix, idx));
+    s
+}
