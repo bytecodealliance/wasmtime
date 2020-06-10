@@ -102,7 +102,6 @@ impl OptLevel {
 #[derive(Arbitrary, Debug)]
 pub struct Config {
     opt_level: OptLevel,
-    debug_verifier: bool,
     debug_info: bool,
     canonicalize_nans: bool,
     interruptable: bool,
@@ -123,7 +122,6 @@ impl Config {
             .static_memory_guard_size(self.static_memory_guard_size.unwrap_or(0).into())
             .dynamic_memory_guard_size(self.dynamic_memory_guard_size.unwrap_or(0).into())
             .cranelift_nan_canonicalization(self.canonicalize_nans)
-            .cranelift_debug_verifier(self.debug_verifier)
             .cranelift_opt_level(self.opt_level.to_wasmtime())
             .interruptable(self.interruptable);
         return cfg;
