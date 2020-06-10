@@ -108,7 +108,7 @@ pub fn write_debugsections_image(
     // LLDB is too "magical" about mach-o, generating elf
     let mut bytes = obj.write()?;
     // elf is still missing details...
-    convert_faerie_elf_to_loadable_file(&mut bytes, code_region.0);
+    convert_object_elf_to_loadable_file(&mut bytes, code_region.0);
 
     // let mut file = ::std::fs::File::create(::std::path::Path::new("test.o")).expect("file");
     // ::std::io::Write::write(&mut file, &bytes).expect("write");
@@ -116,7 +116,7 @@ pub fn write_debugsections_image(
     Ok(bytes)
 }
 
-fn convert_faerie_elf_to_loadable_file(bytes: &mut Vec<u8>, code_ptr: *const u8) {
+fn convert_object_elf_to_loadable_file(bytes: &mut Vec<u8>, code_ptr: *const u8) {
     use std::ffi::CStr;
     use std::os::raw::c_char;
 
@@ -201,7 +201,7 @@ fn convert_faerie_elf_to_loadable_file(bytes: &mut Vec<u8>, code_ptr: *const u8)
     }
 
     // It is somewhat loadable ELF file at this moment.
-    // Update e_flags, e_phoff and e_phnum.
+    // Update e_flags, e_phoff, e_phentsize and e_phnum.
     unsafe {
         *(bytes.as_ptr().offset(0x10) as *mut u16) = /* ET_DYN */ 3;
         *(bytes.as_ptr().offset(0x20) as *mut u64) = ph_off as u64;
