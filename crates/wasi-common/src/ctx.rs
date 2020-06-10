@@ -2,7 +2,7 @@ use crate::entry::{Entry, EntryHandle};
 use crate::fdpool::FdPool;
 use crate::handle::Handle;
 use crate::sys::osdir::OsDir;
-use crate::sys::osother::{OsOther, OsOtherExt};
+use crate::sys::stdio::NullDevice;
 use crate::sys::stdio::{Stderr, StderrExt, Stdin, StdinExt, Stdout, StdoutExt};
 use crate::virtfs::{VirtualDir, VirtualDirEntry};
 use crate::wasi::types;
@@ -136,9 +136,9 @@ pub struct WasiCtxBuilder {
 impl WasiCtxBuilder {
     /// Builder for a new `WasiCtx`.
     pub fn new() -> Self {
-        let stdin = Some(PendingEntry::Thunk(OsOther::from_null));
-        let stdout = Some(PendingEntry::Thunk(OsOther::from_null));
-        let stderr = Some(PendingEntry::Thunk(OsOther::from_null));
+        let stdin = Some(PendingEntry::Handle(Box::new(NullDevice::new())));
+        let stdout = Some(PendingEntry::Handle(Box::new(NullDevice::new())));
+        let stderr = Some(PendingEntry::Handle(Box::new(NullDevice::new())));
 
         Self {
             stdin,

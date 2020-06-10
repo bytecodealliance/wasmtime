@@ -10,13 +10,6 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::ops::Deref;
 
-/// Extra methods for `OsOther` that are only available when configured for
-/// some operating systems.
-pub trait OsOtherExt {
-    /// Create `OsOther` as `dyn Handle` from null device.
-    fn from_null() -> io::Result<Box<dyn Handle>>;
-}
-
 /// `OsOther` is something of a catch-all for everything not covered with the specific handle
 /// types (`OsFile`, `OsDir`, `Stdio`). It currently encapsulates handles such as OS pipes,
 /// sockets, streams, etc. As such, when redirecting stdio within `WasiCtxBuilder`, the redirected
