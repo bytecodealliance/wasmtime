@@ -153,6 +153,10 @@ struct CommonOptions {
     )]
     opt_level: wasmtime::OptLevel,
 
+    /// Other Cranelift flags to be passed down to Cranelift.
+    #[structopt(long, parse(try_from_str = parse_cranelift_flag))]
+    cranelift_flags: Vec<CraneliftFlag>,
+
     /// Maximum size in bytes of wasm memory before it becomes dynamically
     /// relocatable instead of up-front-reserved.
     #[structopt(long)]
@@ -181,6 +185,11 @@ impl CommonOptions {
             .cranelift_opt_level(self.opt_level())
             .strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?
             .profiler(pick_profiling_strategy(self.jitdump, self.vtune)?)?;
+        for CraneliftFlag { name, value } in &self.cranelift_flags {
+            unsafe {
+                config.cranelift_other_flag(name, value)?;
+            }
+        }
         if !self.disable_cache {
             match &self.config {
                 Some(path) => {
@@ -222,4 +231,24 @@ fn parse_opt_level(opt_level: &str) -> Result<wasmtime::OptLevel> {
             other
         ),
     }
+}
+
+struct CraneliftFlag {
+    name: String,
+    value: String,
+}
+
+fn parse_cranelift_flag(name_and_value: &str) -> Result<CraneliftFlag> {
+    let mut split = name_and_value.splitn(2, '=');
+    let name = if let Some(name) = split.next() {
+        name.to_string()
+    } else {
+        bail!("missing name in cranelift flag");
+    };
+    let value = if let Some(value) = split.next() {
+        value.to_string()
+    } else {
+        bail!("missing value in cranelift flag");
+    };
+    Ok(CraneliftFlag { name, value })
 }
