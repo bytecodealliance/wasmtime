@@ -1,5 +1,5 @@
 name: 'Set up a DWARFDUMP env'
-description: 'Set up a DWARFDUMP env (see tests/debug/dump.rs)'
+description: 'Set up a DWARFDUMP env (see tests/all/debug/dump.rs)'
 
 runs:
   using: node12
