@@ -233,6 +233,9 @@ impl UImm12Scaled {
     /// Create a UImm12Scaled from a raw offset and the known scale type, if
     /// possible.
     pub fn maybe_from_i64(value: i64, scale_ty: Type) -> Option<UImm12Scaled> {
+        // Ensure the type is at least one byte.
+        let scale_ty = if scale_ty == B1 { B8 } else { scale_ty };
+
         let scale = scale_ty.bytes();
         assert!(scale.is_power_of_two());
         let scale = scale as i64;
