@@ -1,4 +1,4 @@
-//! This is an example of working with mulit-value modules and dealing with
+//! This is an example of working with multi-value modules and dealing with
 //! multi-value functions.
 //!
 //! Note that the `Func::wrap*` interfaces cannot be used to return multiple
