@@ -315,9 +315,7 @@ impl ABIBody for X64ABIBody {
                         from_reg.to_reg(),
                         Writable::<Reg>::from_reg(to_reg.to_reg()),
                     ))
-                } else if to_reg.get_class() == RegClass::V128
-                    || to_reg.get_class() == RegClass::V128
-                {
+                } else if to_reg.get_class() == RegClass::V128 {
                     ret.push(Inst::xmm_r_r(
                         SSE_Op::SSE2_Movsd,
                         from_reg.to_reg(),

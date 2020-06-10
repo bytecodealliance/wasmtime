@@ -811,6 +811,11 @@ impl MachInst for Inst {
         // %reg.
         match self {
             Self::Mov_R_R { is_64, src, dst } if *is_64 => Some((*dst, *src)),
+            Self::XMM_R_R { op, src, dst }
+                if *op == SSE_Op::SSE_Movss || *op == SSE_Op::SSE2_Movsd =>
+            {
+                Some((*dst, *src))
+            }
             _ => None,
         }
     }
