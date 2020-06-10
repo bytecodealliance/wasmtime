@@ -5,8 +5,8 @@
 
 use crate::binemit::CodeOffset;
 use crate::ir::types::{
-    B1, B16, B16X8, B32, B32X4, B64, B64X2, B8, B8X16, F32, F32X2, F64, FFLAGS, I128, I16, I16X4,
-    I16X8, I32, I32X2, I32X4, I64, I64X2, I8, I8X16, I8X8, IFLAGS,
+    B1, B16, B16X8, B32, B32X4, B64, B64X2, B8, B8X16, F32, F32X2, F32X4, F64, F64X2, FFLAGS, I128,
+    I16, I16X4, I16X8, I32, I32X2, I32X4, I64, I64X2, I8, I8X16, I8X8, IFLAGS,
 };
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
@@ -695,6 +695,20 @@ pub enum Inst {
         ty: Type,
     },
 
+    /// Duplicate general-purpose register to vector.
+    VecDup {
+        rd: Writable<Reg>,
+        rn: Reg,
+        ty: Type,
+    },
+
+    /// Duplicate scalar to vector.
+    VecDupFromFpu {
+        rd: Writable<Reg>,
+        rn: Reg,
+        ty: Type,
+    },
+
     /// Vector extend.
     VecExtend {
         t: VecExtendOp,
@@ -1244,6 +1258,14 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(rn);
         }
         &Inst::MovFromVec { rd, rn, .. } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
+        }
+        &Inst::VecDup { rd, rn, .. } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
+        }
+        &Inst::VecDupFromFpu { rd, rn, .. } => {
             collector.add_def(rd);
             collector.add_use(rn);
         }
@@ -1797,6 +1819,22 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, rn);
         }
         &mut Inst::MovFromVec {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+        }
+        &mut Inst::VecDup {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+        }
+        &mut Inst::VecDupFromFpu {
             ref mut rd,
             ref mut rn,
             ..
@@ -2582,6 +2620,28 @@ impl ShowWithRRU for Inst {
                 let rd = show_ireg_sized(rd.to_reg(), mb_rru, InstSize::from_ty(ty));
                 let rn = show_vreg_element(rn, mb_rru, idx, ty);
                 format!("{} {}, {}", op, rd, rn)
+            }
+            &Inst::VecDup { rd, rn, ty } => {
+                let vector_type = match ty {
+                    I8 => I8X16,
+                    I16 => I16X8,
+                    I32 => I32X4,
+                    I64 => I64X2,
+                    _ => unimplemented!(),
+                };
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, vector_type);
+                let rn = show_ireg_sized(rn, mb_rru, InstSize::from_ty(ty));
+                format!("dup {}, {}", rd, rn)
+            }
+            &Inst::VecDupFromFpu { rd, rn, ty } => {
+                let vector_type = match ty {
+                    F32 => F32X4,
+                    F64 => F64X2,
+                    _ => unimplemented!(),
+                };
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, vector_type);
+                let rn = show_vreg_element(rn, mb_rru, 0, ty);
+                format!("dup {}, {}", rd, rn)
             }
             &Inst::VecExtend { t, rd, rn } => {
                 let (op, dest, src) = match t {

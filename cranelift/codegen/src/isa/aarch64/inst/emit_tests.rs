@@ -1859,6 +1859,60 @@ fn test_aarch64_binemit() {
         "cset x5, hi",
     ));
     insns.push((
+        Inst::VecDup {
+            rd: writable_vreg(25),
+            rn: xreg(7),
+            ty: I8,
+        },
+        "F90C014E",
+        "dup v25.16b, w7",
+    ));
+    insns.push((
+        Inst::VecDup {
+            rd: writable_vreg(2),
+            rn: xreg(23),
+            ty: I16,
+        },
+        "E20E024E",
+        "dup v2.8h, w23",
+    ));
+    insns.push((
+        Inst::VecDup {
+            rd: writable_vreg(0),
+            rn: xreg(28),
+            ty: I32,
+        },
+        "800F044E",
+        "dup v0.4s, w28",
+    ));
+    insns.push((
+        Inst::VecDup {
+            rd: writable_vreg(31),
+            rn: xreg(5),
+            ty: I64,
+        },
+        "BF0C084E",
+        "dup v31.2d, x5",
+    ));
+    insns.push((
+        Inst::VecDupFromFpu {
+            rd: writable_vreg(14),
+            rn: vreg(19),
+            ty: F32,
+        },
+        "6E06044E",
+        "dup v14.4s, v19.s[0]",
+    ));
+    insns.push((
+        Inst::VecDupFromFpu {
+            rd: writable_vreg(18),
+            rn: vreg(10),
+            ty: F64,
+        },
+        "5205084E",
+        "dup v18.2d, v10.d[0]",
+    ));
+    insns.push((
         Inst::VecExtend {
             t: VecExtendOp::Sxtl8,
             rd: writable_vreg(4),

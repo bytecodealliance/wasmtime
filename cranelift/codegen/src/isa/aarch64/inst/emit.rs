@@ -1175,6 +1175,34 @@ impl MachInstEmit for Inst {
                         | machreg_to_gpr(rd.to_reg()),
                 );
             }
+            &Inst::VecDup { rd, rn, ty } => {
+                let imm5 = match ty {
+                    I8 => 0b00001,
+                    I16 => 0b00010,
+                    I32 => 0b00100,
+                    I64 => 0b01000,
+                    _ => unimplemented!(),
+                };
+                sink.put4(
+                    0b010_01110000_00000_000011_00000_00000
+                        | (imm5 << 16)
+                        | (machreg_to_gpr(rn) << 5)
+                        | machreg_to_vec(rd.to_reg()),
+                );
+            }
+            &Inst::VecDupFromFpu { rd, rn, ty } => {
+                let imm5 = match ty {
+                    F32 => 0b00100,
+                    F64 => 0b01000,
+                    _ => unimplemented!(),
+                };
+                sink.put4(
+                    0b010_01110000_00000_000001_00000_00000
+                        | (imm5 << 16)
+                        | (machreg_to_vec(rn) << 5)
+                        | machreg_to_vec(rd.to_reg()),
+                );
+            }
             &Inst::VecExtend { t, rd, rn } => {
                 let (u, immh) = match t {
                     VecExtendOp::Sxtl8 => (0b0, 0b001),
