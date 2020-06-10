@@ -5,6 +5,7 @@ use crate::{init_file_per_thread_logger, pick_compilation_strategy, CommonOption
 use anyhow::{anyhow, Context as _, Result};
 use std::{
     fs::File,
+    io::Write,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -52,8 +53,6 @@ impl WasmToObjCommand {
     }
 
     fn handle_module(&self) -> Result<()> {
-        use std::io::Write;
-
         if self.common.log_to_files {
             let prefix = "wasm2obj.dbg.";
             init_file_per_thread_logger(prefix);

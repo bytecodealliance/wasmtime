@@ -111,7 +111,7 @@ pub fn write_debugsections_image(
     convert_object_elf_to_loadable_file(&mut bytes, code_region.0);
 
     // let mut file = ::std::fs::File::create(::std::path::Path::new("test.o")).expect("file");
-    // ::std::io::Write::write(&mut file, &bytes).expect("write");
+    // ::std::io::Write::write_all(&mut file, &bytes).expect("write");
 
     Ok(bytes)
 }
