@@ -465,8 +465,8 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         insn.is_move()
     }
 
-    fn get_vreg_count_estimate(&self) -> Option<usize> {
-        Some(self.vreg_types.len())
+    fn get_num_vregs(&self) -> usize {
+        self.vreg_types.len()
     }
 
     fn get_spillslot_size(&self, regclass: RegClass, vreg: VirtualReg) -> u32 {

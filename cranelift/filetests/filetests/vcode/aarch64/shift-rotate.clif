@@ -368,10 +368,10 @@ block0(v0: i16):
 
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: uxth w1, w0
-; nextln: lsr w0, w1, #6
-; nextln: lsl w1, w1, #10
-; nextln: orr w0, w1, w0
+; nextln: uxth w0, w0
+; nextln: lsr w1, w0, #6
+; nextln: lsl w0, w0, #10
+; nextln: orr w0, w0, w1
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
@@ -385,10 +385,10 @@ block0(v0: i8):
 
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
-; nextln:  uxtb w1, w0
-; nextln:  lsr w0, w1, #5
-; nextln:  lsl w1, w1, #3
-; nextln:  orr w0, w1, w0
+; nextln:  uxtb w0, w0
+; nextln:  lsr w1, w0, #5
+; nextln:  lsl w0, w0, #3
+; nextln:  orr w0, w0, w1
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret

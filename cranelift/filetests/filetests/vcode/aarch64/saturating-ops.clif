@@ -25,10 +25,10 @@ block0(v0: i8, v1: i8):
 
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: uxtb x2, w0
-; nextln: uxtb x0, w1
-; nextln: mov v0.d[0], x2
-; nextln: mov v1.d[0], x0
+; nextln: uxtb x0, w0
+; nextln: uxtb x1, w1
+; nextln: mov v0.d[0], x0
+; nextln: mov v1.d[0], x1
 ; nextln: uqadd d0, d0, d1
 ; nextln: mov x0, v0.d[0]
 ; nextln: mov sp, fp
