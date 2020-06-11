@@ -225,7 +225,9 @@ jobs:
         RUST_BACKTRACE: 1
 
     # Test debug (DWARF) related functionality.
-    - run: cargo test test_debug_dwarf -- --ignored --test-threads 1
+    - run: |
+        sudo apt-get install -y gdb
+        cargo test test_debug_dwarf -- --ignored --test-threads 1
       if: matrix.os == 'ubuntu-latest'
       env:
         RUST_BACKTRACE: 1

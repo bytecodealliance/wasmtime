@@ -65,7 +65,7 @@ check:        DW_AT_decl_line	(10)
 ))]
 fn test_debug_dwarf5_translate() -> Result<()> {
     check_wasm(
-        "tests/debug/testsuite/fib-wasm-dwarf5.wasm",
+        "tests/all/debug/testsuite/fib-wasm-dwarf5.wasm",
         r##"
 check: DW_TAG_compile_unit
 # We have "fib" function

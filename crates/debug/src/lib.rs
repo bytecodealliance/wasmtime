@@ -117,43 +117,53 @@ pub fn write_debugsections_image(
 }
 
 fn convert_object_elf_to_loadable_file(bytes: &mut Vec<u8>, code_ptr: *const u8) {
+    use object::elf::*;
+    use object::endian::LittleEndian;
     use std::ffi::CStr;
+    use std::mem::size_of;
     use std::os::raw::c_char;
 
+    let e = LittleEndian;
+    let header: &FileHeader64<LittleEndian> =
+        unsafe { &*(bytes.as_mut_ptr() as *const FileHeader64<_>) };
     assert!(
-        bytes[0x4] == 2 && bytes[0x5] == 1,
-        "bits and endianess in .ELF"
+        header.e_ident.class == ELFCLASS64 && header.e_ident.data == ELFDATA2LSB,
+        "bits and endianess in .ELF",
     );
-    let e_phoff = unsafe { *(bytes.as_ptr().offset(0x20) as *const u64) };
-    let e_phnum = unsafe { *(bytes.as_ptr().offset(0x38) as *const u16) };
     assert!(
-        e_phoff == 0 && e_phnum == 0,
+        header.e_phoff.get(e) == 0 && header.e_phnum.get(e) == 0,
         "program header table is empty"
     );
-    let e_shentsize = unsafe { *(bytes.as_ptr().offset(0x3A) as *const u16) };
-    assert_eq!(e_shentsize, 0x40, "size of sh");
+    let e_shentsize = header.e_shentsize.get(e);
+    assert_eq!(
+        e_shentsize as usize,
+        size_of::<SectionHeader64<LittleEndian>>(),
+        "size of sh"
+    );
 
-    let e_shoff = unsafe { *(bytes.as_ptr().offset(0x28) as *const u64) };
-    let e_shnum = unsafe { *(bytes.as_ptr().offset(0x3C) as *const u16) };
+    let e_shoff = header.e_shoff.get(e);
+    let e_shnum = header.e_shnum.get(e);
     let mut shstrtab_off = 0;
     for i in 0..e_shnum {
         let off = e_shoff as isize + i as isize * e_shentsize as isize;
-        let sh_type = unsafe { *(bytes.as_ptr().offset(off + 0x4) as *const u32) };
-        if sh_type != /* SHT_SYMTAB */ 3 {
+        let section: &SectionHeader64<LittleEndian> =
+            unsafe { &*(bytes.as_ptr().offset(off) as *const SectionHeader64<_>) };
+        if section.sh_type.get(e) != SHT_STRTAB {
             continue;
         }
-        shstrtab_off = unsafe { *(bytes.as_ptr().offset(off + 0x18) as *const u64) };
+        shstrtab_off = section.sh_offset.get(e);
     }
     let mut segment = None;
     for i in 0..e_shnum {
         let off = e_shoff as isize + i as isize * e_shentsize as isize;
-        let sh_type = unsafe { *(bytes.as_ptr().offset(off + 0x4) as *const u32) };
-        if sh_type != /* SHT_PROGBITS */ 1 {
+        let section: &mut SectionHeader64<LittleEndian> =
+            unsafe { &mut *(bytes.as_mut_ptr().offset(off) as *mut SectionHeader64<_>) };
+        if section.sh_type.get(e) != SHT_PROGBITS {
             continue;
         }
         // It is a SHT_PROGBITS, but we need to check sh_name to ensure it is our function
+        let sh_name_off = section.sh_name.get(e);
         let sh_name = unsafe {
-            let sh_name_off = *(bytes.as_ptr().offset(off) as *const u32);
             CStr::from_ptr(
                 bytes
                     .as_ptr()
@@ -170,42 +180,36 @@ fn convert_object_elf_to_loadable_file(bytes: &mut Vec<u8>, code_ptr: *const u8)
         assert!(segment.is_none());
         // Functions was added at write_debugsections_image as .text.all.
         // Patch vaddr, and save file location and its size.
-        unsafe {
-            *(bytes.as_ptr().offset(off + 0x10) as *mut u64) = code_ptr as u64;
-        };
-        let sh_offset = unsafe { *(bytes.as_ptr().offset(off + 0x18) as *const u64) };
-        let sh_size = unsafe { *(bytes.as_ptr().offset(off + 0x20) as *const u64) };
+        section.sh_addr.set(e, code_ptr as u64);
+        let sh_offset = section.sh_offset.get(e);
+        let sh_size = section.sh_size.get(e);
         segment = Some((sh_offset, code_ptr, sh_size));
         // Fix name too: cut it to just ".text"
-        unsafe {
-            let sh_name_off = *(bytes.as_ptr().offset(off) as *const u32);
-            bytes[(shstrtab_off + sh_name_off as u64) as usize + ".text".len()] = 0;
-        }
+        bytes[(shstrtab_off + sh_name_off as u64) as usize + ".text".len()] = 0;
     }
 
     // LLDB wants segment with virtual address set, placing them at the end of ELF.
     let ph_off = bytes.len();
+    let e_phentsize = size_of::<ProgramHeader64<LittleEndian>>();
     if let Some((sh_offset, v_offset, sh_size)) = segment {
-        let segment = vec![0; 0x38];
-        unsafe {
-            *(segment.as_ptr() as *mut u32) = /* PT_LOAD */ 0x1;
-            *(segment.as_ptr().offset(0x8) as *mut u64) = sh_offset;
-            *(segment.as_ptr().offset(0x10) as *mut u64) = v_offset as u64;
-            *(segment.as_ptr().offset(0x18) as *mut u64) = v_offset as u64;
-            *(segment.as_ptr().offset(0x20) as *mut u64) = sh_size;
-            *(segment.as_ptr().offset(0x28) as *mut u64) = sh_size;
-        }
-        bytes.extend_from_slice(&segment);
+        bytes.resize(ph_off + e_phentsize, 0);
+        let program: &mut ProgramHeader64<LittleEndian> =
+            unsafe { &mut *(bytes.as_ptr().add(ph_off) as *mut ProgramHeader64<_>) };
+        program.p_type.set(e, PT_LOAD);
+        program.p_offset.set(e, sh_offset);
+        program.p_vaddr.set(e, v_offset as u64);
+        program.p_paddr.set(e, v_offset as u64);
+        program.p_filesz.set(e, sh_size as u64);
+        program.p_memsz.set(e, sh_size as u64);
     } else {
         unreachable!();
     }
 
     // It is somewhat loadable ELF file at this moment.
-    // Update e_flags, e_phoff, e_phentsize and e_phnum.
-    unsafe {
-        *(bytes.as_ptr().offset(0x10) as *mut u16) = /* ET_DYN */ 3;
-        *(bytes.as_ptr().offset(0x20) as *mut u64) = ph_off as u64;
-        *(bytes.as_ptr().offset(0x36) as *mut u16) = 0x38 as u16;
-        *(bytes.as_ptr().offset(0x38) as *mut u16) = 1 as u16;
-    }
+    let header: &mut FileHeader64<LittleEndian> =
+        unsafe { &mut *(bytes.as_mut_ptr() as *mut FileHeader64<_>) };
+    header.e_type.set(e, ET_DYN);
+    header.e_phoff.set(e, ph_off as u64);
+    header.e_phentsize.set(e, e_phentsize as u16);
+    header.e_phnum.set(e, 1u16);
 }
