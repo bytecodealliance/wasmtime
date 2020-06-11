@@ -1025,7 +1025,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
             }
         }
 
-        Inst::XMM_MOV_RM_R {
+        Inst::XMM_Mov_RM_R {
             op,
             src: src_e,
             dst: reg_g,
@@ -1078,7 +1078,16 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                 }
             }
         }
+        Inst::XMM_Mov_R_M { op, src, addr } => {
+            let rex = RexFlags::clear_w();
+            let (prefix, opcode) = match op {
+                SseOpcode::Movd => (LegacyPrefix::_66, 0x0F7E),
+                _ => unimplemented!("Emit xmm mov r m"),
+            };
 
+            // MOV r64, r/m64 is (REX.W==1) 89 /r
+            emit_std_reg_mem(sink, prefix, opcode, 2, *src, addr, rex);
+        }
         _ => panic!("x64_emit: unhandled: {} ", inst.show_rru(None)),
     }
 }

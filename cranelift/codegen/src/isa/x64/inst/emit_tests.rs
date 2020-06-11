@@ -2392,6 +2392,21 @@ fn test_x64_emit() {
         "440F56F9",
         "orps    %xmm1, %xmm15",
     ));
+
+    insns.push((
+        Inst::xmm_mov_r_m(SseOpcode::Movd, xmm0, Addr::imm_reg(321, rbx)),
+        "660F7E8341010000",
+        "movd    %xmm0, 321(%rbx)",
+    ));
+
+    // TODO: Test movd
+    // Should match to %eax not rax.
+    //insns.push((
+    //    Inst::xmm_rm_r(SSE_Op::SSE2_Movd, RM::reg(rax), w_xmm15),
+    //    "664D0F6EFA",
+    //    "movd    %eax, %xmm15",
+    //));
+
     insns.push((
         Inst::xmm_rm_r(SseOpcode::Orps, RegMem::reg(xmm5), w_xmm4),
         "0F56E5",

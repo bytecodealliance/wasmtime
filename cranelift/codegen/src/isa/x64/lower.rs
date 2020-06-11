@@ -25,6 +25,18 @@ type Ctx<'a> = &'a mut dyn LowerCtx<I = Inst>;
 //=============================================================================
 // Helpers for instruction lowering.
 
+pub(crate) fn ldst_offset(data: &InstructionData) -> Option<i32> {
+    match data {
+        &InstructionData::Load { offset, .. }
+        | &InstructionData::StackLoad { offset, .. }
+        | &InstructionData::LoadComplex { offset, .. }
+        | &InstructionData::Store { offset, .. }
+        | &InstructionData::StackStore { offset, .. }
+        | &InstructionData::StoreComplex { offset, .. } => Some(offset.into()),
+        _ => None,
+    }
+}
+
 fn is_int_ty(ty: Type) -> bool {
     match ty {
         types::I8 | types::I16 | types::I32 | types::I64 => true,
@@ -218,6 +230,33 @@ fn lower_insn_to_regs<'a>(ctx: Ctx<'a>, inst: IRInst) {
             } else {
                 unimplemented!("unimplemented lowering for opcode {:?}", op);
             }
+        }
+        Opcode::Store
+        | Opcode::Istore8
+        | Opcode::Istore16
+        | Opcode::Istore32
+        | Opcode::StoreComplex
+        | Opcode::Istore8Complex
+        | Opcode::Istore16Complex
+        | Opcode::Istore32Complex => {
+            // Load the offset
+            let off = ldst_offset(ctx.data(inst)).unwrap() as u32;
+            let elem_ty = ctx.input_ty(inst, 0);
+            let src = input_to_reg(ctx, inst, 0);
+            let mem = input_to_reg(ctx, inst, 1);
+            let num_addr_regs = ctx.num_inputs(inst) - 1;
+            // TODO: How to account for the ctx.memflags
+            match src.get_class() {
+                RegClass::I64 => ctx.emit(match (elem_ty, num_addr_regs) {
+                    (I32, 1) | (F32, 1) => Inst::mov_r_m(4, src, Addr::imm_reg(off, mem)),
+                    _ => unimplemented!("Store memory profile not supported"),
+                }),
+                RegClass::V128 => ctx.emit(match (elem_ty, num_addr_regs) {
+                    (F32, 1) => Inst::xmm_mov_r_m(SseOpcode::Movd, src, Addr::imm_reg(off, mem)),
+                    _ => unimplemented!("Store memory profile not supported"),
+                }),
+                _ => unimplemented!("Store memory profile not supported"),
+            };
         }
         Opcode::Fcopysign => {
             let dst = output_to_reg(ctx, inst, 0);

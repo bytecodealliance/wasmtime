@@ -152,12 +152,12 @@ pub(crate) enum Inst {
     JmpUnknown { target: RegMem },
 
     /// mov between XMM registers (32 64) (reg addr) reg
-    /// XMM_MOV_RM_R differs from XMM_RM_R in that the dst
+    /// XMM_Mov_RM_R differs from XMM_RM_R in that the dst
     /// register of XMM_MOV_RM_R is not used in the computation
     /// of the instruction dst value and so does not have to
     /// be a previously valid value. This is characteristic of
     /// mov instructions.
-    XMM_MOV_RM_R {
+    XMM_Mov_RM_R {
         op: SseOpcode,
         src: RegMem,
         dst: Writable<Reg>,
@@ -169,6 +169,9 @@ pub(crate) enum Inst {
         src: RegMem,
         dst: Writable<Reg>,
     },
+
+    /// mov reg addr (good for all memory stores from xmm registers)
+    XMM_Mov_R_M { op: SseOpcode, src: Reg, addr: Addr },
 }
 
 // Handy constructors for Insts.
@@ -221,12 +224,17 @@ impl Inst {
 
     pub(crate) fn xmm_mov_rm_r(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
-        Inst::XMM_MOV_RM_R { op, src, dst }
+        Inst::XMM_Mov_RM_R { op, src, dst }
     }
 
     pub(crate) fn xmm_rm_r(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Self {
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
         Inst::XMM_RM_R { op, src, dst }
+    }
+
+    pub(crate) fn xmm_mov_r_m(op: SseOpcode, src: Reg, addr: Addr) -> Inst {
+        debug_assert!(src.get_class() == RegClass::V128);
+        Inst::XMM_Mov_R_M { op, src, addr }
     }
 
     pub(crate) fn movzx_m_r(extMode: ExtMode, addr: Addr, dst: Writable<Reg>) -> Inst {
@@ -375,11 +383,17 @@ impl ShowWithRRU for Inst {
                 src.show_rru_sized(mb_rru, sizeLQ(*is_64)),
                 show_ireg_sized(dst.to_reg(), mb_rru, sizeLQ(*is_64)),
             ),
-            Inst::XMM_MOV_RM_R { op, src, dst } => format!(
+            Inst::XMM_Mov_RM_R { op, src, dst } => format!(
                 "{} {}, {}",
                 ljustify(op.to_string()),
                 src.show_rru_sized(mb_rru, op.src_size()),
                 show_ireg_sized(dst.to_reg(), mb_rru, 8),
+            ),
+            Inst::XMM_Mov_R_M { op, src, addr } => format!(
+                "{} {}, {}",
+                ljustify(op.to_string()),
+                show_ireg_sized(*src, mb_rru, 8),
+                addr.show_rru(mb_rru)
             ),
             Inst::XMM_RM_R { op, src, dst } => format!(
                 "{} {}, {}",
@@ -536,13 +550,17 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             src.get_regs_as_uses(collector);
             collector.add_mod(*dst);
         }
-        Inst::XMM_MOV_RM_R { src, dst, .. } => {
+        Inst::XMM_Mov_RM_R { src, dst, .. } => {
             src.get_regs_as_uses(collector);
             collector.add_def(*dst);
         }
         Inst::XMM_RM_R { src, dst, .. } => {
             src.get_regs_as_uses(collector);
             collector.add_mod(*dst);
+        }
+        Inst::XMM_Mov_R_M { op: _, src, addr } => {
+            collector.add_use(*src);
+            addr.get_regs_as_uses(collector);
         }
         Inst::Imm_R {
             dst_is_64: _,
@@ -703,7 +721,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             src.map_uses(mapper);
             map_mod(mapper, dst);
         }
-        Inst::XMM_MOV_RM_R {
+        Inst::XMM_Mov_RM_R {
             op: _,
             ref mut src,
             ref mut dst,
@@ -718,6 +736,14 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         } => {
             src.map_uses(mapper);
             map_mod(mapper, dst);
+        }
+        Inst::XMM_Mov_R_M {
+            op: _,
+            ref mut src,
+            ref mut addr,
+        } => {
+            map_use(mapper, src);
+            addr.map_uses(mapper);
         }
         Inst::Imm_R {
             dst_is_64: _,
@@ -820,7 +846,7 @@ impl MachInst for Inst {
         // %reg.
         match self {
             Self::Mov_R_R { is_64, src, dst } if *is_64 => Some((*dst, *src)),
-            Self::XMM_MOV_RM_R { op, src, dst }
+            Self::XMM_Mov_RM_R { op, src, dst }
                 if *op == SseOpcode::Movss
                     || *op == SseOpcode::Movsd
                     || *op == SseOpcode::Movaps =>
