@@ -80,7 +80,10 @@ impl ValueConversion {
 
     /// Is this a conversion to pointer?
     pub fn is_pointer(self) -> bool {
-        matches!(self, Self::Pointer(_))
+        match self {
+            Self::Pointer(_) => true,
+            _ => false,
+        }
     }
 }
 
