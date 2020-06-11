@@ -181,6 +181,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         },
         "Cranelift" => match (testsuite, testname) {
             ("simd", "simd_address") => return false,
+            ("simd", "simd_align") => return false,
             ("simd", "simd_bitwise") => return false,
             ("simd", "simd_boolean") => return false,
             ("simd", "simd_i8x16_cmp") => return false,
