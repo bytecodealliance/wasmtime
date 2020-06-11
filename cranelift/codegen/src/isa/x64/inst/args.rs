@@ -5,6 +5,7 @@ use std::string::{String, ToString};
 
 use regalloc::{RealRegUniverse, Reg, RegClass, RegUsageCollector};
 
+use crate::ir::condcodes::IntCC;
 use crate::machinst::*;
 
 use super::regs::show_ireg_sized;
@@ -474,7 +475,24 @@ pub enum CC {
 }
 
 impl CC {
-    pub(crate) fn invert(&self) -> CC {
+    pub(crate) fn from_intcc(intcc: IntCC) -> Self {
+        match intcc {
+            IntCC::Equal => CC::Z,
+            IntCC::NotEqual => CC::NZ,
+            IntCC::SignedGreaterThanOrEqual => CC::NL,
+            IntCC::SignedGreaterThan => CC::NLE,
+            IntCC::SignedLessThanOrEqual => CC::LE,
+            IntCC::SignedLessThan => CC::L,
+            IntCC::UnsignedGreaterThanOrEqual => CC::NB,
+            IntCC::UnsignedGreaterThan => CC::NBE,
+            IntCC::UnsignedLessThanOrEqual => CC::BE,
+            IntCC::UnsignedLessThan => CC::B,
+            IntCC::Overflow => CC::O,
+            IntCC::NotOverflow => CC::NO,
+        }
+    }
+
+    pub(crate) fn invert(&self) -> Self {
         match self {
             CC::O => CC::NO,
             CC::NO => CC::O,
