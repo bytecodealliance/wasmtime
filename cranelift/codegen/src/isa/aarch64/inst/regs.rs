@@ -1,7 +1,8 @@
 //! AArch64 ISA definitions: registers.
 
 use crate::ir::types::*;
-use crate::isa::aarch64::inst::InstSize;
+use crate::isa::aarch64::inst::OperandSize;
+use crate::isa::aarch64::inst::ScalarSize;
 use crate::machinst::*;
 use crate::settings;
 
@@ -255,7 +256,7 @@ pub fn create_reg_universe(flags: &settings::Flags) -> RealRegUniverse {
 
 /// If `ireg` denotes an I64-classed reg, make a best-effort attempt to show
 /// its name at the 32-bit size.
-pub fn show_ireg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, size: InstSize) -> String {
+pub fn show_ireg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, size: OperandSize) -> String {
     let mut s = reg.show_rru(mb_rru);
     if reg.get_class() != RegClass::I64 || !size.is32() {
         // We can't do any better.
@@ -277,15 +278,17 @@ pub fn show_ireg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, size: InstSiz
 }
 
 /// Show a vector register.
-pub fn show_freg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, size: InstSize) -> String {
+pub fn show_freg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, size: ScalarSize) -> String {
     let mut s = reg.show_rru(mb_rru);
     if reg.get_class() != RegClass::V128 {
         return s;
     }
     let prefix = match size {
-        InstSize::Size32 => "s",
-        InstSize::Size64 => "d",
-        InstSize::Size128 => "q",
+        ScalarSize::Size8 => "b",
+        ScalarSize::Size16 => "h",
+        ScalarSize::Size32 => "s",
+        ScalarSize::Size64 => "d",
+        ScalarSize::Size128 => "q",
     };
     s.replace_range(0..1, prefix);
     s

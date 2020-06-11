@@ -358,7 +358,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     // The following checks must be done in 32-bit or 64-bit, depending
                     // on the input type. Even though the initial div instruction is
                     // always done in 64-bit currently.
-                    let size = InstSize::from_ty(ty);
+                    let size = OperandSize::from_ty(ty);
                     // Check RHS is -1.
                     ctx.emit(Inst::AluRRImm12 {
                         alu_op: choose_32_64(ty, ALUOp::AddS32, ALUOp::AddS64),
@@ -483,15 +483,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Ishl | Opcode::Ushr | Opcode::Sshr => {
             let ty = ty.unwrap();
-            let size = InstSize::from_bits(ty_bits(ty));
             let rd = get_output_reg(ctx, outputs[0]);
             if ty_bits(ty) < 128 {
+                let size = OperandSize::from_bits(ty_bits(ty));
                 let narrow_mode = match (op, size) {
                     (Opcode::Ishl, _) => NarrowValueMode::None,
-                    (Opcode::Ushr, InstSize::Size64) => NarrowValueMode::ZeroExtend64,
-                    (Opcode::Ushr, InstSize::Size32) => NarrowValueMode::ZeroExtend32,
-                    (Opcode::Sshr, InstSize::Size64) => NarrowValueMode::SignExtend64,
-                    (Opcode::Sshr, InstSize::Size32) => NarrowValueMode::SignExtend32,
+                    (Opcode::Ushr, OperandSize::Size64) => NarrowValueMode::ZeroExtend64,
+                    (Opcode::Ushr, OperandSize::Size32) => NarrowValueMode::ZeroExtend32,
+                    (Opcode::Sshr, OperandSize::Size64) => NarrowValueMode::SignExtend64,
+                    (Opcode::Sshr, OperandSize::Size32) => NarrowValueMode::SignExtend32,
                     _ => unreachable!(),
                 };
                 let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
@@ -1540,7 +1540,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 } else if idx == 0 {
                     ctx.emit(Inst::gen_move(rd, rn, ty));
                 } else {
-                    ctx.emit(Inst::FpuMoveFromVec { rd, rn, idx, ty });
+                    let size = ScalarSize::from_ty(ty);
+                    ctx.emit(Inst::FpuMoveFromVec { rd, rn, idx, size });
                 }
             } else {
                 unreachable!();
