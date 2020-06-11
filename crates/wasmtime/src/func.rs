@@ -194,9 +194,17 @@ macro_rules! getters {
                     >(export.address);
                     let mut ret = None;
                     $(let $args = $args.into_abi();)*
-                    catch_traps(export.vmctx, &instance.store, || {
-                        ret = Some(fnptr(export.vmctx, ptr::null_mut(), $($args,)*));
-                    })?;
+
+                    {
+                        let canary = 0;
+                        let _auto_reset = instance
+                            .store
+                            .externref_activations_table()
+                            .set_stack_canary(&canary);
+                        catch_traps(export.vmctx, &instance.store, || {
+                            ret = Some(fnptr(export.vmctx, ptr::null_mut(), $($args,)*));
+                        })?;
+                    }
 
                     Ok(ret.unwrap())
                 }
@@ -552,14 +560,23 @@ impl Func {
         }
 
         // Call the trampoline.
-        catch_traps(self.export.vmctx, &self.instance.store, || unsafe {
-            (self.trampoline)(
-                self.export.vmctx,
-                ptr::null_mut(),
-                self.export.address,
-                values_vec.as_mut_ptr(),
-            )
-        })?;
+        {
+            let canary = 0;
+            let _auto_reset = self
+                .instance
+                .store
+                .externref_activations_table()
+                .set_stack_canary(&canary);
+
+            catch_traps(self.export.vmctx, &self.instance.store, || unsafe {
+                (self.trampoline)(
+                    self.export.vmctx,
+                    ptr::null_mut(),
+                    self.export.address,
+                    values_vec.as_mut_ptr(),
+                )
+            })?;
+        }
 
         // Load the return values out of `values_vec`.
         let mut results = Vec::with_capacity(my_ty.results().len());

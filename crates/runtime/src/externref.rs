@@ -499,6 +499,14 @@ pub struct VMExternRefActivationsTable {
     /// is just part of this struct so that we can reuse the allocation, rather
     /// than create a new hash set every GC.
     precise_stack_roots: RefCell<HashSet<NonNull<VMExternData>>>,
+
+    /// A pointer to a `u8` on the youngest host stack frame before we called
+    /// into Wasm for the first time. When walking the stack in garbage
+    /// collection, if we don't find this frame, then we failed to walk every
+    /// Wasm stack frame, which means we failed to find all on-stack,
+    /// inside-a-Wasm-frame roots, and doing a GC could lead to freeing one of
+    /// those missed roots, and use after free.
+    stack_canary: Cell<Option<NonNull<u8>>>,
 }
 
 impl VMExternRefActivationsTable {
@@ -515,6 +523,7 @@ impl VMExternRefActivationsTable {
             end: Cell::new(NonNull::new(end).unwrap()),
             chunks: RefCell::new(vec![chunk]),
             precise_stack_roots: RefCell::new(HashSet::with_capacity(Self::INITIAL_CHUNK_SIZE)),
+            stack_canary: Cell::new(None),
         }
     }
 
@@ -707,6 +716,73 @@ impl VMExternRefActivationsTable {
         for slot in chunks.last().unwrap().iter().skip(num_filled_in_last_chunk) {
             unsafe {
                 *slot.get() = None;
+            }
+        }
+    }
+
+    /// Set the stack canary around a call into Wasm.
+    ///
+    /// The return value should not be dropped until after the Wasm call has
+    /// returned.
+    ///
+    /// While this method is always safe to call (or not call), it is unsafe to
+    /// call the `wasmtime_runtime::gc` function unless this method is called at
+    /// the proper times and its return value properly outlives its Wasm call.
+    ///
+    /// For `gc` to be safe, this is only *strictly required* to surround the
+    /// oldest host-->Wasm stack frame transition on this thread, but repeatedly
+    /// calling it is idempotent and cheap, so it is recommended to call this
+    /// for every host-->Wasm call.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use wasmtime_runtime::*;
+    ///
+    /// #let get_table_from_somewhere = || unimplemented!();
+    /// let table: &VMExternRefActivationsTable = get_table_from_somewhere();
+    ///
+    /// // Set the canary before a Wasm call. The canary should always be a
+    /// // local on the stack.
+    /// let canary = 0;
+    /// let auto_reset_canary = table.set_stack_canary(&canary);
+    ///
+    /// // Do the call into Wasm.
+    /// #let call_into_wasm = || unimplemented!();
+    /// call_into_wasm();
+    ///
+    /// // Only drop the value returned by `set_stack_canary` after the Wasm
+    /// // call has returned.
+    /// drop(auto_reset_canary);
+    /// ```
+    pub fn set_stack_canary<'a>(&'a self, canary: &u8) -> impl Drop + 'a {
+        let should_reset = if self.stack_canary.get().is_none() {
+            let canary = canary as *const u8 as *mut u8;
+            self.stack_canary.set(Some(unsafe {
+                debug_assert!(!canary.is_null());
+                NonNull::new_unchecked(canary)
+            }));
+            true
+        } else {
+            false
+        };
+
+        return AutoResetCanary {
+            table: self,
+            should_reset,
+        };
+
+        struct AutoResetCanary<'a> {
+            table: &'a VMExternRefActivationsTable,
+            should_reset: bool,
+        }
+
+        impl Drop for AutoResetCanary<'_> {
+            fn drop(&mut self) {
+                if self.should_reset {
+                    debug_assert!(self.table.stack_canary.get().is_some());
+                    self.table.stack_canary.set(None);
+                }
             }
         }
     }
@@ -954,7 +1030,14 @@ impl<T> std::ops::DerefMut for DebugOnly<T> {
 }
 
 /// Perform garbage collection of `VMExternRef`s.
-pub fn gc(
+///
+/// # Unsafety
+///
+/// You must have called `VMExternRefActivationsTable::set_stack_canary` for at
+/// least the oldest host-->Wasm stack frame transition on this thread's stack
+/// (it is idempotent to call it more than once) and keep its return value alive
+/// across the duration of that host-->Wasm call.
+pub unsafe fn gc(
     stack_maps_registry: &StackMapRegistry,
     externref_activations_table: &VMExternRefActivationsTable,
 ) {
@@ -963,11 +1046,57 @@ pub fn gc(
     debug_assert!({
         // This set is only non-empty within this function. It is built up when
         // walking the stack and interpreting stack maps, and then drained back
-        // into the activations table's bump-allocated space at the end.
+        // into the activations table's bump-allocated space at the
+        // end. Therefore, it should always be empty upon entering this
+        // function.
         let precise_stack_roots = externref_activations_table.precise_stack_roots.borrow();
         precise_stack_roots.is_empty()
     });
 
+    // Whenever we call into Wasm from host code for the first time, we set a
+    // stack canary. When we return to that host code, we unset the stack
+    // canary. If there is *not* a stack canary, then there must be zero Wasm
+    // frames on the stack. Therefore, we can simply reset the table without
+    // walking the stack.
+    let stack_canary = match externref_activations_table.stack_canary.get() {
+        None => {
+            if cfg!(debug_assertions) {
+                // Assert that there aren't any Wasm frames on the stack.
+                backtrace::trace(|frame| {
+                    let stack_map = stack_maps_registry.lookup_stack_map(frame.ip() as usize);
+                    assert!(stack_map.is_none());
+                    true
+                });
+            }
+            externref_activations_table.reset();
+            log::debug!("end GC");
+            return;
+        }
+        Some(canary) => canary.as_ptr() as usize,
+    };
+
+    // There is a stack canary, so there must be Wasm frames on the stack. The
+    // rest of this function consists of:
+    //
+    // * walking the stack,
+    //
+    // * finding the precise set of roots inside Wasm frames via our stack maps,
+    //   and
+    //
+    // * resetting our bump-allocated table's over-approximation to the
+    //   newly-discovered precise set.
+
+    // The SP of the previous frame we processed.
+    let mut last_sp = None;
+
+    // Whether we have found our stack canary or not yet.
+    let mut found_canary = false;
+
+    // The `activations_table_set` is used for `debug_assert!`s checking that
+    // every reference we read out from the stack via stack maps is actually in
+    // the table. If that weren't true, than either we forgot to insert a
+    // reference in the table when passing it into Wasm (a bug) or we are
+    // reading invalid references from the stack (another bug).
     let mut activations_table_set: DebugOnly<HashSet<_>> = Default::default();
     if cfg!(debug_assertions) {
         externref_activations_table.elements(|elem| {
@@ -977,20 +1106,18 @@ pub fn gc(
 
     backtrace::trace(|frame| {
         let pc = frame.ip() as usize;
+        let sp = frame.sp() as usize;
 
         if let Some(stack_map) = stack_maps_registry.lookup_stack_map(pc) {
-            let ptr_to_frame = frame.sp() as usize;
-
             for i in 0..(stack_map.mapped_words() as usize) {
                 if stack_map.get_bit(i) {
                     // Stack maps have one bit per word in the frame, and the
                     // zero^th bit is the *lowest* addressed word in the frame,
                     // i.e. the closest to the SP. So to get the `i`^th word in
-                    // this frame, we add `i * sizeof(word)` to the
-                    // lowest-addressed word within this frame.
-                    let ptr_to_ref = ptr_to_frame + i * mem::size_of::<usize>();
+                    // this frame, we add `i * sizeof(word)` to the SP.
+                    let ptr_to_ref = sp + i * mem::size_of::<usize>();
 
-                    let r = unsafe { std::ptr::read(ptr_to_ref as *const *mut VMExternData) };
+                    let r = std::ptr::read(ptr_to_ref as *const *mut VMExternData);
                     debug_assert!(
                         r.is_null() || activations_table_set.contains(&r),
                         "every on-stack externref inside a Wasm frame should \
@@ -1003,11 +1130,32 @@ pub fn gc(
             }
         }
 
-        // Keep walking the stack.
-        true
+        if let Some(last_sp) = last_sp {
+            // We've found the stack canary when we walk over the frame that it
+            // is contained within.
+            found_canary |= last_sp <= stack_canary && stack_canary <= sp;
+        }
+        last_sp = Some(sp);
+
+        // Keep walking the stack until we've found the canary, which is the
+        // oldest frame before we ever called into Wasm. We can stop once we've
+        // found it because there won't be any more Wasm frames, and therefore
+        // there won't be anymore on-stack, inside-a-Wasm-frame roots.
+        !found_canary
     });
 
-    externref_activations_table.reset();
+    // Only reset the table if we found the stack canary, and therefore know
+    // that we discovered all the on-stack, inside-a-Wasm-frame roots. If we did
+    // *not* find the stack canary, then `libunwind` failed to walk the whole
+    // stack, and we might be missing roots. Reseting the table would free those
+    // missing roots while they are still in use, leading to use-after-free.
+    if found_canary {
+        externref_activations_table.reset();
+    } else {
+        let mut roots = externref_activations_table.precise_stack_roots.borrow_mut();
+        roots.clear();
+    }
+
     log::debug!("end GC");
 }
 

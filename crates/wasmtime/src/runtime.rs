@@ -1097,10 +1097,14 @@ impl Store {
 
     /// Perform garbage collection of `ExternRef`s.
     pub fn gc(&self) {
-        wasmtime_runtime::gc(
-            &*self.inner.stack_map_registry,
-            &*self.inner.externref_activations_table,
-        );
+        // For this crate's API, we ensure that `set_stack_canary` invariants
+        // are upheld for all host-->Wasm calls.
+        unsafe {
+            wasmtime_runtime::gc(
+                &*self.inner.stack_map_registry,
+                &*self.inner.externref_activations_table,
+            );
+        }
     }
 }
 
