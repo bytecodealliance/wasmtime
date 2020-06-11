@@ -225,6 +225,16 @@ pub enum VecALUOp {
     Cmhs,
     /// Compare unsigned higher or same
     Cmhi,
+    /// Bitwise and
+    And,
+    /// Bitwise bit clear
+    Bic,
+    /// Bitwise inclusive or
+    Orr,
+    /// Bitwise exclusive or
+    Eor,
+    /// Bitwise select
+    Bsl,
 }
 
 /// A Vector miscellaneous operation with two registers.
@@ -1273,8 +1283,14 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             collector.add_use(rn);
         }
-        &Inst::VecRRR { rd, rn, rm, .. } => {
-            collector.add_def(rd);
+        &Inst::VecRRR {
+            alu_op, rd, rn, rm, ..
+        } => {
+            if alu_op == VecALUOp::Bsl {
+                collector.add_mod(rd);
+            } else {
+                collector.add_def(rd);
+            }
             collector.add_use(rn);
             collector.add_use(rm);
         }
@@ -1851,12 +1867,17 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, rn);
         }
         &mut Inst::VecRRR {
+            alu_op,
             ref mut rd,
             ref mut rn,
             ref mut rm,
             ..
         } => {
-            map_def(mapper, rd);
+            if alu_op == VecALUOp::Bsl {
+                map_mod(mapper, rd);
+            } else {
+                map_def(mapper, rd);
+            }
             map_use(mapper, rn);
             map_use(mapper, rm);
         }
@@ -2663,16 +2684,21 @@ impl ShowWithRRU for Inst {
                 alu_op,
                 ty,
             } => {
-                let (op, vector) = match alu_op {
-                    VecALUOp::SQAddScalar => ("sqadd", false),
-                    VecALUOp::UQAddScalar => ("uqadd", false),
-                    VecALUOp::SQSubScalar => ("sqsub", false),
-                    VecALUOp::UQSubScalar => ("uqsub", false),
-                    VecALUOp::Cmeq => ("cmeq", true),
-                    VecALUOp::Cmge => ("cmge", true),
-                    VecALUOp::Cmgt => ("cmgt", true),
-                    VecALUOp::Cmhs => ("cmhs", true),
-                    VecALUOp::Cmhi => ("cmhi", true),
+                let (op, vector, ty) = match alu_op {
+                    VecALUOp::SQAddScalar => ("sqadd", false, ty),
+                    VecALUOp::UQAddScalar => ("uqadd", false, ty),
+                    VecALUOp::SQSubScalar => ("sqsub", false, ty),
+                    VecALUOp::UQSubScalar => ("uqsub", false, ty),
+                    VecALUOp::Cmeq => ("cmeq", true, ty),
+                    VecALUOp::Cmge => ("cmge", true, ty),
+                    VecALUOp::Cmgt => ("cmgt", true, ty),
+                    VecALUOp::Cmhs => ("cmhs", true, ty),
+                    VecALUOp::Cmhi => ("cmhi", true, ty),
+                    VecALUOp::And => ("and", true, I8X16),
+                    VecALUOp::Bic => ("bic", true, I8X16),
+                    VecALUOp::Orr => ("orr", true, I8X16),
+                    VecALUOp::Eor => ("eor", true, I8X16),
+                    VecALUOp::Bsl => ("bsl", true, I8X16),
                 };
 
                 let show_vreg_fn: fn(Reg, Option<&RealRegUniverse>, Type) -> String = if vector {
@@ -2686,9 +2712,14 @@ impl ShowWithRRU for Inst {
                 let rm = show_vreg_fn(rm, mb_rru, ty);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
-            &Inst::VecMisc { op, rd, rn, ty } => {
-                let op = match op {
-                    VecMisc2::Not => "mvn",
+            &Inst::VecMisc {
+                op,
+                rd,
+                rn,
+                ty: _ty,
+            } => {
+                let (op, ty) = match op {
+                    VecMisc2::Not => ("mvn", I8X16),
                 };
 
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, ty);
