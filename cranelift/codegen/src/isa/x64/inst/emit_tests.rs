@@ -2688,6 +2688,19 @@ fn test_x64_emit() {
         "440F56F9",
         "orps    %xmm1, %xmm15",
     ));
+
+    insns.push((
+        Inst::xmm_mov_r_m(SseOpcode::Movd, xmm0, Amode::imm_reg(321, rbx)),
+        "660F7E8341010000",
+        "movd    %xmm0, 321(%rbx)",
+    ));
+
+    insns.push((
+        Inst::xmm_mov_r_m(SseOpcode::Movss, xmm15, Amode::imm_reg(128, r12)),
+        "F3450F11BC2480000000",
+        "movss   %xmm15, 128(%r12)",
+    ));
+
     insns.push((
         Inst::xmm_rm_r(SseOpcode::Orps, RegMem::reg(xmm5), w_xmm4),
         "0F56E5",

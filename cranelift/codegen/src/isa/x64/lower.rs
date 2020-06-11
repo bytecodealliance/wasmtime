@@ -567,7 +567,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) -> Codeg
             let src = input_to_reg(ctx, inputs[0]);
 
             if is_float {
-                unimplemented!("FPU stores");
+                ctx.emit(match elem_ty {
+                    F32 => Inst::xmm_mov_r_m(SseOpcode::Movss, src, addr),
+                    _ => unimplemented!("FP store not 32-bit"),
+                });
             } else {
                 ctx.emit(Inst::mov_r_m(elem_ty.bytes() as u8, src, addr));
             }

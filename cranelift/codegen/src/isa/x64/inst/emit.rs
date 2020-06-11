@@ -1027,7 +1027,7 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::XMM_MOV_RM_R {
+        Inst::XMM_Mov_RM_R {
             op,
             src: src_e,
             dst: reg_g,
@@ -1082,7 +1082,17 @@ pub(crate) fn emit(
                 }
             }
         }
+        Inst::XMM_Mov_R_M { op, src, dst } => {
+            let rex = RexFlags::clear_w();
+            let (prefix, opcode) = match op {
+                SseOpcode::Movd => (LegacyPrefix::_66, 0x0F7E),
+                SseOpcode::Movss => (LegacyPrefix::_F3, 0x0F11),
+                _ => unimplemented!("Emit xmm mov r m"),
+            };
 
+            let dst = &dst.finalize(state);
+            emit_std_reg_mem(sink, prefix, opcode, 2, *src, dst, rex);
+        }
         Inst::Hlt => {
             sink.put1(0xcc);
         }
