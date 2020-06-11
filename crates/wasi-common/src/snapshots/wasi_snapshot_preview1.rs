@@ -223,7 +223,6 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                 .preadv(&mut buf, offset)?
                 .try_into()?
         };
-        drop(guest_slices);
         Ok(host_nread)
     }
 
