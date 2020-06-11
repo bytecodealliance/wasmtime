@@ -6796,24 +6796,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn trap(&mut self, trap_id: TrapCode) {
-        let function_start: u32 = self.func_starts[self.current_function as usize]
-            .0
-            .expect(
-                "BUG: We failed to get the offset of the start of the current \
-                function - this should be impossible as we set this value when we enter the \
-                function",
-            )
-            .0
-            .try_into()
-            .expect("Assembly offset overflowed u32");
         self.sinks.traps.trap(
-            u32::try_from(self.asm.offset().0)
-                .expect("Assembly offset overflowed u32")
-                .checked_sub(function_start)
-                .expect(
-                    "BUG: We're trying to emit a trap with an assembly offset less \
-                    than the offset of the start of the function",
-                ),
+            u32::try_from(self.asm.offset().0).expect("Assembly offset overflowed u32"),
             self.source_loc,
             trap_id,
         );
