@@ -216,6 +216,8 @@ pub enum SseOpcode {
     Addsd,
     Comiss,
     Comisd,
+    Cmpss,
+    Cmpsd,
     Cvtsd2ss,
     Cvtsd2si,
     Cvtsi2ss,
@@ -226,6 +228,7 @@ pub enum SseOpcode {
     Cvttsd2si,
     Divss,
     Divsd,
+    Insertps,
     Maxss,
     Maxsd,
     Minss,
@@ -265,7 +268,8 @@ impl SseOpcode {
             | SseOpcode::Subss
             | SseOpcode::Ucomiss
             | SseOpcode::Sqrtss
-            | SseOpcode::Comiss => SSE,
+            | SseOpcode::Comiss
+            | SseOpcode::Cmpss => SSE,
 
             SseOpcode::Addsd
             | SseOpcode::Cvtsd2ss
@@ -281,9 +285,10 @@ impl SseOpcode {
             | SseOpcode::Sqrtsd
             | SseOpcode::Subsd
             | SseOpcode::Ucomisd
-            | SseOpcode::Comisd => SSE2,
+            | SseOpcode::Comisd
+            | SseOpcode::Cmpsd => SSE2,
 
-            SseOpcode::Roundss | SseOpcode::Roundsd => SSE41,
+            SseOpcode::Insertps | SseOpcode::Roundss | SseOpcode::Roundsd => SSE41,
         }
     }
 
@@ -333,6 +338,9 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Subsd => "subsd",
             SseOpcode::Ucomiss => "ucomiss",
             SseOpcode::Ucomisd => "ucomisd",
+            SseOpcode::Cmpss => "cmpss",
+            SseOpcode::Cmpsd => "cmpsd",
+            SseOpcode::Insertps => "insertps",
         };
         write!(fmt, "{}", name)
     }
@@ -341,26 +349,6 @@ impl fmt::Debug for SseOpcode {
 impl ToString for SseOpcode {
     fn to_string(&self) -> String {
         format!("{:?}", self)
-    }
-}
-
-/// Some SSE operations requiring 3 operands i, r/m, and r.
-#[derive(Clone, PartialEq)]
-pub enum SseRmiOpcode {
-    Cmpss,
-    Cmpsd,
-    Insertps,
-}
-
-impl SseRmiOpcode {
-    /// Which `InstructionSet` is the first supporting this opcode?
-    pub(crate) fn available_from(&self) -> InstructionSet {
-        use InstructionSet::*;
-        match self {
-            SseRmiOpcode::Cmpss => SSE,
-            SseRmiOpcode::Cmpsd => SSE2,
-            SseRmiOpcode::Insertps => SSE41,
-        }
     }
 }
 
