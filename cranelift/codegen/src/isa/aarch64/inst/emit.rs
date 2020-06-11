@@ -707,6 +707,16 @@ impl MachInstEmit for Inst {
                             op, r1, r2, /* scaled = */ true, extendop, rd,
                         ));
                     }
+                    &MemArg::RegExtended(r1, r2, extendop) => {
+                        sink.put4(enc_ldst_reg(
+                            op,
+                            r1,
+                            r2,
+                            /* scaled = */ false,
+                            Some(extendop),
+                            rd,
+                        ));
+                    }
                     &MemArg::Label(ref label) => {
                         let offset = match label {
                             // cast i32 to u32 (two's-complement)
@@ -831,6 +841,16 @@ impl MachInstEmit for Inst {
                         };
                         sink.put4(enc_ldst_reg(
                             op, r1, r2, /* scaled = */ true, extendop, rd,
+                        ));
+                    }
+                    &MemArg::RegExtended(r1, r2, extendop) => {
+                        sink.put4(enc_ldst_reg(
+                            op,
+                            r1,
+                            r2,
+                            /* scaled = */ false,
+                            Some(extendop),
+                            rd,
                         ));
                     }
                     &MemArg::Label(..) => {

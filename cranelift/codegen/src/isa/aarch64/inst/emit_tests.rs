@@ -1284,6 +1284,15 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::ULoad64 {
             rd: writable_xreg(1),
+            mem: MemArg::RegExtended(xreg(2), xreg(3), ExtendOp::SXTW),
+            srcloc: None,
+        },
+        "41C863F8",
+        "ldr x1, [x2, w3, SXTW]",
+    ));
+    insns.push((
+        Inst::ULoad64 {
+            rd: writable_xreg(1),
             mem: MemArg::Label(MemLabel::PCRel(64)),
             srcloc: None,
         },
@@ -1473,6 +1482,15 @@ fn test_aarch64_binemit() {
         },
         "415823F8",
         "str x1, [x2, w3, UXTW #3]",
+    ));
+    insns.push((
+        Inst::Store64 {
+            rd: xreg(1),
+            mem: MemArg::RegExtended(xreg(2), xreg(3), ExtendOp::UXTW),
+            srcloc: None,
+        },
+        "414823F8",
+        "str x1, [x2, w3, UXTW]",
     ));
     insns.push((
         Inst::Store64 {
