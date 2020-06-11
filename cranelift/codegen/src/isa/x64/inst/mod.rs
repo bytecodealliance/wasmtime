@@ -44,8 +44,8 @@ pub(crate) enum Inst {
     /// (add sub and or xor mul adc? sbb?) (32 64) (reg addr imm) reg
     Alu_RMI_R {
         is_64: bool,
-        op: RMI_R_Op,
-        src: RMI,
+        op: AluRmiROpcode,
+        src: RegMemImm,
         dst: Writable<Reg>,
     },
 
@@ -103,12 +103,12 @@ pub(crate) enum Inst {
     /// cmp (b w l q) (reg addr imm) reg
     Cmp_RMI_R {
         size: u8, // 1, 2, 4 or 8
-        src: RMI,
+        src: RegMemImm,
         dst: Reg,
     },
 
     /// pushq (reg addr imm)
-    Push64 { src: RMI },
+    Push64 { src: RegMemImm },
 
     /// popq reg
     Pop64 { dst: Writable<Reg> },
@@ -122,7 +122,7 @@ pub(crate) enum Inst {
 
     /// callq (reg mem)
     CallUnknown {
-        dest: RM,
+        dest: RegMem,
         //uses: Set<Reg>,
         //defs: Set<Writable<Reg>>,
     },
@@ -149,18 +149,18 @@ pub(crate) enum Inst {
     },
 
     /// jmpq (reg mem)
-    JmpUnknown { target: RM },
+    JmpUnknown { target: RegMem },
 
     /// (add sub and or xor mul adc? sbb?) (32 64) (reg addr imm) reg
     XMM_RM_R {
-        op: SSE_Op,
-        src: RM,
+        op: SseOpcode,
+        src: RegMem,
         dst: Writable<Reg>,
     },
 
     /// mov (64 32) reg reg
     XMM_R_R {
-        op: SSE_Op,
+        op: SseOpcode,
         src: Reg,
         dst: Writable<Reg>,
     },
@@ -181,7 +181,12 @@ impl Inst {
         Self::Nop { len }
     }
 
-    pub(crate) fn alu_rmi_r(is_64: bool, op: RMI_R_Op, src: RMI, dst: Writable<Reg>) -> Self {
+    pub(crate) fn alu_rmi_r(
+        is_64: bool,
+        op: AluRmiROpcode,
+        src: RegMemImm,
+        dst: Writable<Reg>,
+    ) -> Self {
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
         Self::Alu_RMI_R {
             is_64,
@@ -209,13 +214,13 @@ impl Inst {
         Inst::Mov_R_R { is_64, src, dst }
     }
 
-    pub(crate) fn xmm_r_r(op: SSE_Op, src: Reg, dst: Writable<Reg>) -> Inst {
+    pub(crate) fn xmm_r_r(op: SseOpcode, src: Reg, dst: Writable<Reg>) -> Inst {
         debug_assert!(src.get_class() == RegClass::V128);
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
         Inst::XMM_R_R { op, src, dst }
     }
 
-    pub(crate) fn xmm_rm_r(op: SSE_Op, src: RM, dst: Writable<Reg>) -> Self {
+    pub(crate) fn xmm_rm_r(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Self {
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
         Self::XMM_RM_R { op, src, dst }
     }
@@ -267,7 +272,7 @@ impl Inst {
 
     pub(crate) fn cmp_rmi_r(
         size: u8, // 1, 2, 4 or 8
-        src: RMI,
+        src: RegMemImm,
         dst: Reg,
     ) -> Inst {
         debug_assert!(size == 8 || size == 4 || size == 2 || size == 1);
@@ -275,7 +280,7 @@ impl Inst {
         Inst::Cmp_RMI_R { size, src, dst }
     }
 
-    pub(crate) fn push64(src: RMI) -> Inst {
+    pub(crate) fn push64(src: RegMemImm) -> Inst {
         Inst::Push64 { src }
     }
 
@@ -283,7 +288,7 @@ impl Inst {
         Inst::Pop64 { dst }
     }
 
-    pub(crate) fn call_unknown(dest: RM) -> Inst {
+    pub(crate) fn call_unknown(dest: RegMem) -> Inst {
         Inst::CallUnknown { dest }
     }
 
@@ -307,7 +312,7 @@ impl Inst {
         }
     }
 
-    pub(crate) fn jmp_unknown(target: RM) -> Inst {
+    pub(crate) fn jmp_unknown(target: RegMem) -> Inst {
         Inst::JmpUnknown { target }
     }
 }
@@ -645,11 +650,11 @@ fn map_mod<RUM: RegUsageMapper>(m: &RUM, r: &mut Writable<Reg>) {
 impl Addr {
     fn map_uses<RUM: RegUsageMapper>(&mut self, map: &RUM) {
         match self {
-            Addr::IR {
+            Addr::ImmReg {
                 simm32: _,
                 ref mut base,
             } => map_use(map, base),
-            Addr::IRRS {
+            Addr::ImmRegRegShift {
                 simm32: _,
                 ref mut base,
                 ref mut index,
@@ -662,21 +667,21 @@ impl Addr {
     }
 }
 
-impl RMI {
+impl RegMemImm {
     fn map_uses<RUM: RegUsageMapper>(&mut self, map: &RUM) {
         match self {
-            RMI::R { ref mut reg } => map_use(map, reg),
-            RMI::M { ref mut addr } => addr.map_uses(map),
-            RMI::I { simm32: _ } => {}
+            RegMemImm::Reg { ref mut reg } => map_use(map, reg),
+            RegMemImm::Mem { ref mut addr } => addr.map_uses(map),
+            RegMemImm::Imm { simm32: _ } => {}
         }
     }
 }
 
-impl RM {
+impl RegMem {
     fn map_uses<RUM: RegUsageMapper>(&mut self, map: &RUM) {
         match self {
-            RM::R { ref mut reg } => map_use(map, reg),
-            RM::M { ref mut addr } => addr.map_uses(map),
+            RegMem::Reg { ref mut reg } => map_use(map, reg),
+            RegMem::Mem { ref mut addr } => addr.map_uses(map),
         }
     }
 }
@@ -812,7 +817,7 @@ impl MachInst for Inst {
         match self {
             Self::Mov_R_R { is_64, src, dst } if *is_64 => Some((*dst, *src)),
             Self::XMM_R_R { op, src, dst }
-                if *op == SSE_Op::SSE_Movss || *op == SSE_Op::SSE2_Movsd =>
+                if *op == SseOpcode::Movss || *op == SseOpcode::Movsd =>
             {
                 Some((*dst, *src))
             }
@@ -843,16 +848,19 @@ impl MachInst for Inst {
         }
     }
 
-    fn gen_move(dst_reg: Writable<Reg>, src_reg: Reg, _ty: Type) -> Inst {
+    fn gen_move(dst_reg: Writable<Reg>, src_reg: Reg, ty: Type) -> Inst {
         let rc_dst = dst_reg.to_reg().get_class();
         let rc_src = src_reg.get_class();
         // If this isn't true, we have gone way off the rails.
         debug_assert!(rc_dst == rc_src);
         match rc_dst {
             RegClass::I64 => Inst::mov_r_r(true, src_reg, dst_reg),
-            // TODO: How do you just move 32 bits?
-            RegClass::V128 => Inst::xmm_r_r(SSE_Op::SSE2_Movsd, src_reg, dst_reg),
-            _ => panic!("gen_move(x64): unhandled regclass"),
+            RegClass::V128 => match ty {
+                F32 => Inst::xmm_r_r(SseOpcode::Movss, src_reg, dst_reg),
+                F64 => Inst::xmm_r_r(SseOpcode::Movsd, src_reg, dst_reg),
+                _ => panic!("unexpected V128 type in gen_move"),
+            },
+            _ => panic!("gen_move(x64): unhandled gen_move"),
         }
     }
 

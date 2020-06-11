@@ -106,8 +106,9 @@ fn emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE(
         LegacyPrefix::PfxF3 => sink.put1(0xF3),
         LegacyPrefix::PfxNone => (),
     }
+
     match memE {
-        Addr::IR { simm32, base: regE } => {
+        Addr::ImmReg { simm32, base: regE } => {
             // First, cook up the REX byte.  This is easy.
             let encE = iregEnc(*regE);
             let w = if clearRexW { 0 } else { 1 };
@@ -157,11 +158,11 @@ fn emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE(
                 sink.put1(0x24);
                 sink.put4(*simm32);
             } else {
-                unreachable!("emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE: IR");
+                unreachable!("emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE: ImmReg");
             }
         }
-        // Bizarrely, the IRRS case is much simpler.
-        Addr::IRRS {
+
+        Addr::ImmRegRegShift {
             simm32,
             base: regBase,
             index: regIndex,
@@ -193,7 +194,7 @@ fn emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE(
                 sink.put1(mkSIB(*shift, encIndex & 7, encBase & 7));
                 sink.put4(*simm32);
             } else {
-                panic!("emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE: IRRS");
+                panic!("emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE: ImmRegRegShift");
             }
         }
     }
@@ -355,11 +356,11 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
             dst: regG,
         } => {
             let flags = if *is_64 { F_NONE } else { F_CLEAR_REX_W };
-            if *op == RMI_R_Op::Mul {
+            if *op == AluRmiROpcode::Mul {
                 // We kinda freeloaded Mul into RMI_R_Op, but it doesn't fit the usual pattern, so
                 // we have to special-case it.
                 match srcE {
-                    RMI::R { reg: regE } => {
+                    RegMemImm::Reg { reg: regE } => {
                         emit_REX_OPCODES_MODRM_regG_regE(
                             sink,
                             LegacyPrefix::PfxNone,
@@ -370,7 +371,8 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                             flags,
                         );
                     }
-                    RMI::M { addr } => {
+
+                    RegMemImm::Mem { addr } => {
                         emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                             sink,
                             LegacyPrefix::PfxNone,
@@ -381,7 +383,8 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                             flags,
                         );
                     }
-                    RMI::I { simm32 } => {
+
+                    RegMemImm::Imm { simm32 } => {
                         let useImm8 = low8willSXto32(*simm32);
                         let opcode = if useImm8 { 0x6B } else { 0x69 };
                         // Yes, really, regG twice.
@@ -399,15 +402,16 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                 }
             } else {
                 let (opcode_R, opcode_M, subopcode_I) = match op {
-                    RMI_R_Op::Add => (0x01, 0x03, 0),
-                    RMI_R_Op::Sub => (0x29, 0x2B, 5),
-                    RMI_R_Op::And => (0x21, 0x23, 4),
-                    RMI_R_Op::Or => (0x09, 0x0B, 1),
-                    RMI_R_Op::Xor => (0x31, 0x33, 6),
-                    RMI_R_Op::Mul => panic!("unreachable"),
+                    AluRmiROpcode::Add => (0x01, 0x03, 0),
+                    AluRmiROpcode::Sub => (0x29, 0x2B, 5),
+                    AluRmiROpcode::And => (0x21, 0x23, 4),
+                    AluRmiROpcode::Or => (0x09, 0x0B, 1),
+                    AluRmiROpcode::Xor => (0x31, 0x33, 6),
+                    AluRmiROpcode::Mul => panic!("unreachable"),
                 };
+
                 match srcE {
-                    RMI::R { reg: regE } => {
+                    RegMemImm::Reg { reg: regE } => {
                         // Note.  The arguments .. regE .. regG .. sequence
                         // here is the opposite of what is expected.  I'm not
                         // sure why this is.  But I am fairly sure that the
@@ -431,7 +435,8 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                         // NB: if this is ever extended to handle byte size
                         // ops, be sure to retain redundant REX prefixes.
                     }
-                    RMI::M { addr } => {
+
+                    RegMemImm::Mem { addr } => {
                         // Whereas here we revert to the "normal" G-E ordering.
                         emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                             sink,
@@ -443,7 +448,8 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                             flags,
                         );
                     }
-                    RMI::I { simm32 } => {
+
+                    RegMemImm::Imm { simm32 } => {
                         let useImm8 = low8willSXto32(*simm32);
                         let opcode = if useImm8 { 0x83 } else { 0x81 };
                         // And also here we use the "normal" G-E ordering.
@@ -462,6 +468,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                 }
             }
         }
+
         Inst::Imm_R {
             dst_is_64,
             simm64,
@@ -482,6 +489,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                 sink.put4(*simm64 as u32);
             }
         }
+
         Inst::Mov_R_R { is_64, src, dst } => {
             let flags = if *is_64 { F_NONE } else { F_CLEAR_REX_W };
             emit_REX_OPCODES_MODRM_regG_regE(
@@ -494,6 +502,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                 flags,
             );
         }
+
         Inst::MovZX_M_R { extMode, addr, dst } => {
             match extMode {
                 ExtMode::BL => {
@@ -749,7 +758,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
             dst: regG,
         } => {
             let mut retainRedundantRex = 0;
-            let mut prefix = LegacyPrefix::PfxNone;
+
             if *size == 1 {
                 // Here, a redundant REX prefix changes the meaning of the
                 // instruction.
@@ -758,17 +767,21 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                     retainRedundantRex = F_RETAIN_REDUNDANT_REX;
                 }
             }
+
+            let mut prefix = LegacyPrefix::PfxNone;
             if *size == 2 {
                 prefix = LegacyPrefix::Pfx66;
             }
+
             let mut flags = match size {
                 8 => F_NONE,
                 4 | 2 => F_CLEAR_REX_W,
                 1 => F_CLEAR_REX_W | retainRedundantRex,
                 _ => panic!("x64::Inst::Cmp_RMI_R::emit: unreachable"),
             };
+
             match srcE {
-                RMI::R { reg: regE } => {
+                RegMemImm::Reg { reg: regE } => {
                     let opcode = if *size == 1 { 0x38 } else { 0x39 };
                     if *size == 1 {
                         // We also need to check whether the E register forces
@@ -781,14 +794,16 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                     // Same comment re swapped args as for Alu_RMI_R.
                     emit_REX_OPCODES_MODRM_regG_regE(sink, prefix, opcode, 1, *regE, *regG, flags);
                 }
-                RMI::M { addr } => {
+
+                RegMemImm::Mem { addr } => {
                     let opcode = if *size == 1 { 0x3A } else { 0x3B };
                     // Whereas here we revert to the "normal" G-E ordering.
                     emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                         sink, prefix, opcode, 1, *regG, addr, flags,
                     );
                 }
-                RMI::I { simm32 } => {
+
+                RegMemImm::Imm { simm32 } => {
                     // FIXME JRS 2020Feb11: there are shorter encodings for
                     // cmp $imm, rax/eax/ax/al.
                     let useImm8 = low8willSXto32(*simm32);
@@ -809,9 +824,10 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                 }
             }
         }
+
         Inst::Push64 { src } => {
             match src {
-                RMI::R { reg } => {
+                RegMemImm::Reg { reg } => {
                     let encReg = iregEnc(*reg);
                     let rex = 0x40 | ((encReg >> 3) & 1);
                     if rex != 0x40 {
@@ -819,7 +835,8 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                     }
                     sink.put1(0x50 | (encReg & 7));
                 }
-                RMI::M { addr } => {
+
+                RegMemImm::Mem { addr } => {
                     emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE(
                         sink,
                         LegacyPrefix::PfxNone,
@@ -830,7 +847,8 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                         F_CLEAR_REX_W,
                     );
                 }
-                RMI::I { simm32 } => {
+
+                RegMemImm::Imm { simm32 } => {
                     if low8willSXto64(*simm32) {
                         sink.put1(0x6A);
                         sink.put1(*simm32 as u8);
@@ -841,6 +859,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                 }
             }
         }
+
         Inst::Pop64 { dst } => {
             let encDst = iregEnc(dst.to_reg());
             if encDst >= 8 {
@@ -850,12 +869,10 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
             }
             sink.put1(0x58 + (encDst & 7));
         }
-        //
-        // ** Inst::CallKnown
-        //
+
         Inst::CallUnknown { dest } => {
             match dest {
-                RM::R { reg } => {
+                RegMem::Reg { reg } => {
                     let regEnc = iregEnc(*reg);
                     emit_REX_OPCODES_MODRM_encG_encE(
                         sink,
@@ -867,7 +884,8 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                         F_CLEAR_REX_W,
                     );
                 }
-                RM::M { addr } => {
+
+                RegMem::Mem { addr } => {
                     emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE(
                         sink,
                         LegacyPrefix::PfxNone,
@@ -880,6 +898,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                 }
             }
         }
+
         Inst::Ret {} => sink.put1(0xC3),
 
         Inst::JmpKnown { dest } => {
@@ -895,6 +914,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
             sink.put1(0xE9);
             sink.put4(disp);
         }
+
         Inst::JmpCondSymm {
             cc,
             taken,
@@ -935,9 +955,10 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
             sink.put1(0xE9);
             sink.put4(nt_disp);
         }
+
         Inst::JmpUnknown { target } => {
             match target {
-                RM::R { reg } => {
+                RegMem::Reg { reg } => {
                     let regEnc = iregEnc(*reg);
                     emit_REX_OPCODES_MODRM_encG_encE(
                         sink,
@@ -949,7 +970,8 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                         F_CLEAR_REX_W,
                     );
                 }
-                RM::M { addr } => {
+
+                RegMem::Mem { addr } => {
                     emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE(
                         sink,
                         LegacyPrefix::PfxNone,
@@ -962,20 +984,24 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                 }
             }
         }
+
         Inst::XMM_R_R { op, src, dst } => {
             let flags = F_CLEAR_REX_W;
             let opcode = match op {
-                SSE_Op::SSE_Movss => 0x0F10,
-                SSE_Op::SSE2_Movsd => 0x0F10,
+                SseOpcode::Movss => 0x0F10,
+                SseOpcode::Movsd => 0x0F10,
                 _ => unimplemented!("XMM_R_R opcode"),
             };
+
             let prefix = match op {
-                SSE_Op::SSE_Movss => LegacyPrefix::PfxF3,
-                SSE_Op::SSE2_Movsd => LegacyPrefix::PfxF2,
+                SseOpcode::Movss => LegacyPrefix::PfxF3,
+                SseOpcode::Movsd => LegacyPrefix::PfxF2,
                 _ => unimplemented!("XMM_R_R opcode"),
             };
+
             emit_REX_OPCODES_MODRM_regG_regE(sink, prefix, opcode, 2, dst.to_reg(), *src, flags);
         }
+
         Inst::XMM_RM_R {
             op,
             src: srcE,
@@ -983,12 +1009,13 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
         } => {
             let flags = F_CLEAR_REX_W;
             let opcode = match op {
-                SSE_Op::SSE_Addss => 0x0F58,
-                SSE_Op::SSE_Subss => 0x0F5C,
+                SseOpcode::Addss => 0x0F58,
+                SseOpcode::Subss => 0x0F5C,
                 _ => unimplemented!("XMM_RM_R opcode"),
             };
+
             match srcE {
-                RM::R { reg: regE } => {
+                RegMem::Reg { reg: regE } => {
                     emit_REX_OPCODES_MODRM_regG_regE(
                         sink,
                         LegacyPrefix::PfxF3,
@@ -999,7 +1026,8 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                         flags,
                     );
                 }
-                RM::M { addr } => {
+
+                RegMem::Mem { addr } => {
                     emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                         sink,
                         LegacyPrefix::PfxF3,
@@ -1012,6 +1040,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                 }
             }
         }
+
         _ => panic!("x64_emit: unhandled: {} ", inst.show_rru(None)),
     }
 }
