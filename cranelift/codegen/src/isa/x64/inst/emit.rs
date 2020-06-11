@@ -76,16 +76,37 @@ impl Rex {
         self
     }
 
-    /// Return whether the W bit in the REX prefix is zero.
     #[inline(always)]
     fn must_clear_w(&self) -> bool {
         (self.0 & 1) != 0
     }
-    /// Return whether we need to emit the REX prefix byte even if it appears
-    /// to be redundant (== 0x40).
     #[inline(always)]
     fn must_always_emit(&self) -> bool {
         (self.0 & 2) != 0
+    }
+
+    #[inline(always)]
+    fn emit_two_op(&self, sink: &mut MachBuffer<Inst>, enc_g: u8, enc_e: u8) {
+        let w = if self.must_clear_w() { 0 } else { 1 };
+        let r = (enc_g >> 3) & 1;
+        let x = 0;
+        let b = (enc_e >> 3) & 1;
+        let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
+        if rex != 0x40 || self.must_always_emit() {
+            sink.put1(rex);
+        }
+    }
+
+    #[inline(always)]
+    fn emit_three_op(&self, sink: &mut MachBuffer<Inst>, enc_g: u8, enc_index: u8, enc_base: u8) {
+        let w = if self.must_clear_w() { 0 } else { 1 };
+        let r = (enc_g >> 3) & 1;
+        let x = (enc_index >> 3) & 1;
+        let b = (enc_base >> 3) & 1;
+        let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
+        if rex != 0x40 || self.must_always_emit() {
+            sink.put1(rex);
+        }
     }
 }
 
@@ -140,26 +161,17 @@ fn emit_modrm_sib_enc_ge(
     mem_e: &Addr,
     rex: Rex,
 ) {
-    // General comment for this function: the registers in `memE` must be
+    // General comment for this function: the registers in `mem_e` must be
     // 64-bit integer registers, because they are part of an address
     // expression.  But `enc_g` can be derived from a register of any class.
-    let clear_rex_w = rex.must_clear_w();
-    let retain_redundant = rex.must_always_emit();
 
     prefix.emit(sink);
 
     match mem_e {
         Addr::ImmReg { simm32, base } => {
-            // First, cook up the REX byte.  This is easy.
+            // First, the REX byte.
             let enc_e = int_reg_enc(*base);
-            let w = if clear_rex_w { 0 } else { 1 };
-            let r = (enc_g >> 3) & 1;
-            let x = 0;
-            let b = (enc_e >> 3) & 1;
-            let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
-            if rex != 0x40 || retain_redundant {
-                sink.put1(rex);
-            }
+            rex.emit_two_op(sink, enc_g, enc_e);
 
             // Now the opcode(s).  These include any other prefixes the caller
             // hands to us.
@@ -220,14 +232,7 @@ fn emit_modrm_sib_enc_ge(
             let enc_index = int_reg_enc(*reg_index);
 
             // The rex byte.
-            let w = if clear_rex_w { 0 } else { 1 };
-            let r = (enc_g >> 3) & 1;
-            let x = (enc_index >> 3) & 1;
-            let b = (enc_base >> 3) & 1;
-            let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
-            if rex != 0x40 || retain_redundant {
-                sink.put1(rex);
-            }
+            rex.emit_three_op(sink, enc_g, enc_index, enc_base);
 
             // All other prefixes and opcodes.
             while num_opcodes > 0 {
@@ -268,21 +273,12 @@ fn emit_modrm_enc_ge(
     // don't even have to be from the same class.  For example, for an
     // integer-to-FP conversion insn, one might be RegClass::I64 and the other
     // RegClass::V128.
-    let clear_rex_w = rex.must_clear_w();
-    let retain_redundant = rex.must_always_emit();
 
     // The operand-size override.
     prefix.emit(sink);
 
     // The rex byte.
-    let w = if clear_rex_w { 0 } else { 1 };
-    let r = (enc_g >> 3) & 1;
-    let x = 0;
-    let b = (enc_e >> 3) & 1;
-    let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
-    if rex != 0x40 || retain_redundant {
-        sink.put1(rex);
-    }
+    rex.emit_two_op(sink, enc_g, enc_e);
 
     // All other prefixes and opcodes.
     while num_opcodes > 0 {
