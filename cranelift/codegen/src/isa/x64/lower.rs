@@ -3,12 +3,12 @@
 #![allow(dead_code)]
 #![allow(non_snake_case)]
 
+use log::trace;
 use regalloc::{Reg, RegClass, Writable};
 
-use crate::ir::condcodes::IntCC;
 use crate::ir::types;
 use crate::ir::Inst as IRInst;
-use crate::ir::{InstructionData, Opcode, Type};
+use crate::ir::{condcodes::IntCC, InstructionData, Opcode, Type};
 
 use crate::machinst::lower::*;
 use crate::machinst::*;
@@ -86,23 +86,6 @@ fn inst_condcode(data: &InstructionData) -> IntCC {
     }
 }
 
-fn intCC_to_x64_CC(cc: IntCC) -> CC {
-    match cc {
-        IntCC::Equal => CC::Z,
-        IntCC::NotEqual => CC::NZ,
-        IntCC::SignedGreaterThanOrEqual => CC::NL,
-        IntCC::SignedGreaterThan => CC::NLE,
-        IntCC::SignedLessThanOrEqual => CC::LE,
-        IntCC::SignedLessThan => CC::L,
-        IntCC::UnsignedGreaterThanOrEqual => CC::NB,
-        IntCC::UnsignedGreaterThan => CC::NBE,
-        IntCC::UnsignedLessThanOrEqual => CC::BE,
-        IntCC::UnsignedLessThan => CC::B,
-        IntCC::Overflow => CC::O,
-        IntCC::NotOverflow => CC::NO,
-    }
-}
-
 fn input_to_reg<'a>(ctx: Ctx<'a>, iri: IRInst, input: usize) -> Reg {
     let inputs = ctx.get_input(iri, input);
     ctx.use_input_reg(inputs);
@@ -117,10 +100,10 @@ fn output_to_reg<'a>(ctx: Ctx<'a>, iri: IRInst, output: usize) -> Writable<Reg> 
 // Top-level instruction lowering entry point, for one instruction.
 
 /// Actually codegen an instruction's results into registers.
-fn lower_insn_to_regs<'a>(ctx: Ctx<'a>, iri: IRInst) {
-    let op = ctx.data(iri).opcode();
-    let ty = if ctx.num_outputs(iri) == 1 {
-        Some(ctx.output_ty(iri, 0))
+fn lower_insn_to_regs<'a>(ctx: Ctx<'a>, inst: IRInst) {
+    let op = ctx.data(inst).opcode();
+    let ty = if ctx.num_outputs(inst) == 1 {
+        Some(ctx.output_ty(inst, 0))
     } else {
         None
     };
@@ -128,54 +111,53 @@ fn lower_insn_to_regs<'a>(ctx: Ctx<'a>, iri: IRInst) {
     // This is all outstandingly feeble.  TODO: much better!
     match op {
         Opcode::Iconst => {
-            if let Some(w64) = iri_to_u64_immediate(ctx, iri) {
+            if let Some(w64) = iri_to_u64_immediate(ctx, inst) {
                 // Get exactly the bit pattern in 'w64' into the dest.  No
                 // monkeying with sign extension etc.
-                let dstIs64 = w64 > 0xFFFF_FFFF;
-                let regD = output_to_reg(ctx, iri, 0);
-                ctx.emit(Inst::imm_r(dstIs64, w64, regD));
+                let dst_is_64 = w64 > 0xFFFF_FFFF;
+                let dst = output_to_reg(ctx, inst, 0);
+                ctx.emit(Inst::imm_r(dst_is_64, w64, dst));
             } else {
                 unimplemented!();
             }
         }
 
         Opcode::Iadd | Opcode::Isub => {
-            let regD = output_to_reg(ctx, iri, 0);
-            let regL = input_to_reg(ctx, iri, 0);
-            let regR = input_to_reg(ctx, iri, 1);
-            let is64 = int_ty_is_64(ty.unwrap());
-            let how = if op == Opcode::Iadd {
+            let dst = output_to_reg(ctx, inst, 0);
+            let lhs = input_to_reg(ctx, inst, 0);
+            let rhs = input_to_reg(ctx, inst, 1);
+            let is_64 = int_ty_is_64(ty.unwrap());
+            let alu_op = if op == Opcode::Iadd {
                 AluRmiROpcode::Add
             } else {
                 AluRmiROpcode::Sub
             };
-            ctx.emit(Inst::mov_r_r(true, regL, regD));
-            ctx.emit(Inst::alu_rmi_r(is64, how, RegMemImm::reg(regR), regD));
+            ctx.emit(Inst::mov_r_r(true, lhs, dst));
+            ctx.emit(Inst::alu_rmi_r(is_64, alu_op, RegMemImm::reg(rhs), dst));
         }
 
         Opcode::Ishl | Opcode::Ushr | Opcode::Sshr => {
             // TODO: implement imm shift value into insn
-            let tySL = ctx.input_ty(iri, 0);
-            let tyD = ctx.output_ty(iri, 0); // should be the same as tySL
-            let regSL = input_to_reg(ctx, iri, 0);
-            let regSR = input_to_reg(ctx, iri, 1);
-            let regD = output_to_reg(ctx, iri, 0);
-            if tyD == tySL && (tyD == types::I32 || tyD == types::I64) {
-                let how = match op {
-                    Opcode::Ishl => ShiftKind::Left,
-                    Opcode::Ushr => ShiftKind::RightZ,
-                    Opcode::Sshr => ShiftKind::RightS,
-                    _ => unreachable!(),
-                };
-                let is64 = tyD == types::I64;
-                let r_rcx = regs::rcx();
-                let w_rcx = Writable::<Reg>::from_reg(r_rcx);
-                ctx.emit(Inst::mov_r_r(true, regSL, regD));
-                ctx.emit(Inst::mov_r_r(true, regSR, w_rcx));
-                ctx.emit(Inst::shift_r(is64, how, None /*%cl*/, regD));
-            } else {
-                unimplemented!()
-            }
+            let dst_ty = ctx.output_ty(inst, 0);
+            assert_eq!(ctx.input_ty(inst, 0), dst_ty);
+            assert!(dst_ty == types::I32 || dst_ty == types::I64);
+
+            let lhs = input_to_reg(ctx, inst, 0);
+            let rhs = input_to_reg(ctx, inst, 1);
+            let dst = output_to_reg(ctx, inst, 0);
+
+            let shift_kind = match op {
+                Opcode::Ishl => ShiftKind::Left,
+                Opcode::Ushr => ShiftKind::RightZ,
+                Opcode::Sshr => ShiftKind::RightS,
+                _ => unreachable!(),
+            };
+
+            let is_64 = dst_ty == types::I64;
+            let w_rcx = Writable::from_reg(regs::rcx());
+            ctx.emit(Inst::mov_r_r(true, lhs, dst));
+            ctx.emit(Inst::mov_r_r(true, rhs, w_rcx));
+            ctx.emit(Inst::shift_r(is_64, shift_kind, None /*%cl*/, dst));
         }
 
         Opcode::Uextend | Opcode::Sextend => {
@@ -183,24 +165,25 @@ fn lower_insn_to_regs<'a>(ctx: Ctx<'a>, iri: IRInst) {
             // don't accept a register source operand.  They should be changed
             // so as to have _RM_R form.
             // TODO2: if the source operand is a load, incorporate that.
-            let isZX = op == Opcode::Uextend;
-            let tyS = ctx.input_ty(iri, 0);
-            let tyD = ctx.output_ty(iri, 0);
-            let regS = input_to_reg(ctx, iri, 0);
-            let regD = output_to_reg(ctx, iri, 0);
-            ctx.emit(Inst::mov_r_r(true, regS, regD));
-            match (tyS, tyD, isZX) {
+            let zero_extend = op == Opcode::Uextend;
+            let src_ty = ctx.input_ty(inst, 0);
+            let dst_ty = ctx.output_ty(inst, 0);
+            let src = input_to_reg(ctx, inst, 0);
+            let dst = output_to_reg(ctx, inst, 0);
+
+            ctx.emit(Inst::mov_r_r(true, src, dst));
+            match (src_ty, dst_ty, zero_extend) {
                 (types::I8, types::I64, false) => {
-                    ctx.emit(Inst::shift_r(true, ShiftKind::Left, Some(56), regD));
-                    ctx.emit(Inst::shift_r(true, ShiftKind::RightS, Some(56), regD));
+                    ctx.emit(Inst::shift_r(true, ShiftKind::Left, Some(56), dst));
+                    ctx.emit(Inst::shift_r(true, ShiftKind::RightS, Some(56), dst));
                 }
                 _ => unimplemented!(),
             }
         }
 
         Opcode::FallthroughReturn | Opcode::Return => {
-            for i in 0..ctx.num_inputs(iri) {
-                let src_reg = input_to_reg(ctx, iri, i);
+            for i in 0..ctx.num_inputs(inst) {
+                let src_reg = input_to_reg(ctx, inst, i);
                 let retval_reg = ctx.retval(i);
                 if src_reg.get_class() == RegClass::I64 {
                     ctx.emit(Inst::mov_r_r(true, src_reg, retval_reg));
@@ -209,6 +192,24 @@ fn lower_insn_to_regs<'a>(ctx: Ctx<'a>, iri: IRInst) {
                 }
             }
             // N.B.: the Ret itself is generated by the ABI.
+        }
+
+        Opcode::Fadd | Opcode::Fsub => {
+            let dst = output_to_reg(ctx, inst, 0);
+            let lhs = input_to_reg(ctx, inst, 0);
+            let rhs = input_to_reg(ctx, inst, 1);
+            let is_64 = flt_ty_is_64(ty.unwrap());
+            if !is_64 {
+                let sse_op = if op == Opcode::Fadd {
+                    SseOpcode::Addss
+                } else {
+                    SseOpcode::Subss
+                };
+                ctx.emit(Inst::xmm_r_r(SseOpcode::Movss, lhs, dst));
+                ctx.emit(Inst::xmm_rm_r(sse_op, RegMem::reg(rhs), dst));
+            } else {
+                unimplemented!("unimplemented lowering for opcode {:?}", op);
+            }
         }
 
         Opcode::IaddImm
@@ -240,23 +241,7 @@ fn lower_insn_to_regs<'a>(ctx: Ctx<'a>, iri: IRInst) {
         | Opcode::SshrImm => {
             panic!("ALU+imm and ALU+carry ops should not appear here!");
         }
-        Opcode::Fadd | Opcode::Fsub => {
-            let regD = output_to_reg(ctx, iri, 0);
-            let regL = input_to_reg(ctx, iri, 0);
-            let regR = input_to_reg(ctx, iri, 1);
-            let is64 = flt_ty_is_64(ty.unwrap());
-            if !is64 {
-                let inst = if op == Opcode::Fadd {
-                    SseOpcode::Addss
-                } else {
-                    SseOpcode::Subss
-                };
-                ctx.emit(Inst::xmm_r_r(SseOpcode::Movss, regL, regD));
-                ctx.emit(Inst::xmm_rm_r(inst, RegMem::reg(regR), regD));
-            } else {
-                unimplemented!("unimplemented lowering for opcode {:?}", op);
-            }
-        }
+
         _ => unimplemented!("unimplemented lowering for opcode {:?}", op),
     }
 }
@@ -287,60 +272,60 @@ impl LowerBackend for X64Backend {
         // verifier pass.
         assert!(branches.len() <= 2);
 
-        let mut unimplemented = false;
-
         if branches.len() == 2 {
             // Must be a conditional branch followed by an unconditional branch.
             let op0 = ctx.data(branches[0]).opcode();
             let op1 = ctx.data(branches[1]).opcode();
 
-            println!(
-                "QQQQ lowering two-branch group: opcodes are {:?} and {:?}",
-                op0, op1
+            trace!(
+                "lowering two-branch group: opcodes are {:?} and {:?}",
+                op0,
+                op1
             );
-
             assert!(op1 == Opcode::Jump || op1 == Opcode::Fallthrough);
+
             let taken = BranchTarget::Label(targets[0]);
             let not_taken = match op1 {
                 Opcode::Jump => BranchTarget::Label(targets[1]),
                 Opcode::Fallthrough => BranchTarget::Label(fallthrough.unwrap()),
                 _ => unreachable!(), // assert above.
             };
+
             match op0 {
                 Opcode::Brz | Opcode::Brnz => {
-                    let tyS = ctx.input_ty(branches[0], 0);
-                    if is_int_ty(tyS) {
-                        let rS = input_to_reg(ctx, branches[0], 0);
+                    let src_ty = ctx.input_ty(branches[0], 0);
+                    if is_int_ty(src_ty) {
+                        let src = input_to_reg(ctx, branches[0], 0);
                         let cc = match op0 {
                             Opcode::Brz => CC::Z,
                             Opcode::Brnz => CC::NZ,
                             _ => unreachable!(),
                         };
-                        let sizeB = int_ty_to_sizeB(tyS);
-                        ctx.emit(Inst::cmp_rmi_r(sizeB, RegMemImm::imm(0), rS));
+                        let sizeB = int_ty_to_sizeB(src_ty);
+                        ctx.emit(Inst::cmp_rmi_r(sizeB, RegMemImm::imm(0), src));
                         ctx.emit(Inst::jmp_cond_symm(cc, taken, not_taken));
                     } else {
-                        unimplemented = true;
+                        unimplemented!("brz/brnz with non-int type");
                     }
                 }
+
                 Opcode::BrIcmp => {
-                    let tyS = ctx.input_ty(branches[0], 0);
-                    if is_int_ty(tyS) {
-                        let rSL = input_to_reg(ctx, branches[0], 0);
-                        let rSR = input_to_reg(ctx, branches[0], 1);
-                        let cc = intCC_to_x64_CC(inst_condcode(ctx.data(branches[0])));
-                        let sizeB = int_ty_to_sizeB(tyS);
+                    let src_ty = ctx.input_ty(branches[0], 0);
+                    if is_int_ty(src_ty) {
+                        let lhs = input_to_reg(ctx, branches[0], 0);
+                        let rhs = input_to_reg(ctx, branches[0], 1);
+                        let cc = CC::from_intcc(inst_condcode(ctx.data(branches[0])));
+                        let byte_size = int_ty_to_sizeB(src_ty);
                         // FIXME verify rSR vs rSL ordering
-                        ctx.emit(Inst::cmp_rmi_r(sizeB, RegMemImm::reg(rSR), rSL));
+                        ctx.emit(Inst::cmp_rmi_r(byte_size, RegMemImm::reg(rhs), lhs));
                         ctx.emit(Inst::jmp_cond_symm(cc, taken, not_taken));
                     } else {
-                        unimplemented = true;
+                        unimplemented!("bricmp with non-int type");
                     }
                 }
+
                 // TODO: Brif/icmp, Brff/icmp, jump tables
-                _ => {
-                    unimplemented = true;
-                }
+                _ => unimplemented!("branch opcode"),
             }
         } else {
             assert!(branches.len() == 1);
@@ -355,14 +340,10 @@ impl LowerBackend for X64Backend {
                     ctx.emit(Inst::jmp_known(BranchTarget::Label(targets[0])));
                 }
                 Opcode::Trap => {
-                    unimplemented = true;
+                    unimplemented!("trap");
                 }
                 _ => panic!("Unknown branch type!"),
             }
-        }
-
-        if unimplemented {
-            unimplemented!("lower_branch_group(x64): can't handle: {:?}", branches);
         }
 
         Ok(())
