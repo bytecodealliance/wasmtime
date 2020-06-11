@@ -311,7 +311,7 @@ impl InstructionData {
                 arg: _,
                 imm,
             } => {
-                if matches!(opcode, Opcode::SdivImm | Opcode::SremImm) {
+                if *opcode == Opcode::SdivImm || *opcode == Opcode::SremImm {
                     imm.sign_extend_from_width(bit_width);
                 }
             }
