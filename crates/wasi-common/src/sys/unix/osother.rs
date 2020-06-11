@@ -1,10 +1,9 @@
 use super::oshandle::RawOsHandle;
 use super::{get_file_type, get_rights};
-use crate::handle::Handle;
-use crate::sys::osother::{OsOther, OsOtherExt};
+use crate::sys::osother::OsOther;
 use crate::wasi::types;
 use std::convert::TryFrom;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io;
 use std::os::unix::prelude::{FromRawFd, IntoRawFd};
 
@@ -19,16 +18,5 @@ impl TryFrom<File> for OsOther {
         let rights = get_rights(&file, &file_type)?;
         let handle = unsafe { RawOsHandle::from_raw_fd(file.into_raw_fd()) };
         Ok(Self::new(file_type, rights, handle))
-    }
-}
-
-impl OsOtherExt for OsOther {
-    fn from_null() -> io::Result<Box<dyn Handle>> {
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open("/dev/null")?;
-        let file = Self::try_from(file)?;
-        Ok(Box::new(file))
     }
 }

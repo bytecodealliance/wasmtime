@@ -20,9 +20,10 @@ use super::{fd, AsFile};
 use crate::handle::{Handle, HandleRights};
 use crate::sandboxed_tty_writer::SandboxedTTYWriter;
 use crate::wasi::types::{self, Filetype};
-use crate::wasi::Result;
+use crate::wasi::{Errno, Result, RightsExt};
 use std::any::Any;
 use std::cell::Cell;
+use std::convert::TryInto;
 use std::io::{self, Read, Write};
 
 pub(crate) trait StdinExt: Sized {
@@ -172,5 +173,61 @@ impl Handle for Stderr {
         // on a tty later.
         let nwritten = SandboxedTTYWriter::new(&mut io::stderr()).write_vectored(&iovs)?;
         Ok(nwritten)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct NullDevice {
+    pub(crate) rights: Cell<HandleRights>,
+    pub(crate) fd_flags: Cell<types::Fdflags>,
+}
+
+impl NullDevice {
+    pub(crate) fn new() -> Self {
+        let rights = HandleRights::new(
+            types::Rights::character_device_base(),
+            types::Rights::character_device_inheriting(),
+        );
+        let rights = Cell::new(rights);
+        let fd_flags = types::Fdflags::empty();
+        let fd_flags = Cell::new(fd_flags);
+        Self { rights, fd_flags }
+    }
+}
+
+impl Handle for NullDevice {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn try_clone(&self) -> io::Result<Box<dyn Handle>> {
+        Ok(Box::new(self.clone()))
+    }
+    fn get_file_type(&self) -> types::Filetype {
+        types::Filetype::CharacterDevice
+    }
+    fn get_rights(&self) -> HandleRights {
+        self.rights.get()
+    }
+    fn set_rights(&self, rights: HandleRights) {
+        self.rights.set(rights)
+    }
+    // FdOps
+    fn fdstat_get(&self) -> Result<types::Fdflags> {
+        Ok(self.fd_flags.get())
+    }
+    fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<()> {
+        self.fd_flags.set(fdflags);
+        Ok(())
+    }
+    fn read_vectored(&self, _iovs: &mut [io::IoSliceMut]) -> Result<usize> {
+        Ok(0)
+    }
+    fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
+        let mut total_len = 0u32;
+        for iov in iovs {
+            let len: types::Size = iov.len().try_into()?;
+            total_len = total_len.checked_add(len).ok_or(Errno::Overflow)?;
+        }
+        Ok(total_len as usize)
     }
 }
